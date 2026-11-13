@@ -232,8 +232,11 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
         const candidate = row.revision === undefined ?
           db.prepare(`SELECT * FROM private_cards WHERE ${where} AND state='confirmed' AND id>? ORDER BY id LIMIT 1`)
             .get(...boundary(ns), candidateAfter) : { ...row, state: 'confirmed' };
-        if (engineCardRevisionsInside(db, ns, candidate)) return row;
-        // Advance only this private scan position. Stale candidates never enter
+        if (engineCardRevisionsInside(db, ns, candidate) &&
+          contentReadSafety(db, { identity, namespace: ns, memo, method: 'getCard',
+            ref: { type: 'card', namespace: ns, cardId: candidate.id,
+              revision: candidate.revision, bodyRevision: candidate.body_revision } }).allowed) return row;
+        // Advance only this private scan position. Denied engines never enter
         // contributor checks, body budgets, counts, stream turns or cursor ids.
         candidateAfter = row.id;
       }

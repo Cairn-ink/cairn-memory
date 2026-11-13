@@ -236,16 +236,19 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
     for (const row of rows.slice(0, 256)) {
       if (result.filter(value => value.item).length >= input.limit + 1) break;
       consumed++;
+      const safetyMemo=createContentReadMemo(db);
       if (['member','unfiled'].includes(row.kind)) {
         const id = row.kind === 'member' ? row.b : row.a;
         if (isEngineCard(id)) {
           const candidate = db.prepare(`SELECT * FROM private_cards WHERE ${where} AND id=?`).get(...marks, id);
-          // Keep the cursor's physical offset, but omit stale engines before
+          // Keep the cursor's physical offset, but omit denied engines before
           // contributor checks, text/identity projection and returned counts.
-          if (!candidate || !engineCardRevisionsInside(db, ns, candidate)) continue;
+          if (!candidate || !engineCardRevisionsInside(db, ns, candidate) ||
+            !contentReadSafety(db, { identity, namespace: ns, memo: safetyMemo, method: 'getCard',
+              ref: { type: 'card', namespace: ns, cardId: id,
+                revision: row.card_revision, bodyRevision: row.body_revision } }).allowed) continue;
         }
       }
-      const safetyMemo=createContentReadMemo(db);
       if (cachedContentLayout(db)?.suppressionRevision && ['member','unfiled'].includes(row.kind)) {
         const id=row.kind==='member'?row.b:row.a;
         if(!contentReadSafety(db,{identity,namespace:ns,method:'getCard',memo:safetyMemo,

@@ -79,8 +79,9 @@ export function createOrderedCaptureStorage({ db, admissionStorage, epoch, activ
       const rows = db.prepare(`SELECT * FROM memories WHERE ${where}
         AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT 13`).all(...boundary(ns));
       if (rows.length > 12) return { candidates: [], reason: 'candidate_limit' };
-      const fingerprints = new Set(items.map(item => item.fingerprint));
-      const candidates = rows.filter(row => !fingerprints.has(row.fingerprint) && contentReadSafety(db, { namespace: ns,
+      // A batch may restate a predecessor before replacing it with another item.
+      // Exact-only restatements still need no reconciliation candidate.
+      const candidates = rows.filter(row => items.some(item => item.fingerprint !== row.fingerprint) && contentReadSafety(db, { namespace: ns,
         ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed)
         .map(row => ({ row, receipts: receipts(row.id) }));
       // The five-row lookahead preserves the four-receipt fallback before any

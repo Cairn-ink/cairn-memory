@@ -12,6 +12,7 @@ import { createEngineCardStorage } from '../engine-card-storage.mjs';
 import { createEngineCardMaintenance } from '../engine-card-maintenance.mjs';
 import { createPrivateCardStorage } from '../private-card-storage.mjs';
 import { beginContentWriteSafety } from '../content-write-safety.mjs';
+import { contentWriteChanges } from '../content-write-changes.mjs';
 import { contentSafetyInventory } from '../content-safety-migration.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 import { attestContentSafety } from '../content-safety-schema.mjs';
@@ -79,11 +80,10 @@ async function assertStaleAndRebuild(f, w, before, changed, currentIds, scopedSu
   assert.equal(steps.length, changed.length);
   assert.deepEqual(steps.map(e => e.revision), changed.map((_, i) => before.revision + i + 1));
   assert.ok(steps.every(e => e.kind === 'evidence_invalidated'));
-  assert.deepEqual(steps.map(e => e.action_id).sort(), changed.map(m => {
-    const now = memoryRow(f, m.id);
-    assert.equal(now.revision, m.revision + 1);
-    return 'memory-revision-' + m.id + '-' + now.revision;
-  }).sort());
+  for (const id of new Set(changed.map(m => m.id))) assert.equal(memoryRow(f, id).revision,
+    Math.max(...changed.filter(m => m.id === id).map(m => m.revision)) + 1);
+  assert.deepEqual(steps.map(e => e.action_id).sort(), changed.map(m =>
+    'memory-revision-' + m.id + '-' + (m.revision + 1)).sort());
   assert.equal(ok(f.call('getCard', { cardId: before.id })).card, null);
   assert.ok(ok(f.call('listCards', { states: ['confirmed'] })).cards.every(card => card.id !== before.id));
   const mapped = ok(f.call('mapEvidence', { type: 'card' }));
@@ -188,7 +188,8 @@ test(`engine stale ordinary write: ${operation}, ${mode}`, async t => {
     operation === 'correction' && mode !== 'without lineage');
 });
 
-for (const mode of modes) test(`engine stale ordinary write: causal capture retires bound predecessor, ${mode}`, async t => {
+for (const mode of modes) for (const restate of [false, true])
+test(`engine stale ordinary write: causal capture retires bound predecessor, restate=${restate}, ${mode}`, async t => {
   const f = await fixture(t, mode), memories = [];
   for (let sequence = 1; sequence <= 3; sequence++) {
     f.model.extract = () => ({ items: Array.from({ length: 3 }, (_, i) => ({
@@ -199,17 +200,74 @@ for (const mode of modes) test(`engine stale ordinary write: causal capture reti
     .run(new Date(Date.UTC(2026, 0, 1 + i * 3)).toISOString(), m.id));
   const target = memories[0], content = memoryRow(f, target.id).content, w = worker(f);
   const before = row(f, (await w.pass()).built[0].id);
-  f.model.extract = () => ({ items: [{ content: 'Synthetic ordinary causal replacement', kind: 'fact', confidence: .8, sourceIndices: [0] }] });
-  f.model.reconcile = ({ input }) => ({ transitions: [{ replacementIndex: 0,
-    predecessorIndex: input.candidates.findIndex(m => m.content === content), evidenceIndices: [0],
-    relation: 'supersedes', valueChange: 'changed', adoption: 'explicit' }] });
-  const result = ok(await f.core.capture(captureInput('synthetic-causal-replacement', 4)));
+  const input = captureInput('synthetic-causal-replacement', 4);
+  if (restate) input.messages = [
+    { id: 'synthetic-prior-value', role: 'user', content },
+    { id: 'synthetic-adopted-value', role: 'user', content: 'Synthetic ordinary causal replacement' },
+  ];
+  const replacementIndex = restate ? 1 : 0;
+  f.model.extract = () => ({ items: [...(restate ? [{ content, kind: 'fact', confidence: .8, sourceIndices: [0] }] : []),
+    { content: 'Synthetic ordinary causal replacement', kind: 'fact', confidence: .8, sourceIndices: [replacementIndex] }] });
+  f.model.reconcile = ({ input }) => {
+    const predecessorIndex = input.candidates.findIndex(m => m.content === content);
+    assert.ok(predecessorIndex >= 0, 'the restated predecessor remains a candidate for the distinct replacement');
+    return { transitions: [{ replacementIndex, predecessorIndex, evidenceIndices: [replacementIndex],
+      relation: 'supersedes', valueChange: 'changed', adoption: 'explicit' }] };
+  };
+  const initialReceipts = f.db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY id').all(target.id);
+  const result = ok(await f.core.capture(input));
   assert.equal(result.reconciliation.retiredCount, 1);
   assert.equal(memoryRow(f, target.id).currentness, 'historical');
-  const replacement = result.admission.memories[0];
+  const replacement = result.admission.memories[replacementIndex];
   assert.equal(memoryRow(f, replacement.id).content, 'Synthetic ordinary causal replacement');
-  assert.ok(f.db.prepare('SELECT 1 FROM receipts WHERE memory_id=? AND event_id=?').get(replacement.id, 'synthetic-causal-replacement'));
-  await assertStaleAndRebuild(f, w, before, [target], [replacement.id]);
+  assert.deepEqual({ ...f.db.prepare('SELECT role,excerpt FROM receipts WHERE memory_id=? AND event_id=?')
+    .get(replacement.id, input.messages[replacementIndex].id) },
+  { role: 'user', excerpt: input.messages[replacementIndex].content });
+  if (restate) assert.deepEqual({ ...f.db.prepare('SELECT role,excerpt FROM receipts WHERE memory_id=? AND event_id=?')
+    .get(target.id, input.messages[0].id) }, { role: 'user', excerpt: content }, 'predecessor restatement receipt is retained');
+  assert.deepEqual(f.db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY id').all(target.id)
+    .filter(r => initialReceipts.some(old => old.id === r.id)), initialReceipts, 'the prior receipt is unchanged');
+  assert.equal(f.db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(target.id).n,
+    initialReceipts.length + Number(restate));
+  await assertStaleAndRebuild(f, w, before, restate ? [target, { ...target, revision: target.revision + 1 }] : [target], [replacement.id]);
+});
+
+for (const mode of modes) for (const operation of ['duplicate capture', 'successive writes'])
+test(`engine stale ordinary write: ${operation}, ${mode}`, async t => {
+  const f = await fixture(t, mode), memories = seed(f), target = memories[0], w = worker(f);
+  const before = row(f, (await w.pass()).built[0].id), content = memoryRow(f, target.id).content;
+  const initialReceipts = f.db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(target.id).n;
+  if (operation === 'duplicate capture') {
+    const input = { ...captureInput('synthetic-duplicate'), messages: [
+      { id: 'synthetic-first', role: 'user', content },
+      { id: 'synthetic-reply', role: 'assistant', content: 'Synthetic acknowledgement' },
+      { id: 'synthetic-second', role: 'user', content: content.toUpperCase() },
+    ] };
+    f.model.extract = () => ({ items: [0, 2].map(index => ({ content: input.messages[index].content,
+      kind: 'fact', confidence: .8, sourceIndices: [index] })) });
+    const result = ok(await f.core.capture(input));
+    assert.deepEqual(result.admission.memories.map(m => m.id), [target.id]);
+    const kept = f.db.prepare('SELECT event_id,role,excerpt FROM receipts WHERE memory_id=? AND event_id IN (?,?) ORDER BY event_id')
+      .all(target.id, input.messages[0].id, input.messages[2].id).map(r => ({ ...r }));
+    assert.deepEqual(kept, [input.messages[0], input.messages[2]].map(m => ({ event_id: m.id, role: m.role, excerpt: m.content })));
+    assert.ok(f.db.prepare('SELECT 1 FROM receipts WHERE memory_id=? AND event_id=?').get(target.id, 'synthetic-seed-0'),
+      'the original receipt remains alongside both new user excerpts');
+    assert.equal(f.db.prepare('SELECT state FROM admission_claims WHERE event_id=?').get(input.eventId).state, 'completed');
+  } else {
+    admit(f, content, 'synthetic-stale-first');
+    const first = row(f, before.id);
+    assert.equal(first.revision, before.revision + 1);
+    assert.equal(ok(f.call('getCard', { cardId: before.id })).card, null);
+    await new Promise(resolve => setTimeout(resolve, 5));
+    admit(f, content, 'synthetic-stale-second');
+    assert.ok(row(f, before.id).updated_at > first.updated_at, 'later bound write restarts the maintenance wait');
+    const storage = createEngineCardStorage({ db: f.db, identity: f.identity, ready() {} });
+    const early = await createEngineCardMaintenance({ storage, model: f.model,
+      now: () => Date.parse(first.updated_at) + 600000 }).maintain({ namespace: ns, budget: { maxMs: 5000 } });
+    assert.deepEqual(early.built, []); assert.equal(row(f, before.id).body, before.body);
+  }
+  assert.equal(f.db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(target.id).n, initialReceipts + 2);
+  await assertStaleAndRebuild(f, w, before, [target, { ...target, revision: target.revision + 1 }], [target.id]);
 });
 
 function publish(f, memories, key = 'moc:synthetic-ordinary') {
@@ -312,6 +370,118 @@ for (const fault of faults) test(`engine stale verifier rejects ${fault} with co
     } finally { guard.close(); }
   }), error => error.code === 'evidence_unavailable');
   assert.equal(contentSafetyInventory(f.db), before, 'every row and effect rolls back');
+});
+
+// Native schema forbids namespace moves before the verifier runs. Change only
+// the captured prior namespace to isolate the predicate's immutable-namespace
+// check, while the final Memory and every ordinary read remain canonical.
+function withPriorMemoryNamespace(db, id, projectId, work) {
+  const createSession = db.createSession;
+  let observed = 0;
+  db.createSession = function(...args) {
+    const session = createSession.apply(this, args);
+    return { close: () => session.close(), changeset() {
+      const changes = contentWriteChanges(session.changeset());
+      const columns = db.prepare('PRAGMA table_info(memories)').all();
+      const key = columns.findIndex(c => c.name === 'id');
+      const change = changes.find(c => c.table === 'memories' && (c.next?.[key] ?? c.old?.[key]) === id);
+      assert.ok(change?.old);
+      change.old[columns.findIndex(c => c.name === 'project_id')] = projectId;
+      observed++;
+      const chunks = [], byte = value => chunks.push(Buffer.from([value]));
+      const variable = value => {
+        const bytes = [value & 127];
+        for (value = Math.floor(value / 128); value; value = Math.floor(value / 128)) bytes.unshift((value & 127) | 128);
+        chunks.push(Buffer.from(bytes));
+      };
+      const record = values => { for (const value of values) {
+        if (value === undefined) byte(0);
+        else if (value === null) byte(5);
+        else if (typeof value === 'bigint' || Number.isSafeInteger(value)) {
+          byte(1); const bytes = Buffer.alloc(8); bytes.writeBigInt64BE(BigInt(value)); chunks.push(bytes);
+        } else if (typeof value === 'number') {
+          byte(2); const bytes = Buffer.alloc(8); bytes.writeDoubleBE(value); chunks.push(bytes);
+        } else {
+          byte(typeof value === 'string' ? 3 : 4);
+          const bytes = Buffer.from(value); variable(bytes.length); chunks.push(bytes);
+        }
+      } };
+      for (const c of changes) {
+        byte(84); variable(c.primary.length); chunks.push(Buffer.from(c.primary), Buffer.from(c.table + '\0'));
+        byte(c.next ? c.old ? 23 : 18 : 9); byte(0);
+        if (c.old) record(c.old);
+        if (c.next) record(c.next);
+      }
+      const bytes = Buffer.concat(chunks);
+      assert.deepEqual(contentWriteChanges(bytes), changes, 'all other captured cells survive the observation');
+      return bytes;
+    } };
+  };
+  try { return work(); }
+  finally { db.createSession = createSession; assert.equal(observed, 1); }
+}
+
+for (const mode of ['sealed', 'suppression without lineage'])
+for (const fault of ['missing middle step', 'duplicate revision step', 'beyond final revision', 'unbound cause',
+  'step count', 'Memory moves namespace', 'out of order', 'missing bound Memory interval'])
+test(`engine revision interval rejects ${fault} in isolation, ${mode}`, async t => {
+  const f = await fixture(t, mode), target = admit(f, 'Synthetic interval bound evidence'),
+    other = admit(f, 'Synthetic interval other evidence');
+  const card = publish(f, fault === 'missing bound Memory interval' ? [target, other] : [target]);
+  const before = contentSafetyInventory(f.db), moved = { ...ns, projectId: 'synthetic-moved' };
+  const control = new Error('synthetic-control-rollback');
+  let reached = false;
+  const attempt = damaged => transaction(f.db, () => {
+    // Both namespaces are authorized; the namespace fault changes only the
+    // prior image presented to the verifier, leaving ordinary reads eligible.
+    const guard = beginContentWriteSafety(f.db, { method: 'admit', scopes: [ns, moved] });
+    assert.ok(guard);
+    try {
+      for (let i = 0; i < 3; i++) f.db.prepare('UPDATE memories SET revision=revision+1,updated_at=? WHERE id=?')
+        .run(timestamp, target.id);
+      if (['unbound cause', 'missing bound Memory interval'].includes(fault))
+        f.db.prepare('UPDATE memories SET revision=revision+1,updated_at=? WHERE id=?').run(timestamp, other.id);
+      if (damaged) {
+        const steps = effects(f, card.id);
+        if (fault === 'missing middle step') {
+          f.db.prepare('DELETE FROM card_effects WHERE effect_id=?').run(steps[1].effect_id);
+          f.db.prepare('UPDATE private_cards SET revision=revision-1 WHERE id=?').run(card.id);
+          f.db.prepare('UPDATE card_effects SET revision=revision-1 WHERE effect_id=?').run(steps[2].effect_id);
+        }
+        if (fault === 'duplicate revision step') f.db.prepare('UPDATE card_effects SET action_id=? WHERE effect_id=?')
+          .run(steps[0].action_id, steps[1].effect_id);
+        if (fault === 'beyond final revision') f.db.prepare('UPDATE card_effects SET action_id=? WHERE effect_id=?')
+          .run('memory-revision-' + target.id + '-' + (target.revision + 4), steps[2].effect_id);
+        if (fault === 'unbound cause') f.db.prepare('UPDATE card_effects SET action_id=? WHERE effect_id=?')
+          .run('memory-revision-' + other.id + '-' + (other.revision + 1), steps[2].effect_id);
+        if (fault === 'step count') f.db.prepare('UPDATE private_cards SET revision=revision+1 WHERE id=?').run(card.id);
+        if (fault === 'out of order') {
+          f.db.prepare('UPDATE card_effects SET action_id=? WHERE effect_id=?').run(steps[2].action_id, steps[1].effect_id);
+          f.db.prepare('UPDATE card_effects SET action_id=? WHERE effect_id=?').run(steps[1].action_id, steps[2].effect_id);
+        }
+        if (fault === 'missing bound Memory interval') {
+          f.db.prepare('DELETE FROM card_effects WHERE effect_id=?').run(steps.at(-1).effect_id);
+          f.db.prepare('UPDATE private_cards SET revision=revision-1 WHERE id=?').run(card.id);
+        }
+        const current = row(f, card.id), stepsNow = effects(f, card.id);
+        if (fault !== 'step count') assert.equal(stepsNow.length, current.revision - card.revision,
+          'count guard cannot reject another interval fault');
+        assert.deepEqual(stepsNow.map(step => step.revision), stepsNow.map((_, i) => card.revision + i + 1),
+          'Card effect revisions remain consecutive');
+      }
+      reached = true;
+      guard.validate({});
+      if (!damaged) throw control;
+    } finally { guard.close(); }
+  });
+  assert.throws(() => attempt(false), error => error === control, 'valid native schedule reaches and passes this verifier');
+  assert.equal(contentSafetyInventory(f.db), before);
+  reached = false;
+  assert.throws(() => fault === 'Memory moves namespace'
+    ? withPriorMemoryNamespace(f.db, target.id, moved.projectId, () => attempt(true)) : attempt(true),
+  error => error.code === 'evidence_unavailable');
+  assert.equal(reached, true, 'native schema accepts the mutation; refusal comes from the verifier');
+  assert.equal(contentSafetyInventory(f.db), before, 'complete rollback includes receipts, closures and effects');
 });
 
 test('ordinary authored Card invalidation keeps its existing history path', async t => {

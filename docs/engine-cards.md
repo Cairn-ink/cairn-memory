@@ -174,9 +174,10 @@ revision once and records one `evidence_invalidated` effect for that Memory.
 Ordinary admission or capture of another receipt, causal supersession,
 confirmation, filing or re-filing, remember metadata updates and correction can
 therefore stale an engine Card without failing the Memory write, including on
-stores with sealed lineage. Multiple bound Memories changed in one transaction
-produce one consecutive step each. The Card keeps its state, title, body,
-bindings and seals; the write verifier accepts only those trigger steps, proven
+stores with sealed lineage. Each update to a bound Memory's revision produces
+one consecutive Card step, including repeated updates to the same Memory within
+one transaction. The Card keeps its state, title, body, bindings and seals; the
+write verifier accepts only those trigger steps, proven
 by the same transaction's scoped Memory revisions and unchanged bindings.
 This grants no authority to edit, delete, re-bind or re-state an engine Card.
 Terminal forgetting still purges the Card first as described above.
@@ -186,8 +187,12 @@ Candidate and context reads skip it and continue serving eligible Memories;
 direct Card lookup returns no Card, and an explicit fetch of its stale evidence
 refuses. The surrounding candidate read remains successful. Suppressed,
 excluded, forgotten, denied or foreign sources also make the Card ineligible.
-After at least ten minutes, a later worker pass re-evaluates the trigger. A
-rebuild inserts a fresh Card row and source set, purging all superseded engine
+Card candidate scans also skip an engine Card whose revision is current when
+the canonical source check denies it. Memory source checks still apply, including
+to Memories that share an excluded Raw span.
+Each later write to a bound Memory restarts the ten-minute wait before a worker
+pass rebuilds or retires the Card. After that wait, a later pass re-evaluates the
+trigger. A rebuild inserts a fresh Card row and source set, purging all superseded engine
 payloads for the same namespace and cluster key in the same transaction. Their
 titles and bodies become NULL and live bindings disappear; text-free rows,
 routing receipts and seals remain. Other cluster keys and authored Cards are

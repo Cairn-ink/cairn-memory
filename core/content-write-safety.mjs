@@ -290,18 +290,29 @@ export function beginContentWriteSafety(db, operation) {
         c.old&&oldValue(c,'entity_type')==='card'&&oldValue(c,'entity_id')===key;
       const effects=canonical.filter(c=>c.table==='card_effects'&&cardEffect(c)).sort((a,b)=>a.row.ordinal-b.row.ordinal);
       if(effects.length!==row.revision-previous||removed.some(c=>c.table==='card_effects'&&cardEffect(c)))return false;
-      const causes=new Set();let timestamp;
+      // Enumerate all changed bound Memories, including any whose entire
+      // effect interval is missing. Native sessions retain only old/final rows.
+      const causes=[];
+      for(const memory of canonical.filter(c=>c.table==='memories'&&c.old&&oldValue(c,'revision')!==c.row.revision)) {
+        if(!db.prepare('SELECT 1 FROM card_memory_bindings WHERE card_id=? AND memory_id=? LIMIT 1').get(key,memory.row.id))continue;
+        const revision=oldValue(memory,'revision');
+        if(!sameNamespace(namespace(memory.row))||!Number.isSafeInteger(revision)||revision<1||
+          !Number.isSafeInteger(memory.row.revision)||memory.row.revision<=revision||
+          memory.columns.some((c,i)=>['owner_id','scope','project_id'].includes(c.name)&&memory.old[i]!==undefined))return false;
+        causes.push({memory,revision});
+      }
+      let timestamp;
       for(const [index,effect]of effects.entries()) {
         const e=effect.row;
         if(effect.old||e.kind!=='evidence_invalidated'||e.revision!==previous+index+1||!sameNamespace(namespace(e)))return false;
-        const memory=canonical.find(c=>c.table==='memories'&&c.old&&sameNamespace(namespace(c.row))&&
-          e.action_id==='memory-revision-'+c.row.id+'-'+c.row.revision);
-        if(!memory||causes.has(memory.row.id)||!Number.isSafeInteger(memory.row.revision)||!Number.isSafeInteger(oldValue(memory,'revision'))||
-          oldValue(memory,'revision')<1||memory.row.revision!==oldValue(memory,'revision')+1||
-          memory.columns.some((c,i)=>['owner_id','scope','project_id'].includes(c.name)&&memory.old[i]!==undefined)||
-          !db.prepare('SELECT 1 FROM card_memory_bindings WHERE card_id=? AND memory_id=? LIMIT 1').get(key,memory.row.id))return false;
-        causes.add(memory.row.id);timestamp=memory.row.updated_at;
+        // Consume each Memory's interval in ordinal order; neither a duplicate
+        // nor a jump can explain the next trigger effect.
+        const cause=causes.find(c=>c.revision<c.memory.row.revision&&
+          e.action_id==='memory-revision-'+c.memory.row.id+'-'+(c.revision+1));
+        if(!cause)return false;
+        cause.revision++;timestamp=cause.memory.row.updated_at;
       }
+      if(!causes.length||causes.some(c=>c.revision!==c.memory.row.revision))return false;
       // This only hides an engine Card: every read rejects its advanced revision.
       // It grants no serving authority or retention exception; text, bindings,
       // seals and purge behavior stay unchanged, including prior source denials.
