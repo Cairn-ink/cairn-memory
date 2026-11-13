@@ -21,7 +21,13 @@ for (const json of ordinaryOperations.includes(operation) ? [false, true] : [fal
     if (erasure) registerContentWriteGuard((db, context) => {
       erasureGuards++; return beginContentWriteSafety(db, context);
     });
-    try { positive.verify(ok(await positive.invoke())); }
+    try {
+      const result = await positive.invoke();
+      if (erasure) {
+        assert.equal(result.ok, true);
+        positive.verify(result.value);
+      } else positive.verify(ok(result));
+    }
     finally { if (erasure) registerContentWriteGuard(beginContentWriteSafety); }
     // Trusted erasure transactions have no facade operation context.
     if (erasure) { assert.equal(erasureGuards, 0); return; }

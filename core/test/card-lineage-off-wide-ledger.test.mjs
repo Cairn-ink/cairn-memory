@@ -424,22 +424,32 @@ for (const [label, sql] of [
   ['pragma with Card only after comment', "PRAGMA user_version -- '\n; DELETE FROM card_memory_bindings WHERE card_id='synthetic-unrelated'"],
 ]) for (const method of ['prepare', 'exec']) test(`pins-only rejects ${label} through tracer ${method}`, () => {
   const controls = new URL('../testing/card-lineage-off-wide-controls.mjs', import.meta.url).href;
+  const execSQL = sql.replace('?', "'synthetic-unrelated'");
   const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
     import { DatabaseSync } from 'node:sqlite';
-    const {startTrace,stopTrace,statements}=await import(${JSON.stringify(controls)});
+    const {startTrace,stopTrace,statements,normalizeTraceSQL}=await import(${JSON.stringify(controls)});
     const db=new DatabaseSync(':memory:');
     db.exec('CREATE TABLE card_memory_bindings(card_id TEXT); CREATE TABLE card_operations(target_id TEXT); CREATE TABLE private_cards(id TEXT)');
     const sql=${JSON.stringify(sql)};
+    const execSQL=${JSON.stringify(execSQL)};
     startTrace();
     const prepared=db.prepare(sql);
     if(sql.startsWith('PRAGMA'))prepared.all();else prepared.run('synthetic-unrelated');
-    db.exec(sql.replace('?',"'synthetic-unrelated'"));
-    stopTrace();db.close();process.stdout.write(JSON.stringify(statements));
+    db.exec(execSQL);
+    stopTrace();db.close();process.stdout.write(JSON.stringify({statements,
+      expected:normalizeTraceSQL(${JSON.stringify(method)}==='exec'?execSQL:sql)}));
   `], { encoding: 'utf8' });
   assert.equal(child.status, 0, child.stderr);
-  const recorded = JSON.parse(child.stdout).find(([, operation]) => method === 'prepare' ? operation !== 'exec' : operation === 'exec');
-  assert.ok(recorded); assert.equal(recorded[0], sql.replace(/\s+/g, ' ').trim());
+  const { statements, expected } = JSON.parse(child.stdout);
+  const recorded = statements.find(([, operation]) => method === 'prepare' ? operation !== 'exec' : operation === 'exec');
+  assert.ok(recorded); assert.equal(recorded[0], expected);
+  if (method === 'exec') assert.deepEqual(recorded[2], [], 'exec has no bindings');
   assert.equal(cardFamilySQL(recorded), true);
+  if (method === 'exec' && label.startsWith('apostrophe')) {
+    // The comment's apostrophe must still fail closed without literal quotes
+    // later in the trace accidentally supplying a closing quote.
+    assert.equal(cardFamilySQL(row(recorded[0].replace("'synthetic-unrelated'", '0'))), true);
+  }
   const f = fixture(), executions = structuredClone(executionPins(f)), ledger = pinned(f).sqlAdditions;
   delete f.archived;
   f.parts = structuredClone(f.parts); f.parts[2][2].push(recorded); f.current = trace(f.parts);
