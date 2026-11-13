@@ -2,10 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setImmediate as turn } from 'node:timers/promises';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { openMemoryCore } from '../../../core/contract.mjs';
 import { createFakeEmbedder } from '../../../core/context-read-embedder.mjs';
+import { createCommitDispatcher } from '../../../core/commit-dispatch.mjs';
+import { observeContextMaintenance } from '../../../core/context-read-facade.mjs';
 import { cardHost } from '../../../core/testing/raw-source-fixtures.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { createContextReadAccess } from '../context-read-access.mjs';
@@ -68,6 +71,14 @@ test('combined-only demand keeps every turn combined and is retained', async t =
   assert.deepEqual(f.demand.inspect(), [['combined', 100]], 'R2K_COMBINED_RECORDED');
 });
 
+test('pending demanded views retain a full round-robin turn sequence', async t => {
+  const f = selectionFixture(t);
+  for (const types of [combined, ['memory'], ['card']]) f.demand.note(types);
+  for (let i = 0; i < 15; i++) await f.loop.tick();
+  assert.deepEqual(f.selected, Array.from({ length: 15 }, (_, i) => [combined, ['memory'], ['card']][i % 3]),
+    'R2K_ACTIVE_VIEWS_ROUND_ROBIN');
+});
+
 test('d: every demanded view expires at 30 minutes and resumes combined-only turns', async t => {
   const f = selectionFixture(t);
   f.demand.note(['memory']);
@@ -118,7 +129,7 @@ async function realFixture(t) {
   t.after(async () => { await client.close(); await server.close(); serverSide.destroy(); clientSide.destroy(); });
   await server.connect(new StdioServerTransport(serverSide, serverSide));
   await client.connect(new StdioServerTransport(clientSide, clientSide));
-  return { core, access, client, demand };
+  return { core, access, client, demand, path };
 }
 
 for (const wanted of [[combined], [['memory']], [['card']], [combined, ['memory']], [['memory'], ['card']], [combined, ['memory'], ['card']]]) {
@@ -129,7 +140,12 @@ for (const wanted of [[combined], [['memory']], [['card']], [combined, ['memory'
       selected.push(args.types); return f.access.call(core, method, args);
     } }, { demand: f.demand });
     for (let i = 0; i < 16; i++) await loop.tick();
-    assert.deepEqual(selected, Array.from({ length: 16 }, (_, i) => wanted[i % wanted.length]), 'R2K_ACTIVE_VIEWS_ROUND_ROBIN');
+    assert.deepEqual(selected.slice(0, wanted.length), wanted, 'R2K_ACTIVE_VIEWS_ROUND_ROBIN');
+    assert.ok(selected.every(types => wanted.some(view => JSON.stringify(view) === JSON.stringify(types)) ||
+      JSON.stringify(types) === JSON.stringify(combined)), 'only demanded views or the idle combined fallback');
+    if (wanted.length === 1 && wanted[0].length === 2) {
+      assert.deepEqual(selected, Array.from({ length: 16 }, () => combined), 'R2M_REAL_COMBINED_EVERY_TURN');
+    }
     for (const types of wanted) {
       const result = await context(f.client, input(types));
       assert.equal(result.diagnostics.candidates.channels.semantic.state, 'ready', 'R2J_FILTERED_READY');
@@ -152,4 +168,73 @@ test('e: invalid and refused MCP reads record no demand', { timeout: 15000 }, as
   const result = await f.client.callTool({ name: 'read_memory_context', arguments: input(['card']) });
   assert.equal(result.isError, true);
   assert.deepEqual(f.demand.inspect(), [], 'R2J_REFUSED_DEMAND');
+});
+
+test('idle Card views skip turns, external writes re-enable them, and all-idle turns refresh only combined', { timeout: 15000 }, async t => {
+  const f = await realFixture(t), selected = [];
+  // Keep Memory pending after the one-Card projection has finished.
+  for (let i = 0; i < 24; i++) ok(await f.core.admit({ namespace: ns,
+    memory: { content: 'Synthetic idle-view backlog ' + i, kind: 'fact' },
+    receipts: [{ client: 'synthetic', sessionId: 'idle', eventId: String(i), role: 'user', excerpt: 'Synthetic backlog receipt' }] }));
+  f.demand.note(['memory']); f.demand.note(['card']);
+  const loop = drivenLoop(t, f.core, { ...f.access, async call(core, method, args) {
+    const result = await f.access.call(core, method, args);
+    selected.push({ types: args.types, result }); return result;
+  } }, { demand: f.demand });
+  await loop.tick(); await loop.tick();
+  assert.deepEqual(selected.map(call => call.types), [['memory'], ['card']], 'pending views retain round-robin order');
+  assert.notEqual(selected[0].result.value.status, 'complete', 'control: Memory is still pending when Card finishes');
+  assert.equal(selected[1].result.value.status, 'complete', 'control: Card refresh has no remaining work');
+  const cardTurns = () => selected.filter(call => call.types.length === 1 && call.types[0] === 'card').length;
+  for (let i = 0; i < 6; i++) await loop.tick();
+  assert.equal(cardTurns(), 1, 'R2M_IDLE_CARD_SKIPPED');
+  // Drain the bounded Memory/combined work, then measure only idle turns.
+  for (let i = 0; i < 16; i++) await loop.tick();
+  selected.length = 0;
+  for (let i = 0; i < 4; i++) await loop.tick();
+  assert.deepEqual(selected.map(call => call.types), Array.from({ length: 4 }, () => combined), 'R2M_NO_IDLE_EXTRA_WORK');
+  assert.ok(selected.every(call => call.result.value.status === 'complete'), 'control: all demanded/combined views have drained');
+  const writer = openMemoryCore({ path: f.path, raw: false });
+  try { ok(writer.admit({ namespace: ns, memory: { content: 'Synthetic external write after ready', kind: 'fact' },
+    receipts: [{ client: 'synthetic', sessionId: 'idle', eventId: 'external', role: 'user', excerpt: 'Synthetic external receipt' }] })); }
+  finally { writer.close(); }
+  // A new read after the change must not inherit an indefinitely skipped view.
+  await context(f.client, input(['card']));
+  selected.length = 0;
+  for (let i = 0; i < 3; i++) await loop.tick();
+  assert.ok(cardTurns() >= 1, 'R2M_IDLE_WRITE_REENABLES_CARD');
+});
+
+for (const locked of ['canonical', 'sidecar']) test(`idle fence probe retries ${locked} BUSY outside transactions`, { timeout: 10000 }, async t => {
+  const w = createTestWorkspace(t), path = join(w.path, 'idle-fence.sqlite');
+  const access = createContextReadAccess(ns, false, { maintenance: true });
+  let holder, backoffs = 0;
+  const host = createCommitDispatcher({ strict: true, onBackoff() {
+    backoffs++;
+    assert.ok(host.inspectTransactions().every(state => state.isTransaction === false));
+    assert.ok(host.inspectBusyTimeouts().every(value => value === 5000), 'R2M_IDLE_FENCE_TIMEOUT_RESTORE');
+    holder.exec('ROLLBACK');
+  } });
+  const core = host.open(() => openMemoryCore({ path, raw: false,
+    contextRead: { ...access.configuration, embedder: createFakeEmbedder(), counter,
+      policy: { family: 'local', maxRequests: 10000, maxUsd: 1, estimateUsd: () => 0 } } }));
+  w.defer(() => core.close());
+  ok(await core.admit({ namespace: ns, memory: { content: 'Synthetic fence probe source', kind: 'fact' },
+    receipts: [{ client: 'synthetic', sessionId: 'fence', eventId: 'source', role: 'user', excerpt: 'Synthetic fence probe source' }] }));
+  const observation = await observeContextMaintenance(() => access.call(core, 'refreshContextIndex', {
+    readSet: [ns], types: ['memory'], intent: 'current', budget: { maxItems: 16, maxMs: 1000 },
+  }));
+  assert.equal(ok(observation.result).status, 'complete');
+  assert.equal(typeof observation.current, 'function');
+  holder = new DatabaseSync(locked === 'canonical' ? path : path + '.context-read-v1.sqlite');
+  try {
+    holder.exec('BEGIN EXCLUSIVE');
+    assert.equal(await observation.current(), true, 'R2M_IDLE_FENCE_RETRY');
+    assert.ok(backoffs >= 1, 'R2M_IDLE_FENCE_BUSY_OBSERVED');
+    assert.ok(host.inspectBusyTimeouts().every(value => value === 5000), 'R2M_IDLE_FENCE_TIMEOUT_RESTORE');
+    assert.equal(host.inspectSynchronousWrites().count, 0);
+  } finally {
+    if (holder.isTransaction) holder.exec('ROLLBACK');
+    holder.close();
+  }
 });

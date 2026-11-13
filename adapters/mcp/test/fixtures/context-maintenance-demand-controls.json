@@ -2,24 +2,24 @@
   [
     "fixed-three-way",
     "adapters/mcp/server.mjs",
-    "const selectedTypes = views.length ? views[nextView++ % views.length] : types;",
-    "const selectedTypes = [types, ['memory'], ['card']][nextView++ % 3];",
+    "        let selectedTypes = types;\n        if (combinedOnly) selectedTypes = views[0];\n        else for (let scanned = 0; scanned < views.length; scanned++) {\n          const view = views[nextView++ % views.length];\n          if (pending.includes(view)) { selectedTypes = view; break; }\n        }\n",
+    "        const selectedTypes = [types, ['memory'], ['card']][nextView++ % 3];\n",
     "adapters/mcp/test/context-maintenance-demand.test.mjs",
     "R2J_COMBINED_ONLY"
   ],
   [
     "demand-never-scheduled",
     "adapters/mcp/server.mjs",
-    "const selectedTypes = views.length ? views[nextView++ % views.length] : types;",
-    "const selectedTypes = types;",
+    "        let selectedTypes = types;\n        if (combinedOnly) selectedTypes = views[0];\n        else for (let scanned = 0; scanned < views.length; scanned++) {\n          const view = views[nextView++ % views.length];\n          if (pending.includes(view)) { selectedTypes = view; break; }\n        }\n",
+    "        const selectedTypes = types;\n",
     "adapters/mcp/test/context-maintenance-demand.test.mjs",
     "R2K_ACTIVE_VIEWS_ROUND_ROBIN"
   ],
   [
     "old-combined-weighting",
     "adapters/mcp/server.mjs",
-    "const selectedTypes = views.length ? views[nextView++ % views.length] : types;",
-    "const selectedTypes = views.length && ++nextView % 4 === 0 ? views[0] : types;",
+    "        let selectedTypes = types;\n        if (combinedOnly) selectedTypes = views[0];\n        else for (let scanned = 0; scanned < views.length; scanned++) {\n          const view = views[nextView++ % views.length];\n          if (pending.includes(view)) { selectedTypes = view; break; }\n        }\n",
+    "        const selectedTypes = views.length && ++nextView % 4 === 0 ? views[0] : types;\n",
     "adapters/mcp/test/context-maintenance-demand.test.mjs",
     "R2K_ACTIVE_VIEWS_ROUND_ROBIN"
   ],

@@ -1,6 +1,6 @@
 import { withRawSearchRequestScope } from '../../core/raw-search-request-scope.mjs';
 import { withContextReadBudgetScope } from '../../core/context-read-budget.mjs';
-import { withContextReadRankingPartition } from '../../core/context-read-facade.mjs';
+import { withContextReadRankingPartition, observeContextMaintenance } from '../../core/context-read-facade.mjs';
 import { createLocalAuthorityRouter } from './local-authority-router.mjs';
 import { contextOptions } from '../../core/context-read-input.mjs';
 import { cardCurrentHostConfiguration } from './card-current-configuration.mjs';
@@ -684,6 +684,13 @@ export function startContextMaintenance(core, access, { cards = false, semantic 
   const capabilities = core.getContextReadCapabilities?.();
   let types = capabilities?.ok ? capabilities.value.types : ['memory'];
   let closed = false, active, timer, nextView = 0;
+  const idleViews = new Map(), viewKey = view => view.length === 2 ? 'combined' : view[0];
+  const noRemainingWork = (result, view) => result?.ok && result.value.status === 'complete' &&
+    result.value.coverage?.maintenance?.state === 'ready' && view.every(type => {
+      const counts = result.value.coverage.byType?.[type];
+      return Number.isSafeInteger(counts?.eligible) && counts.eligible >= 0 && counts.indexed === counts.eligible &&
+        (!semantic || result.value.channels?.semantic?.state === 'absent' || counts.embedded === counts.eligible);
+    });
   const arm = () => {
     if (closed) return;
     timer = setTimeout(() => {
@@ -701,12 +708,29 @@ export function startContextMaintenance(core, access, { cards = false, semantic 
         // Without recent demand, retain the full supported view every turn.
         const views = demand.inspect().map(([view]) => view === 'combined' ? types : [view])
           .filter(view => view.every(type => types.includes(type)));
+        for (const key of idleViews.keys()) if (!views.some(view => viewKey(view) === key)) idleViews.delete(key);
+        const combinedOnly = views.length === 1 && views[0].length === types.length && types.every(type => views[0].includes(type));
+        const pending = [];
+        for (const view of views) {
+          const current = combinedOnly ? undefined : idleViews.get(viewKey(view));
+          if (!current || !await current()) pending.push(view);
+        }
         if (!views.length) nextView = 0;
-        const selectedTypes = views.length ? views[nextView++ % views.length] : types;
+        let selectedTypes = types;
+        if (combinedOnly) selectedTypes = views[0];
+        else for (let scanned = 0; scanned < views.length; scanned++) {
+          const view = views[nextView++ % views.length];
+          if (pending.includes(view)) { selectedTypes = view; break; }
+        }
         const refresh = () => access.call(core, 'refreshContextIndex', {
           readSet, types: selectedTypes, intent: 'current', budget: { maxItems: 16, maxMs: 1000 },
         });
-        if (!closed && access.call && (semantic || cards)) await (run ? run(refresh, 1000) : refresh());
+        if (!closed && access.call && (semantic || cards)) {
+          const { result, current } = await observeContextMaintenance(() => run ? run(refresh, 1000) : refresh());
+          const key = viewKey(selectedTypes);
+          if (noRemainingWork(result, selectedTypes) && current) idleViews.set(key, current);
+          else idleViews.delete(key);
+        }
       }).catch(() => {}).finally(() => { active = null; arm(); });
     }, 1000);
     timer.unref();

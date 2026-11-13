@@ -1,4 +1,4 @@
-import { bindCommitRuntime, hasCommitDispatcher, withCommitBinding } from './commit-dispatch.mjs';
+import { bindCommitRuntime, dispatchCommit, dispatchSynchronousCommit, hasCommitDispatcher, withCommitBinding } from './commit-dispatch.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { cardLineageItemInside, cardLineageNamespaceInside } from './card-lineage.mjs';
 import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, cachedContentSuppressionRequestInside, hasContentSuppressionRequestInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
@@ -70,6 +70,14 @@ function metadata(port) {
 // Hosts keep this opaque key for the connection lifetime. No key selects the
 // legacy single partition; the key is not serialized into engine cursors.
 const rankingPartition = new AsyncLocalStorage();
+const maintenanceObservation = new AsyncLocalStorage();
+// Private upkeep seam. A host retains only a fence checker for its enum view;
+// ordinary reads/refreshes do not acquire or retain an observation.
+export async function observeContextMaintenance(work) {
+  const observation = {};
+  const result = await maintenanceObservation.run(observation, work);
+  return { result, current: observation.current };
+}
 export function withContextReadRankingPartition(key, work) {
   if (!key || typeof key !== 'object') throw TypeError('invalid_ranking_partition');
   return rankingPartition.run(key, work);
@@ -624,6 +632,25 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       diagnostics.coverage = coverage(input, current, preflight, 'lexical', 0, 0, maintenance);
       diagnostics.coverage.stops = { deadline: performance.now() >= deadlineAt,
         budget: maintenance.metrics.transformed + vectorProgress.attempted >= input.budget.maxItems || diagnostics.channels.semantic.causes.includes('budget_denied') };
+      const observation = maintenanceObservation.getStore();
+      if (observation) {
+        const expected = current;
+        observation.current = async () => {
+          const check = () => {
+            ready(); access.check();
+            // This is the sidecar's complete canonical/index fence, including
+            // Card dependencies, lineage and the owner suppression epoch.
+            storage.assertState(projection, expected, { checkpoint: false });
+            return true;
+          };
+          try {
+            // Both connections keep 5 ms native waits for this synchronous
+            // probe. Only the rolled-back probe retries, outside transactions.
+            return hasCommitDispatcher(db) ? await dispatchCommit(storage, () => dispatchSynchronousCommit(db, check))
+              : withContentSuppressionRequest(check, { fresh: true });
+          } catch { return false; }
+        };
+      }
       return success({ status: !options.embedder || diagnostics.channels.semantic.state === 'ready' ? 'complete' : 'partial',
         progress: { lexical: maintenance.progress, transformed: maintenance.metrics.transformed,
           embeddingAttempts: vectorProgress.attempted, embedded: vectorProgress.embedded }, coverage: diagnostics.coverage, channels: diagnostics.channels,

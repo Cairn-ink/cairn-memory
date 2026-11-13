@@ -14,7 +14,7 @@ import { isAbsolute, dirname } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { performance } from 'node:perf_hooks';
-import { bindCommitConnection, dispatchCommit, hasCommitDispatcher, recordCommit, withSynchronousCommitScope, assertCommitWriteRouted } from './commit-dispatch.mjs';
+import { bindCommitConnection, bindCommitRuntime, dispatchCommit, hasCommitDispatcher, recordCommit, withSynchronousCommitScope, assertCommitWriteRouted } from './commit-dispatch.mjs';
 import { readTransaction, isConnectionDiscarded } from './database.mjs';
 import { cardNamespace } from './private-card-input.mjs';
 import { cardApplicabilityInside } from './private-evidence-schema.mjs';
@@ -1038,10 +1038,10 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       .all(JSON.stringify(memories), identity.storeId, JSON.stringify(namespace), port.id, port.revision, port.dimensions, port.normalization, REPRESENTATION_VERSION));
     return rows.map(row => ({ memoryId: row.memoryId, revision: row.revision, vector: loadVector(Buffer.from(row.data, 'hex'), port) }));
   }
-  return Object.freeze({ reconcile, reconcileAsync, lexicalPage, lexical: (...args) => lexicalPage(...args).rows, cardVectors,
+  return bindCommitRuntime(Object.freeze({ reconcile, reconcileAsync, lexicalPage, lexical: (...args) => lexicalPage(...args).rows, cardVectors,
     refreshVectors, semanticPreflight, state, assertState, assertFile: checkFile,
     embeddingGuard: (readSet, deadlineAt) => contextEmbeddingGuard(canonical, canonicalRead, readSet, deadlineAt),
-    close() { if (!closed) { closed = true; if (side.isOpen) side.close(); } } });
+    close() { if (!closed) { closed = true; if (side.isOpen) side.close(); } } }), side);
 }
 
 // U5c-2 internal seam: the optional readers supply a charged database wrapper.
