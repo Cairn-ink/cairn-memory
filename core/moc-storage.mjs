@@ -380,7 +380,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     AND EXISTS (SELECT 1 FROM moc_title_sources present WHERE present.moc_id = moc.id)
     THEN moc.title ELSE NULL END`;
 
-  function queryCandidateRows(ns, { score, memoryLabel, sourceReceiptLimit = 0,
+  function queryCandidateRows(ns, { score, memoryLabel, memoryLabelAfterScan, sourceReceiptLimit = 0,
     scanBoundary, expectedEpoch, expectedSuppressionEpoch, scanBudgetMs = QUERY_SCAN_BUDGET_MS }) {
     const { scan, page, top, floor, pageMs } = QUERY_CANDIDATES;
     if (![0, SOURCE_QUERY_RECEIPT_LIMIT].includes(sourceReceiptLimit)) fail('invalid_input');
@@ -489,7 +489,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         eligible.splice(low, 0, candidate);
         if (eligible.length > top) { eligible.pop(); pruned = true; }
       };
-      const place = candidate => {
+      const place = (candidate, afterScan = false) => {
         const { memory, winningExcerpt } = candidate;
         const placement = discoveryPrepare(`SELECT r.* FROM moc_memory_refs r
           JOIN mocs parent ON parent.id = r.moc_id
@@ -497,7 +497,9 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
             AND parent.level = 1 AND parent.revision = r.moc_revision
           ORDER BY parent.canonical_title, parent.id LIMIT 1`)
           .get(memory.id, memory.revision, ...boundary(ns));
-        const candidateLabel = memoryLabel(winningExcerpt ?? memory.content);
+        const text = winningExcerpt ?? memory.content;
+        const candidateLabel = afterScan && memoryLabelAfterScan
+          ? memoryLabelAfterScan(text, candidate.score) : memoryLabel(text);
         return { item: placement
           ? { type: 'ref', ref: memoryRef(placement), label: candidateLabel }
           : { type: 'unfiled', ref: { memoryId: memory.id, revision: memory.revision }, label: candidateLabel } };
@@ -622,7 +624,10 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         const accepted = tryReadPage(() => {
           if (!sameEpochs(epochs())) return false;
           assertIndexAvailable(ns);
-          for (const candidate of eligible) if (!placements.has(candidate)) placements.set(candidate, place(candidate));
+          // Only final winners use the shortcut, after the scan boundary is fixed.
+          for (const candidate of eligible) if (!placements.has(candidate)) {
+            placements.set(candidate, place(candidate, true));
+          }
           return true;
         });
         if (accepted !== true) {

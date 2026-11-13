@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createQueryExcerpt, QUERY_EXCERPT_VERSION } from '../query-excerpt.mjs';
+import { createQueryScore } from '../query-candidates.mjs';
 
 const points = (text) => [...text];
 const prefix = (text) => points(text).slice(0, 120).join('');
@@ -28,6 +29,8 @@ function oracle(query, content) {
 function check(query, content) {
   const excerpt = createQueryExcerpt(query)(content);
   assert.equal(excerpt, oracle(query, content));
+  assert.equal(createQueryExcerpt(query, true)(content, createQueryScore(query)(content)), excerpt,
+    'final label shortcut preserves exact windows');
   assert.ok(points(excerpt).length <= 120);
   assert.ok(content.includes(excerpt), 'excerpt must be a contiguous original substring');
   assert.equal(createQueryExcerpt(query)(content), excerpt, 'stable tie-breaking');
@@ -145,4 +148,15 @@ test('fixed-seed bounded mixtures agree with independent exhaustive window scori
     for (let item = 0; item < 65; item++) body += `${pieces[next(pieces.length)]}${item % 3 === 0 ? '' : ' '}`;
     check(queries[next(queries.length)], body);
   }
+});
+
+
+test('final label shortcut proves whole prefix tokens using original UTF-16 boundaries', () => {
+  for (const [query, body] of [
+    ['alpha beta', 'ALPHA beta ' + '😀'.repeat(180)],
+    ['alpha', '😀'.repeat(114) + 'alpha ' + '.'.repeat(200)],
+    ['𐐀', '😀'.repeat(119) + '𐐨 ' + '.'.repeat(200)],
+    ['alpha', '.'.repeat(115) + 'alphabet ' + '.'.repeat(150) + 'alpha'],
+    ['𐐀', '.'.repeat(119) + '𐐨x ' + '.'.repeat(150) + '𐐨'],
+  ]) check(query, body);
 });
