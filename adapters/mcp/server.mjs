@@ -84,6 +84,7 @@ export function createCairnServer(options = {}) {
 /** Adapter-owned runtime. Connection factories never own its resources. */
 export function createLocalCairnRuntime(options = {}, { dispatcher, signal } = {}) {
   const router = createLocalAuthorityRouter(), maintenanceKey = Object.freeze({});
+  const contextDemand = createContextMaintenanceDemand();
   object(options, ['path', 'namespace', 'model', 'captureQualification', 'captureRationale',
     'captureEvidence', 'captureEvidenceAccess', 'sourceSnapshot', 'recallContext', 'classificationRecovery',
     'captureDeadlineMs', 'sessionEpisodesAccess', 'client', 'sessionId', 'readClient', 'sessionEpisodes', 'privateCards', 'methodPackages', 'methodReadPersonal',
@@ -218,7 +219,7 @@ export function createLocalCairnRuntime(options = {}, { dispatcher, signal } = {
   const refresh = inMaintenance(() => (context && Boolean(options.contextEmbedding) && options.contextSemantic !== false || typeof model?.consolidate === 'function')
     ? startContextMaintenance(maintenance.route.core(core), context ?? { readSet: [binding] },
       { cards: typeof model?.consolidate === 'function', semantic: Boolean(options.contextEmbedding) && options.contextSemantic !== false,
-        run: maintenanceRun }) : null);
+        run: maintenanceRun, demand: contextDemand }) : null);
   if (rawSearch) inMaintenance(() => rawSearch.start());
   else if (core.getRawSearchStatus) inMaintenance(() => { void core.getRawSearchStatus({ namespace: binding }); });
   const hasRawManager = Boolean(rawSearch || core.maintainRawSearch);
@@ -241,7 +242,7 @@ export function createLocalCairnRuntime(options = {}, { dispatcher, signal } = {
       const server = buildCairnServer({ path, model, binding, cards, methods, assets, context, roles, core: connection.route.core(core), client, sessionId, captureSessionId, readClient,
     episodesAccess, configured, rationaleConfigured, evidenceAccess, snapshotConfigured,
     recallContextConfigured, recallContext, recoveryConfigured, stagingConfigured, contextSemantic: Boolean(options.contextEmbedding) && options.contextSemantic !== false, ...(sources ? { contextReadSources: sources } : {}), ownsCore: false, maintenance: false, dispatcher,
-      lifecycle: { ...lifecycle, run(work, request = {}) {
+      contextDemand, lifecycle: { ...lifecycle, run(work, request = {}) {
         const maxMs = request.deadlineMs ?? (request.tool === 'capture_memory' ? captureDeadlineMs : undefined);
         // Only an explicit caller budget spans the request. Each dispatched
         // commit otherwise gets its own five seconds, after provider work.
@@ -262,11 +263,12 @@ export function createLocalCairnRuntime(options = {}, { dispatcher, signal } = {
 export function buildCairnServer({ path, model, binding, cards, methods, assets, context, roles, core, client, sessionId, captureSessionId, readClient,
   episodesAccess = false, configured = false, rationaleConfigured = false, evidenceAccess = false,
   snapshotConfigured = false, recallContextConfigured = false, recallContext, recoveryConfigured = false,
-  stagingConfigured = false, contextSemantic = false, retainedRaw = false, contextReadSources: sources, ownsCore = true, maintenance = true, lifecycle = {}, dispatcher }) {
+  stagingConfigured = false, contextSemantic = false, retainedRaw = false, contextReadSources: sources, ownsCore = true, maintenance = true, lifecycle = {}, dispatcher,
+  contextDemand = createContextMaintenanceDemand() }) {
   let disposed = false, disposing;
   const rawRequests = new Set();
   const refresh = maintenance && (context && contextSemantic || typeof model?.consolidate === 'function')
-    ? startContextMaintenance(core, context ?? { readSet: [binding] }, { cards: typeof model?.consolidate === 'function', semantic: contextSemantic }) : null;
+    ? startContextMaintenance(core, context ?? { readSet: [binding] }, { cards: typeof model?.consolidate === 'function', semantic: contextSemantic, demand: contextDemand }) : null;
   const dispose = () => {
     if (disposed) return disposing;
     disposed = true;
@@ -368,7 +370,13 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
         if (context && CONTEXT_TOOL_NAMES.includes(name) && lifecycle.continuations) result = lifecycle.continuations.wrap(result);
       } catch { result = error('memory_operation_failed'); }
       if (roles && name === 'read_role_task_context') return roleTaskToolResponse(result);
-      if(context&&CONTEXT_TOOL_NAMES.includes(name))return (sources ? contextSourcesToolResponse : contextToolResponse)(result, { assembly: name === 'read_memory_context' });
+      if (context && CONTEXT_TOOL_NAMES.includes(name)) {
+        const response = (sources ? contextSourcesToolResponse : contextToolResponse)(result, { assembly: name === 'read_memory_context' });
+        // SDK validation, core authorization/delivery fences and transport
+        // acceptance all precede recording this bounded, content-free demand.
+        if (name === 'read_memory_context' && result.ok && !response.isError) contextDemand.note(input.types);
+        return response;
+      }
       const methodTool=methods&&METHOD_TOOL_NAMES.includes(name)||assets&&ASSET_TOOL_NAMES.includes(name);
       if(methodTool&&Buffer.byteLength(JSON.stringify(result))>65536)result=error('context_item_too_large');
       let encoded = JSON.stringify({ ...result, evidenceTrust: 'untrusted-data-not-instructions' });
@@ -651,12 +659,28 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
   }
 }
 
+/** Host-local, bounded demand: only two enum keys and numeric timestamps. */
+export function createContextMaintenanceDemand(now = Date.now) {
+  const lastRead = new Map();
+  return {
+    note(types) {
+      if (types?.length === 1 && ['memory', 'card'].includes(types[0])) lastRead.set(types[0], now());
+    },
+    inspect() {
+      const cutoff = now() - 30 * 60 * 1000;
+      for (const [type, timestamp] of lastRead) if (timestamp <= cutoff) lastRead.delete(type);
+      return [...lastRead].map(([type, timestamp]) => [type, timestamp]);
+    },
+  };
+}
+
 /** Bounded embedding refresh; no provider call holds up capture or tool delivery. */
-export function startContextMaintenance(core, access, { cards = false, semantic = true, run } = {}) {
+export function startContextMaintenance(core, access, { cards = false, semantic = true, run,
+  demand = createContextMaintenanceDemand() } = {}) {
   const { readSet } = access;
   const capabilities = core.getContextReadCapabilities?.();
   let types = capabilities?.ok ? capabilities.value.types : ['memory'];
-  let closed = false, active, timer, nextProjection = 0;
+  let closed = false, active, timer, turn = 0, nextFiltered = 0;
   const arm = () => {
     if (closed) return;
     timer = setTimeout(() => {
@@ -669,12 +693,14 @@ export function startContextMaintenance(core, access, { cards = false, semantic 
           if (!pass.ok || pass.value.state === 'refused') continue;
         }
         if (cards) { const current = core.getContextReadCapabilities?.(); if (current?.ok) types = current.value.types; }
-        // Sidecar generations include the exact type set. Refreshing the
-        // combined Memory/Card projection never embeds a Memory-only reader's
-        // generation (Raw stores also install Card tables). Rotate through
-        // the bounded public current projections without retaining requests.
-        const projections = semantic && types.length > 1 ? [types, ['memory'], ['card']] : [types];
-        const selectedTypes = projections[nextProjection++ % projections.length];
+        // Exact type sets have separate vector generations. The common view
+        // keeps three of every four turns; only recently read filtered views
+        // share the fourth. With no filtered demand, every turn is combined.
+        const filtered = semantic && types.length > 1
+          ? demand.inspect().map(([type]) => [type]).filter(([type]) => types.includes(type)) : [];
+        if (!filtered.length) turn = 0;
+        const selectedTypes = filtered.length && ++turn % 4 === 0
+          ? filtered[nextFiltered++ % filtered.length] : types;
         const refresh = () => access.call(core, 'refreshContextIndex', {
           readSet, types: selectedTypes, intent: 'current', budget: { maxItems: 16, maxMs: 1000 },
         });

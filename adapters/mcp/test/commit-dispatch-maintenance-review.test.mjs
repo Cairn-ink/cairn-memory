@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setImmediate as turn } from 'node:timers/promises';
-import { startContextMaintenance } from '../server.mjs';
+import { createContextMaintenanceDemand, startContextMaintenance } from '../server.mjs';
 import { createEngineCardMaintenance } from '../../../core/engine-card-maintenance.mjs';
 
 test('item 8: a busy Card namespace cannot skip other namespaces or projection refresh', { timeout: 3000 }, async t => {
@@ -16,15 +16,20 @@ test('item 8: a busy Card namespace cannot skip other namespaces or projection r
       seen.push(namespace.ownerId);
       return { ok: true, value: { state: 'refused', reason: 'storage_busy' } };
     } };
+  const demand = createContextMaintenanceDemand();
+  demand.note(['memory']); demand.note(['card']);
   const loop = startContextMaintenance(core, { readSet: namespaces, call: async (core, method, input) => {
     projections.push(input.types);
-  } }, { cards: true });
+  } }, { cards: true, demand });
   try {
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 8; i++) {
       tick(); await turn();
     }
-    assert.deepEqual(seen, ['one', 'two', 'one', 'two', 'one', 'two'], 'R2I_MAINTENANCE_CONTINUES');
-    assert.deepEqual(projections, [['memory', 'card'], ['memory'], ['card']]);
+    assert.deepEqual(seen, Array.from({ length: 8 }, () => ['one', 'two']).flat(), 'R2I_MAINTENANCE_CONTINUES');
+    assert.deepEqual(projections, [
+      ['memory', 'card'], ['memory', 'card'], ['memory', 'card'], ['memory'],
+      ['memory', 'card'], ['memory', 'card'], ['memory', 'card'], ['card'],
+    ]);
   } finally { await loop.close(); }
 });
 
