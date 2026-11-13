@@ -4,27 +4,59 @@ import childProcess from 'node:child_process';
 import { registerHooks, syncBuiltinESMExports } from 'node:module';
 import { pathToFileURL } from 'node:url';
 
-// Node 22 does not synchronize node:sqlite's named constructor export. Load
-// application modules only after this hook: their SQLite imports receive this
-// forwarding constructor, while all application statements run unchanged.
-// The default export is patched as well for default-import constructor users.
+// Install forwarding bindings before dynamically importing application modules.
+// They stay worker-scoped, so even module-initialization aliases delegate through
+// the active spy. Outside an operation they call the original builtins unchanged.
 export const sqliteDefault = sqlite;
-let activeCalls;
+let active;
 export const SpiedDatabaseSync = new Proxy(sqlite.DatabaseSync, {
   construct(target, args, newTarget) {
-    activeCalls?.push({ kind: 'in-process', args });
+    active?.calls.push({ kind: 'in-process', args });
     return Reflect.construct(target, args, newTarget);
   },
 });
+sqlite.DatabaseSync = SpiedDatabaseSync;
+// Node 22 does not synchronize node:sqlite's named constructor export. ESM
+// receives an explicit forwarding export; createRequire receives the patched
+// builtin object. Preserve the other SQLite exports on both routes.
 const binding = 'data:text/javascript,' + encodeURIComponent(
-  `export { SpiedDatabaseSync as DatabaseSync, sqliteDefault as default } from ${JSON.stringify(import.meta.url)};`);
+  `export * from 'node:sqlite'; export { SpiedDatabaseSync as DatabaseSync, sqliteDefault as default } from ${JSON.stringify(import.meta.url)};`);
 registerHooks({
   resolve(specifier, context, nextResolve) {
-    if (specifier === 'node:sqlite' && context.parentURL !== import.meta.url)
+    if (specifier === 'node:sqlite' &&
+        context.parentURL !== import.meta.url && context.parentURL !== binding &&
+        ![...context.conditions].includes('require'))
       return { url: binding, shortCircuit: true };
     return nextResolve(specifier, context);
   },
 });
+
+const refusedChild = api => Object.assign(new Error(`open spy refuses child launch: ${api}`),
+  { code: 'open_spy_child_launch_refused' });
+for (const api of ['spawnSync', 'spawn', 'execFileSync', 'execFile', 'execSync', 'exec', 'fork']) {
+  const original = childProcess[api];
+  childProcess[api] = (...parameters) => {
+    if (!active) return Reflect.apply(original, childProcess, parameters);
+    const { calls, failProbeOpen, beforeHeader } = active;
+    if (api !== 'spawnSync') {
+      calls.push({ kind: 'refused-child', api });
+      throw refusedChild(api);
+    }
+    const [command, args, options] = parameters;
+    calls.push({ kind: 'child', command,
+      args: Array.isArray(args) ? [...args] : args, options: { ...options } });
+    if (Array.isArray(args)) {
+      if (args[2] === headerProbe) beforeHeader?.();
+      if (failProbeOpen && args[2] === sqliteProbe) {
+        parameters[1] = args.map((arg, i) => i === 2 ? arg.replace(
+          'new DatabaseSync(process.argv[1], { readOnly: true })',
+          "(() => { throw Object.assign(new Error('unreadable'), { errcode: 14 }); })()") : arg);
+      }
+    }
+    return Reflect.apply(original, childProcess, parameters);
+  };
+}
+syncBuiltinESMExports();
 
 // Exact child programs are deliberate expectations, not imported from the
 // implementation: changing their open flags or adding an open must fail here.
@@ -61,31 +93,19 @@ export const rawHeaderCall = path => ({ kind: 'child', command: process.execPath
   args: ['--input-type=module', '-e', headerProbe, path], options: options(1024) });
 export const refusalCall = error => ({ kind: 'refusal', ...error });
 
-// Scope both builtin patches to one synchronous operation. Record every child,
-// not just recognized probes, and every constructor before delegating. Record
-// refusals in the same transcript so an early open cannot hide behind a catch.
+// Only recording is scoped to the synchronous operation; forwarding bindings
+// remain installed for cached aliases. A swallowed unsupported-launch error must
+// still fail the operation, and overlapping spies are refused.
 export function sqliteOpenSpy(work, { failProbeOpen = false, beforeHeader } = {}) {
-  const originalDatabase = sqlite.DatabaseSync, originalSpawn = childProcess.spawnSync, calls = [];
-  assert.equal(activeCalls, undefined, 'open spies must not overlap');
-  activeCalls = calls;
-  sqlite.DatabaseSync = SpiedDatabaseSync;
-  childProcess.spawnSync = (command, args, options) => {
-    calls.push({ kind: 'child', command, args: [...args], options: { ...options } });
-    if (args[2] === headerProbe) beforeHeader?.();
-    if (failProbeOpen && args[2] === sqliteProbe) {
-      args = args.map((arg, i) => i === 2 ? arg.replace(
-        'new DatabaseSync(process.argv[1], { readOnly: true })',
-        "(() => { throw Object.assign(new Error('unreadable'), { errcode: 14 }); })()") : arg);
-    }
-    return originalSpawn(command, args, options);
-  };
-  syncBuiltinESMExports();
-  try { return { result: work(calls), calls }; }
-  finally {
-    activeCalls = undefined;
-    sqlite.DatabaseSync = originalDatabase; childProcess.spawnSync = originalSpawn;
-    syncBuiltinESMExports();
-  }
+  assert.equal(active, undefined, 'open spies must not overlap');
+  const calls = [];
+  active = { calls, failProbeOpen, beforeHeader };
+  try {
+    const result = work(calls);
+    const refused = calls.find(call => call.kind === 'refused-child');
+    if (refused) throw refusedChild(refused.api);
+    return { result, calls };
+  } finally { active = undefined; }
 }
 export function refusesWithoutOpens(work, error, allowed = [], options) {
   const { calls } = sqliteOpenSpy(calls => {
