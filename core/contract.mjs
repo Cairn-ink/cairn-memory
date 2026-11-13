@@ -825,6 +825,7 @@ export function createMemoryCore(input, internal) {
         let snapshot = navigation.pages.get(key);
         if (!snapshot) {
           snapshot = runtime.queryCandidateRows(ns, { score: navigation.score, memoryLabel: navigation.excerpt,
+            memoryLabelAfterScan: navigation.finalExcerpt,
             ...(navigation.sourceMode ? { sourceReceiptLimit: SOURCE_QUERY_RECEIPT_LIMIT } : {}),
             ...(navigation.scanBudgetMs === undefined ? {} : { scanBudgetMs: navigation.scanBudgetMs }),
             ...(cursor ? { scanBoundary: cursor.a.scanBoundary, expectedEpoch: cursor.e,
@@ -961,7 +962,8 @@ export function createMemoryCore(input, internal) {
       const query = boundedText(input.query, 4000);
       const count = contractRevision(input.limit ?? 6);
       if (count > 12) throw new MemoryStoreError('invalid_input');
-      const navigation = { excerpt: createQueryExcerpt(query), score: createQueryScore(query), pages: new Map(),
+      const navigation = { excerpt: createQueryExcerpt(query), finalExcerpt: createQueryExcerpt(query, true),
+        score: createQueryScore(query), pages: new Map(),
         scanBudgetMs: namespaceScanBudgetMs(namespaces.length),
         ...(isSourceContext(contextMode) ? { sourceMode: contextMode } : {}),
         queryDigest: createHmac('sha256', cursorSecret)

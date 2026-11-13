@@ -11,9 +11,10 @@ const WORDS = /[\p{L}\p{N}]+/gu;
 // Distinct query tokens wholly inside each 120-code-point window score once.
 // Earliest start wins ties; no overlap or a short body preserves the prefix.
 // Tokenization and sliding pointers are linear in the bounded input lengths.
-export function createQueryExcerpt(query) {
+export function createQueryExcerpt(query, afterScan = false) {
   const window = createQueryWindow(query);
-  return (content) => window(content, WIDTH);
+  return afterScan ? (content, score) => window(content, WIDTH, score)
+    : (content) => window(content, WIDTH);
 }
 
 // The same literal policy at a caller-chosen width, used by recall packing to
@@ -21,12 +22,27 @@ export function createQueryExcerpt(query) {
 export function createQueryWindow(query) {
   if (typeof query !== 'string' || query.length > 4000) fail('invalid_input');
   const wanted = new Set(Array.from(query.matchAll(WORDS), (match) => match[0].toLowerCase()));
-  return (content, width) => {
+  return (content, width, maximumScore) => {
     if (typeof content !== 'string' || content.length > 4000) fail('invalid_input');
     if (!Number.isSafeInteger(width) || width < 0) fail('invalid_input');
     const points = [...content];
     const prefix = points.slice(0, width).join('');
     if (points.length <= width || wanted.size === 0) return prefix;
+
+    // Final winners are labeled after the signed scan boundary is fixed.
+    // The candidate's score is the exact overlap of this text with this query.
+    // No window can exceed it. Read whole tokens from the original body so a
+    // clipped prefix token cannot hit; otherwise keep the ordinary fallback.
+    if (maximumScore === 0) return prefix;
+    if (Number.isSafeInteger(maximumScore) && maximumScore > 0 && maximumScore <= wanted.size) {
+      const matched = new Set();
+      for (const match of content.matchAll(WORDS)) {
+        if (match.index + match[0].length > prefix.length) break;
+        const word = match[0].toLowerCase();
+        if (wanted.has(word)) matched.add(word);
+        if (matched.size === maximumScore) return prefix;
+      }
+    }
 
     // Regex offsets are UTF-16; window bounds are original Unicode code points.
     const pointOffsets = new Uint32Array(content.length + 1);
