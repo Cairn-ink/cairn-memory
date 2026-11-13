@@ -266,7 +266,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     side.exec('BEGIN IMMEDIATE');
     if (m) m.beginMs += performance.now() - clock;
     try {
-      const before = m ? side.prepare('SELECT total_changes() AS n').get().n : 0;
+      const before = m || hasCommitDispatcher(side) ? side.prepare('SELECT total_changes() AS n').get().n : 0;
       clock = performance.now(); const result = work();
       if (m) {
         m.writeSqlMs += performance.now() - clock;
@@ -274,7 +274,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
         m.journalPeakBytes = Math.max(m.journalPeakBytes, stat(sidecarPath + '-journal')?.size ?? 0);
       }
       clock = performance.now(); side.exec('COMMIT');
-      recordCommit(side);
+      if (hasCommitDispatcher(side) && side.prepare('SELECT total_changes() AS n').get().n !== before) recordCommit(side);
       if (m) {
         m.commitMs += performance.now() - clock; m.writeTransactions++;
         m[kind + 'TransactionMs'] += performance.now() - started;

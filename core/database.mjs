@@ -387,6 +387,7 @@ export function transaction(db, work, check, { deferred = false } = {}) {
   check?.();
   const execute = () => {
     if (!deferred) assertCommitWriteRouted(db, 'transaction');
+    const before = hasCommitDispatcher(db) ? db.prepare("SELECT total_changes() AS n").get().n : undefined;
     db.exec(deferred ? "BEGIN" : "BEGIN IMMEDIATE");
     let contentWrite;
     try {
@@ -401,7 +402,7 @@ export function transaction(db, work, check, { deferred = false } = {}) {
       contentWrite = null;
       check?.();
       db.exec("COMMIT");
-      recordCommit(db);
+      if (before !== undefined && db.prepare("SELECT total_changes() AS n").get().n !== before) recordCommit(db);
       return result;
     } catch (error) {
       if(db.isTransaction)db.exec("ROLLBACK");

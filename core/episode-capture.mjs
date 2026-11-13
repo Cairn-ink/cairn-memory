@@ -1,4 +1,4 @@
-import { dispatchCommit, hasCommitDispatcher } from './commit-dispatch.mjs';
+import { dispatchCommit, hasCommitDispatcher, dispatchSynchronousCommit } from './commit-dispatch.mjs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -117,16 +117,6 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
     if (staging === 'not-staged') fail('capacity');
     const snapshot = runtime.episodeDraftSnapshot(ns, owned);
     const planned = episodeRequest(model, snapshot);
-    if (hasCommitDispatcher(runtime)) {
-      // Match capture's host-only pre-dispatch phase. The actual provider
-      // freshness callback below still rechecks these exact prepared sources.
-      await dispatchCommit(runtime, () => {
-        runtime.assertCaptureSources(ns, planned.receipts);
-        runtime.episodeDraftSnapshot(ns, owned);
-        return runtime.startEpisodeAttempt(ns, owned, deadline);
-      }, deadline);
-      started = true;
-    }
     let checks = 0;
     const output = await callModel(model, 'interpretEpisode', system, planned.input, {
       failureCode: 'episode_failed', deadline, validateFresh: () => {
@@ -136,7 +126,11 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
         // callModel checks once during preparation and again immediately before
         // invoking the port. Consume only at that second check, with no await.
         if (++checks === 2 && !started) {
-          runtime.startEpisodeAttempt(ns, owned, deadline);
+          if (hasCommitDispatcher(runtime)) dispatchSynchronousCommit(runtime, () => {
+            runtime.assertCaptureSources(ns, planned.receipts);
+            runtime.episodeDraftSnapshot(ns, owned);
+            return runtime.startEpisodeAttempt(ns, owned, deadline);
+          }); else runtime.startEpisodeAttempt(ns, owned, deadline);
           started = true;
         }
       },

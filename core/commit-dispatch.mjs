@@ -66,7 +66,12 @@ export function bindCommitConnection(db, source, { canonical = true } = {}) {
     if (canonical && restoreTimeoutMs !== 5000) fail('storage_error');
     const binding = { host, db, restoreTimeoutMs };
     bindings.set(db, binding);
-    host.connections.add(new WeakRef(db));
+    const ref = new WeakRef(db), close = db.close;
+    host.connections.add(ref);
+    Object.defineProperty(db, 'close', { configurable: true, value() {
+      try { return Reflect.apply(close, db, []); }
+      finally { if (!db.isOpen) { host.connections.delete(ref); bindings.delete(db); } }
+    } });
   }
   return db;
 }

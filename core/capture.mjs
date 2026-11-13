@@ -177,12 +177,6 @@ export async function captureMessages({ model, input, operations, captureQualifi
     } else request = { ...request, input: { ...request.input,
       messages: allowed.map((index, position) => ({ ...request.input.messages[index], index: position })) } };
     deadline?.check();
-    if (operations.commit && isPreDispatchToken(owned.token)) {
-      const dispatched = await operations.commit(() => operations.beginCaptureDispatch(owned));
-      owned.token = dispatched.token;
-      stagedDispatched = true;
-      deadline?.check();
-    }
     const output = episodeRun?.skip ? { items: [] } : await callModel(model, 'extract', request.system, request.input,
       { failureCode: 'extraction_failed', deadline, validateFresh: assertSources,
         beforeDispatch: () => {

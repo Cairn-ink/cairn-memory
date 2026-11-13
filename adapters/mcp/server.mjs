@@ -666,7 +666,7 @@ function startContextMaintenance(core, access, { cards = false, semantic = true,
           const maintain = () => core.maintainCards({ namespace, budget: { maxItems: 512, maxMs: 30000 } });
           const pass = await (run ? run(maintain, 30000) : maintain());
           if (pass.ok && pass.value.state === 'paused') continue;
-          if (!pass.ok || pass.value.state === 'refused') return;
+          if (!pass.ok || pass.value.state === 'refused') continue;
         }
         if (cards) { const current = core.getContextReadCapabilities?.(); if (current?.ok) types = current.value.types; }
         // Sidecar generations include the exact type set. Refreshing the

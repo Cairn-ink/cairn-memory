@@ -1,5 +1,5 @@
 import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
-import { dispatchCommit, hasCommitDispatcher, commitFailure } from './commit-dispatch.mjs';
+import { dispatchCommit, hasCommitDispatcher, commitFailure, dispatchSynchronousCommit } from './commit-dispatch.mjs';
 import { contentWriteMethodClass } from './content-write-context.mjs';
 import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { contentSafetyFacade } from './content-safety-boundary.mjs';
@@ -1080,7 +1080,7 @@ export function createMemoryCore(input, internal) {
           // Preserve private pre-dispatch busy provenance across this internal
           // operation, including the runtime facade's entry/delivery checks.
           beginCaptureDispatch: value => {
-            try { return runtime.assertCaptureEvidence(ns, { ...value, [captureDispatch]: true }, deadline); }
+            try { return dispatchSynchronousCommit(runtime, () => runtime.assertCaptureEvidence(ns, { ...value, [captureDispatch]: true }, deadline)); }
             catch (error) { if (isStorageBusy(error)) throw captureSourceBusy(); throw error; }
           },
           claimAdmission: (value, sources) => invoke(() => runtime.claimCapturedAdmission(ns, {
