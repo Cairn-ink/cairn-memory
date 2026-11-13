@@ -82,12 +82,10 @@ const captureInput = (eventId, messages, ns = namespace) => ({ namespace: ns,
 const message = (id, content) => ({ id, role: 'user', content });
 const opened = (workspace, filename, model, candidatePolicy) => {
   const path = join(workspace.path, filename);
-  let core = openMemoryCore({ path, model, captureSourcePolicy: 'indexed-evidence-v1',
-    ...(candidatePolicy ? { sourceCandidatePolicy: candidatePolicy } : {}) });
+  let core = openMemoryCore({ path, model, captureSourcePolicy: 'indexed-evidence-v1' });
   workspace.defer(() => { core?.close(); core = null; });
   return { path, get core() { return core; }, close() { core?.close(); core = null; },
-    reopen() { core?.close(); core = openMemoryCore({ path, model, captureSourcePolicy: 'indexed-evidence-v1',
-      ...(candidatePolicy ? { sourceCandidatePolicy: candidatePolicy } : {}) }); return core; } };
+    reopen() { core?.close(); core = openMemoryCore({ path, model, captureSourcePolicy: 'indexed-evidence-v1' }); return core; } };
 };
 const passageIn = (receipts, marker) => receipts?.some(row => row.excerpt.includes(marker)) ?? false;
 
@@ -353,9 +351,8 @@ export async function runGate({ fault = null } = {}) {
     const optRow = await timeRead(() => inspectQuestion(optStore, optFrames, target.memory, capacityQuestion,
       'bounded-keyset-v1'));
     report.cases[1].questions[1] = { ...optRow, status: 'completed' };
-    assertGate(defaultRow.stages.retained && !defaultRow.stages.referenceVisible &&
-      defaultRow.firstMissing === 'candidate-visible' &&
-      defaultRow.firstDeliveryFailure === 'reference-visible', 'capacity_default_prefix');
+    assertGate(delivered(defaultRow) && defaultRow.stages.referenceVisible === true
+      && defaultRow.routingCueVisible === true, 'capacity_default_delivery');
     assertGate(delivered(optRow) && optRow.stages.referenceVisible === true
       && optRow.routingCueVisible === true, 'capacity_optin_delivery');
     assertGate(optRow.recallCoverage === 'budget_exhausted', 'capacity_coverage');

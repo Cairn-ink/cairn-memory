@@ -15,7 +15,8 @@ import { SAFETY_SCHEMA_VERSIONS, resolveContentLayout } from '../content-safety-
 import { safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
 import { eventTimeSafetyFixture } from '../testing/receipt-event-time-fixture.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
-import { QUERY_SCAN_LIMIT } from '../query-candidates.mjs';
+import { QUERY_CANDIDATES } from '../query-candidates.mjs';
+import { installRecallScanClock } from '../testing/recall-scan-clock.mjs';
 
 const namespaces = [
   { ownerId: 'discovery-reuse', scope: 'personal', projectId: null },
@@ -154,6 +155,7 @@ const optionsForBase = base => base === 18 ? {} : base === 23 ? { privateCards: 
           : base === 32 ? { roleProfiles: true } : { currentDependencies: true };
 
 async function fixture(t, physical = 'creation', count = 40) {
+  installRecallScanClock(t);
   let workspace, path;
   if (SAFETY_SCHEMA_VERSIONS.includes(physical)) {
     const layout = resolveContentLayout(physical);
@@ -225,20 +227,20 @@ function parity(before, after) {
   assert.equal(after.trace, before.trace, 'byte-identical SQL order, methods and bindings');
 }
 
-for (const physical of layouts) test(`equivalence: layout ${physical}, one/two namespaces, many/zero matches, body/source/keyset, both generation branches`, async t => {
+for (const physical of layouts) test(`equivalence: layout ${physical}, one/two namespaces, many/zero matches, body/source/rationale, both generation branches`, async t => {
   const reference = await referenceEngine(t), f = await fixture(t, physical);
   const cells = [];
   for (const generation of ['declarations', 'published']) {
     if (generation === 'published') publishGeneration(f.path);
-    for (const policy of ['body', 'source', 'keyset']) {
+    for (const policy of ['body', 'source', 'rationale']) {
       const beforeModel = model(), afterModel = model();
-      const options = { path: f.path, ...(policy === 'keyset' ? { sourceCandidatePolicy: 'bounded-keyset-v1' } : {}) };
+      const options = { path: f.path };
       const beforeCore = reference.openMemoryCore({ ...options, model: beforeModel });
       const afterCore = openMemoryCore({ ...options, model: afterModel });
       try {
         for (const size of [1, 2]) for (const hit of [true, false]) {
           const request = { readSet: namespaces.slice(0, size), query: hit ? policy === 'body' ? 'amber' : 'copper' : 'zeppelin',
-            ...(policy === 'body' ? {} : { contextMode: 'source-evidence' }) };
+            ...(policy === 'body' ? {} : { contextMode: policy === 'source' ? 'source-evidence' : 'rationale-evidence' }) };
           beforeModel.counters.length = afterModel.counters.length = 0;
           const before = await measure(() => beforeCore.recall(request));
           const after = await measure(() => afterCore.recall(request));
@@ -262,7 +264,7 @@ for (const physical of layouts) test(`equivalence: layout ${physical}, one/two n
 
 test('prepare counts: exact lazy per-namespace bound at zero, one, many and scan-limit candidates', async t => {
   const reference = await referenceEngine(t), rows = [];
-  for (const count of [0, 1, 32, QUERY_SCAN_LIMIT + 1]) {
+  for (const count of [0, 1, 32, QUERY_CANDIDATES.top + 1]) {
     const f = await fixture(t, 'creation', count);
     const beforeRuntime = reference.createMemoryRuntime({ path: f.path });
     const afterRuntime = createMemoryRuntime({ path: f.path });
@@ -274,8 +276,20 @@ test('prepare counts: exact lazy per-namespace bound at zero, one, many and scan
         const before = await measure(() => call(beforeRuntime));
         const after = await measure(() => call(afterRuntime));
         parity(before, after);
-        const oldCount = Math.min(count, QUERY_SCAN_LIMIT) * size, newCount = count ? size : 0;
-        assert.deepEqual(before.counts, { membership: oldCount, placement: oldCount });
+        const membershipCount = count * size, newCount = count ? size : 0;
+        const db = new DatabaseSync(f.path);
+        let placementCount = 0;
+        try {
+          for (const ns of namespaces.slice(0, size)) {
+            // Independent SQL inventory: mandatory floor placements plus final
+            // ID-ranked winners. A displaced floor row was still placed once.
+            const select = order => db.prepare(`SELECT id FROM memories
+              WHERE owner_id=? AND scope=? AND project_id=? AND deleted=0
+              ORDER BY ${order} LIMIT ?`).all(ns.ownerId, ns.scope, ns.projectId ?? '', QUERY_CANDIDATES.top);
+            placementCount += new Set([...select('updated_at DESC,id ASC'), ...select('id ASC')].map(row => row.id)).size;
+          }
+        } finally { db.close(); }
+        assert.deepEqual(before.counts, { membership: membershipCount, placement: placementCount });
         assert.deepEqual(after.counts, { membership: newCount, placement: newCount }, 'discovery prepares stay constant per namespace');
         assert.equal(new Set(after.statements).size, 2 * newCount, 'no statement shared across transactions/namespaces');
         rows.push({ candidates: count, namespaces: size, before: before.counts, after: after.counts });

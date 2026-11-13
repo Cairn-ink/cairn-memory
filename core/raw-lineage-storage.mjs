@@ -210,6 +210,73 @@ export function assertEpisodeSourceProof(ns, sources, facts, budget = { remainin
 }
 
 /** Schema-presence driven: current option-off writers enforce retained fences. */
+// Writer-only enumeration: at most 128 memories and five receipts per
+// memory per batch; overflow continues with four-plus-one receipt pages.
+function* writerReceiptInputs(db, check, ns) {
+  for (const deleted of [0,1]) {
+    let after;
+    while (true) {
+      check();
+      const select=(clause,args,limit)=>db.prepare(`SELECT id,revision,deleted,updated_at FROM memories INDEXED BY namespace_memories
+        WHERE owner_id=? AND scope=? AND project_id=? AND deleted=? ${clause}
+        ORDER BY updated_at DESC,id LIMIT ?`).all(...boundary(ns),deleted,...args,limit);
+      const memories=after ? select('AND updated_at=? AND id>?',[after.updated_at,after.id],129) : select('',[],129);
+      if(after && memories.length<129)memories.push(...select('AND updated_at<?',[after.updated_at],129-memories.length));
+      const keys=memories.slice(0,sourcePageSize);
+      if(keys.length) {
+        check();
+        const inputs=db.prepare(`SELECT r.*,
+          json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted
+          FROM json_each(?) wanted CROSS JOIN receipts r ON r.rowid IN (
+            SELECT rowid FROM receipts INDEXED BY memory_receipts
+            WHERE memory_id=json_extract(wanted.value,'$[0]') ORDER BY created_at,id LIMIT 5)
+          ORDER BY wanted.key,r.created_at,r.id`)
+          .all(JSON.stringify(keys.map(memory=>[memory.id,memory.revision,memory.deleted])));
+        const byMemory=new Map();
+        for(const row of inputs) {
+          const rows=byMemory.get(row.memory_id)??[];rows.push(row);byMemory.set(row.memory_id,rows);
+        }
+        for(const memory of keys) {
+          const rows=byMemory.get(memory.id)??[];
+          yield* rows.slice(0,sourceReceiptPageSize);
+          if(rows.length<=sourceReceiptPageSize)continue;
+          let receiptAfter=rows[sourceReceiptPageSize-1];
+          while(true) {
+            check();
+            const page=db.prepare(`SELECT r.*,? AS memory_revision,? AS memory_deleted FROM receipts r INDEXED BY memory_receipts
+              WHERE memory_id=? AND (created_at,id)>(?,?) ORDER BY created_at,id LIMIT 5`)
+              .all(memory.revision,memory.deleted,memory.id,receiptAfter.created_at,receiptAfter.id);
+            const next=page.slice(0,sourceReceiptPageSize);
+            yield* next;
+            if(page.length<=sourceReceiptPageSize)break;
+            receiptAfter=next.at(-1);
+          }
+        }
+      }
+      if(memories.length<=sourcePageSize)break;
+      after=memories[sourcePageSize-1];
+    }
+  }
+}
+function matchingReceiptInputs(db, check, ns, receipts) {
+  const key=(client,session,event,role,excerpt)=>JSON.stringify([client,session,event,role,excerpt]);
+  const receiptKey=receipt=>key(receipt.client,receipt.sessionId,receipt.eventId,receipt.role,receipt.excerpt);
+  const matches=new Map();
+  for(const receipt of receipts.slice(1))matches.set(receiptKey(receipt),[]);
+  return function* (receipt,index) {
+    if(index===0) {
+      const firstKey=receiptKey(receipt);
+      for(const row of writerReceiptInputs(db,check,ns)) {
+        check();
+        const rowKey=key(row.client,row.session_id,row.event_id,row.role,row.excerpt);
+        matches.get(rowKey)?.push(row);
+        // Suspend the walk until the first receipt's existing validator runs.
+        if(rowKey===firstKey)yield row;
+      }
+    } else yield* matches.get(receiptKey(receipt));
+  };
+}
+
 export function createRawLineageStorage(db, { readMemo } = {}) {
   const native=db;
   let snapshot;
@@ -281,7 +348,7 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
   // Index order is explicit and every input page has a fixed LIMIT. Filtering
   // follows the page bound, so even a source with no matches cannot scan an
   // unbounded namespace in one statement. The writer fallback visits every page.
-  function* receiptInputs(ns) {
+  function* snapshotReceiptInputs(ns) {
     const cacheKey=JSON.stringify(boundary(ns));
     if(snapshot?.inputs.has(cacheKey)){ yield* snapshot.inputs.get(cacheKey); return; }
     const retained=[];
@@ -343,9 +410,14 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
       if(snapshot && (!hasContentSuppressionRequestInside(db) || !covered || !facts ||
           facts.some(fact=>fact.kind==='raw')))sourceSnapshotOverflow();
       if (contentSuppressionReasonInside(db, ns)) fail('source_excluded');
-      for (const receipt of receipts) {
+      // Validate receipt one as the walk streams; retain later receipts' matches.
+      // Snapshot enumeration, overflow and validated handling stay unchanged.
+      // Leave the row loop only by failing: later receipts see only the rows
+      // retained while receipt one drains the walk.
+      const matches=snapshot ? undefined : matchingReceiptInputs(db,check,ns,receipts);
+      for (const [index,receipt] of receipts.entries()) {
         check();
-        for (const row of receiptInputs(ns)) {
+        for (const row of snapshot ? snapshotReceiptInputs(ns) : matches(receipt,index)) {
           check();
           if(row.client!==receipt.client || row.session_id!==receipt.sessionId || row.event_id!==receipt.eventId ||
             row.role!==receipt.role || row.excerpt!==receipt.excerpt)continue;
