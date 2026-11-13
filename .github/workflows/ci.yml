@@ -23,7 +23,9 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
-          cache-dependency-path: adapters/mcp/package-lock.json
+          cache-dependency-path: |
+            adapters/mcp/package-lock.json
+            adapters/openai/package-lock.json
       - name: Record macOS runner image
         run: echo "ImageOS=$ImageOS ImageVersion=$ImageVersion"
       - name: Inspect dependency directory
@@ -38,6 +40,23 @@ jobs:
         run: node integrations/client/testing/run.mjs --isolated-host integrations/client/test/local-macos-transport-diagnostic.test.mjs
       - run: node integrations/client/testing/run.mjs --isolated-host packages/setup/test/local-capture-interrupted.test.mjs
       - run: npm run test:local-host
+      - name: Test engine storage on macOS
+        shell: bash
+        run: |
+          set -euo pipefail
+          storage_tmp=$(mktemp -d "$RUNNER_TEMP/cairn-storage.XXXXXX")
+          chmod 700 "$storage_tmp"
+          trap 'rm -rf "$storage_tmp"' EXIT
+          TMPDIR=$(cd "$storage_tmp" && pwd -P)
+          export TMPDIR
+          for test_file in core/test/directory-nlink.test.mjs \
+            core/test/raw-search*.test.mjs \
+            core/test/context-read-sidecar.test.mjs \
+            core/test/context-read-product-warm-sidecar.test.mjs \
+            core/test/context-read-product-sidecar-attestation.test.mjs \
+            core/test/sqlite-journal*.test.mjs core/test/local-raw*.test.mjs; do
+            node tools/testing/run.mjs "$test_file"
+          done
       - run: npm run test:local-worker
       - run: npm run test:raw-producer
       - run: node tools/testing/run.mjs packaging/test/local-setup.test.mjs
