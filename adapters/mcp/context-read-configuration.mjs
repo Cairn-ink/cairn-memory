@@ -35,7 +35,7 @@ export function contextHostConfiguration(values) {
   const enabled = !values.has('--no-context-read'), personal = values.has('--context-read-personal');
   if (values.has('--context-read') && (!enabled || values.get('--context-read') !== 'context-read-v1') || personal && (!enabled || !values.has('--project'))) invalid();
   const provider = contextProviderConfiguration(values);
-  if (provider && (!enabled || values.has('--no-context-semantic'))) invalid();
+  if (provider && !enabled) invalid();
   if (!enabled) return { contextRead: false };
   const path = values.get('--db');
   if (typeof path !== 'string' || !isAbsolute(path) || resolve(path) !== path || path.includes('\0')) invalid();

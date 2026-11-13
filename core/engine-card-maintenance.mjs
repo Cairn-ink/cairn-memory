@@ -44,7 +44,8 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
     return result;
   }
   async function maintain(input) {
-    object(input, ['namespace', 'budget']); const ns = cardNamespace(input.namespace);
+    object(input, ['namespace', 'budget', 'rawSpans']); const ns = cardNamespace(input.namespace);
+    if (Object.hasOwn(input, 'rawSpans') && typeof input.rawSpans !== 'boolean') fail('invalid_input');
     const budget = input.budget ?? {}; object(budget, ['maxItems', 'maxMs']);
     const maxItems = budget.maxItems ?? ENGINE_CARD_LIMITS.memories, maxMs = budget.maxMs ?? 1000;
     if (!Number.isSafeInteger(maxItems) || maxItems < 1 || maxItems > ENGINE_CARD_LIMITS.memories ||
@@ -117,10 +118,10 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
           check();
           // Five items establish pressure without a token estimate. The only
           // smaller eligible case is a four-Memory chain: meter its actual
-          // Memory/receipt wire with the existing product packer, including
+          // Memory wire (plus receipts only with consent) with the product packer, including
           // framing, references, metadata, dates and source deduplication.
           const tokens = cluster.memories.length < 5 && edges && chainLength(cluster.memories, edges) >= 3
-            ? assembleContext({ prepared: storage.pressureItems(ns, cluster.memories), counter: model,
+            ? assembleContext({ prepared: storage.pressureItems(ns, cluster.memories, { rawSpans: input.rawSpans === true }), counter: model,
               policy: { id: 'rank-first-whole-v1' }, budget: { maxItems: 12, maxTokens: 1000000 },
               representation: 'representation-v2-dated', deadlineAt: end, snapshotOf: () => null }).diagnostics.budget.used : 0;
           cluster.trigger = cardTrigger(cluster.memories, edges, tokens);
@@ -164,8 +165,8 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
         for (const cluster of eligible.values()) {
           check();
           if (cluster.memories.length > ENGINE_CARD_LIMITS.sources) { result.state = 'source_limit'; continue; }
-          let rawSpans, rawTimer;
-          try {
+          let rawSpans = [], rawTimer;
+          if (input.rawSpans === true) try {
             rawSpans = await Promise.race([storage.rawSpans(ns, cluster.memories, check),
               new Promise((_, reject) => { rawTimer = setTimeout(() => reject(Object.assign(Error('deadline'),
                 { code: 'model_timeout' })), deadline.remainingMs()); })]);

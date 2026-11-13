@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { ownData } from '../../../core/local-authority-input.mjs';
 import { checkedPath, privateRead, privateWrite, privateDirectory, syncDirectory } from '../private-state.mjs';
 import { stateLock } from '../state-lock.mjs';
+import { nativeSettingsLock } from './local-settings-lock.mjs';
 import { createLocalRawHost } from './local-host.mjs';
 import { activateHostAuthority } from './local-host-rearm.mjs';
 import { localCodexQualificationStatus } from './local-codex-qualification.mjs';
@@ -152,7 +153,7 @@ async function prepare(request,signal) {
         // stale active journal is not proof that its native hooks still exist.
         // Refuse drift without silently repairing settings, consent or identity.
         let present = false;
-        try { present = registered((await nativeSnapshot(request.clientConfigPath)).text,request); }
+        try { present = registered((await nativeSnapshot(request.clientConfigPath,request)).text,request); }
         catch { fail('configuration_changed'); }
         if (!present) fail('configuration_changed');
       }
@@ -161,7 +162,7 @@ async function prepare(request,signal) {
   }
   await directory(dirname(paths.root),true);
   const sourceIdentity = await directory(request.sourceRoot);
-  await directory(request.usageRoot,true); await qualification(request); const before = await nativeSnapshot(request.clientConfigPath);
+  await directory(request.usageRoot,true); await qualification(request); const before = await nativeSnapshot(request.clientConfigPath,request);
   mergeNative(before.text,request,false,{ own:false });
   const storeId = await store(request);
   // Validate the complete core opener and all controls before acquiring a new
@@ -183,7 +184,7 @@ async function prepare(request,signal) {
     await privateDirectory(paths.home);
     checkSignal(signal);
     // Re-check conflicts immediately before the real consent mutation.
-    mergeNative((await nativeSnapshot(request.clientConfigPath)).text,request,false,{ own:false });
+    mergeNative((await nativeSnapshot(request.clientConfigPath,request)).text,request,false,{ own:false });
     const authority = await stateLock(request.databasePath+'.local-setup.lock',() =>
       stateLock(join(request.usageRoot,'.local-setup.lock'),() => withCore(request,storeId,async core => {
         if (ok(core.getLocalCaptureControl({ namespace:request.namespace,client:request.client })).targetId !== null) fail('authority_bound');
@@ -227,12 +228,12 @@ async function activate(root,signal) {
     const ready = await host(root).status({ signal });
     if (ready.status !== 'ready') fail('recovery_required');
     await qualification(request);
-    return stateLock(request.clientConfigPath+'.cairn-local.lock',async () => {
-      checkSignal(signal); const before = await nativeSnapshot(request.clientConfigPath);
+    return nativeSettingsLock(request.clientConfigPath+'.cairn-local.lock',request,async () => {
+      checkSignal(signal); const before = await nativeSnapshot(request.clientConfigPath,request);
       if (record.phase === 'active') { if (!registered(before.text,request)) fail('configuration_changed'); return result('active'); }
       const text = mergeNative(before.text,request,true);
       record = await publish(root,record,'activation_pending');
-      await nativeWrite(request.clientConfigPath,text,before);
+      await nativeWrite(request.clientConfigPath,text,before,request);
       if ((await host(root).status({ signal })).status !== 'ready') fail('authority_changed');
       await publish(root,record,'active'); return result('active');
     });
@@ -247,9 +248,9 @@ async function disable(root,signal) {
     record = await publish(root,record,'disabling');
     await clearSessionStarts(locations(root).state);
     try {
-      await stateLock(request.clientConfigPath+'.cairn-local.lock',async () => {
-        const before = await nativeSnapshot(request.clientConfigPath),text = mergeNative(before.text,request,false);
-        if (text !== before.text) await nativeWrite(request.clientConfigPath,text,before);
+      await nativeSettingsLock(request.clientConfigPath+'.cairn-local.lock',request,async () => {
+        const before = await nativeSnapshot(request.clientConfigPath,request),text = mergeNative(before.text,request,false);
+        if (text !== before.text) await nativeWrite(request.clientConfigPath,text,before,request);
       });
     } catch (error) { await publish(root,record,'disabled'); throw error; }
     await publish(root,record,'disabled'); return result('disabled');
@@ -279,7 +280,7 @@ export function createLocalRawSetup(value) {
       if (record.phase === 'rearm_required') return result('blocked','rearm_required');
       if (!['prepared','active'].includes(record.phase)) fail('recovery_required');
       if ((await host(root).status({ signal })).status !== 'ready') fail('authority_changed');
-      if (record.phase === 'active' && !registered((await nativeSnapshot(record.request.clientConfigPath)).text,record.request)) fail('configuration_changed');
+      if (record.phase === 'active' && !registered((await nativeSnapshot(record.request.clientConfigPath,record.request)).text,record.request)) fail('configuration_changed');
       const outcome=result(record.phase);
       return record.request.client === 'codex' ? Object.freeze({...outcome,qualification:await localCodexQualificationStatus(record.request.installation.qualificationConfigPath)}):outcome;
     } catch (error) { return failure(error); }

@@ -88,12 +88,13 @@ export function createLocalCairnRuntime(options = {}, { dispatcher, signal } = {
   object(options, ['path', 'namespace', 'model', 'captureQualification', 'captureRationale',
     'captureEvidence', 'captureEvidenceAccess', 'sourceSnapshot', 'recallContext', 'classificationRecovery',
     'captureDeadlineMs', 'sessionEpisodesAccess', 'client', 'sessionId', 'readClient', 'sessionEpisodes', 'privateCards', 'methodPackages', 'methodReadPersonal',
-    'raw', 'rawSearch', 'contextSemantic', 'contextRead', 'contextReadPersonal', 'contextEmbedding', 'contextCounter', 'assets', 'roleProfiles', 'roleProfileAttribution', 'contextReadSources', 'privateCardCurrentDependencies']);
-  for (const name of ['raw', 'rawSearch', 'contextSemantic']) {
+    'raw', 'rawSearch', 'rawSemantic', 'contextSemantic', 'contextRead', 'contextReadPersonal', 'contextEmbedding', 'contextCounter', 'assets', 'roleProfiles', 'roleProfileAttribution', 'contextReadSources', 'privateCardCurrentDependencies']);
+  for (const name of ['raw', 'rawSearch', 'rawSemantic', 'contextSemantic']) {
     if (Object.hasOwn(options, name) && typeof options[name] !== 'boolean') throw Error('invalid_mcp_configuration');
   }
   if (Object.hasOwn(options, 'contextRead') && !['context-read-v1', false].includes(options.contextRead)) throw Error('invalid_mcp_configuration');
   const { path, namespace } = options, model = router.protect(options.model);
+  const cardRaw = options.rawSemantic === true && options.contextSemantic !== false;
   const contextConfigured = options.contextRead !== false;
   if (contextConfigured && options.contextRead !== undefined && options.contextRead !== 'context-read-v1' || Object.hasOwn(options,'contextReadPersonal') &&
       (!contextConfigured || options.contextReadPersonal !== true || namespace?.scope !== 'project') ||
@@ -205,7 +206,8 @@ export function createLocalCairnRuntime(options = {}, { dispatcher, signal } = {
   // Older readers retain their existing grammar until that reader is installed.
   const rawSearch = context && options.raw !== false && options.rawSearch !== false && supportsRawContext()
     ? inMaintenance(() => createLocalRawSearch(path, defaultRawOptions().port,
-      options.contextSemantic === false ? undefined : embedding)) : null;
+      options.rawSemantic === true && options.contextSemantic !== false ? embedding : undefined,
+      { semanticDisabledReason: options.contextSemantic === false ? 'disabled' : options.rawSemantic === true ? 'disabled' : 'raw_semantic_not_enabled' })) : null;
   const rawPort = rawSearch?.contextPort(context.readSet);
   const core = inMaintenance(() => openMemoryCore({ path, model, raw: options.raw !== false, ...(options.rawSearch === false ? { rawSearch: false } : {}), ...(context?{contextRead:{...routed('context', context.configuration),...(options.contextSemantic === false ? {} : embedding),counter:contextCounter,...(rawPort ? {rawSearch:rawPort} : {}),...(sources ? { sources } : {})}}:{}),
     ...(roles ? { roleProfiles: routed('roles', roles.configuration) } : {}),
@@ -218,7 +220,7 @@ export function createLocalCairnRuntime(options = {}, { dispatcher, signal } = {
   let closed = false, disposed = false, closing;
   const refresh = inMaintenance(() => (context && Boolean(options.contextEmbedding) && options.contextSemantic !== false || typeof model?.consolidate === 'function')
     ? startContextMaintenance(maintenance.route.core(core), context ?? { readSet: [binding] },
-      { cards: typeof model?.consolidate === 'function', semantic: Boolean(options.contextEmbedding) && options.contextSemantic !== false,
+      { cards: typeof model?.consolidate === 'function', cardRaw, semantic: Boolean(options.contextEmbedding) && options.contextSemantic !== false,
         run: maintenanceRun, demand: contextDemand }) : null);
   if (rawSearch) inMaintenance(() => rawSearch.start());
   else if (core.getRawSearchStatus) inMaintenance(() => { void core.getRawSearchStatus({ namespace: binding }); });
@@ -240,7 +242,7 @@ export function createLocalCairnRuntime(options = {}, { dispatcher, signal } = {
       const connection = authorities();
       const { cards, methods, assets, context, roles } = connection;
       const server = buildCairnServer({ path, model, binding, cards, methods, assets, context, roles, core: connection.route.core(core), client, sessionId, captureSessionId, readClient,
-    episodesAccess, configured, rationaleConfigured, evidenceAccess, snapshotConfigured,
+    episodesAccess, configured, rationaleConfigured, evidenceAccess, snapshotConfigured, cardRaw,
     recallContextConfigured, recallContext, recoveryConfigured, stagingConfigured, contextSemantic: Boolean(options.contextEmbedding) && options.contextSemantic !== false, ...(sources ? { contextReadSources: sources } : {}), ownsCore: false, maintenance: false, dispatcher,
       contextDemand, lifecycle: { ...lifecycle, run(work, request = {}) {
         const maxMs = request.deadlineMs ?? (request.tool === 'capture_memory' ? captureDeadlineMs : undefined);
@@ -263,12 +265,12 @@ export function createLocalCairnRuntime(options = {}, { dispatcher, signal } = {
 export function buildCairnServer({ path, model, binding, cards, methods, assets, context, roles, core, client, sessionId, captureSessionId, readClient,
   episodesAccess = false, configured = false, rationaleConfigured = false, evidenceAccess = false,
   snapshotConfigured = false, recallContextConfigured = false, recallContext, recoveryConfigured = false,
-  stagingConfigured = false, contextSemantic = false, retainedRaw = false, contextReadSources: sources, ownsCore = true, maintenance = true, lifecycle = {}, dispatcher,
+  stagingConfigured = false, contextSemantic = false, cardRaw = false, retainedRaw = false, contextReadSources: sources, ownsCore = true, maintenance = true, lifecycle = {}, dispatcher,
   contextDemand = createContextMaintenanceDemand() }) {
   let disposed = false, disposing;
   const rawRequests = new Set();
   const refresh = maintenance && (context && contextSemantic || typeof model?.consolidate === 'function')
-    ? startContextMaintenance(core, context ?? { readSet: [binding] }, { cards: typeof model?.consolidate === 'function', semantic: contextSemantic, demand: contextDemand }) : null;
+    ? startContextMaintenance(core, context ?? { readSet: [binding] }, { cards: typeof model?.consolidate === 'function', cardRaw, semantic: contextSemantic, demand: contextDemand }) : null;
   const dispose = () => {
     if (disposed) return disposing;
     disposed = true;
@@ -678,7 +680,7 @@ export function createContextMaintenanceDemand(now = Date.now) {
 }
 
 /** Bounded embedding refresh; no provider call holds up capture or tool delivery. */
-export function startContextMaintenance(core, access, { cards = false, semantic = true, run,
+export function startContextMaintenance(core, access, { cards = false, cardRaw = false, semantic = true, run,
   demand = createContextMaintenanceDemand() } = {}) {
   const { readSet } = access;
   const capabilities = core.getContextReadCapabilities?.();
@@ -697,7 +699,7 @@ export function startContextMaintenance(core, access, { cards = false, semantic 
       active = withRawSearchRequestScope(async () => {
         if (cards) for (const namespace of readSet) {
           if (closed) return;
-          const maintain = () => core.maintainCards({ namespace, budget: { maxItems: 512, maxMs: 30000 } });
+          const maintain = () => core.maintainCards({ namespace, budget: { maxItems: 512, maxMs: 30000 }, ...(cardRaw ? { rawSpans: true } : {}) });
           const pass = await (run ? run(maintain, 30000) : maintain());
           if (pass.ok && pass.value.state === 'paused') continue;
           if (!pass.ok || pass.value.state === 'refused') continue;

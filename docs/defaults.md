@@ -45,12 +45,13 @@ Several sessions saving at once no longer stop one of them from saving. Default
 reads keep the Raw excerpts they already validated when a read reaches its time
 limit, marked partial, instead of dropping them.
 
-**Search catches up after saving.** Each turn is saved to the local store as soon as it ends. Raw search covers a newly saved conversation only after the local index reaches it. That indexing runs while Claude Code or Codex has the Cairn MCP server open: a few minutes for about 1,000 saved messages, about an hour for 10,000. While you keep working, each new save restarts the indexing pass, so a conversation saved during a busy session may not be searchable until you pause. Until the index has caught up, search reports partial coverage instead of claiming it found everything. Memories, and conversations the index already covers, are not affected and stay searchable as before.
+**Search catches up after saving (installer 0.6.6).** Each turn is saved to the local store as soon as it ends. Raw search covers a newly saved conversation only after the local index reaches it. Raw search builds its index in the background while Cairn is running, at roughly one saved message per second: allow about 15 minutes for 1,000 saved messages and roughly 2 hours for 10,000. After each new saved message it re-checks the whole index (about 6 minutes per 1,000 saved messages). Until a build or re-check finishes, Raw search still returns results but reports partial coverage. While you keep working, each new save restarts the indexing pass, so a conversation saved during a busy session may not be searchable until you pause. Until the index has caught up, newly saved conversations may be missing from results. The coverage report marks such results as partial, but assistants using the memory tool see only the results, so an empty answer then doesn't mean nothing was saved. Memories, and conversations the index already covers, are not affected and stay searchable as before.
 
-Known limits in this release:
+Known limits in installer 0.6.6:
 - While new turns keep arriving, the local MCP server keeps indexing: about one small index write per second and roughly 3% of one CPU core.
 - Histories of about 50,000 messages or more may never finish indexing; search keeps reporting partial coverage for them.
 - Searches served by a reader that doesn't run index maintenance itself, such as keyword-only searches when an embedding model is configured, can keep reporting partial coverage even after indexing has finished. Their results are still returned.
+- When capture resumes after being turned off, Cairn reads up to the last 4 KiB of the conversation file, and for Codex up to the first 4 KiB to find its session header; some of those bytes may have been written while capture was off. They are used only to identify the session and check the file wasn't replaced, never saved or sent.
 - A later release indexes newly saved conversations first.
 
 Going back to 0.6.5: an attested base-33 store with card lineage revision 1
@@ -130,11 +131,11 @@ The helper prints failed samples before returning a nonzero exit code.
 | Capability | What it does | Default | Cost | Programmatic option / CLI switch |
 | --- | --- | --- | --- | --- |
 | Raw retention | Saves submitted capture messages through the Raw journal, with lineage and existing exclusion/forgetting controls | On in MCP and the installer; off in the library | Local plaintext disk, default 200,000,000-byte owner cap; no extra model call | MCP `raw:false` / `--no-raw` disables retention. Library callers enable it with `raw:true`; omit or use `raw:false` to disable. For a custom cap, sealing port or policy, use `rawConversations:{mode:'raw-v1',capBytes,port,readPolicy}`. `mode:'off'` disables saving while retaining management APIs. |
-| Raw search | Searches retained Raw with BM25 plus semantic similarity fused by RRF when a provider is configured, using a separate derived index and canonical authorization checks | On when Raw retention is enabled; BM25 only without a provider or while vector coverage is partial | Local plaintext postings, metadata and vectors, up to 512 MiB per index; semantic queries and background Raw embedding use the shared embedding budget | `rawSearch:false` / `--no-raw-search`; omit to enable. Turning Raw off prevents new saving; existing retained data is not erased. |
+| Raw search | Searches retained Raw with BM25 plus semantic similarity fused by RRF when a provider is configured, using a separate derived index and canonical authorization checks | On when Raw retention is enabled; BM25 by default. Raw document and query embeddings require explicit opt-in and a provider; BM25 while vector coverage is partial | Local plaintext postings, metadata and vectors, up to 512 MiB per index; semantic queries and background Raw embedding use the shared embedding budget | `rawSearch:false` / `--no-raw-search`; omit to enable BM25. Opt into Raw embeddings with MCP `rawSemantic:true`, `--raw-semantic`, or an explicit `--context-embedder` group; an ambient key alone never enables Raw embeddings. Turning Raw off prevents new saving; existing retained data is not erased. |
 | Raw maintenance | Builds and refreshes the index after captures, with bounded background work | On with Raw search | One non-overlapping quantum per second, up to 16 rows / 25 ms; existing one-second publication cadence still applies | Follows `rawSearch` / `--no-raw-search`. `close()` stops scheduling and joins work. Capture never waits for index publication. |
 | contextRead tools | Finds candidates, refetches evidence and assembles bounded memory context | On in MCP | Local reads and tokenizer work; no language-model call | MCP option `contextRead:false` / `--no-context-read`; enable with `contextRead:'context-read-v1'` / `--context-read context-read-v1`. Core hosts supply `contextRead:{version:'context-read-v1',authority,counter,...}` to bind their own read authority. |
 | Three-layer read | Returns Memory plus eligible Raw excerpts with dates | On for the default contextRead presentation | Local reads and a 6,000-token / 24-item response budget; no model call | Follows contextRead; `--no-context-read` removes the tools. There is no separate presentation CLI flag. |
-| Semantic search | Adds embedding similarity to lexical candidate search | On in MCP when `OPENAI_API_KEY` is configured; otherwise BM25 only | Query and background document embedding calls. Automatic OpenAI configuration: `text-embedding-3-small`, 1,536 dimensions, US$1 estimated embedding spend per server process shared by Memory and Raw, concurrency 1; no practical automatic request ceiling | `contextSemantic:false` / `--no-context-semantic`; each read can also set `semantic:false`. Core hosts supply `contextRead.embedder` and `policy`; MCP hosts supply `contextEmbedding`. Explicit provider CLI groups override automatic settings. |
+| Semantic search | Adds embedding similarity to lexical candidate search | On for Memory and Card in MCP when `OPENAI_API_KEY` is configured; otherwise BM25 only. Raw requires explicit opt-in | Query and background document embedding calls. Automatic OpenAI configuration: `text-embedding-3-small`, 1,536 dimensions, US$1 estimated embedding spend per server process shared by Memory, Card and opted-in Raw, concurrency 1; no practical automatic request ceiling | `contextSemantic:false` / `--no-context-semantic`; each read can also set `semantic:false`. Core hosts supply `contextRead.embedder` and `policy`; MCP hosts supply `contextEmbedding`. Explicit provider CLI groups override automatic settings. |
 | Dated reads | Labels evidence with its event date rather than relying only on generated summaries | On for the default contextRead presentation | Local timestamp reads; no provider calls | Follows contextRead; core callers can select `representation:'representation-v2'` for the legacy undated representation. No separate CLI flag. |
 | Event time | Ordinary capture keeps its receive-time fallback for missing `occurredAt`; an explicit canonical UTC instant wins | On for ordinary capture and Raw capture | Timestamp metadata only | Set message `occurredAt` to assert event time. Session range metadata separately marks missing real event time and conservatively matches any local hide window. Legacy sessions without a range row are filled from their own messages and marked conservatively unknown. |
 | Ordered reconciliation | Reconciles successive captures in a caller-declared causal stream | Off | One additional model call per capture that requires reconciliation | Caller supplies `causal:{streamId,sequence}` to `capture()`; omit to disable. MCP has no causal-sequence flag or argument. |
@@ -188,8 +189,18 @@ Raw must never be delivered; owner and namespace boundaries apply to both Raw
 and Memory. Turning a feature off stops future work and does not erase retained
 files or backups.
 
-The embedding budget is process-local, shared by Raw document refresh, Memory
-refresh and query embeddings for the same provider ID and revision. It is not
+With `OPENAI_API_KEY` available to the Cairn MCP server, memories and search text
+go to OpenAI for semantic search, up to an estimated US$1 per server run. Saved
+conversations are sent only if you opt in with `--raw-semantic` or explicitly
+configure `--context-embedder`. Raw document and query embeddings are both off
+by default, with status reason `raw_semantic_not_enabled`; no Raw vectors are
+pending. To keep everything on this computer, don't give the server a key.
+`--no-context-semantic` only turns off embeddings (it also overrides Raw
+opt-in); with a key, recall and other model features still send memory text to
+OpenAI.
+
+The embedding budget is process-local, shared by opted-in Raw document refresh,
+Memory and Card refresh and query embeddings for the same provider ID and revision. It is not
 persisted and does not reset each day; restarting the server creates a fresh
 allowance. Reopening a store in the same process does not reset it. It is not an
 account-wide spending cap. Automatic configuration keeps the US$1 estimated
