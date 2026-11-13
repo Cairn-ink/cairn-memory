@@ -186,6 +186,12 @@ Codex 的規則，以及外掛的隱私約定。
 
 你自己開的互動對話照常使用記憶。
 
+在 0.6.6，由腳本或 Agent SDK 啟動的 Claude Code 執行（例如 `claude -p`）會和互動
+對話一樣被保存。不想讓 harness 的執行存進來，可以用
+`npx @cairn-ink/memory config --local-capture off --client claude` 關掉 Claude Code
+的保存。這也會停止保存你自己的互動式 Claude Code 對話，直到你執行
+`npx @cairn-ink/memory config --local-capture on --client claude`。
+
 ## 目前狀態
 
 這是開發者預覽版。依賴它之前，請先知道這些限制：
@@ -200,8 +206,16 @@ Codex 的規則，以及外掛的隱私約定。
 - **平台。** 本機安裝在 Linux 和 WSL 測試過。macOS 走同一套程式，但還沒測試。
   Windows 原生環境下 `setup --local` 會拒絕執行，請用 WSL，或照
   [PowerShell 原始碼安裝指南（英文）](docs/windows-install.md)操作。
+- **macOS 上用 Homebrew 裝的 Node。** 安裝時會記下 Node 帶版本號的路徑，所以
+  `brew upgrade` 更新 Node 之後請重新執行 setup。下一版修正。
 - **設定資料夾。** 如果 `~/.claude` 或 `~/.codex` 是符號連結，本機安裝會停下來、
   不接上那個工具；自訂的 `CLAUDE_CONFIG_DIR` 目前也還不支援。
+- **刪除的文字與搜尋索引。** 刪除對話或忘記記憶時，那段文字會立刻從 Cairn 的
+  資料庫移除，之後不會再出現；只是因「忘記」而隱藏的對話仍然保存著，要刪除才會
+  移除。本機搜尋索引檔可能還留著被刪內容的詞彙清單（開啟語意搜尋時還有向量），
+  要等背景清理處理到才會移除。清理只在 Cairn 執行時進行，持續有新對話存入時可能
+  一直輪不到，而不再使用的搜尋設定留下的索引檔不會被清理。和多數資料庫一樣，
+  刪掉的文字也可能留在檔案未使用的空間，直到被覆寫。
 - **語意回想需要金鑰。** 沒有 OpenAI 金鑰時，`recall_memory` 會回報
   `model_not_configured`，關鍵字搜尋照常可用。完全在本機跑模型的路徑還沒有驗證。
 - **抽取品質。** 引擎預設用模型抽取記憶的品質，還沒通過我們自己訂的來源支持

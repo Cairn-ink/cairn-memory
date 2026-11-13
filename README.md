@@ -207,6 +207,13 @@ workers from loading it:
 
 Your own interactive sessions keep using memory as before.
 
+In 0.6.6, Claude Code runs started by scripts or the Agent SDK (for example
+`claude -p`) are saved like interactive sessions. To keep harness runs out of
+the store, turn saving off for Claude Code with
+`npx @cairn-ink/memory config --local-capture off --client claude`. This also
+stops saving your interactive Claude Code sessions until you run
+`npx @cairn-ink/memory config --local-capture on --client claude`.
+
 ## Status
 
 This is a developer preview. Know these limits before you rely on it:
@@ -224,9 +231,20 @@ This is a developer preview. Know these limits before you rely on it:
 - **Platforms.** Local setup is tested on Linux and WSL. macOS runs the same
   code but is untested. On native Windows `setup --local` refuses to run, so
   use WSL or the [source-checkout guide for PowerShell](docs/windows-install.md).
+- **Homebrew Node on macOS.** Setup records Node's versioned path, so rerun
+  setup after `brew upgrade` updates Node. Fixed in the next release.
 - **Config directories.** Local setup stops without connecting a tool if
   `~/.claude` or `~/.codex` is a symbolic link, and it does not support a
   custom `CLAUDE_CONFIG_DIR` yet.
+- **Deleted text and search indexes.** Deleting a conversation or forgetting a
+  memory removes that text from Cairn's database at once, and it is never shown
+  again; conversations a forget only hides stay saved until you delete them.
+  Local search index files can keep word lists (and, with semantic search,
+  vectors) from deleted items until background cleanup reaches them. Cleanup
+  runs only while Cairn is running, may not reach them while new conversations
+  keep being saved, and never covers index files for a search setup you no
+  longer use. As with most databases, deleted text can also remain in unused
+  file space until it is overwritten.
 - **Semantic recall needs a key.** Without an OpenAI key, `recall_memory`
   returns `model_not_configured`, and keyword search still works. A fully local
   model path is not verified yet.
