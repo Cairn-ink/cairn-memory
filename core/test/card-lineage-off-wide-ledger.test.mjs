@@ -468,7 +468,7 @@ for (const receiptWalk of [false, true]) for (const mode of ['archive', 'pins'])
   });
   test(`${label}: each row of a terminal group needs permission`, () => {
     const f = neighbourFixture('write', true, receiptWalk); delete f.sqlAdditions[0].atCallEnd;
-    assert.throws(() => checkNeighbourFixture(mode, f), { code: 'ERR_ASSERTION', message: /anchor stays inside its call/ });
+    assert.throws(() => checkNeighbourFixture(mode, f), { code: 'ERR_ASSERTION', message: /entries sharing an after anchor must agree on atCallEnd/ });
   });
   test(`${label}: the receipt read is its own entry and cannot be optional`, () => {
     const f = neighbourFixture('write', false, receiptWalk);
@@ -490,4 +490,17 @@ test('predecessor policies validate exact normalized unique texts and explicit e
   f.sqlAdditions[0].atCallEnd = 'true';
   assert.throws(() => validateSqlAdditions(f.sqlAdditions, f.sqlAdditionMethods, f.sqlAdditionPolicy),
     { code: 'ERR_ASSERTION', message: /atCallEnd is an explicit boolean/ });
+});
+
+test('one after anchor cannot mix call-end and inside-call additions', () => {
+  const f = neighbourFixture('write', true);
+  f.sqlAdditions[0].atCallEnd = false;
+  const expected = { code: 'ERR_ASSERTION', message: /entries sharing an after anchor must agree on atCallEnd/ };
+  assert.throws(() => validateSqlAdditions(f.sqlAdditions, f.sqlAdditionMethods, f.sqlAdditionPolicy), expected);
+  assert.throws(() => compare(f), expected);
+  assert.throws(() => currentAdditionSummary(f.key, f.current, f.sqlAdditions, f.sqlAdditionMethods, {}, f.sqlAdditionPolicy), expected);
+  delete f.sqlAdditions[0].atCallEnd;
+  assert.throws(() => validateSqlAdditions(f.sqlAdditions, f.sqlAdditionMethods, f.sqlAdditionPolicy), expected);
+  f.sqlAdditions[0].atCallEnd = true;
+  validateSqlAdditions(f.sqlAdditions, f.sqlAdditionMethods, f.sqlAdditionPolicy);
 });

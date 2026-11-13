@@ -150,6 +150,14 @@ export function validateSqlAdditions(entries = [], sqlAdditionMethods = [], poli
       ['get', 'all', 'iterate', 'run', 'exec'].includes(row[1]) && Array.isArray(row[2]), 'full traced statement row');
     assert.ok(additionSQL(row, policy) && !receiptWalkSQL(row), 'only reviewed purge statements, never receipt exemptions');
   }
+  const anchorEnds = new Map();
+  for (const entry of entries) {
+    const anchor = JSON.stringify([entry.key, entry.method, entry.ordinal, entry.after]);
+    const atCallEnd = entry.atCallEnd === true;
+    if (anchorEnds.has(anchor)) assert.equal(atCallEnd, anchorEnds.get(anchor),
+      'entries sharing an after anchor must agree on atCallEnd');
+    anchorEnds.set(anchor, atCallEnd);
+  }
   assert.deepEqual([...new Set(entries.map(entry => entry.method))].sort(), [...sqlAdditionMethods].sort(),
     'reviewed methods are exactly those carrying additions across the workloads');
 }
