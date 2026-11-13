@@ -9,6 +9,7 @@ Forgetting, correcting or rejecting a Memory withholds its old evidence from
 other Memories citing the same message. Their own statements remain readable,
 even if they repeat that wording. A Memory can have no delivered receipts;
 an empty receipt list with a positive `receiptCount` means withheld receipts, not corruption, and on a capped recall `receiptsOmitted` includes withheld receipts.
+`getSource` for a retained receipt reference whose source is withheld returns a successful result with `source: null`, no parts and complete coverage, not an error.
 
 ```js
 await core.recall({ readSet: [namespace], query: 'What did I ask about?',
