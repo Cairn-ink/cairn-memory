@@ -43,7 +43,8 @@ async function classifyAdmission(model, namespace, admission, operations, key, d
       emitDiagnostic(model, 'classify', 'core_call', 'model_not_configured');
       fail('model_not_configured');
     }
-    const mapped = unwrap(operations.map({ namespace, purpose: 'classification' }));
+    const readMap = () => operations.map({ namespace, purpose: 'classification' });
+    const mapped = unwrap(operations.commit ? await operations.commit(readMap) : readMap());
     deadline?.check();
     const classified = unwrap(await operations.classifyPlacement({ namespace,
       memoryIds: guards.map((guard) => guard.memoryId), expectedMemoryRevisions: guards,

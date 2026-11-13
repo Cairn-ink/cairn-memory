@@ -1220,8 +1220,9 @@ export function createMemoryCore(input, internal) {
         throw new MemoryStoreError('model_not_configured');
       }
       const snapshot = runtime.classificationSnapshot(ns, ids, guards, index);
-      const mapped = mapPage({ namespace: input.namespace, purpose: 'classification' },
+      const readCatalog = () => mapPage({ namespace: input.namespace, purpose: 'classification' },
         undefined, { catalogOnly: true });
+      const mapped = commit ? await commit(readCatalog, deadline) : readCatalog();
       if (!mapped.ok) return mapped;
       if (mapped.value.indexRevision !== index) throw new MemoryStoreError('index_revision_conflict');
       const validateFresh = () => {
