@@ -119,7 +119,7 @@ P2 是入門與素材驗證；其通過不表示預設抽取品質通過，也�
 
 1. [主張證據表](../promotion-claims.md)已按該版本重新查核；README 與 HN 文案的每個事實句都有對應列。
 2. 單一入口 README 已合併；README、ROADMAP 與本計畫的 gate 狀態一致。
-3. 保留 E05 的硬安全條件：更正後接受舊 revision 為零、已遺忘記憶復活為零、接受偽造來源為零、跨 namespace 參照為零。逐項引用 `2a4e7091` 的測試或紀錄；若只有舊 engine build 的證據，條件 3 維持未完成，並標明版本。
+3. 保留 E05 的硬安全條件：更正後接受舊 revision 為零、已遺忘記憶復活為零、接受偽造來源為零、跨 namespace 參照為零。逐項引用 `2238d2fc` 的測試或紀錄；若只有舊 engine build 的證據，條件 3 維持未完成，並標明版本。
 4. [semantic-evaluation.md](semantic-evaluation.md#frozen-acceptance-e01e09) 定義的 E08、E09 照原文繼續適用於公告版本，沒有刪減項目：E08 的離線測試與 CI、兩個支援的 Node 版本、regression demos 與 plugin gates 都要通過；E09 的固定 commit 獨立審查、未達標照實記錄、作者不自行合併或放行。原文如下。
 
    E08: Ordinary tests/CI are offline. Test denominators, absent results, safety/relevance failures, budget exhaustion, malformed output and opt-in. Offline tests use fake model/HTTP and cannot establish semantic quality. Run both supported core Node versions, regression demos and plugin gates.
@@ -136,7 +136,7 @@ P2 是入門與素材驗證；其通過不表示預設抽取品質通過，也�
 
 ### 2026-11-13 條件狀態
 
-廣泛宣傳**尚未放行**。以下按文件與 `2a4e7091` 來源保守判斷；測試定義存在不等於本次執行或已發布版本驗收通過。
+廣泛宣傳**尚未放行**。以下按文件與 `2238d2fc` 來源保守判斷；測試定義存在不等於本次執行或已發布版本驗收通過。
 
 | 條件 | 狀態 | 證據與尚缺項目 |
 | --- | --- | --- |
@@ -147,16 +147,16 @@ P2 是入門與素材驗證；其通過不表示預設抽取品質通過，也�
 | 5 三次乾淨安裝 | 未完成 | [舊三次紀錄](../promotion/install-validation/README.md)是 `7467aebc` 的 agent/source 安裝；不含已發布 0.6.6 或真實 macOS，也還沒有新版本在 Node 22.16 與 Node 24 上的紀錄。 |
 | 6 真實雙 client | 未完成 | [packed capture 測試](../../packages/setup/test/local-capture.test.mjs)使用合成 client／transcript，不能當成真正 Claude Code 與 Codex 跨 session 驗收。 |
 | 7 三位外部安裝者 | 未完成 | [舊讀者記錄](../promotion/reader-test.csv)仍 pending；沒有三位外部人員依新文件安裝的完整回報。 |
-| 8 資料外送揭露 | 未完成 | [README Your data](../../README.md#your-data)及[繁中版](../../README.zh-TW.md#你的資料)寫明：有 key 時 Memory 與搜尋文字會送到 OpenAI、保存的對話要另外開啟才送、不給 key 才全部留在本機。但在 `2a4e7091`，有五處把 `--no-context-semantic` 寫成可以「fully local」：[release notes](../../CHANGELOG.md)、[CLI 說明](../../adapters/mcp/cli.mjs)、[installer README](../../packages/setup/README.md)、[defaults](../defaults.md)，以及 setup 實際印出的 `local_privacy`／`local_capture_notice`（[messages](../../packages/setup/lib/messages.mjs)）。[MCP CLI](../../adapters/mcp/cli.mjs)在有 key 時仍獨立建立模型，`recall_memory` 等工具照樣會送出文字。setup 輸出是程式字串，要改字才能符合；在公告版本的這五處與 README 一致之前，維持未完成。詳見[證據表](../promotion-claims.md)。 |
+| 8 資料外送揭露 | 未完成 | [README Your data](../../README.md#your-data)及[繁中版](../../README.zh-TW.md#你的資料)寫明：有 key 時 Memory 與搜尋文字會送到 OpenAI、保存的對話要另外開啟才送、不給 key 才全部留在本機，`--no-context-semantic` 只關 embeddings。`2238d2fc` 的 [release notes](../../CHANGELOG.md)、[CLI 說明](../../adapters/mcp/cli.mjs)、[installer README](../../packages/setup/README.md)、[defaults](../defaults.md)，以及 setup 印出的 `local_privacy`／`local_capture_notice`（[messages](../../packages/setup/lib/messages.mjs)）說法相同。文字已一致；要等這個版本發布、README 合併後才算符合。詳見[證據表](../promotion-claims.md)。 |
 | 9 真實 client 錄影 | 未完成 | README 仍連到 [2026-10-03 demo](../promotion/demo/README.md)，它是編輯過的 model-free 工具輸出，不是 0.6.6 真實 client 錄影。 |
 | 10 HN 文案及回覆安排 | 未完成 | 尚無完整 HN 稿、五題首則留言及獨立審閱，也無創辦人的回覆時段紀錄。 |
 | 11 發布量測 | 未完成 | [歷史快照](../promotion/metrics/20261002T171417.327267Z/summary.json)不是本次起點；45 stars 不含同窗 14 天 views／uniques，每日新快照尚未開始。 |
 
 ### 條件 3 的證據邊界
 
-以下測試名稱與 assertions 均核對 `2a4e7091`，本次只讀來源，沒有執行測試。四項引用的完整零違規評測紀錄是[較舊 engine `b05773f` 的 source-faithful rerun](semantic-evaluation.md#source-faithful-instruction-rerun--complete-source-support-still-failed)。不能用舊 build 的零違規代替 0.6.6 驗收；該舊評測本身也因 source support 失敗。
+以下測試名稱與 assertions 均核對 `2238d2fc`，本次只讀來源，沒有執行測試。四項引用的完整零違規評測紀錄是[較舊 engine `b05773f` 的 source-faithful rerun](semantic-evaluation.md#source-faithful-instruction-rerun--complete-source-support-still-failed)。不能用舊 build 的零違規代替 0.6.6 驗收；該舊評測本身也因 source support 失敗。
 
-| 硬安全條件 | `2a4e7091` 中的覆蓋 |
+| 硬安全條件 | `2238d2fc` 中的覆蓋 |
 | --- | --- |
 | 更正後接受舊 revision 為零 | [stdio.test.mjs](../../adapters/mcp/test/stdio.test.mjs)：`real stdio lists strict tools and persists revisions, receipts and forgetting across restart` 拒絕 stale correct／forget；[recall.test.mjs](../../core/test/recall.test.mjs)：`final authoritative read catches another connection deleting or correcting during ranking`。 |
 | 已遺忘記憶復活為零 | [store.test.mjs](../../core/test/store.test.mjs)：`forget clears active content and receipts and cannot be replayed after restart`；[local-capture.test.mjs](../../packages/setup/test/local-capture.test.mjs)：`packed real Claude hook reaches MCP Raw search; forget by save time hides source` 及 re-sent copies fenced 測試。前者查 Memory suppression，後者查合成 hook 的 Raw 隱藏／刪除邊界。 |
