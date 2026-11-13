@@ -199,23 +199,90 @@ test('B forgets and reads/writes while A awaits a provider; A disconnect does no
   assert.equal(host.inspect().runtime.cores, 1);
 });
 
-test('canonical pause gates capture on every connected SDK server; pause has no public MCP tool', { timeout: 15000 }, async t => {
-  const w = createTestWorkspace(t), path = join(w.path, 'synthetic-pause.sqlite');
-  const host = createLocalSharedRuntime({ path, namespace: ns, contextCounter: counter,
-    model: rationaleModel(), captureQualification: 'source-bound-v2' });
-  w.defer(() => host.close());
-  const a = await connect(t, host), b = await connect(t, host);
-  const control = openMemoryCore({ path, raw: true }); w.defer(() => control.close());
-  const generation = ok(control.getCaptureControl({ namespace: ns })).generation;
-  const paused = ok(control.setCapturePaused({ namespace: ns, expectedGeneration: generation, paused: true }));
-  for (const [index, connection] of [a, b].entries()) {
-    const result = await call(connection.client, 'capture_memory', { batchId: 'synthetic-paused-' + index,
-      messages: [{ role: 'user', content: 'Synthetic paused cobalt telescope' }] });
-    assert.equal(result.ok, false); assert.equal(result.error.code, 'capture_disabled');
+test('canonical pause fences Raw on all eight connections and preserves main explicit-capture semantics', { timeout: 30000 }, async t => {
+  const w = createTestWorkspace(t), rawPath = join(w.path, 'synthetic-pause-raw.sqlite');
+  const options = { namespace: ns, contextCounter: counter, rawSearch: false,
+    model: rationaleModel(), captureQualification: 'source-bound-v2', sessionEpisodesAccess: 'episode-v1' };
+  let extractions = 0;
+  const rawHost = createLocalSharedRuntime({ ...options, path: rawPath, client: 'codex',
+    model: rationaleModel(method => { if (method === 'extract') extractions++; }) });
+  w.defer(() => rawHost.close());
+  const rawConnections = [];
+  for (let i = 0; i < 8; i++) rawConnections.push(await connect(t, rawHost));
+  const control = openMemoryCore({ path: rawPath, raw: true, rawSearch: false }); w.defer(() => control.close());
+  const capture = (batchId, content) => ({ batchId, messages: [{ role: 'user', content }] });
+  const setPaused = (core, paused) => ok(core.setCapturePaused({ namespace: ns,
+    expectedGeneration: ok(core.getCaptureControl({ namespace: ns })).generation, paused }));
+  // Populate any accidental per-connection cache before changing durable state.
+  for (const [index, connection] of rawConnections.entries()) {
+    const catalogue = (await connection.client.listTools()).tools.map(tool => tool.name);
+    assert.equal(catalogue.some(name => /pause|resume/.test(name)), false, `pause has no public MCP control on connection ${index}`);
+    assert.equal(catalogue.some(name => /capture.*episode|end.*episode/.test(name)), false,
+      `connection ${index} exposes episode access but no automatic episode producer`);
+    assert.equal((await call(connection.client, 'capture_memory', capture('synthetic-warm-' + index,
+      'Synthetic warm cobalt telescope ' + index))).ok, true, `Raw warm-up succeeds on connection ${index}`);
   }
-  ok(control.setCapturePaused({ namespace: ns, expectedGeneration: paused.generation, paused: false }));
-  ok(await call(b.client, 'capture_memory', { batchId: 'synthetic-resumed',
-    messages: [{ role: 'user', content: 'Synthetic resumed cobalt telescope' }] }));
+  setPaused(control, true);
+  const beforePaused = extractions;
+  for (const [index, connection] of rawConnections.entries()) {
+    const result = await call(connection.client, 'capture_memory', capture('synthetic-paused-' + index,
+      'SYNTHETIC_PAUSED_RAW_SENTINEL_' + index));
+    assert.equal(result.ok, false, `Raw pause must refuse connection ${index} on its very next call`);
+    assert.equal(result.error.code, 'capture_disabled', `Raw pause returns capture_disabled on connection ${index}`);
+    assert.equal(extractions, beforePaused, `Raw pause prevents extraction on connection ${index}`);
+  }
+  setPaused(control, false);
+  for (const [index, connection] of rawConnections.entries()) {
+    const result = await call(connection.client, 'capture_memory', capture('synthetic-resumed-' + index,
+      'Synthetic resumed cobalt telescope ' + index));
+    assert.equal(result.ok, true, `Raw resume admits connection ${index} on its very next call`);
+  }
+  const conversations = ok(control.listRawConversations({ namespace: ns, client: 'codex', limit: 50 }));
+  assert.equal(conversations.conversations.length, 1, 'all Raw connections share one configured capture session');
+  const retained = ok(await control.getConversation({ namespace: ns,
+    conversationId: conversations.conversations[0].id, limit: 50 }));
+  assert.equal(retained.messages.length, 16, 'only eight warm and eight resumed Raw messages are retained');
+  assert.equal(JSON.stringify(retained).includes('SYNTHETIC_PAUSED_RAW_SENTINEL_'), false,
+    'no Raw message submitted while paused may appear after resume');
+  const memories = ok(control.list({ namespace: ns, limit: 50 }));
+  assert.equal(JSON.stringify(memories).includes('SYNTHETIC_PAUSED_RAW_SENTINEL_'), false,
+    'no inferred Memory from refused paused Raw may appear after resume');
+
+  // Client identity is runtime configuration. Use a second eight-connection
+  // cohort for the default Memory-only explicit path, and an isolated ordinary
+  // server with the same operations as the main-semantics oracle.
+  const explicitPath = join(w.path, 'synthetic-pause-explicit.sqlite');
+  const singlePath = join(w.path, 'synthetic-pause-single.sqlite');
+  const explicitHost = createLocalSharedRuntime({ ...options, path: explicitPath });
+  const single = createCairnServer({ ...options, path: singlePath });
+  w.defer(() => explicitHost.close()); w.defer(() => single.close());
+  const explicitConnections = [];
+  for (let i = 0; i < 8; i++) explicitConnections.push(await connect(t, explicitHost));
+  const [a, b] = streams(), direct = new Client({ name: 'synthetic-pause-oracle', version: '1' });
+  t.after(async () => { await direct.close(); a.destroy(); b.destroy(); });
+  await single.connect(new StdioServerTransport(a, a));
+  await direct.connect(new StdioServerTransport(b, b), { prior: { kind: 'legacy' } });
+  const explicitControl = openMemoryCore({ path: explicitPath, raw: true, rawSearch: false });
+  const singleControl = openMemoryCore({ path: singlePath, raw: true, rawSearch: false });
+  w.defer(() => explicitControl.close()); w.defer(() => singleControl.close());
+  setPaused(explicitControl, true); setPaused(singleControl, true);
+  // Independent stores allocate independent Memory keys. Preserve every field
+  // and all cross-references, renaming only the admitted keys bijectively.
+  const comparable = result => {
+    const names = new Map(result.value.admission.memories.map((memory, index) => [memory.id, `admitted-${index}`]));
+    const rename = value => typeof value === 'string' ? names.get(value) ?? value : Array.isArray(value)
+      ? value.map(rename) : value && typeof value === 'object'
+        ? Object.fromEntries(Object.entries(value).map(([key, item]) => [key, rename(item)])) : value;
+    return rename(result);
+  };
+  for (const [index, connection] of explicitConnections.entries()) {
+    const input = capture('synthetic-explicit-paused-' + index, 'Synthetic explicit capture while paused ' + index);
+    const actual = await call(connection.client, 'capture_memory', input), expected = await call(direct, 'capture_memory', input);
+    assert.equal(expected.ok, true, `main oracle explicit capture proceeds while paused for connection ${index}`);
+    assert.equal(actual.ok, true, `shared explicit capture proceeds while paused for connection ${index}`);
+    assert.equal(actual.value.admission.memories.length, 1, `explicit capture admits a nonempty Memory on connection ${index}`);
+    assert.deepEqual(comparable(actual), comparable(expected), `explicit paused capture matches main field by field on connection ${index}`);
+  }
 });
 
 test('SDK discover probe then legacy initialize builds two servers without disposing the connection runtime', { timeout: 15000 }, async t => {
