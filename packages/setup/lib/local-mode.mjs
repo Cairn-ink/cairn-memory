@@ -1,3 +1,4 @@
+import { localNodeExecutable } from './local-node-path.mjs';
 import { constants } from 'node:fs';
 import { readFile, lstat, stat, access, mkdir, open, readdir, rm } from 'node:fs/promises';
 import { dirname, join, sep } from 'node:path';
@@ -296,9 +297,9 @@ async function setupLocal(options, selection, detection, context) {
     } catch { throw new SetupError('engine_bundle_invalid'); }
     const baseId = engineIdFor(installerVersion, bytes);
     if (!descriptor.operation) {
-      descriptor.node = process.execPath;
+      descriptor.node = localNodeExecutable();
       beginOperation(descriptor, 'setup', selected, detection.destinations,
-        { engineId: baseId, node: process.execPath, databasePath: descriptor.database.path,
+        { engineId: baseId, node: localNodeExecutable(), databasePath: descriptor.database.path,
           ownerId: descriptor.ownerId, projectId: descriptor.projectId });
     }
     // Validate destinations again under the root lock, before publishing intent.
@@ -340,7 +341,7 @@ async function setupLocal(options, selection, detection, context) {
     if (!references.has(candidate)) await deletionPath(root, 'engine/' + candidate, { renameOnly: true, references, databasePath: descriptor.database.path });
     let installed;
     try {
-      installed = await installEngine({ root, engineId: candidate, node: process.execPath, env, write, t,
+      installed = await installEngine({ root, engineId: candidate, node: localNodeExecutable(), env, write, t,
         databasePath: descriptor.database.path, ownerId: descriptor.ownerId, projectId: descriptor.projectId, references,
         onChild: ({ kind, pid }) => updateChild(kind === 'npm' ? pid : null) });
     } catch (error) {
@@ -348,9 +349,9 @@ async function setupLocal(options, selection, detection, context) {
     } finally { await updateChild(null); }
     progress.local_engine = true;
     descriptor.engine = { id: installed.engineId, package: manifest.package.name, packageVersion: manifest.package.version, sha256: installed.sha256 };
-    descriptor.node = process.execPath;
+    descriptor.node = localNodeExecutable();
     for (const cp of Object.values(descriptor.operation.checkpoints)) if (!['done', 'manual'].includes(cp.state)) {
-      cp.desired = { ...cp.desired, engineId: installed.engineId, node: process.execPath };
+      cp.desired = { ...cp.desired, engineId: installed.engineId, node: localNodeExecutable() };
     }
     await writeDescriptor(root, descriptor);
     let manual = Object.values(descriptor.operation.checkpoints).some(cp => cp.state === 'manual');

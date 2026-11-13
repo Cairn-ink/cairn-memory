@@ -2,6 +2,8 @@
 
 ## 0.6.7 — Unreleased
 
+- Homebrew Node registrations use the stable `opt` path when it resolves to the current executable, avoiding removed Cellar paths after upgrades.
+
 - Claude Code automatic saving now works on macOS with Node ≥22.16. Linux and WSL keep the existing transcript opener; the hosted runtime is unchanged.
 - Codex automatic saving on macOS isn't supported yet; the memory tools work. To set up only Claude Code, run `npx @cairn-ink/memory setup --local --client claude`.
 - `setup --local --no-capture` no longer prints default-on or Codex hook-approval notices, and status reports a stored capture-off preference as off on every platform.

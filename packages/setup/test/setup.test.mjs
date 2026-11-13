@@ -1,10 +1,11 @@
 const setupTestGroup = process.env.CAIRN_SETUP_TEST_GROUP;
 if (setupTestGroup && !['local', 'cloud-baseline', 'hosted', 'source'].includes(setupTestGroup)) throw new Error('Unknown setup test group');
-if (setupTestGroup === 'local') { await import('./local-mode.test.mjs'); await import('./local-capture.test.mjs'); }
+if (setupTestGroup === 'local') { await import('./local-node-path.test.mjs'); await import('./local-mode.test.mjs'); await import('./local-capture.test.mjs'); }
 else if (setupTestGroup === 'cloud-baseline') await import('./local-cloud-unchanged.test.mjs');
 else if (setupTestGroup === 'hosted') { await import('./approved-flows.test.mjs'); await import('./codex.test.mjs'); }
 else if (setupTestGroup === 'source') await import('./authorization.test.mjs');
 else {
+  await import('./local-node-path.test.mjs');
   await import('./local-mode.test.mjs');
   await import('./local-capture.test.mjs');
   await import('./local-cloud-unchanged.test.mjs');
