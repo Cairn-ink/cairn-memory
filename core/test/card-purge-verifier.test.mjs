@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { lineageFixture, ns, ok, receipt } from '../testing/card-lineage-fixture.mjs';
-import { openMemoryCore } from '../index.mjs';
-import { interpretation } from '../testing/episode-capture-helpers.mjs';
-import { config as captureConfig, request, splitRaw } from '../testing/raw-capture-fixtures.mjs';
+import { createMemoryRuntime } from '../runtime.mjs';
+import { batch } from '../testing/episode-helpers.mjs';
+import { request, splitRaw } from '../testing/raw-capture-fixtures.mjs';
 import { createEngineCardStorage } from '../engine-card-storage.mjs';
 import { createPrivateCardStorage } from '../private-card-storage.mjs';
 import { beginContentWriteSafety } from '../content-write-safety.mjs';
@@ -242,21 +242,22 @@ for (const extra of [false, true]) test(`sealed user Card deletion ${extra ? 're
   }
 });
 
-async function linkedEpisode(f, memories, sessionId = 'synthetic-shared-root') {
-  const peer = openMemoryCore({ path: f.path, ...captureConfig('episode'), model: { contextWindow: 8192,
-    countTokens: () => 1, interpretEpisode: interpretation } });
+function linkedEpisode(f, memories, sessionId = 'synthetic-shared-root') {
+  const runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
   try {
-    const captured = ok(await peer.capture({ namespace: ns, client: 'claude-code', sessionId, eventId: 'synthetic-episode-event',
-      episodeContext: { clientLabel: 'Synthetic', generation: 'initial', origin: 'ordinary' },
-      messages: [{ id: 'synthetic-episode-message', role: 'user', content: 'Synthetic episode evidence.', occurredAt: null }] }));
-    const id = captured.episode.id;
+    // Reserve through the storage seam; the Memories already exist and need
+    // links, so model extraction would add an unrelated setup dependency.
+    const input = { ...batch('synthetic-episode-event', 'Synthetic episode evidence.', sessionId), client: 'claude-code' };
+    const { episodeId: id } = runtime.reserveEpisodeBatch(ns, input);
+    const claim = runtime.claimAdmission(ns, { ...input, leaseMs: 125000 });
+    runtime.finishAdmission(ns, { ...input, token: claim.token, items: [] });
     for (const memory of memories) {
       const ids = f.db.prepare('SELECT id FROM receipts WHERE memory_id=?').all(memory.id).map(row => row.id);
       f.db.prepare('INSERT INTO episode_memory_links VALUES(?,?,?,?,?,?)')
-        .run('synthetic-link-' + memory.id, id, memory.id, 'synthetic-episode-event', memory.revision, JSON.stringify(ids));
+        .run('synthetic-link-' + memory.id, id, memory.id, input.eventId, memory.revision, JSON.stringify(ids));
     }
     return f.db.prepare('SELECT * FROM session_episodes WHERE id=?').get(id);
-  } finally { peer.close(); }
+  } finally { runtime.close(); }
 }
 for (const route of ['deleteConversation', 'forgetEpisode']) test(`sealed mixed ${route} purges shared engine Cards before retaining sibling receipts`, async t => {
   let items = ['Synthetic shared evidence first', 'Synthetic shared evidence second'];
@@ -287,7 +288,7 @@ for (const route of ['deleteConversation', 'forgetEpisode']) test(`sealed mixed 
   if (route === 'deleteConversation') result = ok(f.core.deleteConversation({ namespace: ns, conversationId: raw.id,
     expectedRevision: raw.revision, actionId: 'synthetic-mixed-delete' }));
   else {
-    const episode = await linkedEpisode(f, [ma, mb]);
+    const episode = linkedEpisode(f, [ma, mb]);
     result = ok(f.core.forgetEpisode({ namespace: ns, episodeId: episode.id, expectedRevision: episode.revision }));
   }
   assert.equal(route === 'deleteConversation' ? result.forgottenMemories : result.forgotten, route === 'deleteConversation' ? 1 : true);
@@ -306,18 +307,20 @@ for (const route of ['deleteConversation', 'forgetEpisode']) test(`sealed mixed 
 });
 
 test('sealed direct episode forgetting purges shared engine text once across linked Memories', async t => {
-  const f = await setup(t), second = admit(f, 'direct-episode-second');
+  const f = await lineageFixture(t), second = admit(f, 'direct-episode-second');
   // Direct episode forgetting terminally forgets every linked Memory, even one
   // with an additional receipt. It does not perform the Raw-root receipt plan.
   const ma = ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic purge evidence bound', kind: 'fact' },
-    receipts: [receipt('direct-independent')] })).memory;
+    receipts: [receipt('bound'), receipt('direct-independent')] })).memory;
+  assert.equal(ok(f.core.get({ namespace: ns, memoryId: ma.id })).receipts.length, 2);
   const shared = publish(f, [ma, second], 'moc:synthetic-direct-episode');
-  const episode = await linkedEpisode(f, [ma, second]);
+  const episode = linkedEpisode(f, [ma, second]);
   assert.equal(f.db.prepare("SELECT 1 FROM sqlite_master WHERE name='raw_deletion_actions'").get(), undefined);
   assert.equal(ok(f.core.forgetEpisode({ namespace: ns, episodeId: episode.id, expectedRevision: episode.revision })).forgotten, true);
   for (const memory of [ma, second]) assert.equal(f.db.prepare('SELECT deleted FROM memories WHERE id=?').get(memory.id).deleted, 1);
   const row = f.row(shared.id); assert.equal(row.state, 'deleted'); assert.equal(row.revision, 2);
   assert.equal(row.title, null); assert.equal(row.body, null);
+  assert.equal(f.db.prepare("SELECT count(*) n FROM card_effects WHERE entity_id=? AND kind='card_deleted'").get(shared.id).n, 1);
 });
 
 test('sealed rejection drops held review work and purges the rejected Memory engine Card', async t => {
