@@ -39,7 +39,42 @@ test('first attach builds exactly one core, Raw timer and refresher for eight co
   assert.equal(host.inspect().connections, 7); assert.equal(host.inspect().runtime.cores, 1);
   await host.close(); await host.close();
   assert.equal(host.inspect().runtime.state, 'closed'); assert.equal(host.inspect().connections, 0);
-  assert.throws(() => host.attach(...streams()), /local_host_closed/);
+  assert.throws(() => host.attach(), /local_host_closed/);
+});
+
+test('eight connections contain stream errors during attach, abort, ended peer, double close and host close', { timeout: 15000 }, async t => {
+  const asynchronousErrors = [], record = error => asynchronousErrors.push(error);
+  process.on('uncaughtExceptionMonitor', record);
+  process.on('unhandledRejection', record);
+  t.after(() => {
+    process.off('uncaughtExceptionMonitor', record);
+    process.off('unhandledRejection', record);
+  });
+  const w = createTestWorkspace(t), host = createLocalSharedRuntime({ path: join(w.path, 'synthetic-teardown.sqlite'),
+    namespace: ns, raw: false, contextCounter: counter });
+  w.defer(() => host.close());
+  const attached = [];
+  for (let i = 0; i < 8; i++) attached.push(await connect(t, host));
+  assert.equal(host.inspect().connections, 8);
+  const abort = () => Object.assign(Error('synthetic peer abort'), { name: 'AbortError', code: 'ABORT_ERR' });
+  attached[0].stream.destroy(abort());
+  attached[1].stream.end();
+  await Promise.all([attached[2].handle.close(), attached[2].handle.close()]);
+  await nextTurn(); await nextTurn();
+  assert.equal(attached[0].handle.inspect().closed, true);
+  assert.equal(attached[1].handle.inspect().closed, true);
+  assert.equal(host.inspect().connections, 5);
+  ok(await call(attached[7].client, 'remember_memory', { content: 'Synthetic surviving teardown write', kind: 'fact' }));
+  await Promise.all([host.close(), host.close(), attached[3].handle.close()]);
+  for (const connection of attached) {
+    await connection.client.close();
+    await connection.handle.close();
+    connection.stream.destroy(abort());
+  }
+  await nextTurn(); await nextTurn();
+  assert.equal(host.inspect().connections, 0);
+  assert.equal(host.inspect().runtime.state, 'closed');
+  assert.deepEqual(asynchronousErrors, [], 'no connection may emit an uncaught exception or unhandled rejection');
 });
 
 test('shared and createCairnServer connections have identical catalogues, schemas and canonical results', { timeout: 15000 }, async t => {

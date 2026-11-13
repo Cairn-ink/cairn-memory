@@ -10,7 +10,12 @@ export const ok = result => { assert.equal(result.ok, true, JSON.stringify(resul
 export const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 export function streams() {
   const toServer = new PassThrough(), toClient = new PassThrough();
-  return [Duplex.from({ readable: toServer, writable: toClient }), Duplex.from({ readable: toClient, writable: toServer })];
+  const server = Duplex.from({ readable: toServer, writable: toClient });
+  const peer = Duplex.from({ readable: toClient, writable: toServer });
+  // The synthetic peer owns its errors even before an SDK client is attached.
+  // Leave the server endpoint unguarded: its runtime must own teardown errors.
+  peer.on('error', () => {});
+  return [server, peer];
 }
 export async function connect(t, host) {
   const [serverSide, clientSide] = streams(), handle = host.attach(serverSide, serverSide);

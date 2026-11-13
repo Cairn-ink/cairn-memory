@@ -35,6 +35,13 @@ export function createLocalSharedRuntime(options = {}) {
         inspect: () => ({ closed: disconnected, inFlight: active, sdkServers: instances.size, continuations: continuations.inspect() }),
       };
       const onEnd = () => { void handle.close().catch(() => {}); };
+      // SDK close removes its input error listener before destroy completes.
+      // Own both endpoints through their final close, including abort errors
+      // emitted asynchronously by Duplex.from() and already-ending peers.
+      for (const stream of new Set([input, output])) {
+        stream.on('error', onEnd);
+        stream.once('close', () => stream.off('error', onEnd));
+      }
       input.once('end', onEnd); input.once('close', onEnd); output.once('close', onEnd);
       connections.add(handle);
       try {
@@ -58,7 +65,7 @@ export function createLocalSharedRuntime(options = {}) {
         }, { transport, onerror: onEnd });
         const onTransportClose = transport.onclose;
         transport.onclose = () => { onTransportClose?.(); onEnd(); };
-      } catch (error) { void handle.close(); throw error; }
+      } catch (error) { void handle.close().catch(() => {}); throw error; }
       return handle;
     },
     close() {
