@@ -335,7 +335,12 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
       return { metered, used, fits: used <= args.budget.maxTokens && bytes };
     };
     if (!fits([]).fits) fail('context_item_too_large');
-    while (remaining.length && selected.length < args.budget.maxItems) {
+    // A Memory unit that a selected Card already replaces is not delivered, so it
+    // takes no item slot: count delivered units, and skip units that would vanish.
+    const replaced = unit => { const covered = cardSourceKeys(selected.flatMap(other => other.memories));
+      return covered.size > 0 && unit.memories.length > 0 && !unit.evidence.length &&
+        unit.memories.every(item => item.type === 'memory' && covered.has(memoryPackKey(item.ref))); };
+    while (remaining.length && deduped(selected).length < args.budget.maxItems) {
       check();
       remaining.sort((a, b) => {
         const score = unit => unit.bm25 + unit.prior - (unit.cardHit ? 0 : .15 * unit.cost / 250)
@@ -345,6 +350,7 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
         return score(b) - score(a) || a.rank - b.rank || binary(a.id, b.id);
       });
       const unit = remaining.shift();
+      if (replaced(unit)) continue;
       const covered = cardSourceKeys(unit.memories), cardRank = Math.min(...unit.memories.filter(item => item.type === 'card').map(item => item.rank));
       if (!unit.cardHit && covered.size && selected.some(other => other.memories.some(item => item.type === 'memory' &&
         item.rank < cardRank && covered.has(memoryPackKey(item.ref))))) continue;

@@ -43,6 +43,19 @@ for (const mixed of [false, true]) {
     assert.deepEqual(f.memories.map(m => m.rank), Array.from({ length: 16 }, (_, i) => i + 1));
     if (mixed) assert.ok(items.some(item => item.ref.type === 'raw'), 'exercise mixed units, not fallback');
   });
+  test(`${mixed ? 'three-layer' : 'Memory'} pack without an engine Card is unchanged: first twelve units in rank order`, () => {
+    const f = fixture(), plain = { ...f.args, prepared: f.memories };
+    const value = pack(f, plain), items = value.metered.items;
+    assert.ok(!items.some(item => item.ref.type === 'card'));
+    assert.equal(items.length, 12);
+    const delivered = items.filter(item => item.ref.type === 'memory').map(item => item.ref.id);
+    assert.deepEqual(delivered, f.memories.slice(0, 12).map(memory => memory.ref.memoryId));
+    // An authored Card is an ordinary ranked item: no promotion, nothing replaced.
+    const authored = { ...f.card, metadata: { state: 'confirmed', origin: 'authored' } };
+    const withAuthored = pack(f, { ...f.args, prepared: [...f.memories, authored] }).metered.items;
+    assert.deepEqual(withAuthored.filter(item => item.ref.type === 'memory').map(item => item.ref.id), delivered);
+    assert.ok(!withAuthored.some(item => item.ref.type === 'card'), 'a rank-17 authored Card stays outside twelve items');
+  });
   test(`${mixed ? 'three-layer' : 'Memory'} pack retains ordinary behavior for citations outside the window`, () => {
     const f = fixture(); f.card.text = `Orion distant fact [${f.memories[12].ref.memoryId}]`;
     const value = pack(f);

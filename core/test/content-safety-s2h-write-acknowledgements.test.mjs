@@ -299,6 +299,11 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // neither adds acknowledgement fields or changes the native write guard.
   // Recall's recency keyset adds one private last-position id in the signed
   // cursor boundary. It adds no writer acknowledgement or terminal exemption.
+  // Engine Card bundles: maintenance builds one pack key (memoryId) and passes
+  // another Card's stored source revisions (sourceMemoryRefs) to compare a
+  // marked Memory with that Card's current lines; the output module returns
+  // outOfDateIds to maintenance and no longer builds memoryIds entries. All
+  // are internal comparisons: no acknowledgement, projection or stored field.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));
   const files=JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json',import.meta.url),'utf8'));
   const actual={};

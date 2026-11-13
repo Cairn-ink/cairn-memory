@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "d59f1cf14285534f6ae7b74cbb7a17579bba70e680cffadbdddf17a8119ddd34",
-  "bytes": 1369106,
+  "sha256": "50f3deda41bcac46875491867534fd24857ac7444e61d5af89a5c1e58d29a31c",
+  "bytes": 1369241,
   "files": [
     "LICENSE",
     "README.md",
@@ -471,7 +471,7 @@
     "core/classification.mjs": "0f3f90217e3ede407b33fb52f1db309beafd8d65e09c419a96b3e0523de7164d",
     "core/conflict-storage.mjs": "0d29a3b3dd3dd3341e2e3b4667a6487b5d458026d0bd7035590b557eacb10a32",
     "core/context-read-assembly.mjs": "76af3d5a67f1f276d092de62719459edfbf787c84604caad78b11a1f5837bb80",
-    "core/context-read-three-layer.mjs": "7fe15a03b024d423a9c1e2cfea0a20c58d8a6f5fc7af4df1fa26d4da015e1b78",
+    "core/context-read-three-layer.mjs": "7876578067d4ca95f78c3a2f18bf4cb9d9e00a5ce29776081a72665da19ee5b7",
     "core/context-read-bm25.mjs": "a8174fe0b187063048e386d871caba1c55b65d4d28ea5e408b2abb7eb34ee6e4",
     "core/context-read-budget.mjs": "675b1186824a95c76ee901097b67093eded45200a5f3688ea6a539b4ce33d029",
     "core/context-read-embedder.mjs": "5852e65bb1b01cae14b94536b6872ef1003707501791d38a5b7d7dbf0aedc1ec",

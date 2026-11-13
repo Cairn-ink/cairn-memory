@@ -135,7 +135,8 @@ test('both packers retain uncited cluster Memories when a body omits items, acro
 test('host read retains ordinary Memories omitted by whole-entry fitting', async t => {
   const model = scriptedConsolidator();
   const f = engineCardFixture(t, { model });
-  const memories = Array.from({ length: 12 }, (_, i) => f.add((facts[i % facts.length] + ' ').repeat(4).trim(), i, i));
+  // Distinct text per Memory: identical content would be admitted once.
+  const memories = Array.from({ length: 12 }, (_, i) => f.add(`${(facts[i % facts.length] + ' ').repeat(4).trim()} Detail ${i}.`, i, i));
   const pass = ok(await f.pass()); assert.equal(pass.built.length, 1, JSON.stringify(pass));
   const body = f.db.prepare('SELECT body FROM private_cards WHERE id=?').get(pass.built[0].id).body;
   assert.ok(model.countTokens(body) <= 850);
