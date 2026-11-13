@@ -1,4 +1,4 @@
-import { openSource } from '../../codex/source.mjs';
+import { openLocalSource } from './local-source-open.mjs';
 import { checkCodexHeader } from './codex.mjs';
 import { budget, settings, sourceReader } from './bounds.mjs';
 import { keyed } from './local-worker-state.mjs';
@@ -20,12 +20,12 @@ export function sourceBudget(operation) {
 export async function openWorkerSource(context, operation, bytes) {
   let file;
   try {
-    operation.check(); file = await openSource(context.sourcePath); operation.check();
+    operation.check(); file = await openLocalSource(context.sourcePath); operation.check();
     return { file, source: bytes.reader(file), close: () => file.close() };
   } catch (error) {
     await file?.close();
     if (error.reason) throw error;
-    fault(process.platform !== 'linux' ? 'platform_unavailable' : 'source_unavailable');
+    fault(!['linux','darwin'].includes(process.platform) ? 'platform_unavailable' : 'source_unavailable');
   }
 }
 export function producerOptions(identity, operation) {

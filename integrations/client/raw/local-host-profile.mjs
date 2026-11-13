@@ -69,7 +69,7 @@ export async function readHostConfiguration(profile) {
 
 export function hostRuntime() {
   const [major,minor] = process.versions.node.split('.').map(Number);
-  if (process.platform !== 'linux' || !(major > 22 || major === 22 && minor >= 16)) fail('runtime_unavailable');
+  if (!['linux','darwin'].includes(process.platform) || !(major > 22 || major === 22 && minor >= 16)) fail('runtime_unavailable');
 }
 
 export function hostSelection(value, initialize) {
