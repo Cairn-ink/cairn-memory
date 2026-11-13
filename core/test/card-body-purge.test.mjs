@@ -47,7 +47,9 @@ function worker(f, model) {
   const identity = f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get();
   const storage = createEngineCardStorage({ db: f.db, identity, ready() {}, upgrade: true });
   let clock = Date.parse('2026-06-01T00:00:00.000Z');
-  return { identity, storage, advance() { clock += 600001; },
+  return { identity, storage, advance() {
+    clock = Math.max(clock, ...rows(f).map(row => Date.parse(row.updated_at))) + 600001;
+  },
     pass: (namespace = ns) => createEngineCardMaintenance({ storage, model, now: () => clock })
       .maintain({ namespace, budget: { maxMs: 5000 } }) };
 }
@@ -85,7 +87,9 @@ for (const sealed of [false, true]) for (const state of ['current', 'stale', 're
       w.advance();
       if (state === 'rebuilt') {
         const next = await w.pass(); assert.equal(next.built.length, 1, JSON.stringify(next));
-        assert.equal(rows(f).length, 2); assert.ok(rows(f).every(row => row.body.includes(marker)));
+        assert.equal(rows(f).length, 2);
+        assert.equal(rows(f).find(row => row.id === first.id).body, null, 'rebuild purges the superseded body');
+        assert.ok(rows(f).find(row => row.id === next.built[0].id).body.includes(marker));
       }
     }
     const old = rows(f), retainedSeals = seals(f), schema = f.db.prepare('SELECT type,name,sql FROM sqlite_schema ORDER BY type,name').all();
@@ -109,6 +113,7 @@ for (const sealed of [false, true]) for (const state of ['current', 'stale', 're
     assert.deepEqual(f.db.prepare('SELECT type,name,sql FROM sqlite_schema ORDER BY type,name').all(), schema);
     assert.equal(model.calls.length, calls, 'forget makes no model request');
     assertHidden(f, w, old);
+    w.advance();
     const next = await w.pass(); assert.equal(next.built.length, 1, JSON.stringify(next));
     assert.ok(old.every(row => row.id !== next.built[0].id));
     assert.ok(next.built[0].sourceRevisions.every(ref => ref.memoryId !== memories[0].id));
@@ -125,6 +130,68 @@ test('late failure rolls back engine text, bindings, seals, effects and bookkeep
   f.db.exec("CREATE TRIGGER synthetic_late_failure BEFORE DELETE ON receipts BEGIN SELECT RAISE(ABORT,'synthetic_abort'); END");
   assert.equal(forget(f, memories[0]).ok, false); assert.deepEqual(dump(), before);
   f.db.exec('DROP TRIGGER synthetic_late_failure'); ok(forget(f, memories[0])); assertNoMarker(f);
+});
+
+for (const sealed of [false, true]) test(`supersession erases the old Card bytes atomically: sealed=${sealed}`, async t => {
+  let generation = 0;
+  const model = scriptedConsolidator(({ input }) => {
+    const memory = generation++ === 0 ? input.memories.find(value => value.content.includes(marker))
+      : input.memories.find(value => !value.content.includes(marker));
+    return { currentState: [{ text: memory.content, memoryIds: [memory.id] }], timeline: [], contradictions: [] };
+  });
+  const f = sealed ? await lineageFixture(t, { options: { model } }) : engineCardFixture(t, { model });
+  const memories = seed(f), w = worker(f, model), first = (await w.pass()).built[0]; assert.ok(first);
+  const retainedSeals = seals(f);
+  // Add a source while preserving the marker in its original Memory; only
+  // the superseded Card's copy must disappear.
+  const content = 'Orion synthetic added source milestone.';
+  const added = ok(f.core.admit({ namespace: ns, memory: { content, kind: 'fact' }, receipts: [{ client: 'synthetic',
+    sessionId: 'synthetic-added-conversation', eventId: 'synthetic-added-source', role: 'user', excerpt: content }] })).memory;
+  f.db.prepare("UPDATE memories SET created_at='2026-04-01T00:00:00.000Z' WHERE id=?").run(added.id);
+  assert.equal((await w.pass()).modelCalls, 0, 'the source change first stales the old Card');
+  w.advance();
+  const cluster = { key: first.clusterKey, memories: w.storage.snapshot(ns, 512, () => {}).memories };
+  const before = rows(f);
+  // A failure after purge must roll back the old payload and its bindings.
+  f.db.exec("CREATE TRIGGER synthetic_publish_failure BEFORE INSERT ON private_cards BEGIN SELECT RAISE(ABORT,'synthetic_abort'); END");
+  assert.throws(() => w.storage.commit(ns, cluster, { body: 'Synthetic replacement.' }, '2026-07-01T00:00:00.000Z', () => {}));
+  assert.deepEqual(rows(f), before);
+  assert.equal(f.db.prepare('SELECT count(*) n FROM card_memory_bindings WHERE card_id=?').get(first.id).n, memories.length);
+  f.db.exec('DROP TRIGGER synthetic_publish_failure');
+  const next = await w.pass(); assert.equal(next.built.length, 1, JSON.stringify(next));
+  assert.equal(next.built[0].clusterKey, first.clusterKey);
+  assert.equal(next.deleted, 1, 'the rebuild counts the body it purged in this pass');
+  assertNoMarker(f);
+  const old = rows(f).find(row => row.id === first.id);
+  assert.equal(old.state, 'deleted'); assert.equal(old.title, null); assert.equal(old.body, null);
+  for (const table of ['card_bindings', 'card_memory_bindings', 'card_raw_bindings']) {
+    if (f.db.prepare("SELECT 1 FROM sqlite_master WHERE name=?").get(table))
+      assert.equal(f.db.prepare(`SELECT count(*) n FROM ${table} WHERE card_id=?`).get(first.id).n, 0);
+  }
+  assert.deepEqual(seals(f).map((set, index) => set.filter(row => retainedSeals[index].some(prior => prior.card_id === row.card_id))), retainedSeals);
+  assert.equal(w.storage.cards(ns).find(card => card.id === next.built[0].id).status, 'current');
+  assertHidden(f, w, [old]);
+  assert.equal((await w.pass()).modelCalls, 0, 'unchanged sources do not rebuild');
+});
+
+test('publication purges only its own engine routing key and namespace', async t => {
+  const model = copyingModel(), f = await lineageFixture(t, { options: { model } }), w = worker(f, model);
+  seed(f);
+  const first = (await w.pass()).built[0], snapshot = w.storage.snapshot(ns, 512, () => {});
+  const other = w.storage.commit(ns, { key: 'moc:synthetic-independent-part', memories: snapshot.memories },
+    { body: 'Synthetic independent part.' }, '2026-06-01T00:00:00.000Z', () => {});
+  const namespace = { ...ns, projectId: 'synthetic-independent-project' }; seed(f, namespace, 9, false);
+  assert.equal((await w.pass(namespace)).built.length, 1);
+  const authored = f.confirm(f.draft([f.note('synthetic-independent-author')]));
+  const independent = f.row(other.id), authoredBefore = f.row(authored.id), otherBefore = rows(f, namespace);
+  w.storage.retire(ns, first.id, '2026-06-01T00:00:00.000Z');
+  const next = w.storage.commit(ns, { key: first.clusterKey, memories: snapshot.memories },
+    { body: 'Synthetic fresh supported state.' }, '2026-07-01T00:00:00.000Z', () => {});
+  assert.ok(next); assertNoMarker(f);
+  assert.equal(f.row(first.id).body, null);
+  assert.deepEqual(f.row(other.id), independent);
+  assert.deepEqual(f.row(authored.id), authoredBefore);
+  assert.deepEqual(rows(f, namespace), otherBefore);
 });
 
 for (const mode of ['forget', 'namespace', 'owner']) test(`${mode} purges engine text across retained rows and isolates other Cards`, async t => {

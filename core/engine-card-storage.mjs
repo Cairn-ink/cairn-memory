@@ -180,17 +180,46 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
   }
   function cards(ns, check = () => {}) {
     if (!installed()) return [];
-    return read(ns, () => { const memo = createContentReadMemo(db); return db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o ON o.target_id=c.id
+    return read(ns, () => { const memo = createContentReadMemo(db), result = [];
+      const page = db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o ON o.target_id=c.id
       AND o.owner_id=c.owner_id AND o.scope=c.scope AND o.project_id=c.project_id AND o.action_id=c.id
       WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND o.method='consolidate'
-      AND c.state='confirmed' ORDER BY c.created_at,c.id LIMIT 129`).all(...boundary(ns)).map(row => {
-      check();
-      const metadata = engineCardMetadataInside(db, ns, row);
-      const current = engineCardRevisionsInside(db, ns, row) && contentReadSafety(db, { identity, namespace: ns, memo,
-        ref: cardReference(ns, row),
-        intent: 'history', method: 'getCard' }).allowed;
-      return { ...metadata, row, status: current ? 'current' : 'stale' };
-    }); });
+      AND c.state='confirmed' AND c.id>? ORDER BY c.id LIMIT 128`);
+      // Pages contain live engine rows only, including stale bodies awaiting
+      // rebuild/retirement. Walk every page under the caller's deadline.
+      let after = '';
+      for (;;) {
+        check(); const rows = page.all(...boundary(ns), after);
+        for (const row of rows) {
+          check();
+          const metadata = engineCardMetadataInside(db, ns, row);
+          if (!metadata) continue;
+          const current = engineCardRevisionsInside(db, ns, row) && contentReadSafety(db, { identity, namespace: ns, memo,
+            ref: cardReference(ns, row), intent: 'history', method: 'getCard' }).allowed;
+          result.push({ ...metadata, row, status: current ? 'current' : 'stale' });
+        }
+        if (rows.length < 128) break;
+        after = rows.at(-1).id;
+      }
+      return result;
+    });
+  }
+  function recentPurges(ns, timestamp, check) {
+    if (!installed()) return [];
+    return read(ns, () => {
+      const result = [], since = new Date(Date.parse(timestamp) - ENGINE_CARD_LIMITS.debounceMs).toISOString();
+      // Routing receipts contain source identities, never body/title text.
+      // Tombstones preserve similarity-key continuity and the forget debounce
+      // without occupying any live Card page or becoming serving candidates.
+      for (const row of db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o
+        ON (o.owner_id,o.scope,o.project_id,o.action_id,o.target_id)=(c.owner_id,c.scope,c.project_id,c.id,c.id)
+        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state='deleted' AND c.updated_at>?
+        AND o.method='consolidate' ORDER BY c.id`).iterate(...boundary(ns), since)) {
+        check(); const metadata = engineCardMetadataInside(db, ns, row);
+        if (metadata) result.push({ ...metadata, row });
+      }
+      return result;
+    });
   }
   // Delivery owns a fresh suppression scope and one canonical read snapshot;
   // the commit snapshot cannot authorize references returned after a host hook.
@@ -248,14 +277,14 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
     ready(); check();
     return transaction(db, () => {
       check(); if (!sourcesCurrent(ns, cluster.memories.map(memory => memory.source), check)) fail('source_unavailable');
-      // The namespace's bounded history page may omit this cluster's newest
-      // body. Recheck it atomically before reserving any generation spend.
+      // Recheck this cluster's latest publication or tombstone atomically
+      // before reserving any generation spend.
       const latest = db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o ON o.target_id=c.id
         AND o.owner_id=c.owner_id AND o.scope=c.scope AND o.project_id=c.project_id AND o.action_id=c.id
-        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state='confirmed'
+        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state IN ('confirmed','deleted')
         AND o.method='consolidate' AND json_extract(o.result,'$.clusterKey')=?
         ORDER BY c.created_at DESC,c.id DESC LIMIT 1`).get(...boundary(ns), cluster.key);
-      if (latest?.revision === 1) {
+      if (latest?.state === 'confirmed' && latest.revision === 1) {
         const metadata = engineCardMetadataInside(db, ns, latest);
         const same = JSON.stringify(metadata?.sourceRevisions) === JSON.stringify(cardMemoryRevisions(cluster.memories));
         if (same && contentReadSafety(db, { identity, namespace: ns, intent: 'history', method: 'getCard',
@@ -340,15 +369,23 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       check();
       const refs = cluster.memories.map(m => m.source);
       if (!sourcesCurrent(ns, refs, check)) fail('source_unavailable');
-      for (const ref of refs) if (db.prepare(`SELECT count(*) AS n FROM (SELECT DISTINCT c.id
-        FROM card_memory_bindings b JOIN private_cards c ON c.id=b.card_id WHERE b.memory_id=?
-        AND c.state IN ('draft','confirmed') LIMIT 128)`).get(ref.memoryId).n >= 128) fail('dependency_limit_reached');
       // Re-entrant or concurrent maintenance must not publish a second Card.
       const existing = db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o ON o.target_id=c.id
         WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state='confirmed' AND c.revision=1
         AND o.method='consolidate' AND json_extract(o.result,'$.clusterKey')=? LIMIT 1`)
         .get(...boundary(ns), cluster.key);
       if (existing && engineCardRevisionsInside(db, ns, existing)) return null;
+      // Publish and supersession share the canonical transaction. Preserve
+      // identities/seals, but erase every older engine payload for this key.
+      const superseded = db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o
+        ON (o.owner_id,o.scope,o.project_id,o.action_id,o.target_id)=(c.owner_id,c.scope,c.project_id,c.id,c.id)
+        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND o.method='consolidate'
+        AND json_extract(o.result,'$.origin')='engine' AND json_extract(o.result,'$.clusterKey')=?
+        AND (c.title IS NOT NULL OR c.body IS NOT NULL) ORDER BY c.id`).all(...boundary(ns), cluster.key);
+      for (const row of superseded) { check(); writers.purge(ns, row, 'engine-supersede.' + randomUUID()); }
+      for (const ref of refs) if (db.prepare(`SELECT count(*) AS n FROM (SELECT DISTINCT c.id
+        FROM card_memory_bindings b JOIN private_cards c ON c.id=b.card_id WHERE b.memory_id=?
+        AND c.state IN ('draft','confirmed') LIMIT 128)`).get(ref.memoryId).n >= 128) fail('dependency_limit_reached');
       const shared = tokenizeT1(cluster.memories[0].content).find(term =>
         cluster.memories.filter(memory => tokenizeT1(memory.content).includes(term)).length >= cluster.memories.length / 2);
       const id = 'engine-card.' + randomUUID(), title = 'Topic: ' + (shared ?? 'current state and history');
@@ -365,9 +402,9 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       db.prepare('INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)').run(...boundary(ns), id,
         'consolidate', bind('engine-card-cluster-v1', cluster.key), id, JSON.stringify(metadata), timestamp);
       advance(ns); check();
-      return metadata;
+      return { ...metadata, supersededCount: superseded.length };
     }, [ns]));
   }
-  return { available, snapshot, rawSpans, cards, carry, retire, commit, claim, finish, relations, pressureItems, deliver,
+  return { available, snapshot, rawSpans, cards, recentPurges, carry, retire, commit, claim, finish, relations, pressureItems, deliver,
     validate(ns, memories, check) { return read(ns, () => { if (!sourcesCurrent(ns, memories.map(m => m.source), check)) fail('source_unavailable'); }); } };
 }

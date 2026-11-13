@@ -9,7 +9,7 @@ import { contentWriteChanges } from './content-write-changes.mjs';
 import { CONTENT_TERMINAL_FIELDS, CONTENT_TERMINAL_ACK_FIELDS, registerContentWriteGuard } from './content-write-context.mjs';
 import { fail } from './validation.mjs';
 import { hasCardLineage, loadCardBodyContributorsInside, verifyCardLineageCommitmentsInside, lineageHmac } from './card-lineage.mjs';
-import { engineCardRevisionsInside } from './content-safety.mjs';
+import { engineCardMetadataInside, engineCardRevisionsInside } from './content-safety.mjs';
 
 const names = {memory:'memories',receipt:'receipts',card:'private_cards','submitted-note':'card_notes',raw:'raw_conversations'};
 const kinds = Object.fromEntries(Object.entries(names).map(([kind,table])=>[table,kind]));
@@ -270,6 +270,31 @@ export function beginContentWriteSafety(db, operation) {
       }
       return timestamp===undefined||row.updated_at===timestamp;
     }
+    function engineForgottenCard(key,ns) {
+      // Forget may erase an engine body instead of merely staling it. This
+      // validates a content-free write transition, never serving authority.
+      let forgetting=false;
+      for(let context=operation;context;context=context.parent)forgetting ||= context.method==='forget';
+      const change=canonical.find(c=>c.table==='private_cards'&&c.row.id===key),row=change?.row;
+      if(!forgetting||!change?.old||row.state!=='deleted'||row.title!==null||row.body!==null||
+        row.revision!==oldValue(change,'revision')+1||
+        JSON.stringify(boundary(namespace(row)))!==JSON.stringify(boundary(ns))||
+        !engineCardMetadataInside(db,ns,row)||
+        change.columns.some((c,i)=>!['id','state','revision','title','body','updated_at'].includes(c.name)&&change.old[i]!==undefined))return false;
+      if([...canonical,...removed].some(c=>['card_body_provenance','card_body_sources','card_body_authorizations'].includes(c.table)&&c.row.card_id===key)||
+        canonical.some(c=>bindingTables.has(c.table)&&c.row.card_id===key)||
+        [...bindingTables].some(table=>exists(table)&&db.prepare('SELECT 1 FROM '+table+' WHERE card_id=? LIMIT 1').get(key)))return false;
+      const effects=canonical.filter(c=>c.table==='card_effects'&&c.row.entity_type==='card'&&c.row.entity_id===key);
+      if(effects.length!==1||effects[0].old)return false;
+      const effect=effects[0].row;
+      return effect.kind==='card_deleted'&&effect.revision===row.revision&&
+        JSON.stringify(boundary(namespace(effect)))===JSON.stringify(boundary(ns))&&
+        newFacts.some(f=>f.kind==='card'&&f.match_mode==='incarnation'&&f.reason==='purge'&&f.action_id===effect.action_id&&
+          contentSuppressionTargetMatches(f,ns,{kind:'card',key}))&&
+        removed.some(c=>c.table==='card_memory_bindings'&&c.row.card_id===key&&
+          terminalFacts.some(f=>f.kind==='memory'&&f.match_mode==='incarnation'&&f.action_id===effect.action_id&&
+            contentSuppressionTargetMatches(f,ns,{kind:'memory',key:c.row.memory_id})));
+    }
     const sourceAuthority=createRawLineageStorage(db);
     function engineRetiredCard(key,ns) {
       if(operation.method!=='maintainCards'||changedBindings.has(key))return false;
@@ -413,8 +438,8 @@ export function beginContentWriteSafety(db, operation) {
         if(removed.some(c=>c.table==='card_effects'))fail('evidence_unavailable');
         for(const {table,row,old}of canonical) {
           if(['card_body_sources','card_body_provenance'].includes(table)||table==='card_body_authorizations'&&row.authorization_kind!=='operation')fail('evidence_unavailable');
-          if(table==='private_cards'&&!lineageInvalidatedCard(row.id,namespace(row)))fail('evidence_unavailable');
-          if(table==='card_effects'&&(old||row.entity_type==='card'&&!lineageInvalidatedCard(row.entity_id,namespace(row))))fail('evidence_unavailable');
+          if(table==='private_cards'&&!lineageInvalidatedCard(row.id,namespace(row))&&!engineForgottenCard(row.id,namespace(row)))fail('evidence_unavailable');
+          if(table==='card_effects'&&(old||row.entity_type==='card'&&!lineageInvalidatedCard(row.entity_id,namespace(row))&&!engineForgottenCard(row.entity_id,namespace(row))))fail('evidence_unavailable');
         }
       }
     }

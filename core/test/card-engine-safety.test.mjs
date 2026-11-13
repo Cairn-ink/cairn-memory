@@ -78,7 +78,8 @@ test('sealed maintenance retires a changed source set and deletes bodies after r
   const rebuilt = await pass(600001); assert.equal(rebuilt.built.length, 1, JSON.stringify(rebuilt));
   assert.notEqual(rebuilt.built[0].id, first.id);
   for (const memory of memories.slice(0, 3)) ok(f.core.forget({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision }));
-  const cleaned = await pass(1200002); assert.equal(cleaned.state, 'ready', JSON.stringify(cleaned)); assert.ok(cleaned.deleted >= 1);
+  const cleaned = await pass(1200002); assert.equal(cleaned.state, 'ready', JSON.stringify(cleaned));
+  assert.equal(cleaned.deleted, 0, 'rebuild and forget already purged the old bodies');
   assert.equal(f.row(first.id).state, 'deleted'); assert.equal(f.row(first.id).body, null);
   assert.ok(f.db.prepare('SELECT 1 FROM card_body_provenance WHERE card_id=?').get(first.id));
 });

@@ -99,7 +99,10 @@ the suppression transaction. Authored Cards keep their existing behavior.
 Card identities, routing metadata, keyed digests and sealed lineage records
 without text remain as provenance. Attempt and outcome bookkeeping disappears
 at once with the text. Forget makes no model or embedding request. Later
-maintenance can build a fresh Card from the topic's remaining eligible Memories.
+maintenance can build a fresh Card from the topic's remaining eligible Memories
+after the existing ten-minute debounce. The deleted row's text-free routing
+receipt preserves the topic key and recent change time; forget cannot trigger
+an immediate model request.
 
 An optional `cardRelations.read({namespace, memoryIds, memories, signal})` port
 returns `{from, to, kind, slot}` edges. Only endpoints in the cluster and equal
@@ -137,19 +140,29 @@ ineligible Card requires the normal trigger and rebuild path; an occupied
 destination keeps its own Card. Eligibility and destination occupancy are checked
 again inside the carry transaction.
 
-Known limit: carry searches only the oldest 129 confirmed engine Cards in the
-namespace. A newer Card beyond that page is rebuilt by the backstop on the next
-pass, using one model call and a new Card ID.
+Maintenance walks confirmed engine Cards in pages of 128 by ID, including stale
+Cards awaiting rebuild or retirement. Deleted rows occupy none of those pages.
+Carry, retirement and rebuild routing inspect every live page within the pass's
+existing deadline; there is no total 129-row history cutoff. Source scan limits,
+per-source dependency limits and the one-generation-per-pass limit still apply.
 
 The existing source invalidation increments the Card revision. Such a Card has
 status `stale` and is refused by both current and history reads. Suppressed,
 excluded, forgotten, denied or foreign sources also make the Card ineligible.
 After at least ten minutes, a later worker pass re-evaluates the trigger. A
-rebuild inserts a fresh Card row and source set, retaining the old row and seal.
+rebuild inserts a fresh Card row and source set, purging all superseded engine
+payloads for the same namespace and cluster key in the same transaction. Their
+titles and bodies become NULL and live bindings disappear; text-free rows,
+routing receipts and seals remain. Other cluster keys and authored Cards are
+untouched. Carrying a Card to a new key retains its existing body and identity.
 Forgetting a bound source purges text from both rows immediately as described
 above; stale status alone does not erase text.
 If the trigger no longer holds, maintenance deletes the stale Card body while
-retaining its row and lineage records.
+retaining its row and lineage records. The pass's `deleted` count includes only
+deletions performed by that pass, excluding rows already purged by forget or
+an earlier rebuild. Current/history candidate and context reads skip purged
+Cards and can return the remaining Memories. Explicit fetches of erased Card
+evidence still refuse; old snapshots still fail their freshness fences.
 
 Maintenance rechecks the committed Card and each listed source revision before
 acknowledging a build. If a source becomes ineligible between commit and worker

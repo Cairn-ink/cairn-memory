@@ -147,7 +147,8 @@ test('stale rebuild waits ten minutes, creates a fresh row; lost trigger deletes
   assert.equal(f.db.prepare('SELECT count(*) n FROM private_cards').get().n, 2);
   for (const memory of memories.slice(1, 25)) ok(f.core.forget({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision }));
   const cleanup = createEngineCardMaintenance({ storage, model: f.model, now: () => updated + 1200002 });
-  assert.ok((await cleanup.maintain({ namespace: ns, budget: { maxMs: 5000 } })).deleted >= 1);
+  assert.equal((await cleanup.maintain({ namespace: ns, budget: { maxMs: 5000 } })).deleted, 0,
+    'forget already purged both rows; this pass deletes nothing');
 });
 
 test('bounded maintenance resumes a complete namespace scan without publishing a partial cluster', async t => {
