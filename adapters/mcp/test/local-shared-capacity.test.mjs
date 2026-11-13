@@ -69,5 +69,6 @@ test('A3 eight parallel connections preserve single-connection Raw coverage and 
   const single = rates(baseline), eight = rates(concurrent);
   t.diagnostic('A3 ' + JSON.stringify({ single, eight }));
   assert.equal(single.rawIncluded, 8); assert.equal(single.semanticReady, 8);
+  assert.ok(single.rawItems.every(count => count > 0), 'single-connection baseline must contain published synthetic Raw');
   assert.deepEqual(eight, single);
 });
