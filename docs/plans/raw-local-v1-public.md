@@ -3,7 +3,7 @@
 Status: frozen local verification passed; committed review and remote delivery pending.
 Fixed dependency: `3941e97409cebf5e1e1ab3f882e939e15a7488d5`,
 [P4a PR #455](https://github.com/Cairn-ink/cairn-memory/pull/455).
-Worktree: `/home/chichieh/Github/cairn-memory-worktrees/raw-local-v1-public`.
+Worktree: `~/Github/cairn-memory-worktrees/raw-local-v1-public`.
 Branch: `feat/raw-local-v1-public`.
 P4a is ready/unmerged: both independent reviews and all31 latest-head checks
 pass on that exact commit; merge tree equals the reviewed candidate tree.

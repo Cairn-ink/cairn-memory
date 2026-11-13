@@ -166,9 +166,9 @@ are parameters; execution imports `node:sqlite` inside functions, as at
 `integrations/client/raw/local-setup.mjs:61`. No `createRequire` hiding. Schema
 comparison uses `new db.constructor(':memory:')` (`core/card-current-schema.mjs:65`).
 
-### §3 revision 3.8 addendum: receipt event time (D-33, 2026-11-03)
+### §3 revision 3.8 addendum: receipt event time (2026-11-03)
 
-D-33 uses three per-base family integers: 51→18, 52→23 and 53→33.
+The 2026-11-03 decision uses three per-base family integers: 51→18, 52→23 and 53→33.
 The integer selects the base family; it does not encode installed feature
 combinations. Features and revisions are attested in `content_safety_control`.
 The family format adds `receipt_event_time INTEGER NOT NULL CHECK
@@ -228,17 +228,17 @@ are "context-read facade: memo receipt projection" and "private evidence
 storage: memo receipt projection sink". The projection variant is fixed per
 facade open; a store cannot change layout without schema-cookie re-attestation.
 
-e9 decision (2026-11-03 06:1x): stop the bypass rounds; `37374c54` passes.
+Decision (2026-11-03 06:1x): stop the bypass rounds; `37374c54` passes.
 The gate covers an honest engineer who accidentally reads the event-time feature
 flag in another S2h path. Deliberately obtaining it by reflection or constructed
 access is out of scope and is caught in code review, the same as for any other
 module-private state.
 
-Every other S2h path is identical on 48 and 53: 5b's seam review found exact cost
+Every other S2h path is identical on 48 and 53: the seam review found exact cost
 equality over 9 path kinds. The accessor reads module-private state held in a
 `WeakSet`, and only the three approved consumers import it by name. Before PR 1
 merges, S2h-2's own gates will also run on the shipped cells 51/52/53, using a
-subset chosen by 5b.
+subset chosen by the safety review.
 
 S2c will set `card_lineage_revision=1` on families 52/53 with matching DDL,
 instead of assigning new combination cells. There is no base-18 lineage feature.
@@ -1151,7 +1151,7 @@ This addendum scopes the guarantees above. It changes no storage, writer or pull
 
 ### R2 exception E1: awaited caller-port boundaries
 
-Decision: e9, 2026-10-31. This is the sole exception to R2's zero
+Decision: 2026-10-31. This is the sole exception to R2's zero
 per-item statement rule. The original R2 text remains unchanged. E1 applies
 only when the engine invokes a caller-supplied port: Raw `openRaw` for each
 retained part, and the token counter during assembly. A future caller port
@@ -1194,7 +1194,7 @@ bypasses canonical ancestry checks.
 
 ## Revision 3.5 addendum: R2-A1 and S2h-3 deferrals (2026-11-01)
 
-Decision: **e9, 2026-11-01 17:15**. This append-only addendum supersedes
+Decision: **2026-11-01 17:15**. This append-only addendum supersedes
 R2(a)'s requirement for the **same constant at both sizes** and its historical
 comparator. The original R2 text and the E1 addendum remain unchanged.
 
@@ -1283,7 +1283,7 @@ Denial, zero tolerance, inert-port, E1 and R1 acceptance remain unchanged.
 
 ## Revision 3.6 addendum: R2-A1 ratchet baseline (2026-11-01)
 
-Decision: **e9, 2026-11-01 23:35**. The deferred caps are the round 3 measured
+Decision: **2026-11-01 23:35**. The deferred caps are the round 3 measured
 values: fix3b's 106 caps tied to the CSV hash recorded in
 `core/test/fixtures/content-safety-s2h-deferred-counts.json`. The decision
 shorthand "+87/+147" was relative to the zero-fact safety cell. Relative to
@@ -1291,16 +1291,16 @@ legacy, Role five-fact n12/n24 is +141/+249, including 50/98 E1 calls.
 getEpisode ≤ 20 is the v34 value; v48 getEpisode is 24.
 
 After the round 4 fixes, every deferred cell is remeasured. A lower measurement
-regenerates its cap downward; a measurement above its round 3 cap requires e9
+regenerates its cap downward; a measurement above its round 3 cap requires a coordinator decision
 before merge and must not raise that cap. The caps are the measured values.
 This supersedes revision 3.5's instruction to retain a higher round 3 cap when
 current measurements are lower. After merge, lowering a cap needs no approval;
-raising one needs e9. The S2h-3 target remains the R2-A1 formula.
+raising one needs a coordinator decision. The S2h-3 target remains the R2-A1 formula.
 
 
 ## Revision 3.7 addendum: model ports at protected read boundaries (2026-11-02)
 
-Decision: **e9, 2026-11-02 03:10**. The fix4b acceptance regressions are part
+Decision: **2026-11-02 03:10**. The fix4b acceptance regressions are part
 of the current P1 correction round. Revisions 3.5 and 3.6 remain unchanged.
 The unmigrated comparison fixture is remeasured against merged main
 `a69cc9795f97596b3e1c9829d65545b3cdf3dbd7` on 2026-11-02; the comparison

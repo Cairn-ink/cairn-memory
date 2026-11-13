@@ -552,7 +552,7 @@ The pair tables are not an append-only audit trail.
 
 ## Receipt event time v1 (physical 51/52/53, 2026-11-03)
 
-The [layout §3 addendum](plans/context-read-b3s-safety-layout.md) records D-33's
+The [layout §3 addendum](plans/context-read-b3s-safety-layout.md) records the 2026-11-03 decision's
 mapping and direct offline migration paths. Receipts on these layouts carry
 optional immutable `occurred_at TEXT NULL`; existing receipts migrate as null.
 There is no automatic upgrade or time backfill. Times are optional: values the

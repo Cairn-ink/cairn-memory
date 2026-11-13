@@ -6,7 +6,7 @@ Spec review for two confirmed provenance/CAS defects; its failures are retained
 below. Corrections and related authority/context regressions now pass. A new
 fixed-commit dual review and latest-head CI are still required; no push/PR yet.
 Fixed base: `99b09855358176786d86765d009faba4777867f6` (P3a, PR #451).
-Worktree: `/home/chichieh/Github/cairn-memory-worktrees/raw-local-v1-delete`.
+Worktree: `~/Github/cairn-memory-worktrees/raw-local-v1-delete`.
 Branch: `feat/raw-local-v1-delete`. P3a passed independent Standards and Spec;
 its latest-head CI subsequently passed 31/31 checks, `gh pr checks` actual exit 0.
 PR #451 is ready and mergeable, not merged. P3b develops on this dependent branch;

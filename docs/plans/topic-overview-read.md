@@ -3,7 +3,7 @@
 Status: implementation and local acceptance complete; fixed-candidate review
 and remote delivery gates are tracked in the PR.
 Fixed base: cd6d1ad32ac3d6f5926c6846e8c6d27645bb7c9a (current main).
-Worktree: /home/chichieh/Github/cairn-memory-worktrees/topic-overview-read.
+Worktree: ~/Github/cairn-memory-worktrees/topic-overview-read.
 Branch: feat/topic-overview-read. Primary owns planning/integration/acceptance;
 one bounded GPT6.1Sol/high author owns diagnostic harness and later approved
 implementation. Separate non-author fixed-candidate reviews remain required.

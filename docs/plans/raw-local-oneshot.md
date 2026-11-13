@@ -4,7 +4,7 @@ Status: Phase-B source frozen; focused and primary independent checks passed on
 both runtimes. The full-matrix Codex fixture failure is diagnosed and corrected;
 all 54 unique affected runtime/gate pairs are independently audited as passing.
 Committed acceptance, independent review and delivery remain pending.
-Prepared worktree: `/home/chichieh/Github/cairn-memory-worktrees/raw-local-oneshot`,
+Prepared worktree: `~/Github/cairn-memory-worktrees/raw-local-oneshot`,
 branch `feat/raw-local-oneshot`. Fixed B3 base is now corrected B2b
 `d8e114c52f6cac02315f55ce326473d1c1edb386`, accepted by both independent
 review axes after its corrected 42-command matrix and committed primary 35-case

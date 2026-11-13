@@ -4,7 +4,7 @@ Status: core, MCP/TTY, installed acceptance and both-runtime combined gates pass
 2026-10-21. Final committed acceptance, independent review and PR delivery follow;
 this is not full Raw V1 acceptance or public release.
 Initial fixed base:96fd4c64e719427e594b7600702294f7313e88e2 (reviewed B4b).
-Worktree:/home/chichieh/Github/cairn-memory-worktrees/raw-retained-mcp.
+Worktree:~/Github/cairn-memory-worktrees/raw-retained-mcp.
 Branch:feat/raw-retained-mcp. B4c changes no core files, so this bounded core work
 can proceed independently while B4c finishes review/CI. Primary will integrate
 the exact accepted B4c commit before host/installed freeze and delivery, record
@@ -344,7 +344,7 @@ Reuse existing card-review-pty.py unchanged. No core, docs, package/manifest,
 CI, setup or packaging changes in this milestone. No commits/pushes/PRs by author.
 
 One local MCP node_modules symlink may target the existing reviewed install at
-/home/chichieh/Github/cairn-memory-worktrees/raw-local-v1-sources/adapters/mcp/node_modules.
+~/Github/cairn-memory-worktrees/raw-local-v1-sources/adapters/mcp/node_modules.
 First prove the new link location absent and target realpath/package identities
 match the14 MCP entries in the earlier dependency freeze. No install, deletion,
 shared-target mutation or OpenAI/root dependency link. Primary freezes these

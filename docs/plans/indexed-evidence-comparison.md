@@ -101,7 +101,7 @@ consume final review slots or delegate further without primary coordination.
 ## Implementation trace and offline checkpoints
 
 Worker: GPT-6 Sol/high, dispatched by primary; no further workers. Active
-worktree `/home/chichieh/Github/cairn-memory-worktrees/indexed-evidence-comparison`,
+worktree `~/Github/cairn-memory-worktrees/indexed-evidence-comparison`,
 branch `feat/indexed-evidence-comparison`, fixed base as above. Primary owns
 independent acceptance, both final review axes and remote delivery.
 

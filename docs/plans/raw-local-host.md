@@ -5,7 +5,7 @@ The first matrix's static namespace-owner failure is retained below. Primary
 committed-candidate acceptance, independent dual review and latest-head CI are
 delivery gates; their final SHA/results belong in the accompanying PR evidence.
 Fixed base: 96fd4c64e719427e594b7600702294f7313e88e2 (B4b candidate).
-Worktree: /home/chichieh/Github/cairn-memory-worktrees/raw-local-host.
+Worktree: ~/Github/cairn-memory-worktrees/raw-local-host.
 Branch: feat/raw-local-host. This is a dependent branch; B4b must pass final
 review/CI before this packet is delivered. No merge is authorized.
 

@@ -5,7 +5,7 @@ remote delivery pending.
 Fixed dependent base: `cc9a91d285498181aeb424bcfb47d5992057d497`
 ([B1 PR #456](https://github.com/Cairn-ink/cairn-memory/pull/456)).
 Branch: `fix/raw-skipped-tail-barrier`.
-Worktree: `/home/chichieh/Github/cairn-memory-worktrees/raw-skipped-tail-barrier`.
+Worktree: `~/Github/cairn-memory-worktrees/raw-skipped-tail-barrier`.
 Main remains `cd6d1ad32ac3d6f5926c6846e8c6d27645bb7c9a` when prepared.
 B1 is ready/unmerged with independent dual review and 31 successful latest-head
 checks. This is an explicitly dependent packet, not authorization to merge it.
