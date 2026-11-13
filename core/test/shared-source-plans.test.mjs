@@ -192,13 +192,13 @@ test('every added or changed production statement has bounded indexed inputs wit
     messages:[{id:'synthetic-plan-episode-message-'+i,role:'user',content:'Synthetic plan Episode source '+i,occurredAt:'1901-02-03T04:05:06.789Z'}]})));
   // Populate the ancestry branch through genuine Raw capture on this same
   // layout, then ordinary capture above continues to exercise empty ancestry.
-  const raw=openRawCaptureCore({path:f.path,model:rationaleModel()}, {mode:'raw-v1',sources:true,
+  const raw=openRawCaptureCore({path:f.path,model:rationaleModel(),privateCards:f.host.options}, {mode:'raw-v1',sources:true,
     port:localPlainPort(),readPolicy:()=>({generation:'synthetic',reason:null})});
   t.after(()=>raw.close());
   for(let i=0;i<8;i++){
     const result=ok(await raw.captureRaw(request(splitRaw('Synthetic Raw plan support '+i,{id:'synthetic-raw-plan-'+i})[0],
       {namespace:ns,sessionId:'synthetic-raw-plan-session-'+i,eventId:'synthetic-raw-plan-event-'+i})));
-    if(result.interpretation.ok!==undefined)ok(result.interpretation);
+    ok(result.interpretation);
   }
   const forgotten=memories.at(-1);ok(f.core.forget({namespace:ns,memoryId:forgotten.id,expectedRevision:forgotten.revision}));
   for(const table of ['memories','receipts','private_cards','card_bindings','card_memory_bindings','card_body_sources','qualification_anchors','procedural_tags','suppressed','rationale_edges','session_episodes','episode_sources','episode_memory_links','raw_conversations','raw_messages','raw_receipt_lineage','raw_receipt_origins','raw_source_maps'])
