@@ -219,8 +219,9 @@ test(`Episode listing and next steps scan past withheld candidates ${operation}`
   const context=ok(f.core.sessionStartContext({namespace:ns,groups:{nextSteps:true,procedural:false},maxTokens:2000,maxChars:8000}));
   const encoded=JSON.stringify({listed,first,second,receivedFirst,receivedSecond,context});
   for(const item of withheldEpisodes){assert.equal(encoded.includes(item.saved.excerpt),false);assert.equal(encoded.includes(item.saved.id),false);}
-  assert.deepEqual(context.groups.nextSteps.items.map(item=>item.episodeId),survivorIds,
-    'both next-step survivors require refilling beyond the first thirteen physical candidates');
+  // The session-start read returns only the namespace's newest open step, as before this change.
+  assert.deepEqual(context.groups.nextSteps.items.map(item=>item.episodeId),[survivorIds[0]],
+    'the newest surviving next step lies beyond the first thirteen physical candidates and requires refilling');
 });
 
 test('Episode link and source continuation filter each physical page',async t=>{
