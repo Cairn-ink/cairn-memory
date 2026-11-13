@@ -242,10 +242,10 @@ export function createLocalCairnRuntime(options = {}, { dispatcher, signal } = {
     episodesAccess, configured, rationaleConfigured, evidenceAccess, snapshotConfigured,
     recallContextConfigured, recallContext, recoveryConfigured, stagingConfigured, contextSemantic: Boolean(options.contextEmbedding) && options.contextSemantic !== false, ...(sources ? { contextReadSources: sources } : {}), ownsCore: false, maintenance: false, dispatcher,
       lifecycle: { ...lifecycle, run(work, request = {}) {
-        const maxMs = request.deadlineMs ?? (request.tool === 'capture_memory' ? captureDeadlineMs :
-          CONTEXT_TOOL_NAMES.includes(request.tool) || request.tool === 'read_role_task_context' ? 1000 : undefined) ?? 5000;
-        // Allocate before waiting for readiness; retries cannot reset it.
-        const deadlineAt = performance.now() + maxMs;
+        const maxMs = request.deadlineMs ?? (request.tool === 'capture_memory' ? captureDeadlineMs : undefined);
+        // Only an explicit caller budget spans the request. Each dispatched
+        // commit otherwise gets its own five seconds, after provider work.
+        const deadlineAt = maxMs === undefined ? undefined : performance.now() + maxMs;
         const invoke = () => withContextReadBudgetScope(key, () => withContextReadRankingPartition(key, () => connection.route.run(() => dispatcher
           ? dispatcher.run(work, { signal: AbortSignal.any([signal, lifecycle.signal, connection.route.signal, request.signal].filter(Boolean)),
             check: connection.route.check, deadlineAt }) : work())));

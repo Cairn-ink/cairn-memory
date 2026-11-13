@@ -60,8 +60,7 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
       if (typeof work !== 'function' || types.isAsyncFunction(work) || types.isGeneratorFunction(work)) fail('storage_error');
       const scope = requests.getStore();
       const started = now();
-      const remaining = deadline?.remainingMs ? deadline.remainingMs(Number.MAX_SAFE_INTEGER) : Infinity;
-      const end = Math.min(scope?.deadlineAt ?? started + 5000, started + remaining);
+      let end = Math.min(started + 5000, scope?.deadlineAt ?? Infinity);
       const checkIdle = point => {
         if (!db.isOpen) fail('store_closed');
         const refuseActive = () => { try { db.close(); } catch { /* Refuse reuse even when native close fails. */ } fail('storage_transaction_active'); };
@@ -77,7 +76,6 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
       const tryCommit = () => {
         checkAuthority();
         checkIdle('attempt');
-        if (end - now() < 5) fail('storage_busy');
         const state = { db, commits: 0 };
         const { restoreTimeoutMs } = bindings.get(db);
         try {
@@ -100,6 +98,12 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
       };
       const first = tryCommit();
       if (first) return first.value;
+      // The default attempt always runs. Only retries consume an explicit
+      // caller budget; provider time never consumes an implicit request budget.
+      let remaining = Infinity;
+      try { if (deadline?.remainingMs) remaining = deadline.remainingMs(Number.MAX_SAFE_INTEGER); }
+      catch (error) { if (error?.code !== 'model_timeout') throw error; remaining = 0; }
+      end = Math.min(end, now() + remaining);
       const retry = async () => {
         for (let attempt = 0; ; attempt++) {
         // BEGIN failure and rollback failure are distinguished by native state.
@@ -124,6 +128,7 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
           if (signal?.aborted) abort();
         }); } finally { checkIdle('after_timer'); }
         checkAuthority();
+        if (end - now() < 5) fail('storage_busy');
         const result = tryCommit();
         if (result) return result.value;
         }
@@ -137,7 +142,7 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
       try { return opening.run(scope, work); }
       finally { scope.active = false; }
     },
-    run(work, { signal, check, deadlineAt = now() + 5000 } = {}) {
+    run(work, { signal, check, deadlineAt } = {}) {
       return requests.run({ signal, check, deadlineAt }, work);
     },
     inspectTransactions() {
