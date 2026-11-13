@@ -121,8 +121,9 @@ stones of a cairn.
 | **Memories** | The preferences, decisions and facts worth keeping, each with its Source Receipt | Saved when you or your agent ask | Extracted from your conversations automatically, or saved on request |
 | **Cards** | Topic pages that pull related memories together into a map | Not built by default | The map you browse on cairn.ink |
 
-In Local mode, a lookup returns memories together with dated excerpts from the
-conversations behind them, so an answer arrives with its evidence.
+In Local mode, a lookup returns memories and, where the saved conversations
+behind them are already indexed, dated excerpts from those conversations, so
+an answer can arrive with its evidence.
 
 ## Cloud mode
 
@@ -171,9 +172,11 @@ hosted MCP endpoint, the Codex rules and the plugin's privacy contract.
   OpenAI for semantic search, estimated at most about US$1 per server run, and
   `recall_memory` sends the text it selects. Pausing or turning off saving does
   not stop these requests yet. Saved conversations are sent only if you opt in
-  with `--raw-semantic`. To keep everything on your computer, register the
-  server with `--no-context-semantic`, or do not give it a key.
-  [Defaults, costs and off switches](docs/defaults.md) has the details.
+  with `--raw-semantic` or configure `--context-embedder` yourself. To keep
+  everything on your computer, do not give the server a key.
+  `--no-context-semantic` turns off semantic search and its requests, but with
+  a key present `recall_memory` still calls the model whenever your agent uses
+  it. [Defaults, costs and off switches](docs/defaults.md) has the details.
 - **Cloud.** Conversation text and prompts go to cairn.ink after best-effort
   masking. The Claude Code plugin sends content-free usage statistics by
   default, and you can turn them off. Codex keeps its sign-in in an unencrypted
