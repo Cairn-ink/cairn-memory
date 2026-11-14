@@ -1,10 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { openMemoryCore, openMemoryStore } from '../index.mjs';
-import { ns, ok, receipt } from '../testing/card-lineage-fixture.mjs';
+import { ns, ok, receipt, lineageHost, copySqliteFixture, quiescence } from '../testing/card-lineage-fixture.mjs';
+import { safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
+import { host as contextHost } from '../testing/context-read-core-fixture.mjs';
+import { migrateCardLineage, migrateReceiptEventTime } from '../content-safety-migration.mjs';
+import { receiptDenialTokens } from '../content-safety.mjs';
+import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { model as episodeModel, input as episodeInput } from '../testing/episode-capture-helpers.mjs';
 import { options as episodeOptions } from '../testing/episode-helpers.mjs';
-import { survivor, forgotten, message, ordinaryKinds, source, fixture, capture, act, noLeak, hasId } from '../testing/shared-source-fixture.mjs';
+import { survivor, forgotten, message, ordinaryKinds, source, fixture, capture, act, noLeak, hasId,
+  scripted, markers, memoryRef, trace } from '../testing/shared-source-fixture.mjs';
 
 const error = (result, code) => assert.deepEqual(result, { ok: false, error: { code, retryable: false } });
 const refs = memory => [{ memoryId: memory.id, revision: memory.revision }];
@@ -60,40 +70,33 @@ test('empty qualified rank validates every fetched source and keeps clean comple
   }
 });
 
-test('legacy correction with a reused receipt and legacy forgetting preserve shared withholding', { timeout: 15000 }, async t => {
-  for (const operation of ['correct', 'forget']) {
-    const f = await fixture(t, 'ordinary-53'), [b, a] = await capture(f);
-    const denied = ok(f.core.get({ namespace: ns, memoryId: b.id })).receipts[0].id;
-    const store = openMemoryStore({ path: f.path }); t.after(() => store.close());
-    const scope = store.scope({ ownerId: ns.ownerId, projectId: ns.projectId });
-    if (operation === 'correct') {
-      // The same receipt primary key makes delete/reinsert a native UPDATE.
-      const result = scope.correct(a.id, { content: 'Synthetic corrected legacy claim', kind: 'fact', receipt: source() }, a.revision);
-      assert.equal(result.id, a.id);
-      assert.equal(result.revision, a.revision + 1);
-      assert.deepEqual(result.receipts, []);
-      noLeak(result, 'legacy correction acknowledgement');
-    } else assert.equal(scope.forget(a.id, a.revision), true);
-    for (const value of [scope.get(b.id), ok(f.core.get({ namespace: ns, memoryId: b.id }))]) {
-      assert.equal(value.id ?? value.memory.id, b.id);
-      assert.deepEqual(value.receipts, []);
-      noLeak(value, 'legacy sibling');
-      assert.equal(hasId(value, denied), false);
-    }
+test('legacy forgetting preserves shared withholding', { timeout: 15000 }, async t => {
+  const f = await fixture(t, 'ordinary-53'), [b, a] = await capture(f);
+  const denied = ok(f.core.get({ namespace: ns, memoryId: b.id })).receipts[0].id;
+  const store = openMemoryStore({ path: f.path }); t.after(() => store.close());
+  const scope = store.scope({ ownerId: ns.ownerId, projectId: ns.projectId });
+  assert.equal(scope.forget(a.id, a.revision), true);
+  for (const value of [scope.get(b.id), ok(f.core.get({ namespace: ns, memoryId: b.id }))]) {
+    assert.equal(value.id ?? value.memory.id, b.id);
+    assert.deepEqual(value.receipts, []);
+    noLeak(value, 'legacy sibling');
+    assert.equal(hasId(value, denied), false);
   }
 });
 
 test('Episode deletion forgets its purged Memory and removes shared wording from an independently supported sibling', { timeout: 15000 }, async t => {
-  const f = await fixture(t, 'ordinary-53'), [b, a] = await capture(f);
-  const supported = ok(f.core.admit({ namespace: ns, memory: { content: survivor, kind: 'fact' },
-    receipts: [receipt('synthetic-regression-independent', 'Synthetic independent surviving support')] })).memory;
-  const denied = ok(f.core.get({ namespace: ns, memoryId: supported.id })).receipts.find(row => row.excerpt === message).id;
+  const f = await fixture(t, 'ordinary-53');
   const episode = openMemoryCore({ path: f.path, privateCards: f.host.options, ...episodeOptions,
-    model: episodeModel({ extract: () => ({ items: [{ content: forgotten, kind: 'fact', confidence: .8, sourceIndices: [0] }] }) }) });
+    model: episodeModel({ extract: () => ({ items: [survivor, forgotten].map(content =>
+      ({ content, kind: 'fact', confidence: .8, sourceIndices: [0] })) }) }) });
   t.after(() => episode.close());
   const captured = ok(await episode.capture(episodeInput(1, 'synthetic-session', { namespace: ns,
     messages: [{ id: 'synthetic-message', role: 'user', content: message }] })));
-  assert.equal(captured.admission.memories[0].id, a.id);
+  const [b, a] = captured.admission.memories;
+  const supported = ok(f.core.admit({ namespace: ns, memory: { content: survivor, kind: 'fact' },
+    receipts: [receipt('synthetic-regression-independent', 'Synthetic independent surviving support')] })).memory;
+  assert.equal(supported.id, b.id);
+  const denied = ok(f.core.get({ namespace: ns, memoryId: supported.id })).receipts.find(row => row.excerpt === message).id;
   const episodeId = captured.episode.id;
   const revision = f.db.prepare('SELECT revision FROM session_episodes WHERE id=?').get(episodeId).revision;
   assert.equal(ok(episode.forgetEpisode({ namespace: ns, episodeId, expectedRevision: revision })).forgotten, true);
@@ -103,4 +106,243 @@ test('Episode deletion forgets its purged Memory and removes shared wording from
   assert.deepEqual(value.receipts.map(row => row.excerpt), ['Synthetic independent surviving support']);
   noLeak(value, 'Episode deletion sibling');
   assert.equal(hasId(value, denied), false);
+});
+
+// Cover each legacy cell, each suppression family, and the independently
+// attested receipt-time/Card-lineage feature combinations.
+const layouts = [18, 23, 33].flatMap(base => ['old', 'safety', 'event',
+  ...(base === 18 ? [] : ['lineage', 'lineage-event'])].map(mode => ({ base, mode })));
+const label = layout => `${layout.base}/${layout.mode}`;
+async function correctionFixture(t, { base, mode }) {
+  const f = safetyFixture(t, base);
+  if (mode === 'safety') await f.migrate();
+  if (mode === 'event' || mode === 'lineage-event') {
+    copySqliteFixture(f.path, f.backupPath);
+    await migrateReceiptEventTime({ path: f.path, backupPath: f.backupPath,
+      expected: { storeId: f.storeId, base }, quiescence });
+  }
+  if (mode === 'lineage' || mode === 'lineage-event') {
+    const before = f.connect();
+    const domain = mode === 'lineage-event' ? before.prepare('SELECT suppression_domain FROM content_safety_control').get().suppression_domain : undefined;
+    before.close();
+    copySqliteFixture(f.path, f.backupPath);
+    await migrateCardLineage({ path: f.path, backupPath: f.backupPath,
+      expected: { storeId: f.storeId, base, ...(domain ? { suppressionDomain: domain } : {}) }, quiescence });
+  }
+  const host = base === 18 ? null : lineageHost(), trusted = contextHost(), model = scripted('forget');
+  model.countTokens = () => 1;
+  const config = { path: f.path, model, decisionReview: 'required-v1', ...(host ? { privateCards: host.options } : {}) };
+  const core = openMemoryCore(config), db = f.connect(), store = openMemoryStore({ path: f.path });
+  const context = openMemoryCore({ ...config, contextRead: { version: 'context-read-v1', authority: trusted.authority,
+    counter: { id: 'synthetic', countTokens: () => 1 } } });
+  t.after(() => { context.close(); store.close(); db.close(); core.close(); });
+  return { ...f, core, db, context, trusted, host, model, config,
+    call: host && ((method, input) => host.call(core, method, input)),
+    scope: store.scope({ ownerId: ns.ownerId, projectId: ns.projectId }) };
+}
+const obsolete = 'Synthetic obsolete interpretation';
+const corrected = 'Synthetic current interpretation';
+const newExcerpt = 'Synthetic current receipt support';
+function absent(values, denied) {
+  for (const [name, value] of Object.entries(values)) for (const text of denied)
+    assert.equal(JSON.stringify(value).includes(text), false, name + ' withholds ' + text);
+}
+async function currentReads(f, memory) {
+  const input = { namespace: ns, refs: refs(memory) };
+  const values = {
+    get: ok(f.core.get({ namespace: ns, memoryId: memory.id })),
+    fetch: ok(f.core.fetch(input)), sourceFetch: ok(f.core.fetch({ ...input, contextMode: 'source-evidence' })),
+    recall: ok(await f.core.recall({ readSet: [ns], query: 'Synthetic', limit: 8 })),
+    sourceRecall: ok(await f.core.recall({ readSet: [ns], query: 'Synthetic', limit: 8, contextMode: 'source-evidence' })),
+    rationaleRecall: ok(await f.core.recall({ readSet: [ns], query: 'Synthetic', limit: 8, contextMode: 'rationale-evidence' })),
+    snapshot: ok(f.core.sourceSnapshot({ readSet: [ns], limit: 12 })),
+    list: ok(f.core.list({ namespace: ns, limit: 20 })), map: ok(f.core.map({ namespace: ns, purpose: 'recall' })),
+    legacyGet: f.scope.get(memory.id), legacyList: f.scope.list(), legacySearch: f.scope.search('Synthetic'),
+    contextEvidence: ok(await f.trusted.call(f.context, 'fetchCandidateEvidence',
+      { readSet: [ns], intent: 'current', refs: [memoryRef(memory)] })),
+    contextRead: ok(await f.trusted.call(f.context, 'contextRead', { readSet: [ns], types: ['memory'], intent: 'current',
+      query: 'Synthetic', semantic: false, deadlineMs: 5000, budget: { maxItems: 12, maxTokens: 3000 } })),
+    session: ok(f.core.sessionStartContext({ namespace: ns, groups: { nextSteps: true, procedural: false, background: true },
+      maxTokens: 2000, maxChars: 8000 })),
+  };
+  for (const name of ['get', 'fetch', 'sourceFetch', 'recall', 'sourceRecall', 'rationaleRecall', 'snapshot',
+    'legacyGet', 'contextEvidence', 'contextRead', 'session']) assert.ok(hasId(values[name], memory.id), name + ' includes current Memory');
+  if (f.call) {
+    values.cardEvidence = ok(await f.call('fetchEvidence', { intent: 'current', refs: [memoryRef(memory)] }));
+    values.cardSelection = ok(await f.call('selectEvidence', { intent: 'current', query: 'Synthetic', types: ['memory'], limit: 24 }));
+    values.cardSources = await Promise.all(values.cardEvidence.items[0].provenance.sources.map(source =>
+      Promise.resolve(f.call('getSource', { source })).then(ok)));
+  }
+  return values;
+}
+
+// The unedited compatibility worker fixes clock/identities and hashes the
+// complete result, receipts, schema and database rows against the base captures.
+for (const mode of ['old', 'safety', 'event']) test(`identical recites match complete frozen base results and databases: ${mode}`,
+  { timeout: 180000 }, t => {
+    const workspace = createTestWorkspace(t, { prefix: 'shared-source-recite-parity-' });
+    const report = join(workspace.path, 'result.json');
+    const worker = fileURLToPath(new URL('./fixtures/receipt-event-time-main-worker.mjs', import.meta.url));
+    const child = spawnSync(process.execPath, [worker, fileURLToPath(new URL('../../', import.meta.url)),
+      workspace.path, report, mode, '-', 'receipts'], { encoding: 'utf8', timeout: 170000 });
+    assert.equal(child.error, undefined); assert.equal(child.signal, null); assert.equal(child.status, 0, child.stderr);
+    const actual = JSON.parse(readFileSync(report, 'utf8'));
+    const expected = JSON.parse(readFileSync(new URL('./fixtures/receipt-event-time-main' +
+      (mode === 'old' ? '' : '-' + mode) + '.json', import.meta.url), 'utf8'));
+    for (const base of [18, 23, 33]) for (const api of ['correct', 'legacyCorrect'])
+      assert.deepEqual(actual.writes[`${base}:${api}`], expected.writes[`${base}:${api}`], `${base}:${api}`);
+  });
+
+for (const layout of layouts) for (const correction of ['identical', 'same-address']) for (const api of ['core', 'legacy'])
+test(`${correction} correction delivers current receipts on every read path: ${label(layout)}, ${api}`, { timeout: 15000 }, async t => {
+  const f = await correctionFixture(t, layout);
+  // An unlinked Episode already records the new receipt's source. It keeps
+  // its own interpretation while correction retires only the Memory revision.
+  const port = episodeModel({ extract: () => ({ items: [] }), interpretEpisode: request => {
+    const field = value => ({ value, anchors: [{ sourceIndex: 0, start: 0, end: request.input.sources[0].text.length }] });
+    return { type: field('work'), language: 'en', gist: field('Synthetic source activity'), outcome: null,
+      nextStep: field('Synthetic next action'), disposition: null };
+  } });
+  const episode = openMemoryCore({ ...f.config, ...episodeOptions, model: port }); t.after(() => episode.close());
+  const captured = ok(await episode.capture(episodeInput(1, 'synthetic-recite-session', { namespace: ns,
+    messages: [{ id: 'synthetic-recite-message', role: 'user', content: newExcerpt }] })));
+  const episodeId = captured.episode.id;
+  const session = f.db.prepare('SELECT session_key FROM session_episodes WHERE id=?').get(episodeId).session_key;
+  const replacement = { client: 'synthetic', sessionId: session, eventId: 'synthetic-recite-message', role: 'user', excerpt: newExcerpt };
+  const previous = { ...replacement, excerpt: correction === 'identical' ? newExcerpt : 'Synthetic previous receipt support' };
+  const a = ok(f.core.admit({ namespace: ns, memory: { content: obsolete, kind: 'fact' }, receipts: [previous] })).memory;
+  const siblingReceipt = correction === 'identical' ? previous : { ...previous, excerpt: 'Synthetic alternate receipt support' };
+  const b = ok(f.core.admit({ namespace: ns, memory: { content: survivor, kind: 'fact' }, receipts: [siblingReceipt] })).memory;
+  const oldReceipt = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').get(a.id);
+  const siblingId = ok(f.core.get({ namespace: ns, memoryId: b.id })).receipts[0].id;
+  const acknowledgement = api === 'core' ? ok(f.core.correct({ namespace: ns, memoryId: a.id, expectedRevision: a.revision,
+    content: corrected, kind: 'fact', receipt: replacement })) : f.scope.correct(a.id, { content: corrected, kind: 'fact', receipt: replacement }, a.revision);
+  const current = ok(f.core.get({ namespace: ns, memoryId: a.id }));
+  assert.equal(current.memory.revision, a.revision + 1); assert.equal(current.memory.content, corrected);
+  assert.deepEqual(current.receipts.map(row => row.excerpt), [newExcerpt]);
+  assert.notEqual(current.receipts[0].id, oldReceipt.id, 're-cite replaces the receipt incarnation');
+  assert.deepEqual(markers(f), correction === 'identical' ? [] : [receiptDenialTokens([oldReceipt])[0]]);
+  const sibling = ok(f.core.get({ namespace: ns, memoryId: b.id }));
+  assert.deepEqual(sibling.receipts.map(row => row.id), [siblingId], 'the specified sibling consequence remains visible');
+  const values = await currentReads(f, current.memory);
+  for (const name of ['get', 'fetch', 'sourceFetch', 'recall', 'sourceRecall', 'rationaleRecall', 'snapshot',
+    'legacyGet', 'contextEvidence', 'contextRead', 'session', ...(f.call ? ['cardSources'] : [])])
+    assert.ok(JSON.stringify(values[name]).includes(newExcerpt), name + ' delivers the new receipt');
+  values.episode = ok(f.core.getEpisode({ namespace: ns, episodeId, sourceLimit: 16, memoryLimit: 50 }));
+  assert.deepEqual(values.episode.sources.items.map(row => row.text), [newExcerpt]);
+  assert.ok(values.session.groups.nextSteps.items.some(item => item.episodeId === episodeId), 'session keeps the independent Episode source');
+  values.acknowledgement = acknowledgement;
+  values.staleFetch = f.core.fetch({ namespace: ns, refs: refs(a) });
+  if (f.call) values.staleCard = await f.call('fetchEvidence', { intent: 'current', refs: [memoryRef(a)] });
+  absent(values, [obsolete, oldReceipt.id]);
+});
+
+for (const layout of layouts) test(`different-address correction withholds a sibling's different excerpt: ${label(layout)}`,
+  { timeout: 15000 }, async t => {
+    const f = await correctionFixture(t, layout);
+    const a = ok(f.core.admit({ namespace: ns, memory: { content: obsolete, kind: 'fact' }, receipts: [source('Synthetic original receipt')] })).memory;
+    const b = ok(f.core.admit({ namespace: ns, memory: { content: survivor, kind: 'fact' }, receipts: [source('Synthetic alternate receipt')] })).memory;
+    const old = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').get(a.id);
+    const denied = ok(f.core.get({ namespace: ns, memoryId: b.id })).receipts[0].id;
+    ok(f.core.correct({ namespace: ns, memoryId: a.id, expectedRevision: a.revision, content: corrected, kind: 'fact',
+      receipt: receipt('synthetic-other-address', newExcerpt) }));
+    assert.deepEqual(markers(f), receiptDenialTokens([old]).sort());
+    const value = ok(f.core.get({ namespace: ns, memoryId: b.id }));
+    assert.deepEqual(value.receipts, []); absent({ value }, ['Synthetic alternate receipt', denied]);
+  });
+
+for (const layout of layouts.filter(layout => layout.mode !== 'old')) for (const correction of ['identical', 'same-address'])
+test(`prior forget denials survive ${correction} correction: ${label(layout)}`, { timeout: 15000 }, async t => {
+  const f = await correctionFixture(t, layout);
+  const episode = openMemoryCore({ ...f.config, ...episodeOptions, model: episodeModel({ extract: () => ({ items: [] }) }) });
+  t.after(() => episode.close());
+  const captured = ok(await episode.capture(episodeInput(1, 'synthetic-prior-forget', { namespace: ns,
+    messages: [{ id: 'synthetic-prior-forget-message', role: 'user', content: 'Synthetic erased source wording' }] })));
+  const episodeId = captured.episode.id;
+  const session = f.db.prepare('SELECT session_key FROM session_episodes WHERE id=?').get(episodeId).session_key;
+  const shared = { ...source('Synthetic erased source wording'), sessionId: session, eventId: 'synthetic-prior-forget-message' };
+  assert.ok(JSON.stringify(ok(f.core.getEpisode({ namespace: ns, episodeId }))).includes(shared.excerpt));
+  const a = ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic erased interpretation', kind: 'fact' }, receipts: [shared] })).memory;
+  const b = ok(f.core.admit({ namespace: ns, memory: { content: survivor, kind: 'fact' }, receipts: [shared] })).memory;
+  const denied = f.db.prepare('SELECT id FROM receipts WHERE memory_id IN (?,?)').all(a.id, b.id).map(row => row.id);
+  ok(f.core.forget({ namespace: ns, memoryId: a.id, expectedRevision: a.revision }));
+  const before = markers(f);
+  const acknowledgement = ok(f.core.correct({ namespace: ns, memoryId: b.id, expectedRevision: b.revision, content: corrected, kind: 'fact',
+    receipt: correction === 'identical' ? shared : { ...shared, excerpt: newExcerpt } }));
+  const current = acknowledgement.memory;
+  assert.deepEqual(markers(f), before, 'correction never removes a prior forget marker');
+  const values = {
+    acknowledgement,
+    get: ok(f.core.get({ namespace: ns, memoryId: current.id })),
+    fetch: ok(f.core.fetch({ namespace: ns, refs: refs(current) })),
+    recall: ok(await f.core.recall({ readSet: [ns], query: 'Synthetic' })),
+    legacy: f.scope.get(current.id), legacyList: f.scope.list(), legacySearch: f.scope.search('Synthetic'),
+    list: f.core.list({ namespace: ns }), map: f.core.map({ namespace: ns }),
+    source: f.core.fetch({ namespace: ns, refs: refs(current), contextMode: 'source-evidence' }),
+    sourceRecall: await f.core.recall({ readSet: [ns], query: 'Synthetic', contextMode: 'source-evidence' }),
+    rationaleRecall: await f.core.recall({ readSet: [ns], query: 'Synthetic', contextMode: 'rationale-evidence' }),
+    snapshot: f.core.sourceSnapshot({ readSet: [ns], limit: 12 }),
+    context: ok(await f.trusted.call(f.context, 'contextRead', { readSet: [ns], types: ['memory'], intent: 'current',
+      query: 'Synthetic', semantic: false, deadlineMs: 5000, budget: { maxItems: 12, maxTokens: 3000 } })),
+    evidence: ok(await f.trusted.call(f.context, 'fetchCandidateEvidence', { readSet: [ns], intent: 'current', refs: [memoryRef(current)] })),
+    episode: f.core.getEpisode({ namespace: ns, episodeId }),
+    session: f.core.sessionStartContext({ namespace: ns, groups: { background: true } }),
+  };
+  assert.deepEqual(values.get.receipts, []); assert.deepEqual(values.legacy.receipts, []);
+  if (f.call) values.card = ok(await f.call('fetchEvidence', { intent: 'current', refs: [memoryRef(current)] }));
+  absent(values, ['Synthetic erased source wording', 'Synthetic erased interpretation', ...denied]);
+});
+
+for (const operation of ['forget', 'reject']) test(`${operation} denies both receipt identity and same-message address`,
+  { timeout: 15000 }, async t => {
+    const f = await fixture(t, 'ordinary-53', operation), [b, a] = await capture(f);
+    const c = ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic alternate sibling', kind: 'fact' },
+      receipts: [source('Synthetic different excerpt')] })).memory;
+    const old = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').get(a.id);
+    const denied = f.db.prepare('SELECT id FROM receipts WHERE memory_id IN (?,?)').all(b.id, c.id).map(row => row.id);
+    ok(act(f, operation, a)); assert.deepEqual(markers(f), receiptDenialTokens([old]).sort());
+    for (const memory of [b, c]) {
+      const value = ok(f.core.get({ namespace: ns, memoryId: memory.id }));
+      assert.deepEqual(value.receipts, []); absent({ value }, [forgotten, 'Synthetic different excerpt', ...denied]);
+    }
+  });
+
+// Compare every table, including metadata, journals, reservations, suppression
+// facts and Episode effects, so a failed commit cannot leave a partial write.
+function databaseState(db) {
+  const names = db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all();
+  return names.map(({ name }) => [name, db.prepare('SELECT * FROM "' + name.replaceAll('"', '""') + '"').all()
+    .map(row => JSON.stringify(row)).sort()]);
+}
+for (const layout of [{ base: 33, mode: 'safety' }, { base: 33, mode: 'lineage' }])
+for (const method of ['forget', 'correct', 'forgetEpisode']) for (const forgery of ['marker', 'fingerprint',
+  ...(method === 'correct' ? ['identical-identity', 'identical-address', 'same-address'] : [])])
+test(`commit rejects ${forgery} during ${method}: ${label(layout)}`, { timeout: 15000 }, async t => {
+  const f = await correctionFixture(t, layout);
+  let a, episodeId;
+  if (method === 'forgetEpisode') {
+    const episode = openMemoryCore({ ...f.config, ...episodeOptions,
+      model: episodeModel({ extract: () => ({ items: [{ content: obsolete, kind: 'fact', confidence: .8, sourceIndices: [0] }] }) }) });
+    t.after(() => episode.close());
+    const captured = ok(await episode.capture(episodeInput(1, 'synthetic-forged-episode', { namespace: ns })));
+    [a] = captured.admission.memories; episodeId = captured.episode.id;
+  } else a = ok(f.core.admit({ namespace: ns, memory: { content: obsolete, kind: 'fact' }, receipts: [source(newExcerpt)] })).memory;
+  const old = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').get(a.id);
+  const before = databaseState(f.db);
+  let injected = false;
+  const result = await trace(() => {
+    if (method === 'forgetEpisode') return f.core.forgetEpisode({ namespace: ns, episodeId,
+      expectedRevision: f.db.prepare('SELECT revision FROM session_episodes WHERE id=?').get(episodeId).revision });
+    if (method === 'forget') return f.core.forget({ namespace: ns, memoryId: a.id, expectedRevision: a.revision });
+    return f.core.correct({ namespace: ns, memoryId: a.id, expectedRevision: a.revision, content: corrected, kind: 'fact',
+      receipt: forgery === 'same-address' ? source('Synthetic changed excerpt') : source(newExcerpt) });
+  }, (sql, args, writer) => {
+    if (injected || !sql.startsWith('UPDATE memories SET content') || args.at(-1) !== a.id) return;
+    injected = true;
+    const token = forgery === 'fingerprint' ? 'f'.repeat(64) : forgery === 'marker' ? 'rs1:i:' + '0'.repeat(64)
+      : receiptDenialTokens([old])[forgery === 'identical-identity' ? 0 : 1];
+    writer.prepare('INSERT INTO suppressed VALUES(?,?,?,?)').run(ns.ownerId, ns.scope, ns.projectId, token);
+  });
+  assert.equal(injected, true); error(result.result, 'evidence_unavailable');
+  assert.deepEqual(databaseState(f.db), before, 'every persisted row is unchanged after the failed commit');
 });

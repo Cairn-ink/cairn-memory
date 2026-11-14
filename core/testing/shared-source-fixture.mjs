@@ -168,8 +168,13 @@ async function reads(f, memory, expectedReceipts) {
     sourceRecall: await f.core.recall({ readSet: [ns], query: survivor, limit: 8, contextMode: 'source-evidence' }),
   };
   const sourceError = get.memory.receiptCount > 100 ? 'context_item_too_large' : 'source_unavailable';
-  for (const name of ['sourceFetch', 'sourceRecall'])
-    assert.deepEqual(values[name], { ok: false, error: { code: sourceError, retryable: false } }, name);
+  assert.deepEqual(values.sourceFetch, { ok: false, error: { code: sourceError, retryable: false } }, 'sourceFetch');
+  if (get.memory.receiptCount > 100) {
+    const recalled = ok(values.sourceRecall);
+    assert.deepEqual(recalled.memories, []);
+    assert.equal(recalled.coverage, 'budget_exhausted');
+    assert.equal(recalled.recallTruncated.candidatesOmitted, 1);
+  } else assert.deepEqual(values.sourceRecall, { ok: false, error: { code: sourceError, retryable: false } }, 'sourceRecall');
   assert.ok(f.model.offered.some(ref => ref.memoryId === memory.id), 'scripted selector was offered B');
   for (const name of ['recall', 'fetch']) {
     const item = (values[name].memories ?? values[name].items).find(item => item.memory.id === memory.id);
