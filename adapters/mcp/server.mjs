@@ -76,13 +76,13 @@ async function classifyUnfiledMemories({ core, namespace, model, refs }) {
 }
 
 export function createCairnServer(options = {}) {
-  const runtime = createLocalCairnRuntime(options);
+  const runtime = createLocalCairnRuntime(options, { shared: false });
   try { return runtime.server({ ownsRuntime: true }); }
   catch (error) { void runtime.close(); throw error; }
 }
 
 /** Adapter-owned runtime. Connection factories never own its resources. */
-export function createLocalCairnRuntime(options = {}, { dispatcher, signal } = {}) {
+export function createLocalCairnRuntime(options = {}, { dispatcher, signal, shared = true } = {}) {
   const router = createLocalAuthorityRouter(), maintenanceKey = Object.freeze({});
   const contextDemand = createContextMaintenanceDemand();
   object(options, ['path', 'namespace', 'model', 'captureQualification', 'captureRationale',
@@ -185,7 +185,8 @@ export function createLocalCairnRuntime(options = {}, { dispatcher, signal } = {
   const maintenance = authorities(true);
   const { cards, methods, assets, context, roles } = maintenance;
   const routed = (kind, configuration) => ({ ...configuration, authority: router.authority(kind) });
-  const inMaintenance = work => withContextReadBudgetScope(maintenanceKey, () => maintenance.route.run(work));
+  const scopedBudget = Boolean(dispatcher || shared);
+  const inMaintenance = work => withContextReadBudgetScope(maintenanceKey, () => maintenance.route.run(work), scopedBudget);
   const maintenanceRun = dispatcher ? (work, maxMs) => dispatcher.run(work, {
     signal: AbortSignal.any([signal, maintenance.route.signal].filter(Boolean)),
     check: maintenance.route.check, deadlineAt: performance.now() + maxMs,
@@ -251,7 +252,7 @@ export function createLocalCairnRuntime(options = {}, { dispatcher, signal } = {
         const deadlineAt = maxMs === undefined ? undefined : performance.now() + maxMs;
         const invoke = () => withContextReadBudgetScope(key, () => withContextReadRankingPartition(key, () => connection.route.run(() => dispatcher
           ? dispatcher.run(work, { signal: AbortSignal.any([signal, lifecycle.signal, connection.route.signal, request.signal].filter(Boolean)),
-            check: connection.route.check, deadlineAt }) : work())));
+            check: connection.route.check, deadlineAt }) : work())), scopedBudget);
         return lifecycle.run ? lifecycle.run(invoke) : invoke();
       }, revoke() { connection.route.revoke(); lifecycle.revoke?.(); },
       dispose() { lifecycle.dispose?.(); if (ownsRuntime) return close(); } } });
