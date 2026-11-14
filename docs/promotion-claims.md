@@ -10,7 +10,12 @@ GitHub Release: [@cairn-ink/memory 0.6.6](https://github.com/Cairn-ink/cairn-mem
 Release commit on main: [`2238d2fc`](https://github.com/Cairn-ink/cairn-memory/commit/2238d2fc7cac8dd7548266ad8279b1d9134bb812).
 
 Evidence paths below refer to their contents at `2238d2fc` for 0.6.6 behavior,
-including paths that arrive with the release merge. Test citations mean their
+with one exception. [`docs/cloud-mode.md`](cloud-mode.md) did not exist at the
+release: it was split out of the release's root `README.md` afterwards (the
+sections from "Existing hosted integration" to "Hosted plugin privacy
+contract"), with pointers to the installer guide added. Rows that cite it refer
+to its contents on `main`; at `2238d2fc` the same text is in those `README.md`
+sections. Test citations mean their
 assertions were inspected, not that they were executed in this audit. Historical
 records retain their stated versions. Public Cloud sources establish client and
 wire contracts, not the private service's deployed behavior or quality.

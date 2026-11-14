@@ -40,7 +40,7 @@
 | P1 改善 repo 入口 | 入口準備 | 單一入口 README、Local／Cloud 說明、支援表與分享圖 | 版本及連結核對；舊 5 人／30 秒／4 人答對條件已由 P4 條件 7 取代，不再是 Show HN 前提 | 保留未完成的舊真人檢查紀錄；依新條件記錄外部安裝嘗試 |
 | P2 驗證入門與 demo | 發布前 | 公告版本的乾淨安裝、真實 client 紀錄與錄影 | 舊 source 安裝與 model-free demo 保留為歷史；Show HN 改依 P4 條件 5、6、9 | 保留每次失敗；補足公告版本、真實 client 與 macOS 證據 |
 | P3 小規模分享 preview | 自行安排 D0 至 D6 | 渠道貼文、每日量測與回饋記錄 | 小規模試驗保留原流程；P3 的 D0 與第 7 天檢查不再是 Show HN 前提，中文貼文與 Show HN 可在同一週 | 依觸及、repo 瀏覽、stars 與回饋分別調整 |
-| P4 決定是否擴大 | 11 項條件全部符合後 | Local 模式 Show HN 稿、創辦人首則留言、獨立審查與本人簽核 | 下方限定範圍及 11 項條件；品質或 Cards／maps 主張恢復完整 E01 至 E09 | 尚未放行；缺證據就維持未完成，不改寫為通過 |
+| P4 決定是否擴大 | 11 項條件全部符合後 | Local 模式 Show HN 稿、創辦人首則留言、獨立審查與本人簽核 | 下方限定範圍及 11 項條件；品質、成本節省或 Cards／maps 主張恢復完整 E01 至 E09 | 尚未放行；缺證據就維持未完成，不改寫為通過 |
 | P5 結案與下一輪 | D14 | 成效表、未達目標的原因假設、下一輪單一改動 | 資料視窗與起點明確；成功、失敗與缺資料均保留；決定可由數字追溯 | 資料不足時標記不確定，不補寫成效 |
 
 ## P0 主張與量測驗證
@@ -113,7 +113,7 @@ P2 是入門與素材驗證；其通過不表示預設抽取品質通過，也�
 
 此門檻適用於 Show HN 或任何廣泛公告，且只能宣傳**已發布 npm 版本**在 Local 模式實際提供的能力：一個指令設定、本機 SQLite 儲存、不經模型自動保存對話原文，以及每筆記憶都附來源原文的明確工具。這裡的「自動保存」是逐字保存對話文字，不是模型抽取。Cairn.ink Memory 0.6.6 已於 2026-11-13 發布到 npm；以下各項仍須對這個已發布版本逐項核對。
 
-貼文及創辦人的首則留言都必須寫明：我們不主張模型抽取品質、recall 準確率或成本節省；引擎預設的模型抽取仍未通過自己的來源支持標準，並連到[已知限制](../limitations.md)。公告一旦主張抽取品質、自動 recall 品質，或 Cards 與 maps，完整 [E01 至 E09](semantic-evaluation.md) 就恢復適用，標準不變。公告若宣稱 current、history、why 或自動更新能力，仍須依 [reliability contract](memory-reliability-contract.md) 驗證對應狀態與來源，不能只檢查回答字串。
+貼文及創辦人的首則留言都必須寫明：我們不主張模型抽取品質、recall 準確率或成本節省；引擎預設的模型抽取仍未通過自己的來源支持標準，並連到[已知限制](../limitations.md)。公告一旦主張抽取品質、自動 recall 品質、成本節省，或 Cards 與 maps，完整 [E01 至 E09](semantic-evaluation.md) 就恢復適用，標準不變。公告若宣稱 current、history、why 或自動更新能力，仍須依 [reliability contract](memory-reliability-contract.md) 驗證對應狀態與來源，不能只檢查回答字串。
 
 以下 11 項必須對**實際公告的同一版本**全部成立：
 
@@ -147,7 +147,7 @@ P2 是入門與素材驗證；其通過不表示預設抽取品質通過，也�
 | 5 三次乾淨安裝 | 未完成 | [舊三次紀錄](../promotion/install-validation/README.md)是 `7467aebc` 的 agent/source 安裝，不是已發布版本。0.6.6 的自動保存只在 Linux 與 WSL 執行（[capture host check](../../integrations/client/raw/local-host-profile.mjs)）：在 macOS 上 `setup --local` 會接上 client、記憶工具可用，但回報對話保存 OFF 並以代碼 2 結束，所以真實 macOS 這一項在自動保存支援 macOS 之前無法符合。Node 22.16 與 Node 24 的新版本紀錄也還沒有。 |
 | 6 真實雙 client | 未完成 | [packed capture 測試](../../packages/setup/test/local-capture.test.mjs)使用合成 client／transcript，不能當成真正 Claude Code 與 Codex 跨 session 驗收。 |
 | 7 三位外部安裝者 | 未完成 | [舊讀者記錄](../promotion/reader-test.csv)仍 pending；沒有三位外部人員依新文件安裝的完整回報。 |
-| 8 資料外送揭露 | 未完成 | [README Your data](../../README.md#your-data)及[繁中版](../../README.zh-TW.md#你的資料)寫明：有 key 時 Memory 與搜尋文字會送到 OpenAI、保存的對話要另外開啟才送、不給 key 才全部留在本機，`--no-context-semantic` 只關 embeddings。`2238d2fc` 的 [release notes](../../CHANGELOG.md)、[CLI 說明](../../adapters/mcp/cli.mjs)、[installer README](../../packages/setup/README.md)、[defaults](../defaults.md)，以及 setup 印出的 `local_privacy`／`local_capture_notice`（[messages](../../packages/setup/lib/messages.mjs)）說法相同。文字已一致；要等這個版本發布、README 合併後才算符合。詳見[證據表](../promotion-claims.md)。 |
+| 8 資料外送揭露 | 未完成 | [README Your data](../../README.md#your-data)及[繁中版](../../README.zh-TW.md#你的資料)寫明：有 key 時 Memory 與搜尋文字會送到 OpenAI、保存的對話要另外開啟才送、不給 key 才全部留在本機，`--no-context-semantic` 只關 embeddings。`2238d2fc` 的 [release notes](../../CHANGELOG.md)、[CLI 說明](../../adapters/mcp/cli.mjs)、[installer README](../../packages/setup/README.md)、[defaults](../defaults.md)，以及 setup 印出的 `local_privacy`／`local_capture_notice`（[messages](../../packages/setup/lib/messages.mjs)）說法相同。0.6.6 已於 2026-11-13 發布、README 已於 2026-11-14 合併，0.6.6 的文字一致。實際公告的版本若是 0.6.6 之後的版本，須對該版本的 setup 輸出與 release notes 重新核對；公告版本確定並核對前維持未完成。詳見[證據表](../promotion-claims.md)。 |
 | 9 真實 client 錄影 | 未完成 | README 仍連到 [2026-10-03 demo](../promotion/demo/README.md)，它是編輯過的 model-free 工具輸出，不是 0.6.6 真實 client 錄影。 |
 | 10 HN 文案及回覆安排 | 未完成 | 尚無完整 HN 稿、五題首則留言及獨立審閱，也無創辦人的回覆時段紀錄。 |
 | 11 發布量測 | 未完成 | [歷史快照](../promotion/metrics/20261002T171417.327267Z/summary.json)不是本次起點；45 stars 不含同窗 14 天 views／uniques，每日新快照尚未開始。 |
@@ -204,7 +204,7 @@ GitHub traffic 提供最近 14 天的資料，故需每日保存回傳視窗。�
 - [x] 接上既有發布帳號，發布英文 X 與中文 Threads 真人招募稿。
 - [ ] 完成新 P4 的版本、真人安裝、真實 client、錄影、HN 文案與回覆安排，再經獨立審閱及本人批准 PR。
 - [ ] 執行 P3 第 7 天檢查（保留小規模試驗；作為 Show HN 前提已取代，可與中文貼文同週）。
-- [ ] 核對 P4 全部 11 項條件；廣泛宣傳尚未放行。任何抽取、自動 recall 品質或 Cards／maps 主張仍核對完整 E01 至 E09。
+- [ ] 核對 P4 全部 11 項條件；廣泛宣傳尚未放行。任何抽取、自動 recall 品質、成本節省或 Cards／maps 主張仍核對完整 E01 至 E09。
 - [ ] 完成 14 天結案與下一輪決策。
 
 ### 2026 年 10 月 3 日執行紀錄
@@ -229,7 +229,7 @@ GitHub traffic 提供最近 14 天的資料，故需每日保存回傳視窗。�
 - P3 不再是 Show HN 前提後，P3 自己的進入條件（P0 至 P2 通過）也不再擋 Show HN；對應的檢查改由條件 1（P0）、條件 7（P1）、條件 5、6、9（P2）承擔。
 - 保留舊 P4 的一條：公告若宣稱 current、history、why 或自動更新能力，仍依 reliability contract 驗證對應狀態與來源。
 - 舊 P4 其餘的評測條款（評測版本與宣傳版本相符、holdout 與 historical 結果分開、不得把失敗案例重跑到成功）隨 E01 至 E09 一起只在品質主張時適用；「版本相符」的要求保留在「對實際公告的同一版本全部成立」這句。
-- 新增 Cairn.ink Memory 公告的限定範圍：只宣傳已發布 npm 版本的 Local setup、SQLite、無模型保存對話原文及附來源的明確工具。貼文與首則留言須揭露不主張抽取品質、recall 準確率或省錢，並連到引擎預設抽取仍未過關的限制。品質、自動 recall 品質或 Cards／maps 主張恢復完整 E01 至 E09。
+- 新增 Cairn.ink Memory 公告的限定範圍：只宣傳已發布 npm 版本的 Local setup、SQLite、無模型保存對話原文及附來源的明確工具。貼文與首則留言須揭露不主張抽取品質、recall 準確率或省錢，並連到引擎預設抽取仍未過關的限制。品質、自動 recall 品質、成本節省或 Cards／maps 主張恢復完整 E01 至 E09。
 - 新增條件 1：公告版本重查主張表，README 與 HN 的每個事實句逐列對應。
 - 新增條件 2：單一入口 README 已合併，README、ROADMAP 與本計畫狀態一致。
 - 保留 E05 為條件 3：舊 revision、遺忘復活、偽造來源、跨 namespace 四項都為零，列明 release 證據及舊 build 邊界；保留 E08、E09 為條件 4，照原文適用，沒有刪減項目。
