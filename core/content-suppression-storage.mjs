@@ -140,7 +140,7 @@ function servingFacts(db, ns) {
 export const withContentSuppressionRequest = (work, { fresh = false } = {}) => requestAccount.getStore() && !fresh
   ? work() : requestAccount.run({ selected: new Map(), facts: new Map(), reads: new Map() }, work);
 
-export function withContentSuppressionAttempt(work, checkEpoch = assertContentSuppressionRequestInside) {
+export function withContentSuppressionAttempt(work, checkEpoch = (db, readSet) => assertContentSuppressionRequestInside(db, readSet, true)) {
   const parent = requestAccount.getStore();
   const account = { selected: new Map(), facts: new Map(), reads: new Map() };
   // Host attempts carry only scope epochs, never retained facts or content.
@@ -246,8 +246,10 @@ export function contentSuppressionRequestFenceInside(db, owner) {
   return state?.owner === owner ? state.layout.suppressionRevision ? state.epoch : null
     : contentSuppressionFenceInside(db, owner);
 }
-export function assertContentSuppressionRequestInside(db, readSet) {
-  const retained = requestAccount.getStore()?.epochs?.get(contentSafetyConnection(db));
+export function assertContentSuppressionRequestInside(db, readSet, forceEpochs = false) {
+  const epochs = requestAccount.getStore()?.epochs;
+  const retained = epochs && (forceEpochs || servingWrites.getStore() !== contentSafetyConnection(db))
+    ? epochs.get(contentSafetyConnection(db)) : undefined;
   const states = [...new Set(readSet.map(ns => ns.ownerId))].map(owner => retained?.get(owner) ?? cachedContentSuppressionRequestInside(db, owner)).filter(Boolean);
   if (!states.length) return;
   // A fresh header and owner epochs after host callbacks fence every retained decision.
@@ -262,7 +264,7 @@ export function assertContentSuppressionRequestInside(db, readSet) {
 export function inContentSuppressionRequestInside(db, work, fallbackReadSet) {
   const native = contentSafetyConnection(db), account = requestAccount.getStore();
   for (const [selected, owners] of account?.epochs ?? []) if (owners.size)
-    (account.checkEpoch ?? assertContentSuppressionRequestInside)(selected, [...owners.keys()].map(ownerId => ({ ownerId })));
+    (account.checkEpoch ?? assertContentSuppressionRequestInside)(selected, [...owners.keys()].map(ownerId => ({ ownerId })), true);
   if (requestFacts.getStore()?.native === native) return work();
   const readSet = account?.selected.get(native) ?? fallbackReadSet;
   return readSet ? withContentSuppressionReadInside(db, readSet, () => work()) : work();

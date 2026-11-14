@@ -202,3 +202,20 @@ test('one host request retains winning epochs across separate core facade calls'
       error => error.code === 'evidence_unavailable', 'R2O_HOST_REQUEST_ACCOUNT');
   });
 });
+
+for (const operation of ['forget', 'correct']) test(`a host ${operation} acknowledges its own suppression write`, async t => {
+  const f = safetyFixture(t, 23); await f.migrate();
+  const host = createCommitDispatcher({ strict: true });
+  const core = host.open(() => openMemoryCore({ path: f.path, raw: true, model: { countTokens: () => 1 } }));
+  f.workspace.defer(() => core.close());
+  const memory = ok(await core.admit({ namespace: ns, memory: { content: 'Synthetic write acknowledgement', kind: 'fact' },
+    receipts: [{ client: 'synthetic', sessionId: 'ack', eventId: 'ack', role: 'user', excerpt: 'Synthetic write source' }] })).memory;
+  const result = await core[operation]({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision,
+    ...(operation === 'correct' ? { content: 'Synthetic revised acknowledgement', kind: 'fact',
+      receipt: { client: 'synthetic', sessionId: 'ack', eventId: 'correct', role: 'user', excerpt: 'Synthetic revised source' } } : {}) });
+  assert.equal(result.ok, true, 'R2O_WRITE_ACK ' + JSON.stringify(result));
+  const db = f.connect(); f.workspace.defer(() => db.close());
+  const row = db.prepare('SELECT revision,deleted FROM memories WHERE id=?').get(memory.id);
+  assert.equal(row.deleted, operation === 'forget' ? 1 : 0);
+  assert.equal(row.revision, memory.revision + 1);
+});

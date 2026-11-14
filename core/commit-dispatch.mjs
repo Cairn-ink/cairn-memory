@@ -146,13 +146,13 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
             }
             return value;
           }), (native, readSet) => {
-            if (native === db) return assertContentSuppressionRequestInside(native, readSet);
+            if (native === db) return assertContentSuppressionRequestInside(native, readSet, true);
             // A request can have sampled another canonical handle. Its epoch
             // read must share the attempt's short wait, including nested use.
             const nativeTimeoutMs = native.prepare('PRAGMA busy_timeout').get().timeout;
             try {
               native.exec('PRAGMA busy_timeout = 5');
-              assertContentSuppressionRequestInside(native, readSet);
+              assertContentSuppressionRequestInside(native, readSet, true);
             } finally { if (native.isOpen) native.exec(`PRAGMA busy_timeout = ${nativeTimeoutMs}`); }
           });
           const value = completed.value;

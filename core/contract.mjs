@@ -1389,7 +1389,8 @@ export function createMemoryCore(input, internal) {
     },
   }, { check: commit ? (scopes, phase) => phase?.delivery
       ? inCommitDelivery(() => runtime.assertContentScope(scopes, phase)) : runtime.assertContentScope(scopes, phase)
-      : runtime.assertContentScope, portGuard: runtime.contentPortGuard, failure, asyncMethods: ['capture','maintainCards'],
+      : runtime.assertContentScope, ...(commit ? { writeBoundary: runtime.assertContentScope } : {}),
+    portGuard: runtime.contentPortGuard, failure, asyncMethods: ['capture','maintainCards'],
     requestScope: (work, method) => contentWriteMethodClass(method) === 'read'
       ? commit ? withCommitDelivery(work) : withContentSuppressionRequest(work) : work(),
     isFailedCapture(result) {
