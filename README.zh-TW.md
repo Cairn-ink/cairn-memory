@@ -46,7 +46,7 @@ npx @cairn-ink/memory setup
 | --- | --- | --- |
 | 帳號 | 不需要 | 需要 [cairn.ink](https://cairn.ink) 帳號，用瀏覽器登入一次 |
 | 記憶放在哪 | 這台電腦上的 SQLite 資料庫 | cairn.ink |
-| 自動保存什麼 | 你和 Claude Code、Codex 的對話，以明文保存（目前限 Linux 和 WSL） | 你的對話，由 cairn.ink 整理成記憶 |
+| 自動保存什麼 | 你和 Claude Code、Codex 的對話，以明文保存（Linux 和 WSL；macOS 目前只有 Claude Code） | 你的對話，由 cairn.ink 整理成記憶 |
 | 存一筆記憶 | 你開口，agent 才存 | 自動，也可以請 agent 存 |
 | 怎麼找回來 | 你問，agent 才去查 | 每次提問自動帶入相關記憶 |
 | 換一台電腦 | 不會同步 | 登入後是同一份記憶 |
@@ -110,7 +110,7 @@ Cairn.ink Memory 把 agent 學到的東西分成三層存放，就像一座石�
 
 | 層 | 放什麼 | 本機模式 | 雲端模式 |
 | --- | --- | --- | --- |
-| **對話** | 講過的內容，以可搜尋的文字保存 | 自動存在你的電腦上（Linux 和 WSL） | 送到 cairn.ink |
+| **對話** | 講過的內容，以可搜尋的文字保存 | 自動存在你的電腦上（Linux 和 WSL；macOS 上的 Claude Code） | 送到 cairn.ink |
 | **記憶** | 值得留下的偏好、決定和事實，每筆都附 Source Receipt | 你或 agent 開口才存 | 從對話自動整理出來，也可以開口存 |
 | **卡片** | 把相關記憶整理在一起的主題頁，連成一張地圖 | 預設不會建立 | 你在 cairn.ink 上瀏覽的地圖 |
 
@@ -146,7 +146,7 @@ Codex 的規則，以及外掛的隱私約定。
   放搜尋用的索引，同樣是明文。不會傳任何東西給 Cairn，也不需要 Cairn 帳號。
   安裝時會從 npm 下載引擎需要的套件。
 - **已保存的對話。** 在 Linux 和 WSL 上，本機模式會自動把你和 Claude Code、Codex 的對話文字存進
-  這個資料庫，上限 200 MB。保存不需要帳號、不需要金鑰，也不呼叫模型。要關掉，跑
+  這個資料庫，上限 200 MB。在 macOS 上會存 Claude Code 的對話。保存不需要帳號、不需要金鑰，也不呼叫模型。要關掉，跑
   `npx @cairn-ink/memory config --local-capture off`，或安裝時用
   `npx @cairn-ink/memory setup --local --no-capture`。
   `npx @cairn-ink/memory raw list` 會列出已保存的對話，不顯示內容。

@@ -50,7 +50,7 @@ first asks: where should your memory live?
 | --- | --- | --- |
 | Account | None | A [cairn.ink](https://cairn.ink) account, one browser sign-in |
 | Where memory lives | A SQLite database on this computer | cairn.ink |
-| Saved automatically | Your Claude Code and Codex conversations, as plain text (on Linux and WSL for now) | Your conversations, which cairn.ink turns into memories |
+| Saved automatically | Your Claude Code and Codex conversations, as plain text (on Linux and WSL; on macOS, Claude Code only for now) | Your conversations, which cairn.ink turns into memories |
 | Saving a memory | Your agent saves one when you ask | Automatic, or ask your agent |
 | Getting it back | Your agent searches when you ask | Relevant memories are added to each prompt |
 | Other computers | Not synced | The same memory wherever you sign in |
@@ -117,7 +117,7 @@ stones of a cairn.
 
 | Layer | What it holds | Local mode | Cloud mode |
 | --- | --- | --- | --- |
-| **Conversations** | What was said, as searchable text | Saved automatically on your computer (Linux and WSL) | Sent to cairn.ink |
+| **Conversations** | What was said, as searchable text | Saved automatically on your computer (Linux and WSL; Claude Code on macOS) | Sent to cairn.ink |
 | **Memories** | The preferences, decisions and facts worth keeping, each with its Source Receipt | Saved when you or your agent ask | Extracted from your conversations automatically, or saved on request |
 | **Cards** | Topic pages that pull related memories together into a map | Not built by default | The map you browse on cairn.ink |
 
@@ -159,8 +159,8 @@ hosted MCP endpoint, the Codex rules and the plugin's privacy contract.
   packages from npm.
 - **Saved conversations.** On Linux and WSL, Local mode saves the text of your
   Claude Code and Codex conversations into that database automatically, up to
-  200 MB. Saving
-  needs no account, no key and no model calls. Turn it off with
+  200 MB. On macOS it saves Claude Code conversations. Saving needs no account,
+  no key and no model calls. Turn it off with
   `npx @cairn-ink/memory config --local-capture off`,
   or install with `npx @cairn-ink/memory setup --local --no-capture`.
   `npx @cairn-ink/memory raw list` lists saved conversations without their text.
