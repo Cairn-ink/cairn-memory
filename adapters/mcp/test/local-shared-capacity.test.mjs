@@ -19,7 +19,8 @@ test('A3 eight parallel connections preserve single-connection Raw coverage and 
   installRawSearchTestClock(t);
   const w = createTestWorkspace(t), path = join(w.path, 'synthetic-capacity.sqlite');
   const singlePath = join(w.path, 'synthetic-capacity-single.sqlite');
-  for (const fixturePath of [path, singlePath]) {
+  const ordinaryPath = join(w.path, 'synthetic-capacity-unbound.sqlite');
+  for (const fixturePath of [path, singlePath, ordinaryPath]) {
     const seed = openMemoryCore({ path: fixturePath, raw: true, model: rationaleModel() });
     try {
       // Core capture requires message IDs; Raw retention accepts codex/claude-code.
@@ -51,9 +52,12 @@ test('A3 eight parallel connections preserve single-connection Raw coverage and 
     contextEmbedding: { embedder, policy: { family: 'hosted', maxRequests: 10000, maxUsd: 1,
       maxConcurrent: 1, estimateUsd: () => 0 } } };
   // Independent identical fixtures prevent either runtime's sidecar from
-  // warming the other. Compare actual ordinary-server maintenance, not just
-  // sequential reads on the shared host.
-  const server = createCairnServer({ ...configuration, path: singlePath });
+  // warming the other. Decision (A): strict parity uses host mode on both
+  // fixtures; the unbound server retains main's upkeep and cumulative budget.
+  const singleHost = createLocalSharedRuntime({ ...configuration, path: singlePath });
+  w.defer(() => singleHost.close());
+  const referenceClient = (await connect(t, singleHost)).client;
+  const server = createCairnServer({ ...configuration, path: ordinaryPath });
   const [serverSide, clientSide] = streams(), direct = new Client({ name: 'synthetic-capacity-oracle', version: '1' });
   w.defer(async () => { await direct.close(); await server.close(); serverSide.destroy(); clientSide.destroy(); });
   await server.connect(new StdioServerTransport(serverSide, serverSide));
@@ -67,12 +71,19 @@ test('A3 eight parallel connections preserve single-connection Raw coverage and 
   for (let i = 0; i < 30; i++) {
     await rawSearchTestWait(1010); await delay(1100);
     const ordinary = await context(direct, input);
+    const reference = await context(referenceClient, input);
     warm = await context(clients[0], input);
-    if (ordinary.diagnostics.coverage.raw === 'included' && ordinary.diagnostics.candidates.channels.semantic.state === 'ready' &&
+    // Main's unbound upkeep may leave this exact semantic view unready.
+    // Wait for Raw there, and semantic readiness on both host fixtures.
+    if (ordinary.diagnostics.coverage.raw === 'included' &&
+        reference.diagnostics.coverage.raw === 'included' && reference.diagnostics.candidates.channels.semantic.state === 'ready' &&
         warm.diagnostics.coverage.raw === 'included' && warm.diagnostics.candidates.channels.semantic.state === 'ready') break;
   }
-  const ordinaryBaseline = [];
-  for (let i = 0; i < 8; i++) ordinaryBaseline.push(await context(direct, input));
+  const ordinaryBaseline = [], referenceBaseline = [];
+  for (let i = 0; i < 8; i++) {
+    ordinaryBaseline.push(await context(direct, input));
+    referenceBaseline.push(await context(referenceClient, input));
+  }
   assert.equal(warm.diagnostics.coverage.raw, 'included');
   assert.equal(warm.diagnostics.candidates.channels.semantic.state, 'ready');
   const baseline = [];
@@ -87,10 +98,13 @@ test('A3 eight parallel connections preserve single-connection Raw coverage and 
     semanticReady: results.filter(r => r.diagnostics.candidates.channels.semantic.state === 'ready').length,
     rawItems: results.map(r => r.value.items.filter(item => item.ref.type === 'raw' || item.evidence?.some(e => e.ref.type === 'raw')).length) });
   const single = rates(baseline), eight = rates(concurrent);
-  const ordinary = rates(ordinaryBaseline);
-  t.diagnostic('A3 ' + JSON.stringify({ ordinary, single, eight }));
+  const ordinary = rates(ordinaryBaseline), reference = rates(referenceBaseline);
+  t.diagnostic('A3 ' + JSON.stringify({ ordinary, reference, single, eight }));
   assert.equal(single.rawIncluded, 8); assert.equal(single.semanticReady, 8);
   assert.ok(single.rawItems.every(count => count > 0), 'single-connection baseline must contain published synthetic Raw');
-  assert.deepEqual(single, ordinary, 'shared maintenance must match createCairnServer on an independent identical fixture');
+  const rawCoverage = ({ rawIncluded, rawItems, reads }) => ({ rawIncluded, rawItems, reads });
+  assert.deepEqual(rawCoverage(eight), rawCoverage(ordinary), 'A3_UNBOUND_RAW_EQUAL');
+  assert.ok(eight.semanticReady >= ordinary.semanticReady, 'A3_READY_AT_LEAST_UNBOUND');
+  assert.deepEqual(eight, reference, 'A3_HOST_REFERENCE_EQUAL');
   assert.deepEqual(eight, single);
 });
