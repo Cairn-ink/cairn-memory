@@ -2,10 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openMemoryCore, openMemoryStore } from '../index.mjs';
 import { createMemoryRuntime } from '../runtime.mjs';
+import { createMemoryCore } from '../contract.mjs';
 import { ns, ok, receipt, lineageHost, copySqliteFixture, quiescence } from '../testing/card-lineage-fixture.mjs';
 import { safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
 import { host as contextHost } from '../testing/context-read-core-fixture.mjs';
@@ -322,8 +324,7 @@ test('final recall proof refuses a correction after the lazy recent read', async
   };
   const measured = await trace(() => f.core.recall({ readSet: [ns], query: 'Synthetic recent', limit: 2 }));
   assert.equal(ranked, true);
-  assert.equal(measured.result.ok, false);
-  assert.ok(['revision_conflict', 'index_revision_conflict', 'evidence_unavailable'].includes(measured.result.error.code));
+  error(measured.result, 'revision_conflict');
   absent({ result: measured.result }, ['Synthetic recent support', ...f.erased]);
 });
 
@@ -520,6 +521,308 @@ function absent(values, denied) {
   for (const [name, value] of Object.entries(values)) for (const text of denied)
     assert.equal(JSON.stringify(value).includes(text), false, name + ' withholds ' + text);
 }
+
+// Use the existing internal runtime collaborator, retaining the public contract
+// and all storage/port/delivery guards. Each mutation uses f.core's separate
+// connection; f.db independently observes its committed row before we continue.
+// The extra fact-only proof writes f.db and verifies on the recall connection.
+async function fencedRecallFixture(t, layout, { textPacking = false } = {}) {
+  const f = await correctionFixture(t, layout);
+  const supports = Array.from({ length: 12 }, (_, index) => ({
+    client: 'synthetic-fence-client-' + index, sessionId: 'synthetic-fence-session-' + index,
+    eventId: 'synthetic-fence-event-' + index, role: 'user', excerpt: 'Synthetic fenced support ' + index,
+  }));
+  const memory = ok(f.core.admit({ namespace: ns, memory: { kind: 'fact',
+    content: 'Synthetic prepared selected wording' + (textPacking ? ' x'.repeat(120) : '') }, receipts: supports })).memory;
+  const shared = supports[11];
+  const sibling = ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic prepared sibling wording', kind: 'fact' },
+    receipts: [shared] })).memory;
+  const independent = ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic prepared independent wording', kind: 'fact' },
+    receipts: [receipt('synthetic-fence-independent')] })).memory;
+  transaction(f.db, () => {
+    for (const [index, support] of supports.entries()) f.db.prepare('UPDATE receipts SET created_at=? WHERE memory_id=? AND event_id=?')
+      .run(recentTime(index), memory.id, support.eventId);
+  });
+  const stored = f.db.prepare('SELECT * FROM receipts WHERE memory_id IN (?,?)').all(memory.id, sibling.id);
+  const ids = supports.map(support => stored.find(row => row.memory_id === memory.id && row.event_id === support.eventId).id);
+  const state = {};
+  const reset = (change, at) => Object.assign(state, { change, at, changed: false, prepared: false,
+    lazyStarted: false, lazyFinished: false, rankReturned: false, rankOutputCounted: false,
+    navigation: [], requests: [], recentSQL: [], afterInputs: [], finalFences: null, finalError: null, finalSucceeded: false, lazyError: null,
+    fetchedLists: null, fenceReadsAfterPreparation: 0 });
+  reset();
+  const observeInput = (port, input) => { if (state.changed) state.afterInputs.push({ port, input: structuredClone(input) }); };
+  f.model.select = ({ input }) => {
+    observeInput('select', input);
+    const offered = input.maps.flatMap(page => page.items.map(item => ({ namespaceIndex: page.namespaceIndex,
+      ...(item.type === 'unfiled' ? item.ref : { memoryId: item.ref.childId, revision: item.ref.childRevision }) })));
+    return { refs: [memory, independent].map(item => {
+      const ref = offered.find(ref => ref.memoryId === item.id); assert.ok(ref); return ref;
+    }) };
+  };
+  f.model.countTokens = text => {
+    let input;
+    try { input = JSON.parse(text); } catch { input = text; }
+    observeInput('countTokens', input);
+    if (state.rankReturned && input?.refs) state.rankOutputCounted = true;
+    const candidates = input?.input?.candidates;
+    if (!candidates) return 1;
+    state.fetchedLists ??= candidates.map(item => ({ memoryId: item.memory.id, length: item.receipts.length }));
+    return textPacking ? (candidates.some(item => item.memory.content.length > 120) ? 7000 : 1)
+      : candidates.reduce((sum, item) => sum + item.receipts.length * 1000, 0);
+  };
+  f.model.rank = ({ input }) => {
+    observeInput('rank', input);
+    state.rankReturned = true;
+    return { refs: input.candidates.map(item => ({ namespaceIndex: item.namespaceIndex,
+      memoryId: item.memory.id, revision: item.memory.revision })) };
+  };
+  let connection;
+  function commitChange() {
+    assert.equal(state.prepared, true, 'preparation returned after its read transaction committed');
+    assert.equal(connection.isTransaction, false, 'no recall transaction surrounds the other connection commit');
+    assert.equal(f.db.isTransaction, false);
+    assert.equal(state.changed, false);
+    if (state.at === 'before-lazy') {
+      assert.equal(state.lazyStarted, false, 'the recent reader has not been entered');
+      assert.equal(state.recentSQL.length, 0, 'zero recent statements before the change');
+    } else {
+      assert.equal(state.lazyFinished, true);
+      assert.equal(state.recentSQL.length, 1, 'the lazy transaction committed before the change');
+      assert.equal(state.rankOutputCounted, true, 'all rank callbacks finished before the change');
+    }
+    const target = state.change.startsWith('sibling-') ? sibling : memory;
+    const forget = state.change.endsWith('forget');
+    const factOnly = state.change === 'sibling-fact';
+    if (factOnly) transaction(f.db, () => writeContentSuppressionInside(f.db, { namespace: ns,
+      kind: 'memory', key: sibling.id, matchMode: 'revision-through',
+      sourceVersion: JSON.stringify(['memory-revision-through-v1', sibling.revision]),
+      reason: 'correction_supersession', actionId: 'synthetic-fence-fact-only' }));
+    else ok(forget ? f.core.forget({ namespace: ns, memoryId: target.id, expectedRevision: target.revision })
+      : f.core.correct({ namespace: ns, memoryId: target.id, expectedRevision: target.revision,
+        content: 'Synthetic replacement interpretation', kind: 'fact',
+        receipt: state.change === 'sibling-identical' ? shared : state.change === 'sibling-address'
+          ? { ...shared, excerpt: 'Synthetic replacement excerpt' } : receipt('synthetic-fence-replacement') }));
+    // An autocommit read on another connection cannot see an uncommitted write.
+    const verification = factOnly ? connection : f.db;
+    assert.equal(verification.isTransaction, false);
+    const observed = verification.prepare('SELECT revision,deleted FROM memories WHERE id=?').get(target.id);
+    assert.equal(forget ? observed.deleted : observed.revision, forget ? 1 : target.revision + (factOnly ? 0 : 1));
+    if (factOnly) {
+      const index = verification.prepare('SELECT epoch FROM namespace_epochs WHERE owner_id=? AND scope=? AND project_id=?')
+        .get(ns.ownerId, ns.scope, ns.projectId).epoch;
+      const owner = verification.prepare('SELECT epoch_hi,epoch_lo FROM owner_suppression_epochs WHERE owner_id=?').get(ns.ownerId);
+      assert.equal(index, state.navigation[0].indexRevision, 'fact-only write leaves the namespace index unchanged');
+      assert.notEqual(`${owner.epoch_hi}:${owner.epoch_lo}`, state.navigation[0].suppressionEpoch, 'new owner epoch is committed');
+    }
+    if (target === sibling) assert.equal(f.db.prepare('SELECT revision FROM memories WHERE id=?').get(memory.id).revision,
+      memory.revision, 'sibling changes leave the selected Memory revision unchanged');
+    state.changed = true;
+  }
+  const core = createMemoryCore(f.config, { createRuntime(options) {
+    const runtime = createMemoryRuntime(options, { attachRaw(db) { connection = db; } });
+    const fences = namespaces => namespaces.map(({ indexRevision, suppressionEpoch }) => ({ indexRevision, suppressionEpoch }));
+    return { ...runtime,
+      queryCandidateRows(...args) {
+        if (state.prepared) state.fenceReadsAfterPreparation++;
+        assert.equal(state.prepared, false, 'navigation fences are captured before preparation');
+        const page = runtime.queryCandidateRows(...args);
+        state.navigation.push({ indexRevision: page.epoch, suppressionEpoch: page.suppressionEpoch });
+        return page;
+      },
+      epoch(...args) {
+        if (state.prepared) state.fenceReadsAfterPreparation++;
+        return runtime.epoch(...args);
+      },
+      suppressionFence(...args) {
+        if (state.prepared) state.fenceReadsAfterPreparation++;
+        return runtime.suppressionFence(...args);
+      },
+      recallSnapshot(candidates, selected, namespaces, ...rest) {
+        if (selected === null) {
+          assert.equal(state.navigation.length, 1);
+          const reader = runtime.recallSnapshot(candidates, selected, namespaces, ...rest);
+          assert.equal(connection.isTransaction, false, 'preparation has actually committed');
+          assert.equal(state.recentSQL.length, 0);
+          state.prepared = true;
+          return { ...reader, recentReceipts(namespace, ref, count) {
+            assert.equal(state.prepared, true);
+            assert.equal(connection.isTransaction, false, 'lazy transaction has not begun');
+            state.requests.push({ memoryId: ref.memoryId, count });
+            if (state.change && state.at === 'before-lazy') commitChange();
+            state.lazyStarted = true;
+            try {
+              const rows = reader.recentReceipts(namespace, ref, count);
+              assert.equal(connection.isTransaction, false, 'lazy transaction has committed');
+              state.lazyFinished = true;
+              return rows;
+            } catch (failure) { state.lazyError = failure.code; throw failure; }
+          } };
+        }
+        if (selected.length) {
+          state.finalFences = fences(namespaces);
+          assert.deepEqual(state.finalFences, state.navigation, 'final proof retains the navigation-time fences');
+        }
+        let result;
+        try { result = runtime.recallSnapshot(candidates, selected, namespaces, ...rest); }
+        catch (failure) { if (selected.length) state.finalError = failure.code; throw failure; }
+        if (selected.length) state.finalSucceeded = true;
+        // callModel's last validateFresh follows the rank-output counter. Its
+        // committed return is immediately before finalization, with no later
+        // model/counter callback. The final arguments must still carry E0.
+        if (state.change && state.at === 'after-rank-validation' && state.rankOutputCounted && !state.changed) commitChange();
+        return result;
+      },
+    };
+  } });
+  t.after(() => core.close());
+  const call = async invoke => {
+    const measured = await trace(invoke, (sql, args) => {
+      if (isRecentStatement({ sql })) state.recentSQL.push({ sql, args });
+    });
+    return measured.result;
+  };
+  const needles = change => {
+    const target = change.startsWith('sibling-') ? sibling : memory;
+    const targetRows = stored.filter(row => row.memory_id === target.id);
+    const denied = [target.content, ...targetRows.map(row => row.id)];
+    if (change !== 'sibling-identical') denied.push(shared.excerpt, ids[11]);
+    // Re-citation preserves the address; only forget / a different replacement
+    // address withholds it. All synthetic source coordinates are unique.
+    if (change.endsWith('forget') || change === 'selected-correct') for (const row of targetRows)
+      denied.push(row.excerpt, row.client, row.session_id, row.event_id);
+    return denied;
+  };
+  return { ...f, core, memory, sibling, independent, ids, state, reset, call, needles };
+}
+
+async function recallEntry(t, f, route) {
+  const input = { readSet: [ns], query: 'Synthetic', limit: 2 };
+  if (route === 'direct') {
+    return () => f.call(async () => {
+      const result = await f.core.recall(input); return { result, publicResult: result };
+    });
+  }
+  // Real client dispatch through the installed MCP SDK and production handler;
+  // the in-memory transport lets the same statement observer see its core call.
+  const require = createRequire(new URL('../../adapters/mcp/package.json', import.meta.url));
+  const [{ buildCairnServer }, { Client }, { InMemoryTransport }] = await Promise.all([
+    import('../../adapters/mcp/server.mjs'), import(require.resolve('@modelcontextprotocol/client').replace(/\.cjs$/, '.mjs')),
+    import(require.resolve('@modelcontextprotocol/server').replace(/\.cjs$/, '.mjs')),
+  ]);
+  const server = buildCairnServer({ core: f.core, model: f.model, binding: ns });
+  const client = new Client({ name: 'synthetic-recall-fence', version: '1' });
+  t.after(async () => { await client.close(); await server.close(); });
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  await server.connect(a); await client.connect(b);
+  return () => f.call(async () => {
+    const publicResult = await client.callTool({ name: 'recall_memory', arguments: { query: input.query, limit: input.limit } });
+    const { evidenceTrust, ...result } = JSON.parse(publicResult.content[0].text);
+    assert.equal(evidenceTrust, 'untrusted-data-not-instructions');
+    assert.equal(publicResult.isError, !result.ok);
+    return { result, publicResult };
+  });
+}
+
+function assertCappedControl(f, result) {
+  const value = ok(result);
+  assert.equal(value.memories.length, 2);
+  const selected = value.memories.find(item => item.memory.id === f.memory.id);
+  assert.deepEqual(selected.receipts.map(row => row.id), [11, 10, 9, 8, 7].map(index => f.ids[index]));
+  assert.equal(selected.receiptCount, 12);
+  assert.equal(selected.receiptsOmitted, 7);
+  assert.deepEqual(value.recallTruncated, { navigationItemsOmitted: 0, candidatesOmitted: 0,
+    candidatesShortened: 0, receiptListsCapped: 1 });
+  assert.equal(value.coverage, 'budget_exhausted');
+  assert.deepEqual(f.state.requests, [{ memoryId: f.memory.id, count: 11 }]);
+  assert.equal(f.state.recentSQL.length, 2, 'one lazy read and one final recent proof');
+  assert.deepEqual(f.state.finalFences, f.state.navigation);
+}
+
+const recallChanges = [
+  ['A1 sibling-forget', 'sibling-forget', 'before-lazy'],
+  ['A2 selected-forget', 'selected-forget', 'before-lazy'],
+  ['A3 identical sibling correction', 'sibling-identical', 'before-lazy'],
+  ['A3 same-address sibling correction', 'sibling-address', 'before-lazy'],
+  ['A4 selected correction', 'selected-correct', 'before-lazy'],
+  ['A5 sibling-forget after lazy read / A6 original final fences', 'sibling-forget', 'after-rank-validation'],
+  ['A5 selected correction after lazy read', 'selected-correct', 'after-rank-validation'],
+];
+for (const layout of layouts.filter(layout => layout.mode !== 'old' || layout.base === 18))
+for (const [name, change, at] of recallChanges.filter(([, change]) => layout.mode !== 'old' || change.endsWith('forget')))
+for (const route of ['direct', 'dispatched']) test(`${name}: ${label(layout)} ${route}`, { timeout: 15000 }, async t => {
+  const f = await fencedRecallFixture(t, layout), call = await recallEntry(t, f, route);
+  assertCappedControl(f, (await call()).result);
+  f.reset(change, at);
+  const { result, publicResult } = await call();
+  assert.equal(f.state.changed, true, 'the scheduled public mutation committed');
+  const expected = layout.mode !== 'old' ? 'evidence_unavailable'
+    : change === 'selected-forget' ? 'revision_conflict' : 'index_revision_conflict';
+  error(result, expected);
+  assert.equal(Object.hasOwn(result, 'value'), false, 'no Memory list on refusal');
+  absent({ publicResult, afterChangeModelInputs: f.state.afterInputs }, f.needles(change));
+  assert.equal(f.state.fenceReadsAfterPreparation, 0, 'nothing re-captures either fence after preparation');
+  assert.equal(f.state.navigation.length, 1);
+  if (at === 'after-rank-validation') {
+    assert.deepEqual(f.state.finalFences, f.state.navigation, 'a mid-call mutation never refreshes final fences');
+    assert.equal(f.state.finalError, layout.mode !== 'old' ? 'evidence_unavailable'
+      : change === 'selected-correct' ? 'revision_conflict' : 'index_revision_conflict');
+    assert.deepEqual(f.state.afterInputs, [], 'no model input follows the final interleaving');
+  } else if (change.startsWith('selected-')) {
+    assert.equal(f.state.lazyError, 'revision_conflict');
+    assert.equal(f.state.recentSQL.length, 0, 'selected revision refusal precedes recent SQL');
+    assert.deepEqual(f.state.afterInputs, []);
+  } else {
+    assert.equal(f.state.lazyFinished, true);
+    assert.equal(f.state.recentSQL.length, 1, 'the lazy read participates in the refused call');
+    assert.ok(f.state.afterInputs.length > 0, 'inspect the actual post-change packing input');
+  }
+});
+
+for (const route of ['direct', 'dispatched'])
+test(`A6 owner epoch alone covers lazy reads through public delivery ${route}`, async t => {
+  const f = await fencedRecallFixture(t, { base: 18, mode: 'safety' });
+  const call = await recallEntry(t, f, route);
+  assertCappedControl(f, (await call()).result);
+  f.reset('sibling-fact', 'after-rank-validation');
+  const { result, publicResult } = await call();
+  assert.equal(f.state.changed, true);
+  error(result, 'evidence_unavailable');
+  assert.equal(Object.hasOwn(result, 'value'), false);
+  assert.deepEqual(f.state.finalFences, f.state.navigation);
+  assert.equal(f.state.fenceReadsAfterPreparation, 0);
+  // No canonical write / index advance: epoch() folds a live owner E1 into the
+  // final snapshot's namespace epoch read and rejects the request's E0 memo.
+  // This must fail even when the namespace index comparison alone would pass.
+  assert.equal(f.state.finalSucceeded, false);
+  assert.equal(f.state.finalError, 'evidence_unavailable');
+  assert.equal(f.state.recentSQL.length, 1, 'owner fence rejects before final receipt SQL');
+  assert.deepEqual(f.state.afterInputs, []);
+  absent({ publicResult }, [f.sibling.content]);
+});
+
+for (const textPacking of [false, true]) for (const route of ['direct', 'dispatched'])
+test(`recent requests equal trial-capped candidates, final text-only packing=${textPacking} ${route}`, async t => {
+  const f = await fencedRecallFixture(t, { base: 18, mode: 'safety' }, { textPacking });
+  const call = await recallEntry(t, f, route), { result } = await call();
+  const value = ok(result);
+  // Both fixtures fetch [12,1] receipts. The base's floor pass uses cap=1:
+  // precisely the 12-receipt candidate requests a recent provider, once even
+  // across binary-search trials. Text-only packing later widens back to 12.
+  assert.deepEqual(f.state.fetchedLists, [{ memoryId: f.memory.id, length: 12 }, { memoryId: f.independent.id, length: 1 }]);
+  assert.deepEqual(f.state.requests, [{ memoryId: f.memory.id, count: 11 }]);
+  assert.deepEqual(f.state.requests.map(item => item.memoryId), f.state.fetchedLists.filter(item => item.length > 1).map(item => item.memoryId));
+  assert.equal(f.state.requests.length, f.state.fetchedLists.filter(item => item.length > 1).length);
+  const selected = value.memories.find(item => item.memory.id === f.memory.id);
+  if (textPacking) {
+    assert.equal(value.recallTruncated.receiptListsCapped, 0);
+    assert.equal(value.recallTruncated.candidatesShortened, 1);
+    assert.deepEqual(selected.receipts.map(row => row.id), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(index => f.ids[index]));
+    assert.equal(Object.hasOwn(selected, 'receiptsOmitted'), false);
+    assert.equal(f.state.recentSQL.length, 1, 'trial request only; final list uses forward proof');
+  } else assertCappedControl(f, result);
+});
+
 async function currentReads(f, memory) {
   const input = { namespace: ns, refs: refs(memory) };
   const values = {
