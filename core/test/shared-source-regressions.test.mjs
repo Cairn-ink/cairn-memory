@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openMemoryCore, openMemoryStore } from '../index.mjs';
+import { openMemoryCore, openMemoryStore, roleTaskMeteredText, roleTaskToolResponse } from '../index.mjs';
 import { createMemoryRuntime } from '../runtime.mjs';
 import { createMemoryCore } from '../contract.mjs';
 import { ns, ok, receipt, lineageHost, copySqliteFixture, quiescence } from '../testing/card-lineage-fixture.mjs';
@@ -15,11 +15,12 @@ import { migrateCardLineage, migrateReceiptEventTime } from '../content-safety-m
 import { receiptDenialTokens, receiptDeliverySnapshot, deliveryReceiptRows, receiptReadSafety, contentReadSafety } from '../content-safety.mjs';
 import { readTransaction, transaction } from '../database.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
+import { fingerprint } from '../validation.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { model as episodeModel, input as episodeInput } from '../testing/episode-capture-helpers.mjs';
 import { options as episodeOptions } from '../testing/episode-helpers.mjs';
 import { survivor, forgotten, message, ordinaryKinds, source, fixture, capture, act, noLeak, hasId,
-  scripted, markers, memoryRef, trace, key, isLookup } from '../testing/shared-source-fixture.mjs';
+  scripted, markers, memoryRef, trace, isLookup } from '../testing/shared-source-fixture.mjs';
 
 const error = (result, code) => assert.deepEqual(result, { ok: false, error: { code, retryable: false } });
 const refs = memory => [{ memoryId: memory.id, revision: memory.revision }];
@@ -28,19 +29,68 @@ const recentId = index => 'r' + String(index).padStart(4, '0');
 const recentTime = index => new Date(Date.UTC(2026, 0, 1) + index * 1000).toISOString();
 const tieTime = '2026-01-02T00:00:00.000Z';
 const deliveryKey = memory => JSON.stringify([ns.ownerId, ns.scope, ns.projectId ?? '', memory.id]);
+
+function derivedReceiptRows(f, admittedRow, supports) {
+  if (!supports.length) return [];
+  // receiptKey is private to runtime.mjs. Invoke that actual function through
+  // the internal admission writer, once for the whole synthetic batch. Its
+  // donor Memory is outside every read set used here; the tested Memory still
+  // gets its extra rows only by the direct inserts below. No duplicate hash.
+  const runtime = createMemoryRuntime({ path: f.path });
+  let written;
+  try {
+    written = runtime.admit({ ...ns, projectId: 'synthetic-receipt-template-project' }, {
+      content: 'Synthetic receipt row template donor', fingerprint: fingerprint('Synthetic receipt row template donor'),
+      kind: 'fact', origin: 'explicit', confidence: 1, receipts: supports,
+    }).memory;
+  } finally { runtime.close(); }
+  const engineRows = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(written.id);
+  assert.equal(engineRows.length, supports.length);
+  const byEvent = new Map(engineRows.map(row => [row.event_id, row]));
+  const columns = Object.keys(admittedRow).sort();
+  return supports.map(support => {
+    const engineRow = byEvent.get(support.eventId);
+    assert.ok(engineRow);
+    assert.deepEqual(Object.keys(engineRow).sort(), columns, 'both engine writers use the admitted column set');
+    // All other columns, including optional engine-filled columns, come from
+    // the admitted row. Only the source identity/payload differs here.
+    return { ...admittedRow, ...Object.fromEntries(['receipt_key', 'client', 'session_id', 'event_id', 'role', 'excerpt']
+      .map(column => [column, engineRow[column]])) };
+  });
+}
+
+function insertDerivedReceiptRows(f, admittedRow, rows) {
+  const columns = Object.keys(admittedRow), quote = name => '"' + name.replaceAll('"', '""') + '"';
+  const insert = f.db.prepare(`INSERT INTO receipts (${columns.map(quote).join(',')}) VALUES (${columns.map(() => '?').join(',')})`);
+  for (const row of rows) insert.run(...columns.map(column => row[column]));
+  const stored = new Map(f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(admittedRow.memory_id).map(row => [row.id, row]));
+  const changed = new Set(['id', 'receipt_key', 'client', 'session_id', 'event_id', 'role', 'excerpt', 'created_at']);
+  for (const expected of rows) {
+    const actual = stored.get(expected.id);
+    assert.ok(actual);
+    assert.deepEqual(Object.keys(actual).sort(), [...columns].sort(), 'inserted and admitted column sets agree');
+    assert.deepEqual({ ...actual }, expected);
+    for (const column of columns) {
+      assert.equal(actual[column] === null ? 'null' : typeof actual[column],
+        admittedRow[column] === null ? 'null' : typeof admittedRow[column], column + ' retains its engine-written type');
+      if (!changed.has(column)) assert.equal(actual[column], admittedRow[column], column + ' retains its engine-filled value');
+    }
+  }
+}
+
 async function recentFixture(t, count, time) {
   const f = await fixture(t, 'fresh-default');
   const memory = ok(f.core.admit({ namespace: ns, memory: { content: survivor, kind: 'fact' },
     receipts: [receipt('synthetic-recent-seed')] })).memory;
+  const admittedRow = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').get(memory.id);
+  const rows = derivedReceiptRows(f, admittedRow, Array.from({ length: count }, (_, index) =>
+    receipt('synthetic-recent-' + index, 'Synthetic recent support ' + index)))
+    .map((row, index) => ({ ...row, id: recentId(index), created_at: time(index) })).reverse();
   // Explicit ids and times make the expected lists independent of UUIDs,
   // insertion order, wall clock and the production order implementation.
   transaction(f.db, () => {
     f.db.prepare('DELETE FROM receipts WHERE memory_id=?').run(memory.id);
-    const insert = f.db.prepare('INSERT INTO receipts VALUES(?,?,?,?,?,?,?,?,?)');
-    for (let index = count - 1; index >= 0; index--) {
-      const row = receipt('synthetic-recent-' + index, 'Synthetic recent support ' + index);
-      insert.run(recentId(index), memory.id, key(row), row.client, row.sessionId, row.eventId, row.role, row.excerpt, time(index));
-    }
+    insertDerivedReceiptRows(f, admittedRow, rows);
   });
   return { ...f, memory };
 }
@@ -539,18 +589,14 @@ async function fencedRecallFixture(t, layout, { textPacking = false } = {}) {
   const selectedContent = 'Synthetic prepared selected wording' + (textPacking ? ' x'.repeat(120) : '');
   // admit accepts 1..4 receipts (contract.mjs). As in recentFixture, seed a
   // valid Memory first, then build the larger synthetic stored list directly.
-  // Explicit columns also work on event-time layouts, whose occurred_at is nullable.
   const admitted = ok(f.core.admit({ namespace: ns, memory: { kind: 'fact', content: selectedContent },
     receipts: [supports[0]] })).memory;
+  const admittedRow = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').get(admitted.id);
+  const insertedRows = derivedReceiptRows(f, admittedRow, supports.slice(1)).map((row, index) =>
+    ({ ...row, id: recentId(index + 1), created_at: recentTime(index + 1) })).reverse();
   transaction(f.db, () => {
     f.db.prepare('UPDATE receipts SET created_at=? WHERE memory_id=?').run(recentTime(0), admitted.id);
-    const insert = f.db.prepare(`INSERT INTO receipts
-      (id,memory_id,receipt_key,client,session_id,event_id,role,excerpt,created_at) VALUES(?,?,?,?,?,?,?,?,?)`);
-    for (let index = supports.length - 1; index >= 1; index--) {
-      const support = supports[index];
-      insert.run(recentId(index), admitted.id, key(support), support.client, support.sessionId,
-        support.eventId, support.role, support.excerpt, recentTime(index));
-    }
+    insertDerivedReceiptRows(f, admittedRow, insertedRows);
   });
   const memory = ok(f.core.get({ namespace: ns, memoryId: admitted.id })).memory;
   const shared = supports[11];
@@ -570,7 +616,7 @@ async function fencedRecallFixture(t, layout, { textPacking = false } = {}) {
     preparationReturns: 0, changePreparationReturns: null,
     lazyStarted: false, lazyFinished: false, rankReturned: false, rankOutputCounted: false,
     navigation: [], requests: [], recentSQL: [], afterInputs: [], finalFences: null, finalError: null, finalSucceeded: false, lazyError: null,
-    fetchedLists: null, fenceReadsAfterPreparation: 0 });
+    fetchedLists: null, fenceReadsAfterPreparation: 0, factWrite: null });
   reset();
   const observeInput = (port, input) => { if (state.changed) state.afterInputs.push({ port, input: structuredClone(input) }); };
   f.model.select = ({ input }) => {
@@ -616,12 +662,27 @@ async function fencedRecallFixture(t, layout, { textPacking = false } = {}) {
     }
     const target = state.change.startsWith('sibling-') ? sibling : memory;
     const forget = state.change.endsWith('forget');
-    const factOnly = state.change === 'sibling-fact';
-    if (factOnly) transaction(f.db, () => writeContentSuppressionInside(f.db, { namespace: ns,
-      kind: 'memory', key: sibling.id, matchMode: 'revision-through',
-      sourceVersion: JSON.stringify(['memory-revision-through-v1', sibling.revision]),
-      reason: 'correction_supersession', actionId: 'synthetic-fence-fact-only' }));
-    else ok(forget ? f.core.forget({ namespace: ns, memoryId: target.id, expectedRevision: target.revision })
+    const factOnly = ['sibling-fact', 'selected-receipt-purge-fact'].includes(state.change);
+    if (factOnly) {
+      const witness = () => ({
+        indexRevision: connection.prepare('SELECT epoch FROM namespace_epochs WHERE owner_id=? AND scope=? AND project_id=?')
+          .get(ns.ownerId, ns.scope, ns.projectId).epoch,
+        memoryRevision: connection.prepare('SELECT revision FROM memories WHERE id=?').get(memory.id).revision,
+        owner: connection.prepare('SELECT epoch_hi,epoch_lo FROM owner_suppression_epochs WHERE owner_id=?').get(ns.ownerId)
+          ?? { epoch_hi: 0, epoch_lo: 0 },
+      });
+      const before = witness();
+      const written = transaction(f.db, () => writeContentSuppressionInside(f.db, state.change === 'sibling-fact'
+        ? { namespace: ns, kind: 'memory', key: sibling.id, matchMode: 'revision-through',
+          sourceVersion: JSON.stringify(['memory-revision-through-v1', sibling.revision]),
+          reason: 'correction_supersession', actionId: 'synthetic-fence-fact-only' }
+        // The same receipt-fact writer used by suppressReceiptsInside during
+        // purge. No canonical mutation or direct epoch-row update accompanies it.
+        : { namespace: ns, kind: 'receipt', key: ids[11], reason: 'purge', actionId: 'synthetic-fence-purge-fact-only' }));
+      state.factWrite = { before, after: witness(), fact: connection.prepare(
+        'SELECT kind,stable_key,match_mode,reason FROM content_suppressions WHERE owner_id=? AND fact_id=?')
+        .get(ns.ownerId, written.factId) };
+    } else ok(forget ? f.core.forget({ namespace: ns, memoryId: target.id, expectedRevision: target.revision })
       : f.core.correct({ namespace: ns, memoryId: target.id, expectedRevision: target.revision,
         content: 'Synthetic replacement interpretation', kind: 'fact',
         receipt: state.change === 'sibling-identical' ? shared : state.change === 'sibling-address'
@@ -718,7 +779,7 @@ async function fencedRecallFixture(t, layout, { textPacking = false } = {}) {
     assert.ok(denied.every(text => typeof text === 'string' && text.length > 0), 'every leak needle is real text');
     return denied;
   };
-  return { ...f, core, memory, sibling, independent, ids, state, reset, call, needles };
+  return { ...f, writer: f.core, core, memory, sibling, independent, ids, admittedRow, insertedRows, state, reset, call, needles };
 }
 
 async function recallEntry(t, f, route) {
@@ -817,18 +878,29 @@ for (const route of ['direct', 'dispatched']) test(`${name}: ${label(layout)} ${
   }
 });
 
-for (const route of ['direct', 'dispatched'])
-test(`A6 owner epoch alone covers lazy reads through public delivery ${route}`, async t => {
+for (const change of ['sibling-fact', 'selected-receipt-purge-fact']) for (const route of ['direct', 'dispatched'])
+test(`A6 owner epoch alone covers lazy reads through public delivery${change === 'sibling-fact' ? '' : ' with purge receipt writer'} ${route}`, async t => {
   const f = await fencedRecallFixture(t, { base: 18, mode: 'safety' });
   const call = await recallEntry(t, f, route);
   assertCappedControl(f, (await call()).result);
-  f.reset('sibling-fact', 'after-rank-validation');
+  f.reset(change, 'after-rank-validation');
   const { result, publicResult } = await call();
   assert.equal(f.state.preparationReturns, 1, 'the changed call returned from preparation');
   assert.equal(f.state.changePreparationReturns, 1, 'the change hook observed that preparation return');
   assert.equal(f.state.changed, true);
   assert.equal(f.state.lazyFinished, true, 'this call completed its prepared lazy read');
   assert.deepEqual(f.state.requests, [{ memoryId: f.memory.id, count: 11 }]);
+  const { before, after, fact } = f.state.factWrite;
+  assert.equal(after.indexRevision, before.indexRevision, 'fact writer leaves the namespace index revision unchanged');
+  assert.equal(before.indexRevision, f.state.navigation[0].indexRevision);
+  assert.equal(after.memoryRevision, before.memoryRevision, 'fact writer leaves the selected Memory revision unchanged');
+  assert.equal(after.memoryRevision, f.memory.revision);
+  const epoch = owner => (BigInt(owner.epoch_hi) << 32n) + BigInt(owner.epoch_lo);
+  assert.equal(epoch(after.owner), epoch(before.owner) + 1n, 'the engine fact insert advances the owner epoch exactly once');
+  assert.equal(`${before.owner.epoch_hi}:${before.owner.epoch_lo}`, f.state.navigation[0].suppressionEpoch);
+  assert.deepEqual({ ...fact }, change === 'sibling-fact'
+    ? { kind: 'memory', stable_key: f.sibling.id, match_mode: 'revision-through', reason: 'correction_supersession' }
+    : { kind: 'receipt', stable_key: f.ids[11], match_mode: 'incarnation', reason: 'purge' });
   error(result, 'evidence_unavailable');
   assert.equal(Object.hasOwn(result, 'value'), false);
   assert.deepEqual(f.state.finalFences, f.state.navigation);
@@ -840,7 +912,119 @@ test(`A6 owner epoch alone covers lazy reads through public delivery ${route}`, 
   assert.equal(f.state.finalError, 'evidence_unavailable');
   assert.equal(f.state.recentSQL.length, 1, 'owner fence rejects before final receipt SQL');
   assert.deepEqual(f.state.afterInputs, []);
-  absent({ publicResult }, [f.sibling.content]);
+  absent({ publicResult, afterChangeModelInputs: f.state.afterInputs }, change === 'sibling-fact'
+    ? [f.sibling.content] : [f.memory.content, f.ids[11], ...Object.values(f.insertedRows.find(row => row.id === f.ids[11]))
+      .filter(value => typeof value === 'string')]);
+});
+
+test('public sibling forget withholds a directly inserted fixture receipt on every Memory read', { timeout: 15000 }, async t => {
+  const f = await fencedRecallFixture(t, { base: 33, mode: 'lineage-event' });
+  const denied = f.insertedRows.find(row => row.id === f.ids[11]);
+  const siblingRow = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').get(f.sibling.id);
+  assert.ok(denied, 'the receipt under test was directly inserted, not the admitted seed');
+  assert.notEqual(denied.id, f.admittedRow.id);
+  assert.equal(denied.memory_id, f.memory.id);
+  assert.notEqual(denied.id, siblingRow.id);
+  for (const column of ['receipt_key', 'client', 'session_id', 'event_id', 'role', 'excerpt'])
+    assert.equal(denied[column], siblingRow[column], 'the public sibling cites the same ' + column);
+  const expectedMarkers = receiptDenialTokens([denied]).sort();
+  assert.equal(expectedMarkers.length, 2);
+  assert.deepEqual(expectedMarkers.map(token => token.slice(0, 6)).sort(), ['rs1:a:', 'rs1:i:']);
+  assert.deepEqual(markers(f), []);
+  const before = ok(f.writer.get({ namespace: ns, memoryId: f.memory.id }));
+  assert.deepEqual(before.receipts.map(row => row.id), f.ids, 'all twelve fixture rows are initially delivered');
+  const acknowledgement = ok(f.writer.forget({ namespace: ns, memoryId: f.sibling.id, expectedRevision: f.sibling.revision }));
+  assert.equal(acknowledgement.forgotten, true);
+  assert.deepEqual(markers(f), expectedMarkers, 'public forget writes both deny tokens for the inserted receipt');
+  assert.equal(f.db.prepare('SELECT revision FROM memories WHERE id=?').get(f.memory.id).revision, f.memory.revision);
+
+  const values = {}, modelInputs = [];
+  for (const port of ['select', 'rank']) {
+    const invoke = f.model[port];
+    f.model[port] = request => { modelInputs.push({ port, input: structuredClone(request.input) }); return invoke(request); };
+  }
+  const count = f.model.countTokens;
+  let capped = true;
+  f.model.countTokens = text => { modelInputs.push({ port: 'countTokens', input: text }); return capped ? count(text) : 1; };
+  // Exercise the capped lazy provider and final recent proof through BOTH
+  // public entry points, then uncapped delivery of all eleven remaining rows.
+  for (const route of ['direct', 'dispatched']) {
+    const call = await recallEntry(t, f, route);
+    for (const cap of [true, false]) {
+      capped = cap;
+      f.reset();
+      const response = await call(), value = ok(response.result);
+      values[route + (cap ? 'Capped' : 'Uncapped')] = response.publicResult;
+      const selected = value.memories.find(item => item.memory.id === f.memory.id);
+      assert.ok(selected);
+      assert.deepEqual(selected.receipts.map(row => row.id), cap ? [10, 9, 8, 7, 6].map(index => f.ids[index]) : f.ids.slice(0, 11));
+      assert.equal(selected.receiptCount, 12, 'withholding preserves the physical count');
+      if (cap) {
+        assert.equal(selected.receiptsOmitted, 7);
+        assert.deepEqual(f.state.requests, [{ memoryId: f.memory.id, count: 10 }]);
+        assert.equal(f.state.recentSQL.length, 2);
+      } else assert.equal(Object.hasOwn(selected, 'receiptsOmitted'), false);
+    }
+  }
+  capped = false;
+  const core = f.writer, input = { namespace: ns, refs: refs(f.memory) }, remaining = f.ids.slice(0, 11);
+  Object.assign(values, {
+    get: ok(core.get({ namespace: ns, memoryId: f.memory.id })),
+    fetch: ok(core.fetch(input)),
+    list: ok(core.list({ namespace: ns, limit: 20 })), map: ok(core.map({ namespace: ns, purpose: 'recall' })),
+    legacyGet: f.scope.get(f.memory.id), legacyList: f.scope.list(), legacySearch: f.scope.search('Synthetic'),
+    contextEvidence: ok(await f.trusted.call(f.context, 'fetchCandidateEvidence',
+      { readSet: [ns], intent: 'current', refs: [memoryRef(f.memory)] })),
+    contextRead: ok(await f.trusted.call(f.context, 'contextRead', { readSet: [ns], types: ['memory'], intent: 'current',
+      query: 'Synthetic', semantic: false, deadlineMs: 5000, budget: { maxItems: 12, maxTokens: 3000 } })),
+    session: core.sessionStartContext({ namespace: ns, groups: { nextSteps: true, procedural: false, background: true },
+      maxTokens: 2000, maxChars: 8000 }),
+  });
+  error(values.session, 'source_unavailable');
+  assert.deepEqual(values.get.receipts.map(row => row.id), remaining);
+  assert.deepEqual(values.fetch.items[0].receipts.map(row => row.id), remaining);
+  assert.deepEqual(values.legacyGet.receipts.map(row => row.excerpt), values.get.receipts.map(row => row.excerpt));
+  const runtime = createMemoryRuntime({ path: f.path });
+  try { values.recent = runtime.recentReceipts(ns, refs(f.memory)[0], 12); }
+  finally { runtime.close(); }
+  assert.deepEqual(values.recent.map(row => row.id), [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0].map(index => f.ids[index]));
+  for (const recent of [false, true]) {
+    values[recent ? 'recentRows' : 'forwardRows'] = readTransaction(f.db, () => {
+      const memo = receiptDeliverySnapshot(f.db, [{ namespace: ns, memoryId: f.memory.id }], undefined, [], { recent, limit: 12 });
+      return deliveryReceiptRows(f.db, ns, f.memory.id, memo, { recent, limit: 12 });
+    });
+    assert.deepEqual(values[recent ? 'recentRows' : 'forwardRows'].map(row => row.id), recent ? [...remaining].reverse() : remaining);
+  }
+  // Source-context reads require the complete physical source set, so one
+  // withheld receipt must produce the same exact refusal as other leak cases.
+  for (const contextMode of ['source-evidence', 'rationale-evidence']) {
+    values[contextMode + 'Fetch'] = core.fetch({ ...input, contextMode });
+    values[contextMode + 'Recall'] = await core.recall({ readSet: [ns], query: 'Synthetic', limit: 8, contextMode });
+    error(values[contextMode + 'Fetch'], 'source_unavailable');
+    error(values[contextMode + 'Recall'], 'source_unavailable');
+  }
+  values.snapshot = core.sourceSnapshot({ readSet: [ns], limit: 12 });
+  assert.equal(values.snapshot.ok, false);
+  assert.equal(JSON.stringify(values.snapshot).includes('complete-current-admitted'), false);
+  values.cardEvidence = ok(await f.host.call(core, 'fetchEvidence', { intent: 'current', refs: [memoryRef(f.memory)] }));
+  values.cardSelection = ok(await f.host.call(core, 'selectEvidence', { intent: 'current', query: 'Synthetic', types: ['memory'], limit: 24 }));
+  values.cardRevalidation = ok(await f.host.call(core, 'revalidateEvidence', { snapshot: values.cardEvidence.snapshot }));
+  for (const name of ['contextEvidence', 'cardEvidence']) {
+    const item = values[name].items.find(item => item.ref.memoryId === f.memory.id);
+    assert.ok(item);
+    assert.deepEqual(item.provenance.sources.map(source => source.receiptId), remaining, name + ' keeps every remaining receipt');
+  }
+  values.cardSources = await Promise.all(values.cardEvidence.items[0].provenance.sources.map(source =>
+    Promise.resolve(f.host.call(core, 'getSource', { source })).then(ok)));
+  assert.equal(values.cardSources.length, 11);
+  for (const row of values.get.receipts) assert.ok(JSON.stringify(values.cardSources).includes(row.excerpt));
+  values.exportedText = roleTaskMeteredText(values.contextRead.metered);
+  values.exportedTool = roleTaskToolResponse({ ok: true, value: values.contextRead });
+  for (const name of ['list', 'map', 'legacyList', 'legacySearch', 'contextRead', 'cardSelection'])
+    assert.ok(hasId(values[name], f.memory.id), name + ' still delivers the selected Memory');
+  assert.ok(modelInputs.some(item => item.port === 'rank'), 'the input scan includes actual post-forget rank requests');
+  absent({ ...values, modelInputs }, [f.sibling.content, denied.id, siblingRow.id, denied.receipt_key,
+    denied.excerpt, denied.client, denied.session_id, denied.event_id, ...expectedMarkers]);
 });
 
 for (const textPacking of [false, true]) for (const route of ['direct', 'dispatched'])
