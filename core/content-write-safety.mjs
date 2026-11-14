@@ -153,7 +153,7 @@ export function beginContentWriteSafety(db, operation) {
     // Memory transition/facts of this action. Arguments confer no exemption.
     const markerMethods = new Set();
     for (let context = operation; context; context = context.parent) markerMethods.add(context.method);
-    const allowedMarkers = new Set(), allowedFingerprints = new Set();
+    const allowedMarkers = new Set();
     if (['forget', 'correct', 'reject', 'resolveReview', 'forgetEpisode'].some(method => markerMethods.has(method))) {
       for (const change of canonical.filter(change => change.table === 'memories' && change.old)) {
         const ns = namespace(change.row), previous = oldValue(change, 'revision');
@@ -164,7 +164,6 @@ export function beginContentWriteSafety(db, operation) {
           fact.match_mode === 'incarnation' && contentSuppressionTargetMatches(fact, ns, { kind: 'memory', key: change.row.id }) ||
           markerMethods.has('correct') && retiredMemory(fact) && fact.stable_key === change.row.id));
         if (!cause) continue;
-        allowedFingerprints.add(JSON.stringify([...boundary(ns), oldValue(change, 'fingerprint')]));
         const receipts = removed.filter(change => change.table === 'receipts' && change.row.memory_id === cause.stable_key &&
           newFacts.some(fact => fact.kind === 'receipt' && fact.action_id === cause.action_id && fact.reason === cause.reason &&
             fact.match_mode === 'incarnation' && contentSuppressionTargetMatches(fact, ns, { kind: 'receipt', key: change.row.id })))
@@ -173,13 +172,6 @@ export function beginContentWriteSafety(db, operation) {
       }
     }
     for (const row of markerChanges) if (!allowedMarkers.has(JSON.stringify(row))) fail('evidence_unavailable');
-    if (['forget', 'correct', 'reject', 'resolveReview', 'forgetEpisode'].some(method => markerMethods.has(method))) {
-      for (const change of canonical.filter(change => change.table === 'suppressed')) {
-        const row = change.row;
-        if (change.old || !allowedFingerprints.has(JSON.stringify([row.owner_id,row.scope,row.project_id,row.fingerprint]))) fail('evidence_unavailable');
-      }
-      if (removed.some(change => change.table === 'suppressed')) fail('evidence_unavailable');
-    }
     const terminalFacts=newFacts.filter(f=>terminal.has(JSON.stringify([f.owner_id,f.scope,f.project_id,f.kind,f.stable_key]))||
       lineage&&retiredMemory(f)||
       f.kind==='raw'&&f.match_mode==='span'&&exists('raw_source_exclusions')&&
