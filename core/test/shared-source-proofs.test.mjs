@@ -39,10 +39,10 @@ for (const operation of operations) test(`rationale links omit withheld receipts
   ok(await act(f, operation, a));
   const rationale = ok(f.core.getRationale({ namespace: ns, memoryId: b.id, revision: b.revision }));
   assert.deepEqual(rationale.edges, []); noLeak(rationale, 'rationale links');
-  const fetched = ok(f.core.fetch({ namespace: ns, refs: [{ memoryId: b.id, revision: b.revision }],
-    contextMode: 'rationale-evidence', tokenBudget: 4000 }));
+  const fetched = f.core.fetch({ namespace: ns, refs: [{ memoryId: b.id, revision: b.revision }],
+    contextMode: 'rationale-evidence', tokenBudget: 4000 });
   noLeak(fetched, 'rationale source projection');
-  assert.ok(hasId(fetched, b.id));
+  assert.deepEqual(fetched, { ok: false, error: { code: 'source_unavailable', retryable: false } });
 });
 
 for (const kind of ['fresh-default','ordinary-48','ordinary-53']) test(`review A1 unchanged qualification retention ${kind}`, async t => {
@@ -154,14 +154,15 @@ for(const operation of operations) test(`source snapshots, rationale recall and 
   const f=await fixture(t,'ordinary-53',operation),[b,a]=await capture(f);
   const denied=ok(f.core.get({namespace:ns,memoryId:b.id})).receipts[0].id;
   ok(act(f,operation,a));f.model.countTokens=()=>1;
-  const snapshot=ok(f.core.sourceSnapshot({readSet:[ns],limit:12}));
-  assert.ok(snapshot.memories.some(item=>item.memory.id===b.id&&item.receipts.length===0&&item.receiptCount===1));
-  const recall=ok(await f.core.recall({readSet:[ns],query:survivor,limit:8,contextMode:'rationale-evidence'}));
-  assert.ok(recall.memories.some(item=>item.memory.id===b.id));
+  const snapshot=f.core.sourceSnapshot({readSet:[ns],limit:12});
+  assert.equal(snapshot.ok,false);
+  assert.equal(JSON.stringify(snapshot).includes('complete-current-admitted'),false);
+  const recall=await f.core.recall({readSet:[ns],query:survivor,limit:8,contextMode:'rationale-evidence'});
+  assert.deepEqual(recall,{ok:false,error:{code:'source_unavailable',retryable:false}});
   const store=openMemoryStore({path:f.path});t.after(()=>store.close());
   const legacy=store.scope({ownerId:ns.ownerId,projectId:ns.projectId});
   const values=[snapshot,recall,legacy.get(b.id),legacy.list({limit:20}),legacy.search('Synthetic',{limit:20})];
-  for(const result of values){assert.ok(hasId(result,b.id));noLeak(result,'source and legacy delivery');assert.equal(hasId(result,denied),false);}
+  for(const result of values){if(result!==snapshot&&result!==recall)assert.ok(hasId(result,b.id));noLeak(result,'source and legacy delivery');assert.equal(hasId(result,denied),false);}
   assert.deepEqual(legacy.get(b.id).receipts,[]);
 });
 

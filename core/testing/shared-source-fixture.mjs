@@ -163,12 +163,15 @@ async function reads(f, memory, expectedReceipts) {
     recall: ok(await f.core.recall({ readSet: [ns], query: survivor, limit: 8 })),
     map: ok(f.core.map({ namespace: ns, purpose: 'recall' })),
     fetch: ok(f.core.fetch({ namespace: ns, refs: [{ memoryId: memory.id, revision: memory.revision }], tokenBudget: 4000 })),
-    sourceFetch: ok(f.core.fetch({ namespace: ns, refs: [{ memoryId: memory.id, revision: memory.revision }],
-      contextMode: 'source-evidence', tokenBudget: 4000 })),
-    sourceRecall: ok(await f.core.recall({ readSet: [ns], query: survivor, limit: 8, contextMode: 'source-evidence' })),
+    sourceFetch: f.core.fetch({ namespace: ns, refs: [{ memoryId: memory.id, revision: memory.revision }],
+      contextMode: 'source-evidence', tokenBudget: 4000 }),
+    sourceRecall: await f.core.recall({ readSet: [ns], query: survivor, limit: 8, contextMode: 'source-evidence' }),
   };
+  const sourceError = get.memory.receiptCount > 100 ? 'context_item_too_large' : 'source_unavailable';
+  for (const name of ['sourceFetch', 'sourceRecall'])
+    assert.deepEqual(values[name], { ok: false, error: { code: sourceError, retryable: false } }, name);
   assert.ok(f.model.offered.some(ref => ref.memoryId === memory.id), 'scripted selector was offered B');
-  for (const name of ['recall', 'fetch', 'sourceFetch', 'sourceRecall']) {
+  for (const name of ['recall', 'fetch']) {
     const item = (values[name].memories ?? values[name].items).find(item => item.memory.id === memory.id);
     assert.ok(item, name + ' returns B');
     assert.deepEqual(item.receipts.map(row => row.excerpt), expectedReceipts, name + ' receipt list');
@@ -198,7 +201,7 @@ async function reads(f, memory, expectedReceipts) {
   values.exportedTool = roleTaskToolResponse({ok:true,value:values.contextRead});
   for (const [name, value] of Object.entries(values)) {
     noLeak(value, name);
-    assert.ok(hasId(value, memory.id), name + ' includes B');
+    if (!['sourceFetch', 'sourceRecall'].includes(name)) assert.ok(hasId(value, memory.id), name + ' includes B');
   }
   if (expectedReceipts.length) assert.ok(JSON.stringify(values.contextRead).includes(independent), 'context keeps independent evidence');
   return values;

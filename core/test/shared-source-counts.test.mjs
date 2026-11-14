@@ -40,7 +40,7 @@ test(`host receipt counts ${kind} ${operation}`, async t => {
     if (!delivered) {
       assert.deepEqual(detail.receipts, []);
       const row = f.db.prepare('SELECT * FROM memories WHERE id=?').get(b.id);
-      assert.equal(sourceEvidence(row, [], count, key).receiptCount, 1);
+      assert.throws(() => sourceEvidence(row, [], count, key), { code: 'storage_error' });
     }
     const request = { namespace: ns, refs: [b, spare].map(m => ({ memoryId: m.id, revision: m.revision })), tokenBudget: 4000 };
     let cursor, pages = 0; const items = [];
@@ -171,8 +171,9 @@ test('Raw deletion and shared-source markers preserve the retained receipt count
     let cursor,pages=0;const items=[];
     do{const page=ok(f.core.fetch({...request,...(cursor?{cursor}:{})}));items.push(...page.items);cursor=page.nextCursor;assert.ok(++pages<=3,'finite combined fetch pages');noLeak(page,'combined fetch');}while(cursor);
     const recalled=ok(await f.core.recall({readSet:[ns],query:survivor,limit:8}));noLeak(recalled,'combined recall');
-    const usage=ok(f.core.fetch({...request,contextMode:'source-evidence'}));noLeak(usage,'combined source fetch');
-    for(const values of [items,recalled.memories,usage.items]){
+    const usage=f.core.fetch({...request,contextMode:'source-evidence'});noLeak(usage,'combined source fetch');
+    assert.deepEqual(usage,{ok:false,error:{code:'source_unavailable',retryable:false}});
+    for(const values of [items,recalled.memories]){
       const item=values.find(item=>item.memory.id===initialB.id);assert.ok(item);
       assert.ok(item.receiptCount>=1);assert.deepEqual(item.receipts.map(receipt=>receipt.excerpt),excerpts);
     }

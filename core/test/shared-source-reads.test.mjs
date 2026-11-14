@@ -123,7 +123,8 @@ for (const marked of [false, true]) test(`review B one lookup per snapshot with 
     sourceReceiptLimit:4}));
   assert.ok(queried.result.rows.length>=12); assertLookups(queried.rows,1);
   const sourceRecall=await trace(()=>f.core.recall({readSet:[ns],query:'Synthetic',limit:12,contextMode:'source-evidence'}));
-  assert.equal(ok(sourceRecall.result).memories.length,12); assertLookups(sourceRecall.rows,3);
+  if(marked) assert.deepEqual(sourceRecall.result,{ok:false,error:{code:'source_unavailable',retryable:false}});
+  else { assert.equal(ok(sourceRecall.result).memories.length,12); assertLookups(sourceRecall.rows,3); }
 });
 
 test('mixed evidence selection collects anchors once as the candidate population grows',async t=>{
