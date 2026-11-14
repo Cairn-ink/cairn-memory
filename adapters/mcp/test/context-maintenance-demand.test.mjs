@@ -249,7 +249,19 @@ for (const locked of ['canonical', 'sidecar']) test(`idle fence probe retries ${
 async function idleFixture(t, fixture) {
   const f = fixture ?? await realFixture(t, { shared: true }), selected = [];
   f.demand.note(['memory']); f.demand.note(['card']);
-  let refuseCard = false;
+  let refuseCard = false, currentCard, refusedFence;
+  const set = Map.prototype.set;
+  t.mock.method(Map.prototype, 'set', function(key, value) {
+    // Wrap only the real maintenance idle predicate. A one-turn probe refusal
+    // leaves its durable fence intact and makes entry removal observable.
+    if (key === 'card' && typeof value === 'function' &&
+        Function.prototype.toString.call(value).includes('storage.assertState(projection, expected')) {
+      currentCard = value;
+      const current = value;
+      value = () => refuseCard ? false : current();
+    }
+    return Reflect.apply(set, this, [key, value]);
+  });
   const loop = drivenLoop(t, f.core, { ...f.access, async call(core, method, args) {
     const result = refuseCard && args.types.length === 1 && args.types[0] === 'card'
       ? (refuseCard = false, { ok: false, error: { code: 'index_unavailable', retryable: false } })
@@ -262,7 +274,7 @@ async function idleFixture(t, fixture) {
   assert.deepEqual(selected.map(call => call.types), Array.from({ length: 3 }, () => combined),
     'control: both views are complete and skipped before invalidation ' + JSON.stringify(selected));
   selected.length = 0;
-  return { ...f, selected, loop, refuseNextCard() { refuseCard = true; } };
+  return { ...f, selected, loop, refuseNextCard() { assert.ok(currentCard, 'a real Card idle predicate was installed'); refusedFence = currentCard; refuseCard = true; }, refusedFenceCurrent() { return refusedFence(); } };
 }
 const cardTurns = f => f.selected.filter(call => call.types.length === 1 && call.types[0] === 'card');
 async function resumesReady(f, marker) {
@@ -329,12 +341,24 @@ test('sidecar replacement and reopen re-enable an idle Card view and reach ready
 
 test('a refused refresh removes idle state and the view recovers to ready', { timeout: 15000 }, async t => {
   const f = await idleFixture(t);
-  // A canonical write invalidates the skipped view; inject one refused return
-  // at the refresh seam to exercise the scheduler's refusal/recovery branch.
-  ok(await f.core.admit({ namespace: ns, memory: { content: 'Synthetic recovery invalidation', kind: 'fact' },
-    receipts: [{ client: 'synthetic', sessionId: 'recovery', eventId: 'invalidate', role: 'user', excerpt: 'Synthetic recovery source' }] }));
+  // No durable invalidation: after the one refused refresh, a stale cached
+  // entry would say current forever unless the refusal branch removes it.
   f.refuseNextCard();
   for (let i = 0; i < 3; i++) await f.loop.tick();
   assert.ok(cardTurns(f).some(call => !call.result.ok), 'R2N_IDLE_REFRESH_REFUSED');
-  await resumesReady(f, 'R2N_IDLE_REFUSAL_RECOVERS');
+  assert.equal(await f.refusedFenceCurrent(), true, 'R2O_IDLE_REFUSAL_ENTRY: the prior durable fence remains current');
+  await resumesReady(f, 'R2N_IDLE_REFUSAL_RECOVERS R2O_IDLE_REFUSAL_ENTRY');
+});
+
+for (const shared of [false, true]) for (const operation of ['forget', 'correct']) test(`same-namespace ${operation} re-enables an idle Card view and reaches ready shared=${shared}`, { timeout: 15000 }, async t => {
+  const safety = safetyFixture(t, 23); await safety.migrate();
+  const base = await realFixture(t, { path: safety.path, shared });
+  const victim = ok(await base.core.admit({ namespace: ns,
+    memory: { content: 'Synthetic same-namespace idle victim', kind: 'fact' },
+    receipts: [{ client: 'synthetic', sessionId: 'same-namespace', eventId: 'victim', role: 'user', excerpt: 'Synthetic idle victim' }] })).memory;
+  const f = await idleFixture(t, base);
+  ok(await f.core[operation]({ namespace: ns, memoryId: victim.id, expectedRevision: victim.revision,
+    ...(operation === 'correct' ? { content: 'Synthetic revised idle source', kind: 'fact',
+      receipt: { client: 'synthetic', sessionId: 'same-namespace', eventId: 'correction', role: 'user', excerpt: 'Synthetic revised idle source' } } : {}) }));
+  await resumesReady(f, 'R2O_IDLE_' + operation.toUpperCase());
 });
