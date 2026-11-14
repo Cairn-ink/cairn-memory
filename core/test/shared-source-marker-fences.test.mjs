@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { parse } from '../../tools/testing/vendor/acorn/acorn.mjs';
+import { ns, ok } from '../testing/card-lineage-fixture.mjs';
+import { fixture, capture, act, markers, originalRow } from '../testing/shared-source-fixture.mjs';
 
 const root=new URL('../',import.meta.url);
 const normalize=text=>text.replace(/\s+/g,' ').trim();
@@ -201,150 +203,164 @@ function sourceWalker(sources){
     for(const binding of bindings)if(binding.import&&imported(binding)===fn)visit(binding,[]);
     return found;
   }
-  const returns=fn=>fn.body.type==='BlockStatement'?sites.filter(site=>site.node.type==='ReturnStatement'&&
-    parentFunction(site)===fn).map(site=>site.node.argument):[fn.body];
-  const fields=(pattern,path)=>{
-    if(pattern.type==='Identifier')return [{binding:bindings.find(binding=>binding.id===pattern),path}];
-    if(pattern.type==='AssignmentPattern')return fields(pattern.left,path);
-    if(pattern.type==='ObjectPattern')return pattern.properties.flatMap(p=>fields(p.value,[...path,p.key.name??p.key.value]));
-    return [];
-  };
-  function callEnvironment(fn,args,env){
-    const bound=new Map(env);
-    fn.params.forEach((pattern,index)=>{
-      for(const {binding,path}of fields(pattern,[]))bound.set(binding,{node:args[index],env,path});
-    });
-    return bound;
-  }
-  // Prove values by their origins, rather than their variable names. Arrays
-  // carry their element provenance through map/filter and for-of; parameters
-  // are checked at every discovered caller, including returned factory methods.
-  function prove(node,kind){
-    const graph=[],active=new Map(),backEdges=[];
-    const nodeKey=value=>{const site=byNode.get(value);return site?site.file+':'+value.start:'<missing>';};
-    // Keep caller substitutions in the state: the same expression at two
-    // callers must not hide an unproven argument behind a different caller's
-    // back-edge. Flatten forwarded parameter aliases before comparing them.
-    function boundKey(bound){
-      const seen=new Set();let path=[],element=false;
-      while(bound){
-        if(seen.has(bound))return '<cycle>';
-        seen.add(bound);path=[...(bound.path??[]),...path];element=bound.element??element;
-        const forwarded=bound.node?.type==='Identifier'&&bound.env.get(bindingOf(bound.node));
-        if(!forwarded)return JSON.stringify([nodeKey(bound.node),path,element]);
-        bound=forwarded;
+  return {callers,directFunction,bindingOf};
+}
+
+const fingerprintMember=node=>node?.type==='MemberExpression'&&!node.computed&&!node.optional&&named(node.property,'fingerprint');
+const engineFingerprintCall=(node,walker,fn)=>node?.type==='CallExpression'&&!node.optional&&
+  node.callee.type==='Identifier'&&walker.directFunction(node.callee)===fn;
+
+// A complete, reviewed producer/sink census, not an object-data-flow proof.
+// Keep duplicates: the confirmation INSERT and its UPDATE bind the same value.
+// Five same-named auxiliary properties are pump configuration signatures or
+// raw-search capabilities/index payloads, not Memory fingerprints. Catalog
+// those too, rather than exempting their modules from discovery. The two
+// suppressed sinks are checked separately by the unchanged emitter proofs.
+const expectedFingerprintProducers=[
+  ['card-raw-sources.mjs','object',"createHash('sha256').update(sealed).digest('hex')"],
+  ['content-safety-observations.mjs','object','memory.fingerprint'],
+  ['content-suppression-storage.mjs','INSERT suppressed.fingerprint','JSON.stringify(receiptDenialTokens(rows))'],
+  ['context-product-pump.mjs','object','fingerprint'],
+  ['context-semantic-pump.mjs','object','fingerprint'],
+  ['ordered-capture-storage.mjs','INSERT confirmation_supersessions.previous_fingerprint','row.previous.fingerprint'],
+  ['ordered-capture-storage.mjs','UPDATE confirmation_supersessions.previous_fingerprint','row.previous.fingerprint'],
+  ['raw-search-authority.mjs','object','fingerprint'],
+  ['raw-search-maintenance.mjs','object','fingerprint'],
+  ['raw-search-storage.mjs','object','fingerprint'],
+  ['runtime.mjs','INSERT suppressed.fingerprint','value'],
+  ['runtime.mjs','INSERT memories.fingerprint','value.fingerprint'],
+  ['runtime.mjs','UPDATE memories.fingerprint','value.fingerprint'],
+  ['suppression-content.mjs','object','fingerprint(content)'],
+  ['validation.mjs','object','fingerprint(content)'],
+];
+const producerKey=entry=>JSON.stringify(entry);
+const producerTuple=entry=>[entry.site.file,entry.kind,entry.expression];
+const fingerprintColumn=name=>['fingerprint','previous_fingerprint'].includes(name.toLowerCase());
+const sqlIdentifier=text=>text.trim().replace(/^["`\[]|["`\]]$/g,'').toLowerCase();
+
+function fingerprintProducers(sources,walker){
+  const result=[];
+  for(const source of sources.values()){
+    const add=(site,kind,value)=>{
+      assert.ok(value,classified(site,'fingerprint-producer','missing source-backed column value'));
+      result.push({site,kind,value,expression:source.text(value)});
+    };
+    for(const site of source.nodes){
+      const node=site.node,parent=site.ancestors.at(-1);
+      // Include quoted/computed literal names, and reject computed writes
+      // below; neither can bypass the census by changing AST node shape.
+      if(node.type==='Property'&&parent?.type==='ObjectExpression'&&
+          (node.key.name??node.key.value)==='fingerprint'){
+        assert.ok(!node.computed&&node.kind==='init',classified(site,'fingerprint-producer','expected a data property'));
+        add(site,'object',node.value);
       }
-      return '<missing>';
-    }
-    function visit(node,kind,env=new Map(),path=[],element=false,chain=[]){
-      const site=byNode.get(node),step=classified(site,'fingerprint-value',
-        kind+(path.length?' .'+path.join('.'):'')+(element?' element':''));
-      const trail=[...chain,step],message='expected a stored Memory fingerprint or engine SHA-256 fingerprint'+
-        '\norigin chain:\n  '+trail.join('\n  -> ');
-      assert.ok(node,message);
-      const context=[...env].map(([binding,bound])=>[nodeKey(binding.id),boundKey(bound)]).sort();
-      const key=JSON.stringify([nodeKey(node),kind,path,element,context]);
-      if(active.has(key)){
-        const target=active.get(key);backEdges.push({target,trail});return target;
+      if(node.type==='AssignmentExpression'&&node.left.type==='MemberExpression'&&
+          (node.left.property.name??node.left.property.value)==='fingerprint'){
+        assert.ok(!node.left.computed&&node.operator==='=',classified(site,'fingerprint-producer','expected a simple property assignment'));
+        add(site,'assignment',node.right);
       }
-      const value={origins:[],seed:false,absent:false,message};graph.push(value);active.set(key,value);
-      const again=(origin,bindings=env,keys=path,items=element,type=kind)=>
-        visit(origin,type,bindings,keys,items,trail);
-      const from=origins=>{value.origins=origins;return value;};
-      const terminal=(seed=true)=>{value.seed=seed;value.absent=!seed;return value;};
-      try{
-        if(kind==='fingerprint'&&!path.length&&!element&&node.type==='MemberExpression'&&!node.computed&&named(node.property,'fingerprint')){
-          // Member syntax alone is not proof: the object must trace to a
-          // stored Memory row. Do not admit arbitrary external DTOs here.
-          return from([again(node.object,env,[],false,'memory')]);
-        }
-        if(node.type==='Identifier'){
-          // A missing optional row cannot reach an insert via .fingerprint.
-          // Preserve that existing absence case; it supplies no proof seed.
-          if(node.name==='undefined'&&kind==='memory')return terminal(false);
-          const binding=bindingOf(node),bound=env.get(binding);
-          assert.ok(binding,message);
-          // Reassignment could invalidate a row or replace its fingerprint.
-          for(const ref of references.get(binding))assert.ok(!ref.ancestors.some(parent=>
-            parent.type==='AssignmentExpression'&&parent.left.start<=ref.node.start&&parent.left.end>=ref.node.end||
-            parent.type==='UpdateExpression'),message+'\n'+classified(ref,'fingerprint-value','mutable fingerprint origin'));
-          if(bound)return from([again(bound.node,bound.env,[...(bound.path??[]),...path],bound.element??element)]);
-          if(binding.declaration){
-            const loop=binding.site.ancestors.find(parent=>parent.type==='ForOfStatement'&&parent.left.start<=node.start);
-            if(!binding.declaration.init&&loop)return from([again(loop.right,env,path,true)]);
-            return from([again(binding.declaration.init)]);
-          }
-          if(binding.param!==undefined){
-            const fn=binding.fn,fnSite=byNode.get(fn),parent=fnSite.ancestors.at(-1);
-            if(parent?.type==='CallExpression'&&parent.arguments[0]===fn&&parent.callee.type==='MemberExpression'&&named(parent.callee.property,'map')){
-              return from([again(parent.callee.object,env,path,true)]);
+      // Scan SQL text independently of prepare/run discovery, so moving a
+      // write out of its immediate prepare/run shape fails closed.
+      const sql=node.type==='Literal'&&typeof node.value==='string'?node.value:
+        node.type==='TemplateLiteral'?node.quasis.map(part=>part.value.cooked).join('${expression}'):'';
+      if(!/^\s*(?:INSERT|UPDATE)\b/i.test(sql)||!/\b(?:previous_)?fingerprint\b/i.test(sql))continue;
+      const prepare=parent,member=site.ancestors.at(-2),run=site.ancestors.at(-3);
+      assert.ok(prepare?.type==='CallExpression'&&named(prepare.callee?.property,'prepare')&&prepare.arguments[0]===node&&
+        member?.type==='MemberExpression'&&member.object===prepare&&named(member.property,'run')&&
+        run?.type==='CallExpression'&&run.callee===member,
+      classified(site,'fingerprint-producer','SQL fingerprint writes require immediate prepare(...).run(...)'));
+      const args=run.arguments.flatMap(arg=>{
+        if(arg.type!=='SpreadElement')return [arg];
+        const fn=arg.argument.type==='CallExpression'&&walker.directFunction(arg.argument.callee),array=fn?.body;
+        assert.ok(array?.type==='ArrayExpression'&&array.elements.every(value=>value&&value.type!=='SpreadElement'),
+          classified(site,'fingerprint-producer','SQL spread arity must be a source-backed fixed array'));
+        return array.elements;
+      });
+      const bound=offset=>args[(sql.slice(0,offset).match(/\?/g)??[]).length];
+      const insert=/^\s*INSERT\s+(?:OR\s+\w+\s+)?INTO\s+([^\s(]+)\s*\(([^)]+)\)\s*/i.exec(sql);
+      const inserted=new Map();
+      if(insert){
+        const table=sqlIdentifier(insert[1]),columns=insert[2].split(',').map(sqlIdentifier);
+        const rest=sql.slice(insert[0].length),values=/^VALUES\s*\(([^)]+)\)/i.exec(rest);
+        if(values){
+          const cells=values[1].split(','),base=insert[0].length+values[0].indexOf('(')+1;
+          assert.equal(cells.length,columns.length,classified(site,'fingerprint-producer','INSERT column/value arity'));
+          let offset=base;
+          for(const [index,column]of columns.entries()){
+            const cell=cells[index];
+            if(fingerprintColumn(column)){
+              assert.equal(cell.trim(),'?',classified(site,'fingerprint-producer','fingerprint SQL expression must bind a JS value'));
+              const value=bound(offset);inserted.set(column,value);add(site,'INSERT '+table+'.'+column,value);
             }
-            const incoming=callers(fn);
-            assert.ok(incoming.length,message+' (no source-backed callers)');
-            return from(incoming.map(call=>again(call.node.arguments[binding.param],new Map(),[...binding.path,...path])));
+            offset+=cell.length+1;
           }
-        }
-        if(node.type==='MemberExpression'&&!node.computed)return from([again(node.object,env,[node.property.name,...path])]);
-        if(node.type==='ObjectExpression'&&path.length){
-          const property=node.properties.find(p=>propertyNamed(p,path[0]));
-          assert.ok(property,message);return from([again(property.value,env,path.slice(1))]);
-        }
-        if(node.type==='ConditionalExpression')return from([again(node.consequent),again(node.alternate)]);
-        if(node.type==='CallExpression'){
-          const method=node.callee.type==='MemberExpression'?node.callee.property.name:undefined;
-          if(kind==='memory'&&!path.length&&node.callee.type==='MemberExpression'&&method===(element?'all':'get')){
-            const prepare=node.callee.object;
-            if(prepare?.type==='CallExpression'&&named(prepare.callee?.property,'prepare')){
-              const sql=sources.get(site.file).text(prepare.arguments[0]);
-              if(/^\s*[`'"]SELECT (?:memories\.\*|\*)[\s\S]*? FROM memories\b/.test(sql))return terminal();
-            }
-          }
-          if(element&&method==='filter')return from([again(node.callee.object)]);
-          if(element&&method==='map'&&isFunction(node.arguments[0])){
-            const callback=node.arguments[0],bound=new Map(env);
-            for(const {binding,path:keys}of fields(callback.params[0],[]))bound.set(binding,{node:node.callee.object,env,path:keys,element:true});
-            return from(returns(callback).map(origin=>again(origin,bound,path,false)));
-          }
-          const fn=directFunction(node.callee);
-          if(kind==='fingerprint'&&!path.length&&!element&&fn===functionSite(sources,'validation.mjs','fingerprint').node)return terminal();
-          if(fn)return from(returns(fn).map(origin=>again(origin,callEnvironment(fn,node.arguments,env))));
-        }
-        assert.fail(message);
-      }catch(error){
-        assert.ok(error instanceof assert.AssertionError,'provenance failures must be classified assertions');
-        if(error.message.includes('\norigin chain:\n'))throw error;
-        assert.fail(message+'\n'+error.message);
-      }finally{active.delete(key);}
-    }
-    const entry=visit(node,kind);
-    // Least fixpoint of reachability to a real source. Back-edges contribute
-    // no seed. Track paths containing only absent optional rows separately:
-    // absence must never ground a cycle or count as a fingerprint source.
-    const productive=new Set(graph.filter(value=>value.seed));
-    const absent=new Set(graph.filter(value=>value.absent));
-    let changed;
-    do{
-      changed=false;
-      for(const value of graph){
-        if(!productive.has(value)&&value.origins.some(origin=>productive.has(origin))){
-          productive.add(value);changed=true;
-        }
-        if(!absent.has(value)&&value.origins.length&&value.origins.every(origin=>absent.has(origin))){
-          absent.add(value);changed=true;
+        }else{
+          // The only SELECT producer is the already-proved marker emitter:
+          // json_each unwraps the JS token array bound in the fourth slot.
+          assert.equal(normalize(sql),
+            'INSERT OR IGNORE INTO suppressed(owner_id,scope,project_id,fingerprint) SELECT ?,?,?,value FROM json_each(?)',
+            classified(site,'fingerprint-producer','unclassified INSERT SELECT'));
+          add(site,'INSERT '+table+'.fingerprint',args[3]);
         }
       }
-    }while(changed);
-    const closed=backEdges.find(({target})=>!productive.has(target));
-    assert.ok(!closed,'expected a stored Memory fingerprint or engine SHA-256 fingerprint (only cyclic origins)'+
-      (closed?'\norigin chain:\n  '+closed.trail.join('\n  -> '):''));
-    // Require EVERY reachable origin to be productive (or solely absent).
-    // A good sibling cannot launder a closed, seedless cycle.
-    for(const value of graph)assert.ok(productive.has(value)||absent.has(value),value.message+' (no proven origin)');
-    const count=graph.filter(value=>value.seed).length;
-    assert.ok(productive.has(entry)&&count>0,entry.message+' (no proven fingerprint origin)');
-    return count;
+      const update=insert?/\bDO\s+UPDATE\s+SET\s+([\s\S]*?)(?:\bWHERE\b|$)/i.exec(sql):
+        /^\s*UPDATE\s+([^\s]+)\s+SET\s+([\s\S]*?)(?:\bWHERE\b|$)/i.exec(sql);
+      if(update){
+        const table=sqlIdentifier(insert?insert[1]:update[1]),set=update[insert?1:2];
+        let offset=update.index+update[0].indexOf(set);
+        for(const cell of set.split(',')){
+          const assignment=/^\s*([^=]+)=([\s\S]*)$/.exec(cell);
+          assert.ok(assignment,classified(site,'fingerprint-producer','unclassified UPDATE assignment'));
+          const column=sqlIdentifier(assignment[1]),expression=assignment[2].trim();
+          if(fingerprintColumn(column)){
+            const excluded=expression.match(/^excluded\.(\w+)$/i);
+            assert.ok(expression==='?'||insert&&excluded&&sqlIdentifier(excluded[1])===column,
+              classified(site,'fingerprint-producer','fingerprint UPDATE must bind JS or reuse its INSERT column'));
+            add(site,'UPDATE '+table+'.'+column,excluded?inserted.get(column):bound(offset+cell.indexOf('=')+1));
+          }
+          offset+=cell.length+1;
+        }
+      }
+      assert.ok(insert||update,classified(site,'fingerprint-producer','unclassified fingerprint SQL write'));
+    }
   }
-  return {callers,prove};
+  return result;
+}
+
+function assertFingerprintProducers(sources,walker,fingerprint){
+  const producers=fingerprintProducers(sources,walker);
+  const auxiliaryOwners=new Map([
+    ['context-product-pump.mjs','renewContextMaintenancePump'],
+    ['context-semantic-pump.mjs','semanticPump'],
+    ['raw-search-authority.mjs','createRawSearchAuthority'],
+    ['raw-search-maintenance.mjs','run'],
+    ['raw-search-storage.mjs','unpack'],
+  ]);
+  const sinks=expectedFingerprintProducers.filter(([,kind])=>kind==='INSERT suppressed.fingerprint').map(producerKey);
+  for(const entry of producers){
+    const {site,value,kind,expression}=entry,tuple=producerTuple(entry);
+    if(kind==='object'&&expression==='fingerprint'&&auxiliaryOwners.has(site.file)){
+      assert.equal(owner(site),auxiliaryOwners.get(site.file),classified(site,'fingerprint-producer','unreviewed auxiliary property'));
+      continue;
+    }
+    if(sinks.includes(producerKey(tuple)))continue;
+    let hash=value?.callee?.object;
+    const hex=value?.type==='CallExpression'&&!value.optional&&value.callee.type==='MemberExpression'&&
+      !value.callee.computed&&named(value.callee.property,'digest')&&value.arguments.length===1&&value.arguments[0].value==='hex';
+    while(hash?.type==='CallExpression'&&!hash.optional&&hash.callee.type==='MemberExpression'&&
+      !hash.callee.computed&&named(hash.callee.property,'update'))hash=hash.callee.object;
+    const cryptoBinding=hash?.callee?.type==='Identifier'&&walker.bindingOf(hash.callee);
+    const sha256=hex&&callNamed(hash,'createHash')&&hash.arguments.length===1&&hash.arguments[0].value==='sha256'&&
+      cryptoBinding?.imported==='createHash'&&cryptoBinding.import.source.value==='node:crypto';
+    assert.ok(fingerprintMember(value)||engineFingerprintCall(value,walker,fingerprint)||sha256||
+      value?.type==='MemberExpression'&&!value.computed&&named(value.property,'previous_fingerprint'),
+      classified(site,'fingerprint-producer','unapproved fingerprint value: '+expression));
+  }
+  const actual=producers.map(producerTuple).map(producerKey).sort(),expected=expectedFingerprintProducers.map(producerKey).sort();
+  const unexpected=producers.find(entry=>!expected.includes(producerKey(producerTuple(entry))));
+  assert.deepEqual(actual,expected,classified(unexpected?.site??producers[0]?.site,'fingerprint-producer-catalog',
+    'complete producer list must equal the reviewed list ('+producers.length+' entries); '+
+    producers.map(entry=>label(entry.site)+' '+entry.kind+' <- '+entry.expression).join('; ')));
 }
 
 function assertFingerprintClass(sources,insert){
@@ -356,6 +372,8 @@ function assertFingerprintClass(sources,insert){
     'db.prepare(`INSERT OR IGNORE INTO suppressed (owner_id, scope, project_id, fingerprint) VALUES (?, ?, ?, ?)`) .run(...boundary(ns), value);',
     classified(insert,'fingerprint-insert','only the supplied value is inserted'));
   const fingerprint=functionSite(sources,'validation.mjs','fingerprint');
+  assert.equal(fingerprint.ancestors.at(-1)?.type,'ExportNamedDeclaration',
+    classified(fingerprint,'fingerprint-shape','the reviewed digest builder is the exported engine fingerprint'));
   assert.equal(sources.get(fingerprint.file).text(fingerprint.node),
     'function fingerprint(content) { return createHash("sha256").update(content.toLowerCase()).digest("hex"); }',
     classified(fingerprint,'fingerprint-shape','SHA-256 hex is exactly 64 lower-case hexadecimal characters'));
@@ -376,19 +394,18 @@ function assertFingerprintClass(sources,insert){
   assert.match(reads,/s.fingerprint=w.value.*\.all\(JSON.stringify\(\[\.\.\.missing.values\(\)\].map\(value => value\[3\]\)\), \.\.\.boundary\(namespace\)\)/);
   assert.match(reads,/s.fingerprint=json_extract\(w.value,'\$\[3\]'\).*\.all\(JSON.stringify\(\[\.\.\.missing.values\(\)\]\)\)/);
   // Both marker lookup shapes compare the complete token by equality. A
-  // [0-9a-f]{64} fingerprint cannot satisfy either rs1:-prefixed lookup.
+  // [0-9a-f]{64} fingerprint cannot satisfy either rs1:-prefixed lookup:
+  // r and s are not hex digits, so the two value classes are disjoint.
   const walker=sourceWalker(sources),sites=walker.callers(suppress.node);
   assert.ok(sites.length,classified(suppress,'fingerprint-callers','expected source-backed fingerprint calls'));
   for(const site of sites){
     assert.equal(site.node.arguments.length,2,classified(site,'fingerprint-value','expected namespace and fingerprint'));
-    let proof;
-    try{proof=walker.prove(site.node.arguments[1],'fingerprint');}
-    catch(error){
-      assert.ok(error instanceof assert.AssertionError,'provenance failures must be classified assertions');
-      assert.fail(classified(site,'fingerprint-value','unproven value: '+error.message));
-    }
-    assert.ok(proof>0,classified(site,'fingerprint-value','no proven fingerprint origin'));
+    const value=site.node.arguments[1];
+    assert.ok(fingerprintMember(value)||engineFingerprintCall(value,walker,fingerprint.node),
+      classified(site,'fingerprint-value','expected non-computed <expr>.fingerprint or a direct engine fingerprint call; got '+
+        sources.get(site.file).text(value)));
   }
+  assertFingerprintProducers(sources,walker,fingerprint.node);
   return sites;
 }
 function assertMarkerFences(sources){
@@ -524,14 +541,10 @@ test('every production marker insertion is transactionally fenced for Card reads
   assertMarkerFences(sourceInventory());
 });
 
-test('the fingerprint catalog follows renamed injected helpers and seeded cycles into a new module',()=>{
+test('the fingerprint catalog follows renamed injected helpers into a new module',()=>{
   const sources=sourceInventory(),runtime=sources.get('runtime.mjs');
   const injected=runtime.source.replace('  const supersessionStorage = createSupersessionStorage(',
     `  const syntheticFingerprints=createSyntheticFingerprintStorage({block:suppress});
-  function syntheticFingerprint(ns,id){
-    syntheticFingerprints.remember(ns,activeRow(ns,id));
-    syntheticFingerprints.hashed(ns,'synthetic content');
-  }
   const supersessionStorage = createSupersessionStorage(`);
   assert.notEqual(injected,runtime.source);
   sources.set('runtime.mjs',inventory('runtime.mjs',injected+
@@ -540,13 +553,13 @@ test('the fingerprint catalog follows renamed injected helpers and seeded cycles
 import {fingerprint as engineFingerprint} from './validation.mjs';
 export function createSyntheticFingerprintStorage({block:deny}) {
   const renamed=deny;
-  function remember(ns,row){const value=row?row.fingerprint:value;renamed(ns,value);}
+  function remember(ns,row){renamed(ns,row.fingerprint);}
   function hashed(ns,content){renamed(ns,engineFingerprint(content));}
   return {remember,hashed};
 }`;
   sources.set(file,inventory(file,source));
   assertMarkerFences(sources);
-  for(const value of ["'rs1:i:synthetic'","({fingerprint:'rs1:i:synthetic'}).fingerprint"]){
+  for(const value of ["'rs1:i:synthetic'",'`rs1:i:${row.id}`',"'rs1:i:' + row.id","row['fingerprint']",'row']){
     sources.set(file,inventory(file,source.replace('row.fingerprint',value)));
     assert.throws(()=>assertMarkerFences(sources),error=>{
       assert.ok(error instanceof assert.AssertionError);
@@ -554,41 +567,104 @@ export function createSyntheticFingerprintStorage({block:deny}) {
       return true;
     });
   }
-});
-
-test('the fingerprint catalog rejects marker values at the injected supersession caller',()=>{
-  const sources=sourceInventory(),file='supersession-storage.mjs',source=sources.get(file).source;
-  const changed=source.replace('suppress(ns, previous.fingerprint)',"suppress(ns, 'rs1:i:synthetic')");
-  assert.notEqual(changed,source);sources.set(file,inventory(file,changed));
+  sources.set(file,inventory(file,source.replace('row.fingerprint',"({fingerprint:'rs1:i:' + row.id}).fingerprint")));
   assert.throws(()=>assertMarkerFences(sources),error=>{
     assert.ok(error instanceof assert.AssertionError);
-    assert.match(error.message,/supersession-storage\.mjs:\d+ retireMutation \[fingerprint-value\]/);
+    assert.match(error.message,/synthetic-fingerprint-storage\.mjs:\d+ remember \[fingerprint-producer\]/);
     return true;
   });
 });
 
-test('the fingerprint catalog rejects seedless cycles, including beside a proven origin',()=>{
+test('the fingerprint catalog rejects marker values at the injected supersession caller',()=>{
   const original=sourceInventory(),file='supersession-storage.mjs',source=original.get(file).source;
-  const mutations=[
-    // Valid syntax, never evaluated: a self-feeding variable has no source.
-    'const selfFeeding=selfFeeding; suppress(ns, selfFeeding)',
-    'const selfFeeding=selfFeeding; const mixed=previous?previous.fingerprint:selfFeeding; suppress(ns, mixed)',
-    'const selfFeeding=previous?undefined:selfFeeding; suppress(ns, selfFeeding.fingerprint)',
-    // A good seed plus a back-edge must also retain every bad terminal.
-    "const mixed=previous?previous.fingerprint:(replacement?'rs1:i:synthetic':mixed); suppress(ns, mixed)",
-  ];
-  for(const [index,expression]of mutations.entries()){
-    const changed=source.replace('suppress(ns, previous.fingerprint)',expression);
+  for(const value of ["'rs1:i:synthetic'",'`rs1:i:${previous.id}`']){
+    const changed=source.replace('suppress(ns, previous.fingerprint)','suppress(ns, '+value+')');
     assert.notEqual(changed,source);
     const sources=new Map(original);sources.set(file,inventory(file,changed));
     assert.throws(()=>assertMarkerFences(sources),error=>{
       assert.ok(error instanceof assert.AssertionError);
       assert.match(error.message,/supersession-storage\.mjs:\d+ retireMutation \[fingerprint-value\]/);
-      assert.match(error.message,/origin chain:\n  .*\n  -> /,'retain the complete provenance chain');
-      if(index<3)assert.match(error.message,/only cyclic origins/);
       return true;
     });
   }
+});
+
+test('the fingerprint producer catalog rejects marker producers and unreviewed safe producers',()=>{
+  const original=sourceInventory(),file='synthetic-fingerprint-producer.mjs';
+  const mutations=[
+    "export function produce(x){return {fingerprint:'rs1:i:' + x};}",
+    "export function produce(x,row){row.fingerprint='rs1:i:' + x;}",
+    "export function produce(db,x){db.prepare('INSERT INTO memories (fingerprint) VALUES (?)').run('rs1:i:' + x);}",
+    "export function produce(db,x){db.prepare('UPDATE memories SET fingerprint=?').run('rs1:i:' + x);}",
+    "export function produce(db,x){db.prepare('UPDATE confirmation_supersessions SET previous_fingerprint=?').run('rs1:i:' + x);}",
+    // Even an allowed expression needs an explicit catalog review.
+    "import {fingerprint} from './validation.mjs'; export function produce(x){return {fingerprint:fingerprint(x)};}",
+  ];
+  for(const source of mutations){
+    const sources=new Map(original);sources.set(file,inventory(file,source));
+    assert.throws(()=>assertMarkerFences(sources),error=>{
+      assert.ok(error instanceof assert.AssertionError);
+      assert.match(error.message,/synthetic-fingerprint-producer\.mjs:\d+ produce \[fingerprint-producer(?:-catalog)?\]/);
+      return true;
+    });
+  }
+});
+
+// Follow shared-source-forget.test.mjs's
+// "shared source fresh-default forget, independent=false" and
+// shared-source-writes.test.mjs's correction/forget/rejection statement-addition cases.
+// Ordered retirement follows ordered-capture.test.mjs's "O1/O4 ordered captures
+// automatically retire Friday, bind real Monday evidence and preserve inferred authority".
+test('public fingerprint and marker writers produce disjoint suppressed values',{timeout:15000},async t=>{
+  const f=await fixture(t,'fresh-default'),siblings=f.model.items;
+  const item=content=>({content,kind:'fact',confidence:.8,sourceIndices:[0]});
+  f.model.reconcile=()=>({transitions:[{replacementIndex:0,predecessorIndex:0,evidenceIndices:[0],
+    relation:'supersedes',valueChange:'changed',adoption:'explicit'}]});
+  const ordered=async(sequence,content)=>{
+    f.model.items=[item(content)];
+    return ok(await f.core.capture({namespace:ns,client:'synthetic',sessionId:'marker-ordered',eventId:'ordered-'+sequence,
+      causal:{streamId:'marker-stream',sequence},messages:[{id:'ordered-message-'+sequence,role:'user',content}]}));
+  };
+  const first=await ordered(1,'Project Alpha deadline is Friday.');
+  const predecessor=first.admission.memories[0],oldFingerprint=originalRow(f,predecessor).fingerprint;
+  const second=await ordered(2,'Project Alpha deadline is Monday.');
+  assert.deepEqual(second.reconciliation,{status:'applied',reason:null,retiredCount:1});
+  const history=f.db.prepare('SELECT * FROM memory_supersessions').all();
+  assert.equal(history.length,1,'ordered capture reached retireMutation');
+  assert.equal(history[0].previous_memory_id,predecessor.id);
+  assert.equal(history[0].replacement_memory_id,second.admission.memories[0].id);
+  const stored=()=>f.db.prepare('SELECT * FROM suppressed ORDER BY owner_id,scope,project_id,fingerprint').all();
+  assert.ok(stored().some(row=>row.fingerprint===oldFingerprint),'retirement wrote its fingerprint');
+
+  f.model.items=siblings;
+  const [sibling,target]=await capture(f),before=originalRow(f,sibling);
+  const mutate=async(operation,memory)=>{
+    const fingerprint=originalRow(f,memory).fingerprint,markerCount=markers(f).length;
+    ok(await act(f,operation,memory));
+    assert.ok(stored().some(row=>row.fingerprint===fingerprint),operation+' wrote the original fingerprint');
+    assert.ok(markers(f).length>markerCount,operation+' wrote new shared-source markers');
+    if(operation==='correct')assert.notEqual(originalRow(f,memory).fingerprint,fingerprint,'correction changed content identity');
+  };
+  await mutate('forget',target);
+  assert.deepEqual(originalRow(f,sibling),before,'sibling forget left the survivor unchanged');
+  for(const operation of ['correct','forget','reject']){
+    const content='Synthetic marker-fence '+operation+' target';
+    f.model.items=[{...item(content),kind:operation==='reject'?'decision':'fact'}];
+    const captured=ok(await f.core.capture({namespace:ns,client:'synthetic',sessionId:'marker-'+operation,
+      eventId:'marker-'+operation,messages:[{id:'marker-message-'+operation,role:'user',content}]}));
+    const memory=captured.admission.memories[0];
+    if(operation==='reject')assert.equal(originalRow(f,memory).review_state,'awaiting');
+    await mutate(operation,memory);
+  }
+  let fingerprints=0,tokens=0;
+  for(const row of stored()){
+    const value=row.fingerprint,hex=/^[0-9a-f]{64}$/.test(value),marker=/^rs1:[ia]:/.test(value);
+    assert.equal(Number(hex)+Number(marker),1,'suppressed value belongs to exactly one class: '+value);
+    assert.equal(hex&&marker,false,'fingerprints never match marker decisions');
+    fingerprints+=Number(hex);tokens+=Number(marker);
+  }
+  assert.ok(fingerprints>=5,'retirement, sibling forget, correction, public forget and rejection wrote distinct fingerprints');
+  assert.ok(tokens>0,'the marker class is non-empty');
 });
 
 test('the marker catalog rejects missing epoch advances and unclassified writers',()=>{
