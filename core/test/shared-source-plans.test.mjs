@@ -275,14 +275,19 @@ function assertPlan(db,sql,sites,statistics) {
     assert.ok(!plan.some(row=>/TEMP B-TREE/.test(row.detail)),label+' no namespace-sized sorting input');
   }
   if(recentKeys){
-    assert.match(sql,/ON r\.id IN \( WITH RECURSIVE recent_keys\(cursor\) AS \( SELECT json_array\(json_extract\(j\.value,'\$\.afterTime'\),json_extract\(j\.value,'\$\.afterId'\)\) UNION ALL/);
+    assert.match(sql,/ON r\.id IN \( WITH RECURSIVE recent_keys\(cursor\) AS \( SELECT json_array\(coalesce\(nullif\(json_extract\(j\.value,'\$\.afterTime'\),''\),nullif\(\( SELECT initial\.created_at FROM receipts initial INDEXED BY memory_receipts WHERE initial\.memory_id=m\.id AND initial\.created_at<'\uffff' ORDER BY initial\.created_at DESC LIMIT 1\),''\)\),json_extract\(j\.value,'\$\.afterId'\)\) UNION ALL/);
     assert.match(sql,/FROM recent_keys CROSS JOIN json_each\(json_array\(recent_keys\.cursor\)\) WHERE recent_keys\.cursor IS NOT NULL LIMIT CAST\(\? AS INTEGER\) OFFSET 1\) SELECT json_extract\(cursor,'\$\[1\]'\) FROM recent_keys WHERE cursor IS NOT NULL\)/,
       label+' only the skipped seed and a bounded number of recursive keys');
     assert.equal(plan.filter(row=>row.detail.startsWith('SEARCH candidate ')&&
       row.detail.includes('memory_receipts')&&row.detail.includes('memory_id=? AND created_at=?')).length,2,label+' both tie seeks fix a timestamp');
     assert.ok(plan.some(row=>row.detail.startsWith('SEARCH older ')&&
       row.detail.includes('memory_receipts')&&row.detail.includes('memory_id=? AND created_at<?')),label+' reverse time seek');
-    assert.ok(!plan.some(row=>/TEMP B-TREE/.test(row.detail)),label+' no SQL sorter, including inside a large tie');
+    assert.ok(plan.some(row=>row.detail.startsWith('SEARCH initial ')&&
+      row.detail.includes('memory_receipts')&&row.detail.includes('memory_id=? AND created_at<?')),label+' initial time seek retains the incoming id');
+    assert.match(sql,/AND r\.memory_id=m\.id ORDER BY j\.key,r\.created_at COLLATE BINARY DESC,r\.id COLLATE BINARY ASC$/,
+      label+' only the outer bounded key set is ordered');
+    assert.deepEqual(plan.filter(row=>/TEMP B-TREE/.test(row.detail)).map(({parent,detail})=>({parent,detail})),
+      [{parent:0,detail:'USE TEMP B-TREE FOR ORDER BY'}],label+' exactly one outer sorter, at most the recursive LIMIT per job');
   }
   if(sql.includes('CROSS JOIN qualification_anchors q')){
     for(const alias of ['q','p'])assert.ok(plan.some(row=>row.detail.startsWith('SEARCH '+alias+' ')&&

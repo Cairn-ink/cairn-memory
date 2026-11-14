@@ -258,6 +258,112 @@ const isRecentStatement = row => row.sql.includes('WITH RECURSIVE recent_keys(cu
   row.sql.startsWith('SELECT r.created_at AS time FROM memories') ||
   row.sql.startsWith('SELECT r.id,r.memory_id,r.receipt_key,') && row.sql.includes('AND r.created_at=? AND r.id>?');
 
+// Red-first witnesses for the UTF-16/BINARY boundary. These ASCII-prefixed
+// times remain below the reader's existing U+FFFF starting bound.
+const unicodeNewer = '2026-\u{10000}', unicodeOlder = '2026-\uE000';
+for (const [mode, count, limit, split, expected, passes] of [
+  ['refill', 236, 203, 235, ['r0235'], 2],
+  ['continuation', 2, 4, 1, ['r0001'], 1],
+  ['uncapped', 257, Number.MAX_SAFE_INTEGER, 256, ['r0256'], 2],
+]) test(`recent timestamp BINARY boundary preserves the candidate walk: ${mode}`, async t => {
+  const f = await recentFixture(t, count, i => i < split ? unicodeNewer : unicodeOlder);
+  const after = mode === 'continuation' ? { createdAt: unicodeNewer, id: 'r0000' } : undefined;
+  if (!after) transaction(f.db, () => {
+    const denied = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(f.memory.id)
+      .filter(row => !expected.includes(row.id));
+    for (const token of receiptDenialTokens(denied)) f.db.prepare('INSERT INTO suppressed VALUES(?,?,?,?)')
+      .run(ns.ownerId, ns.scope, ns.projectId ?? '', token);
+  });
+  const measured = await trace(() => receiptDeliverySnapshot(f.db,
+    [{ namespace: ns, memoryId: f.memory.id }], undefined, [], { recent: true, limit, after }));
+  assert.deepEqual(measured.result.deliveryHeaders.get(deliveryKey(f.memory)).map(row => row.id), expected);
+  assert.equal(measured.rows.filter(isRecentStatement).length, passes);
+  assert.deepEqual(measured.rows.filter(isRecentStatement).map(row => row.args[1]),
+    Array(passes).fill(mode === 'refill' ? 235 : mode === 'uncapped' ? 256 : 36));
+  assert.deepEqual(deliveryReceiptRows(f.db, ns, f.memory.id, measured.result, { recent: true, limit }).map(row => row.id), expected);
+});
+
+test('recent id BINARY boundary inside a tie survives a full denied batch and a continuation', async t => {
+  const f = await recentFixture(t, 37, () => tieTime);
+  transaction(f.db, () => {
+    for (let i = 0; i < 37; i++) f.db.prepare('UPDATE receipts SET id=? WHERE memory_id=? AND id=?')
+      .run(i === 36 ? 'p\u{10000}-allowed' : 'p\uE000-' + recentId(i), f.memory.id, recentId(i));
+    const denied = f.db.prepare('SELECT * FROM receipts WHERE memory_id=? AND id<>?').all(f.memory.id, 'p\u{10000}-allowed');
+    for (const token of receiptDenialTokens(denied)) f.db.prepare('INSERT INTO suppressed VALUES(?,?,?,?)')
+      .run(ns.ownerId, ns.scope, ns.projectId ?? '', token);
+  });
+  for (const [after, passes] of [[undefined, 2], [{ createdAt: tieTime, id: 'p\uE000-r0035' }, 1]]) {
+    const measured = await trace(() => receiptDeliverySnapshot(f.db,
+      [{ namespace: ns, memoryId: f.memory.id }], undefined, [], { recent: true, limit: 4, after }));
+    assert.deepEqual(measured.result.deliveryHeaders.get(deliveryKey(f.memory)).map(row => row.id), ['p\u{10000}-allowed']);
+    assert.equal(measured.rows.filter(isRecentStatement).length, passes);
+  }
+});
+
+test('recent empty incoming time preserves the candidate starting seek', async t => {
+  const f = await recentFixture(t, 2, i => i === 0 ? '' : tieTime);
+  transaction(f.db, () => {
+    f.db.prepare('UPDATE receipts SET id=? WHERE memory_id=? AND id=?').run('a', f.memory.id, 'r0000');
+    f.db.prepare('UPDATE receipts SET id=? WHERE memory_id=? AND id=?').run('b', f.memory.id, 'r0001');
+  });
+  const after = { createdAt: '', id: 'a' };
+  const measured = await trace(() => receiptDeliverySnapshot(f.db,
+    [{ namespace: ns, memoryId: f.memory.id }], undefined, [], { recent: true, limit: 4, after }));
+  assert.deepEqual(measured.result.deliveryHeaders.get(deliveryKey(f.memory)).map(row => row.id), ['b']);
+  assert.equal(measured.rows.filter(isRecentStatement).length, 1);
+});
+
+for (const [id, expected] of [['0', ['b', 'd', 'c']], ['a', ['b', 'd', 'c']], ['c', ['d', 'c']], ['z', ['c']]])
+test(`recent empty incoming time keeps its id only for the first tie: ${id}`, async t => {
+  const f = await recentFixture(t, 4, i => i === 0 ? '' : i < 3 ? tieTime : recentTime(0));
+  transaction(f.db, () => {
+    for (const [from, to] of [['r0000', 'a'], ['r0001', 'b'], ['r0002', 'd'], ['r0003', 'c']])
+      f.db.prepare('UPDATE receipts SET id=? WHERE memory_id=? AND id=?').run(to, f.memory.id, from);
+  });
+  const after = { createdAt: '', id };
+  const measured = await trace(() => receiptDeliverySnapshot(f.db,
+    [{ namespace: ns, memoryId: f.memory.id }], undefined, [], { recent: true, limit: 4, after }));
+  assert.deepEqual(measured.result.deliveryHeaders.get(deliveryKey(f.memory)).map(row => row.id), expected);
+  assert.equal(measured.rows.filter(isRecentStatement).length, 1);
+  assert.deepEqual(measured.result.deliveryMemoryStates.get(deliveryKey(f.memory)).after, after);
+});
+
+for (const [emptyIdAt, expected] of [[0, ['r0001', 'r0002']], [1, ['r0002']]])
+test(`an empty incoming time advances past a tie whose only id is empty: ${emptyIdAt}`, async t => {
+  const f = await recentFixture(t, 3, i => recentTime(3 - i));
+  f.db.prepare('UPDATE receipts SET id=? WHERE memory_id=? AND id=?').run('', f.memory.id, recentId(emptyIdAt));
+  const memo = receiptDeliverySnapshot(f.db, [{ namespace: ns, memoryId: f.memory.id }], undefined, [],
+    { recent: true, limit: 4, after: { createdAt: '', id: 'z' } });
+  assert.deepEqual(memo.deliveryHeaders.get(deliveryKey(f.memory)).map(row => row.id), expected);
+});
+
+test('recent walks the binding representation of lone-surrogate timestamps and ids', async t => {
+  const f = await recentFixture(t, 3, i => i === 0 ? unicodeOlder : i === 1 ? tieTime : unicodeNewer);
+  // REPORT.md records the binding source: node:sqlite binds Utf8Value bytes;
+  // V8 replaces an unpaired D800 with U+FFFD (EF BF BD), not ED A0 80.
+  // Pin the actual stored bytes before making any ordering assertion.
+  f.db.prepare('UPDATE receipts SET created_at=?,id=? WHERE memory_id=? AND id=?')
+    .run('2026-\uD800', 'id-\uD800', f.memory.id, 'r0001');
+  const stored = f.db.prepare(`SELECT id,created_at,hex(CAST(id AS BLOB)) AS id_hex,
+    hex(CAST(created_at AS BLOB)) AS time_hex FROM receipts WHERE memory_id=? AND event_id=?`)
+    .get(f.memory.id, 'synthetic-recent-1');
+  assert.deepEqual({ ...stored }, { id: 'id-\uFFFD', created_at: '2026-\uFFFD', id_hex: '69642DEFBFBD', time_hex: '323032362DEFBFBD' });
+  for (const limit of [4, Number.MAX_SAFE_INTEGER]) {
+    let statements = 0;
+    const measured = await trace(() => receiptDeliverySnapshot(f.db,
+      [{ namespace: ns, memoryId: f.memory.id }], undefined, [], { recent: true, limit }), sql => {
+      if (isRecentStatement({ sql })) assert.ok(++statements <= 1, 'the three stored keys terminate in one pass');
+    });
+    assert.deepEqual(measured.result.deliveryHeaders.get(deliveryKey(f.memory)).map(row => row.id), ['r0002', 'id-\uFFFD', 'r0000']);
+    assert.equal(statements, 1);
+  }
+  f.db.prepare('UPDATE receipts SET created_at=? WHERE memory_id=?').run(tieTime, f.memory.id);
+  f.db.prepare('UPDATE receipts SET id=? WHERE memory_id=? AND id=?').run('id-\uE000', f.memory.id, 'r0000');
+  f.db.prepare('UPDATE receipts SET id=? WHERE memory_id=? AND id=?').run('id-\u{10000}', f.memory.id, 'r0002');
+  const tied = receiptDeliverySnapshot(f.db, [{ namespace: ns, memoryId: f.memory.id }], undefined, [], { recent: true, limit: 4 });
+  assert.deepEqual(tied.deliveryHeaders.get(deliveryKey(f.memory)).map(row => row.id), ['id-\uE000', 'id-\uFFFD', 'id-\u{10000}']);
+});
+
 // Written before the production fixes. The lead runs these against the broken
 // head as well as the fix; the statement observer aborts a restart synchronously.
 for (const [name, times, expected] of [
@@ -322,8 +428,8 @@ test(`empty timestamp cannot restart finalization refills, all broken passes fil
   assert.equal(statements, 1);
 });
 
-for (const mode of ['continuation', 'refill', 'empty-refill'])
-test(`recent refuses a nonmoving key at the statement seam, mode=${mode}`, async t => {
+for (const mode of ['continuation', 'refill', 'batch-end'])
+test(`recent refuses a repeated receipt id at the statement seam, mode=${mode}`, async t => {
   const refill = mode !== 'continuation';
   const f = await recentFixture(t, 37, recentTime);
   const after = refill ? undefined : { createdAt: recentTime(36), id: recentId(36) };
@@ -338,25 +444,51 @@ test(`recent refuses a nonmoving key at the statement seam, mode=${mode}`, async
     const rows = Reflect.apply(all, this, args);
     if (!this.sourceSQL.includes('WITH RECURSIVE recent_keys(cursor)')) return rows;
     assert.ok(++statements <= 2, 'guard must stop the call');
-    if (mode === 'empty-refill') {
-      // A malformed empty key must not turn the next pass back into an
-      // initial sentinel, even though the real SQL now excludes empty keys.
-      if (statements === 1) {
-        injected = true;
-        return rows.map((row, index) => index === 0 ? { ...row, created_at: '' } : row);
-      }
-      return rows;
+    if (mode === 'batch-end') {
+      // The full batch's final header repeats its first id. Include an empty
+      // returned time: it must still fail before any cursor can be reset.
+      injected = true;
+      assert.equal(rows.length, 36);
+      return rows.map((row, index) => index === rows.length - 1 ? { ...row, id: rows[0].id, created_at: '' } : row);
     }
     if (statements !== (refill ? 2 : 1)) return rows;
     const job = JSON.parse(args[0])[0];
     injected = true;
-    return [{ ...rows[0], id: job.afterId, created_at: job.afterTime }];
+    // Retain the legitimately older time: identity alone must reject replay.
+    return [{ ...rows[0], id: job.afterId }];
   };
   try {
     assert.throws(() => receiptDeliverySnapshot(f.db, [{ namespace: ns, memoryId: f.memory.id }],
       undefined, [], { recent: true, limit: 4, after }), error => error.code === 'storage_error');
     assert.equal(injected, true);
-    assert.equal(statements, refill ? 2 : 1);
+    assert.equal(statements, mode === 'refill' ? 2 : 1);
+  } finally { StatementSync.prototype.all = all; }
+});
+
+for (const limit of [4, Number.MAX_SAFE_INTEGER])
+test(`a returned empty time cannot clear seen receipt identities, limit=${limit}`, async t => {
+  const f = await recentFixture(t, 257, recentTime);
+  transaction(f.db, () => {
+    const denied = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(f.memory.id);
+    for (const token of receiptDenialTokens(denied)) f.db.prepare('INSERT INTO suppressed VALUES(?,?,?,?)')
+      .run(ns.ownerId, ns.scope, ns.projectId ?? '', token);
+  });
+  const all = StatementSync.prototype.all;
+  let statements = 0;
+  StatementSync.prototype.all = function (...args) {
+    const rows = Reflect.apply(all, this, args);
+    if (!this.sourceSQL.includes('WITH RECURSIVE recent_keys(cursor)')) return rows;
+    assert.ok(++statements <= 2, 'a restarted walk fails on its first repeated id');
+    if (statements === 1) {
+      assert.equal(rows.length, limit === 4 ? 36 : 256);
+      return rows.map((row, index) => index === rows.length - 1 ? { ...row, created_at: '' } : row);
+    }
+    return rows;
+  };
+  try {
+    assert.throws(() => receiptDeliverySnapshot(f.db, [{ namespace: ns, memoryId: f.memory.id }],
+      undefined, [], { recent: true, limit }), error => error.code === 'storage_error');
+    assert.equal(statements, 2);
   } finally { StatementSync.prototype.all = all; }
 });
 
