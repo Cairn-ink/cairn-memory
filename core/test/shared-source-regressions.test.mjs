@@ -31,25 +31,28 @@ test(`${contextMode} recall resolves provenance only in its two fetched-source s
   const measured = await trace(() => f.core.recall({ readSet: [ns], query: 'Synthetic', limit: 6, contextMode }));
   assert.equal(ok(measured.result).memories.length, 6);
   assert.equal(measured.result.value.coverage, 'complete');
+  // Rationale retains the base's independent stored-source validation per root.
+  const validationsPerMemory = contextMode === 'rationale-evidence' ? 4 : 2;
+  const probePasses = contextMode === 'rationale-evidence' ? 14 : 2;
   for (const fragment of ['FROM raw_receipt_lineage l LEFT JOIN raw_conversations',
     'SELECT kind FROM raw_receipt_origins WHERE receipt_id=?',
     'SELECT 1 FROM episode_memory_links WHERE memory_id=? LIMIT 1']) {
     const rows = measured.rows.filter(row => row.sql.includes(fragment));
-    assert.equal(rows.length, 12, fragment + ': once per fetched Memory per source snapshot');
+    assert.equal(rows.length, 6 * validationsPerMemory, fragment + ': no extra discovery validation');
     assert.equal(new Set(rows.map(row => row.snapshot)).size, 2, 'discovery reuses its canonical absence proof');
     const counts = new Map();
     for (const row of rows) counts.set(row.args[0], (counts.get(row.args[0]) ?? 0) + 1);
     assert.equal(counts.size, 6);
-    assert.deepEqual([...counts.values()], Array(6).fill(2));
+    assert.deepEqual([...counts.values()], Array(6).fill(validationsPerMemory));
   }
   for (const sql of ["SELECT 1 FROM sqlite_master WHERE name='raw_source_maps'",
     "SELECT 1 FROM sqlite_master WHERE name='raw_job_sources'",
     "SELECT 1 FROM sqlite_master WHERE name='raw_session_fences'"])
-    assert.equal(measured.rows.filter(row => row.sql === sql).length, 2, sql);
-  assert.equal(measured.rows.filter(row => row.sql.startsWith("SELECT name FROM sqlite_master WHERE type='table' AND name IN (")).length, 2);
-  assert.equal(measured.rows.filter(row => row.sql.startsWith('SELECT 1 FROM raw_conversations WHERE')).length, 2);
-  assert.equal(measured.rows.filter(row => row.sql === 'SELECT secret FROM episode_identity WHERE singleton=1').length, 4);
-  assert.equal(measured.rows.filter(row => row.sql.startsWith('SELECT 1 FROM raw_session_fences WHERE')).length, 4);
+    assert.equal(measured.rows.filter(row => row.sql === sql).length, probePasses, sql);
+  assert.equal(measured.rows.filter(row => row.sql.startsWith("SELECT name FROM sqlite_master WHERE type='table' AND name IN (")).length, probePasses);
+  assert.equal(measured.rows.filter(row => row.sql.startsWith('SELECT 1 FROM raw_conversations WHERE')).length, probePasses);
+  assert.equal(measured.rows.filter(row => row.sql === 'SELECT secret FROM episode_identity WHERE singleton=1').length, 2 * probePasses);
+  assert.equal(measured.rows.filter(row => row.sql.startsWith('SELECT 1 FROM raw_session_fences WHERE')).length, 2 * probePasses);
 });
 
 test('a receipt denial survives a warm canonical absence proof', { timeout: 15000 }, async t => {
