@@ -94,8 +94,14 @@ const widenedNames = ['listReviewConflicts', 'listReviewTransitions', 'episodesE
 const writerSource = String.raw`
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { writeFileSync } from 'node:fs';
+import { renameSync, writeFileSync } from 'node:fs';
 const [moduleURL, path, mode, serialized, marker] = process.argv.slice(1);
+// The parent polls for these markers while it is blocked inside a read, so a
+// marker must never be visible before its content is complete.
+const publish = (file, text) => {
+  writeFileSync(file + '.tmp', text, { flag: 'wx' });
+  renameSync(file + '.tmp', file);
+};
 let db, core;
 if (mode === 'forget' || mode === 'episode-forget') {
   const { openMemoryCore } = await import(moduleURL);
@@ -123,11 +129,11 @@ process.on('message', command => {
     db.exec('PRAGMA busy_timeout=0');
     assert.throws(() => db.exec('COMMIT'), error => (error.errcode & 255) === 5);
     db.exec('PRAGMA busy_timeout=5000');
-    writeFileSync(marker, 'busy', { flag: 'wx' });
+    publish(marker, 'busy');
     const start = performance.now();
     db.exec('COMMIT');
     const elapsedMs = performance.now() - start;
-    writeFileSync(marker + '.committed', 'committed', { flag: 'wx' });
+    publish(marker + '.committed', 'committed');
     process.send({ type: 'committed', elapsedMs });
   } else if (command === 'close') {
     if (db.isTransaction) db.exec('ROLLBACK');
@@ -172,6 +178,25 @@ async function writer(f, mode = 'hold', memory) {
     assert.equal(signal, null, stderr);
     assert.equal(code, 0, stderr);
   } };
+}
+
+// Runs inside a synchronous engine read, after its SELECT holds SHARED. An
+// assertion thrown here would surface as the engine's storage_error, so it is
+// recorded and the test rethrows it once the read has returned.
+function proveCommitBlocked(other, db, failures) {
+  try {
+    other.send('commit');
+    const deadline = Date.now() + 3000;
+    while (!existsSync(other.marker)) {
+      assert.ok(Date.now() < deadline, 'writer did not prove COMMIT was blocked');
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);
+    }
+    assert.equal(readFileSync(other.marker, 'utf8'), 'busy');
+    assert.equal(existsSync(other.marker + '.committed'), false);
+    assert.equal(db.isTransaction, true);
+  } catch (error) {
+    failures.push(error);
+  }
 }
 
 
@@ -221,6 +246,7 @@ test('uncommitted forget returns pre-forget world pages and COMMIT waits for the
     assert.ok(timings[name] < STORAGE_BUSY_TIMEOUT_MS / 3);
   }
   let injected = false;
+  const failures = [];
   const prepare = DatabaseSync.prototype.prepare;
   const mock = t.mock.method(DatabaseSync.prototype, 'prepare', function(sql) {
     const statement = prepare.call(this, sql);
@@ -229,15 +255,7 @@ test('uncommitted forget returns pre-forget world pages and COMMIT waits for the
       statement.all = (...args) => {
         const rows = all(...args); // SELECT has acquired SHARED on this snapshot.
         injected = true;
-        other.send('commit');
-        const deadline = Date.now() + 3000;
-        while (!existsSync(other.marker)) {
-          assert.ok(Date.now() < deadline, 'writer did not prove COMMIT was blocked');
-          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);
-        }
-        assert.equal(readFileSync(other.marker, 'utf8'), 'busy');
-        assert.equal(existsSync(other.marker + '.committed'), false);
-        assert.equal(this.isTransaction, true);
+        proveCommitBlocked(other, this, failures);
         return rows;
       };
     }
@@ -245,6 +263,7 @@ test('uncommitted forget returns pre-forget world pages and COMMIT waits for the
   });
   const snapshot = readers.revision();
   mock.mock.restore();
+  if (failures.length) throw failures[0];
   assert.equal(injected, true);
   assert.deepEqual(snapshot, expected.revision);
   const committed = await other.wait('committed');
@@ -303,6 +322,7 @@ for (const [name, mode] of [...widenedNames.map(name => [name, 'forget']),
     const elapsedMs = performance.now() - start;
     assert.ok(elapsedMs < STORAGE_BUSY_TIMEOUT_MS / 3);
     let injected = false;
+    const failures = [];
     const prepare = DatabaseSync.prototype.prepare;
     const mock = t.mock.method(DatabaseSync.prototype, 'prepare', function(sql) {
       const statement = prepare.call(this, sql);
@@ -313,15 +333,7 @@ for (const [name, mode] of [...widenedNames.map(name => [name, 'forget']),
           const result = execute(...args);
           if (!injected) {
             injected = true;
-            other.send('commit');
-            const deadline = Date.now() + 3000;
-            while (!existsSync(other.marker)) {
-              assert.ok(Date.now() < deadline, 'writer did not prove COMMIT was blocked');
-              Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);
-            }
-            assert.equal(readFileSync(other.marker, 'utf8'), 'busy');
-            assert.equal(existsSync(other.marker + '.committed'), false);
-            assert.equal(this.isTransaction, true);
+            proveCommitBlocked(other, this, failures);
           }
           return result;
         };
@@ -330,6 +342,7 @@ for (const [name, mode] of [...widenedNames.map(name => [name, 'forget']),
     });
     const actual = call();
     mock.mock.restore();
+    if (failures.length) throw failures[0];
     assert.equal(injected, true);
     assert.deepEqual(actual, expected);
     const committed = await other.wait('committed');
