@@ -63,7 +63,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
       if(!legacy)memoryBatchInside(ns,scoped,memo);
       const seen=memo.deliveryCards??=new Set();
       const cards=scoped.filter(ref=>ref.type==='card'&&!seen.has(JSON.stringify([...boundary(ns),ref.cardId])));
-      if(cards.length)batches.push({namespace:ns,receipts:cardReceiptTokens(db,ns,cards.map(ref=>ref.cardId))});
+      if(cards.length)batches.push({namespace:ns,receipts:cardReceiptTokens(db,ns,cards.map(ref=>ref.cardId),memo)});
       for(const ref of cards)seen.add(JSON.stringify([...boundary(ns),ref.cardId]));
     }
     receiptDeliverySnapshot(db,refs.filter(ref=>ref.type==='memory').map(ref=>({namespace:ref.namespace,memoryId:ref.memoryId})),memo,batches,

@@ -7,7 +7,7 @@ import { openProductIndex } from "../context-product-index.mjs";
 import { accessDigest } from "../context-product-validation.mjs";
 import { configured, descriptor } from "../testing/context-product-owner-fixture.mjs";
 import { readTransaction } from "../database.mjs";
-import { receiptDeliverySnapshot, createContentReadMemo } from "../content-safety.mjs";
+import { receiptDeliverySnapshot, createContentReadMemo, cardDeliverySnapshot, cardDeliverable } from "../content-safety.mjs";
 import { receiptDenialTokens } from "../content-safety.mjs";
 import { message, operations, isLookup, source, noLeak, hasId, trace, fixture, capture, act, memoryRef, reads } from "../testing/shared-source-fixture.mjs";
 // A pending adapter/worker call must fail the case within the file budget.
@@ -86,6 +86,9 @@ test(`context receipt lookups are batched per snapshot ${route}, markers=${marke
   const lookups = measured.rows.filter(isLookup);
   assert.equal(lookups.length, 2, 'one preparation lookup and one independent final-delivery lookup');
   assert.equal(new Set(lookups.map(row => row.snapshot)).size, 2);
+  const collectors = measured.rows.filter(row => row.sql.includes('CROSS JOIN qualification_anchors q'));
+  assert.equal(collectors.length, 2, 'one anchor collector in each delivery snapshot');
+  assert.equal(new Set(collectors.map(row => row.snapshot)).size, 2);
   for (const lookup of lookups) {
     assert.ok(lookup.snapshot, 'lookup belongs to an actual read transaction');
     const tokens=JSON.parse(lookup.args[0]);
@@ -137,12 +140,44 @@ test('receipt snapshot deduplicates before count, offset and anchor reads',async
   }
   const measured=await trace(()=>readTransaction(f.db,()=>{
     const memo=createContentReadMemo(f.db);
+    receiptDeliverySnapshot(f.db,[],memo,[],{limit:17});
     for(let i=0;i<12;i++)receiptDeliverySnapshot(f.db,[...entries,...entries],memo,[],{limit:17});
     return memo.deliveryHeaders.size;
   }));
   assert.equal(measured.result,12);assert.equal(measured.rows.filter(isLookup).length,1);
-  assert.equal(measured.rows.filter(row=>row.sql.startsWith('SELECT count(*) AS n FROM receipts r INDEXED BY memory_receipts')).length,12);
-  assert.equal(measured.rows.filter(row=>row.sql.includes('FROM qualification_anchors q CROSS JOIN')).length,12);
+  assert.equal(measured.rows.filter(row=>row.sql.startsWith('SELECT count(*) AS n FROM receipts r INDEXED BY memory_receipts')).length,0);
+  const counts=measured.rows.filter(row=>row.sql.startsWith('SELECT j.value AS input,(SELECT count(*)'));
+  assert.equal(counts.length,1);assert.equal(JSON.parse(counts[0].args[0]).length,12);
+  const anchors=measured.rows.filter(row=>row.sql.includes('CROSS JOIN qualification_anchors q'));
+  assert.equal(anchors.length,1);assert.equal(JSON.parse(anchors[0].args[0]).length,12);
+  assert.equal(anchors[0].args[0],anchors[0].args[1],'both anchor kinds use the same job list');
+});
+
+test('Card delivery reuses batched contributors including empty sets within one snapshot',async t=>{
+  const f=await fixture(t,'ordinary-53'),[b,a]=await capture(f),refs=[];
+  for(let i=0;i<2;i++){
+    const card=ok(f.call('createCardDraft',{actionId:'synthetic-token-card-'+i,drafting:'authored',input:{
+      title:'Synthetic token Card',body:'Synthetic token body',memoryRefs:[memoryRef(b)],sourcePolicy:'retained-receipts-v1'}}));
+    refs.push({type:'card',namespace:ns,cardId:card.id});
+  }
+  const note=ok(f.call('submitSourceNote',{actionId:'synthetic-token-note',text:'Synthetic note support',occurredAt:null})).source;
+  const empty=ok(f.call('createCardDraft',{actionId:'synthetic-token-empty',drafting:'authored',input:{
+    title:'Synthetic note Card',body:'Synthetic note body',sources:[note]}}));
+  refs.push({type:'card',namespace:ns,cardId:empty.id});
+  const check=()=>readTransaction(f.db,()=>{
+    const memo=cardDeliverySnapshot(f.db,refs);
+    cardDeliverySnapshot(f.db,[...refs,...refs],memo);
+    return refs.map(ref=>cardDeliverable(f.db,ns,ref.cardId,memo));
+  });
+  for(const marked of [false,true]){
+    if(marked)ok(act(f,'forget',a));
+    const measured=await trace(check);
+    assert.deepEqual(measured.result,[!marked,!marked,true]);
+    const collectors=measured.rows.filter(row=>row.sql.includes('CROSS JOIN card_memory_bindings b'));
+    assert.equal(collectors.length,1,'one contributor collection for all selected Cards');
+    assert.equal(JSON.parse(collectors[0].args[0]).length,3);
+    assert.doesNotMatch(collectors[0].sql,/excerpt|r\.\*/);
+  }
 });
 
 for(const kind of ['ordinary-48','ordinary-53'])

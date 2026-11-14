@@ -380,31 +380,40 @@ AND s.project_id=json_extract(w.value,'$[2]') AND s.fingerprint=json_extract(w.v
 
 // Token-only collection is bounded by the selected Card ids. CROSS JOIN keeps
 // each step on its id index even without planner statistics.
-export function cardReceiptTokens(db, ns, ids) {
+export function cardReceiptTokens(db, ns, ids, memo) {
   if (!ids.length) return [];
+  const cache = memo ? memo.deliveryCardTokens ??= new Map() : new Map();
+  const key = id => JSON.stringify([...boundary(ns), id]);
+  const missing = [...new Set(ids)].filter(id => !cache.has(key(id)));
+  if (!missing.length) return ids.flatMap(id => cache.get(key(id)));
+  // Retain each Card's token rows, including an empty set, in this read memo.
+  // Later per-Card delivery checks reuse the snapshot's bounded collection.
   const lineage = hasCardLineage(db) ? ` UNION
-    SELECT r.receipt_key,r.client,r.session_id,r.event_id,r.role
+    SELECT c.id AS card_id,r.receipt_key,r.client,r.session_id,r.event_id,r.role
     FROM json_each(?) wanted CROSS JOIN private_cards c ON c.id=wanted.value
     CROSS JOIN card_body_sources s ON s.card_id=c.id AND s.body_revision=c.body_revision
       AND s.owner_id=c.owner_id AND s.scope=c.scope AND s.project_id=c.project_id AND s.source_kind='receipt'
     CROSS JOIN receipts r ON r.id=s.source_key CROSS JOIN memories m ON m.id=r.memory_id
     WHERE c.owner_id=? AND c.scope=? AND c.project_id=?
       AND m.owner_id=c.owner_id AND m.scope=c.scope AND m.project_id=c.project_id` : '';
-  const selected = JSON.stringify([...new Set(ids)]);
-  return db.prepare(`SELECT r.receipt_key,r.client,r.session_id,r.event_id,r.role
+  const selected = JSON.stringify(missing);
+  const rows = db.prepare(`SELECT c.id AS card_id,r.receipt_key,r.client,r.session_id,r.event_id,r.role
     FROM json_each(?) wanted CROSS JOIN private_cards c ON c.id=wanted.value
     CROSS JOIN card_memory_bindings b ON b.card_id=c.id CROSS JOIN receipts r ON r.id=b.receipt_id
     CROSS JOIN memories m ON m.id=r.memory_id AND m.id=b.memory_id
     WHERE c.owner_id=? AND c.scope=? AND c.project_id=?
       AND m.owner_id=c.owner_id AND m.scope=c.scope AND m.project_id=c.project_id${lineage}`)
     .all(selected, ...boundary(ns), ...(lineage ? [selected, ...boundary(ns)] : []));
+  for (const id of missing) cache.set(key(id), []);
+  for (const { card_id, ...row } of rows) cache.get(key(card_id)).push(row);
+  return ids.flatMap(id => cache.get(key(id)));
 }
 export function cardDeliverable(db, ns, id, memo) {
   const cache = memo && (memo.deliveryCardTokens ??= new Map());
   const key = JSON.stringify([...boundary(ns), id]);
   let rows = cache?.get(key);
   if (!rows) {
-    rows = cardReceiptTokens(db, ns, [id]);
+    rows = cardReceiptTokens(db, ns, [id], memo);
     cache?.set(key, rows);
   }
   return receiptDenialsInside(db, ns, rows, memo).size === 0;
@@ -459,24 +468,52 @@ export function receiptDeliverySnapshot(db, entries, memo = createContentReadMem
     if (!after && options.offset > 0) after = db.prepare(`SELECT r.created_at AS createdAt,r.id FROM receipts r INDEXED BY memory_receipts
       CROSS JOIN memories m ON m.id=r.memory_id WHERE r.memory_id=? AND m.owner_id=? AND m.scope=? AND m.project_id=?
       ORDER BY r.created_at,r.id LIMIT 1 OFFSET ?`).get(entry.memoryId, ...boundary(ns), options.offset - 1);
-    const total = options.totals === false ? null : receiptStoredCountInside(db, ns, entry.memoryId);
+    const total = options.totals === false ? null : coordinates.total;
     const job = { key, namespace: ns, id: entry.memoryId, owner: ns.ownerId, scope: ns.scope, project: ns.projectId ?? '',
       limit: options.limit ?? 101, afterTime: after?.createdAt ?? '', afterId: after?.id ?? '',
       position: options.offset ?? 0, recent: Boolean(options.recent), idOrder: Boolean(options.idOrder), total };
     jobs.push(job);
     job.coordinates = coordinates;
     if (options.includeRecent) jobs.push({ ...job, key: key + ':recent', recent: true, afterTime: '', afterId: '', position: 0 });
-    const anchors = db.prepare(`SELECT r.receipt_key,r.client,r.session_id,r.event_id,r.role
-      FROM qualification_anchors q CROSS JOIN receipts r ON r.id=q.receipt_id
+  }
+  // Prepare on warm and cold reads alike; execute only for missing totals.
+  // The recent-order job shares the same physical total and coordinates.
+  if (jobs.some(job => job.total !== null)) {
+    const count = db.prepare(`SELECT j.value AS input,(SELECT count(*) FROM receipts r INDEXED BY memory_receipts
+      CROSS JOIN memories m ON m.id=r.memory_id WHERE r.memory_id=json_extract(j.value,'$.id')
+        AND m.owner_id=json_extract(j.value,'$.owner') AND m.scope=json_extract(j.value,'$.scope')
+        AND m.project_id=json_extract(j.value,'$.project')) AS n FROM json_each(?) j`);
+    const counted = jobs.filter(job => pending.has(job.key) && job.total === undefined);
+    if (counted.length) {
+      const rows = count.all(JSON.stringify(counted.map(({ key, id, owner, scope, project }) => ({ key, id, owner, scope, project }))));
+      const totals = new Map(rows.map(row => [JSON.parse(row.input).key, row.n]));
+      for (const job of counted) job.coordinates.total = totals.get(job.key);
+      for (const job of jobs) if (job.total === undefined) job.total = job.coordinates.total;
+    }
+  }
+  if (pending.size) {
+    // Both anchor kinds start at the same deduplicated, namespace-bound job
+    // list. The extra recent-order job never collects the anchors again.
+    const inputs = [...pending].map(([key, entry]) => ({ key, id: entry.memoryId,
+      owner: entry.namespace.ownerId, scope: entry.namespace.scope, project: entry.namespace.projectId ?? '' }));
+    const selected = JSON.stringify(inputs);
+    const anchors = db.prepare(`SELECT j.value AS input,q.memory_id,r.receipt_key,r.client,r.session_id,r.event_id,r.role
+      FROM json_each(?) j CROSS JOIN qualification_anchors q ON q.memory_id=json_extract(j.value,'$.id')
+      CROSS JOIN receipts r ON r.id=q.receipt_id
       CROSS JOIN memories m ON m.id=q.memory_id AND m.id=r.memory_id
-      WHERE q.memory_id=? AND m.owner_id=? AND m.scope=? AND m.project_id=? UNION
-      SELECT r.receipt_key,r.client,r.session_id,r.event_id,r.role
-      FROM procedural_tags p CROSS JOIN json_each(p.anchors) a
+      WHERE m.owner_id=json_extract(j.value,'$.owner') AND m.scope=json_extract(j.value,'$.scope')
+        AND m.project_id=json_extract(j.value,'$.project') UNION
+      SELECT j.value AS input,p.memory_id,r.receipt_key,r.client,r.session_id,r.event_id,r.role
+      FROM json_each(?) j CROSS JOIN procedural_tags p ON p.memory_id=json_extract(j.value,'$.id')
+      CROSS JOIN json_each(p.anchors) a
       CROSS JOIN receipts r ON r.id=json_extract(a.value,'$.receiptId')
       CROSS JOIN memories m ON m.id=p.memory_id AND m.id=r.memory_id
-      WHERE p.memory_id=? AND m.owner_id=? AND m.scope=? AND m.project_id=?`)
-      .all(job.id, ...boundary(ns), job.id, ...boundary(ns));
-    batches.push({ namespace: ns, receipts: anchors });
+      WHERE m.owner_id=json_extract(j.value,'$.owner') AND m.scope=json_extract(j.value,'$.scope')
+        AND m.project_id=json_extract(j.value,'$.project')`)
+      .all(selected, selected);
+    const byKey = new Map(inputs.map(input => [input.key, []]));
+    for (const { input, memory_id, ...row } of anchors) byKey.get(JSON.parse(input).key).push(row);
+    for (const [key, entry] of pending) batches.push({ namespace: entry.namespace, receipts: byKey.get(key) });
   }
   for (const job of jobs) {
     cache.set(job.key, []);
@@ -616,7 +653,7 @@ export function cardDeliverySnapshot(db, refs, memo = createContentReadMemo(db))
   const batches=[];
   for(const ns of new Map(refs.filter(ref=>ref.type==='card').map(ref=>[JSON.stringify(boundary(ref.namespace)),ref.namespace])).values()){
     const ids=refs.filter(ref=>ref.type==='card'&&JSON.stringify(boundary(ref.namespace))===JSON.stringify(boundary(ns))).map(ref=>ref.cardId);
-    batches.push({namespace:ns,receipts:cardReceiptTokens(db,ns,ids)});
+    batches.push({namespace:ns,receipts:cardReceiptTokens(db,ns,ids,memo)});
   }
   return receiptDeliverySnapshot(db,[],memo,batches);
 }

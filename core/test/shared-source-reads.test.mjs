@@ -103,6 +103,9 @@ for (const marked of [false, true]) test(`review B one lookup per snapshot with 
     const lookups=rows.filter(isLookup);
     assert.equal(lookups.length, expected);
     assert.equal(new Set(lookups.map(row=>row.snapshot)).size, expected, 'at most one statement per synchronous snapshot');
+    const anchors=rows.filter(row=>row.sql.includes('CROSS JOIN qualification_anchors q'));
+    assert.equal(anchors.length,expected,'one anchor collection per selected snapshot');
+    assert.equal(new Set(anchors.map(row=>row.snapshot)).size,expected);
     return lookups;
   };
   assertLookups((await trace(()=>f.core.get({namespace:ns,memoryId:memories[0].id,includeQualification:true}))).rows,1);
@@ -121,4 +124,24 @@ for (const marked of [false, true]) test(`review B one lookup per snapshot with 
   assert.ok(queried.result.rows.length>=12); assertLookups(queried.rows,1);
   const sourceRecall=await trace(()=>f.core.recall({readSet:[ns],query:'Synthetic',limit:12,contextMode:'source-evidence'}));
   assert.equal(ok(sourceRecall.result).memories.length,12); assertLookups(sourceRecall.rows,3);
+});
+
+test('mixed evidence selection collects anchors once as the candidate population grows',async t=>{
+  const f=await fixture(t,'ordinary-53'),memories=[];
+  for(const population of [4,8]){
+    for(let i=memories.length;i<population;i++)memories.push(ok(f.core.admit({namespace:ns,
+      memory:{content:'Synthetic mixed population '+i,kind:'fact'},receipts:[receipt('synthetic-mixed-population-'+i)]})).memory);
+    if(population===4){
+      const card=ok(f.call('createCardDraft',{actionId:'synthetic-mixed-population-card',drafting:'authored',input:{
+        title:'Synthetic mixed population',body:'Synthetic mixed body',memoryRefs:[memoryRef(memories[0])],sourcePolicy:'retained-receipts-v1'}}));
+      ok(f.call('confirmCardDraft',{actionId:'synthetic-mixed-population-confirm',cardId:card.id,expectedRevision:card.revision,applicability:'current'}));
+    }
+    const measured=await trace(()=>f.call('selectEvidence',{intent:'current',query:'Synthetic',types:['memory','card'],limit:1}));
+    assert.equal(ok(measured.result).items.length,1);
+    const anchors=measured.rows.filter(row=>row.sql.includes('CROSS JOIN qualification_anchors q'));
+    assert.equal(anchors.length,1,'exactly one anchor statement at population '+population);
+    assert.deepEqual(JSON.parse(anchors[0].args[0]).map(job=>job.id).sort(),memories.map(memory=>memory.id).sort());
+    assert.equal(anchors[0].args[0],anchors[0].args[1]);
+    assert.doesNotMatch(anchors[0].sql,/excerpt|r\.\*/);
+  }
 });

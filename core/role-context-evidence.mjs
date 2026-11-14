@@ -20,8 +20,8 @@ export function roleEvidence(storage,config) {
   const receipts=createCardReceiptSources(db,(purpose,value)=>keyed(identity.cursorSecret,purpose,[identity.storeId,value]));
   const evidence=createPrivateEvidenceStorage({db,identity,cardDetailInside:cards.cardDetailInside,receiptRefInside:receipts.refInside});
   const fence=item=>createHmac('sha256',identity.cursorSecret).update(JSON.stringify(['context-read-v1','snapshot-item',identity.storeId,cardLineageItemInside(db,item)])).digest('base64url');
-  function item(ref,readSet,rank,intent='current') {
-    const canonical=evidence.itemsInside(ref.namespace,[ref],intent,readSet)[0];
+  function item(ref,readSet,rank,intent='current',options) {
+    const canonical=evidence.itemsInside(ref.namespace,[ref],intent,readSet,options)[0];
     if (!canonical) return null;
     const {type,state,origin}=canonical;
     const sourceRows=type==='memory'&&canonical.provenance.sourceAccess==='available'?

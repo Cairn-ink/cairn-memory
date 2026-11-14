@@ -183,6 +183,11 @@ function statementCatalog() {
     'get includes the populated memoryAncestry variant');
   const probes=[...texts.keys()].filter(sql=>/FROM private_cards WHERE .*state=\? AND id>\? ORDER BY id LIMIT \?$/.test(sql));
   assert.equal(probes.length,2,'token prefetch and physical visibility probes');
+  const anchorCollectors=[...texts.keys()].filter(sql=>sql.includes('CROSS JOIN qualification_anchors q'));
+  assert.equal(anchorCollectors.length,1,'the batched collector is in the complete source catalog');
+  assert.match(anchorCollectors[0],/FROM json_each\(\?\) j CROSS JOIN qualification_anchors q ON q\.memory_id=json_extract\(j\.value,'\$\.id'\)/);
+  assert.match(anchorCollectors[0],/UNION SELECT j\.value AS input,p\.memory_id,.*FROM json_each\(\?\) j CROSS JOIN procedural_tags p ON p\.memory_id=json_extract\(j\.value,'\$\.id'\)/);
+  assert.doesNotMatch(anchorCollectors[0],/excerpt|r\.\*/,'anchor collection projects tokens only');
   assert.ok(sites>0);assert.ok(literals>0);
   return {texts,sites,literals};
 }
@@ -234,6 +239,12 @@ function assertPlan(db,sql,sites,statistics) {
   if(stateProbe){
     assert.equal(plan.some(row=>/TEMP B-TREE|\bSCAN\b/.test(row.detail)),false,label+' must limit an ordered per-state range');
     assert.ok(plan.some(row=>/private_card_scope/.test(row.detail)&&row.detail.includes('state=?')&&row.detail.includes('id>?')),label);
+  }
+  if(sql.includes('CROSS JOIN qualification_anchors q')){
+    for(const alias of ['q','p'])assert.ok(plan.some(row=>row.detail.startsWith('SEARCH '+alias+' ')&&
+      row.detail.includes('memory_id=?')),label+' anchors must be reached by memory_id: '+alias);
+    for(const alias of ['r','m'])assert.equal(plan.filter(row=>row.detail.startsWith('SEARCH '+alias+' ')&&
+      row.detail.includes('(id=?)')).length,2,label+' both anchor arms reach '+alias+' by id');
   }
   for(const row of plan){
     const {detail}=row,scan=detail.match(/\bSCAN (\w+)/);

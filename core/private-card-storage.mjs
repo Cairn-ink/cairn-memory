@@ -326,7 +326,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
       const candidateProbe = db.prepare(`SELECT id FROM private_cards WHERE ${where} AND state=? AND id>? ORDER BY id LIMIT ?`);
       const candidateIds = input.states.flatMap(state => candidateProbe.all(...boundary(ns), state, after, candidateLimit))
         .sort((a,b) => Buffer.compare(Buffer.from(a.id), Buffer.from(b.id))).slice(0, candidateLimit).map(row => row.id);
-      receiptDeliverySnapshot(db,[],memo,[{namespace:ns,receipts:cardReceiptTokens(db,ns,candidateIds)}]);
+      receiptDeliverySnapshot(db,[],memo,[{namespace:ns,receipts:cardReceiptTokens(db,ns,candidateIds,memo)}]);
       if (hasCardLineage(db)) {
         const probe = db.prepare(`SELECT rowid AS cursor_row,id,revision,state,body_revision,created_at,updated_at,confirmed_at
           FROM private_cards WHERE ${where} AND state=? AND id>? ORDER BY id LIMIT ?`);

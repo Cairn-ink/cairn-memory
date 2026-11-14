@@ -5,6 +5,7 @@ import { openMemoryCore } from '../index.mjs';
 import { transaction } from '../database.mjs';
 import { lineageFixture, ns, ok, receipt } from '../testing/card-lineage-fixture.mjs';
 import { host as roleHost, publish, read } from './role-fixture.mjs';
+import { trace } from '../testing/shared-source-fixture.mjs';
 
 const normalize = sql => sql.replace(/\s+/g, ' ').trim();
 
@@ -31,7 +32,7 @@ test('multi-state Card warming bounds each state before the global merge as popu
     StatementSync.prototype.all = function (...args) {
       const sql = normalize(this.sourceSQL), rows = Reflect.apply(original, this, args);
       if (sql.startsWith('SELECT id FROM private_cards WHERE')) probes.push({sql,args,rows});
-      if (sql.startsWith('SELECT r.receipt_key,r.client') && sql.includes('card_memory_bindings')) unions.push(args);
+      if (sql.startsWith('SELECT c.id AS card_id,r.receipt_key') && sql.includes('card_memory_bindings')) unions.push(args);
       return rows;
     };
     let result;
@@ -49,7 +50,7 @@ test('multi-state Card warming bounds each state before the global merge as popu
     }
     const merged = probes.flatMap(row => row.rows).sort((a,b) => Buffer.compare(Buffer.from(a.id), Buffer.from(b.id)))
       .slice(0,1024).map(row => row.id);
-    assert.equal(unions.length >= 1, true);
+    assert.equal(unions.length, 1);
     assert.deepEqual(JSON.parse(unions[0][0]), merged, 'only the globally first bounded IDs warm tokens');
   }
 });
@@ -69,13 +70,21 @@ test('role context keeps independent evidence after sixteen withheld leading rec
   f.db.prepare('UPDATE receipts SET created_at=? WHERE memory_id=? AND event_id=?')
     .run('2026-01-02T00:00:00.000Z',b.id,'synthetic-role-independent');
   const withheld = f.db.prepare('SELECT id FROM receipts WHERE memory_id=? AND event_id!=?').all(b.id,'synthetic-role-independent');
+  const other=ok(f.core.admit({namespace:ns,memory:{content:'Synthetic role survivor other',kind:'fact'},
+    receipts:[receipt('synthetic-role-other','Synthetic other role evidence')]})).memory;
   const h = roleHost({counter: {id: 'synthetic', countTokens: () => 1}});
   const roles = openMemoryCore({path: f.path, methodPackages: h.methods, assets: h.assets, roleProfiles: h.options, contextRead: h.context});
   t.after(() => roles.close());
   ok(roles.publishRoleProfileRelease(publish(ns,'synthetic-evidence-role','synthetic-role-publish'),{}));
-  const result = ok(roles.readRoleTaskContext({...read('synthetic-evidence-role',[ns]),task:'Synthetic role survivor'},{}));
+  const measured=await trace(()=>roles.readRoleTaskContext({...read('synthetic-evidence-role',[ns]),task:'Synthetic role survivor'},{}));
+  const result = ok(measured.result);
   const text = JSON.stringify(result);
   assert.ok(text.includes(b.id)); assert.ok(text.includes('Synthetic later independent role evidence'));
   assert.equal(text.includes('Synthetic withheld role evidence'),false);
   for (const row of withheld) assert.equal(text.includes(row.id),false);
+  assert.ok(text.includes(other.id));
+  const collectors=measured.rows.filter(row=>row.sql.includes('CROSS JOIN qualification_anchors q'));
+  assert.equal(collectors.length,2,'one anchor collection in preparation and one in final delivery');
+  assert.equal(new Set(collectors.map(row=>row.snapshot)).size,2);
+  for(const collector of collectors)assert.deepEqual(JSON.parse(collector.args[0]).map(job=>job.id).sort(),[b.id,other.id].sort());
 });
