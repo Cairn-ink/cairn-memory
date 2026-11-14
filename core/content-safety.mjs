@@ -531,25 +531,45 @@ export function receiptDeliverySnapshot(db, entries, memo = createContentReadMem
     const chunks = [];
     // Direction is engine-owned. Separate index orders avoid a CASE sort that
     // would read the whole Memory before applying its per-chunk bound.
-    for (const job of active.filter(job => job.recent && !job.idOrder)) {
-      const chunk = Math.min(256, job.limit + 32), headers = [];
-      let time = job.afterTime, id = job.afterId;
-      while (headers.length < chunk) {
-        if (!time) time = db.prepare(`SELECT r.created_at AS time FROM memories m
-          CROSS JOIN receipts r INDEXED BY memory_receipts ON r.memory_id=m.id
-          WHERE m.id=? AND m.owner_id=? AND m.scope=? AND m.project_id=? AND r.created_at<?
-          ORDER BY r.created_at DESC LIMIT 1`).get(job.id, ...boundary(job.namespace), job.beforeTime ?? '\uffff')?.time;
-        if (!time) break;
-        const page = db.prepare(`SELECT r.id,r.memory_id,r.receipt_key,r.client,r.session_id,r.event_id,r.role,r.created_at
-          FROM memories m CROSS JOIN receipts r INDEXED BY memory_receipts ON r.memory_id=m.id
-          WHERE m.id=? AND m.owner_id=? AND m.scope=? AND m.project_id=? AND r.created_at=? AND r.id>?
-          ORDER BY r.id LIMIT ?`).all(job.id, ...boundary(job.namespace), time, id, chunk - headers.length);
-        headers.push(...page);
-        if (headers.length === chunk) break;
-        job.beforeTime = time; time = ''; id = '';
+    const recent = active.filter(job => job.recent && !job.idOrder);
+    if (recent.length) {
+      const chunk = Math.min(256, (options.limit ?? 101) + 32);
+      const inputs = recent.map(({ coordinates, ...job }) => job);
+      // The index cannot reverse time without also reversing ids. Walk at most
+      // chunk keys inside ONE statement: an id seek within the current tie,
+      // otherwise a reverse time seek followed by that tie's first id. No
+      // sorter sees a whole tie; the only sort below has <= chunk headers.
+      const rows = db.prepare(`SELECT j.value AS input,r.id,r.memory_id,r.receipt_key,r.client,r.session_id,r.event_id,r.role,r.created_at
+        FROM json_each(?) j CROSS JOIN memories m ON m.id=json_extract(j.value,'$.id')
+        CROSS JOIN receipts r INDEXED BY sqlite_autoindex_receipts_1 ON r.id IN (
+          WITH RECURSIVE recent_keys(cursor) AS (
+            SELECT json_array(json_extract(j.value,'$.afterTime'),json_extract(j.value,'$.afterId'))
+            UNION ALL
+            SELECT coalesce(
+              (SELECT json_array(candidate.created_at,candidate.id) FROM receipts candidate INDEXED BY memory_receipts
+                WHERE candidate.memory_id=m.id AND candidate.created_at=json_extract(json_each.value,'$[0]')
+                  AND candidate.id>json_extract(json_each.value,'$[1]') AND json_extract(json_each.value,'$[0]')<>''
+                ORDER BY candidate.id LIMIT 1),
+              (SELECT json_array(candidate.created_at,candidate.id) FROM receipts candidate INDEXED BY memory_receipts
+                WHERE candidate.memory_id=m.id AND candidate.created_at=(
+                  SELECT older.created_at FROM receipts older INDEXED BY memory_receipts
+                    WHERE older.memory_id=m.id AND older.created_at<coalesce(nullif(json_extract(json_each.value,'$[0]'),''),'\uffff')
+                    ORDER BY older.created_at DESC LIMIT 1)
+                ORDER BY candidate.id LIMIT 1))
+            FROM recent_keys CROSS JOIN json_each(json_array(recent_keys.cursor))
+            WHERE recent_keys.cursor IS NOT NULL LIMIT ? OFFSET 1)
+          SELECT json_extract(cursor,'$[1]') FROM recent_keys WHERE cursor IS NOT NULL)
+        WHERE m.owner_id=json_extract(j.value,'$.owner') AND m.scope=json_extract(j.value,'$.scope')
+          AND m.project_id=json_extract(j.value,'$.project') AND r.memory_id=m.id`).all(JSON.stringify(inputs), chunk);
+      const byKey = new Map(recent.map(job => [job.key, []]));
+      for (const { input, ...row } of rows) byKey.get(JSON.parse(input).key).push(row);
+      for (const job of recent) {
+        const headers = byKey.get(job.key);
+        headers.sort((a,b) => a.created_at === b.created_at ? (a.id < b.id ? -1 : a.id > b.id ? 1 : 0) :
+          a.created_at > b.created_at ? -1 : 1);
+        chunks.push({ job, headers, ended: headers.length < chunk });
+        batches.push({ namespace: job.namespace, receipts: headers });
       }
-      chunks.push({ job, headers, ended: headers.length < chunk });
-      batches.push({ namespace: job.namespace, receipts: headers });
     }
     for (const direction of ['forward', 'id']) {
       const selected = active.filter(job => (job.idOrder ? 'id' : job.recent ? 'recent' : 'forward') === direction);

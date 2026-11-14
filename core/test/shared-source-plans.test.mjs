@@ -221,6 +221,7 @@ function assertPlan(db,sql,sites,statistics) {
   const plan=db.prepare('EXPLAIN QUERY PLAN '+sql).all(...bindings),label=statistics+' '+sites+'\n'+sql;
   const composed=sql.startsWith('WITH candidates AS MATERIALIZED (');
   const candidateAncestry=sql.includes('WITH RECURSIVE ancestors(id) AS (');
+  const recentKeys=sql.includes('WITH RECURSIVE recent_keys(cursor) AS (');
   // Multiple lexical scopes may reuse an alias. Retain every physical table
   // it can name so a later alias cannot hide a namespace-sized physical read.
   const aliases=new Map();
@@ -273,6 +274,16 @@ function assertPlan(db,sql,sites,statistics) {
     assert.ok(plan.some(row=>/episode_open_step_read/.test(row.detail)),label+' ordered candidate range');
     assert.ok(!plan.some(row=>/TEMP B-TREE/.test(row.detail)),label+' no namespace-sized sorting input');
   }
+  if(recentKeys){
+    assert.match(sql,/ON r\.id IN \( WITH RECURSIVE recent_keys\(cursor\) AS \( SELECT json_array\(json_extract\(j\.value,'\$\.afterTime'\),json_extract\(j\.value,'\$\.afterId'\)\) UNION ALL/);
+    assert.match(sql,/FROM recent_keys CROSS JOIN json_each\(json_array\(recent_keys\.cursor\)\) WHERE recent_keys\.cursor IS NOT NULL LIMIT \? OFFSET 1\) SELECT json_extract\(cursor,'\$\[1\]'\) FROM recent_keys WHERE cursor IS NOT NULL\)/,
+      label+' only the skipped seed and a bounded number of recursive keys');
+    assert.equal(plan.filter(row=>row.detail.startsWith('SEARCH candidate ')&&
+      row.detail.includes('memory_receipts')&&row.detail.includes('memory_id=? AND created_at=?')).length,2,label+' both tie seeks fix a timestamp');
+    assert.ok(plan.some(row=>row.detail.startsWith('SEARCH older ')&&
+      row.detail.includes('memory_receipts')&&row.detail.includes('memory_id=? AND created_at<?')),label+' reverse time seek');
+    assert.ok(!plan.some(row=>/TEMP B-TREE/.test(row.detail)),label+' no SQL sorter, including inside a large tie');
+  }
   if(sql.includes('CROSS JOIN qualification_anchors q')){
     for(const alias of ['q','p'])assert.ok(plan.some(row=>row.detail.startsWith('SEARCH '+alias+' ')&&
       row.detail.includes('memory_id=?')),label+' anchors must be reached by memory_id: '+alias);
@@ -310,6 +321,7 @@ function assertPlan(db,sql,sites,statistics) {
         'd49a92204f9357fdf9b4ffe080426cb6b47998e4f7c3081fd0c918723599abd7';
       assert.ok(ownerEpochFence||virtual.has(scan[1])&&/VIRTUAL TABLE INDEX/.test(detail)||
         candidateAncestry&&([...tables].every(table=>table==='ancestors')||detail==='SCAN CONSTANT ROW')||
+        recentKeys&&(detail==='SCAN recent_keys'||detail==='SCAN CONSTANT ROW')||
         composed&&(derived||/SCAN CONSTANT ROW/.test(detail)),label+'\n'+detail);
     }
     const search=detail.match(/\bSEARCH (\w+) /),tables=search&&aliases.get(search[1]);

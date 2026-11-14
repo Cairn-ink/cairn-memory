@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openMemoryCore, openMemoryStore } from '../index.mjs';
+import { createMemoryRuntime } from '../runtime.mjs';
 import { ns, ok, receipt, lineageHost, copySqliteFixture, quiescence } from '../testing/card-lineage-fixture.mjs';
 import { safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
 import { host as contextHost } from '../testing/context-read-core-fixture.mjs';
@@ -16,10 +17,150 @@ import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { model as episodeModel, input as episodeInput } from '../testing/episode-capture-helpers.mjs';
 import { options as episodeOptions } from '../testing/episode-helpers.mjs';
 import { survivor, forgotten, message, ordinaryKinds, source, fixture, capture, act, noLeak, hasId,
-  scripted, markers, memoryRef, trace } from '../testing/shared-source-fixture.mjs';
+  scripted, markers, memoryRef, trace, key, isLookup } from '../testing/shared-source-fixture.mjs';
 
 const error = (result, code) => assert.deepEqual(result, { ok: false, error: { code, retryable: false } });
 const refs = memory => [{ memoryId: memory.id, revision: memory.revision }];
+
+const recentId = index => 'r' + String(index).padStart(4, '0');
+const recentTime = index => new Date(Date.UTC(2026, 0, 1) + index * 1000).toISOString();
+const tieTime = '2026-01-02T00:00:00.000Z';
+const deliveryKey = memory => JSON.stringify([ns.ownerId, ns.scope, ns.projectId ?? '', memory.id]);
+async function recentFixture(t, count, time) {
+  const f = await fixture(t, 'fresh-default');
+  const memory = ok(f.core.admit({ namespace: ns, memory: { content: survivor, kind: 'fact' },
+    receipts: [receipt('synthetic-recent-seed')] })).memory;
+  // Explicit ids and times make the expected lists independent of UUIDs,
+  // insertion order, wall clock and the production order implementation.
+  transaction(f.db, () => {
+    f.db.prepare('DELETE FROM receipts WHERE memory_id=?').run(memory.id);
+    const insert = f.db.prepare('INSERT INTO receipts VALUES(?,?,?,?,?,?,?,?,?)');
+    for (let index = count - 1; index >= 0; index--) {
+      const row = receipt('synthetic-recent-' + index, 'Synthetic recent support ' + index);
+      insert.run(recentId(index), memory.id, key(row), row.client, row.sessionId, row.eventId, row.role, row.excerpt, time(index));
+    }
+  });
+  return { ...f, memory };
+}
+
+// limit=4 gives a chunk of 36. The large cases also exceed the hard chunk
+// maximum; a single timestamp must never become a whole-Memory sorting input.
+for (const [count, distinct, tied] of [
+  [0, [], []],
+  [1, [0], [0]],
+  [35, [34, 33, 32, 31], [0, 1, 2, 3]],
+  [36, [35, 34, 33, 32], [0, 1, 2, 3]],
+  [37, [36, 35, 34, 33], [0, 1, 2, 3]],
+  [3000, [2999, 2998, 2997, 2996], [0, 1, 2, 3]],
+]) for (const ties of [false, true])
+test(`recent delivery preserves explicit order and coverage at ${count} receipts, ties=${ties}`, { timeout: 15000 }, async t => {
+  const f = await recentFixture(t, count, ties ? () => tieTime : recentTime);
+  const expected = (ties ? tied : distinct).map(recentId);
+  for (const includeRecent of [false, true]) {
+    const memo = receiptDeliverySnapshot(f.db, [{ namespace: ns, memoryId: f.memory.id }], undefined, [],
+      { limit: 4, recent: !includeRecent, includeRecent });
+    const stamp = deliveryKey(f.memory) + (includeRecent ? ':recent' : '');
+    assert.deepEqual(memo.deliveryHeaders.get(stamp).map(row => row.id), expected);
+    assert.deepEqual(memo.deliveryHeaders.get(stamp).map(row => row.position), expected.map((_, i) => i + 1));
+    assert.deepEqual(memo.deliveryMemoryStates.get(stamp), { total: count, complete: count < 4, after: undefined, recent: true });
+    assert.deepEqual(deliveryReceiptRows(f.db, ns, f.memory.id, memo, { recent: true, limit: 4 }).map(row => row.id), expected);
+  }
+  const runtime = createMemoryRuntime({ path: f.path }); t.after(() => runtime.close());
+  assert.deepEqual(runtime.recentReceipts(ns, { memoryId: f.memory.id, revision: f.memory.revision }, 4).map(row => row.id), expected);
+  const page = ok(f.core.get({ namespace: ns, memoryId: f.memory.id, receiptLimit: 4 }));
+  assert.equal(page.memory.receiptCount, count);
+  assert.equal(page.exhausted, count <= 4);
+  assert.equal(page.nextReceiptCursor === null, count <= 4);
+});
+
+test('recent delivery statement count is independent of timestamps and selected Memories', { timeout: 15000 }, async t => {
+  for (const [count, time] of [[1, recentTime], [60, recentTime], [60, () => tieTime]]) {
+    const f = await recentFixture(t, count, time);
+    const sibling = ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic recent sibling', kind: 'fact' },
+      receipts: [receipt('synthetic-recent-sibling')] })).memory;
+    const measured = await trace(() => receiptDeliverySnapshot(f.db,
+      [f.memory, sibling].map(memory => ({ namespace: ns, memoryId: memory.id })), undefined, [],
+      { recent: true, limit: 64, positions: false, totals: false }));
+    assert.equal(measured.result.deliveryHeaders.get(deliveryKey(f.memory)).length, count);
+    assert.equal(measured.result.deliveryHeaders.get(deliveryKey(sibling)).length, 1);
+    assert.equal(measured.rows.length, 3, 'one anchor union, one recent chunk for both Memories, one marker union');
+    const headers = measured.rows.filter(row => row.sql.startsWith('SELECT j.value AS input,r.id'));
+    assert.equal(headers.length, 1);
+    assert.equal(headers[0].args[1], 96);
+    assert.equal(JSON.parse(headers[0].args[0]).length, 2);
+    assert.equal(measured.rows.filter(isLookup).length, 1);
+    assert.equal(measured.rows.some(row => /r\.excerpt|r\.\*/.test(row.sql)), false, 'header delivery reads no receipt text');
+  }
+});
+
+test('a tie larger than a recent chunk pages without loss or duplication', { timeout: 15000 }, async t => {
+  const f = await recentFixture(t, 73, () => tieTime);
+  const expected = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+    19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
+    39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58,
+    59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72].map(recentId);
+  let after;
+  const actual = [];
+  for (let offset = 0; offset < expected.length; offset += 4) {
+    const memo = receiptDeliverySnapshot(f.db, [{ namespace: ns, memoryId: f.memory.id }], undefined, [],
+      { recent: true, limit: 4, after });
+    const headers = memo.deliveryHeaders.get(deliveryKey(f.memory)), state = memo.deliveryMemoryStates.get(deliveryKey(f.memory));
+    assert.deepEqual(headers.map(row => row.id), expected.slice(offset, offset + 4));
+    assert.equal(state.total, 73);
+    assert.equal(state.complete, offset === 72);
+    assert.deepEqual(state.after, after);
+    actual.push(...headers.map(row => row.id));
+    after = { createdAt: headers.at(-1).created_at, id: headers.at(-1).id };
+  }
+  assert.deepEqual(actual, expected);
+  assert.equal(new Set(actual).size, 73);
+  // The uncapped order agrees with all of those individually resumed pages.
+  const memo = receiptDeliverySnapshot(f.db, [{ namespace: ns, memoryId: f.memory.id }], undefined, [],
+    { recent: true, limit: Number.MAX_SAFE_INTEGER });
+  assert.deepEqual(memo.deliveryHeaders.get(deliveryKey(f.memory)).map(row => row.id), expected);
+});
+
+for (const [count, passes] of [[255, 1], [256, 2], [257, 2], [513, 3]]) for (const ties of [false, true])
+test(`uncapped recent delivery keeps bounded chunks and one marker union at ${count}, ties=${ties}`, { timeout: 15000 }, async t => {
+  const f = await recentFixture(t, count, ties ? () => tieTime : recentTime);
+  // Exact expected lists: r0000 through r(count-1) ascending for the single
+  // tie, and r(count-1) through r0000 descending for distinct times. Neither
+  // list uses SQL or a production comparator to obtain its expected order.
+  const expected = Array.from({ length: count }, (_, index) => recentId(ties ? index : count - index - 1));
+  const measured = await trace(() => receiptDeliverySnapshot(f.db, [{ namespace: ns, memoryId: f.memory.id }], undefined, [],
+    { recent: true, limit: Number.MAX_SAFE_INTEGER, positions: false, totals: false }));
+  assert.deepEqual(measured.result.deliveryHeaders.get(deliveryKey(f.memory)).map(row => row.id), expected);
+  const chunks = measured.rows.filter(row => row.sql.startsWith('SELECT j.value AS input,r.id'));
+  assert.equal(chunks.length, passes);
+  assert.deepEqual(chunks.map(row => row.args[1]), Array(passes).fill(256));
+  assert.equal(measured.rows.filter(isLookup).length, 1, 'uncapped chunks retain the existing deferred marker union');
+  assert.deepEqual(measured.result.deliveryMemoryStates.get(deliveryKey(f.memory)), { total: count, complete: true, after: undefined, recent: true });
+});
+
+test('recent refills skip interleaved denials across a tie and older timestamps before reading text', { timeout: 15000 }, async t => {
+  const f = await recentFixture(t, 73, i => i < 37 ? tieTime : recentTime(73 - i));
+  const survivors = [1, 17, 37, 40, 72].map(recentId);
+  const denied = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(f.memory.id).filter(row => !survivors.includes(row.id));
+  for (const token of receiptDenialTokens(denied)) f.db.prepare('INSERT OR IGNORE INTO suppressed VALUES(?,?,?,?)')
+    .run(ns.ownerId, ns.scope, ns.projectId, token);
+  const measured = await trace(() => {
+    const memo = receiptDeliverySnapshot(f.db, [{ namespace: ns, memoryId: f.memory.id }], undefined, [], { recent: true, limit: 4 });
+    return { memo, rows: deliveryReceiptRows(f.db, ns, f.memory.id, memo, { recent: true, limit: 4 }) };
+  });
+  assert.deepEqual(measured.result.rows.map(row => row.id), [1, 17, 37, 40].map(recentId));
+  assert.equal(measured.rows.filter(row => row.sql.startsWith('SELECT j.value AS input,r.id')).length, 2);
+  assert.equal(measured.rows.filter(isLookup).length, 2, 'one batched marker lookup per pass');
+  const textReads = measured.rows.filter(row => row.sql.startsWith('SELECT r.rowid AS cursor_row,r.*'));
+  assert.equal(textReads.length, 1);
+  assert.deepEqual(JSON.parse(textReads[0].args[0]), [1, 17, 37, 40].map(recentId));
+  assert.ok(measured.rows.lastIndexOf(measured.rows.filter(isLookup).at(-1)) < measured.rows.indexOf(textReads[0]));
+  const state = measured.result.memo.deliveryMemoryStates.get(deliveryKey(f.memory));
+  assert.equal(state.total, 73); assert.equal(state.complete, false);
+  const after = { createdAt: recentTime(33), id: recentId(40) };
+  const last = receiptDeliverySnapshot(f.db, [{ namespace: ns, memoryId: f.memory.id }], undefined, [], { recent: true, limit: 4, after });
+  assert.deepEqual(last.deliveryHeaders.get(deliveryKey(f.memory)).map(row => row.id), [recentId(72)]);
+  assert.deepEqual(last.deliveryMemoryStates.get(deliveryKey(f.memory)), { total: 73, complete: true, after, recent: true });
+});
 
 for (const contextMode of ['source-evidence', 'rationale-evidence'])
 test(`${contextMode} recall resolves provenance only in its two fetched-source snapshots`, { timeout: 15000 }, async t => {
