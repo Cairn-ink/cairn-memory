@@ -45,7 +45,7 @@ const modules=[
   {file:'core/role-context-facade.mjs',functions:[]},
   {file:'core/runtime.mjs',functions:[{name:'getPage'},{name:'usageSnapshot'},
     {name:'storedSourceEvidence'},{name:'projectRationale'}]},
-  {file:'core/session-context.mjs',functions:[{name:'hiddenEpisode'}],builders:[
+  {file:'core/session-context.mjs',functions:[],builders:[
     {name:'contextQuery',kind:'nextSteps'},
     {name:'nextStepPage',kind:'selectedInput'},
   ]},
@@ -203,6 +203,7 @@ function assertPlan(db,sql,sites,statistics) {
   const bindings=Array((sql.match(/\?/g)??[]).length).fill(null);
   const plan=db.prepare('EXPLAIN QUERY PLAN '+sql).all(...bindings),label=statistics+' '+sites+'\n'+sql;
   const composed=sql.startsWith('WITH candidates AS MATERIALIZED (');
+  const candidateAncestry=sql.includes('WITH RECURSIVE ancestors(id) AS (');
   // Multiple lexical scopes may reuse an alias. Retain every physical table
   // it can name so a later alias cannot hide a namespace-sized physical read.
   const aliases=new Map();
@@ -244,6 +245,17 @@ function assertPlan(db,sql,sites,statistics) {
     assert.equal(plan.some(row=>/TEMP B-TREE|\bSCAN\b/.test(row.detail)),false,label+' must limit an ordered per-state range');
     assert.ok(plan.some(row=>/private_card_scope/.test(row.detail)&&row.detail.includes('state=?')&&row.detail.includes('id>?')),label);
   }
+  if(candidateAncestry){
+    assert.match(sql,/AND NOT EXISTS \( WITH RECURSIVE ancestors\(id\) AS \( SELECT e\.id UNION SELECT s\.origin_episode_id FROM ancestors a CROSS JOIN episode_sources s INDEXED BY episode_source_page ON s\.episode_id=a\.id \) SELECT 1 FROM ancestors a CROSS JOIN episode_memory_links l ON l\.episode_id=a\.id CROSS JOIN memories m ON m\.id=l\.memory_id WHERE m\.deleted=0 AND m\.review_state='awaiting' LIMIT 1\) ORDER BY .* LIMIT \?$/,
+      label+' hidden eligibility is correlated and precedes the page limit');
+    assert.doesNotMatch(sql,/review_hidden_episodes/,label+' must not enumerate the global hidden view');
+    assert.ok(plan.some(row=>/CORRELATED SCALAR SUBQUERY/.test(row.detail)),label+' candidate correlation');
+    for(const [alias,key]of [['s','episode_id'],['l','episode_id'],['m','id']])
+      assert.ok(plan.some(row=>row.detail.startsWith('SEARCH '+alias+' ')&&row.detail.includes(key+'=?')),
+        label+' ancestry reaches '+alias+' by '+key);
+    assert.ok(plan.some(row=>/episode_open_step_read/.test(row.detail)),label+' ordered candidate range');
+    assert.ok(!plan.some(row=>/TEMP B-TREE/.test(row.detail)),label+' no namespace-sized sorting input');
+  }
   if(sql.includes('CROSS JOIN qualification_anchors q')){
     for(const alias of ['q','p'])assert.ok(plan.some(row=>row.detail.startsWith('SEARCH '+alias+' ')&&
       row.detail.includes('memory_id=?')),label+' anchors must be reached by memory_id: '+alias);
@@ -258,6 +270,7 @@ function assertPlan(db,sql,sites,statistics) {
       const derived=ctes.has(scan[1])||[...tables].some(table=>ctes.has(table))||
         scan[1]==='anchor'&&sql.includes('FROM (SELECT 1) anchor');
       assert.ok(virtual.has(scan[1])&&/VIRTUAL TABLE INDEX/.test(detail)||
+        candidateAncestry&&([...tables].every(table=>table==='ancestors')||detail==='SCAN CONSTANT ROW')||
         composed&&(derived||/SCAN CONSTANT ROW/.test(detail)),label+'\n'+detail);
     }
     const search=detail.match(/\bSEARCH (\w+) /),tables=search&&aliases.get(search[1]);
