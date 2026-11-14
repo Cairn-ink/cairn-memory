@@ -111,7 +111,7 @@ P2 是入門與素材驗證；其通過不表示預設抽取品質通過，也�
 
 ## P4 擴大宣傳與產品品質標準
 
-此門檻適用於 Show HN 或任何廣泛公告，且只能宣傳**已發布 npm 版本**在 Local 模式實際提供的能力：一個指令設定、本機 SQLite 儲存、不經模型自動保存對話原文，以及每筆記憶都附來源原文的明確工具。這裡的「自動保存」是逐字保存對話文字，不是模型抽取。Cairn.ink Memory 的 0.6.6 release 仍須在發布後按同一版本核對，本文不宣告它已發布。
+此門檻適用於 Show HN 或任何廣泛公告，且只能宣傳**已發布 npm 版本**在 Local 模式實際提供的能力：一個指令設定、本機 SQLite 儲存、不經模型自動保存對話原文，以及每筆記憶都附來源原文的明確工具。這裡的「自動保存」是逐字保存對話文字，不是模型抽取。Cairn.ink Memory 0.6.6 已於 2026-11-13 發布到 npm；以下各項仍須對這個已發布版本逐項核對。
 
 貼文及創辦人的首則留言都必須寫明：我們不主張模型抽取品質、recall 準確率或成本節省；引擎預設的模型抽取仍未通過自己的來源支持標準，並連到[已知限制](../limitations.md)。公告一旦主張抽取品質、自動 recall 品質，或 Cards 與 maps，完整 [E01 至 E09](semantic-evaluation.md) 就恢復適用，標準不變。公告若宣稱 current、history、why 或自動更新能力，仍須依 [reliability contract](memory-reliability-contract.md) 驗證對應狀態與來源，不能只檢查回答字串。
 
@@ -141,7 +141,7 @@ P2 是入門與素材驗證；其通過不表示預設抽取品質通過，也�
 | 條件 | 狀態 | 證據與尚缺項目 |
 | --- | --- | --- |
 | 1 主張逐句對應 | 未完成 | [0.6.6 證據表](../promotion-claims.md)已按 README 重查；HN 稿尚未寫，逐句對應尚未完成。 |
-| 2 單一入口及狀態一致 | 未完成 | [README](../../README.md)已有單一入口，但本次文件尚待合併，不能把工作中的改寫當成已合併 gate。 |
+| 2 單一入口及狀態一致 | 未完成 | 單一入口 [README](../../README.md)已於 2026-11-14 合併到 main（本列於同日更新）。本次的證據表與 gate 文件仍待簽核與合併，合併前不能把工作中的改寫當成已生效的 gate。 |
 | 3 四項硬安全 | 未完成 | 下表列出 release 來源中的測試；引用的完整零違規評測紀錄來自較舊 `b05773f`，不是 0.6.6 的已發布 engine 驗收紀錄。 |
 | 4 E08、E09 | 未完成 | [原始定義](semantic-evaluation.md#frozen-acceptance-e01e09)保留；尚未附上公告版本的 E08 紀錄（離線測試與 CI、兩個 Node 版本、regression demos、plugin gates），也還沒有固定 commit 的獨立審查紀錄。 |
 | 5 三次乾淨安裝 | 未完成 | [舊三次紀錄](../promotion/install-validation/README.md)是 `7467aebc` 的 agent/source 安裝，不是已發布版本。0.6.6 的自動保存只在 Linux 與 WSL 執行（[capture host check](../../integrations/client/raw/local-host-profile.mjs)）：在 macOS 上 `setup --local` 會接上 client、記憶工具可用，但回報對話保存 OFF 並以代碼 2 結束，所以真實 macOS 這一項在自動保存支援 macOS 之前無法符合。Node 22.16 與 Node 24 的新版本紀錄也還沒有。 |
