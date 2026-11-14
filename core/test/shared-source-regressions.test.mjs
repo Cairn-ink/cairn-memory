@@ -9,7 +9,9 @@ import { ns, ok, receipt, lineageHost, copySqliteFixture, quiescence } from '../
 import { safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
 import { host as contextHost } from '../testing/context-read-core-fixture.mjs';
 import { migrateCardLineage, migrateReceiptEventTime } from '../content-safety-migration.mjs';
-import { receiptDenialTokens } from '../content-safety.mjs';
+import { receiptDenialTokens, receiptDeliverySnapshot, deliveryReceiptRows, receiptReadSafety, contentReadSafety } from '../content-safety.mjs';
+import { readTransaction, transaction } from '../database.mjs';
+import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { model as episodeModel, input as episodeInput } from '../testing/episode-capture-helpers.mjs';
 import { options as episodeOptions } from '../testing/episode-helpers.mjs';
@@ -18,6 +20,68 @@ import { survivor, forgotten, message, ordinaryKinds, source, fixture, capture, 
 
 const error = (result, code) => assert.deepEqual(result, { ok: false, error: { code, retryable: false } });
 const refs = memory => [{ memoryId: memory.id, revision: memory.revision }];
+
+for (const contextMode of ['source-evidence', 'rationale-evidence'])
+test(`${contextMode} recall resolves provenance only in its two fetched-source snapshots`, { timeout: 15000 }, async t => {
+  const f = await correctionFixture(t, { base: 33, mode: 'safety' });
+  for (let i = 0; i < 12; i++) ok(f.core.admit({ namespace: ns,
+    memory: { content: 'Synthetic provenance reuse ' + i, kind: 'fact' }, receipts: [receipt('provenance-reuse-' + i)] }));
+  f.model.select = ({ input }) => ({ refs: input.maps.flatMap(page => page.items.filter(item => item.type === 'unfiled')
+    .map(item => ({ namespaceIndex: page.namespaceIndex, ...item.ref }))).slice(0, 6) });
+  const measured = await trace(() => f.core.recall({ readSet: [ns], query: 'Synthetic', limit: 6, contextMode }));
+  assert.equal(ok(measured.result).memories.length, 6);
+  assert.equal(measured.result.value.coverage, 'complete');
+  for (const fragment of ['FROM raw_receipt_lineage l LEFT JOIN raw_conversations',
+    'SELECT kind FROM raw_receipt_origins WHERE receipt_id=?',
+    'SELECT 1 FROM episode_memory_links WHERE memory_id=? LIMIT 1']) {
+    const rows = measured.rows.filter(row => row.sql.includes(fragment));
+    assert.equal(rows.length, 12, fragment + ': once per fetched Memory per source snapshot');
+    assert.equal(new Set(rows.map(row => row.snapshot)).size, 2, 'discovery reuses its canonical absence proof');
+    const counts = new Map();
+    for (const row of rows) counts.set(row.args[0], (counts.get(row.args[0]) ?? 0) + 1);
+    assert.equal(counts.size, 6);
+    assert.deepEqual([...counts.values()], Array(6).fill(2));
+  }
+  for (const sql of ["SELECT 1 FROM sqlite_master WHERE name='raw_source_maps'",
+    "SELECT 1 FROM sqlite_master WHERE name='raw_job_sources'",
+    "SELECT 1 FROM sqlite_master WHERE name='raw_session_fences'"])
+    assert.equal(measured.rows.filter(row => row.sql === sql).length, 2, sql);
+  assert.equal(measured.rows.filter(row => row.sql.startsWith("SELECT name FROM sqlite_master WHERE type='table' AND name IN (")).length, 2);
+  assert.equal(measured.rows.filter(row => row.sql.startsWith('SELECT 1 FROM raw_conversations WHERE')).length, 2);
+  assert.equal(measured.rows.filter(row => row.sql === 'SELECT secret FROM episode_identity WHERE singleton=1').length, 4);
+  assert.equal(measured.rows.filter(row => row.sql.startsWith('SELECT 1 FROM raw_session_fences WHERE')).length, 4);
+});
+
+test('a receipt denial survives a warm canonical absence proof', { timeout: 15000 }, async t => {
+  const f = await correctionFixture(t, { base: 33, mode: 'safety' });
+  const memory = ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic denied provenance', kind: 'fact' },
+    receipts: [receipt('denied-provenance')] })).memory;
+  const stored = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').get(memory.id);
+  transaction(f.db, () => writeContentSuppressionInside(f.db, { namespace: ns, kind: 'receipt', key: stored.id,
+    reason: 'purge', actionId: 'synthetic-denied-provenance' }));
+  readTransaction(f.db, () => {
+    const memo = receiptDeliverySnapshot(f.db, [{ namespace: ns, memoryId: memory.id }]);
+    const [row] = deliveryReceiptRows(f.db, ns, memory.id, memo, { idOrder: true });
+    assert.equal(row.empty_raw_ancestry, 1);
+    const options = { namespace: ns, receipt: row, memo, rawAncestryEmpty: true };
+    assert.deepEqual(receiptReadSafety(f.db, options), { allowed: false, reason: 'purge' });
+    assert.deepEqual(receiptReadSafety(f.db, options), { allowed: false, reason: 'purge' });
+    assert.deepEqual(contentReadSafety(f.db, { namespace: ns, intent: 'history', memo,
+      ref: { type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision }, receipts: [stored] }),
+    { allowed: false, reason: 'purge' });
+  });
+});
+
+test('a write between warm source reads on the same core connection is observed', { timeout: 15000 }, async t => {
+  const f = await fixture(t, 'ordinary-48'), [b, a] = await capture(f);
+  for (const contextMode of ['source-evidence', 'rationale-evidence']) for (let repeat = 0; repeat < 2; repeat++)
+    assert.equal(ok(f.core.fetch({ namespace: ns, refs: refs(b), contextMode })).items[0].receipts.length, 1);
+  ok(act(f, 'forget', a));
+  for (const contextMode of ['source-evidence', 'rationale-evidence']) {
+    const result = f.core.fetch({ namespace: ns, refs: refs(b), contextMode });
+    error(result, 'source_unavailable'); noLeak(result, 'post-write source read');
+  }
+});
 
 for (const kind of ordinaryKinds) test(`ordinary shared capture refuses incomplete source evidence on ${kind}`, { timeout: 15000 }, async t => {
   const f = await fixture(t, kind), [b, a] = await capture(f);

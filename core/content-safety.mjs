@@ -644,12 +644,25 @@ export function deliveryReceiptRows(db, ns, id, memo, {limit=101,offset=0,after,
   const cached=!cursor&&candidate?JSON.parse(candidate.batch_receipts):[];
   const byId=new Map(cached.map(row=>[row.id,row]));
   const missing=selected.filter(row=>!byId.has(row.id));
+  // MOC source scoring already consumes this canonical absence proof. Keep it
+  // in the bounded text read so its snapshot memo need not resolve it again.
+  const rawReceiptProof=idOrder&&cachedContentLayout(db)?.suppressionRevision&&cachedContentLayout(db)?.rawLineage;
+  const receiptAncestry=rawReceiptProof?`,(
+    NOT EXISTS(SELECT 1 FROM raw_receipt_lineage l WHERE l.receipt_id=r.id)
+    AND NOT EXISTS(SELECT 1 FROM raw_receipt_origins o WHERE o.receipt_id=r.id AND o.kind='derived')
+    AND NOT EXISTS(SELECT 1 FROM episode_memory_links l WHERE l.memory_id=r.memory_id)
+    AND NOT EXISTS(SELECT 1 FROM raw_conversations c WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.client=r.client)
+    AND NOT EXISTS(SELECT 1 FROM session_episodes e WHERE e.owner_id=? AND e.scope=? AND e.project_id=? AND e.client=r.client)
+    AND NOT EXISTS(SELECT 1 FROM raw_job_sources j WHERE j.owner_id=? AND j.scope=? AND j.project_id=? AND j.source_client=r.client)
+    AND NOT EXISTS(SELECT 1 FROM raw_session_fences f WHERE f.owner_id=? AND f.scope=? AND f.project_id=? AND f.client=r.client)
+  ) AS empty_raw_ancestry`:'';
   // Selected ids are themselves keyset ordered and capped. Each text read is
   // at most 64 rows and at most cap+1 rows are read for the whole Memory.
   for(let start=0;start<missing.length;start+=64){
     const ids=missing.slice(start,start+64).map(row=>row.id);
-    for(const {cursor_row,...row}of db.prepare(`SELECT r.rowid AS cursor_row,r.* FROM json_each(?) wanted
-      CROSS JOIN receipts r INDEXED BY sqlite_autoindex_receipts_1 ON r.id=wanted.value WHERE r.memory_id=?`).all(JSON.stringify(ids),id))
+    for(const {cursor_row,...row}of db.prepare(`SELECT r.rowid AS cursor_row,r.*${receiptAncestry} FROM json_each(?) wanted
+      CROSS JOIN receipts r INDEXED BY sqlite_autoindex_receipts_1 ON r.id=wanted.value WHERE r.memory_id=?`)
+      .all(...(rawReceiptProof?Array.from({length:4},()=>boundary(ns)).flat():[]),JSON.stringify(ids),id))
       byId.set(row.id,cursor?{cursor_row,...row}:row);
   }
   return selected.map(header=>byId.get(header.id)).filter(Boolean);
