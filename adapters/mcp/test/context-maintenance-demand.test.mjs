@@ -57,7 +57,7 @@ function selectionFixture(t) {
     assert.equal(method, 'refreshContextIndex');
     assert.deepEqual(args.budget, { maxItems: 16, maxMs: 1000 });
     selected.push(args.types);
-  } }, { demand });
+  } }, { demand, host: true });
   return { demand, selected, loop, advance(ms) { now += ms; } };
 }
 
@@ -139,14 +139,19 @@ async function realFixture(t, { path: sourcePath, cards = cardHost(), shared = f
   return { core, access, client, demand, path, cards, card: draft };
 }
 
-for (const wanted of [[combined], [['memory']], [['card']], [combined, ['memory']], [['memory'], ['card']], [combined, ['memory'], ['card']]]) {
-  test(`b/c: successful reads schedule only ${JSON.stringify(wanted)} round-robin and reach semantic ready`, { timeout: 15000 }, async t => {
-    const f = await realFixture(t), selected = [];
+for (const shared of [false, true]) for (const wanted of [[combined], [['memory']], [['card']], [combined, ['memory']], [['memory'], ['card']], [combined, ['memory'], ['card']]]) {
+  test(`b/c: successful reads schedule only ${JSON.stringify(wanted)} round-robin and reach semantic ready shared=${shared}`, { timeout: 15000 }, async t => {
+    const f = await realFixture(t, { shared }), selected = [];
     for (const types of wanted) await context(f.client, input(types));
     const loop = drivenLoop(t, f.core, { ...f.access, call(core, method, args) {
       selected.push(args.types); return f.access.call(core, method, args);
-    } }, { demand: f.demand });
+    } }, { demand: f.demand, host: shared });
     for (let i = 0; i < 16; i++) await loop.tick();
+    // Coordinator 11-14 (A): the default core keeps main's combined turns.
+    if (!shared) {
+      assert.deepEqual(selected, Array.from({ length: 16 }, () => combined), 'R2O4_UNBOUND_MAIN_TURNS');
+      return;
+    }
     assert.deepEqual(selected.slice(0, wanted.length), wanted, 'R2K_ACTIVE_VIEWS_ROUND_ROBIN');
     assert.ok(selected.every(types => wanted.some(view => JSON.stringify(view) === JSON.stringify(types)) ||
       JSON.stringify(types) === JSON.stringify(combined)), 'only demanded views or the idle combined fallback');
@@ -178,7 +183,7 @@ test('e: invalid and refused MCP reads record no demand', { timeout: 15000 }, as
 });
 
 test('idle Card views skip turns, external writes re-enable them, and all-idle turns refresh only combined', { timeout: 15000 }, async t => {
-  const f = await realFixture(t), selected = [];
+  const f = await realFixture(t, { shared: true }), selected = [];
   // Keep Memory pending after the one-Card projection has finished.
   for (let i = 0; i < 24; i++) ok(await f.core.admit({ namespace: ns,
     memory: { content: 'Synthetic idle-view backlog ' + i, kind: 'fact' },
@@ -187,7 +192,7 @@ test('idle Card views skip turns, external writes re-enable them, and all-idle t
   const loop = drivenLoop(t, f.core, { ...f.access, async call(core, method, args) {
     const result = await f.access.call(core, method, args);
     selected.push({ types: args.types, result }); return result;
-  } }, { demand: f.demand });
+  } }, { demand: f.demand, host: true });
   await loop.tick(); await loop.tick();
   assert.deepEqual(selected.map(call => call.types), [['memory'], ['card']], 'pending views retain round-robin order');
   assert.notEqual(selected[0].result.value.status, 'complete', 'control: Memory is still pending when Card finishes');
@@ -267,7 +272,7 @@ async function idleFixture(t, fixture) {
       ? (refuseCard = false, { ok: false, error: { code: 'index_unavailable', retryable: false } })
       : await f.access.call(core, method, args);
     selected.push({ types: args.types, result }); return result;
-  } }, { demand: f.demand });
+  } }, { demand: f.demand, host: true });
   for (let i = 0; i < 16; i++) await loop.tick();
   selected.length = 0;
   for (let i = 0; i < 3; i++) await loop.tick();
@@ -311,7 +316,7 @@ test('a Card dependency change re-enables an idle view and reaches ready', { tim
   demand.note(['memory']); demand.note(['card']);
   const loop = drivenLoop(t, fixture.core, { readSet: [dependencyNamespace], async call(core, method, args) {
     const result = await fixture.call(method, args); selected.push({ types: args.types, result }); return result;
-  } }, { demand });
+  } }, { demand, host: true });
   for (let i = 0; i < 16; i++) await loop.tick();
   selected.length = 0;
   for (let i = 0; i < 3; i++) await loop.tick();
@@ -356,7 +361,10 @@ for (const shared of [false, true]) for (const operation of ['forget', 'correct'
   const victim = ok(await base.core.admit({ namespace: ns,
     memory: { content: 'Synthetic same-namespace idle victim', kind: 'fact' },
     receipts: [{ client: 'synthetic', sessionId: 'same-namespace', eventId: 'victim', role: 'user', excerpt: 'Synthetic idle victim' }] })).memory;
-  const f = await idleFixture(t, base);
+  const f = shared ? await idleFixture(t, base) : { ...base, selected: [] };
+  if (!shared) f.loop = drivenLoop(t, f.core, { ...f.access, async call(core, method, args) {
+    const result = await f.access.call(core, method, args); f.selected.push({ types: args.types, result }); return result;
+  } }, { demand: f.demand });
   ok(await f.core[operation]({ namespace: ns, memoryId: victim.id, expectedRevision: victim.revision,
     ...(operation === 'correct' ? { content: 'Synthetic revised idle source', kind: 'fact',
       receipt: { client: 'synthetic', sessionId: 'same-namespace', eventId: 'correction', role: 'user', excerpt: 'Synthetic revised idle source' } } : {}) }));
@@ -365,13 +373,27 @@ for (const shared of [false, true]) for (const operation of ['forget', 'correct'
   for (let cycle = 0; cycle < 3; cycle++) {
     const before = f.selected.length;
     await f.loop.tick(); await f.loop.tick();
-    assert.deepEqual(f.selected.slice(before).map(call => call.types[0]).sort(), ['card', 'memory'],
+    assert.deepEqual(f.selected.slice(before).map(call => JSON.stringify(call.types)).sort(), (shared ? [['memory'], ['card']] : [combined, combined]).map(view => JSON.stringify(view)).sort(),
       'R2O3_SAME_NAMESPACE_TURNS ' + operation + ' shared=' + shared);
   }
-  assert.equal(cardTurns(f).length, 3, 'R2O3_SAME_NAMESPACE_TURNS: the Card view is never skipped');
-  for (const turn of cardTurns(f)) assert.deepEqual(turn.result,
+  assert.equal(shared ? cardTurns(f).length : f.selected.length, shared ? 3 : 6, 'R2O3_SAME_NAMESPACE_TURNS: the Card view is never skipped');
+  for (const turn of shared ? cardTurns(f) : f.selected) assert.deepEqual(turn.result,
     { ok: false, error: { code: 'index_unavailable', retryable: false } }, 'same-namespace public refusal is preserved');
   const acknowledgement = await f.access.call(f.core, 'refreshContextIndex', { readSet: [ns], types: ['card'],
     intent: 'current', budget: { maxItems: 16, maxMs: 1000 } });
   assert.deepEqual(acknowledgement, { ok: false, error: { code: 'index_unavailable', retryable: false } });
+});
+
+test('default maintenance installs no idle observation and never skips the combined refresh', async t => {
+  const f = await realFixture(t), selected = [];
+  const observation = await observeContextMaintenance(() => f.access.call(f.core, 'refreshContextIndex', {
+    readSet: [ns], types: combined, intent: 'current', budget: { maxItems: 16, maxMs: 1000 },
+  }));
+  assert.equal(observation.current, undefined, 'R2O4_UNBOUND_NO_OBSERVATION');
+  f.demand.note(['memory']); f.demand.note(['card']);
+  const loop = drivenLoop(t, f.core, { ...f.access, call(core, method, args) {
+    selected.push(args.types); return f.access.call(core, method, args);
+  } }, { demand: f.demand });
+  for (let i = 0; i < 8; i++) await loop.tick();
+  assert.deepEqual(selected, Array.from({ length: 8 }, () => combined), 'R2O4_UNBOUND_MAIN_TURNS');
 });

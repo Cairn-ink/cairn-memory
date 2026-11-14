@@ -73,8 +73,8 @@ const rankingPartition = new AsyncLocalStorage();
 const maintenanceObservation = new AsyncLocalStorage();
 // Private upkeep seam. A host retains only a fence checker for its enum view;
 // ordinary reads/refreshes do not acquire or retain an observation.
-export async function observeContextMaintenance(work) {
-  const observation = {};
+export async function observeContextMaintenance(work, { host = false, previous } = {}) {
+  const observation = { host, previous };
   const result = await maintenanceObservation.run(observation, work);
   return { result, current: observation.current };
 }
@@ -583,11 +583,86 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     } catch (error) { return failure(error); }
   }
   async function refreshContextIndex(original, token) {
+    // Coordinator 11-14 (A): preserve main's ordinary refresh statements.
+    return hasCommitDispatcher(db) || maintenanceObservation.getStore()?.host
+      ? refreshHostContextIndex(original, token) : refreshUnboundContextIndex(original, token);
+  }
+  async function refreshUnboundContextIndex(original, token) {
     let controller, diagnostics, lease, deadlineAt;
     try {
       ready();
       if (readOnly) fail('invalid_input');
       const { payload, input } = contextInput('refreshContextIndex', original, supportedTypes), access = authorize('refreshContextIndex', input, payload, token);
+      diagnostics = { channels: { lexical: channel('unavailable'), semantic: channel(options.embedder ? 'unavailable' : 'absent') },
+        coverage: unknownCoverage(input), trace: trace({ semantic: Boolean(options.embedder) }) };
+      sampleTrace(diagnostics.trace);
+      if (options.embedder && !dispatch) { diagnostics.channels.semantic = channel('budget_denied'); fail('invalid_input'); }
+      deadlineAt = performance.now() + input.budget.maxMs; const projection = selected(input, access);
+      lease = acquireSidecar(projection, access); const storage = lease.storage;
+      const remaining = Math.floor(deadlineAt - performance.now());
+      if (remaining < 1) { diagnostics.coverage.stops.deadline = true; fail('index_unavailable'); }
+      const maintenance = storage.reconcile({ ...projection, budget: { ...input.budget, maxMs: remaining } }, { isCurrent: access.check });
+      diagnostics.trace.maintenance = maintenance.metrics;
+      access.check();
+      let vectorProgress = { attempted: 0, embedded: 0 }, preflight, current = storage.state(projection);
+      maintenanceCoverage(diagnostics.coverage, maintenance, { deadlineAt, maxItems: input.budget.maxItems });
+      if (!current.ready) {
+        diagnostics.coverage.maintenance.progress = maintenance.progress;
+        sampleTrace(diagnostics.trace); access.check();
+        return success({ status: 'rebuilding', progress: { lexical: maintenance.progress, transformed: maintenance.metrics.transformed,
+          embeddingAttempts: 0, embedded: 0 }, coverage: diagnostics.coverage, channels: diagnostics.channels,
+          ...(options.localStatus ? { trace: { localEmbedder: diagnostics.trace.localEmbedder } } : {}) });
+      }
+      diagnostics.channels.lexical = channel('ready');
+      if (options.embedder) {
+        controller = new AbortController(); controllers.add(controller);
+        const remainingItems = input.budget.maxItems - maintenance.metrics.transformed, remainingMs = Math.floor(deadlineAt - performance.now());
+        try {
+          if (remainingItems > 0 && remainingMs > 0) vectorProgress = await storage.refreshVectors({ ...projection,
+            budget: { maxItems: remainingItems, maxMs: remainingMs } }, dispatch.port(options.embedder,{signal:controller.signal,deadlineAt,
+            guard:()=>{access.check();storage.assertState(projection,current,{checkpoint:false});}}), { signal: controller.signal, maxBatchDocuments: options.policy.maxBatchDocuments,
+            isCurrent: () => { access.check(); return true; },
+            onProgress: progress => { vectorProgress = progress; } });
+          access.check();
+          preflight = storage.semanticPreflight(projection, options.embedder, { deadlineAt });
+          preflight.release?.();
+          diagnostics.channels.semantic = channel(preflight.state);
+        } catch (error) { diagnostics.channels.semantic = degradation(error); }
+      }
+      sampleTrace(diagnostics.trace);
+      access.check(); current = storage.state(projection);
+      if (!current.ready) fail('index_unavailable');
+      diagnostics.coverage = coverage(input, current, preflight, 'lexical', 0, 0, maintenance);
+      diagnostics.coverage.stops = { deadline: performance.now() >= deadlineAt,
+        budget: maintenance.metrics.transformed + vectorProgress.attempted >= input.budget.maxItems || diagnostics.channels.semantic.causes.includes('budget_denied') };
+      return success({ status: !options.embedder || diagnostics.channels.semantic.state === 'ready' ? 'complete' : 'partial',
+        progress: { lexical: maintenance.progress, transformed: maintenance.metrics.transformed,
+          embeddingAttempts: vectorProgress.attempted, embedded: vectorProgress.embedded }, coverage: diagnostics.coverage, channels: diagnostics.channels,
+          ...(options.localStatus ? { trace: { localEmbedder: diagnostics.trace.localEmbedder } } : {}) });
+    } catch (error) {
+      if (diagnostics && !['scope_changed', 'authority_required', 'store_closed'].includes(error.code)) sampleTrace(diagnostics.trace);
+      lease?.invalidate(error);
+      if (diagnostics && deadlineAt !== undefined) diagnostics.coverage.stops.deadline ||= performance.now() >= deadlineAt;
+      if (diagnostics) diagnostics.coverage.maintenance.reason ??= maintenanceReasons.get(error.reason) ?? null;
+      return failure(error, ['scope_changed', 'authority_required', 'store_closed'].includes(error.code) ? undefined : diagnostics);
+    }
+    finally { lease?.release(); if (controller) { assertContentPort({invoke:()=>controller.abort()}); controllers.delete(controller); } }
+  }
+  async function refreshHostContextIndex(original, token) {
+    let controller, diagnostics, lease, deadlineAt;
+    try {
+      ready();
+      if (readOnly) fail('invalid_input');
+      const { payload, input } = contextInput('refreshContextIndex', original, supportedTypes), access = authorize('refreshContextIndex', input, payload, token);
+      // A host's all-idle combined turn can reuse only a complete maintenance
+      // result, after rechecking its entire canonical/sidecar fence. This is
+      // content-free upkeep state; failures always take the normal refresh path.
+      const retained = maintenanceObservation.getStore();
+      if (retained?.host && retained.previous && await retained.previous.current()) {
+        access.check();
+        retained.current = retained.previous.current;
+        return retained.previous.result;
+      }
       diagnostics = { channels: { lexical: channel('unavailable'), semantic: channel(options.embedder ? 'unavailable' : 'absent') },
         coverage: unknownCoverage(input), trace: trace({ semantic: Boolean(options.embedder) }) };
       sampleTrace(diagnostics.trace);
@@ -633,7 +708,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       diagnostics.coverage.stops = { deadline: performance.now() >= deadlineAt,
         budget: maintenance.metrics.transformed + vectorProgress.attempted >= input.budget.maxItems || diagnostics.channels.semantic.causes.includes('budget_denied') };
       const observation = maintenanceObservation.getStore();
-      if (observation) {
+      if (observation && (observation.host || hasCommitDispatcher(db))) {
         const expected = current;
         observation.current = async () => {
           const check = () => {

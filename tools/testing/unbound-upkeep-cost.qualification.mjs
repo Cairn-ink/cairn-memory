@@ -17,7 +17,7 @@ const ns = { ownerId: 'synthetic-upkeep-cost', scope: 'personal', projectId: nul
 const methods = ['run', 'get', 'all', 'iterate', 'exec'];
 const median = values => { const sorted = [...values].sort((a,b) => a-b); return (sorted[9] + sorted[10]) / 2; };
 
-test('unbound idle upkeep statement and wall cost against main 39ae9111', { timeout: 120000 }, async t => {
+test('unbound and one-connection shared idle upkeep cost against main 39ae9111', { timeout: 120000 }, async t => {
   const w = createTestWorkspace(t, { prefix: 'unbound-upkeep-' }), previous = join(w.path, 'main');
   const archive = join(w.path, 'main.tar');
   const command = (program, args) => {
@@ -52,7 +52,7 @@ test('unbound idle upkeep statement and wall cost against main 39ae9111', { time
     });
   }
   const engines = {};
-  for (const [label, tree] of [['branch', root], ['main', previous]]) {
+  for (const [label, tree] of [['branch', root], ['shared', root], ['main', previous]]) {
     const { openMemoryCore } = await import(pathToFileURL(join(tree, 'core/contract.mjs')));
     const { createCairnServer } = await import(pathToFileURL(join(tree, 'adapters/mcp/server.mjs')));
     const { cardHost } = await import(pathToFileURL(join(tree, 'core/testing/raw-source-fixtures.mjs')));
@@ -69,12 +69,21 @@ test('unbound idle upkeep statement and wall cost against main 39ae9111', { time
     ok(await cards.call(seed, 'confirmCardDraft', { namespace: ns, actionId: 'confirm', cardId: card.id, expectedRevision: 1, applicability: 'current' }));
     seed.close();
     states.set(label, { arms: 0 });
-    const server = owner.run(label, () => createCairnServer({ path, namespace: ns, raw: false, privateCards: 'local-v1',
+    const configuration = { path, namespace: ns, raw: false, privateCards: 'local-v1',
       contextCounter: { id: 'synthetic-cost-counter', countTokens: text => Math.ceil(text.length / 4) },
       contextEmbedding: { embedder: { id: 'synthetic-cost-' + label, revision: '1', dimensions: 1, normalization: 'none',
         async embed(texts) { return texts.map(() => [1]); } },
-      policy: { family: 'hosted', maxRequests: 10000, maxUsd: 10000, maxConcurrent: 1, estimateUsd: () => 0 } } }));
+      policy: { family: 'hosted', maxRequests: 10000, maxUsd: 10000, maxConcurrent: 1, estimateUsd: () => 0 } } };
     const [a,b] = streams(), client = new Client({ name: 'synthetic-cost-client', version: '1' });
+    let server;
+    if (label === 'shared') {
+      const { createLocalSharedRuntime } = await import(pathToFileURL(join(root, 'adapters/mcp/local-shared-runtime.mjs')));
+      const host = createLocalSharedRuntime(configuration);
+      owner.run(label, () => host.attach(a,a));
+      server = { connect: async () => {}, close: () => host.close() };
+      assert.equal(host.inspect().connections, 1, 'shared cost measures exactly one connection');
+    } else server = owner.run(label, () => createCairnServer(configuration));
+
     w.defer(async () => { await client.close(); await server.close(); a.destroy(); b.destroy(); });
     await server.connect(new StdioServerTransport(a,a));
     await client.connect(new StdioServerTransport(b,b));
@@ -93,14 +102,17 @@ test('unbound idle upkeep statement and wall cost against main 39ae9111', { time
     return { counts, statements: Object.values(counts).reduce((a,b) => a+b,0), wallMs: performance.now()-started };
   };
   // Warm identical synthetic stores, then leave the recently demanded views idle.
-  for (let i = 0; i < 16; i++) for (const label of ['branch','main']) await pass(label, false);
-  const rows = { branch: [], main: [] };
-  for (let i = 0; i < passes; i++) for (const label of i % 2 ? ['main','branch'] : ['branch','main']) rows[label].push(await pass(label, true));
+  for (let i = 0; i < 16; i++) for (const label of ['branch','shared','main']) await pass(label, false);
+  const rows = { branch: [], shared: [], main: [] };
+  for (let i = 0; i < passes; i++) for (const label of i % 2 ? ['main','shared','branch'] : ['branch','shared','main']) rows[label].push(await pass(label, true));
   const summary = Object.fromEntries(Object.entries(rows).map(([label, values]) => [label, {
     statements: { median: median(values.map(row => row.statements)), max: Math.max(...values.map(row => row.statements)), total: values.reduce((n,row) => n+row.statements,0) },
     wallMs: { median: median(values.map(row => row.wallMs)), max: Math.max(...values.map(row => row.wallMs)), total: values.reduce((n,row) => n+row.wallMs,0) },
   }]));
   const flags = { moreStatements: summary.branch.statements.total > summary.main.statements.total,
     wallOverTenPercent: summary.branch.wallMs.total > summary.main.wallMs.total * 1.1 };
-  t.diagnostic('R2O3_UPKEEP_COST ' + JSON.stringify({ base, passes, interleaved: true, rows, summary, flags }));
+  flags.sharedMoreStatements = summary.shared.statements.total > summary.main.statements.total;
+  t.diagnostic('R2O4_UPKEEP_COST ' + JSON.stringify({ base, passes, interleaved: true, rows, summary, flags }));
+  assert.equal(summary.branch.statements.total, summary.main.statements.total, 'R2O4_UNBOUND_UPKEEP_COST');
+  assert.ok(!flags.sharedMoreStatements, 'R2O4_HOST_UPKEEP_COST');
 });

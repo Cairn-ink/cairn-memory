@@ -44,7 +44,7 @@ for (const mode of ['unbound', 'runtime', 'dispatcher']) for (const cap of ['req
   });
   t.mock.method(globalThis, 'clearTimeout', token => { if (!timers.has(token)) nativeClear(token); });
   const options = { path, namespace: ns, raw: false, contextCounter: counter,
-    ...(cap === 'concurrency' ? { privateCards: 'local-v1' } : {}),
+    ...((cap === 'concurrency' || mode === 'unbound') ? { privateCards: 'local-v1' } : {}),
     contextEmbedding: { embedder, policy: { family: 'hosted', maxRequests: cap === 'requests' ? 1 : 100,
       maxUsd: cap === 'usd' ? 1 : 100, maxConcurrent: 1, estimateUsd: () => 1 } } };
   const dispatcher = mode === 'dispatcher' ? createCommitDispatcher({ strict: true }) : null;
@@ -55,7 +55,11 @@ for (const mode of ['unbound', 'runtime', 'dispatcher']) for (const cap of ['req
   t.after(async () => { release.resolve(); await client.close(); await server.close(); a.destroy(); b.destroy(); });
   await server.connect(new StdioServerTransport(a, a));
   await client.connect(new StdioServerTransport(b, b));
-  if (cap !== 'concurrency') await context(client, { query: 'synthetic budget warm-up', types: ['memory'], intent: 'current', semantic: false });
+  // Coordinator 11-14 (A): main's unbound upkeep maintains the combined
+  // projection. Exercise the same ready projection so the query reaches the
+  // paid dispatch guard; all original send-count and denial assertions remain.
+  const types = mode === 'unbound' && cap !== 'concurrency' ? ['memory', 'card'] : ['memory'];
+  if (cap !== 'concurrency') await context(client, { query: 'synthetic budget warm-up', types, intent: 'current', semantic: false });
   assert.ok(pending, 'the real unbound server armed maintenance');
   for (let pass = 0; sends === 0 && pass < 12; pass++) {
     const before = arms; pending();
@@ -64,7 +68,7 @@ for (const mode of ['unbound', 'runtime', 'dispatcher']) for (const cap of ['req
   assert.equal(sends, 1, 'maintenance reached its paid request');
   if (cap !== 'concurrency') for (let i = 0; i < 20; i++) await turn();
   try {
-    const result = await context(client, { query: 'synthetic unique semantic budget query', types: ['memory'],
+    const result = await context(client, { query: 'synthetic unique semantic budget query', types,
       intent: 'current', semantic: true, deadlineMs: 5000 });
     assert.equal(sends, mode === 'unbound' ? 1 : 2, 'R2O3_UNBOUND_SHARED_BUDGET ' + mode + ' ' + cap);
     assert.equal(result.diagnostics.candidates.channels.semantic.causes.includes('budget_denied'), mode === 'unbound',

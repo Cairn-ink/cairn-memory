@@ -222,7 +222,7 @@ export function createLocalCairnRuntime(options = {}, { dispatcher, signal, shar
   const refresh = inMaintenance(() => (context && Boolean(options.contextEmbedding) && options.contextSemantic !== false || typeof model?.consolidate === 'function')
     ? startContextMaintenance(maintenance.route.core(core), context ?? { readSet: [binding] },
       { cards: typeof model?.consolidate === 'function', cardRaw, semantic: Boolean(options.contextEmbedding) && options.contextSemantic !== false,
-        run: maintenanceRun, demand: contextDemand }) : null);
+        run: maintenanceRun, demand: contextDemand, host: scopedBudget }) : null);
   if (rawSearch) inMaintenance(() => rawSearch.start());
   else if (core.getRawSearchStatus) inMaintenance(() => { void core.getRawSearchStatus({ namespace: binding }); });
   const hasRawManager = Boolean(rawSearch || core.maintainRawSearch);
@@ -271,7 +271,7 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
   let disposed = false, disposing;
   const rawRequests = new Set();
   const refresh = maintenance && (context && contextSemantic || typeof model?.consolidate === 'function')
-    ? startContextMaintenance(core, context ?? { readSet: [binding] }, { cards: typeof model?.consolidate === 'function', cardRaw, semantic: contextSemantic, demand: contextDemand }) : null;
+    ? startContextMaintenance(core, context ?? { readSet: [binding] }, { cards: typeof model?.consolidate === 'function', cardRaw, semantic: contextSemantic, demand: contextDemand, host: Boolean(dispatcher) }) : null;
   const dispose = () => {
     if (disposed) return disposing;
     disposed = true;
@@ -681,12 +681,46 @@ export function createContextMaintenanceDemand(now = Date.now) {
 }
 
 /** Bounded embedding refresh; no provider call holds up capture or tool delivery. */
-export function startContextMaintenance(core, access, { cards = false, cardRaw = false, semantic = true, run,
+// Coordinator 11-14 (A): demand probes and idle skipping belong to hosts.
+// Keep main's ordinary upkeep body verbatim, including refusal and read order.
+export function startContextMaintenance(core, access, options = {}) {
+  return options.host ? startHostContextMaintenance(core, access, options)
+    : startUnboundContextMaintenance(core, access, options);
+}
+
+function startUnboundContextMaintenance(core, access, { cards = false, cardRaw = false, semantic = true } = {}) {
+  const { readSet } = access;
+  const capabilities = core.getContextReadCapabilities?.();
+  let types = capabilities?.ok ? capabilities.value.types : ['memory'];
+  let closed = false, active, timer;
+  const arm = () => {
+    if (closed) return;
+    timer = setTimeout(() => {
+      active = (async () => {
+        if (cards) for (const namespace of readSet) {
+          if (closed) return;
+          const pass = await core.maintainCards({ namespace, budget: { maxItems: 512, maxMs: 30000 }, ...(cardRaw ? { rawSpans: true } : {}) });
+          if (pass.ok && pass.value.state === 'paused') continue;
+          if (!pass.ok || pass.value.state === 'refused') return;
+        }
+        if (cards) { const current = core.getContextReadCapabilities?.(); if (current?.ok) types = current.value.types; }
+        if (!closed && access.call && (semantic || cards)) await access.call(core, 'refreshContextIndex', {
+          readSet, types, intent: 'current', budget: { maxItems: 16, maxMs: 1000 },
+        });
+      })().catch(() => {}).finally(() => { active = null; arm(); });
+    }, 1000);
+    timer.unref();
+  };
+  arm();
+  return { async close() { closed = true; clearTimeout(timer); await active; } };
+}
+
+function startHostContextMaintenance(core, access, { cards = false, cardRaw = false, semantic = true, run,
   demand = createContextMaintenanceDemand() } = {}) {
   const { readSet } = access;
   const capabilities = core.getContextReadCapabilities?.();
   let types = capabilities?.ok ? capabilities.value.types : ['memory'];
-  let closed = false, active, timer, nextView = 0;
+  let closed = false, active, timer, nextView = 0, idleCombined;
   const idleViews = new Map(), viewKey = view => view.length === 2 ? 'combined' : view[0];
   const noRemainingWork = (result, view) => result?.ok && result.value.status === 'complete' &&
     result.value.coverage?.maintenance?.state === 'ready' && view.every(type => {
@@ -729,10 +763,12 @@ export function startContextMaintenance(core, access, { cards = false, cardRaw =
           readSet, types: selectedTypes, intent: 'current', budget: { maxItems: 16, maxMs: 1000 },
         });
         if (!closed && access.call && (semantic || cards)) {
-          const { result, current } = await observeContextMaintenance(() => run ? run(refresh, 1000) : refresh());
+          const { result, current } = await observeContextMaintenance(() => run ? run(refresh, 1000) : refresh(),
+            { host: true, previous: pending.length === 0 && selectedTypes === types ? idleCombined : undefined });
           const key = viewKey(selectedTypes);
           if (noRemainingWork(result, selectedTypes) && current) idleViews.set(key, current);
           else idleViews.delete(key);
+          if (key === 'combined') idleCombined = noRemainingWork(result, selectedTypes) && current ? { result, current } : undefined;
         }
       }).catch(() => {}).finally(() => { active = null; arm(); });
     }, 1000);
