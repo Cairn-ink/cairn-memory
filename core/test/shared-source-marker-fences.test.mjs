@@ -472,6 +472,7 @@ function assertMarkerFences(sources){
   ],'suppressReceiptsInside [caller-catalog] every caller is classified: '+writers.map(label).join(', '));
   for(const site of writers){
     const source=sources.get(site.file),name=owner(site),args=site.node.arguments;
+    assert.ok(args.every(node=>node.type!=='SpreadElement'),classified(site,'helper-arguments','marker helper arguments are never spread'));
     assert.ok(named(args?.[0],'db')&&named(args?.[1],'ns'),classified(site,'helper-arguments','expected db and ns'));
     if(name==='removeReceipts'){
       assert.equal(args.length,5,'receipt removal leaves denySharedSource at false');continue;
@@ -493,6 +494,17 @@ function assertMarkerFences(sources){
     }
   }
   // Token subtraction exists only where a correction writes markers and where the verifier derives them.
+  // No alias, indirect invocation or spread argument can evade this census.
+  for(const [file,source]of sources)for(const site of source.nodes)if(named(site.node,'receiptDenialTokens')){
+    const parent=site.ancestors.at(-1);
+    assert.ok((parent?.type==='ImportSpecifier'&&parent.imported?.name===parent.local?.name)||
+      (parent?.type==='ExportSpecifier'&&parent.local?.name===parent.exported?.name)||
+      (parent?.type==='FunctionDeclaration'&&parent.id===site.node)||
+      (parent?.type==='CallExpression'&&!parent.optional&&parent.callee===site.node),
+      classified(site,'token-reference','expected a direct token helper reference'));
+  }
+  for(const site of calls(sources,'receiptDenialTokens'))assert.ok(site.node.arguments.every(node=>node.type!=='SpreadElement'),
+    classified(site,'token-reference','token helper arguments are never spread'));
   const subtracting=calls(sources,'receiptDenialTokens').filter(site=>site.node.arguments.length!==1);
   assert.deepEqual(subtracting.map(site=>site.file+':'+site.node.arguments.length+':'+sources.get(site.file).text(site.node.arguments[1])).sort(),[
     'content-suppression-storage.mjs:2:replacements','content-write-safety.mjs:2:replacements',
@@ -803,6 +815,24 @@ test('the marker catalog rejects missing epoch advances and unclassified writers
   const substitute=(from,to)=>{assert.equal(runtime.source.split(from).length,2,'one mutation site: '+from);return runtime.source.replace(from,to);};
   mutations.push(substitute('value.receipts.map(receipt => ({ receipt_key: receiptKey(receipt)','receiptSnapshot.map(receipt => ({ receipt_key: receipt.receipt_key'));
   mutations.push(substitute('cachedContentLayout(db)?.suppressionRevision ? undefined : receiptSnapshot);','cachedContentLayout(db)?.suppressionRevision ? undefined : receiptSnapshot, receiptSnapshot);'));
+  // Spread arguments keep the argument count while moving or adding a replacement list.
+  mutations.push(substitute('cachedContentLayout(db)?.suppressionRevision ? undefined : receiptSnapshot,','...[undefined, receiptSnapshot],'));
+  mutations.push(substitute('cachedContentLayout(db)?.suppressionRevision ? undefined : receiptSnapshot);','...[undefined, receiptSnapshot]);'));
+  const safety=original.get('content-safety.mjs');
+  const tokenMutations=[
+    [/receiptDenialTokens\(\[receipt\]\)/,'receiptDenialTokens(...[[receipt], [receipt]])'],
+    [/import \{ receiptDenialTokens, receiptCoordinateStateInside \} from '\.\/raw-source-roots\.mjs';/,
+      "import { receiptDenialTokens as denialTokens, receiptDenialTokens, receiptCoordinateStateInside } from './raw-source-roots.mjs';"],
+  ];
+  for(const [from,to]of tokenMutations){
+    assert.equal(safety.source.split(from).length,2,'one token mutation site: '+from);
+    const mutated=new Map(original);mutated.set('content-safety.mjs',inventory('content-safety.mjs',safety.source.replace(from,to)));
+    assert.throws(()=>assertMarkerFences(mutated),error=>{
+      assert.ok(error instanceof assert.AssertionError,'unexpected AST shapes must be assertion failures, never TypeError');
+      assert.match(error.message,/content-safety\.mjs:\d+ .*\[token-reference\]/,'the assertion names the token helper reference');
+      return true;
+    });
+  }
   for(const source of mutations){
     const mutated=new Map(original);mutated.set('runtime.mjs',inventory('runtime.mjs',source));
     assert.throws(()=>assertMarkerFences(mutated),error=>{
