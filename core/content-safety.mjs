@@ -475,9 +475,11 @@ export function receiptDeliverySnapshot(db, entries, memo = createContentReadMem
       CROSS JOIN memories m ON m.id=r.memory_id WHERE r.memory_id=? AND m.owner_id=? AND m.scope=? AND m.project_id=?
       ORDER BY r.created_at,r.id LIMIT 1 OFFSET ?`).get(entry.memoryId, ...boundary(ns), options.offset - 1);
     const total = options.totals === false ? null : coordinates.total;
+    // Final recall entries already carry their requested order. Keep one job
+    // per Memory so uncapped neighbours never acquire a recent projection.
     const job = { key, namespace: ns, id: entry.memoryId, owner: ns.ownerId, scope: ns.scope, project: ns.projectId ?? '',
       limit: options.limit ?? 101, afterTime: after?.createdAt ?? '', afterId: after?.id ?? '',
-      position: options.offset ?? 0, recent: Boolean(options.recent), idOrder: Boolean(options.idOrder), total };
+      position: options.offset ?? 0, recent: entry.receiptOrder === 'recent' || Boolean(options.recent), idOrder: Boolean(options.idOrder), total };
     jobs.push(job);
     job.coordinates = coordinates;
     if (options.includeRecent) jobs.push({ ...job, key: key + ':recent', recent: true, afterTime: '', afterId: '', position: 0 });
@@ -557,7 +559,7 @@ export function receiptDeliverySnapshot(db, entries, memo = createContentReadMem
                     ORDER BY older.created_at DESC LIMIT 1)
                 ORDER BY candidate.id LIMIT 1))
             FROM recent_keys CROSS JOIN json_each(json_array(recent_keys.cursor))
-            WHERE recent_keys.cursor IS NOT NULL LIMIT ? OFFSET 1)
+            WHERE recent_keys.cursor IS NOT NULL LIMIT CAST(? AS INTEGER) OFFSET 1)
           SELECT json_extract(cursor,'$[1]') FROM recent_keys WHERE cursor IS NOT NULL)
         WHERE m.owner_id=json_extract(j.value,'$.owner') AND m.scope=json_extract(j.value,'$.scope')
           AND m.project_id=json_extract(j.value,'$.project') AND r.memory_id=m.id`).all(JSON.stringify(inputs), chunk);

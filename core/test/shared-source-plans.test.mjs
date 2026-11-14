@@ -276,7 +276,7 @@ function assertPlan(db,sql,sites,statistics) {
   }
   if(recentKeys){
     assert.match(sql,/ON r\.id IN \( WITH RECURSIVE recent_keys\(cursor\) AS \( SELECT json_array\(json_extract\(j\.value,'\$\.afterTime'\),json_extract\(j\.value,'\$\.afterId'\)\) UNION ALL/);
-    assert.match(sql,/FROM recent_keys CROSS JOIN json_each\(json_array\(recent_keys\.cursor\)\) WHERE recent_keys\.cursor IS NOT NULL LIMIT \? OFFSET 1\) SELECT json_extract\(cursor,'\$\[1\]'\) FROM recent_keys WHERE cursor IS NOT NULL\)/,
+    assert.match(sql,/FROM recent_keys CROSS JOIN json_each\(json_array\(recent_keys\.cursor\)\) WHERE recent_keys\.cursor IS NOT NULL LIMIT CAST\(\? AS INTEGER\) OFFSET 1\) SELECT json_extract\(cursor,'\$\[1\]'\) FROM recent_keys WHERE cursor IS NOT NULL\)/,
       label+' only the skipped seed and a bounded number of recursive keys');
     assert.equal(plan.filter(row=>row.detail.startsWith('SEARCH candidate ')&&
       row.detail.includes('memory_receipts')&&row.detail.includes('memory_id=? AND created_at=?')).length,2,label+' both tie seeks fix a timestamp');

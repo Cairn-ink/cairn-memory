@@ -162,6 +162,171 @@ test('recent refills skip interleaved denials across a tie and older timestamps 
   assert.deepEqual(last.deliveryMemoryStates.get(deliveryKey(f.memory)), { total: 73, complete: true, after, recent: true });
 });
 
+test('recent refills keep explicit page cuts when a chunk splits a mixed timestamp group', async t => {
+  const f = await recentFixture(t, 41, i => i < 2 ? recentTime(90000 - i) : i < 40 ? tieTime : recentTime(0));
+  const kept = [1, 34, 36, 37, 39, 40].map(recentId);
+  const stored = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(f.memory.id);
+  for (const row of stored.filter(row => !kept.includes(row.id))) {
+    // Each refusal is independently forced by just one of the two tokens.
+    const token = receiptDenialTokens([row])[Number(row.id.slice(1)) % 2];
+    f.db.prepare('INSERT INTO suppressed VALUES(?,?,?,?)').run(ns.ownerId, ns.scope, ns.projectId, token);
+  }
+  const first = await trace(() => receiptDeliverySnapshot(f.db, [{ namespace: ns, memoryId: f.memory.id }],
+    undefined, [], { recent: true, limit: 4 }));
+  const headers = first.result.deliveryHeaders.get(deliveryKey(f.memory));
+  assert.deepEqual(headers.map(row => row.id), [1, 34, 36, 37].map(recentId));
+  assert.deepEqual(headers.map(row => row.position), [2, 35, 37, 38]);
+  assert.equal(first.rows.filter(row => row.sql.includes('WITH RECURSIVE recent_keys(cursor)')).length, 2);
+  const checked = first.rows.filter(isLookup).flatMap(row => JSON.parse(row.args[0])
+    .map(value => Array.isArray(value) ? value[3] : value));
+  assert.deepEqual([...new Set(checked)].sort(), receiptDenialTokens(stored).sort(), 'both tokens of every visited header');
+  const after = { createdAt: tieTime, id: recentId(37) };
+  const second = receiptDeliverySnapshot(f.db, [{ namespace: ns, memoryId: f.memory.id }], undefined, [],
+    { recent: true, limit: 4, after, offset: 38 });
+  assert.deepEqual(second.deliveryHeaders.get(deliveryKey(f.memory)).map(row => row.id), [39, 40].map(recentId));
+  assert.deepEqual(second.deliveryHeaders.get(deliveryKey(f.memory)).map(row => row.position), [40, 41]);
+  assert.deepEqual(second.deliveryMemoryStates.get(deliveryKey(f.memory)), { total: 41, complete: true, after, recent: true });
+});
+
+test('distinct-time recent continuation has explicit expected pages', async t => {
+  const f = await recentFixture(t, 12, recentTime);
+  let after;
+  for (const page of [[11, 10, 9, 8], [7, 6, 5, 4], [3, 2, 1, 0], []]) {
+    const memo = receiptDeliverySnapshot(f.db, [{ namespace: ns, memoryId: f.memory.id }], undefined, [],
+      { recent: true, limit: 4, after });
+    const headers = memo.deliveryHeaders.get(deliveryKey(f.memory));
+    assert.deepEqual(headers.map(row => row.id), page.map(recentId));
+    if (headers.length) after = { createdAt: headers.at(-1).created_at, id: headers.at(-1).id };
+  }
+});
+
+// Recognize both the candidate's timestamp walk and the new bounded statement.
+const isRecentStatement = row => row.sql.includes('WITH RECURSIVE recent_keys(cursor)') ||
+  row.sql.startsWith('SELECT r.created_at AS time FROM memories') ||
+  row.sql.startsWith('SELECT r.id,r.memory_id,r.receipt_key,') && row.sql.includes('AND r.created_at=? AND r.id>?');
+
+for (const ties of [false, true]) test(`uncapped recall reads no recent projection, ties=${ties}`, async t => {
+  const f = await recentFixture(t, 12, ties ? () => tieTime : recentTime);
+  f.model.countTokens = () => 1;
+  let sent;
+  const rank = f.model.rank;
+  f.model.rank = request => { sent = structuredClone(request.input); return rank(request); };
+  const before = ok(f.core.get({ namespace: ns, memoryId: f.memory.id }));
+  const measured = await trace(() => f.core.recall({ readSet: [ns], query: survivor }));
+  const result = ok(measured.result);
+  assert.equal(measured.rows.filter(isRecentStatement).length, 0, 'uncapped packing and finalization request no recent headers');
+  assert.equal(result.memories.length, 1);
+  const expected = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(recentId);
+  assert.deepEqual(sent.candidates[0].receipts.map(row => row.id), expected);
+  assert.deepEqual(result.memories[0].receipts.map(row => row.id), expected);
+  assert.deepEqual(result.memories[0].receipts, before.receipts);
+  assert.equal(result.memories[0].receiptCount, 12);
+  assert.equal(Object.hasOwn(result.memories[0], 'receiptsOmitted'), false);
+  assert.equal(Object.hasOwn(result, 'recallTruncated'), false);
+  assert.equal(result.coverage, 'complete');
+  const texts = measured.rows.filter(row => row.sql.startsWith('SELECT r.rowid AS cursor_row,r.*'));
+  assert.equal(texts.length, 2, 'one forward text read in preparation and one in the final proof');
+});
+
+async function cappedRecallFixture(t) {
+  const f = await recentFixture(t, 12, i => i >= 8 ? tieTime : recentTime(i));
+  const shared = receipt('synthetic-recent-11', 'Synthetic recent support 11');
+  const sibling = ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic recent forgotten sibling', kind: 'fact' },
+    receipts: [shared] })).memory;
+  const independent = ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic recent independent', kind: 'fact' },
+    receipts: [receipt('synthetic-recent-independent')] })).memory;
+  const erased = f.db.prepare('SELECT id FROM receipts WHERE memory_id IN (?,?) AND event_id=?')
+    .all(f.memory.id, sibling.id, shared.eventId).map(row => row.id);
+  // A deterministic counter gives rank room for exactly six receipt identities:
+  // five from the crowded candidate and the independent candidate's single one.
+  f.model.countTokens = text => {
+    let input;
+    try { input = JSON.parse(text).input; } catch { return 1; }
+    return input?.candidates ? input.candidates.reduce((sum, candidate) => sum + candidate.receipts.length * 1000, 0) : 1;
+  };
+  return { ...f, sibling, independent, erased, shared };
+}
+
+test('capped recall requests only that candidate in recent order and skips a forgotten sibling', async t => {
+  const f = await cappedRecallFixture(t);
+  ok(f.core.forget({ namespace: ns, memoryId: f.sibling.id, expectedRevision: f.sibling.revision }));
+  let sent;
+  const rank = f.model.rank;
+  f.model.rank = request => { sent = structuredClone(request.input); return rank(request); };
+  const measured = await trace(() => f.core.recall({ readSet: [ns], query: 'Synthetic recent', limit: 2 }));
+  const result = ok(measured.result);
+  const recent = measured.rows.filter(isRecentStatement);
+  assert.equal(recent.length, 2, 'one lazy request and one final proof, independent of timestamps');
+  for (const row of recent) {
+    assert.deepEqual(JSON.parse(row.args[0]).map(job => job.id), [f.memory.id], 'no recent job for the uncapped candidate');
+    assert.match(row.sql, /LIMIT CAST\(\? AS INTEGER\)/);
+    const index = measured.rows.indexOf(row);
+    const text = measured.rows.findIndex((next, position) => position > index && next.snapshot === row.snapshot &&
+      next.sql.startsWith('SELECT r.rowid AS cursor_row,r.*') && next.args.at(-1) === f.memory.id);
+    assert.ok(text > index);
+    assert.ok(measured.rows.slice(index + 1, text).some(isLookup), 'marker lookup precedes recent text in each transaction');
+  }
+  assert.equal(result.memories.length, 2);
+  const returned = result.memories.find(item => item.memory.id === f.memory.id);
+  const expected = [8, 9, 10, 7, 6].map(recentId);
+  assert.deepEqual(returned.receipts.map(row => row.id), expected);
+  assert.deepEqual(sent.candidates.find(item => item.memory.id === f.memory.id).receipts, returned.receipts);
+  assert.equal(returned.receiptCount, 12);
+  assert.equal(returned.receiptsOmitted, 7);
+  const independent = result.memories.find(item => item.memory.id === f.independent.id);
+  assert.equal(independent.receipts.length, 1);
+  assert.equal(Object.hasOwn(independent, 'receiptsOmitted'), false);
+  assert.deepEqual(result.recallTruncated, { navigationItemsOmitted: 0, candidatesOmitted: 0,
+    candidatesShortened: 0, receiptListsCapped: 1 });
+  assert.equal(result.coverage, 'budget_exhausted');
+  absent({ result, sent }, [f.shared.excerpt, f.sibling.content, ...f.erased]);
+});
+
+for (const change of ['forget', 'correct']) test(`lazy recent read observes ${change} after preparation`, async t => {
+  const f = await cappedRecallFixture(t);
+  const runtime = createMemoryRuntime({ path: f.path }); t.after(() => runtime.close());
+  const ref = { namespace: ns, memoryId: f.memory.id, revision: f.memory.revision };
+  const prepared = await trace(() => runtime.recallSnapshot([ref], null));
+  assert.equal(prepared.rows.filter(isRecentStatement).length, 0);
+  if (change === 'correct') {
+    ok(f.core.correct({ namespace: ns, memoryId: f.memory.id, expectedRevision: f.memory.revision,
+      content: 'Synthetic corrected recent memory', kind: 'fact', receipt: receipt('synthetic-recent-correction') }));
+    const measured = await trace(() => {
+      assert.throws(() => prepared.result.recentReceipts(ns, ref, 5), error => error.code === 'revision_conflict');
+    });
+    assert.equal(measured.rows.filter(isRecentStatement).length, 0, 'revision checked before recent headers or text');
+    assert.equal(measured.rows.some(row => row.sql.startsWith('SELECT r.rowid AS cursor_row,r.*')), false);
+  } else {
+    ok(f.core.forget({ namespace: ns, memoryId: f.sibling.id, expectedRevision: f.sibling.revision }));
+    const measured = await trace(() => prepared.result.recentReceipts(ns, ref, 5));
+    assert.equal(measured.rows.filter(isRecentStatement).length, 1);
+    assert.deepEqual(measured.result.map(row => row.id), [8, 9, 10, 7, 6].map(recentId));
+    absent({ recent: measured.result }, [f.shared.excerpt, ...f.erased]);
+    const final = runtime.recallSnapshot([{ ...ref, receiptOrder: 'recent', receiptLimit: 5 }], [0]);
+    assert.deepEqual(final[0].receipts, measured.result, 'the final proof revalidates the post-change delivery');
+  }
+});
+
+test('final recall proof refuses a correction after the lazy recent read', async t => {
+  const f = await cappedRecallFixture(t);
+  ok(f.core.forget({ namespace: ns, memoryId: f.sibling.id, expectedRevision: f.sibling.revision }));
+  const rank = f.model.rank;
+  let ranked = false;
+  f.model.rank = request => {
+    ranked = true;
+    assert.deepEqual(request.input.candidates.find(item => item.memory.id === f.memory.id).receipts.map(row => row.id),
+      [8, 9, 10, 7, 6].map(recentId));
+    ok(f.core.correct({ namespace: ns, memoryId: f.memory.id, expectedRevision: f.memory.revision,
+      content: 'Synthetic corrected after rank', kind: 'fact', receipt: receipt('synthetic-after-rank') }));
+    return rank(request);
+  };
+  const measured = await trace(() => f.core.recall({ readSet: [ns], query: 'Synthetic recent', limit: 2 }));
+  assert.equal(ranked, true);
+  assert.equal(measured.result.ok, false);
+  assert.ok(['revision_conflict', 'index_revision_conflict', 'evidence_unavailable'].includes(measured.result.error.code));
+  absent({ result: measured.result }, ['Synthetic recent support', ...f.erased]);
+});
+
 for (const contextMode of ['source-evidence', 'rationale-evidence'])
 test(`${contextMode} recall resolves provenance only in its two fetched-source snapshots`, { timeout: 15000 }, async t => {
   const f = await correctionFixture(t, { base: 33, mode: 'safety' });

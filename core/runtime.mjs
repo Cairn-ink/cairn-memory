@@ -722,14 +722,14 @@ export function createMemoryRuntime(input, internal) {
       rationale: rationaleStorage.inspectInside(ns, { memoryId: row.id, revision: row.revision }, 'decision-context', memo) } : {}) };
   }
 
-  // One preparation snapshot for the complete selected recall set. Paging and
-  // token packing below use detached projections; finalization owns a new read.
+  // One preparation snapshot for the complete selected recall set. Paging uses
+  // detached projections; capped recent lists and finalization own fresh reads.
   function prepareRecall(entries, includeQualification, contextMode) {
     ready();
-    const pages = new Map(), recentPages=new Map();
+    const pages = new Map();
     const stamp = (ns,id) => JSON.stringify([boundary(internalNamespace(ns)),id]);
     readTransaction(db, () => {
-      const memo = usageSnapshot(entries, contextMode,{limit:203,includeRecent:!isSourceContext(contextMode)});
+      const memo = usageSnapshot(entries, contextMode,{limit:203});
       for (const entry of entries) {
         const ns = entry.namespace, row = currentRow(ns,entry.memoryId);
         if (!safeMemory(ns,row) || row.revision !== entry.revision) fail('revision_conflict');
@@ -739,7 +739,6 @@ export function createMemoryRuntime(input, internal) {
           catch (error) { if(error.code!=='context_item_too_large')throw error; pages.set(stamp(ns,row.id),{oversized:true}); }
         } else {
           const receipts = receiptPrefix(ns,row,0,202,memo), positions = receiptPageOffsets.get(receipts);
-          recentPages.set(stamp(ns,row.id),receiptRecent(ns,row,202,memo));
           pages.set(stamp(ns,row.id),{memory:detailDto(row),receipts,receiptOffsets:positions.offsets,
             receiptEnd:positions.end,epoch:currentEpoch,
             ...(includeQualification ? {qualification:safeQualification(ns,row,memo)} : {})});
@@ -759,10 +758,7 @@ export function createMemoryRuntime(input, internal) {
           return {...page,receipts:start < 0 ? [] : page.receipts.slice(start,end),
             receiptOffsets:start < 0 ? [] : page.receiptOffsets.slice(start,end)};
         },
-        recentReceipts(ns,ref,count) {
-          const page=pages.get(stamp(ns,ref.memoryId));
-          return recentPages.get(stamp(ns,ref.memoryId)).slice(0,count);
-        },
+        recentReceipts,
     };
   }
 
@@ -823,7 +819,7 @@ export function createMemoryRuntime(input, internal) {
         if (epoch(namespace) !== indexRevision || cachedContentLayout(db)?.suppressionRevision && suppressionEpoch !== undefined && suppressionEpoch !== contentSuppressionRequestFenceInside(db, namespace.ownerId)) fail('index_revision_conflict');
       }
       const entries = (isSourceContext(contextMode) ? candidates : selected.map(index => candidates[index]));
-      const memo = isSourceContext(contextMode) ? usageSnapshot(entries, contextMode) : receiptDeliverySnapshot(db,entries,undefined,[],{limit:203,includeRecent:entries.some(entry=>entry.receiptOrder==='recent')});
+      const memo = isSourceContext(contextMode) ? usageSnapshot(entries, contextMode) : receiptDeliverySnapshot(db,entries,undefined,[],{limit:203});
       if (isSourceContext(contextMode)) {
         const sources = rows.map((row, index) => {
           const source = readUsageEvidence(candidates[index].namespace, row, contextMode, memo);
