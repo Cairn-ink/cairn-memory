@@ -830,7 +830,8 @@ export function createMemoryRuntime(input, internal) {
         });
         return selected.map(index => sources[index]);
       }
-      const qualifications = includeQualification ? new Map(selected.map(index => [index, safeQualification(candidates[index].namespace, rows[index], memo)])) : null;
+      const qualifications = includeQualification ? rows.map((row, index) => selected.includes(index)
+        ? safeQualification(candidates[index].namespace, row, memo) : qualificationStorage.inspect(row)) : null;
       return selected.map((index) => {
         const memory = detailDto(rows[index]);
         const capped = candidates[index].receiptOrder === 'recent';
@@ -838,7 +839,7 @@ export function createMemoryRuntime(input, internal) {
           : receiptPrefix(candidates[index].namespace, rows[index], 0, candidates[index].receiptLimit, memo);
         return { memory, receipts, receiptCount: memory.receiptCount,
           ...(capped ? { receiptsOmitted: memory.receiptCount - receipts.length } : {}),
-          ...(includeQualification ? { qualification: qualifications.get(index) } : {}) };
+          ...(includeQualification ? { qualification: qualifications[index] } : {}) };
       });
     }, undefined, { deferred: true });
   }
