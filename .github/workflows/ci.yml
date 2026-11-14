@@ -235,7 +235,7 @@ jobs:
           - {node-version: '24.22.1', key: '24-22-1'}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: Require successful jobs and attempt-pinned pass markers
+      - name: Require successful shard jobs and their own pass markers
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}

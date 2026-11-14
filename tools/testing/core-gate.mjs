@@ -2,7 +2,13 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 // The needs aggregate alone cannot prove that all matrix legs succeeded.
-// Resolve jobs in this attempt, then pin each marker to that job's attempt.
+// Resolve the shard jobs listed for this attempt, then require each job's own
+// pass marker. GitHub lists a job carried over by "re-run failed jobs" with the
+// current attempt number and a new id, but keeps its original start and
+// completion times, so the marker is the one uploaded inside that time window.
+// A marker from an earlier run of the same shard predates the job's start.
+const MARKER_SLACK_MS = 5000;
+
 export async function checkGate({ nodeKey, shards, needsResult, token, repository, runId, runAttempt,
   fetchImpl = globalThis.fetch, log = console.log }) {
   if (needsResult !== 'success') throw new Error(`needs result is ${needsResult ?? 'missing'}; expected success`);
@@ -47,20 +53,27 @@ export async function checkGate({ nodeKey, shards, needsResult, token, repositor
     if (matches.length !== 1) throw new Error(`${name}: expected exactly one job, found ${matches.length}`);
     const job = matches[0];
     if (job.conclusion !== 'success') throw new Error(`${name}: conclusion ${job.conclusion ?? 'missing'}`);
-    if (!Number.isSafeInteger(job.run_attempt) || job.run_attempt < 1 || job.run_attempt > Number(runAttempt)) {
-      throw new Error(`${name}: invalid run_attempt`);
+    const started = Date.parse(job.started_at), completed = Date.parse(job.completed_at);
+    if (!Number.isFinite(started) || !Number.isFinite(completed) || completed < started) {
+      throw new Error(`${name}: missing or invalid job start/completion time`);
     }
-    selected.push({ shard, job });
+    selected.push({ shard, job, started, completed });
   }
   const artifacts = await pages('/artifacts', 'artifacts');
-  for (const { shard, job } of selected) {
-    const marker = `core-pass-${nodeKey}-${shard}-${job.run_attempt}`;
-    if (!artifacts.some(artifact => artifact?.name === marker && artifact.expired === false)) {
-      throw new Error(`${job.name}: missing non-expired marker ${marker}`);
+  for (const { shard, job, started, completed } of selected) {
+    const pattern = new RegExp(`^core-pass-${nodeKey}-${shard}-([1-9]\\d*)$`);
+    const markers = artifacts.filter(artifact => {
+      const match = pattern.exec(artifact?.name ?? '');
+      const created = Date.parse(artifact?.created_at);
+      return match && Number(match[1]) <= Number(runAttempt) && artifact.expired === false &&
+        Number.isFinite(created) && created >= started && created <= completed + MARKER_SLACK_MS;
+    });
+    if (markers.length !== 1) {
+      throw new Error(`${job.name}: expected one non-expired marker uploaded during the job, found ${markers.length}`);
     }
-    log(`Checked ${job.name}: success, job attempt ${job.run_attempt}, marker ${marker}`);
+    log(`Checked ${job.name}: success, ran ${job.started_at}..${job.completed_at}, marker ${markers[0].name}`);
   }
-  log(`Core ${nodeKey} gate passed: ${shards} successful jobs and attempt-pinned markers`);
+  log(`Core ${nodeKey} gate passed: ${shards} successful jobs, each with its own pass marker`);
 }
 
 export async function main(args = process.argv.slice(2), env = process.env) {
