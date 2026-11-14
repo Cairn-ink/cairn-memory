@@ -17,7 +17,11 @@ const ns = { ownerId: 'synthetic-upkeep-cost', scope: 'personal', projectId: nul
 const methods = ['run', 'get', 'all', 'iterate', 'exec'];
 const median = values => { const sorted = [...values].sort((a,b) => a-b); return (sorted[9] + sorted[10]) / 2; };
 
-test('unbound and one-connection shared idle upkeep cost against main 39ae9111', { timeout: 120000 }, async t => {
+for (const [shape, demand] of [
+  ['separate', [['memory'], ['card']]],
+  ['combined-only', [['memory', 'card']]],
+  ['mixed', [['memory', 'card'], ['memory'], ['card']]],
+]) test(`unbound and one-connection shared idle upkeep cost: ${shape} against main 39ae9111`, { timeout: 120000 }, async t => {
   const w = createTestWorkspace(t, { prefix: 'unbound-upkeep-' }), previous = join(w.path, 'main');
   const archive = join(w.path, 'main.tar');
   const command = (program, args) => {
@@ -87,7 +91,7 @@ test('unbound and one-connection shared idle upkeep cost against main 39ae9111',
     w.defer(async () => { await client.close(); await server.close(); a.destroy(); b.destroy(); });
     await server.connect(new StdioServerTransport(a,a));
     await client.connect(new StdioServerTransport(b,b));
-    for (const type of ['memory', 'card']) await context(client, { query: 'synthetic upkeep', types: [type], intent: 'current', semantic: false });
+    for (const types of demand) await context(client, { query: 'synthetic upkeep', types, intent: 'current', semantic: false });
     engines[label] = { client, context };
   }
   const pass = async (label, measured) => {
@@ -112,7 +116,11 @@ test('unbound and one-connection shared idle upkeep cost against main 39ae9111',
   const flags = { moreStatements: summary.branch.statements.total > summary.main.statements.total,
     wallOverTenPercent: summary.branch.wallMs.total > summary.main.wallMs.total * 1.1 };
   flags.sharedMoreStatements = summary.shared.statements.total > summary.main.statements.total;
-  t.diagnostic('R2O4_UPKEEP_COST ' + JSON.stringify({ base, passes, interleaved: true, rows, summary, flags }));
+  t.diagnostic('R2O5_UPKEEP_COST ' + JSON.stringify({ shape, base, passes, interleaved: true, rows, summary, flags }));
   assert.equal(summary.branch.statements.total, summary.main.statements.total, 'R2O4_UNBOUND_UPKEEP_COST');
-  assert.ok(!flags.sharedMoreStatements, 'R2O4_HOST_UPKEEP_COST');
+  for (let pass = 0; pass < passes; pass++) {
+    assert.equal(rows.branch[pass].statements, rows.main[pass].statements, 'R2O5_UNBOUND_UPKEEP_COST ' + shape + ' pass=' + pass);
+    assert.ok(rows.shared[pass].statements <= rows.main[pass].statements,
+      'R2O5_HOST_COMBINED_COST ' + shape + ' pass=' + pass + ' host=' + rows.shared[pass].statements + ' main=' + rows.main[pass].statements);
+  }
 });

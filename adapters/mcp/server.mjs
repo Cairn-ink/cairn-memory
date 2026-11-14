@@ -751,7 +751,8 @@ function startHostContextMaintenance(core, access, { cards = false, cardRaw = fa
         const combinedOnly = views.length === 1 && views[0].length === types.length && types.every(type => views[0].includes(type));
         const pending = [];
         for (const view of views) {
-          const current = combinedOnly ? undefined : idleViews.get(viewKey(view));
+          // Combined demand uses the same full fence and complete-result rules.
+          const current = idleViews.get(viewKey(view));
           if (!current || !await current()) pending.push(view);
         }
         if (!views.length) nextView = 0;

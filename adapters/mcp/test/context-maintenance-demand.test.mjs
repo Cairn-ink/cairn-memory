@@ -397,3 +397,29 @@ test('default maintenance installs no idle observation and never skips the combi
   for (let i = 0; i < 8; i++) await loop.tick();
   assert.deepEqual(selected, Array.from({ length: 8 }, () => combined), 'R2O4_UNBOUND_MAIN_TURNS');
 });
+
+test('shared combined-only idle reuse refreshes again after a Memory write', { timeout: 15000 }, async t => {
+  const f = await realFixture(t, { shared: true }), selected = [];
+  await context(f.client, input(combined));
+  const loop = drivenLoop(t, f.core, { ...f.access, async call(core, method, args) {
+    const result = await f.access.call(core, method, args);
+    selected.push({ types: args.types, result }); return result;
+  } }, { demand: f.demand, host: true });
+  for (let i = 0; i < 16; i++) await loop.tick();
+  const before = selected.at(-1).result;
+  assert.equal(before.value.status, 'complete');
+  await loop.tick();
+  assert.strictEqual(selected.at(-1).result, before, 'R2O5_COMBINED_IDLE_REUSED');
+  const writer = openMemoryCore({ path: f.path, raw: false });
+  try { ok(writer.admit({ namespace: ns, memory: { content: 'Synthetic combined-only write after idle reuse', kind: 'fact' },
+    receipts: [{ client: 'synthetic', sessionId: 'combined-idle', eventId: 'write', role: 'user', excerpt: 'Synthetic new source' }] })); }
+  finally { writer.close(); }
+  await loop.tick();
+  const after = selected.at(-1).result;
+  assert.notStrictEqual(after, before, 'R2O5_COMBINED_WRITE_REENABLES');
+  assert.equal(after.value.status, 'complete', 'R2O5_COMBINED_WRITE_REENABLES');
+  assert.equal(after.value.coverage.byType.memory.eligible, before.value.coverage.byType.memory.eligible + 1,
+    'R2O5_COMBINED_WRITE_REENABLES');
+  const result = await context(f.client, input(combined));
+  assert.equal(result.diagnostics.candidates.channels.semantic.state, 'ready', 'R2O5_COMBINED_WRITE_REENABLES');
+});
