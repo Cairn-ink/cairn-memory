@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { isStorageBusy } from './database.mjs';
+import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { isCaptureSourceBusy, isPreDispatchToken } from './capture-source-safety.mjs';
 import { captureSnapshot, extractedItems, retainedSourceView } from './capture-input.mjs';
 import { callModel } from './model-call.mjs';
@@ -235,7 +236,9 @@ export async function captureMessages({ model, input, operations, captureQualifi
   }
   const admission = { ...(episodeRun ? { status: 'completed' } : {}),
     memories: finished.memories, suppressedCount: finished.suppressedCount, indexRevision: finished.indexRevision };
-  const classification = await classifyAdmission(model, snapshot.namespace, admission, operations, key, deadline, episodeRun?.keep);
+  const classification = operations.commit
+    ? await withContentSuppressionRequest(() => classifyAdmission(model, snapshot.namespace, admission, operations, key, deadline, episodeRun?.keep))
+    : await classifyAdmission(model, snapshot.namespace, admission, operations, key, deadline, episodeRun?.keep);
   const rationale = captureRationale ? await reviewCapturedRationale({ snapshot, admission,
     classification, sourceMessages, operations, deadline }) : undefined;
   const { itemsShortened, itemsUnqualified } = qualificationReport;
