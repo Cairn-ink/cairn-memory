@@ -1,0 +1,18 @@
+[
+  [
+    "remove-only-card-account-handoff",
+    "core/commit-dispatch.mjs",
+    "delivery.resume = AsyncLocalStorage.snapshot();",
+    "delivery.resume = work => work();",
+    "adapters/mcp/test/local-shared-review-findings.test.mjs",
+    "R2K_CARD_ACCOUNT_HANDOFF"
+  ],
+  [
+    "swallow-bound-Keep-BUSY",
+    "core/episode-storage.mjs",
+    "      if (hasCommitDispatcher(db) && isStorageBusy(error)) throw error;",
+    "      // Fault: swallow bound native BUSY as though cleanup had succeeded.",
+    "adapters/mcp/test/commit-dispatch-compensation.test.mjs",
+    "R2K_KEEP_COMPENSATION"
+  ]
+]

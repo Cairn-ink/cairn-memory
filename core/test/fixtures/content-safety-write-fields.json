@@ -149,9 +149,9 @@
     "literal:sessionId": 1
   },
   "core/episode-capture.mjs": {
-    "key:classificationEventId": 1,
-    "key:episodeId": 4,
-    "key:eventId": 7,
+    "key:classificationEventId": 2,
+    "key:episodeId": 6,
+    "key:eventId": 8,
     "key:id": 14,
     "key:memoryIds": 2,
     "key:messageId": 1,
@@ -400,7 +400,7 @@
     "key:messageId": 2
   },
   "core/context-read-budget.mjs": {
-    "key:id": 1
+    "key:id": 2
   },
   "core/context-read-embedder.mjs": {
     "key:id": 2,

@@ -1,10 +1,11 @@
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety } from './content-safety.mjs';
 import { createHash } from 'node:crypto';
-import { transaction } from './database.mjs';
+import { transaction, isStorageBusy } from './database.mjs';
 import { createRawJournal, isRawEpochConflict } from './raw-journal.mjs';
 import { rawBoundary, rawRegistration, rawNamespace } from './raw-input.mjs';
 import { captureSnapshot } from './capture-input.mjs';
+import { dispatchCommit, hasCommitDispatcher } from './commit-dispatch.mjs';
 import { episodeSnapshot } from './episode-input.mjs';
 import { episodeText } from './episode-storage.mjs';
 import { rawSourceMap } from './raw-source-map.mjs';
@@ -59,9 +60,12 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
     }
     const sessionKey = journal.sessionKey(input.namespace, input.client, input.sessionId);
     privacy?.assertModeInside(input.namespace, input.client, sessionKey, hostInterpretation ? 'host' : 'engine');
-    try { privacy?.fenceArrival(input.namespace, input.client, sessionKey, rangeMessages); }
+    try {
+      const fence = () => privacy?.fenceArrival(input.namespace, input.client, sessionKey, rangeMessages);
+      if (privacy && hasCommitDispatcher(db)) await dispatchCommit(db, fence, deadline); else fence();
+    }
     catch (error) {
-      if (privacy && ['storage_busy','conversation_deleted'].includes(error.code)) arrivalInputs.get(arrivalToken).decided = true;
+      if (privacy && !isStorageBusy(error) && ['storage_busy','conversation_deleted'].includes(error.code)) arrivalInputs.get(arrivalToken).decided = true;
       throw error;
     }
     const previous = binding(input);
@@ -242,13 +246,20 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       if (result) accepted = true;
       return result;
     }
+    const commitOnly = () => { const result = transaction(db, commit, checkDeadline); if (result.closed) fail(result.closed); accepted = true; return result; };
     return Object.freeze({ localPrivacy: Boolean(privacy), input: projection, hasProjection: Boolean(snapshot), replay,
       emptyOutcome, commit, observeReplay, assertEpochCurrent, checkDeadline, checkFailureDeadline,
       // A winner can commit even during a failing model preflight. Only an
       // unaccepted attempt may observe that winner; it never acquires work.
       observeFailedInterpretation: () => !accepted && snapshot ? observeReplay(true) : null,
       accept: () => { accepted = true; },
-      commitOnly: () => { const result = transaction(db, commit, checkDeadline); if (result.closed) fail(result.closed); accepted = true; return result; },
+      commitOnly,
+      ...(hasCommitDispatcher(db) ? {
+        commitOnlyAsync: () => dispatchCommit(db, commitOnly, deadline),
+        observeReplayAsync: onlyRecorded => dispatchCommit(db, () => observeReplay(onlyRecorded), deadline),
+        observeFailedInterpretationAsync: () => !accepted && snapshot
+          ? dispatchCommit(db, () => observeReplay(true), deadline) : null,
+      } : {}),
       result: () => { const row = accepted && rawEvent(input); return row ? JSON.parse(row.result) : null; },
       setStaging: staging => db.prepare(`UPDATE raw_capture_events SET staging=? WHERE ${where}`).run(staging, ...key(input)),
     });

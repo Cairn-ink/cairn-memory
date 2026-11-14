@@ -1,0 +1,18 @@
+[
+  [
+    "idle-never-skip",
+    "adapters/mcp/server.mjs",
+    "if (!current || !await current()) pending.push(view);",
+    "if (true) pending.push(view);",
+    "adapters/mcp/test/context-maintenance-demand.test.mjs",
+    "R2M_IDLE_CARD_SKIPPED"
+  ],
+  [
+    "idle-skip-forever",
+    "adapters/mcp/server.mjs",
+    "if (!current || !await current()) pending.push(view);",
+    "if (!current) pending.push(view);",
+    "adapters/mcp/test/context-maintenance-demand.test.mjs",
+    "R2M_IDLE_WRITE_REENABLES_CARD"
+  ]
+]

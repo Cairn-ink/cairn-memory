@@ -191,10 +191,11 @@ function assertDeferredAllowlist(sources) {
   const permit = (file, offset) => {
     const offsets = allowed.get(file) ?? new Set(); offsets.add(offset); allowed.set(file, offsets);
   };
-  // Exactly the mode declaration and the BEGIN selector may reference the
-  // option in its implementation; no forwarding sibling or new mode sink.
+  // Reviewed R2i routing guard: the mode declaration, write-route check and
+  // BEGIN selector inspect this option; none forwards it to a new mode sink.
   const database = sources.get('core/database.mjs');
   for (const text of ['export function transaction(db, work, check, { deferred = false } = {}) {',
+    "    if (!deferred) assertCommitWriteRouted(db, 'transaction');",
     '    db.exec(deferred ? "BEGIN" : "BEGIN IMMEDIATE");']) {
     const start = database.indexOf(text);
     assert.ok(start >= 0 && database.indexOf(text, start + 1) < 0, 'unique transaction mode implementation');

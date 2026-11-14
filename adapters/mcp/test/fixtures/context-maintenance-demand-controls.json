@@ -1,0 +1,66 @@
+[
+  [
+    "fixed-three-way",
+    "adapters/mcp/server.mjs",
+    "        let selectedTypes = types;\n        if (combinedOnly) selectedTypes = views[0];\n        else for (let scanned = 0; scanned < views.length; scanned++) {\n          const view = views[nextView++ % views.length];\n          if (pending.includes(view)) { selectedTypes = view; break; }\n        }\n",
+    "        const selectedTypes = [types, ['memory'], ['card']][nextView++ % 3];\n",
+    "adapters/mcp/test/context-maintenance-demand.test.mjs",
+    "R2J_COMBINED_ONLY"
+  ],
+  [
+    "demand-never-scheduled",
+    "adapters/mcp/server.mjs",
+    "        let selectedTypes = types;\n        if (combinedOnly) selectedTypes = views[0];\n        else for (let scanned = 0; scanned < views.length; scanned++) {\n          const view = views[nextView++ % views.length];\n          if (pending.includes(view)) { selectedTypes = view; break; }\n        }\n",
+    "        const selectedTypes = types;\n",
+    "adapters/mcp/test/context-maintenance-demand.test.mjs",
+    "R2K_ACTIVE_VIEWS_ROUND_ROBIN"
+  ],
+  [
+    "old-combined-weighting",
+    "adapters/mcp/server.mjs",
+    "        let selectedTypes = types;\n        if (combinedOnly) selectedTypes = views[0];\n        else for (let scanned = 0; scanned < views.length; scanned++) {\n          const view = views[nextView++ % views.length];\n          if (pending.includes(view)) { selectedTypes = view; break; }\n        }\n",
+    "        const selectedTypes = views.length && ++nextView % 4 === 0 ? views[0] : types;\n",
+    "adapters/mcp/test/context-maintenance-demand.test.mjs",
+    "R2K_ACTIVE_VIEWS_ROUND_ROBIN"
+  ],
+  [
+    "no-expiry",
+    "adapters/mcp/server.mjs",
+    "if (timestamp <= cutoff) lastRead.delete(type);",
+    "if (false) lastRead.delete(type);",
+    "adapters/mcp/test/context-maintenance-demand.test.mjs",
+    "R2J_DEMAND_EXPIRY"
+  ],
+  [
+    "combined-never-recorded",
+    "adapters/mcp/server.mjs",
+    "lastRead.set(length === 2 ? 'combined' : first, now());",
+    "length === 1 && lastRead.set(first, now());",
+    "adapters/mcp/test/context-maintenance-demand.test.mjs",
+    "R2K_COMBINED_RECORDED"
+  ],
+  [
+    "single-view-reuse",
+    "adapters/mcp/server.mjs",
+    "const fullView = key === viewKey(types);",
+    "const fullView = selectedTypes === types;",
+    "adapters/mcp/test/context-maintenance-demand.test.mjs",
+    "R2O6_SINGLE_VIEW_REUSE"
+  ],
+  [
+    "single-view-reuse-cost",
+    "adapters/mcp/server.mjs",
+    "const fullView = key === viewKey(types);",
+    "const fullView = selectedTypes === types;",
+    "tools/testing/unbound-upkeep-cost.qualification.mjs",
+    "R2O6_SINGLE_VIEW_REUSE"
+  ],
+  [
+    "single-view-write-fence",
+    "core/context-read-facade.mjs",
+    "storage.assertState(projection, expected, { checkpoint: false });",
+    "if (projection.types.length !== 1) storage.assertState(projection, expected, { checkpoint: false });",
+    "adapters/mcp/test/context-maintenance-demand.test.mjs",
+    "R2O6_SINGLE_VIEW_WRITE_REENABLES"
+  ]
+]

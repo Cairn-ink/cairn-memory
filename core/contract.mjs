@@ -1,5 +1,6 @@
 import { suppressionContent } from './suppression-content.mjs';
 import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
+import { withCommitDelivery, inCommitDelivery, dispatchCommit, hasCommitDispatcher, commitFailure, dispatchSynchronousCommit } from './commit-dispatch.mjs';
 import { contentWriteMethodClass } from './content-write-context.mjs';
 import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { contentSafetyFacade } from './content-safety-boundary.mjs';
@@ -173,7 +174,7 @@ function failure(error) {
   if (isStorageBusy(error)) code = "storage_busy";
   if (["invalid_identifier", "invalid_text", "invalid_memory", "invalid_receipt",
     "invalid_revision", "invalid_limit"].includes(code)) code = "invalid_input";
-  return { ok: false, error: { code, retryable: code === "storage_busy" || code === 'local_raw_privacy_write_failed' } };
+  return commitFailure(error, { ok: false, error: { code, retryable: code === "storage_busy" || code === 'local_raw_privacy_write_failed' } });
 }
 
 // Validate the trusted opt-in before composition can snapshot any constructor fields.
@@ -377,6 +378,10 @@ export function createMemoryCore(input, internal) {
   function invoke(work) {
     try { return success(work()); } catch (error) { return failure(error); }
   }
+
+  // These closures contain only the selected synchronous storage phase. The
+  // provider's detached result remains outside, in this invocation's stack.
+  const commit = hasCommitDispatcher(runtime) ? (work, deadline, options) => dispatchCommit(runtime, work, deadline, options) : null;
 
   /**
    * The read answers whether admit would refuse this exact text as
@@ -1034,7 +1039,9 @@ export function createMemoryCore(input, internal) {
       deadline?.check();
       const proposals = await proposeRationale(model, snapshot.sources, validateFresh, deadline);
       deadline?.check();
-      return success({ ...runtime.commitRationale(ns, refs, snapshot, proposals, deadline),
+      const committed = commit ? await commit(() => runtime.commitRationale(ns, refs, snapshot, proposals, deadline), deadline)
+        : runtime.commitRationale(ns, refs, snapshot, proposals, deadline);
+      return success({ ...committed,
         ...(inputMode ? { inputMode } : {}) });
     } catch (error) { return failure(error); }
   }
@@ -1095,12 +1102,13 @@ export function createMemoryCore(input, internal) {
         startAdmission: () => (deadline = sharedDeadline ?? (captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs))),
         captureRationale, captureEvidence,
         deadline, input: { ...input, namespace },
-        operations: { filterCaptureSources: sources => runtime.filterCaptureSources(ns, sources),
+        operations: { ...(commit ? { commit: (work, options) => commit(work, deadline, options) } : {}),
+          filterCaptureSources: sources => runtime.filterCaptureSources(ns, sources),
           assertCaptureSources: sources => runtime.assertCaptureSources(ns, sources),
           // Preserve private pre-dispatch busy provenance across this internal
           // operation, including the runtime facade's entry/delivery checks.
           beginCaptureDispatch: value => {
-            try { return runtime.assertCaptureEvidence(ns, { ...value, [captureDispatch]: true }, deadline); }
+            try { return dispatchSynchronousCommit(runtime, () => runtime.assertCaptureEvidence(ns, { ...value, [captureDispatch]: true }, deadline)); }
             catch (error) { if (isStorageBusy(error)) throw captureSourceBusy(); throw error; }
           },
           claimAdmission: (value, sources) => invoke(() => runtime.claimCapturedAdmission(ns, {
@@ -1240,8 +1248,9 @@ export function createMemoryCore(input, internal) {
         throw new MemoryStoreError('model_not_configured');
       }
       const snapshot = runtime.classificationSnapshot(ns, ids, guards, index);
-      const mapped = mapPage({ namespace: input.namespace, purpose: 'classification' },
+      const readCatalog = () => mapPage({ namespace: input.namespace, purpose: 'classification' },
         undefined, { catalogOnly: true });
+      const mapped = commit ? await commit(readCatalog, deadline) : readCatalog();
       if (!mapped.ok) return mapped;
       if (mapped.value.indexRevision !== index) throw new MemoryStoreError('index_revision_conflict');
       const validateFresh = () => {
@@ -1343,9 +1352,11 @@ export function createMemoryCore(input, internal) {
   }
 
   internal?.attachCapture?.((input, registration, deadline) => capture(input, undefined, registration, deadline));
+  // Host reads share one delivery hand-off through nested facades. The final
+  // public check resumes the successful attempt, including after BUSY retries.
   const contentReads = new Set(['get','list','map','fetch','recall','sourceSnapshot','getEpisode','listEpisodes','listMemoriesByTime',
     'sessionStartContext','getRationale','inspectAdmission','inspectCaptureEvidence','listReviewTransitions','listReviewConflicts']);
-  return withEngineCardDelivery(contentSafetyFacade({
+  const core = withEngineCardDelivery(contentSafetyFacade({
     ...(engineConfigured ? {
       async maintainCards(input) { try { runtime.ready(); return success(await (await loadEngineCards()).maintain(input)); } catch (error) { return failure(error); } },
       getEngineCardStatus(input) { try {
@@ -1376,8 +1387,12 @@ export function createMemoryCore(input, internal) {
       runtime.close();
       return success(null);
     },
-  }, { check: runtime.assertContentScope, portGuard: runtime.contentPortGuard, failure, asyncMethods: ['capture','maintainCards'],
-    requestScope: (work, method) => contentWriteMethodClass(method) === 'read' ? withContentSuppressionRequest(work) : work(),
+  }, { check: commit ? (scopes, phase) => phase?.delivery
+      ? inCommitDelivery(() => runtime.assertContentScope(scopes, phase)) : runtime.assertContentScope(scopes, phase)
+      : runtime.assertContentScope, ...(commit ? { writeBoundary: runtime.assertContentScope } : {}),
+    portGuard: runtime.contentPortGuard, failure, asyncMethods: ['capture','maintainCards'],
+    requestScope: (work, method) => contentWriteMethodClass(method) === 'read'
+      ? commit ? withCommitDelivery(work) : withContentSuppressionRequest(work) : work(),
     isFailedCapture(result) {
       // Admission committed before the paused classifier. After close only its
       // failed-classification completion is deliverable; no retained identities,
@@ -1391,6 +1406,21 @@ export function createMemoryCore(input, internal) {
     'getPrivateCardCapabilities','getAssetCapabilities','getMethodPackageCapabilities'] }), null, {
       project: (input, value) => engineCards.deliver(cardNamespace(input.namespace), value), failure,
     });
+  if (!commit) return core;
+  // This inventory is deliberately provider-free and single-transaction.
+  // Provider orchestration calls the unwrapped local operations above.
+  const synchronousCommits = new Set(`admit correct forget supersede bindQualifiedClaim transitionQualified transitionQualifiedSet
+    confirm reject claimAdmission finishAdmission abandonAdmission inspectCaptureEvidence discardCaptureEvidence
+    applyPlacement linkMocs rebuildIndex closeEpisodeNextStep forgetEpisode correctEpisode releaseEpisodeCorrection
+    setCapturePaused setProjectCapture setProceduralMemory get list map fetch sourceSnapshot inspectAdmission
+    listReviewTransitions listReviewConflicts listEpisodes listMemoriesByTime getEpisode sessionStartContext getRationale isSuppressed`.split(/\s+/));
+  return Object.freeze(Object.fromEntries(Object.entries(core).map(([method, value]) => [method,
+    synchronousCommits.has(method) ? (...args) => {
+      try {
+        const result = commit(() => Reflect.apply(value, core, args));
+        return types.isPromise(result) ? result.catch(failure) : result;
+      } catch (error) { return failure(error); }
+    } : value])));
   } catch (error) {
     try { runtime.close(); } catch { /* Preserve the construction failure. */ }
     throw error;

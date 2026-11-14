@@ -303,6 +303,16 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // Lock liveness preflight adds key:pid (1 -> 2): process metadata, never content or writer identity.
   // Recall's recency keyset adds one private last-position id in the signed
   // cursor boundary. It adds no writer acknowledgement or terminal exemption.
+  // R2k dispatch branches duplicate existing opaque operation inputs:
+  // classificationEventId (1 -> 2) selects the same batch for draft commit;
+  // episodeId (4 -> 6) addresses the async read-only attempt outcome lookup
+  // and the bound writer-release ownership check; eventId (7 -> 8) addresses
+  // the bound admission claim. These add no returned acknowledgement fields.
+  // All three names already belong to content-write-safety.mjs's opaque set;
+  // content identities still pass its canonical fail-closed walker unchanged.
+  // The unbound budget keeps main's cumulative contextBudget byte-for-byte beside the host-scoped one;
+  // its embedding-port wrapper repeats `id: port.id` (1 -> 2), the provider's model identity, never a
+  // writer acknowledgement or content identity.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));
   const files=JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json',import.meta.url),'utf8'));
   const actual={};

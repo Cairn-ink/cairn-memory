@@ -39,7 +39,112 @@ function portError(error) {
   return safe;
 }
 
+// An opaque object identifies a connection-lifetime ledger. The host gives
+// maintenance a different object. Only counters are retained, never payloads.
+const ledgerScope = new AsyncLocalStorage();
+const scopedLedgers = new WeakMap();
+export function withContextReadBudgetScope(scope, work, enabled = true) {
+  if (!enabled) return work();
+  if (!scope || typeof scope !== 'object') throw TypeError('invalid_budget_scope');
+  return ledgerScope.run(scope, work);
+}
+function ledgerFor(binding) {
+  const scope = ledgerScope.getStore();
+  let selected = ledgers;
+  if (scope) {
+    selected = scopedLedgers.get(scope);
+    if (!selected) scopedLedgers.set(scope, selected = new Map());
+  }
+  let ledger = selected.get(binding);
+  if (!ledger) selected.set(binding, ledger = { requests: 0, usd: 0, active: 0 });
+  return ledger;
+}
+
 export function contextBudget(options) {
+  // Keep main's cumulative construction and dispatch statements intact.
+  // Only an explicitly bound host selects the connection-lifetime path.
+  if (!ledgerScope.getStore()) return cumulativeContextBudget(options);
+  if (!options.budgetConfigured) return null;
+  const { policy } = options;
+  const local = policy.family === 'local' && policy.maxBatchDocuments === 1;
+  const port = options.embedder;
+  const binding = JSON.stringify([port?.id, port?.revision]);
+  async function dispatch(port, texts, { signal, deadlineAt, guard, onInvoke }) {
+    const ledger = ledgerFor(binding);
+    // Hosts may call this engine guard before transmitting. Resume its own
+    // request proof; a host callback itself still gets a fresh caller scope.
+    // The final canonical guard must follow every mutable signal hook.
+    const checkDispatch = engineGuard(function checkDispatch(phase) {
+      if (isSignalAborted(signal) || performance.now() >= deadlineAt) throw refused('timeout');
+      guard(phase);
+    });
+    const beforeDispatch = () => checkDispatch('pre-send');
+    guard();
+    const usd = local ? 0 : assertContentPort({invoke:()=>{try{const value=policy.estimateUsd(Object.freeze([...texts]));return typeof value==='number'?value:NaN;}catch(error){throw portError(error);}}});
+    guard();
+    if (!Number.isFinite(usd) || usd < 0 || ledger.requests >= policy.maxRequests ||
+        (!local && ledger.usd + usd > policy.maxUsd) || ledger.active >= policy.maxConcurrent) throw refused('budget_denied');
+    if (isSignalAborted(signal) || performance.now() >= deadlineAt) throw refused('timeout');
+    // Reserve synchronously, immediately before invoking the port. Unknown
+    // usage keeps the conservative full charge. Every invocation reserves anew.
+    ledger.requests++; ledger.usd += usd; ledger.active++;
+    let operation, invoked = false, actualUsd;
+    const invoke = controls => assertContentPort({invoke:async()=>{
+      try { return inertContentPortValue(await port.embed(texts, controls), 'provider_error', { rejectProxies: true }); }
+      catch (error) {
+        throw portError(error);
+      }
+    }});
+    // A trusted adapter may report validated usage. Hold the reservation until
+    // the underlying attempt settles; unknown usage retains its full charge.
+    const settleUsd = value => {
+      if (!Number.isFinite(value) || value < 0 || actualUsd !== undefined) throw refused('provider_error');
+      actualUsd = value;
+    };
+    try {
+      beforeDispatch();
+      // Adapters with internal awaits must call beforeDispatch immediately
+      // before HTTP transmission. Core also fences every await/settlement.
+      invoked = true; onInvoke?.();
+      if (local) {
+        const localReservation = {}; reservations.set(localReservation, binding);
+        try { operation = invoke({ signal, beforeDispatch, deadlineAt, localReservation }); }
+        finally { reservations.delete(localReservation); }
+      } else operation = invoke({ signal, beforeDispatch, deadlineAt, settleUsd });
+    } catch (error) {
+      ledger.active--;
+      if (!invoked) { ledger.requests--; ledger.usd -= usd; }
+      else if (actualUsd !== undefined) ledger.usd += actualUsd - usd;
+      throw error;
+    }
+    const settled = () => { ledger.active--; if (actualUsd !== undefined) ledger.usd += actualUsd - usd; };
+    operation.then(settled, settled);
+    let timer, aborted;
+    const timeout = new Promise((resolve, reject) => {
+      aborted = () => reject(refused('timeout'));
+      listenSignal(signal,true,aborted);
+      timer = setTimeout(aborted, Math.max(0, deadlineAt - performance.now()));
+    });
+    try { const result = await Promise.race([operation, timeout]); checkDispatch('post-send'); return result; }
+    catch (error) { guard('post-send'); throw error; }
+    finally { clearTimeout(timer); listenSignal(signal,false,aborted); }
+  }
+  // The only marked ports execute this ledger's fixed dispatch implementation.
+  // Public configuration validation creates fresh objects, so a caller cannot
+  // attach the provenance to its own callback.
+  dispatch.port = (port, controls) => {
+    let invoked=false;
+    const wrapper=Object.freeze({didInvoke:()=>invoked,id:port.id,revision:port.revision,dimensions:port.dimensions,
+      normalization:port.normalization,embed:(texts, extra)=>{invoked=false;return dispatch(port,texts,{...controls,
+        onInvoke:()=>{invoked=true;},guard:phase=>{controls.guard(phase);extra.beforeDispatch(phase);}});}});
+    enginePorts.add(wrapper);return wrapper;
+  };
+  return dispatch;
+}
+
+// Deliberately retain main's default path verbatim; scoped host lookup above
+// happens at dispatch because one core serves several connection scopes.
+function cumulativeContextBudget(options) {
   if (!options.budgetConfigured) return null;
   const { policy } = options;
   const local = policy.family === 'local' && policy.maxBatchDocuments === 1;
