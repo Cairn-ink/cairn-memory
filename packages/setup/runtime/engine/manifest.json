@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "cc5a43b0e5f7871af9f82d941b014e76aa7a2af16e085c6489bd771d1c680530",
-  "bytes": 1317939,
+  "sha256": "63c114b492a9cde7cc44a8a8af8f97155f05cde71e73874678907be51e56d3f1",
+  "bytes": 1318581,
   "files": [
     "LICENSE",
     "README.md",
@@ -533,7 +533,7 @@
     "core/prompts/relate-rationale.md": "b00cc2511e7e01d6507f9d13abf6115b315cca8208866a5e15721b6bee212615",
     "core/prompts/relate-claim-focus.md": "17ba366ce9d34f9cef84ad4fea20ba86a9399ff9a34afcd7b4e900cefca332ec",
     "core/recall.mjs": "12faf9f9700a85790e3f615ecb34798663c878bac7901e5aef3fadfb2d03c8e2",
-    "core/runtime.mjs": "9fe598967e05143892dfd0fbeb1c6a9478ef60734e974a49a8636c6bf1be499e",
+    "core/runtime.mjs": "621ea51e8fb0285ef7703cd14abd5129433a7c3cfe5a6ba5a7dfa53529d99df4",
     "core/supersession-storage.mjs": "b13c88bc377cdb9759481214ab3eefd07aec39d15139978e6c4f09871e41b20d",
     "core/validation.mjs": "fb8fa11ee5951ebd2c6bd0b67e3b528ca7cacfd95cd7ddefc22c242a71e1aa0d",
     "core/suppression-content.mjs": "a3d47ffc353c079ba1b1e35cbb506bd7bbb661f3d2ea89562ce7e6e914aaff98",
@@ -718,7 +718,7 @@
     "core/context-product-comparison.mjs": "ec340185793d622b8e48445c378bfd40fe9c5f1606e49bd589db1d6bf162cd46",
     "core/context-product-quantum.mjs": "b43d2c3386e4a9704831b6aa6667378a3148593bc09ff5848914ef3c706d2659",
     "core/context-product-sqlite.mjs": "5bf348977dea61370a8623b98c80648105c6d788c5e0d1dd428970c5bde19d87",
-    "core/content-safety.mjs": "5b2f0e8efd5c0b40c49a6b13a2d5b7cf7bb3947107dccc937ff537785efbd901",
+    "core/content-safety.mjs": "ba9341cd49bbfa1714e893c90eecb3a65a8dd0b88ee128c96e36ce3b8b9ed263",
     "core/context-product-index.mjs": "975c38f6d212fcc80fee6af945258a6b1394e67f55b621cb78a8e08ceef11202",
     "core/context-product-pump.mjs": "2f7c56e7ce56e6dfb03d3fd0fb85b12f74e5079d3cdba891612ca17352714a63",
     "core/context-maintenance-turn.mjs": "50552d945ef5a87feb94a042cd5a0b8260bbdea8119e0aaf34ff4f991297a23b",
