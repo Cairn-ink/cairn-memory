@@ -758,7 +758,11 @@ export function createMemoryRuntime(input, internal) {
           return {...page,receipts:start < 0 ? [] : page.receipts.slice(start,end),
             receiptOffsets:start < 0 ? [] : page.receiptOffsets.slice(start,end)};
         },
-        recentReceipts,
+        recentReceipts(ns,ref,count) {
+          // Preserve preparation's canonical 202-row projection before the
+          // packer's requested cap, while retaining the fresh lazy transaction.
+          return recentReceipts(ns,ref,202).slice(0,count);
+        },
     };
   }
 
