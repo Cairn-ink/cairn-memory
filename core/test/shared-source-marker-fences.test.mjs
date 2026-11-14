@@ -219,67 +219,130 @@ function sourceWalker(sources){
   // Prove values by their origins, rather than their variable names. Arrays
   // carry their element provenance through map/filter and for-of; parameters
   // are checked at every discovered caller, including returned factory methods.
-  function prove(node,kind,env=new Map(),path=[],element=false,seen=new Set()){
-    const site=byNode.get(node),message=classified(site,'fingerprint-value','expected a stored Memory fingerprint or engine SHA-256 fingerprint');
-    assert.ok(node,message);
-    const key=node.start+':'+site.file+':'+kind+':'+path.join('.')+':'+element;
-    assert.ok(!seen.has(key),message+' (cyclic origin)');
-    const next=new Set(seen);next.add(key);
-    const again=(value,bindings=env,keys=path,items=element)=>prove(value,kind,bindings,keys,items,next);
-    if(kind==='fingerprint'&&!path.length&&!element&&node.type==='MemberExpression'&&!node.computed&&named(node.property,'fingerprint')){
-      return prove(node.object,'memory',env,[],false,next);
-    }
-    if(node.type==='Identifier'){
-      if(node.name==='undefined'&&kind==='memory')return 0;
-      const binding=bindingOf(node),bound=env.get(binding);
-      assert.ok(binding,message);
-      // Reassignment could invalidate a row or replace its fingerprint. Refuse
-      // it, including writes to any member of the source row.
-      for(const ref of references.get(binding))assert.ok(!ref.ancestors.some(parent=>
-        parent.type==='AssignmentExpression'&&parent.left.start<=ref.node.start&&parent.left.end>=ref.node.end||
-        parent.type==='UpdateExpression'),classified(ref,'fingerprint-value','mutable fingerprint origin'));
-      if(bound)return again(bound.node,bound.env,[...(bound.path??[]),...path],bound.element??element);
-      if(binding.declaration){
-        const loop=binding.site.ancestors.find(parent=>parent.type==='ForOfStatement'&&parent.left.start<=node.start);
-        if(!binding.declaration.init&&loop)return again(loop.right,env,path,true);
-        return again(binding.declaration.init);
+  function prove(node,kind){
+    const graph=[],active=new Map(),backEdges=[];
+    const nodeKey=value=>{const site=byNode.get(value);return site?site.file+':'+value.start:'<missing>';};
+    // Keep caller substitutions in the state: the same expression at two
+    // callers must not hide an unproven argument behind a different caller's
+    // back-edge. Flatten forwarded parameter aliases before comparing them.
+    function boundKey(bound){
+      const seen=new Set();let path=[],element=false;
+      while(bound){
+        if(seen.has(bound))return '<cycle>';
+        seen.add(bound);path=[...(bound.path??[]),...path];element=bound.element??element;
+        const forwarded=bound.node?.type==='Identifier'&&bound.env.get(bindingOf(bound.node));
+        if(!forwarded)return JSON.stringify([nodeKey(bound.node),path,element]);
+        bound=forwarded;
       }
-      if(binding.param!==undefined){
-        const fn=binding.fn,fnSite=byNode.get(fn),parent=fnSite.ancestors.at(-1);
-        if(parent?.type==='CallExpression'&&parent.arguments[0]===fn&&parent.callee.type==='MemberExpression'&&named(parent.callee.property,'map')){
-          return again(parent.callee.object,env,path,true);
+      return '<missing>';
+    }
+    function visit(node,kind,env=new Map(),path=[],element=false,chain=[]){
+      const site=byNode.get(node),step=classified(site,'fingerprint-value',
+        kind+(path.length?' .'+path.join('.'):'')+(element?' element':''));
+      const trail=[...chain,step],message='expected a stored Memory fingerprint or engine SHA-256 fingerprint'+
+        '\norigin chain:\n  '+trail.join('\n  -> ');
+      assert.ok(node,message);
+      const context=[...env].map(([binding,bound])=>[nodeKey(binding.id),boundKey(bound)]).sort();
+      const key=JSON.stringify([nodeKey(node),kind,path,element,context]);
+      if(active.has(key)){
+        const target=active.get(key);backEdges.push({target,trail});return target;
+      }
+      const value={origins:[],seed:false,absent:false,message};graph.push(value);active.set(key,value);
+      const again=(origin,bindings=env,keys=path,items=element,type=kind)=>
+        visit(origin,type,bindings,keys,items,trail);
+      const from=origins=>{value.origins=origins;return value;};
+      const terminal=(seed=true)=>{value.seed=seed;value.absent=!seed;return value;};
+      try{
+        if(kind==='fingerprint'&&!path.length&&!element&&node.type==='MemberExpression'&&!node.computed&&named(node.property,'fingerprint')){
+          // Member syntax alone is not proof: the object must trace to a
+          // stored Memory row. Do not admit arbitrary external DTOs here.
+          return from([again(node.object,env,[],false,'memory')]);
         }
-        const incoming=callers(fn);
-        assert.ok(incoming.length,message+' (no source-backed callers)');
-        return incoming.reduce((count,call)=>count+again(call.node.arguments[binding.param],new Map(),[...binding.path,...path]),0);
-      }
+        if(node.type==='Identifier'){
+          // A missing optional row cannot reach an insert via .fingerprint.
+          // Preserve that existing absence case; it supplies no proof seed.
+          if(node.name==='undefined'&&kind==='memory')return terminal(false);
+          const binding=bindingOf(node),bound=env.get(binding);
+          assert.ok(binding,message);
+          // Reassignment could invalidate a row or replace its fingerprint.
+          for(const ref of references.get(binding))assert.ok(!ref.ancestors.some(parent=>
+            parent.type==='AssignmentExpression'&&parent.left.start<=ref.node.start&&parent.left.end>=ref.node.end||
+            parent.type==='UpdateExpression'),message+'\n'+classified(ref,'fingerprint-value','mutable fingerprint origin'));
+          if(bound)return from([again(bound.node,bound.env,[...(bound.path??[]),...path],bound.element??element)]);
+          if(binding.declaration){
+            const loop=binding.site.ancestors.find(parent=>parent.type==='ForOfStatement'&&parent.left.start<=node.start);
+            if(!binding.declaration.init&&loop)return from([again(loop.right,env,path,true)]);
+            return from([again(binding.declaration.init)]);
+          }
+          if(binding.param!==undefined){
+            const fn=binding.fn,fnSite=byNode.get(fn),parent=fnSite.ancestors.at(-1);
+            if(parent?.type==='CallExpression'&&parent.arguments[0]===fn&&parent.callee.type==='MemberExpression'&&named(parent.callee.property,'map')){
+              return from([again(parent.callee.object,env,path,true)]);
+            }
+            const incoming=callers(fn);
+            assert.ok(incoming.length,message+' (no source-backed callers)');
+            return from(incoming.map(call=>again(call.node.arguments[binding.param],new Map(),[...binding.path,...path])));
+          }
+        }
+        if(node.type==='MemberExpression'&&!node.computed)return from([again(node.object,env,[node.property.name,...path])]);
+        if(node.type==='ObjectExpression'&&path.length){
+          const property=node.properties.find(p=>propertyNamed(p,path[0]));
+          assert.ok(property,message);return from([again(property.value,env,path.slice(1))]);
+        }
+        if(node.type==='ConditionalExpression')return from([again(node.consequent),again(node.alternate)]);
+        if(node.type==='CallExpression'){
+          const method=node.callee.type==='MemberExpression'?node.callee.property.name:undefined;
+          if(kind==='memory'&&!path.length&&node.callee.type==='MemberExpression'&&method===(element?'all':'get')){
+            const prepare=node.callee.object;
+            if(prepare?.type==='CallExpression'&&named(prepare.callee?.property,'prepare')){
+              const sql=sources.get(site.file).text(prepare.arguments[0]);
+              if(/^\s*[`'"]SELECT (?:memories\.\*|\*)[\s\S]*? FROM memories\b/.test(sql))return terminal();
+            }
+          }
+          if(element&&method==='filter')return from([again(node.callee.object)]);
+          if(element&&method==='map'&&isFunction(node.arguments[0])){
+            const callback=node.arguments[0],bound=new Map(env);
+            for(const {binding,path:keys}of fields(callback.params[0],[]))bound.set(binding,{node:node.callee.object,env,path:keys,element:true});
+            return from(returns(callback).map(origin=>again(origin,bound,path,false)));
+          }
+          const fn=directFunction(node.callee);
+          if(kind==='fingerprint'&&!path.length&&!element&&fn===functionSite(sources,'validation.mjs','fingerprint').node)return terminal();
+          if(fn)return from(returns(fn).map(origin=>again(origin,callEnvironment(fn,node.arguments,env))));
+        }
+        assert.fail(message);
+      }catch(error){
+        assert.ok(error instanceof assert.AssertionError,'provenance failures must be classified assertions');
+        if(error.message.includes('\norigin chain:\n'))throw error;
+        assert.fail(message+'\n'+error.message);
+      }finally{active.delete(key);}
     }
-    if(node.type==='MemberExpression'&&!node.computed)return again(node.object,env,[node.property.name,...path]);
-    if(node.type==='ObjectExpression'&&path.length){
-      const property=node.properties.find(p=>propertyNamed(p,path[0]));
-      assert.ok(property,message);return again(property.value,env,path.slice(1));
-    }
-    if(node.type==='ConditionalExpression')return again(node.consequent)+again(node.alternate);
-    if(node.type==='CallExpression'){
-      const method=node.callee.type==='MemberExpression'?node.callee.property.name:undefined;
-      if(kind==='memory'&&!path.length&&node.callee.type==='MemberExpression'&&method===(element?'all':'get')){
-        const prepare=node.callee.object;
-        if(prepare?.type==='CallExpression'&&named(prepare.callee?.property,'prepare')){
-          const sql=sources.get(site.file).text(prepare.arguments[0]);
-          if(/^\s*[`'"]SELECT (?:memories\.\*|\*)[\s\S]*? FROM memories\b/.test(sql))return 1;
+    const entry=visit(node,kind);
+    // Least fixpoint of reachability to a real source. Back-edges contribute
+    // no seed. Track paths containing only absent optional rows separately:
+    // absence must never ground a cycle or count as a fingerprint source.
+    const productive=new Set(graph.filter(value=>value.seed));
+    const absent=new Set(graph.filter(value=>value.absent));
+    let changed;
+    do{
+      changed=false;
+      for(const value of graph){
+        if(!productive.has(value)&&value.origins.some(origin=>productive.has(origin))){
+          productive.add(value);changed=true;
+        }
+        if(!absent.has(value)&&value.origins.length&&value.origins.every(origin=>absent.has(origin))){
+          absent.add(value);changed=true;
         }
       }
-      if(element&&method==='filter')return again(node.callee.object);
-      if(element&&method==='map'&&isFunction(node.arguments[0])){
-        const callback=node.arguments[0],bound=new Map(env);
-        for(const {binding,path:keys}of fields(callback.params[0],[]))bound.set(binding,{node:node.callee.object,env,path:keys,element:true});
-        return returns(callback).reduce((count,value)=>count+again(value,bound,path,false),0);
-      }
-      const fn=directFunction(node.callee);
-      if(kind==='fingerprint'&&!path.length&&!element&&fn===functionSite(sources,'validation.mjs','fingerprint').node)return 1;
-      if(fn)return returns(fn).reduce((count,value)=>count+again(value,callEnvironment(fn,node.arguments,env)),0);
-    }
-    assert.fail(message);
+    }while(changed);
+    const closed=backEdges.find(({target})=>!productive.has(target));
+    assert.ok(!closed,'expected a stored Memory fingerprint or engine SHA-256 fingerprint (only cyclic origins)'+
+      (closed?'\norigin chain:\n  '+closed.trail.join('\n  -> '):''));
+    // Require EVERY reachable origin to be productive (or solely absent).
+    // A good sibling cannot launder a closed, seedless cycle.
+    for(const value of graph)assert.ok(productive.has(value)||absent.has(value),value.message+' (no proven origin)');
+    const count=graph.filter(value=>value.seed).length;
+    assert.ok(productive.has(entry)&&count>0,entry.message+' (no proven fingerprint origin)');
+    return count;
   }
   return {callers,prove};
 }
@@ -461,7 +524,7 @@ test('every production marker insertion is transactionally fenced for Card reads
   assertMarkerFences(sourceInventory());
 });
 
-test('the fingerprint catalog follows renamed injected helpers into a new module',()=>{
+test('the fingerprint catalog follows renamed injected helpers and seeded cycles into a new module',()=>{
   const sources=sourceInventory(),runtime=sources.get('runtime.mjs');
   const injected=runtime.source.replace('  const supersessionStorage = createSupersessionStorage(',
     `  const syntheticFingerprints=createSyntheticFingerprintStorage({block:suppress});
@@ -477,7 +540,7 @@ test('the fingerprint catalog follows renamed injected helpers into a new module
 import {fingerprint as engineFingerprint} from './validation.mjs';
 export function createSyntheticFingerprintStorage({block:deny}) {
   const renamed=deny;
-  function remember(ns,row){renamed(ns,row.fingerprint);}
+  function remember(ns,row){const value=row?row.fingerprint:value;renamed(ns,value);}
   function hashed(ns,content){renamed(ns,engineFingerprint(content));}
   return {remember,hashed};
 }`;
@@ -502,6 +565,30 @@ test('the fingerprint catalog rejects marker values at the injected supersession
     assert.match(error.message,/supersession-storage\.mjs:\d+ retireMutation \[fingerprint-value\]/);
     return true;
   });
+});
+
+test('the fingerprint catalog rejects seedless cycles, including beside a proven origin',()=>{
+  const original=sourceInventory(),file='supersession-storage.mjs',source=original.get(file).source;
+  const mutations=[
+    // Valid syntax, never evaluated: a self-feeding variable has no source.
+    'const selfFeeding=selfFeeding; suppress(ns, selfFeeding)',
+    'const selfFeeding=selfFeeding; const mixed=previous?previous.fingerprint:selfFeeding; suppress(ns, mixed)',
+    'const selfFeeding=previous?undefined:selfFeeding; suppress(ns, selfFeeding.fingerprint)',
+    // A good seed plus a back-edge must also retain every bad terminal.
+    "const mixed=previous?previous.fingerprint:(replacement?'rs1:i:synthetic':mixed); suppress(ns, mixed)",
+  ];
+  for(const [index,expression]of mutations.entries()){
+    const changed=source.replace('suppress(ns, previous.fingerprint)',expression);
+    assert.notEqual(changed,source);
+    const sources=new Map(original);sources.set(file,inventory(file,changed));
+    assert.throws(()=>assertMarkerFences(sources),error=>{
+      assert.ok(error instanceof assert.AssertionError);
+      assert.match(error.message,/supersession-storage\.mjs:\d+ retireMutation \[fingerprint-value\]/);
+      assert.match(error.message,/origin chain:\n  .*\n  -> /,'retain the complete provenance chain');
+      if(index<3)assert.match(error.message,/only cyclic origins/);
+      return true;
+    });
+  }
 });
 
 test('the marker catalog rejects missing epoch advances and unclassified writers',()=>{
