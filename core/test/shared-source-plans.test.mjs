@@ -93,11 +93,12 @@ function variants(site,variables) {
   for(const group of ['nextSteps','procedural','background'])for(const after of [undefined,{ordinal:7,id:'synthetic-anchor'}]) {
     const scope={where:'owner_id=? AND scope=? AND project_id=?',denySharedSource:enabled,type:enabled?'memory':'card',
       input:{states:Array(stateCount).fill('confirmed')},direction,group,after,rawAncestry:enabled,
-      db:{},hasCardLineage:()=>enabled,cachedContentLayout:()=>({suppressionRevision:enabled?1:0,rawLineage:enabled})};
+      db:{},hasCardLineage:()=>enabled,cachedContentLayout:()=>({suppressionRevision:enabled?1:0,rawLineage:enabled}),
+      idOrder:direction==='id'};
     const ancestryBuilder=[...variables].find(([name])=>name.endsWith(':memoryAncestry'));
     if(ancestryBuilder)scope.memoryAncestry=evaluate(ancestryBuilder[1],scope);
     // Resolve the engine-owned SQL fragments from their actual initializers.
-    for(const name of ['lineage','ancestry','index','order','keyset'])if(variables.has(site.fn+':'+name))
+    for(const name of ['lineage','ancestry','index','order','keyset','rawReceiptProof','receiptAncestry'])if(variables.has(site.fn+':'+name))
       scope[name]=evaluate(variables.get(site.fn+':'+name),scope);
     const sql=evaluate(site.expression,scope);assert.equal(typeof sql,'string',site.expression);
     result.add(normalize(sql));

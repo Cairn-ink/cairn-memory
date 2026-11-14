@@ -97,10 +97,11 @@ test(`source recall reads no receipt text after ${rejection} rejection`, { timeo
   assert.deepEqual(measured.result.rows.map(row => row.item.ref.memoryId), [retained.id]);
   assert.equal(measured.result.rows[0].item.label, 'Synthetic winning excerpt retained');
   assert.deepEqual(scored, ['Synthetic scan retained', 'Synthetic winning excerpt retained']);
-  const texts = measured.rows.filter(row => row.sql.startsWith('SELECT r.rowid AS cursor_row,r.* FROM json_each(?) wanted'));
+  // The scoring read may carry the canonical absence proof next to the receipt columns.
+  const texts = measured.rows.filter(row => /^SELECT r\.rowid AS cursor_row,r\.\*(?:,\( NOT EXISTS\(.*\) AS empty_raw_ancestry)? FROM json_each\(\?\) wanted/.test(row.sql));
   assert.equal(texts.length, 1, 'only the admitted candidate materializes receipt text');
-  assert.equal(texts[0].args[1], retained.id);
+  assert.equal(texts[0].args.at(-1), retained.id);
   assert.ok(!measured.rows.some(row => row.args.includes(rejected.id) &&
-    /SELECT (?:\*|r\.\*|r\.rowid AS cursor_row,r\.\*) FROM .*receipts/.test(row.sql)));
+    /SELECT (?:\*|r\.\*|r\.rowid AS cursor_row,r\.\*)(?:,| FROM ).*receipts/.test(row.sql)));
   assert.ok(measured.rows.some(row => row.sql.includes('r.receipt_key') && !/excerpt|r\.\*/.test(row.sql)), 'marker inputs still use headers');
 });
