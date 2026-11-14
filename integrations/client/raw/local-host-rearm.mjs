@@ -1,3 +1,4 @@
+import { openLocalSource } from './local-source-open.mjs';
 import { detectLocalCodexHost } from './local-codex-qualification.mjs';
 import { privateRead, privateWrite, checkedPath } from '../private-state.mjs';
 import { stateLock } from '../state-lock.mjs';
@@ -248,7 +249,7 @@ async function qualifiedContext(profile,selection,authority,operation,deps) {
     const source = await sessionSourceMetadata(selection.sourcePath,selection.sessionId,{ signal:operation.signal,
       qualifiedCreatorVersion:qualification.version,
       qualifyCreator:version => hasQualifiedCreator(profile.installation.qualificationConfigPath,version,{ signal:operation.signal }),
-      ...(deps.openSource ? { openSource:deps.openSource }:{}) });
+      openSource:deps.openSource ?? openLocalSource });
     if (!source?.interactive) rearmFail('source_unqualified');
     formatAuthority = source.formatAuthority;
     if (!await boundBinary(host)) rearmFail('host_unavailable');

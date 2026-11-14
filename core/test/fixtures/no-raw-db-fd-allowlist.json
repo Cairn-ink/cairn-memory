@@ -1825,6 +1825,26 @@
     "reason": "Private daemon coordination metadata, capability, identity-key, fixed-code log, or source-artifact/OS metadata only; generated endpoint names never designate a DB, WAL or SHM. No raw store descriptor is opened."
   },
   {
+    "path": "integrations/client/raw/local-source-open.mjs",
+    "source": "import { constants } from 'node:fs'",
+    "reason": "Local transcript opener only; never accepts a database path from capture authority."
+  },
+  {
+    "path": "integrations/client/raw/local-source-open.mjs",
+    "source": "import { open, lstat } from 'node:fs/promises'",
+    "reason": "Local transcript opener only; never accepts a database path from capture authority."
+  },
+  {
+    "path": "integrations/client/raw/local-source-open.mjs",
+    "source": "const handle = await open(prefix, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_DIRECTORY);",
+    "reason": "Local transcript opener only; never accepts a database path from capture authority."
+  },
+  {
+    "path": "integrations/client/raw/local-source-open.mjs",
+    "source": "file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);",
+    "reason": "Local transcript opener only; never accepts a database path from capture authority."
+  },
+  {
     "path": "integrations/openclaw/src/setup.mjs",
     "source": "import { mkdir, rmdir, unlink, lstat } from \"node:fs/promises\"",
     "reason": "Local setup inspects its private credential directory and removes only its newly created secret or empty directory on rollback; secret file I/O uses the OpenClaw SDK and never a database path."

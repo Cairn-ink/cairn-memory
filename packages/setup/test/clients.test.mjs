@@ -111,6 +111,7 @@ export async function fixture(t, { claude = true, codex = true, qualified = true
         TEST_INSPECTION: JSON.stringify(inspection),
         FAKE_GLOBAL_CALLS: allCalls, TEST_CHOICES: JSON.stringify(choices), TEST_TTY: String(interactive), TEST_HOSTED_BASELINE: String(disableLocalMode), TEST_FIXED_NOW: fixedNow === undefined ? '' : String(fixedNow), CAIRN_MEMORY_HOME: join(home, 'local-memory') }, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
     wireChild(child, server.server);
+    child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
     let stdout = '', stderr = '';
     child.stdout.on('data', data => { stdout += data; }); child.stderr.on('data', data => { stderr += data; });
     const timer = setTimeout(() => child.kill('SIGKILL'), 30000);

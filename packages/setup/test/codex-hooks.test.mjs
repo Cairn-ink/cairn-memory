@@ -94,6 +94,7 @@ async function fixture(t,{answers=[''],args,config='',hooks,paired=false,claudeP
     const child = spawn(executable,[harness,...flags],{cwd:ws.path,
       env:{...env,...envOverrides,CX5_TEST_CLI_MODULE:module},stdio:['ignore','pipe','pipe','ipc']});
     wireChild(child,server.server);
+    child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
     let stdout='',stderr='';child.stdout.on('data',x=>stdout+=x);child.stderr.on('data',x=>stderr+=x);
     let timedOut=false;
     const timer=setTimeout(()=>{timedOut=true;child.kill('SIGKILL');},30000);

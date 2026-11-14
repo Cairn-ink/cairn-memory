@@ -54,6 +54,7 @@ async function fixture(t, options = {}) {
       env: { LANG: 'en_US.UTF-8', PATH: options.relativePath ? 'bin' : fakeBin, HOME: workspace.path, TMPDIR: options.projectTmp ? projectTmp : process.env.TMPDIR, FAKE_CALLS: callsPath, FAKE_STATE: statePath,
         ...(options.customHome ? { CODEX_HOME: home } : {}), ...options.env },
     });
+    child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
     let stdout = '', stderr = '';
     child.stdout.on('data', data => { stdout += data; }); child.stderr.on('data', data => { stderr += data; });
     const timer=setTimeout(()=>child.kill('SIGKILL'),30000);

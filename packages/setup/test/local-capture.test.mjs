@@ -20,6 +20,7 @@ const needCache = t => engineCacheComplete(process.env.CAIRN_SETUP_NPM_CACHE) ||
 async function run(command, args, { input, ...options } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'], ...options });
+    child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
     let stdout = '', stderr = '';
     child.stdout.on('data', data => stdout += data); child.stderr.on('data', data => stderr += data);
     child.on('error', reject);
@@ -28,7 +29,7 @@ async function run(command, args, { input, ...options } = {}) {
     child.stdin.end(input);
   });
 }
-async function fixture(t, { codex = true, failedQualification = false, cloud = false, interactive = false } = {}) {
+async function fixture(t, { codex = true, failedQualification = false, cloud = false, interactive = false, platform = process.platform } = {}) {
   const ws = createTestWorkspace(t, { prefix: 'packed-local-capture-' });
   const home = join(ws.path, 'home'), bin = join(ws.path, 'bin'), root = join(home, '.cairn-memory');
   await mkdir(home, { mode: 0o700 }); await mkdir(bin, { mode: 0o700 });
@@ -63,7 +64,7 @@ async function fixture(t, { codex = true, failedQualification = false, cloud = f
     CAIRN_SETUP_NPM_CACHE: process.env.CAIRN_SETUP_NPM_CACHE, CAIRN_SETUP_NPM_OFFLINE: '1' };
   const harness = join(ws.path, 'setup.mjs');
   await writeFile(harness, `import{main}from ${JSON.stringify(pathToFileURL(join(pkg, 'lib/setup.mjs')).href)};
-    process.exitCode=await main(process.argv.slice(2),{interactive:${interactive},prompt:async()=> 'yes'});`);
+    process.exitCode=await main(process.argv.slice(2),{interactive:${interactive},platform:${JSON.stringify(platform)},prompt:async()=> 'yes'});`);
   const setup = async (args = ['setup', '--local'], { expected = 0, packagePath } = {}) => {
     assertFixtureClients(env, ws.path);
     const result = await run(process.execPath, [packagePath ? join(packagePath, 'bin/memory.mjs') : harness, ...args], { env, cwd: ws.path });
@@ -92,6 +93,7 @@ async function mcp(f, t) {
   const executable = join(f.root, 'engine', receipt.engineId, 'app/node_modules/cairn-memory-local-preview/bin/cairn-memory.mjs');
   const child = spawn(receipt.node, [executable, '--db', d.database.path, '--owner', d.ownerId,
     ...(d.projectId ? ['--project', d.projectId] : [])], { cwd: f.ws, env: f.env, stdio: ['pipe', 'pipe', 'pipe'] });
+  child.stdout.setEncoding('utf8');
   child.stderr.resume(); let sequence = 0, buffer = ''; const pending = new Map();
   child.stdout.on('data', bytes => {
     buffer += bytes;
@@ -260,11 +262,13 @@ test('fixture client guard rejects leaked Node bin and escaping clients before e
 
 for (const interactive of [false, true]) test(`packed default capture, notice once, idempotence and status (${interactive ? 'interactive' : 'noninteractive'})`, { timeout: 150000 }, async t => {
   if (!needCache(t)) return;
-  const f = await fixture(t, { interactive });
+  const clients = process.platform === 'darwin' ? ['claude'] : ['claude', 'codex'];
+  const f = await fixture(t, { interactive, codex:clients.includes('codex') });
   const output = await f.setup();
-  assert.equal(output.match(/Conversation text from this tool/g)?.length, 2);
-  assert.match(output, /Codex: approve.*\/hooks/);
-  for (const client of ['claude', 'codex']) {
+  assert.equal(output.match(/Conversation text from this tool/g)?.length, clients.length);
+  if (clients.includes('codex')) assert.match(output, /Codex: approve.*\/hooks/);
+  else t.diagnostic('Codex default-on assertions require Linux host qualification; Claude capture runs on macOS.');
+  for (const client of clients) {
     const settings = await f.native(client);
     assert.ok(settings.hooks.SessionStart); assert.ok(settings.hooks.Stop); assert.ok(settings.hooks.PreCompact);
     if (client === 'codex') assert.ok(settings.hooks.UserPromptSubmit);
@@ -274,19 +278,19 @@ for (const interactive of [false, true]) test(`packed default capture, notice on
     assert.equal(capture.interpretation, 'raw-only'); assert.equal(capture.raw.capBytes, 200000000);
     assert.equal(capture.usage.root, join(f.root, 'capture-usage'));
   }
-  const before = await Promise.all(['claude', 'codex'].map(client => f.native(client)));
-  const keys = await Promise.all(['claude', 'codex'].map(client => readFile(join(f.root, 'capture', client, 'identity.key'))));
+  const before = await Promise.all(clients.map(client => f.native(client)));
+  const keys = await Promise.all(clients.map(client => readFile(join(f.root, 'capture', client, 'identity.key'))));
   assert.doesNotMatch(await f.setup(), /Conversation text from this tool/);
-  assert.deepEqual(await Promise.all(['claude', 'codex'].map(client => f.native(client))), before);
-  assert.deepEqual(await Promise.all(['claude', 'codex'].map(client => readFile(join(f.root, 'capture', client, 'identity.key')))), keys);
-  const probeCount = (await readFile(f.calls.codex, 'utf8')).split('\n').filter(line => line.includes('generate-json-schema')).length;
+  assert.deepEqual(await Promise.all(clients.map(client => f.native(client))), before);
+  assert.deepEqual(await Promise.all(clients.map(client => readFile(join(f.root, 'capture', client, 'identity.key')))), keys);
+  const probeCount = clients.includes('codex') ? (await readFile(f.calls.codex, 'utf8')).split('\n').filter(line => line.includes('generate-json-schema')).length : 0;
   const status = await f.setup(['status']);
-  assert.match(status, /Claude Code local capture: on/); assert.match(status, /Codex local capture: on/);
+  assert.match(status, /Claude Code local capture: on/); if (clients.includes('codex')) assert.match(status, /Codex local capture: on/);
   assert.match(status, /200,000,000/);
-  assert.equal((await readFile(f.calls.codex, 'utf8')).split('\n').filter(line => line.includes('generate-json-schema')).length, probeCount);
+  if (clients.includes('codex')) assert.equal((await readFile(f.calls.codex, 'utf8')).split('\n').filter(line => line.includes('generate-json-schema')).length, probeCount);
 });
 
-test('packed Codex zero-history off/on and engine qualification status never probes', { timeout: 150000 }, async t => {
+test('packed Codex zero-history off/on and engine qualification status never probes', { timeout: 150000, skip: process.platform === 'darwin' && 'Codex automatic saving requires Linux /proc host qualification.' }, async t => {
   if (!needCache(t)) return;
   const f = await fixture(t); await f.setup(['setup', '--local', '--no-capture']);
   await f.setup(['config', '--local-capture', 'on', '--client', 'codex']);
@@ -325,7 +329,7 @@ test('packed Traditional Chinese notice appears once and describes controls and 
   assert.doesNotMatch(await f.setup(['setup', '--local', '--lang', 'zh']), /明文 Raw/);
 });
 
-test('packed failed Codex qualification keeps setup usable, reports waiting, status never probes', { timeout: 150000 }, async t => {
+test('packed failed Codex qualification keeps setup usable, reports waiting, status never probes', { timeout: 150000, skip: process.platform === 'darwin' && 'Codex automatic saving requires Linux /proc host qualification.' }, async t => {
   if (!needCache(t)) return;
   const f = await fixture(t, { failedQualification: true });
   assert.match(await f.setup(), /Codex capture waits for format qualification/);
@@ -403,9 +407,16 @@ test('packed Claude transcript created after SessionStart captures its first tur
   const reader = await mcp(f, t); await searchCaptured(reader); await reader.close();
 });
 
-test('packed hook → raw list → preview → delete → MCP empty → re-sent copies fenced', { timeout: 150000 }, async t => {
+for (const mode of [
+  { name: 'native', codex: process.platform !== 'darwin', platform: process.platform },
+  { name: 'linux Claude-only, Codex absent', codex: false, platform: 'linux', claudeOnly: true },
+  { name: 'darwin Claude-only, Codex absent', codex: false, platform: 'darwin', claudeOnly: true },
+  { name: 'darwin Claude-only, Codex present', codex: true, platform: 'darwin', claudeOnly: true },
+  { name: 'darwin both registered, Codex capture blocked', codex: true, platform: 'darwin', setupCode: 2 },
+]) test(`packed hook → raw list → preview → delete → MCP empty → re-sent copies fenced (${mode.name})`, { timeout: 150000 }, async t => {
   if (!needCache(t)) return;
-  const f = await fixture(t); await f.setup(['setup', '--local', '--owner', 'synthetic-raw-owner', '--project', 'synthetic-raw-project']);
+  const f = await fixture(t, mode); await f.setup(['setup', '--local', '--owner', 'synthetic-raw-owner', '--project', 'synthetic-raw-project',
+    ...(mode.claudeOnly ? ['--client', 'claude'] : [])], { expected: mode.setupCode ?? 0 });
   const d = await f.descriptor(), vector = d.clients.claude.vector;
   const executable = join(f.root, 'engine', vector.engineId, 'app/node_modules/cairn-memory-local-preview/bin/cairn-memory.mjs');
   const help = await run(vector.node, [executable, 'raw', '--help'], { env: f.env, cwd: f.ws });
@@ -422,7 +433,8 @@ test('packed hook → raw list → preview → delete → MCP empty → re-sent 
   assert.equal(row.client, 'claude-code'); assert.equal(row.messageCount, 1); assert.ok(row.byteCount > 0);
   assert.ok(Date.parse(row.firstEventAt)); assert.ok(Date.parse(row.lastEventAt));
   assert.equal(await f.setup(['raw', 'list', '--client', 'claude']), listed);
-  assert.equal(await f.setup(['raw', 'list', '--client', 'codex']), '');
+  if (d.clients.codex) assert.equal(await f.setup(['raw', 'list', '--client', 'codex']), '');
+  else await f.setup(['raw', 'list', '--client', 'codex'], { expected: 2 });
   const before = await snapshotDatabase(f);
   const preview = await f.setup(['raw', 'delete', id]);
   assert.doesNotMatch(preview, /copper|telescope|private delete sentinel/);
@@ -562,4 +574,33 @@ test('packed attested base-33 lineage-1 store refuses 0.6.5 after Raw open; rein
   assert.deepEqual(await snapshotDatabase(f), before, 'refused old open changes nothing');
   await f.setup();
   const restored = await mcp(f, t); await searchCaptured(restored); await restored.close();
+});
+
+for (const action of ['setup-opt-out', 'config-off']) test(`packed ${action} prints only off capture status and retains it in status`, { timeout:150000 }, async t => {
+  if (!needCache(t)) return;
+  const f = await fixture(t);
+  const initial = await f.setup(['setup', '--local', '--no-capture']);
+  if (action === 'config-off') assert.match(await f.setup(['config', '--local-capture', 'on', '--client', 'claude']), /Claude Code local capture: on/);
+  const output = action === 'setup-opt-out' ? initial : await f.setup(['config', '--local-capture', 'off']);
+  assert.doesNotMatch(output, /on by default|approve the new entries|format qualification/);
+  for (const client of ['Claude Code', 'Codex']) assert.ok(output.includes(`${client} local capture: off (off)`));
+  // Simulate an unavailable retained runtime: stored off must not become blocked.
+  const settingsPath = join(f.root, 'capture-settings.json'), settings = await json(settingsPath);
+  for (const receipt of Object.values(settings.clients)) receipt.node = join(f.ws, 'missing-node');
+  await writeFile(settingsPath, JSON.stringify(settings), { mode:0o600 });
+  const status = await f.setup(['status']);
+  for (const client of ['Claude Code', 'Codex']) assert.ok(status.includes(`${client} local capture: off (off)`));
+  assert.doesNotMatch(status, /local capture: blocked|approve the new entries/);
+});
+
+for (const lang of ['en', 'zh']) test(`packed macOS Codex stays unavailable with the Claude setup hint (${lang})`, {
+  timeout:150000, skip:process.platform !== 'darwin' && 'Requires the real macOS installer and engine.'
+}, async t => {
+  if (!needCache(t)) return;
+  const f = await fixture(t);
+  const output = await f.setup(['setup', '--local', '--lang', lang], { expected:2 });
+  assert.match(output, /npx @cairn-ink\/memory setup --local --client\s+claude/);
+  assert.match(output.trimEnd().split('\n').at(-1), /qualification_required/);
+  const status = await f.setup(['status', '--lang', lang]);
+  assert.match(status, /qualification_required/);
 });

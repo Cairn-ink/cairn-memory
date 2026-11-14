@@ -470,7 +470,7 @@ export async function main(argv, {
     return Math.max(localStatusCode, error instanceof SetupError ? error.code : 1);
   } finally {
     if (localDetection) {
-      try { await localStatus(localDetection, { write, t, env, verbose, emittedEnvironmentCauses: progress.codexEnvironmentCauses }); }
+      try { await localStatus(localDetection, { write, t, env, platform, verbose, emittedEnvironmentCauses: progress.codexEnvironmentCauses }); }
       catch { write(t('local_status_unverified')); }
     }
     process.off('SIGINT', interrupt);

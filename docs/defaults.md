@@ -1,6 +1,6 @@
 # Local engine defaults
 
-Installer 0.6.6 `setup --local` installs automatic plaintext conversation Raw
+Since installer 0.6.6, `setup --local` installs automatic plaintext conversation Raw
 capture by default, without a key or model calls. Each selected client gets one
 notice. Both clients share the 200,000,000-byte cap and the MCP database/namespace.
 Use `setup --local --no-capture` or `config --local-capture off`; enable with
@@ -45,9 +45,9 @@ Several sessions saving at once no longer stop one of them from saving. Default
 reads keep the Raw excerpts they already validated when a read reaches its time
 limit, marked partial, instead of dropping them.
 
-**Search catches up after saving (installer 0.6.6).** Each turn is saved to the local store as soon as it ends. Raw search covers a newly saved conversation only after the local index reaches it. Raw search builds its index in the background while Cairn is running, at roughly one saved message per second: allow about 15 minutes for 1,000 saved messages and roughly 2 hours for 10,000. After each new saved message it re-checks the whole index (about 6 minutes per 1,000 saved messages). Until a build or re-check finishes, Raw search still returns results but reports partial coverage. While you keep working, each new save restarts the indexing pass, so a conversation saved during a busy session may not be searchable until you pause. Until the index has caught up, newly saved conversations may be missing from results. The coverage report marks such results as partial, but assistants using the memory tool see only the results, so an empty answer then doesn't mean nothing was saved. Memories, and conversations the index already covers, are not affected and stay searchable as before.
+**Search catches up after saving (installer 0.6.6 and later).** Each turn is saved to the local store as soon as it ends. Raw search covers a newly saved conversation only after the local index reaches it. Raw search builds its index in the background while Cairn is running, at roughly one saved message per second: allow about 15 minutes for 1,000 saved messages and roughly 2 hours for 10,000. After each new saved message it re-checks the whole index (about 6 minutes per 1,000 saved messages). Until a build or re-check finishes, Raw search still returns results but reports partial coverage. While you keep working, each new save restarts the indexing pass, so a conversation saved during a busy session may not be searchable until you pause. Until the index has caught up, newly saved conversations may be missing from results. The coverage report marks such results as partial, but assistants using the memory tool see only the results, so an empty answer then doesn't mean nothing was saved. Memories, and conversations the index already covers, are not affected and stay searchable as before.
 
-Known limits in installer 0.6.6:
+Known limits in installers 0.6.6 and 0.6.7:
 - While new turns keep arriving, the local MCP server keeps indexing: about one small index write per second and roughly 3% of one CPU core.
 - Histories of about 50,000 messages or more may never finish indexing; search keeps reporting partial coverage for them.
 - Searches served by a reader that doesn't run index maintenance itself, such as keyword-only searches when an embedding model is configured, can keep reporting partial coverage even after indexing has finished. Their results are still returned.

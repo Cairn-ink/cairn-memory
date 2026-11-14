@@ -109,6 +109,7 @@ export async function installedPrompt(t, { host = 'codex', warm = true, syncDela
       process.send({kind:'outcome', ...outcome}, () => process.exit(outcome.code ?? 1));`);
     startedAt = performance.now();
     const child = spawn(executable, [parent], { cwd: ws.path, detached: true, env, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
+    child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
     let stdout = '', stderr = '', outcome, delivery;
     child.stdout.on('data', data => stdout += data); child.stderr.on('data', data => stderr += data);
     child.on('message', message => {
