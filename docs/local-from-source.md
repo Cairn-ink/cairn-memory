@@ -141,6 +141,8 @@ long-history retrieval and the boundaries of individual client tests.
 
 The released hosted plugin and local developer preview have different readiness
 levels. The local install lifecycle is verified, but source-support quality still
-fails; broad promotion is not yet cleared. No first-ten-user result or star
-target is presented as achieved. See [Known limitations](limitations.md), [ROADMAP.md](../ROADMAP.md) and the
+fails; broad promotion is not yet cleared. Local-mode announcements follow
+[P4](plans/github-promotion.md#p4-擴大宣傳與產品品質標準); quality claims still require
+[E01–E09](plans/semantic-evaluation.md#frozen-acceptance-e01e09). No first-ten-user
+result or star target is presented as achieved. See [Known limitations](limitations.md), [ROADMAP.md](../ROADMAP.md) and the
 [proposed adoption experiment](plans/local-memory-plg.md).
