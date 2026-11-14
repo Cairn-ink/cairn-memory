@@ -106,6 +106,29 @@ export function dispatchCommit(connection, work, deadline, options) {
   return binding.host.dispatch(binding.db, work, deadline, options);
 }
 
+// Coordinator 11-14 D1 (i) with (iii): only the refused staged claim's
+// content-free release gets a fresh account. Do not move other compensation
+// or any content publication away from the retained request account.
+export function releaseStagedCaptureClaim(connection, input) {
+  const binding = bindings.get(connection);
+  if (!binding) fail('storage_error');
+  const { db } = binding, { namespace, client, eventId, payloadDigest, token } = input;
+  return withContentSuppressionRequest(() => binding.host.dispatch(db, () => {
+    // One atomic, token-guarded write. No expiry sweep, staged-payload change,
+    // admission or publication may share this fresh-account statement batch.
+    const result = db.prepare(`UPDATE admission_claims SET state='reserved',token=NULL,lease_expires_at=NULL
+      WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND event_id=?
+        AND state='pending' AND payload_digest=? AND token=?
+        AND EXISTS (SELECT 1 FROM staged_capture_evidence s
+          WHERE s.owner_id=admission_claims.owner_id AND s.scope=admission_claims.scope
+            AND s.project_id=admission_claims.project_id AND s.client=admission_claims.client
+            AND s.event_id=admission_claims.event_id AND s.state='pending')`)
+      .run(namespace.ownerId, namespace.scope, namespace.projectId ?? '', client, eventId, payloadDigest, token);
+    if (result.changes) recordCommit(db);
+    return result;
+  }, undefined, { compensating: true }), { fresh: true });
+}
+
 export function createCommitDispatcher({ now = () => performance.now(), random = Math.random,
   onAwait, onBackoff, signal: hostSignal, strict = false } = {}) {
   const host = {

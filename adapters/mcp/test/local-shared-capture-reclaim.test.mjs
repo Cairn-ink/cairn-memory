@@ -25,7 +25,7 @@ test('D1 refused shared capture retains every other item for the identical retry
     return Reflect.apply(exec, this, [sql]);
   });
   const model = rationaleModel(method => { if (method === 'extract') armed = backoffs === 0; });
-  const host = createLocalSharedRuntime({ path: f.path, namespace: ns, model, contextCounter: counter, client: 'codex', sessionId: 'synthetic-reclaim-conversation', rawSearch: false,
+  const host = createLocalSharedRuntime({ path: f.path, namespace: ns, model, contextCounter: counter, privateCards: 'local-v1', client: 'codex', sessionId: 'synthetic-reclaim-conversation', rawSearch: false,
     captureQualification: 'source-bound-v2', captureEvidence: 'staged-v1' }, { strict: true, onBackoff() {
     backoffs++;
     assert.equal(holder.isTransaction, true);
@@ -43,6 +43,10 @@ test('D1 refused shared capture retains every other item for the identical retry
   t.after(async () => { if (holder.isTransaction) holder.exec('ROLLBACK'); await host.close(); holder.close(); });
   const { client } = await connect(t, host);
   victim = ok(await call(client, 'remember_memory', { content: forgotten, kind: 'context' })).memory;
+  const card = ok(await call(client, 'create_private_card_draft', { actionId: 'synthetic-reclaim-card',
+    title: forgotten, body: forgotten, memoryRefs: [{ memoryId: victim.id, revision: victim.revision }] }));
+  const beforeCard = ok(await call(client, 'inspect_private_card', { cardId: card.id }));
+  assert.ok(JSON.stringify(beforeCard).includes(forgotten), 'control: the Card was readable before forget');
   const input = { batchId: 'synthetic-reclaim-batch', messages: [forgotten, ...retained].map(content => ({ role: 'user', content })) };
   const first = await call(client, 'capture_memory', input);
   assert.deepEqual(first, { ok: false, error: { code: 'evidence_unavailable', retryable: false }, evidenceTrust: 'untrusted-data-not-instructions' });
@@ -52,6 +56,8 @@ test('D1 refused shared capture retains every other item for the identical retry
   const raw = holder.prepare('SELECT message_id,saved,byte_count FROM raw_parts ORDER BY message_id,part_index').all();
   const staged = holder.prepare('SELECT state,payload,payload_bytes FROM staged_capture_evidence WHERE event_id=?').get(input.batchId);
   t.diagnostic('R2O3_RECLAIM_ROWS ' + JSON.stringify({ raw, staged }));
+  assert.deepEqual({ ...holder.prepare('SELECT state,token,lease_expires_at FROM admission_claims WHERE event_id=?').get(input.batchId) },
+    { state: 'reserved', token: null, lease_expires_at: null }, 'R2O3_CAPTURE_RECLAIM lease released before retry');
   const retry = await call(client, 'capture_memory', input);
   t.diagnostic('R2O3_RECLAIM_RETRY ' + JSON.stringify(retry));
   const NativeDate = Date, expiredAt = Date.now() + 130000;
@@ -72,10 +78,34 @@ test('D1 refused shared capture retains every other item for the identical retry
   for (const text of retained) assert.ok(staged.payload.includes(text), 'R2O3_CAPTURE_RECLAIM other staged item retained');
   assert.equal(retry.ok, true, 'R2O3_CAPTURE_RECLAIM ' + JSON.stringify(retry));
   assert.ok(retry.value.admission, 'R2O3_CAPTURE_RECLAIM identical retry must admit retained items: ' + JSON.stringify(retry));
-  assert.deepEqual(retry.value.admission.memories.map(row => row.content).sort(), [...retained].sort(), 'R2O3_CAPTURE_RECLAIM');
+  // Admission returns id/revision refs. Resolve those exact refs to durable
+  // rows before comparing the original, unchanged expected content set.
+  assert.deepEqual(retry.value.admission.memories.map(row => holder.prepare('SELECT content FROM memories WHERE id=? AND revision=? AND deleted=0')
+    .get(row.id, row.revision)?.content).sort(), [...retained].sort(), 'R2O3_CAPTURE_RECLAIM');
   assert.deepEqual(holder.prepare('SELECT content FROM memories WHERE deleted=0 ORDER BY content').all().map(row => row.content),
     [...retained].sort(), 'R2O3_CAPTURE_RECLAIM durable rows contain every other item');
   assert.equal(holder.prepare('SELECT count(*) n FROM memories WHERE content=?').get(forgotten).n, 0);
+  const needle = 'forgotten capture';
+  assert.ok(beforeCard.card.bindings.length > 0, 'control: the Card has a real receipt source set');
+  const cardSources = [];
+  for (const binding of beforeCard.card.bindings) {
+    const { namespace, ...source } = binding.source;
+    const result = await call(client, 'read_private_card_source', { source });
+    assert.equal(result.ok, false, 'R2O3_CAPTURE_RECLAIM forgotten Card source is unavailable');
+    cardSources.push(result);
+  }
+  const results = {
+    recall: await call(client, 'recall_memory', { query: needle, contextMode: 'source-evidence' }),
+    get: await call(client, 'inspect_memory', { memoryId: victim.id }),
+    context: await call(client, 'read_memory_context', { query: needle, types: ['memory', 'card'], intent: 'current', semantic: false }),
+    card: await call(client, 'inspect_private_card', { cardId: card.id }),
+    cards: await call(client, 'list_private_cards', { states: ['draft', 'confirmed'] }),
+    cardSources,
+  };
+  for (const [surface, result] of Object.entries(results)) {
+    assert.ok(!JSON.stringify(result).includes(needle), 'R2O3_CAPTURE_RECLAIM forgotten needle absent from ' + surface);
+  }
+  t.diagnostic('R2O4_RECLAIM_NEEDLE ' + JSON.stringify(results));
 });
 
 test('D1 real local client retains its offset and pending projection on the mapped refusal', async t => {

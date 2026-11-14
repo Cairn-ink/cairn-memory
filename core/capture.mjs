@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { isStorageBusy } from './database.mjs';
+import { releaseStagedCaptureClaim } from './commit-dispatch.mjs';
 import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { isCaptureSourceBusy, isPreDispatchToken } from './capture-source-safety.mjs';
 import { captureSnapshot, extractedItems, retainedSourceView } from './capture-input.mjs';
@@ -226,9 +227,13 @@ export async function captureMessages({ model, input, operations, captureQualifi
     }
   } catch (error) {
     // A failed or stale cleanup cannot replace the original error or release a successor's claim.
-    try { const abandon = () => operations.abandonAdmission(owned, (isCaptureSourceBusy(error) && !stagedDispatched) || Boolean(episodeRun &&
+    try { if (operations.commit && captureEvidence === 'staged-v1' && !episodeRun &&
+        error instanceof MemoryStoreError && error.code === 'evidence_unavailable') {
+      await releaseStagedCaptureClaim(runtime, owned);
+    } else { const abandon = () => operations.abandonAdmission(owned, (isCaptureSourceBusy(error) && !stagedDispatched) || Boolean(episodeRun &&
       (isStorageBusy(error) || (error instanceof MemoryStoreError && error.code === 'storage_busy'))));
       if (operations.commit) await operations.commit(abandon, { compensating: true }); else abandon();
+    }
     } catch { /* Pre-dispatch staged tokens remain reclaimable without cleanup. */ }
     if (error instanceof MemoryStoreError) throw error;
     if (episodeRun && isStorageBusy(error)) fail('storage_busy');

@@ -80,12 +80,15 @@ for (const kind of ['memory', 'receipt', 'owner']) test(`${kind}: suppression be
     assert.equal(expected.ok, true, JSON.stringify(expected));
     assert.deepEqual(expected.value.admission.memories, []);
     assert.equal(expected.value.admission.suppressedCount, 1);
-    assert.equal(actual.ok, true, 'R2K_MEMORY_GUARD_RERUN: ' + JSON.stringify(actual));
-    assert.deepEqual(actual.value.admission, expected.value.admission, 'R2K_MEMORY_GUARD_RERUN');
+    // Coordinator 11-14 D1 decision (i) with (iii): retained epoch disagreement
+    // refuses earlier; the content-free staged release permits a fresh retry.
+    assert.deepEqual(actual, { ok: false, error: { code: 'evidence_unavailable', retryable: false } }, 'R2K_MEMORY_GUARD_RERUN');
   } else {
     assert.equal(expected.ok, false, JSON.stringify(expected));
     assert.equal(expected.error.code, kind === 'receipt' ? 'source_excluded' : 'memory_not_found');
-    assert.deepEqual(actual, expected, 'R2K_' + kind.toUpperCase() + '_GUARD_RERUN');
+    assert.deepEqual(actual, kind === 'receipt'
+      ? { ok: false, error: { code: 'evidence_unavailable', retryable: false } } : expected,
+    'R2K_' + kind.toUpperCase() + '_GUARD_RERUN');
   }
   assert.equal(f.counts().extract, 1, 'provider extraction must not replay');
   assert.equal(control.counts().extract, kind === 'memory' ? 1 : 0);
