@@ -350,7 +350,7 @@ test('a refused refresh removes idle state and the view recovers to ready', { ti
   await resumesReady(f, 'R2N_IDLE_REFUSAL_RECOVERS R2O_IDLE_REFUSAL_ENTRY');
 });
 
-for (const shared of [false, true]) for (const operation of ['forget', 'correct']) test(`same-namespace ${operation} re-enables an idle Card view and reaches ready shared=${shared}`, { timeout: 15000 }, async t => {
+for (const shared of [false, true]) for (const operation of ['forget', 'correct']) test(`same-namespace ${operation} keeps taking refused maintenance turns shared=${shared}`, { timeout: 15000 }, async t => {
   const safety = safetyFixture(t, 23); await safety.migrate();
   const base = await realFixture(t, { path: safety.path, shared });
   const victim = ok(await base.core.admit({ namespace: ns,
@@ -360,5 +360,18 @@ for (const shared of [false, true]) for (const operation of ['forget', 'correct'
   ok(await f.core[operation]({ namespace: ns, memoryId: victim.id, expectedRevision: victim.revision,
     ...(operation === 'correct' ? { content: 'Synthetic revised idle source', kind: 'fact',
       receipt: { client: 'synthetic', sessionId: 'same-namespace', eventId: 'correction', role: 'user', excerpt: 'Synthetic revised idle source' } } : {}) }));
-  await resumesReady(f, 'R2O_IDLE_' + operation.toUpperCase());
+  // Coordinator 11-14, D2: main refuses the public acknowledgement while this
+  // namespace has a suppression fact. Refusal must never make the view idle.
+  for (let cycle = 0; cycle < 3; cycle++) {
+    const before = f.selected.length;
+    await f.loop.tick(); await f.loop.tick();
+    assert.deepEqual(f.selected.slice(before).map(call => call.types[0]).sort(), ['card', 'memory'],
+      'R2O3_SAME_NAMESPACE_TURNS ' + operation + ' shared=' + shared);
+  }
+  assert.equal(cardTurns(f).length, 3, 'R2O3_SAME_NAMESPACE_TURNS: the Card view is never skipped');
+  for (const turn of cardTurns(f)) assert.deepEqual(turn.result,
+    { ok: false, error: { code: 'index_unavailable', retryable: false } }, 'same-namespace public refusal is preserved');
+  const acknowledgement = await f.access.call(f.core, 'refreshContextIndex', { readSet: [ns], types: ['card'],
+    intent: 'current', budget: { maxItems: 16, maxMs: 1000 } });
+  assert.deepEqual(acknowledgement, { ok: false, error: { code: 'index_unavailable', retryable: false } });
 });
