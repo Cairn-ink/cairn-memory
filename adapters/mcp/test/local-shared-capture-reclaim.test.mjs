@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { createLocalRawWorker } from '../../../integrations/client/raw/local-worker.mjs';
 import { workerFixture } from '../../../integrations/client/test/fixtures/local-worker-workspace.mjs';
 import { captureReply } from '../../local/capture.mjs';
@@ -12,7 +15,55 @@ import { rationaleModel } from '../../../core/testing/rationale-model.mjs';
 import { writeContentSuppressionInside, suppressReceiptsInside } from '../../../core/content-suppression-storage.mjs';
 import { ns, counter, connect, call, ok } from './local-shared-support.mjs';
 
-test('D1 refused shared capture retains every other item for the identical retry', { timeout: 15000 }, async t => {
+const stagedRow = (db, eventId) => db.prepare('SELECT state,payload,payload_bytes,created_at,expires_at FROM staged_capture_evidence WHERE event_id=?').get(eventId);
+const stagedShape = row => row && { state: row.state, readable: row.payload !== null, bytes: row.payload_bytes,
+  retentionMs: row.expires_at - row.created_at };
+async function atWallTime(timestamp, work) {
+  const NativeDate = Date;
+  globalThis.Date = class extends NativeDate {
+    constructor(...args) { super(...(args.length ? args : [timestamp])); }
+    static now() { return timestamp; }
+  };
+  try { return await work(); } finally { globalThis.Date = NativeDate; }
+}
+
+// Establish main's actual successful/abandon lifecycle, including its expiry
+// sweep. Staged-v1 payloads remain inspectable until the 24-hour deadline;
+// admission consumes the pending state, not the retained source bytes.
+async function ordinaryMainStaging(t, abandoned) {
+  const w = createTestWorkspace(t, { prefix: 'reclaim-main-' });
+  const root = fileURLToPath(new URL('../../../', import.meta.url));
+  const archive = join(w.path, 'main.tar');
+  for (const [program, args] of [['git', ['archive', '--output', archive, '39ae9111']], ['tar', ['-xf', archive, '-C', w.path]]]) {
+    const child = spawnSync(program, args, { cwd: root, encoding: 'utf8' });
+    t.diagnostic('R2O5_STAGED_MAIN_COMMAND ' + JSON.stringify({ program, args, rc: child.status }));
+    assert.equal(child.status, 0, child.stderr);
+  }
+  const { openMemoryCore } = await import(pathToFileURL(join(w.path, 'core/contract.mjs')));
+  const model = rationaleModel();
+  if (abandoned) model.extract = () => { throw Error('synthetic extraction failure'); };
+  const path = join(w.path, 'ordinary.sqlite');
+  const core = openMemoryCore({ path, raw: false, model, captureQualification: 'source-bound-v2', captureEvidence: 'staged-v1' });
+  w.defer(() => core.close());
+  const key = { namespace: ns, client: 'synthetic', eventId: 'ordinary-stage' };
+  const result = await core.capture({ ...key, sessionId: 'ordinary',
+    messages: [{ id: 'source', role: 'user', content: 'Synthetic ordinary staged source' }] });
+  assert.equal(result.ok, !abandoned, JSON.stringify(result));
+  const db = new DatabaseSync(path); w.defer(() => db.close());
+  const before = stagedRow(db, key.eventId);
+  assert.equal(before.state, abandoned ? 'failed' : 'admitted');
+  assert.ok(before.payload);
+  await atWallTime(before.created_at + 130000, () => core.inspectCaptureEvidence(key));
+  const afterLease = stagedRow(db, key.eventId);
+  await atWallTime(before.expires_at + 1, () => core.inspectCaptureEvidence(key));
+  const afterExpiry = stagedRow(db, key.eventId);
+  assert.deepEqual(stagedShape(afterExpiry), { state: 'expired', readable: false, bytes: 0, retentionMs: 86400000 });
+  t.diagnostic('R2O5_STAGED_MAIN ' + JSON.stringify({ abandoned, before: stagedShape(before),
+    afterLease: stagedShape(afterLease), afterExpiry: stagedShape(afterExpiry) }));
+  return { before, afterLease, afterExpiry };
+}
+
+for (const recovery of ['retry', 'no-retry']) test(`D1 refused shared capture staged lifecycle: ${recovery}`, { timeout: 15000 }, async t => {
   const f = safetyFixture(t, 33); await f.migrate();
   const holder = f.connect(); let armed = false, backoffs = 0, victim;
   const forgotten = 'Synthetic forgotten capture item';
@@ -58,8 +109,28 @@ test('D1 refused shared capture retains every other item for the identical retry
   t.diagnostic('R2O3_RECLAIM_ROWS ' + JSON.stringify({ raw, staged }));
   assert.deepEqual({ ...holder.prepare('SELECT state,token,lease_expires_at FROM admission_claims WHERE event_id=?').get(input.batchId) },
     { state: 'reserved', token: null, lease_expires_at: null }, 'R2O3_CAPTURE_RECLAIM lease released before retry');
+  const main = await ordinaryMainStaging(t, recovery === 'no-retry');
+  const initialStage = stagedRow(holder, input.batchId);
+  const inspect = () => call(client, 'inspect_capture_evidence', { batchId: input.batchId });
+  if (recovery === 'no-retry') {
+    await atWallTime(initialStage.created_at + 130000, inspect);
+    const afterLease = stagedRow(holder, input.batchId);
+    assert.equal(afterLease.payload !== null, main.afterLease.payload !== null, 'R2O5_STAGED_ABANDON_MAIN');
+    assert.equal(afterLease.expires_at, initialStage.expires_at, 'release cannot extend retention');
+    await atWallTime(initialStage.expires_at + 1, inspect);
+    const afterExpiry = stagedRow(holder, input.batchId);
+    t.diagnostic('R2O5_STAGED_NO_RETRY ' + JSON.stringify({ before: stagedShape(initialStage),
+      afterLease: stagedShape(afterLease), afterExpiry: stagedShape(afterExpiry) }));
+    assert.deepEqual(stagedShape(afterExpiry), stagedShape(main.afterExpiry), 'R2O5_STAGED_ABANDON_PURGED');
+    assert.equal(holder.prepare('SELECT count(*) n FROM memories WHERE deleted=0').get().n, 0);
+    return;
+  }
   const retry = await call(client, 'capture_memory', input);
   t.diagnostic('R2O3_RECLAIM_RETRY ' + JSON.stringify(retry));
+  const afterRetry = stagedRow(holder, input.batchId);
+  assert.equal(afterRetry.state, main.before.state, 'R2O5_STAGED_RETRY_CONSUMED');
+  assert.equal(afterRetry.payload !== null, main.before.payload !== null, 'R2O5_STAGED_RETRY_CONSUMED');
+  assert.equal(afterRetry.expires_at, initialStage.expires_at, 'retry cannot extend retention');
   const NativeDate = Date, expiredAt = Date.now() + 130000;
   globalThis.Date = class extends NativeDate {
     constructor(...args) { super(...(args.length ? args : [expiredAt])); }
@@ -72,6 +143,10 @@ test('D1 refused shared capture retains every other item for the identical retry
     claim: holder.prepare('SELECT state,lease_expires_at FROM admission_claims WHERE event_id=?').get(input.batchId),
     staged: holder.prepare('SELECT state,payload_bytes FROM staged_capture_evidence WHERE event_id=?').get(input.batchId),
     live: holder.prepare('SELECT content FROM memories WHERE deleted=0').all() }));
+  assert.equal(expired.ok, true, 'R2O5_REPLAY_AFTER_LEASE');
+  assert.equal(expired.value.duplicate, true, 'R2O5_REPLAY_AFTER_LEASE');
+  assert.deepEqual(expired.value.memoryIds.sort(), retry.value.admission.memories.map(row => row.id).sort(), 'R2O5_REPLAY_AFTER_LEASE');
+  assert.equal(expired.value.suppressedCount, 1, 'R2O5_REPLAY_AFTER_LEASE');
   assert.equal(raw.length, 3, 'Raw parts survive the refused capture');
   assert.ok(raw.every(row => row.saved === 1 && row.byte_count > 0));
   assert.ok(staged?.payload && staged.payload_bytes > 0, 'R2O3_CAPTURE_RECLAIM staged evidence stays intact');
@@ -106,6 +181,11 @@ test('D1 refused shared capture retains every other item for the identical retry
     assert.ok(!JSON.stringify(result).includes(needle), 'R2O3_CAPTURE_RECLAIM forgotten needle absent from ' + surface);
   }
   t.diagnostic('R2O4_RECLAIM_NEEDLE ' + JSON.stringify(results));
+  await atWallTime(initialStage.expires_at + 1, inspect);
+  const afterExpiry = stagedRow(holder, input.batchId);
+  t.diagnostic('R2O5_STAGED_RETRY ' + JSON.stringify({ before: stagedShape(initialStage),
+    afterRetry: stagedShape(afterRetry), afterExpiry: stagedShape(afterExpiry) }));
+  assert.deepEqual(stagedShape(afterExpiry), stagedShape(main.afterExpiry), 'R2O5_STAGED_RETRY_PURGED');
 });
 
 test('D1 real local client retains its offset and pending projection on the mapped refusal', async t => {
