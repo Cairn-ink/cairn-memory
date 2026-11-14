@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "41cf1194daa15d77f0302aa6cc3aa9b3d877f5483b988178df64ae4370f064e9",
-  "bytes": 1396754,
+  "sha256": "5446b2c5683e1c3a7b16775dddded092275a5a31a78a0f423a9009e8ece9acc3",
+  "bytes": 1397131,
   "files": [
     "LICENSE",
     "README.md",
@@ -480,7 +480,7 @@
     "core/context-read-assembly.mjs": "572814aab302faa3e55c2c279e71cc457a17bb081082938b0156cd29c27fa7ba",
     "core/context-read-three-layer.mjs": "e25daa35573c63fd214071da4bfd02a6e4d953b559be7686adfb6b09d01c6ac3",
     "core/context-read-bm25.mjs": "a8174fe0b187063048e386d871caba1c55b65d4d28ea5e408b2abb7eb34ee6e4",
-    "core/context-read-budget.mjs": "200b6339333ca853786bfa67e6573468bf196ea2f85bca2de8ab9bc2575c87f4",
+    "core/context-read-budget.mjs": "c3b363b28a349817b7c164c7c4508b1613307222dca67fff4ce7c456ecdd1395",
     "core/context-read-embedder.mjs": "5852e65bb1b01cae14b94536b6872ef1003707501791d38a5b7d7dbf0aedc1ec",
     "core/context-read-facade.mjs": "8a04b2e6cfe7d95334e44d714e476fc77829f8ffbb12a87c06790e1f3ac9d165",
     "core/context-read-fusion.mjs": "e7e571c0037a9dd8fcd7435886ec32b42a469bcdd6c0bce4ef4691df1ba67344",
@@ -591,7 +591,7 @@
     "adapters/mcp/local-authority-router.mjs": "ebddbcf382d0d69f199d124a01569d68b11f4a8399834b8411ed45f98ae57a47",
     "adapters/mcp/local-context-continuations.mjs": "ad824cc65a83e60a71b97f9fa1418807fd7acbc429afa731c73edb87fd1d5e38",
     "adapters/mcp/local-shared-runtime.mjs": "d5a1a4baba2513eade1dcce141bb354dd19bc31a592198583a7ba60ecf613dc8",
-    "adapters/mcp/server.mjs": "9492cd381157a47debcc4aeb9ae85edcb6154224787f689ecf6fadd80dcdf81d",
+    "adapters/mcp/server.mjs": "3af30dccc2bd9a960639ca2aa2fce107b55dc099c17b05d295923c081d65fe07",
     "adapters/mcp/private-card-access.mjs": "fc95ae394d96a945d6d6ecd2e8ec8f182d36ac8094977a6b6ed42932f2ee7cca",
     "adapters/mcp/review-card.mjs": "a653e0778be9c5351c170e7da3c8555e2fd5da221bd429496ea21ff649936382",
     "adapters/mcp/retained-raw-profile.mjs": "6d43aa5bb72a362299f5ab4cbbd56e2a4e21408765d7c17e46d6a799a65f2c79",
