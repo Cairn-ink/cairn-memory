@@ -84,7 +84,7 @@ export function createCairnServer(options = {}) {
 /** Adapter-owned runtime. Connection factories never own its resources. */
 export function createLocalCairnRuntime(options = {}, { dispatcher, signal, shared = true } = {}) {
   const router = createLocalAuthorityRouter(), maintenanceKey = Object.freeze({});
-  const contextDemand = createContextMaintenanceDemand();
+  const contextDemand = dispatcher || shared ? createContextMaintenanceDemand() : undefined;
   object(options, ['path', 'namespace', 'model', 'captureQualification', 'captureRationale',
     'captureEvidence', 'captureEvidenceAccess', 'sourceSnapshot', 'recallContext', 'classificationRecovery',
     'captureDeadlineMs', 'sessionEpisodesAccess', 'client', 'sessionId', 'readClient', 'sessionEpisodes', 'privateCards', 'methodPackages', 'methodReadPersonal',
@@ -245,7 +245,7 @@ export function createLocalCairnRuntime(options = {}, { dispatcher, signal, shar
       const server = buildCairnServer({ path, model, binding, cards, methods, assets, context, roles, core: connection.route.core(core), client, sessionId, captureSessionId, readClient,
     episodesAccess, configured, rationaleConfigured, evidenceAccess, snapshotConfigured, cardRaw,
     recallContextConfigured, recallContext, recoveryConfigured, stagingConfigured, contextSemantic: Boolean(options.contextEmbedding) && options.contextSemantic !== false, ...(sources ? { contextReadSources: sources } : {}), ownsCore: false, maintenance: false, dispatcher,
-      contextDemand, lifecycle: { ...lifecycle, run(work, request = {}) {
+      contextDemand, host: scopedBudget, lifecycle: { ...lifecycle, run(work, request = {}) {
         const maxMs = request.deadlineMs ?? (request.tool === 'capture_memory' ? captureDeadlineMs : undefined);
         // Only an explicit caller budget spans the request. Each dispatched
         // commit otherwise gets its own five seconds, after provider work.
@@ -267,7 +267,7 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
   episodesAccess = false, configured = false, rationaleConfigured = false, evidenceAccess = false,
   snapshotConfigured = false, recallContextConfigured = false, recallContext, recoveryConfigured = false,
   stagingConfigured = false, contextSemantic = false, cardRaw = false, retainedRaw = false, contextReadSources: sources, ownsCore = true, maintenance = true, lifecycle = {}, dispatcher,
-  contextDemand = createContextMaintenanceDemand() }) {
+  host = Boolean(dispatcher), contextDemand = host ? createContextMaintenanceDemand() : undefined }) {
   let disposed = false, disposing;
   const rawRequests = new Set();
   const refresh = maintenance && (context && contextSemantic || typeof model?.consolidate === 'function')
@@ -357,7 +357,7 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
   };
   const registerTool = (name, configuration, handler) => server.registerTool(name, configuration,
     (input, extra) => (lifecycle.run ?? (work => work()))(() => handler(input, extra),
-      { tool: name, deadlineMs: input?.deadlineMs, signal: extra?.signal }));
+      host ? { tool: name, deadlineMs: input?.deadlineMs, signal: extra?.signal } : undefined));
   const tool = (name, description, inputSchema, action, readOnlyHint = false, destructiveHint = false) => {
     registerTool(name, { description, inputSchema,
       annotations: { readOnlyHint, destructiveHint,
@@ -374,6 +374,8 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
       } catch { result = error('memory_operation_failed'); }
       if (roles && name === 'read_role_task_context') return roleTaskToolResponse(result);
       if (context && CONTEXT_TOOL_NAMES.includes(name)) {
+        // Coordinator 11-14 (A): ordinary reads keep main's immediate return.
+        if (!host) return (sources ? contextSourcesToolResponse : contextToolResponse)(result, { assembly: name === 'read_memory_context' });
         const response = (sources ? contextSourcesToolResponse : contextToolResponse)(result, { assembly: name === 'read_memory_context' });
         // SDK validation, core authorization/delivery fences and transport
         // acceptance all precede recording this bounded, content-free demand.

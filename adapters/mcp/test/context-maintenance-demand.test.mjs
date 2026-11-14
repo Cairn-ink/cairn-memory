@@ -131,7 +131,7 @@ async function realFixture(t, { path: sourcePath, cards = cardHost(), shared = f
     expectedRevision: 1, applicability: 'current' }));
   const demand = createContextMaintenanceDemand();
   const server = buildCairnServer({ path, binding: ns, core, context: access, contextSemantic: true,
-    contextDemand: demand, maintenance: false, ownsCore: false });
+    contextDemand: demand, dispatcher: host, maintenance: false, ownsCore: false });
   const [serverSide, clientSide] = streams(), client = new Client({ name: 'synthetic-demand', version: '1' });
   t.after(async () => { await client.close(); await server.close(); serverSide.destroy(); clientSide.destroy(); });
   await server.connect(new StdioServerTransport(serverSide, serverSide));
@@ -165,8 +165,8 @@ for (const shared of [false, true]) for (const wanted of [[combined], [['memory'
   });
 }
 
-test('e: invalid and refused MCP reads record no demand', { timeout: 15000 }, async t => {
-  const f = await realFixture(t);
+test('e: invalid and refused host MCP reads record no demand', { timeout: 15000 }, async t => {
+  const f = await realFixture(t, { shared: true });
   assert.deepEqual(f.demand.inspect(), []);
   for (const patch of [{ query: '' }, { types: ['memory', 'memory'] }, { types: ['raw'] }, { deadlineMs: 0 }]) {
     const result = await f.client.callTool({ name: 'read_memory_context', arguments: { ...input(['memory']), ...patch } });
