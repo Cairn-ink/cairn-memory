@@ -5,6 +5,9 @@ import { mkdirSync,readFileSync,readdirSync } from 'node:fs';
 import { join,relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
+import { eventTimeSafetyFixture } from '../testing/receipt-event-time-fixture.mjs';
+import { transaction } from '../database.mjs';
+import { createRawLineageStorage } from '../raw-lineage-storage.mjs';
 import { normalizeSQL, summary, currentReceiptWalkSQLTexts, receiptWalkSQLTexts, receiptWalkSQL,
   workloadKeys, validateSqlAdditions, reviseSQL, compareWideTraces, assertWidePins, validateCardStatementTexts, assertArchivedCardStatementTexts, wideArchiveMode } from '../testing/card-lineage-off-wide-compare.mjs';
 
@@ -124,6 +127,25 @@ for(const base of [23,33])for(const mode of ['open','workload'])for(const eventT
       calls:current.calls.length,statements:current.statements.length,tables:current.dump.length}));
   });
 }
+
+test('filter-off receipt batch is an exact current exemption',async t=>{
+  const f=eventTimeSafetyFixture(t,33);await f.migrate();
+  const db=f.connect();t.after(()=>db.close());
+  const namespace={ownerId:'synthetic-owner',scope:'project',projectId:'synthetic-project'};
+  db.prepare(`INSERT INTO memories(id,owner_id,scope,project_id,fingerprint,content,kind,origin,confidence,revision,deleted,created_at,updated_at)
+    VALUES('parent',?,?,?,'parent','Synthetic','fact','explicit',1,1,0,'time','time')`)
+    .run(namespace.ownerId,namespace.scope,namespace.projectId);
+  const statements=[],prepare=db.prepare.bind(db);
+  const hook=t.mock.method(db,'prepare',sql=>{statements.push([normalizeSQL(sql)]);return prepare(sql);});
+  try {
+    transaction(db,()=>createRawLineageStorage(db).assertReceipts(namespace,[{
+      client:'synthetic',sessionId:'session',eventId:'event',role:'user',excerpt:'\uFFFD',
+    }]));
+  } finally {hook.mock.restore();}
+  const batches=statements.filter(([sql])=>sql.includes('FROM json_each(?) wanted CROSS JOIN receipts'));
+  assert.equal(batches.length,1);assert.equal(batches[0][0],"SELECT r.*,wanted.key AS wanted_entry, json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted FROM json_each(?) wanted CROSS JOIN receipts r ON r.rowid IN ( SELECT rowid FROM receipts INDEXED BY memory_receipts WHERE memory_id=json_extract(wanted.value,'$[0]') ORDER BY created_at,id LIMIT 5) ORDER BY wanted.key,r.created_at,r.id");
+  observeReceiptWalkSQL(statements,'current');
+});
 
 test('receipt enumeration exemptions are a closed set over the listed traces',async t=>{
   // The current code's texts are required in every mode, and it emits no other exempt text.
