@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
@@ -64,10 +65,11 @@ export function validateFlakes(entries) {
 // runner. Reporter flags precede file arguments and pass straight to node --test.
 export async function runFiles({ files, timingsFile, cwd = root, env = process.env, stdio = 'inherit' }) {
   if (!files.length) return { code: 0, signal: null }; // node --test with no files would discover the whole tree.
+  const evidenceId = randomUUID();
   const child = spawn(process.execPath, [join(root, 'tools/testing/run.mjs'),
     '--test-reporter=spec', '--test-reporter-destination=stdout',
     `--test-reporter=${join(root, 'tools/testing/file-timing-reporter.mjs')}`,
-    `--test-reporter-destination=${timingsFile}`, ...files], { cwd, env, stdio });
+    '--test-reporter-destination=stdout', ...files], { cwd, env: { ...env, CORE_SHARD_TIMINGS_FILE: timingsFile, CORE_SHARD_EVIDENCE_ID: evidenceId }, stdio });
   const handlers = new Map();
   let termination;
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
@@ -80,32 +82,49 @@ export async function runFiles({ files, timingsFile, cwd = root, env = process.e
       child.once('error', reject);
       child.once('close', (code, signal) => resolveResult({ code: code ?? 1, signal }));
     });
-    return termination ? { code: { SIGINT: 130, SIGTERM: 143, SIGHUP: 129 }[termination], signal: termination } : result;
+    return termination ? { code: { SIGINT: 130, SIGTERM: 143, SIGHUP: 129 }[termination], signal: termination, evidenceId } : { ...result, evidenceId };
   } finally {
     for (const [signal, handler] of handlers) process.off(signal, handler);
   }
 }
 
-export function readTimings(file, cwd = root) {
+function readTimingEvidence(file, cwd = root, evidenceId) {
   try {
-    return readFileSync(file, 'utf8').split('\n').filter(line => line.trim()).map(line => {
-      const record = JSON.parse(line);
-      if (typeof record.file !== 'string' || !record.file || !['pass', 'fail'].includes(record.outcome) ||
+    const lines = readFileSync(file, 'utf8').split('\n');
+    if (lines.at(-1) === '') lines.pop();
+    const parsed = lines.map(line => JSON.parse(line));
+    const end = parsed.pop();
+    const integer = value => Number.isSafeInteger(value) && value >= 0;
+    if ((evidenceId !== undefined && end?.evidenceId !== evidenceId) || end?.type !== 'end' || !integer(end.records) || !integer(end.failedTopLevel) ||
+        !integer(end.runnerFailed) || end.records !== parsed.length) return null;
+    const records = parsed.map(record => {
+      if (!record || record.type !== undefined || typeof record.file !== 'string' || !record.file ||
+          typeof record.name !== 'string' || !['pass', 'fail'].includes(record.outcome) ||
           !Number.isFinite(record.durationMs) || record.durationMs < 0) throw new Error('invalid timing record');
       return { ...record, file: relative(cwd, isAbsolute(record.file) ? record.file : resolve(cwd, record.file)).split('\\').join('/') };
     });
-  } catch { return null; } // Incomplete evidence must never authorize a rerun.
+    const failed = records.filter(record => record.outcome === 'fail').length;
+    if (end.failedTopLevel !== failed || end.runnerFailed !== failed) return null;
+    return { records, end };
+  } catch { return null; } // Missing or partial evidence cannot authorize a rerun.
+}
+
+export function readTimings(file, cwd = root, evidenceId) {
+  return readTimingEvidence(file, cwd, evidenceId)?.records ?? null;
+}
+
+function bestEffort(action) {
+  try { return action(); } catch { return undefined; }
 }
 
 export async function executeShard({ files, outputDir, knownFlakes = [], cwd = root,
   env = process.env, log = console.log, run = runFiles }) {
   validateFlakes(knownFlakes);
-  mkdirSync(outputDir, { recursive: true, mode: 0o700 });
-  writeFileSync(join(outputDir, 'files.json'), `${JSON.stringify(files, null, 2)}\n`);
+  bestEffort(() => mkdirSync(outputDir, { recursive: true, mode: 0o700 }));
+  bestEffort(() => writeFileSync(join(outputDir, 'files.json'), `${JSON.stringify(files, null, 2)}\n`));
   const timingsFile = join(outputDir, 'timings.jsonl');
-  writeFileSync(timingsFile, '');
   const result = await run({ files, timingsFile, cwd, env });
-  const records = readTimings(timingsFile, cwd);
+  const records = readTimings(timingsFile, cwd, result.evidenceId);
   let code = result.code;
   const reruns = [];
   if (code !== 0 && !result.signal) {
@@ -133,14 +152,14 @@ export async function executeShard({ files, outputDir, knownFlakes = [], cwd = r
   try {
     const weights = {};
     for (const record of records ?? []) weights[record.file] = (weights[record.file] ?? 0) + record.durationMs / 1000;
-    writeFileSync(join(outputDir, 'weights.json'), `${JSON.stringify(weights, null, 2)}\n`);
+    bestEffort(() => writeFileSync(join(outputDir, 'weights.json'), `${JSON.stringify(weights, null, 2)}\n`));
     const summary = [`## Core shard (${files.length} files; exit ${code})`, '', '| File | Top-level seconds |', '| --- | ---: |',
       ...files.map(file => `| ${file} | ${Object.hasOwn(weights, file) ? weights[file].toFixed(3) : 'unavailable'} |`), '',
       ...reruns.map(retry => `**KNOWN-FLAKE RERUN**: ${retry.file} — ${retry.reason}; exit ${retry.code}`), '',
       '### File list', '', '```text', ...files, '```', ''].join('\n');
-    writeFileSync(join(outputDir, 'summary.md'), summary);
-    if (env.GITHUB_STEP_SUMMARY) appendFileSync(env.GITHUB_STEP_SUMMARY, summary);
-  } catch (error) { log(`Timing publication failed: ${error.message}`); }
+    bestEffort(() => writeFileSync(join(outputDir, 'summary.md'), summary));
+    if (env.GITHUB_STEP_SUMMARY) bestEffort(() => appendFileSync(env.GITHUB_STEP_SUMMARY, summary));
+  } catch {}
   return { code, records, reruns, timingsFile };
 }
 
@@ -148,21 +167,29 @@ export async function main(args = process.argv.slice(2)) {
   let shard;
   let count;
   let list = false;
+  let expectCount;
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
     if ((arg === '--shard' || arg === '--of') && /^[1-9]\d*$/.test(args[index + 1] ?? '')) {
       if (arg === '--shard' && shard === undefined) shard = Number(args[++index]);
       else if (arg === '--of' && count === undefined) count = Number(args[++index]);
       else throw new Error('duplicate option');
+    } else if (arg === '--expect-count' && expectCount === undefined && /^(0|[1-9]\d*)$/.test(args[index + 1] ?? '')) {
+      expectCount = Number(args[++index]);
+      if (!Number.isSafeInteger(expectCount)) throw new Error('invalid expected count');
     } else if (arg === '--list' && !list) list = true;
-    else throw new Error('usage: core-shards.mjs --shard K --of N [--list]');
+    else throw new Error('usage: core-shards.mjs --shard K --of N [--list] [--expect-count N]');
   }
   if (!Number.isSafeInteger(shard) || !Number.isSafeInteger(count) || shard < 1 || shard > count) throw new Error('invalid shard selection');
-  const plan = planShards(coreFiles(), readJSON(join(root, 'tools/testing/core-test-weights.json'), {}), count);
+  const discovered = coreFiles();
+  if (expectCount !== undefined && expectCount !== discovered.length) {
+    throw new Error(`core file count mismatch: expected ${expectCount}, readdir ${discovered.length}`);
+  }
+  const plan = planShards(discovered, readJSON(join(root, 'tools/testing/core-test-weights.json'), {}), count);
   const files = plan.shards[shard - 1].files;
   console.error(`Core plan: ${plan.total} files across ${count} disjoint shards; shard ${shard}: ${files.length} files`);
   if (list) { if (files.length) console.log(files.join('\n')); return 0; }
-  const outputDir = process.env.CORE_SHARD_OUTPUT_DIR ?? mkdtempSync(join(tmpdir(), 'core-shard-'));
+  const outputDir = process.env.CORE_SHARD_OUTPUT_DIR ?? bestEffort(() => mkdtempSync(join(tmpdir(), 'core-shard-'))) ?? join(tmpdir(), 'core-shard-unavailable');
   console.log(`Timing artifacts: ${outputDir}`);
   const result = await executeShard({ files, outputDir, knownFlakes: readJSON(join(root, 'tools/testing/core-known-flakes.json'), []) });
   return result.code;

@@ -224,6 +224,7 @@ jobs:
     name: core (${{ matrix.node-version }})
     needs: [core-shard-22-16-0, core-shard-24, core-shard-24-22-1]
     if: always()
+    permissions: { contents: read, actions: read }
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -233,10 +234,15 @@ jobs:
           - {node-version: 24, key: '24'}
           - {node-version: '24.22.1', key: '24-22-1'}
     steps:
-      - name: Require this Node's shards to succeed
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Require successful jobs and attempt-pinned pass markers
         env:
-          NODE_SHARDS_SUCCEEDED: ${{ needs[format('core-shard-{0}', matrix.key)].result == 'success' }}
-        run: test "$NODE_SHARDS_SUCCEEDED" = "true"
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          CORE_SHARD_NEEDS_RESULT: ${{ needs[format('core-shard-{0}', matrix.key)].result }}
+        run: node tools/testing/core-gate.mjs --node-key '${{ matrix.key }}' --shards 6
 
   longmemeval:
     runs-on: ubuntu-latest

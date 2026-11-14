@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
@@ -63,12 +64,13 @@ function fixture(t) {
   const env = { ...process.env, TMPDIR: cwd, TMP: cwd, TEMP: cwd };
   delete env.GITHUB_STEP_SUMMARY;
   function add(name, body) {
-    writeFileSync(join(cwd, name), `import test from 'node:test';\nimport assert from 'node:assert/strict';\n${body}\n`);
+    writeFileSync(join(cwd, name), `import test from 'node:test';\nimport assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';\n${body}\n`);
     return name;
   }
   const pass = add('pass.test.mjs', "test('first pass', () => {}); test('second pass', () => {});");
   const fail = add('fail.test.mjs', "test('synthetic failure', () => assert.fail('synthetic'));");
-  const flaky = add('flaky.test.mjs', `import { existsSync, writeFileSync } from 'node:fs';
+  const flaky = add('flaky.test.mjs', `import { chmodSync, existsSync, writeFileSync } from 'node:fs';
     test('synthetic fail once', () => {
       const marker = ${JSON.stringify(join(cwd, 'attempt'))};
       const prior = existsSync(marker); writeFileSync(marker, 'attempted'); assert.ok(prior);
@@ -76,15 +78,33 @@ function fixture(t) {
   return { cwd, env, add, pass, fail, flaky, outputDir: join(cwd, 'output') };
 }
 
-test('reporter records only top-level outcomes using event.file and includes failures', async () => {
+test('reporter yields nothing, records top-level outcomes and reconciles root totals on both Node versions', async t => {
+  const f = fixture(t);
+  const timingsFile = join(f.cwd, 'reporter.jsonl');
+  const previous = process.env.CORE_SHARD_TIMINGS_FILE;
+  process.env.CORE_SHARD_TIMINGS_FILE = timingsFile;
+  t.after(() => {
+    if (previous === undefined) delete process.env.CORE_SHARD_TIMINGS_FILE;
+    else process.env.CORE_SHARD_TIMINGS_FILE = previous;
+  });
   const events = [
     { type: 'test:pass', data: { nesting: 1, file: 'ignored', name: 'nested', details: { duration_ms: 100 } } },
     { type: 'test:pass', data: { nesting: 0, file: 'a', name: 'pass', details: { duration_ms: 3 } } },
     { type: 'test:fail', data: { nesting: 0, file: 'b', name: 'fail', details: { duration_ms: 5 } } },
   ];
-  const records = [];
-  for await (const line of reporter(events)) records.push(JSON.parse(line));
-  assert.deepEqual(records, [{ file: 'a', name: 'pass', durationMs: 3, outcome: 'pass' }, { file: 'b', name: 'fail', durationMs: 5, outcome: 'fail' }]);
+  for (const summary of [
+    { type: 'test:diagnostic', data: { nesting: 0, message: 'fail 1' } },
+    { type: 'test:summary', data: { counts: { failed: 1 } } },
+  ]) {
+    const yielded = [];
+    for await (const line of reporter([...events,
+      { type: 'test:diagnostic', data: { nesting: 0, file: 'ignored', message: 'fail 99' } },
+      { type: 'test:summary', data: { file: 'ignored', counts: { failed: 99 } } }, summary])) yielded.push(line);
+    assert.deepEqual(yielded, []);
+    const records = readFileSync(timingsFile, 'utf8').trimEnd().split('\n').map(JSON.parse);
+    assert.deepEqual(records.slice(0, -1), [{ file: 'a', name: 'pass', durationMs: 3, outcome: 'pass' }, { file: 'b', name: 'fail', durationMs: 5, outcome: 'fail' }]);
+    assert.deepEqual(records.at(-1), { type: 'end', failedTopLevel: 1, records: 2, runnerFailed: 1 });
+  }
 });
 
 test('the real spawn path preserves failure, identifies the failing file and records passes', async t => {
@@ -159,10 +179,11 @@ test('missing, malformed, incomplete and signal failure evidence cannot authoriz
   const f = fixture(t);
   for (const mode of ['empty', 'malformed', 'partial', 'unknown', 'signal', 'infrastructure']) {
     const result = await executeShard({ ...f, files: ['a', 'b'], knownFlakes: [{ file: 'a', reason: 'synthetic' }], run: async ({ timingsFile }) => {
-      const fail = JSON.stringify({ file: join(f.cwd, 'a'), durationMs: 1, outcome: 'fail' });
-      const pass = JSON.stringify({ file: join(f.cwd, 'b'), durationMs: 1, outcome: 'pass' });
+      const fail = JSON.stringify({ name: 'fail', file: join(f.cwd, 'a'), durationMs: 1, outcome: 'fail' });
+      const pass = JSON.stringify({ name: 'pass', file: join(f.cwd, 'b'), durationMs: 1, outcome: 'pass' });
       const content = { empty: '', malformed: '{', partial: fail, unknown: fail + '\n' + JSON.stringify({ file: 'unknown', durationMs: 1, outcome: 'fail' }), signal: fail + '\n' + pass, infrastructure: fail + '\n' + pass }[mode];
-      writeFileSync(timingsFile, content);
+      const end = JSON.stringify({ type: 'end', records: 2, failedTopLevel: 1, runnerFailed: 1 });
+      writeFileSync(timingsFile, ['signal', 'infrastructure'].includes(mode) ? `${content}\n${end}\n` : content);
       return { code: mode === 'infrastructure' ? 2 : 1, signal: mode === 'signal' ? 'SIGTERM' : null };
     } });
     assert.notEqual(result.code, 0);
@@ -184,6 +205,86 @@ test('summary I/O errors cannot alter either passing or failing runner status; e
   assert.equal(result.code, 0);
 });
 
+test('unwritable timing and artifact paths preserve passing and failing results through the real spawn path', async t => {
+  const f = fixture(t);
+  for (const file of [f.pass, f.fail]) {
+    const expected = file === f.pass ? 0 : 1;
+    const result = await runFiles({ ...f, files: [file], timingsFile: join(f.cwd, 'missing-parent', 'timings.jsonl') });
+    assert.equal(result.code, expected);
+    mkdirSync(f.outputDir, { recursive: true });
+    chmodSync(f.outputDir, 0o500);
+    try {
+      const artifact = await executeShard({ ...f, files: [file], knownFlakes: [{ file, reason: 'synthetic' }] });
+      assert.equal(artifact.code, expected);
+      assert.equal(artifact.records, null);
+      assert.deepEqual(artifact.reruns, []);
+    } finally { chmodSync(f.outputDir, 0o700); }
+  }
+});
+
+test('truncated tails, end count mismatches, runner count mismatches and hidden unlisted failures never rerun', async t => {
+  const f = fixture(t);
+  const records = [
+    { file: 'a', name: 'listed failure', durationMs: 1, outcome: 'fail' },
+    { file: 'b', name: 'early pass before hidden unlisted failure', durationMs: 1, outcome: 'pass' },
+  ];
+  const end = { type: 'end', failedTopLevel: 1, records: 2, runnerFailed: 1 };
+  const scenarios = [
+    records, // A record from every file is insufficient without an end record.
+    [...records, { ...end, records: 3 }],
+    [...records, { ...end, failedTopLevel: 2 }],
+    [...records, { ...end, runnerFailed: 0 }],
+    [...records, { ...end, runnerFailed: 2 }], // Unlisted failure only in runner total.
+    [...records, end, records[1]], // End must be last.
+    [records[0], { ...records[1], durationMs: 'invalid' }, end],
+    [...records, { ...end, runnerFailed: null }],
+  ];
+  for (const evidence of scenarios) {
+    let calls = 0;
+    const result = await executeShard({ ...f, files: ['a', 'b'], knownFlakes: [{ file: 'a', reason: 'synthetic' }],
+      run: async ({ timingsFile }) => {
+        calls++;
+        writeFileSync(timingsFile, evidence.map(record => JSON.stringify(record)).join('\n') + '\n');
+        return { code: 1, signal: null };
+      } });
+    assert.equal(result.code, 1);
+    assert.deepEqual(result.reruns, []);
+    assert.equal(calls, 1);
+  }
+});
+
+test('stale complete evidence from a prior invocation cannot authorize a rerun', async t => {
+  const f = fixture(t);
+  let calls = 0;
+  const result = await executeShard({ ...f, files: ['a'], knownFlakes: [{ file: 'a', reason: 'synthetic' }],
+    run: async ({ timingsFile }) => {
+      calls++;
+      writeFileSync(timingsFile, [
+        { file: 'a', name: 'old failure', durationMs: 1, outcome: 'fail' },
+        { type: 'end', failedTopLevel: 1, records: 1, runnerFailed: 1, evidenceId: 'old' },
+      ].map(record => JSON.stringify(record)).join('\n') + '\n');
+      return { code: 1, signal: null, evidenceId: 'current' };
+    } });
+  assert.equal(result.code, 1);
+  assert.equal(calls, 1);
+});
+
+test('CLI enforces the independent file count before running or creating artifacts', t => {
+  const f = fixture(t);
+  const args = [join(root, 'tools/testing/core-shards.mjs'), '--shard', '7', '--of', '60', '--expect-count'];
+  const mismatch = spawnSync(process.execPath, [...args, '0'], {
+    cwd: root, env: { ...f.env, CORE_SHARD_OUTPUT_DIR: f.outputDir }, encoding: 'utf8',
+  });
+  assert.equal(mismatch.status, 1);
+  assert.match(mismatch.stderr, /core file count mismatch: expected 0, readdir/);
+  assert.equal(existsSync(f.outputDir), false);
+  const match = spawnSync(process.execPath, [...args, String(coreFiles().length), '--list'], {
+    cwd: root, env: f.env, encoding: 'utf8',
+  });
+  assert.equal(match.status, 0);
+  assert.deepEqual(match.stdout.trim().split('\n'), planShards(coreFiles(), JSON.parse(readFileSync(join(root, 'tools/testing/core-test-weights.json'), 'utf8')), 60).shards[6].files);
+});
+
 // Parse just the workflow's job and step blocks, without a new YAML dependency.
 function jobs(text) {
   return Object.fromEntries([...text.matchAll(/^  ([\w-]+):\n([\s\S]*?)(?=^  [\w-]+:\n|$(?![\s\S]))/gm)].map(match => [match[1], match[2]]));
@@ -199,10 +300,15 @@ function assertWorkflow(ci, reusable) {
   const entries = [...core.matchAll(/- \{node-version: ('.*?'|\d+), key: '(.*?)'\}/g)].map(match => ({ version: match[1].replaceAll("'", ''), key: match[2] }));
   assert.deepEqual(entries, [{ version: '22.16.0', key: '22-16-0' }, { version: '24', key: '24' }, { version: '24.22.1', key: '24-22-1' }]);
   assert.deepEqual(entries.map(entry => `core (${entry.version})`), ['core (22.16.0)', 'core (24)', 'core (24.22.1)']);
-  assert.match(core, /^          NODE_SHARDS_SUCCEEDED: \$\{\{ needs\[format\('core-shard-\{0\}', matrix.key\)\]\.result == 'success' \}\}$/m);
-  assert.match(core, /^        run: test "\$NODE_SHARDS_SUCCEEDED" = "true"$/m);
-  assert.equal((core.match(/^      - /gm) ?? []).length, 1);
-  assert.doesNotMatch(core, /checkout|continue-on-error/);
+  assert.match(core, /^    permissions: \{ contents: read, actions: read \}$/m);
+  assert.match(core, /^          CORE_SHARD_NEEDS_RESULT: \$\{\{ needs\[format\('core-shard-\{0\}', matrix.key\)\]\.result \}\}$/m);
+  assert.match(core, /run: node tools\/testing\/core-gate.mjs --node-key '\$\{\{ matrix.key \}\}' --shards 6/);
+  for (const [name, context] of [['TOKEN', 'token'], ['REPOSITORY', 'repository'], ['RUN_ID', 'run_id'], ['RUN_ATTEMPT', 'run_attempt']]) {
+    assert.ok(core.includes(`GITHUB_${name}: \${{ github.${context} }}`));
+  }
+  assert.equal((core.match(/^      - /gm) ?? []).length, 2);
+  assert.match(core, /actions\/checkout@11d5960a326750d5838078e36cf38b85af677262/);
+  assert.doesNotMatch(core, /continue-on-error/);
   for (const { version, key } of entries) {
     const job = all[`core-shard-${key}`];
     assert.match(job, /^      fail-fast: false$/m);
@@ -219,12 +325,21 @@ function assertWorkflow(ci, reusable) {
   assert.ok(demos.every(step => /^        if: inputs.shard == 1$/m.test(step)));
   assert.match(shard, /CAIRN_REQUIRE_WIDE_ARCHIVE: "1"/);
   assert.match(shard, /ls core\/test\/\*\.test.mjs \| wc -l/);
-  assert.match(shard, /node tools\/testing\/core-shards.mjs --shard "\$SHARD" --of 6/);
+  assert.match(shard, /^          node tools\/testing\/core-shards.mjs --shard "\$SHARD" --of 6 --expect-count "\$file_count"$/m);
   assert.match(shard, /git fetch --no-tags --depth=1 origin fd5c59ef8e67cc58bb855a95f8910c668150bfa3/);
   assert.match(shard, /actions\/checkout@11d5960a326750d5838078e36cf38b85af677262/);
   assert.match(shard, /actions\/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020/);
   assert.match(shard, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02/);
   assert.ok(steps.some(step => step.includes('Upload core shard') && /if: always\(\)/.test(step)));
+  const marker = steps.find(step => step.startsWith('name: Upload core pass marker'));
+  assert.ok(marker);
+  assert.match(marker, /^        if: success\(\)$/m);
+  assert.match(marker, /name: core-pass-\$\{\{ inputs.node-key \}\}-\$\{\{ inputs.shard \}\}-\$\{\{ github.run_attempt \}\}/);
+  assert.match(marker, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02/);
+  assert.ok(steps.indexOf(marker) > steps.indexOf(demos.at(-1)));
+  const timings = steps.find(step => step.startsWith('name: Upload core shard timings'));
+  assert.match(timings, /name: core-shard-\$\{\{ inputs.node-key \}\}-\$\{\{ inputs.shard \}\}-\$\{\{ github.run_attempt \}\}/);
+  assert.doesNotMatch(reusable, /overwrite: true/);
   assert.match(ci, /run: npm run test:workspace-lifecycle/);
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
   assert.equal(pkg.scripts['test:workspace-lifecycle'], 'node tools/testing/run.mjs tools/testing/*.test.mjs');
@@ -238,7 +353,12 @@ test('workflow preserves required names, strict Node mapping, six-way shards and
 test('workflow guard rejects always-true aggregator and missing always(), and missing demo guards', () => {
   const ci = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
   const reusable = readFileSync(join(root, '.github/workflows/core-shard.yml'), 'utf8');
-  assert.throws(() => assertWorkflow(ci.replace("needs[format('core-shard-{0}', matrix.key)].result == 'success'", 'true'), reusable));
+  assert.throws(() => assertWorkflow(ci.replace("needs[format('core-shard-{0}', matrix.key)].result", 'true'), reusable));
   assert.throws(() => assertWorkflow(ci.replace('    if: always()\n', ''), reusable));
   assert.throws(() => assertWorkflow(ci, reusable.replace('        if: inputs.shard == 1\n', '')));
+  assert.throws(() => assertWorkflow(ci.replace('actions: read', 'actions: none'), reusable));
+  assert.throws(() => assertWorkflow(ci.replace('core-gate.mjs', 'missing.mjs'), reusable));
+  assert.throws(() => assertWorkflow(ci, reusable.replaceAll('if: success()', 'if: always()')));
+  assert.throws(() => assertWorkflow(ci, reusable.replaceAll('-${{ github.run_attempt }}', '')));
+  assert.throws(() => assertWorkflow(ci, reusable.replace('--expect-count "$file_count"', '')));
 });
