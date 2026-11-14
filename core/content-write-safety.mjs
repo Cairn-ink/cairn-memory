@@ -1,3 +1,4 @@
+import { receiptDenialTokens } from './content-safety.mjs';
 import { assertContentScopes } from './content-safety-boundary.mjs';
 import { createRawLineageStorage } from './raw-lineage-storage.mjs';
 import { createHmac } from 'node:crypto';
@@ -74,9 +75,19 @@ export function beginContentWriteSafety(db, operation) {
     for(const [owner,epoch]of ceilings)for(const fact of db.prepare(`SELECT * FROM content_suppressions INDEXED BY content_suppression_window
       WHERE owner_id=? AND (epoch_hi,epoch_lo)>(?,?) ORDER BY epoch_hi,epoch_lo`).all(owner,Number(epoch>>32n),Number(epoch&0xffffffffn)))newFacts.push(fact);
     const terminal=new Set();
-    const canonical=[],removed=[];
+    const canonical=[],removed=[],markerChanges=[];
     for(const change of changes) {
       if(tables.get(change.table)==='shadow')continue;
+      if (change.table === 'suppressed' && [change.next?.[3], change.old?.[3]].some(value => typeof value === 'string' && value.startsWith('rs1:'))) {
+        // All four columns are the attested base table's primary key. INSERT
+        // changesets carry their complete native values; no per-marker SELECT
+        // or catalog read is necessary to prove an immutable added row.
+        if (change.old || !change.next || change.next.length !== 4 ||
+            change.primary.length !== 4 || change.primary.some(value => !value) ||
+            change.next.some(value => typeof value !== 'string')) fail('evidence_unavailable');
+        markerChanges.push(change.next);
+        continue;
+      }
       const columns=info(change.table);if(columns.length!==change.primary.length)fail('evidence_unavailable');
       if(!change.next){removed.push({table:change.table,row:Object.fromEntries(columns.map((c,i)=>[c.name,change.old[i]]))});continue;}
       const pk=columns.filter((_,i)=>change.primary[i]);if(!pk.length)fail('evidence_unavailable');
@@ -84,6 +95,13 @@ export function beginContentWriteSafety(db, operation) {
       const row=db.prepare('SELECT * FROM '+quote(change.table)+' WHERE '+pk.map(c=>quote(c.name)+' IS ?').join(' AND ')).get(...values);
       if(!row)fail('evidence_unavailable');
       canonical.push({table:change.table,row,old:change.old,columns});
+    }
+    // A delete/reinsert at the same (memory_id, receipt_key) is a native
+    // UPDATE. Its replaced receipt id still has a canonical retirement fact.
+    for (const change of canonical.filter(change => change.table === 'receipts' && change.old)) {
+      const row = Object.fromEntries(change.columns.map((column, index) =>
+        [column.name, change.old[index] ?? change.row[column.name]]));
+      if (row.id !== change.row.id) removed.push({ table: 'receipts', row });
     }
     // The declaration names a canonical field; arguments never select an
     // exemption. Automatic terminal changes additionally require their own fact.
@@ -136,6 +154,44 @@ export function beginContentWriteSafety(db, operation) {
         receipts.every(({row})=>newFacts.some(f=>f.kind==='receipt'&&f.match_mode==='incarnation'&&
           f.reason===fact.reason&&f.action_id===fact.action_id&&
           contentSuppressionTargetMatches(f,namespace(change.row),{kind:'receipt',key:row.id})));
+    }
+    // Tagged rows are evidence denials, never Memory fingerprints. Admit only
+    // new tokens derived from native receipt removals and the matching native
+    // Memory transition/facts of this action. Arguments confer no exemption.
+    const markerMethods = new Set();
+    for (let context = operation; context; context = context.parent) markerMethods.add(context.method);
+    const allowedMarkers = new Set(), allowedFingerprints = new Set();
+    if (['forget', 'correct', 'reject', 'resolveReview', 'forgetEpisode'].some(method => markerMethods.has(method))) {
+      for (const change of canonical.filter(change => change.table === 'memories' && change.old)) {
+        const ns = namespace(change.row), previous = oldValue(change, 'revision');
+        if (!scopes.some(scope => JSON.stringify(boundary(scope)) === JSON.stringify(boundary(ns))) ||
+            oldValue(change, 'deleted') || change.row.revision !== previous + 1) continue;
+        const cause = newFacts.find(fact => fact.kind === 'memory' && (
+          change.row.deleted && (fact.reason === 'user_forget' && (markerMethods.has('forget') || markerMethods.has('forgetEpisode')) ||
+            fact.reason === 'purge' && ['reject', 'resolveReview', 'forgetEpisode'].some(method => markerMethods.has(method))) &&
+          fact.match_mode === 'incarnation' && contentSuppressionTargetMatches(fact, ns, { kind: 'memory', key: change.row.id }) ||
+          markerMethods.has('correct') && retiredMemory(fact) && fact.stable_key === change.row.id));
+        if (!cause) continue;
+        allowedFingerprints.add(JSON.stringify([...boundary(ns), oldValue(change, 'fingerprint')]));
+        // Deletion cascades suppress fingerprints but do not write shared-source
+        // markers. Rejection retains its existing address and identity denial.
+        if (cause.reason === 'purge' && !markerMethods.has('reject') && !markerMethods.has('resolveReview')) continue;
+        const receipts = removed.filter(change => change.table === 'receipts' && change.row.memory_id === cause.stable_key &&
+          newFacts.some(fact => fact.kind === 'receipt' && fact.action_id === cause.action_id && fact.reason === cause.reason &&
+            fact.match_mode === 'incarnation' && contentSuppressionTargetMatches(fact, ns, { kind: 'receipt', key: change.row.id })))
+          .map(change => change.row);
+        const replacements = cause.reason === 'correction_supersession' ? canonical.filter(change => change.table === 'receipts' &&
+          change.row.memory_id === cause.stable_key && (!change.old || oldValue(change, 'id') !== change.row.id)).map(change => change.row) : [];
+        for (const token of receiptDenialTokens(receipts, replacements)) allowedMarkers.add(JSON.stringify([...boundary(ns), token]));
+      }
+    }
+    for (const row of markerChanges) if (!allowedMarkers.has(JSON.stringify(row))) fail('evidence_unavailable');
+    if (['forget', 'correct', 'reject', 'resolveReview', 'forgetEpisode'].some(method => markerMethods.has(method))) {
+      for (const change of canonical.filter(change => change.table === 'suppressed')) {
+        const row = change.row;
+        if (change.old || !allowedFingerprints.has(JSON.stringify([row.owner_id,row.scope,row.project_id,row.fingerprint]))) fail('evidence_unavailable');
+      }
+      if (removed.some(change => change.table === 'suppressed')) fail('evidence_unavailable');
     }
     const terminalFacts=newFacts.filter(f=>terminal.has(JSON.stringify([f.owner_id,f.scope,f.project_id,f.kind,f.stable_key]))||
       lineage&&retiredMemory(f)||

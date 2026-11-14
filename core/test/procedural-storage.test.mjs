@@ -67,9 +67,16 @@ test('E10 foreign/unsupported anchors and split Unicode reject; content correcti
   const d=detail(f,id),r=d.receipts[0],position=r.excerpt.indexOf('😀');
   assert.equal(set(f,id,0,[{receiptId:r.id,digest:sourceDigest(r.excerpt),start:position,end:position+1}]).error.code,'invalid_input');
   ok(set(f,id));
-  ok(f.core.correct({namespace:ns,memoryId:id,expectedRevision:d.memory.revision,content:'Review carefully',kind:'instruction',receipt:receipt()}));
+  // Correction deliberately withholds the old receipt/address. Use new evidence
+  // so this tag/acknowledgement regression keeps testing a readable anchor.
+  const corrected=ok(f.core.correct({namespace:ns,memoryId:id,expectedRevision:d.memory.revision,content:'Review carefully',kind:'instruction',receipt:receipt('corrected')}));
+  assert.deepEqual(Object.keys(corrected).sort(),['indexRevision','memory']);
+  assert.equal(corrected.memory.id,id);
   assert.equal(detail(f,id).procedural.procedural,false);
-  ok(set(f,id,2));
+  const acknowledgement=ok(set(f,id,2));
+  assert.deepEqual(Object.keys(acknowledgement).sort(),['indexRevision','tag']);
+  assert.equal(acknowledgement.tag.procedural,true);
+  assert.equal(acknowledgement.tag.anchors[0].receiptId,detail(f,id).receipts[0].id);
   ok(f.core.forget({namespace:ns,memoryId:id,expectedRevision:detail(f,id).memory.revision}));
   assert.equal(f.db.prepare('SELECT positive FROM procedural_tags WHERE memory_id=?').get(id).positive,0);
 });

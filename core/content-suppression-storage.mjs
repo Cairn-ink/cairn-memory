@@ -1,3 +1,4 @@
+import { receiptDenialTokens } from './raw-source-roots.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { bindContentSafetyConnection, cachedContentLayout, contentSafetyConnection, contentSafetyBudgetError, installedContentLayout, withContentSafetyLayoutInside } from './content-safety-schema.mjs';
@@ -66,10 +67,18 @@ export function suppressOwnerInside(db, { ownerId, reason, actionId, recordedAt 
   return writeContentSuppressionInside(db, { namespace: { ownerId, scope: 'owner', projectId: '' },
     kind: 'owner', matchMode: 'owner', reason, actionId, recordedAt });
 }
-export function suppressReceiptsInside(db, ns, memoryId, options, ids) {
+export function suppressReceiptsInside(db, ns, memoryId, options, ids, denySharedSource = false, receiptSnapshot, replacements = []) {
   requireSuppressionTransaction(db);
-  if (!installedContentLayout(db).suppressionRevision) return;
-  const rows = db.prepare('SELECT id FROM receipts WHERE memory_id=?').all(memoryId);
+  const packaged = installedContentLayout(db).suppressionRevision;
+  if (!packaged && !denySharedSource) return;
+  const rows = receiptSnapshot ?? db.prepare(denySharedSource
+    ? `SELECT r.id,r.receipt_key,r.client,r.session_id,r.event_id,r.role FROM receipts r WHERE r.memory_id=? AND EXISTS(
+      SELECT 1 FROM memories m WHERE m.id=r.memory_id AND m.owner_id=? AND m.scope=? AND m.project_id=?)`
+    : 'SELECT id FROM receipts WHERE memory_id=?').all(memoryId, ...(denySharedSource ? boundary(ns) : []));
+  // A correction that re-cites a receipt derives no marker for it; an empty set inserts nothing.
+  if (denySharedSource) db.prepare(`INSERT OR IGNORE INTO suppressed(owner_id,scope,project_id,fingerprint)
+SELECT ?,?,?,value FROM json_each(?)`).run(...boundary(ns), JSON.stringify(receiptDenialTokens(rows, replacements)));
+  if (!packaged) return;
   for (const row of rows) if (!ids || ids.includes(row.id)) writeContentSuppressionInside(db,
     { namespace: ns, kind: 'receipt', key: row.id, ...options });
 }

@@ -1,3 +1,4 @@
+import { receiptDenialTokens, receiptCoordinateStateInside } from './raw-source-roots.mjs';
 import { contentSuppressionReasonInside, registerContentSuppressionReadMemoInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { bindContentSafetyConnection, cachedContentLayout, contentSafetyConnection } from './content-safety-schema.mjs';
 import { createHash, createHmac } from 'node:crypto';
@@ -5,6 +6,7 @@ import { createCardRawSources } from './card-raw-sources.mjs';
 import { createRawLineageStorage } from './raw-lineage-storage.mjs';
 import { sourceRef } from './private-card-input.mjs';
 import { hasCardLineage, loadCardBodyContributorsInside } from './card-lineage.mjs';
+import { fail } from './validation.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
@@ -48,10 +50,16 @@ function withReadDecision(db, key, work) {
 }
 
 // Explicitly scoped to one synchronous canonical read; never retain across awaits.
-export function createContentReadMemo(db) {
+export function createContentReadMemo(db, check) {
   const statements = new Map();
   const read = registerContentSuppressionReadMemoInside(bindContentSafetyConnection({ get isTransaction() { return db.isTransaction; }, prepare(sql) {
-    if (!statements.has(sql)) statements.set(sql, db.prepare(sql));
+    if (!statements.has(sql)) {
+      const statement = db.prepare(sql);
+      statements.set(sql, check ? new Proxy(statement, { get(target, key) {
+        const value = Reflect.get(target, key, target);
+        return typeof value === 'function' ? (...args) => { check(); return Reflect.apply(value, target, args); } : value;
+      } }) : statement);
+    }
     return statements.get(sql);
   } }, db));
   return { db: read, sources: new Map(), memories: new Map(), receipts: new Map(), contributors: new Map(), lineage: createRawLineageStorage(read, { readMemo: new Map() }) };
@@ -341,4 +349,400 @@ export function contentReadSafety(db, options) {
       ...boundary(namespace), ref.type, ref.memoryId ?? ref.cardId, ref.revision]));
     return result;
   });
+}
+
+// Delivery projections below never participate in canonical validation.
+export { receiptDenialTokens } from './raw-source-roots.mjs';
+export function receiptDenialsInside(db, ns, receipts, memo) {
+  // A batch may cover several namespaces, but every token retains the full
+  // primary-key boundary. The memo belongs only to the caller's snapshot.
+  const batches = Array.isArray(ns) ? ns : [{ namespace: ns, receipts }];
+  const cache = memo ? memo.receiptDenials ??= new Map() : new Map();
+  const key = (namespace, token) => JSON.stringify([...boundary(namespace), token]);
+  const missing = new Map();
+  for (const batch of batches) for (const token of receiptDenialTokens(batch.receipts)) {
+    const id = key(batch.namespace, token);
+    if (!cache.has(id)) missing.set(id, [...boundary(batch.namespace), token]);
+  }
+  if (missing.size) {
+    if (batches.length === 1) {
+      const namespace = batches[0].namespace;
+      const rows = db.prepare(`SELECT s.fingerprint,1 AS denied FROM json_each(?) w CROSS JOIN suppressed s
+WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value`)
+        .all(JSON.stringify([...missing.values()].map(value => value[3])), ...boundary(namespace));
+      for (const id of missing.keys()) cache.set(id, false);
+      for (const row of rows) cache.set(key(namespace, row.fingerprint), true);
+    } else {
+      const rows = db.prepare(`SELECT s.owner_id,s.scope,s.project_id,s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s
+WHERE s.owner_id=json_extract(w.value,'$[0]') AND s.scope=json_extract(w.value,'$[1]')
+AND s.project_id=json_extract(w.value,'$[2]') AND s.fingerprint=json_extract(w.value,'$[3]')`)
+        .all(JSON.stringify([...missing.values()]));
+      for (const id of missing.keys()) cache.set(id, false);
+      for (const row of rows) cache.set(JSON.stringify([row.owner_id, row.scope, row.project_id, row.fingerprint]), true);
+    }
+  }
+  return new Set(batches.flatMap(batch => batch.receipts.filter(receipt =>
+    receiptDenialTokens([receipt]).some(token => cache.get(key(batch.namespace, token)))).map(receipt => receipt.receipt_key)));
+}
+
+// Token-only collection is bounded by the selected Card ids. CROSS JOIN keeps
+// each step on its id index even without planner statistics.
+export function cardReceiptTokens(db, ns, ids, memo) {
+  if (!ids.length) return [];
+  const cache = memo ? memo.deliveryCardTokens ??= new Map() : new Map();
+  const key = id => JSON.stringify([...boundary(ns), id]);
+  const missing = [...new Set(ids)].filter(id => !cache.has(key(id)));
+  if (!missing.length) return ids.flatMap(id => cache.get(key(id)));
+  // Retain each Card's token rows, including an empty set, in this read memo.
+  // Later per-Card delivery checks reuse the snapshot's bounded collection.
+  const lineage = hasCardLineage(db) ? ` UNION
+    SELECT c.id AS card_id,r.receipt_key,r.client,r.session_id,r.event_id,r.role
+    FROM json_each(?) wanted CROSS JOIN private_cards c ON c.id=wanted.value
+    CROSS JOIN card_body_sources s ON s.card_id=c.id AND s.body_revision=c.body_revision
+      AND s.owner_id=c.owner_id AND s.scope=c.scope AND s.project_id=c.project_id AND s.source_kind='receipt'
+    CROSS JOIN receipts r ON r.id=s.source_key CROSS JOIN memories m ON m.id=r.memory_id
+    WHERE c.owner_id=? AND c.scope=? AND c.project_id=?
+      AND m.owner_id=c.owner_id AND m.scope=c.scope AND m.project_id=c.project_id` : '';
+  const selected = JSON.stringify(missing);
+  const rows = db.prepare(`SELECT c.id AS card_id,r.receipt_key,r.client,r.session_id,r.event_id,r.role
+    FROM json_each(?) wanted CROSS JOIN private_cards c ON c.id=wanted.value
+    CROSS JOIN card_memory_bindings b ON b.card_id=c.id CROSS JOIN receipts r ON r.id=b.receipt_id
+    CROSS JOIN memories m ON m.id=r.memory_id AND m.id=b.memory_id
+    WHERE c.owner_id=? AND c.scope=? AND c.project_id=?
+      AND m.owner_id=c.owner_id AND m.scope=c.scope AND m.project_id=c.project_id${lineage}`)
+    .all(selected, ...boundary(ns), ...(lineage ? [selected, ...boundary(ns)] : []));
+  for (const id of missing) cache.set(key(id), []);
+  for (const { card_id, ...row } of rows) cache.get(key(card_id)).push(row);
+  return ids.flatMap(id => cache.get(key(id)));
+}
+export function cardDeliverable(db, ns, id, memo) {
+  const cache = memo && (memo.deliveryCardTokens ??= new Map());
+  const key = JSON.stringify([...boundary(ns), id]);
+  let rows = cache?.get(key);
+  if (!rows) {
+    rows = cardReceiptTokens(db, ns, [id], memo);
+    cache?.set(key, rows);
+  }
+  return receiptDenialsInside(db, ns, rows, memo).size === 0;
+}
+export function anchorsDeliverable(db, ns, memoryId, anchors, memo) {
+  const rows = anchors.map(anchor => db.prepare('SELECT receipt_key,client,session_id,event_id,role FROM receipts WHERE memory_id=? AND id=?')
+    .get(memoryId, anchor.receiptId)).filter(Boolean);
+  return receiptDenialsInside(db, ns, rows, memo).size === 0;
+}
+
+// Cache only counts and key coordinates, never delivery decisions. Both native
+// counters invalidate on local writes or a
+// commit from another connection. Recall freshness continues using its base
+// Memory/namespace proof. Rollback explicitly clears this cache. Each
+// connection retains at most 64 selected Memories.
+function receiptCoordinateCache(db, ns, id) {
+  const native = contentSafetyConnection(db);
+  const version = db.prepare('PRAGMA data_version').get().data_version;
+  const changes = db.prepare('SELECT total_changes() AS n FROM store_metadata WHERE singleton=1').get().n;
+  const state = receiptCoordinateStateInside(native, version, changes);
+  const key = JSON.stringify([...boundary(ns), id]);
+  if (!state.memories.has(key)) {
+    if (state.memories.size >= 64) state.memories.delete(state.memories.keys().next().value);
+    state.memories.set(key, { offsets: new Map() });
+  }
+  return state.memories.get(key);
+}
+export function receiptStoredCountInside(db, ns, id) {
+  const cached = receiptCoordinateCache(db, ns, id);
+  // Keep the prepared statement sequence independent of cache warmth. Only
+  // execution is cached; diagnostics must not change the SQL a read prepares.
+  const count = db.prepare(`SELECT count(*) AS n FROM receipts r INDEXED BY memory_receipts
+    CROSS JOIN memories m ON m.id=r.memory_id WHERE r.memory_id=? AND m.owner_id=? AND m.scope=? AND m.project_id=?`);
+  return cached.total ??= count.get(id, ...boundary(ns)).n;
+}
+
+// Headers are read in bounded keyset chunks; text is fetched only after the
+// shared marker decision. Every pass advances each unfinished Memory's key.
+export function receiptDeliverySnapshot(db, entries, memo = createContentReadMemo(db), additional = [], options = {}) {
+  const cache = memo.deliveryHeaders ??= new Map(), states = memo.deliveryMemoryStates ??= new Map();
+  // Deduplicate and discard cached identities before any count/offset/anchor SQL.
+  const pending = new Map();
+  for (const entry of entries) {
+    const key = JSON.stringify([...boundary(entry.namespace), entry.memoryId]);
+    if (!cache.has(key)) pending.set(key, entry);
+  }
+  const jobs = [], batches = [...additional], recentSeen = new Map();
+  for (const [key, entry] of pending) {
+    const ns = entry.namespace;
+    const coordinates = options.positions === false && options.totals === false ? null : receiptCoordinateCache(db, ns, entry.memoryId);
+    let after = options.after ?? coordinates?.offsets.get(options.offset);
+    if (!after && options.offset > 0) after = db.prepare(`SELECT r.created_at AS createdAt,r.id FROM receipts r INDEXED BY memory_receipts
+      CROSS JOIN memories m ON m.id=r.memory_id WHERE r.memory_id=? AND m.owner_id=? AND m.scope=? AND m.project_id=?
+      ORDER BY r.created_at,r.id LIMIT 1 OFFSET ?`).get(entry.memoryId, ...boundary(ns), options.offset - 1);
+    const total = options.totals === false ? null : coordinates.total;
+    // Final recall entries already carry their requested order. Keep one job
+    // per Memory so uncapped neighbours never acquire a recent projection.
+    const job = { key, namespace: ns, id: entry.memoryId, owner: ns.ownerId, scope: ns.scope, project: ns.projectId ?? '',
+      limit: options.limit ?? 101, afterTime: after?.createdAt ?? '', afterId: after?.id ?? '',
+      position: options.offset ?? 0, recent: entry.receiptOrder === 'recent' || Boolean(options.recent), idOrder: Boolean(options.idOrder), total };
+    jobs.push(job);
+    // An empty incoming time starts a new seek; its id only cuts the first tie.
+    if (after?.createdAt) recentSeen.set(key, new Set([after.id]));
+    job.coordinates = coordinates;
+    if (options.includeRecent) jobs.push({ ...job, key: key + ':recent', recent: true, afterTime: '', afterId: '', position: 0 });
+  }
+  // Prepare on warm and cold reads alike; execute only for missing totals.
+  // The recent-order job shares the same physical total and coordinates.
+  if (jobs.some(job => job.total !== null)) {
+    const count = db.prepare(`SELECT j.value AS input,(SELECT count(*) FROM receipts r INDEXED BY memory_receipts
+      CROSS JOIN memories m ON m.id=r.memory_id WHERE r.memory_id=json_extract(j.value,'$.id')
+        AND m.owner_id=json_extract(j.value,'$.owner') AND m.scope=json_extract(j.value,'$.scope')
+        AND m.project_id=json_extract(j.value,'$.project')) AS n FROM json_each(?) j`);
+    const counted = jobs.filter(job => pending.has(job.key) && job.total === undefined);
+    if (counted.length) {
+      const rows = count.all(JSON.stringify(counted.map(({ key, id, owner, scope, project }) => ({ key, id, owner, scope, project }))));
+      const totals = new Map(rows.map(row => [JSON.parse(row.input).key, row.n]));
+      for (const job of counted) job.coordinates.total = totals.get(job.key);
+      for (const job of jobs) if (job.total === undefined) job.total = job.coordinates.total;
+    }
+  }
+  if (pending.size) {
+    // Both anchor kinds start at the same deduplicated, namespace-bound job
+    // list. The extra recent-order job never collects the anchors again.
+    const inputs = [...pending].map(([key, entry]) => ({ key, id: entry.memoryId,
+      owner: entry.namespace.ownerId, scope: entry.namespace.scope, project: entry.namespace.projectId ?? '' }));
+    const selected = JSON.stringify(inputs);
+    const anchors = db.prepare(`SELECT j.value AS input,q.memory_id,r.receipt_key,r.client,r.session_id,r.event_id,r.role
+      FROM json_each(?) j CROSS JOIN qualification_anchors q ON q.memory_id=json_extract(j.value,'$.id')
+      CROSS JOIN receipts r ON r.id=q.receipt_id
+      CROSS JOIN memories m ON m.id=q.memory_id AND m.id=r.memory_id
+      WHERE m.owner_id=json_extract(j.value,'$.owner') AND m.scope=json_extract(j.value,'$.scope')
+        AND m.project_id=json_extract(j.value,'$.project') UNION
+      SELECT j.value AS input,p.memory_id,r.receipt_key,r.client,r.session_id,r.event_id,r.role
+      FROM json_each(?) j CROSS JOIN procedural_tags p ON p.memory_id=json_extract(j.value,'$.id')
+      CROSS JOIN json_each(p.anchors) a
+      CROSS JOIN receipts r ON r.id=json_extract(a.value,'$.receiptId')
+      CROSS JOIN memories m ON m.id=p.memory_id AND m.id=r.memory_id
+      WHERE m.owner_id=json_extract(j.value,'$.owner') AND m.scope=json_extract(j.value,'$.scope')
+        AND m.project_id=json_extract(j.value,'$.project')`)
+      .all(selected, selected);
+    const byKey = new Map(inputs.map(input => [input.key, []]));
+    for (const { input, memory_id, ...row } of anchors) byKey.get(JSON.parse(input).key).push(row);
+    for (const [key, entry] of pending) batches.push({ namespace: entry.namespace, receipts: byKey.get(key) });
+  }
+  for (const job of jobs) {
+    cache.set(job.key, []);
+    states.set(job.key, { total: job.total, complete: false, after: options.after, recent: job.recent });
+  }
+  const uncapped = options.limit === Number.MAX_SAFE_INTEGER, pendingChunks = [];
+  let active = jobs;
+  do {
+    const chunks = [];
+    // Direction is engine-owned. Separate index orders avoid a CASE sort that
+    // would read the whole Memory before applying its per-chunk bound.
+    const recent = active.filter(job => job.recent && !job.idOrder);
+    if (recent.length) {
+      const chunk = Math.min(256, (options.limit ?? 101) + 32);
+      const inputs = recent.map(({ coordinates, ...job }) => job);
+      // The index cannot reverse time without also reversing ids. Walk at most
+      // chunk keys inside ONE statement: an id seek within the current tie,
+      // otherwise a reverse time seek followed by that tie's first id. No
+      // sorter sees a whole tie; the final SQL sort has <= chunk headers per job.
+      const rows = db.prepare(`SELECT j.value AS input,r.id,r.memory_id,r.receipt_key,r.client,r.session_id,r.event_id,r.role,r.created_at
+        FROM json_each(?) j CROSS JOIN memories m ON m.id=json_extract(j.value,'$.id')
+        CROSS JOIN receipts r INDEXED BY sqlite_autoindex_receipts_1 ON r.id IN (
+          WITH RECURSIVE recent_keys(cursor) AS (
+            SELECT json_array(coalesce(nullif(json_extract(j.value,'$.afterTime'),''),nullif((
+              SELECT initial.created_at FROM receipts initial INDEXED BY memory_receipts
+                WHERE initial.memory_id=m.id AND initial.created_at<'\uffff'
+                ORDER BY initial.created_at DESC LIMIT 1),'')),json_extract(j.value,'$.afterId'))
+            UNION ALL
+            SELECT coalesce(
+              (SELECT json_array(candidate.created_at,candidate.id) FROM receipts candidate INDEXED BY memory_receipts
+                WHERE candidate.memory_id=m.id AND candidate.created_at=json_extract(json_each.value,'$[0]')
+                  AND candidate.id>json_extract(json_each.value,'$[1]') AND json_extract(json_each.value,'$[0]')<>''
+                ORDER BY candidate.id LIMIT 1),
+              (SELECT json_array(candidate.created_at,candidate.id) FROM receipts candidate INDEXED BY memory_receipts
+                WHERE candidate.memory_id=m.id AND candidate.created_at=nullif((
+                  SELECT older.created_at FROM receipts older INDEXED BY memory_receipts
+                    WHERE older.memory_id=m.id AND older.created_at<coalesce(nullif(json_extract(json_each.value,'$[0]'),''),'\uffff') AND older.id>''
+                    ORDER BY older.created_at DESC LIMIT 1),'')
+                  AND candidate.id>''
+                ORDER BY candidate.id LIMIT 1))
+            FROM recent_keys CROSS JOIN json_each(json_array(recent_keys.cursor))
+            WHERE recent_keys.cursor IS NOT NULL LIMIT CAST(? AS INTEGER) OFFSET 1)
+          SELECT json_extract(cursor,'$[1]') FROM recent_keys WHERE cursor IS NOT NULL)
+        WHERE m.owner_id=json_extract(j.value,'$.owner') AND m.scope=json_extract(j.value,'$.scope')
+          AND m.project_id=json_extract(j.value,'$.project') AND r.memory_id=m.id
+        ORDER BY j.key,r.created_at COLLATE BINARY DESC,r.id COLLATE BINARY ASC`).all(JSON.stringify(inputs), chunk);
+      const byKey = new Map(recent.map(job => [job.key, []]));
+      for (const { input, ...row } of rows) byKey.get(JSON.parse(input).key).push(row);
+      for (const job of recent) {
+        const headers = byKey.get(job.key);
+        // Validate identities before marker decisions or cursor updates. Keep
+        // every visited id across refills and uncapped collection passes.
+        const seen = recentSeen.get(job.key) ?? new Set();
+        recentSeen.set(job.key, seen);
+        for (const header of headers) {
+          if (seen.has(header.id)) fail('storage_error');
+          seen.add(header.id);
+        }
+        chunks.push({ job, headers, ended: headers.length < chunk });
+        batches.push({ namespace: job.namespace, receipts: headers });
+      }
+    }
+    for (const direction of ['forward', 'id']) {
+      const selected = active.filter(job => (job.idOrder ? 'id' : job.recent ? 'recent' : 'forward') === direction);
+      if (!selected.length) continue;
+      const index = direction === 'id' ? 'capture_memory_receipts' : 'memory_receipts';
+      const order = direction === 'id' ? 'candidate.id' : 'candidate.created_at,candidate.id';
+      const keyset = direction === 'id' ? "candidate.id>json_extract(j.value,'$.afterId')" :
+        "(candidate.created_at,candidate.id)>(json_extract(j.value,'$.afterTime'),json_extract(j.value,'$.afterId'))";
+      // Finite caps read the requested cap plus 32 headers. Uncapped legacy
+      // delivery uses 256 headers per pass, with no position/prefix counts.
+      const chunk = Math.min(256, (options.limit ?? 101) + 32);
+      const inputs = selected.map(({ coordinates, ...job }) => job);
+      const rows = db.prepare(`SELECT j.value AS input,r.id,r.memory_id,r.receipt_key,r.client,r.session_id,r.event_id,r.role,r.created_at
+        FROM json_each(?) j CROSS JOIN memories m ON m.id=json_extract(j.value,'$.id')
+        CROSS JOIN receipts r INDEXED BY sqlite_autoindex_receipts_1 ON r.id IN (SELECT candidate.id FROM receipts candidate INDEXED BY ${index}
+          WHERE candidate.memory_id=m.id AND ${keyset} ORDER BY ${order} LIMIT ?)
+        WHERE m.owner_id=json_extract(j.value,'$.owner') AND m.scope=json_extract(j.value,'$.scope')
+          AND m.project_id=json_extract(j.value,'$.project') AND r.memory_id=m.id`).all(JSON.stringify(inputs), chunk);
+      const byKey = new Map(selected.map(job => [job.key, []]));
+      for (const { input, ...row } of rows) byKey.get(JSON.parse(input).key).push(row);
+      for (let i = 0; i < selected.length; i++) {
+        const job = selected[i], headers = byKey.get(job.key);
+        headers.sort(direction === 'id' ? (a,b) => a.id.localeCompare(b.id) :
+          (a,b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+        chunks.push({ job, headers, ended: headers.length < chunk });
+        batches.push({ namespace: job.namespace, receipts: headers });
+      }
+    }
+    // Legacy delivery consumes the whole selected receipt set. Collect its
+    // bounded header chunks first, then resolve their union once, even when a
+    // Memory has more than one chunk. Its output already requires O(N) space.
+    if (uncapped) {
+      pendingChunks.push(...chunks);
+      active = [];
+      for (const { job, headers, ended } of chunks) {
+        const last = headers.at(-1);
+        if (last) { job.afterTime = last.created_at; job.afterId = last.id; }
+        if (!ended) active.push(job);
+      }
+      if (active.length) continue;
+      chunks.length = 0; chunks.push(...pendingChunks);
+    }
+    // The first chunks of every selected Memory, both orders, Card contributors
+    // and anchors share one batched lookup. Refills share one lookup per pass.
+    receiptDenialsInside(db, batches, undefined, memo);
+    batches.length = 0;
+    const next = [];
+    for (const { job, headers, ended } of chunks) {
+      const delivered = cache.get(job.key), denied = receiptDenialsInside(db, job.namespace, headers, memo);
+      for (const header of headers) {
+        job.position++;
+        if (!denied.has(header.receipt_key) && delivered.length < job.limit) {
+          delivered.push({ ...header, position: options.positions === false ? 0 : job.position });
+          if (job.coordinates && !job.recent && !job.idOrder && options.positions !== false) {
+            const offsets = job.coordinates.offsets;
+            if (offsets.size >= 256) offsets.delete(offsets.keys().next().value);
+            offsets.set(job.position, { createdAt: header.created_at, id: header.id });
+          }
+        }
+      }
+      const last = headers.at(-1);
+      if (last) { job.afterTime = last.created_at; job.afterId = last.id; }
+      const state = states.get(job.key);
+      state.complete = ended && delivered.length < job.limit;
+      // Evidence readers need no persistent coordinates or count scan. A
+      // fully consumed header keyset already gives its exact physical total;
+      // an unfinished one retains unknown omitted coverage, as before.
+      if (job.total === null && ended) state.total = job.position;
+      if (!uncapped && !ended && delivered.length < job.limit) next.push(job);
+    }
+    active = next;
+    // At most ceil(N/32)+1 passes for N headers in any selected Memory/order;
+    // every continuation consumes at least 32 new headers. No prefix recount.
+  } while (active.length);
+  return memo;
+}
+export function deliveryReceiptHeaders(db, ns, id, memo) {
+  const key=JSON.stringify([...boundary(ns),id]);
+  if(!memo.deliveryHeaders?.has(key))receiptDeliverySnapshot(db,[{namespace:ns,memoryId:id}],memo);
+  return memo.deliveryHeaders.get(key)??[];
+}
+export function deliveryReceiptRows(db, ns, id, memo, {limit=101,offset=0,after,recent=false,idOrder=false,cursor=false}={}) {
+  let headers=recent&&memo.deliveryHeaders?.has(JSON.stringify([...boundary(ns),id])+':recent')?
+    memo.deliveryHeaders.get(JSON.stringify([...boundary(ns),id])+':recent'):deliveryReceiptHeaders(db,ns,id,memo);
+  if(recent)headers=[...headers].sort((a,b)=>b.created_at.localeCompare(a.created_at)||a.id.localeCompare(b.id));
+  if(idOrder)headers=[...headers].sort((a,b)=>a.id.localeCompare(b.id));
+  const selected=headers.filter(row=>(offset===0||row.position>offset)&&(!after||row.created_at>after.createdAt||row.created_at===after.createdAt&&row.id>after.id)).slice(0,limit);
+  // The canonical candidate batch already read its first seventeen rows.
+  // Reuse those exact rows in this transaction; fetch only identities that a
+  // withheld prefix moved beyond that page. No serving proof crosses an await.
+  const candidate=memo.evidenceMemories?.get(JSON.stringify([boundary(ns),id]));
+  const cached=!cursor&&candidate?JSON.parse(candidate.batch_receipts):[];
+  const byId=new Map(cached.map(row=>[row.id,row]));
+  const missing=selected.filter(row=>!byId.has(row.id));
+  // MOC source scoring already consumes this canonical absence proof. Keep it
+  // in the bounded text read so its snapshot memo need not resolve it again.
+  const rawReceiptProof=idOrder&&cachedContentLayout(db)?.suppressionRevision&&cachedContentLayout(db)?.rawLineage;
+  const receiptAncestry=rawReceiptProof?`,(
+    NOT EXISTS(SELECT 1 FROM raw_receipt_lineage l WHERE l.receipt_id=r.id)
+    AND NOT EXISTS(SELECT 1 FROM raw_receipt_origins o WHERE o.receipt_id=r.id AND o.kind='derived')
+    AND NOT EXISTS(SELECT 1 FROM episode_memory_links l WHERE l.memory_id=r.memory_id)
+    AND NOT EXISTS(SELECT 1 FROM raw_conversations c WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.client=r.client)
+    AND NOT EXISTS(SELECT 1 FROM session_episodes e WHERE e.owner_id=? AND e.scope=? AND e.project_id=? AND e.client=r.client)
+    AND NOT EXISTS(SELECT 1 FROM raw_job_sources j WHERE j.owner_id=? AND j.scope=? AND j.project_id=? AND j.source_client=r.client)
+    AND NOT EXISTS(SELECT 1 FROM raw_session_fences f WHERE f.owner_id=? AND f.scope=? AND f.project_id=? AND f.client=r.client)
+  ) AS empty_raw_ancestry`:'';
+  // Selected ids are themselves keyset ordered and capped. Each text read is
+  // at most 64 rows and at most cap+1 rows are read for the whole Memory.
+  for(let start=0;start<missing.length;start+=64){
+    const ids=missing.slice(start,start+64).map(row=>row.id);
+    for(const {cursor_row,...row}of db.prepare(`SELECT r.rowid AS cursor_row,r.*${receiptAncestry} FROM json_each(?) wanted
+      CROSS JOIN receipts r INDEXED BY sqlite_autoindex_receipts_1 ON r.id=wanted.value WHERE r.memory_id=?`)
+      .all(...(rawReceiptProof?Array.from({length:4},()=>boundary(ns)).flat():[]),JSON.stringify(ids),id))
+      byId.set(row.id,cursor?{cursor_row,...row}:row);
+  }
+  return selected.map(header=>byId.get(header.id)).filter(Boolean);
+}
+
+export function cardDeliverySnapshot(db, refs, memo, check) {
+  memo ??= createContentReadMemo(db, check);
+  // Lexical callers use their existing cooperative deadline before every
+  // canonical statement, including the marker lookup after token collection.
+  if (check) db = memo.db;
+  const cards=refs.filter(ref=>ref.type==='card'),batches=[];
+  const namespaces=new Map(cards.map(ref=>[JSON.stringify(boundary(ref.namespace)),ref.namespace]));
+  if(namespaces.size>1){
+    // A chunk may span namespaces. Collect its complete boundary tuples in one
+    // statement, retaining the same id-first joins as the single-namespace read.
+    const cache=memo.deliveryCardTokens??=new Map();
+    const wanted=new Map(cards.map(ref=>{const tuple=[...boundary(ref.namespace),ref.cardId];return [JSON.stringify(tuple),tuple];}));
+    const missing=[...wanted].filter(([key])=>!cache.has(key));
+    if(missing.length){
+      const lineage=hasCardLineage(db)?` UNION
+        SELECT c.owner_id,c.scope,c.project_id,c.id AS card_id,r.receipt_key,r.client,r.session_id,r.event_id,r.role
+        FROM json_each(?) wanted CROSS JOIN private_cards c ON c.id=json_extract(wanted.value,'$[3]')
+        CROSS JOIN card_body_sources s ON s.card_id=c.id AND s.body_revision=c.body_revision
+          AND s.owner_id=c.owner_id AND s.scope=c.scope AND s.project_id=c.project_id AND s.source_kind='receipt'
+        CROSS JOIN receipts r ON r.id=s.source_key CROSS JOIN memories m ON m.id=r.memory_id
+        WHERE c.owner_id=json_extract(wanted.value,'$[0]') AND c.scope=json_extract(wanted.value,'$[1]')
+          AND c.project_id=json_extract(wanted.value,'$[2]')
+          AND m.owner_id=c.owner_id AND m.scope=c.scope AND m.project_id=c.project_id`:'';
+      const selected=JSON.stringify(missing.map(([,tuple])=>tuple));
+      const rows=db.prepare(`SELECT c.owner_id,c.scope,c.project_id,c.id AS card_id,r.receipt_key,r.client,r.session_id,r.event_id,r.role
+        FROM json_each(?) wanted CROSS JOIN private_cards c ON c.id=json_extract(wanted.value,'$[3]')
+        CROSS JOIN card_memory_bindings b ON b.card_id=c.id CROSS JOIN receipts r ON r.id=b.receipt_id
+        CROSS JOIN memories m ON m.id=r.memory_id AND m.id=b.memory_id
+        WHERE c.owner_id=json_extract(wanted.value,'$[0]') AND c.scope=json_extract(wanted.value,'$[1]')
+          AND c.project_id=json_extract(wanted.value,'$[2]')
+          AND m.owner_id=c.owner_id AND m.scope=c.scope AND m.project_id=c.project_id${lineage}`)
+        .all(selected,...(lineage?[selected]:[]));
+      for(const [key]of missing)cache.set(key,[]);
+      for(const {owner_id,scope,project_id,card_id,...row}of rows)cache.get(JSON.stringify([owner_id,scope,project_id,card_id])).push(row);
+    }
+  }
+  for(const ns of namespaces.values()){
+    const ids=cards.filter(ref=>JSON.stringify(boundary(ref.namespace))===JSON.stringify(boundary(ns))).map(ref=>ref.cardId);
+    batches.push({namespace:ns,receipts:cardReceiptTokens(db,ns,ids,memo)});
+  }
+  return receiptDeliverySnapshot(db,[],memo,batches);
 }

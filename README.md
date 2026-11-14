@@ -243,6 +243,9 @@ long-history retrieval and the boundaries of individual client tests.
 - Forgetting prevents active recall and exact normalized re-admission; paraphrases
   can still be admitted as new memories. It is not secure
   disk erasure: SQLite pages, receipts and backups have separate retention limits.
+- Forgetting a Memory also withholds its evidence from other Memories citing the
+  same message. If another Memory's own statement repeats the wording, forgetting
+  the first does not remove that statement.
   Stop all writers before copying the database and sidecars for backup.
 - Uninstalling the executable preserves the external database. See
   [backup, upgrade and deletion boundaries](packaging/README.md),

@@ -1,6 +1,9 @@
+import { receiptDeliverySnapshot, deliveryReceiptRows, deliveryReceiptHeaders } from './content-safety.mjs';
+import { receiptDenialsInside, anchorsDeliverable, cardDeliverable } from './content-safety.mjs';
+import { contentReadSafety, receiptReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { performance } from 'node:perf_hooks';
 import { cachedContentLayout, checkInstalledContentSafety } from './content-safety-schema.mjs';
-import { contentReadSafety, receiptReadSafety, createContentReadMemo } from './content-safety.mjs';
+
 import { contentSuppressionRequestFenceInside, contentSuppressionReasonInside, cachedContentSuppressionRequestInside,
   contentSuppressionFenceInside, withContentSuppressionRequest,
   resetContentSuppressionRequestInside, contentSuppressionRequestInside } from './content-suppression-storage.mjs';
@@ -416,36 +419,25 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     // Only tail snapshots need independent request accounts below.
     const readPage = work => transaction(db, work, undefined, { deferred: true });
     try {
-      // A conservative canonical proof of the ordinary-receipt branch. Fold
-      // it into the receipt read already required for scoring; any possible Raw
-      // root, derived origin, keep link or session fence uses full S1 instead.
-      const rawReceiptProof = safety && cachedContentLayout(db)?.rawLineage;
-      const receiptAncestry = rawReceiptProof ? `,(
-        NOT EXISTS(SELECT 1 FROM raw_receipt_lineage l WHERE l.receipt_id=r.id)
-        AND NOT EXISTS(SELECT 1 FROM raw_receipt_origins o WHERE o.receipt_id=r.id AND o.kind='derived')
-        AND NOT EXISTS(SELECT 1 FROM episode_memory_links l WHERE l.memory_id=r.memory_id)
-        AND NOT EXISTS(SELECT 1 FROM raw_conversations c WHERE ${qualifiedNamespace('c')} AND c.client=r.client)
-        AND NOT EXISTS(SELECT 1 FROM session_episodes e WHERE ${qualifiedNamespace('e')} AND e.client=r.client)
-        AND NOT EXISTS(SELECT 1 FROM raw_job_sources j WHERE ${qualifiedNamespace('j')} AND j.source_client=r.client)
-        AND NOT EXISTS(SELECT 1 FROM raw_session_fences f WHERE ${qualifiedNamespace('f')} AND f.client=r.client)
-      ) AS empty_raw_ancestry` : '';
-      const receiptSources = sourceReceiptLimit === 0 ? null : db.prepare(rawReceiptProof ?
-        `SELECT r.*${receiptAncestry} FROM receipts r INDEXED BY capture_memory_receipts
-          WHERE r.memory_id = ? ORDER BY r.id LIMIT ?` :
-        `SELECT * FROM receipts INDEXED BY capture_memory_receipts WHERE memory_id = ? ORDER BY id LIMIT ?`);
+      // Prefetch tokens only. The scorer reads text after the base's residual
+      // eligibility, membership and budget checks admit this candidate.
+      const collectReceipts = memories => {
+        if(!sourceReceiptLimit)return;
+        receiptDeliverySnapshot(db,memories.map(memory=>({namespace:ns,memoryId:memory.id})),readMemo,[],{limit:sourceReceiptLimit,idOrder:true});
+      };
       const scoreMemory = (memory) => {
         const bodyScore = score(memory.content);
         let candidateScore = bodyScore;
         let winningExcerpt;
-        if (receiptSources) {
-          const receipts = receiptSources.all(...(rawReceiptProof ? Array.from({length:4},()=>boundary(ns)).flat() : []), memory.id, sourceReceiptLimit);
-          for (const receipt of receipts) {
-            const source = validateSourceReceipt(memory.id, receipt, receiptKey);
-            // The selected Memory already completed its canonical decision above.
-            // This row is canonical and validateSourceReceipt binds its identity;
-            // retain the receipt's own S1/ancestry and suppression decision.
+        if (sourceReceiptLimit) {
+          const receipts = deliveryReceiptRows(db,ns,memory.id,readMemo,{limit:sourceReceiptLimit,idOrder:true});
+          const deniedReceipts = receiptDenialsInside(db, ns, receipts, readMemo);
+          const allowed = receipts.filter(receipt => !deniedReceipts.has(receipt.receipt_key));
+          for (const receipt of allowed.slice(0, sourceReceiptLimit)) {
             if (safety && !receiptReadSafety(db, { namespace: ns, receipt, memo: readMemo,
               rawAncestryEmpty: receipt.empty_raw_ancestry === 1 }).allowed) continue;
+            const source = validateSourceReceipt(memory.id, receipt, receiptKey);
+            // Only admitted receipts compete for the bounded source label.
             const receiptScore = score(source.excerpt);
             // Stable receipt-ID order and strict improvement preserve the first
             // receipt on ties and retain the body label on a body/receipt tie.
@@ -508,6 +500,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       const scanRows = (limit, tail) => {
         const pageStarted = performance.now();
         const batch = physicalRows(last, limit);
+        collectReceipts(batch);
         let consumed = 0;
         for (const physical of batch) {
           // Residual filters and projection denials consume rows and time.
@@ -543,9 +536,10 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         assertIndexAvailable(ns);
         currentEpoch = epoch(ns);
         if (replay && currentEpoch !== expectedEpoch) fail('cursor_stale');
-        readMemo = safety ? createContentReadMemo(db) : undefined;
+        readMemo = createContentReadMemo(db);
         const limit = Math.min(floor, replay ? scanBoundary.rows : scan);
         const batch = floorPage.all(...boundary(ns), limit + 1);
+        collectReceipts(batch.slice(0,limit));
         for (const memory of batch.slice(0, limit)) {
           visited++;
           last = positionOf(memory);
@@ -607,7 +601,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         const accepted = tryReadPage(() => {
           if (!sameEpochs(epochs())) return false;
           assertIndexAvailable(ns);
-          readMemo = safety ? createContentReadMemo(db) : undefined;
+          readMemo = createContentReadMemo(db);
           scanRows(Math.min(page, (replay ? scanBoundary.rows : scan) - visited), true);
           return true;
         });

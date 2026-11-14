@@ -1,10 +1,13 @@
+import { receiptStoredCountInside, receiptDeliverySnapshot, deliveryReceiptRows, deliveryReceiptHeaders } from './content-safety.mjs';
+import { receiptDenialsInside, anchorsDeliverable, cardDeliverable } from './content-safety.mjs';
+import { contentReadSafety, memoryContentIdentity, receiptReadSafety, anchoredReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { captureSnapshot } from './capture-input.mjs';
 import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
 import { registerContentWriteBoundary } from './content-write-context.mjs';
 import { contentScopeEpochGuard, assertContentOutput, contentReceiptCount, assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
 import { receiptEventTimeEnabled, cachedContentLayout, installedContentLayout, checkInstalledContentSafety } from './content-safety-schema.mjs';
 import { writeContentSuppressionInside, suppressReceiptsInside, withContentSuppressionReadInside, requireSuppressionTransaction, allocateContentKey, contentSuppressionReasonInside, contentSuppressionRequestFenceInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, hasContentSuppressionRequestInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
-import { contentReadSafety, memoryContentIdentity, receiptReadSafety, anchoredReadSafety, createContentReadMemo } from './content-safety.mjs';
+
 import { roleProfileOptions } from './role-profile-input.mjs';
 import { createRoleProfileStorage } from './role-profile-storage.mjs';
 import { assetOptions } from './asset-input.mjs';
@@ -202,11 +205,11 @@ export function createMemoryRuntime(input, internal) {
         WHERE ar.memory_id=memories.id AND (ac.owner_id IS NOT memories.owner_id
           OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry` : '';
 
-
-  function legacyDto(memory) {
+  function legacyDto(memory, memo) {
     if (!memory || privacyMemoryDenied(memory)) return null;
     const ns = { ownerId: memory.owner_id, scope: memory.scope, projectId: memory.project_id || null };
-    const receipts = safeReceipts(ns, db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,receipt_key').all(memory.id));
+    memo ??= receiptSnapshot([{namespace:ns,memoryId:memory.id}],{limit:Number.MAX_SAFE_INTEGER,positions:false,totals:false});
+    const receipts = safeReceipts(ns, snapshotReceipts(ns,memory.id,memo,false,Number.MAX_SAFE_INTEGER).sort((a,b)=>a.created_at.localeCompare(b.created_at)||a.receipt_key.localeCompare(b.receipt_key)), memo);
     return {
       id: memory.id, content: memory.content, kind: memory.kind,
       scope: memory.scope, projectId: memory.project_id || null,
@@ -239,8 +242,8 @@ export function createMemoryRuntime(input, internal) {
   }
 
   function detailDto(memory) {
-    const withCount = { ...memory, receipt_count: db.prepare(
-      "SELECT count(*) AS n FROM receipts WHERE memory_id = ?").get(memory.id).n };
+    const withCount = { ...memory, receipt_count: receiptStoredCountInside(db,
+      { ownerId: memory.owner_id, scope: memory.scope, projectId: memory.project_id }, memory.id) };
     return { ...metadataDto(withCount), content: memory.content };
   }
 
@@ -347,11 +350,14 @@ export function createMemoryRuntime(input, internal) {
         AND fingerprint = ? AND deleted = 0 AND id != ?`)
         .get(...boundary(ns), value.fingerprint, id);
       if (other) fail("memory_conflict");
-      sourceRoots.touchMemory(ns, id);
+      const receiptSnapshot = sourceRoots.touchMemory(ns, id);
       const suppression = { reason: 'correction_supersession', actionId: 'memory-correct-'+id+'-'+expectedRevision };
       writeContentSuppressionInside(db, { namespace: ns, kind: 'memory', key: id, matchMode: 'revision-through',
         sourceVersion: JSON.stringify(['memory-revision-through-v1', current.revision]), ...suppression });
-      suppressReceiptsInside(db, ns, id, suppression);
+      suppressReceiptsInside(db, ns, id, suppression, undefined, true,
+        cachedContentLayout(db)?.suppressionRevision ? undefined : receiptSnapshot,
+        value.receipts.map(receipt => ({ receipt_key: receiptKey(receipt), client: receipt.client,
+          session_id: receipt.sessionId, event_id: receipt.eventId, role: receipt.role })));
       rawLineage.excludeMemory(ns, id, suppression);
       stagedEvidence.purgeNamespace(ns);
       if (current.fingerprint !== value.fingerprint) suppress(ns, current.fingerprint);
@@ -385,11 +391,12 @@ export function createMemoryRuntime(input, internal) {
       const current = activeRow(ns, id);
       if (!current) return { forgotten: false, indexRevision: epoch(ns) };
       if (expectedRevision !== undefined && current.revision !== expectedRevision) fail("revision_conflict");
-      sourceRoots.touchMemory(ns, id);
+      const receiptSnapshot = sourceRoots.touchMemory(ns, id);
       suppress(ns, current.fingerprint);
       const suppression = { reason: suppressionReason, actionId: 'memory-forget-'+id };
       writeContentSuppressionInside(db, { namespace: ns, kind: 'memory', key: id, ...suppression });
-      suppressReceiptsInside(db, ns, id, suppression);
+      suppressReceiptsInside(db, ns, id, suppression, undefined, suppressionReason === 'user_forget' || reason === 'rejected',
+        cachedContentLayout(db)?.suppressionRevision ? undefined : receiptSnapshot);
       rawLineage.excludeMemory(ns, id, suppression);
       stagedEvidence.purgeNamespace(ns);
       const now = new Date().toISOString();
@@ -488,21 +495,28 @@ export function createMemoryRuntime(input, internal) {
 
   function legacyList(ns, count) {
     ready();
-    return transaction(db, () => db.prepare(`SELECT memories.*${memoryAncestry()} FROM memories WHERE ${where}
-      AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id LIMIT ?`)
-      .all(...boundary(ns), count).map(legacyDto).filter(Boolean));
+    return transaction(db, () => {
+      const rows=db.prepare(`SELECT memories.*${memoryAncestry()} FROM memories WHERE ${where}
+      AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id LIMIT ?`).all(...boundary(ns),count);
+      const memo=receiptSnapshot(rows.map(row=>({namespace:ns,memoryId:row.id})),{limit:Number.MAX_SAFE_INTEGER,positions:false,totals:false});
+      return rows.map(row=>legacyDto(row,memo)).filter(Boolean);
+    });
   }
 
   function legacySearch(ns, terms, count) {
     ready();
-    return transaction(db, () => db.prepare(`SELECT memories.*${memoryAncestry()} FROM memories WHERE ${where}
+    return transaction(db, () => {
+      const rows=db.prepare(`SELECT memories.*${memoryAncestry()} FROM memories WHERE ${where}
       AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current'`).all(...boundary(ns))
       .map((memory) => ({ memory, score: terms.reduce((n, term) =>
         n + Number(memory.content.toLowerCase().includes(term)), 0) }))
       .filter(({ score }) => score > 0)
       .sort((a, b) => b.score - a.score || b.memory.updated_at.localeCompare(a.memory.updated_at)
         || a.memory.id.localeCompare(b.memory.id))
-      .slice(0, count).map(({ memory }) => legacyDto(memory)).filter(Boolean));
+      .slice(0, count).map(({memory})=>memory);
+      const memo=receiptSnapshot(rows.map(row=>({namespace:ns,memoryId:row.id})),{limit:Number.MAX_SAFE_INTEGER,positions:false,totals:false});
+      return rows.map(row=>legacyDto(row,memo)).filter(Boolean);
+    });
   }
 
   function listPage(ns, statuses, count, anchor, expectedEpoch, states = ['active', 'historical'], reviewState) {
@@ -538,8 +552,7 @@ export function createMemoryRuntime(input, internal) {
     return transaction(db, () => {
       const currentEpoch = epoch(ns);
       if (expectedEpoch !== undefined && currentEpoch !== expectedEpoch) fail("cursor_stale");
-      const memory = db.prepare(`SELECT memories.*${memoryAncestry()}, (SELECT count(*) FROM receipts
-        WHERE receipts.memory_id = memories.id) AS receipt_count FROM memories
+      const memory = db.prepare(`SELECT memories.*${memoryAncestry()} FROM memories
         WHERE ${where} AND id = ? AND deleted = 0`).get(...boundary(ns), id);
       if (!memory || privacyMemoryDenied(memory) || (memory.review_state === 'awaiting' && !(decisionReview && includeAwaiting))) fail("memory_not_found");
       if (anchor && Object.hasOwn(anchor, 'row')) {
@@ -548,54 +561,66 @@ export function createMemoryRuntime(input, internal) {
         if (!stored) fail('cursor_stale');
         anchor = stored;
       }
-      let sql = `SELECT rowid AS cursor_row,* FROM receipts WHERE memory_id = ?`;
-      const params = [id];
-      if (anchor) {
-        sql += " AND (created_at > ? OR (created_at = ? AND id > ?))";
-        params.push(anchor.createdAt, anchor.createdAt, anchor.id);
-      }
-      sql += " ORDER BY created_at ASC, id ASC LIMIT ?";
-      params.push(count + 1);
-      const original = db.prepare(sql).all(...params), scanned = original.slice(0, count), procedural = safeProcedural(ns, id);
-      return { receiptComplete: original.length <= count, receiptScan: scanned.at(-1)?.cursor_row, memory: { ...metadataDto(memory), content: memory.content },
-        receipts: safeReceipts(ns, scanned).map(receipt => ({ id: receipt.id, client: receipt.client,
+      memory.receipt_count = receiptStoredCountInside(db, ns, id);
+      const memo = receiptSnapshot([{namespace:ns,memoryId:id}],{limit:count+1,after:anchor,positions:false});
+      const allowed = deliveryReceiptRows(db,ns,id,memo,{limit:count+1,after:anchor,cursor:true});
+      const scanned = allowed.slice(0, count), receipts = safeReceipts(ns, scanned, memo), procedural = safeProcedural(ns, id, memo);
+      return { receiptComplete: allowed.length <= count, receiptScan: scanned.at(-1)?.cursor_row, memory: { ...metadataDto(memory), content: memory.content },
+        receipts: receipts.map(receipt => ({ id: receipt.id, client: receipt.client,
           sessionId: receipt.session_id, eventId: receipt.event_id, role: receipt.role, excerpt: receipt.excerpt, createdAt: receipt.created_at })),
         ...(procedural ? { procedural } : {}),
         placements: mocStorage.placementRefs(ns, id),
         conflicts: conflictStorage.inspect(ns, id),
-        ...(includeQualification ? { qualification: safeQualification(ns, memory) } : {}),
+        ...(includeQualification ? { qualification: safeQualification(ns, memory, memo) } : {}),
         ...(memory.currentness === 'historical'
           ? { supersession: supersessionStorage.inspect(ns, id) } : {}), epoch: currentEpoch };
     }, undefined, { deferred: true });
   }
 
-  function safeQualification(ns, row) {
-    const value = qualificationStorage.inspect(row);
-    return value && !anchoredReadSafety(db, { namespace: ns, memoryId: row.id, anchors: value.anchors }).allowed ? null : value;
+  function safeQualification(ns, row, memo = createContentReadMemo(db)) {
+    const value = qualificationStorage.inspect(row, memo);
+    return value && (!anchorsDeliverable(db, ns, row.id, value.anchors, memo) || !anchoredReadSafety(db, { namespace: ns, memoryId: row.id, anchors: value.anchors, memo }).allowed) ? null : value;
   }
-  function safeProcedural(ns, id) {
+  function safeProcedural(ns, id, memo = createContentReadMemo(db)) {
     const value = proceduralStorage.inspect(id);
-    return value && !anchoredReadSafety(db, { namespace: ns, memoryId: id, anchors: value.anchors }).allowed ? null : value;
+    return value && (!anchorsDeliverable(db, ns, id, value.anchors, memo) || !anchoredReadSafety(db, { namespace: ns, memoryId: id, anchors: value.anchors, memo }).allowed) ? null : value;
+  }
+  function receiptSnapshot(entries,options) {
+    return receiptDeliverySnapshot(db,entries,undefined,[],options);
+  }
+  function snapshotReceipts(ns, id, memo, recent = false, limit = 101) {
+    return deliveryReceiptRows(db,ns,id,memo,{recent,limit});
+  }
+
+  function unmarkedReceipts(ns, receipts, memo) {
+    const denied = receiptDenialsInside(db, ns, receipts, memo);
+    return receipts.filter(receipt => !denied.has(receipt.receipt_key));
   }
   function safeReceipts(ns, receipts, memo = createContentReadMemo(db)) {
-    return receipts.filter(receipt => receiptReadSafety(db, { namespace: ns, receipt, memo }).allowed);
+    const denied = receiptDenialsInside(db, ns, receipts, memo);
+    return receipts.filter(receipt => !denied.has(receipt.receipt_key) && receiptReadSafety(db, { namespace: ns, receipt, memo }).allowed);
   }
   const receiptPageOffsets = new WeakMap();
-  function receiptPage(ns, row, offset, count, recent = false) {
-    const original = db.prepare(`SELECT * FROM receipts WHERE memory_id=?
-      ORDER BY created_at ${recent ? 'DESC' : 'ASC'},id LIMIT ? OFFSET ?`).all(row.id, count, offset);
-    const memo = createContentReadMemo(db), rows = safeReceipts(ns, original, memo);
+  function receiptPage(ns, row, offset, count, recent = false, memo) {
+    memo ??= receiptSnapshot([{namespace:ns,memoryId:row.id}],{limit:count+1,recent,offset});
+    const headers = deliveryReceiptHeaders(db,ns,row.id,memo);
+    const original = recent ? [...headers].sort((a,b)=>b.created_at.localeCompare(a.created_at)||a.id.localeCompare(b.id)) : headers;
+    const state=memo.deliveryMemoryStates.get(JSON.stringify([...boundary(ns),row.id]));
+    const positions = new Map(original.map(receipt=>[receipt.id,receipt.position]));
+    const allowed = count === 0 ? [] : deliveryReceiptRows(db,ns,row.id,memo,{offset,limit:count+1,recent});
+    const remaining = allowed, scanned = remaining.slice(0,count);
+    const rows = safeReceipts(ns, scanned, memo);
     if (!row || !contentReadSafety(db, { identity, namespace: ns, intent: 'history', memo,
       ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision }, receipts: rows }).allowed) fail('revision_conflict');
     const result = rows.map(receipt => ({ id: receipt.id, client: receipt.client, sessionId: receipt.session_id, eventId: receipt.event_id,
       role: receipt.role, excerpt: receipt.excerpt, createdAt: receipt.created_at }));
-    receiptPageOffsets.set(result, { offsets: rows.map(receipt => offset + original.indexOf(receipt) + 1), end: offset + original.length });
+    receiptPageOffsets.set(result, { offsets: rows.map(receipt => receipt === scanned.at(-1) && remaining.length<=count && state.complete ? state.total : positions.get(receipt.id)), end: scanned.length === remaining.length && state.complete ? state.total : positions.get(scanned.at(-1)?.id) ?? offset });
     return result;
   }
-  function receiptPrefix(ns, row, offset, count) { return receiptPage(ns, row, offset, count); }
+  function receiptPrefix(ns, row, offset, count, memo) { return receiptPage(ns, row, offset, count, false, memo); }
 
   // A capped recall receipt list: most recent first, ties broken by ID.
-  function receiptRecent(ns, row, count) { return receiptPage(ns, row, 0, count, true); }
+  function receiptRecent(ns, row, count, memo) { return receiptPage(ns, row, 0, count, true, memo); }
 
   // Read before ranking only; the final recall snapshot rereads the same list.
   function recentReceipts(ns, ref, count) {
@@ -607,15 +632,43 @@ export function createMemoryRuntime(input, internal) {
     }, undefined, { deferred: true });
   }
 
-  function readSourceEvidence(row, complete = true) {
+  function storedSourceEvidence(row) {
     const original = db.prepare('SELECT * FROM receipts WHERE memory_id = ? ORDER BY created_at, id LIMIT 101').all(row.id);
     const ns = { ownerId: row.owner_id, scope: row.scope, projectId: row.project_id || null };
     qualificationStorage.inspect(row);
-    const full = sourceEvidence(row, original, detailDto(row).receiptCount, receiptKey);
-    const memo = createContentReadMemo(db), receipts = complete ? original : safeReceipts(ns, original, memo);
-    if (!complete && !receipts.length) fail('source_unavailable');
-    const ids = new Set(receipts.map(receipt => receipt.id));
-    const evidence = complete ? full : { ...full, receipts: full.receipts.filter(receipt => ids.has(receipt.id)), receiptCount: receipts.length };
+    const evidence = sourceEvidence(row, original, detailDto(row).receiptCount, receiptKey);
+    const memo = createContentReadMemo(db);
+    if (!contentReadSafety(db, { identity, namespace: ns, intent: 'history', memo, ref: { type: 'memory', namespace: ns,
+      memoryId: row.id, revision: row.revision }, receipts: original }).allowed) fail('revision_conflict');
+    return evidence;
+  }
+  function projectRationale(value, existingMemo) {
+    const sources = value.sources, entries = sources.map(source => {
+      const row = db.prepare('SELECT owner_id,scope,project_id FROM memories WHERE id=?').get(source.memory.id);
+      return { namespace: {ownerId:row.owner_id,scope:row.scope,projectId:row.project_id || null}, memoryId:source.memory.id };
+    });
+    const memo = existingMemo ?? receiptSnapshot(entries), delivered = new Set();
+    const projected = sources.map((source,index) => {
+      const entry = entries[index], rows = snapshotReceipts(entry.namespace, entry.memoryId, memo);
+      const ids = new Set(unmarkedReceipts(entry.namespace, rows, memo).map(row => row.id));
+      const receipts = source.receipts.filter(receipt => ids.has(receipt.id));
+      for (const receipt of receipts) delivered.add(receipt.id);
+      return {...source,receipts};
+    });
+    const edges = value.edges?.filter(edge => delivered.has(edge.fromReceipt) && delivered.has(edge.toReceipt));
+    return {...value,sources:projected,...(edges ? {edges,status:!value.view && edges.some(edge=>edge.relation==='challenges-premise') ? 'reconfirmation-suggested' : 'unassessed'} : {})};
+  }
+
+  function readSourceEvidence(row, memo = createContentReadMemo(db)) {
+    const ns = { ownerId: row.owner_id, scope: row.scope, projectId: row.project_id || null };
+    const original = snapshotReceipts(ns, row.id, memo);
+    const allowed = unmarkedReceipts(ns, original, memo);
+    qualificationStorage.inspect(row, memo);
+    const receiptCount = detailDto(row).receiptCount;
+    if (receiptCount > 100 || allowed.length > 100) fail('context_item_too_large');
+    const receipts = safeReceipts(ns, allowed, memo);
+    if (receipts.length < receiptCount) fail('source_unavailable');
+    const evidence = sourceEvidence(row, receipts, receiptCount, receiptKey);
     if (!contentReadSafety(db, { identity, namespace: ns, intent: 'history', memo, ref: { type: 'memory', namespace: ns,
       memoryId: row.id, revision: row.revision }, receipts }).allowed) fail('revision_conflict');
     return evidence;
@@ -641,17 +694,76 @@ export function createMemoryRuntime(input, internal) {
         fetchPageIdentities.set(page, memoryContentIdentity(row));
         return page;
       }
+      const memo = receiptSnapshot([{ namespace: ns, memoryId: row.id }],{limit:101,offset});
       const memory = detailDto(row);
-      const receipts = receiptPrefix(ns, row, offset, 101), positions = receiptPageOffsets.get(receipts);
+      const receipts = receiptPrefix(ns, row, offset, 101, memo), positions = receiptPageOffsets.get(receipts);
       return { memory, receipts, receiptOffsets: positions.offsets, receiptEnd: positions.end, epoch: currentEpoch,
-        ...(includeQualification ? { qualification: safeQualification(ns, row) } : {}),
+        ...(includeQualification ? { qualification: safeQualification(ns, row, memo) } : {}),
         ...(view === 'historical' ? { supersession: supersessionStorage.inspect(ns, row.id) } : {}) };
     }, undefined, { deferred: true });
   }
 
-  function readUsageEvidence(ns, row, mode) {
-    return { ...readSourceEvidence(row, false), ...(mode === 'rationale-evidence'
-      ? { rationale: rationaleStorage.inspectInside(ns, { memoryId: row.id, revision: row.revision }) } : {}) };
+  function usageSnapshot(entries, mode, options) {
+    const expanded = [...entries];
+    if (mode === 'rationale-evidence') for (const entry of entries) {
+      const ns = entry.namespace;
+      const ids = db.prepare(`SELECT e.from_id,e.to_id FROM rationale_edges e
+        CROSS JOIN memories a ON a.id=e.from_id CROSS JOIN memories b ON b.id=e.to_id
+        WHERE a.owner_id=? AND a.scope=? AND a.project_id=? AND b.owner_id=a.owner_id
+          AND b.scope=a.scope AND b.project_id=a.project_id AND (e.from_id=? OR e.to_id=? OR
+          e.to_id IN (SELECT from_id FROM rationale_edges WHERE to_id=? AND relation='supports-decision')) LIMIT 121`)
+        .all(...boundary(ns), entry.memoryId, entry.memoryId, entry.memoryId);
+      for (const row of ids) for (const memoryId of [row.from_id,row.to_id]) expanded.push({namespace:ns,memoryId});
+    }
+    return receiptSnapshot(expanded,options);
+  }
+  function readUsageEvidence(ns, row, mode, memo = usageSnapshot([{namespace:ns,memoryId:row.id}], mode)) {
+    return { ...readSourceEvidence(row, memo), ...(mode === 'rationale-evidence' ? {
+      rationale: rationaleStorage.inspectInside(ns, { memoryId: row.id, revision: row.revision }, 'decision-context', memo) } : {}) };
+  }
+
+  // One preparation snapshot for the complete selected recall set. Paging uses
+  // detached projections; capped recent lists and finalization own fresh reads.
+  function prepareRecall(entries, includeQualification, contextMode) {
+    ready();
+    const pages = new Map();
+    const stamp = (ns,id) => JSON.stringify([boundary(internalNamespace(ns)),id]);
+    readTransaction(db, () => {
+      const memo = usageSnapshot(entries, contextMode,{limit:203});
+      for (const entry of entries) {
+        const ns = entry.namespace, row = currentRow(ns,entry.memoryId);
+        if (!safeMemory(ns,row) || row.revision !== entry.revision) fail('revision_conflict');
+        const currentEpoch = epoch(ns);
+        if (isSourceContext(contextMode)) {
+          try { pages.set(stamp(ns,row.id),{source:readUsageEvidence(ns,row,contextMode,memo),epoch:currentEpoch}); }
+          catch (error) { if(error.code!=='context_item_too_large')throw error; pages.set(stamp(ns,row.id),{oversized:true}); }
+        } else {
+          const receipts = receiptPrefix(ns,row,0,202,memo), positions = receiptPageOffsets.get(receipts);
+          pages.set(stamp(ns,row.id),{memory:detailDto(row),receipts,receiptOffsets:positions.offsets,
+            receiptEnd:positions.end,epoch:currentEpoch,
+            ...(includeQualification ? {qualification:safeQualification(ns,row,memo)} : {})});
+        }
+      }
+    });
+    return {
+        assertEpoch: (ns,index) => mocStorage.assertEpoch(ns,index),
+        fetchPage(ns,ref,offset,expectedEpoch) {
+          const page = pages.get(stamp(ns,ref.memoryId));
+          if (page?.oversized) fail('context_item_too_large');
+          if (!page || (page.memory ?? page.source?.memory)?.revision !== ref.revision) fail('revision_conflict');
+          if (expectedEpoch !== undefined && expectedEpoch !== page.epoch) fail('cursor_stale');
+          if (page.source) return page;
+          const start = page.receiptOffsets.findIndex(position => position > offset);
+          const end = start < 0 ? 0 : start + 101;
+          return {...page,receipts:start < 0 ? [] : page.receipts.slice(start,end),
+            receiptOffsets:start < 0 ? [] : page.receiptOffsets.slice(start,end)};
+        },
+        recentReceipts(ns,ref,count) {
+          // Preserve preparation's canonical 202-row projection before the
+          // packer's requested cap, while retaining the fresh lazy transaction.
+          return recentReceipts(ns,ref,202).slice(0,count);
+        },
+    };
   }
 
   const sourceSnapshotIdentities = new WeakMap();
@@ -674,6 +786,7 @@ export function createMemoryRuntime(input, internal) {
       if (identities.length > count) fail(expected ? 'revision_conflict' : 'context_item_too_large');
       const contentIdentities = [], previousIdentities = expected && sourceSnapshotIdentities.get(expected);
       if (expected && !previousIdentities) fail('revision_conflict');
+      const memo = receiptSnapshot(identities.map(({id,namespaceIndex}) => ({ namespace: namespaces[namespaceIndex], memoryId: id })));
       const memories = identities.map(({ id, revision, namespaceIndex }, index) => {
         const namespace = namespaces[namespaceIndex];
         // An incomplete active projection is an error, never a smaller claim
@@ -683,7 +796,7 @@ export function createMemoryRuntime(input, internal) {
         const row = currentRow(namespace, id);
         if (!safeMemory(namespace, row, 'current', previousIdentities?.[index])) fail('revision_conflict');
         contentIdentities.push(memoryContentIdentity(row));
-        return { namespaceIndex, ...readSourceEvidence(row) };
+        return { namespaceIndex, ...readSourceEvidence(row, memo) };
       });
       const snapshot = { memories, namespaces: boundaries, coverage: 'complete-current-admitted',
         semanticCoverage: 'unassessed', evidenceTrust: 'untrusted-data-not-instructions' };
@@ -695,6 +808,9 @@ export function createMemoryRuntime(input, internal) {
 
   function recallSnapshot(candidates, selected, namespaces = [], includeQualification = false, contextMode) {
     ready();
+    // Private preparation handoff through the existing collaborator. Null is
+    // never a delivered selection and does not add a runtime method.
+    if (selected === null) return prepareRecall(candidates, includeQualification, contextMode);
     return transaction(db, () => {
       // This transaction is the return linearization point across the read set.
       const rows = candidates.map(({ namespace, memoryId, revision }) => {
@@ -706,20 +822,23 @@ export function createMemoryRuntime(input, internal) {
         indexStorage.assertAvailable(namespace);
         if (epoch(namespace) !== indexRevision || cachedContentLayout(db)?.suppressionRevision && suppressionEpoch !== undefined && suppressionEpoch !== contentSuppressionRequestFenceInside(db, namespace.ownerId)) fail('index_revision_conflict');
       }
+      const entries = (isSourceContext(contextMode) ? candidates : selected.map(index => candidates[index]));
+      const memo = isSourceContext(contextMode) ? usageSnapshot(entries, contextMode) : receiptDeliverySnapshot(db,entries,undefined,[],{limit:203});
       if (isSourceContext(contextMode)) {
         const sources = rows.map((row, index) => {
-          const source = readUsageEvidence(candidates[index].namespace, row, contextMode);
+          const source = readUsageEvidence(candidates[index].namespace, row, contextMode, memo);
           if (JSON.stringify(source) !== JSON.stringify(candidates[index].sourceEvidence)) fail('revision_conflict');
           return source;
         });
         return selected.map(index => sources[index]);
       }
-      const qualifications = includeQualification ? rows.map((row, index) => safeQualification(candidates[index].namespace, row)) : null;
+      const qualifications = includeQualification ? rows.map((row, index) => selected.includes(index)
+        ? safeQualification(candidates[index].namespace, row, memo) : qualificationStorage.inspect(row)) : null;
       return selected.map((index) => {
         const memory = detailDto(rows[index]);
         const capped = candidates[index].receiptOrder === 'recent';
-        const receipts = capped ? receiptRecent(candidates[index].namespace, rows[index], candidates[index].receiptLimit)
-          : receiptPrefix(candidates[index].namespace, rows[index], 0, candidates[index].receiptLimit);
+        const receipts = capped ? receiptRecent(candidates[index].namespace, rows[index], candidates[index].receiptLimit, memo)
+          : receiptPrefix(candidates[index].namespace, rows[index], 0, candidates[index].receiptLimit, memo);
         return { memory, receipts, receiptCount: memory.receiptCount,
           ...(capped ? { receiptsOmitted: memory.receiptCount - receipts.length } : {}),
           ...(includeQualification ? { qualification: qualifications[index] } : {}) };
@@ -729,7 +848,7 @@ export function createMemoryRuntime(input, internal) {
 
   const conflictStorage = createConflictStorage({ db, activeRow: currentRow, rawRow: activeRow, advanceEpoch,
     dropHeldWork: (id, reason) => dropHeldWork(db, id, reason) });
-  const rationaleStorage = createRationaleStorage({ db, currentRow, readSourceEvidence, epoch, advanceEpoch });
+  const rationaleStorage = createRationaleStorage({ db, currentRow, readSourceEvidence: storedSourceEvidence, epoch, advanceEpoch, project: projectRationale });
   const qualificationStorage = createQualificationStorage({ db, receiptKey,
     assertStoredReceipts: rawLineage.assertStoredReceipts });
   const qualifiedTransitionStorage = createQualifiedTransitionStorage({ db, qualificationStorage, advanceEpoch, epoch });
@@ -926,7 +1045,7 @@ export function createMemoryRuntime(input, internal) {
     identity, ready, admit, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     legacyGet, legacyList, legacySearch,
     listPage, getPage, fetchPage, recentReceipts, recallSnapshot, sourceSnapshot,
-    rationaleSnapshot(ns, refs, inputMode) { ready(); return rationaleStorage.snapshot(ns, refs, inputMode); },
+    rationaleSnapshot(ns, refs, inputMode) { ready(); return inputMode === null ? rationaleStorage.validateSnapshot(ns, refs) : rationaleStorage.snapshot(ns, refs, inputMode); },
     commitRationale(ns, refs, snapshot, proposals, deadline) {
       ready(); return rationaleStorage.commit(ns, refs, snapshot, proposals, deadline);
     },

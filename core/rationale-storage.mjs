@@ -9,7 +9,10 @@ const bounded = value => {
 };
 
 /** Only current, exact-namespace sources. No model call occurs in a transaction. */
-export function createRationaleStorage({ db, currentRow, readSourceEvidence, epoch, advanceEpoch }) {
+export function createRationaleStorage({ db, currentRow, readSourceEvidence, epoch, advanceEpoch, project = value => value }) {
+  // Delivery may omit receipts. Keep its unchanged stored snapshot private so
+  // committing proposals validates stored evidence without projecting again.
+  const storedSnapshots = new WeakMap();
   function source(ns, ref, includeFocus = false) {
     const row = currentRow(ns, ref.memoryId);
     if (!row) fail('memory_not_found');
@@ -24,12 +27,17 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
   }
 
   function snapshot(ns, refs, inputMode) {
-    return transaction(db, () => snapshotInside(ns, refs, inputMode));
+    return transaction(db, () => {
+      const stored = snapshotInside(ns, refs, inputMode), delivered = bounded(project(stored));
+      storedSnapshots.set(delivered, stored);
+      return delivered;
+    });
   }
 
   function assertSnapshot(ns, refs, expected) {
-    const actual = snapshotInside(ns, refs, expected.inputMode);
-    if (JSON.stringify(actual) !== JSON.stringify(expected)) fail('revision_conflict');
+    const stored = storedSnapshots.get(expected) ?? expected;
+    const actual = snapshotInside(ns, refs, stored.inputMode);
+    if (JSON.stringify(actual) !== JSON.stringify(stored)) fail('revision_conflict');
   }
 
   // Placement alone may revise a memory without changing its source. Keep this
@@ -113,7 +121,7 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
     }, deadline?.check);
   }
 
-  function inspectInside(ns, ref, view = 'decision-context') {
+  function inspectInside(ns, ref, view = 'decision-context', deliveryMemo) {
       if (!['decision-context', 'incident-proposals'].includes(view)) fail('invalid_input');
       const incident = view === 'incident-proposals';
       const sources = new Map([[ref.memoryId, source(ns, ref)]]);
@@ -145,12 +153,13 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
         edges.push({ from: row.from_id, to: row.to_id, relation: row.relation,
           fromReceipt: row.from_receipt, toReceipt: row.to_receipt, interpretationStatus: 'model-proposed' });
       }
-      return bounded({ root: { memoryId: ref.memoryId, revision: ref.revision },
+      return bounded(project(bounded({ root: { memoryId: ref.memoryId, revision: ref.revision },
         status: !incident && edges.some(edge => edge.relation === 'challenges-premise') ? 'reconfirmation-suggested' : 'unassessed',
         sources: [...sources.values()], edges, coverage: incident ? 'root-incident-only' : 'linked-evidence-only',
-        ...(incident ? { view: 'incident-proposals' } : {}), indexRevision: epoch(ns) });
+        ...(incident ? { view: 'incident-proposals' } : {}), indexRevision: epoch(ns) }),deliveryMemo));
   }
 
   return { snapshot, commit, snapshotFilingEdges, restoreFilingEdges,
+    validateSnapshot: (ns, refs) => transaction(db, () => snapshotInside(ns, refs)),
     inspectInside, inspect: (ns, ref, view) => transaction(db, () => inspectInside(ns, ref, view)) };
 }

@@ -1,5 +1,6 @@
+import { sourceDigest } from './procedural-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
-import { contentReadSafety } from './content-safety.mjs';
+import { contentReadSafety, receiptDenialsInside, createContentReadMemo } from './content-safety.mjs';
 import { cachedContentSuppressionRequestInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { transaction } from './database.mjs';
 import { episodeClient, episodeMetadata, episodeReadRow, instant } from './episode-storage.mjs';
@@ -148,16 +149,30 @@ export function createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRea
   return function read(ns, operation, filter, cursor) {
     // Reviewed read-only pages can share a snapshot with a RESERVED writer.
     return transaction(db, () => {
-      const original = rangeQuery(ns,operation,filter,cursor?.a);
-      const projected = operation === 'listEpisodes' ? episodeProjection(ns, original, cursor?.e) : { epoch: epoch(ns), query: original };
-      const current = projected.epoch;
-      if (cursor && cursor.e !== current) fail('cursor_stale');
-      const query = projected.query, rows = db.prepare(query.sql).all(...query.params);
-      if (contentSuppressionReasonInside(db, ns)) fail('revision_conflict');
-      return { epoch: current, rows: rows.map(row => {
-        if (operation === 'listEpisodes') {
+      let after = cursor?.a, current, rows = [];
+      // Each query retains the original physical keyset. Projected intervals
+      // cannot be used as progress anchors because withholding blanks them.
+      while (true) {
+        const original = rangeQuery(ns, operation, filter, after);
+        const projected = operation === 'listEpisodes' ? episodeProjection(ns, original, cursor?.e) : { epoch: epoch(ns), query: original };
+        current = projected.epoch;
+        if (cursor && cursor.e !== current) fail('cursor_stale');
+        const query = projected.query;
+        const physical = db.prepare(query.sql).all(...query.params);
+        if (contentSuppressionReasonInside(db, ns)) fail('revision_conflict');
+        if (operation !== 'listEpisodes') { rows = physical; break; }
+        const visible = episodeReadRowsInside(db, ns, physical).rows;
+        for (let row of visible) {
           assertEpisodeRead?.(ns, row, projected.budget);
           row = episodeReadRow(row);
+          if (filter.timeBasis !== 'event' || JSON.parse(row.record).eventEnd !== null) rows.push(row);
+        }
+        if (rows.length >= filter.limit + 1 || physical.length < filter.limit + 1) break;
+        const last = physical.at(-1);
+        after = { time: filter.timeBasis === 'event' ? JSON.parse(last.record).eventEnd : last.first_received_at, id: last.id };
+      }
+      return { epoch: current, rows: rows.slice(0, filter.limit + 1).map(row => {
+        if (operation === 'listEpisodes') {
           const item = episodeMetadata(ns,row);
           return { item, key: { time: filter.timeBasis === 'event' ? item.eventEnd : item.firstReceivedAt, id: row.id } };
         }
@@ -190,4 +205,31 @@ export function rangePage(page, filter, binding, encodeCursor, operation) {
     output.status = 'budget_exhausted';
   }
   fail('context_item_too_large');
+}
+
+export function episodeReadRowsInside(db, ns, rows, linkedReceipts = [], {memo=createContentReadMemo(db),defer=false} = {}) {
+  const sources = rows.length ? db.prepare(`SELECT s.*,o.client AS origin_client,o.session_key AS origin_session
+    FROM json_each(?) wanted CROSS JOIN session_episodes e ON e.id=wanted.value
+    CROSS JOIN episode_sources s INDEXED BY episode_source_page ON s.episode_id=e.id
+    CROSS JOIN session_episodes o ON o.id=s.origin_episode_id
+    WHERE e.owner_id=? AND e.scope=? AND e.project_id=? AND o.owner_id=e.owner_id
+      AND o.scope=e.scope AND o.project_id=e.project_id ORDER BY s.id`)
+    .all(JSON.stringify(rows.map(row=>row.id)),...boundary(ns)) : [];
+  const receipts = sources.map(source => {
+    const input={client:source.origin_client,sessionId:source.origin_session,eventId:source.message_id,role:source.role,excerpt:source.text};
+    return {receipt_key:sourceDigest(JSON.stringify(input)),client:input.client,session_id:input.sessionId,event_id:input.eventId,role:input.role};
+  });
+  if(defer)return {memo,receipts:[...receipts,...linkedReceipts]};
+  const denied = receiptDenialsInside(db,ns,[...receipts,...linkedReceipts],memo);
+  const hidden = new Set(sources.filter((source,index)=>denied.has(receipts[index].receipt_key)).map(source=>source.id));
+  return {memo,sources:sources.filter(source=>!hidden.has(source.id)),rows:rows.map(row=>{
+    if (!sources.some(source=>source.episode_id===row.id&&hidden.has(source.id))) return row;
+    // Same record as invalidate(ns,id,false): source denial invalidates the
+    // whole interpretation. No event interval survives a withheld source.
+    const record = { clientLabel:null,eventStart:null,eventEnd:null,eventTimeCoverage:'unknown',
+      interpretedAt:null,type:null,language:null,gist:null,outcome:null,nextStep:null,
+      anchors:{},modelMetadata:null,semanticSupport:'unassessed',editor:{},
+      processing:{state:'invalidated',missing:0,expired:0,omitted:0,errorCode:null} };
+    return {...row,record:JSON.stringify(record)};
+  })};
 }
