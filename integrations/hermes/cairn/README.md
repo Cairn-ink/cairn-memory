@@ -23,10 +23,12 @@ The token expires; see the token list. Full-access tokens are refused because
 they grant the whole account, while Hermes needs only memory capture and recall.
 The adapter checks the token before saving it or activating Cairn.
 
-The credential stays in `<profile>/cairn/hosted-credential.json` (0600), inside a
-0700 directory. It is never put in `cairn.json`, `.env` or the process environment.
-Revoke it by deleting it in **Settings → Connections**. To sign out locally,
-delete `<profile>/cairn/hosted-credential.json` and select another memory provider.
+The token is entered only through `hermes memory setup`, which checks it is memory-only before saving it.
+Hermes stores the token as `CAIRN_MEMORY_TOKEN` in the profile's `.env` (mode 0600).
+It is never put in `cairn.json` or `config.yaml`.
+Revoke it by deleting it at **cairn.ink → Settings → Connections**; to sign out
+locally, remove `CAIRN_MEMORY_TOKEN` through Hermes configuration and select another memory provider.
+A home set up with plugin 0.2.0 must re-run `hermes memory setup`.
 
 Hosted profile configuration:
 
@@ -42,6 +44,8 @@ one recall in flight per conversation. Each prefetch request has a total deadlin
 of the cap plus 0.5 seconds. Connections are reused within a session.
 Post-turn prefetch is disabled so there is only one recall per non-trivial
 turn against the daily quota.
+Automatic recall, including a cached late result, is withheld while the hosted account is paused or its enforced pause state cannot be verified within the same prefetch cap.
+Explicit remember, recall and forget tools remain available while automatic memory is paused, subject to server authorization.
 
 What leaves the device:
 

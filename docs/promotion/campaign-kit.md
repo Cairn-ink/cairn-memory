@@ -129,7 +129,7 @@ https://github.com/Cairn-ink/cairn-memory
 
 以下說明交給一位不熟悉實作的開發者。使用 Linux x64、Git、Node 22.16 或 Node 24、npm 與 `tar`。本輪固定 source commit 為 `7467aebcb32563c9aab4356a8c3e04c0ebb1ecd4`，另保留使用的 README 雜湊；所有操作只用新 checkout、新安裝目錄與 walkthrough 的合成資料庫。若要改 source commit，先記錄新一批的版本，保留舊批次結果。
 
-1. **按 README 安裝。** 從 [Local preview 的第 1 步](../../README.md#try-the-local-memory-layer) clone 後，在 checkout 內執行 `git checkout --detach 7467aebcb32563c9aab4356a8c3e04c0ebb1ecd4`，再依提供的 README 安裝。選一個不存在的絕對路徑作為安裝目標，例如既有私人目錄下的 `cairn-trial-h01`。記錄 Node/npm 版本、開始 UTC 時間，以及 clone 和安裝各花多久。
+1. **按 README 安裝。** 從 [Local preview 的第 1 步](../local-from-source.md#try-the-local-memory-layer) clone 後，在 checkout 內執行 `git checkout --detach 7467aebcb32563c9aab4356a8c3e04c0ebb1ecd4`，再依提供的 README 安裝。選一個不存在的絕對路徑作為安裝目標，例如既有私人目錄下的 `cairn-trial-h01`。記錄 Node/npm 版本、開始 UTC 時間，以及 clone 和安裝各花多久。
 2. **按 README 執行第 2 步。** 安裝 isolated MCP SDK，將相同安裝路徑帶入 `walkthrough.mjs --executable`。使用預設無 key 模式，不加 `--with-recall`。預期整體為 `status: "passed"`，六個階段皆通過，包含重啟後 receipt 相同、舊 revision 更正遭拒、`model_not_configured` 與遺忘後空列表。這一步不需要先設定聊天 client。
 3. **回報結果與卡住位置。** 回報匿名操作者 ID、固定 commit、Node/npm 版本、各步驟耗時、整體及階段 status、阻礙與是否需要人幫忙。安裝輸出含私人路徑，先移除路徑和識別資料再分享；不要公開原始 installation receipt。任何中斷或失敗都保留，先記錄原結果才開始修正或重試。
 

@@ -78,7 +78,8 @@ test('sealed maintenance retires a changed source set and deletes bodies after r
   const rebuilt = await pass(600001); assert.equal(rebuilt.built.length, 1, JSON.stringify(rebuilt));
   assert.notEqual(rebuilt.built[0].id, first.id);
   for (const memory of memories.slice(0, 3)) ok(f.core.forget({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision }));
-  const cleaned = await pass(1200002); assert.equal(cleaned.state, 'ready', JSON.stringify(cleaned)); assert.ok(cleaned.deleted >= 1);
+  const cleaned = await pass(1200002); assert.equal(cleaned.state, 'ready', JSON.stringify(cleaned));
+  assert.equal(cleaned.deleted, 0, 'rebuild and forget already purged the old bodies');
   assert.equal(f.row(first.id).state, 'deleted'); assert.equal(f.row(first.id).body, null);
   assert.ok(f.db.prepare('SELECT 1 FROM card_body_provenance WHERE card_id=?').get(first.id));
 });
@@ -94,7 +95,7 @@ test('engine generation reads bounded receipt Raw spans; exclusion revokes the g
   const memories = f.db.prepare('SELECT id FROM memories ORDER BY id').all(); assert.equal(memories.length, 8);
   memories.forEach((m, i) => f.db.prepare('UPDATE memories SET created_at=? WHERE id=?')
     .run(new Date(Date.UTC(2026, 0, i * 3 + 1)).toISOString(), m.id));
-  const pass = ok(await f.core.maintainCards({ namespace: rawNs, budget: { maxMs: 10000 } }));
+  const pass = ok(await f.core.maintainCards({ namespace: rawNs, budget: { maxMs: 10000 }, rawSpans: true }));
   assert.equal(pass.built.length, 1, JSON.stringify(pass));
   assert.equal(model.calls[0].rawSpans.length, 8);
   assert.ok(model.calls[0].rawSpans.every(span => span.text.length <= 400));

@@ -51,7 +51,7 @@ for (const disabled of [false, true]) test(`Card transport refuses ${disabled ? 
     return rawSpans(...args);
   };
   const pass = await createEngineCardMaintenance({ storage, model: f.model })
-    .maintain({ namespace: ns, budget: { maxMs: 5000 } });
+    .maintain({ namespace: ns, budget: { maxMs: 5000 }, rawSpans: true });
   assert.equal(selected, true);
   assert.equal(f.model.calls.length, 0);
   assert.equal(pass.state, 'paused', JSON.stringify(pass));

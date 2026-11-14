@@ -2,6 +2,19 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { bindContentSafetyConnection, cachedContentLayout, contentSafetyConnection, contentSafetyBudgetError, installedContentLayout, withContentSafetyLayoutInside } from './content-safety-schema.mjs';
 import { fail, identifier } from './validation.mjs';
+import { purgeEngineCardOperationsInside } from './private-card-schema.mjs';
+
+// Installed by private-card-storage, which already owns the native database
+// dependency. This module must stay safe to load from SQLite-free commands.
+let engineCardPurge;
+export function registerEngineCardPurgeInside(purge) { engineCardPurge = purge; }
+function purgeEngineCardsForErasureInside(db, ns, actionId) {
+  if (engineCardPurge) return engineCardPurge(db, ns, actionId);
+  // Migration/command graphs need no Card writer, but erasure must never skip
+  // existing Card tables merely because that writer was not loaded.
+  if (db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name IN ('private_cards','card_memory_bindings','card_operations') LIMIT 1").get())
+    fail('evidence_unavailable');
+}
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const reasons = new Set(['user_forget', 'correction_supersession', 'purge', 'privacy_erase', 'account_erasure']);
@@ -34,6 +47,10 @@ export function writeContentSuppressionInside(db, { namespace: ns, kind, key = '
   if (matchMode === 'span') {
     identifier(messageId);
     if (![start,end].every(Number.isSafeInteger) || start < 0 || end <= start) fail('invalid_input');
+  }
+  if (['owner', 'namespace'].includes(matchMode)) {
+    purgeEngineCardsForErasureInside(db, ns, actionId);
+    purgeEngineCardOperationsInside(db, ns);
   }
   const incarnation = ['owner', 'namespace'].includes(matchMode) ? '' : key;
   const target = [...boundary(ns), kind, key, incarnation, matchMode, sourceVersion, messageId, start, end, reason, actionId];

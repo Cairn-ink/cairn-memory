@@ -72,12 +72,13 @@ export function createCairnServer(options = {}) {
   object(options, ['path', 'namespace', 'model', 'captureQualification', 'captureRationale',
     'captureEvidence', 'captureEvidenceAccess', 'sourceSnapshot', 'recallContext', 'classificationRecovery',
     'captureDeadlineMs', 'sessionEpisodesAccess', 'client', 'sessionId', 'readClient', 'sessionEpisodes', 'privateCards', 'methodPackages', 'methodReadPersonal',
-    'raw', 'rawSearch', 'contextSemantic', 'contextRead', 'contextReadPersonal', 'contextEmbedding', 'contextCounter', 'assets', 'roleProfiles', 'roleProfileAttribution', 'contextReadSources', 'privateCardCurrentDependencies']);
-  for (const name of ['raw', 'rawSearch', 'contextSemantic']) {
+    'raw', 'rawSearch', 'rawSemantic', 'contextSemantic', 'contextRead', 'contextReadPersonal', 'contextEmbedding', 'contextCounter', 'assets', 'roleProfiles', 'roleProfileAttribution', 'contextReadSources', 'privateCardCurrentDependencies']);
+  for (const name of ['raw', 'rawSearch', 'rawSemantic', 'contextSemantic']) {
     if (Object.hasOwn(options, name) && typeof options[name] !== 'boolean') throw Error('invalid_mcp_configuration');
   }
   if (Object.hasOwn(options, 'contextRead') && !['context-read-v1', false].includes(options.contextRead)) throw Error('invalid_mcp_configuration');
   const { path, namespace, model } = options;
+  const cardRaw = options.rawSemantic === true && options.contextSemantic !== false;
   const contextConfigured = options.contextRead !== false;
   if (contextConfigured && options.contextRead !== undefined && options.contextRead !== 'context-read-v1' || Object.hasOwn(options,'contextReadPersonal') &&
       (!contextConfigured || options.contextReadPersonal !== true || namespace?.scope !== 'project') ||
@@ -174,7 +175,8 @@ export function createCairnServer(options = {}) {
   // Older readers retain their existing grammar until that reader is installed.
   const rawSearch = context && options.raw !== false && options.rawSearch !== false && supportsRawContext()
     ? createLocalRawSearch(path, defaultRawOptions().port,
-      options.contextSemantic === false ? undefined : options.contextEmbedding) : null;
+      options.rawSemantic === true && options.contextSemantic !== false ? options.contextEmbedding : undefined,
+      { semanticDisabledReason: options.contextSemantic === false ? 'disabled' : options.rawSemantic === true ? 'disabled' : 'raw_semantic_not_enabled' }) : null;
   const rawPort = rawSearch?.contextPort(context.readSet);
   const core = openMemoryCore({ path, model, raw: options.raw !== false, ...(options.rawSearch === false ? { rawSearch: false } : {}), ...(context?{contextRead:{...context.configuration,...(options.contextSemantic === false ? {} : options.contextEmbedding),counter:contextCounter,...(rawPort ? {rawSearch:rawPort} : {}),...(sources ? { sources } : {})}}:{}),
     ...(roles ? { roleProfiles: roles.configuration } : {}),
@@ -185,7 +187,7 @@ export function createCairnServer(options = {}) {
     ...(rationaleConfigured ? { captureRationale: options.captureRationale } : {}),
     ...(stagingConfigured ? { captureEvidence: options.captureEvidence } : {}) });
   const server = buildCairnServer({ path, model, binding, cards, methods, assets, context, roles, core, client, sessionId, captureSessionId, readClient,
-    episodesAccess, configured, rationaleConfigured, evidenceAccess, snapshotConfigured,
+    episodesAccess, configured, rationaleConfigured, evidenceAccess, snapshotConfigured, cardRaw,
     recallContextConfigured, recallContext, recoveryConfigured, stagingConfigured, contextSemantic: Boolean(options.contextEmbedding) && options.contextSemantic !== false, ...(sources ? { contextReadSources: sources } : {}) });
   if (rawSearch) rawSearch.start();
   else if (core.getRawSearchStatus) void core.getRawSearchStatus({ namespace: binding });
@@ -197,10 +199,10 @@ export function createCairnServer(options = {}) {
 export function buildCairnServer({ path, model, binding, cards, methods, assets, context, roles, core, client, sessionId, captureSessionId, readClient,
   episodesAccess = false, configured = false, rationaleConfigured = false, evidenceAccess = false,
   snapshotConfigured = false, recallContextConfigured = false, recallContext, recoveryConfigured = false,
-  stagingConfigured = false, contextSemantic = false, retainedRaw = false, contextReadSources: sources }) {
+  stagingConfigured = false, contextSemantic = false, cardRaw = false, retainedRaw = false, contextReadSources: sources }) {
   let disposed = false, disposing;
   const refresh = (context && contextSemantic || typeof model?.consolidate === 'function')
-    ? startContextMaintenance(core, context ?? { readSet: [binding] }, { cards: typeof model?.consolidate === 'function', semantic: contextSemantic }) : null;
+    ? startContextMaintenance(core, context ?? { readSet: [binding] }, { cards: typeof model?.consolidate === 'function', cardRaw, semantic: contextSemantic }) : null;
   const dispose = () => {
     if (disposed) return disposing;
     disposed = true;
@@ -556,7 +558,7 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
 }
 
 /** Bounded embedding refresh; no provider call holds up capture or tool delivery. */
-function startContextMaintenance(core, access, { cards = false, semantic = true } = {}) {
+function startContextMaintenance(core, access, { cards = false, cardRaw = false, semantic = true } = {}) {
   const { readSet } = access;
   const capabilities = core.getContextReadCapabilities?.();
   let types = capabilities?.ok ? capabilities.value.types : ['memory'];
@@ -567,7 +569,7 @@ function startContextMaintenance(core, access, { cards = false, semantic = true 
       active = (async () => {
         if (cards) for (const namespace of readSet) {
           if (closed) return;
-          const pass = await core.maintainCards({ namespace, budget: { maxItems: 512, maxMs: 30000 } });
+          const pass = await core.maintainCards({ namespace, budget: { maxItems: 512, maxMs: 30000 }, ...(cardRaw ? { rawSpans: true } : {}) });
           if (pass.ok && pass.value.state === 'paused') continue;
           if (!pass.ok || pass.value.state === 'refused') return;
         }

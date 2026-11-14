@@ -4,6 +4,7 @@ import json
 import time
 
 import pytest
+from hermes_cli.config import save_env_value
 
 
 def test_recall_trickle_releases_worker_and_allows_next_recall(install, cloud, monkeypatch):
@@ -13,7 +14,8 @@ def test_recall_trickle_releases_worker_and_allows_next_recall(install, cloud, m
 
     def track_worker(*args, **kwargs):
         worker = spawn(*args, **kwargs)
-        workers.append(worker)
+        if kwargs.get("name") == "cairn-recall":
+            workers.append(worker)
         return worker
 
     monkeypatch.setattr(hosted, "spawn_context_thread", track_worker)
@@ -76,8 +78,7 @@ def test_shutdown_prevents_backend_reactivation(install, cloud, selected):
     home, provider, _, hosted = install(configured=False)
     values = {"mode": "hosted", "api_endpoint": cloud.endpoint, "prefetch_timeout_ms": "250"}
     (home / "cairn.json").write_text(json.dumps(values))
-    hosted.write_credential(home, {"endpoint": cloud.endpoint, "token": "synthetic-memory-token",
-                                 "token_id": "synthetic-token-id", "expires_at": None})
+    save_env_value("CAIRN_MEMORY_TOKEN", "synthetic-memory-token")
     if selected:
         assert provider.is_available()
     backend = provider._hosted

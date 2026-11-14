@@ -13,10 +13,29 @@ import { appendFile, mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/pr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { bundleClient, GENERATED_BANNER } from '../../../integrations/client/bundle.mjs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
+import { bundleClient, GENERATED_BANNER, openclawModules } from '../../../integrations/client/bundle.mjs';
 
 test('checked-in client bundle is reproducible and current', async () => {
   await bundleClient({ check: true });
+});
+
+test('checked-in OpenClaw bundle is reproducible and current through its CLI check', async () => {
+  await promisify(execFile)(process.execPath, ['integrations/client/bundle.mjs', '--openclaw', '--check'], {
+    cwd: fileURLToPath(new URL('../../../', import.meta.url)), timeout: 30000,
+  });
+});
+
+test('stale OpenClaw bundle names its own regeneration command', async () => {
+  const target = await mkdtemp(join(tmpdir(), 'cairn-openclaw-bundle-check-test-'));
+  try {
+    const options = { target, modules: await openclawModules(), openclaw: true };
+    await bundleClient(options);
+    await appendFile(join(target, 'hosted-pause.mjs'), '\n// synthetic tamper\n');
+    await assert.rejects(bundleClient({ ...options, check: true }), /run node integrations\/client\/bundle\.mjs --openclaw$/);
+  } finally { await rm(target, { recursive: true, force: true }); }
 });
 
 test('bundle check rejects tampered, missing and extra files, then regeneration repairs them', async () => {
@@ -26,7 +45,7 @@ test('bundle check rejects tampered, missing and extra files, then regeneration 
     await bundleClient({ target });
     await bundleClient({ target, check: true });
     await appendFile(join(target, 'redact.mjs'), '\n// synthetic tamper\n');
-    await assert.rejects(bundleClient({ target, check: true }), /client_bundle_stale: redact.mjs/);
+    await assert.rejects(bundleClient({ target, check: true }), /client_bundle_stale: redact.mjs; run node integrations\/client\/bundle\.mjs$/);
     await bundleClient({ target });
     await unlink(join(target, 'identity.mjs'));
     await assert.rejects(bundleClient({ target, check: true }), /client_bundle_stale: identity.mjs/);

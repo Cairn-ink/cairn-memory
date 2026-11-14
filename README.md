@@ -1,16 +1,17 @@
 <p align="center">
   <picture>
     <source media="(max-width: 600px)" srcset="docs/images/readme-hero-mobile.png">
-    <img src="docs/images/readme-hero.png" alt="Cairn Memory — AI memory you can inspect and change. Official Cairn stacked-stone logo. Open-source developer preview." width="1200">
+    <img src="docs/images/readme-hero.png" alt="Cairn.ink Memory: AI memory you can inspect and change. One memory for Claude Code and Codex. A hand-drawn island carries a cairn of three stones, labelled Cards, Memories and Conversations. Open source." width="1200">
   </picture>
 </p>
 
-<h1 align="center">Cairn Memory</h1>
+<h1 align="center">Cairn.ink Memory</h1>
 
-<p align="center"><strong>Keep important context between AI sessions. Change it when things change.</strong></p>
+<p align="center"><strong>Memory for Claude Code and Codex that you can inspect, correct and forget.</strong></p>
 
 <p align="center">
   <a href="https://github.com/Cairn-ink/cairn-memory/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Cairn-ink/cairn-memory/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://www.npmjs.com/package/@cairn-ink/memory"><img alt="npm version" src="https://img.shields.io/npm/v/%40cairn-ink%2Fmemory"></a>
   <a href="LICENSE"><img alt="Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
   <a href="https://cairn.ink"><img alt="Hosted by Cairn.ink" src="https://img.shields.io/badge/hosted-cairn.ink-5b5147"></a>
 </p>
@@ -19,471 +20,307 @@
   English · <a href="README.zh-TW.md">繁體中文</a>
 </p>
 
-<p align="center">
-  <a href="#a-preference-changes">See an example</a> ·
-  <a href="#choose-your-starting-point">Where to start</a> ·
-  <a href="#try-the-local-memory-layer">Local setup</a> ·
-  <a href="#existing-hosted-integration">Hosted setup</a> ·
-  <a href="docs/limitations.md">Limitations</a> ·
-  <a href="docs/privacy.md">Privacy</a>
-</p>
+A new Claude Code or Codex session often does not know the preferences and
+project decisions from your earlier conversations, so you end up repeating
+them. Cairn.ink Memory gives both tools one shared memory. Each memory keeps
+the text it was saved from, so when one is wrong or out of date you can see
+where it came from, then correct it or forget it.
 
-**Cairn Memory** is Cairn.ink's open-source AI memory toolkit for Claude Code
-and Codex, with local MCP tools or cloud automatic memory. Visit
-[Cairn.ink](https://cairn.ink), install
-[@cairn-ink/memory on npm](https://www.npmjs.com/package/@cairn-ink/memory), or
-view the [Cairn Memory GitHub repository](https://github.com/Cairn-ink/cairn-memory).
+- **Every memory has a source.** Each one keeps the text it was saved from, so
+  you can check it before you trust it.
+- **You can change it.** Correct a memory when things change, or forget it.
+- **One memory for both tools.** Claude Code and Codex read and write the same
+  store.
+- **Your choice of home.** A database on your computer with no account, or
+  cairn.ink when you want the same memory on every computer.
 
-Starting a new AI session often means repeating your preferences and project
-decisions. Cairn provides memory tools to save that context between sessions,
-inspect the submitted text behind each memory, and update it when things change.
-
-## A preference changes
-
-Suppose you save **“Keep my reports short.”** Later, you decide you need detailed
-reports. You can inspect the old memory and its source text, correct the saved
-preference, or forget it so it is no longer available for active recall.
-
-![Illustrated example: save a short-report preference with its submitted source text, then correct it to detailed reports or forget it to remove it from active use.](docs/images/memory-workflow.png)
-
-This is an **illustrated explicit-tool example**, not a chat-client screenshot.
-The local preview uses tools to save, inspect, correct and forget; it does not
-automatically read your conversations.
-
-- **Inspect the source.** Read the source text stored with a memory. A receipt
-  does not prove that the memory is true or correctly interpreted.
-- **Correct what changed.** Update the memory at the revision you inspected.
-- **Forget what should go.** Remove a memory from active recall.
-  [Deletion and backup boundaries](#local-privacy-and-control) apply.
-
-A **Source Receipt** is the submitted text attached to a memory. It helps you
-check what was supplied when the memory was saved or corrected. It is not a
-verified transcript of the whole conversation or proof of human intent.
-
-## Cairn Memory and Cairn
-
-**Cairn Memory** is the open-source toolkit in this repository for saving,
-inspecting and changing AI memory. **[Cairn](https://cairn.ink)** is the hosted
-shared memory map for people and AI, where people organize, review and share
-knowledge.
-
-This repository includes local memory tools and connectors to the hosted Cairn
-service. Each path has its own setup and feature boundaries. Local use does not
-require a Cairn account; hosted connections require a compatible service and
-authentication.
-
-## Choose your starting point
-
-| You want to… | Start here | What you need |
-| --- | --- | --- |
-| Understand the idea before installing | [繁體中文](README.zh-TW.md) or the [recorded walkthrough](#watch-the-recorded-walkthrough) | No installation or account |
-| Try the open-source tools on your computer | [Local preview setup](#try-the-local-memory-layer) or [Windows guide](docs/windows-install.md) | Terminal setup; Linux x64 and a bounded native Windows x64 check; no Cairn account |
-| Use the documented hosted Claude Code or Codex connection | [Hosted setup](#existing-hosted-integration) | A compatible hosted service and authentication; separate from local-preview client support |
-| Build on the memory layer | [Architecture](docs/architecture.md) and [MCP tools](docs/standalone-mcp.md) | JavaScript or MCP integration work |
-
-If you use Claude or Codex but do not usually install tools from a terminal,
-start with the example and recorded walkthrough. This preview requires setup;
-check the [tested client paths](docs/promotion-claims.md#supported-paths) before
-connecting your AI tool.
-
-## Current preview
-
-Cairn's open-source memory layer stores memories in your own SQLite file and
-exposes them through MCP or JavaScript. No Cairn account is needed for local use.
-
-**Developer preview.** Installed persistence and a narrow real-model memory loop
-have [retained evidence](docs/promotion-claims.md). Default extraction still fails
-our source-support bar; see [known limitations](docs/limitations.md).
-Save, inspect, correct and forget work without a model key. Semantic recall
-requires your OpenAI key and sends selected context to that provider.
-
-## Watch the recorded walkthrough
-
-[Watch the 36-second model-free demo (MP4)](docs/promotion/demo/cairn-memory-preview.mp4).
-This records the memory tools running, rather than a conversation in Claude or
-Codex. “Model-free” means no AI model is called during the walkthrough.
-
-For long-conversation results, see the [four-case real-model pilot](docs/evidence/long-history-live-pilot.md).
-It is an opt-in diagnostic with one failed Cairn answer, not a measurement of
-long-term default-client recall reliability. [Known limitations](docs/limitations.md)
-
-<details>
-<summary>Open the recorded tool walkthrough (GIF)</summary>
-
-The demo below records the **model-free loop**: save, restart, inspect, correct
-and forget. Its recall step reports `model_not_configured`.
-
-![Recorded model-free memory loop: save, inspect the source, restart, correct and forget](docs/demo/cairn-memory-loop.gif)
-
-[Recorded responses and regeneration instructions](docs/demo/README.md) ·
-[Verified capabilities and client support](docs/promotion-claims.md#supported-paths)
-
-</details>
+This is a developer preview. See the [current limits](#status) and the full
+[known limitations](docs/limitations.md).
 
 ## Install
 
-For **Claude Code and Codex**, run the one-command installer:
-
 ```sh
 npx @cairn-ink/memory setup
 ```
 
-A fresh interactive install asks once: local MCP memory tools on this computer,
-or cloud automatic memory with cairn.ink sign-in; choose directly with
-`setup --local` or `setup --cloud`. Fresh non-interactive runs need `--local`
-or `--cloud`; local mode has no automatic capture or recall in 0.6.3.
+You need Node 22.16 or later, and Claude Code or Codex on your `PATH`. Setup
+first asks: where should your memory live?
 
-Installer **0.6.3**, with Codex 0.164.0–0.166.0 format requalification, was
-published on 2026-11-03, so `npx @cairn-ink/memory setup` uses it; a checkout
-can also run `node packages/setup/bin/memory.mjs setup`. The plugin is 0.3.7.
-Requires Node ≥22.16 and at least one CLI on PATH. Cloud setup asks about new tools,
-updates connected tools, and uses one browser sign-in when connecting both.
-The default server is cairn.ink. Conflicting servers or memory IDs present a
-choice; non-interactive conflicts change nothing. Codex must pass format
-qualification before automatic memory is enabled. Automated `codex exec` runs
-skip capture and prompt recall by default; opt in with
-`npx @cairn-ink/memory config --codex-capture-exec on`.
+| | **Local** | **Cloud** |
+| --- | --- | --- |
+| Account | None | A [cairn.ink](https://cairn.ink) account, one browser sign-in |
+| Where memory lives | A SQLite database on this computer | cairn.ink |
+| Saved automatically | Your Claude Code and Codex conversations, as plain text (on Linux and WSL for now) | Your conversations, which cairn.ink turns into memories |
+| Saving a memory | Your agent saves one when you ask | Automatic, or ask your agent |
+| Getting it back | Your agent searches when you ask | Relevant memories are added to each prompt |
+| Other computers | Not synced | The same memory wherever you sign in |
+| Price | Free | See [pricing](https://cairn.ink/pricing) |
 
-Choose the mode that fits your workflow:
+To skip the question, run `npx @cairn-ink/memory setup --local` or
+`npx @cairn-ink/memory setup --cloud`. Restart Claude Code and Codex when setup
+finishes. In Codex, also open `/hooks` and allow the Cairn entries. A computer
+runs one mode at a time, and memories do not move between modes.
 
-- **[Local preview](#try-the-local-memory-layer):** your SQLite database,
-  explicit MCP memory tools, no Cairn account. Start here to try the open-source
-  memory layer. Semantic recall uses your OpenAI key.
-- **[Hosted integration](#existing-hosted-integration):** memory on cairn.ink,
-  with automatic capture and recall through the Claude Code plugin. Requires a
-  Cairn account, token and compatible service. Explicit hosted MCP is also available.
+The package is `@cairn-ink/memory`. The unscoped packages named `cairn-memory`
+on npm and PyPI are unrelated projects.
 
-## Try the local memory layer
+## Use it
 
-Prerequisites: **Git, Node >=22.16, npm and `tar`**. Recorded checks cover Linux
-x64 and a [bounded native Windows x64 installation](docs/evidence/windows-install.md).
-**On Windows, use the [PowerShell setup and walkthrough](docs/windows-install.md)**;
-the commands below use Linux/WSL paths. Other platforms are unverified.
-Install from this repository:
-the unscoped npm and PyPI packages named `cairn-memory` are unrelated projects.
-The local archive is not published to npm yet.
+After a Local install, Claude Code and Codex both have memory tools from a
+server named `cairn-local`. Ask in plain words:
 
-**1. Install into a new directory.** Replace the path below with a new absolute
-directory beneath an existing parent you control.
-
-```sh
-git clone https://github.com/Cairn-ink/cairn-memory.git
-cd cairn-memory
-npm run install:preview -- --directory /absolute/new/cairn-local --owner local-user
+```text
+Remember that my reports should be short.
 ```
 
-The installer builds this checkout and downloads pinned public npm dependencies
-without install scripts. It creates `app/`, `data/` and a private
-`installation-receipt.json` containing the executable path and MCP settings.
-It makes no model calls. Keep the receipt private: it contains local paths and
-identity. [Installation details, recovery and backup](packaging/README.md)
+In a later session:
 
-**2. Run the model-free check.** From the source checkout, use the same
-installation path. No chat-client setup or model key is needed.
-
-```sh
-npm ci --prefix adapters/mcp
-node adapters/mcp/walkthrough.mjs --executable /absolute/new/cairn-local/app/node_modules/.bin/cairn-memory
+```text
+What do you remember about how I like reports?
+Show me where that memory came from.
+Correct it: I need detailed reports now.
+Forget that memory.
 ```
 
-Expect `status: "passed"`. The check uses a fresh synthetic database and verifies
-the five tools, receipts, process-restart persistence, correction and forgetting.
-It strips the model key from the child process; `model_not_configured` is the
-expected recall result. [Steps and expected results](docs/local-memory-demo.md)
+If your agent does not reach for the memory tools, name them: “use the
+cairn-local memory tools”.
 
-**3. Connect a client.** Copy `stdio.command` and `stdio.args` from your private
-installation receipt into the client's local MCP configuration. Keep the same
-database, owner and project across sessions. See the
-[tested client matrix](docs/promotion-claims.md#supported-paths).
+Local mode also saves your conversations as you work, so you can ask about them
+later (on Linux and WSL; on macOS automatic saving does not start yet, see
+[Status](#status)):
 
-For semantic recall, explicitly supply `OPENAI_API_KEY` through the MCP process's
-secret environment. The walkthrough's optional `--with-recall` path sends
-synthetic context to OpenAI and incurs model charges; it has no built-in dollar
-cap. A fully local model path is not yet verified.
+```text
+What did we decide about the database migration last week?
+```
 
-For the Hermes native provider, follow its [separate setup guide](docs/hermes-first-use.md).
-It uses a profile-local database and owner, plus `CAIRN_MEMORY_OPENAI_API_KEY`,
-rather than the generic MCP settings above.
+Search over saved conversations catches up in the background, so your most
+recent turns may not show up yet.
 
-| Tool | Purpose |
+![Illustrated example: save a short-report preference with the text it was saved from, then correct it to detailed reports or forget it.](docs/images/memory-workflow.png)
+
+| You want to | Tool |
 | --- | --- |
-| `remember_memory` | Explicitly save one memory and its receipt |
-| `find_memory_candidates` | Preferred lexical/semantic memory candidate search |
-| `fetch_memory_candidate_evidence` | Refetch exact candidate evidence |
-| `read_memory_context` | Preferred dated Memory + Raw read, within a local token budget |
-| `recall_memory` | Model-guided retrieval of current memories and receipts |
-| `inspect_memory` | List memories, or inspect an ID, revision and receipts |
-| `correct_memory` | Replace content at the revision you inspected |
-| `forget_memory` | Logically delete at the revision you inspected |
+| Save a memory together with its source text | `remember_memory` |
+| Search memories and saved conversations by keyword, with no model key | `find_memory_candidates`, `read_memory_context` |
+| Let a model pick the relevant memories, with your OpenAI key | `recall_memory` |
+| See a memory, its current revision and its source text | `inspect_memory` |
+| Replace what a memory says | `correct_memory` |
+| Take a memory out of use | `forget_memory` |
 
-The local MCP server and installer enable Raw retention for submitted captures,
-Raw search, dated three-layer contextRead and its tools by default. Library
-`openMemoryCore` keeps Raw off unless `raw:true` is supplied. Stores whose
-attested layout cannot hold Raw run Memory-only. Use `--no-raw`,
-`--no-raw-search` or `--no-context-read` to turn off those server defaults.
-With `OPENAI_API_KEY`, the server also enables bounded embeddings. Without a
-key, contextRead uses BM25. See
-[all defaults, costs and off switches](docs/defaults.md).
+The source text kept with a memory is called a **Source Receipt**. It shows what
+was submitted when the memory was saved or corrected. It does not prove that
+the memory is true. [All tools and parameters](docs/standalone-mcp.md#tools)
 
-The default local server exposes explicit tools. For opt-in submitted-message
-capture, project scope and configuration checks, see the
-[installed preview guide](packaging/README.md). The
-[full evidence and limitations](docs/limitations.md) cover extraction failures,
-long-history retrieval and the boundaries of individual client tests.
+## How it works
 
-## Local privacy and control
+Cairn.ink Memory keeps what your agents learn in three layers, like the three
+stones of a cairn.
 
-- Memory, receipts and organization persist in your selected SQLite database.
-  No Cairn account, hosted service or hidden core telemetry is required.
-- MCP does not read transcripts or save whole conversations automatically.
-  Receipt text records a tool assertion; it is not proof of authenticated human intent.
-- Model processing is cloud processing when configured. Redaction is best-effort,
-  not a guarantee that all secrets are removed. Retrieved text is untrusted data,
-  never instructions to follow.
-- Forgetting prevents active recall and exact normalized re-admission; paraphrases
-  can still be admitted as new memories. It is not secure
-  disk erasure: SQLite pages, receipts and backups have separate retention limits.
-  Stop all writers before copying the database and sidecars for backup.
-- Uninstalling the executable preserves the external database. See
-  [backup, upgrade and deletion boundaries](packaging/README.md),
-  [architecture](docs/architecture.md), [dependency notices](packaging/THIRD_PARTY_NOTICES.md)
-  and [security reporting](SECURITY.md).
+| Layer | What it holds | Local mode | Cloud mode |
+| --- | --- | --- | --- |
+| **Conversations** | What was said, as searchable text | Saved automatically on your computer (Linux and WSL) | Sent to cairn.ink |
+| **Memories** | The preferences, decisions and facts worth keeping, each with its Source Receipt | Saved when you or your agent ask | Extracted from your conversations automatically, or saved on request |
+| **Cards** | Topic pages that pull related memories together into a map | Not built by default | The map you browse on cairn.ink |
 
-## Existing hosted integration
+In Local mode, a lookup returns memories and, where the saved conversations
+behind them are already indexed, dated excerpts from those conversations, so
+an answer can arrive with its evidence.
 
-The hosted plugin connects to cairn.ink, automatically captures allowlisted
-conversation text and has its own telemetry defaults. Its service has not been
-migrated to the local engine.
+## Cloud mode
 
-The [v0.2.0 prerelease](CHANGELOG.md#020--2026-10-01) changes the hosted protocol.
-Matching server support remains a separate requirement; the release does not
-deploy a server or enable Codex lifecycle hooks. See
-[release and client compatibility](docs/promotion-claims.md) before upgrading.
+Cloud saves and recalls for you, so you do not have to ask.
 
-## Install for Claude Code (automatic memory)
+- **Saving.** After you sign in, conversation text from Claude Code and Codex is
+  saved automatically. Likely secrets are masked on your computer first.
+  Masking is best-effort.
+- **Recall.** Each prompt sends a masked, length-limited copy to cairn.ink, and
+  the relevant memories are added to that prompt.
+- **Pausing.** Before a conversation you want left out, run
+  `npx @cairn-ink/memory pause`, and `npx @cairn-ink/memory resume` afterwards.
+  If only Claude Code is connected, use `/cairn-memory:pause` and
+  `/cairn-memory:resume` inside it instead. Paused text is not saved later.
+- **Both tools.** Setting up Claude Code and Codex together takes one browser
+  sign-in.
+  Adding Codex after Claude Code needs one browser sign-in with the same account.
+- **Codex.** Automatic memory turns on only for Codex versions the installer
+  has verified, and `npx @cairn-ink/memory status` shows whether yours is one.
+  Automated `codex exec` runs are not saved unless you opt in.
 
-Run the published installer from your terminal:
+Read [what Cloud sends and how to control it](https://cairn.ink/memory/privacy)
+before you turn it on for work conversations.
+[Cloud mode in detail](docs/cloud-mode.md) covers manual plugin install, the
+hosted MCP endpoint, the Codex rules and the plugin's privacy contract.
 
-```sh
-npx @cairn-ink/memory setup
-```
+## Your data
 
-Installer **0.6.3** (plugin **0.3.3**) is published, so these flows run through
-npx. To run this checkout instead, use `node packages/setup/bin/memory.mjs setup`.
+- **Local.** Your memories and saved conversations are in a plaintext SQLite
+  database, by default `~/.cairn-memory/data/memory.sqlite`, with plaintext
+  search indexes in a folder beside it (`memory.sqlite.raw-search`). Nothing is
+  sent to Cairn, and no Cairn account is involved. Setup downloads the engine's
+  packages from npm.
+- **Saved conversations.** On Linux and WSL, Local mode saves the text of your
+  Claude Code and Codex conversations into that database automatically, up to
+  200 MB. Saving
+  needs no account, no key and no model calls. Turn it off with
+  `npx @cairn-ink/memory config --local-capture off`,
+  or install with `npx @cairn-ink/memory setup --local --no-capture`.
+  `npx @cairn-ink/memory raw list` lists saved conversations without their text.
+  `npx @cairn-ink/memory raw delete <conversation-id>` previews what would be
+  removed, and adding `--yes` deletes it. Memories saved from that conversation
+  stay until you forget them.
+- **Model keys.** Saving conversations never calls a model, and keyword search,
+  inspecting, correcting and forgetting use no model either. If the memory
+  server can see an `OPENAI_API_KEY`, your memories and search text are sent to
+  OpenAI for semantic search, estimated at most about US$1 per server run, and
+  `recall_memory` sends the text it selects. Pausing or turning off saving does
+  not stop these requests yet. Saved conversations are sent only if you opt in
+  with `--raw-semantic` or configure `--context-embedder` yourself. To keep
+  everything on your computer, do not give the server a key.
+  `--no-context-semantic` turns off semantic search and its requests, but with
+  a key present `recall_memory` still calls the model whenever your agent uses
+  it. [Defaults, costs and off switches](docs/defaults.md) has the details.
+- **Cloud.** Conversation text and prompts go to cairn.ink after best-effort
+  masking. The Claude Code plugin sends content-free usage statistics by
+  default, and you can turn them off. Codex keeps its sign-in in an unencrypted
+  file that only your user can read.
+- **Forgetting.** Forgetting takes a memory out of use and blocks the same text
+  from being saved again. It is not secure erasure. Database pages and backups
+  can still hold the text, and a reworded version can be saved as a new memory.
+  In Local mode, forgetting or correcting a memory also hides saved
+  conversations that have messages within 30 minutes of when that memory was
+  saved. This can hide an unrelated conversation and miss a related one, so use
+  `raw delete` to remove a specific conversation.
+- **Uninstalling.** `npx @cairn-ink/memory uninstall --local` disconnects the
+  tools and keeps your data on disk. Uninstalling Cloud keeps your memories on
+  cairn.ink.
 
-Without `--client`, setup finds both tools and asks only about new connections.
-It updates connected tools. Close both tools and wait for background work before
-confirming shared memory. The sign-in line shows the server (default cairn.ink).
-There is no endpoint or daily-cap question; `--endpoint` remains available.
+[Local data, backup and deletion](docs/local-from-source.md#local-privacy-and-control) ·
+[Privacy and threat model](docs/privacy.md) ·
+[Defaults, costs and off switches](docs/defaults.md)
 
-Conversations are saved after best-effort local masking. Each prompt sends a
-masked, length-limited copy for recall. Claude usage stats are on by default and
-can be turned off. Codex's sign-in is stored in an unencrypted user-only file.
-See [privacy and controls](https://cairn.ink/memory/privacy).
+## If you run an agent harness
 
-A memory ID connects the same project across tools. Existing IDs are retained.
-Server conflicts offer two choices; unsafe Codex credential migrations require
-logout first. When two independent IDs exist, choose one; the other key is backed
-up only after successful sign-in and validation, never deleted. Old projects may
-no longer automatically match the old ID. Non-interactive conflicts write nothing.
-Setup never reads Claude native secret files. Adding Claude after Codex validates
-and reuses the installer credential; adding Codex after Claude needs one browser
-sign-in using the same account. Claude's existing sign-in is kept.
+Setup registers the memory server for every Claude Code and Codex session on
+this computer. Each session starts its own copy, so a harness that launches
+many agents also launches that many memory servers on one database. To keep
+workers from loading it:
 
-Automated `codex exec` runs skip both automatic capture and prompt recall by
-default. Opt in with `npx @cairn-ink/memory config --codex-capture-exec on`;
-use `off` to restore the default. This setting enables both capture and recall
-for exec. `status` shows it only when enabled; rerunning setup preserves it.
-The hooks read the transcript's session-bound `session_meta.payload.source`,
-and also detect a native exec ancestor for `exec resume` of an older CLI thread.
-If the header is missing or cannot be verified, they skip capture and injection.
-Interactive sessions with verified CLI headers continue normally. Threads on the
-Codex app-server (the TUI since 0.160, the VS Code extension and the desktop app)
-count as interactive only when their `originator` is one of those three clients;
-other app-server clients are treated like exec and need the same opt-in. Older frozen
-runtimes must first be updated with setup; config prints the exact command.
+- **Claude Code.** Start workers with `--strict-mcp-config`, which loads only
+  the servers you pass with `--mcp-config`.
+- **Codex.** Start workers with `codex exec --ignore-user-config`, which skips
+  the global configuration where the server is registered.
 
-To stop prompt recall while keeping automatic capture, run
-`npx @cairn-ink/memory prompt-recall-off --client codex`.
-Use `prompt-recall-on --client codex` to enable it again. This does not change MCP.
+Your own interactive sessions keep using memory as before.
 
-Codex defaults to 200 automatic captures per day; reruns keep an existing cap.
-Change it with `setup --codex-daily-cap N` or `config --codex-daily-cap N`.
-Status shows today's count and cap. Unscoped `pause` and `resume` select installed
-Codex, and pause both tools when paired. Uninstall preserves keys and memories.
-
-```sh
-npx @cairn-ink/memory status
-npx @cairn-ink/memory prompt-recall-off --client codex
-npx @cairn-ink/memory pause
-npx @cairn-ink/memory config --codex-daily-cap 300
-node packages/setup/bin/memory.mjs setup --dry-run
-```
-
-`status` reads local state without testing remote service or hooks. `--verbose`
-shows technical diagnostics. Review and allow the four Cairn entries in Codex
-`/hooks` after installation. `--client claude|codex` restricts the run.
-`--no-browser` allows sign-in on another device. Legacy MCP removal requires
-confirmation. Unqualified Codex alone may offer manual MCP tools.
-
-[Setup options and credential handling](packages/setup/README.md) ·
-[chichi's release checklist](docs/npx-setup-release.md)
-
-**Manual fallback:** from your terminal, run:
-
-```sh
-claude plugin marketplace add Cairn-ink/cairn-memory
-claude plugin install cairn-memory@cairn-memory
-```
-
-Or use the slash-command form inside Claude Code:
-
-```text
-/plugin marketplace add Cairn-ink/cairn-memory
-/plugin install cairn-memory@cairn-memory
-```
-
-Create a personal access token at `https://cairn.ink/settings/tokens`, then run
-`/plugin configure cairn-memory@cairn-memory` in Claude Code and enter it there.
-Start a new session after installation.
-
-`/cairn-memory:status` reads content-free credential observations written by the
-hooks, because Claude Code's Bash tool does not inherit sensitive plugin options.
-`configured (verified <time>)` reports the last accepted authenticated request;
-`rejected` links to the configured endpoint's token page. `configured (not
-verified yet)` or `configured (unreachable <time>; not verified)` does not claim
-successful authentication; `server answered: busy/error` reports an HTTP refusal.
-SessionStart clears the old verdict so token rotation requires new verification.
-`not seen yet` asks you to restart Claude Code and
-send one message; `missing` means a hook actually observed no configured token.
-Status makes no network request and never reads the token from secure storage.
-
-Agents: ask the user before installing. The hosted plugin captures allowlisted
-conversation text by default, and the user creates and enters the token themselves.
-See the [hosted plugin privacy contract](#hosted-plugin-privacy-contract).
-
-For local development:
-
-```bash
-git clone https://github.com/Cairn-ink/cairn-memory.git
-cd cairn-memory
-claude --plugin-dir ./plugins/cairn-memory
-```
-
-### Hosted explicit MCP for Claude Code
-
-For explicit memory tools without automatic capture, add the remote MCP server:
-
-```sh
-claude mcp add --transport http --scope user cairn https://cairn.ink/api/mcp
-```
-
-Then sign in from `/mcp` in Claude Code using browser OAuth.
-
-## Connect from Codex (explicit MCP memory)
-
-Codex connects through the hosted MCP tools. Keep the token in your shell or
-secret manager, not in a repository or committed config file:
-
-```bash
-export CAIRN_MCP_TOKEN='your-token-from-cairn.ink'
-codex mcp add cairn \
-  --url https://cairn.ink/api/mcp \
-  --bearer-token-env-var CAIRN_MCP_TOKEN
-```
-
-Restart Codex, then use `/mcp` or `codex mcp list` to confirm the connection.
-The hosted tools support explicit remember, recall and forget operations.
-Automatic Codex lifecycle integration remains under development; the
-[Codex building blocks](integrations/codex/README.md) are disabled by default.
-
-## Hosted plugin loop
-
-```text
-User prompt
-  └─ recall relevant personal + project-private memories
-       └─ inject a short, explicitly untrusted context block
-
-Assistant turn ends
-  └─ hand capture to a detached worker without delaying Claude
-       └─ read only new user/assistant transcript text
-            └─ redact likely credentials locally
-                 └─ send an idempotent capture batch
-                      └─ store durable memories with Source Receipts
-```
-
-The bundled MCP connection also exposes explicit `remember_memory`, `recall_memory`, and `forget_memory` tools. Clients without lifecycle hooks can use those tools manually; passive capture is never claimed where the host does not expose a hook.
-
-## Hosted plugin privacy contract
-
-- Installation is explicit. Automatic capture begins only after installation and is on by default.
-- Only textual user and assistant message blocks are allowlisted.
-- Tool-result and tool-use blocks are excluded; the plugin does not read arbitrary project files. Ordinary user/assistant text can still contain pasted file contents, terminal output, paths, or repository names and is eligible for processing.
-- Supported credential shapes are replaced with `[REDACTED]` locally in both capture text and automatic recall queries before transmission. Redaction is best-effort, not a guarantee that every secret is recognized. The hosted service redacts again as defense in depth.
-- Automatic recall sends a redacted, bounded version of the current prompt to the configured service. This occurs before capture and is a separate processing path.
-- Prompt recall sends the host conversation id when it matches the 1–200 character
-  ASCII allowlist (`A–Z`, `a–z`, `0–9`, `.`, `_`, `:`, `-`). Trusted hooks supply
-  it, never model text; the server stores only an owner-scoped SHA-256 hash.
-  An older strict server gets one exact-schema retry without the optional field.
-- Project scope is a keyed opaque identifier. Its derivation key never leaves the device and is separate from the anonymous telemetry id.
-- Automatically inferred memories remain personal or project-private. They cannot publish into a team or community.
-- Product telemetry is content-free, defaults on, and can be disabled. Its schema accepts only lifecycle event, client version, platform, and a random installation id.
-- Hooks fail open: Cairn outages and timeouts do not block normal Claude Code work.
-- Capture workers are detached so headless `claude -p` sessions cannot cancel them during teardown; the allowlisted handoff is piped directly to the worker and is not written to a queue file.
-
-Use `/cairn-memory:pause`, `/cairn-memory:resume`, and `/cairn-memory:status` to control capture and recall.
-
-Paused text is not automatically backfilled. After resume, each session's first
-capture hook skips its current unprocessed history (including any early resumed
-text); later complete messages are captured. On Linux and macOS, once a pause is
-recorded on this machine, no request starts after that; work already admitted in
-another process may complete. A content-free pending marker keeps new admissions
-closed while pause publication waits, including after a process restart.
-
-Recall aborts new work at 3,500 ms. Only an admitted output write may drain until
-the 3,750 ms process-clock backstop before the host's four-second timeout;
-first-prompt classification and diagnostics cannot use that drain window.
-These timers cannot preempt process suspension or synchronous file output.
-On native Windows, pause checks use process-local observations before every send;
-a request already started can finish, and another process's pause observation
-does not revoke an older active response. A new session's first prompt can tag
-capture authority from its own validated active recall observation, using one
-transcript-size stat and no transcript read or extra network request. Only bytes
-appended after that snapshot qualify; an already-written prompt is omitted.
-Unknown authority, a busy cursor lock or insufficient cleanup time leaves capture
-to skip through its first EOF. Later prompts never refresh the tags, and Stop
-requires a fresh observation matching their generation and target. Windows
-coverage uses injection only. See the detailed pause boundaries in the privacy guide.
-
-Read the full [privacy and threat model](docs/privacy.md). Security reports belong in the private channel described in [SECURITY.md](SECURITY.md), not a public issue.
-
-## What is open
-
-This repository is the source of truth for:
-
-- the Claude Code plugin and marketplace manifest;
-- local transcript filtering, redaction, and project identity derivation;
-- the public HTTP/MCP wire contract and JSON Schemas;
-- a local SQLite core with receipts, namespace isolation, capture orchestration,
-  MOC organization, model-guided recall, correction and deletion suppression;
-- an optional OpenAI adapter, thin local MCP host and inspected install artifact;
-- conformance tests and self-host implementation guidance.
-
-The Cairn.ink hosted extraction service, user database, auth, billing, abuse controls, and production operations live in a separate private repository. See [Architecture](docs/architecture.md) and [Self-hosting](docs/self-hosting.md) for the public service boundary.
+In 0.6.6, Claude Code runs started by scripts or the Agent SDK (for example
+`claude -p`) are saved like interactive sessions. To keep harness runs out of
+the store, turn saving off for Claude Code with
+`npx @cairn-ink/memory config --local-capture off --client claude`. This also
+stops saving your interactive Claude Code sessions until you run
+`npx @cairn-ink/memory config --local-capture on --client claude`.
 
 ## Status
 
-The released hosted plugin and local developer preview have different readiness
-levels. The local install lifecycle is verified, but source-support quality still
-fails; broad promotion is not yet cleared. No first-ten-user result or star
-target is presented as achieved. See [Known limitations](docs/limitations.md), [ROADMAP.md](ROADMAP.md) and the
-[proposed adoption experiment](docs/plans/local-memory-plg.md).
+This is a developer preview. Know these limits before you rely on it:
 
-Star the repository to follow the local preview and upcoming integrations.
+- **Search catches up after saving.** Each turn is saved as soon as it ends,
+  and Local mode indexes it in the background while Claude Code or Codex is
+  open: about 15 minutes for 1,000 saved messages, roughly 2 hours for 10,000.
+  Every new save restarts the pass, so a conversation from a busy session may
+  not be searchable until you pause. Until the index catches up, search still
+  returns results, but recent conversations can be missing, so an empty answer
+  does not mean nothing was saved. Histories of about 50,000 messages or more
+  may never finish indexing.
+- **Local recall is on request.** Local mode does not add memories to your
+  prompts by itself. Your agent searches when you ask.
+- **Platforms.** Automatic saving runs on Linux and WSL. On macOS, setup
+  connects Claude Code and Codex and the memory tools work, but automatic
+  saving doesn't start yet: setup reports conversation saving OFF
+  (`runtime_unavailable`) and exits with code 2. On native Windows
+  `setup --local` refuses to run, so use WSL or the
+  [source-checkout guide for PowerShell](docs/windows-install.md).
+- **Homebrew Node on macOS.** Setup records Node's versioned path, so rerun
+  setup after `brew upgrade` updates Node. Fixed in the next release.
+- **Config directories.** Local setup stops without connecting a tool if
+  `~/.claude` or `~/.codex` is a symbolic link, and it does not support a
+  custom `CLAUDE_CONFIG_DIR` yet.
+- **Deleted text and search indexes.** Deleting a conversation or forgetting a
+  memory removes that text from Cairn's database at once, and it is never shown
+  again; conversations a forget only hides stay saved until you delete them.
+  Local search index files can keep word lists (and, with semantic search,
+  vectors) from deleted items until background cleanup reaches them. Cleanup
+  runs only while Cairn is running, may not reach them while new conversations
+  keep being saved, and never covers index files for a search setup you no
+  longer use. As with most databases, deleted text can also remain in unused
+  file space until it is overwritten.
+- **Semantic recall needs a key.** Without an OpenAI key, `recall_memory`
+  returns `model_not_configured`, and keyword search still works. A fully local
+  model path is not verified yet.
+- **Extraction quality.** The engine's default model extraction still fails our
+  own source-support bar. The evidence and the retained failures are in
+  [known limitations](docs/limitations.md).
+
+[Roadmap](ROADMAP.md) · [Changelog](CHANGELOG.md) ·
+[What each claim rests on](docs/promotion-claims.md)
+
+Star the repository to follow new releases.
+
+## Cairn.ink Memory and Cairn.ink
+
+**Cairn.ink Memory** is the open-source memory layer in this repository.
+**[Cairn.ink](https://cairn.ink)** is the hosted product, a shared memory map
+where people and their AI tools organize, review and share what they know.
+Cloud mode connects Claude Code and Codex to your Cairn.ink account. Local mode
+never contacts it.
+
+## What is in this repository
+
+- the installer, `@cairn-ink/memory`, and the Claude Code plugin with its
+  marketplace manifest;
+- the local SQLite memory engine, with receipts, correction, forgetting and
+  search, and a thin local MCP server;
+- local transcript filtering, redaction and project identity derivation;
+- the public HTTP and MCP wire contract, with JSON Schemas;
+- an optional OpenAI adapter;
+- conformance tests and self-hosting guidance.
+
+The Cairn.ink hosted extraction service, user database, auth, billing, abuse
+controls and production operations live in a separate private repository. See
+[architecture](docs/architecture.md) and [self-hosting](docs/self-hosting.md).
+
+## More documentation
+
+| If you want to | Read |
+| --- | --- |
+| See every setup option, switch modes or fix a stuck install | [Installer guide](packages/setup/README.md) |
+| Connect Cloud by hand, or read its rules and privacy contract | [Cloud mode in detail](docs/cloud-mode.md) |
+| Build from a source checkout or wire a client by hand | [Local preview from source](docs/local-from-source.md), [Windows guide](docs/windows-install.md) |
+| Watch it run before installing | [36-second recorded walkthrough (MP4)](docs/promotion/demo/cairn-memory-preview.mp4) |
+| Build on the engine | [Architecture](docs/architecture.md), [MCP tools](docs/standalone-mcp.md) |
+| Use it from Hermes | [Hermes setup](docs/hermes-first-use.md) |
+| Report a security problem | [SECURITY.md](SECURITY.md) |
+
+## For AI agents
+
+If a user asked you to install Cairn.ink Memory:
+
+- Install `@cairn-ink/memory` from npm. Its source is
+  `github.com/Cairn-ink/cairn-memory`. Do not install the unscoped
+  `cairn-memory` packages on npm or PyPI.
+- Ask the user to choose Local or Cloud before you run anything. Cloud uploads
+  conversation text to cairn.ink, and the user signs in themselves. Local saves
+  conversation text on this computer by default; add `--no-capture` if the user
+  does not want that.
+- In a non-interactive shell, run `npx @cairn-ink/memory setup --local` or
+  `npx @cairn-ink/memory setup --cloud`. On a fresh install, a non-interactive
+  run without a mode flag writes nothing.
+- When setup finishes, tell the user to restart Claude Code and Codex.
 
 ## Development
 
-The dependency-free plugin runtime and test suite require Node.js 20 or newer. Maintainer-only Claude plugin validation requires Node.js 22 and is isolated under `tools/plugin-validation` so it is never installed with the plugin.
+The dependency-free plugin runtime and test suite require Node.js 20 or newer.
+Maintainer-only Claude plugin validation requires Node.js 22 and is isolated
+under `tools/plugin-validation`, so it is never installed with the plugin.
 
 ```bash
 npm test
@@ -493,11 +330,13 @@ npm ci --prefix tools/plugin-validation
 npm run validate --prefix tools/plugin-validation
 ```
 
-For the local store on Node >=22.16 (no dependency installation required):
+For the local store on Node >=22.16, with no dependency installation:
 
 ```bash
 npm run test:core
 npm run demo:store
 ```
 
-Contributions are welcome after reading [CONTRIBUTING.md](CONTRIBUTING.md) and the privacy invariants in [docs/protocol.md](docs/protocol.md).
+Contributions are welcome after reading [CONTRIBUTING.md](CONTRIBUTING.md) and
+the privacy invariants in [docs/protocol.md](docs/protocol.md). The code is
+licensed under [Apache-2.0](LICENSE).

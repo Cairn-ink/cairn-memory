@@ -271,7 +271,7 @@ function oracleCanonical(value) {
 const oracleHash = value => createHash('sha256').update(oracleCanonical(value)).digest('hex');
 assert.equal(oracleHash(historicalFormats), historicalPolicy);
 const mappedFingerprints = new Map(), derivedFormats = new Set();
-for (const version of ['0.160.1', '0.161.0', '0.162.0', '0.163.0', '0.164.0', '0.165.0', '0.166.0']) {
+for (const version of ['0.160.1', '0.161.0', '0.162.0', '0.163.0', '0.164.0', '0.165.0', '0.166.0', '0.167.0', '0.167.2']) {
   const original = JSON.parse(await readFile(new URL(`../../../integrations/codex/test/fixtures/binary-${version}/format.json`, import.meta.url)));
   const refreshed = oracleHash({ ...original, serdeMarkers: markerProfile });
   derivedFormats.add(refreshed);
