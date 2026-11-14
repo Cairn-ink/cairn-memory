@@ -238,8 +238,9 @@ function assertPlan(db,sql,sites,statistics) {
     }
     const search=detail.match(/\bSEARCH (\w+) /),tables=search&&aliases.get(search[1]);
     if(tables&&[...tables].some(table=>/^(?:memories|receipts|private_cards|card_\w+)$/.test(table))&&
-      detail.includes('owner_id=? AND scope=? AND project_id=?')&&!/\b(?:id|rowid)[=<>]/.test(detail)){
-      // The existing source proof has an unsorted LIMIT directly on its input.
+      detail.includes('owner_id=? AND scope=? AND project_id=?')&&!/\b(?!owner_id|project_id)(?:\w+_)?(?:id|rowid)[=<>]/.test(detail)){
+      // A search that also fixes an id column (id, card_id, memory_id, receipt_id) is bounded by that id;
+      // only the namespace columns alone are not. The existing source proof has an unsorted LIMIT directly on its input.
       assert.ok(composed&&within(row,'proof_memories'),label+' unbounded namespace search: '+detail);
     }
     if(tables?.has('suppressed')){
