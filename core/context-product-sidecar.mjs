@@ -1458,7 +1458,10 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     });
     // The no-fact shortcut still collects canonical Card tokens. Pin both
     // passes there too, while retaining a caller-owned canonical snapshot.
-    return read(()=>canonical.isTransaction||!p.types.includes('card')?work():readTransaction(canonical,work));
+    return read(()=>{
+      if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');
+      return canonical.isTransaction||!p.types.includes('card')?work():readTransaction(canonical,work);
+    });
   }
 
   return {

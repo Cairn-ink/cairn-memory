@@ -285,6 +285,63 @@ for(const route of routes)test(`Card token chunks and mid-population deadline: $
   assert.equal(served.ok,true,'the next public read on the same handles succeeds');
 });
 
+for(const route of ['ordinary','suppressed'])
+test(`deadline before the canonical lexical enclosure: ${route}`,async t=>{
+  const f=await lexicalFixture(t,route),documents=Array.from({length:3},(_,i)=>card(f,i));
+  sidecar(t,f,route).refresh();
+  let expire=false,atEntry=false,lexicalPending=false,samplesAtEntry;
+  const samples=[],now=()=>{const value=expire&&atEntry?1:0;samples.push(value);return value;};
+  const rendezvous=phase=>{
+    if(phase==='lexical')lexicalPending=true;
+    if(phase==='snapshot'&&lexicalPending){
+      lexicalPending=false;atEntry=true;samplesAtEntry=samples.length;
+    }
+  };
+  // Separate readers retain the same native connections after a timeout.
+  const a=sidecar(t,f,route,now,{rendezvous});
+  const call=pages(t,f,route,{now,storageOptions:{rendezvous}});
+  const expected=expectedRows(documents);
+  for(const entry of ['storage','held-storage','public']){
+    const connections=new Map(),afterEntry=[];
+    const onSql=(sql,args,connection)=>{
+      if(expire&&atEntry)afterEntry.push(sql);
+      const key=collector({sql})?'canonical':posting(sql)?'sidecar':null;
+      if(!key)return;
+      if(!connections.has(key))connections.set(key,connection);
+      else assert.equal(connection,connections.get(key),'reuse the same native '+key+' connection');
+    };
+    const work=()=>entry==='public'?call({...selection,query,semantic:false,limit:3,deadlineMs:1}):
+      entry==='held-storage'?a.withCanonicalRead(()=>a.lexical(1)):a.lexical(1);
+    const complete=result=>{
+      if(entry==='public'){
+        const value=ok(result);
+        assert.deepEqual(publicRows(value),expected);
+        assert.equal(value.coverage.omitted.lexical,0);assert.equal(value.nextCursor,null);
+      }else{assert.equal(result.matched,3);assert.deepEqual(result.rows,expected);}
+    };
+    expire=false;atEntry=false;
+    complete((await trace(work,onSql)).result);
+    assert.equal(connections.size,2);
+    expire=true;atEntry=false;
+    const timed=await trace(()=>{
+      if(entry==='public')assert.deepEqual(work(),{ok:false,error:{code:'read_timeout',retryable:false}});
+      else assert.throws(work,{code:'read_timeout'});
+    },onSql);
+    assert.equal(atEntry,true,'the call reached the canonical enclosure decision');
+    assert.equal(samples[samplesAtEntry-1],0,'the preceding clock sample passed');
+    assert.deepEqual(samples.slice(samplesAtEntry),[1],'the entry check reports exactly the cutoff');
+    const boundary=timed.rows.findLastIndex(row=>row.sql==='PRAGMA schema_version');
+    assert.ok(boundary>=0,'the sidecar snapshot was acquired before the entry check');
+    assert.equal(timed.rows.slice(boundary+1).some(row=>/^BEGIN\b/.test(row.sql)),false,
+      'no canonical BEGIN starts at the cutoff, including when the caller already owns the read');
+    assert.deepEqual(afterEntry,[],'no canonical lexical statement starts at the cutoff');
+    assert.equal(timed.rows.filter(collector).length,0);assert.equal(timed.rows.filter(row=>posting(row.sql)).length,0);
+    assert.ok([...connections.values()].every(connection=>connection.isOpen&&!connection.isTransaction));
+    expire=false;atEntry=false;
+    complete((await trace(work,onSql)).result);
+  }
+});
+
 test('ordinary replay deadline rolls back and the same connections serve a complete next read',{timeout:120000},async t=>{
   const f=await fixture(t,'ordinary-48'),documents=Array.from({length:300},(_,i)=>card(f,i));
   mark(f,documents[0]);
@@ -710,10 +767,10 @@ for(const route of routes)test(`withheld Card has no lexical population or cache
   for(const value of [after,...afterPages])assert.equal(hasId(value,denied.ref.cardId),false,'id absent from results, diagnostics and cached pages');
 });
 
-// On the packaged store that also carries Raw source maps (Card lineage off),
+// On the packaged store that also carries Raw source maps with Card lineage,
 // the public Card lexical read returns its ranking: the lexical work owns a
 // canonical read transaction, which contributor validation requires there.
-test('public Card lexical read returns a value on the Raw-capable lineage-off package',{timeout:60000},async t=>{
+test('public Card lexical read returns a value on the Raw-capable package with Card lineage',{timeout:60000},async t=>{
   const f=await fixture(t,'ordinary-53');
   const documents=Array.from({length:3},(_,i)=>card(f,i));
   const call=pages(t,f,'suppressed');call.refresh();
