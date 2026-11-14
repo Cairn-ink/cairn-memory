@@ -1,23 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
+import { Client } from '@modelcontextprotocol/client';
+import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
+import { buildCairnServer } from '../server.mjs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { DatabaseSync } from 'node:sqlite';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
-import { createCommitDispatcher, bindCommitConnection } from '../../../core/commit-dispatch.mjs';
+import { createCommitDispatcher, bindCommitConnection, inCommitDelivery } from '../../../core/commit-dispatch.mjs';
 import { createLocalSharedRuntime } from '../local-shared-runtime.mjs';
 import { rationaleModel } from '../../../core/testing/rationale-model.mjs';
 import { openRawCaptureCore } from '../../../core/raw-capture.mjs';
 import { localPlainPort, request as rawRequest, splitRaw } from '../../../core/testing/raw-capture-fixtures.mjs';
 import { safetyFixture } from '../../../core/testing/content-safety-s2h-fixture.mjs';
 import { cardHost } from '../../../core/testing/raw-source-fixtures.mjs';
-import { writeContentSuppressionInside } from '../../../core/content-suppression-storage.mjs';
+import { writeContentSuppressionInside, cachedContentSuppressionRequestInside } from '../../../core/content-suppression-storage.mjs';
 import { transaction } from '../../../core/database.mjs';
 import { fixture as sidecarFixture, request as sidecarRequest } from '../../../core/testing/context-read-fixture.mjs';
 import { setup as episodeFixture, input as episodeInput } from '../../../core/testing/episode-capture-helpers.mjs';
 import { seed } from './fixtures/episode-server.mjs';
-import { ns, ok, call, connect, holdWriteLock } from './local-shared-support.mjs';
+import { ns, ok, call, connect, holdWriteLock, streams } from './local-shared-support.mjs';
 
 const text = 'Synthetic slow cobalt telescope preference';
 const capture = { namespace: ns, client: 'synthetic', sessionId: 'slow-session', eventId: 'slow-batch',
@@ -128,10 +131,52 @@ for (const operation of ['foreign-inspect', 'forget', 'attach']) test(`P1-4: EXC
   assert.equal(holder.isTransaction, false);
 });
 
-for (const depth of [1, 2, 3, 'immediate']) for (const kind of ['card', 'source', 'unrelated']) test(`P1-5: ${kind} suppression at delivery depth ${depth} refuses the body`, { timeout: 10000 }, async t => {
+test('Card delivery keeps the retry account through its final successful facade fence', { timeout: 10000 }, async t => {
   const f = safetyFixture(t, 23); await f.migrate();
   const authority = cardHost(), writer = f.connect();
-  let armed = false, suppressed = false, backoffs = 0;
+  let tracking = false, native, activeAttempt = false, selectedProof, backoffs = 0;
+  const fences = [], contractFences = [], traces = [];
+  const exec = DatabaseSync.prototype.exec, prepare = DatabaseSync.prototype.prepare;
+  t.mock.method(DatabaseSync.prototype, 'exec', function(sql) {
+    if (tracking && sql === 'PRAGMA busy_timeout = 5') { native = this; activeAttempt = true; }
+    if (tracking && activeAttempt && this === native && sql === 'COMMIT') {
+      const proof = cachedContentSuppressionRequestInside(this, ns.ownerId);
+      if (proof) selectedProof = proof;
+    }
+    const value = Reflect.apply(exec, this, [sql]);
+    if (tracking && this === native && sql === 'PRAGMA busy_timeout = 5000') activeAttempt = false;
+    return value;
+  });
+  t.mock.method(DatabaseSync.prototype, 'prepare', function(sql) {
+    const stack = callStack();
+    if (tracking && sql.includes('SELECT epoch_hi,epoch_lo FROM owner_suppression_epochs') && stack.includes('inCommitDelivery')) {
+      const proof = cachedContentSuppressionRequestInside(this, ns.ownerId);
+      fences.push(proof);
+      if (stack.includes('/core/contract.mjs:') && stack.includes('assertContentScope')) contractFences.push(proof);
+      traces.push(stack);
+    }
+    return Reflect.apply(prepare, this, [sql]);
+  });
+  const host = createCommitDispatcher({ strict: true, onBackoff() { backoffs++; writer.exec('ROLLBACK'); } });
+  const core = host.open(() => openMemoryCore({ path: f.path, raw: false, privateCards: authority.options }));
+  t.after(async () => { if (writer.isTransaction) writer.exec('ROLLBACK'); await core.close(); writer.close(); });
+  const card = ok(await authority.call(core, 'createCardDraft', { namespace: ns, actionId: 'successful-delivery-card', drafting: 'authored',
+    input: { title: 'Synthetic account identity Card', body: 'Synthetic successful body', authoredInput: { text: 'Synthetic source', occurredAt: null } } }));
+  writer.exec('BEGIN IMMEDIATE'); tracking = true;
+  const result = await authority.call(core, 'getCard', { namespace: ns, cardId: card.id });
+  tracking = false;
+  assert.equal(ok(result).card.body, 'Synthetic successful body');
+  assert.ok(backoffs >= 1);
+  t.diagnostic('R2O_D5_ACCOUNT_TRACE ' + JSON.stringify({ traces, fenceMatches: fences.map(proof => proof === selectedProof),
+    finalMatches: contractFences.map(proof => proof === selectedProof) }));
+  assert.ok(selectedProof && fences.includes(selectedProof), 'R2K_CARD_ACCOUNT_HANDOFF');
+  assert.ok(contractFences.includes(selectedProof), 'R2N_CARD_DELIVERY_2');
+});
+
+for (const handoff of ['core', 'mcp']) for (const raw of [false, true]) for (const depth of [1, 2, 3, 'immediate']) for (const kind of ['card', 'source', 'unrelated']) test(`P1-5: ${kind} suppression at delivery depth ${depth} refuses the body raw=${raw} handoff=${handoff}`, { timeout: 10000 }, async t => {
+  const f = safetyFixture(t, raw ? 33 : 23); await f.migrate();
+  const authority = cardHost(), writer = f.connect();
+  let armed = false, suppressed = false, backoffs = 0, finalSuppression;
   let target;
   const host = createCommitDispatcher({ strict: true, onBackoff() { backoffs++; writer.exec('ROLLBACK'); }, onAwait({ point }) {
     if (armed && point === 'return') {
@@ -142,7 +187,8 @@ for (const depth of [1, 2, 3, 'immediate']) for (const kind of ['card', 'source'
         suppressed = true;
       };
       const schedule = left => left === 0 ? suppress() : queueMicrotask(() => schedule(left - 1));
-      if (depth === 'immediate') setImmediate(suppress);
+      if (raw && depth === 2) finalSuppression = () => schedule(2);
+      else if (depth === 'immediate') setImmediate(suppress);
       else schedule(depth);
     }
   } });
@@ -151,30 +197,48 @@ for (const depth of [1, 2, 3, 'immediate']) for (const kind of ['card', 'source'
   // successful attempt, and the production delivery fence runs afterwards.
   let boundaryDeliveries = 0;
   const nativeThen = Promise.prototype.then;
-  if (depth === 'immediate') t.mock.method(Promise.prototype, 'then', function(fulfilled, rejected) {
+  if (depth === 'immediate' || raw && depth === 2) t.mock.method(Promise.prototype, 'then', function(fulfilled, rejected) {
     const stack = callStack();
-    if (armed && fulfilled?.name === 'deliver' && stack.includes('/content-safety-boundary.mjs:') && ++boundaryDeliveries === 3) {
+    if (armed && fulfilled?.name === 'deliver' && stack.includes('/content-safety-boundary.mjs:') && ++boundaryDeliveries === (raw ? 4 : 3)) {
       const finalDelivery = fulfilled;
-      fulfilled = async value => { await new Promise(resolve => setImmediate(resolve)); return finalDelivery(value); };
+      fulfilled = async value => {
+        if (raw && depth === 2) {
+          // Exercise the gap after the inner Card fence and before Raw delivery.
+          finalSuppression();
+          await new Promise(resolve => queueMicrotask(() => queueMicrotask(resolve)));
+        } else await new Promise(resolve => setImmediate(resolve));
+        return finalDelivery(value);
+      };
     }
     return Reflect.apply(nativeThen, this, [fulfilled, rejected]);
   });
-  const core = host.open(() => openMemoryCore({ path: f.path, raw: false, privateCards: authority.options }));
-  t.after(() => { if (writer.isTransaction) writer.exec('ROLLBACK'); core.close(); writer.close(); });
+  const core = host.open(() => openMemoryCore({ path: f.path, raw, privateCards: authority.options }));
+  t.after(async () => { if (writer.isTransaction) writer.exec('ROLLBACK'); await core.close(); writer.close(); });
   const card = ok(await authority.call(core, 'createCardDraft', { namespace: ns, actionId: 'delivery-card', drafting: 'authored',
     input: { title: 'Synthetic retained Card', body: 'Synthetic private body', authoredInput: { text: 'Synthetic source', occurredAt: null } } }));
   target = kind === 'card' ? { kind: 'card', key: card.id }
     : kind === 'source' ? { kind: 'submitted-note', key: writer.prepare('SELECT id FROM card_notes').get().id }
       : { kind: 'memory', key: 'synthetic-unrelated-memory' };
-  const readable = ok(await authority.call(core, 'getCard', { namespace: ns, cardId: card.id }));
+  let read = () => authority.call(core, 'getCard', { namespace: ns, cardId: card.id });
+  if (handoff === 'mcp') {
+    const server = buildCairnServer({ path: f.path, binding: ns, core, maintenance: false, ownsCore: false,
+      cards: { call: (core, method, input) => authority.call(core, method, { ...input, namespace: ns }), revoke() {} },
+      lifecycle: { run: work => host.run(work) } });
+    const [serverSide, clientSide] = streams(), client = new Client({ name: 'synthetic-card-delivery', version: '1' });
+    t.after(async () => { await client.close(); await server.close(); serverSide.destroy(); clientSide.destroy(); });
+    await server.connect(new StdioServerTransport(serverSide, serverSide));
+    await client.connect(new StdioServerTransport(clientSide, clientSide));
+    read = () => call(client, 'inspect_private_card', { cardId: card.id });
+  }
+  const readable = ok(await read());
   assert.equal(readable.card.body, 'Synthetic private body', 'control: the retained body is readable before suppression');
   writer.exec('BEGIN IMMEDIATE'); armed = true;
-  const result = await authority.call(core, 'getCard', { namespace: ns, cardId: card.id });
+  const result = await read();
   assert.ok(backoffs > 0 && suppressed, 'suppression commits before the public result');
-  if (depth === 'immediate') assert.equal(boundaryDeliveries, 3, 'delay exactly the final public delivery reaction');
-  t.diagnostic('R2M_CARD_HANDOFF ' + JSON.stringify({ kind, depth, ok: result.ok,
+  if (depth === 'immediate' || raw && depth === 2) assert.equal(boundaryDeliveries, raw ? 4 : 3, 'delay exactly the final public delivery reaction');
+  t.diagnostic('R2M_CARD_HANDOFF ' + JSON.stringify({ handoff, raw, kind, depth, ok: result.ok,
     bodyReturned: JSON.stringify(result).includes('Synthetic private body') }));
-  assert.equal(result.error?.code, 'evidence_unavailable', `${kind === 'unrelated' ? 'R2K_CARD_ACCOUNT_HANDOFF' : 'R2I_CARD_DELIVERY_FENCE'} R2N_CARD_DELIVERY_${depth}`);
+  assert.equal(result.error?.code, 'evidence_unavailable', `${kind === 'unrelated' ? 'R2K_CARD_ACCOUNT_HANDOFF' : 'R2I_CARD_DELIVERY_FENCE'} R2N_CARD_DELIVERY_${depth} ${raw ? 'R2O_RAW_CARD_DELIVERY' : ''}`);
   assert.doesNotMatch(JSON.stringify(result), /Synthetic private body/, 'R2M_SUPPRESSED_CARD_BODY_REFUSED');
 });
 
