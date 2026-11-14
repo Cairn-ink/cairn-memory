@@ -567,6 +567,7 @@ async function fencedRecallFixture(t, layout, { textPacking = false } = {}) {
   assert.equal(new Set(ids).size, 12);
   const state = {};
   const reset = (change, at) => Object.assign(state, { change, at, changed: false, prepared: false,
+    preparationReturns: 0, changePreparationReturns: null,
     lazyStarted: false, lazyFinished: false, rankReturned: false, rankOutputCounted: false,
     navigation: [], requests: [], recentSQL: [], afterInputs: [], finalFences: null, finalError: null, finalSucceeded: false, lazyError: null,
     fetchedLists: null, fenceReadsAfterPreparation: 0 });
@@ -600,6 +601,8 @@ async function fencedRecallFixture(t, layout, { textPacking = false } = {}) {
   let connection;
   function commitChange() {
     assert.equal(state.prepared, true, 'preparation returned after its read transaction committed');
+    assert.equal(state.preparationReturns, 1, 'this call returned from exactly one preparation');
+    state.changePreparationReturns = state.preparationReturns;
     assert.equal(connection.isTransaction, false, 'no recall transaction surrounds the other connection commit');
     assert.equal(f.db.isTransaction, false);
     assert.equal(state.changed, false);
@@ -664,6 +667,7 @@ async function fencedRecallFixture(t, layout, { textPacking = false } = {}) {
           const reader = runtime.recallSnapshot(candidates, selected, namespaces, ...rest);
           assert.equal(connection.isTransaction, false, 'preparation has actually committed');
           assert.equal(state.recentSQL.length, 0);
+          state.preparationReturns++;
           state.prepared = true;
           return { ...reader, recentReceipts(namespace, ref, count) {
             assert.equal(state.prepared, true);
@@ -780,7 +784,12 @@ for (const route of ['direct', 'dispatched']) test(`${name}: ${label(layout)} ${
   assertCappedControl(f, (await call()).result);
   f.reset(change, at);
   const { result, publicResult } = await call();
+  // reset cleared the earlier control's witnesses. These belong to the changed
+  // call, and must hold before its expected error can count as a passing case.
+  assert.equal(f.state.preparationReturns, 1, 'the changed call returned from preparation');
+  assert.equal(f.state.changePreparationReturns, 1, 'the change hook observed that preparation return');
   assert.equal(f.state.changed, true, 'the scheduled public mutation committed');
+  assert.deepEqual(f.state.requests, [{ memoryId: f.memory.id, count: 11 }], 'this call entered its prepared lazy provider');
   const expected = layout.mode !== 'old' ? 'evidence_unavailable'
     : change === 'selected-forget' ? 'revision_conflict' : 'index_revision_conflict';
   error(result, expected);
@@ -815,7 +824,11 @@ test(`A6 owner epoch alone covers lazy reads through public delivery ${route}`, 
   assertCappedControl(f, (await call()).result);
   f.reset('sibling-fact', 'after-rank-validation');
   const { result, publicResult } = await call();
+  assert.equal(f.state.preparationReturns, 1, 'the changed call returned from preparation');
+  assert.equal(f.state.changePreparationReturns, 1, 'the change hook observed that preparation return');
   assert.equal(f.state.changed, true);
+  assert.equal(f.state.lazyFinished, true, 'this call completed its prepared lazy read');
+  assert.deepEqual(f.state.requests, [{ memoryId: f.memory.id, count: 11 }]);
   error(result, 'evidence_unavailable');
   assert.equal(Object.hasOwn(result, 'value'), false);
   assert.deepEqual(f.state.finalFences, f.state.navigation);
