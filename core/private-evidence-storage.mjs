@@ -264,7 +264,12 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
           ancestryChecked:!layout.rawLineage||Object.hasOwn(row,'invalid_raw_ancestry')}))fail('evidence_unavailable');
         return true;
       }
+      if(peek&&!layout?.suppressionRevision)return cardDeliverable(db,ns,row.id,memo);
       if(!layout?.suppressionRevision && ![...memo.receiptDenials?.values()??[]].some(Boolean))return true;
+      const proof=cachedContentSuppressionRequestInside(db,ns.ownerId);
+      // Preserve the metadata-only peek; its contributor tokens are already
+      // collected in the scan memo and need no canonical source validation.
+      if(peek&&!hasCardLineage(db)&&proof?.facts?.length===0&&proof.readSet.some(n=>n.scope==='owner'||n.scope===ns.scope&&(n.projectId??'')===(ns.projectId??'')))return cardDeliverable(db,ns,row.id,memo);
       const ref={type:'card',namespace:ns,cardId:row.id,revision:row.revision,bodyRevision:row.body_revision};
       if(!contentReadSafety(db,{identity,namespace:ns,memo,method:'getCard',ref}).allowed)fail('evidence_unavailable');
       return cardDeliverable(db,ns,row.id,memo);

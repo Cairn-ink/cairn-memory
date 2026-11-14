@@ -419,18 +419,18 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     // Only tail snapshots need independent request accounts below.
     const readPage = work => transaction(db, work, undefined, { deferred: true });
     try {
-      let receiptRows = new Map();
+      // Prefetch tokens only. The scorer reads text after the base's residual
+      // eligibility, membership and budget checks admit this candidate.
       const collectReceipts = memories => {
-        if(!sourceReceiptLimit){receiptRows=new Map();return;}
+        if(!sourceReceiptLimit)return;
         receiptDeliverySnapshot(db,memories.map(memory=>({namespace:ns,memoryId:memory.id})),readMemo,[],{limit:sourceReceiptLimit,idOrder:true});
-        receiptRows = new Map(memories.map(memory => [memory.id, sourceReceiptLimit ? deliveryReceiptRows(db,ns,memory.id,readMemo,{limit:sourceReceiptLimit,idOrder:true}) : []]));
       };
       const scoreMemory = (memory) => {
         const bodyScore = score(memory.content);
         let candidateScore = bodyScore;
         let winningExcerpt;
         if (sourceReceiptLimit) {
-          const receipts = receiptRows.get(memory.id) ?? [];
+          const receipts = deliveryReceiptRows(db,ns,memory.id,readMemo,{limit:sourceReceiptLimit,idOrder:true});
           const deniedReceipts = receiptDenialsInside(db, ns, receipts, readMemo);
           const allowed = receipts.filter(receipt => !deniedReceipts.has(receipt.receipt_key));
           for (const receipt of allowed.slice(0, sourceReceiptLimit)) {

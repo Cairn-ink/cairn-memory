@@ -188,6 +188,10 @@ function statementCatalog() {
   assert.match(anchorCollectors[0],/FROM json_each\(\?\) j CROSS JOIN qualification_anchors q ON q\.memory_id=json_extract\(j\.value,'\$\.id'\)/);
   assert.match(anchorCollectors[0],/UNION SELECT j\.value AS input,p\.memory_id,.*FROM json_each\(\?\) j CROSS JOIN procedural_tags p ON p\.memory_id=json_extract\(j\.value,'\$\.id'\)/);
   assert.doesNotMatch(anchorCollectors[0],/excerpt|r\.\*/,'anchor collection projects tokens only');
+  const linkReceipts=[...texts.keys()].filter(sql=>sql.includes("r.id=json_extract(wanted.value,'$[1]')"));
+  assert.equal(linkReceipts.length,1,'Episode linked-receipt tokens are in the complete source catalog');
+  assert.match(linkReceipts[0],/^SELECT r\.id,r\.memory_id,r\.receipt_key,r\.client,r\.session_id,r\.event_id,r\.role FROM json_each\(\?\)/);
+  assert.doesNotMatch(linkReceipts[0],/excerpt|r\.\*/,'Episode link filtering projects tokens only');
   assert.ok(sites>0);assert.ok(literals>0);
   return {texts,sites,literals};
 }
