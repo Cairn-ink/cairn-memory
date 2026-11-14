@@ -288,6 +288,11 @@ function assertPlan(db,sql,sites,statistics) {
       label+' only the outer bounded key set is ordered');
     assert.deepEqual(plan.filter(row=>/TEMP B-TREE/.test(row.detail)).map(({parent,detail})=>({parent,detail})),
       [{parent:0,detail:'USE TEMP B-TREE FOR ORDER BY'}],label+' exactly one outer sorter, at most the recursive LIMIT per job');
+    // The sorter's input stays at the recursive LIMIT only while each header is a point lookup by its unique id
+    // (directly, or through an index whose equality prefix ends in id) — never a memory_id-only range.
+    const headerRows=plan.filter(row=>row.detail.startsWith('SEARCH r '));
+    assert.ok(headerRows.length>0&&headerRows.every(row=>/\((?:[a-z_]+=\? AND )*id=\?\)$/.test(row.detail)),
+      label+' every header is reached by its unique id: '+plan.map(row=>row.detail).join(' ; '));
   }
   if(sql.includes('CROSS JOIN qualification_anchors q')){
     for(const alias of ['q','p'])assert.ok(plan.some(row=>row.detail.startsWith('SEARCH '+alias+' ')&&
