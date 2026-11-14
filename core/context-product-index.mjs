@@ -82,7 +82,6 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     access.check();
     prepare?.();
     return read(()=>inContentSuppressionRequestInside(db,()=>{
-      if (p.rankingVersion !== undefined && p.rankingVersion !== db.prepare('PRAGMA data_version').get().data_version) fail(code);
       if (p.suppressionEpoch !== undefined && p.suppressionEpoch !== contentSuppressionRequestFenceInside(db,p.readSet[0].ownerId)) fail('evidence_unavailable');
       const current=storage.observe(p,access.accessGenerations);
       if (current.dto.lexical.state!=='ready' || current.publication.publicationId!==publication.publicationId) fail(code);
@@ -115,12 +114,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       readSet:p.readSet,suppressionEpoch:p.suppressionEpoch});
   }
   function candidates(p,access,prepareOnly=false) {
-    const observed=read(()=>{
-      // Marker-only writes need not advance a publication or suppression epoch.
-      // Bind lexical pagination to the canonical version observed before ranking.
-      if(!prepareOnly&&p.types.includes('card'))p.rankingVersion=db.prepare('PRAGMA data_version').get().data_version;
-      return storage.observe(p,access.accessGenerations);
-    });
+    const observed=read(()=>storage.observe(p,access.accessGenerations));
     const suppressionEpoch=cachedContentLayout(db)?.suppressionRevision?contentSuppressionRequestFenceInside(db,p.readSet[0].ownerId):undefined;
     p.suppressionEpoch=suppressionEpoch;
     if (observed.dto.lexical.state!=='ready') return {observed};
@@ -139,7 +133,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       }
     }
     covered.omitted={lexical:Math.max(0,ranked.matched-24),semantic:null,horizon:Math.max(0,fused.unionSize-24)};
-    return {observed,suppressionEpoch,rankingVersion:p.rankingVersion,readMemo:()=>createContentReadMemo(db),items:fused.rows.map((row,i)=>({ref:row.ref,rank:i+1,fusionScore:row.fusionScore,channels:row.channels})),
+    return {observed,suppressionEpoch,readMemo:()=>createContentReadMemo(db),items:fused.rows.map((row,i)=>({ref:row.ref,rank:i+1,fusionScore:row.fusionScore,channels:row.channels})),
       channels:channels(true),coverage:covered,trace:detail,...(prepareOnly?{lexical:ranked}:{})};
   }
   function assemble(p,access,c,prepareOnly=false,rawChannel={items:[],coverage:'unavailable'}) {
@@ -309,7 +303,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         if(!token || token.v!==1 || token.binding!==binding || !Number.isSafeInteger(token.position) || token.position<1)fail('invalid_cursor');
         const r=rankings.get(token.id);
         if(!r || r.expires<=Date.now() || token.publication!==r.publication.publicationId || token.position>=r.items.length)fail('cursor_stale');
-        p.suppressionEpoch=r.suppressionEpoch;p.rankingVersion=r.rankingVersion;
+        p.suppressionEpoch=r.suppressionEpoch;
         const result=page(r,token.position,p.limit);
         if(r.trace.semantic) {result.value.trace={...r.trace};delete result.value.trace.semantic;}
         if(r.vectorPublication){p.vectorPublication=r.vectorPublication;p.semanticSnapshot=r.semanticSnapshot;}

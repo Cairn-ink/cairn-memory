@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
 import { DatabaseSync } from 'node:sqlite';
+import { Worker, MessageChannel, receiveMessageOnPort } from 'node:worker_threads';
+import { once } from 'node:events';
 import { fixture, trace, memoryRef, hasId, isLookup } from '../testing/shared-source-fixture.mjs';
 import { lineageFixture, ns, ok, receipt } from '../testing/card-lineage-fixture.mjs';
 import { openContextReadSidecar } from '../context-read-sidecar.mjs';
@@ -374,11 +376,12 @@ test(`canonical and sidecar readers release success, deadline and thrown error: 
 
 for(const entry of ['storage','public'])
 test(`three equal Cards retain one replay population and fence cached pages: ${entry}`,async t=>{
-  const f=await fixture(t,'ordinary-48');
+  const f=await fixture(t,'fresh-cards');
   const documents=Array.from({length:3},(_,i)=>card(f,i,{title:'Synthetic',body:'needle'}));
   const B=documents[1];mark(f,B);
   const survivors=documents.filter(d=>d!==B),expected=expectedRows(survivors,'needle');
   const A=survivors.find(d=>d.ref.cardId===expected[1].ref.cardId),C=survivors.find(d=>d!==A);
+  const withheld=sibling(f,documents.indexOf(A));
   assert.equal(f.db.prepare('PRAGMA journal_mode=WAL').get().journal_mode,'wal');
   const sqlite=createProductSqlitePolicy();sqlite.start(Infinity);
   let boundary;
@@ -393,7 +396,7 @@ test(`three equal Cards retain one replay population and fence cached pages: ${e
   assert.equal(first.coverage.omitted.lexical,0);
   assert.deepEqual(publicRows(ok(call({...input,cursor:first.nextCursor}))),[expected[1]],
     'the cached pre-write ranking contains A and C with the same population scores');
-  boundary=replayBoundary(3,()=>mark(f,A));
+  boundary=replayBoundary(3,()=>forget(f,withheld));
   const measured=await trace(()=>entry==='storage'?a.lexical(Infinity,'needle'):call(input),boundary.onSql);
   assertReplaySnapshots(measured,boundary);
   if(entry==='storage'){
@@ -402,19 +405,159 @@ test(`three equal Cards retain one replay population and fence cached pages: ${e
     assert.ok(measured.result.rows.every(row=>Object.is(row.score,expected[0].score)));
   }else{
     assert.deepEqual(measured.result,{ok:false,error:{code:'index_unavailable',retryable:false}},
-      'the final version fence rejects the provisional pre-write ranking');
+      'the final namespace fence rejects the provisional pre-write ranking');
     assert.ok(provisionalCursor);assert.notEqual(provisionalCursor,first.nextCursor);
     assert.deepEqual(call({...input,cursor:provisionalCursor}),{ok:false,error:{code:'cursor_stale',retryable:false}},
       'a ranking refused by the final fence cannot be paged');
   }
   assert.deepEqual(call({...input,cursor:first.nextCursor}),{ok:false,error:{code:'cursor_stale',retryable:false}},
     'page two refuses the changed population rather than mixing rows, scores and coverage');
+  call.refresh();assert.equal(a.observe().dto.lexical.state,'ready');
   const next=a.lexical(Infinity,'needle');
   assert.equal(next.matched,1);assert.deepEqual(next.rows,expectedRows([C],'needle'));
   const fresh=ok(call(input));
   assert.deepEqual(publicRows(fresh),next.rows);
   assert.equal(fresh.coverage.omitted.lexical,0);assert.equal(fresh.nextCursor,null);
   for(const result of [next,fresh])for(const denied of [A,B])assert.equal(hasId(result,denied.ref.cardId),false);
+});
+
+test('marker-only fixture writes preserve the storage replay snapshot',async t=>{
+  const f=await fixture(t,'ordinary-48');
+  const documents=Array.from({length:3},(_,i)=>card(f,i,{title:'Synthetic',body:'needle'}));
+  mark(f,documents[1]);
+  assert.equal(f.db.prepare('PRAGMA journal_mode=WAL').get().journal_mode,'wal');
+  const sqlite=createProductSqlitePolicy();sqlite.start(Infinity);
+  const boundary=replayBoundary(3,()=>mark(f,documents[0]));
+  const a=sidecar(t,f,'ordinary',()=>boundary.now(),{sqlite});a.refresh();
+  const measured=await trace(()=>a.lexical(Infinity,'needle'),boundary.onSql);
+  assertReplaySnapshots(measured,boundary);
+  assert.equal(measured.result.matched,2);
+  assert.deepEqual(measured.result.rows,expectedRows([documents[0],documents[2]],'needle'));
+  const next=a.lexical(Infinity,'needle');
+  assert.equal(next.matched,1);assert.deepEqual(next.rows,expectedRows([documents[2]],'needle'));
+});
+
+test('packaged public forget fences delivery and previously cached pages',async t=>{
+  const f=await lexicalFixture(t,'suppressed');
+  const documents=Array.from({length:3},(_,i)=>card(f,i,{title:'Synthetic',body:'needle'}));
+  const a=sidecar(t,f,'suppressed');a.refresh();
+  const expected=expectedRows(documents,'needle');
+  const A=documents.find(d=>d.ref.cardId===expected[1].ref.cardId),withheld=sibling(f,documents.indexOf(A));
+  a.refresh();
+  assert.equal(f.db.prepare('PRAGMA journal_mode=WAL').get().journal_mode,'wal');
+  let armed=false,provisionalCursor,committed=false;
+  const call=pages(t,f,'suppressed',{onCursor:cursor=>{
+    provisionalCursor=cursor;
+    if(armed){armed=false;forget(f,withheld);committed=true;}
+  }});
+  const input={...selection,query:'needle',semantic:false,limit:1,deadlineMs:5000};
+  const first=ok(call(input));assert.ok(first.nextCursor);
+  const before=a.lexical(Infinity,'needle');
+  assert.equal(before.matched,3);assert.deepEqual(before.rows,expected);
+  armed=true;
+  assert.deepEqual(call(input),{ok:false,error:{code:'evidence_unavailable',retryable:false}});
+  assert.equal(committed,true);assert.equal(f.db.isTransaction,false);
+  const refusedCursor=provisionalCursor;
+  assert.ok(refusedCursor);assert.notEqual(refusedCursor,first.nextCursor);
+  assert.deepEqual(call({...input,cursor:refusedCursor}),{ok:false,error:{code:'cursor_stale',retryable:false}},
+    'the refused ranking never entered the cache');
+  assert.deepEqual(call({...input,cursor:first.nextCursor}),{ok:false,error:{code:'evidence_unavailable',retryable:false}},
+    'the base keeps the suppression-fence classification on cached pages');
+  call.refresh();assert.equal(a.observe().dto.lexical.state,'ready');
+  const next=a.lexical(Infinity,'needle');
+  assert.equal(next.matched,2);assert.deepEqual(next.rows,expectedRows(documents.filter(d=>d!==A),'needle'));
+  const fresh=ok(call(input)),second=ok(call({...input,cursor:fresh.nextCursor}));
+  assert.deepEqual([...publicRows(fresh),...publicRows(second)],next.rows);
+  assert.deepEqual(second.coverage,fresh.coverage);assert.equal(fresh.coverage.omitted.lexical,0);
+  assert.equal(second.nextCursor,null);
+  for(const value of [fresh,second])assert.equal(hasId(value,A.ref.cardId),false);
+});
+
+// Public capture awaits extraction, so a second thread commits it while the
+// synchronous reader is paused at the cursor-encoding seam before final().
+// No engine method is replaced and no direct SQL simulates the capture.
+async function unrelatedCaptureWorker(){
+  const {workerData,parentPort}=await import('node:worker_threads');
+  const {openMemoryCore}=await import(workerData.coreURL);
+  const signal=new Int32Array(workerData.signal);
+  const core=openMemoryCore({path:workerData.path,model:{contextWindow:8192,countTokens:()=>1,
+    extract:()=>({items:[{content:'Synthetic unrelated capture',kind:'fact',confidence:.8,sourceIndices:[0]}]})}});
+  parentPort.postMessage('ready');
+  let result;
+  try{
+    if(Atomics.wait(signal,0,0,30000)==='timed-out')throw Error('capture trigger timed out');
+    result=await core.capture({namespace:workerData.namespace,client:'synthetic',sessionId:'synthetic-unrelated',
+      eventId:'synthetic-unrelated-capture',messages:[{id:'synthetic-unrelated-message',role:'user',content:'Synthetic unrelated capture'}]});
+  }catch(error){result={ok:false,error:{code:error.code??error.message}};}
+  finally{core.close();}
+  workerData.port.postMessage(result);
+  Atomics.store(signal,1,1);Atomics.notify(signal,1);
+  workerData.port.close();parentPort.close();
+}
+
+async function captureWriter(t,f,namespace){
+  const signal=new Int32Array(new SharedArrayBuffer(8)),{port1,port2}=new MessageChannel();
+  const worker=new Worker('('+unrelatedCaptureWorker.toString()+')()',{eval:true,
+    workerData:{path:f.path,namespace,signal:signal.buffer,port:port2,coreURL:new URL('../index.mjs',import.meta.url).href},
+    transferList:[port2]});
+  const exited=once(worker,'exit');
+  t.after(async()=>{port1.close();await worker.terminate();});
+  assert.deepEqual((await once(worker,'message'))[0],'ready');
+  return {exited,commit(){
+    Atomics.store(signal,0,1);Atomics.notify(signal,0);
+    assert.notEqual(Atomics.wait(signal,1,0,30000),'timed-out','the public capture completed');
+    const result=receiveMessageOnPort(port1)?.message;
+    assert.equal(result?.ok,true,JSON.stringify(result));
+    assert.equal(result.value.admission.memories.length,1,'a new Memory was captured');
+    const stored=f.db.prepare('SELECT id FROM memories WHERE owner_id=? AND scope=? AND project_id=? AND deleted=0 AND content=?')
+      .all(namespace.ownerId,namespace.scope,namespace.projectId,'Synthetic unrelated capture');
+    assert.equal(stored.length,1,'the reader sees the other connection commit');
+  }};
+}
+
+for(const kind of ['fresh-cards','ordinary-48'])for(const namespace of ['other','same'])for(const phase of ['delivery','page'])
+test(`unrelated capture preserves the base namespace fence: ${kind} / ${namespace} / ${phase}`,{timeout:60000},async t=>{
+  const f=await fixture(t,kind),documents=Array.from({length:3},(_,i)=>card(f,i,{title:'Synthetic',body:'needle'}));
+  assert.equal(f.db.prepare('PRAGMA journal_mode=WAL').get().journal_mode,'wal');
+  const writer=await captureWriter(t,f,namespace==='same'?ns:{...ns,projectId:'synthetic-other-project'});
+  let armed=false,committed=false,provisionalCursor;
+  const call=pages(t,f,'ordinary',{now:()=>0,onCursor:cursor=>{
+    provisionalCursor=cursor;
+    if(armed){armed=false;writer.commit();committed=true;}
+  }});
+  call.refresh();
+  const input={...selection,query:'needle',semantic:false,limit:1,deadlineMs:5000};
+  const first=ok(call(input)),second=ok(call({...input,cursor:first.nextCursor}));
+  assert.ok(second.nextCursor);
+  const before=f.db.prepare('SELECT generation FROM card_epochs WHERE owner_id=? AND scope=? AND project_id=?')
+    .get(ns.ownerId,ns.scope,ns.projectId);
+  let result;
+  if(phase==='delivery'){
+    armed=true;result=call(input);assert.equal(committed,true,'capture committed between ranking and final delivery');
+  }else{
+    writer.commit();committed=true;result=call({...input,cursor:first.nextCursor});
+  }
+  assert.deepEqual(await writer.exited,[0],'the capture worker exited successfully');
+  assert.deepEqual(f.db.prepare('SELECT generation FROM card_epochs WHERE owner_id=? AND scope=? AND project_id=?')
+    .get(ns.ownerId,ns.scope,ns.projectId),before,'the capture touched no Card');
+  const expected=phase==='delivery'?first:second;
+  if(namespace==='other'){
+    const value=ok(result);
+    assert.deepEqual(publicRows(value),publicRows(expected));
+    assert.deepEqual(value.coverage,expected.coverage);assert.deepEqual(value.channels,expected.channels);
+    const next=ok(call({...input,cursor:phase==='delivery'?value.nextCursor:first.nextCursor}));
+    assert.deepEqual(publicRows(next),publicRows(second));assert.deepEqual(next.coverage,second.coverage);
+  }else{
+    assert.deepEqual(result,{ok:false,error:{code:phase==='delivery'?'index_unavailable':'cursor_stale',retryable:false}},
+      'the base fences every namespace epoch, including a Card-only projection');
+    if(phase==='delivery')assert.deepEqual(call({...input,cursor:provisionalCursor}),
+      {ok:false,error:{code:'cursor_stale',retryable:false}},'failed final delivery leaves no cache entry');
+    call.refresh();
+    const fresh=ok(call(input));
+    assert.deepEqual(publicRows(fresh),expectedRows(documents,'needle').slice(0,1));
+    assert.deepEqual(fresh.coverage.byType,first.coverage.byType);
+    assert.deepEqual(fresh.coverage.omitted,first.coverage.omitted);
+  }
 });
 
 for(const kind of ['fresh-cards','ordinary-48'])
