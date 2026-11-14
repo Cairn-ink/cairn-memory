@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "4d9e9991e878e2f510a36522aaf933e241262ba0996bd566ffc0a4278713a57f",
-  "bytes": 1398472,
+  "sha256": "14480e4dc1022c1bdb849afa73d381c419b75e4d5eb113c16dc4cca8867c5306",
+  "bytes": 1398585,
   "files": [
     "LICENSE",
     "README.md",
@@ -591,7 +591,7 @@
     "adapters/mcp/local-authority-router.mjs": "ebddbcf382d0d69f199d124a01569d68b11f4a8399834b8411ed45f98ae57a47",
     "adapters/mcp/local-context-continuations.mjs": "ad824cc65a83e60a71b97f9fa1418807fd7acbc429afa731c73edb87fd1d5e38",
     "adapters/mcp/local-shared-runtime.mjs": "d5a1a4baba2513eade1dcce141bb354dd19bc31a592198583a7ba60ecf613dc8",
-    "adapters/mcp/server.mjs": "660cd106ccdd59c8e3fb5f3a7723b1255b35fea4479d2e2fe7d83bb7e986efae",
+    "adapters/mcp/server.mjs": "96033b1d7d02cca4cbec8b4601ef55da3084f9d5eb675233aa7c1743ef94d8c7",
     "adapters/mcp/private-card-access.mjs": "fc95ae394d96a945d6d6ecd2e8ec8f182d36ac8094977a6b6ed42932f2ee7cca",
     "adapters/mcp/review-card.mjs": "a653e0778be9c5351c170e7da3c8555e2fd5da221bd429496ea21ff649936382",
     "adapters/mcp/retained-raw-profile.mjs": "6d43aa5bb72a362299f5ab4cbbd56e2a4e21408765d7c17e46d6a799a65f2c79",
