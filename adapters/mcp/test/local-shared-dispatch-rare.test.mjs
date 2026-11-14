@@ -9,6 +9,7 @@ import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { createCommitDispatcher, bindCommitConnection, withSynchronousCommitScope, dispatchCommit } from '../../../core/commit-dispatch.mjs';
 import { createMemoryRuntime } from '../../../core/runtime.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
+import { engineCardFixture, ns as engineNamespace } from '../../../core/testing/engine-card-fixture.mjs';
 import { fixture as sidecarFixture } from '../../../core/testing/context-read-fixture.mjs';
 import { host as roleHost, ns as roleNs, publish, read } from '../../../core/test/role-fixture.mjs';
 import { holdWriteLock, ns, ok } from './local-shared-support.mjs';
@@ -140,4 +141,33 @@ test('item 8: production lazy Card claim retries its migration and leaves a comp
     assert.ok(observer.prepare("SELECT 1 FROM sqlite_master WHERE name='card_mocs'").get());
   } finally { observer.close(); }
   assert.equal(dispatcher.inspectSynchronousWrites().count, 0);
+});
+
+
+for (const strict of [false, true]) test(`main merge: warm Card outcome cleanup retries its writer acquisition strict=${strict}`, { timeout: 15000 }, async t => {
+  const f = engineCardFixture(t); f.seed(8);
+  assert.equal(ok(await f.pass()).built.length, 1);
+  const expected = ok(await f.pass());
+  assert.equal(expected.state, 'ready');
+  await f.core.close();
+  let backoffs = 0;
+  const dispatcher = createCommitDispatcher({ strict, onBackoff() {
+    backoffs++; f.db.exec('ROLLBACK');
+  } });
+  const core = dispatcher.open(() => openMemoryCore({ path: f.path, raw: false, model: f.model }));
+  f.workspace.defer(() => core.close());
+  f.db.exec('BEGIN IMMEDIATE');
+  let result;
+  try {
+    const envelope = await dispatcher.run(() => core.maintainCards({ namespace: engineNamespace, budget: { maxMs: 5000 } }));
+    assert.equal(envelope.ok, true, 'R2O_MERGE_CARD_CLEANUP ' + JSON.stringify(envelope));
+    result = ok(envelope);
+  }
+  finally { if (f.db.isTransaction) f.db.exec('ROLLBACK'); }
+  t.diagnostic('R2O_MERGE_CARD_CLEANUP ' + JSON.stringify({ result, backoffs, writes: dispatcher.inspectSynchronousWrites() }));
+  assert.equal(dispatcher.inspectSynchronousWrites().count, 0, 'R2O_MERGE_CARD_CLEANUP unrouted_synchronous_write');
+  assert.deepEqual(result, expected, 'R2O_MERGE_CARD_CLEANUP');
+  assert.ok(backoffs >= 1, 'R2O_MERGE_CARD_CLEANUP_BACKOFF');
+  assert.equal(dispatcher.inspectSynchronousWrites().count, 0, 'R2O_MERGE_CARD_CLEANUP_ROUTED');
+  assert.equal(f.db.prepare("SELECT count(*) n FROM private_cards WHERE state='confirmed'").get().n, 1);
 });

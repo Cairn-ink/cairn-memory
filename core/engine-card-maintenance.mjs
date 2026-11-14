@@ -64,10 +64,10 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
       const commit = hasCommitDispatcher(storage) ? work => dispatchCommit(storage, () => { checkPause(); return work(); }, deadline) : null;
       await withContentSuppressionRequest(async () => {
         const scope = JSON.stringify(ns), previous = scans.get(scope);
-        let page = storage.snapshot(ns, maxItems, check, previous?.after ?? '');
+        let page = commit ? await commit(() => storage.snapshot(ns, maxItems, check, previous?.after ?? '')) : storage.snapshot(ns, maxItems, check, previous?.after ?? '');
         let scan = previous;
         if (scan && (scan.epoch !== page.epoch || now() - scan.startedAt >= ENGINE_CARD_LIMITS.debounceMs)) {
-          scans.delete(scope); scan = null; page = storage.snapshot(ns, maxItems, check);
+          scans.delete(scope); scan = null; page = commit ? await commit(() => storage.snapshot(ns, maxItems, check)) : storage.snapshot(ns, maxItems, check);
         }
         scan ??= { memories: [], epoch: page.epoch, after: '', startedAt: now() };
         scan.memories.push(...page.memories); scan.after = page.after;
