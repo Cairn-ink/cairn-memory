@@ -4,7 +4,7 @@ import { appendFile, writeFile, symlink, readFile } from "node:fs/promises";
 import { PassThrough } from "node:stream";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
-import { fixture, header, item, session } from "./helpers.mjs";
+import { fixture, header, item, session, stableCapture } from "./helpers.mjs";
 import { runWorker, prepareCapture, resetCapture } from "../worker.mjs";
 import { readHookInput, handleHook, workerFromHandoff } from "../hook.mjs";
 import { withSourceReadObserver } from "../source.mjs";
@@ -28,7 +28,7 @@ test("A4 partial lines and appends preserve frozen IDs and coverage", async (t) 
   await appendFile(f.path, partial.slice(0, -10));
   f.clear();
   await runWorker(f.binding, { transport: f.transport, guard: f.guard });
-  assert.deepEqual(f.calls[1], frozen);
+  assert.deepEqual(stableCapture(f.calls[1]), stableCapture(frozen));
   assert.equal((await f.cursor()).offset, Buffer.byteLength(first));
   assert.equal(
     (await runWorker(f.binding, { transport: f.transport, guard: f.guard })).status,

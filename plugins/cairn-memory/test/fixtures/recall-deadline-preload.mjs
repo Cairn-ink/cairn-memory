@@ -9,16 +9,26 @@ const startupDelay = Number(process.env.CAIRN_TEST_STARTUP_DELAY ?? 0);
 if (startupDelay) await delay(startupDelay);
 // Observe the configured HTTP delay without replacing the native timeout.
 const originalSignalTimeout = AbortSignal.timeout;
+let outputSignal;
 AbortSignal.timeout = function (milliseconds) {
-  notify('http-timeout', { delayMs: milliseconds });
-  return originalSignalTimeout.call(this, milliseconds);
+  const signal = originalSignalTimeout.call(this, milliseconds);
+  const caller = new Error().stack?.split('\n')[2] ?? '';
+  const outputBudget = caller.includes('/scripts/hook.mjs:');
+  if (outputBudget) outputSignal = signal;
+  notify(outputBudget ? 'output-timeout' : 'http-timeout', { delayMs: milliseconds });
+  return signal;
 };
 // Observe entry at creation of the hook's timer, without moving or replacing it.
 // hrtime has a common monotonic origin across parent/child processes; IPC receipt
 // latency is therefore excluded from application-entry-to-close measurement.
 const originalTimeout = globalThis.setTimeout;
-let entryObserved = false;
+let entryObserved = false, forcedHardCap;
 globalThis.setTimeout = function (callback, milliseconds, ...args) {
+  if (process.env.CAIRN_TEST_FORCE_HARD_CAP === 'true' &&
+      callback.toString().includes('process.exit(0)') && callback.toString().includes('setImmediate')) {
+    forcedHardCap = callback;
+    return originalTimeout(() => {}, milliseconds);
+  }
   if (!entryObserved && callback.name === 'expireRecall') {
     entryObserved = true;
     notify('application-entry', { monotonicMs: Number(process.hrtime.bigint()) / 1e6 });
@@ -26,10 +36,15 @@ globalThis.setTimeout = function (callback, milliseconds, ...args) {
   return originalTimeout(callback, milliseconds, ...args);
 };
 const originalLink = fsPromises.link;
-let contentionObserved = false;
+let contentionObserved = false, rootContentionObserved = false;
 fsPromises.link = async function (source, target) {
   try { return await originalLink(source, target); }
   catch (error) {
+    if (!rootContentionObserved && error.code === 'EEXIST' &&
+        String(target) === `${process.env.CLAUDE_PLUGIN_DATA}/hosted-pause.gate`) {
+      rootContentionObserved = true;
+      notify('root-gate-contended');
+    }
     if (!contentionObserved && error.code === 'EEXIST' &&
         String(target).startsWith(`${process.env.CLAUDE_PLUGIN_DATA}/hosted-quota/`) &&
         String(target).endsWith('.json.lock')) {
@@ -40,7 +55,8 @@ fsPromises.link = async function (source, target) {
   }
 };
 syncBuiltinESMExports();
-const abortSource = signal => signal.reason?.message === 'recall_timeout' ? 'application'
+const abortSource = signal => outputSignal?.aborted && signal.reason === outputSignal.reason ? 'output'
+  : signal.reason?.message === 'recall_timeout' ? 'application'
   : signal.reason?.name === 'TimeoutError' ? 'http' : 'other';
 // Register the rendezvous before announcing fetch so an early parent ack cannot
 // be lost. Keep IPC live only while waiting, and remove listeners on abort too.
@@ -71,6 +87,10 @@ const memory = { id: '12345678-1234-4234-8234-123456789abc', content: 'Synthetic
     sessionId: 'synthetic-source', eventId: 'synthetic-event', role: 'user', excerpt: 'Synthetic source.',
     createdAt: '2026-10-01T00:00:00Z' }] };
 globalThis.fetch = async (url, options) => {
+  if (new URL(url).pathname.endsWith('/pause-state')) {
+    options.signal?.throwIfAborted();
+    return Response.json({ paused: false, generation: 0, enforced: true });
+  }
   if (process.env.CAIRN_TEST_LOOPBACK_ENDPOINT &&
       url === process.env.CAIRN_TEST_LOOPBACK_ENDPOINT + '/api/memory/recall') {
     if (new URL(url).hostname !== '127.0.0.1') throw new Error('loopback_only');
@@ -89,6 +109,10 @@ globalThis.fetch = async (url, options) => {
       ? fetchAcknowledgement(options.signal, number) : undefined;
     notify('recall-fetch', { attempt: number, sameSignal: options.signal === firstSignal,
       hasSession: Object.hasOwn(body, 'session_id'), sameLegacyPayload: JSON.stringify(legacy) === firstLegacyPayload });
+    if (process.env.CAIRN_TEST_FORCE_HARD_CAP === 'true') {
+      if (!forcedHardCap) throw new Error('hard_cap_not_registered');
+      setImmediate(forcedHardCap);
+    }
     const mode = process.env.CAIRN_TEST_RECALL_REPLY;
     const milliseconds = mode === 'old-schema' ? number === 1 ? 50 : 5000 : Number(process.env.CAIRN_TEST_RECALL_DELAY);
     try {

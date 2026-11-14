@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { testServer, wireChild, childEnvironment } from "./http-harness.mjs";
+import { stableCapture } from "./helpers.mjs";
 export async function receiverServer(f) {
   const server = createServer(async (req, res) => {
     let raw = "";
@@ -16,7 +17,7 @@ export async function receiverServer(f) {
       res.end(JSON.stringify({ status: "refused", code: "quota_reached" }));
       return;
     }
-    if (existing) assert.deepEqual(body, existing);
+    if (existing) assert.deepEqual(stableCapture(body), stableCapture(existing));
     f.receiver.set(body.event_id, body);
     res.setHeader("content-type", "application/json");
     res.end(

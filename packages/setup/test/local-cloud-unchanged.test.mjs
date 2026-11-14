@@ -93,41 +93,135 @@ const generationPath = new RegExp('^\\.codex/cairn/runtime/(' + runtimeId + ')(/
 // Recall deadlines admit exactly these line substitutions, checked against the
 // immutable installer below. Every other source byte remains significant.
 const recallRuntimeChanges = new Map([
-  ['integrations/codex/entry.mjs', [
-    "const budget = event === 'qualify' ? 65000 : event === 'worker' ? 62500 : capture ? 750 : 2000;",
-    "const budget = event === 'qualify' ? 65000 : event === 'worker' ? 62500 : capture ? 750 : event === 'UserPromptSubmit' ? 3000 : 2000;",
-  ]],
   ['integrations/codex/hook.mjs', [
     "  const budget=['SessionStart','UserPromptSubmit'].includes(input?.hook_event_name)?2500:750;",
     "  const budget=input?.hook_event_name==='UserPromptSubmit'?3000:input?.hook_event_name==='SessionStart'?2500:750;",
   ]],
 ]);
+// Atomic output delivery changes entry beyond its recall-budget line.
 // Pause durability changes whole functions; pin both immutable historical and
 // current bytes instead of reconstructing the earlier file from current source.
+// Root replay and the frozen capture generation revise current pins; preserve
+// every historical digest and the historical behavior comparisons below.
 const durabilityRuntimeChanges = new Map([
+  // Output gate admission now accepts the remaining-budget abort signal.
+  ['integrations/client/state-lock.mjs', {
+    historical: 'ee4bc6161d97bac44a8dc34a2058ed48e3dbbfeb105e32f6e66590b883b29b58',
+    before: 'ee4bc6161d97bac44a8dc34a2058ed48e3dbbfeb105e32f6e66590b883b29b58',
+    previousHostContainer: '47899f7e6881b7e27726f5145fe151c0f8068537045b3e26556eb9e53d87e14a',
+    // Host-managed root gates allow readable containers; eligibility stays read-only.
+    previousGateContention: 'b1c40477819aceb2bf374d598da25eb258c81f031a6f70646d28c154aefba152',
+    // Absolute caller deadline bounds acquisition setup and polling.
+    previousCallerDeadline: '1ffd9d275b20449bd73f6a08610d896a2ffd89b6637d20475e9ac8bcd9270dbf',
+    // Host-root locks are taken only at the canonical root path.
+    current: 'a7dbbf6c805fce74039a224f19e720d5740506c1fcd41129bea8ecb6a60c7c84',
+  }],
+  // The merged worker retains capture windows/source times plus root replay
+  // and frozen-generation dispatch; pin these combined bytes exactly once.
+  ['integrations/codex/worker.mjs', {
+    historical: '0fbb1295e596769035eca5e974efa4f355774a6c37d70f3442a3e78c4aa7264d',
+    before: '0fbb1295e596769035eca5e974efa4f355774a6c37d70f3442a3e78c4aa7264d',
+    previousPauseWorker: '6453ea0e6d3c0f3a4eb70bfc4eb7c45e85251c48dcc4c3da89e177be834ff03e',
+    previousCombined: 'a22f205506062e00debe4971a825dfd3990240a005c7c2d7d180f34e4affa3fd',
+    previousInstaller: '2fd5987edcf0c047d0ad78145b7f2887e20643ce6eca723871b41598ca2e13e4',
+    // Acknowledged-capture diagnostics plus capture windows, root replay and frozen-generation dispatch.
+    previousGateContention: 'b26a5823e39aaabb21e9224794801be7d80ede84a9c29122bc60e33745b825c6',
+    // Recovery uses the worker cap; hosted transport receives the existing request deadline.
+    current: '1e49dd2b5936a9c3df3c4b47efb1be9ee1217f0f0177528d40d78400faf901a2',
+  }],
+  ['integrations/codex/entry.mjs', {
+    historical: '558a2f9f5cbed3c4e08146626708ba5ab4374e6938fa9c2e1cdc935d50580952',
+    before: '0182cc90faddafeea34b8ba11a4c96805f74140117c1ee4b4ad118ca47b0d331',
+    current: '4bc207d972508f7e0ba7eea2ed69021188673d47cccfe6a375de1b8d88973ea4',
+  }],
+  // Final admission needs synchronous owner-checked reads of pause metadata.
   ['integrations/client/private-state.mjs', {
     historical: 'ca789169d55a76c327ca1ee603ff21b71d1bdde9a8f0d837cfbeb167700afd64',
     before: 'ca789169d55a76c327ca1ee603ff21b71d1bdde9a8f0d837cfbeb167700afd64',
-    current: '7dc46417a129414937b0180482acf6bdf7f58c1816f93468e8df1d952057485b',
+    previousCurrent: '7dc46417a129414937b0180482acf6bdf7f58c1816f93468e8df1d952057485b',
+    previousHostContainer: '7fd62ae5b862cfe77b393e06ef787508f89f7071879a84859357420893aff0c4',
+    // Host containers may be readable or aliased; state files remain private.
+    previousReadableContainer: 'df7adad56c4a0e40d072a69f4f67ccd62ec3e9b7970327443fb114f5a4715dff',
+    // Host roots resolve once per process; root-level writes refuse a non-canonical path.
+    current: '14a576ec9f24c568e15cefff540f3771ecb2b974248ef73b4cee5124c83c365e',
   }],
+  // Merge portable exact-GET first-prompt authority with gate-only pause commits
+  // and durable pending-marker replay; retain both parent current digests below.
   ['integrations/client/hosted-pause.mjs', {
     historical: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
     before: 'f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30',
-    current: '8d15d24036533f5a235b5e54627cb4db3b94312f28874f9fdf24cd2897cb0635',
+    previousCurrent: '365314ab54f794b34e4972de22d456b2c529a0f6d608c62a01f8558fe4a32892',
+    previousSynchronousAdmission: '24d0588a6316c89cc5c2d4c0cc2a8ee5a6bacd035c2187298e3480ac3c21a5b2',
+    previousGatedPublication: 'c946fb5ab612b8a252bf21d4c18a12c69bd4abed9bda16ea5ad411c551f36993',
+    previousPortableFirstPrompt: '76cc819ac94a85ed1fc8a2d2dabd92bf9b3581ad82422119df279c054727639c',
+    previousPendingReplay: 'c2cb8a1dce38e1a9ae2055094c9ef8b1ec65ba40e6ce0cbfbcee8bfa1f9e8086',
+    previousHostContainer: 'ab63b7ddb34a8f097255e4f702bd7cfaefd5155a63873d66b93f0d229a6995d2',
+    // Retain the installer's superseded pause runtime alongside gate-only replay.
+    previousInstallerPause: '8d15d24036533f5a235b5e54627cb4db3b94312f28874f9fdf24cd2897cb0635',
+    // Root authority and rotation retain the gate in host-managed containers.
+    previousGateContention: 'ef2f022848664bb436d7f59f4cc446a2d230e3aacf637707f20d09b66ac563ba',
+    // Caller deadlines cover unchanged publication, recovery and final admission; changed observations retain durable marker retries.
+    previousCallerDeadline: 'c116c69bd2e902d8ae230fe46c9db38b560e5a6d412b6577d08712e208dbec66',
+    // The gate and its records use the pinned canonical root; a changed configured path fails closed.
+    previousCanonicalRoot: '15a0c3f7f0e36d6fb9b5a7c337e2f08bc1bfa05b4a751c6a393266409da3fac4',
+    // Comment-only removal of a source-evidence note; runtime behavior is unchanged.
+    previousSourceNote: '355ee562215c9f11f40b85b9b4a0b1cc53b9cd6b4bc01e900701650fe4b48398',
+    // The pinned root delegates to the caller's config; guarded endpoint accessors are read live.
+    current: 'ecbad7a62ca1908baf6e5e39553d82408b66cec85bb0d4d70dac998a5f6afb15',
   }],
   ['integrations/codex/installed.mjs', {
     historical: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',
     before: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',
-    // Merged capture-stop notices and deferred host publication change the installed runtime bytes.
-    current: '0377df55d80378aad167522116c58262e3b5e182b9c4b5da517e14670bb832e8',
+    previousCombined: '8079b851c499f57f2064c29380a3b8b9a137dd3bb9b4dd4b930b5b1b047f32d9',
+    previousInstaller: '0377df55d80378aad167522116c58262e3b5e182b9c4b5da517e14670bb832e8',
+    // Capture-stop notices plus pause-gated context delivery and deferred host publication.
+    previousGateContention: 'a054b5da392fc2b4dce7bc7b0e2c9e161ba1bc7beb5a3518247b1c8575f9997b',
+    // Initial hosted observations and worker recovery share the installed process budget.
+    current: '0977b326b4d88ceda28b646e0cdaaa9af33b06ea67233bd5e72dd306ae61fd84',
   }],
   ['integrations/codex/hosted-lifecycle.mjs', {
     historical: '8b4a8e7ea1cef5473147bfe2ea6af9548894c52f08e44a656e545fcb9fc8c496',
     before: 'bd7bc299773cc389565a34bfd9a7131f68ad7bef934d3ce5a0ebeeea800bbe3a',
-    current: '5123350b18ee89a7557dbeec237e1e7790f1b7f21484dd393a97a6f66b009e94',
+    previousInstallerDeadline: '5123350b18ee89a7557dbeec237e1e7790f1b7f21484dd393a97a6f66b009e94',
+    previousPromptDeadline: '3771ad2a034c5cad4b9a2882d5a9306a7cefd704bcebc67893fc286b93937b24',
+    // Recall retains its full deadline and cancellation after the final switch withholds output.
+    previousGateContention: '513a735b9f14899f824374b7fe27fcbf0c06ce81d025588cd6c84c0e415be44a',
+    // Capture and recall pass their existing deadlines through every publication and request/output gate.
+    current: '1333467801e667d2bad98080d57a2d01761a5b679a28badcea8fdb84a9d96b58',
   }],
 ]);
-const hostedRuntimeExceptions = [
+// Capture metadata changes the contract/schema and worker, and extracts a pure
+// calendar helper. Pin the exact historical/current bytes; the new helper is
+// required in current generations and synthesized only for the pinned old tree.
+const captureRuntimeChanges = new Map([
+  [
+    "integrations/client/hosted-contract.mjs",
+    {
+      "historical": "39ce7dcb60b91ab7bf815bd0085f278e9cc5d0f9798b9b5d27e7b7655fd217d1",
+      "current": "07bb439a728f1be053cfa40f425d7e52e0a2b958a22dd72cd889f3f942fb12fd"
+    }
+  ],
+  [
+    "integrations/client/hosted-schemas.mjs",
+    {
+      "historical": "fda2e6b4f6feda316300819e1a199dd25f7462b9f47e33bff950c3c4f95ba8ce",
+      "current": "c9e2b4fc3e85e136594438ad58a24d15526296b12ab1d438ae930a91b8ec82d3"
+    }
+  ],
+  // Reuse the durability object's historical/before/current pins: one worker,
+  // one authority for its merged bytes, with both behavioral classifications.
+  ['integrations/codex/worker.mjs', durabilityRuntimeChanges.get('integrations/codex/worker.mjs')],
+  [
+    "integrations/client/source-time.mjs",
+    {
+      "historical": null,
+      "current": "002acf215bd6b79b3e4ace3e9d181a89dbf8efc48093a6e980c8417df64b9401"
+    }
+  ]
+]);
+const captureSourceModule = 'integrations/client/source-time.mjs';
+const historicalCaptureManifestHash = "3f03f7e0f15e3f4b482b383e2a8b01c5c51ce2903c22f2983d5f3da42b41b1dd";
+const hostedRuntimeExceptions = [...new Set([
   'integrations/client/control-state.mjs',
   'integrations/client/file-lock.mjs',
   'integrations/client/pairing.mjs',
@@ -141,7 +235,8 @@ const hostedRuntimeExceptions = [
   'integrations/codex/worker.mjs',
   ...recallRuntimeChanges.keys(),
   ...durabilityRuntimeChanges.keys(),
-];
+  ...captureRuntimeChanges.keys(),
+])];
 const packagedHostedRuntime = new Map(await Promise.all(hostedRuntimeExceptions.map(async path =>
   [path, await readFile(new URL('../runtime/' + path, import.meta.url))])));
 const packagedHostedManifest = await readFile(new URL('../runtime/manifest.json', import.meta.url));
@@ -152,7 +247,7 @@ const historicalRecallRuntime = new Map([...recallRuntimeChanges].map(([path, [b
 }));
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 function assertRecallRuntime(path, bytes) {
-  const pins = durabilityRuntimeChanges.get(path);
+  const pins = durabilityRuntimeChanges.get(path) ?? captureRuntimeChanges.get(path);
   assert.ok(pins ? Object.values(pins).includes(sha256(bytes)) :
     bytes.equals(packagedHostedRuntime.get(path)) || bytes.equals(historicalRecallRuntime.get(path)),
     'Only approved runtime bytes may differ: ' + path);
@@ -202,7 +297,14 @@ function normalizeFile(name, bytes, home, { historical = false } = {}) {
   const runtimeManifest = generationPath.exec(name)?.[2] === '/manifest.json';
   const verdict = historical && qualificationVerdictPath.test(name);
   if (!installation && !runtimeManifest && name !== '.codex/hooks.json' && !verdict) return bytes;
-  const text = verdict ? new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes) : bytes.toString();
+  let text = verdict ? new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes) : bytes.toString();
+  if (runtimeManifest && historical && !Object.hasOwn(JSON.parse(text).files, captureSourceModule)) {
+    assert.equal(sha256(bytes), historicalCaptureManifestHash, 'Only the pinned historical manifest lacks the calendar helper');
+    const next = '    "integrations/client/state-lock.mjs":';
+    assert.equal(text.split(next).length, 2);
+    text = text.replace(next, '    ' + JSON.stringify(captureSourceModule) + ': ' +
+      JSON.stringify(captureRuntimeChanges.get(captureSourceModule).current) + ',\n' + next);
+  }
   const parsed = JSON.parse(text), translatedValues = new Map();
   if (verdict) {
     assert.ok(parsed && typeof parsed === 'object' && !Array.isArray(parsed), 'Malformed qualification verdict');
@@ -257,7 +359,7 @@ function normalizeFile(name, bytes, home, { historical = false } = {}) {
         // Preserve paths, order, formatting and every other manifest byte.
         if (path.length === 2 && path[0] === 'files' && hostedRuntimeExceptions.includes(path[1])) {
           assert.match(raw, /^"[a-f0-9]{64}"$/u);
-          const pins = durabilityRuntimeChanges.get(path[1]);
+          const pins = durabilityRuntimeChanges.get(path[1]) ?? captureRuntimeChanges.get(path[1]);
           if (pins) assert.ok(Object.values(pins).includes(JSON.parse(raw)), 'Only approved diagnostic hashes: ' + path[1]);
           else if (recallRuntimeChanges.has(path[1])) assert.ok([
             sha256(historicalRecallRuntime.get(path[1])), sha256(packagedHostedRuntime.get(path[1])),
@@ -284,13 +386,22 @@ function normalizeFile(name, bytes, home, { historical = false } = {}) {
 const normalizedCall = (call, home) => ({ ...call, args: call.args.map(arg => normalizeRuntime(arg, home)) });
 function fileInventory(entries, normalize, home, { historical = false } = {}) {
   const result = {}, generations = new Map();
+  entries = [...entries];
+  if (normalize && historical) for (const [name, bytes] of [...entries]) {
+    const generation = generationPath.exec(name);
+    if (generation?.[2] !== '/manifest.json' || Object.hasOwn(JSON.parse(bytes).files, captureSourceModule)) continue;
+    assert.equal(sha256(bytes), historicalCaptureManifestHash, 'Only the pinned historical inventory lacks the calendar helper');
+    const leaf = name.slice(0, -'manifest.json'.length) + captureSourceModule;
+    assert.ok(!entries.some(([path]) => path === leaf), 'Historical helper must be absent before its explicit classification');
+    entries.push([leaf, packagedHostedRuntime.get(captureSourceModule)]);
+  }
   for (let [name, bytes] of entries) {
     const generation = generationPath.exec(name);
     if (normalize && generation?.[2] === '/manifest.json' && !historical)
       assert.deepEqual(bytes, packagedHostedManifest, 'Installed runtime manifest must match packaged manifest: ' + name);
     const packaged = normalize && generation && packagedHostedRuntime.get(generation[2]?.slice(1));
     if (packaged) {
-      if (historical && (recallRuntimeChanges.has(generation[2]?.slice(1)) || durabilityRuntimeChanges.has(generation[2]?.slice(1)))) assertRecallRuntime(generation[2].slice(1), bytes);
+      if (historical && (recallRuntimeChanges.has(generation[2]?.slice(1)) || durabilityRuntimeChanges.has(generation[2]?.slice(1)) || captureRuntimeChanges.has(generation[2]?.slice(1)))) assertRecallRuntime(generation[2].slice(1), bytes);
       if (!historical) assert.deepEqual(bytes, packaged, 'Installed runtime must match packaged source: ' + name);
       bytes = packaged;
     }
@@ -411,10 +522,18 @@ test('L06 version normalization preserves unrelated bytes and complete runtime g
     normalized('Cairn.ink Memory setup 0.5.3\nunrelated 0.5.3', home));
 });
 test('L06 hosted runtime exceptions require packaged bytes and preserve all other comparisons', async () => {
-  assert.equal(hostedRuntimeExceptions.length, 15);
+  // Eight unpinned modules + recall (1) + durability (7) + capture (4),
+  // less the shared worker (1): nineteen unique runtime exceptions. Merging
+  // synchronous metadata reads and pending replay changes pins, not membership.
+  assert.equal(hostedRuntimeExceptions.length, 19);
+  // Atomic output moved entry to whole-file pins; root replay and cancellable
+  // admission add worker/state-lock. Immutable historical/before pins remain.
+  assert.equal(recallRuntimeChanges.size, 1);
+  assert.equal(durabilityRuntimeChanges.size, 7);
+  // The worker belongs to both behaviors but shares one exact pin object.
+  assert.equal(captureRuntimeChanges.size, 4);
+  // Capture-stop diagnostics add installed-state; worker is already pinned.
   assert.equal(new Set(hostedRuntimeExceptions).size, hostedRuntimeExceptions.length);
-  assert.equal(recallRuntimeChanges.size, 2);
-  assert.equal(durabilityRuntimeChanges.size, 4);
   const home = '/synthetic/.codex';
   const oldRuntime = '.codex/cairn/runtime/0.5.3-0123456789ab/';
   const newRuntime = '.codex/cairn/runtime/0.6.0-abcdef012345/';
@@ -427,7 +546,7 @@ test('L06 hosted runtime exceptions require packaged bytes and preserve all othe
       files([[oldRuntime + path, payload]], true)), { code: 'ERR_ASSERTION' }, path);
   }
   for (const [path, packaged] of packagedHostedRuntime) {
-    const baseline = files([[oldRuntime + path, historicalRecallRuntime.get(path) ?? (durabilityRuntimeChanges.has(path) ? packaged : payload)]], true);
+    const baseline = files([[oldRuntime + path, historicalRecallRuntime.get(path) ?? ((durabilityRuntimeChanges.has(path) || captureRuntimeChanges.has(path)) ? packaged : payload)]], true);
     assert.deepEqual(files([[newRuntime + path, packaged]]), baseline);
     const damaged = Buffer.from(packaged); damaged[0] ^= 1;
     assert.throws(() => files([[newRuntime + path, damaged]]), { code: 'ERR_ASSERTION' }, path);
@@ -438,7 +557,7 @@ test('L06 hosted runtime exceptions require packaged bytes and preserve all othe
   const manifestName = newRuntime + 'manifest.json';
   const oldManifest = Buffer.from(packagedHostedManifest.toString().replace(/"([^"\n]+)": "[a-f0-9]{64}"/gu,
     (raw, path) => hostedRuntimeExceptions.includes(path) ? JSON.stringify(path) + ': "' +
-      (historicalRecallRuntime.has(path) ? sha256(historicalRecallRuntime.get(path)) : durabilityRuntimeChanges.get(path)?.historical ?? '0'.repeat(64)) + '"' : raw));
+      (historicalRecallRuntime.has(path) ? sha256(historicalRecallRuntime.get(path)) : durabilityRuntimeChanges.get(path)?.historical ?? captureRuntimeChanges.get(path)?.historical ?? captureRuntimeChanges.get(path)?.current ?? '0'.repeat(64)) + '"' : raw));
   const baselineManifest = files([[oldRuntime + 'manifest.json', oldManifest]], true);
   assert.deepEqual(files([[manifestName, packagedHostedManifest]]), baselineManifest);
   assert.deepEqual(files([[oldRuntime + 'manifest.json', oldManifest], [manifestName, packagedHostedManifest]], true), baselineManifest);
@@ -459,6 +578,34 @@ test('L06 hosted runtime exceptions require packaged bytes and preserve all othe
   }
   // Even an approved hash cannot hide a corrupt installed manifest copy.
   assert.throws(() => files([[manifestName, oldManifest]]), { code: 'ERR_ASSERTION' });
+});
+
+test('L06 capture allowances pin exact source bytes and require the new calendar helper', async t => {
+  const historical = await baselineForTest(t);
+  if (!historical) return;
+  const oldBytes = await readFile(new URL('../runtime/manifest.json', historical.module));
+  const oldManifest = JSON.parse(oldBytes), currentManifest = JSON.parse(packagedHostedManifest);
+  assert.equal(sha256(oldBytes), historicalCaptureManifestHash);
+  const oldBase = '.codex/cairn/runtime/0.5.3-0123456789ab/';
+  const newBase = '.codex/cairn/runtime/0.6.0-abcdef012345/';
+  const previous = [[oldBase + 'manifest.json', oldBytes]];
+  for (const path of Object.keys(oldManifest.files))
+    previous.push([oldBase + path, await readFile(new URL('../runtime/' + path, historical.module))]);
+  const current = [[newBase + 'manifest.json', packagedHostedManifest]];
+  for (const path of Object.keys(currentManifest.files))
+    current.push([newBase + path, await readFile(new URL('../runtime/' + path, import.meta.url))]);
+  const compare = entries => assert.deepEqual(fileInventory(entries, true, '/synthetic/.codex'),
+    fileInventory(previous, true, '/synthetic/.codex', { historical: true }));
+  compare(current);
+  for (const [path, pins] of captureRuntimeChanges) {
+    assert.equal(currentManifest.files[path], pins.current);
+    assert.equal(oldManifest.files[path] ?? null, pins.historical);
+    const missing = current.filter(([name]) => name !== newBase + path);
+    assert.throws(() => compare(missing), { code: 'ERR_ASSERTION' }, path);
+    const damaged = current.map(([name, bytes]) => [name,
+      name === newBase + path ? Buffer.concat([bytes, Buffer.from('damaged')]) : bytes]);
+    assert.throws(() => compare(damaged), { code: 'ERR_ASSERTION' }, path);
+  }
 });
 
 test('L06 recall allowances prove the exact historical source and hash changes', async t => {

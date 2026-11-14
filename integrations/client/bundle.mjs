@@ -17,6 +17,7 @@ export const CLIENT_MODULES = Object.freeze({
   'runtime-usage.mjs': 'runtime-usage.mjs',
   'state-lock.mjs': 'state-lock.mjs',
   'capture-cursor.mjs': 'capture-cursor.mjs',
+  'source-time.mjs': 'source-time.mjs',
   'hosted-contract.mjs': 'hosted-contract.mjs',
   'hosted-schemas.mjs': 'hosted-schemas.mjs',
   'config.mjs': 'config.mjs',

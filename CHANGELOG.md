@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.3.7 — 2026-11-13: later sessions after a hosted resume keep their first turn
+
+Plugin and marketplace 0.3.7. Protocol stays 0.3.0. The installer version is not
+bumped here.
+
+- On Linux and macOS, capture the first turn of a new Claude Code session,
+  including one-turn sessions, once this computer has already seen the hosted
+  resume: in practice the second and later new sessions after a resume. This
+  needs the synchronous start hook to finish within its budget and validate
+  active local control. Missing transcripts additionally require locally
+  published active hosted authority; unknown pending starts remain conservative.
+  Existing transcripts retain their local-only start boundary check. Native
+  Windows portable first-prompt authority is unchanged.
+- Known gaps. Each skips a turn; none sends text written during a pause:
+  - The first new session after a hosted resume, started before any other
+    session on this computer has seen the resume, loses its first turn. A
+    one-turn `claude -p` run right after a resume is not captured.
+  - On an account that has ever paused, the first pause check after installing
+    the plugin, or after upgrading from 0.3.5, skips the turn then in progress
+    in each open session.
+- Exclude leading copied history older than the new session's start, allowing
+  five seconds for clock differences. Sessions with a boundary from before a
+  pause continue to skip their unprocessed history after resume.
+- Long non-English prompts and paths are no longer corrupted when hook input arrives in pieces.
+- Hook stdin reads have their own deadlines; unfinished input is discarded without sending.
+
+## 0.3.6 — 2026-11-10: hosted pause and capture session windows (unreleased; shipped in 0.3.7)
+
+Plugin and marketplace 0.3.6. Protocol stays 0.3.0. The installer version is not
+bumped here; the Codex changes reach installs through the next installer
+release.
+
+- Honour a hosted pause on the Claude Code client before recall and capture.
+- Honour a hosted pause when delivering Codex context output.
+- Send capture session windows and original message source times.
+- On native Windows, capture a new session from its first prompt onward. If
+  the host has already written that prompt when the prompt hook starts, that
+  prompt is not captured.
+- Hosted recall output that has already started writing may finish up to
+  3,750 ms after the prompt hook starts; no new recall work starts after
+  3,500 ms.
+
 ## Unreleased — README single entry point
 
 - Rewrite the root README and its Traditional Chinese edition as a short entry

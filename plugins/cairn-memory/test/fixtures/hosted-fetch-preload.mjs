@@ -4,6 +4,11 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 let sequence = 0;
 globalThis.fetch = async (url, options) => {
+  // Serve hosted observations separately from the historical content oracle.
+  if (new URL(url).pathname.endsWith('/pause-state')) {
+    options.signal?.throwIfAborted();
+    return Response.json({ paused: false, generation: 0, enforced: true });
+  }
   const id = `${process.pid}-${++sequence}`;
   const directory = process.env.CAIRN_TEST_HOSTED_PEER;
   const request = join(directory, `request-${id}.json`);
