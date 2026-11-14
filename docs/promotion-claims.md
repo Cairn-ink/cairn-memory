@@ -3,10 +3,11 @@
 Reviewed **2026-11-13** against npm package **`@cairn-ink/memory` 0.6.6** and
 source commit **`2238d2fc`**. This audits the current [English README](../README.md)
 and its [Traditional Chinese counterpart](../README.zh-TW.md), using the release
-source when the checkout differs. It does not assert that 0.6.6 is published.
+source when the checkout differs. 0.6.6 was published to npm on 2026-11-13.
 
-Release tag URL: `PENDING-PUBLISH`. GitHub Release URL: `PENDING-PUBLISH`.
-Release commit on main: `PENDING-PUBLISH`.
+Release tag: [`installer-v0.6.6`](https://github.com/Cairn-ink/cairn-memory/tree/installer-v0.6.6).
+GitHub Release: [@cairn-ink/memory 0.6.6](https://github.com/Cairn-ink/cairn-memory/releases/tag/installer-v0.6.6).
+Release commit on main: [`2238d2fc`](https://github.com/Cairn-ink/cairn-memory/commit/2238d2fc7cac8dd7548266ad8279b1d9134bb812).
 
 Evidence paths below refer to their contents at `2238d2fc` for 0.6.6 behavior,
 including paths that arrive with the release merge. Test citations mean their
