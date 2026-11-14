@@ -88,6 +88,19 @@ jobs:
       # Parity with the released 0.1.1 client (checked-in fixture plus its sources at 3a1c17d9).
       - run: npm run test:pairing:golden
 
+  client-pause:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      # Hosted pause gate client suites: nothing is sent or shown while paused.
+      - run: npm run test:client-pause
+
   codex:
     runs-on: ubuntu-latest
     strategy:

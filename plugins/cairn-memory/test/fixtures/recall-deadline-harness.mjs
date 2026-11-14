@@ -6,6 +6,7 @@ import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createTestWorkspace } from '../../../../tools/testing/workspace.mjs';
 import { withFileLock } from '../../lib/file-lock.mjs';
+import { stateLock } from '../../lib/state-lock.mjs';
 import { hostedTargetId } from '../../lib/http.mjs';
 import { createServer } from 'node:http';
 
@@ -18,14 +19,14 @@ export const scenarios = {
   'unavailable-quota-lock': { holdQuotaLock: true, telemetry: true },
   // The schema rejection comes 50 ms after the first fetch, and the fallback
   // waits 5000 ms on the shared signal, so it is still in flight at the
-  // 3500 ms process-clock cutoff. The 1500 ms lock hold puts the shared
-  // HTTP deadline (first fetch + 2500 ms) beyond the application cutoff.
+  // process cap. The 1500 ms lock hold puts the shared HTTP deadline
+  // (first fetch + 2500 ms) beyond the remaining process budget.
   'schema-fallback': { lockMs: 1500, reply: 'old-schema' },
 };
 
 export async function invocation(t, { lockMs = 0, holdQuotaLock = false, recallMs = 0,
   telemetry = false, stalledInput = false, reply = 'valid', missingToken = false, onFetch,
-  startupMs = 0, neverAnswer = false } = {}) {
+  startupMs = 0, neverAnswer = false, forceHardCap = false, rootGateMs = 0 } = {}) {
   const workspace = createTestWorkspace(t, { prefix: 'recall-deadline-' });
   try {
     const home = join(workspace.path, 'home'), root = join(home, 'data');
@@ -51,6 +52,14 @@ export async function invocation(t, { lockMs = 0, holdQuotaLock = false, recallM
     const namesBefore = holdQuotaLock ? await lockNames() : undefined;
     const ownerFile = namesBefore?.find(name => name.includes('.owner-'));
     const ownerFileBefore = holdQuotaLock ? await readFile(join(dirname(lock), ownerFile), 'utf8') : undefined;
+    let rootReady, rootUnlock, rootTimer;
+    const rootHeld = new Promise(resolve => rootReady = resolve);
+    const rootRelease = new Promise(resolve => rootUnlock = resolve);
+    const rootHolder = rootGateMs ? stateLock(join(root, 'hosted-pause.gate'), async () => {
+      rootReady(); await rootRelease;
+    }) : Promise.resolve();
+    workspace.defer(async () => { clearTimeout(rootTimer); rootUnlock(); await rootHolder; });
+    if (rootGateMs) await rootHeld;
     const started = monotonicMs(), events = [];
     const mark = ({ monotonicMs: childTime, ...event }) => events.push({ ...event,
       ms: (Number.isFinite(childTime) ? childTime : monotonicMs()) - started });
@@ -58,7 +67,7 @@ export async function invocation(t, { lockMs = 0, holdQuotaLock = false, recallM
       cwd: home, env: { PATH: '/usr/bin:/bin', HOME: home, TMPDIR: workspace.path,
         CLAUDE_PLUGIN_DATA: root, CLAUDE_PLUGIN_OPTION_API_ENDPOINT: endpoint,
         CLAUDE_PLUGIN_OPTION_API_TOKEN: missingToken ? '' : 'synthetic-token', CLAUDE_PLUGIN_OPTION_TELEMETRY: String(telemetry),
-        CAIRN_TEST_RECALL_DELAY: String(recallMs), CAIRN_TEST_RECALL_REPLY: reply,
+        CAIRN_TEST_FORCE_HARD_CAP: String(forceHardCap), CAIRN_TEST_RECALL_DELAY: String(recallMs), CAIRN_TEST_RECALL_REPLY: reply,
         CAIRN_TEST_RECALL_ACK: String(Boolean(onFetch)), CAIRN_TEST_STARTUP_DELAY: String(startupMs),
         ...(neverAnswer ? { CAIRN_TEST_LOOPBACK_ENDPOINT: endpoint } : {}) }, stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
     });
@@ -68,6 +77,8 @@ export async function invocation(t, { lockMs = 0, holdQuotaLock = false, recallM
       // Rendezvous on EEXIST from the child's actual quota-lock link attempt.
       if (event.kind === 'quota-lock-contended' && lockMs && !releaseTimer)
         releaseTimer = setTimeout(unlock, lockMs);
+      if (event.kind === 'root-gate-contended' && rootGateMs && !rootTimer)
+        rootTimer = setTimeout(rootUnlock, rootGateMs);
       if (event.kind === 'recall-fetch' && onFetch && !duringFetch)
         duringFetch = Promise.resolve().then(async () => {
           await onFetch(root);
@@ -161,6 +172,6 @@ export function assertScenario(name, result) {
     assert.equal(calls.length, 2);
     assert.equal(calls[0].hasSession, true); assert.equal(calls[1].hasSession, false);
     assert.equal(calls[1].sameSignal, true); assert.equal(calls[1].sameLegacyPayload, true);
-    assert.ok(aborted[0].source === 'application', 'application_deadline');
+    assert.ok(aborted[0].source === 'application', 'remaining_process_deadline');
   }
 }

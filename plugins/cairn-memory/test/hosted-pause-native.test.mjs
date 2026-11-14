@@ -1,0 +1,208 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { spawn } from 'node:child_process';
+import { captureCursorPath, writeCaptureCursor } from '../lib/capture-cursor.mjs';
+import { hostedTargetId } from '../lib/http.mjs';
+import { createServer } from 'node:http';
+import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
+
+const hook = fileURLToPath(new URL('../scripts/hook.mjs', import.meta.url));
+const launcher = fileURLToPath(new URL('../scripts/launch-capture.mjs', import.meta.url));
+const foregroundPreload = fileURLToPath(new URL('./fixtures/pause-foreground-preload.mjs', import.meta.url));
+const nativePreload = fileURLToPath(new URL('./fixtures/pause-native-preload.mjs', import.meta.url));
+const active = { paused: false, generation: 0, enforced: true };
+const paused = { paused: true, generation: 1, enforced: true };
+async function fixture(t, observation = () => active, memories = []) {
+  const ws = createTestWorkspace(t), home = join(ws.path, 'home'), root = join(home, 'data');
+  await mkdir(root, { recursive: true, mode: 0o700 });
+  await writeFile(join(root, 'project-key'), '11111111-1111-4111-8111-111111111111\n', { mode: 0o600 });
+  const transcript = join(ws.path, 'transcript.jsonl');
+  await writeFile(transcript, JSON.stringify({ type: 'user', uuid: 'synthetic-message',
+    message: { content: 'Synthetic capture text.' } }) + '\n');
+  const captures=[];
+  const counts = { pause: 0, recall: 0, capture: 0, other: 0 };
+  const server = createServer((request, response) => {
+    let body=''; request.on('data',chunk=>{body+=chunk;});
+    request.on('end',()=>{if(request.url.endsWith('/capture'))captures.push(JSON.parse(body));});
+    response.setHeader('content-type', 'application/json');
+    if (request.url.endsWith('/pause-state')) {
+      const value = observation(++counts.pause);
+      if (value === null) return; // Explicitly held until the child aborts.
+      if (value === undefined) { response.writeHead(503); response.end('{}'); }
+      else response.end(JSON.stringify(value));
+    } else if (request.url.endsWith('/recall')) {
+      counts.recall++; response.end(JSON.stringify({ memories }));
+    } else if (request.url.endsWith('/capture')) {
+      counts.capture++; response.end(JSON.stringify({ duplicate: false, memoryCount: 1 }));
+    } else { counts.other++; response.end('{}'); }
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  const endpoint = `http://127.0.0.1:${server.address().port}`;
+  const env = { PATH: '/usr/bin:/bin', HOME: home, TMPDIR: ws.path, CLAUDE_PLUGIN_DATA: root,
+    CLAUDE_PLUGIN_OPTION_API_ENDPOINT: endpoint, CLAUDE_PLUGIN_OPTION_API_TOKEN: 'synthetic-token',
+    CLAUDE_PLUGIN_OPTION_TELEMETRY: 'false' };
+  const input = { session_id: 'synthetic-session', prompt: 'Synthetic recall query.',
+    transcript_path: transcript, cwd: ws.path, capture_generation: 'initial' };
+  await writeCaptureCursor(captureCursorPath(root, input.session_id), { offset: 0, generation: 'initial',
+    discardUntilNewline: false, hostedGeneration: 0, hostedTarget: hostedTargetId({ endpoint }) });
+  return { counts, env, input, captures, transcript, root, endpoint };
+}
+async function run(t, f, action, { entry = hook, preload = nativePreload, onSpawn } = {}) {
+  const events = [], started = performance.now();
+  const child = spawn(process.execPath, [...(preload ? [preload].flat().flatMap(path=>['--import',path]) : []), entry, ...(action ? [action] : [])],
+    { env: f.env, stdio: ['pipe', 'pipe', 'pipe', 'ipc'] });
+  let stdout = '', stderr = '';
+  child.stdout.on('data', data => { stdout += data; }); child.stderr.on('data', data => { stderr += data; });
+  child.on('message', event => events.push(event));
+  const done = new Promise((resolve, reject) => {
+    child.once('error', reject); child.once('close', (code, signal) => resolve({ code, signal }));
+  });
+  t.after(async () => { if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); await done; });
+  onSpawn?.(child);
+  child.stdin.end(JSON.stringify(f.input));
+  const result = await done;
+  assert.equal(result.code, 0); assert.equal(result.signal, null); assert.equal(stderr, '');
+  return { stdout, events, elapsedMs: performance.now() - started };
+}
+const memory={ id:'11111111-1111-4111-8111-111111111111',content:'Synthetic memory.',kind:'fact',scope:'personal',
+  projectId:null,origin:'explicit',confidence:1,createdAt:'2026-10-01T00:00:00Z',updatedAt:'2026-10-01T00:00:00Z',
+  receipts:[{client:'claude-code',sessionId:'s',eventId:'e',role:'user',excerpt:'Synthetic source.',createdAt:'2026-10-01T00:00:00Z'}]};
+for(const action of ['recall','capture','capture-detached']) {
+  test(`native ${action} sends after fresh active observations`,{timeout:10000},async t=>{
+    const f=await fixture(t,()=>active,action==='recall'?[memory]:[]);
+    const result=await run(t,f,action);
+    assert.equal(f.counts.pause,action==='recall'?1:2,'native_fresh_observations');
+    assert.equal(f.counts[action==='recall'?'recall':'capture'],1,'native_active_send');
+    if(action==='recall')assert.match(JSON.parse(result.stdout).hookSpecificOutput.additionalContext,/Synthetic memory/);
+  });
+  for(const [label,bad] of (action==='recall' ? [['paused',paused],['unavailable',undefined]] : [['paused',paused],['unavailable',undefined],['regressed',{...active,generation:0}]])) {
+    for(const at of (action==='recall'?[1]:label==='regressed'?[2]:[1,2])) test(`native ${action} blocks ${label} at observation ${at}`,{timeout:10000},async t=>{
+      const before=label==='regressed'?{...active,generation:1}:active;
+      const f=await fixture(t,number=>number>=at?bad:before);
+      if(label==='regressed' && action!=='recall')await writeCaptureCursor(captureCursorPath(f.root,f.input.session_id),{
+        offset:0,generation:'initial',discardUntilNewline:false,hostedGeneration:1,hostedTarget:hostedTargetId({endpoint:f.endpoint}),
+      });
+      const result=await run(t,f,action);
+      assert.equal(f.counts.recall+f.counts.capture,0,'native_denied_content');assert.equal(result.stdout,'');
+      assert.equal(f.counts.pause,at,'native_denial_observation_reached');
+    });
+  }
+}
+for(const action of ['capture','capture-detached']) test(`native ${action} discards paused-period bytes after resume across fresh processes`,{timeout:15000},async t=>{
+  let remote=active;
+  const f=await fixture(t,()=>remote);
+  await run(t,f,action);assert.equal(f.counts.capture,1,'pre_pause_capture');
+  remote=paused;await run(t,f,action);
+  await appendFile(f.transcript,JSON.stringify({type:'user',uuid:'paused-message',message:{content:'SYNTHETIC_PAUSED_PERIOD'}})+'\n');
+  remote={...paused,paused:false};
+  await run(t,f,action);
+  assert.equal(f.counts.capture,1,'resume_eof_skips_paused_bytes');
+  await appendFile(f.transcript,JSON.stringify({type:'user',uuid:'resumed-message',message:{content:'SYNTHETIC_AFTER_RESUME'}})+'\n');
+  await run(t,f,action);assert.equal(f.counts.capture,2,'post_resume_capture');
+  assert.ok(f.captures.flatMap(body=>body.messages).every(message=>!message.content.includes('SYNTHETIC_PAUSED_PERIOD')),'zero_paused_period_bytes');
+});
+for(const hook_event_name of ['Stop','PreCompact']) test(`native ${hook_event_name} foreground has zero network`,{timeout:10000},async t=>{
+  const f=await fixture(t);f.input.hook_event_name=hook_event_name;
+  const result=await run(t,f,'',{entry:launcher,preload:[nativePreload,foregroundPreload]});
+  assert.deepEqual(f.counts,{pause:0,recall:0,capture:0,other:0});assert.equal(result.stdout,'');
+});
+
+for(const endpoint of ['file:///synthetic/local','stdio://synthetic'])test(`native non-HTTP ${new URL(endpoint).protocol} stays local`,{timeout:10000},async t=>{
+  const f=await fixture(t);f.env.CLAUDE_PLUGIN_OPTION_API_ENDPOINT=endpoint;
+  for(const action of ['recall','capture','capture-detached'])assert.equal((await run(t,f,action)).stdout,'');
+  assert.deepEqual(f.counts,{pause:0,recall:0,capture:0,other:0});
+});
+
+for(const action of ['capture','capture-detached'])test(`native ${action} observes before each batch`,{timeout:10000},async t=>{
+  const f=await fixture(t,number=>number<3?active:paused);
+  await writeFile(f.transcript,Array.from({length:25},(_,index)=>JSON.stringify({type:'user',uuid:'message-'+index,message:{content:'Synthetic message '+index}})).join('\n')+'\n');
+  await run(t,f,action);
+  assert.equal(f.counts.pause,3,'every_batch_observes');assert.equal(f.counts.capture,1,'second_batch_blocked');
+  assert.equal(f.captures.flatMap(body=>body.messages).length,24);
+});
+
+for (const action of ['capture', 'capture-detached']) test(`native ${action} legacy authority cannot bridge pause and a generation-zero target change`, { timeout: 20000 }, async t => {
+  let remote = active;
+  const f = await fixture(t, () => remote);
+  // A distinct loopback endpoint is a fresh hosted target at generation zero.
+  const targetB = await fixture(t);
+  const cursorPath = captureCursorPath(f.root, f.input.session_id);
+  const offset = (await readFile(f.transcript)).length;
+  const legacy = { offset, generation: 'initial', discardUntilNewline: false };
+  await writeCaptureCursor(cursorPath, legacy);
+  remote = paused;
+  await run(t, f, action); // Validated pause on A, without tagging the legacy cursor.
+  assert.equal(f.counts.pause, 1);
+  assert.deepEqual(JSON.parse(await readFile(cursorPath, 'utf8')), legacy);
+  await appendFile(f.transcript, JSON.stringify({ type: 'user', uuid: 'private',
+    message: { content: 'SYNTHETIC_PAUSED_PERIOD' } }) + '\n');
+  remote = { ...paused, paused: false }; // Resume A before switching profile to B.
+  f.env.CLAUDE_PLUGIN_OPTION_API_ENDPOINT = targetB.endpoint;
+  const target = hostedTargetId({ endpoint: targetB.endpoint });
+  // Also isolate missing generation from missing target: the zero-default mutation
+  // must fail even when the target is valid and already matches B.
+  for (const tags of [{}, { hostedTarget: target }, { hostedGeneration: -1, hostedTarget: target },
+    { hostedGeneration: '0', hostedTarget: target }, { hostedGeneration: 0 },
+    { hostedGeneration: 0, hostedTarget: null },
+    { hostedGeneration: 0, hostedTarget: hostedTargetId({ endpoint: f.endpoint }) }]) {
+    await writeCaptureCursor(cursorPath, { ...legacy, ...tags });
+    await run(t, f, action);
+    assert.equal(targetB.counts.capture, 0, 'unknown_or_different_authority_establishes_eof');
+    const cursor = JSON.parse(await readFile(cursorPath, 'utf8'));
+    assert.equal(cursor.offset, (await readFile(f.transcript)).length);
+    assert.equal(cursor.hostedGeneration, 0);
+    assert.equal(cursor.hostedTarget, target);
+  }
+  await appendFile(f.transcript, JSON.stringify({ type: 'user', uuid: 'resumed',
+    message: { content: 'SYNTHETIC_AFTER_RESUME' } }) + '\n');
+  await run(t, f, action);
+  assert.equal(targetB.counts.capture, 1, 'new_bytes_after_boundary_are_captured');
+  assert.ok(targetB.captures.flatMap(body => body.messages)
+    .every(message => !message.content.includes('SYNTHETIC_PAUSED_PERIOD')), 'zero_paused_period_bytes');
+  // POSIX upgrades still adopt the pending legacy range when no barrier changed.
+  const posix = await fixture(t);
+  await writeCaptureCursor(captureCursorPath(posix.root, posix.input.session_id),
+    { offset: 0, generation: 'initial', discardUntilNewline: false });
+  await run(t, posix, action, { preload: null });
+  assert.equal(posix.counts.capture, 1, 'posix_legacy_pending_range_preserved');
+});
+
+// Barrier-mode failed rotations must govern every target, including legacy cursors.
+for (const kind of ['timeout', 'death']) for (const action of ['capture', 'capture-detached']) {
+  test(`barrier ${action} repairs ${kind} before adopting a generation-zero target`, { timeout: 20000 }, async t => {
+    const { interruptRotation } = await import('../../../integrations/client/test/fixtures/pending-revocation.mjs');
+    const { readControlState } = await import('../../../integrations/client/control-state.mjs');
+    let remote = active;
+    const f = await fixture(t, () => remote), targetB = await fixture(t);
+    const path = captureCursorPath(f.root, f.input.session_id);
+    await writeCaptureCursor(path, { offset: (await readFile(f.transcript)).length,
+      generation: 'initial', discardUntilNewline: false });
+    remote = paused;
+    await interruptRotation(t, { root: f.root, endpoint: f.endpoint }, kind);
+    await appendFile(f.transcript, JSON.stringify({ type: 'user', uuid: 'private',
+      message: { content: 'SYNTHETIC_PAUSED_PERIOD' } }) + '\n');
+    remote = { ...paused, paused: false };
+    f.env.CLAUDE_PLUGIN_OPTION_API_ENDPOINT = targetB.endpoint;
+    if (action === 'capture') delete f.input.capture_generation;
+    await run(t, f, action, { preload: null });
+    assert.equal(targetB.counts.capture, 0, 'pending_revocation_forces_eof');
+    const boundary = await readControlState(f.root);
+    assert.notEqual(boundary.generation, 'initial', 'root_rotation_repaired');
+    f.input.capture_generation = boundary.generation;
+    // An old detached handoff is denied after repair; its fresh successor adopts EOF.
+    if (action === 'capture-detached') await run(t, f, action, { preload: null });
+    assert.equal(JSON.parse(await readFile(path, 'utf8')).offset, (await readFile(f.transcript)).length);
+    await appendFile(f.transcript, JSON.stringify({ type: 'user', uuid: 'resumed',
+      message: { content: 'SYNTHETIC_AFTER_BOUNDARY' } }) + '\n');
+    f.input.capture_generation = boundary.generation;
+    await run(t, f, action, { preload: null });
+    assert.equal(targetB.counts.capture, 1, 'post_boundary_bytes_sent');
+    const text = targetB.captures.flatMap(body => body.messages).map(message => message.content).join('\n');
+    assert.ok(!text.includes('SYNTHETIC_PAUSED_PERIOD'), 'zero_paused_period_bytes');
+    assert.match(text, /SYNTHETIC_AFTER_BOUNDARY/);
+  });
+}

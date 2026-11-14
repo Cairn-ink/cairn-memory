@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile, appendFile } from 'node:fs/promises';
 import { parseLine } from '../parser.mjs';
 import { runWorker } from '../worker.mjs';
-import { fixture, session } from './helpers.mjs';
+import { fixture, session, stableCapture } from './helpers.mjs';
 
 const fixtures = new URL('./fixtures/', import.meta.url);
 const native = JSON.parse(await readFile(new URL('phase-0.162.0-native-read.json', fixtures)));
@@ -52,7 +52,8 @@ test('partial followed by final on a later hook keeps stable partial once and ap
 test('lost-reply replay freezes the same partial/final request and receiver counts it once', async t => {
   const f = await fixture(t, { text: await readFile(new URL('partial-final-0.162.0.jsonl', fixtures), 'utf8') });
   f.fail('lost'); await run(f); f.clear(); await run(f); await run(f);
-  assert.equal(f.calls.length, 2); assert.deepEqual(f.calls[0], f.calls[1]);
+  assert.equal(f.calls.length, 2); assert.deepEqual(stableCapture(f.calls[0]), stableCapture(f.calls[1]));
+  assert.ok(f.calls.every(body => Number.isFinite(Date.parse(body.sent_at))));
   assert.deepEqual(contents(f), ['Synthetic question.', 'First stable section.', 'Second terminal section.']);
 });
 test('unknown phase fails the scan closed before any finished content is dispatched', async t => {
