@@ -82,6 +82,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     access.check();
     prepare?.();
     return read(()=>inContentSuppressionRequestInside(db,()=>{
+      if (p.rankingVersion !== undefined && p.rankingVersion !== db.prepare('PRAGMA data_version').get().data_version) fail(code);
       if (p.suppressionEpoch !== undefined && p.suppressionEpoch !== contentSuppressionRequestFenceInside(db,p.readSet[0].ownerId)) fail('evidence_unavailable');
       const current=storage.observe(p,access.accessGenerations);
       if (current.dto.lexical.state!=='ready' || current.publication.publicationId!==publication.publicationId) fail(code);
@@ -114,7 +115,12 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       readSet:p.readSet,suppressionEpoch:p.suppressionEpoch});
   }
   function candidates(p,access,prepareOnly=false) {
-    const observed=read(()=>storage.observe(p,access.accessGenerations));
+    const observed=read(()=>{
+      // Marker-only writes need not advance a publication or suppression epoch.
+      // Bind lexical pagination to the canonical version observed before ranking.
+      if(!prepareOnly&&p.types.includes('card'))p.rankingVersion=db.prepare('PRAGMA data_version').get().data_version;
+      return storage.observe(p,access.accessGenerations);
+    });
     const suppressionEpoch=cachedContentLayout(db)?.suppressionRevision?contentSuppressionRequestFenceInside(db,p.readSet[0].ownerId):undefined;
     p.suppressionEpoch=suppressionEpoch;
     if (observed.dto.lexical.state!=='ready') return {observed};
@@ -133,7 +139,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       }
     }
     covered.omitted={lexical:Math.max(0,ranked.matched-24),semantic:null,horizon:Math.max(0,fused.unionSize-24)};
-    return {observed,suppressionEpoch,readMemo:()=>createContentReadMemo(db),items:fused.rows.map((row,i)=>({ref:row.ref,rank:i+1,fusionScore:row.fusionScore,channels:row.channels})),
+    return {observed,suppressionEpoch,rankingVersion:p.rankingVersion,readMemo:()=>createContentReadMemo(db),items:fused.rows.map((row,i)=>({ref:row.ref,rank:i+1,fusionScore:row.fusionScore,channels:row.channels})),
       channels:channels(true),coverage:covered,trace:detail,...(prepareOnly?{lexical:ranked}:{})};
   }
   function assemble(p,access,c,prepareOnly=false,rawChannel={items:[],coverage:'unavailable'}) {
@@ -303,7 +309,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         if(!token || token.v!==1 || token.binding!==binding || !Number.isSafeInteger(token.position) || token.position<1)fail('invalid_cursor');
         const r=rankings.get(token.id);
         if(!r || r.expires<=Date.now() || token.publication!==r.publication.publicationId || token.position>=r.items.length)fail('cursor_stale');
-        p.suppressionEpoch=r.suppressionEpoch;
+        p.suppressionEpoch=r.suppressionEpoch;p.rankingVersion=r.rankingVersion;
         const result=page(r,token.position,p.limit);
         if(r.trace.semantic) {result.value.trace={...r.trace};delete result.value.trace.semantic;}
         if(r.vectorPublication){p.vectorPublication=r.vectorPublication;p.semanticSnapshot=r.semanticSnapshot;}
@@ -322,13 +328,15 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       }
       for(const [id,r] of rankings)if(r.expires<=Date.now())rankings.delete(id);
       while(rankings.size>=128)rankings.delete(rankings.keys().next().value);
-      const r={...c,id:randomUUID(),binding,publication:c.observed.publication,expires:Date.now()+300000};rankings.set(r.id,r);
+      const r={...c,id:randomUUID(),binding,publication:c.observed.publication,expires:Date.now()+300000};
       const result=page(r,0,p.limit);
-      return final(p,access,r.publication,()=>{
+      const delivered=final(p,access,r.publication,()=>{
         const safetyMemo=createContentReadMemo(db);
         result.value.items=result.value.items.filter(candidate=>evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet,{safetyMemo,batchRefs:result.value.items.map(candidate=>candidate.ref)}).length>0);
         return result;
       });
+      rankings.set(r.id,r);
+      return delivered;
     } catch(e) {
       if((pumpWork||admitting)&&e===admissionRequired) {
         return access.envelope(()=>{if(observation)observation.admission='required';return success(null);});
@@ -463,14 +471,16 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       }
       for(const [id,r] of rankings)if(r.expires<=Date.now())rankings.delete(id);while(rankings.size>=128)rankings.delete(rankings.keys().next().value);
       const binding=digest({readSet:p.readSet,types:p.types,intent:p.intent,query:p.query,semantic:p.semantic,access:access.accessGenerations});
-      const r={...c,id:randomUUID(),binding,publication:c.observed.publication,expires:Date.now()+300000,vectorPublication:p.vectorPublication,semanticSnapshot:snapshot};rankings.set(r.id,r);
-      return final(p,access,r.publication,valid=>{
+      const r={...c,id:randomUUID(),binding,publication:c.observed.publication,expires:Date.now()+300000,vectorPublication:p.vectorPublication,semanticSnapshot:snapshot};
+      const delivered=final(p,access,r.publication,valid=>{
         if(!valid){Object.assign(r,lexicalFallback(r));delete r.vectorPublication;}
         const result=page(r,0,p.limit);
         const safetyMemo=createContentReadMemo(db);
         result.value.items=result.value.items.filter(candidate=>evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet,{safetyMemo,batchRefs:result.value.items.map(candidate=>candidate.ref)}).length>0);
         return result;
       });
+      rankings.set(r.id,r);
+      return delivered;
     }catch(error){attribution?.captureFailure(error);attribution?.selectFailure(error);return failure(error.code==='ERR_SQLITE_ERROR'?[5,6].includes(error.errcode&255)?'storage_busy':'storage_error':error.code??'storage_error');}
   }
   async function embeddingRefresh(p,access,cutoff,observation) {

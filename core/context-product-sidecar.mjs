@@ -1309,20 +1309,21 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     return read(()=>suppressionRequest(p,publication,visible=>visible?.counts??null));
   }
   function cardCandidateAllowed(ref, p, safetyMemo) {
-    return contextCardEligible(canonical,identity,features,ref.namespace,
+    return contextCardEligible(safetyMemo?.db??canonical,identity,features,ref.namespace,
       {id:ref.cardId,revision:ref.revision,body_revision:ref.bodyRevision},p.intent,{readSet:p.readSet,safetyMemo});
   }
   function lexicalSuppressed(p,publication,query,limit,visible) {
     const terms=[...new Set(tokenizeT1(query))],generation=storageKey(publication.generation.id),ss=streams(p),documents=[];
     const placeholders=terms.map(()=>'?').join(','),checked=new WeakSet();
+    const check=()=>{if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');};
     let candidates=[];
     const accept=()=>{
       if(!candidates.length)return;
       if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');
-      const deliveryMemo=cardDeliverySnapshot(canonical,candidates.map(d=>d.ref));
+      const deliveryMemo=cardDeliverySnapshot(canonical,candidates.map(d=>d.ref),undefined,check);
       const memory=visible.checkEach?candidates.filter(({ref})=>ref.type==='memory'&&contentSuppressionMayMatchInside(canonical,ref.namespace,{kind:'memory',key:ref.memoryId})):[];
       if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');
-      const allowed=memoryCandidatesAllowedInside(canonical,memory.map(d=>d.ref),p,identity);
+      const allowed=memoryCandidatesAllowedInside(deliveryMemo.db,memory.map(d=>d.ref),p,identity);
       const decisions=new Map(memory.map((d,i)=>[d.ref,allowed[i]]));
       for(const document of candidates){
         if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');
@@ -1374,10 +1375,10 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       rankScores(ranked);if(ranked.length>limit)ranked.pop();
     }
     const pending=ranked.filter(({ref})=>!checked.has(ref)&&!(visible.canonicalRequired===false&&!contentSuppressionMayMatchInside(canonical,ref.namespace,{kind:ref.type,key:ref.memoryId??ref.cardId})));
-    const memory=pending.filter(({ref})=>ref.type==='memory');
-    const allowed=memoryCandidatesAllowedInside(canonical,memory.map(d=>d.ref),p,identity);
+    const memory=pending.filter(({ref})=>ref.type==='memory'),deliveryMemo=createContentReadMemo(canonical,check);
+    const allowed=memoryCandidatesAllowedInside(deliveryMemo.db,memory.map(d=>d.ref),p,identity);
     const decisions=new Map(memory.map((d,i)=>[d.ref,allowed[i]]));
-    for(const {ref}of pending)if(ref.type==='card')decisions.set(ref,cardCandidateAllowed(ref,p));
+    for(const {ref}of pending)if(ref.type==='card')decisions.set(ref,cardCandidateAllowed(ref,p,deliveryMemo));
     const rows=ranked.filter(({ref})=>decisions.get(ref)!==false);
     return {rows,matched:documents.length,counts:visible.counts,filtered:visible.filtered};
   }
@@ -1393,11 +1394,12 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       for(const term of terms)df.set(term,side.prepare('SELECT df FROM statistics WHERE generation=? AND term=?').get(generation,term)?.df??0);
       let matched=0,candidates=[],denied=0,deniedLength=0;
       const deniedDf=new Map(terms.map(term=>[term,0]));
+      const check=()=>{if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');};
       let statistics={N,totalLength:total.totalTokenLength,df};
       const accept=collectDenials=>{
         if(!candidates.length)return;
         if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');
-        const deliveryMemo=cardDeliverySnapshot(canonical,candidates.map(row=>row.ref));
+        const deliveryMemo=cardDeliverySnapshot(canonical,candidates.map(row=>row.ref),undefined,check);
         for(const document of candidates){
           if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');
           const {ref}=document;

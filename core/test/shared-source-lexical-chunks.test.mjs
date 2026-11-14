@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
 import { DatabaseSync } from 'node:sqlite';
 import { fixture, trace, memoryRef, hasId, isLookup } from '../testing/shared-source-fixture.mjs';
-import { ns, ok, receipt } from '../testing/card-lineage-fixture.mjs';
+import { lineageFixture, ns, ok, receipt } from '../testing/card-lineage-fixture.mjs';
 import { openContextReadSidecar } from '../context-read-sidecar.mjs';
 import { openContextProductFacade } from '../context-read-facade.mjs';
 import { openProductIndex } from '../context-product-index.mjs';
@@ -15,12 +15,18 @@ import { createBM25 } from '../context-read-bm25.mjs';
 import { tokenizeT1 } from '../context-read-tokenize.mjs';
 import { cardDeliverySnapshot, cardDeliverable, receiptDenialTokens } from '../content-safety.mjs';
 import { readTransaction } from '../database.mjs';
+import { withContentSuppressionRequest, contentSuppressionRequestInside } from '../content-suppression-storage.mjs';
 
 const routes=['embedded','ordinary','suppressed'];
 const collector=row=>row.sql.includes('CROSS JOIN card_memory_bindings b');
 const query='needle pear';
 const selection={readSet:[ns],types:['card'],intent:'current'};
 const projection={...selection,accessGeneration:1};
+
+// A lineage-enabled, Raw-incapable package keeps this public route valid on
+// the pre-chunking implementation as well as on the current implementation.
+const lexicalFixture=(t,route)=>route==='suppressed'?lineageFixture(t,{base:23}):
+  fixture(t,route==='ordinary'?'ordinary-48':'ordinary-53');
 
 // Public Card creation follows the existing shared-source context fixture;
 // admit avoids model work. Independent Memories avoid dependent-Card limits.
@@ -52,19 +58,33 @@ function sidecar(t,f,route,clock=()=>performance.now(),options={}){
     if(observed.dto.lexical.state==='ready')publication=observed.publication;
     return observed;
   };
-  return {storage,observe,refresh(){
+  return {storage,observe,withCanonicalRead:work=>readTransaction(facade.port.db,work),refresh(){
     for(let i=0;i<16;i++){
       storage.refresh(p,access,{maxItems:1024,maxMs:5000});
       const observed=observe();
       if(observed.dto.lexical.state==='ready'){publication=observed.publication;return;}
     }
     assert.fail('product publication did not finish');
-  },lexical(deadlineAt=Infinity){return storage.lexical({...p,deadlineAt},publication,query);}};
+  },lexical(deadlineAt=Infinity,text=query){return withContentSuppressionRequest(()=>{
+    // Match the public index: request-scoped observation finishes its read
+    // before lexical work reuses the cached suppression proof.
+    contentSuppressionRequestInside(facade.port.db,p.readSet,{defer:true});
+    if(facade.port.db.isTransaction)observe();else readTransaction(facade.port.db,observe);
+    return storage.lexical({...p,deadlineAt},publication,text);
+  });}};
 }
 
 function pages(t,f,route,options={}){
   if(route==='embedded')return input=>f.trusted.call(f.context,'findCandidates',input);
   const facade=openContextProductFacade(f.path,{sqlite:options.sqlite});
+  if(options.onCursor){
+    const encode=facade.port.encode;
+    facade.port.encode=(purpose,value,...args)=>{
+      const token=encode(purpose,value,...args);
+      if(purpose==='cursor')options.onCursor(token);
+      return token;
+    };
+  }
   const index=openProductIndex({path:f.path,facade,ownerCoverage:descriptor([ns]),maintenance:true,
     ...options,
     authorize:()=>({accessGenerations:accessDigest({ownerId:ns.ownerId,namespaces:{readSet:[ns]}}),check(){},envelope:work=>work()})});
@@ -103,7 +123,7 @@ function sibling(f,i){
 function forget(f,memory){
   return ok(f.core.forget({namespace:ns,memoryId:memory.id,expectedRevision:memory.revision}));
 }
-const expectedRows=documents=>createBM25(documents.map(({ref,text})=>({ref,text}))).search(query);
+const expectedRows=(documents,text=query)=>createBM25(documents.map(({ref,text})=>({ref,text}))).search(text);
 const publicRows=value=>value.items.map(({ref,channels})=>({ref,score:channels.lexical.rawScore}));
 const posting=sql=>sql.startsWith('SELECT p.doc FROM postings p INDEXED BY product_term');
 
@@ -124,7 +144,7 @@ function replayBoundary(population,write){
       if(committed&&/^(INSERT|UPDATE|DELETE)\b/.test(sql))writers.add(connection);
       if(posting(sql)&&!side)side=connection;
       if(collector({sql})&&!canonical)canonical=connection;
-      if((collector({sql})&&connection===canonical)||(posting(sql)&&connection===side)){
+      if(((collector({sql})||isLookup({sql}))&&connection===canonical)||(posting(sql)&&connection===side)){
         events.push({sql,connection,transaction:connection.isTransaction});
       }
       if(committed)return;
@@ -145,6 +165,9 @@ function assertReplaySnapshots(measured,boundary){
     assert.equal(boundary.events.some(event=>event.connection===connection),false,'writes use other connections');
   }
   const tokens=measured.rows.filter(collector),postings=measured.rows.filter(row=>posting(row.sql));
+  const markers=measured.rows.filter(isLookup);
+  assert.equal(markers.length,2,'one marker statement in each pass');
+  assert.ok(markers.every(row=>row.snapshot===tokens[0].snapshot),'both marker reads share the token snapshot');
   assert.equal(tokens.length,2,'one collector in each pass');
   for(const rows of [tokens,postings]){
     assert.ok(rows.length>1);
@@ -154,10 +177,41 @@ function assertReplaySnapshots(measured,boundary){
   assert.notEqual(tokens[0].snapshot,postings[0].snapshot,'canonical and sidecar have separate connections');
 }
 
+// The deadline aborts canonical work before the next statement. Transaction
+// cleanup and the public failure envelope's independent safety fence still run.
+function assertNoCanonicalReadAfterCutoff(measured,number=1,cutoffRow){
+  const row=cutoffRow??measured.rows.filter(collector)[number-1],start=measured.rows.indexOf(row);
+  assert.ok(row);
+  const end=measured.rows.findIndex((item,i)=>i>start&&item.snapshot===row.snapshot&&item.sql==='ROLLBACK');
+  assert.ok(end>start,'the timed canonical snapshot rolled back');
+  assert.deepEqual(measured.rows.slice(start+1,end).filter(item=>item.snapshot===row.snapshot),[],
+    'no canonical statement, including the marker lookup, starts after cutoff');
+  assert.equal(measured.rows.slice(start+1).filter(isLookup).length,0,'no subsequent marker lookup on the call');
+}
+
+// Same reader-release witness as sqlite-lock-safety's WAL checkpoint case.
+// Commit fresh frames after the read so a leaked snapshot cannot pass vacuously.
+function assertReadersReleased(f){
+  for(const [path,table]of [[f.path,'store_metadata'],[f.path+PRODUCT_SIDECAR_SUFFIX,'product_metadata']]){
+    const writer=new DatabaseSync(path);
+    try{
+      writer.exec('PRAGMA busy_timeout=0');
+      assert.equal(writer.prepare('PRAGMA journal_mode').get().journal_mode,'wal');
+      const original=writer.prepare(`SELECT store_id FROM ${table} WHERE singleton=1`).get().store_id;
+      const update=writer.prepare(`UPDATE ${table} SET store_id=? WHERE singleton=1`);
+      try{update.run(original+'-synthetic-checkpoint');}finally{update.run(original);}
+      const checkpoint=writer.prepare('PRAGMA wal_checkpoint(TRUNCATE)').get();
+      assert.equal(checkpoint.busy,0,JSON.stringify(checkpoint));
+      assert.equal(checkpoint.log,0,'WAL was truncated');
+      assert.equal(checkpoint.checkpointed,0);
+    }finally{writer.close();}
+  }
+}
+
 // Extend the cooperative lexical deadline contract and product timeout mapping
 // with expiry inside the Card population, rather than only at entry/guard time.
 for(const route of routes)test(`Card token chunks and mid-population deadline: ${route}`,{timeout:120000},async t=>{
-  const f=await fixture(t,route==='ordinary'?'ordinary-48':'ordinary-53');
+  const f=await lexicalFixture(t,route);
   const documents=Array.from({length:300},(_,i)=>card(f,i));
   let clock=0,samples=0;
   const a=sidecar(t,f,route,()=>{samples++;return clock;});a.refresh();
@@ -189,13 +243,31 @@ for(const route of routes)test(`Card token chunks and mid-population deadline: $
     if(collector({sql})&&++reads===1){expired=true;clock=1;samplesAtExpiry=samples;}
   });
   assert.equal(timed.rows.filter(collector).length,1,'no second token statement after cutoff');
+  assertNoCanonicalReadAfterCutoff(timed);
   assert.ok(route==='embedded'?checksAfterExpiry>0:samples>samplesAtExpiry,'existing clock consulted after the first chunk');
+  if(route!=='ordinary'){
+    expired=false;clock=0;let canonical,markers=false,cutoffSql;
+    const validation=await trace(()=>{
+      assert.throws(()=>a.lexical(cutoff),route==='embedded'?{code:'index_unavailable',reason:'timeout'}:{code:'read_timeout'});
+    },(sql,args,connection)=>{
+      if(collector({sql}))canonical=connection;
+      else if(connection===canonical&&isLookup({sql}))markers=true;
+      else if(markers&&connection===canonical&&!cutoffSql){cutoffSql=sql;expired=true;clock=1;}
+    });
+    assert.ok(cutoffSql,'expiry also occurs during canonical candidate validation');
+    const marker=validation.rows.findIndex(isLookup);
+    const cutoffRow=validation.rows.find((row,i)=>i>marker&&row.sql===cutoffSql);
+    assertNoCanonicalReadAfterCutoff(validation,1,cutoffRow);
+    expired=false;clock=0;
+    assert.deepEqual(a.lexical().rows,expected,'a validator deadline does not poison the canonical connection');
+  }
   expired=false;clock=0;reads=0;
   const call=pages(t,f,route);
   const delivered=await trace(()=>call({...selection,query,semantic:false,limit:1,deadlineMs:5000}),sql=>{
     if(collector({sql})&&++reads===1)expired=true;
   });
   assert.equal(delivered.rows.filter(collector).length,1);
+  assertNoCanonicalReadAfterCutoff(delivered);
   if(route==='embedded'){
     assert.equal(delivered.result.ok,false);assert.equal(delivered.result.error.code,'index_unavailable');
     const details=delivered.result.error.details;
@@ -240,6 +312,7 @@ test('ordinary replay deadline rolls back and the same connections serve a compl
     assert.throws(()=>a.lexical(1),{code:'read_timeout'});
   },expire);
   assert.equal(timed.rows.filter(collector).length,firstPass+1,'no later replay collector executes');
+  assertNoCanonicalReadAfterCutoff(timed,firstPass+1);
   assert.ok(samples>samplesAtExpiry,'the existing clock is checked after the first replay collector');
   assert.ok(timed.rows.some(row=>row.sql==='ROLLBACK'),'timeout releases the read transactions');
   assert.equal(connections.size,2);
@@ -251,11 +324,97 @@ test('ordinary replay deadline rolls back and the same connections serve a compl
   connections.clear();
   const delivered=await trace(()=>call({...selection,query,semantic:false,limit:24,deadlineMs:5000}),expire);
   assert.equal(delivered.rows.filter(collector).length,firstPass+1);
+  assertNoCanonicalReadAfterCutoff(delivered,firstPass+1);
   assert.deepEqual(delivered.result,{ok:false,error:{code:'read_timeout',retryable:false}},'no partial ranking DTO');
   expired=false;clock=0;reads=0;
   const served=ok((await trace(()=>call({...selection,query,semantic:false,limit:24,deadlineMs:5000}),sameConnections)).result);
   assert.deepEqual(publicRows(served),expected.map(({ref,score})=>({ref,score})));
   assert.equal(served.coverage.omitted.lexical,299-24,'same public handle returns the full correct horizon');
+});
+
+for(const route of ['ordinary','suppressed'])
+test(`canonical and sidecar readers release success, deadline and thrown error: ${route}`,async t=>{
+  const f=await lexicalFixture(t,route),documents=Array.from({length:3},(_,i)=>card(f,i));
+  mark(f,documents[1]);
+  assert.equal(f.db.prepare('PRAGMA journal_mode=WAL').get().journal_mode,'wal');
+  const sqlite=createProductSqlitePolicy();sqlite.start(Infinity);
+  const options={sqlite,sidecarJournalMode:'WAL'};
+  let clock=0;
+  const a=sidecar(t,f,route,()=>clock,options);a.refresh();
+  const call=pages(t,f,route,{...options,now:()=>clock});
+  for(const entry of ['storage','public'])for(const exit of ['success','deadline','error']){
+    clock=0;let collected=false;
+    const thrown=new Error('Synthetic collector failure');
+    const measured=await trace(()=>{
+      const work=()=>entry==='storage'?a.lexical(1):call({...selection,query,semantic:false,limit:1,deadlineMs:1});
+      if(entry==='storage'&&exit!=='success')assert.throws(work,exit==='deadline'?{code:'read_timeout'}:error=>error===thrown);
+      else{
+        const result=work();
+        if(entry==='storage')assert.equal(result.matched,2);
+        else if(exit==='success')assert.equal(result.ok,true);
+        else assert.deepEqual(result,{ok:false,error:{code:exit==='deadline'?'read_timeout':'storage_error',retryable:false}});
+      }
+    },sql=>{
+      if(!collected&&collector({sql})){
+        collected=true;
+        if(exit==='deadline')clock=1;
+        if(exit==='error')throw thrown;
+      }
+    });
+    assert.equal(collected,true);
+    if(exit==='deadline')assertNoCanonicalReadAfterCutoff(measured);
+    assertReadersReleased(f);
+  }
+  clock=0;
+  // Reusing an already-open canonical read must not BEGIN a nested one, and
+  // completion must release it when its owner exits.
+  assert.equal(a.withCanonicalRead(()=>a.lexical()).matched,2);
+  assertReadersReleased(f);
+});
+
+for(const entry of ['storage','public'])
+test(`three equal Cards retain one replay population and fence cached pages: ${entry}`,async t=>{
+  const f=await fixture(t,'ordinary-48');
+  const documents=Array.from({length:3},(_,i)=>card(f,i,{title:'Synthetic',body:'needle'}));
+  const B=documents[1];mark(f,B);
+  const survivors=documents.filter(d=>d!==B),expected=expectedRows(survivors,'needle');
+  const A=survivors.find(d=>d.ref.cardId===expected[1].ref.cardId),C=survivors.find(d=>d!==A);
+  assert.equal(f.db.prepare('PRAGMA journal_mode=WAL').get().journal_mode,'wal');
+  const sqlite=createProductSqlitePolicy();sqlite.start(Infinity);
+  let boundary;
+  const a=sidecar(t,f,'ordinary',()=>boundary?.now()??0,{sqlite});a.refresh();
+  let provisionalCursor;
+  const call=pages(t,f,'ordinary',{sqlite,now:()=>boundary?.now()??0,onCursor:cursor=>{provisionalCursor=cursor;}});
+  const input={...selection,query:'needle',semantic:false,limit:1,deadlineMs:5000};
+  const first=ok(call(input));
+  assert.deepEqual(publicRows(first),[expected[0]]);
+  assert.equal(first.items[0].ref.cardId,C.ref.cardId);
+  assert.ok(first.nextCursor);
+  assert.equal(first.coverage.omitted.lexical,0);
+  assert.deepEqual(publicRows(ok(call({...input,cursor:first.nextCursor}))),[expected[1]],
+    'the cached pre-write ranking contains A and C with the same population scores');
+  boundary=replayBoundary(3,()=>mark(f,A));
+  const measured=await trace(()=>entry==='storage'?a.lexical(Infinity,'needle'):call(input),boundary.onSql);
+  assertReplaySnapshots(measured,boundary);
+  if(entry==='storage'){
+    assert.equal(measured.result.matched,2);
+    assert.deepEqual(measured.result.rows,expected,'A and C, scored with B absent');
+    assert.ok(measured.result.rows.every(row=>Object.is(row.score,expected[0].score)));
+  }else{
+    assert.deepEqual(measured.result,{ok:false,error:{code:'index_unavailable',retryable:false}},
+      'the final version fence rejects the provisional pre-write ranking');
+    assert.ok(provisionalCursor);assert.notEqual(provisionalCursor,first.nextCursor);
+    assert.deepEqual(call({...input,cursor:provisionalCursor}),{ok:false,error:{code:'cursor_stale',retryable:false}},
+      'a ranking refused by the final fence cannot be paged');
+  }
+  assert.deepEqual(call({...input,cursor:first.nextCursor}),{ok:false,error:{code:'cursor_stale',retryable:false}},
+    'page two refuses the changed population rather than mixing rows, scores and coverage');
+  const next=a.lexical(Infinity,'needle');
+  assert.equal(next.matched,1);assert.deepEqual(next.rows,expectedRows([C],'needle'));
+  const fresh=ok(call(input));
+  assert.deepEqual(publicRows(fresh),next.rows);
+  assert.equal(fresh.coverage.omitted.lexical,0);assert.equal(fresh.nextCursor,null);
+  for(const result of [next,fresh])for(const denied of [A,B])assert.equal(hasId(result,denied.ref.cardId),false);
 });
 
 for(const kind of ['fresh-cards','ordinary-48'])
@@ -390,7 +549,7 @@ test(`one Card token statement for a chunk spanning namespaces: ${kind}`,async t
 });
 
 for(const route of routes)test(`withheld Card has no lexical population or cached ranking contribution: ${route}`,{timeout:60000},async t=>{
-  const f=await fixture(t,route==='ordinary'?'ordinary-48':'ordinary-53');
+  const f=await lexicalFixture(t,route);
   Array.from({length:30},(_,i)=>card(f,i));
   const a=sidecar(t,f,route);a.refresh();
   const call=pages(t,f,route),before=a.lexical(),beforePages=await cachedPages(call);

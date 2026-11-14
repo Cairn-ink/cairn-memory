@@ -627,8 +627,8 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     return g;
   }
   function candidateAllowed(item, intent, readSet, memo, selectedMemory) {
-    return item.type === 'card' ? contextCardEligible(canonical,identity,features,item.namespace,
-      {id:item.cardId,revision:item.revision,body_revision:item.bodyRevision},intent,{readSet}) :
+    return item.type === 'card' ? contextCardEligible(memo?.db??canonical,identity,features,item.namespace,
+      {id:item.cardId,revision:item.revision,body_revision:item.bodyRevision},intent,{readSet,safetyMemo:memo}) :
       contentReadSafety(canonical,{identity,namespace:item.namespace,ref:item,intent,memo,selectedMemory}).allowed;
   }
   function safetyEpoch(p) {
@@ -696,6 +696,10 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
   function lexicalPage(input, query, limit = 24, { deadlineAt = Infinity } = {}) {
     if (typeof query !== 'string' || !query.trim() || query.length > 4000 || query.includes('\0') || !query.isWellFormed() ||
         !Number.isSafeInteger(limit) || limit < 1 || limit > 24) fail('invalid_input');
+    // Safety readers recognize read_timeout as a cooperative budget stop;
+    // translate it back to this path's existing timeout at the outer boundary.
+    const check=()=>{if(performance.now()>=deadlineAt)fail('read_timeout');};
+    try {
     const p = projection(input), terms = [...new Set(tokenizeT1(query))], suppressionEpoch=safetyEpoch(p);
     const keys=factDocuments(p); let result, pending;
     const work=state=>sideRead(() => {
@@ -754,7 +758,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
           this.check();
           const memo=cardDeliverySnapshot(canonical,chunk.keys.map(key=>{
             const row=docs.get(key);return ref(p.streams[row.stream],row);
-          }));
+          }),undefined,check);
           const memories=new Map(selected.map(row=>
             [JSON.stringify([row.owner_id,row.scope,row.project_id,row.id]),row]));
           for(const key of chunk.keys){
@@ -776,15 +780,19 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     if(result.rows.length && (hasCardLineage(canonical)||suppressionEpoch!==undefined && suppressionEpoch!=='0:0' &&
         !cachedContentSuppressionRequestInside(canonical,p.readSet[0].ownerId))) {
       // Direct internal sidecar callers have no facade's final evidence pass.
-      result.rows=canonicalRead(()=>{const memo=cardDeliverySnapshot(canonical,result.rows.map(row=>row.ref));
+      result.rows=canonicalRead(()=>{const memo=cardDeliverySnapshot(canonical,result.rows.map(row=>row.ref),undefined,check);
         const visible=result.rows.filter(({ref:item})=>candidateAllowed(item,p.intent,p.readSet,memo));
         if(hasCardLineage(canonical)&&visible.length!==result.rows.length)unavailable('stale_index');
         return visible.filter(({ref:item})=>item.type!=='card'||cardDeliverable(canonical,item.namespace,item.cardId,memo));});
     } else if(result.rows.some(({ref:item})=>item.type==='card')) {
-      result.rows=canonicalRead(()=>{const memo=cardDeliverySnapshot(canonical,result.rows.map(row=>row.ref));
+      result.rows=canonicalRead(()=>{const memo=cardDeliverySnapshot(canonical,result.rows.map(row=>row.ref),undefined,check);
         return result.rows.filter(({ref:item})=>item.type!=='card'||cardDeliverable(canonical,item.namespace,item.cardId,memo));});
     }
     return result;
+    } catch(error) {
+      if(error.code==='read_timeout')unavailable('timeout');
+      throw error;
+    }
   }
 
   // Explicit document embedding is deliberately a separate operation. The

@@ -49,10 +49,16 @@ function withReadDecision(db, key, work) {
 }
 
 // Explicitly scoped to one synchronous canonical read; never retain across awaits.
-export function createContentReadMemo(db) {
+export function createContentReadMemo(db, check) {
   const statements = new Map();
   const read = registerContentSuppressionReadMemoInside(bindContentSafetyConnection({ get isTransaction() { return db.isTransaction; }, prepare(sql) {
-    if (!statements.has(sql)) statements.set(sql, db.prepare(sql));
+    if (!statements.has(sql)) {
+      const statement = db.prepare(sql);
+      statements.set(sql, check ? new Proxy(statement, { get(target, key) {
+        const value = Reflect.get(target, key, target);
+        return typeof value === 'function' ? (...args) => { check(); return Reflect.apply(value, target, args); } : value;
+      } }) : statement);
+    }
     return statements.get(sql);
   } }, db));
   return { db: read, sources: new Map(), memories: new Map(), receipts: new Map(), contributors: new Map(), lineage: createRawLineageStorage(read, { readMemo: new Map() }) };
@@ -649,7 +655,11 @@ export function deliveryReceiptRows(db, ns, id, memo, {limit=101,offset=0,after,
   return selected.map(header=>byId.get(header.id)).filter(Boolean);
 }
 
-export function cardDeliverySnapshot(db, refs, memo = createContentReadMemo(db)) {
+export function cardDeliverySnapshot(db, refs, memo, check) {
+  memo ??= createContentReadMemo(db, check);
+  // Lexical callers use their existing cooperative deadline before every
+  // canonical statement, including the marker lookup after token collection.
+  if (check) db = memo.db;
   const cards=refs.filter(ref=>ref.type==='card'),batches=[];
   const namespaces=new Map(cards.map(ref=>[JSON.stringify(boundary(ref.namespace)),ref.namespace]));
   if(namespaces.size>1){
