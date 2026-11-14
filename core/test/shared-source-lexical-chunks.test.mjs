@@ -709,3 +709,17 @@ for(const route of routes)test(`withheld Card has no lexical population or cache
   assert.deepEqual(afterPages.flatMap(p=>p.items),beforePages.flatMap(p=>p.items));
   for(const value of [after,...afterPages])assert.equal(hasId(value,denied.ref.cardId),false,'id absent from results, diagnostics and cached pages');
 });
+
+// On the packaged store that also carries Raw source maps (Card lineage off),
+// the public Card lexical read returns its ranking: the lexical work owns a
+// canonical read transaction, which contributor validation requires there.
+test('public Card lexical read returns a value on the Raw-capable lineage-off package',{timeout:60000},async t=>{
+  const f=await fixture(t,'ordinary-53');
+  const documents=Array.from({length:3},(_,i)=>card(f,i));
+  const call=pages(t,f,'suppressed');call.refresh();
+  for(let attempt=0;attempt<2;attempt++){
+    const served=await call({...selection,query,semantic:false,limit:3,deadlineMs:5000});
+    assert.equal(served.ok,true,JSON.stringify(served).slice(0,200));
+    assert.deepEqual(publicRows(served.value),expectedRows(documents),'exact ranking and scores');
+  }
+});
