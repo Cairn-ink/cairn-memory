@@ -662,9 +662,11 @@ export function createMemoryRuntime(input, internal) {
     const original = snapshotReceipts(ns, row.id, memo);
     const allowed = unmarkedReceipts(ns, original, memo);
     qualificationStorage.inspect(row, memo);
-    if (allowed.length > 100) fail('context_item_too_large');
+    const receiptCount = detailDto(row).receiptCount;
+    if (receiptCount > 100 || allowed.length > 100) fail('context_item_too_large');
     const receipts = safeReceipts(ns, allowed, memo);
-    const evidence = sourceEvidence(row, receipts, detailDto(row).receiptCount, receiptKey);
+    if (receipts.length < receiptCount) fail('source_unavailable');
+    const evidence = sourceEvidence(row, receipts, receiptCount, receiptKey);
     if (!contentReadSafety(db, { identity, namespace: ns, intent: 'history', memo, ref: { type: 'memory', namespace: ns,
       memoryId: row.id, revision: row.revision }, receipts }).allowed) fail('revision_conflict');
     return evidence;
