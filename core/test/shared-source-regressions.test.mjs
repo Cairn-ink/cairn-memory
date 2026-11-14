@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { StatementSync } from 'node:sqlite';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -256,6 +257,108 @@ test('distinct-time recent continuation has explicit expected pages', async t =>
 const isRecentStatement = row => row.sql.includes('WITH RECURSIVE recent_keys(cursor)') ||
   row.sql.startsWith('SELECT r.created_at AS time FROM memories') ||
   row.sql.startsWith('SELECT r.id,r.memory_id,r.receipt_key,') && row.sql.includes('AND r.created_at=? AND r.id>?');
+
+// Written before the production fixes. The lead runs these against the broken
+// head as well as the fix; the statement observer aborts a restart synchronously.
+for (const [name, times, expected] of [
+  ['one empty', ['', recentTime(1)], [1]],
+  ['several empty', ['', '', recentTime(2), recentTime(3)], [3, 2]],
+  ['only one empty', [''], []],
+  ['only empty', ['', '', ''], []],
+  ['mixed ties', ['', tieTime, tieTime, recentTime(0), ''], [1, 2, 3]],
+]) test(`recent excludes empty timestamps: ${name}`, async t => {
+  const f = await recentFixture(t, times.length, i => times[i]);
+  for (const limit of [4, Number.MAX_SAFE_INTEGER]) {
+    const measured = await trace(() => receiptDeliverySnapshot(f.db,
+      [{ namespace: ns, memoryId: f.memory.id }], undefined, [], { recent: true, limit }));
+    assert.deepEqual(measured.result.deliveryHeaders.get(deliveryKey(f.memory)).map(row => row.id), expected.map(recentId));
+    assert.equal(measured.rows.filter(isRecentStatement).length, 1);
+    assert.equal(measured.result.deliveryMemoryStates.get(deliveryKey(f.memory)).complete, true);
+  }
+});
+
+test('empty timestamps preserve explicit page cuts across a split tie and its continuation', async t => {
+  const f = await recentFixture(t, 39, i => i === 38 ? '' : i < 37 ? tieTime : recentTime(0));
+  const keep = [0, 35, 36, 37].map(recentId);
+  transaction(f.db, () => {
+    const rows = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(f.memory.id).filter(row => !keep.includes(row.id));
+    for (const token of receiptDenialTokens(rows)) f.db.prepare('INSERT INTO suppressed VALUES(?,?,?,?)')
+      .run(ns.ownerId, ns.scope, ns.projectId ?? '', token);
+  });
+  for (const [after, expected, passes] of [
+    [undefined, [0, 35, 36, 37], 2],
+    [{ createdAt: tieTime, id: recentId(35) }, [36, 37], 1],
+    [{ createdAt: recentTime(0), id: recentId(37) }, [], 1],
+  ]) {
+    let statements = 0;
+    const measured = await trace(() => receiptDeliverySnapshot(f.db,
+      [{ namespace: ns, memoryId: f.memory.id }], undefined, [], { recent: true, limit: 4, after }), sql => {
+      if (isRecentStatement({ sql })) assert.ok(++statements <= passes, 'bounded recent pass count');
+    });
+    assert.deepEqual(measured.result.deliveryHeaders.get(deliveryKey(f.memory)).map(row => row.id), expected.map(recentId));
+    assert.equal(statements, passes);
+  }
+});
+
+for (const noneSurvive of [false, true])
+test(`empty timestamp cannot restart finalization refills, all broken passes fill K, noneSurvive=${noneSurvive}`, async t => {
+  // Finalization limit=203, K=235: the broken walk includes the empty row,
+  // fills EVERY pass, and restarts. With all rows denied it never terminates.
+  const f = await recentFixture(t, 235, i => i === 234 ? '' : recentTime(i));
+  const expected = noneSurvive ? [] : [233, 232, 231, 230, 229, 228, 227, 226, 225, 224, 223, 222].map(recentId);
+  transaction(f.db, () => {
+    const rows = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(f.memory.id).filter(row => !expected.includes(row.id));
+    for (const token of receiptDenialTokens(rows)) f.db.prepare('INSERT INTO suppressed VALUES(?,?,?,?)')
+      .run(ns.ownerId, ns.scope, ns.projectId ?? '', token);
+  });
+  let statements = 0;
+  const measured = await trace(() => receiptDeliverySnapshot(f.db,
+    [{ namespace: ns, memoryId: f.memory.id, receiptOrder: 'recent' }], undefined, [], { limit: 203 }), sql => {
+    if (isRecentStatement({ sql })) assert.ok(++statements <= 1, 'one finite recent pass; abort the old infinite walk');
+  });
+  const ids = measured.result.deliveryHeaders.get(deliveryKey(f.memory)).map(row => row.id);
+  assert.deepEqual(ids, expected);
+  assert.equal(new Set(ids).size, ids.length);
+  assert.equal(statements, 1);
+});
+
+for (const mode of ['continuation', 'refill', 'empty-refill'])
+test(`recent refuses a nonmoving key at the statement seam, mode=${mode}`, async t => {
+  const refill = mode !== 'continuation';
+  const f = await recentFixture(t, 37, recentTime);
+  const after = refill ? undefined : { createdAt: recentTime(36), id: recentId(36) };
+  if (refill) transaction(f.db, () => {
+    const rows = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(f.memory.id);
+    for (const token of receiptDenialTokens(rows)) f.db.prepare('INSERT INTO suppressed VALUES(?,?,?,?)')
+      .run(ns.ownerId, ns.scope, ns.projectId ?? '', token);
+  });
+  const all = StatementSync.prototype.all;
+  let statements = 0, injected = false;
+  StatementSync.prototype.all = function (...args) {
+    const rows = Reflect.apply(all, this, args);
+    if (!this.sourceSQL.includes('WITH RECURSIVE recent_keys(cursor)')) return rows;
+    assert.ok(++statements <= 2, 'guard must stop the call');
+    if (mode === 'empty-refill') {
+      // A malformed empty key must not turn the next pass back into an
+      // initial sentinel, even though the real SQL now excludes empty keys.
+      if (statements === 1) {
+        injected = true;
+        return rows.map((row, index) => index === 0 ? { ...row, created_at: '' } : row);
+      }
+      return rows;
+    }
+    if (statements !== (refill ? 2 : 1)) return rows;
+    const job = JSON.parse(args[0])[0];
+    injected = true;
+    return [{ ...rows[0], id: job.afterId, created_at: job.afterTime }];
+  };
+  try {
+    assert.throws(() => receiptDeliverySnapshot(f.db, [{ namespace: ns, memoryId: f.memory.id }],
+      undefined, [], { recent: true, limit: 4, after }), error => error.code === 'storage_error');
+    assert.equal(injected, true);
+    assert.equal(statements, refill ? 2 : 1);
+  } finally { StatementSync.prototype.all = all; }
+});
 
 for (const ties of [false, true]) test(`uncapped recall reads no recent projection, ties=${ties}`, async t => {
   const f = await recentFixture(t, 12, ties ? () => tieTime : recentTime);
@@ -809,6 +912,59 @@ async function recallEntry(t, f, route) {
     return { result, publicResult };
   });
 }
+
+for (const route of ['direct', 'dispatched'])
+test(`capped canonical receipt denial filters the old projection before the requested count, ${route}`, async t => {
+  const f = await correctionFixture(t, { base: 33, mode: 'safety' });
+  const memory = ok(f.core.admit({ namespace: ns, memory: { content: survivor, kind: 'fact' },
+    receipts: [receipt('synthetic-canonical-seed')] })).memory;
+  const admittedRow = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').get(memory.id);
+  const rows = derivedReceiptRows(f, admittedRow, Array.from({ length: 12 }, (_, i) => receipt('synthetic-canonical-' + i)))
+    .map((row, i) => ({ ...row, id: recentId(i), created_at: recentTime(i) }));
+  transaction(f.db, () => {
+    f.db.prepare('DELETE FROM receipts WHERE memory_id=?').run(memory.id);
+    insertDerivedReceiptRows(f, admittedRow, rows);
+    writeContentSuppressionInside(f.db, { namespace: ns, kind: 'receipt', key: recentId(11),
+      reason: 'purge', actionId: 'synthetic-canonical-denial' });
+  });
+  assert.deepEqual(markers(f), [], 'canonical fact only; no shared-source marker');
+  let sent;
+  const rank = f.model.rank;
+  f.model.rank = request => { sent = structuredClone(request.input); return rank(request); };
+  f.model.countTokens = text => {
+    let input;
+    try { input = JSON.parse(text).input; } catch { return 1; }
+    return input?.candidates ? input.candidates.reduce((sum, candidate) => sum + candidate.receipts.length * 600, 0) : 1;
+  };
+  // Independently pin the final read's existing ede17dcc behavior. It slices
+  // ten headers before canonical filtering, returning nine, even after this fix.
+  const runtime = createMemoryRuntime({ path: f.path });
+  try {
+    const final = runtime.recallSnapshot([{ namespace: ns, memoryId: memory.id, revision: memory.revision,
+      receiptOrder: 'recent', receiptLimit: 10 }], [0]);
+    assert.deepEqual(final[0].receipts.map(row => row.id), [10, 9, 8, 7, 6, 5, 4, 3, 2].map(recentId));
+    assert.equal(final[0].receiptCount, 11);
+    assert.equal(final[0].receiptsOmitted, 2);
+  } finally { runtime.close(); }
+  f.call = invoke => invoke();
+  const call = await recallEntry(t, f, route);
+  const measured = await trace(call);
+  const value = ok(measured.result.result), selected = value.memories[0];
+  assert.equal(value.memories.length, 1);
+  assert.deepEqual(sent.candidates[0].receipts.map(row => row.id), [10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map(recentId));
+  assert.equal(sent.candidates[0].receiptCount, 11);
+  assert.equal(sent.candidates[0].receiptsOmitted, 1);
+  assert.deepEqual(selected.receipts.map(row => row.id), [10, 9, 8, 7, 6, 5, 4, 3, 2].map(recentId));
+  assert.equal(selected.receiptCount, 11);
+  assert.equal(selected.receiptsOmitted, 2);
+  assert.equal(value.coverage, 'budget_exhausted');
+  assert.deepEqual(value.recallTruncated, { navigationItemsOmitted: 0, candidatesOmitted: 0,
+    candidatesShortened: 0, receiptListsCapped: 1 });
+  assert.equal(measured.rows.filter(isRecentStatement).length, 2);
+  const texts = measured.rows.filter(row => row.sql.startsWith('SELECT r.rowid AS cursor_row,r.*') && row.args.at(-1) === memory.id);
+  assert.equal(texts.length, 3, 'one preparation, one lazy projection and one final text read');
+  assert.deepEqual(texts.map(row => JSON.parse(row.args[0]).length), [12, 12, 11]);
+});
 
 function assertCappedControl(f, result) {
   const value = ok(result);
