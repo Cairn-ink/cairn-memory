@@ -19,7 +19,7 @@ const modules=[
   {file:'adapters/openai/index.mjs',functions:[]},
   {file:'adapters/openai/schemas.mjs',functions:[]},
   {file:'core/content-safety.mjs',functions:[
-    {name:'receiptDenialsInside'},{name:'cardReceiptTokens'},{name:'anchorsDeliverable'},
+    {name:'receiptDenialsInside'},{name:'cardReceiptTokens'},{name:'cardDeliverySnapshot'},{name:'anchorsDeliverable'},
     {name:'receiptCoordinateCache'},{name:'receiptStoredCountInside'},
     {name:'receiptDeliverySnapshot'},{name:'deliveryReceiptRows'},
   ]},
@@ -188,6 +188,14 @@ function statementCatalog() {
   assert.match(anchorCollectors[0],/FROM json_each\(\?\) j CROSS JOIN qualification_anchors q ON q\.memory_id=json_extract\(j\.value,'\$\.id'\)/);
   assert.match(anchorCollectors[0],/UNION SELECT j\.value AS input,p\.memory_id,.*FROM json_each\(\?\) j CROSS JOIN procedural_tags p ON p\.memory_id=json_extract\(j\.value,'\$\.id'\)/);
   assert.doesNotMatch(anchorCollectors[0],/excerpt|r\.\*/,'anchor collection projects tokens only');
+  const scopedCards=[...texts.keys()].filter(sql=>sql.startsWith('SELECT c.owner_id,c.scope,c.project_id,c.id AS card_id'));
+  assert.equal(scopedCards.length,2,'both lineage variants of the cross-namespace Card collector');
+  for(const sql of scopedCards){
+    assert.match(sql,/FROM json_each\(\?\) wanted CROSS JOIN private_cards c ON c\.id=json_extract\(wanted\.value,'\$\[3\]'\)/);
+    for(const [column,index]of [['owner_id',0],['scope',1],['project_id',2]])
+      assert.ok(sql.includes(`c.${column}=json_extract(wanted.value,'$[${index}]')`),'full Card boundary: '+column);
+    assert.doesNotMatch(sql,/excerpt|r\.\*/,'Card chunks project tokens only');
+  }
   assert.ok(sites>0);assert.ok(literals>0);
   return {texts,sites,literals};
 }

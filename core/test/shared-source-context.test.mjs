@@ -211,5 +211,6 @@ test(`product Card lexical filtering refills the ranking bound ${kind}`,async t=
   const measured=await trace(()=>storage.lexical(p,observed.publication,'needle'));
   assert.equal(measured.result.matched,2);assert.equal(measured.result.rows.length,2);
   for(const row of measured.result.rows)assert.equal(denied.has(row.ref.cardId),false);
-  assert.equal(measured.rows.filter(isLookup).length,1,'one union lookup for all matching Card contributors');
+  assert.equal(measured.rows.filter(isLookup).length,kind==='ordinary-48'?2:1,
+    'one union lookup per population pass; ordinary withholding corrects published BM25 totals in a bounded replay');
 });

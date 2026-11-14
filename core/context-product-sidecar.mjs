@@ -1315,6 +1315,32 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   function lexicalSuppressed(p,publication,query,limit,visible) {
     const terms=[...new Set(tokenizeT1(query))],generation=storageKey(publication.generation.id),ss=streams(p),documents=[];
     const placeholders=terms.map(()=>'?').join(','),checked=new WeakSet();
+    let candidates=[];
+    const accept=()=>{
+      if(!candidates.length)return;
+      if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');
+      const deliveryMemo=cardDeliverySnapshot(canonical,candidates.map(d=>d.ref));
+      const memory=visible.checkEach?candidates.filter(({ref})=>ref.type==='memory'&&contentSuppressionMayMatchInside(canonical,ref.namespace,{kind:'memory',key:ref.memoryId})):[];
+      if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');
+      const allowed=memoryCandidatesAllowedInside(canonical,memory.map(d=>d.ref),p,identity);
+      const decisions=new Map(memory.map((d,i)=>[d.ref,allowed[i]]));
+      for(const document of candidates){
+        if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');
+        const {ref}=document;
+        if(ref.type==='card'){
+          if(!cardDeliverable(canonical,ref.namespace,ref.cardId,deliveryMemo))continue;
+          if(visible.checkEach&&(hasCardLineage(canonical)||contentSuppressionMayMatchInside(canonical,ref.namespace,{kind:'card',key:ref.cardId}))){
+            if(!cardCandidateAllowed(ref,p,deliveryMemo))continue;
+            checked.add(ref);
+          }
+        }else if(decisions.has(ref)){
+          if(!decisions.get(ref))continue;
+          checked.add(ref);
+        }
+        documents.push(document);
+      }
+      candidates=[];
+    };
     for(const term of terms){
       let after=0;
       while(true){
@@ -1332,33 +1358,26 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
           if(!document?.eligible)continue;
           const stream=ss[document.stream],ref={type:stream.type,namespace:stream.ns,[stream.type==='memory'?'memoryId':'cardId']:document.id,
             revision:document.revision,...(stream.type==='card'?{bodyRevision:document.body_revision}:{})};
-          if(stream.type==='card'&&visible.checkEach&&(hasCardLineage(canonical)||contentSuppressionMayMatchInside(canonical,stream.ns,{kind:'card',key:document.id}))){
-            if(!cardCandidateAllowed(ref,p))continue;
-            checked.add(ref);
-          }
-          documents.push({ref,frequencies,length:document.token_length});
+          candidates.push({ref,frequencies,length:document.token_length});
+          if(candidates.length===128)accept();
         }
         if(rows.length<128)break;after=rows.at(-1).doc;
       }
     }
-    if(visible.checkEach){
-      const memory=documents.filter(({ref})=>ref.type==='memory'&&contentSuppressionMayMatchInside(canonical,ref.namespace,{kind:'memory',key:ref.memoryId}));
-      const allowed=memoryCandidatesAllowedInside(canonical,memory.map(d=>d.ref),p,identity);
-      const decisions=new Map(memory.map((d,i)=>[d.ref,allowed[i]]));
-      for(const {ref}of memory)if(decisions.get(ref))checked.add(ref);
-      for(let i=documents.length-1;i>=0;i--)if(decisions.get(documents[i].ref)===false)documents.splice(i,1);
-    }
-    const deliveryMemo=cardDeliverySnapshot(canonical,documents.map(document=>document.ref));
-    for(let i=documents.length-1;i>=0;i--)if(documents[i].ref.type==='card'&&!cardDeliverable(canonical,documents[i].ref.namespace,documents[i].ref.cardId,deliveryMemo))documents.splice(i,1);
+    accept();
     const df=new Map(terms.map(term=>[term,documents.filter(d=>d.frequencies.has(term)).length]));
     const N=visible.unknown?documents.length:Object.values(visible.counts.byType).reduce((n,c)=>n+c.eligible,0);
     const totalLength=visible.unknown?documents.reduce((n,d)=>n+d.length,0):visible.counts.totalTokenLength;
-    const ranked=rankScores(documents.map(d=>({ref:d.ref,score:scoreBM25(terms,d,{N,totalLength,df})}))).slice(0,limit);
+    const ranked=[];
+    for(const d of documents){
+      ranked.push({ref:d.ref,score:scoreBM25(terms,d,{N,totalLength,df})});
+      rankScores(ranked);if(ranked.length>limit)ranked.pop();
+    }
     const pending=ranked.filter(({ref})=>!checked.has(ref)&&!(visible.canonicalRequired===false&&!contentSuppressionMayMatchInside(canonical,ref.namespace,{kind:ref.type,key:ref.memoryId??ref.cardId})));
     const memory=pending.filter(({ref})=>ref.type==='memory');
     const allowed=memoryCandidatesAllowedInside(canonical,memory.map(d=>d.ref),p,identity);
     const decisions=new Map(memory.map((d,i)=>[d.ref,allowed[i]]));
-    for(const {ref}of pending)if(ref.type==='card')decisions.set(ref,cardCandidateAllowed(ref,p,deliveryMemo));
+    for(const {ref}of pending)if(ref.type==='card')decisions.set(ref,cardCandidateAllowed(ref,p));
     const rows=ranked.filter(({ref})=>decisions.get(ref)!==false);
     return {rows,matched:documents.length,counts:visible.counts,filtered:visible.filtered};
   }
@@ -1372,37 +1391,68 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       const placeholders=terms.map(()=>'?').join(','),generation=storageKey(publication.generation.id),ss=streams(p);
       const N=Object.values(total.byType).reduce((n,c)=>n+c.eligible,0);
       for(const term of terms)df.set(term,side.prepare('SELECT df FROM statistics WHERE generation=? AND term=?').get(generation,term)?.df??0);
-      let matched=0;
-      for(const term of terms) {
-        let after=0;
-        while(true){
+      let matched=0,candidates=[],denied=0,deniedLength=0;
+      const deniedDf=new Map(terms.map(term=>[term,0]));
+      let statistics={N,totalLength:total.totalTokenLength,df};
+      const accept=collectDenials=>{
+        if(!candidates.length)return;
+        if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');
+        const deliveryMemo=cardDeliverySnapshot(canonical,candidates.map(row=>row.ref));
+        for(const document of candidates){
           if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');
-          // A native statement visits at most 128 postings from one term's
-          // index range. Missing terms never walk the generation's postings;
-          // eligibility and scoring happen after the bounded enumeration.
-          const rows=side.prepare(`SELECT p.doc FROM postings p INDEXED BY product_term
-            WHERE p.generation=? AND p.term=(SELECT term_id FROM statistics WHERE generation=? AND term=?) AND p.doc>? ORDER BY p.doc LIMIT 128`).all(generation,generation,term,after);
-          for(const row of rows){
-            if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');
-            const frequencies=new Map(side.prepare(`SELECT s.term,p.frequency FROM statistics s INDEXED BY sqlite_autoindex_statistics_2 CROSS JOIN postings p
-              ON p.generation=s.generation AND p.term=s.term_id AND p.doc=?
-              WHERE s.generation=? AND s.term IN (${placeholders})`).all(row.doc,generation,...terms).map(r=>[r.term,r.frequency]));
-            // Score an identity exactly once, on its first matching query term.
-            // Keep the original term order for byte-identical BM25 arithmetic.
-            if(terms.find(t=>frequencies.has(t))!==term)continue;
-            const document=side.prepare('SELECT stream,id,revision,body_revision,token_length,eligible FROM documents WHERE generation=? AND doc=?').get(generation,row.doc);
-            if(!document?.eligible)continue;
-            const score=scoreBM25(terms,{frequencies,length:document.token_length},{N,totalLength:total.totalTokenLength,df});
-            ranked.push({score,ref:{type:ss[document.stream].type,namespace:ss[document.stream].ns,
-              [ss[document.stream].type==='memory'?'memoryId':'cardId']:document.id,revision:document.revision,...(ss[document.stream].type==='card'?{bodyRevision:document.body_revision}:{})}});
-            matched++;
+          const {ref}=document;
+          if(ref.type==='card'&&!cardDeliverable(canonical,ref.namespace,ref.cardId,deliveryMemo)){
+            if(collectDenials){
+              denied++;deniedLength+=document.length;
+              for(const term of terms)if(document.frequencies.has(term))deniedDf.set(term,deniedDf.get(term)+1);
+            }
+            continue;
           }
-          if(rows.length<128)break;after=rows.at(-1).doc;
+          ranked.push({score:scoreBM25(terms,document,statistics),ref});
+          rankScores(ranked);if(ranked.length>limit)ranked.pop();
+          matched++;
         }
+        candidates=[];
+      };
+      const enumerate=collectDenials=>{
+        for(const term of terms) {
+          let after=0;
+          while(true){
+            if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');
+            // A native statement visits at most 128 postings from one term's
+            // index range. Missing terms never walk the generation's postings;
+            // eligibility and scoring happen after the bounded enumeration.
+            const rows=side.prepare(`SELECT p.doc FROM postings p INDEXED BY product_term
+              WHERE p.generation=? AND p.term=(SELECT term_id FROM statistics WHERE generation=? AND term=?) AND p.doc>? ORDER BY p.doc LIMIT 128`).all(generation,generation,term,after);
+            for(const row of rows){
+              if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');
+              const frequencies=new Map(side.prepare(`SELECT s.term,p.frequency FROM statistics s INDEXED BY sqlite_autoindex_statistics_2 CROSS JOIN postings p
+                ON p.generation=s.generation AND p.term=s.term_id AND p.doc=?
+                WHERE s.generation=? AND s.term IN (${placeholders})`).all(row.doc,generation,...terms).map(r=>[r.term,r.frequency]));
+              // Score an identity exactly once, on its first matching query term.
+              // Keep the original term order for byte-identical BM25 arithmetic.
+              if(terms.find(t=>frequencies.has(t))!==term)continue;
+              const document=side.prepare('SELECT stream,id,revision,body_revision,token_length,eligible FROM documents WHERE generation=? AND doc=?').get(generation,row.doc);
+              if(!document?.eligible)continue;
+              candidates.push({frequencies,length:document.token_length,ref:{type:ss[document.stream].type,namespace:ss[document.stream].ns,
+                [ss[document.stream].type==='memory'?'memoryId':'cardId']:document.id,revision:document.revision,...(ss[document.stream].type==='card'?{bodyRevision:document.body_revision}:{})}});
+              if(candidates.length===128)accept(collectDenials);
+            }
+            if(rows.length<128)break;after=rows.at(-1).doc;
+          }
+        }
+        accept(collectDenials);
+      };
+      enumerate(true);
+      if(denied){
+        // Published totals include withheld matches. Re-score with their exact
+        // contribution removed. Re-enumeration keeps refs and token headers
+        // bounded even when a changed average length changes the winning heap.
+        statistics={N:N-denied,totalLength:total.totalTokenLength-deniedLength,
+          df:new Map(terms.map(term=>[term,df.get(term)-deniedDf.get(term)]))};
+        ranked.length=0;matched=0;enumerate(false);
       }
-      const deliveryMemo=cardDeliverySnapshot(canonical,ranked.map(row=>row.ref));
-      const deliverable = ranked.filter(({ref})=>ref.type!=='card'||cardDeliverable(canonical,ref.namespace,ref.cardId,deliveryMemo));
-      return {rows:rankScores(deliverable).slice(0,limit),matched:deliverable.length};
+      return {rows:ranked,matched};
     }));
   }
 

@@ -650,9 +650,39 @@ export function deliveryReceiptRows(db, ns, id, memo, {limit=101,offset=0,after,
 }
 
 export function cardDeliverySnapshot(db, refs, memo = createContentReadMemo(db)) {
-  const batches=[];
-  for(const ns of new Map(refs.filter(ref=>ref.type==='card').map(ref=>[JSON.stringify(boundary(ref.namespace)),ref.namespace])).values()){
-    const ids=refs.filter(ref=>ref.type==='card'&&JSON.stringify(boundary(ref.namespace))===JSON.stringify(boundary(ns))).map(ref=>ref.cardId);
+  const cards=refs.filter(ref=>ref.type==='card'),batches=[];
+  const namespaces=new Map(cards.map(ref=>[JSON.stringify(boundary(ref.namespace)),ref.namespace]));
+  if(namespaces.size>1){
+    // A chunk may span namespaces. Collect its complete boundary tuples in one
+    // statement, retaining the same id-first joins as the single-namespace read.
+    const cache=memo.deliveryCardTokens??=new Map();
+    const wanted=new Map(cards.map(ref=>{const tuple=[...boundary(ref.namespace),ref.cardId];return [JSON.stringify(tuple),tuple];}));
+    const missing=[...wanted].filter(([key])=>!cache.has(key));
+    if(missing.length){
+      const lineage=hasCardLineage(db)?` UNION
+        SELECT c.owner_id,c.scope,c.project_id,c.id AS card_id,r.receipt_key,r.client,r.session_id,r.event_id,r.role
+        FROM json_each(?) wanted CROSS JOIN private_cards c ON c.id=json_extract(wanted.value,'$[3]')
+        CROSS JOIN card_body_sources s ON s.card_id=c.id AND s.body_revision=c.body_revision
+          AND s.owner_id=c.owner_id AND s.scope=c.scope AND s.project_id=c.project_id AND s.source_kind='receipt'
+        CROSS JOIN receipts r ON r.id=s.source_key CROSS JOIN memories m ON m.id=r.memory_id
+        WHERE c.owner_id=json_extract(wanted.value,'$[0]') AND c.scope=json_extract(wanted.value,'$[1]')
+          AND c.project_id=json_extract(wanted.value,'$[2]')
+          AND m.owner_id=c.owner_id AND m.scope=c.scope AND m.project_id=c.project_id`:'';
+      const selected=JSON.stringify(missing.map(([,tuple])=>tuple));
+      const rows=db.prepare(`SELECT c.owner_id,c.scope,c.project_id,c.id AS card_id,r.receipt_key,r.client,r.session_id,r.event_id,r.role
+        FROM json_each(?) wanted CROSS JOIN private_cards c ON c.id=json_extract(wanted.value,'$[3]')
+        CROSS JOIN card_memory_bindings b ON b.card_id=c.id CROSS JOIN receipts r ON r.id=b.receipt_id
+        CROSS JOIN memories m ON m.id=r.memory_id AND m.id=b.memory_id
+        WHERE c.owner_id=json_extract(wanted.value,'$[0]') AND c.scope=json_extract(wanted.value,'$[1]')
+          AND c.project_id=json_extract(wanted.value,'$[2]')
+          AND m.owner_id=c.owner_id AND m.scope=c.scope AND m.project_id=c.project_id${lineage}`)
+        .all(selected,...(lineage?[selected]:[]));
+      for(const [key]of missing)cache.set(key,[]);
+      for(const {owner_id,scope,project_id,card_id,...row}of rows)cache.get(JSON.stringify([owner_id,scope,project_id,card_id])).push(row);
+    }
+  }
+  for(const ns of namespaces.values()){
+    const ids=cards.filter(ref=>JSON.stringify(boundary(ref.namespace))===JSON.stringify(boundary(ns))).map(ref=>ref.cardId);
     batches.push({namespace:ns,receipts:cardReceiptTokens(db,ns,ids,memo)});
   }
   return receiptDeliverySnapshot(db,[],memo,batches);

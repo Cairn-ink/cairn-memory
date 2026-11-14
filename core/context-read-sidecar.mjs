@@ -697,7 +697,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     if (typeof query !== 'string' || !query.trim() || query.length > 4000 || query.includes('\0') || !query.isWellFormed() ||
         !Number.isSafeInteger(limit) || limit < 1 || limit > 24) fail('invalid_input');
     const p = projection(input), terms = [...new Set(tokenizeT1(query))], suppressionEpoch=safetyEpoch(p);
-    const keys=factDocuments(p); let result, pending, candidateDeliveryMemo;
+    const keys=factDocuments(p); let result, pending;
     const work=state=>sideRead(() => {
       const statistics=visibleStatistics(p,keys===null?null:factDocuments(p,state)), visible=keys===null?null:visibleDocuments(p,statistics,deadlineAt,state);
       const allowed=visible&&new Set(visible.ids);
@@ -727,8 +727,12 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       const rank = () => {
         if(visible)for(const term of terms)df.set(term,[...docs.values()].filter(row=>row.frequencies.has(term)).length);
         if(visible?.unknown){totals.n=docs.size;totals.total_length=[...docs.values()].reduce((n,r)=>n+r.token_length,0);}
-        const ranked = rankScores([...docs.values()].map(row => ({ ref: ref(p.streams[row.stream], row),
-          score: scoreBM25(terms, { frequencies: row.frequencies, length: row.token_length }, { N: totals.n, totalLength: totals.total_length, df }) }))).slice(0, limit);
+        const ranked=[];
+        for(const row of docs.values()){
+          ranked.push({ref:ref(p.streams[row.stream],row),
+            score:scoreBM25(terms,{frequencies:row.frequencies,length:row.token_length},{N:totals.n,totalLength:totals.total_length,df})});
+          rankScores(ranked);if(ranked.length>limit)ranked.pop();
+        }
         if (performance.now() >= deadlineAt) unavailable('timeout');
         return { rows: ranked, matched: docs.size };
       };
@@ -747,7 +751,10 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
           if(keys.length)yield {refs,keys};
         },
         accept(chunk,selected){
-          const memo=candidateDeliveryMemo??=cardDeliverySnapshot(canonical,[...docs.values()].map(row=>ref(p.streams[row.stream],row)));
+          this.check();
+          const memo=cardDeliverySnapshot(canonical,chunk.keys.map(key=>{
+            const row=docs.get(key);return ref(p.streams[row.stream],row);
+          }));
           const memories=new Map(selected.map(row=>
             [JSON.stringify([row.owner_id,row.scope,row.project_id,row.id]),row]));
           for(const key of chunk.keys){
