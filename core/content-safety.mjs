@@ -6,6 +6,7 @@ import { createCardRawSources } from './card-raw-sources.mjs';
 import { createRawLineageStorage } from './raw-lineage-storage.mjs';
 import { sourceRef } from './private-card-input.mjs';
 import { hasCardLineage, loadCardBodyContributorsInside } from './card-lineage.mjs';
+import { fail } from './validation.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
@@ -466,7 +467,7 @@ export function receiptDeliverySnapshot(db, entries, memo = createContentReadMem
     const key = JSON.stringify([...boundary(entry.namespace), entry.memoryId]);
     if (!cache.has(key)) pending.set(key, entry);
   }
-  const jobs = [], batches = [...additional];
+  const jobs = [], batches = [...additional], recentCursors = new Map();
   for (const [key, entry] of pending) {
     const ns = entry.namespace;
     const coordinates = options.positions === false && options.totals === false ? null : receiptCoordinateCache(db, ns, entry.memoryId);
@@ -481,6 +482,7 @@ export function receiptDeliverySnapshot(db, entries, memo = createContentReadMem
       limit: options.limit ?? 101, afterTime: after?.createdAt ?? '', afterId: after?.id ?? '',
       position: options.offset ?? 0, recent: entry.receiptOrder === 'recent' || Boolean(options.recent), idOrder: Boolean(options.idOrder), total };
     jobs.push(job);
+    if (after) recentCursors.set(key, [after.createdAt, after.id]);
     job.coordinates = coordinates;
     if (options.includeRecent) jobs.push({ ...job, key: key + ':recent', recent: true, afterTime: '', afterId: '', position: 0 });
   }
@@ -553,10 +555,10 @@ export function receiptDeliverySnapshot(db, entries, memo = createContentReadMem
                   AND candidate.id>json_extract(json_each.value,'$[1]') AND json_extract(json_each.value,'$[0]')<>''
                 ORDER BY candidate.id LIMIT 1),
               (SELECT json_array(candidate.created_at,candidate.id) FROM receipts candidate INDEXED BY memory_receipts
-                WHERE candidate.memory_id=m.id AND candidate.created_at=(
+                WHERE candidate.memory_id=m.id AND candidate.created_at=nullif((
                   SELECT older.created_at FROM receipts older INDEXED BY memory_receipts
                     WHERE older.memory_id=m.id AND older.created_at<coalesce(nullif(json_extract(json_each.value,'$[0]'),''),'\uffff')
-                    ORDER BY older.created_at DESC LIMIT 1)
+                    ORDER BY older.created_at DESC LIMIT 1),'')
                 ORDER BY candidate.id LIMIT 1))
             FROM recent_keys CROSS JOIN json_each(json_array(recent_keys.cursor))
             WHERE recent_keys.cursor IS NOT NULL LIMIT CAST(? AS INTEGER) OFFSET 1)
@@ -569,6 +571,14 @@ export function receiptDeliverySnapshot(db, entries, memo = createContentReadMem
         const headers = byKey.get(job.key);
         headers.sort((a,b) => a.created_at === b.created_at ? (a.id < b.id ? -1 : a.id > b.id ? 1 : 0) :
           a.created_at > b.created_at ? -1 : 1);
+        // Validate before marker decisions or cursor updates, on every pass.
+        // A refill and an explicit continuation use the same incoming key.
+        let [time, id] = recentCursors.get(job.key) ?? [job.afterTime || '\uffff', job.afterId];
+        for (const header of headers) {
+          if (!(header.created_at < time || header.created_at === time && header.id > id)) fail('storage_error');
+          time = header.created_at; id = header.id;
+        }
+        recentCursors.set(job.key, [time, id]);
         chunks.push({ job, headers, ended: headers.length < chunk });
         batches.push({ namespace: job.namespace, receipts: headers });
       }
