@@ -255,9 +255,10 @@ function assertPlan(db,sql,sites,statistics) {
   if(sql.includes('CROSS JOIN qualification_anchors q')){
     for(const alias of ['q','p'])assert.ok(plan.some(row=>row.detail.startsWith('SEARCH '+alias+' ')&&
       row.detail.includes('memory_id=?')),label+' anchors must be reached by memory_id: '+alias);
-    // A receipt is reached by its unique id, directly or through the (memory_id,id) index: one row either way.
+    // A receipt or Memory is reached by its unique id: directly, or through an index whose
+    // equality prefix ends in id (memory_id,id or the namespace keyset). One row either way.
     for(const alias of ['r','m'])assert.equal(plan.filter(row=>row.detail.startsWith('SEARCH '+alias+' ')&&
-      /\((?:memory_id=\? AND )?id=\?\)/.test(row.detail)).length,2,label+' both anchor arms reach '+alias+' by id');
+      /\((?:[a-z_]+=\? AND )*id=\?\)$/.test(row.detail)).length,2,label+' both anchor arms reach '+alias+' by id: '+plan.map(row=>row.detail).join(' ; '));
   }
   for(const row of plan){
     const {detail}=row,scan=detail.match(/\bSCAN (\w+)/);
