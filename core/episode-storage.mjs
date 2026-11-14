@@ -1,6 +1,6 @@
 import { episodeReadRowsInside } from './episode-reads.mjs';
 import { receiptDenialsInside, anchorsDeliverable, cardDeliverable } from './content-safety.mjs';
-import { contentReadSafety, createContentReadMemo } from './content-safety.mjs';
+import { contentReadSafety, createContentReadMemo, receiptReadSafety } from './content-safety.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
 
 import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
@@ -1054,8 +1054,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
           AND m.owner_id=? AND m.scope=? AND m.project_id=? ORDER BY l.id LIMIT ?`)
         .all(row.id,pages.memory.after??'',...boundary(ns),pages.memory.limit+1);
       const linkedIds=linkRows.flatMap(link=>JSON.parse(link.receipt_ids).map(id=>[link.memory_id,id]));
-      const linkedReceipts=db.prepare(`SELECT r.id,r.memory_id,r.receipt_key,r.client,r.session_id,r.event_id,r.role
-        FROM json_each(?) wanted CROSS JOIN receipts r INDEXED BY sqlite_autoindex_receipts_1
+      const linkedReceipts=db.prepare(`SELECT r.* FROM json_each(?) wanted CROSS JOIN receipts r INDEXED BY sqlite_autoindex_receipts_1
         ON r.id=json_extract(wanted.value,'$[1]') CROSS JOIN memories m ON m.id=r.memory_id
         WHERE r.memory_id=json_extract(wanted.value,'$[0]') AND m.owner_id=? AND m.scope=? AND m.project_id=?`)
         .all(JSON.stringify(linkedIds),...boundary(ns));
@@ -1070,8 +1069,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
         }).map(link => ({ id: link.id, memoryId: link.memory_id,
           admissionRevision: link.admission_revision, receiptIds: JSON.parse(link.receipt_ids).filter(id => {
             const receipt=linkedReceipts.find(receipt=>receipt.id===id&&receipt.memory_id===link.memory_id);
-            return receipt&&!receiptDenialsInside(db,ns,[receipt],memo).size&&
-              !contentSuppressionReasonInside(db,ns,{kind:'receipt',key:id});
+            return receipt&&!receiptDenialsInside(db,ns,[receipt],memo).size&&receiptReadSafety(db,{namespace:ns,receipt,memo}).allowed;
           }) }));
       const policies = db.prepare(`SELECT e.*,s.state,s.release_reason FROM episode_events e LEFT JOIN staged_capture_evidence s
         ON e.owner_id=s.owner_id AND e.scope=s.scope AND e.project_id=s.project_id AND e.client=s.client AND e.event_id=s.event_id

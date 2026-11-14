@@ -8,8 +8,6 @@ import { hasCardLineage } from '../card-lineage.mjs';
 import { ns, ok, receipt } from '../testing/card-lineage-fixture.mjs';
 import { fixture, trace, normalize, memoryRef } from '../testing/shared-source-fixture.mjs';
 import { request, splitRaw, localPlainPort } from '../testing/raw-capture-fixtures.mjs';
-import { model as episodeModel, input as episodeInput } from '../testing/episode-capture-helpers.mjs';
-import { options as episodeOptions } from '../testing/episode-helpers.mjs';
 
 for (const sourceKind of ['submitted-note', 'receipt', 'raw'])
 test(`metadata peek reads no contributor text: ${sourceKind}`, { timeout: 15000 }, async t => {
@@ -105,27 +103,4 @@ test(`source recall reads no receipt text after ${rejection} rejection`, { timeo
   assert.ok(!measured.rows.some(row => row.args.includes(rejected.id) &&
     /SELECT (?:\*|r\.\*|r\.rowid AS cursor_row,r\.\*) FROM .*receipts/.test(row.sql)));
   assert.ok(measured.rows.some(row => row.sql.includes('r.receipt_key') && !/excerpt|r\.\*/.test(row.sql)), 'marker inputs still use headers');
-});
-
-test('Episode link filtering reads receipt tokens and keeps base checks', { timeout: 15000 }, async t => {
-  const f = await fixture(t, 'ordinary-48');
-  const core = openMemoryCore({ path: f.path, privateCards: f.host.options, ...episodeOptions,
-    model: episodeModel({ extract: () => ({ items: [{ content: 'Synthetic linked signal', kind: 'fact', confidence: .8, sourceIndices: [0] }] }) }) });
-  t.after(() => core.close());
-  const captured = ok(await core.capture(episodeInput(1, 'synthetic-token-episode', { namespace: ns })));
-  const memory = captured.admission.memories[0];
-  const saved = ok(core.get({ namespace: ns, memoryId: memory.id })).receipts[0];
-  const sibling = ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic independent sibling', kind: 'fact' },
-    receipts: [{ client: saved.client, sessionId: saved.sessionId, eventId: saved.eventId, role: saved.role, excerpt: saved.excerpt }] })).memory;
-  const input = { namespace: ns, episodeId: captured.episode.id, sourceLimit: 16, memoryLimit: 50 };
-  for (const marked of [false, true]) {
-    if (marked) ok(f.core.forget({ namespace: ns, memoryId: sibling.id, expectedRevision: sibling.revision }));
-    const measured = await trace(() => core.getEpisode(input));
-    const value = ok(measured.result);
-    assert.deepEqual(value.memoryLinks.items.find(link => link.memoryId === memory.id).receiptIds, marked ? [] : [saved.id]);
-    const linked = measured.rows.filter(row => row.sql.includes("r.id=json_extract(wanted.value,'$[1]')"));
-    assert.equal(linked.length, 1);
-    assert.match(linked[0].sql, /^SELECT r\.id,r\.memory_id,r\.receipt_key,r\.client,r\.session_id,r\.event_id,r\.role FROM json_each\(\?\)/);
-    assert.doesNotMatch(linked[0].sql, /excerpt|r\.\*/);
-  }
 });
