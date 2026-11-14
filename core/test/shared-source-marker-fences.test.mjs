@@ -4,6 +4,10 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { parse } from '../../tools/testing/vendor/acorn/acorn.mjs';
 import { ns, ok } from '../testing/card-lineage-fixture.mjs';
 import { fixture, capture, act, markers, originalRow } from '../testing/shared-source-fixture.mjs';
+import { openMemoryCore } from '../index.mjs';
+import { model as episodeModel, input as episodeInput } from '../testing/episode-capture-helpers.mjs';
+import { options as episodeOptions } from '../testing/episode-helpers.mjs';
+import { receiptDenialTokens } from '../raw-source-roots.mjs';
 
 const root=new URL('../',import.meta.url);
 const normalize=text=>text.replace(/\s+/g,' ').trim();
@@ -617,6 +621,43 @@ test('the fingerprint producer catalog rejects marker producers and unreviewed s
 // automatically retire Friday, bind real Monday evidence and preserve inferred authority".
 test('public fingerprint and marker writers produce disjoint suppressed values',{timeout:15000},async t=>{
   const f=await fixture(t,'fresh-default'),siblings=f.model.items;
+  const sources=sourceInventory();
+  // Use the static proof's helper/caller censuses and pinned default arguments:
+  // receipt removal disables markers; forgetMutationInside expands to its
+  // user-forget/rejection routes, excluding the explicitly purging Raw route.
+  const markerWriters=calls(sources,'suppressReceiptsInside').flatMap(site=>{
+    if(site.node.arguments.length<=5||site.node.arguments[5]?.value===false)return [];
+    if(owner(site)!=='forgetMutationInside')return [site];
+    return calls(sources,'forgetMutation').filter(({node})=>{
+      const reason=node.arguments[3]?.value??'forgotten';
+      const suppressionReason=node.arguments[4]?.value??(reason==='forgotten'?'user_forget':'purge');
+      return suppressionReason==='user_forget'||reason==='rejected';
+    });
+  });
+  const staticWriters=[...markerWriters.map(site=>['marker',label(site)]),
+    ...sourceWalker(sources).callers(functionSite(sources,'runtime.mjs','suppress').node)
+      .map(site=>['fingerprint',label(site)])];
+  const workload={
+    supersession:[['fingerprint','supersession-storage.mjs:55 retireMutation']],
+    correct:[['marker','runtime.mjs:357 correct'],['fingerprint','runtime.mjs:361 correct']],
+    forget:[['marker','runtime.mjs:415 forget'],['fingerprint','runtime.mjs:393 forgetMutationInside']],
+    reject:[['marker','confirmation-storage.mjs:35 resolve'],['fingerprint','runtime.mjs:393 forgetMutationInside']],
+    episode:[['marker','episode-storage.mjs:1012 forget'],['fingerprint','runtime.mjs:393 forgetMutationInside']],
+  };
+  const stored=()=>f.db.prepare('SELECT * FROM suppressed ORDER BY owner_id,scope,project_id,fingerprint').all();
+  const rowKey=row=>JSON.stringify([row.owner_id,row.scope,row.project_id,row.fingerprint]);
+  const observations=[];
+  const exercise=async(operation,call)=>{
+    const before=stored(),result=await call(),after=stored();
+    const previous=new Set(before.map(rowKey)),added=after.filter(row=>!previous.has(rowKey(row)));
+    const writers=workload[operation];
+    for(const [kind,site]of writers){
+      const shape=kind==='fingerprint'?/^[0-9a-f]{64}$/:/^rs1:[ia]:/;
+      assert.ok(added.some(row=>shape.test(row.fingerprint)),site+' ['+kind+'-runtime-write] public '+operation+' added a row');
+    }
+    observations.push({writers,before,after,added});
+    return {result,added};
+  };
   const item=content=>({content,kind:'fact',confidence:.8,sourceIndices:[0]});
   f.model.reconcile=()=>({transitions:[{replacementIndex:0,predecessorIndex:0,evidenceIndices:[0],
     relation:'supersedes',valueChange:'changed',adoption:'explicit'}]});
@@ -627,20 +668,22 @@ test('public fingerprint and marker writers produce disjoint suppressed values',
   };
   const first=await ordered(1,'Project Alpha deadline is Friday.');
   const predecessor=first.admission.memories[0],oldFingerprint=originalRow(f,predecessor).fingerprint;
-  const second=await ordered(2,'Project Alpha deadline is Monday.');
+  const {result:second,added:retired}=await exercise('supersession',()=>ordered(2,'Project Alpha deadline is Monday.'));
   assert.deepEqual(second.reconciliation,{status:'applied',reason:null,retiredCount:1});
   const history=f.db.prepare('SELECT * FROM memory_supersessions').all();
   assert.equal(history.length,1,'ordered capture reached retireMutation');
   assert.equal(history[0].previous_memory_id,predecessor.id);
   assert.equal(history[0].replacement_memory_id,second.admission.memories[0].id);
-  const stored=()=>f.db.prepare('SELECT * FROM suppressed ORDER BY owner_id,scope,project_id,fingerprint').all();
+  assert.ok(retired.some(row=>row.fingerprint===oldFingerprint),'retirement added its fingerprint in this call');
   assert.ok(stored().some(row=>row.fingerprint===oldFingerprint),'retirement wrote its fingerprint');
 
   f.model.items=siblings;
   const [sibling,target]=await capture(f),before=originalRow(f,sibling);
   const mutate=async(operation,memory)=>{
     const fingerprint=originalRow(f,memory).fingerprint,markerCount=markers(f).length;
-    ok(await act(f,operation,memory));
+    const {result,added}=await exercise(operation,()=>act(f,operation,memory));
+    ok(result);
+    assert.ok(added.some(row=>row.fingerprint===fingerprint),operation+' added the original fingerprint in this call');
     assert.ok(stored().some(row=>row.fingerprint===fingerprint),operation+' wrote the original fingerprint');
     assert.ok(markers(f).length>markerCount,operation+' wrote new shared-source markers');
     if(operation==='correct')assert.notEqual(originalRow(f,memory).fingerprint,fingerprint,'correction changed content identity');
@@ -656,6 +699,55 @@ test('public fingerprint and marker writers produce disjoint suppressed values',
     if(operation==='reject')assert.equal(originalRow(f,memory).review_state,'awaiting');
     await mutate(operation,memory);
   }
+
+  // Follow shared-source-episode.test.mjs's fresh linked=false construction:
+  // public Episode capture links one Memory; ordinary capture reuses its saved
+  // message coordinates for an unlinked sibling. Forgetting follows E7
+  // "conversation deletion forgets deduplicated/historical lineage with suppression,
+  // unrelated survives" in episode-storage.test.mjs and CF1's Episode forget.
+  const linkedContent='Synthetic legacy Episode linked claim',sharedText=linkedContent+'. Synthetic Episode sibling evidence.';
+  const episodeCore=openMemoryCore({path:f.path,...episodeOptions,
+    model:episodeModel({extract:()=>({items:[item(linkedContent)]})})});
+  t.after(()=>episodeCore.close());
+  const episodeCapture=ok(await episodeCore.capture(episodeInput(1,'marker-legacy-episode',{namespace:ns,
+    messages:[{id:'marker-episode-message',role:'user',content:sharedText}]})));
+  const linked=episodeCapture.admission.memories[0],episodeId=episodeCapture.episode.id;
+  const saved=ok(episodeCore.get({namespace:ns,memoryId:linked.id})).receipts[0];
+  f.model.items=[item('Synthetic legacy Episode surviving sibling')];
+  const episodeSibling=ok(await f.core.capture({namespace:ns,client:saved.client,sessionId:saved.sessionId,
+    eventId:'marker-episode-sibling',messages:[{id:saved.eventId,role:saved.role,content:saved.excerpt}]})).admission.memories[0];
+  assert.notEqual(episodeSibling.id,linked.id);
+  assert.deepEqual(f.db.prepare('SELECT memory_id FROM episode_memory_links WHERE episode_id=? ORDER BY memory_id').all(episodeId)
+    .map(row=>row.memory_id),[linked.id],'only the target Memory is linked to the Episode');
+  const siblingBefore=originalRow(f,episodeSibling),linkedFingerprint=originalRow(f,linked).fingerprint;
+  const siblingReceipts=f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(episodeSibling.id);
+  assert.equal(siblingReceipts.length,1,'sibling has the shared message receipt');
+  const siblingTokens=receiptDenialTokens(siblingReceipts);
+  assert.equal(siblingTokens.length,2,'sibling supplies identity and address markers');
+  assert.deepEqual(siblingTokens,receiptDenialTokens(f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(linked.id)),
+    'linked Memory and unlinked sibling share receipt identity and message address');
+  const episode=ok(episodeCore.getEpisode({namespace:ns,episodeId})).episode;
+  assert.equal(f.db.prepare("SELECT count(*) n FROM sqlite_master WHERE name='raw_deletion_actions'").get().n,0,
+    'fresh-default has no source-root deletion: forgetEpisode must take the legacy branch');
+  const {result:episodeForgotten,added:episodeRows}=await exercise('episode',()=>episodeCore.forgetEpisode({namespace:ns,episodeId,
+    expectedRevision:episode.revision}));
+  assert.equal(ok(episodeForgotten).forgotten,true);
+  assert.ok(episodeRows.some(row=>row.fingerprint===linkedFingerprint),'legacy Episode forget added the linked fingerprint');
+  for(const token of siblingTokens)assert.ok(episodeRows.some(row=>row.fingerprint===token),
+    'legacy Episode forget added the sibling receipt token: '+token);
+  assert.equal(f.db.prepare('SELECT deleted FROM session_episodes WHERE id=?').get(episodeId).deleted,1);
+  assert.equal(f.core.get({namespace:ns,memoryId:linked.id}).error.code,'memory_not_found');
+  assert.deepEqual(originalRow(f,episodeSibling),siblingBefore,'legacy Episode forget left the unlinked sibling unchanged');
+  assert.deepEqual(ok(f.core.get({namespace:ns,memoryId:episodeSibling.id})).receipts,[],'sibling receipt is withheld by the markers');
+
+  // Only writers whose individual call added the required class enter this
+  // list. Keep duplicates in the source catalog so an extra call site also fails.
+  const runtimeWriters=[...new Map(observations.flatMap(row=>row.writers).map(writer=>[JSON.stringify(writer),writer])).values()];
+  const compareWriters=catalog=>assert.deepEqual(runtimeWriters.map(writer=>JSON.stringify(writer)).sort(),
+    catalog.map(writer=>JSON.stringify(writer)).sort(),'suppressed [runtime-writer-catalog] exercised writers equal source-derived writers');
+  compareWriters(staticWriters);
+  assert.throws(()=>compareWriters([...staticWriters,['marker','synthetic-extra-writer.mjs:1 extraWriter']]),
+    {code:'ERR_ASSERTION',message:/\[runtime-writer-catalog\]/},'an unexercised extra source writer must fail coverage');
   let fingerprints=0,tokens=0;
   for(const row of stored()){
     const value=row.fingerprint,hex=/^[0-9a-f]{64}$/.test(value),marker=/^rs1:[ia]:/.test(value);
