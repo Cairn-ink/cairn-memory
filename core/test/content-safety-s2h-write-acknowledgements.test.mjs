@@ -306,6 +306,9 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // the bound admission claim. These add no returned acknowledgement fields.
   // All three names already belong to content-write-safety.mjs's opaque set;
   // content identities still pass its canonical fail-closed walker unchanged.
+  // The unbound budget keeps main's cumulative contextBudget byte-for-byte beside the host-scoped one;
+  // its embedding-port wrapper repeats `id: port.id` (1 -> 2), the provider's model identity, never a
+  // writer acknowledgement or content identity.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));
   const files=JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json',import.meta.url),'utf8'));
   const actual={};
