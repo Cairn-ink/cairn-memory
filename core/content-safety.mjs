@@ -482,7 +482,8 @@ export function receiptDeliverySnapshot(db, entries, memo = createContentReadMem
       limit: options.limit ?? 101, afterTime: after?.createdAt ?? '', afterId: after?.id ?? '',
       position: options.offset ?? 0, recent: entry.receiptOrder === 'recent' || Boolean(options.recent), idOrder: Boolean(options.idOrder), total };
     jobs.push(job);
-    if (after) recentSeen.set(key, new Set([after.id]));
+    // An empty incoming time starts a new seek; its id only cuts the first tie.
+    if (after?.createdAt) recentSeen.set(key, new Set([after.id]));
     job.coordinates = coordinates;
     if (options.includeRecent) jobs.push({ ...job, key: key + ':recent', recent: true, afterTime: '', afterId: '', position: 0 });
   }
@@ -547,7 +548,10 @@ export function receiptDeliverySnapshot(db, entries, memo = createContentReadMem
         FROM json_each(?) j CROSS JOIN memories m ON m.id=json_extract(j.value,'$.id')
         CROSS JOIN receipts r INDEXED BY sqlite_autoindex_receipts_1 ON r.id IN (
           WITH RECURSIVE recent_keys(cursor) AS (
-            SELECT json_array(json_extract(j.value,'$.afterTime'),json_extract(j.value,'$.afterId'))
+            SELECT json_array(coalesce(nullif(json_extract(j.value,'$.afterTime'),''),nullif((
+              SELECT initial.created_at FROM receipts initial INDEXED BY memory_receipts
+                WHERE initial.memory_id=m.id AND initial.created_at<'\uffff'
+                ORDER BY initial.created_at DESC LIMIT 1),'')),json_extract(j.value,'$.afterId'))
             UNION ALL
             SELECT coalesce(
               (SELECT json_array(candidate.created_at,candidate.id) FROM receipts candidate INDEXED BY memory_receipts
@@ -557,8 +561,9 @@ export function receiptDeliverySnapshot(db, entries, memo = createContentReadMem
               (SELECT json_array(candidate.created_at,candidate.id) FROM receipts candidate INDEXED BY memory_receipts
                 WHERE candidate.memory_id=m.id AND candidate.created_at=nullif((
                   SELECT older.created_at FROM receipts older INDEXED BY memory_receipts
-                    WHERE older.memory_id=m.id AND older.created_at<coalesce(nullif(json_extract(json_each.value,'$[0]'),''),'\uffff')
+                    WHERE older.memory_id=m.id AND older.created_at<coalesce(nullif(json_extract(json_each.value,'$[0]'),''),'\uffff') AND older.id>''
                     ORDER BY older.created_at DESC LIMIT 1),'')
+                  AND candidate.id>''
                 ORDER BY candidate.id LIMIT 1))
             FROM recent_keys CROSS JOIN json_each(json_array(recent_keys.cursor))
             WHERE recent_keys.cursor IS NOT NULL LIMIT CAST(? AS INTEGER) OFFSET 1)
