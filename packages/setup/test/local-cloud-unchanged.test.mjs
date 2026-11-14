@@ -165,7 +165,9 @@ const durabilityRuntimeChanges = new Map([
     // The gate and its records use the pinned canonical root; a changed configured path fails closed.
     previousCanonicalRoot: '15a0c3f7f0e36d6fb9b5a7c337e2f08bc1bfa05b4a751c6a393266409da3fac4',
     // Comment-only removal of a source-evidence note; runtime behavior is unchanged.
-    current: '355ee562215c9f11f40b85b9b4a0b1cc53b9cd6b4bc01e900701650fe4b48398',
+    previousSourceNote: '355ee562215c9f11f40b85b9b4a0b1cc53b9cd6b4bc01e900701650fe4b48398',
+    // The pinned root delegates to the caller's config; guarded endpoint accessors are read live.
+    current: 'ecbad7a62ca1908baf6e5e39553d82408b66cec85bb0d4d70dac998a5f6afb15',
   }],
   ['integrations/codex/installed.mjs', {
     historical: '778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea',

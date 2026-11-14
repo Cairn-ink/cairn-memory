@@ -180,7 +180,11 @@ async function pinned(config) {
     const root = await canonicalHostRoot(lexicalRoot);
     // A caller that pinned its own root must agree with this process's pin.
     if (config.lexicalRoot !== undefined && root !== config.root) throw new Error('pause_unavailable');
-    const pin = { ...config, root, lexicalRoot, [pinnedRoot]: true };
+    // Delegate, never copy: only the canonical root is fixed here. Every other
+    // field, including a caller's accessor that guards each endpoint read, is
+    // read live from the caller's config.
+    const pin = Object.create(config, { root: { value: root, enumerable: true },
+      lexicalRoot: { value: lexicalRoot, enumerable: true }, [pinnedRoot]: { value: true } });
     modes.set(pin, hostedPauseMode(config));
     if (!pins.has(config)) pins.set(config, pin);
   }
