@@ -90,6 +90,11 @@ active local control. If the transcript is missing at start, this also requires 
 published active hosted authority; unknown pending starts remain conservative after a
 pause. Existing transcripts still use only local control for their start boundary.
 Native Windows retains its existing portable first-prompt authority.
+Known gaps, which skip a turn and never send paused text: the first new session after
+a hosted resume, started before another session on this computer has seen the resume,
+loses its first turn (a one-turn `claude -p` right after a resume is not captured); and on
+an account that has ever paused, the first pause check after installing or upgrading
+skips the turn then in progress in each open session.
 Requests already started before pause may still finish.
 
 Hosted recall and capture require a freshly validated, enforced pause state.

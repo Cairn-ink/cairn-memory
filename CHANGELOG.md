@@ -1,17 +1,25 @@
 # Changelog
 
-## 0.3.7 — 2026-11-13: first-turn capture after hosted resume
+## 0.3.7 — 2026-11-13: later sessions after a hosted resume keep their first turn
 
 Plugin and marketplace 0.3.7. Protocol stays 0.3.0. The installer version is not
 bumped here.
 
-- On Linux and macOS, capture the first turn of a new Claude Code session
-  started after a hosted pause has resumed, including one-turn sessions, when
-  the synchronous start hook finishes within its budget and validates active
-  local control. Missing transcripts additionally require locally published active
-  hosted authority; unknown pending starts remain conservative. Existing transcripts
-  retain their local-only start boundary check. Native Windows portable first-prompt
-  authority is unchanged.
+- On Linux and macOS, capture the first turn of a new Claude Code session,
+  including one-turn sessions, once this computer has already seen the hosted
+  resume: in practice the second and later new sessions after a resume. This
+  needs the synchronous start hook to finish within its budget and validate
+  active local control. Missing transcripts additionally require locally
+  published active hosted authority; unknown pending starts remain conservative.
+  Existing transcripts retain their local-only start boundary check. Native
+  Windows portable first-prompt authority is unchanged.
+- Known gaps. Each skips a turn; none sends text written during a pause:
+  - The first new session after a hosted resume, started before any other
+    session on this computer has seen the resume, loses its first turn. A
+    one-turn `claude -p` run right after a resume is not captured.
+  - On an account that has ever paused, the first pause check after installing
+    the plugin, or after upgrading from 0.3.5, skips the turn then in progress
+    in each open session.
 - Exclude leading copied history older than the new session's start, allowing
   five seconds for clock differences. Sessions with a boundary from before a
   pause continue to skip their unprocessed history after resume.
