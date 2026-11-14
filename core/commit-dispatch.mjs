@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { types } from 'node:util';
 import { fail, MemoryStoreError } from './validation.mjs';
-import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
+import { withContentSuppressionRequest, withContentSuppressionAttempt, assertContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 
 // Internal host seam. Registries contain connection identities and diagnostics,
 // never request data. The attempt closure and detached output stay on its stack.
@@ -134,20 +134,32 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
         checkIdle('attempt');
         const state = { db, active: true, commits: 0, busyResults: new WeakSet() };
         const { restoreTimeoutMs } = bindings.get(db);
+        const pendingDelivery = {};
+        let accepted;
         try {
           db.exec('PRAGMA busy_timeout = 5');
-          const value = withContentSuppressionRequest(() => attempts.run(state, () => {
+          const completed = withContentSuppressionAttempt(() => attempts.run(state, () => {
             const value = work();
-            const delivery = deliveries.getStore();
+            const delivery = deliveries.getStore() ? pendingDelivery : null;
             if (delivery && !state.busyResults.has(value) && !(value && typeof value.then === 'function')) {
               delivery.resume = AsyncLocalStorage.snapshot();
             }
             return value;
-          }), { fresh: true });
+          }), (native, readSet) => {
+            if (native === db) return assertContentSuppressionRequestInside(native, readSet);
+            // A request can have sampled another canonical handle. Its epoch
+            // read must share the attempt's short wait, including nested use.
+            const nativeTimeoutMs = native.prepare('PRAGMA busy_timeout').get().timeout;
+            try {
+              native.exec('PRAGMA busy_timeout = 5');
+              assertContentSuppressionRequestInside(native, readSet);
+            } finally { if (native.isOpen) native.exec(`PRAGMA busy_timeout = ${nativeTimeoutMs}`); }
+          });
+          const value = completed.value;
           // Never await caller work. An async transaction closure is invalid.
           if (value && typeof value.then === 'function') fail('storage_error');
-          if (!state.busyResults.has(value)) { checkIdle('return'); return { value }; }
-          if (state.commits || !retryAllowed) return { value };
+          if (!state.busyResults.has(value)) { checkIdle('return'); accepted = { value, merge: completed.merge }; }
+          else if (state.commits || !retryAllowed) accepted = { value };
         } catch (error) {
           checkIdle('failure');
           if (!busy(error)) throw error;
@@ -157,6 +169,14 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
           // checkIdle retires a connection with an active transaction. Keep
           // its fixed refusal, without attempting SQL on that closed handle.
           if (db.isOpen) db.exec(`PRAGMA busy_timeout = ${restoreTimeoutMs}`);
+        }
+        if (accepted) {
+          if (accepted.value?.ok !== false) {
+            accepted.merge?.();
+            const delivery = deliveries.getStore();
+            if (delivery && pendingDelivery.resume) delivery.resume = pendingDelivery.resume;
+          }
+          return { value: accepted.value };
         }
         return null;
       };
@@ -206,7 +226,7 @@ export function createCommitDispatcher({ now = () => performance.now(), random =
       finally { scope.active = false; }
     },
     run(work, { signal, check, deadlineAt } = {}) {
-      return requests.run({ signal, check, deadlineAt }, work);
+      return requests.run({ signal, check, deadlineAt }, () => withContentSuppressionRequest(work));
     },
     inspectSynchronousWrites: () => ({ count: host.unroutedWrites, connections: host.connections.size, scopes: [...host.namedScopes].sort() }),
     inspectTransactions() {

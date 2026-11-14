@@ -140,6 +140,40 @@ function servingFacts(db, ns) {
 export const withContentSuppressionRequest = (work, { fresh = false } = {}) => requestAccount.getStore() && !fresh
   ? work() : requestAccount.run({ selected: new Map(), facts: new Map(), reads: new Map() }, work);
 
+export function withContentSuppressionAttempt(work, checkEpoch = assertContentSuppressionRequestInside) {
+  const parent = requestAccount.getStore();
+  const account = { selected: new Map(), facts: new Map(), reads: new Map() };
+  // Host attempts carry only scope epochs, never retained facts or content.
+  const copy = (target, source) => {
+    for (const states of [source?.epochs, source?.reads]) for (const [native, owners] of states ?? []) {
+      let selected = target.get(native);
+      if (!selected) target.set(native, selected = new Map());
+      for (const [owner, { layout, epoch }] of owners) {
+        // Legacy views never sampled a suppression epoch and may initialize Cards.
+        if (!layout.suppressionRevision) continue;
+        const previous = selected.get(owner);
+        if (previous && (previous.layout !== layout || previous.epoch !== epoch)) fail('evidence_unavailable');
+        if (!previous) selected.set(owner, { layout, owner, epoch });
+      }
+    }
+  };
+  account.epochs = new Map();
+  account.checkEpoch = checkEpoch;
+  copy(account.epochs, parent);
+  const value = requestAccount.run(account, () => {
+    for (const [native, owners] of account.epochs)
+      if (owners.size) checkEpoch(native, [...owners.keys()].map(ownerId => ({ ownerId })));
+    return work();
+  });
+  return { value, merge() {
+    if (!parent) return;
+    // Validate the entire union before publishing any winning-attempt scopes.
+    const epochs = new Map();
+    copy(epochs, parent); copy(epochs, account);
+    parent.epochs = epochs;
+  } };
+}
+
 // An abandoned operation attempt must not seed the next snapshot's denial
 // memo. Keep its request account, but load this connection's facts on demand.
 export function resetContentSuppressionRequestInside(db) {
@@ -213,7 +247,8 @@ export function contentSuppressionRequestFenceInside(db, owner) {
     : contentSuppressionFenceInside(db, owner);
 }
 export function assertContentSuppressionRequestInside(db, readSet) {
-  const states = [...new Set(readSet.map(ns => ns.ownerId))].map(owner => cachedContentSuppressionRequestInside(db, owner)).filter(Boolean);
+  const retained = requestAccount.getStore()?.epochs?.get(contentSafetyConnection(db));
+  const states = [...new Set(readSet.map(ns => ns.ownerId))].map(owner => retained?.get(owner) ?? cachedContentSuppressionRequestInside(db, owner)).filter(Boolean);
   if (!states.length) return;
   // A fresh header and owner epochs after host callbacks fence every retained decision.
   const layout = installedContentLayout(db);
@@ -226,6 +261,8 @@ export function assertContentSuppressionRequestInside(db, readSet) {
 }
 export function inContentSuppressionRequestInside(db, work, fallbackReadSet) {
   const native = contentSafetyConnection(db), account = requestAccount.getStore();
+  for (const [selected, owners] of account?.epochs ?? []) if (owners.size)
+    (account.checkEpoch ?? assertContentSuppressionRequestInside)(selected, [...owners.keys()].map(ownerId => ({ ownerId })));
   if (requestFacts.getStore()?.native === native) return work();
   const readSet = account?.selected.get(native) ?? fallbackReadSet;
   return readSet ? withContentSuppressionReadInside(db, readSet, () => work()) : work();
