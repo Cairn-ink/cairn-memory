@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(max-width: 600px)" srcset="docs/images/readme-hero-mobile.png">
-    <img src="docs/images/readme-hero.png" alt="Cairn.ink Memory: AI memory you can inspect and change. One memory for Claude Code and Codex. A hand-drawn island carries a cairn of three stones, labelled Cards, Memories and Conversations. Open source." width="1200">
+    <img src="docs/images/readme-hero.png" alt="Cairn.ink Memory: AI memory you can inspect and change. One memory for Claude Code and Codex. A hand-drawn island carries a three-stone cairn that stands for Cards, Memories and Conversations. Open source." width="1200">
   </picture>
 </p>
 
@@ -170,11 +170,12 @@ hosted MCP endpoint, the Codex rules and the plugin's privacy contract.
 - **Model keys.** Saving conversations never calls a model, and keyword search,
   inspecting, correcting and forgetting use no model either. If the memory
   server can see an `OPENAI_API_KEY`, your memories and search text are sent to
-  OpenAI for semantic search, estimated at most about US$1 per server run, and
-  `recall_memory` sends the text it selects. Pausing or turning off saving does
-  not stop these requests yet. Saved conversations are sent only if you opt in
-  with `--raw-semantic` or configure `--context-embedder` yourself. To keep
-  everything on your computer, do not give the server a key.
+  OpenAI for semantic search, with those embedding requests estimated at most
+  about US$1 per server run. `recall_memory` also sends the text it selects,
+  and its model calls are not counted in that estimate. Pausing or turning off
+  saving does not stop these requests yet. Saved conversations are sent only if
+  you opt in with `--raw-semantic` or configure `--context-embedder` yourself.
+  To keep everything on your computer, do not give the server a key.
   `--no-context-semantic` turns off semantic search and its requests, but with
   a key present `recall_memory` still calls the model whenever your agent uses
   it. [Defaults, costs and off switches](docs/defaults.md) has the details.

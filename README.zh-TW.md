@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(max-width: 600px)" srcset="docs/images/readme-hero-mobile.png">
-    <img src="docs/images/readme-hero.png" alt="Cairn.ink Memory：可以查看與修改的 AI 記憶，Claude Code 和 Codex 共用一份。圖中是一座手繪小島，島上的石堆有三顆石頭，分別標著卡片、記憶、對話。開源專案。" width="1200">
+    <img src="docs/images/readme-hero.png" alt="Cairn.ink Memory：可以查看與修改的 AI 記憶，Claude Code 和 Codex 共用一份。圖中是一座手繪小島，島上的石堆有三顆石頭，代表卡片、記憶、對話。開源專案。" width="1200">
   </picture>
 </p>
 
@@ -154,8 +154,9 @@ Codex 的規則，以及外掛的隱私約定。
   加上 `--yes` 才真的刪除。從那段對話存下來的記憶會留著，要另外叫它忘記。
 - **模型金鑰。** 保存對話不會呼叫模型，關鍵字搜尋、查看、修改、忘記也都不呼叫
   模型。如果記憶 server 看得到 `OPENAI_API_KEY`，你的記憶和搜尋文字會送到 OpenAI
-  做語意搜尋，每次 server 執行估計最多約 1 美元，`recall_memory` 也會送出它挑選的
-  文字。暫停或關閉保存，目前還不會停止這些請求。已保存的對話只有在你用
+  做語意搜尋，這些 embedding 請求每次 server 執行估計最多約 1 美元。`recall_memory`
+  也會送出它挑選的文字，它呼叫模型的費用不算在這個估計裡。暫停或關閉保存，目前還
+  不會停止這些請求。已保存的對話只有在你用
   `--raw-semantic` 選擇開啟、或自己設定 `--context-embedder` 時才會送出。要讓所有
   資料都留在電腦上，請不要給 server 金鑰。`--no-context-semantic` 會關掉語意搜尋和
   它的請求，但只要 server 看得到金鑰，agent 每次使用 `recall_memory` 仍會呼叫模型。
