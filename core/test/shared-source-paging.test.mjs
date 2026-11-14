@@ -1,11 +1,12 @@
 import nodeTest from "node:test";
 import assert from "node:assert/strict";
-import { openMemoryStore } from "../index.mjs";
+import { openMemoryCore, openMemoryStore } from "../index.mjs";
 import { ns, ok, receipt } from "../testing/card-lineage-fixture.mjs";
 import { createMemoryRuntime } from "../runtime.mjs";
 import { transaction } from "../database.mjs";
 import { receiptStoredCountInside } from "../content-safety.mjs";
 import { receiptDenialTokens } from "../content-safety.mjs";
+import { receiptCoordinateStateInside } from "../raw-source-roots.mjs";
 import { survivor, forgotten, independent, ordinaryKinds, isLookup, source, key, noLeak, hasId, trace, fixture, capture, act, markers, memoryRef, reads, appendReceipts } from "../testing/shared-source-fixture.mjs";
 // A pending adapter/worker call must fail the case within the file budget.
 const test=(name,run)=>nodeTest(name,{timeout:15000},run);
@@ -145,4 +146,127 @@ test('receipt counts discard values computed inside a rolled-back write',async t
   }),/synthetic-rollback/);
   assert.equal(f.db.prepare('SELECT total_changes() n').get().n,inside,'rollback does not change the native counter');
   assert.equal(receiptStoredCountInside(f.db,ns,b.id),1);
+});
+
+function receiptCoordinateCounters(db) {
+  return {version:db.prepare('PRAGMA data_version').get().data_version,
+    changes:db.prepare('SELECT total_changes() AS n FROM store_metadata WHERE singleton=1').get().n};
+}
+function observedReceiptCoordinates(db,memoryId) {
+  const counters=receiptCoordinateCounters(db);
+  const state=receiptCoordinateStateInside(db,counters.version,counters.changes);
+  const coordinates=state.memories.get(JSON.stringify([ns.ownerId,ns.scope,ns.projectId??'',memoryId]));
+  // This accessor can create an empty state. Requiring the populated entry
+  // proves that the preceding public read, rather than this inspection, warmed it.
+  assert.ok(coordinates,'public fetch populated this native connection\'s Memory entry');
+  assert.ok(coordinates.offsets.size>0,'public fetch cached delivered coordinates');
+  return {...counters,state,coordinates};
+}
+async function observedReceiptFetch(core,input) {
+  let native;
+  const measured=await trace(()=>core.fetch(input),(sql,args,db)=>{
+    if(sql.startsWith('SELECT j.value AS input,r.id')) {
+      if(native)assert.equal(db,native,'both fetch snapshots use the same native connection');
+      native=db;
+    }
+  });
+  assert.ok(native,'public fetch executed the cached receipt-coordinate path');
+  return {page:ok(measured.result),native};
+}
+
+for(const kind of ordinaryKinds) for(const connection of ['same','other'])
+test(`receipt-coordinate cache resets after ${connection}-connection public forget ${kind}`,async t=>{
+  const f=await fixture(t,kind),[initial,sibling]=await capture(f);
+  const memory=ok(f.core.admit({namespace:ns,memory:{content:survivor,kind:'fact'},
+    receipts:[receipt('synthetic-cache-independent-1',independent),receipt('synthetic-cache-independent-2','Synthetic second independent support')]})).memory;
+  assert.equal(memory.id,initial.id);
+  const shared=f.db.prepare('SELECT id FROM receipts WHERE memory_id=? AND event_id=?').get(memory.id,'synthetic-message');
+  assert.ok(shared);
+  // Make the shared receipt the first delivered row, independently of clock
+  // resolution and generated ids; the remaining two rows have a stable order.
+  f.db.prepare('UPDATE receipts SET created_at=? WHERE memory_id=?').run('2026-01-02T00:00:00.000Z',memory.id);
+  f.db.prepare('UPDATE receipts SET created_at=? WHERE id=?').run('2026-01-01T00:00:00.000Z',shared.id);
+  const stored=f.db.prepare('SELECT id,created_at AS createdAt FROM receipts WHERE memory_id=? ORDER BY created_at,id').all(memory.id);
+  assert.equal(stored.length,3);assert.equal(stored[0].id,shared.id);
+  assert.deepEqual(markers(f),[]);
+  // Force one receipt per public fetch page without a large fixture or any
+  // dependence on a model tokenizer. This exercises nonzero cached offsets.
+  f.model.countTokens=text=>{
+    try {if(JSON.parse(text).value?.items?.[0]?.receipts?.length>1)return 4001;}catch{}
+    return 1;
+  };
+  const options={path:f.path,model:f.model,decisionReview:'required-v1',...(f.host?{privateCards:f.host.options}:{}),
+    contextRead:{version:'context-read-v1',authority:f.trusted.authority,counter:{id:'synthetic',countTokens:()=>1}}};
+  const reader=openMemoryCore(options);t.after(()=>reader.close());
+  const input={namespace:ns,refs:[{memoryId:memory.id,revision:memory.revision}],tokenBudget:4000};
+  const evidence=core=>{
+    const items=ok(f.trusted.call(core,'fetchCandidateEvidence',{readSet:[ns],intent:'current',refs:[memoryRef(memory)]})).items;
+    assert.equal(items.length,1);return items[0];
+  };
+  const first=await observedReceiptFetch(reader,input);
+  assert.notEqual(first.native,f.db,'inspect the engine connection, not the fixture connection');
+  assert.deepEqual(first.page.items[0].receipts.map(row=>row.id),[shared.id],'positive delivery control');
+  assert.equal(first.page.items[0].receiptCount,3);assert.equal(first.page.items[0].memory.receiptCount,3);
+  assert.equal(first.page.exhausted,false);assert.equal(first.page.truncatedBy,'token_budget');
+  assert.equal(typeof first.page.nextCursor,'string');
+  const before=observedReceiptCoordinates(first.native,memory.id);
+  assert.equal(before.coordinates.total,3,'positive stored-count cache control');
+  assert.deepEqual(before.coordinates.offsets,new Map(stored.map((row,i)=>[i+1,{...row}])),'positive offset cache control');
+  const beforeEvidence=evidence(reader);
+  assert.deepEqual(beforeEvidence.provenance.receiptMetadata.map(row=>row.receiptId),stored.map(row=>row.id));
+  assert.deepEqual(beforeEvidence.provenance.coverage,{status:'complete',included:3,omitted:0});
+
+  const writer=connection==='same'?reader:f.core;
+  let writerNative;
+  const forgotten=await trace(()=>writer.forget({namespace:ns,memoryId:sibling.id,expectedRevision:sibling.revision}),(sql,args,db)=>{
+    if(sql.startsWith('UPDATE memories SET content = NULL, deleted = 1,')&&args.at(-1)===sibling.id)writerNative=db;
+  });
+  assert.equal(ok(forgotten.result).forgotten,true);assert.ok(writerNative);
+  if(connection==='same')assert.equal(writerNative,first.native,'public forget uses the warmed connection');
+  else assert.notEqual(writerNative,first.native,'handle B owns another native connection');
+  const write=forgotten.rows.findIndex(row=>row.sql.startsWith('UPDATE memories SET content = NULL, deleted = 1,'));
+  assert.ok(write>=0&&forgotten.rows.slice(write+1).some(row=>row.sql==='COMMIT'),'public forget committed before A reads again');
+  const changed=receiptCoordinateCounters(first.native);
+  if(connection==='same') {
+    assert.notEqual(changed.changes,before.changes,'local total_changes() invalidates A');
+    assert.equal(changed.version,before.version,'a local commit does not move A\'s data_version');
+  } else {
+    assert.notEqual(changed.version,before.version,'B\'s commit moves PRAGMA data_version on A');
+    assert.equal(changed.changes,before.changes,'B\'s writes do not move total_changes() on A');
+  }
+  const second=await observedReceiptFetch(reader,input);
+  assert.equal(second.native,first.native);
+  const after=observedReceiptCoordinates(second.native,memory.id);
+  assert.equal(after.version,changed.version);assert.equal(after.changes,changed.changes);
+  assert.notEqual(after.state,before.state,'the public read replaced the old cache state');
+  assert.notEqual(after.coordinates,before.coordinates,'no old Memory cache entry survived');
+  assert.equal(after.coordinates.total,3,'withholding preserves the three physically stored receipts');
+  const expectedOffsets=new Map(stored.slice(1).map((row,i)=>[i+2,{...row}]));
+  assert.deepEqual(after.coordinates.offsets,expectedOffsets,'no withheld coordinate remains cached');
+  assert.equal(after.coordinates.offsets.has(1),false,'the formerly delivered shared offset was discarded');
+  assert.deepEqual(second.page.items[0].receipts.map(row=>row.id),[stored[1].id],'A withholds the shared receipt');
+  assert.equal(second.page.items[0].receiptCount,3);assert.equal(second.page.items[0].memory.receiptCount,3);
+  const afterEvidence=evidence(reader);
+  assert.deepEqual(afterEvidence.provenance.receiptMetadata.map(row=>row.receiptId),stored.slice(1).map(row=>row.id));
+  assert.deepEqual(afterEvidence.provenance.coverage,{status:'budget_exhausted',included:2,omitted:1});
+
+  const fresh=openMemoryCore(options);t.after(()=>fresh.close());
+  const freshFirst=await observedReceiptFetch(fresh,input),freshCoordinates=observedReceiptCoordinates(freshFirst.native,memory.id);
+  assert.notEqual(freshFirst.native,first.native);
+  assert.deepEqual(second.page,freshFirst.page,'delivered rows, counts and page coverage equal a post-forget handle');
+  assert.equal(after.coordinates.total,freshCoordinates.coordinates.total);
+  assert.deepEqual(after.coordinates.offsets,freshCoordinates.coordinates.offsets,'cached offsets equal a fresh handle');
+  const freshEvidence=evidence(fresh);
+  assert.deepEqual(afterEvidence.provenance.receiptMetadata,freshEvidence.provenance.receiptMetadata);
+  assert.deepEqual(afterEvidence.provenance.coverage,freshEvidence.provenance.coverage);
+  assert.equal(typeof second.page.nextCursor,'string');
+  const last=ok(reader.fetch({...input,cursor:second.page.nextCursor}));
+  const freshLast=ok(fresh.fetch({...input,cursor:freshFirst.page.nextCursor}));
+  assert.deepEqual(last,freshLast,'the new cursor resumes at the post-forget offset');
+  assert.deepEqual([...second.page.items[0].receipts,...last.items[0].receipts].map(row=>row.id),stored.slice(1).map(row=>row.id));
+  assert.equal(last.items[0].receiptCount,3);assert.equal(last.exhausted,true);assert.equal(last.nextCursor,null);
+  for(const value of [second.page,last,afterEvidence]) {noLeak(value,'post-forget delivery');assert.equal(hasId(value,shared.id),false);}
+  // runtime.mjs:683 rejects the pre-forget namespace epoch. Do this last:
+  // its rollback clears the cache and must not mask counter invalidation above.
+  assert.deepEqual(reader.fetch({...input,cursor:first.page.nextCursor}),{ok:false,error:{code:'cursor_stale',retryable:false}});
 });
