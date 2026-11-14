@@ -7,6 +7,10 @@ import { contextBudget, withContextReadBudgetScope } from '../context-read-budge
 import { createFakeEmbedder } from '../context-read-embedder.mjs';
 import { coreFixture, query, refresh, policy, ok, denied } from '../testing/context-read-core-fixture.mjs';
 
+// R2o3: hosts construct their core and budget ports inside a maintenance scope.
+// The unbound constructor deliberately retains main's cumulative ledger.
+const inHostMode = work => withContextReadBudgetScope({}, work);
+
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 
 test('partition A pages while partition B creates 200 rankings; default capacity remains 128', async t => {
@@ -37,12 +41,12 @@ test('eight concurrent scoped semantic queries stay ready during a separate main
     return base.embed(texts, controls);
   } };
   t.after(() => gate.resolve());
-  const f = coreFixture(t, { embedder, selectedPolicy: policy({ family: 'hosted', maxConcurrent: 1 }) }); f.admit('apple');
+  const f = inHostMode(() => coreFixture(t, { embedder, selectedPolicy: policy({ family: 'hosted', maxConcurrent: 1 }) })); f.admit('apple');
   const maintenance = {};
   ok(await withContextReadBudgetScope(maintenance, () => f.call('refreshContextIndex', refresh())));
   // This is the same ledger/port seam used by Raw and Memory maintenance;
   // leave the existing index fully published while the provider is in flight.
-  const dispatch = contextBudget({ budgetConfigured: true, embedder, policy: policy({ family: 'hosted', maxConcurrent: 1 }) });
+  const dispatch = inHostMode(() => contextBudget({ budgetConfigured: true, embedder, policy: policy({ family: 'hosted', maxConcurrent: 1 }) }));
   blocking = true;
   const operation = withContextReadBudgetScope(maintenance, () => dispatch(embedder, ['maintenance-document'], {
     guard() {}, signal: new AbortController().signal, deadlineAt: performance.now() + 10000 }));
@@ -63,8 +67,8 @@ test('scoped USD and request caps last across invocations; unscoped concurrency 
   const embedder = { id: 'sharing-ledger-' + randomUUID(), revision: '1', embed: async () => {
     calls++; if (block) await gate.promise; return [[1]];
   } };
-  const dispatch = contextBudget({ budgetConfigured: true, embedder,
-    policy: { family: 'hosted', maxConcurrent: 1, maxRequests: 100, maxUsd: 1, estimateUsd: () => .6 } });
+  const dispatch = inHostMode(() => contextBudget({ budgetConfigured: true, embedder,
+    policy: { family: 'hosted', maxConcurrent: 1, maxRequests: 100, maxUsd: 1, estimateUsd: () => .6 } }));
   const run = () => dispatch(embedder, ['synthetic'], { guard() {}, signal: new AbortController().signal, deadlineAt: performance.now() + 5000 });
   const a = {}, b = {};
   await withContextReadBudgetScope(a, run);
@@ -83,8 +87,8 @@ test('unscoped maxConcurrent refusal is independent of USD and request caps', as
   const embedder = { id: 'sharing-unscoped-' + randomUUID(), revision: '1', async embed() {
     if (++calls === 1) await gate.promise; return [[1]];
   } };
-  const dispatch = contextBudget({ budgetConfigured: true, embedder,
-    policy: { family: 'hosted', maxConcurrent: 1, maxRequests: 2, maxUsd: 1, estimateUsd: () => 0 } });
+  const dispatch = inHostMode(() => contextBudget({ budgetConfigured: true, embedder,
+    policy: { family: 'hosted', maxConcurrent: 1, maxRequests: 2, maxUsd: 1, estimateUsd: () => 0 } }));
   const run = () => dispatch(embedder, ['synthetic'], { guard() {}, signal: new AbortController().signal, deadlineAt: performance.now() + 5000 });
   const first = run();
   try { await assert.rejects(run(), { code: 'budget_denied' }); }
