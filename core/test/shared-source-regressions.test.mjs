@@ -226,8 +226,13 @@ test(`${correction} correction delivers current receipts on every read path: ${l
   assert.deepEqual(sibling.receipts.map(row => row.id), [siblingId], 'the specified sibling consequence remains visible');
   const values = await currentReads(f, current.memory);
   for (const name of ['get', 'fetch', 'sourceFetch', 'recall', 'sourceRecall', 'rationaleRecall', 'snapshot',
-    'legacyGet', 'contextEvidence', 'contextRead', 'session', ...(f.call ? ['cardSources'] : [])])
+    'legacyGet', 'contextRead', 'session', ...(f.call ? ['cardSources'] : [])])
     assert.ok(JSON.stringify(values[name]).includes(newExcerpt), name + ' delivers the new receipt');
+  // Candidate evidence returns source references, not excerpt text: the new receipt is its only source.
+  const newReceiptId = values.get.receipts.find(row => row.excerpt === newExcerpt).id;
+  const provenance = values.contextEvidence.items[0].provenance;
+  assert.deepEqual(provenance.sources.map(source => source.receiptId), [newReceiptId], 'contextEvidence delivers the new receipt');
+  assert.deepEqual(provenance.coverage, { status: 'complete', included: 1, omitted: 0 });
   values.episode = ok(f.core.getEpisode({ namespace: ns, episodeId, sourceLimit: 16, memoryLimit: 50 }));
   assert.deepEqual(values.episode.sources.items.map(row => row.text), [newExcerpt]);
   assert.ok(values.session.groups.nextSteps.items.some(item => item.episodeId === episodeId), 'session keeps the independent Episode source');

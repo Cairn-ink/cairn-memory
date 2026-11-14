@@ -123,7 +123,8 @@ for (const marked of [false, true]) test(`review B one lookup per snapshot with 
     sourceReceiptLimit:4}));
   assert.ok(queried.result.rows.length>=12); assertLookups(queried.rows,1);
   const sourceRecall=await trace(()=>f.core.recall({readSet:[ns],query:'Synthetic',limit:12,contextMode:'source-evidence'}));
-  if(marked) assert.deepEqual(sourceRecall.result,{ok:false,error:{code:'source_unavailable',retryable:false}});
+  // A marked source fails closed in its second snapshot, before the final proof; each snapshot still runs one lookup.
+  if(marked) { assert.deepEqual(sourceRecall.result,{ok:false,error:{code:'source_unavailable',retryable:false}}); assertLookups(sourceRecall.rows,2); }
   else { assert.equal(ok(sourceRecall.result).memories.length,12); assertLookups(sourceRecall.rows,3); }
 });
 
