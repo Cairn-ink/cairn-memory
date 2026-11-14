@@ -223,7 +223,7 @@ const engineFingerprintCall=(node,walker,fn)=>node?.type==='CallExpression'&&!no
 const expectedFingerprintProducers=[
   ['card-raw-sources.mjs','object',"createHash('sha256').update(sealed).digest('hex')"],
   ['content-safety-observations.mjs','object','memory.fingerprint'],
-  ['content-suppression-storage.mjs','INSERT suppressed.fingerprint','JSON.stringify(receiptDenialTokens(rows))'],
+  ['content-suppression-storage.mjs','INSERT suppressed.fingerprint','JSON.stringify(receiptDenialTokens(rows, replacements))'],
   ['context-product-pump.mjs','object','fingerprint'],
   ['context-semantic-pump.mjs','object','fingerprint'],
   ['ordered-capture-storage.mjs','INSERT confirmation_supersessions.previous_fingerprint','row.previous.fingerprint'],
@@ -389,7 +389,8 @@ function assertFingerprintClass(sources,insert){
   assert.deepEqual(arrays[0].node.elements.map(node=>node?.type==='BinaryExpression'&&node.operator==='+'?node.left?.value:undefined),
     ['rs1:i:','rs1:a:'],classified(tokens,'marker-shape','every token begins with rs1:, outside [0-9a-f]{64}'));
   assert.equal(tokenSource.text(tokens.node),
-    "function receiptDenialTokens(receipts) { return [...new Set(receipts.flatMap(receipt => [ 'rs1:i:' + receipt.receipt_key, 'rs1:a:' + createHash('sha256').update(JSON.stringify([ 'receipt-source-address-v1', receipt.client, receipt.session_id, receipt.event_id, receipt.role, ])).digest('hex'), ]))]; }",
+    // The builder may only drop tokens that the same builder derives for a correction's replacement receipts.
+    "function receiptDenialTokens(receipts, replacements = []) { const retained = new Set(replacements.length ? receiptDenialTokens(replacements) : []); return [...new Set(receipts.flatMap(receipt => [ 'rs1:i:' + receipt.receipt_key, 'rs1:a:' + createHash('sha256').update(JSON.stringify([ 'receipt-source-address-v1', receipt.client, receipt.session_id, receipt.event_id, receipt.role, ])).digest('hex'), ]).filter(token => !retained.has(token)))]; }",
     classified(tokens,'marker-shape','the token-pair builder is the only returned marker source'));
   const denials=functionSite(sources,'content-safety.mjs','receiptDenialsInside');
   const reads=sources.get(denials.file).text(denials.node);
@@ -445,11 +446,17 @@ function assertMarkerFences(sources){
   const member=marker.ancestors.at(-1),run=marker.ancestors.at(-2);
   assert.ok(member?.type==='MemberExpression'&&named(member.property,'run')&&run?.type==='CallExpression'&&run.callee===member,
     classified(marker,'marker-values','expected immediate execution of the marker insert'));
-  assert.equal(helperSource.text(run.arguments[1]),'JSON.stringify(receiptDenialTokens(rows))',
+  assert.equal(helperSource.text(run.arguments[1]),'JSON.stringify(receiptDenialTokens(rows, replacements))',
     classified(marker,'marker-values','only rs1:-prefixed tokens enter the marker insert'));
+  // A correction may name the same Memory's new receipts so that a re-cited receipt derives no marker.
+  // Only the last parameter carries them, and it defaults to none.
+  assert.equal(helper.node.params?.length,8,classified(helper,'marker-replacements','expected eight parameters'));
+  assert.ok(helper.node.params[7]?.type==='AssignmentPattern'&&named(helper.node.params[7].left,'replacements')&&
+    helper.node.params[7].right?.type==='ArrayExpression'&&helper.node.params[7].right.elements.length===0,
+    classified(helper,'marker-replacements','replacements default to an empty list'));
   assert.equal(helper.node.params?.[5]?.type,'AssignmentPattern',classified(helper,'marker-default','expected default parameter'));
   assert.equal(helper.node.params?.[5]?.right?.value,false,classified(helper,'marker-default','markers default to false'));
-  assert.match(helperText,/JSON\.stringify\(receiptDenialTokens\(rows\)\)/);
+  assert.match(helperText,/JSON\.stringify\(receiptDenialTokens\(rows, replacements\)\)/);
   assert.match(helperText,/for \(const row of rows\).*writeContentSuppressionInside\(db,/);
   // No aliases or indirect invocations can evade the caller census.
   for(const [file,source]of sources)for(const site of source.nodes)if(named(site.node,'suppressReceiptsInside')){
@@ -473,12 +480,23 @@ function assertMarkerFences(sources){
     if(name==='correct'){
       assert.equal(args?.[5]?.value,true,classified(site,'marker-enable','correction enables markers'));
       assert.ok(transaction(site),classified(site,'transaction','correction owns the write transaction'));
+      // The replacements are exactly this correction's own normalized new receipts.
+      assert.equal(args.length,8,classified(site,'marker-replacements','correction names its replacement receipts'));
+      assert.equal(source.text(args[7]).replace(/\s+/g,' '),
+        "value.receipts.map(receipt => ({ receipt_key: receiptKey(receipt), client: receipt.client, session_id: receipt.sessionId, event_id: receipt.eventId, role: receipt.role }))",
+        classified(site,'marker-replacements','only the corrected Memory\'s incoming receipts are replacements'));
     }else{
       assert.ok(args?.[5],classified(site,'marker-enable','forget must specify the marker condition'));
+      assert.equal(args.length,7,classified(site,'marker-replacements','forget and rejection never name replacements'));
       assert.equal(source.text(args[5]),"suppressionReason === 'user_forget' || reason === 'rejected'",
         classified(site,'marker-enable','forget enables markers for user forget and rejection'));
     }
   }
+  // Token subtraction exists only where a correction writes markers and where the verifier derives them.
+  const subtracting=calls(sources,'receiptDenialTokens').filter(site=>site.node.arguments.length!==1);
+  assert.deepEqual(subtracting.map(site=>site.file+':'+site.node.arguments.length+':'+sources.get(site.file).text(site.node.arguments[1])).sort(),[
+    'content-suppression-storage.mjs:2:replacements','content-write-safety.mjs:2:replacements',
+  ],'receiptDenialTokens [replacement-census] every two-argument call is classified: '+subtracting.map(label).join(', '));
   assertFingerprintClass(sources,classes.get('fingerprint')[0]);
   const insideCalls=calls(sources,'forgetMutationInside');
   assert.equal(insideCalls.length,1);assert.equal(owner(insideCalls[0]),'forgetMutation');
@@ -639,10 +657,10 @@ test('public fingerprint and marker writers produce disjoint suppressed values',
       .map(site=>['fingerprint',label(site)])];
   const workload={
     supersession:[['fingerprint','supersession-storage.mjs:55 retireMutation']],
-    correct:[['marker','runtime.mjs:357 correct'],['fingerprint','runtime.mjs:361 correct']],
-    forget:[['marker','runtime.mjs:415 forget'],['fingerprint','runtime.mjs:393 forgetMutationInside']],
-    reject:[['marker','confirmation-storage.mjs:35 resolve'],['fingerprint','runtime.mjs:393 forgetMutationInside']],
-    episode:[['marker','episode-storage.mjs:1012 forget'],['fingerprint','runtime.mjs:393 forgetMutationInside']],
+    correct:[['marker','runtime.mjs:357 correct'],['fingerprint','runtime.mjs:363 correct']],
+    forget:[['marker','runtime.mjs:417 forget'],['fingerprint','runtime.mjs:395 forgetMutationInside']],
+    reject:[['marker','confirmation-storage.mjs:35 resolve'],['fingerprint','runtime.mjs:395 forgetMutationInside']],
+    episode:[['marker','episode-storage.mjs:1012 forget'],['fingerprint','runtime.mjs:395 forgetMutationInside']],
   };
   const stored=()=>f.db.prepare('SELECT * FROM suppressed ORDER BY owner_id,scope,project_id,fingerprint').all();
   const rowKey=row=>JSON.stringify([row.owner_id,row.scope,row.project_id,row.fingerprint]);
@@ -781,6 +799,10 @@ test('the marker catalog rejects missing epoch advances and unclassified writers
   mutations.push(replace(last,'return { ...projection };'));
   mutations.push(replace(last,'return { indexRevision: advanceEpoch?.(ns) };'));
   mutations.push(replace(marker.node,'(() => '+runtime.source.slice(marker.node.start,marker.node.end)+')()'));
+  // Replacement receipts: a correction may name only its own incoming receipts, and forgetting may name none.
+  const substitute=(from,to)=>{assert.equal(runtime.source.split(from).length,2,'one mutation site: '+from);return runtime.source.replace(from,to);};
+  mutations.push(substitute('value.receipts.map(receipt => ({ receipt_key: receiptKey(receipt)','receiptSnapshot.map(receipt => ({ receipt_key: receipt.receipt_key'));
+  mutations.push(substitute('cachedContentLayout(db)?.suppressionRevision ? undefined : receiptSnapshot);','cachedContentLayout(db)?.suppressionRevision ? undefined : receiptSnapshot, receiptSnapshot);'));
   for(const source of mutations){
     const mutated=new Map(original);mutated.set('runtime.mjs',inventory('runtime.mjs',source));
     assert.throws(()=>assertMarkerFences(mutated),error=>{
