@@ -1,15 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
-import { fixture, trace, memoryRef, hasId } from '../testing/shared-source-fixture.mjs';
+import { DatabaseSync } from 'node:sqlite';
+import { fixture, trace, memoryRef, hasId, isLookup } from '../testing/shared-source-fixture.mjs';
 import { ns, ok, receipt } from '../testing/card-lineage-fixture.mjs';
 import { openContextReadSidecar } from '../context-read-sidecar.mjs';
 import { openContextProductFacade } from '../context-read-facade.mjs';
 import { openProductIndex } from '../context-product-index.mjs';
-import { productSidecar } from '../context-product-sidecar.mjs';
+import { productSidecar, PRODUCT_SIDECAR_SUFFIX } from '../context-product-sidecar.mjs';
+import { createProductSqlitePolicy } from '../context-product-sqlite.mjs';
 import { accessDigest } from '../context-product-validation.mjs';
 import { descriptor } from '../testing/context-product-owner-fixture.mjs';
 import { createBM25 } from '../context-read-bm25.mjs';
+import { tokenizeT1 } from '../context-read-tokenize.mjs';
 import { cardDeliverySnapshot, cardDeliverable, receiptDenialTokens } from '../content-safety.mjs';
 import { readTransaction } from '../database.mjs';
 
@@ -21,10 +24,9 @@ const projection={...selection,accessGeneration:1};
 
 // Public Card creation follows the existing shared-source context fixture;
 // admit avoids model work. Independent Memories avoid dependent-Card limits.
-function card(f,i){
+function card(f,i,{title='Synthetic needle '+i,body=i%2?'needle pear pear':'needle needle pear'}={}){
   const memory=ok(f.core.admit({namespace:ns,memory:{content:'Synthetic support '+i,kind:'fact'},
     receipts:[receipt('synthetic-chunk-'+i)]})).memory;
-  const title='Synthetic needle '+i,body=i%2?'needle pear pear':'needle needle pear';
   let value=ok(f.call('createCardDraft',{actionId:'synthetic-chunk-draft-'+i,drafting:'authored',
     input:{title,body,memoryRefs:[memoryRef(memory)],sourcePolicy:'retained-receipts-v1'}}));
   value=ok(f.call('confirmCardDraft',{actionId:'synthetic-chunk-confirm-'+i,cardId:value.id,
@@ -32,7 +34,7 @@ function card(f,i){
   return {memory,ref:{type:'card',namespace:ns,cardId:value.id,revision:value.revision,bodyRevision:value.bodyRevision},text:title+'\n'+body};
 }
 
-function sidecar(t,f,route,clock=()=>performance.now()){
+function sidecar(t,f,route,clock=()=>performance.now(),options={}){
   if(route==='embedded'){
     const storage=openContextReadSidecar({path:f.path,db:f.db});t.after(()=>storage.close());
     return {storage,refresh(){
@@ -40,28 +42,42 @@ function sidecar(t,f,route,clock=()=>performance.now()){
       assert.fail('embedded publication did not finish');
     },lexical(deadlineAt=Infinity){return storage.lexicalPage(projection,query,24,{deadlineAt});}};
   }
-  const facade=openContextProductFacade(f.path,{}),p={...projection,ownerCoverage:descriptor([ns])};
+  const facade=openContextProductFacade(f.path,{sqlite:options.sqlite}),p={...projection,ownerCoverage:descriptor([ns])};
   const storage=productSidecar({path:f.path,db:facade.port.db,identity:facade.port.identity,
-    features:facade.port.features,writable:true,now:clock});
+    features:facade.port.features,writable:true,now:clock,...options});
   t.after(()=>{storage.close();facade.close();});
   const access=accessDigest({ownerId:ns.ownerId,namespaces:{readSet:[ns]}});let publication;
-  return {storage,refresh(){
+  const observe=()=>{
+    const observed=storage.observe(p,access);
+    if(observed.dto.lexical.state==='ready')publication=observed.publication;
+    return observed;
+  };
+  return {storage,observe,refresh(){
     for(let i=0;i<16;i++){
       storage.refresh(p,access,{maxItems:1024,maxMs:5000});
-      const observed=storage.observe(p,access);
+      const observed=observe();
       if(observed.dto.lexical.state==='ready'){publication=observed.publication;return;}
     }
     assert.fail('product publication did not finish');
   },lexical(deadlineAt=Infinity){return storage.lexical({...p,deadlineAt},publication,query);}};
 }
 
-function pages(t,f,route){
+function pages(t,f,route,options={}){
   if(route==='embedded')return input=>f.trusted.call(f.context,'findCandidates',input);
-  const facade=openContextProductFacade(f.path,{});
+  const facade=openContextProductFacade(f.path,{sqlite:options.sqlite});
   const index=openProductIndex({path:f.path,facade,ownerCoverage:descriptor([ns]),maintenance:true,
+    ...options,
     authorize:()=>({accessGenerations:accessDigest({ownerId:ns.ownerId,namespaces:{readSet:[ns]}}),check(){},envelope:work=>work()})});
   t.after(()=>{index.close();facade.close();});
-  return input=>index.run('findCandidates',input,{});
+  const call=input=>index.run('findCandidates',input,{});
+  call.refresh=()=>{
+    for(let i=0;i<16;i++){
+      const value=ok(index.run('refreshContextIndex',{...selection,mode:'lexical',budget:{maxItems:1024,maxMs:5000}},{}));
+      if(value.status==='complete')return;
+    }
+    assert.fail('public product publication did not finish');
+  };
+  return call;
 }
 
 async function cachedPages(call){
@@ -72,6 +88,70 @@ async function cachedPages(call){
     if(!cursor)return values;
   }
   assert.fail('ranking pagination exceeded its 24-row horizon');
+}
+
+function mark(f,document){
+  const headers=f.db.prepare('SELECT receipt_key,client,session_id,event_id,role FROM receipts WHERE memory_id=?').all(document.memory.id);
+  for(const token of receiptDenialTokens(headers))f.db.prepare('INSERT INTO suppressed VALUES(?,?,?,?)')
+    .run(ns.ownerId,ns.scope,ns.projectId,token);
+}
+
+function sibling(f,i){
+  return ok(f.core.admit({namespace:ns,memory:{content:'Synthetic sibling '+i,kind:'fact'},
+    receipts:[receipt('synthetic-chunk-'+i)]})).memory;
+}
+function forget(f,memory){
+  return ok(f.core.forget({namespace:ns,memoryId:memory.id,expectedRevision:memory.revision}));
+}
+const expectedRows=documents=>createBM25(documents.map(({ref,text})=>({ref,text}))).search(query);
+const publicRows=value=>value.items.map(({ref,channels})=>({ref,score:channels.lexical.rawScore}));
+const posting=sql=>sql.startsWith('SELECT p.doc FROM postings p INDEXED BY product_term');
+
+// The trace hook arms the existing clock after the last first-pass marker
+// lookup. There is then exactly one clock check per remaining chunk document.
+// The following check is the replay entry, before its first posting statement:
+// both the denial aggregates and the first-pass heap have finished by then.
+function replayBoundary(population,write){
+  let chunks=0,remaining=null,armed=false,committed=false,canonical,side;
+  const events=[],writers=new Set();
+  return {events,writers,get committed(){return committed;},
+    now(){
+      if(remaining===0){remaining=null;committed=true;write({canonical,side});}
+      else if(remaining!==null)remaining--;
+      return 0;
+    },
+    onSql(sql,args,connection){
+      if(committed&&/^(INSERT|UPDATE|DELETE)\b/.test(sql))writers.add(connection);
+      if(posting(sql)&&!side)side=connection;
+      if(collector({sql})&&!canonical)canonical=connection;
+      if((collector({sql})&&connection===canonical)||(posting(sql)&&connection===side)){
+        events.push({sql,connection,transaction:connection.isTransaction});
+      }
+      if(committed)return;
+      if(collector({sql}))chunks++;
+      if(!armed&&chunks===Math.ceil(population/128)&&isLookup({sql})){
+        armed=true;remaining=(population-1)%128+1;
+      }
+    },
+  };
+}
+
+function assertReplaySnapshots(measured,boundary){
+  assert.equal(boundary.committed,true,'the inter-pass write actually committed');
+  assert.ok(boundary.events.every(event=>event.transaction),'both connections remain inside read transactions');
+  assert.ok(boundary.writers.size>0,'real mutation statements executed');
+  for(const connection of boundary.writers){
+    assert.equal(connection.isTransaction,false,'the other connections committed');
+    assert.equal(boundary.events.some(event=>event.connection===connection),false,'writes use other connections');
+  }
+  const tokens=measured.rows.filter(collector),postings=measured.rows.filter(row=>posting(row.sql));
+  assert.equal(tokens.length,2,'one collector in each pass');
+  for(const rows of [tokens,postings]){
+    assert.ok(rows.length>1);
+    assert.notEqual(rows[0].snapshot,undefined,'an explicit BEGIN owns the reads');
+    assert.equal(new Set(rows.map(row=>row.snapshot)).size,1,'both passes use one snapshot on this database');
+  }
+  assert.notEqual(tokens[0].snapshot,postings[0].snapshot,'canonical and sidecar have separate connections');
 }
 
 // Extend the cooperative lexical deadline contract and product timeout mapping
@@ -129,6 +209,159 @@ for(const route of routes)test(`Card token chunks and mid-population deadline: $
   assert.deepEqual(next.rows,expected,'the next storage read on the same connection is complete');
   const served=await call({...selection,query,semantic:false,limit:1,deadlineMs:5000});
   assert.equal(served.ok,true,'the next public read on the same handles succeeds');
+});
+
+test('ordinary replay deadline rolls back and the same connections serve a complete next read',{timeout:120000},async t=>{
+  const f=await fixture(t,'ordinary-48'),documents=Array.from({length:300},(_,i)=>card(f,i));
+  mark(f,documents[0]);
+  let clock=0,reads=0,samples=0,samplesAtExpiry;
+  sidecar(t,f,'ordinary').refresh();
+  // Open a separate reader, as the product does. Maintenance handles may be
+  // discarded after errors; this read-only native handle must remain usable.
+  const a=sidecar(t,f,'ordinary',()=>{samples++;return clock;});
+  assert.equal(a.observe().dto.lexical.state,'ready');
+  const expected=expectedRows(documents.slice(1)),firstPass=Math.ceil(documents.length/128);
+  const complete=await trace(()=>a.lexical());
+  assert.equal(complete.rows.filter(collector).length,2*firstPass,'the marked ordinary branch really replays');
+  assert.equal(complete.result.matched,299);assert.deepEqual(complete.result.rows,expected);
+  const original=performance.now.bind(performance);let expired=false;
+  t.mock.method(performance,'now',()=>expired?Number.MAX_SAFE_INTEGER:original());
+  const connections=new Map(),sameConnections=(sql,args,connection)=>{
+    const key=collector({sql})?'canonical':posting(sql)?'sidecar':null;
+    if(!key)return;
+    if(!connections.has(key))connections.set(key,connection);
+    else assert.equal(connection,connections.get(key),'reuse the same native '+key+' connection');
+  };
+  const expire=(sql,args,connection)=>{
+    sameConnections(sql,args,connection);
+    if(collector({sql})&&++reads===firstPass+1){expired=true;clock=1;samplesAtExpiry=samples;}
+  };
+  const timed=await trace(()=>{
+    assert.throws(()=>a.lexical(1),{code:'read_timeout'});
+  },expire);
+  assert.equal(timed.rows.filter(collector).length,firstPass+1,'no later replay collector executes');
+  assert.ok(samples>samplesAtExpiry,'the existing clock is checked after the first replay collector');
+  assert.ok(timed.rows.some(row=>row.sql==='ROLLBACK'),'timeout releases the read transactions');
+  assert.equal(connections.size,2);
+  assert.ok([...connections.values()].every(connection=>!connection.isTransaction),'both read transactions were released');
+  expired=false;clock=0;reads=0;
+  const next=(await trace(()=>a.lexical(),sameConnections)).result;
+  assert.equal(next.matched,299);assert.deepEqual(next.rows,expected,'same canonical and sidecar connections recover');
+  const call=pages(t,f,'ordinary');
+  connections.clear();
+  const delivered=await trace(()=>call({...selection,query,semantic:false,limit:24,deadlineMs:5000}),expire);
+  assert.equal(delivered.rows.filter(collector).length,firstPass+1);
+  assert.deepEqual(delivered.result,{ok:false,error:{code:'read_timeout',retryable:false}},'no partial ranking DTO');
+  expired=false;clock=0;reads=0;
+  const served=ok((await trace(()=>call({...selection,query,semantic:false,limit:24,deadlineMs:5000}),sameConnections)).result);
+  assert.deepEqual(publicRows(served),expected.map(({ref,score})=>({ref,score})));
+  assert.equal(served.coverage.omitted.lexical,299-24,'same public handle returns the full correct horizon');
+});
+
+for(const kind of ['fresh-cards','ordinary-48'])
+test(`ordinary replay retains the canonical snapshot across a committed sibling forget: ${kind}`,{timeout:60000},async t=>{
+  const f=await fixture(t,kind),documents=Array.from({length:32},(_,i)=>card(f,i));
+  const second=sibling(f,1);
+  // The package case keeps facts empty to select the ordinary branch. On the
+  // legacy layout an actual sibling forget also leaves the fact set empty.
+  if(kind==='fresh-cards')forget(f,sibling(f,0));else mark(f,documents[0]);
+  assert.equal(f.db.prepare('PRAGMA journal_mode=WAL').get().journal_mode,'wal');
+  const sqlite=createProductSqlitePolicy();sqlite.start(Infinity);
+  let writer;
+  const boundary=replayBoundary(documents.length,({canonical,side})=>{
+    assert.notEqual(canonical,side);assert.equal(canonical.isTransaction,true);
+    writer=f.db;assert.notEqual(writer,canonical);
+    forget(f,second);
+    assert.equal(writer.isTransaction,false,'public forget has returned after COMMIT');
+    const header=writer.prepare('SELECT receipt_key,client,session_id,event_id,role FROM receipts WHERE memory_id=?').get(documents[1].memory.id);
+    for(const token of receiptDenialTokens([header]))assert.ok(writer.prepare(
+      'SELECT 1 FROM suppressed WHERE owner_id=? AND scope=? AND project_id=? AND fingerprint=?')
+      .get(ns.ownerId,ns.scope,ns.projectId,token),'another connection sees the committed marker');
+  });
+  const a=sidecar(t,f,'ordinary',()=>boundary.now(),{sqlite});a.refresh();
+  const before=a.lexical();
+  assert.equal(before.matched,31);assert.deepEqual(before.rows,expectedRows(documents.slice(1)));
+  const measured=await trace(()=>a.lexical(),boundary.onSql);
+  assertReplaySnapshots(measured,boundary);
+  assert.equal(measured.result.matched,before.matched);
+  assert.deepEqual(measured.result.rows,before.rows,'replay cannot mix old BM25 inputs with new withholding');
+  const next=a.lexical();
+  assert.equal(next.matched,30);assert.deepEqual(next.rows,expectedRows(documents.slice(2)),'fresh read sees the committed forget');
+  assert.equal(hasId(next,documents[1].ref.cardId),false);
+});
+
+test('ordinary replay retains the sidecar snapshot across a new Card publication and retirement',{timeout:60000},async t=>{
+  const f=await fixture(t,'fresh-cards'),documents=Array.from({length:32},(_,i)=>card(f,i));
+  forget(f,sibling(f,0));
+  assert.equal(f.db.prepare('PRAGMA journal_mode=WAL').get().journal_mode,'wal');
+  const sqlite=createProductSqlitePolicy();sqlite.start(Infinity);
+  const options={sqlite,sidecarJournalMode:'WAL'};
+  let added,publisher;
+  const boundary=replayBoundary(documents.length,({canonical,side})=>{
+    assert.equal(canonical.isTransaction,true);assert.equal(side.isTransaction,true);
+    added=card(f,documents.length);
+    // Public maintenance retires the old generation, making a missing sidecar
+    // snapshot observable in the replay, rather than merely changing a pointer.
+    const count=reader=>reader.prepare('SELECT count(*) AS n FROM documents').get().n;
+    const probe=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX,{readOnly:true});
+    try{
+      assert.notEqual(probe,side);
+      for(let i=0;i<4;i++){
+        publisher.refresh();
+        if(count(probe)===documents.length+1)break;
+      }
+      assert.equal(count(probe),documents.length+1,'the publisher committed and retired the old documents');
+      assert.equal(count(side),documents.length,'the in-flight sidecar still sees the old generation');
+    }finally{probe.close();}
+  });
+  const a=sidecar(t,f,'ordinary',()=>boundary.now(),options);a.refresh();
+  publisher=pages(t,f,'ordinary',options);
+  const before=a.lexical(),measured=await trace(()=>a.lexical(),boundary.onSql);
+  assertReplaySnapshots(measured,boundary);
+  assert.equal(measured.result.matched,31);assert.deepEqual(measured.result.rows,before.rows);
+  assert.equal(hasId(measured.result,added.ref.cardId),false);
+  assert.equal(a.observe().dto.lexical.state,'ready','fresh observation sees the committed publication');
+  const next=a.lexical();
+  assert.equal(next.matched,32);assert.deepEqual(next.rows,expectedRows([...documents.slice(1),added]));
+});
+
+for(const withheld of [1,3])
+test(`ordinary marked ranking exactly equals public deletion and republication: ${withheld} withheld Cards`,{timeout:60000},async t=>{
+  const f=await fixture(t,'ordinary-48');
+  const survivors=Array.from({length:36},(_,i)=>card(f,i,{title:'Synthetic document '+i,
+    body:['needle pear','needle','pear'][i%3]+' padding'.repeat(8+i%7)}));
+  const shapes=[{title:'needle',body:'needle '.repeat(18)},
+    {title:'needle pear',body:'needle pear '.repeat(10)},{title:'pear',body:'pear '.repeat(18)}];
+  const denied=shapes.slice(0,withheld).map((shape,i)=>card(f,36+i,shape));
+  const terms=new Set(tokenizeT1(query));
+  const matchedTerms=denied.map(document=>new Set(tokenizeT1(document.text).filter(term=>terms.has(term))).size);
+  assert.equal(matchedTerms[0],1,'a withheld Card matches only some query terms');
+  if(withheld===3)assert.ok(matchedTerms.includes(terms.size),'another withheld Card matches several terms');
+  const a=sidecar(t,f,'ordinary');a.refresh();
+  const unmarked=a.lexical();
+  assert.ok(denied.some(document=>unmarked.rows.some(row=>row.ref.cardId===document.ref.cardId)),
+    'a withheld Card would occupy the first 24 slots');
+  for(const document of denied)mark(f,document);
+  const measured=await trace(()=>a.lexical()),marked=measured.result;
+  assert.equal(measured.rows.filter(collector).length,2,'ordinary/no-fact path corrects statistics and replays');
+  assert.equal(marked.matched,survivors.length);assert.deepEqual(marked.rows,expectedRows(survivors));
+  const call=pages(t,f,'ordinary'),markedPages=await cachedPages(call);
+  assert.equal(markedPages.length,24);
+  assert.ok(markedPages.every(page=>page.coverage.omitted.lexical===survivors.length-24));
+  assert.deepEqual(markedPages.flatMap(publicRows),marked.rows.map(({ref,score})=>({ref,score})));
+  // Keep this exact store and all surviving refs/text. Only public Card
+  // deletion and normal index maintenance construct the comparison corpus.
+  for(const {ref}of denied)ok(f.call('deleteKnowledgeCard',{actionId:'synthetic-chunk-delete-'+ref.cardId,
+    cardId:ref.cardId,expectedRevision:ref.revision}));
+  call.refresh();
+  assert.equal(a.observe().dto.lexical.state,'ready');
+  const absent=a.lexical(),absentPages=await cachedPages(call);
+  assert.equal(absent.matched,marked.matched);assert.deepEqual(absent.rows,marked.rows,'ids, order and exact numeric scores');
+  assert.deepEqual(absentPages.map(page=>page.coverage.omitted.lexical),markedPages.map(page=>page.coverage.omitted.lexical));
+  assert.deepEqual(absentPages.flatMap(publicRows),markedPages.flatMap(publicRows),'public ordered refs and raw scores');
+  for(let i=0;i<marked.rows.length;i++)assert.ok(Object.is(marked.rows[i].score,absent.rows[i].score),'bit-identical score '+i);
+  for(const document of denied)for(const result of [marked,absent,...markedPages,...absentPages])
+    assert.equal(hasId(result,document.ref.cardId),false,'no withheld id in results, coverage or cached pages');
 });
 
 for(const kind of ['ordinary-48','ordinary-53'])

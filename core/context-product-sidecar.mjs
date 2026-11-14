@@ -1384,7 +1384,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   function lexical(p, publication, query, limit=24) {
     if (!publication || !connection()) unavailable('missing');
     rendezvous('lexical');
-    return read(() => suppressionRequest(p,publication,visible => {
+    const work=() => suppressionRequest(p,publication,visible => {
       if (visible) return lexicalSuppressed(p,publication,query,limit,visible);
       const terms=[...new Set(tokenizeT1(query))], total=publication.counts, df=new Map(), ranked=[];
       if(!terms.length)return {rows:[],matched:0};
@@ -1453,7 +1453,10 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         ranked.length=0;matched=0;enumerate(false);
       }
       return {rows:ranked,matched};
-    }));
+    });
+    // The no-fact shortcut still collects canonical Card tokens. Pin both
+    // passes there too, while retaining a caller-owned canonical snapshot.
+    return read(()=>canonical.isTransaction||!p.types.includes('card')?work():readTransaction(canonical,work));
   }
 
   return {

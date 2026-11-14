@@ -268,6 +268,17 @@ function assertPlan(db,sql,sites,statistics) {
     for(const alias of ['r','m'])assert.equal(plan.filter(row=>row.detail.startsWith('SEARCH '+alias+' ')&&
       /\((?:[a-z_]+=\? AND )*id=\?\)$/.test(row.detail)).length,2,label+' both anchor arms reach '+alias+' by id: '+plan.map(row=>row.detail).join(' ; '));
   }
+  if(sql.startsWith('SELECT c.owner_id,c.scope,c.project_id,c.id AS card_id')){
+    const arms=sql.includes(' UNION ')?2:1;
+    for(const alias of ['c','r','m'])assert.equal(plan.filter(row=>row.detail.startsWith('SEARCH '+alias+' ')&&
+      /\((?:[a-z_]+=\? AND )*id=\?\)$/.test(row.detail)).length,arms,
+      label+' every scoped collector arm reaches '+alias+' by its unique id');
+    assert.ok(plan.some(row=>row.detail.startsWith('SEARCH b ')&&row.detail.includes('card_id=?')),
+      label+' current bindings are keyed by selected card_id');
+    if(arms===2)assert.ok(plan.some(row=>row.detail.startsWith('SEARCH s ')&&
+      row.detail.includes('card_id=?')&&row.detail.includes('body_revision=?')),
+      label+' lineage is keyed by the selected Card and current body revision');
+  }
   for(const row of plan){
     const {detail}=row,scan=detail.match(/\bSCAN (\w+)/);
     if(scan){
