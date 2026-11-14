@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 import { setImmediate as turn } from 'node:timers/promises';
 import { createContextMaintenanceDemand, startContextMaintenance } from '../server.mjs';
 import { createEngineCardMaintenance } from '../../../core/engine-card-maintenance.mjs';
-import { createCommitDispatcher, bindCommitRuntime } from '../../../core/commit-dispatch.mjs';
+import { createCommitDispatcher, bindCommitRuntime, hasCommitDispatcher } from '../../../core/commit-dispatch.mjs';
 import { openDatabase } from '../../../core/database.mjs';
 
-test('item 8: a busy Card namespace cannot skip other namespaces or projection refresh', { timeout: 3000 }, async t => {
+for (const hosted of [true, false]) test(hosted
+  ? 'item 8: a busy Card namespace cannot skip other namespaces or projection refresh'
+  : 'unbound upkeep retains main early return after a refused Card namespace', { timeout: 3000 }, async t => {
   let tick;
   const original = globalThis.setTimeout;
   globalThis.setTimeout = callback => { tick = callback; return { unref() {} }; };
@@ -18,20 +20,32 @@ test('item 8: a busy Card namespace cannot skip other namespaces or projection r
       seen.push(namespace.ownerId);
       return { ok: true, value: { state: 'refused', reason: 'storage_busy' } };
     } };
+  // Coordinator 11-14 decision (A): continuation and demand scheduling are host-only.
+  if (hosted) {
+    const dispatcher = createCommitDispatcher({ strict: true });
+    const db = dispatcher.open(() => openDatabase(':memory:'));
+    t.after(() => db.close());
+    bindCommitRuntime(core, db);
+  }
   const demand = createContextMaintenanceDemand();
   demand.note(['memory']); demand.note(['card']);
   const loop = startContextMaintenance(core, { readSet: namespaces, call: async (core, method, input) => {
     projections.push(input.types);
-  } }, { cards: true, demand });
+  } }, { cards: true, demand, host: hasCommitDispatcher(core) });
   try {
     for (let i = 0; i < 8; i++) {
       tick(); await turn();
     }
-    assert.deepEqual(seen, Array.from({ length: 8 }, () => ['one', 'two']).flat(), 'R2I_MAINTENANCE_CONTINUES');
-    assert.deepEqual(projections, [
-      ['memory'], ['card'], ['memory'], ['card'],
-      ['memory'], ['card'], ['memory'], ['card'],
-    ]);
+    if (hosted) {
+      assert.deepEqual(seen, Array.from({ length: 8 }, () => ['one', 'two']).flat(), 'R2I_MAINTENANCE_CONTINUES');
+      assert.deepEqual(projections, [
+        ['memory'], ['card'], ['memory'], ['card'],
+        ['memory'], ['card'], ['memory'], ['card'],
+      ]);
+    } else {
+      assert.deepEqual(seen, Array(8).fill('one'), 'R2O7_UNBOUND_MAINTENANCE_MAIN');
+      assert.deepEqual(projections, [], 'R2O7_UNBOUND_MAINTENANCE_MAIN');
+    }
   } finally { await loop.close(); }
 });
 
