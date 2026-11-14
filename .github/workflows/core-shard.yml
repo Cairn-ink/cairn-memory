@@ -1,0 +1,73 @@
+name: Core shard
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        required: true
+        type: string
+      node-key:
+        required: true
+        type: string
+      shard:
+        required: true
+        type: number
+
+permissions:
+  contents: read
+
+jobs:
+  shard:
+    name: shard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      # The wide gate replays an archived engine revision. A shallow checkout
+      # lacks it, so fetch that one commit and require the archive path.
+      - run: git fetch --no-tags --depth=1 origin fd5c59ef8e67cc58bb855a95f8910c668150bfa3
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ inputs.node-version }}
+      - run: npm ci --prefix adapters/mcp
+      - run: npm ci --prefix adapters/openai
+      - name: Run core shard and record timings
+        env:
+          CAIRN_REQUIRE_WIDE_ARCHIVE: "1"
+          CORE_SHARD_OUTPUT_DIR: ${{ runner.temp }}/core-shard-output
+          SHARD: ${{ inputs.shard }}
+        run: |
+          set -euo pipefail
+          printf 'Directory file count (ls): '
+          ls core/test/*.test.mjs | wc -l
+          node tools/testing/core-shards.mjs --shard "$SHARD" --of 6
+      - name: Upload core shard timings and file list
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: core-shard-${{ inputs.node-key }}-${{ inputs.shard }}
+          path: ${{ runner.temp }}/core-shard-output/
+          if-no-files-found: warn
+      - run: npm run demo:store
+        if: inputs.shard == 1
+      - run: npm run demo:history
+        if: inputs.shard == 1
+      - run: npm run demo:moc
+        if: inputs.shard == 1
+      - run: npm run demo:recall
+        if: inputs.shard == 1
+      - run: npm run demo:admission
+        if: inputs.shard == 1
+      - run: npm run demo:episodes
+        if: inputs.shard == 1
+      - run: npm run demo:session-context
+        if: inputs.shard == 1
+      - run: npm run demo:private-cards
+        if: inputs.shard == 1
+      - run: npm run demo:capture
+        if: inputs.shard == 1
+      - run: npm run demo:conflicts
+        if: inputs.shard == 1
+      - run: npm run demo:rebuild
+        if: inputs.shard == 1
+      - run: npm run demo:continuation
+        if: inputs.shard == 1
