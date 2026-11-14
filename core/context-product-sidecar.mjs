@@ -4,7 +4,7 @@ import { hasCardLineage, cardLineageNamespaceInside } from './card-lineage.mjs';
 import { admissionRequired, PRODUCT_SIDECAR_SUFFIX } from './context-product-admission.mjs';
 import { cachedContentSuppressionRequestInside, contentSuppressionRequestInside, withMemoryCandidateBatchInside, withContentSuppressionReadInside, contentSuppressionReasonInside, contentSuppressionRequestFenceInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
 import { bindContentSafetyConnection, cachedContentLayout } from './content-safety-schema.mjs';
-import { contentReadSafety, memoryReadEligible } from './content-safety.mjs';
+import { contentReadSafety, isEngineCard, memoryReadEligible } from './content-safety.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { types } from 'node:util';
 import { randomUUID, createHash } from 'node:crypto';
@@ -12,7 +12,7 @@ import { performance } from 'node:perf_hooks';
 import { dirname } from 'node:path';
 import { createExclusiveSqliteFile, probeRollbackJournal, sqliteFileStat, protectedDeleteJournal, sameJournal } from './sqlite-journal-probe.mjs';
 import { readTransaction } from './database.mjs';
-import { contextCardEligible, contextReadDeleteJournal } from './context-read-sidecar.mjs';
+import { contextEmbeddingGuard, assertContextEmbeddingAllowedInside, contextCardEligible, contextReadDeleteJournal } from './context-read-sidecar.mjs';
 import { cardDependencyFence } from './card-current-storage.mjs';
 import { termFrequencies, tokenizeT1, TOKENIZER_VERSION, REPRESENTATION_VERSION } from './context-read-tokenize.mjs';
 import { scoreBM25, rankScores } from './context-read-bm25.mjs';
@@ -1113,7 +1113,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
               if(exactDocument(base,row)) {tokens={length:base.token_length};source=g.base_id;}
               else {
                 const text=row.eligible ? canonicalRead(()=>{
-                  if(stream.type==='card'&&hasCardLineage(canonical)) {
+                  if(stream.type==='card'&&(hasCardLineage(canonical)||isEngineCard(row.id))) {
                     const current=canonical.prepare(`SELECT id,revision,body_revision,state FROM private_cards WHERE ${where} AND id=?`).get(...boundary(stream.ns),row.id);
                     if(!current||!contextCardEligible(canonical,identity,features,stream.ns,current,p.intent,{readSet:p.readSet}))unavailable('stale_index');
                   }
@@ -1331,7 +1331,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
           if(!document?.eligible)continue;
           const stream=ss[document.stream],ref={type:stream.type,namespace:stream.ns,[stream.type==='memory'?'memoryId':'cardId']:document.id,
             revision:document.revision,...(stream.type==='card'?{bodyRevision:document.body_revision}:{})};
-          if(stream.type==='card'&&visible.checkEach&&(hasCardLineage(canonical)||contentSuppressionMayMatchInside(canonical,stream.ns,{kind:'card',key:document.id}))){
+          if(stream.type==='card'&&(isEngineCard(document.id)||visible.checkEach&&(hasCardLineage(canonical)||contentSuppressionMayMatchInside(canonical,stream.ns,{kind:'card',key:document.id})))){
             if(!cardCandidateAllowed(ref,p))continue;
             checked.add(ref);
           }
@@ -1389,9 +1389,11 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
             if(terms.find(t=>frequencies.has(t))!==term)continue;
             const document=side.prepare('SELECT stream,id,revision,body_revision,token_length,eligible FROM documents WHERE generation=? AND doc=?').get(generation,row.doc);
             if(!document?.eligible)continue;
+            const ref={type:ss[document.stream].type,namespace:ss[document.stream].ns,
+              [ss[document.stream].type==='memory'?'memoryId':'cardId']:document.id,revision:document.revision,...(ss[document.stream].type==='card'?{bodyRevision:document.body_revision}:{})};
+            if(ref.type==='card'&&isEngineCard(ref.cardId)&&!canonicalRead(()=>cardCandidateAllowed(ref,p)))continue;
             const score=scoreBM25(terms,{frequencies,length:document.token_length},{N,totalLength:total.totalTokenLength,df});
-            ranked.push({score,ref:{type:ss[document.stream].type,namespace:ss[document.stream].ns,
-              [ss[document.stream].type==='memory'?'memoryId':'cardId']:document.id,revision:document.revision,...(ss[document.stream].type==='card'?{bodyRevision:document.body_revision}:{})}});
+            ranked.push({score,ref});
             rankScores(ranked);if(ranked.length>limit)ranked.pop();matched++;
           }
           if(rows.length<128)break;after=rows.at(-1).doc;
@@ -1402,6 +1404,15 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   }
 
   return {
+    embeddingGuard: (readSet, deadlineAt) => contextEmbeddingGuard(canonical, canonicalRead, readSet, deadlineAt),
+    assertEmbeddingAllowed: (readSet, deadlineAt) => canonicalRead(() => assertContextEmbeddingAllowedInside(canonical, readSet, deadlineAt)),
+    embeddingError(readSet, deadlineAt, error) {
+      if (error.code === 'budget_denied') {
+        try { canonicalRead(() => assertContextEmbeddingAllowedInside(canonical, readSet, deadlineAt)); }
+        catch (denial) { denial.attempts=error.attempts;return denial; }
+      }
+      return error;
+    },
     visibleCounts,
     vectorFence(p,lexical) {
       return recordBindings(lexical,target(projection(p),lexical.accessDigest))===null&&

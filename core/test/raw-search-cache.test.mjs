@@ -71,7 +71,7 @@ async function embeddedFixture(t,patch={}) {
 }
 function observeLoads(t) {
   const prepare=DatabaseSync.prototype.prepare;let loads=0;
-  DatabaseSync.prototype.prepare=function(sql){if(sql.includes('SELECT s.*,h.sequence'))loads++;return prepare.call(this,sql);};
+  DatabaseSync.prototype.prepare=function(sql){if(sql.startsWith('SELECT * FROM segments WHERE published=1 ORDER BY id DESC'))loads++;return prepare.call(this,sql);};
   t.after(()=>{DatabaseSync.prototype.prepare=prepare;});return ()=>loads;
 }
 test('local warm search reuses fp32 and hints; coverage and status reveal no cache state',async t=>{
@@ -198,13 +198,14 @@ for(const scope of ['owner','namespace'])test(`Raw handle inventory and warm cac
   for(const intent of ['current','history']){const candidate=(await s.search({query:'copper',intent})).candidates[0];
     entries.push({intent,candidate,prepared:await s.prepare(candidate,intent)});}
   const before=opens;
-  const gated=['search','prepare','prepareSource','classify','validate','revalidate'],lifecycle=['maintain','status','purge','close'];
+  const gated=['search','prepare','prepareMany','prepareSource','classify','validate','revalidate'],lifecycle=['maintain','status','purge','close'];
   assert.deepEqual(Object.keys(s.service).sort(),[...gated,...lifecycle].sort());
   transaction(f.db,()=>scope==='owner'?suppressOwnerInside(f.db,{ownerId:ns.ownerId,reason:'account_erasure',actionId:'synthetic-erasure'}):
     writeContentSuppressionInside(f.db,{namespace:ns,kind:'namespace',matchMode:'namespace',reason:'privacy_erase',actionId:'synthetic-erasure'}));
   for(const {intent,candidate,prepared} of entries){
     assert.equal((await s.search({query:'copper',intent})).candidates.length,0);
     await assert.rejects(s.prepare(candidate,intent),{code:'raw_search_unavailable'});
+    assert.deepEqual(await s.service.prepareMany([candidate],{intent},s.host.token),{handles:[null],complete:true});
     await assert.rejects(s.service.prepareSource(candidate.ranges[0],{intent},s.host.token),{code:'raw_search_unavailable'});
     assert.deepEqual(await s.service.classify(candidate,{intent},s.host.token),{kind:'denied',reason:'source-or-authority-unavailable'});
     for(const method of ['validate','revalidate'])assert.throws(()=>s.service[method]([prepared]),{code:'raw_search_unavailable'});

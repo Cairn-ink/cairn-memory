@@ -1,5 +1,66 @@
 # Compatibility protocol v0.3.0
 
+### Local core forgotten-text read
+
+| Method | Input | Success value |
+| --- | --- | --- |
+| `core.isSuppressed` | `{ namespace, content }` | `{ suppressed: boolean }` |
+
+`openMemoryCore` exposes this synchronous read in the usual `{ ok, value }`
+envelope. The read answers whether admit would refuse this exact text as
+`memory_suppressed`, extended to raw inputs beyond admit's raw-length guard.
+The raw ceilings are 1,000,000 UTF-16 units for the read and 20,000 for admit.
+One shared normalization/fingerprint path applies NFKC, existing secret
+redaction, collapsed and trimmed whitespace, then lowercases with JavaScript
+`toLowerCase()`; no full Unicode case folding (e.g. ß/SS, σ/ς don't match),
+the same as admit.
+
+Every string within the read's raw guard gets `{ suppressed: boolean }` when
+scope and storage checks succeed. Empty after normalization, redaction-only,
+NUL-containing, and over 4,000 normalized units return `suppressed: false`:
+none can equal stored Memory text. Non-string content, missing or extra fields,
+over 1,000,000 raw units, or an invalid namespace return `invalid_input`.
+Namespace refusals stay identical to admit's.
+
+Known limits: exact-text match after admit's normalization, so trivially
+modified text (an added character, embedded text) is not matched. Fingerprints
+written under an older normalization match only if today's normalization yields
+the same text, the same as for admit. The equivalence domain is admit's eligible
+inputs: the read says `suppressed` iff admit refuses `memory_suppressed`.
+Outside admit's raw guard the read answers more. Admit's receipts-first ordering
+is the safe direction: whenever the read says `true`, admit refuses, possibly
+with an earlier admission-only code. This read does not validate kind, receipts,
+timestamps, conflict hints, qualification, or procedural metadata. Write-only
+lock and query-only failures can also prevent admission independently.
+
+Installed content-safety facts hiding a matching live Memory count as suppressed.
+The read uses a deferred transaction, creates no claims, events or recall units,
+and can answer while another connection holds a reserved write lock. Its early
+scope check is deferred into the snapshot, and the outer facade checks again at
+delivery. It does not reserve a later admission: the host must still handle
+admit's refusal if suppression changes between calls.
+
+| Non-ok code | Meaning |
+| --- | --- |
+| `invalid_input` | Unanswerable: the host must not save. |
+| `memory_not_found` | Erased owner or namespace. |
+| `store_closed` | Closed connection. |
+| `storage_busy` | Storage contention; retry once. |
+| `unsupported_database` | Failed layout attestation. |
+| `evidence_unavailable` | On an installed safety layout, another connection records a forget or erase fact for the owner between the read's COMMIT and final delivery check. Transient race; retry once. |
+| `storage_error` | Other storage failure. |
+
+Any non-ok result means unanswerable, so don't save; retry once for
+`evidence_unavailable`/`storage_busy`. The global `retryable` mapping is unchanged;
+`evidence_unavailable` still carries `retryable: false`. Errors contain codes and
+retryability only.
+
+The host binds `namespace` to the authenticated owner and project, exactly as
+for admit; a role context adds no grant check. Forgotten text in another
+namespace does not affect the answer. This is a trusted-host boundary: a probe
+leaves no trace, unlike a refused admit. Hosts that expose the read beyond the
+authenticated owner should rate-limit it.
+
 The uninstalled [internal Raw producer foundation](raw-local-journal.md#internal-producer-foundation-p4a)
 has a separate v2 preparation/acknowledgement contract and transient-plaintext
 threat model. It does not widen installed v1 or add a hosted route.
@@ -472,10 +533,54 @@ The tuple `(authenticated user, client, event_id)` is an idempotency key. Concur
 
 Only `user` and `assistant` text belongs in `messages`. Unknown fields are rejected. Automatic results must remain `personal` or `project` private and carry origin `agent-inferred` plus at least one Source Receipt.
 
+Capture clients may supply these optional time and window fields:
+
+- Each message's `occurred_at` is its record's ISO timestamp, preserved exactly,
+  at most 40 characters. Messages without a timestamp omit it.
+- `sent_at` is the client's ISO clock at this send attempt. It changes on retry.
+- `window` is `{ id, slice, slices, initial }`. `id` hashes the wire session and
+  window's starting byte offset. `slice` and `slices` are integers from 1 to 4096,
+  with `slice <= slices` enforced by capture-request conformance;
+  numbering is 1-based and counts only requests containing messages. Entirely
+  withheld batches do not count. The last sent request has `slice === slices`.
+  These clients group a backlog exceeding 4096 sent batches into
+  consecutive metadata windows of at most 4096 requests, without changing event
+  IDs or batch boundaries. The first
+  group starts at the frozen range's offset; subsequent groups start at their
+  first batch's record offset. All groups inherit the range's `initial` value.
+  Frozen retries preserve IDs, numbering and `initial` even if the file grows.
+
+Claude sets `initial` when the range began without a cursor or a SessionStart
+byte boundary, including when only a first-prompt time was available. A synchronous
+local SessionStart handler records EOF under one nonblocking capture-lock attempt,
+with a two-second host timeout; telemetry remains asynchronous. An existing cursor
+or start boundary returns without acquiring the lock. An existing empty file
+starts at zero, while a missing transcript leaves the boundary unknown. A prompt
+marker or any earlier capture attempt prevents a late start from claiming EOF.
+Even an empty capture persists `captureSeen`, without creating a trusted byte
+boundary, so subsequently flushed bytes remain eligible for `initial: true`.
+
+A first-prompt marker can exclude only a leading dated prefix strictly older than
+`firstPromptAt - 10 minutes`. It is published after recall's fetch or decision,
+using one nonblocking capture-lock attempt, and only before any capture has run.
+A later recall cannot supply a skipping marker for an earlier capture. Records
+inside that margin are sent with their own times and `initial: true`; server
+copied-history classification remains necessary. Marker and cursor writes cannot
+overwrite one another from stale reads. A first capture that wins the race
+freezes its classification across retries. Codex establishes
+an EOF boundary before capture and refuses fork/history headers, so its windows
+have `initial: false`. Codex uses a row timestamp or completion milliseconds
+converted to ISO. Time and window metadata never enter message or event IDs.
+
+Servers must accept these optional fields before updated hosted clients ship.
+The non-HTTP local raw producer has a separate strict multipart contract and
+does not receive hosted window or send-time fields.
+
 The Claude plugin withholds machine-written user records and its own skill turns,
 including assistant answers until the next submitted user prompt. Whole plugin
-control output lines are also withheld. Its local capture cursor may retain only
-an `ownSkillTurn: true` boolean for continued answers; this is not a wire field.
+control output lines are also withheld. Its local capture cursor retains
+an `ownSkillTurn: true` boolean for continued answers alongside session boundary
+and frozen-window metadata; these cursor fields are not wire fields.
 The parser still keeps every record the 0.1.0 text parser emitted when computing
 24-record batch boundaries and `event_id`. Only the withheld subset is removed
 from `messages`; an entirely withheld batch needs no request. A frozen retry
@@ -780,14 +885,18 @@ It reads receipts in stable opaque-ID order, which is not event chronology, and
 uses the greatest distinct literal query-token overlap across the generated body
 and those four excerpts. A receipt supplies the existing 120-code-point select
 preview only when it scores strictly above the body; the first stable-ID receipt
-wins a receipt tie, while a body tie keeps the body preview. The default scans
-at most 1,024 current physical memories per namespace and scores at most 4,096
-excerpts of at most 800 UTF-16 units. An embedded trusted caller may opt into
-`openMemoryCore({ sourceCandidatePolicy: 'bounded-keyset-v1' })` for explicit
-source-context recall only. It keyset-scans at most 20,000 current physical rows
-per authorized namespace in pages of at most 256, checks one ID-only sentinel,
-and retains the top 1,024 by the same score and ID order. Projection-excluded
-rows consume the physical bound without exposing text or receipts to scoring.
+wins a receipt tie, while a body tie keeps the body preview. All recall modes scan nondeleted physical rows newest first on the existing
+`namespace_memories` index, with a 1,024-row floor, a fixed 300 ms monotonic
+budget and a 20,000-row cap. The floor and its placement share one
+normal-timeout deferred transaction. Tail pages use timeout zero, restored
+synchronously, and visit at most 256 rows or 25 ms before releasing SHARED.
+The floor filters currentness and review state in one content statement,
+with an unscored 1,025th row detecting a tail. It retains ordinary recall
+statement costs when exhausted. Tail pages apply those filters after physical
+traversal. Active-generation membership and canonical safety gate scoring;
+rejected tail rows still consume time and rows. The best 1,024 candidates are retained by overlap then ID. Body-only
+recall scores no receipts; source modes score up to four excerpts of at most
+800 UTF-16 units per eligible memory. There is no candidate-policy option.
 The selector sees only a winning 120-code-point
 preview for each candidate actually packed into the existing at-most-100-item,
 4,000-token pages over at most two rounds, not all four excerpts, receipt IDs or
@@ -807,12 +916,19 @@ receipt five or later cannot help that memory reach selection. Existing epoch,
 revision and final-snapshot checks prevent stale later use and finalization;
 they cannot retract a preview after a model request has already begun.
 
-The opt-in policy additionally binds its 20,000-row cap, 256-row page and
-1,024-candidate top bound in private recall cursors. A physical cap with another
-current row or any eligible candidate discarded by top-K retention is explicitly
-incomplete; it never triggers complete-map source ranking. This constructor
-policy adds no public map, MCP, HTTP, Hermes or persisted schema field and
-provides no semantic-accuracy guarantee.
+The `literal-recency-keyset-overlap-v4` policy binds the cap, page size and
+top bound in private recall cursors, together with a signed scan boundary
+(visited rows, last recency key and stop cause). A continuation rebuilds exactly
+that prefix without the time budget and rejects changed epochs or a busy tail.
+Older policy cursors fail validation. The floor, its safety checks and placement
+share one normal-timeout deferred read. Tail pages and final placement use
+try-once reads with timeout zero, restored synchronously after each read.
+There are no restarts: epoch movement discards the tail and returns the floor
+under its original epochs, subject to existing delivery freshness checks.
+Tail placement also rechecks those epochs and falls back to the floor on BUSY
+or movement. Budget/cap exhaustion, a busy tail, movement or top-K pruning sets `scanExhausted:false` and ordinary
+incomplete coverage; it never adds an error, partial reason or retry status.
+No public map, MCP, HTTP, Hermes or persisted schema field is added.
 
 Complete retained sources must fit the existing budgets or fail; no context
 expansion, dropped conditions or inferred authority is allowed. Inspection can

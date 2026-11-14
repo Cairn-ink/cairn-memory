@@ -40,5 +40,7 @@ export function createCardReceiptSources(db, binding) {
     }
     return result;
   }
-  return { resolve, fromMemories, refInside };
+  // Shared projection for already selected canonical rows, including readable
+  // historical Memories. Serving still validates the resulting source ref.
+  return { resolve, fromMemories, refInside, retainedRefInside: refFor };
 }

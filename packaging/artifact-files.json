@@ -140,6 +140,7 @@
   "core/runtime.mjs",
   "core/supersession-storage.mjs",
   "core/validation.mjs",
+  "core/suppression-content.mjs",
   "core/prompts/classify-placement.md",
   "core/prompts/extract-memories.md",
   "core/prompts/extract-retained-sources.md",
@@ -193,6 +194,7 @@
   "evaluation/live/diagnostics.mjs",
   "integrations/client/control-state.mjs",
   "integrations/client/file-lock.mjs",
+  "integrations/client/source-time.mjs",
   "integrations/client/hosted-contract.mjs",
   "integrations/client/hosted-schemas.mjs",
   "integrations/client/pairing.mjs",
@@ -240,6 +242,7 @@
   "integrations/codex/session-source.mjs",
   "integrations/codex/qualification.mjs",
   "integrations/codex/schema-evidence.mjs",
+  "plugins/cairn-memory/lib/source-time.mjs",
   "plugins/cairn-memory/lib/transcript.mjs",
   "integrations/client/runtime-usage.mjs",
   "integrations/client/state-lock.mjs",
@@ -385,5 +388,11 @@
   "core/card-lineage-base-schema.mjs",
   "docs/plans/card-lineage-v1.md",
   "SEAM.md",
-  "docs/plans/layout-base-upgrade.md"
+  "docs/plans/layout-base-upgrade.md",
+  "adapters/openai/consolidate-schema.mjs",
+  "core/engine-card-clusters.mjs",
+  "core/engine-card-maintenance.mjs",
+  "core/engine-card-output.mjs",
+  "core/engine-card-storage.mjs",
+  "docs/engine-cards.md"
 ]

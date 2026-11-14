@@ -98,6 +98,11 @@ test('r4 write inventory has a closed operation and terminal-target classificati
     assert.equal(contentWriteMethodClass(method),value.operation==='write'?'write':'read',facade+'.'+method+' dispatch class');
     if(value.operation==='write'){assert.ok(CONTENT_WRITE_METHODS.includes(method));listed.add(method);assert.equal(value.terminalField,CONTENT_TERMINAL_FIELDS[method]??null);}
   }
+  // Configured-only engine writer; ordinary facade method inventories stay fixed.
+  assert.equal(contentWriteMethodClass('maintainCards'),'write');
+  assert.equal(CONTENT_TERMINAL_FIELDS.maintainCards??null,null);
+  assert.equal(listed.has('maintainCards'),false);
+  listed.add('maintainCards');
   assert.deepEqual([...listed].sort(),[...CONTENT_WRITE_METHODS].sort());
 });
 
@@ -292,6 +297,12 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // manager. Ordinary Raw capture reconstructs existing message/event/session
   // identities before journal registration. Pin these existing projections;
   // neither adds acknowledgement fields or changes the native write guard.
+  // Capture-window metadata adds two literal id occurrences in the hosted
+  // schema (required key and property). This opaque window identity is transport
+  // metadata, not writer authority or a new acknowledgement/terminal field.
+  // Lock liveness preflight adds key:pid (1 -> 2): process metadata, never content or writer identity.
+  // Recall's recency keyset adds one private last-position id in the signed
+  // cursor boundary. It adds no writer acknowledgement or terminal exemption.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));
   const files=JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json',import.meta.url),'utf8'));
   const actual={};

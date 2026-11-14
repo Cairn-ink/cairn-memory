@@ -9,11 +9,12 @@ import { createTestWorkspace } from '../../../../tools/testing/workspace.mjs';
 import { binaryIdentity, canonical, KNOWN_FORMATS } from '../../qualification.mjs';
 import { resolveClient } from '../../../client/pairing.mjs';
 import { policyPath } from '../../../client/automatic-policy.mjs';
+import { hostedTargetId } from '../../../client/transport-hosted.mjs';
 import { hostedPauseStatus } from '../../../client/hosted-pause.mjs';
 import { copyRuntime } from '../../../../packages/setup/lib/codex-runtime.mjs';
 
 const preload = fileURLToPath(new URL('./prefetch-preload.mjs', import.meta.url));
-export async function installedPrompt(t, { host = 'codex', warm = true, syncDelay = 0, unanswered = false, seedIdentity = true, pauseUnavailable = false } = {}) {
+export async function installedPrompt(t, { host = 'codex', warm = true, syncDelay = 0, unanswered = false, seedIdentity = true, pauseUnavailable = false, memories = [], deliveryEvidence = false } = {}) {
   const ws = createTestWorkspace(t, { prefix: 'prefetch-' });
   try {
     const home = join(ws.path, 'home'), root = join(home, 'data'), directory = join(home, 'codex', 'cairn');
@@ -27,7 +28,7 @@ export async function installedPrompt(t, { host = 'codex', warm = true, syncDela
         if (measuring) recallHeaders++;
         if (measuring && unanswered) return;
         response.setHeader('content-type', 'application/json');
-        response.end(JSON.stringify({ memories: [] })); return;
+        response.end(JSON.stringify({ memories })); return;
       }
       assert.ok(request.url.endsWith('/pause-state'));
       const wait = measuring && unanswered && pauseRequests++ === 0 ?
@@ -90,6 +91,7 @@ export async function installedPrompt(t, { host = 'codex', warm = true, syncDela
         const start = performance.now();
         const child = spawn(${JSON.stringify(process.execPath)}, [
           ...(measured ? ['--import', ${JSON.stringify(preload)}] : []),
+          ...(measured && ${deliveryEvidence} ? ['--import', ${JSON.stringify(fileURLToPath(new URL('./pause-delivery-preload.mjs', import.meta.url)))}] : []),
           ${JSON.stringify(entry)}, ...${JSON.stringify(args)}], {
           env: {...process.env, CAIRN_TEST_SYNC_DELAY: measured ? '${syncDelay}' : '0'},
           stdio: ['pipe', 'pipe', 'pipe', 'ipc'] });
@@ -108,12 +110,13 @@ export async function installedPrompt(t, { host = 'codex', warm = true, syncDela
     startedAt = performance.now();
     const child = spawn(executable, [parent], { cwd: ws.path, detached: true, env, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
     child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
-    let stdout = '', stderr = '', outcome;
+    let stdout = '', stderr = '', outcome, delivery;
     child.stdout.on('data', data => stdout += data); child.stderr.on('data', data => stderr += data);
     child.on('message', message => {
       if (message.kind === 'measuring') { measuring = true; startedAt = performance.now(); }
       else if (message.kind === 'prefetch') snapshot = message;
       else if (message.kind === 'outcome') outcome = message;
+      else if (message.kind === 'delivery') delivery = message;
     });
     const done = new Promise((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
     ws.defer(async () => {
@@ -123,7 +126,10 @@ export async function installedPrompt(t, { host = 'codex', warm = true, syncDela
     const watchdog = setTimeout(() => process.kill(-child.pid, 'SIGKILL'), 10000);
     let code;
     try { code = await done; } finally { clearTimeout(watchdog); }
-    return { code, signal: child.signalCode, stdout, stderr, outcome, recallHeaders, snapshot, phases,
-      status: await hostedPauseStatus({ root, endpoint }) };
+    const exists = path => readFile(path).then(() => true, error => { if(error.code==='ENOENT')return false; throw error; });
+    const deliveryLocks = deliveryEvidence ? {control:await exists(join(root,'control.lock')),
+      gate:await exists(join(root, 'hosted-pause.gate'))} : undefined;
+    return { code, signal: child.signalCode, stdout, stderr, outcome, recallHeaders, snapshot, phases, deliveryLocks,
+      delivery, status: await hostedPauseStatus({ root, endpoint }) };
   } finally { await ws.cleanup(); }
 }

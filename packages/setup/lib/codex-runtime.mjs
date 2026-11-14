@@ -212,7 +212,7 @@ async function prepareIdentity({ previous, prompt, write, t, neutral, codexHome,
     const pending = await initializePairing(options);
     if (!pending.pairingRecord) throw new Error('identity_unavailable');
     // Native Claude delivery happens only after the disabled Codex binding is
-    // durable. A hook/credential failure cannot strand Claude behind H5 or a cap.
+    // durable. A hook/credential failure cannot apply a Codex-only cap to Claude.
     return {root:pending.root,usesClaude:true,pairingRecord:pending.pairingRecord,complete:options};
   };
 }

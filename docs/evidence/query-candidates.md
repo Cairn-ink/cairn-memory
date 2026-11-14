@@ -1,5 +1,9 @@
 # Query-aware candidate reachability
 
+> Historical candidate-routing configuration: current recall uses the
+> [default recency keyset scan](../defaults.md) in every mode. The old
+> ID-prefix limit and candidate-policy constructor option no longer apply.
+
 This change moves literal body scoring before recall candidate pagination.
 It retains the shared SQLite core, public MOC organization and genuine placement
 references, while changing the private selection input from mixed root-map pages

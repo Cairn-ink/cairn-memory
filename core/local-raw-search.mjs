@@ -16,7 +16,7 @@ export const localRawSearchManager = port => owners.get(port) ?? null;
 export function createLocalRawSearch(path, crypto, { embedder, policy } = {}, { semanticDisabledReason = 'disabled' } = {}) {
   const embeddingPolicy = embedder ? rawEmbeddingPolicy(policy) : null;
   const entries = new Map();
-  let timer, running, closing, closed = false, unsupported = false, next = 0;
+  let timer, running, closing, closed = false, unsupported = false, serviced = 0;
   const unsupportedStatus = () => ({ state: 'unavailable', raw: 'unsupported_store', coverage: 'unknown' });
   const unsupportedSearch = () => ({ candidates: [], coverage: { status: 'unsupported_store' } });
   const maintenanceTurn = { version: 1, maxWaitMs: 25, createTurn() {
@@ -32,10 +32,20 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}, { 
     const namespaces = readSet.map(normalize).sort((a,b) => Buffer.compare(Buffer.from(JSON.stringify(a)), Buffer.from(JSON.stringify(b))));
     if (namespaces.some(ns => ns.ownerId !== namespaces[0].ownerId) || new Set(namespaces.map(ns => JSON.stringify(ns))).size !== namespaces.length) fail('invalid_read_set');
     const key = hash(namespaces.length === 1 ? namespaces[0] : namespaces);
-    if (!entries.has(key)) entries.set(key, { key, readSet: namespaces, token: {}, grants: new WeakMap(), readers: new Map(), service: null, opening: null, error: null });
+    if (!entries.has(key)) entries.set(key, { key, readSet: namespaces, token: {}, grants: new WeakMap(), readers: new Map(), service: null, opening: null, error: null, lastServed: 0, dirty: false });
     return entries.get(key);
   }
   async function serviceFor(entry, lexical = false) {
+    // Both readers belong to the same host authority and canonical store.
+    // Keep that private identity so their handles can share a final snapshot.
+    entry.authority ??= {
+      authorize(request, token) {
+        if (closed || token !== entry.token) return null;
+        const { input, ...binding } = request, grant = {};
+        entry.grants.set(grant, { ...binding, accessGeneration: 1 }); return grant;
+      },
+      isCurrent: grant => closed ? null : entry.grants.get(grant) ?? null,
+    };
     if (lexical && embedder) {
       entry.lexical ??= { ...entry, service: null, opening: null, lexicalOnly: true };
       return serviceFor(entry.lexical);
@@ -46,17 +56,9 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}, { 
       if (path === ':memory:') fail('raw_search_backend_unavailable');
       const directory = resolve(path) + '.raw-search/' + entry.key;
       await mkdir(directory, { recursive: true, mode: 0o700 });
-      const authority = {
-        authorize(request, token) {
-          if (closed || token !== entry.token) return null;
-          const { input, ...binding } = request, grant = {};
-          entry.grants.set(grant, { ...binding, accessGeneration: 1 }); return grant;
-        },
-        isCurrent: grant => closed ? null : entry.grants.get(grant) ?? null,
-      };
       const service = await openRawSearch({ version: 'raw-search-v1', enabled: true, backend: 'local',
         path: resolve(path), directory, ownerId: entry.readSet[0].ownerId, readSet: entry.readSet,
-        authority, crypto, maintenanceTurn, ...(embedder && !entry.lexicalOnly ? { embedder, policy: embeddingPolicy } : {}) });
+        authority: entry.authority, crypto, maintenanceTurn, ...(embedder && !entry.lexicalOnly ? { embedder, policy: embeddingPolicy } : {}) });
       if (closed) { await service.close(); fail('store_closed'); }
       entry.error = null;
       return entry.service = service;
@@ -72,7 +74,12 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}, { 
     timer.unref();
   }
   async function tick() {
-    const values = [...entries.values()], entry = values[next++ % values.length];
+    const values = [...entries.values()];
+    // Oldest service wins; dirty saves break ties without starving polling of
+    // other-process writers. A finite namespace population remains required.
+    values.sort((a,b)=>a.lastServed-b.lastServed||Number(b.dirty)-Number(a.dirty)||a.key.localeCompare(b.key));
+    const entry=values[0];
+    if(entry){entry.lastServed=++serviced;entry.dirty=false;}
     if (!entry || closed) return;
     try { await maintain(entry, await serviceFor(entry)); }
     catch (error) {
@@ -122,7 +129,8 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}, { 
     unsupportedStore() { unsupported = true; clearTimeout(timer); timer = null; },
     schedule(namespace) {
       const ns = normalize(namespace);
-      if (![...entries.values()].some(entry => entry.readSet.some(value => same(value, ns)))) entryFor([ns]);
+      const entry=[...entries.values()].find(entry=>entry.readSet.some(value=>same(value,ns)))??entryFor([ns]);
+      entry.dirty=true;
       arm(0);
     },
     start() { arm(0); },
@@ -142,13 +150,51 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}, { 
           const handle = await service.prepare(candidate, settings, entry.token);
           handles.set(handle, service); return handle;
         },
+        async prepareMany(candidates, settings = {}) {
+          if (closed) fail('store_closed');
+          if (!Array.isArray(candidates) || candidates.length > 24) fail('invalid_input');
+          if (!candidates.length) return { handles: [], complete: true };
+          // Consecutive reader partitions preserve input/progress order. Each
+          // native reader authenticates every proof in its own partition.
+          const groups = [];
+          for (const candidate of candidates) {
+            const reader = entry.readSet.some(ns => same(ns, candidate?.namespace)) ? entry.readers.get(candidate?.proof) : null;
+            const service = [entry.service, entry.lexical?.service].includes(reader) ? reader : null;
+            if (!groups.length || groups.at(-1).service !== service) groups.push({ service, candidates: [], start: groups.reduce((n, group) => n + group.candidates.length, 0) });
+            groups.at(-1).candidates.push(candidate);
+          }
+          const prepared = [], deadlineAt = Math.min(settings.deadlineAt ?? Infinity, performance.now() + 1000);
+          for (const group of groups) {
+            if (performance.now() >= deadlineAt) return { handles: prepared, complete: false };
+            if (!group.service) {
+              for (const [offset] of group.candidates.entries()) { prepared.push(null); settings.onPrepared?.(null, group.start + offset); }
+              continue;
+            }
+            const result = await group.service.prepareMany(group.candidates, { ...settings, deadlineAt, onPrepared(handle, offset) {
+              if (handle) handles.set(handle, group.service);
+              settings.onPrepared?.(handle, group.start + offset);
+            } }, entry.token);
+            prepared.push(...result.handles);
+            if (!result.complete || result.handles.length !== group.candidates.length) return { handles: prepared, complete: false };
+          }
+          return { handles: prepared, complete: true };
+        },
         revalidate(selected) {
           if (closed) fail('store_closed');
-          const service = Array.isArray(selected) && selected.length ? handles.get(selected[0]) : entry.service;
-          if (!service || ![entry.service, entry.lexical?.service].includes(service) || !Array.isArray(selected) || selected.some(handle => handles.get(handle) !== service)) fail('stale_publication');
-          // One native batch preserves final canonical validation across the
-          // whole authorized read set, including personal + project reads.
-          return service.revalidate(selected);
+          if (!Array.isArray(selected)) fail('stale_publication');
+          let validator;
+          for (const handle of selected) {
+            const service = handles.get(handle);
+            if (!service || ![entry.service, entry.lexical?.service].includes(service)) fail('stale_publication');
+            validator ??= service;
+          }
+          if (!selected.length) {
+            if (!entry.service) fail('stale_publication');
+            return entry.service.revalidate([]);
+          }
+          // Issuing-reader callbacks run first. One reader then checks the
+          // entire set in one canonical snapshot, preserving input order.
+          return validator.revalidate(selected);
         },
       });
       owners.set(port, manager); return port;

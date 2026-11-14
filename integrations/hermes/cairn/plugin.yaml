@@ -1,4 +1,5 @@
 name: cairn
-version: 0.1.0
-description: Explicit profile-local memory through the installed Cairn MCP.
+version: 0.3.0
+requires_hermes: ">=0.23.0"
+description: Cairn memory through hosted HTTPS or the installed profile-local MCP.
 hooks: []

@@ -25,7 +25,7 @@
     "start": null,
     "end": null,
     "purpose": "input timestamp normalizer; no attested layout access",
-    "sha256": "305ced7b94efa69da65945c4d6bb45a174b91b1b0f9919ce7a8f765cfe55698d"
+    "sha256": "fb8fa11ee5951ebd2c6bd0b67e3b528ca7cacfd95cd7ddefc22c242a71e1aa0d"
   },
   {
     "file": "core/runtime.mjs",
@@ -88,7 +88,7 @@
     "start": "export function createPrivateEvidenceStorage(",
     "end": "  function selectedReceiptRef(",
     "purpose": "private evidence storage: memo receipt projection sink",
-    "sha256": "866203b0a2ec5885a575988e9da3199572e5fce077068961819e4a1d028042f6"
+    "sha256": "333f80c7f19ee1f26156d714ad59d2b2f9c65d133e8cfb3770628f178a680ea5"
   },
   {
     "file": "core/layout-base-upgrade.mjs",

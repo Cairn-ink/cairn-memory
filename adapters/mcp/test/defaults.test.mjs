@@ -76,7 +76,7 @@ test('programmatic dependent tools inherit the contextRead default', async t => 
   const workspace = createTestWorkspace(t);
   const server = createCairnServer({ path:join(workspace.path, 'roles.sqlite'), namespace,
     methodPackages:'local-v1', roleProfiles:'local-v1' });
-  t.after(() => server.close());
+  workspace.defer(() => server.close());
   assert.equal(await server.contextCounterReady, true);
   assert.ok(Object.keys(server._registeredTools).includes('read_role_task_context'));
   assert.ok(Object.keys(server._registeredTools).includes('read_memory_context'));

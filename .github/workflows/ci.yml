@@ -154,6 +154,19 @@ jobs:
       # Parity with the released 0.1.1 client (checked-in fixture plus its sources at 3a1c17d9).
       - run: npm run test:pairing:golden
 
+  client-pause:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      # Hosted pause gate client suites: nothing is sent or shown while paused.
+      - run: npm run test:client-pause
+
   codex:
     runs-on: ubuntu-latest
     strategy:
@@ -178,12 +191,17 @@ jobs:
         node-version: ['22.16.0', 24, '24.22.1']
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      # The wide gate replays an archived engine revision. A shallow checkout
+      # lacks it, so fetch that one commit and require the archive path.
+      - run: git fetch --no-tags --depth=1 origin fd5c59ef8e67cc58bb855a95f8910c668150bfa3
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ matrix.node-version }}
       - run: npm ci --prefix adapters/mcp
       - run: npm ci --prefix adapters/openai
       - run: npm run test:core
+        env:
+          CAIRN_REQUIRE_WIDE_ARCHIVE: "1"
       - run: npm run demo:store
       - run: npm run demo:history
       - run: npm run demo:moc

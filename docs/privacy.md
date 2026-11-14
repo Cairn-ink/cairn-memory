@@ -671,6 +671,75 @@ standalone Codex target, preserving Claude keys/config. Pairing delivers only th
 shared identity record; same account/endpoint remains the person's choice. Local
 deletion does not revoke a server credential.
 
+Hosted automatic recall and capture in both clients also require a freshly
+validated, enforced `/api/memory/pause-state` observation. Claude recall observes
+once immediately before its fetch, after project and quota preparation; output
+checks only the local published pause barrier (in-process state on native Windows).
+A recall already in flight when you pause can still complete for that one prompt;
+nothing is sent after the pause is seen by that hook. Capture, its detached worker
+and Codex retain their initial and pre-dispatch observations.
+Unavailable state blocks both operations. The foreground capture launcher does
+not fetch hosted state; its detached worker performs the observations.
+
+On Linux and macOS, pause publication and final request or context-write
+admission share one filesystem gate, acquired before the local control lock.
+Pause authority is committed only under that gate. Once a pause is recorded on
+this machine, no request starts after that; work already admitted in another
+process may complete. Context not yet admitted is suppressed. A content-free
+pending marker keeps new admissions closed while pause publication waits,
+including after a process restart.
+
+Resume permits new work only after local publication. Local rotation and durable
+pause publication precede a matching completion receipt; incomplete publication
+never authorizes work. The publisher
+continues waiting until it holds the gate or its process budget ends. A live
+holder suspended by the operating system can delay publication indefinitely;
+the admission deadline is cooperative and cannot bound OS suspension or disk I/O.
+
+Final admission retains synchronous owner-checked reads of local authority and
+checks for pending observations. The unchanged path adds no network call or
+fsync. Network completion and the drain of an admitted output happen after the
+gate is released.
+
+A fixed high-water checkpoint and the latest immutable intent/receipt retain
+crash authority across restarts. Changed observations prune dominated records
+only after their replacement authority is durable; interrupted compaction is
+repaired on a later observation. Successful cycles retain two journal files,
+and repeated failed rotations retain only the highest pending intent. Availability
+diagnostics never authorize dispatch. Complete, unchanged observations add no
+durable writes before recall. Resume retains the hosted generation and permits
+work only after publication.
+
+Recall still aborts new work at 3,500 ms on the process clock, and output must
+start before 3,450 ms. An admitted pipe write may finish draining after the abort;
+only that pending write delays forced exit. A permanently blocked reader is
+abandoned at the backstop: 3,750 ms from the process clock origin, reserving
+100 ms for spawn-to-origin latency and 150 ms for exit before the host's
+4,000 ms timeout. First-prompt classification and diagnostics cannot use the drain
+window. These are cooperative
+timers: process suspension can delay them, and regular-file stdout is synchronous,
+so a slow file write blocks the event loop and cannot be preempted by a timer.
+
+The Claude plugin selects a portable capability on native Windows. On native
+Windows, pause is checked right before every send, and a request that had already
+started when you paused can finish. Observation authority there is
+process-local: a delayed older active response in another hook can still authorize
+a send after a different process has observed pause. Each observation validates
+the full contract, enforcement, generation ordering and pause transitions.
+Capture cursors persist the hosted generation and target and establish a fresh
+EOF boundary when either changes, including after pause/resume and for old
+detached handoffs. Before any capture and only when hosted tags are absent, the
+first prompt can authorize bytes appended after one transcript-size snapshot at
+hook entry, using only that recall's validated active observation. This adds at
+most one stat, with no transcript read or extra network call. A prompt record
+already on disk at that snapshot is conservatively omitted. Later prompts never
+add or refresh these tags. A denied observation, busy capture lock, unknown byte
+boundary or insufficient recall cleanup time leaves the first capture to establish
+EOF; Stop still requires a fresh observation matching both tags. POSIX-only
+availability diagnostics and root revocation checkpoints are skipped there. Other platforms never
+select this mode after a lock error. Non-HTTP local integrations retain their
+existing behavior.
+
 Upgraded Claude honors the shared hosted quota gate as the explicit D1 exception.
 The selected private root retains `hosted-quota/<target digest>.json` and its
 process-owned lock/recovery files. The 0600 record contains only version, a finite

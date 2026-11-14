@@ -115,10 +115,11 @@ def test_full_native_setup_preserves_existing_cairn_values_on_blank(provider_fac
     monkeypatch.setattr(memory_setup, "_curses_select", lambda *args, **kwargs: 0)
     secrets = iter(["synthetic-wizard-only-key", "", "", ""])
     written_secrets = []
-    monkeypatch.setattr(memory_setup, "masked_secret_prompt", lambda *args, **kwargs: next(secrets))
-    monkeypatch.setattr(memory_setup, "_write_env_vars", lambda values: written_secrets.append(dict(values)))
+    hosted = importlib.import_module(provider.__class__.__module__).hosted
+    monkeypatch.setattr(hosted.getpass, "getpass", lambda *args, **kwargs: next(secrets))
+    monkeypatch.setattr("hermes_cli.config.save_env_value", lambda key, value: written_secrets.append({key: value}))
     assert "  cairn:" not in (home / "config.yaml").read_text()
-    monkeypatch.setattr(sys, "stdin", io.StringIO(config["node_path"] + "\n" + config["executable_path"] + "\n\n\n\n"))
+    monkeypatch.setattr(sys, "stdin", io.StringIO("local\n" + config["node_path"] + "\n" + config["executable_path"] + "\n\n\n\n"))
     memory_setup.cmd_setup([])
     minimal = {"node_path": config["node_path"], "executable_path": config["executable_path"]}
     assert json.loads((home / "cairn.json").read_text()) == minimal
@@ -127,16 +128,16 @@ def test_full_native_setup_preserves_existing_cairn_values_on_blank(provider_fac
     assert not (home / "cairn").exists()
     enabled = {**minimal, "capture_qualification": "source-bound-v2", "capture_deadline_ms": "1500",
                "classification_recovery": "guarded-v1", "recall_context": "source-evidence"}
-    monkeypatch.setattr(sys, "stdin", io.StringIO("\n\nsource-bound-v2\n1500\nguarded-v1\nsource-evidence\n"))
+    monkeypatch.setattr(sys, "stdin", io.StringIO("local\n\n\nsource-bound-v2\n1500\nguarded-v1\nsource-evidence\n"))
     memory_setup.cmd_setup([])
     assert json.loads((home / "cairn.json").read_text()) == enabled
     assert all(field.get("default") == enabled[field["key"]]
                for field in provider.get_config_schema() if field["key"] in enabled)
-    monkeypatch.setattr(sys, "stdin", io.StringIO("\n" * 6))
+    monkeypatch.setattr(sys, "stdin", io.StringIO("local\n" + "\n" * 6))
     memory_setup.cmd_setup([])
     assert json.loads((home / "cairn.json").read_text()) == enabled
     before = (home / "cairn.json").read_bytes()
-    monkeypatch.setattr(sys, "stdin", io.StringIO("\n\n\n01500\n\n\n"))
+    monkeypatch.setattr(sys, "stdin", io.StringIO("local\n\n\n\n01500\n\n\n"))
     memory_setup.cmd_setup([])
     assert (home / "cairn.json").read_bytes() == before
     assert not (home / "cairn").exists()

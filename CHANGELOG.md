@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.7 — Unreleased
+## 0.6.7 — 2026-11-14
 
 - Raw search now opens on macOS (directory link counts differ there).
 - Known limit: When capture resumes after being turned off, Cairn reads up to the last 4 KiB of the conversation file, and for Codex up to the first 4 KiB to find its session header; some of those bytes may have been written while capture was off. They are used only to identify the session and check the file wasn't replaced, never saved or sent.
@@ -10,7 +10,140 @@
 - `setup --local --no-capture` no longer prints default-on or Codex hook-approval notices, and status reports off only after capture has been disabled; an interrupted disable asks you to run the off command again.
 - Known limit: on macOS, a process running as the same user or root can still redirect an open through precisely timed directory swaps during verification, without crossing a privilege boundary.
 
-## 0.6.6 — Unreleased
+## 0.3.7 — 2026-11-13: later sessions after a hosted resume keep their first turn
+
+Plugin and marketplace 0.3.7. Protocol stays 0.3.0. The installer version is not
+bumped here.
+
+- On Linux and macOS, capture the first turn of a new Claude Code session,
+  including one-turn sessions, once this computer has already seen the hosted
+  resume: in practice the second and later new sessions after a resume. This
+  needs the synchronous start hook to finish within its budget and validate
+  active local control. Missing transcripts additionally require locally
+  published active hosted authority; unknown pending starts remain conservative.
+  Existing transcripts retain their local-only start boundary check. Native
+  Windows portable first-prompt authority is unchanged.
+- Known gaps. Each skips a turn; none sends text written during a pause:
+  - The first new session after a hosted resume, started before any other
+    session on this computer has seen the resume, loses its first turn. A
+    one-turn `claude -p` run right after a resume is not captured.
+  - On an account that has ever paused, the first pause check after installing
+    the plugin, or after upgrading from 0.3.5, skips the turn then in progress
+    in each open session.
+- Exclude leading copied history older than the new session's start, allowing
+  five seconds for clock differences. Sessions with a boundary from before a
+  pause continue to skip their unprocessed history after resume.
+- Long non-English prompts and paths are no longer corrupted when hook input arrives in pieces.
+- Hook stdin reads have their own deadlines; unfinished input is discarded without sending.
+
+## 0.3.6 — 2026-11-10: hosted pause and capture session windows (unreleased; shipped in 0.3.7)
+
+Plugin and marketplace 0.3.6. Protocol stays 0.3.0. The installer version is not
+bumped here; the Codex changes reach installs through the next installer
+release.
+
+- Honour a hosted pause on the Claude Code client before recall and capture.
+- Honour a hosted pause when delivering Codex context output.
+- Send capture session windows and original message source times.
+- On native Windows, capture a new session from its first prompt onward. If
+  the host has already written that prompt when the prompt hook starts, that
+  prompt is not captured.
+- Hosted recall output that has already started writing may finish up to
+  3,750 ms after the prompt hook starts; no new recall work starts after
+  3,500 ms.
+
+## Unreleased — README single entry point
+
+- Rewrite the root README and its Traditional Chinese edition as a short entry
+  point: one install command, a Local and Cloud comparison, usage, data
+  handling and current limits. The outward name is "Cairn.ink Memory"; package,
+  plugin and server names are unchanged.
+- Move hosted connection details to `docs/cloud-mode.md` and source-checkout
+  installation to `docs/local-from-source.md`. Documentation only; installer,
+  plugin and engine behavior are unchanged.
+
+## Unreleased — Card consolidation respects the Raw opt-in
+
+- Engine Card consolidation uses memories only by default, including for library
+  callers. Set `rawSpans: true` on `maintainCards` to include saved conversation
+  excerpts. The local MCP server includes those excerpts only with
+  `rawSemantic: true`, unless `contextSemantic: false` overrides it.
+
+## Unreleased — forgotten-text read
+
+- Add `core.isSuppressed({ namespace, content })` so a host can ask before
+  saving. This pure read uses admission's normalized exact-text suppression
+  check in the caller's namespace and returns `{ suppressed: boolean }`.
+
+## Unreleased — default recall recency scan
+
+- Use one newest-first keyset scan for body and source recall: a 1,024-row
+  floor, fixed 300 ms budget and 20,000-row cap, retaining the best 1,024 by
+  query overlap then ID. Remove the candidate-policy constructor option.
+- Bound the added scan time per recall call: a two-namespace read set splits
+  the budget evenly (rounded down per namespace); each floor always completes.
+- Read floor content in one filtered statement with an unscored extra row to
+  detect a tail, preserving ordinary statement costs for small namespaces.
+  Keep the floor and its placement in one normal-timeout deferred transaction,
+  then use try-once tail pages. Epoch changes discard the tail without restarting;
+  final tail placement rechecks the floor epochs in one try-once read. Bind the
+  scan boundary into signed continuation cursors; busy continuations are stale.
+  Budget exhaustion and a busy tail remain ordinary incomplete coverage. See
+  [defaults](docs/defaults.md). Earlier prefix/opt-in entries are historical.
+
+## Unreleased — nothing sent to an embedding provider while saving is paused
+
+- With an embedding model configured, Memory and Card search no longer sends the
+  search text, and index maintenance no longer sends stored Memory or Card text,
+  to the provider while saving is paused or disabled for that store. Searches
+  fall back to keyword results. Stores without an embedding model do no extra
+  work.
+- Card maintenance also sends nothing to the consolidation model while saving
+  is paused or disabled.
+- Known limit: a pause that lands in the instant between the final check and the
+  provider call can still let that one in-flight request go out.
+
+## Unreleased — engine-generated topic Cards
+
+- When a consolidation model is configured, the engine builds topic Cards during
+  maintenance to summarize a topic's current state, history and contradictions.
+  Cards follow their Memories when a topic is relabeled or refiled, without
+  regenerating the summary when the sources stay the same.
+- A forgotten, suppressed or excluded source hides its Card from reads.
+  Maintenance rebuilds the Card from eligible sources when the topic still
+  qualifies, or removes its stale body when it no longer does.
+- There is no separate generation toggle. Generation is available only when the
+  configured model implements `consolidate`; hosts can leave that method
+  unconfigured to keep it off. See [Engine Cards](docs/engine-cards.md).
+- Dated reads retain every surviving Memory's source dates and sort by the
+  surviving sources when a topic Card replaces part of a shared-source group.
+
+## Unreleased — batch Raw preparation
+
+- Document and pin the mixed-reader Raw grant-sampling known limit; final whole-set stored-state checks remain enforced.
+
+- Preserve prepare-only host ports and candidate-based authorizers; optional
+  batches retain candidates from every live proof and reject known oversized
+  ranges before source inspection.
+
+- Recheck live Raw source predicates and caller grants around each part opener
+  and revalidate handles at registration after the initial snapshot releases.
+
+- Default three-layer reads prepare the first 24 Raw candidates together,
+  sharing publication and a canonical source snapshot while preserving each
+  candidate's existing authorization request. Completed
+  candidates retain independent outcomes and cutoff delivery; fresh batch and
+  final checks still precede Raw projection and delivery.
+
+## Unreleased — source dates on delivered Memories
+
+- Context reads attach the date of each Memory's source message, taken from its
+  receipts, so a client can tell when a fact was said even when no Raw excerpt
+  is delivered. Source entries gain an optional `date` or `dates`; the item's
+  existing `date` keeps its meaning. Stores without source dates produce the
+  same output as before and run no extra statement.
+
+## 0.6.6 — 2026-11-13
 
 - Raw document and query embeddings now require `--raw-semantic` or an explicit `--context-embedder`; setup discloses that an MCP OpenAI key sends memories and search text to OpenAI for semantic search, up to an estimated US$1 per server run. To keep everything on this computer, don't give the server a key; `--no-context-semantic` only turns off embeddings, and with a key, recall and other model features still send memory text to OpenAI.
 - Codex CLI 0.167.0 and 0.167.2 are now qualified for automatic capture. Earlier installers report `format_changed` for them and keep saving off; rerun setup to pick up the new qualification.
@@ -64,6 +197,8 @@
   - macOS with Node from Homebrew: setup records Node's versioned path, so rerun setup after `brew upgrade` updates Node. Fixed in the next release.
   - Claude Code runs started by scripts or the Agent SDK (for example `claude -p`) are saved like interactive sessions.
   - Deleting a conversation or forgetting a memory removes that text from Cairn's database at once, and it is never shown again; conversations a forget only hides stay saved until you delete them. Local search index files can keep word lists (and, with semantic search, vectors) from deleted items until background cleanup reaches them. Cleanup runs only while Cairn is running, may not reach them while new conversations keep being saved, and never covers index files for a search setup you no longer use. As with most databases, deleted text can also remain in unused file space until it is overwritten.
+  - Automatic saving runs on Linux and WSL. On macOS, setup connects Claude Code and Codex and the memory tools work, but automatic saving doesn't start yet: setup reports conversation saving OFF (runtime_unavailable) and exits with code 2.
+  - When capture resumes after being turned off, Cairn reads up to the last 4 KiB of the conversation file, and for Codex up to the first 4 KiB to find its session header; some of those bytes may have been written while capture was off. They are used only to identify the session and check the file wasn't replaced, never saved or sent.
   - A later release indexes newly saved conversations first.
 - Default reads keep the Raw excerpts they already validated when a read reaches
   its time limit, marked partial, instead of dropping them.
@@ -116,7 +251,7 @@
   Unknown event times are handled conservatively; both Raw search intents hide
   fenced sessions. Hosted selections retain their existing behavior and schema.
 
-## 0.6.5 — Unreleased
+## 0.6.5 — 2026-11-09
 
 - 0.6.4 was prepared but not published; its changes ship in 0.6.5.
 - Hosted Codex SessionStart shows a short notice when format qualification

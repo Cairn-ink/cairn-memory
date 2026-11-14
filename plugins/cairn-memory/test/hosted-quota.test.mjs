@@ -1,3 +1,4 @@
+import { assertFrozenRetry } from "../../../tools/testing/capture-attempt.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { watch, openSync, closeSync, writeFileSync, readFileSync } from "node:fs";
@@ -99,12 +100,12 @@ test("Capture refusal retains frozen cursor/event through Codex, restarts and si
   assert.match(await f.run("resume"), /one eligible attempt/);
   await f.run("capture"); await f.run("capture");
   assert.equal(f.requests.length, 2);
-  assert.deepEqual(f.requests[1].body, f.requests[0].body);
+  assertFrozenRetry(f.requests[1].body, f.requests[0].body);
   assert.equal(await readFile(f.cursor, "utf8"), frozen);
   await f.run("resume");
   f.respond(200, { duplicate: false, memoryCount: 1 });
   await f.run("capture");
-  assert.deepEqual(f.requests[2].body, f.requests[0].body);
+  assertFrozenRetry(f.requests[2].body, f.requests[0].body);
   assert.equal(JSON.parse(await readFile(f.cursor, "utf8")).offset, initial.pendingEnd);
   await f.run("capture");
   assert.deepEqual(f.requests[3].body.messages.map((m) => m.content), ["Synthetic later message"]);
@@ -165,7 +166,7 @@ for (const signal of ["SIGTERM", "SIGKILL"]) {
     pending.child.kill(signal); assert.equal((await pending.done).signal, signal); f.release();
     assert.equal((await hostedQuotaStatus(f.target)).operations.capture.mode, "open");
     await f.run("capture"); assert.equal(f.requests.length, 2);
-    assert.deepEqual(f.requests[1].body, f.requests[0].body);
+    assertFrozenRetry(f.requests[1].body, f.requests[0].body);
     assert.equal(JSON.parse(frozen).offset, 0);
     assert.equal(JSON.parse(await readFile(f.cursor, "utf8")).offset, JSON.parse(frozen).pendingEnd);
   });
@@ -179,7 +180,7 @@ test("R07 SIGKILL of resumed hook restores refusal; next resume grants a fresh a
   await f.run("capture"); assert.equal(f.requests.length, 2);
   await f.run("resume"); f.respond(200, { duplicate: false, memoryCount: 1 });
   await f.run("capture"); assert.equal(f.requests.length, 3);
-  assert.deepEqual(f.requests[2].body, f.requests[0].body);
+  assertFrozenRetry(f.requests[2].body, f.requests[0].body);
 });
 test("R14 a real recall hook sends during an in-flight capture hook", { timeout: 15000 }, async (t) => {
   const f = await fixture(t);
@@ -198,7 +199,7 @@ test("R13 plugin status provides repair hint and resume repairs corrupt state wi
   await f.run("capture"); assert.equal(f.requests.length, 1);
   assert.match(await f.run("resume"), /quota state repaired to open/);
   f.respond(200, { duplicate: false, memoryCount: 1 }); await f.run("capture");
-  assert.equal(f.requests.length, 2); assert.deepEqual(f.requests[1].body, f.requests[0].body);
+  assert.equal(f.requests.length, 2); assertFrozenRetry(f.requests[1].body, f.requests[0].body);
 });
 test("R12 plugin resume clears an unknown-429 cooldown and retains the frozen batch", async (t) => {
   const f = await fixture(t); f.respond(429, { error: "legacy rate limit" }); await f.run("capture");
@@ -206,6 +207,6 @@ test("R12 plugin resume clears an unknown-429 cooldown and retains the frozen ba
   assert.match(await f.run("status"), /capture: cooldown; retry after/);
   await f.run("capture"); assert.equal(f.requests.length, 1);
   await f.run("resume"); f.respond(200, { duplicate: false, memoryCount: 1 }); await f.run("capture");
-  assert.equal(f.requests.length, 2); assert.deepEqual(f.requests[1].body, f.requests[0].body);
+  assert.equal(f.requests.length, 2); assertFrozenRetry(f.requests[1].body, f.requests[0].body);
   assert.equal(JSON.parse(await readFile(f.cursor, "utf8")).offset, JSON.parse(frozen).pendingEnd);
 });

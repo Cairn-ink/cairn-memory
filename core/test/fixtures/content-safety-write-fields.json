@@ -4,6 +4,7 @@
     "literal:id": 3
   },
   "core/content-write-safety.mjs": {
+    "key:action_id": 1,
     "key:cardId": 1,
     "key:eventId": 1,
     "key:memoryId": 1,
@@ -12,17 +13,18 @@
     "key:projectId": 8,
     "key:sessionId": 1,
     "key:sourceId": 1,
-    "literal:card_id": 2,
+    "literal:card_id": 16,
     "literal:card_moc_id": 1,
-    "literal:cardId": 1,
+    "literal:cardId": 6,
+    "literal:cardRefs": 1,
     "literal:child_id": 1,
     "literal:childId": 2,
     "literal:conversationId": 1,
-    "literal:entity_id": 1,
+    "literal:entity_id": 3,
     "literal:entityId": 2,
     "literal:from_id": 1,
     "literal:fromId": 1,
-    "literal:id": 4,
+    "literal:id": 10,
     "literal:keep_source_ids": 1,
     "literal:leftMemoryId": 1,
     "literal:memory_id": 2,
@@ -31,6 +33,7 @@
     "literal:memoryId": 1,
     "literal:moc_id": 1,
     "literal:mocId": 1,
+    "literal:owner_id": 1,
     "literal:ownerId": 1,
     "literal:parent_id": 1,
     "literal:parentId": 1,
@@ -41,13 +44,15 @@
     "literal:previous_receipt_ids": 1,
     "literal:previousId": 1,
     "literal:previousMemoryId": 1,
+    "literal:project_id": 1,
+    "literal:reasonRefs": 1,
     "literal:receipt_ids": 1,
     "literal:replacementId": 1,
     "literal:replacementMemoryId": 1,
     "literal:rightMemoryId": 1,
     "literal:source_id": 2,
     "literal:sourceId": 1,
-    "literal:target_id": 1,
+    "literal:target_id": 4,
     "literal:targetId": 3,
     "literal:to_id": 1,
     "literal:toId": 1
@@ -264,14 +269,14 @@
     "key:actionId": 3,
     "key:affectedIds": 1,
     "key:card_id": 1,
-    "key:cardId": 2,
+    "key:cardId": 3,
     "key:effectId": 1,
     "key:id": 6,
     "key:leaseId": 1,
     "key:memoryId": 1,
     "key:memoryRef": 1,
-    "key:ownerId": 3,
-    "key:projectId": 2,
+    "key:ownerId": 4,
+    "key:projectId": 3,
     "key:receiptId": 1,
     "key:sourceId": 1,
     "key:targetId": 1,
@@ -300,7 +305,7 @@
     "literal:projectId": 2
   },
   "core/private-evidence-storage.mjs": {
-    "key:cardId": 3,
+    "key:cardId": 4,
     "key:memoryId": 5,
     "key:receiptId": 2,
     "key:triggerMemoryRefs": 1,
@@ -325,7 +330,7 @@
     "literal:topicRef": 1
   },
   "core/private-organization-storage.mjs": {
-    "key:cardId": 5,
+    "key:cardId": 6,
     "key:cardRefs": 2,
     "key:childId": 2,
     "key:createdMocRefs": 1,
@@ -386,7 +391,8 @@
     "key:targetId": 3
   },
   "core/context-read-assembly.mjs": {
-    "key:id": 3
+    "key:id": 3,
+    "key:sourceMemoryRefs": 1
   },
   "core/context-read-three-layer.mjs": {
     "key:conversationId": 2,
@@ -425,7 +431,7 @@
     "key:cardId": 2,
     "key:id": 8,
     "key:ids": 1,
-    "key:memoryId": 1,
+    "key:memoryId": 2,
     "key:storeId": 1,
     "literal:gid": 1,
     "literal:id": 4,
@@ -658,7 +664,7 @@
   "core/moc-storage.mjs": {
     "key:child_id": 1,
     "key:childId": 3,
-    "key:id": 5,
+    "key:id": 6,
     "key:invalidRef": 1,
     "key:memory_id": 1,
     "key:memoryId": 3,
@@ -902,7 +908,7 @@
     "literal:episodeId": 2,
     "literal:event_id": 2,
     "literal:eventId": 2,
-    "literal:id": 14,
+    "literal:id": 16,
     "literal:ownerId": 4,
     "literal:project_id": 3,
     "literal:projectId": 6,
@@ -1096,7 +1102,7 @@
     "literal:valid": 1
   },
   "integrations/client/state-lock.mjs": {
-    "key:pid": 1
+    "key:pid": 2
   },
   "core/role-context-evidence.mjs": {
     "key:id": 1
@@ -1638,6 +1644,29 @@
   },
   "core/layout-base-upgrade.mjs": {
     "literal:storeId": 1
+  },
+  "adapters/openai/consolidate-schema.mjs": {
+    "key:memoryIds": 1
+  },
+  "core/engine-card-clusters.mjs": {
+    "key:id": 1,
+    "key:memoryId": 1
+  },
+  "core/engine-card-maintenance.mjs": {
+    "key:id": 1,
+    "key:memoryIds": 1
+  },
+  "core/engine-card-output.mjs": {
+    "key:memoryIds": 1,
+    "literal:memoryIds": 1
+  },
+  "core/engine-card-storage.mjs": {
+    "key:cardId": 1,
+    "key:conversationId": 1,
+    "key:id": 2,
+    "key:memoryId": 2,
+    "key:messageId": 1,
+    "key:rowid": 1
   },
   "adapters/mcp/raw-command.mjs": {
     "key:actionId": 1,

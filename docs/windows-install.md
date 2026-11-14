@@ -75,5 +75,5 @@ ChatGPT setup. Model-guided recall requires a separate OpenAI key supplied throu
 the server process's secret environment and may incur provider charges.
 
 [Installation, backups and deletion boundaries](../packaging/README.md) ·
-[Recorded walkthrough](../README.md#watch-the-recorded-walkthrough) ·
+[Recorded walkthrough](local-from-source.md#watch-the-recorded-walkthrough) ·
 [Known limitations](limitations.md)

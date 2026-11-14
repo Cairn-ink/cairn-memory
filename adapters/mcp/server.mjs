@@ -78,6 +78,7 @@ export function createCairnServer(options = {}) {
   }
   if (Object.hasOwn(options, 'contextRead') && !['context-read-v1', false].includes(options.contextRead)) throw Error('invalid_mcp_configuration');
   const { path, namespace, model } = options;
+  const cardRaw = options.rawSemantic === true && options.contextSemantic !== false;
   const contextConfigured = options.contextRead !== false;
   if (contextConfigured && options.contextRead !== undefined && options.contextRead !== 'context-read-v1' || Object.hasOwn(options,'contextReadPersonal') &&
       (!contextConfigured || options.contextReadPersonal !== true || namespace?.scope !== 'project') ||
@@ -156,7 +157,7 @@ export function createCairnServer(options = {}) {
   const assets=assetsConfigured?createAssetReadAccess(binding):null;
   const methods=methodsConfigured?createMethodReadAccess(binding,options.methodReadPersonal===true):null;
   const context=contextConfigured?createContextReadAccess(binding,options.contextReadPersonal===true,
-    { maintenance:Boolean(options.contextEmbedding) && options.contextSemantic !== false }):null;
+    { maintenance:Boolean(options.contextEmbedding) && options.contextSemantic !== false || typeof model?.consolidate === 'function' }):null;
   const roles = roleAttribution ? createRoleProfileAccess(binding, context.readSet, roleAttribution) : null;
   // Programmatic hosts retain retrieval while their local tokenizer loads.
   let contextCounter = context ? options.contextCounter : null, contextCounterReady;
@@ -186,7 +187,7 @@ export function createCairnServer(options = {}) {
     ...(rationaleConfigured ? { captureRationale: options.captureRationale } : {}),
     ...(stagingConfigured ? { captureEvidence: options.captureEvidence } : {}) });
   const server = buildCairnServer({ path, model, binding, cards, methods, assets, context, roles, core, client, sessionId, captureSessionId, readClient,
-    episodesAccess, configured, rationaleConfigured, evidenceAccess, snapshotConfigured,
+    episodesAccess, configured, rationaleConfigured, evidenceAccess, snapshotConfigured, cardRaw,
     recallContextConfigured, recallContext, recoveryConfigured, stagingConfigured, contextSemantic: Boolean(options.contextEmbedding) && options.contextSemantic !== false, ...(sources ? { contextReadSources: sources } : {}) });
   if (rawSearch) rawSearch.start();
   else if (core.getRawSearchStatus) void core.getRawSearchStatus({ namespace: binding });
@@ -198,9 +199,10 @@ export function createCairnServer(options = {}) {
 export function buildCairnServer({ path, model, binding, cards, methods, assets, context, roles, core, client, sessionId, captureSessionId, readClient,
   episodesAccess = false, configured = false, rationaleConfigured = false, evidenceAccess = false,
   snapshotConfigured = false, recallContextConfigured = false, recallContext, recoveryConfigured = false,
-  stagingConfigured = false, contextSemantic = false, retainedRaw = false, contextReadSources: sources }) {
+  stagingConfigured = false, contextSemantic = false, cardRaw = false, retainedRaw = false, contextReadSources: sources }) {
   let disposed = false, disposing;
-  const refresh = contextSemantic && context ? startContextMaintenance(core, context) : null;
+  const refresh = (context && contextSemantic || typeof model?.consolidate === 'function')
+    ? startContextMaintenance(core, context ?? { readSet: [binding] }, { cards: typeof model?.consolidate === 'function', cardRaw, semantic: contextSemantic }) : null;
   const dispose = () => {
     if (disposed) return disposing;
     disposed = true;
@@ -556,17 +558,26 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
 }
 
 /** Bounded embedding refresh; no provider call holds up capture or tool delivery. */
-function startContextMaintenance(core, access) {
+function startContextMaintenance(core, access, { cards = false, cardRaw = false, semantic = true } = {}) {
   const { readSet } = access;
-  const capabilities = core.getContextReadCapabilities();
-  const types = capabilities.ok ? capabilities.value.types : ['memory'];
+  const capabilities = core.getContextReadCapabilities?.();
+  let types = capabilities?.ok ? capabilities.value.types : ['memory'];
   let closed = false, active, timer;
   const arm = () => {
     if (closed) return;
     timer = setTimeout(() => {
-      active = Promise.resolve(access.call(core, 'refreshContextIndex', {
-        readSet, types, intent: 'current', budget: { maxItems: 16, maxMs: 1000 },
-      })).catch(() => {}).finally(() => { active = null; arm(); });
+      active = (async () => {
+        if (cards) for (const namespace of readSet) {
+          if (closed) return;
+          const pass = await core.maintainCards({ namespace, budget: { maxItems: 512, maxMs: 30000 }, ...(cardRaw ? { rawSpans: true } : {}) });
+          if (pass.ok && pass.value.state === 'paused') continue;
+          if (!pass.ok || pass.value.state === 'refused') return;
+        }
+        if (cards) { const current = core.getContextReadCapabilities?.(); if (current?.ok) types = current.value.types; }
+        if (!closed && access.call && (semantic || cards)) await access.call(core, 'refreshContextIndex', {
+          readSet, types, intent: 'current', budget: { maxItems: 16, maxMs: 1000 },
+        });
+      })().catch(() => {}).finally(() => { active = null; arm(); });
     }, 1000);
     timer.unref();
   };
@@ -577,7 +588,7 @@ function startContextMaintenance(core, access) {
 function supportsRawContext() {
   try {
     contextOptions({ version:'context-read-v1', authority:{authorize(){},isCurrent(){}},
-      rawSearch:{async search(){},async prepare(){},revalidate(){}} });
+      rawSearch:{async search(){},async prepareMany(){},revalidate(){}} });
     return true;
   } catch { return false; }
 }

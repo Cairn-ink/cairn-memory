@@ -73,7 +73,7 @@ function measure(cell) {
   let db;
   let runtime;
   try {
-    core = openMemoryCore({ path, sourceCandidatePolicy: 'bounded-keyset-v1' });
+    core = openMemoryCore({ path });
     db = new DatabaseSync(path);
     const authorized = cell === 'worst1000' || cell === 'foreign1000' ? 1000 : Number(cell);
     const receiptsPerRow = cell === 'worst1000' ? 4 : 1;
@@ -95,7 +95,7 @@ function measure(cell) {
         return score(text);
       },
       memoryLabel: text => [...text].slice(0, 120).join(''),
-      sourceReceiptLimit: 4, sourceCandidatePolicy: 'bounded-keyset-v1',
+      sourceReceiptLimit: 4,
     });
     const elapsedMs = performance.now() - started;
     const inspected = Math.min(authorized, 20_000);

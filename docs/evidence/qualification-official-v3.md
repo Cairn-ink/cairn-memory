@@ -1,5 +1,9 @@
 # Fresh official-six v3: halted generation, no score
 
+> Historical candidate-routing configuration: current recall uses the
+> [default recency keyset scan](../defaults.md) in every mode. The old
+> ID-prefix limit and candidate-policy constructor option no longer apply.
+
 Status: terminal generation halt, incomplete accounting settlement, and failed
 mechanical and paired-scoreability gates. The [source-free aggregate artifact](../../evaluation/official-six-v3/results.json)
 retains six planned cases and twelve arms on public runtime

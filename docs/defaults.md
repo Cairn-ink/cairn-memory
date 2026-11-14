@@ -45,12 +45,13 @@ Several sessions saving at once no longer stop one of them from saving. Default
 reads keep the Raw excerpts they already validated when a read reaches its time
 limit, marked partial, instead of dropping them.
 
-**Search catches up after saving.** Each turn is saved to the local store as soon as it ends. Raw search covers a newly saved conversation only after the local index reaches it. Raw search builds its index in the background while Cairn is running, at roughly one saved message per second: allow about 15 minutes for 1,000 saved messages and roughly 2 hours for 10,000. After each new saved message it re-checks the whole index (about 6 minutes per 1,000 saved messages). Until a build or re-check finishes, Raw search still returns results but reports partial coverage. While you keep working, each new save restarts the indexing pass, so a conversation saved during a busy session may not be searchable until you pause. Until the index has caught up, newly saved conversations may be missing from results. The coverage report marks such results as partial, but assistants using the memory tool see only the results, so an empty answer then doesn't mean nothing was saved. Memories, and conversations the index already covers, are not affected and stay searchable as before.
+**Search catches up after saving (installer 0.6.6).** Each turn is saved to the local store as soon as it ends. Raw search covers a newly saved conversation only after the local index reaches it. Raw search builds its index in the background while Cairn is running, at roughly one saved message per second: allow about 15 minutes for 1,000 saved messages and roughly 2 hours for 10,000. After each new saved message it re-checks the whole index (about 6 minutes per 1,000 saved messages). Until a build or re-check finishes, Raw search still returns results but reports partial coverage. While you keep working, each new save restarts the indexing pass, so a conversation saved during a busy session may not be searchable until you pause. Until the index has caught up, newly saved conversations may be missing from results. The coverage report marks such results as partial, but assistants using the memory tool see only the results, so an empty answer then doesn't mean nothing was saved. Memories, and conversations the index already covers, are not affected and stay searchable as before.
 
-Known limits in this release:
+Known limits in installer 0.6.6:
 - While new turns keep arriving, the local MCP server keeps indexing: about one small index write per second and roughly 3% of one CPU core.
 - Histories of about 50,000 messages or more may never finish indexing; search keeps reporting partial coverage for them.
 - Searches served by a reader that doesn't run index maintenance itself, such as keyword-only searches when an embedding model is configured, can keep reporting partial coverage even after indexing has finished. Their results are still returned.
+- When capture resumes after being turned off, Cairn reads up to the last 4 KiB of the conversation file, and for Codex up to the first 4 KiB to find its session header; some of those bytes may have been written while capture was off. They are used only to identify the session and check the file wasn't replaced, never saved or sent.
 - A later release indexes newly saved conversations first.
 
 Going back to 0.6.5: an attested base-33 store with card lineage revision 1
@@ -84,6 +85,48 @@ contextRead still requires an explicit authority configuration. These defaults
 do not install a transcript hook, start capturing a conversation, or enable hosted processing.
 Only messages actually submitted to capture enter Raw. The separately selected
 retained-profile server is a read-only host with its own authority boundaries.
+
+Legacy `recall()` now scans each authorized namespace newest first, using
+`updated_at DESC, id ASC` on the existing `namespace_memories` index. All recall
+modes use this default; there is no candidate-policy constructor option.
+`QUERY_SCAN_BUDGET_MS` in `core/query-candidates.mjs` is fixed at **300 ms** per
+recall call. A read set splits it evenly, rounded down, so each namespace of a
+two-namespace call scans its tail for at most half; every floor still completes.
+The floor reads up to 1,025 current, nondeleted, non-awaiting rows in one
+statement, scoring at most 1,024. The extra row decides whether a tail is
+needed. At most 1,024 such rows exhaust the scan with the ordinary statement
+budget. Tail pages visit nondeleted physical rows and stop at the monotonic
+budget, 20,000 total visited rows, or the end. Historical and awaiting tail
+rows, and projection-rejected rows, consume the allowance without contributing text.
+Recency determines traversal; literal overlap and then ID determine the best
+1,024 retained candidates. Body-only recall reads no scoring receipts; source
+modes still examine only the first four stable-ID receipts per eligible memory.
+
+The first 1,024 rows, safety checks and MOC placement share one deferred read
+transaction with the connection's normal busy timeout. The monotonic budget
+includes acquisition and floor work. Later pages release SHARED after at most
+256 rows or 25 ms (checked between rows) and use busy timeout zero, restored
+synchronously after each page. BUSY at the first cheap read stops the tail.
+There are no restarts: a namespace or suppression epoch change discards all
+tail candidates and returns the already placed floor under its original epochs.
+New tail candidates are placed in one final try-once read that rechecks those
+epochs; contention or movement there also returns the floor. Existing delivery
+freshness and content-safety fences still apply. Other recall reads retain the
+normal connection timeout; the discovery budget is not an end-to-end recall
+deadline.
+`scanExhausted:false` means a budget, row cap, busy tail, epoch change or top-candidate
+pruning left coverage incomplete. It is an ordinary incomplete result, with
+`exhausted:false` on private map pages and the existing recall coverage values;
+it adds no error, retry status or response field. Signed recall cursors bind
+the visited-row count, last recency key and stop cause. Continuations replay
+that exact boundary without the time budget, with the same normal-timeout
+floor and try-once tail;
+a busy tail or changed epoch yields `cursor_stale`.
+From a source checkout, run `npm run measure:recall-recency -- --layout plain N`
+(or `--layout 53`; add `--writer` for concurrent writes)
+for one namespace size at a time. The writer is unpaced by default;
+`--writer-pause-ms N` sets an explicit pause between write calls for comparison.
+The helper prints failed samples before returning a nonzero exit code.
 
 | Capability | What it does | Default | Cost | Programmatic option / CLI switch |
 | --- | --- | --- | --- | --- |

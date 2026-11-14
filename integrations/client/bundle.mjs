@@ -17,6 +17,7 @@ export const CLIENT_MODULES = Object.freeze({
   'runtime-usage.mjs': 'runtime-usage.mjs',
   'state-lock.mjs': 'state-lock.mjs',
   'capture-cursor.mjs': 'capture-cursor.mjs',
+  'source-time.mjs': 'source-time.mjs',
   'hosted-contract.mjs': 'hosted-contract.mjs',
   'hosted-schemas.mjs': 'hosted-schemas.mjs',
   'config.mjs': 'config.mjs',
@@ -43,7 +44,21 @@ export async function schemaModule() {
   return '// Frozen from schemas/ by integrations/client/bundle.mjs. Do not edit.\n' +
     'export const HOSTED_SCHEMAS = ' + JSON.stringify(schemas, null, 2) + ';\n';
 }
-export async function bundleClient({ check = false, target = destination } = {}) {
+// The independent OpenClaw package needs only the observer's transitive closure.
+// Copy sources byte-for-byte, with the same ownership and freshness checks.
+export async function openclawModules() {
+  const names = new Set();
+  async function visit(name) {
+    if (names.has(name)) return;
+    if (!CLIENT_MODULES[name]) throw new Error('client_bundle_unknown_module');
+    names.add(name);
+    const code = await readFile(join(source, name), 'utf8');
+    for (const match of code.matchAll(/(?:from\s*|import\s*)['"]\.\/([a-z-]+\.mjs)['"]/gu)) await visit(match[1]);
+  }
+  await visit('hosted-pause.mjs');
+  return [...names].sort();
+}
+export async function bundleClient({ check = false, target = destination, modules = Object.keys(CLIENT_MODULES), openclaw = false } = {}) {
   const schemas = await schemaModule();
   const schemaPath = join(source, 'hosted-schemas.mjs');
   if (check) {
@@ -60,7 +75,7 @@ export async function bundleClient({ check = false, target = destination } = {})
   // carry our ownership banner; never remove or rewrite unrelated plugin code.
   const unexpected = [];
   for (const entry of existing) {
-    if (!entry.isFile() || !entry.name.endsWith('.mjs') || Object.values(CLIENT_MODULES).includes(entry.name)) continue;
+    if (!entry.isFile() || !entry.name.endsWith('.mjs') || modules.map(name => CLIENT_MODULES[name]).includes(entry.name)) continue;
     if ((await readFile(join(target, entry.name), 'utf8')).startsWith(GENERATED_BANNER)) unexpected.push(entry.name);
   }
   if (check && unexpected.length) throw new Error(`client_bundle_extra: ${unexpected.join(', ')}`);
@@ -68,7 +83,7 @@ export async function bundleClient({ check = false, target = destination } = {})
     await mkdir(target, { recursive: true });
     for (const name of unexpected) await rm(join(target, name));
   }
-  for (const name of Object.keys(CLIENT_MODULES).sort()) {
+  for (const name of [...modules].sort()) {
     const output = CLIENT_MODULES[name];
     const code = (await readFile(join(source,name),'utf8')).replace(/(['"])\.\/([a-z-]+\.mjs)\1/gu,
       (original,quote,module) => CLIENT_MODULES[module] ? `${quote}./${CLIENT_MODULES[module]}${quote}` : original);
@@ -77,15 +92,17 @@ export async function bundleClient({ check = false, target = destination } = {})
       let actual;
       try { actual = await readFile(join(target, output)); }
       catch (error) { if (error.code !== 'ENOENT') throw error; }
-      if (!actual?.equals(expected)) throw new Error(`client_bundle_stale: ${output}; run node integrations/client/bundle.mjs`);
+      if (!actual?.equals(expected)) throw new Error(`client_bundle_stale: ${output}; run node integrations/client/bundle.mjs${openclaw ? ' --openclaw' : ''}`);
     } else await writeFile(join(target, output), expected);
   }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
-    if (process.argv.slice(2).some(arg => arg !== '--check')) throw new Error('unexpected_arguments');
-    await bundleClient({ check: process.argv.includes('--check') });
+    if (process.argv.slice(2).some(arg => !['--check', '--openclaw'].includes(arg))) throw new Error('unexpected_arguments');
+    await bundleClient({ check: process.argv.includes('--check'), ...(process.argv.includes('--openclaw') ? {
+      target: fileURLToPath(new URL('../openclaw/lib/', import.meta.url)), modules: await openclawModules(), openclaw: true,
+    } : {}) });
     console.log('Client bundle matches shared source.');
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

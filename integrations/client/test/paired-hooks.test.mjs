@@ -40,6 +40,10 @@ async function setup(t, paired = true, customRoot = false) {
   const requests = [];
   let recallReply = () => ({ memories: [] });
   const server = createServer((req, res) => {
+      if (req.url === "/api/memory/pause-state") {
+        req.resume(); res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ paused: false, generation: 0, enforced: true })); return;
+      }
     let body = "";
     req.on("data", (bytes) => (body += bytes));
     req.on("end", async () => {
@@ -250,7 +254,7 @@ test("newcomer Claude without evidence is fail-open and sends nothing", async (t
   const requests = join(workspace.path, "requests");
   await writeFile(requests, "");
   const preload = fileURLToPath(new URL("../testing/golden-preload.mjs", import.meta.url));
-  for (const action of ["start", "recall", "capture"]) {
+  for (const action of ["start-boundary", "start", "recall", "capture"]) {
     const child = spawn(process.execPath, ["--import", preload, hook, action], {
       env: {
         PATH: process.env.PATH,

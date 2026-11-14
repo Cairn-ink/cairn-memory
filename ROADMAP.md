@@ -112,7 +112,9 @@ service must use the same public core, not separate engines.
 - Optional OpenAI adapter and thin local MCP host; an inspected local npm archive
   has passed installed subprocess persistence and actual-model sourced recall.
 - Frozen synthetic evaluation and failures are retained. **Source support still
-  fails**, so broad-promotion readiness is not declared.
+  fails**. Broad promotion is not cleared; Local-mode announcements follow
+  [P4](docs/plans/github-promotion.md#p4-擴大宣傳與產品品質標準). Quality claims still
+  require [E01–E09](docs/plans/semantic-evaluation.md#frozen-acceptance-e01e09).
 - The [verified preview consolidation](docs/plans/pr-consolidation.md) selects
   four narrow engineering changes: filing-only rationale preservation, an
   explicit local MCP source-evidence startup default, owned provider response

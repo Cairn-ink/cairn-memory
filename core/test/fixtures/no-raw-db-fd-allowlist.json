@@ -756,8 +756,13 @@
   },
   {
     "path": "plugins/cairn-memory/scripts/hook.mjs",
-    "source": "if (JSON.parse(await readFile(statePath, \"utf8\")).ownSkillTurn === true) {",
-    "reason": "Hook transcript input and skill-turn JSON state; SQLite is accessed through the engine."
+    "source": "const extension = JSON.parse(await readFile(statePath, \"utf8\"));",
+    "reason": "Hook transcript input and capture-cursor JSON extensions; SQLite is accessed through the engine."
+  },
+  {
+    "path": "plugins/cairn-memory/scripts/hook.mjs",
+    "source": "const state = JSON.parse(await readFile(path, \"utf8\"));",
+    "reason": "Session cursor JSON is selected by the hashed host session ID; this read never selects a database file."
   },
   {
     "path": "evaluation/live/diagnostics.mjs",
@@ -1041,8 +1046,13 @@
   },
   {
     "path": "plugins/cairn-memory/scripts/hook.mjs",
-    "source": "import { open, readFile, stat } from \"node:fs/promises\"",
-    "reason": "Hook transcript input and skill-turn JSON state; SQLite is accessed through the engine."
+    "source": "import { open, readFile, stat, mkdir, rename, unlink, writeFile } from \"node:fs/promises\"",
+    "reason": "Hook transcript reads and private session JSON boundaries; the PID/UUID temporary JSON is under the session state directory, never a database file."
+  },
+  {
+    "path": "plugins/cairn-memory/scripts/hook.mjs",
+    "source": "await writeFile(temporary, JSON.stringify(state), { mode: 0o600, flag: \"wx\" });",
+    "reason": "Exclusive PID/UUID temporary JSON under the session state directory, atomically renamed to boundary state; never a database file."
   },
   {
     "path": "evaluation/live/diagnostics.mjs",
@@ -1685,6 +1695,46 @@
     "reason": "Creates private search sidecar directories only; mkdir does not open or close a database file descriptor."
   },
   {
+    "path": "plugins/cairn-memory/scripts/hook.mjs",
+    "source": "try { current = JSON.parse(await readFile(path, \"utf8\")); }",
+    "reason": "Fresh hashed-session cursor JSON under one nonblocking capture-lock attempt; marker publication never reads database bytes or overwrites a stale cursor."
+  },
+  {
+    "path": "plugins/cairn-memory/scripts/hook.mjs",
+    "source": "await writeFile(temporary, JSON.stringify(state), { mode: 0o600, flag: \"wx\" });",
+    "reason": "Portable first-prompt publication writes only session cursor JSON to an exclusive temporary file before atomic rename; no SQLite file is opened."
+  },
+  {
+    "path": "integrations/client/private-state.mjs",
+    "source": "import { lstatSync, realpathSync, openSync, fstatSync, readFileSync, closeSync, readdirSync } from \"node:fs\"",
+    "reason": "Synchronous final admission reads only private content-free pause metadata, never a SQLite file."
+  },
+  {
+    "path": "integrations/client/private-state.mjs",
+    "source": "try { file = openSync(before.canonical, constants.O_RDONLY | constants.O_NOFOLLOW); }",
+    "reason": "Open only owner-checked regular pause metadata for final synchronous admission, never a SQLite file."
+  },
+  {
+    "path": "integrations/client/private-state.mjs",
+    "source": "return readFileSync(file, \"utf8\");",
+    "reason": "Read only the checked pause metadata handle, bounded to 64 KiB, never a SQLite file."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/private-state.mjs",
+    "source": "import { lstatSync, realpathSync, openSync, fstatSync, readFileSync, closeSync, readdirSync } from \"node:fs\"",
+    "reason": "Synchronous final admission reads only private content-free pause metadata, never a SQLite file."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/private-state.mjs",
+    "source": "try { file = openSync(before.canonical, constants.O_RDONLY | constants.O_NOFOLLOW); }",
+    "reason": "Open only owner-checked regular pause metadata for final synchronous admission, never a SQLite file."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/private-state.mjs",
+    "source": "return readFileSync(file, \"utf8\");",
+    "reason": "Read only the checked pause metadata handle, bounded to 64 KiB, never a SQLite file."
+  },
+  {
     "path": "integrations/client/raw/local-codex-qualification.mjs",
     "source": "import { realpathSync, stat as statCallback, lutimes as lutimesCallback } from 'node:fs'",
     "reason": "Metadata only: realpathSync resolves host/config fixture boundaries; promisified stat/lutimes inspect the bound host or update observed-host cache JSON timestamps. None opens database or sidecar data descriptors."
@@ -1733,5 +1783,180 @@
     "path": "integrations/client/raw/local-source-open.mjs",
     "source": "file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);",
     "reason": "Local transcript opener only; never accepts a database path from capture authority."
+  },
+  {
+    "path": "integrations/openclaw/src/setup.mjs",
+    "source": "import { mkdir, rmdir, unlink, lstat } from \"node:fs/promises\"",
+    "reason": "Local setup inspects its private credential directory and removes only its newly created secret or empty directory on rollback; secret file I/O uses the OpenClaw SDK and never a database path."
+  },
+  {
+    "path": "integrations/openclaw/lib/private-state.mjs",
+    "source": "file = await open(",
+    "reason": "Generated shared observer dependency, identical to integrations/client/private-state.mjs. Private runtime directory handles and explicit identity/config JSON state; no database path."
+  },
+  {
+    "path": "integrations/openclaw/lib/private-state.mjs",
+    "source": "const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);",
+    "reason": "Generated shared observer dependency, identical to integrations/client/private-state.mjs. Private runtime directory handles and explicit identity/config JSON state; no database path."
+  },
+  {
+    "path": "integrations/openclaw/lib/private-state.mjs",
+    "source": "const file = await open(temporary, \"wx\", 0o600);",
+    "reason": "Generated shared observer dependency, identical to integrations/client/private-state.mjs. Private runtime directory handles and explicit identity/config JSON state; no database path."
+  },
+  {
+    "path": "integrations/openclaw/lib/private-state.mjs",
+    "source": "import { lstat, mkdir, open, link, rename, unlink, realpath, readdir } from \"node:fs/promises\"",
+    "reason": "Generated shared observer dependency, identical to integrations/client/private-state.mjs. Private runtime directory handles and explicit identity/config JSON state; no database path."
+  },
+  {
+    "path": "integrations/openclaw/lib/private-state.mjs",
+    "source": "import { constants } from \"node:fs\"",
+    "reason": "Generated shared observer dependency, identical to integrations/client/private-state.mjs. Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "integrations/openclaw/lib/private-state.mjs",
+    "source": "import { lstatSync, realpathSync, openSync, fstatSync, readFileSync, closeSync, readdirSync } from \"node:fs\"",
+    "reason": "Generated shared observer dependency, identical to integrations/client/private-state.mjs. Synchronous final admission reads only private content-free pause metadata, never a SQLite file."
+  },
+  {
+    "path": "integrations/openclaw/lib/private-state.mjs",
+    "source": "try { file = openSync(before.canonical, constants.O_RDONLY | constants.O_NOFOLLOW); }",
+    "reason": "Generated shared observer dependency, identical to integrations/client/private-state.mjs. Open only owner-checked regular pause metadata for final synchronous admission, never a SQLite file."
+  },
+  {
+    "path": "integrations/openclaw/lib/private-state.mjs",
+    "source": "return readFileSync(file, \"utf8\");",
+    "reason": "Generated shared observer dependency, identical to integrations/client/private-state.mjs. Read only the checked pause metadata handle, bounded to 64 KiB, never a SQLite file."
+  },
+  {
+    "path": "integrations/openclaw/lib/control-state.mjs",
+    "source": "const value = JSON.parse(await readFile(path, \"utf8\"));",
+    "reason": "Generated shared observer dependency, identical to integrations/client/control-state.mjs. Pause/control JSON state and staging files, separate from the SQLite store."
+  },
+  {
+    "path": "integrations/openclaw/lib/control-state.mjs",
+    "source": "await writeFile(",
+    "reason": "Generated shared observer dependency, identical to integrations/client/control-state.mjs. Pause/control JSON state and staging files, separate from the SQLite store."
+  },
+  {
+    "path": "integrations/openclaw/lib/control-state.mjs",
+    "source": "await writeFile(controlPaths.legacyPause, \"paused\\n\", { mode: 0o600 });",
+    "reason": "Generated shared observer dependency, identical to integrations/client/control-state.mjs. Pause/control JSON state and staging files, separate from the SQLite store."
+  },
+  {
+    "path": "integrations/openclaw/lib/control-state.mjs",
+    "source": "import { mkdir, readFile, rename, stat, unlink, writeFile } from \"node:fs/promises\"",
+    "reason": "Generated shared observer dependency, identical to integrations/client/control-state.mjs. Pause/control JSON state and staging files, separate from the SQLite store."
+  },
+  {
+    "path": "integrations/openclaw/lib/file-lock.mjs",
+    "source": "async function readOwner(path, read = readFile) {",
+    "reason": "Generated shared observer dependency, identical to integrations/client/file-lock.mjs. Transport coordination owner JSON files, distinct from SQLite database and journal locks."
+  },
+  {
+    "path": "integrations/openclaw/lib/file-lock.mjs",
+    "source": "await writeFile(reaperOwnerPath, JSON.stringify(reaperOwner), {",
+    "reason": "Generated shared observer dependency, identical to integrations/client/file-lock.mjs. Transport coordination owner JSON files, distinct from SQLite database and journal locks."
+  },
+  {
+    "path": "integrations/openclaw/lib/file-lock.mjs",
+    "source": "isAlive = processIsAlive, validatePath = async () => {}, read = readFile, signal } = {},",
+    "reason": "Generated shared observer dependency, identical to integrations/client/file-lock.mjs. Transport coordination owner JSON files, distinct from SQLite database and journal locks."
+  },
+  {
+    "path": "integrations/openclaw/lib/file-lock.mjs",
+    "source": "await writeFile(ownerPath, JSON.stringify(owner), { mode: 0o600, flag: 'wx' });",
+    "reason": "Generated shared observer dependency, identical to integrations/client/file-lock.mjs. Transport coordination owner JSON files, distinct from SQLite database and journal locks."
+  },
+  {
+    "path": "integrations/openclaw/lib/file-lock.mjs",
+    "source": "import { link, mkdir, readFile, unlink, writeFile } from \"node:fs/promises\"",
+    "reason": "Generated shared observer dependency, identical to integrations/client/file-lock.mjs. Transport coordination owner JSON files, distinct from SQLite database and journal locks."
+  },
+  {
+    "path": "integrations/openclaw/lib/http.mjs",
+    "source": "try { file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW); }",
+    "reason": "Generated shared observer dependency, identical to integrations/client/transport-hosted.mjs. Hosted transport JSON state and exclusive staging files; no local SQLite database access."
+  },
+  {
+    "path": "integrations/openclaw/lib/http.mjs",
+    "source": "const file = await open(temporary, \"wx\", 0o600);",
+    "reason": "Generated shared observer dependency, identical to integrations/client/transport-hosted.mjs. Hosted transport JSON state and exclusive staging files; no local SQLite database access."
+  },
+  {
+    "path": "integrations/openclaw/lib/http.mjs",
+    "source": "import { lstat, mkdir, realpath, open, rename, unlink } from \"node:fs/promises\"",
+    "reason": "Generated shared observer dependency, identical to integrations/client/transport-hosted.mjs. Hosted transport JSON state and exclusive staging files; no local SQLite database access."
+  },
+  {
+    "path": "integrations/openclaw/lib/http.mjs",
+    "source": "import { constants } from \"node:fs\"",
+    "reason": "Generated shared observer dependency, identical to integrations/client/transport-hosted.mjs. Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "read: () => readFile(path, \"utf8\"),",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "await writeFile(temporaryPath, `${value}\\n`, { flag: \"wx\", mode: 0o600 });",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "read: () => readFile(keyPath, \"utf8\"),",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "const winner = (await readFile(keyPath, \"utf8\")).trim();",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "const staged = await open(temporary, \"wx\", 0o600);",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "await staged.writeFile(bytes);",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "return readFile(join(root, \"project-key\"), \"utf8\");",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "read: () => readFile(join(root, \"project-key\"), \"utf8\"),",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "boot: (await readFile(\"/proc/sys/kernel/random/boot_id\", \"utf8\")).trim(),",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "read: () => readFile(join(root, \"project-key\"), \"utf8\"),",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "import {\n  opendir,\n  open,\n  readFile,\n  readlink,\n  unlink,\n  lstat,\n  stat,\n  access,\n  realpath,\n  link,\n  mkdir,\n  writeFile,\n  rmdir,\n  rename,\n  readdir,\n} from \"node:fs/promises\"",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/openclaw/lib/pairing.mjs",
+    "source": "import { constants } from \"node:fs\"",
+    "reason": "Generated shared observer dependency, identical to integrations/client/pairing.mjs. Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "integrations/client/bundle.mjs",
+    "source": "const code = await readFile(join(source, name), 'utf8');",
+    "reason": "Build-time read of a fixed shared client module for the independent plugin dependency closure; never a database path."
   }
 ]

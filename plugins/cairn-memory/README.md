@@ -16,7 +16,7 @@ npx @cairn-ink/memory setup
 ```
 
 This checkout prepares installer **0.5.3**; publication is a separate step.
-Try it with `node packages/setup/bin/memory.mjs setup`. The plugin is 0.3.5.
+Try it with `node packages/setup/bin/memory.mjs setup`. The plugin is 0.3.7.
 Setup asks about new tools, updates connected tools, and uses one browser sign-in
 when connecting both. The default server is cairn.ink. Conflicting servers or
 memory IDs present a choice; non-interactive conflicts change nothing.
@@ -83,8 +83,70 @@ The bundled Cairn MCP server also exposes explicit `remember_memory`, `recall_me
 
 Hooks fail open: timeouts, auth errors, and service outages never block normal Claude Code work.
 Explicit pause/resume commands report control failures rather than claiming success. After resume,
-each session's first capture hook skips its current unprocessed history; later complete messages are
-eligible. Requests already started before pause may still finish.
+sessions with a boundary from before the pause skip their unprocessed history; later complete messages are eligible.
+On Linux and macOS, new sessions can be captured from their start, excluding copied
+history, when the synchronous start hook finishes within its budget and validates
+active local control. If the transcript is missing at start, this also requires locally
+published active hosted authority; unknown pending starts remain conservative after a
+pause. Existing transcripts still use only local control for their start boundary.
+Native Windows retains its existing portable first-prompt authority.
+Known gaps, which skip a turn and never send paused text: the first new session after
+a hosted resume, started before another session on this computer has seen the resume,
+loses its first turn (a one-turn `claude -p` right after a resume is not captured); and on
+an account that has ever paused, the first pause check after installing or upgrading
+skips the turn then in progress in each open session.
+Requests already started before pause may still finish.
+
+Hosted recall and capture require a freshly validated, enforced pause state.
+Claude recall observes it once immediately before fetching, after project and
+quota preparation, then checks only the local published barrier before emitting
+context (in-process state on native Windows). A recall already in flight when
+you pause can still complete for that one prompt; nothing is sent after the pause
+is seen by that hook. Capture and its detached worker keep their initial and
+pre-dispatch observations. Paused, unavailable, unenforced or regressing
+observations block that operation. The foreground Stop/PreCompact launcher makes
+no hosted request; its detached worker performs the observations.
+
+On Linux and macOS, pause publication and final request/output admission share
+one filesystem gate, acquired before the local control lock. Pause authority is
+committed only under that gate. Once a pause is recorded on this machine, no
+request starts after that; work already admitted in another process may complete.
+A content-free pending marker keeps new admissions closed while pause publication
+waits, including after a process restart. A suspended holder can delay publication;
+resume permits work only after local publication. A high-water checkpoint and
+crash-safe pruning bound completed journal history without warm-path fsyncs.
+Shared observations apply across paired clients; the local daily cap remains
+specific to Codex.
+
+Recall aborts new work at 3,500 ms and admits output only before 3,450 ms.
+Only an admitted pipe write may drain until the 3,750 ms process-clock backstop,
+reserving 100 ms for spawn-to-origin latency and 150 ms for exit before the
+host's four-second timeout. First-prompt classification and diagnostics cannot
+use this drain window. These cooperative timers cannot preempt process suspension
+or a synchronous regular-file output write.
+
+On native Windows, pause is checked right before every send, and a request that
+had already started when you paused can finish. This mode uses process-local
+observations: a delayed older active response in another hook is not revoked by
+a different process's observation. Capture cursors retain the hosted generation
+and target; after either changes, the first capture skips to EOF so paused-period
+text is not uploaded after resume. On upgrade, a Windows hosted session with
+missing or invalid cursor authority also skips its pending bytes through that
+first capture's EOF, even at generation zero. Before any capture and only when
+hosted tags are absent, the first prompt can instead authorize bytes appended
+after one transcript-size snapshot at hook entry. Authority comes only from that
+recall's validated active observation; a later prompt never adds or refreshes it.
+The prompt path adds at most one stat, with no transcript read or extra network call.
+A prompt record already on disk at that snapshot is conservatively omitted.
+A denied observation, busy capture lock, unknown byte boundary or insufficient
+recall cleanup time leaves the first capture to establish EOF. Stop still requires
+a fresh observation matching both tags. Linux/macOS upgrades and local capture
+retain their existing behavior. POSIX-only availability diagnostics and root
+revocation checkpoints are skipped.
+This capability is selected once by platform, never after a Linux/macOS lock
+failure. Windows coverage uses injection only. Non-HTTP local integrations are
+unchanged. See [privacy details](../../docs/privacy.md) for the commit point and
+content-free journal recovery rules.
 
 Capture is handed to a detached worker so it survives both interactive sessions and `claude -p`
 teardown without delaying Claude's response. The launcher pipes only session id, transcript path,

@@ -755,97 +755,97 @@
           "forget",
           "b0937277a5a2824a9219e78d9a027e6583e12fc7c188d861db912ff17124fefb",
           3537,
-          3563
+          3567
         ],
         [
           "admit",
           "f501774841453b6aa07e74470cf2eb1e72bd6511edfbf2c5195f249085e4ac2f",
-          3563,
-          3587
+          3567,
+          3591
         ],
         [
           "forget",
           "837e5753f92d579c1b6f8adf8f718e8c634d622dfb027c4230c52773ddc6c2e8",
-          3587,
-          3613
+          3591,
+          3619
         ],
         [
           "submitSourceNote",
           "2a44dacc85af984c07680dd4888e96bc05aee0b0532ba88ced1e8a2e0924d648",
-          3613,
-          3624
+          3619,
+          3630
         ],
         [
           "createCardDraft",
           "cd2a5b757129d43fe2d19ee688f18ee2112e58327f3c12a05496dae18e09da90",
-          3624,
-          3639
+          3630,
+          3645
         ],
         [
           "createCardDraft",
           "3e74a22726d77c1c76a00bd997d676a0cb762047b49ac063650b1b760876ea9e",
-          3639,
-          3654
+          3645,
+          3660
         ],
         [
           "confirmCardDraft",
           "3e20dd54a19f149424d37537911fcdcde843fbb449d212cdb9a04bdc980258d3",
-          3654,
-          3682
+          3660,
+          3688
         ],
         [
           "deleteSourceNote",
           "b31d216492e3dbdc8266f0314810528f7c075d834268f9af18dd0dc65b8495a7",
-          3682,
-          3707
+          3688,
+          3713
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          3707,
-          3711
+          3713,
+          3717
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          3711,
-          3721
+          3717,
+          3727
         ],
         [
           "cancelCardDraft",
           "59dead7c3040409d4f3fd3aa9cafbf5cce64f1a966946ed0db6fafb8ad84f5a9",
-          3721,
-          3735
+          3727,
+          3741
         ],
         [
           "deleteKnowledgeCard",
           "5a66832abd3dd64e57fa8bc8d328405ec1c03fc01344829e7518aeb37b185c3c",
-          3735,
-          3749
+          3741,
+          3755
         ],
         [
           "deleteSourceNote",
           "e599d7cbeb4a1fcd8d3e316241113a6157e4e522c6a80ae0d8dfde8c54f39f50",
-          3749,
-          3761
+          3755,
+          3767
         ],
         [
           "listCardEffects",
           "21ece43ee72d29507d70e449663ea224ca3c4d9b845824ff11448d24c674665d",
-          3761,
-          3764
+          3767,
+          3770
         ],
         [
           "getPrivateCardUsage",
           "69c7335d36b31ad5f695501c82725d4359230e9816b6d38e2b85ee3a652ad2cc",
-          3764,
-          3768
+          3770,
+          3774
         ],
         [
           "recall",
           "8893101c7945b3853b74b9efa10374a1c6c0c4da58ef9e5ea60d2a050b10cc89",
-          3768,
-          3867
+          3774,
+          3873
         ],
         [
           "modelCalls",
@@ -854,8 +854,8 @@
           null
         ]
       ],
-      "statements": 3867,
-      "sql": "afcf18099c971d587be29bd56825f2b0340e106300d17f3b8d3c49d76d209f1d",
+      "statements": 3873,
+      "sql": "b2b9d97c891919dfd19d734a93adc769ccf6b42b6e03b0d8158cae35647b031b",
       "tables": [
         [
           "admission_claims",
@@ -1148,7 +1148,54 @@
           "3de05550f3b2f82414bc204f298f6089d04887b0d39bced47df04ab693c8fbef"
         ]
       ],
-      "effectWitnesses": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      "effectWitnesses": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "sqlAdditions": {
+        "callCount": 2,
+        "calls": [
+          {
+            "method": "forget",
+            "ordinal": 2,
+            "statements": [
+              [
+                "1baf19ae2afefbfce1a04af3951c8879d8c7604f12e64f7808d5630442eee21a",
+                "get",
+                "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              ],
+              [
+                "101687bc582c8e91219e7ea15007bc500e32a3ffcfcde12dfd34bc8afdc412ef",
+                "all",
+                "0f6bb0932752160f53b53f9438228c1b6a78c9449b843028d8e26a54b1b92ebf"
+              ],
+              [
+                "82ded9dd3abbcbec86858390a6cbdd876f7f7a09bd89ca84be0c7b7dbc4e2277",
+                "get",
+                "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              ],
+              [
+                "24892f84eeeda6b51c90828116e47e41cf69be1e46b905ddc47e32458be99df7",
+                "run",
+                "32435e1d018cfa5bac67e0d94a884af21ad56944dff1ac55a13765ef16005545"
+              ]
+            ]
+          },
+          {
+            "method": "forget",
+            "ordinal": 3,
+            "statements": [
+              [
+                "101687bc582c8e91219e7ea15007bc500e32a3ffcfcde12dfd34bc8afdc412ef",
+                "all",
+                "80d4f7569ae2dae44de7b2b75a84e9220fda764e710ccd6d17cd2f26acc8b093"
+              ],
+              [
+                "24892f84eeeda6b51c90828116e47e41cf69be1e46b905ddc47e32458be99df7",
+                "run",
+                "486aed3f059e115a762eb41f1096898441dcf7d629df83bd916e7ddb8030a910"
+              ]
+            ]
+          }
+        ]
+      }
     },
     "open:52": {
       "calls": [
@@ -1995,7 +2042,7 @@
         ]
       ],
       "statements": 8660,
-      "sql": "8fd8df620e85f67a17e4f6c6cbac255be5e976ef5f575e95539192e74ac7f7d8",
+      "sql": "e0703338b0bd207dd606510ea15fe258d30a33428bdd06f339a64fe08384e3f8",
       "tables": [
         [
           "admission_claims",
@@ -3613,157 +3660,157 @@
           "deleteConversation",
           "7c7ab2d9136d6c49f1d0a70939b301a8307200184574f4a8322b5b7a4c1cf8fa",
           10377,
-          10477
+          10481
         ],
         [
           "deleteConversation",
           "7c7ab2d9136d6c49f1d0a70939b301a8307200184574f4a8322b5b7a4c1cf8fa",
-          10477,
-          10480
+          10481,
+          10484
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          10480,
-          10494
+          10484,
+          10498
         ],
         [
           "correct",
           "70c4e925846dcd32d8b26c480ae91cc34e2d42e27e0b3ad9c6487c711cdae920",
-          10494,
-          10583
+          10498,
+          10587
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          10583,
-          10597
+          10587,
+          10601
         ],
         [
           "get",
           "2b5ca6f58052e5cde3d834a08499c495f84f5a008824bc9fa24cd1aec692f2bb",
-          10597,
-          10628
+          10601,
+          10632
         ],
         [
           "supersede",
           "85a132991b83f00e80c42000aceac0019e48ee517011857e8f74e73f36e051be",
-          10628,
-          10696
+          10632,
+          10700
         ],
         [
           "forget",
           "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
-          10696,
-          10702
+          10700,
+          10706
         ],
         [
           "get",
           "0c1761396a0caa357777c813104e85734df24166e734f4ea4e6c4b8f4e8b8ed9",
-          10702,
-          10733
+          10706,
+          10737
         ],
         [
           "forget",
           "842bca929001887de46060ceb41958218fe160f882674e064a4c266993ce8c36",
-          10733,
-          10790
+          10737,
+          10796
         ],
         [
           "admit",
           "8c0069625defe656be7efa5842f2c611f0de14604360d73e3719a603b208ca21",
-          10790,
-          10845
+          10796,
+          10851
         ],
         [
           "forget",
           "9af50378e5cef59c000dfe2ad8b41f4e441cb9aad7b0e4964ac3db8dfa0161b3",
-          10845,
-          10902
+          10851,
+          10910
         ],
         [
           "submitSourceNote",
           "b128a9849ab6ad8f6eac48b1f07c728136d208ff99239d69e7737191a883c05c",
-          10902,
-          10913
+          10910,
+          10921
         ],
         [
           "createCardDraft",
           "212a257dc881f37ac626cd89471b43631c7b3fec0651570cd25a83e0f2710bbf",
-          10913,
-          10928
+          10921,
+          10936
         ],
         [
           "createCardDraft",
           "c35def3828dac4fed01ed93ace309724438fa4cb83b5c328dc706b437a5bf100",
-          10928,
-          10943
+          10936,
+          10951
         ],
         [
           "confirmCardDraft",
           "f9c972af890c6b29e26caea918edd9de0b83fde25dcb599d49b19be7353990e9",
-          10943,
-          10974
+          10951,
+          10982
         ],
         [
           "deleteSourceNote",
           "130faba56067cb2cfcb212249b417add4ff5642ee12be7dd85384e38bf055923",
-          10974,
-          10999
+          10982,
+          11007
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          10999,
-          11003
+          11007,
+          11011
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          11003,
-          11014
+          11011,
+          11022
         ],
         [
           "cancelCardDraft",
           "59dead7c3040409d4f3fd3aa9cafbf5cce64f1a966946ed0db6fafb8ad84f5a9",
-          11014,
-          11028
+          11022,
+          11036
         ],
         [
           "deleteKnowledgeCard",
           "5a66832abd3dd64e57fa8bc8d328405ec1c03fc01344829e7518aeb37b185c3c",
-          11028,
-          11042
+          11036,
+          11050
         ],
         [
           "checkMethodReasonRefs",
           "a59808dac96996843c9c766296bf1aaf8abadfe59a67e89b216de944a6e952a0",
-          11042,
-          11049
+          11050,
+          11057
         ],
         [
           "deleteSourceNote",
           "e599d7cbeb4a1fcd8d3e316241113a6157e4e522c6a80ae0d8dfde8c54f39f50",
-          11049,
-          11061
+          11057,
+          11069
         ],
         [
           "listCardEffects",
           "a2dbe844a3a2e064af92095d1480365111c5f5a62fd7d8dcf2f0b43bd48c4341",
-          11061,
-          11064
+          11069,
+          11072
         ],
         [
           "getPrivateCardUsage",
           "69c7335d36b31ad5f695501c82725d4359230e9816b6d38e2b85ee3a652ad2cc",
-          11064,
-          11068
+          11072,
+          11076
         ],
         [
           "recall",
           "5f1ed616c1b4fc4a9ab0ae19f343358a8ad9f88ecc207b06ac9d9bce40b87058",
-          11068,
-          11326
+          11076,
+          11334
         ],
         [
           "modelCalls",
@@ -3772,8 +3819,8 @@
           null
         ]
       ],
-      "statements": 11326,
-      "sql": "e28c5325046d654f15d58984c5ce30e9228872ac1b650233f9cf77f8c2583502",
+      "statements": 11334,
+      "sql": "6ad1e17012f1e014cd0c9de675a9f6294289d94b0d36edc4bcc2e6671c33bdec",
       "tables": [
         [
           "admission_claims",
@@ -4326,7 +4373,70 @@
           "1b4c0cc31ca400b7c68bd9a268720b9ccaf6d993f0ae9ec74a87ec4f9572bfea"
         ]
       ],
-      "effectWitnesses": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      "effectWitnesses": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "sqlAdditions": {
+        "callCount": 3,
+        "calls": [
+          {
+            "method": "deleteConversation",
+            "ordinal": 1,
+            "statements": [
+              [
+                "1baf19ae2afefbfce1a04af3951c8879d8c7604f12e64f7808d5630442eee21a",
+                "get",
+                "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              ],
+              [
+                "101687bc582c8e91219e7ea15007bc500e32a3ffcfcde12dfd34bc8afdc412ef",
+                "all",
+                "6fb4aaf4f1e15e71f69e748d124f6e30c7b15b8bf5f12b6468577241b6908452"
+              ],
+              [
+                "82ded9dd3abbcbec86858390a6cbdd876f7f7a09bd89ca84be0c7b7dbc4e2277",
+                "get",
+                "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              ],
+              [
+                "24892f84eeeda6b51c90828116e47e41cf69be1e46b905ddc47e32458be99df7",
+                "run",
+                "c29486357392e644f150992765bb0846fbd6307626354d44d463848eda02c027"
+              ]
+            ]
+          },
+          {
+            "method": "forget",
+            "ordinal": 2,
+            "statements": [
+              [
+                "101687bc582c8e91219e7ea15007bc500e32a3ffcfcde12dfd34bc8afdc412ef",
+                "all",
+                "0f6bb0932752160f53b53f9438228c1b6a78c9449b843028d8e26a54b1b92ebf"
+              ],
+              [
+                "24892f84eeeda6b51c90828116e47e41cf69be1e46b905ddc47e32458be99df7",
+                "run",
+                "32435e1d018cfa5bac67e0d94a884af21ad56944dff1ac55a13765ef16005545"
+              ]
+            ]
+          },
+          {
+            "method": "forget",
+            "ordinal": 3,
+            "statements": [
+              [
+                "101687bc582c8e91219e7ea15007bc500e32a3ffcfcde12dfd34bc8afdc412ef",
+                "all",
+                "d73478d33b6caac0bd0ebc526a8f71e13083d90d3065fb7e6a6ddee20e106841"
+              ],
+              [
+                "24892f84eeeda6b51c90828116e47e41cf69be1e46b905ddc47e32458be99df7",
+                "run",
+                "73d4d6397855032427279eadcb616cede2b7c512f02917bcd7c20547531d3f8f"
+              ]
+            ]
+          }
+        ]
+      }
     },
     "open:53": {
       "calls": [
@@ -5841,7 +5951,7 @@
         ]
       ],
       "statements": 20693,
-      "sql": "6d12abc0f89d04883be41216e829200e7603f5922803ccb40eceaaeaf7d0f8aa",
+      "sql": "d65e80fb0a6d8cbf631a668ae13d286284feb7e0aa4379be372f80fd3ea95927",
       "tables": [
         [
           "admission_claims",
@@ -6424,5 +6534,1071 @@
     "openContextIndexMaintainer",
     "openContentSuppressionReader",
     "openRawCaptureCore"
-  ]
+  ],
+  "sqlRevisions": [
+    {
+      "key": "workload:23",
+      "index": 201,
+      "old": "SELECT id, revision, content, deleted, currentness FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
+      "new": "SELECT id, revision, content, deleted, currentness, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
+    },
+    {
+      "key": "workload:23",
+      "index": 3771,
+      "old": "SELECT id, revision, content, deleted, currentness FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
+      "new": "SELECT id, revision, content, deleted, currentness, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
+    },
+    {
+      "key": "workload:33",
+      "index": 884,
+      "old": "SELECT id, revision, content, deleted, currentness FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
+      "new": "SELECT id, revision, content, deleted, currentness, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
+    },
+    {
+      "key": "workload:33",
+      "index": 11071,
+      "old": "SELECT id, revision, content, deleted, currentness FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
+      "new": "SELECT id, revision, content, deleted, currentness, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
+    },
+    {
+      "key": "workload:52",
+      "index": 855,
+      "old": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
+      "new": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
+    },
+    {
+      "key": "workload:52",
+      "index": 8328,
+      "old": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
+      "new": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
+    },
+    {
+      "key": "workload:53",
+      "index": 1599,
+      "old": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state,EXISTS( SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=memories.id AND (ac.owner_id IS NOT memories.owner_id OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
+      "new": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state,EXISTS( SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=memories.id AND (ac.owner_id IS NOT memories.owner_id OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
+    },
+    {
+      "key": "workload:53",
+      "index": 19852,
+      "old": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state,EXISTS( SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=memories.id AND (ac.owner_id IS NOT memories.owner_id OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
+      "new": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state,EXISTS( SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=memories.id AND (ac.owner_id IS NOT memories.owner_id OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
+    }
+  ],
+  "sqlAdditionMethods": [
+    "deleteConversation",
+    "forget"
+  ],
+  "sqlAdditions": [
+    {
+      "key": "workload:23",
+      "method": "forget",
+      "ordinal": 2,
+      "after": 20,
+      "statement": [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_memory_bindings'",
+        "get",
+        []
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:23",
+      "method": "forget",
+      "ordinal": 2,
+      "after": 20,
+      "statement": [
+        "SELECT c.* FROM private_cards c JOIN card_operations o ON (o.owner_id,o.scope,o.project_id,o.action_id,o.target_id)= (c.owner_id,c.scope,c.project_id,c.id,c.id) WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND o.method='consolidate' AND json_extract(o.result,'$.origin')='engine' AND (c.title IS NOT NULL OR c.body IS NOT NULL) AND EXISTS(SELECT 1 FROM card_memory_bindings b WHERE b.card_id=c.id AND b.memory_id=?) ORDER BY c.id",
+        "all",
+        [
+          "synthetic-off-owner",
+          "personal",
+          "",
+          "00000000-0000-4000-8000-000000000003"
+        ]
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:23",
+      "method": "forget",
+      "ordinal": 2,
+      "after": 20,
+      "statement": [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_operations'",
+        "get",
+        []
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:23",
+      "method": "forget",
+      "ordinal": 2,
+      "after": 20,
+      "statement": [
+        "DELETE FROM card_operations WHERE owner_id=? AND scope=? AND project_id=? AND method IN ('consolidateAttempt','consolidateOutcome') AND (target_id=? OR json_type(result,'$.sourceRevisions') IS NOT 'array' OR EXISTS(SELECT 1 FROM json_each(result,'$.sourceRevisions') WHERE json_extract(value,'$.memoryId')=?))",
+        "run",
+        [
+          "synthetic-off-owner",
+          "personal",
+          "",
+          "00000000-0000-4000-8000-000000000003",
+          "00000000-0000-4000-8000-000000000003"
+        ]
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:23",
+      "method": "forget",
+      "ordinal": 3,
+      "after": 20,
+      "statement": [
+        "SELECT c.* FROM private_cards c JOIN card_operations o ON (o.owner_id,o.scope,o.project_id,o.action_id,o.target_id)= (c.owner_id,c.scope,c.project_id,c.id,c.id) WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND o.method='consolidate' AND json_extract(o.result,'$.origin')='engine' AND (c.title IS NOT NULL OR c.body IS NOT NULL) AND EXISTS(SELECT 1 FROM card_memory_bindings b WHERE b.card_id=c.id AND b.memory_id=?) ORDER BY c.id",
+        "all",
+        [
+          "synthetic-off-owner",
+          "personal",
+          "",
+          "00000000-0000-4000-8000-000000000041"
+        ]
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:23",
+      "method": "forget",
+      "ordinal": 3,
+      "after": 20,
+      "statement": [
+        "DELETE FROM card_operations WHERE owner_id=? AND scope=? AND project_id=? AND method IN ('consolidateAttempt','consolidateOutcome') AND (target_id=? OR json_type(result,'$.sourceRevisions') IS NOT 'array' OR EXISTS(SELECT 1 FROM json_each(result,'$.sourceRevisions') WHERE json_extract(value,'$.memoryId')=?))",
+        "run",
+        [
+          "synthetic-off-owner",
+          "personal",
+          "",
+          "00000000-0000-4000-8000-000000000041",
+          "00000000-0000-4000-8000-000000000041"
+        ]
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:33",
+      "method": "deleteConversation",
+      "ordinal": 1,
+      "after": 69,
+      "statement": [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_memory_bindings'",
+        "get",
+        []
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:33",
+      "method": "deleteConversation",
+      "ordinal": 1,
+      "after": 69,
+      "statement": [
+        "SELECT c.* FROM private_cards c JOIN card_operations o ON (o.owner_id,o.scope,o.project_id,o.action_id,o.target_id)= (c.owner_id,c.scope,c.project_id,c.id,c.id) WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND o.method='consolidate' AND json_extract(o.result,'$.origin')='engine' AND (c.title IS NOT NULL OR c.body IS NOT NULL) AND EXISTS(SELECT 1 FROM card_memory_bindings b WHERE b.card_id=c.id AND b.memory_id=?) ORDER BY c.id",
+        "all",
+        [
+          "synthetic-off-owner",
+          "personal",
+          "",
+          "00000000-0000-4000-8000-000000000045"
+        ]
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:33",
+      "method": "deleteConversation",
+      "ordinal": 1,
+      "after": 69,
+      "statement": [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_operations'",
+        "get",
+        []
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:33",
+      "method": "deleteConversation",
+      "ordinal": 1,
+      "after": 69,
+      "statement": [
+        "DELETE FROM card_operations WHERE owner_id=? AND scope=? AND project_id=? AND method IN ('consolidateAttempt','consolidateOutcome') AND (target_id=? OR json_type(result,'$.sourceRevisions') IS NOT 'array' OR EXISTS(SELECT 1 FROM json_each(result,'$.sourceRevisions') WHERE json_extract(value,'$.memoryId')=?))",
+        "run",
+        [
+          "synthetic-off-owner",
+          "personal",
+          "",
+          "00000000-0000-4000-8000-000000000045",
+          "00000000-0000-4000-8000-000000000045"
+        ]
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:33",
+      "method": "forget",
+      "ordinal": 2,
+      "after": 48,
+      "statement": [
+        "SELECT c.* FROM private_cards c JOIN card_operations o ON (o.owner_id,o.scope,o.project_id,o.action_id,o.target_id)= (c.owner_id,c.scope,c.project_id,c.id,c.id) WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND o.method='consolidate' AND json_extract(o.result,'$.origin')='engine' AND (c.title IS NOT NULL OR c.body IS NOT NULL) AND EXISTS(SELECT 1 FROM card_memory_bindings b WHERE b.card_id=c.id AND b.memory_id=?) ORDER BY c.id",
+        "all",
+        [
+          "synthetic-off-owner",
+          "personal",
+          "",
+          "00000000-0000-4000-8000-000000000003"
+        ]
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:33",
+      "method": "forget",
+      "ordinal": 2,
+      "after": 48,
+      "statement": [
+        "DELETE FROM card_operations WHERE owner_id=? AND scope=? AND project_id=? AND method IN ('consolidateAttempt','consolidateOutcome') AND (target_id=? OR json_type(result,'$.sourceRevisions') IS NOT 'array' OR EXISTS(SELECT 1 FROM json_each(result,'$.sourceRevisions') WHERE json_extract(value,'$.memoryId')=?))",
+        "run",
+        [
+          "synthetic-off-owner",
+          "personal",
+          "",
+          "00000000-0000-4000-8000-000000000003",
+          "00000000-0000-4000-8000-000000000003"
+        ]
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:33",
+      "method": "forget",
+      "ordinal": 3,
+      "after": 48,
+      "statement": [
+        "SELECT c.* FROM private_cards c JOIN card_operations o ON (o.owner_id,o.scope,o.project_id,o.action_id,o.target_id)= (c.owner_id,c.scope,c.project_id,c.id,c.id) WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND o.method='consolidate' AND json_extract(o.result,'$.origin')='engine' AND (c.title IS NOT NULL OR c.body IS NOT NULL) AND EXISTS(SELECT 1 FROM card_memory_bindings b WHERE b.card_id=c.id AND b.memory_id=?) ORDER BY c.id",
+        "all",
+        [
+          "synthetic-off-owner",
+          "personal",
+          "",
+          "00000000-0000-4000-8000-000000000077"
+        ]
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:33",
+      "method": "forget",
+      "ordinal": 3,
+      "after": 48,
+      "statement": [
+        "DELETE FROM card_operations WHERE owner_id=? AND scope=? AND project_id=? AND method IN ('consolidateAttempt','consolidateOutcome') AND (target_id=? OR json_type(result,'$.sourceRevisions') IS NOT 'array' OR EXISTS(SELECT 1 FROM json_each(result,'$.sourceRevisions') WHERE json_extract(value,'$.memoryId')=?))",
+        "run",
+        [
+          "synthetic-off-owner",
+          "personal",
+          "",
+          "00000000-0000-4000-8000-000000000077",
+          "00000000-0000-4000-8000-000000000077"
+        ]
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:52",
+      "method": "forget",
+      "ordinal": 2,
+      "after": 48,
+      "statement": [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_memory_bindings'",
+        "get",
+        []
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:52",
+      "method": "forget",
+      "ordinal": 2,
+      "after": 48,
+      "statement": [
+        "SELECT c.* FROM private_cards c JOIN card_operations o ON (o.owner_id,o.scope,o.project_id,o.action_id,o.target_id)= (c.owner_id,c.scope,c.project_id,c.id,c.id) WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND o.method='consolidate' AND json_extract(o.result,'$.origin')='engine' AND (c.title IS NOT NULL OR c.body IS NOT NULL) AND EXISTS(SELECT 1 FROM card_memory_bindings b WHERE b.card_id=c.id AND b.memory_id=?) ORDER BY c.id",
+        "all",
+        [
+          "synthetic-off-owner",
+          "personal",
+          "",
+          "00000000-0000-4000-8000-000000000005"
+        ]
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:52",
+      "method": "forget",
+      "ordinal": 2,
+      "after": 48,
+      "statement": [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_operations'",
+        "get",
+        []
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:52",
+      "method": "forget",
+      "ordinal": 2,
+      "after": 48,
+      "statement": [
+        "DELETE FROM card_operations WHERE owner_id=? AND scope=? AND project_id=? AND method IN ('consolidateAttempt','consolidateOutcome') AND (target_id=? OR json_type(result,'$.sourceRevisions') IS NOT 'array' OR EXISTS(SELECT 1 FROM json_each(result,'$.sourceRevisions') WHERE json_extract(value,'$.memoryId')=?))",
+        "run",
+        [
+          "synthetic-off-owner",
+          "personal",
+          "",
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000005"
+        ]
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:52",
+      "method": "forget",
+      "ordinal": 3,
+      "after": 49,
+      "statement": [
+        "SELECT c.* FROM private_cards c JOIN card_operations o ON (o.owner_id,o.scope,o.project_id,o.action_id,o.target_id)= (c.owner_id,c.scope,c.project_id,c.id,c.id) WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND o.method='consolidate' AND json_extract(o.result,'$.origin')='engine' AND (c.title IS NOT NULL OR c.body IS NOT NULL) AND EXISTS(SELECT 1 FROM card_memory_bindings b WHERE b.card_id=c.id AND b.memory_id=?) ORDER BY c.id",
+        "all",
+        [
+          "synthetic-off-owner",
+          "personal",
+          "",
+          "00000000-0000-4000-8000-000000000051"
+        ]
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:52",
+      "method": "forget",
+      "ordinal": 3,
+      "after": 49,
+      "statement": [
+        "DELETE FROM card_operations WHERE owner_id=? AND scope=? AND project_id=? AND method IN ('consolidateAttempt','consolidateOutcome') AND (target_id=? OR json_type(result,'$.sourceRevisions') IS NOT 'array' OR EXISTS(SELECT 1 FROM json_each(result,'$.sourceRevisions') WHERE json_extract(value,'$.memoryId')=?))",
+        "run",
+        [
+          "synthetic-off-owner",
+          "personal",
+          "",
+          "00000000-0000-4000-8000-000000000051",
+          "00000000-0000-4000-8000-000000000051"
+        ]
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:53",
+      "method": "deleteConversation",
+      "ordinal": 1,
+      "after": 137,
+      "statement": [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_memory_bindings'",
+        "get",
+        []
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:53",
+      "method": "deleteConversation",
+      "ordinal": 1,
+      "after": 137,
+      "statement": [
+        "SELECT c.* FROM private_cards c JOIN card_operations o ON (o.owner_id,o.scope,o.project_id,o.action_id,o.target_id)= (c.owner_id,c.scope,c.project_id,c.id,c.id) WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND o.method='consolidate' AND json_extract(o.result,'$.origin')='engine' AND (c.title IS NOT NULL OR c.body IS NOT NULL) AND EXISTS(SELECT 1 FROM card_memory_bindings b WHERE b.card_id=c.id AND b.memory_id=?) ORDER BY c.id",
+        "all",
+        [
+          "synthetic-off-owner",
+          "personal",
+          "",
+          "00000000-0000-4000-8000-000000000047"
+        ]
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:53",
+      "method": "deleteConversation",
+      "ordinal": 1,
+      "after": 137,
+      "statement": [
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_operations'",
+        "get",
+        []
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:53",
+      "method": "deleteConversation",
+      "ordinal": 1,
+      "after": 137,
+      "statement": [
+        "DELETE FROM card_operations WHERE owner_id=? AND scope=? AND project_id=? AND method IN ('consolidateAttempt','consolidateOutcome') AND (target_id=? OR json_type(result,'$.sourceRevisions') IS NOT 'array' OR EXISTS(SELECT 1 FROM json_each(result,'$.sourceRevisions') WHERE json_extract(value,'$.memoryId')=?))",
+        "run",
+        [
+          "synthetic-off-owner",
+          "personal",
+          "",
+          "00000000-0000-4000-8000-000000000047",
+          "00000000-0000-4000-8000-000000000047"
+        ]
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:53",
+      "method": "forget",
+      "ordinal": 2,
+      "after": 81,
+      "statement": [
+        "SELECT c.* FROM private_cards c JOIN card_operations o ON (o.owner_id,o.scope,o.project_id,o.action_id,o.target_id)= (c.owner_id,c.scope,c.project_id,c.id,c.id) WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND o.method='consolidate' AND json_extract(o.result,'$.origin')='engine' AND (c.title IS NOT NULL OR c.body IS NOT NULL) AND EXISTS(SELECT 1 FROM card_memory_bindings b WHERE b.card_id=c.id AND b.memory_id=?) ORDER BY c.id",
+        "all",
+        [
+          "synthetic-off-owner",
+          "personal",
+          "",
+          "00000000-0000-4000-8000-000000000005"
+        ]
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:53",
+      "method": "forget",
+      "ordinal": 2,
+      "after": 81,
+      "statement": [
+        "DELETE FROM card_operations WHERE owner_id=? AND scope=? AND project_id=? AND method IN ('consolidateAttempt','consolidateOutcome') AND (target_id=? OR json_type(result,'$.sourceRevisions') IS NOT 'array' OR EXISTS(SELECT 1 FROM json_each(result,'$.sourceRevisions') WHERE json_extract(value,'$.memoryId')=?))",
+        "run",
+        [
+          "synthetic-off-owner",
+          "personal",
+          "",
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000005"
+        ]
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:53",
+      "method": "forget",
+      "ordinal": 3,
+      "after": 82,
+      "statement": [
+        "SELECT c.* FROM private_cards c JOIN card_operations o ON (o.owner_id,o.scope,o.project_id,o.action_id,o.target_id)= (c.owner_id,c.scope,c.project_id,c.id,c.id) WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND o.method='consolidate' AND json_extract(o.result,'$.origin')='engine' AND (c.title IS NOT NULL OR c.body IS NOT NULL) AND EXISTS(SELECT 1 FROM card_memory_bindings b WHERE b.card_id=c.id AND b.memory_id=?) ORDER BY c.id",
+        "all",
+        [
+          "synthetic-off-owner",
+          "personal",
+          "",
+          "00000000-0000-4000-8000-000000000087"
+        ]
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    },
+    {
+      "key": "workload:53",
+      "method": "forget",
+      "ordinal": 3,
+      "after": 82,
+      "statement": [
+        "DELETE FROM card_operations WHERE owner_id=? AND scope=? AND project_id=? AND method IN ('consolidateAttempt','consolidateOutcome') AND (target_id=? OR json_type(result,'$.sourceRevisions') IS NOT 'array' OR EXISTS(SELECT 1 FROM json_each(result,'$.sourceRevisions') WHERE json_extract(value,'$.memoryId')=?))",
+        "run",
+        [
+          "synthetic-off-owner",
+          "personal",
+          "",
+          "00000000-0000-4000-8000-000000000087",
+          "00000000-0000-4000-8000-000000000087"
+        ]
+      ],
+      "reference": 616,
+      "reason": "Erase engine Card content and bookkeeping when its source is forgotten."
+    }
+  ],
+  "cardStatementTexts": {
+    "deleteConversation": [
+      "DELETE FROM card_raw_mutation_context",
+      "DELETE FROM card_raw_pending_invalidations",
+      "INSERT INTO card_effects VALUES(lower(hex(randomblob(16))),?,?,?,?,?,?,?,?, (SELECT coalesce(max(ordinal),0)+1 FROM card_effects))",
+      "INSERT INTO card_epochs VALUES(?,?,?,2) ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET generation=generation+1",
+      "INSERT INTO card_raw_mutation_context VALUES(1,?,?,?,?)",
+      "INSERT OR IGNORE INTO card_raw_pending_invalidations(card_id,revision) VALUES(?,?)",
+      "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+      "UPDATE private_cards SET revision=revision+1,updated_at=?, title=CASE WHEN state='draft' THEN NULL ELSE title END,body=CASE WHEN state='draft' THEN NULL ELSE body END, state=CASE WHEN state='draft' THEN 'cancelled' ELSE state END WHERE id=?"
+    ],
+    "forget": [
+      "DELETE FROM card_raw_mutation_context",
+      "DELETE FROM card_raw_pending_invalidations",
+      "INSERT INTO card_raw_mutation_context VALUES(1,?,?,?,?)",
+      "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?"
+    ],
+    "forgetEpisode": [],
+    "reject": []
+  },
+  "cardStatementExecutions": {
+    "workload:23": {
+      "callCount": 3,
+      "calls": [
+        {
+          "method": "forget",
+          "ordinal": 1,
+          "statements": [
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ]
+          ]
+        },
+        {
+          "method": "forget",
+          "ordinal": 2,
+          "statements": [
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ]
+          ]
+        },
+        {
+          "method": "forget",
+          "ordinal": 3,
+          "statements": [
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ]
+          ]
+        }
+      ]
+    },
+    "workload:33": {
+      "callCount": 5,
+      "calls": [
+        {
+          "method": "deleteConversation",
+          "ordinal": 1,
+          "statements": [
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ],
+            [
+              "INSERT INTO card_raw_mutation_context VALUES(1,?,?,?,?)",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                "",
+                "delete-raw"
+              ]
+            ],
+            [
+              "INSERT OR IGNORE INTO card_raw_pending_invalidations(card_id,revision) VALUES(?,?)",
+              "run",
+              [
+                "00000000-0000-4000-8000-000000000048",
+                2
+              ]
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ],
+            [
+              "INSERT OR IGNORE INTO card_raw_pending_invalidations(card_id,revision) VALUES(?,?)",
+              "run",
+              [
+                "00000000-0000-4000-8000-000000000048",
+                2
+              ]
+            ],
+            [
+              "UPDATE private_cards SET revision=revision+1,updated_at=?, title=CASE WHEN state='draft' THEN NULL ELSE title END,body=CASE WHEN state='draft' THEN NULL ELSE body END, state=CASE WHEN state='draft' THEN 'cancelled' ELSE state END WHERE id=?",
+              "run",
+              [
+                "2026-01-01T00:00:00.000Z",
+                "00000000-0000-4000-8000-000000000048"
+              ]
+            ],
+            [
+              "INSERT INTO card_effects VALUES(lower(hex(randomblob(16))),?,?,?,?,?,?,?,?, (SELECT coalesce(max(ordinal),0)+1 FROM card_effects))",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                "",
+                "evidence_invalidated",
+                "card",
+                "00000000-0000-4000-8000-000000000048",
+                3,
+                "delete-raw"
+              ]
+            ],
+            [
+              "INSERT INTO card_epochs VALUES(?,?,?,2) ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET generation=generation+1",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                ""
+              ]
+            ],
+            [
+              "DELETE FROM card_raw_pending_invalidations",
+              "run",
+              []
+            ],
+            [
+              "DELETE FROM card_raw_mutation_context",
+              "run",
+              []
+            ]
+          ]
+        },
+        {
+          "method": "deleteConversation",
+          "ordinal": 2,
+          "statements": []
+        },
+        {
+          "method": "forget",
+          "ordinal": 1,
+          "statements": [
+            [
+              "INSERT INTO card_raw_mutation_context VALUES(1,?,?,?,?)",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                "",
+                "memory-forget-00000000-0000-4000-8000-000000000003"
+              ]
+            ],
+            [
+              "DELETE FROM card_raw_pending_invalidations",
+              "run",
+              []
+            ],
+            [
+              "DELETE FROM card_raw_mutation_context",
+              "run",
+              []
+            ]
+          ]
+        },
+        {
+          "method": "forget",
+          "ordinal": 2,
+          "statements": [
+            [
+              "INSERT INTO card_raw_mutation_context VALUES(1,?,?,?,?)",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                "",
+                "memory-forget-00000000-0000-4000-8000-000000000003"
+              ]
+            ],
+            [
+              "DELETE FROM card_raw_pending_invalidations",
+              "run",
+              []
+            ],
+            [
+              "DELETE FROM card_raw_mutation_context",
+              "run",
+              []
+            ]
+          ]
+        },
+        {
+          "method": "forget",
+          "ordinal": 3,
+          "statements": [
+            [
+              "INSERT INTO card_raw_mutation_context VALUES(1,?,?,?,?)",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                "",
+                "memory-forget-00000000-0000-4000-8000-000000000077"
+              ]
+            ],
+            [
+              "DELETE FROM card_raw_pending_invalidations",
+              "run",
+              []
+            ],
+            [
+              "DELETE FROM card_raw_mutation_context",
+              "run",
+              []
+            ]
+          ]
+        }
+      ]
+    },
+    "workload:52": {
+      "callCount": 3,
+      "calls": [
+        {
+          "method": "forget",
+          "ordinal": 1,
+          "statements": [
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ]
+          ]
+        },
+        {
+          "method": "forget",
+          "ordinal": 2,
+          "statements": [
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_bindings"
+              ]
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_memory_bindings"
+              ]
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_raw_bindings"
+              ]
+            ]
+          ]
+        },
+        {
+          "method": "forget",
+          "ordinal": 3,
+          "statements": [
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ]
+          ]
+        }
+      ]
+    },
+    "workload:53": {
+      "callCount": 5,
+      "calls": [
+        {
+          "method": "deleteConversation",
+          "ordinal": 1,
+          "statements": [
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ],
+            [
+              "INSERT INTO card_raw_mutation_context VALUES(1,?,?,?,?)",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                "",
+                "delete-raw"
+              ]
+            ],
+            [
+              "INSERT OR IGNORE INTO card_raw_pending_invalidations(card_id,revision) VALUES(?,?)",
+              "run",
+              [
+                "00000000-0000-4000-8000-000000000050",
+                2
+              ]
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE name='card_raw_bindings'",
+              "get",
+              []
+            ],
+            [
+              "INSERT OR IGNORE INTO card_raw_pending_invalidations(card_id,revision) VALUES(?,?)",
+              "run",
+              [
+                "00000000-0000-4000-8000-000000000050",
+                2
+              ]
+            ],
+            [
+              "UPDATE private_cards SET revision=revision+1,updated_at=?, title=CASE WHEN state='draft' THEN NULL ELSE title END,body=CASE WHEN state='draft' THEN NULL ELSE body END, state=CASE WHEN state='draft' THEN 'cancelled' ELSE state END WHERE id=?",
+              "run",
+              [
+                "2026-01-01T00:00:00.000Z",
+                "00000000-0000-4000-8000-000000000050"
+              ]
+            ],
+            [
+              "INSERT INTO card_effects VALUES(lower(hex(randomblob(16))),?,?,?,?,?,?,?,?, (SELECT coalesce(max(ordinal),0)+1 FROM card_effects))",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                "",
+                "evidence_invalidated",
+                "card",
+                "00000000-0000-4000-8000-000000000050",
+                3,
+                "delete-raw"
+              ]
+            ],
+            [
+              "INSERT INTO card_epochs VALUES(?,?,?,2) ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET generation=generation+1",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                ""
+              ]
+            ],
+            [
+              "DELETE FROM card_raw_pending_invalidations",
+              "run",
+              []
+            ],
+            [
+              "DELETE FROM card_raw_mutation_context",
+              "run",
+              []
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_bindings"
+              ]
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_memory_bindings"
+              ]
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_raw_bindings"
+              ]
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_bindings"
+              ]
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_memory_bindings"
+              ]
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_raw_bindings"
+              ]
+            ]
+          ]
+        },
+        {
+          "method": "deleteConversation",
+          "ordinal": 2,
+          "statements": []
+        },
+        {
+          "method": "forget",
+          "ordinal": 1,
+          "statements": [
+            [
+              "INSERT INTO card_raw_mutation_context VALUES(1,?,?,?,?)",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                "",
+                "memory-forget-00000000-0000-4000-8000-000000000005"
+              ]
+            ],
+            [
+              "DELETE FROM card_raw_pending_invalidations",
+              "run",
+              []
+            ],
+            [
+              "DELETE FROM card_raw_mutation_context",
+              "run",
+              []
+            ]
+          ]
+        },
+        {
+          "method": "forget",
+          "ordinal": 2,
+          "statements": [
+            [
+              "INSERT INTO card_raw_mutation_context VALUES(1,?,?,?,?)",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                "",
+                "memory-forget-00000000-0000-4000-8000-000000000005"
+              ]
+            ],
+            [
+              "DELETE FROM card_raw_pending_invalidations",
+              "run",
+              []
+            ],
+            [
+              "DELETE FROM card_raw_mutation_context",
+              "run",
+              []
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_bindings"
+              ]
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_memory_bindings"
+              ]
+            ],
+            [
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              "get",
+              [
+                "card_raw_bindings"
+              ]
+            ]
+          ]
+        },
+        {
+          "method": "forget",
+          "ordinal": 3,
+          "statements": [
+            [
+              "INSERT INTO card_raw_mutation_context VALUES(1,?,?,?,?)",
+              "run",
+              [
+                "synthetic-off-owner",
+                "personal",
+                "",
+                "memory-forget-00000000-0000-4000-8000-000000000087"
+              ]
+            ],
+            [
+              "DELETE FROM card_raw_pending_invalidations",
+              "run",
+              []
+            ],
+            [
+              "DELETE FROM card_raw_mutation_context",
+              "run",
+              []
+            ]
+          ]
+        }
+      ]
+    }
+  }
 }

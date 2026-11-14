@@ -62,6 +62,10 @@ export function retrieveRaw(segments,query,{ vectors = null,queryVector = null,m
     turn.segments.push(segment);
   }
   for (const turn of turns.values()) {check();
+    // Recent publication order can run backwards across physical parts. Keep
+    // returned refs, classifications and opened text in canonical span order.
+    turn.segments.sort((a,b)=>{check();return (a.source.ref.span?.start??0)-(b.source.ref.span?.start??0)||
+      (a.source.ref.span?.end??0)-(b.source.ref.span?.end??0)||binary(a.key,b.key);});
     Object.assign(turn,merge(turn.segments.map(s=>({length:s.postings.length,frequencies:new Map(s.postings.terms)})),check));
     const spans=turn.segments.map(s=>s.source.ref.span).filter(Boolean).sort((a,b)=>a.start-b.start);
     let through=0;
