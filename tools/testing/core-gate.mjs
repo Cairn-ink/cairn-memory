@@ -63,7 +63,8 @@ export async function checkGate({ nodeKey, shards, needsResult, token, repositor
     const job = shardJob(jobs, name);
     if (!job) throw new Error(`${name}: expected exactly one job, found 0`);
     if (job.conclusion !== 'success') throw new Error(`${name}: conclusion ${job.conclusion ?? 'missing'}`);
-    if (!Number.isFinite(Date.parse(job.started_at)) || !Number.isFinite(Date.parse(job.completed_at))) {
+    const started = Date.parse(job.started_at), completed = Date.parse(job.completed_at);
+    if (!Number.isFinite(started) || !Number.isFinite(completed) || completed < started) {
       throw new Error(`${name}: missing or invalid job start/completion time`);
     }
     let ranIn;

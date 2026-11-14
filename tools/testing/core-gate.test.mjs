@@ -112,7 +112,8 @@ test('a later attempt\'s marker and another Node\'s marker do not satisfy a shar
 });
 
 test('missing or invalid job times, and a run no listing explains, fail closed', async () => {
-  for (const change of [job => { delete job.started_at; }, job => { job.completed_at = 'not a time'; }]) {
+  for (const change of [job => { delete job.started_at; }, job => { job.completed_at = 'not a time'; },
+    job => { job.completed_at = at(0); }]) {
     const data = fixture();
     change(data.jobs[1][0]);
     await assert.rejects(check(data), /invalid job start\/completion time/);
