@@ -15,7 +15,7 @@ function sort(value) {
   return value && typeof value==='object' ? Object.fromEntries(Object.keys(value).sort().map(key=>[key,sort(value[key])])) : value;
 }
 export const fingerprint = evidence => sha(canonical(evidence));
-// Native 0.160.1–0.166.0 evidence, with transitive $refs and the section 18
+// Native 0.160.1–0.167.2 evidence, with transitive $refs and the section 18
 // marker profile. Equal snapshots share an entry; versions do not grant access.
 // Refreshing this registry also invalidates old qualified AND changed verdicts.
 export const KNOWN_FORMATS = Object.freeze([
@@ -23,6 +23,7 @@ export const KNOWN_FORMATS = Object.freeze([
   'f3ea8d1075a12ed48be85664d221d146f02423a90cfeb0ebcbbd8fd0e42cc01d',
   '79214a75034e013259c75a074b7de1173785d5a879281022f4cc1586d9a8d1c0',
   'd6b9a0c5e2e89207703eb4b3cc66c02d26f473425a89c4cad0be5a7a67fbdd36',
+  '890210284588c18252a66d89afd99cbbf94f697b6137ee2c7ea7ea247af6a285',
 ]);
 const policy = sha(canonical(KNOWN_FORMATS));
 export const validVersion = value => typeof value==='string' && /^\d+\.\d+\.\d+(?:[-+][a-zA-Z0-9.-]+)?$/u.test(value) && value.length<=100;

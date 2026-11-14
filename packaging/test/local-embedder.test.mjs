@@ -43,9 +43,9 @@ test('L01/L02/L12/L13 installed artifact: static imports/checks, status envelope
   try{result=spawnSync(process.execPath,['--input-type=module','-e',script],{stdio:['ignore',out,err],timeout:30000,env:{NODE_NO_WARNINGS:'1'}});}finally{closeSync(out);closeSync(err);}
   assert.equal(result.error,undefined);assert.equal(result.status,0,readFileSync(errPath,'utf8'));assert.equal(result.signal,null);
   const values=JSON.parse(readFileSync(outPath,'utf8'));
-  const lexicalCheck={ok:true,mode:'configuration-check',contextRead:'context-read-v1',contextReadPersonal:false,scope:'personal',provider:null,preset:'rrf-k60-d12',modelKeyInspected:false,databaseOpened:false,providerContacted:false,automaticCapture:false};
+  const lexicalCheck={ok:true,mode:'configuration-check',contextRead:'context-read-v1',rawSemantic:false,rawSemanticReason:'raw_semantic_not_enabled',contextReadPersonal:false,scope:'personal',provider:null,preset:'rrf-k60-d12',modelKeyInspected:false,databaseOpened:false,providerContacted:false,automaticCapture:false};
   assert.equal(JSON.stringify(values[0]),JSON.stringify(lexicalCheck));
-  assert.equal(JSON.stringify(values[1]),JSON.stringify({...lexicalCheck,provider:{provider:'openai',model:'text-embedding-3-small',dimensions:1536,maxRequests:5,maxUsd:.1},preset:'rrf-k10'}));
+  assert.equal(JSON.stringify(values[1]),JSON.stringify({...lexicalCheck,rawSemantic:true,rawSemanticReason:null,provider:{provider:'openai',model:'text-embedding-3-small',dimensions:1536,maxRequests:5,maxUsd:.1},preset:'rrf-k10'}));
   assert.equal(values[2].preset,'rrf-k60-d12');assert.equal(values[2].packStatus,'not-inspected');assert.equal(values[2].provider.threads,4);assert.equal(values[3].packStatus,'not-inspected');assert.equal(values[4].preset,'rrf-k60-d12-moc-v1');assert.equal(values[5].preset,'rrf-k60-d12');assert.equal(values[5].packStatus,'not-inspected');
   const loaded=new Set(readFileSync(log,'utf8').trim().split('\n').map(JSON.parse));
   for(const path of source.required.filter(p=>(p.startsWith('adapters/local-embedder/')&&p.endsWith('.mjs'))||['adapters/mcp/model-command.mjs','core/context-read-local-status.mjs'].includes(p)))assert.ok(loaded.has(pathToFileURL(join(f.root,path)).href),path);

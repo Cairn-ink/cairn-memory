@@ -216,21 +216,23 @@ the first prompt, without modifying runtime qualification gates.
 
 ## Installer 0.6.3 native format evidence
 
-The five-marker profile and four distinct fingerprints cover native
-0.160.1–0.166.0 snapshots. Frozen historical fixtures are unchanged; test
+The five-marker profile and five distinct fingerprints cover native
+0.160.1–0.167.2 snapshots. Frozen historical fixtures are unchanged; test
 loaders replace only their marker arrays. The registry change invalidates
 both old qualified and old changed verdicts. An observing hook schedules
 qualification and stays closed; later eligible hooks run after success.
-Creators 0.163.0–0.166.0 are seeded from native rollout evidence.
+Creators 0.163.0, 0.164.0, 0.165.0, 0.166.0, 0.167.0 and 0.167.2 are seeded
+from native rollout evidence.
 
 [The native probe](../../scripts/probe-codex-rollout.mjs) enforces a fresh
 loopback-only network namespace before native execution. Each of 0.163.0,
-0.164.0, 0.165.0 and 0.166.0 passes final, two turns, interruption,
-partial/final, resume, dynamic-tool lifecycle, trusted hooks, context inventory
-and hook-origin recall placement. Each makes 13 mock requests and zero real
-provider calls. Local compaction and continuation also pass. Hook execution
-is proven by native app-server notifications; none persists hook lifecycle
-rollout rows. All produced rollouts parse without unsupported formats.
+0.164.0, 0.165.0, 0.166.0, 0.167.0 and 0.167.2 passes final, two turns,
+interruption, partial/final, resume, dynamic-tool lifecycle, trusted hooks,
+context inventory and hook-origin recall placement. Each makes 13 mock
+requests and zero real provider calls. Local compaction and continuation also
+pass. Hook execution is proven by native app-server notifications; none
+persists hook lifecycle rollout rows. All produced rollouts parse without
+unsupported formats.
 
 The canary remains in a developer message after the submitted user input and
 outside canonical captured messages. A placement change still requires A7

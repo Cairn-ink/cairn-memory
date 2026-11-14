@@ -25,11 +25,17 @@ const help = `Cairn Memory — local stdio MCP developer preview
 Defaults: Raw retention and Raw search maintenance are on (--no-raw disables retention).
 Preferred memory reads: find_memory_candidates and read_memory_context (contextRead is on).
 --no-context-read removes these tools; --no-context-semantic keeps reads BM25-only.
-OPENAI_API_KEY automatically selects bounded OpenAI embeddings when present.
+With OPENAI_API_KEY available to the Cairn MCP server, memories and search text
+go to OpenAI for semantic search, up to an estimated US$1 per server run.
+Saved conversations are sent only with --raw-semantic or an explicit
+--context-embedder configuration. Raw document and query embeddings are off by default.
+To keep everything on this computer, don't give the server a key.
+--no-context-semantic only turns off embeddings; with a key, recall and other
+model features still send memory text to OpenAI.
 See docs/defaults.md for costs, options and every default.
 
 Usage:
-  cairn-memory --db ABS --owner ID [--project ID] [--context-read context-read-v1 | --no-context-read] [--context-read-personal]
+  cairn-memory --db ABS --owner ID [--project ID] [--context-read context-read-v1 | --no-context-read] [--context-read-personal] [--raw-semantic]
     [--context-read-sources relations-one-hop-v1,moc-v1]
     [--context-embedder openai --context-embed-model MODEL --context-embed-dimensions N --context-embed-max-requests N --context-embed-max-usd X]
   cairn-memory context refresh --db ABS --owner ID [--project ID] --types memory,card --intent current|history --max-items N --max-ms T
@@ -178,6 +184,8 @@ It cannot verify database permissions, credentials or model availability.
 --context-read context-read-v1 adds find_memory_candidates and
 fetch_memory_candidate_evidence and read_memory_context by default. Read sets are fixed at startup; personal
 reads require project scope and --context-read-personal. Semantic defaults on with OPENAI_API_KEY; otherwise reads use BM25.
+Raw needs --raw-semantic or an explicit --context-embedder group for document
+and query embedding. --no-context-semantic overrides both.
 Background turns refresh configured embeddings. Explicit provider overrides
 require all five provider options together. Hosted uses rrf-k10.
 Context --check-config performs no key lookup, database opening or provider creation.
@@ -188,12 +196,12 @@ See docs/context-read-local.md for budgets, degraded states and non-claims.
 
 function parseHostConfiguration(args) {
   const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale',
-    '--raw', '--no-raw', '--no-raw-search', '--capture-evidence', '--capture-evidence-access', '--source-snapshot', '--recall-context',
+    '--raw', '--no-raw', '--no-raw-search', '--raw-semantic', '--capture-evidence', '--capture-evidence-access', '--source-snapshot', '--recall-context',
     '--classification-recovery', '--capture-deadline-ms', '--session-episodes-access',
     '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client', '--private-cards', '--retained-raw-profile', '--method-packages', '--assets', '--role-profiles', '--private-card-current-dependencies', ...CONTEXT_FLAGS, CONTEXT_SOURCE_FLAG]);
   const values = new Map();
   for (let i = 0; i < args.length; i += 2) {
-    if(['--method-read-personal','--context-read-personal','--raw','--no-raw','--no-raw-search','--no-context-read','--no-context-semantic'].includes(args[i])){
+    if(['--method-read-personal','--context-read-personal','--raw','--no-raw','--no-raw-search','--raw-semantic','--no-context-read','--no-context-semantic'].includes(args[i])){
       if(values.has(args[i]))throw Error('invalid_mcp_configuration');
       values.set(args[i],true);i--;continue;
     }
@@ -268,6 +276,7 @@ function parseHostConfiguration(args) {
     ...context,
     ...(values.has('--no-raw') ? { raw: false } : {}),
     ...(values.has('--no-raw-search') ? { rawSearch: false } : {}),
+    ...((values.has('--raw-semantic') || values.has('--context-embedder')) ? { rawSemantic: true } : {}),
     ...(values.has('--private-card-current-dependencies') ? { privateCardCurrentDependencies: values.get('--private-card-current-dependencies') } : {}),
     ...(values.has('--role-profiles') ? { roleProfiles: values.get('--role-profiles') } : {}),
     ...(values.has('--assets')?{assets:'local-v1'}:{}),
@@ -342,6 +351,8 @@ export async function start(args = process.argv.slice(2), env = process.env) {
   }
   if (check && config.contextRead && args.includes('--context-read')) {
     console.log(JSON.stringify({ ok: true, mode: 'configuration-check', contextRead: config.contextRead,
+      rawSemantic: config.rawSemantic === true && config.contextSemantic !== false,
+      rawSemanticReason: config.contextSemantic === false ? 'disabled' : config.rawSemantic === true ? null : 'raw_semantic_not_enabled',
       contextReadPersonal: config.contextReadPersonal ?? false,
       ...(config.privateCardCurrentDependencies ? { privateCardCurrentDependencies: config.privateCardCurrentDependencies, cardDependencyApproval: 'separate-local-tty-required' } : {}),
       ...(config.roleProfiles ? roleProfileCheckConfiguration(config) : {}), scope: config.namespace.scope,
@@ -357,6 +368,8 @@ export async function start(args = process.argv.slice(2), env = process.env) {
   if (check) {
     console.log(JSON.stringify({ ok: true, mode: 'configuration-check',
       raw: config.raw !== false, rawSearch: config.raw !== false && config.rawSearch !== false,
+      rawSemantic: config.rawSemantic === true && config.contextSemantic !== false,
+      rawSemanticReason: config.contextSemantic === false ? 'disabled' : config.rawSemantic === true ? null : 'raw_semantic_not_enabled',
       contextRead: config.contextRead || false,
       scope: config.namespace.scope, modelKeyPresent: Boolean(key),
       recallModel: key ? DEFAULT_MODEL : null,
