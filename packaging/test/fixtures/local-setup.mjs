@@ -12,6 +12,7 @@ import { register,syncBuiltinESMExports } from 'node:module';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { buildArtifact,command,packageName } from '../../build.mjs';
 import { installedImportClosure } from './installed-import-closure.mjs';
+import { collectChildOutput } from './child-output.mjs';
 
 const root=fileURLToPath(new URL('../../../',import.meta.url));
 const self=fileURLToPath(import.meta.url),preload=fileURLToPath(new URL('./local-host-child.mjs',import.meta.url));
@@ -58,9 +59,7 @@ export async function installedSetupFixture(t,client='claude-code'){
       event,payload:payload??{hook_event_name:event,session_id:sessionId,transcript_path:sourcePath,cwd:base,model:'synthetic',turn_id:'synthetic-turn',permission_mode:'default',
         ...(event==='Stop'?{last_assistant_message:null,stop_hook_active:false}:{}),...(event==='PreCompact'?{trigger:'manual'}:{}),...(event==='SessionStart'?{source:'startup'}:{}),...(event==='UserPromptSubmit'?{prompt:'synthetic prompt'}:{})}}),{mode:0o600});
     const child=cp.spawn(process.execPath,[self,'--driver',settings],{cwd:base,stdio:['ignore','pipe','pipe'],env:{...environment,...(key?{CAIRN_SYNTHETIC_API_KEY:'synthetic_key_secret'}:{})}});
-    let stdout='',stderr='';child.stdout.on('data',chunk=>{stdout+=chunk;if(Buffer.byteLength(stdout)>262144)child.kill('SIGTERM')});child.stderr.on('data',chunk=>{stderr+=chunk;if(Buffer.byteLength(stderr)>65536)child.kill('SIGTERM')});
-    const timer=setTimeout(()=>child.kill('SIGTERM'),20000);
-    const done=new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',(code,signal)=>resolve({code,signal,stdout,stderr}))}).finally(()=>clearTimeout(timer));
+    const done=collectChildOutput(child);
     workspace.defer(async()=>{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGTERM');await done;});return{child,done,trace};
   }
   async function invoke(action,args=[],options={},expected=0){const launched=launch(action,args,options),outcome=await launched.done;
@@ -101,7 +100,7 @@ async function driver(path){
   syncBuiltinESMExports();
   register('data:text/javascript,'+encodeURIComponent(`import{appendFileSync}from'node:fs';import{fileURLToPath}from'node:url';let data;export function initialize(value){data=value}
 export async function resolve(specifier,context,next){const result=await next(specifier,context);if(result.url.startsWith('file:')){const path=fileURLToPath(result.url);if(!path.startsWith(data.allowed+'/'))throw Error('installed_setup_source_fallback');appendFileSync(data.trace,JSON.stringify({kind:'module',path})+'\\n')}return result}
-export async function load(url,context,next){const result=await next(url,context);const names=url.endsWith('/integrations/codex/source.mjs')?['openSource','source']:url.endsWith('/integrations/client/raw/local-worker.mjs')?['createLocalRawWorker','worker']:null;if(!names)return result;const[name,kind]=names;let source=String(result.source).replace('export async function '+name+'(','async function observed_'+name+'(').replace('export function '+name+'(','function observed_'+name+'(');source+='\\nexport function '+name+'(...args){globalThis[Symbol.for("cairn.setup.observe")]?.('+JSON.stringify(kind)+');return observed_'+name+'(...args)}';return{...result,source}}`),{parentURL:import.meta.url,data:{allowed:dirname(installed),trace}});
+export async function load(url,context,next){const result=await next(url,context);const names=url.endsWith('/integrations/client/raw/local-source-open.mjs')?['openLocalSource','source']:url.endsWith('/integrations/client/raw/local-worker.mjs')?['createLocalRawWorker','worker']:null;if(!names)return result;const[name,kind]=names;let source=String(result.source).replace('export async function '+name+'(','async function observed_'+name+'(').replace('export function '+name+'(','function observed_'+name+'(');source+='\\nexport function '+name+'(...args){globalThis[Symbol.for("cairn.setup.observe")]?.('+JSON.stringify(kind)+');return observed_'+name+'(...args)}';return{...result,source}}`),{parentURL:import.meta.url,data:{allowed:dirname(installed),trace}});
   globalThis[Symbol.for('cairn.setup.observe')]=kind=>note({kind});
   const {registerLocalQualificationTestRoot,awaitLocalQualificationTestChildren}=await import(pathToFileURL(join(installed,'integrations/client/raw/local-codex-qualification.mjs')));
   const unregister=registerLocalQualificationTestRoot(dirname(settings.request.installationDirectory));

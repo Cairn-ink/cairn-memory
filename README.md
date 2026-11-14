@@ -86,8 +86,7 @@ If your agent does not reach for the memory tools, name them: “use the
 cairn-local memory tools”.
 
 Local mode also saves your conversations as you work, so you can ask about them
-later (on Linux and WSL; on macOS automatic saving does not start yet, see
-[Status](#status)):
+later (on Linux and WSL, and for Claude Code on macOS; see [Status](#status)):
 
 ```text
 What did we decide about the database migration last week?
@@ -212,7 +211,7 @@ workers from loading it:
 
 Your own interactive sessions keep using memory as before.
 
-In 0.6.6, Claude Code runs started by scripts or the Agent SDK (for example
+In 0.6.6 and 0.6.7, Claude Code runs started by scripts or the Agent SDK (for example
 `claude -p`) are saved like interactive sessions. To keep harness runs out of
 the store, turn saving off for Claude Code with
 `npx @cairn-ink/memory config --local-capture off --client claude`. This also
@@ -233,10 +232,10 @@ This is a developer preview. Know these limits before you rely on it:
   may never finish indexing.
 - **Local recall is on request.** Local mode does not add memories to your
   prompts by itself. Your agent searches when you ask.
-- **Platforms.** Automatic saving runs on Linux and WSL. On macOS, setup
-  connects Claude Code and Codex and the memory tools work, but automatic
-  saving doesn't start yet: setup reports conversation saving OFF
-  (`runtime_unavailable`) and exits with code 2. On native Windows
+- **Platforms.** Automatic saving runs on Linux and WSL, and for Claude Code
+  on macOS (since installer 0.6.7). Codex automatic saving on macOS isn't
+  supported yet; the memory tools work there. To set up only Claude Code, run
+  `npx @cairn-ink/memory setup --local --client claude`. On native Windows
   `setup --local` refuses to run, so use WSL or the
   [source-checkout guide for PowerShell](docs/windows-install.md).
 - **Homebrew Node on macOS.** Setup records Node's versioned path, so rerun

@@ -7,8 +7,13 @@ import { pathToFileURL } from 'node:url';
 // Callers supply lstat snapshots; these predicates perform no filesystem access.
 export const sameJournal = (actual, expected) =>
   ['dev','ino','mode','uid','nlink'].every(key => actual[key] === expected[key]);
-const sameProof = (actual, expected) => actual && expected &&
-  ['dev','ino','mode','uid','gid','nlink'].every(key => actual[key] === expected[key]);
+// Directory entry creation/removal changes nlink on macOS. File guards retain it.
+export const sameDirectory = (actual, expected) =>
+  actual.dev === expected.dev && actual.ino === expected.ino &&
+  actual.mode === expected.mode && actual.uid === expected.uid;
+const sameProof = (actual, expected, directory = false) => actual && expected &&
+  ['dev','ino','mode','uid','gid','nlink'].every(key =>
+    directory && key === 'nlink' || actual[key] === expected[key]);
 export function protectedDeleteJournal({ main, directory, journal, wal, shm }, proof = { main, directory, journal }) {
   const uid = process.getuid?.();
   const file = entry => entry?.isFile() && !entry.isSymbolicLink() &&
@@ -17,7 +22,7 @@ export function protectedDeleteJournal({ main, directory, journal, wal, shm }, p
     directory?.isDirectory() && !directory.isSymbolicLink() &&
     (process.platform === 'win32' || (Number(directory.mode) & 0o777) === 0o700 &&
       uid !== undefined && [main, journal, directory].every(entry => Number(entry.uid) === uid)) &&
-    sameProof(main, proof.main) && sameProof(directory, proof.directory) &&
+    sameProof(main, proof.main) && sameProof(directory, proof.directory, true) &&
     ['mode','uid','nlink'].every(key => journal[key] === proof.journal[key]) && !wal && !shm;
 }
 

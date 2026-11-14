@@ -178,7 +178,7 @@ export async function configureCapture(root, descriptor, selected, context, { en
     if (descriptor) await save(root, settings, descriptor.database.path);
     const installation = join(root, 'capture', client);
     let outcome;
-    if (!uninstall && !receipt.noticed) {
+    if (!uninstall && receipt.enabled && !receipt.noticed) {
       context.write(context.t('local_capture_notice', { client: client === 'claude' ? 'Claude Code' : 'Codex' }));
       if (client === 'codex') context.write(context.t('local_capture_codex_approval'));
       receipt.noticed = true; await save(root, settings, descriptor.database.path);
@@ -230,7 +230,9 @@ export function finishCaptureSetup(outcomes, { write, t }) {
   })).join(' '));
   return inactive.some(value => !value.temporary) ? 2 : 0;
 }
-function showCapture(client, outcome, { write, t }) {
+function showCapture(client, outcome, { write, t, platform = process.platform }) {
+  const macCodex = client === 'codex' && platform === 'darwin' && outcome.status !== 'disabled';
+  if (macCodex && ['active', 'prepared'].includes(outcome.status)) outcome = { status:'blocked', reason:'qualification_required' };
   // A retained older runtime may omit the DTO. Keep capture status waiting
   // rather than infer a qualified host or inspect its private cache ourselves.
   const verdict = client === 'codex' ? outcome.qualification ??
@@ -241,22 +243,61 @@ function showCapture(client, outcome, { write, t }) {
     'invalid_input','declined','source_refused','event_refused','unsafe_path','store_invalid','authority_bound','authority_changed','qualification_required','runtime_unavailable','busy','cancelled','child_unavailable','unexpected_failure']);
   const reason = waiting ? 'qualification_required' : state === 'blocked' ? (allowedReasons.has(outcome.reason) ? outcome.reason : outcome.status === 'prepared' ? 'prepared' : outcome.status === 'busy' ? 'busy' : outcome.status === 'declined' ? 'declined' : 'not_installed') : state;
   write(t('local_capture_status', { client: client === 'claude' ? 'Claude Code' : 'Codex', state, reason }));
-  if (client === 'codex') {
+  if (client === 'codex' && state !== 'off') {
+    if (macCodex) write(t('local_capture_codex_macos'));
     write(t('local_capture_codex_approval'));
     if (verdict) {
       const status = ['qualified', 'pending', 'failed'].includes(verdict.status) ? verdict.status : 'pending';
       const reason = /^[a-z_]{1,64}$/.test(verdict.reason ?? '') ? verdict.reason : 'qualification_required';
       write(t('local_capture_qualification_status', { state: status, reason }));
       write(t(waiting ? 'local_capture_qualification' : 'local_capture_last_qualified'));
-    } else if (outcome.reason === 'qualification_required') write(t('local_capture_qualification'));
+    } else if (!macCodex && outcome.reason === 'qualification_required') write(t('local_capture_qualification'));
   }
   return { state, reason, temporary: outcome.status === 'active' && outcome.qualification?.status === 'pending' };
+}
+// A disabled journal is published only after SQL authority has been revoked.
+// It can also be published on a hook-removal failure, so require the native
+// hooks to be gone as well. No retained executable is needed for this proof.
+async function captureDisabled(root, client, context) {
+  try {
+    const installation = join(root, 'capture', client);
+    const nativeHome = await clientConfigDirectory(client, context.env);
+    const nativePath = join(nativeHome, client === 'claude' ? 'settings.json' : 'hooks.json');
+    if (await exists(installation)) {
+      await ownedDirectory(installation);
+      const record = await boundedJSON(join(installation, 'installation.json'), 65536, { privateFile: true });
+      if (record.version !== 'local-raw-installation-v1' || record.phase !== 'disabled' ||
+          record.request?.installationDirectory !== installation || record.request.clientConfigPath !== nativePath ||
+          record.request.client !== (client === 'claude' ? 'claude-code' : 'codex')) return false;
+    }
+    if (!await exists(nativePath)) return true;
+    const stat = await lstat(nativePath);
+    if (stat.nlink !== 1 || (stat.mode & 0o022) || (process.getuid && stat.uid !== process.getuid())) return false;
+    const native = await boundedJSON(nativePath, 1048576);
+    if (native.hooks === undefined) return true;
+    if (!native.hooks || typeof native.hooks !== 'object' || Array.isArray(native.hooks)) return false;
+    for (const groups of Object.values(native.hooks)) {
+      if (!Array.isArray(groups)) return false;
+      for (const group of groups) {
+        if (!Array.isArray(group?.hooks)) return false;
+        for (const hook of group.hooks) {
+          if (!hook || typeof hook !== 'object') return false;
+          if (typeof hook.command === 'string' && /cairn[-_/ ]?memory|integrations\/codex\/entry\.mjs|scripts\/launch-capture\.mjs|local-setup-cli\.mjs/i.test(hook.command)) return false;
+        }
+      }
+    }
+    return true;
+  } catch { return false; }
 }
 export async function captureStatus(root, client, context) {
   const receipt = (await captureSettings(root)).clients[client];
   if (!receipt) return; // 0.6.5 descriptors retain their established status shape.
-  let outcome = await invoke(root, receipt, ['status', '--installation', join(root, 'capture', client)], { ...context, timeout: 10000 });
-  if (!receipt.enabled && outcome.reason === 'not_installed') outcome = { status: 'disabled' };
+  if (!receipt.enabled) {
+    if (await captureDisabled(root, client, context)) showCapture(client, { status: 'disabled' }, context);
+    else context.write(context.t('local_capture_disable_interrupted', { client: client === 'claude' ? 'Claude Code' : 'Codex' }));
+    return;
+  }
+  const outcome = await invoke(root, receipt, ['status', '--installation', join(root, 'capture', client)], { ...context, timeout: 10000 });
   showCapture(client, outcome, context);
 }
 export async function retainedCapture(root) { return Object.keys((await captureSettings(root)).clients).length > 0; }

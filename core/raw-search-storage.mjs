@@ -2,7 +2,7 @@ import { performance } from 'node:perf_hooks';
 import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { resolve, dirname, join } from 'node:path';
-import { createExclusiveSqliteFile, sqliteFileStat, sameJournal } from './sqlite-journal-probe.mjs';
+import { createExclusiveSqliteFile, sqliteFileStat, sameJournal, sameDirectory } from './sqlite-journal-probe.mjs';
 import { fail } from './validation.mjs';
 import { same, RAW_SEARCH_LIMITS, rawSourceHint } from './raw-search-input.mjs';
 import { sidecarAttestationFile, readSidecarAttestation, validSidecarAttestation, writeSidecarAttestation } from './context-product-sidecar-attestation.mjs';
@@ -69,7 +69,7 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
   let closed = false;
   function ready() {
     if (closed) fail('store_closed');
-    if (!sameJournal(privateFile(path),initial) || !sameJournal(privateDirectory(directory),parent)) fail('unsafe_index_file');
+    if (!sameJournal(privateFile(path),initial) || !sameDirectory(privateDirectory(directory),parent)) fail('unsafe_index_file');
   }
   function transaction(work) {
     ready(); db.exec('BEGIN IMMEDIATE');

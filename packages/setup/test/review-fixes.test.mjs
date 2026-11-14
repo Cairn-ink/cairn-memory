@@ -21,6 +21,7 @@ try {
 
 async function childResult(command, args, options = {}) {
   const child = spawn(command, args, { ...options, stdio: ['ignore', 'pipe', 'pipe'] });
+  child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
   let stdout = '', stderr = '';
   child.stdout.on('data', data => { stdout += data; });
   child.stderr.on('data', data => { stderr += data; });

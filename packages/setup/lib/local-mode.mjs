@@ -373,7 +373,7 @@ async function setupLocal(options, selection, detection, context) {
     return finishCaptureSetup(capture, context) || (manual ? 1 : 0);
   });
 }
-export async function localStatus(detection, { write, t, env = process.env, verbose, emittedEnvironmentCauses = new Set() }) {
+export async function localStatus(detection, { write, t, env = process.env, platform = process.platform, verbose, emittedEnvironmentCauses = new Set() }) {
   if (!detection) return;
   const { descriptor, root, states } = detection;
   try {
@@ -387,7 +387,7 @@ export async function localStatus(detection, { write, t, env = process.env, verb
       write(t('local_status_client', { client: client === 'claude' ? 'Claude Code' : 'Codex' }));
       const state = registration(states[client]);
       write(t('local_status_registration', { state: t('local_registration_' + state) }));
-      await captureStatus(root, client, { write, t, env });
+      await captureStatus(root, client, { write, t, env, platform });
     }
     if (!descriptor) return;
     if (uninstalled) write(t(clientNames.every(client => registration(states[client]) === 'missing') ?

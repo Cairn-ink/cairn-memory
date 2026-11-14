@@ -25,6 +25,14 @@ export function workerFixture(t, { client = 'claude-code', rows } = {}) {
   const root = options.runtimeRoot, modePath = join(f.workspace.path,'provider-mode');
   const ownedPath = join(f.workspace.path,'owned-child-pids.jsonl'), readyPath = join(f.workspace.path,'provider-ready'), releasePath = join(f.workspace.path,'provider-release');
   function processInfo(pid) {
+    if (process.platform === 'darwin') {
+      // Inspect only a child whose PID this fixture owns; never list processes.
+      const result = spawnSync('/bin/ps', ['-p', String(pid), '-o', 'lstart=', '-o', 'stat='], { encoding:'utf8' });
+      if (result.status === 1) return null;
+      if (result.error || result.status !== 0) throw Error('owned_child_identity_unavailable');
+      const fields = result.stdout.trim().split(/\s+/), state = fields.pop();
+      return { pid, start:fields.join(' '), live:!['Z','X'].some(value => state.startsWith(value)) };
+    }
     try { const text = readFileSync(`/proc/${pid}/stat`,'utf8'), fields = text.slice(text.lastIndexOf(')')+2).split(' ');
       return { pid,start:fields[19],live:!['Z','X'].includes(fields[0]) }; }
     catch (error) { if (['ENOENT','ESRCH'].includes(error.code)) return null; throw error; }
@@ -46,10 +54,10 @@ export function workerFixture(t, { client = 'claude-code', rows } = {}) {
   // A trusted test executable inserts fake HTTP; production never forwards these
   // scaffolding variables/preloads through its closed child environment.
   writeFileSync(executable,`#!${process.execPath}
-import {spawn} from 'node:child_process';import {readFileSync,appendFileSync} from 'node:fs';
+import {spawn,spawnSync} from 'node:child_process';import {readFileSync,appendFileSync} from 'node:fs';
 if(process.argv[2]==='--version')process.stdout.write(process.version+'\\n');
 else {
- const note=pid=>{try{const text=readFileSync('/proc/'+pid+'/stat','utf8'),fields=text.slice(text.lastIndexOf(')')+2).split(' ');appendFileSync(${JSON.stringify(ownedPath)},JSON.stringify({pid,start:fields[19]})+'\\n',{mode:0o600})}catch(error){if(!['ENOENT','ESRCH'].includes(error.code))throw error}};
+ const note=pid=>{try{if(process.platform==='darwin'){const result=spawnSync('/bin/ps',['-p',String(pid),'-o','lstart=','-o','stat='],{encoding:'utf8'});if(result.status===1)return;if(result.error||result.status!==0)throw Error('owned_child_identity_unavailable');const fields=result.stdout.trim().split(/\\s+/);fields.pop();appendFileSync(${JSON.stringify(ownedPath)},JSON.stringify({pid,start:fields.join(' ')})+'\\n',{mode:0o600});return;}const text=readFileSync('/proc/'+pid+'/stat','utf8'),fields=text.slice(text.lastIndexOf(')')+2).split(' ');appendFileSync(${JSON.stringify(ownedPath)},JSON.stringify({pid,start:fields[19]})+'\\n',{mode:0o600})}catch(error){if(!['ENOENT','ESRCH'].includes(error.code))throw error}};
  note(process.pid);
  const mode=readFileSync(${JSON.stringify(modePath)},'utf8');
  const child=spawn(${JSON.stringify(process.execPath)},['--import',${JSON.stringify(join(root,'adapters/local/test/fixtures/http.mjs'))},...process.argv.slice(2)],

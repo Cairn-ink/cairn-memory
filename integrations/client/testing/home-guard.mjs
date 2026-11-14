@@ -98,7 +98,9 @@ const scratch = (() => {
 const text = (value) =>
   value instanceof URL ? fileURLToPath(value) : Buffer.isBuffer(value) ? value.toString() : String(value);
 function observed(path, target) {
-  if (!/^\/proc\/(?:\d+|self|thread-self)\/exe$/u.test(resolve(text(path)))) return target;
+  // Darwin fixtures inject scratch-owned fake hosts instead of probing /proc.
+  // Check executable link targets there too, even without a procfs link name.
+  if (process.platform !== 'darwin' && !/^\/proc\/(?:\d+|self|thread-self)\/exe$/u.test(resolve(text(path)))) return target;
   const executable = text(target).replace(/ \(deleted\)$/u, "");
   if (basename(executable) === "codex" && !executable.startsWith(scratch + "/"))
     violation("test_observed_real_codex_host");

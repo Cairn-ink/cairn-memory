@@ -80,8 +80,8 @@ Codex 還要到 `/hooks` 允許 Cairn 的設定。一台電腦一次只能用一
 
 如果 agent 沒有去用記憶工具，直接點名：「用 cairn-local 的記憶工具」。
 
-本機模式也會在你工作時把對話存下來，之後可以直接問（Linux 和 WSL；macOS 上自動保存
-還不會啟動，見[目前狀態](#目前狀態)）：
+本機模式也會在你工作時把對話存下來，之後可以直接問（Linux、WSL，以及 macOS 上的
+Claude Code；見[目前狀態](#目前狀態)）：
 
 ```text
 上週我們對資料庫搬遷做了什麼決定？
@@ -188,7 +188,7 @@ Codex 的規則，以及外掛的隱私約定。
 
 你自己開的互動對話照常使用記憶。
 
-在 0.6.6，由腳本或 Agent SDK 啟動的 Claude Code 執行（例如 `claude -p`）會和互動
+在 0.6.6 與 0.6.7，由腳本或 Agent SDK 啟動的 Claude Code 執行（例如 `claude -p`）會和互動
 對話一樣被保存。不想讓 harness 的執行存進來，可以用
 `npx @cairn-ink/memory config --local-capture off --client claude` 關掉 Claude Code
 的保存。這也會停止保存你自己的互動式 Claude Code 對話，直到你執行
@@ -205,9 +205,9 @@ Codex 的規則，以及外掛的隱私約定。
   不代表沒存到。大約 50,000 則以上的歷史可能永遠建不完。
 - **本機模式要你開口才會回想。** 本機模式不會自己把記憶帶進提問，你問了，
   agent 才去查。
-- **平台。** 自動保存目前只在 Linux 和 WSL 上執行。macOS：安裝與記憶工具可用；自動保存
-  還不會啟動（setup 會回報對話保存為 OFF、`runtime_unavailable`，並以代碼 2 結束）。
-  Windows 原生環境下 `setup --local` 會拒絕執行，請用 WSL，或照
+- **平台。** 自動保存在 Linux、WSL 上執行；macOS 從安裝器 0.6.7 起支援 Claude Code。
+  Codex 在 macOS 還不支援自動保存，但記憶工具可以用；若只要設定 Claude Code，請執行
+  `npx @cairn-ink/memory setup --local --client claude`。Windows 原生環境下 `setup --local` 會拒絕執行，請用 WSL，或照
   [PowerShell 原始碼安裝指南（英文）](docs/windows-install.md)操作。
 - **macOS 上用 Homebrew 裝的 Node。** 安裝時會記下 Node 帶版本號的路徑，所以
   `brew upgrade` 更新 Node 之後請重新執行 setup。下一版修正。

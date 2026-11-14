@@ -9,8 +9,10 @@ local MCP tools or cloud automatic memory.
 
 Requires Node ≥22.16 and the selected CLI on PATH. The installer itself has no
 runtime dependencies.
-This README describes **installer 0.6.6**, published on 2026-11-13. Local mode now saves Claude Code and
-Codex conversations automatically. Codex CLI 0.167.0 and 0.167.2 are qualified
+This README describes **installer 0.6.7**, published on 2026-11-14. Claude Code automatic saving now works
+on macOS. Codex automatic saving on macOS isn't supported yet; the memory tools
+work. To set up only Claude Code, run
+`npx @cairn-ink/memory setup --local --client claude`. Codex CLI 0.167.0 and 0.167.2 are qualified
 for automatic capture; if you already use Codex with Cairn, in local or cloud
 mode, rerun setup to pick up the new qualification.
 
@@ -72,7 +74,16 @@ limit, marked partial, instead of dropping them.
 
 **Search catches up after saving.** Each turn is saved to the local store as soon as it ends. Raw search covers a newly saved conversation only after the local index reaches it. Raw search builds its index in the background while Cairn is running, at roughly one saved message per second: allow about 15 minutes for 1,000 saved messages and roughly 2 hours for 10,000. After each new saved message it re-checks the whole index (about 6 minutes per 1,000 saved messages). Until a build or re-check finishes, Raw search still returns results but reports partial coverage. While you keep working, each new save restarts the indexing pass, so a conversation saved during a busy session may not be searchable until you pause. Until the index has caught up, newly saved conversations may be missing from results. The coverage report marks such results as partial, but assistants using the memory tool see only the results, so an empty answer then doesn't mean nothing was saved. Memories, and conversations the index already covers, are not affected and stay searchable as before.
 
+With `--no-capture`, setup prints only the off capture status, without the
+default-on notice or Codex hook-approval prompt. After `--no-capture` or
+`config --local-capture off` completes, status reports capture as off on every platform.
+If turning it off was interrupted, status asks you to run the off command again.
+
+User-owned hardlinked transcript files are accepted, as on Linux.
+
 Known limits in this release:
+- When capture resumes after being turned off, Cairn reads up to the last 4 KiB of the conversation file, and for Codex up to the first 4 KiB to find its session header; some of those bytes may have been written while capture was off. They are used only to identify the session and check the file wasn't replaced, never saved or sent.
+- On macOS, a process running as the same user or root can still redirect an open through precisely timed directory swaps during verification, without crossing a privilege boundary.
 - While new turns keep arriving, the local MCP server keeps indexing: about one small index write per second and roughly 3% of one CPU core.
 - Histories of about 50,000 messages or more may never finish indexing; search keeps reporting partial coverage for them.
 - Searches served by a reader that doesn't run index maintenance itself, such as keyword-only searches when an embedding model is configured, can keep reporting partial coverage even after indexing has finished. Their results are still returned.
@@ -98,7 +109,9 @@ hide windows or fork fences for capture. Its setup leaves 0.6.6 hooks registered
 with their retained engine; turn capture off with 0.6.6 before downgrading to
 stop them.
 
-本說明對應**安裝器 0.6.6**（2026-11-13 發布）。本機模式現在會自動保存 Claude Code 與 Codex 的對話。
+本說明對應**安裝器 0.6.7**（2026-11-14 發布）。Claude Code 現在也能在 macOS 自動保存對話。
+Codex 在 macOS 還不支援自動保存，但記憶工具可以正常使用。若只要設定
+Claude Code，請執行 `npx @cairn-ink/memory setup --local --client claude`。
 Codex CLI 0.167.0 與 0.167.2 已通過格式驗證，可以自動擷取；已經在 Cairn 使用
 Codex 的人（本機或雲端模式）請重新執行 setup，以套用新的驗證。
 
@@ -151,7 +164,16 @@ npx @cairn-ink/memory raw delete <conversation-id> --yes
 
 **保存後，搜尋需要時間追上。** 每一輪對話結束時就會存進本機資料庫，但 Raw 搜尋要等本機索引處理到這段對話，才找得到它。Raw 搜尋會在 Cairn 執行時於背景建立索引，速度大約每秒一則已保存訊息：1,000 則約需 15 分鐘，10,000 則約 2 小時。每保存一則新訊息，它會重新檢查整個索引（每 1,000 則約 6 分鐘）。建立或重新檢查完成之前，Raw 搜尋仍會回傳結果，但會回報 partial（部分涵蓋）。持續使用時，每次新的保存都會讓索引從頭再跑一次，所以忙碌工作階段中保存的對話，可能要等你停下來後才搜得到。索引追上之前，新保存的對話可能不會出現在結果裡。涵蓋報告會把這類結果標為 partial，但透過記憶工具使用的助理只看得到結果本身，所以這段期間的空結果不代表沒有保存。Memories 與索引已涵蓋的對話不受影響，照常可以搜尋。
 
+使用 `--no-capture` 時，設定只會顯示擷取已關閉，不再顯示預設開啟通知或
+Codex 的 hooks 核准提示。執行 `--no-capture` 或 `config --local-capture off`
+完成之後，所有平台的 status 都會顯示擷取已關閉。
+若關閉作業中斷，status 會提示再次執行關閉指令。
+
+和 Linux 一樣，使用者擁有的對話檔案可以是硬連結。
+
 本版已知限制：
+- 從關閉狀態恢復擷取時，Cairn 會讀取對話檔最後至多 4 KiB，Codex 還會讀取開頭至多 4 KiB 來找出 session 標頭；其中一部分可能是關閉期間寫入的。這些位元組只用來辨識 session、確認檔案沒有被替換，不會保存或送出。
+- 在 macOS，同一使用者或 root 的程式仍可能在驗證期間精準切換目錄來重新導向開啟的檔案，但不會跨越權限邊界。
 - 只要新的對話持續進來，本機 MCP 伺服器就會持續建索引：大約每秒一次小量索引寫入，約佔一個 CPU 核心的 3%。
 - 約 50,000 則訊息以上的歷史可能永遠建不完索引，搜尋會一直回報 partial。
 - 由不自行維護索引的讀取端處理的搜尋（例如設定了 embedding 模型時的純關鍵字搜尋），即使索引已建完，也可能持續回報 partial；搜尋結果仍會照常回傳。
@@ -231,7 +253,7 @@ Restart the tools after setup. If Node moves, rerun `setup --local`.
 兩個工具共用資料庫與 owner，並使用 Node 的絕對路徑。安裝後請重開工具；
 Node 路徑變動時，重跑 `setup --local`。
 
-**0.6.6 local mode captures Raw automatically by default.** Use the explicit MCP tools:
+**0.6.7 local mode captures Raw automatically by default on supported platforms.** Use the explicit MCP tools:
 `remember_memory`, `recall_memory`, `inspect_memory`, `correct_memory`,
 `forget_memory`, alongside the default dated contextRead tools
 `find_memory_candidates`, `fetch_memory_candidate_evidence`, and
@@ -249,7 +271,7 @@ it reads the Claude registration configuration file `~/.claude.json` with a
 `cairn-local` MCP registrations. It does not access credential stores or use
 authentication fields. Unrelated entries and file contents are never printed.
 
-**0.6.6 本機模式預設自動保存 Raw。** 可明確呼叫 `remember_memory`、
+**0.6.7 本機模式在支援的平台預設自動保存 Raw。** 可明確呼叫 `remember_memory`、
 `recall_memory`、`inspect_memory`、`correct_memory`、`forget_memory`，
 也可使用預設開啟、附日期的 contextRead 工具 `find_memory_candidates`、
 `fetch_memory_candidate_evidence`、`read_memory_context`。自動 hooks 不需要模型就能保存 Raw，setup 不會註冊 `capture_memory`。
@@ -340,10 +362,7 @@ To switch to cloud, run `npx @cairn-ink/memory uninstall --local`, then
 `npx @cairn-ink/memory setup --cloud`. There is no data migration between modes.
 If Claude shows two `cairn-local` servers, check `claude mcp list`:
 project/local
-scope can shadow user scope, which setup does not detect. Linux/WSL are
-tested;
-Automatic saving runs on Linux and WSL. On macOS, setup connects Claude Code and Codex and the memory tools work, but automatic saving doesn't start yet: setup reports conversation saving OFF (runtime_unavailable) and exits with code 2. native Windows local setup is refused
-(use WSL). The engine enables Raw retention for submitted captures, background Raw search
+scope can shadow user scope, which setup does not detect. Automatic saving runs on Linux, WSL and macOS (Claude Code). Codex automatic saving on macOS isn't supported yet. Native Windows local setup is refused (use WSL). The engine enables Raw retention for submitted captures, background Raw search
 and dated three-layer contextRead with its preferred tools by default.
 Use `--no-raw`, `--no-raw-search` or `--no-context-read` in the server registration
 to disable them. Library `openMemoryCore` keeps Raw off unless `raw:true` is
@@ -367,8 +386,9 @@ semantic search. See [defaults and off switches](../../docs/defaults.md).
 切回雲端則先執行 `npx @cairn-ink/memory uninstall --local`，再執行
 `npx @cairn-ink/memory setup --cloud`，兩種模式不會搬移資料。
 Claude 若出現兩個 `cairn-local`，請用 `claude mcp list` 檢查；project／local
-scope 可能蓋過 user scope，安裝器不會偵測這種情況。Linux／WSL 已測試，
-自動保存目前在 Linux 和 WSL 上執行。macOS 上，setup 會連接 Claude Code 與 Codex，記憶工具也能用，但自動保存還不會啟動：setup 會回報對話保存為 OFF（runtime_unavailable）並以代碼 2 結束。Windows 原生環境會拒絕本機安裝，請用 WSL。
+scope 可能蓋過 user scope，安裝器不會偵測這種情況。自動保存支援 Linux、
+WSL 與 macOS（Claude Code）；Codex 在 macOS 還不支援自動保存。
+Windows 原生環境會拒絕本機安裝，請用 WSL。
 安裝器不會開啟引擎的選用功能。
 
 ## Cloud mode / 雲端模式

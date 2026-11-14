@@ -9,6 +9,72 @@ permissions:
   contents: read
 
 jobs:
+  macos-capture:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ['22.16.0', 24]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: |
+            adapters/mcp/package-lock.json
+            adapters/openai/package-lock.json
+      - name: Record macOS runner image
+        run: echo "ImageOS=$ImageOS ImageVersion=$ImageVersion"
+      - name: Inspect dependency directory
+        run: if [ -e adapters/mcp/node_modules ] || [ -L adapters/mcp/node_modules ]; then ls -ld adapters/mcp/node_modules; fi
+      - run: npm ci --prefix adapters/mcp --ignore-scripts
+      - name: Inspect provider dependency directory
+        run: if [ -e adapters/openai/node_modules ] || [ -L adapters/openai/node_modules ]; then ls -ld adapters/openai/node_modules; fi
+      - run: npm ci --prefix adapters/openai --ignore-scripts
+      - run: node integrations/client/testing/run.mjs integrations/client/test/local-source-open.test.mjs integrations/client/test/local-source-parity.test.mjs
+      - run: node integrations/client/testing/run.mjs integrations/client/test/local-source-close.test.mjs
+      - name: Diagnose native macOS capture transport
+        run: node integrations/client/testing/run.mjs --isolated-host integrations/client/test/local-macos-transport-diagnostic.test.mjs
+      - run: node integrations/client/testing/run.mjs --isolated-host packages/setup/test/local-capture-interrupted.test.mjs
+      - run: npm run test:local-host
+      - name: Test engine storage on macOS
+        shell: bash
+        run: |
+          set -euo pipefail
+          storage_tmp=$(mktemp -d "$RUNNER_TEMP/cairn-storage.XXXXXX")
+          chmod 700 "$storage_tmp"
+          trap 'rm -rf "$storage_tmp"' EXIT
+          TMPDIR=$(cd "$storage_tmp" && pwd -P)
+          export TMPDIR
+          for test_file in core/test/directory-nlink.test.mjs \
+            core/test/raw-search*.test.mjs \
+            core/test/context-read-sidecar.test.mjs \
+            core/test/context-read-product-warm-sidecar.test.mjs \
+            core/test/context-read-product-sidecar-attestation.test.mjs \
+            core/test/sqlite-journal*.test.mjs core/test/local-raw*.test.mjs; do
+            node tools/testing/run.mjs "$test_file"
+          done
+      - run: npm run test:local-worker
+      - run: npm run test:raw-producer
+      # Same artifact cache preparation as the Linux artifact job.
+      - run: node tools/testing/run.mjs --script packaging/verify-clean-cache.mjs
+      - run: node tools/testing/run.mjs --script packaging/prepare-cache.mjs
+      - run: node tools/testing/run.mjs packaging/test/local-setup.test.mjs
+      - name: Prime installer engine dependency cache
+        env:
+          CAIRN_SETUP_TEST_NETWORK: '1'
+        run: node packages/setup/test/engine-cache.mjs "$RUNNER_TEMP/setup-engine-cache"
+      - name: Test installer capture
+        env:
+          CAIRN_SETUP_TEST_GROUP: local
+          CAIRN_SETUP_NPM_CACHE: ${{ runner.temp }}/setup-engine-cache
+          CAIRN_SETUP_NPM_OFFLINE: '1'
+          CAIRN_SETUP_REQUIRE_CACHE: '1'
+        run: node tools/testing/run.mjs --script packages/setup/test/setup.test.mjs
+
   local-embedder-offline:
     runs-on: ubuntu-latest
     strategy:

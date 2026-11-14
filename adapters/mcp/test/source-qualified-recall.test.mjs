@@ -47,6 +47,7 @@ async function host(t, path, mode) {
       ...(mode ? ['--capture-qualification', mode] : [])],
     env: { OPENAI_API_KEY: '', NODE_NO_WARNINGS: '1' }, stderr: 'pipe' });
   const ranks = []; const waiters = []; let pending = '';
+  transport.stderr.setEncoding('utf8');
   transport.stderr.on('data', chunk => {
     pending += chunk.toString();
     let newline;

@@ -68,11 +68,12 @@ export function contextReadDeleteJournal(path, observer, validated) {
   try {
     const before = lstatSync(path, { bigint: true }), directory = lstatSync(dirname(path), { bigint: true });
     const fields = ['dev','ino','mode','uid','gid','nlink'];
-    const matches = (actual, expected) => fields.every(key =>
+    const matches = (actual, expected, directory = false) => fields.every(key =>
+      directory && key === 'nlink' ||
       (typeof expected[key] === 'bigint' || Number.isSafeInteger(expected[key])) && actual[key] === BigInt(expected[key]));
     const baseline = validated ?? { main: before, directory };
     // Retain the caller's protection/identity proof rather than resetting it.
-    if (!matches(before, baseline.main) || !matches(directory, baseline.directory) ||
+    if (!matches(before, baseline.main) || !matches(directory, baseline.directory, true) ||
         baseline.expectedIdentity && (String(before.dev) !== baseline.expectedIdentity.device ||
           String(before.ino) !== baseline.expectedIdentity.inode)) return false;
     const timeout = Math.min(5000, Math.floor(observer?.journalRemainingMs?.() ?? 5000));
@@ -96,7 +97,7 @@ export function contextReadDeleteJournal(path, observer, validated) {
     // A writer may commit while the child starts. Content timestamps can
     // change; replacement or protection changes must retain the refusal.
     return opened.mode === 'delete' && opened.device === String(before.dev) && opened.inode === String(before.ino) &&
-      matches(after, baseline.main) && matches(currentDirectory, baseline.directory);
+      matches(after, baseline.main) && matches(currentDirectory, baseline.directory, true);
   } catch (error) { if (error?.code === 'read_timeout') throw error; return false; }
 }
 
