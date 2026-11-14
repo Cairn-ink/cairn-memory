@@ -17,6 +17,10 @@ async function receiver(t, { fail = () => false } = {}) {
   const requests = [];
   const stored = new Map();
   const server = createServer((request, response) => {
+    if (request.url === "/api/memory/pause-state") {
+      request.resume(); response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ paused: false, generation: 0, enforced: true })); return;
+    }
     let body = "";
     request.on("data", (chunk) => (body += chunk));
     request.on("end", () => {

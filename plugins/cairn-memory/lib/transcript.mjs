@@ -1,3 +1,4 @@
+import { sourceTimestamp } from "./source-time.mjs";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { redactSecrets } from "./redact.mjs";
@@ -123,9 +124,12 @@ function pluginControlOutput(text) {
  * Optional turnState carries only a boolean across incremental capture windows;
  * it is updated even by tool-only records that the old parser did not emit.
  */
-export function transcriptWindow(jsonl, sessionId, { turnState = {}, pluginRoot = installedPluginRoot } = {}) {
+export function transcriptWindow(jsonl, sessionId, { turnState = {}, pluginRoot = installedPluginRoot, includeOffsets = false } = {}) {
   const messages = [];
+  let byteOffset = 0;
   for (const [lineIndex, line] of jsonl.split("\n").entries()) {
+    const recordOffset = byteOffset;
+    byteOffset += Buffer.byteLength(line) + 1;
     if (!line.trim()) continue;
     let record;
     try {
@@ -151,7 +155,10 @@ export function transcriptWindow(jsonl, sessionId, { turnState = {}, pluginRoot 
         : createHash("sha256")
             .update(`${sessionId}\0${lineIndex}\0${role}\0${content}`)
             .digest("hex");
-    messages.push({ id, role, content, withheld: machine || turnState.ownSkillTurn === true ||
+    messages.push({ id, role, content,
+      ...(sourceTimestamp(record.timestamp) ? { occurred_at: record.timestamp } : {}),
+      ...(includeOffsets ? { recordOffset } : {}),
+      withheld: machine || turnState.ownSkillTurn === true ||
       (role === "assistant" && pluginControlOutput(rawText)) });
   }
   return messages;

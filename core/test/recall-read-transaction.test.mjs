@@ -52,8 +52,14 @@ function fixture(t, options = {}) {
 const writerSource = String.raw`
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { writeFileSync } from 'node:fs';
+import { renameSync, writeFileSync } from 'node:fs';
 const [moduleURL, path, mode, serialized, marker] = process.argv.slice(1);
+// The parent polls for these markers while it is blocked inside a read, so a
+// marker must never be visible before its content is complete.
+const publish = (file, text) => {
+  writeFileSync(file + '.tmp', text, { flag: 'wx' });
+  renameSync(file + '.tmp', file);
+};
 let db, core;
 if (mode === 'forget') {
   const { openMemoryCore } = await import(moduleURL);
@@ -81,11 +87,11 @@ process.on('message', command => {
     db.exec('PRAGMA busy_timeout=0');
     assert.throws(() => db.exec('COMMIT'), error => (error.errcode & 255) === 5);
     db.exec('PRAGMA busy_timeout=5000');
-    writeFileSync(marker, 'busy', { flag: 'wx' });
+    publish(marker, 'busy');
     const start = performance.now();
     db.exec('COMMIT');
     const elapsedMs = performance.now() - start;
-    writeFileSync(marker + '.committed', 'committed', { flag: 'wx' });
+    publish(marker + '.committed', 'committed');
     process.send({ type: 'committed', elapsedMs });
   } else if (command === 'close') {
     if (db.isTransaction) db.exec('ROLLBACK');

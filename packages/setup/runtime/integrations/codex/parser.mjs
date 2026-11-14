@@ -1,3 +1,4 @@
+import { sourceTimestamp } from '../client/source-time.mjs';
 import { normalizeBlocks, hash, PROFILE } from '../client/common-profile.mjs';
 
 export const CODEX_COMMIT = '36650394c5b38c2990ccf2a3457165ca3e9d9726';
@@ -92,6 +93,12 @@ export function parseLine(bytes, { sessionId, wireSessionId, epoch, start, end }
   }
   const clean = normalizeBlocks(texts);
   if (clean.reason) return excluded(clean.reason);
-  return { start, end, ...clean, message: { id: hash(PROFILE,'codex',wireSessionId,epoch,start,end),
-    role: user ? 'user' : 'assistant', content: clean.content } };
+  const completed = typeof p.completed_at_ms === 'number' && Number.isFinite(p.completed_at_ms) ?
+    new Date(p.completed_at_ms) : null;
+  const occurredAt = sourceTimestamp(row.timestamp) ? row.timestamp :
+    completed && Number.isFinite(completed.getTime()) && sourceTimestamp(completed.toISOString()) ? completed.toISOString() : undefined;
+  return { start, end, ...clean,
+    ...(occurredAt === undefined ? {} : { occurred_at: occurredAt }),
+    message: { id: hash(PROFILE,'codex',wireSessionId,epoch,start,end),
+      role: user ? 'user' : 'assistant', content: clean.content } };
 }

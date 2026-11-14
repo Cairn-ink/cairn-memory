@@ -18,6 +18,12 @@ if (process.env.CAIRN_STATUS_FIXTURE_SYNC_CLOCK === "true") {
 }
 
 globalThis.fetch = async (url, options) => {
+  // Pause observations are separate from the authenticated content requests
+  // whose credential outcomes this fixture records.
+  if (new URL(url).pathname === "/api/memory/pause-state") {
+    options.signal?.throwIfAborted();
+    return Response.json({ paused: false, generation: 0, enforced: true });
+  }
   const token = process.env.CLAUDE_PLUGIN_OPTION_API_TOKEN;
   await appendFile(process.env.CAIRN_STATUS_FIXTURE_REQUESTS, JSON.stringify({
     path: new URL(url).pathname,

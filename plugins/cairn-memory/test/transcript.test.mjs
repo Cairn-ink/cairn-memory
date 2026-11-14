@@ -121,6 +121,10 @@ test("capture hook redacts locally before constructing the HTTP body", async (t)
 
   let received;
   const server = createServer((request, response) => {
+    if (request.url === "/api/memory/pause-state") {
+      request.resume(); response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ paused: false, generation: 0, enforced: true })); return;
+    }
     let body = "";
     request.on("data", (chunk) => (body += chunk));
     request.on("end", () => {
@@ -180,6 +184,10 @@ test("detached capture survives after its short-lived launcher exits", async (t)
 
   let received;
   const server = createServer((request, response) => {
+    if (request.url === "/api/memory/pause-state") {
+      request.resume(); response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ paused: false, generation: 0, enforced: true })); return;
+    }
     let body = "";
     request.on("data", (chunk) => (body += chunk));
     request.on("end", () => {

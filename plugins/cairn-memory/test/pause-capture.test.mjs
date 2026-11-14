@@ -55,6 +55,10 @@ test("paused transcript text is never backfilled after resume", async (t) => {
 
   const requests = [];
   const server = createServer((request, response) => {
+    if (request.url === "/api/memory/pause-state") {
+      request.resume(); response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ paused: false, generation: 0, enforced: true })); return;
+    }
     let body = "";
     request.on("data", (chunk) => (body += chunk));
     request.on("end", () => {
@@ -114,6 +118,10 @@ test("a line spanning the pause boundary is discarded through its newline", asyn
   await writeFile(transcript, "");
   const requests = [];
   const server = createServer((request, response) => {
+    if (request.url === "/api/memory/pause-state") {
+      request.resume(); response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ paused: false, generation: 0, enforced: true })); return;
+    }
     let body = "";
     request.on("data", (chunk) => (body += chunk));
     request.on("end", () => {
@@ -160,6 +168,10 @@ test("a delayed pre-pause worker is rejected after resume", async (t) => {
   await writeFile(transcript, record("delayed", "queued before pause"));
   let captureCount = 0;
   const server = createServer((request, response) => {
+    if (request.url === "/api/memory/pause-state") {
+      request.resume(); response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ paused: false, generation: 0, enforced: true })); return;
+    }
     if (request.url === "/api/memory/capture") captureCount += 1;
     request.resume();
     response.writeHead(200, { "content-type": "application/json" });
@@ -215,6 +227,10 @@ test("pause returns while an initiated request is in flight and stops later batc
   let sawFirst;
   const firstRequest = new Promise((resolve) => (sawFirst = resolve));
   const server = createServer((request, response) => {
+    if (request.url === "/api/memory/pause-state") {
+      request.resume(); response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ paused: false, generation: 0, enforced: true })); return;
+    }
     let body = "";
     request.on("data", (chunk) => (body += chunk));
     request.on("end", () => {
@@ -270,6 +286,10 @@ test("a failed partial batch retries an immutable window before newer text", asy
   );
   const requests = [];
   const server = createServer((request, response) => {
+    if (request.url === "/api/memory/pause-state") {
+      request.resume(); response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ paused: false, generation: 0, enforced: true })); return;
+    }
     let body = "";
     request.on("data", (chunk) => (body += chunk));
     request.on("end", () => {
@@ -317,6 +337,10 @@ test("concurrent workers serialize one session and advance its cursor once", asy
   await writeFile(transcript, record("concurrent", "capture exactly once"));
   let captureCount = 0;
   const server = createServer((request, response) => {
+    if (request.url === "/api/memory/pause-state") {
+      request.resume(); response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ paused: false, generation: 0, enforced: true })); return;
+    }
     request.resume();
     request.on("end", () => {
       if (request.url !== "/api/memory/capture") return;

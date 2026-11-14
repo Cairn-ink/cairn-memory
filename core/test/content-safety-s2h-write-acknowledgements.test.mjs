@@ -297,6 +297,10 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // manager. Ordinary Raw capture reconstructs existing message/event/session
   // identities before journal registration. Pin these existing projections;
   // neither adds acknowledgement fields or changes the native write guard.
+  // Capture-window metadata adds two literal id occurrences in the hosted
+  // schema (required key and property). This opaque window identity is transport
+  // metadata, not writer authority or a new acknowledgement/terminal field.
+  // Lock liveness preflight adds key:pid (1 -> 2): process metadata, never content or writer identity.
   // Recall's recency keyset adds one private last-position id in the signed
   // cursor boundary. It adds no writer acknowledgement or terminal exemption.
   // R2k dispatch branches duplicate existing opaque operation inputs:

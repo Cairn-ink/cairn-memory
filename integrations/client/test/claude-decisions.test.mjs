@@ -1,12 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, writeFile, readFile, chmod, lstat, symlink, unlink, rm } from "node:fs/promises";
+import { mkdir, writeFile, readFile, chmod, lstat, symlink, unlink, rm, appendFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { createTestWorkspace } from "../../../tools/testing/workspace.mjs";
+import { harness as portableHarness, row as transcriptRow } from '../../../plugins/cairn-memory/test/capture-window-harness.mjs';
 import { privateWrite } from "../private-state.mjs";
 import {
   probeClaudeFacts,
@@ -405,6 +406,10 @@ for (const row of table.rows) {
     const preservedPause = f.resetDestination && (await readControlState(defaultRoot));
     const requests = [];
     const server = createServer((req, res) => {
+      if (req.url === "/api/memory/pause-state") {
+        req.resume(); res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ paused: false, generation: 0, enforced: true })); return;
+      }
       let bytes = "";
       req.on("data", (chunk) => (bytes += chunk));
       req.on("end", () => {
@@ -520,13 +525,17 @@ for (const row of table.rows) {
           }),
         );
       });
+    // Windows uses validated process-local observations; POSIX still requires
+    // a verified PID namespace and owner for the shared pause-publication lock.
+    const hostedAvailable = f.coord !== "foreign";
+    const expectedRequests = hostedAvailable ? row.expect.requests : 0;
     assert.equal((await run("recall")).code, 0);
-    assert.equal(requests.length, row.expect.requests, "exact request count");
+    assert.equal(requests.length, expectedRequests, "exact request count");
     if (preservedPause) assert.deepEqual(await readControlState(defaultRoot), preservedPause);
     const afterKeys = await Promise.all(keys.map(exists));
     assert.equal(
       afterKeys.filter((value, i) => value && !beforeKeys[i]).length,
-      row.expect.mint ? 1 : 0,
+      hostedAvailable && row.expect.mint ? 1 : 0,
       "exact number of minted project keys",
     );
     const status = await run("status");
@@ -543,12 +552,12 @@ for (const row of table.rows) {
     );
     assert.equal((await run("pause")).code, row.expect.enabled ? 0 : 1);
     await run("recall");
-    assert.equal(requests.length, row.expect.requests, "pause or disabled gate suppresses recall");
+    assert.equal(requests.length, expectedRequests, "pause or disabled gate suppresses recall");
     assert.equal((await run("resume")).code, row.expect.enabled ? 0 : 1);
     await run("recall");
     assert.equal(
       requests.length,
-      row.expect.requests + (row.expect.resumeRequests ?? (row.expect.enabled ? 1 : 0)),
+      hostedAvailable ? row.expect.requests + (row.expect.resumeRequests ?? (row.expect.enabled ? 1 : 0)) : 0,
     );
     if (row.expect.enabled && requests.length) {
       const key = (await readFile(join(selected, "project-key"), "utf8")).trim();
@@ -563,3 +572,63 @@ for (const row of table.rows) {
       );
   });
 }
+
+const portableActive = { paused: false, generation: 0, enforced: true };
+for (const [name, observation] of [
+  ['paused', { ...portableActive, paused: true, generation: 1 }],
+  ['invalid', { ...portableActive, generation: -1 }],
+  ['unenforced', { ...portableActive, enforced: false }],
+  ['unavailable', {}],
+]) test(`native Windows ${name} observation permits only its GET and keeps local identity private`, async t => {
+  const keyExists = [];
+  for (const portable of [true, false]) {
+    const mode = portable ? 'Windows' : 'POSIX';
+    const f = await portableHarness(t, { portable, pauseState: () => observation });
+    await f.write('');
+    await f.run('start-boundary');
+    await f.run('recall');
+    assert.deepEqual(f.requests.map(({ method, url }) => [method, url]),
+      [['GET', '/api/memory/pause-state']],
+      `${mode}: denied observation permits only its own GET; no other network requests`);
+    if (portable) {
+      const state = await f.state();
+      assert.equal(Object.hasOwn(state, 'hostedGeneration'), false);
+      assert.equal(Object.hasOwn(state, 'hostedTarget'), false);
+    }
+    const keyPath = join(f.dataDir, 'project-key');
+    keyExists.push(await exists(keyPath));
+    if (keyExists.at(-1)) {
+      const key = (await readFile(keyPath, 'utf8')).trim();
+      assert.match(key, /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u);
+      const identities = [key, createHash('sha256').update(key).digest('hex'),
+        createHmac('sha256', key).update('/synthetic/project').digest('hex')];
+      for (const request of f.requests) {
+        const received = JSON.stringify(request);
+        for (const identity of identities)
+          assert.equal(received.includes(identity), false,
+            `${mode}: denied observation transmits no project key or derived identity in URL, headers or body`);
+      }
+    }
+  }
+  assert.equal(keyExists[0], keyExists[1], 'Windows local project-key existence matches POSIX hosted mode');
+});
+
+test('native Windows first-prompt authority covers only bytes after the prompt snapshot', async t => {
+  let observations = 0;
+  const f = await portableHarness(t, { portable: true,
+    pauseState: () => { observations++; return portableActive; } });
+  await f.write(''); await f.run('start-boundary');
+  const prefix = transcriptRow('before-first-prompt');
+  await appendFile(f.transcript, prefix);
+  await f.run('recall');
+  assert.equal(observations, 1, 'recall takes its own fresh observation');
+  assert.equal(f.recalls.length, 1, 'valid active Windows recall dispatches');
+  const state = await f.state();
+  assert.equal(state.hostedGeneration, 0);
+  assert.match(state.hostedTarget, /^[a-f0-9]{64}$/u);
+  assert.equal(state.offset, Buffer.byteLength(prefix), 'first-prompt byte fence');
+  await appendFile(f.transcript, transcriptRow('after-first-prompt'));
+  await f.run('capture');
+  assert.equal(f.captures.length, 1, 'first turn actually captured');
+  assert.deepEqual(f.captures[0].messages.map(message => message.id), ['after-first-prompt']);
+});

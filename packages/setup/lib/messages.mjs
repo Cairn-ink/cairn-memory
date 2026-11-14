@@ -255,8 +255,8 @@ export const messages = {
     "en": "The Claude Code plugin cannot be checked. Codex keeps its shared memory."
   },
   "codex_shared_pause_availability": {
-    "zh": "共用暫停開關最後觀察：{state}；Codex 需要伺服器強制執行，Claude 保留既有行為。",
-    "en": "Shared pause gate last observation: {state}; Codex requires enforced state, Claude keeps existing behavior."
+    "zh": "共用暫停開關最後觀察：{state}；Codex 與 Claude 都需要伺服器強制執行。",
+    "en": "Shared pause gate last observation: {state}; Codex and Claude both require enforced state."
   },
   "codex_prompt_recall_status": {
     "zh": "  · 提問時找回記憶：{state}",

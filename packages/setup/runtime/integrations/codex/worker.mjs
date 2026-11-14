@@ -1,5 +1,6 @@
 import { recordLastCapture } from "./installed-state.mjs";
 import { randomBytes } from "node:crypto";
+import { completeHostedPauseRotation } from '../client/hosted-pause.mjs';
 import { transcriptDigest } from "./digest.mjs";
 import { checkedPath } from "../client/private-state.mjs";
 import { stateLock } from "../client/state-lock.mjs";
@@ -80,6 +81,10 @@ async function prepared(binding, options, action) {
   )
     throw new Error("invalid_binding");
   await checkedPath(root, { directory: true });
+  // Hosted cursor adoption uses the root's repaired generation on every target.
+  // Stub/local workers retain their released behavior and do not read hosted state.
+  if (options.hosted) await completeHostedPauseRotation({ root },
+    { signal: options.signal, deadlineMs: options.deadlineMs });
   const cp = cursorPath(root, targetId, sessionId);
   return stateLock(
     cp.replace(/\.json$/, ".lock"),
@@ -395,6 +400,8 @@ export function resetCapture(binding, { hostsStopped, confirm, ...options } = {}
   return prepared(binding, { ...options, reset: true });
 }
 
+const CAPTURE_WINDOW_SLICES = 4096;
+
 /** Stub seam: capture(body,{signal}) plus synchronous confirmed-termination query.
  * Every real local/hosted adapter must implement cancellation and idempotency.
  */
@@ -408,11 +415,15 @@ export async function runWorker(
     requestMs,
     overallMs,
     beforeDispatch,
+    // Internal seam for bounded synthetic window tests.
+    captureWindowSlices = CAPTURE_WINDOW_SLICES,
     ...options
   } = {},
 ) {
   if (!["hosted", "hosted-stub", "local-stub"].includes(mode) || !transport || !guard)
     return { status: "transport_unavailable" };
+  if (!Number.isSafeInteger(captureWindowSlices) || captureWindowSlices < 1 ||
+      captureWindowSlices > CAPTURE_WINDOW_SLICES) throw new Error("invalid_window_limit");
   requestMs ??= mode === "local-stub" ? 150000 : 25000;
   overallMs ??= mode === "local-stub" ? 155000 : 60000;
   if (
@@ -423,8 +434,9 @@ export async function runWorker(
   )
     throw new Error("invalid_worker_deadline");
   const started = now();
+  const deadlineMs = Math.min(options.deadlineMs ?? Infinity, performance.now() + overallMs);
   let lastCapture;
-  const result = await prepared(binding, options, async ({ s, save, batches, records, bytes, stat, digest }) => {
+  const result = await prepared(binding, { ...options, deadlineMs, hosted: mode === 'hosted' }, async ({ s, save, batches, records, bytes, stat, digest }) => {
     if (s.quotaRefusal && !s.quotaRefusal.latched) {
       try {
         const latch = await guard.refuse({ resetAt: s.quotaRefusal.resetAt });
@@ -450,6 +462,13 @@ export async function runWorker(
       await save();
     }
     if (s.notBefore > now()) return { status: s.status, state: s };
+    // Number only sent batches. Metadata windows may split a large frozen
+    // range, but the existing manifests, event IDs and batch boundaries stay.
+    const sent = batches.filter(batch => batch.body);
+    // Time is a record attribute, attached only after the legacy byte-size
+    // planner has frozen boundaries. It must not split an existing batch.
+    const times = new Map(records.filter(record => record.message && record.occurred_at !== undefined)
+      .map(record => [record.message.id, record.occurred_at]));
     let dispatched = 0;
     while (s.pending.next < batches.length) {
       const b = batches[s.pending.next];
@@ -502,13 +521,28 @@ export async function runWorker(
             startIfArmed(binding.root, s.generation, s.arm, () => {
               if (now() - started + requestMs > overallMs) throw new Error("deadline");
               began = true;
+              const requestDeadlineMs = Math.min(deadlineMs, performance.now() + requestMs);
               const timeout = new Promise((_, reject) => {
                 timer = setTimeout(() => {
                   abort.abort();
                   reject(new Error("timeout"));
                 }, requestMs);
               });
-              return Promise.race([transport.capture(b.body, { signal: abort.signal }), timeout]);
+              const index = sent.indexOf(b), group = Math.floor(index / captureWindowSlices) * captureWindowSlices;
+              const body = { ...b.body,
+                messages: b.body.messages.map(message => times.has(message.id) ?
+                  { ...message, occurred_at: times.get(message.id) } : message),
+                window: {
+                  id: hash(wireBinding(binding).sessionId, group === 0 ? s.pending.start : sent[group].start),
+                  slice: index - group + 1,
+                  slices: Math.min(captureWindowSlices, sent.length - group),
+                  // Every admitted Codex session already has an EOF boundary.
+                  initial: false,
+                },
+                sent_at: new Date(now()).toISOString(),
+              };
+              return Promise.race([transport.capture(body, { signal: abort.signal,
+                ...(mode === 'hosted' ? { generation: s.generation, deadlineMs: requestDeadlineMs } : {}) }), timeout]);
             }),
           );
           if (!gate.ok) {
