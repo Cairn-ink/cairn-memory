@@ -247,8 +247,9 @@ function assertPlan(db,sql,sites,statistics) {
   if(sql.includes('CROSS JOIN qualification_anchors q')){
     for(const alias of ['q','p'])assert.ok(plan.some(row=>row.detail.startsWith('SEARCH '+alias+' ')&&
       row.detail.includes('memory_id=?')),label+' anchors must be reached by memory_id: '+alias);
+    // A receipt is reached by its unique id, directly or through the (memory_id,id) index: one row either way.
     for(const alias of ['r','m'])assert.equal(plan.filter(row=>row.detail.startsWith('SEARCH '+alias+' ')&&
-      row.detail.includes('(id=?)')).length,2,label+' both anchor arms reach '+alias+' by id');
+      /\((?:memory_id=\? AND )?id=\?\)/.test(row.detail)).length,2,label+' both anchor arms reach '+alias+' by id');
   }
   for(const row of plan){
     const {detail}=row,scan=detail.match(/\bSCAN (\w+)/);
@@ -343,7 +344,7 @@ test('every owned production statement has bounded indexed inputs with and witho
       headerPlans[statistics]=f.db.prepare('EXPLAIN QUERY PLAN '+sql).all(...Array((sql.match(/\?/g)??[]).length).fill(null)).map(row=>row.detail);
     for(const [sql,locations]of texts)try{assertPlan(f.db,sql,locations,statistics);}catch(error){
       const lines=String(error.message).split('\n');
-      violations.push([lines[0],...lines.filter(line=>/^\s*(?:SCAN|SEARCH)|unbounded/.test(line)).map(line=>line.slice(-220))].join(' | '));
+      violations.push([lines[0],...lines.slice(1).filter(line=>!/^\s*(?:SELECT|INSERT|WITH|FROM|WHERE|CROSS|UNION|AND)\b/i.test(line)).map(line=>line.trim().slice(-260))].join(' | ').slice(0,900));
     }
   }
   assert.deepEqual(violations,[]);
