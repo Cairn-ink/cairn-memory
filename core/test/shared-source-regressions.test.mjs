@@ -284,10 +284,14 @@ test('capped recall requests only that candidate in recent order and skips a for
   absent({ result, sent }, [f.shared.excerpt, f.sibling.content, ...f.erased]);
 });
 
-for (const change of ['forget', 'correct']) test(`lazy recent read observes ${change} after preparation`, async t => {
+// Internal lazy-reader behavior only: its fresh read cannot authorize combining
+// post-change receipts with prepared content in a public recall response. The
+// final snapshot must retain the fences captured before the change and refuse.
+for (const change of ['forget', 'correct']) test(`internal lazy reader observes ${change}; original final fences refuse`, async t => {
   const f = await cappedRecallFixture(t);
   const runtime = createMemoryRuntime({ path: f.path }); t.after(() => runtime.close());
   const ref = { namespace: ns, memoryId: f.memory.id, revision: f.memory.revision };
+  const namespaces = [{ namespace: ns, indexRevision: runtime.epoch(ns), suppressionEpoch: runtime.suppressionFence(ns) }];
   const prepared = await trace(() => runtime.recallSnapshot([ref], null));
   assert.equal(prepared.rows.filter(isRecentStatement).length, 0);
   if (change === 'correct') {
@@ -304,9 +308,9 @@ for (const change of ['forget', 'correct']) test(`lazy recent read observes ${ch
     assert.equal(measured.rows.filter(isRecentStatement).length, 1);
     assert.deepEqual(measured.result.map(row => row.id), [8, 9, 10, 7, 6].map(recentId));
     absent({ recent: measured.result }, [f.shared.excerpt, ...f.erased]);
-    const final = runtime.recallSnapshot([{ ...ref, receiptOrder: 'recent', receiptLimit: 5 }], [0]);
-    assert.deepEqual(final[0].receipts, measured.result, 'the final proof revalidates the post-change delivery');
   }
+  assert.throws(() => runtime.recallSnapshot([{ ...ref, receiptOrder: 'recent', receiptLimit: 5 }], [0], namespaces),
+    failure => failure.code === (change === 'correct' ? 'revision_conflict' : 'index_revision_conflict'));
 });
 
 test('final recall proof refuses a correction after the lazy recent read', async t => {
@@ -532,19 +536,35 @@ async function fencedRecallFixture(t, layout, { textPacking = false } = {}) {
     client: 'synthetic-fence-client-' + index, sessionId: 'synthetic-fence-session-' + index,
     eventId: 'synthetic-fence-event-' + index, role: 'user', excerpt: 'Synthetic fenced support ' + index,
   }));
-  const memory = ok(f.core.admit({ namespace: ns, memory: { kind: 'fact',
-    content: 'Synthetic prepared selected wording' + (textPacking ? ' x'.repeat(120) : '') }, receipts: supports })).memory;
+  const selectedContent = 'Synthetic prepared selected wording' + (textPacking ? ' x'.repeat(120) : '');
+  // admit accepts 1..4 receipts (contract.mjs). As in recentFixture, seed a
+  // valid Memory first, then build the larger synthetic stored list directly.
+  // Explicit columns also work on event-time layouts, whose occurred_at is nullable.
+  const admitted = ok(f.core.admit({ namespace: ns, memory: { kind: 'fact', content: selectedContent },
+    receipts: [supports[0]] })).memory;
+  transaction(f.db, () => {
+    f.db.prepare('UPDATE receipts SET created_at=? WHERE memory_id=?').run(recentTime(0), admitted.id);
+    const insert = f.db.prepare(`INSERT INTO receipts
+      (id,memory_id,receipt_key,client,session_id,event_id,role,excerpt,created_at) VALUES(?,?,?,?,?,?,?,?,?)`);
+    for (let index = supports.length - 1; index >= 1; index--) {
+      const support = supports[index];
+      insert.run(recentId(index), admitted.id, key(support), support.client, support.sessionId,
+        support.eventId, support.role, support.excerpt, recentTime(index));
+    }
+  });
+  const memory = ok(f.core.get({ namespace: ns, memoryId: admitted.id })).memory;
   const shared = supports[11];
-  const sibling = ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic prepared sibling wording', kind: 'fact' },
+  const siblingRef = ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic prepared sibling wording', kind: 'fact' },
     receipts: [shared] })).memory;
+  const sibling = ok(f.core.get({ namespace: ns, memoryId: siblingRef.id })).memory;
   const independent = ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic prepared independent wording', kind: 'fact' },
     receipts: [receipt('synthetic-fence-independent')] })).memory;
-  transaction(f.db, () => {
-    for (const [index, support] of supports.entries()) f.db.prepare('UPDATE receipts SET created_at=? WHERE memory_id=? AND event_id=?')
-      .run(recentTime(index), memory.id, support.eventId);
-  });
   const stored = f.db.prepare('SELECT * FROM receipts WHERE memory_id IN (?,?)').all(memory.id, sibling.id);
   const ids = supports.map(support => stored.find(row => row.memory_id === memory.id && row.event_id === support.eventId).id);
+  assert.equal(memory.content, selectedContent);
+  assert.equal(sibling.content, 'Synthetic prepared sibling wording');
+  assert.equal(memory.receiptCount, 12);
+  assert.equal(new Set(ids).size, 12);
   const state = {};
   const reset = (change, at) => Object.assign(state, { change, at, changed: false, prepared: false,
     lazyStarted: false, lazyFinished: false, rankReturned: false, rankOutputCounted: false,
@@ -691,6 +711,7 @@ async function fencedRecallFixture(t, layout, { textPacking = false } = {}) {
     // address withholds it. All synthetic source coordinates are unique.
     if (change.endsWith('forget') || change === 'selected-correct') for (const row of targetRows)
       denied.push(row.excerpt, row.client, row.session_id, row.event_id);
+    assert.ok(denied.every(text => typeof text === 'string' && text.length > 0), 'every leak needle is real text');
     return denied;
   };
   return { ...f, core, memory, sibling, independent, ids, state, reset, call, needles };
@@ -731,6 +752,10 @@ function assertCappedControl(f, result) {
   assert.deepEqual(selected.receipts.map(row => row.id), [11, 10, 9, 8, 7].map(index => f.ids[index]));
   assert.equal(selected.receiptCount, 12);
   assert.equal(selected.receiptsOmitted, 7);
+  const independent = value.memories.find(item => item.memory.id === f.independent.id);
+  assert.equal(independent.receiptCount, 1);
+  assert.deepEqual(independent.receipts.map(row => row.eventId), ['synthetic-fence-independent']);
+  assert.equal(Object.hasOwn(independent, 'receiptsOmitted'), false);
   assert.deepEqual(value.recallTruncated, { navigationItemsOmitted: 0, candidatesOmitted: 0,
     candidatesShortened: 0, receiptListsCapped: 1 });
   assert.equal(value.coverage, 'budget_exhausted');
@@ -767,14 +792,18 @@ for (const route of ['direct', 'dispatched']) test(`${name}: ${label(layout)} ${
     assert.deepEqual(f.state.finalFences, f.state.navigation, 'a mid-call mutation never refreshes final fences');
     assert.equal(f.state.finalError, layout.mode !== 'old' ? 'evidence_unavailable'
       : change === 'selected-correct' ? 'revision_conflict' : 'index_revision_conflict');
+    assert.equal(f.state.finalSucceeded, false);
+    assert.equal(f.state.recentSQL.length, 1, 'final refusal precedes final recent headers');
     assert.deepEqual(f.state.afterInputs, [], 'no model input follows the final interleaving');
   } else if (change.startsWith('selected-')) {
     assert.equal(f.state.lazyError, 'revision_conflict');
     assert.equal(f.state.recentSQL.length, 0, 'selected revision refusal precedes recent SQL');
+    assert.equal(f.state.finalFences, null, 'lazy refusal never reaches finalization');
     assert.deepEqual(f.state.afterInputs, []);
   } else {
     assert.equal(f.state.lazyFinished, true);
     assert.equal(f.state.recentSQL.length, 1, 'the lazy read participates in the refused call');
+    assert.equal(f.state.finalFences, null, 'post-change packing/freshness refuses before finalization');
     assert.ok(f.state.afterInputs.length > 0, 'inspect the actual post-change packing input');
   }
 });
