@@ -38,5 +38,29 @@
     "length === 1 && lastRead.set(first, now());",
     "adapters/mcp/test/context-maintenance-demand.test.mjs",
     "R2K_COMBINED_RECORDED"
+  ],
+  [
+    "single-view-reuse",
+    "adapters/mcp/server.mjs",
+    "const fullView = key === viewKey(types);",
+    "const fullView = selectedTypes === types;",
+    "adapters/mcp/test/context-maintenance-demand.test.mjs",
+    "R2O6_SINGLE_VIEW_REUSE"
+  ],
+  [
+    "single-view-reuse-cost",
+    "adapters/mcp/server.mjs",
+    "const fullView = key === viewKey(types);",
+    "const fullView = selectedTypes === types;",
+    "tools/testing/unbound-upkeep-cost.qualification.mjs",
+    "R2O6_SINGLE_VIEW_REUSE"
+  ],
+  [
+    "single-view-write-fence",
+    "core/context-read-facade.mjs",
+    "storage.assertState(projection, expected, { checkpoint: false });",
+    "if (projection.types.length !== 1) storage.assertState(projection, expected, { checkpoint: false });",
+    "adapters/mcp/test/context-maintenance-demand.test.mjs",
+    "R2O6_SINGLE_VIEW_WRITE_REENABLES"
   ]
 ]

@@ -722,7 +722,7 @@ function startHostContextMaintenance(core, access, { cards = false, cardRaw = fa
   const { readSet } = access;
   const capabilities = core.getContextReadCapabilities?.();
   let types = capabilities?.ok ? capabilities.value.types : ['memory'];
-  let closed = false, active, timer, nextView = 0, idleCombined;
+  let closed = false, active, timer, nextView = 0, idleFullView;
   const idleViews = new Map(), viewKey = view => view.length === 2 ? 'combined' : view[0];
   const noRemainingWork = (result, view) => result?.ok && result.value.status === 'complete' &&
     result.value.coverage?.maintenance?.state === 'ready' && view.every(type => {
@@ -766,12 +766,14 @@ function startHostContextMaintenance(core, access, { cards = false, cardRaw = fa
           readSet, types: selectedTypes, intent: 'current', budget: { maxItems: 16, maxMs: 1000 },
         });
         if (!closed && access.call && (semantic || cards)) {
-          const { result, current } = await observeContextMaintenance(() => run ? run(refresh, 1000) : refresh(),
-            { host: true, previous: pending.length === 0 && selectedTypes === types ? idleCombined : undefined });
           const key = viewKey(selectedTypes);
+          // Full-view identity is the enum key, including single-type hosts.
+          const fullView = key === viewKey(types);
+          const { result, current } = await observeContextMaintenance(() => run ? run(refresh, 1000) : refresh(),
+            { host: true, previous: pending.length === 0 && fullView ? idleFullView : undefined });
           if (noRemainingWork(result, selectedTypes) && current) idleViews.set(key, current);
           else idleViews.delete(key);
-          if (key === 'combined') idleCombined = noRemainingWork(result, selectedTypes) && current ? { result, current } : undefined;
+          if (fullView) idleFullView = noRemainingWork(result, selectedTypes) && current ? { result, current } : undefined;
         }
       }).catch(() => {}).finally(() => { active = null; arm(); });
     }, 1000);

@@ -112,11 +112,11 @@ test('f: retained demand contains only three enum/timestamp pairs, copied on ins
   assert.deepEqual(createContextMaintenanceDemand().inspect(), [], 'hosts do not share demand');
 });
 
-async function realFixture(t, { path: sourcePath, cards = cardHost(), shared = false } = {}) {
+async function realFixture(t, { path: sourcePath, cards = cardHost(), raw = true, shared = false } = {}) {
   const w = createTestWorkspace(t), path = sourcePath ?? join(w.path, 'synthetic-demand.sqlite');
   const access = createContextReadAccess(ns, false, { maintenance: true });
   const host = shared ? createCommitDispatcher({ strict: true }) : null;
-  const open = () => openMemoryCore({ path, raw: true, privateCards: cards.options,
+  const open = () => openMemoryCore({ path, raw, ...(cards ? { privateCards: cards.options } : {}),
     contextRead: { ...access.configuration, embedder: createFakeEmbedder(), counter,
       policy: { family: 'local', maxRequests: 10000, maxUsd: 1, estimateUsd: () => 0 } } });
   const core = host ? host.open(open) : open();
@@ -124,11 +124,14 @@ async function realFixture(t, { path: sourcePath, cards = cardHost(), shared = f
   for (let i = 0; i < 3; i++) ok(await core.admit({ namespace: ns,
     memory: { content: 'Synthetic cobalt telescope memory ' + i, kind: 'fact' },
     receipts: [{ client: 'synthetic', sessionId: 'demand', eventId: String(i), role: 'user', excerpt: 'Synthetic receipt ' + i }] }));
-  const draft = ok(await cards.call(core, 'createCardDraft', { namespace: ns, actionId: 'draft', drafting: 'authored',
-    input: { title: 'Synthetic cobalt telescope', body: 'Synthetic cobalt telescope card',
-      authoredInput: { text: 'Synthetic source for demand test', occurredAt: null } } }));
-  ok(await cards.call(core, 'confirmCardDraft', { namespace: ns, actionId: 'confirm', cardId: draft.id,
-    expectedRevision: 1, applicability: 'current' }));
+  let draft;
+  if (cards) {
+    draft = ok(await cards.call(core, 'createCardDraft', { namespace: ns, actionId: 'draft', drafting: 'authored',
+      input: { title: 'Synthetic cobalt telescope', body: 'Synthetic cobalt telescope card',
+        authoredInput: { text: 'Synthetic source for demand test', occurredAt: null } } }));
+    ok(await cards.call(core, 'confirmCardDraft', { namespace: ns, actionId: 'confirm', cardId: draft.id,
+      expectedRevision: 1, applicability: 'current' }));
+  }
   const demand = createContextMaintenanceDemand();
   const server = buildCairnServer({ path, binding: ns, core, context: access, contextSemantic: true,
     contextDemand: demand, dispatcher: host, maintenance: false, ownsCore: false });
@@ -422,4 +425,34 @@ test('shared combined-only idle reuse refreshes again after a Memory write', { t
     'R2O5_COMBINED_WRITE_REENABLES');
   const result = await context(f.client, input(combined));
   assert.equal(result.diagnostics.candidates.channels.semantic.state, 'ready', 'R2O5_COMBINED_WRITE_REENABLES');
+});
+
+// Raw construction also installs Card storage, so it advertises the two-type
+// full view. Neither fixture configures private Cards or a consolidator.
+for (const raw of [false, true]) test(`shared full-view idle reuse refreshes again after a Memory write raw=${raw}`, { timeout: 15000 }, async t => {
+  const f = await realFixture(t, { cards: null, raw, shared: true }), selected = [];
+  const types = raw ? combined : ['memory'];
+  assert.deepEqual(ok(f.core.getContextReadCapabilities()).types, types);
+  await context(f.client, input(types));
+  const loop = drivenLoop(t, f.core, { ...f.access, async call(core, method, args) {
+    const result = await f.access.call(core, method, args);
+    selected.push({ types: args.types, result }); return result;
+  } }, { demand: f.demand, host: true });
+  for (let i = 0; i < 16; i++) await loop.tick();
+  const before = selected.at(-1).result;
+  assert.equal(before.value.status, 'complete');
+  await loop.tick();
+  assert.strictEqual(selected.at(-1).result, before, 'R2O6_SINGLE_VIEW_REUSE');
+  const writer = openMemoryCore({ path: f.path, raw: false });
+  try { ok(writer.admit({ namespace: ns, memory: { content: 'Synthetic Memory-only write after idle reuse', kind: 'fact' },
+    receipts: [{ client: 'synthetic', sessionId: 'memory-idle', eventId: 'write', role: 'user', excerpt: 'Synthetic new source' }] })); }
+  finally { writer.close(); }
+  await loop.tick();
+  const after = selected.at(-1).result;
+  assert.notStrictEqual(after, before, 'R2O6_SINGLE_VIEW_WRITE_REENABLES');
+  assert.equal(after.value.status, 'complete', 'R2O6_SINGLE_VIEW_WRITE_REENABLES');
+  assert.equal(after.value.coverage.byType.memory.eligible, before.value.coverage.byType.memory.eligible + 1,
+    'R2O6_SINGLE_VIEW_WRITE_REENABLES');
+  const result = await context(f.client, input(types));
+  assert.equal(result.diagnostics.candidates.channels.semantic.state, 'ready', 'R2O6_SINGLE_VIEW_WRITE_REENABLES');
 });

@@ -18,6 +18,7 @@ const methods = ['run', 'get', 'all', 'iterate', 'exec'];
 const median = values => { const sorted = [...values].sort((a,b) => a-b); return (sorted[9] + sorted[10]) / 2; };
 
 for (const [shape, demand] of [
+  ['memory-only', [['memory']]],
   ['separate', [['memory'], ['card']]],
   ['combined-only', [['memory', 'card']]],
   ['mixed', [['memory', 'card'], ['memory'], ['card']]],
@@ -64,16 +65,19 @@ for (const [shape, demand] of [
     const { Client } = await import(pathToFileURL(adapterRequire.resolve('@modelcontextprotocol/client')));
     const { StdioServerTransport } = await import(pathToFileURL(adapterRequire.resolve('@modelcontextprotocol/server/stdio')));
     const { streams, context } = await import(pathToFileURL(join(root, 'adapters/mcp/test/local-shared-support.mjs')));
-    const path = join(w.path, label + '.sqlite'), cards = cardHost(), seed = openMemoryCore({ path, raw: false, privateCards: cards.options });
+    const path = join(w.path, label + '.sqlite'), cards = shape === 'memory-only' ? null : cardHost();
+    const seed = openMemoryCore({ path, raw: false, ...(cards ? { privateCards: cards.options } : {}) });
     const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
     for (let i = 0; i < 3; i++) ok(seed.admit({ namespace: ns, memory: { content: 'Synthetic idle upkeep memory ' + i, kind: 'fact' },
       receipts: [{ client: 'synthetic', sessionId: 'upkeep', eventId: String(i), role: 'user', excerpt: 'Synthetic source ' + i }] }));
-    const card = ok(await cards.call(seed, 'createCardDraft', { namespace: ns, actionId: 'draft', drafting: 'authored',
-      input: { title: 'Synthetic upkeep card', body: 'Synthetic idle card', authoredInput: { text: 'Synthetic authored source', occurredAt: null } } }));
-    ok(await cards.call(seed, 'confirmCardDraft', { namespace: ns, actionId: 'confirm', cardId: card.id, expectedRevision: 1, applicability: 'current' }));
+    if (cards) {
+      const card = ok(await cards.call(seed, 'createCardDraft', { namespace: ns, actionId: 'draft', drafting: 'authored',
+        input: { title: 'Synthetic upkeep card', body: 'Synthetic idle card', authoredInput: { text: 'Synthetic authored source', occurredAt: null } } }));
+      ok(await cards.call(seed, 'confirmCardDraft', { namespace: ns, actionId: 'confirm', cardId: card.id, expectedRevision: 1, applicability: 'current' }));
+    }
     seed.close();
     states.set(label, { arms: 0 });
-    const configuration = { path, namespace: ns, raw: false, privateCards: 'local-v1',
+    const configuration = { path, namespace: ns, raw: false, ...(cards ? { privateCards: 'local-v1' } : {}),
       contextCounter: { id: 'synthetic-cost-counter', countTokens: text => Math.ceil(text.length / 4) },
       contextEmbedding: { embedder: { id: 'synthetic-cost-' + label, revision: '1', dimensions: 1, normalization: 'none',
         async embed(texts) { return texts.map(() => [1]); } },
@@ -121,6 +125,6 @@ for (const [shape, demand] of [
   for (let pass = 0; pass < passes; pass++) {
     assert.equal(rows.branch[pass].statements, rows.main[pass].statements, 'R2O5_UNBOUND_UPKEEP_COST ' + shape + ' pass=' + pass);
     assert.ok(rows.shared[pass].statements <= rows.main[pass].statements,
-      'R2O5_HOST_COMBINED_COST ' + shape + ' pass=' + pass + ' host=' + rows.shared[pass].statements + ' main=' + rows.main[pass].statements);
+      (shape === 'memory-only' ? 'R2O6_SINGLE_VIEW_REUSE ' : 'R2O5_HOST_COMBINED_COST ') + shape + ' pass=' + pass + ' host=' + rows.shared[pass].statements + ' main=' + rows.main[pass].statements);
   }
 });
