@@ -467,7 +467,7 @@ export function receiptDeliverySnapshot(db, entries, memo = createContentReadMem
     const key = JSON.stringify([...boundary(entry.namespace), entry.memoryId]);
     if (!cache.has(key)) pending.set(key, entry);
   }
-  const jobs = [], batches = [...additional], recentCursors = new Map();
+  const jobs = [], batches = [...additional], recentSeen = new Map();
   for (const [key, entry] of pending) {
     const ns = entry.namespace;
     const coordinates = options.positions === false && options.totals === false ? null : receiptCoordinateCache(db, ns, entry.memoryId);
@@ -482,7 +482,7 @@ export function receiptDeliverySnapshot(db, entries, memo = createContentReadMem
       limit: options.limit ?? 101, afterTime: after?.createdAt ?? '', afterId: after?.id ?? '',
       position: options.offset ?? 0, recent: entry.receiptOrder === 'recent' || Boolean(options.recent), idOrder: Boolean(options.idOrder), total };
     jobs.push(job);
-    if (after) recentCursors.set(key, [after.createdAt, after.id]);
+    if (after) recentSeen.set(key, new Set([after.id]));
     job.coordinates = coordinates;
     if (options.includeRecent) jobs.push({ ...job, key: key + ':recent', recent: true, afterTime: '', afterId: '', position: 0 });
   }
@@ -542,7 +542,7 @@ export function receiptDeliverySnapshot(db, entries, memo = createContentReadMem
       // The index cannot reverse time without also reversing ids. Walk at most
       // chunk keys inside ONE statement: an id seek within the current tie,
       // otherwise a reverse time seek followed by that tie's first id. No
-      // sorter sees a whole tie; the only sort below has <= chunk headers.
+      // sorter sees a whole tie; the final SQL sort has <= chunk headers per job.
       const rows = db.prepare(`SELECT j.value AS input,r.id,r.memory_id,r.receipt_key,r.client,r.session_id,r.event_id,r.role,r.created_at
         FROM json_each(?) j CROSS JOIN memories m ON m.id=json_extract(j.value,'$.id')
         CROSS JOIN receipts r INDEXED BY sqlite_autoindex_receipts_1 ON r.id IN (
@@ -564,21 +564,20 @@ export function receiptDeliverySnapshot(db, entries, memo = createContentReadMem
             WHERE recent_keys.cursor IS NOT NULL LIMIT CAST(? AS INTEGER) OFFSET 1)
           SELECT json_extract(cursor,'$[1]') FROM recent_keys WHERE cursor IS NOT NULL)
         WHERE m.owner_id=json_extract(j.value,'$.owner') AND m.scope=json_extract(j.value,'$.scope')
-          AND m.project_id=json_extract(j.value,'$.project') AND r.memory_id=m.id`).all(JSON.stringify(inputs), chunk);
+          AND m.project_id=json_extract(j.value,'$.project') AND r.memory_id=m.id
+        ORDER BY j.key,r.created_at COLLATE BINARY DESC,r.id COLLATE BINARY ASC`).all(JSON.stringify(inputs), chunk);
       const byKey = new Map(recent.map(job => [job.key, []]));
       for (const { input, ...row } of rows) byKey.get(JSON.parse(input).key).push(row);
       for (const job of recent) {
         const headers = byKey.get(job.key);
-        headers.sort((a,b) => a.created_at === b.created_at ? (a.id < b.id ? -1 : a.id > b.id ? 1 : 0) :
-          a.created_at > b.created_at ? -1 : 1);
-        // Validate before marker decisions or cursor updates, on every pass.
-        // A refill and an explicit continuation use the same incoming key.
-        let [time, id] = recentCursors.get(job.key) ?? [job.afterTime || '\uffff', job.afterId];
+        // Validate identities before marker decisions or cursor updates. Keep
+        // every visited id across refills and uncapped collection passes.
+        const seen = recentSeen.get(job.key) ?? new Set();
+        recentSeen.set(job.key, seen);
         for (const header of headers) {
-          if (!(header.created_at < time || header.created_at === time && header.id > id)) fail('storage_error');
-          time = header.created_at; id = header.id;
+          if (seen.has(header.id)) fail('storage_error');
+          seen.add(header.id);
         }
-        recentCursors.set(job.key, [time, id]);
         chunks.push({ job, headers, ended: headers.length < chunk });
         batches.push({ namespace: job.namespace, receipts: headers });
       }
