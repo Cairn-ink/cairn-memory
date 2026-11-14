@@ -121,6 +121,14 @@ for(const route of routes)test(`Card token chunks and mid-population deadline: $
     const details=delivered.result.error.details;
     assert.equal(details.channels.lexical.state,'timeout');assert.equal(details.coverage.stops.deadline,true);
   }else assert.deepEqual(delivered.result,{ok:false,error:{code:'read_timeout',retryable:false}});
+  // A deadline inside the population is a cooperative stop between statements:
+  // the same handles serve the next read completely.
+  expired=false;clock=0;reads=0;
+  const next=a.lexical();
+  assert.equal(next.matched,300);
+  assert.deepEqual(next.rows,expected,'the next storage read on the same connection is complete');
+  const served=await call({...selection,query,semantic:false,limit:1,deadlineMs:5000});
+  assert.equal(served.ok,true,'the next public read on the same handles succeeds');
 });
 
 for(const kind of ['ordinary-48','ordinary-53'])

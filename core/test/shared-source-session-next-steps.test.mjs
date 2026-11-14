@@ -152,10 +152,10 @@ test('candidate hidden ancestry matches the view through origins and cycles', { 
   assert.deepEqual(physical(f), episodes.filter((_, index) => index !== 3).map(episode => episode.id));
 });
 
-for (const found of [0, 1, 12])
-test(`withheld refill stops at its fixed cap and preserves ${found} found rows`, { timeout: 45000 }, async t => {
+for (const layout of [48, 53]) for (const found of [0, 1, 12])
+test(`withheld refill stops at its fixed cap and preserves ${found} found rows, layout ${layout}`, { timeout: 45000 }, async t => {
   assert.equal(pageSize, 13); assert.equal(maxPasses, 2);
-  const f = await fixture(t), episodes = seed(f, scanLimit + 2);
+  const f = await fixture(t, layout), episodes = seed(f, scanLimit + 2);
   const retained = episodes.slice(0, found), denied = episodes.slice(found, scanLimit + 1);
   withhold(f, denied);
   const measured = await trace(() => f.core.sessionStartContext({ namespace: ns, ...config }));
