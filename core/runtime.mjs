@@ -33,8 +33,9 @@ import { createQualifiedTransitionStorage } from './qualified-transition-storage
 import { createRationaleStorage } from './rationale-storage.mjs';
 import { fail, object, receiptEventTime } from "./validation.mjs";
 import { privateCardOptions } from './private-card-input.mjs';
-import { createPrivateCardStorage } from './private-card-storage.mjs';
+import { createPrivateCardStorage, purgeEngineCardsInside } from './private-card-storage.mjs';
 import { createRawCardInvalidation } from './card-raw-sources.mjs';
+import { purgeEngineCardOperationsInside } from './private-card-schema.mjs';
 import { createRawSourceRoots } from './raw-source-roots.mjs';
 import { createRawDeletionStorage } from './raw-deletion-storage.mjs';
 import { createRawLineageStorage, isSourceSnapshotOverflow, SOURCE_SNAPSHOT_MS } from './raw-lineage-storage.mjs';
@@ -405,6 +406,8 @@ export function createMemoryRuntime(input, internal) {
       qualificationStorage.clear(id);
       proceduralStorage.clear(id);
       episodes.invalidateMemory(ns, id, current.review_state === 'awaiting');
+      purgeEngineCardsInside(db, ns, suppression.actionId, id);
+      purgeEngineCardOperationsInside(db, ns, id);
       db.prepare(`UPDATE memories SET content = NULL, deleted = 1,
         revision = revision + 1, updated_at = ? WHERE id = ?`).run(now, id);
       db.prepare("DELETE FROM receipts WHERE memory_id = ?").run(id);
