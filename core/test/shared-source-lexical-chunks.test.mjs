@@ -5,7 +5,9 @@ import { DatabaseSync } from 'node:sqlite';
 import { Worker, MessageChannel, receiveMessageOnPort } from 'node:worker_threads';
 import { once } from 'node:events';
 import { fixture, trace, memoryRef, hasId, isLookup } from '../testing/shared-source-fixture.mjs';
-import { lineageFixture, ns, ok, receipt } from '../testing/card-lineage-fixture.mjs';
+import { lineageFixture, lineageHost, ns, ok, receipt } from '../testing/card-lineage-fixture.mjs';
+import { layoutFixture } from '../testing/recall-recency-fixture.mjs';
+import { openMemoryCore } from '../index.mjs';
 import { openContextReadSidecar } from '../context-read-sidecar.mjs';
 import { openContextProductFacade } from '../context-read-facade.mjs';
 import { openProductIndex } from '../context-product-index.mjs';
@@ -83,7 +85,7 @@ function pages(t,f,route,options={}){
     const encode=facade.port.encode;
     facade.port.encode=(purpose,value,...args)=>{
       const token=encode(purpose,value,...args);
-      if(purpose==='cursor')options.onCursor(token);
+      if(purpose==='cursor')options.onCursor(token,facade.port.db);
       return token;
     };
   }
@@ -179,15 +181,31 @@ function assertReplaySnapshots(measured,boundary){
   assert.notEqual(tokens[0].snapshot,postings[0].snapshot,'canonical and sidecar have separate connections');
 }
 
-// The deadline aborts canonical work before the next statement. Transaction
-// cleanup and the public failure envelope's independent safety fence still run.
+// The deadline aborts canonical lexical work before the next statement.
+// readTransaction's ROLLBACK passes through the WAL wait-policy proxy, which
+// can refresh its native busy timeout before releasing the snapshot. The
+// checkpoint probe runs outside trace; the public failure fence is independent.
+const cutoffCleanupStatements=[{
+  shape:/^PRAGMA busy_timeout=(?:0|[1-9][0-9]*)$/,
+  reason:'topic-reader-sqlite invoke configures the WAL timeout immediately before readTransaction ROLLBACK',
+}];
 function assertNoCanonicalReadAfterCutoff(measured,number=1,cutoffRow){
   const row=cutoffRow??measured.rows.filter(collector)[number-1],start=measured.rows.indexOf(row);
   assert.ok(row);
   const end=measured.rows.findIndex((item,i)=>i>start&&item.snapshot===row.snapshot&&item.sql==='ROLLBACK');
   assert.ok(end>start,'the timed canonical snapshot rolled back');
-  assert.deepEqual(measured.rows.slice(start+1,end).filter(item=>item.snapshot===row.snapshot),[],
-    'no canonical statement, including the marker lookup, starts after cutoff');
+  const after=measured.rows.slice(start+1,end).filter(item=>item.snapshot===row.snapshot);
+  const lexical=after.filter(item=>!cutoffCleanupStatements.some(({shape})=>shape.test(item.sql)));
+  assert.deepEqual(lexical,[],
+    'no canonical lexical statement (collector, marker lookup, candidate validation or snapshot SELECT) starts after cutoff; '+
+    'only cleanup is allowed: '+cutoffCleanupStatements.map(item=>item.reason).join('; '));
+  for(const item of after){
+    assert.deepEqual(item.args,[],'cleanup configures the connection without lexical bindings');
+    const next=measured.rows[measured.rows.indexOf(item)+1];
+    assert.equal(next?.sql,'ROLLBACK',
+      'the allowed busy_timeout belongs to rollback cleanup, never subsequent lexical work');
+    assert.equal(next?.snapshot,row.snapshot,'cleanup releases the timed canonical snapshot');
+  }
   assert.equal(measured.rows.slice(start+1).filter(isLookup).length,0,'no subsequent marker lookup on the call');
 }
 
@@ -501,11 +519,14 @@ test('packaged public forget fences delivery and previously cached pages',async 
   const expected=expectedRows(documents,'needle');
   const A=documents.find(d=>d.ref.cardId===expected[1].ref.cardId),withheld=sibling(f,documents.indexOf(A));
   a.refresh();
-  assert.equal(f.db.prepare('PRAGMA journal_mode=WAL').get().journal_mode,'wal');
   let armed=false,provisionalCursor,committed=false;
-  const call=pages(t,f,'suppressed',{onCursor:cursor=>{
+  assert.equal(f.db.prepare('PRAGMA journal_mode').get().journal_mode,'delete');
+  const call=pages(t,f,'suppressed',{onCursor:(cursor,reader)=>{
     provisionalCursor=cursor;
-    if(armed){armed=false;forget(f,withheld);committed=true;}
+    if(armed){
+      assert.equal(reader.isTransaction,false,'ranking released its canonical read before the public forget');
+      armed=false;forget(f,withheld);committed=true;
+    }
   }});
   const input={...selection,query:'needle',semantic:false,limit:1,deadlineMs:5000};
   const first=ok(call(input));assert.ok(first.nextCursor);
@@ -575,14 +596,21 @@ async function captureWriter(t,f,namespace){
 for(const kind of ['fresh-cards','ordinary-48'])for(const namespace of ['other','same'])for(const phase of ['delivery','page'])
 test(`unrelated capture preserves the base namespace fence: ${kind} / ${namespace} / ${phase}`,{timeout:60000},async t=>{
   const f=await fixture(t,kind),documents=Array.from({length:3},(_,i)=>card(f,i,{title:'Synthetic',body:'needle'}));
-  assert.equal(f.db.prepare('PRAGMA journal_mode=WAL').get().journal_mode,'wal');
-  const writer=await captureWriter(t,f,namespace==='same'?ns:{...ns,projectId:'synthetic-other-project'});
+  // The public facade opens on its supported DELETE store shape. The cursor
+  // seam runs after ranking releases the read, so the other connection can
+  // commit without WAL or a held canonical snapshot.
+  assert.equal(f.db.prepare('PRAGMA journal_mode').get().journal_mode,'delete');
+  let writer;
   let armed=false,committed=false,provisionalCursor;
-  const call=pages(t,f,'ordinary',{now:()=>0,onCursor:cursor=>{
+  const call=pages(t,f,'ordinary',{now:()=>0,onCursor:(cursor,reader)=>{
     provisionalCursor=cursor;
-    if(armed){armed=false;writer.commit();committed=true;}
+    if(armed){
+      assert.equal(reader.isTransaction,false,'ranking released its canonical read before the public capture');
+      armed=false;writer.commit();committed=true;
+    }
   }});
   call.refresh();
+  writer=await captureWriter(t,f,namespace==='same'?ns:{...ns,projectId:'synthetic-other-project'});
   const input={...selection,query:'needle',semantic:false,limit:1,deadlineMs:5000};
   const first=ok(call(input)),second=ok(call({...input,cursor:first.nextCursor}));
   assert.ok(second.nextCursor);
@@ -778,5 +806,57 @@ test('public Card lexical read returns a value on the Raw-capable package with C
     const served=await call({...selection,query,semantic:false,limit:3,deadlineMs:5000});
     assert.equal(served.ok,true,JSON.stringify(served).slice(0,200));
     assert.deepEqual(publicRows(served.value),expectedRows(documents),'exact ranking and scores');
+  }
+});
+
+test('public Card lexical read returns a value on packaged layout 53 with Card lineage off and receipt event time',{timeout:60000},async t=>{
+  const model={contextWindow:8192,countTokens:()=>1,contents:[],
+    extract:()=>({items:model.contents.map(content=>({content,kind:'fact',confidence:1,sourceIndices:[0]}))}),
+    classify:({input})=>({items:input.memories.map(memory=>({memoryId:memory.id,parentIds:[]}))})};
+  // layoutFixture(53) is eventTimeSafetyFixture(t,33) followed by migrate():
+  // suppression and receipt event time are enabled; Card lineage stays off.
+  const f=await layoutFixture(t,53,model),host=lineageHost();
+  const writer=openMemoryCore({path:f.path,model,privateCards:host.options});
+  f.workspace.defer(()=>writer.close());
+  const control=f.db.prepare('SELECT * FROM content_safety_control WHERE singleton=1').get();
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version,53);
+  assert.equal(control.base_layout,33);assert.equal(control.card_lineage_revision,0);
+  assert.equal(control.receipt_event_time,1);assert.equal(control.suppression_revision,1);
+  async function capture(tag,content){
+    model.contents=[content];
+    const value=ok(await writer.capture({namespace:ns,client:'synthetic',sessionId:'synthetic-event-time-'+tag,
+      eventId:'synthetic-event-time-'+tag,messages:[{id:'synthetic-message-'+tag,role:'user',content}]}));
+    assert.equal(value.admission.memories.length,1);
+    assert.equal(value.classification.status,'applied');
+    return ok(writer.get({namespace:ns,memoryId:value.admission.memories[0].id})).memory;
+  }
+  const documents=[];
+  for(let i=0;i<3;i++){
+    const memory=await capture('support-'+i,'Synthetic retained support '+i);
+    const title='Synthetic needle '+i,body=i%2?'needle pear pear':'needle needle pear';
+    let value=ok(host.call(writer,'createCardDraft',{actionId:'synthetic-event-time-draft-'+i,drafting:'authored',
+      input:{title,body,memoryRefs:[memoryRef(memory)],sourcePolicy:'retained-receipts-v1'}}));
+    value=ok(host.call(writer,'confirmCardDraft',{actionId:'synthetic-event-time-confirm-'+i,cardId:value.id,
+      expectedRevision:value.revision,applicability:'current'}));
+    assert.equal(value.state,'confirmed');
+    documents.push({ref:{type:'card',namespace:ns,cardId:value.id,revision:value.revision,bodyRevision:value.bodyRevision},
+      text:title+'\n'+body});
+  }
+  const unrelated=await capture('unrelated','Synthetic unrelated forget target');
+  ok(writer.forget({namespace:ns,memoryId:unrelated.id,expectedRevision:unrelated.revision}));
+  assert.ok(f.db.prepare('SELECT count(*) AS n FROM content_suppressions WHERE owner_id=? AND scope=? AND project_id=?')
+    .get(ns.ownerId,ns.scope,ns.projectId).n>0,'the unrelated public forget selects the suppression-aware branch');
+  const call=pages(t,f,'suppressed');call.refresh();
+  const expected=expectedRows(documents);
+  for(let attempt=0;attempt<2;attempt++){
+    const measured=await trace(()=>call({...selection,query,semantic:false,limit:3,deadlineMs:5000}));
+    const served=ok(measured.result);
+    assert.equal(served.coverage.byType.card.eligible,null,'the suppression-aware Card population is unknown');
+    assert.ok(measured.rows.some(collector),'the public read collects the matching Cards');
+    assert.equal(measured.rows.some(row=>row.sql==='SELECT df FROM statistics WHERE generation=? AND term=?'),false,
+      'the ordinary published-df branch did not execute');
+    assert.deepEqual(publicRows(served),expected,'exact public ranking and scores on both reads');
+    assert.equal(served.items.length,3);assert.equal(served.nextCursor,null);
+    assert.equal(served.coverage.omitted.lexical,0);
   }
 });
