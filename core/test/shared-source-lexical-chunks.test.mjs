@@ -215,11 +215,17 @@ function assertNoCanonicalReadAfterCutoff(measured,number=1,cutoffRow){
   assert.deepEqual(lexical,[],
     'no canonical lexical statement (collector, marker lookup, candidate validation or snapshot SELECT) starts after cutoff; '+
     'only cleanup is allowed: '+cutoffCleanupStatements.filter(item=>item.shape).map(item=>item.reason).join('; '));
+  assert.ok(after.length<=3,'at most a small fixed number of cleanup statements precede the rollback: '+after.length);
+  assert.equal(measured.rows[end].sql,'ROLLBACK');assert.equal(measured.rows[end].snapshot,row.snapshot);
   for(const item of after){
     assert.deepEqual(item.args,[],'cleanup configures the connection without lexical bindings');
+    // The wait policy (core/topic-reader-sqlite.mjs:102-111) may configure the native
+    // wait more than once before core/database.mjs:355 executes the rollback (twice
+    // was observed on one Node version). Whatever follows an allowed cleanup statement
+    // is either another allowed cleanup statement or the rollback of this same snapshot.
     const next=measured.rows[measured.rows.indexOf(item)+1];
-    assert.equal(next?.sql,'ROLLBACK',
-      'the allowed busy_timeout belongs to rollback cleanup, never subsequent lexical work');
+    assert.ok(next?.sql==='ROLLBACK'||cutoffCleanupStatements.some(({shape})=>shape?.test(next?.sql??'')),
+      'the allowed busy_timeout belongs to rollback cleanup, never subsequent lexical work: '+String(next?.sql).slice(0,120));
     assert.equal(next?.snapshot,row.snapshot,'cleanup releases the timed canonical snapshot');
   }
   assert.equal(measured.rows.slice(start+1).filter(isLookup).length,0,'no subsequent marker lookup on the call');
@@ -1017,4 +1023,18 @@ test('public Card lexical read returns a value on packaged layout 53 with Card l
     assert.equal(served.items.length,3);assert.equal(served.nextCursor,null);
     assert.equal(served.coverage.omitted.lexical,0);
   }
+});
+
+// The cutoff witness itself: a lexical statement inside the cleanup chain is
+// rejected, and so is a chain longer than the small fixed allowance.
+test('the cutoff witness rejects lexical work between the cutoff and the rollback',()=>{
+  const snapshot=7,cutoff={sql:'SELECT 1 AS cutoff',args:[],snapshot};
+  const chain=statements=>({rows:[cutoff,...statements.map(sql=>({sql,args:[],snapshot})),{sql:'ROLLBACK',args:[],snapshot}]});
+  assertNoCanonicalReadAfterCutoff(chain(['PRAGMA busy_timeout=500','PRAGMA busy_timeout=499']),1,cutoff);
+  assert.throws(()=>assertNoCanonicalReadAfterCutoff(
+    chain(['PRAGMA busy_timeout=500','SELECT fingerprint FROM suppressed WHERE owner_id=?','PRAGMA busy_timeout=499']),1,cutoff),
+    /no canonical lexical statement/);
+  assert.throws(()=>assertNoCanonicalReadAfterCutoff(
+    chain(['PRAGMA busy_timeout=4','PRAGMA busy_timeout=3','PRAGMA busy_timeout=2','PRAGMA busy_timeout=1']),1,cutoff),
+    /small fixed number/);
 });

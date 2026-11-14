@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { parse } from '../../tools/testing/vendor/acorn/acorn.mjs';
 import { openMemoryCore } from '../index.mjs';
 import { model as episodeModel, input as episodeInput } from '../testing/episode-capture-helpers.mjs';
@@ -202,6 +203,17 @@ function statementCatalog() {
 function assertInputBounds(sql,label) {
   assert.doesNotMatch(sql,/FROM private_cards WHERE[^)]*state IN \([^)]*\)[^;]*ORDER BY id/,'unbounded multi-state prefetch: '+label);
 }
+// The epoch-fence statement's template text, exactly as written in the source
+// (from the opening backtick of its prepare call to its last line).
+function episodeFenceTemplateSha(){
+  const source=readFileSync(new URL('../episode-reads.mjs',import.meta.url),'utf8');
+  const end='LEFT JOIN owner_suppression_epochs f ON f.owner_id=?`',stop=source.indexOf(end);
+  assert.ok(stop>0&&source.indexOf(end,stop+1)<0,'one epoch-fence statement');
+  const open='db.prepare(`',start=source.lastIndexOf(open,stop);
+  assert.ok(start>0);
+  return createHash('sha256').update(source.slice(start+open.length,stop+end.length-1)).digest('hex');
+}
+
 function assertPlan(db,sql,sites,statistics) {
   assertInputBounds(sql,sites);
   const bindings=Array((sql.match(/\?/g)??[]).length).fill(null);
@@ -285,7 +297,17 @@ function assertPlan(db,sql,sites,statistics) {
       const tables=aliases.get(scan[1])??new Set([scan[1]]);
       const derived=ctes.has(scan[1])||[...tables].some(table=>ctes.has(table))||
         scan[1]==='anchor'&&sql.includes('FROM (SELECT 1) anchor');
-      assert.ok(virtual.has(scan[1])&&/VIRTUAL TABLE INDEX/.test(detail)||
+      // One statement of the production base, unchanged by this line: the Episode projection's
+      // epoch fence ends in `LEFT JOIN owner_suppression_epochs f ON f.owner_id=?` (one row per
+      // owner, keyed by owner_id). With the analysed statistics, SQLite 3.49.1 (Node 22) scans
+      // that table in the LEFT JOIN; SQLite 3.53.4 (Node 24) searches it by key. Accepted for
+      // exactly that plan row, in the analysed pass only, and only while the statement's
+      // template text is byte-equal to the base's (pinned by its SHA-256).
+      const ownerEpochFence=statistics==='analyzed'&&detail==='SCAN f LEFT-JOIN'&&
+        [...tables].length===1&&[...tables][0]==='owner_suppression_epochs'&&
+        /(?:^|[ ,])core\/episode-reads\.mjs:\d+ \(begin\)(?:$|[ ,])/.test(String(sites))&&episodeFenceTemplateSha()===
+        'd49a92204f9357fdf9b4ffe080426cb6b47998e4f7c3081fd0c918723599abd7';
+      assert.ok(ownerEpochFence||virtual.has(scan[1])&&/VIRTUAL TABLE INDEX/.test(detail)||
         candidateAncestry&&([...tables].every(table=>table==='ancestors')||detail==='SCAN CONSTANT ROW')||
         composed&&(derived||/SCAN CONSTANT ROW/.test(detail)),label+'\n'+detail);
     }
