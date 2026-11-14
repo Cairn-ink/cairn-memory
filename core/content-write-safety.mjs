@@ -96,6 +96,13 @@ export function beginContentWriteSafety(db, operation) {
       if(!row)fail('evidence_unavailable');
       canonical.push({table:change.table,row,old:change.old,columns});
     }
+    // A delete/reinsert at the same (memory_id, receipt_key) is a native
+    // UPDATE. Its replaced receipt id still has a canonical retirement fact.
+    for (const change of canonical.filter(change => change.table === 'receipts' && change.old)) {
+      const row = Object.fromEntries(change.columns.map((column, index) =>
+        [column.name, change.old[index] ?? change.row[column.name]]));
+      if (row.id !== change.row.id) removed.push({ table: 'receipts', row });
+    }
     // The declaration names a canonical field; arguments never select an
     // exemption. Automatic terminal changes additionally require their own fact.
     for(const {table,row}of canonical) {
