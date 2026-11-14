@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — README single entry point
+
+- Rewrite the root README and its Traditional Chinese edition as a short entry
+  point: one install command, a Local and Cloud comparison, usage, data
+  handling and current limits. The outward name is "Cairn.ink Memory"; package,
+  plugin and server names are unchanged.
+- Move hosted connection details to `docs/cloud-mode.md` and source-checkout
+  installation to `docs/local-from-source.md`. Documentation only; installer,
+  plugin and engine behavior are unchanged.
+
 ## Unreleased — Card consolidation respects the Raw opt-in
 
 - Engine Card consolidation uses memories only by default, including for library
