@@ -583,6 +583,7 @@ test('marker-only fixture writes preserve the storage replay snapshot',async t=>
   assert.equal(next.matched,1);assert.deepEqual(next.rows,expectedRows([documents[2]],'needle'));
 });
 
+// Canonical openers: facade without sqlite accepts DELETE only (context-read-facade.mjs:106-110 -> context-read-sidecar.mjs:110,144,149); createProductSqlitePolicy accepts DELETE and WAL (context-product-sqlite.mjs:77).
 test('packaged public forget fences delivery and previously cached pages',async t=>{
   const f=await lexicalFixture(t,'suppressed');
   const documents=Array.from({length:3},(_,i)=>card(f,i,{title:'Synthetic',body:'needle'}));
@@ -667,7 +668,7 @@ async function captureWriter(t,f,namespace){
 for(const kind of ['fresh-cards','ordinary-48'])for(const namespace of ['other','same'])for(const phase of ['delivery','page'])
 test(`unrelated capture preserves the base namespace fence: ${kind} / ${namespace} / ${phase}`,{timeout:60000},async t=>{
   const f=await fixture(t,kind),documents=Array.from({length:3},(_,i)=>card(f,i,{title:'Synthetic',body:'needle'}));
-  // The public facade opens on its supported DELETE store shape. The cursor
+  // The default public facade opens on DELETE. The cursor
   // seam runs after ranking releases the read, so the other connection can
   // commit without WAL or a held canonical snapshot.
   assert.equal(f.db.prepare('PRAGMA journal_mode').get().journal_mode,'delete');
@@ -713,6 +714,92 @@ test(`unrelated capture preserves the base namespace fence: ${kind} / ${namespac
     assert.deepEqual(publicRows(fresh),expectedRows(documents,'needle').slice(0,1));
     assert.deepEqual(fresh.coverage.byType,first.coverage.byType);
     assert.deepEqual(fresh.coverage.omitted,first.coverage.omitted);
+  }
+});
+
+test('packaged WAL public forget commits inside the ranking snapshot and fences delivery',{timeout:60000},async t=>{
+  // Use independent, identical races to observe the storage result and the
+  // public result without replacing lexical() or any engine method.
+  for(const entry of ['storage','public']){
+    const f=await lexicalFixture(t,'suppressed');
+    const documents=Array.from({length:3},(_,i)=>card(f,i,{title:'Synthetic',body:'needle'}));
+    const expected=expectedRows(documents,'needle');
+    const A=documents.find(document=>document.ref.cardId===expected[1].ref.cardId);
+    const withheld=sibling(f,documents.indexOf(A));
+    assert.equal(f.db.prepare('PRAGMA journal_mode=WAL').get().journal_mode,'wal');
+    const sqlite=createProductSqlitePolicy();sqlite.start(Infinity);
+    let provisionalCursor;
+    // Open the facade before the racing write, through the route's own policy
+    // that admits WAL companions. Use it for the storage observation as well.
+    const call=pages(t,f,'suppressed',{sqlite,now:()=>0,onCursor:cursor=>{provisionalCursor=cursor;}});
+    call.refresh();
+    const a=sidecar(t,f,'suppressed',()=>0,{sqlite});
+    assert.equal(a.observe().dto.lexical.state,'ready');
+    const input={...selection,query:'needle',semantic:false,limit:1,deadlineMs:5000};
+    const first=ok(call(input));assert.ok(first.nextCursor);
+    const before=a.lexical(Infinity,'needle');
+    assert.equal(before.matched,3);assert.deepEqual(before.rows,expected);
+    const epochSql='SELECT epoch FROM namespace_epochs WHERE owner_id=? AND scope=? AND project_id=?';
+    const namespace=[ns.ownerId,ns.scope,ns.projectId],epoch=f.db.prepare(epochSql).get(...namespace).epoch;
+    const header=f.db.prepare('SELECT receipt_key,client,session_id,event_id,role FROM receipts WHERE memory_id=?').get(withheld.id);
+    const tokens=receiptDenialTokens([header]),markerSql=
+      'SELECT 1 FROM suppressed WHERE owner_id=? AND scope=? AND project_id=? AND fingerprint=?';
+    let canonical,committed=false,writing=false;
+    const events=[],writers=new Set();
+    const measured=await trace(()=>entry==='storage'?a.lexical(Infinity,'needle'):call(input),(sql,args,connection)=>{
+      if(writing&&/^(INSERT|UPDATE|DELETE)\b/.test(sql))writers.add(connection);
+      if(collector({sql})&&!canonical)canonical=connection;
+      if(connection===canonical&&(collector({sql})||isLookup({sql})))
+        events.push({sql,transaction:connection.isTransaction});
+      if(committed||writing||!collector({sql}))return;
+      assert.equal(connection,canonical);assert.equal(canonical.isTransaction,true,'collector holds the canonical ranking snapshot');
+      assert.notEqual(canonical,f.db);
+      writing=true;
+      try{assert.equal(forget(f,withheld).forgotten,true);}finally{writing=false;}
+      committed=true;
+      assert.ok(writers.size>0,'the public forget executed real mutation statements');
+      for(const writer of writers){
+        assert.notEqual(writer,canonical,'public forget uses another connection');
+        assert.equal(writer.isTransaction,false,'public forget returned after COMMIT');
+      }
+      assert.equal(canonical.isTransaction,true,'the racing commit did not release ranking');
+      assert.equal(canonical.prepare(epochSql).get(...namespace).epoch,epoch,'ranking retains its pre-write namespace snapshot');
+      assert.ok(f.db.prepare(epochSql).get(...namespace).epoch>epoch,'another connection sees the committed namespace advance');
+      for(const token of tokens){
+        assert.ok(f.db.prepare(markerSql).get(...namespace,token),'another connection sees the committed denial');
+        assert.equal(canonical.prepare(markerSql).get(...namespace,token),undefined,'ranking still sees the pre-write marker set');
+      }
+    });
+    assert.equal(committed,true,'the public mutation committed inside lexical ranking');
+    assert.ok(events.some(event=>collector(event))&&events.some(event=>isLookup(event)));
+    assert.ok(events.every(event=>event.transaction),'collector and marker decisions own a canonical transaction');
+    const reads=measured.rows.filter(row=>collector(row)||isLookup(row));
+    assert.notEqual(reads[0]?.snapshot,undefined);
+    assert.equal(new Set(reads.map(row=>row.snapshot)).size,1,'all ranking collector/marker reads use one pre-write snapshot');
+    assert.equal(canonical.isTransaction,false,'ranking released its snapshot');
+    if(entry==='storage'){
+      assert.equal(measured.result.matched,3);
+      assert.deepEqual(measured.result.rows,before.rows,'one pre-write population, order and exact BM25 scores');
+    }else{
+      assert.deepEqual(measured.result,{ok:false,error:{code:'evidence_unavailable',retryable:false}},
+        'the base suppression fence withholds public delivery after the committed forget');
+      const refusedCursor=provisionalCursor;
+      assert.ok(refusedCursor);assert.notEqual(refusedCursor,first.nextCursor,'the in-flight ranking reached provisional cursor encoding');
+      assert.deepEqual(call({...input,cursor:refusedCursor}),{ok:false,error:{code:'cursor_stale',retryable:false}},
+        'failed public delivery cached no ranking');
+    }
+    assert.deepEqual(call({...input,cursor:first.nextCursor}),{ok:false,error:{code:'evidence_unavailable',retryable:false}},
+      'the previously cached population also retains the base stale-fence outcome');
+    call.refresh();assert.equal(a.observe().dto.lexical.state,'ready');
+    const next=a.lexical(Infinity,'needle'),survivors=documents.filter(document=>document!==A);
+    assert.equal(next.matched,2);assert.deepEqual(next.rows,expectedRows(survivors,'needle'));
+    const fresh=ok(call(input));assert.ok(fresh.nextCursor);
+    const second=ok(call({...input,cursor:fresh.nextCursor}));
+    assert.deepEqual([...publicRows(fresh),...publicRows(second)],next.rows,'fresh public pages use the post-write population');
+    assert.deepEqual(fresh.coverage,second.coverage,'coverage is consistent across the refreshed pages');
+    assert.deepEqual(fresh.channels,second.channels);
+    assert.equal(fresh.coverage.omitted.lexical,0);assert.equal(second.nextCursor,null);
+    for(const value of [next,fresh,second])assert.equal(hasId(value,A.ref.cardId),false,'the withheld Card is absent everywhere');
   }
 });
 
