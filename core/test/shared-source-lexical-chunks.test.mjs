@@ -18,7 +18,7 @@ import { descriptor } from '../testing/context-product-owner-fixture.mjs';
 import { createBM25 } from '../context-read-bm25.mjs';
 import { tokenizeT1 } from '../context-read-tokenize.mjs';
 import { cardDeliverySnapshot, cardDeliverable, receiptDenialTokens } from '../content-safety.mjs';
-import { readTransaction } from '../database.mjs';
+import { readTransaction, isConnectionDiscarded } from '../database.mjs';
 import { withContentSuppressionRequest, contentSuppressionRequestInside } from '../content-suppression-storage.mjs';
 
 const routes=['embedded','ordinary','suppressed'];
@@ -44,7 +44,7 @@ function card(f,i,{title='Synthetic needle '+i,body=i%2?'needle pear pear':'need
   return {memory,ref:{type:'card',namespace:ns,cardId:value.id,revision:value.revision,bodyRevision:value.bodyRevision},text:title+'\n'+body};
 }
 
-function sidecar(t,f,route,clock=()=>performance.now(),options={}){
+function sidecar(t,f,route,clock=()=>performance.now(),options={},selected=projection){
   if(route==='embedded'){
     const storage=openContextReadSidecar({path:f.path,db:f.db});t.after(()=>storage.close());
     return {storage,refresh(){
@@ -52,7 +52,7 @@ function sidecar(t,f,route,clock=()=>performance.now(),options={}){
       assert.fail('embedded publication did not finish');
     },lexical(deadlineAt=Infinity){return storage.lexicalPage(projection,query,24,{deadlineAt});}};
   }
-  const facade=openContextProductFacade(f.path,{sqlite:options.sqlite}),p={...projection,ownerCoverage:descriptor([ns])};
+  const facade=openContextProductFacade(f.path,{sqlite:options.sqlite}),p={...selected,ownerCoverage:descriptor([ns])};
   const storage=productSidecar({path:f.path,db:facade.port.db,identity:facade.port.identity,
     features:facade.port.features,writable:true,now:clock,...options});
   t.after(()=>{storage.close();facade.close();});
@@ -185,20 +185,36 @@ function assertReplaySnapshots(measured,boundary){
 // readTransaction's ROLLBACK passes through the WAL wait-policy proxy, which
 // can refresh its native busy timeout before releasing the snapshot. The
 // checkpoint probe runs outside trace; the public failure fence is independent.
+// Keep every cutoff allowance here. Only the rollback witness uses the numeric
+// busy-timeout shape; opening witnesses match the exact SQL texts below.
 const cutoffCleanupStatements=[{
   shape:/^PRAGMA busy_timeout=(?:0|[1-9][0-9]*)$/,
-  reason:'topic-reader-sqlite invoke configures the WAL timeout immediately before readTransaction ROLLBACK',
-}];
+  reason:'core/topic-reader-sqlite.mjs:106 configures the WAL timeout immediately before core/database.mjs:355 ROLLBACK',
+},
+  {sql:'ROLLBACK',args:[],phase:'cleanup',reason:'core/database.mjs:355 releases the failed read; core/context-product-sidecar.mjs:244 releases the lifecycle lock'},
+  {sql:'PRAGMA query_only=ON',args:[],phase:'cleanup',reason:'core/database.mjs:359 restores saved query_only=1'},
+  {sql:'PRAGMA query_only=OFF',args:[],phase:'cleanup',reason:'core/database.mjs:359 restores saved query_only=0'},
+  {sql:'SELECT schema_version AS cookie,(SELECT user_version FROM pragma_user_version) AS physical, '+
+    '(SELECT application_id FROM pragma_application_id) AS applicationId,'+
+    '(SELECT json_array(singleton,base_layout,suppression_revision,card_lineage_revision,migration_state,suppression_domain,migration_id,inventory_digest) FROM content_safety_control WHERE singleton=1) AS control FROM pragma_schema_version',
+    args:[],phase:'delivery',route:'ordinary',reason:'core/content-safety-schema.mjs:356 executes headerSQL from :267-270'},
+  {sql:'SELECT schema_version AS cookie,(SELECT user_version FROM pragma_user_version) AS physical, '+
+    '(SELECT application_id FROM pragma_application_id) AS applicationId,'+
+    '(SELECT json_array(singleton,base_layout,suppression_revision,card_lineage_revision,migration_state,suppression_domain,migration_id,inventory_digest,receipt_event_time) FROM content_safety_control WHERE singleton=1) AS control FROM pragma_schema_version',
+    args:[],phase:'delivery',route:'suppressed',reason:'core/content-safety-schema.mjs:356 executes headerSQL from :267-270 (attested features)'},
+  {sql:'SELECT epoch_hi,epoch_lo FROM owner_suppression_epochs WHERE owner_id=?',args:[ns.ownerId],phase:'delivery',
+    reason:'core/content-suppression-storage.mjs:214 checks the delivery epoch via core/context-product-index.mjs:540'},
+];
 function assertNoCanonicalReadAfterCutoff(measured,number=1,cutoffRow){
   const row=cutoffRow??measured.rows.filter(collector)[number-1],start=measured.rows.indexOf(row);
   assert.ok(row);
   const end=measured.rows.findIndex((item,i)=>i>start&&item.snapshot===row.snapshot&&item.sql==='ROLLBACK');
   assert.ok(end>start,'the timed canonical snapshot rolled back');
   const after=measured.rows.slice(start+1,end).filter(item=>item.snapshot===row.snapshot);
-  const lexical=after.filter(item=>!cutoffCleanupStatements.some(({shape})=>shape.test(item.sql)));
+  const lexical=after.filter(item=>!cutoffCleanupStatements.some(({shape})=>shape?.test(item.sql)));
   assert.deepEqual(lexical,[],
     'no canonical lexical statement (collector, marker lookup, candidate validation or snapshot SELECT) starts after cutoff; '+
-    'only cleanup is allowed: '+cutoffCleanupStatements.map(item=>item.reason).join('; '));
+    'only cleanup is allowed: '+cutoffCleanupStatements.filter(item=>item.shape).map(item=>item.reason).join('; '));
   for(const item of after){
     assert.deepEqual(item.args,[],'cleanup configures the connection without lexical bindings');
     const next=measured.rows[measured.rows.indexOf(item)+1];
@@ -207,6 +223,25 @@ function assertNoCanonicalReadAfterCutoff(measured,number=1,cutoffRow){
     assert.equal(next?.snapshot,row.snapshot,'cleanup releases the timed canonical snapshot');
   }
   assert.equal(measured.rows.slice(start+1).filter(isLookup).length,0,'no subsequent marker lookup on the call');
+}
+
+function assertNoLexicalWorkAfterOpeningCutoff(rows,entry,route){
+  assert.equal(rows.some(row=>/^BEGIN\b/.test(row.sql)),false,'no canonical lexical enclosure starts after cutoff');
+  assert.equal(rows.some(collector),false,'no token collector starts after cutoff');
+  assert.equal(rows.some(isLookup),false,'no marker lookup starts after cutoff');
+  assert.equal(rows.some(row=>posting(row.sql)),false,'no posting enumeration starts after cutoff');
+  // Only exact cleanup and base delivery-fence texts qualify. In particular,
+  // every candidate-validation query is rejected, regardless of statement kind.
+  const allowed=cutoffCleanupStatements.filter(item=>item.phase==='cleanup'||
+    entry==='public'&&item.phase==='delivery'&&(!item.route||item.route===route));
+  for(const row of rows){
+    const permit=allowed.find(item=>item.sql===row.sql);
+    assert.ok(permit,'unexpected statement after lexical cutoff: '+row.sql);
+    assert.deepEqual(row.args,permit.args,permit.reason);
+  }
+  if(entry==='public')for(const permit of allowed.filter(item=>item.phase==='delivery')){
+    assert.ok(rows.some(row=>row.sql===permit.sql),'the base failure-delivery fence still runs: '+permit.reason);
+  }
 }
 
 // Same reader-release witness as sqlite-lock-safety's WAL checkpoint case.
@@ -303,12 +338,14 @@ for(const route of routes)test(`Card token chunks and mid-population deadline: $
   assert.equal(served.ok,true,'the next public read on the same handles succeeds');
 });
 
-for(const route of ['ordinary','suppressed'])
-test(`deadline before the canonical lexical enclosure: ${route}`,async t=>{
+for(const route of ['ordinary','suppressed'])for(const phase of ['entry','setup'])
+test(`deadline at canonical lexical enclosure ${phase}: ${route}`,async t=>{
   const f=await lexicalFixture(t,route),documents=Array.from({length:3},(_,i)=>card(f,i));
   sidecar(t,f,route).refresh();
-  let expire=false,atEntry=false,lexicalPending=false,samplesAtEntry;
-  const samples=[],now=()=>{const value=expire&&atEntry?1:0;samples.push(value);return value;};
+  let expire=false,atEntry=false,lexicalPending=false,setupExpired=false,samplesAtEntry;
+  const samples=[],now=()=>{
+    const value=expire&&atEntry&&(phase==='entry'||setupExpired)?1:0;samples.push(value);return value;
+  };
   const rendezvous=phase=>{
     if(phase==='lexical')lexicalPending=true;
     if(phase==='snapshot'&&lexicalPending){
@@ -319,17 +356,19 @@ test(`deadline before the canonical lexical enclosure: ${route}`,async t=>{
   const a=sidecar(t,f,route,now,{rendezvous});
   const call=pages(t,f,route,{now,storageOptions:{rendezvous}});
   const expected=expectedRows(documents);
-  for(const entry of ['storage','held-storage','public']){
-    const connections=new Map(),afterEntry=[];
+  for(const entry of ['storage','public'])for(const saved of phase==='setup'?[0,1]:[null]){
+    const connections=new Map();
     const onSql=(sql,args,connection)=>{
-      if(expire&&atEntry)afterEntry.push(sql);
+      if(expire&&atEntry&&phase==='setup'&&connection===connections.get('canonical')&&sql==='PRAGMA query_only'){
+        assert.equal(connection.isTransaction,false,'the setup pragma executes before canonical BEGIN');
+        setupExpired=true; // trace calls this hook after the pragma's get() executes.
+      }
       const key=collector({sql})?'canonical':posting(sql)?'sidecar':null;
       if(!key)return;
       if(!connections.has(key))connections.set(key,connection);
       else assert.equal(connection,connections.get(key),'reuse the same native '+key+' connection');
     };
-    const work=()=>entry==='public'?call({...selection,query,semantic:false,limit:3,deadlineMs:1}):
-      entry==='held-storage'?a.withCanonicalRead(()=>a.lexical(1)):a.lexical(1);
+    const work=()=>entry==='public'?call({...selection,query,semantic:false,limit:3,deadlineMs:1}):a.lexical(1);
     const complete=result=>{
       if(entry==='public'){
         const value=ok(result);
@@ -337,9 +376,12 @@ test(`deadline before the canonical lexical enclosure: ${route}`,async t=>{
         assert.equal(value.coverage.omitted.lexical,0);assert.equal(value.nextCursor,null);
       }else{assert.equal(result.matched,3);assert.deepEqual(result.rows,expected);}
     };
-    expire=false;atEntry=false;
+    expire=false;atEntry=false;setupExpired=false;
     complete((await trace(work,onSql)).result);
     assert.equal(connections.size,2);
+    const canonical=connections.get('canonical');
+    if(saved!==null)canonical.exec('PRAGMA query_only='+(saved?'ON':'OFF'));
+    const previous=canonical.prepare('PRAGMA query_only').get().query_only;
     expire=true;atEntry=false;
     const timed=await trace(()=>{
       if(entry==='public')assert.deepEqual(work(),{ok:false,error:{code:'read_timeout',retryable:false}});
@@ -347,17 +389,46 @@ test(`deadline before the canonical lexical enclosure: ${route}`,async t=>{
     },onSql);
     assert.equal(atEntry,true,'the call reached the canonical enclosure decision');
     assert.equal(samples[samplesAtEntry-1],0,'the preceding clock sample passed');
-    assert.deepEqual(samples.slice(samplesAtEntry),[1],'the entry check reports exactly the cutoff');
-    const boundary=timed.rows.findLastIndex(row=>row.sql==='PRAGMA schema_version');
-    assert.ok(boundary>=0,'the sidecar snapshot was acquired before the entry check');
-    assert.equal(timed.rows.slice(boundary+1).some(row=>/^BEGIN\b/.test(row.sql)),false,
-      'no canonical BEGIN starts at the cutoff, including when the caller already owns the read');
-    assert.deepEqual(afterEntry,[],'no canonical lexical statement starts at the cutoff');
+    assert.deepEqual(samples.slice(samplesAtEntry),phase==='entry'?[1]:[0,0,1],
+      'the existing clock stops opening at exactly the cutoff');
+    const sideBoundary=timed.rows.findLastIndex(row=>row.sql==='PRAGMA schema_version');
+    assert.ok(sideBoundary>=0,'the sidecar snapshot was acquired before canonical opening');
+    const boundary=phase==='entry'?sideBoundary:
+      timed.rows.findIndex((row,i)=>i>sideBoundary&&row.sql==='PRAGMA query_only');
+    assert.ok(boundary>=sideBoundary,'the cutoff boundary was reached');
+    if(phase==='setup'){
+      assert.equal(setupExpired,true,'the canonical setup pragma actually advanced the clock');
+      assert.ok(boundary>sideBoundary,'the canonical query_only read ran before the cutoff');
+    }
+    assertNoLexicalWorkAfterOpeningCutoff(timed.rows.slice(boundary+1),entry,route);
     assert.equal(timed.rows.filter(collector).length,0);assert.equal(timed.rows.filter(row=>posting(row.sql)).length,0);
     assert.ok([...connections.values()].every(connection=>connection.isOpen&&!connection.isTransaction));
-    expire=false;atEntry=false;
+    assert.equal(isConnectionDiscarded(canonical),false,'an opening timeout does not discard the canonical connection');
+    assert.equal(canonical.prepare('PRAGMA query_only').get().query_only,previous,'query_only is restored');
+    expire=false;atEntry=false;setupExpired=false;
     complete((await trace(work,onSql)).result);
   }
+});
+
+for(const route of ['ordinary','suppressed'])for(const entry of ['held-storage','memory-only'])
+test(`zero-term lexical read without a new canonical enclosure: ${route}, ${entry}`,async t=>{
+  const f=await lexicalFixture(t,route);card(f,0);
+  let clock=0,lexicalPending=false,samplesAtEntry;
+  const samples=[],rendezvous=phase=>{
+    if(phase==='lexical')lexicalPending=true;
+    if(phase==='snapshot'&&lexicalPending){lexicalPending=false;samplesAtEntry=samples.length;clock=1;}
+  };
+  const selected=entry==='memory-only'?{...projection,types:['memory']}:projection;
+  const a=sidecar(t,f,route,()=>{samples.push(clock);return clock;},{rendezvous},selected);a.refresh();
+  const work=()=>a.lexical(1,'');
+  const measured=await trace(()=>entry==='held-storage'?a.withCanonicalRead(work):work());
+  assert.deepEqual(measured.result.rows,[]);assert.equal(measured.result.matched,0);
+  assert.notEqual(samplesAtEntry,undefined,'the expired call reached lexical work');
+  assert.deepEqual(samples.slice(samplesAtEntry),[],'base zero-term return still precedes the first lexical clock check');
+  const boundary=measured.rows.findLastIndex(row=>row.sql==='PRAGMA schema_version');
+  assert.ok(boundary>=0);
+  assert.equal(measured.rows.slice(boundary+1).some(row=>/^BEGIN\b/.test(row.sql)),false,
+    'caller-owned and Memory-only reads add no canonical enclosure');
 });
 
 test('ordinary replay deadline rolls back and the same connections serve a complete next read',{timeout:120000},async t=>{
