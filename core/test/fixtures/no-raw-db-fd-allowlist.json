@@ -1795,6 +1795,21 @@
     "reason": "Generated shared observer dependency, identical to integrations/client/private-state.mjs. Metadata and path operations only; this import binds no API that opens database data descriptors."
   },
   {
+    "path": "integrations/openclaw/lib/private-state.mjs",
+    "source": "import { lstatSync, realpathSync, openSync, fstatSync, readFileSync, closeSync, readdirSync } from \"node:fs\"",
+    "reason": "Generated shared observer dependency, identical to integrations/client/private-state.mjs. Synchronous final admission reads only private content-free pause metadata, never a SQLite file."
+  },
+  {
+    "path": "integrations/openclaw/lib/private-state.mjs",
+    "source": "try { file = openSync(before.canonical, constants.O_RDONLY | constants.O_NOFOLLOW); }",
+    "reason": "Generated shared observer dependency, identical to integrations/client/private-state.mjs. Open only owner-checked regular pause metadata for final synchronous admission, never a SQLite file."
+  },
+  {
+    "path": "integrations/openclaw/lib/private-state.mjs",
+    "source": "return readFileSync(file, \"utf8\");",
+    "reason": "Generated shared observer dependency, identical to integrations/client/private-state.mjs. Read only the checked pause metadata handle, bounded to 64 KiB, never a SQLite file."
+  },
+  {
     "path": "integrations/openclaw/lib/control-state.mjs",
     "source": "const value = JSON.parse(await readFile(path, \"utf8\"));",
     "reason": "Generated shared observer dependency, identical to integrations/client/control-state.mjs. Pause/control JSON state and staging files, separate from the SQLite store."
