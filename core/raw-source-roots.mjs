@@ -16,13 +16,14 @@ export function clearReceiptCoordinatesInside(db) { receiptCoordinates.delete(db
 
 // Portable across account re-keying and store merges. Namespace isolation lives
 // in the suppressed primary key and read memo, never in the address digest.
-export function receiptDenialTokens(receipts) {
+export function receiptDenialTokens(receipts, replacements = []) {
+  const retained = new Set(replacements.length ? receiptDenialTokens(replacements) : []);
   return [...new Set(receipts.flatMap(receipt => [
     'rs1:i:' + receipt.receipt_key,
     'rs1:a:' + createHash('sha256').update(JSON.stringify([
       'receipt-source-address-v1', receipt.client, receipt.session_id, receipt.event_id, receipt.role,
     ])).digest('hex'),
-  ]))];
+  ]).filter(token => !retained.has(token)))];
 }
 
 const where = 'owner_id=? AND scope=? AND project_id=?';

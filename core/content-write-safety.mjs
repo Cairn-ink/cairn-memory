@@ -175,7 +175,9 @@ export function beginContentWriteSafety(db, operation) {
           newFacts.some(fact => fact.kind === 'receipt' && fact.action_id === cause.action_id && fact.reason === cause.reason &&
             fact.match_mode === 'incarnation' && contentSuppressionTargetMatches(fact, ns, { kind: 'receipt', key: change.row.id })))
           .map(change => change.row);
-        for (const token of receiptDenialTokens(receipts)) allowedMarkers.add(JSON.stringify([...boundary(ns), token]));
+        const replacements = cause.reason === 'correction_supersession' ? canonical.filter(change => change.table === 'receipts' &&
+          change.row.memory_id === cause.stable_key && (!change.old || oldValue(change, 'id') !== change.row.id)).map(change => change.row) : [];
+        for (const token of receiptDenialTokens(receipts, replacements)) allowedMarkers.add(JSON.stringify([...boundary(ns), token]));
       }
     }
     for (const row of markerChanges) if (!allowedMarkers.has(JSON.stringify(row))) fail('evidence_unavailable');

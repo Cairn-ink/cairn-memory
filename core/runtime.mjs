@@ -355,7 +355,9 @@ export function createMemoryRuntime(input, internal) {
       writeContentSuppressionInside(db, { namespace: ns, kind: 'memory', key: id, matchMode: 'revision-through',
         sourceVersion: JSON.stringify(['memory-revision-through-v1', current.revision]), ...suppression });
       suppressReceiptsInside(db, ns, id, suppression, undefined, true,
-        cachedContentLayout(db)?.suppressionRevision ? undefined : receiptSnapshot);
+        cachedContentLayout(db)?.suppressionRevision ? undefined : receiptSnapshot,
+        value.receipts.map(receipt => ({ receipt_key: receiptKey(receipt), client: receipt.client,
+          session_id: receipt.sessionId, event_id: receipt.eventId, role: receipt.role })));
       rawLineage.excludeMemory(ns, id, suppression);
       stagedEvidence.purgeNamespace(ns);
       if (current.fingerprint !== value.fingerprint) suppress(ns, current.fingerprint);
