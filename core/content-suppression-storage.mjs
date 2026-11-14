@@ -75,9 +75,9 @@ export function suppressReceiptsInside(db, ns, memoryId, options, ids, denyShare
     ? `SELECT r.id,r.receipt_key,r.client,r.session_id,r.event_id,r.role FROM receipts r WHERE r.memory_id=? AND EXISTS(
       SELECT 1 FROM memories m WHERE m.id=r.memory_id AND m.owner_id=? AND m.scope=? AND m.project_id=?)`
     : 'SELECT id FROM receipts WHERE memory_id=?').all(memoryId, ...(denySharedSource ? boundary(ns) : []));
-  const tokens = denySharedSource ? receiptDenialTokens(rows, replacements) : [];
-  if (tokens.length) db.prepare(`INSERT OR IGNORE INTO suppressed(owner_id,scope,project_id,fingerprint)
-SELECT ?,?,?,value FROM json_each(?)`).run(...boundary(ns), JSON.stringify(tokens));
+  // A correction that re-cites a receipt derives no marker for it; an empty set inserts nothing.
+  if (denySharedSource) db.prepare(`INSERT OR IGNORE INTO suppressed(owner_id,scope,project_id,fingerprint)
+SELECT ?,?,?,value FROM json_each(?)`).run(...boundary(ns), JSON.stringify(receiptDenialTokens(rows, replacements)));
   if (!packaged) return;
   for (const row of rows) if (!ids || ids.includes(row.id)) writeContentSuppressionInside(db,
     { namespace: ns, kind: 'receipt', key: row.id, ...options });
