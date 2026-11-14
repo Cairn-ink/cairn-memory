@@ -273,7 +273,8 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     // Memory headers with them to keep one marker union, but never reads a
     // candidate body ahead of the row/body budget or materializes its receipts.
     const scanRefs=input.types.includes('card')?input.types.flatMap(type=>db.prepare(type==='memory'
-      ? `SELECT id,revision,currentness,review_state FROM memories WHERE ${where} AND deleted=0 AND id>? ORDER BY id LIMIT ?`
+      // The unary plus keeps the planner on the id keyset for this ordered read, with or without statistics.
+      ? `SELECT id,revision,currentness,review_state FROM memories WHERE ${where} AND +deleted=0 AND id>? ORDER BY id LIMIT ?`
       : `SELECT id,revision,body_revision FROM private_cards WHERE ${where} AND state='confirmed' AND id>? ORDER BY id LIMIT ?`)
       .all(...boundary(ns),after[type],input.scanRows+1)
       .filter(row=>type==='card'||memoryReadEligible(row,input.intent))

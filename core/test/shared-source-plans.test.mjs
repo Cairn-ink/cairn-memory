@@ -316,7 +316,7 @@ test('every owned production statement has bounded indexed inputs with and witho
   const {texts,sites,literals}=statementCatalog();
   assert.throws(()=>assertInputBounds('SELECT id FROM private_cards WHERE owner_id=? AND scope=? AND project_id=? AND state IN (?,?) AND id>? ORDER BY id LIMIT ?', 'negative control'),
     /unbounded multi-state prefetch/,'an indexed multi-state sort must be refused');
-  const violations=[],baseEquivalent=[];
+  const violations=[],headerPlans={};
   for(const statistics of ['absent','analyzed']) {
     if(statistics==='analyzed') {
       f.db.exec('ANALYZE');assert.ok(f.db.prepare('SELECT count(*) n FROM sqlite_stat1').get().n>0);
@@ -335,18 +335,20 @@ test('every owned production statement has bounded indexed inputs with and witho
       f.db.exec('ANALYZE sqlite_schema');
     }
     // Collect every violation so that one run reports the complete picture.
+    for(const [sql]of texts)if(/^SELECT id,revision,currentness,review_state FROM memories WHERE .* AND \+deleted=0 AND id>\? ORDER BY id LIMIT \?$/.test(sql))
+      headerPlans[statistics]=f.db.prepare('EXPLAIN QUERY PLAN '+sql).all(...Array((sql.match(/\?/g)??[]).length).fill(null)).map(row=>row.detail);
     for(const [sql,locations]of texts)try{assertPlan(f.db,sql,locations,statistics);}catch(error){
-      // With large-store statistics the Memory scan-header read takes the same access path as the base's own
-      // candidate scan of the same predicate and order (namespace and deleted, sorted by id): no index hint is
-      // possible because the keyset index is absent on stores without the index layout. Recorded, not hidden.
-      if(statistics==='analyzed'&&/^SELECT id,revision,currentness,review_state FROM memories WHERE owner_id ?= ?\? AND scope ?= ?\? AND project_id ?= ?\? AND deleted=0 AND id>\? ORDER BY id LIMIT \?$/.test(sql)){
-        baseEquivalent.push(sql);continue;
-      }
       const lines=String(error.message).split('\n');
       violations.push([lines[0],...lines.filter(line=>/^\s*(?:SCAN|SEARCH)|unbounded/.test(line)).map(line=>line.slice(-220))].join(' | '));
     }
   }
   assert.deepEqual(violations,[]);
-  assert.ok(baseEquivalent.length<=1,'at most the one recorded base-equivalent access path');
+  // The Memory scan-header read of evidence selection must stay on the id keyset in both passes: with
+  // large-store statistics the planner would otherwise prefer the (namespace, deleted) index and sort.
+  assert.deepEqual(Object.keys(headerPlans).sort(),['absent','analyzed']);
+  for(const [statistics,details] of Object.entries(headerPlans)){
+    assert.ok(details.some(detail=>/index_memory_keyset/.test(detail)&&detail.includes('id>?')),statistics+': '+details.join(' | '));
+    assert.ok(!details.some(detail=>/TEMP B-TREE|namespace_memories/.test(detail)),statistics+': '+details.join(' | '));
+  }
   t.diagnostic(`Derived ${sites} prepare/literal sites (${literals} independent source SQL literals) and ${texts.size} distinct texts; each pinned twice.`);
 });
