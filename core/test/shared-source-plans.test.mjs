@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
 import { parse } from '../../tools/testing/vendor/acorn/acorn.mjs';
 import { openMemoryCore } from '../index.mjs';
 import { model as episodeModel, input as episodeInput } from '../testing/episode-capture-helpers.mjs';
@@ -11,27 +10,75 @@ import { lineageFixture, ns, ok, receipt } from '../testing/card-lineage-fixture
 import { openRawCaptureCore } from '../raw-capture.mjs';
 import { request, splitRaw, localPlainPort } from '../testing/raw-capture-fixtures.mjs';
 
-const root=new URL('../../',import.meta.url),base='88a054fa';
-const git=args=>execFileSync('git',args,{cwd:root,encoding:'utf8'});
+const root=new URL('../../',import.meta.url);
+// The modules in this fix are explicit data. Empty function lists identify
+// modules whose changes do not own a prepared-statement cost contract.
+// In dispatchers, bindings name the complete owned SQL regions; unrelated
+// operations and their pre-existing queries are outside this catalog.
+const modules=[
+  {file:'adapters/openai/index.mjs',functions:[]},
+  {file:'adapters/openai/schemas.mjs',functions:[]},
+  {file:'core/content-safety.mjs',functions:[
+    {name:'receiptDenialsInside'},{name:'cardReceiptTokens'},{name:'anchorsDeliverable'},
+    {name:'receiptCoordinateCache'},{name:'receiptStoredCountInside'},
+    {name:'receiptDeliverySnapshot'},{name:'deliveryReceiptRows'},
+  ]},
+  {file:'core/content-suppression-storage.mjs',functions:[{name:'suppressReceiptsInside'}]},
+  {file:'core/content-write-safety.mjs',functions:[]},
+  {file:'core/context-product-index.mjs',functions:[{name:'assemble'}]},
+  {file:'core/context-product-sidecar.mjs',functions:[]},
+  {file:'core/context-read-facade.mjs',functions:[{name:'contextRead'}]},
+  {file:'core/context-read-sidecar.mjs',functions:[]},
+  {file:'core/contract.mjs',functions:[]},
+  {file:'core/database.mjs',functions:[]},
+  {file:'core/episode-reads.mjs',functions:[{name:'episodeReadRowsInside'}],
+    builders:[{name:'begin',kind:'envelopes'}]},
+  {file:'core/episode-storage.mjs',functions:[{name:'inspect',bindings:['linkRows','linkedReceipts']}]},
+  {file:'core/moc-storage.mjs',functions:[]},
+  {file:'core/private-card-storage.mjs',functions:[{name:'cardSourceDeliverable'},
+    {name:'read',bindings:['candidateProbe','probe']}]},
+  {file:'core/private-evidence-storage.mjs',functions:[{name:'select',bindings:['scanRefs']}]},
+  {file:'core/rationale-storage.mjs',functions:[]},
+  {file:'core/raw-source-roots.mjs',functions:[]},
+  {file:'core/recall.mjs',functions:[]},
+  {file:'core/role-context-evidence.mjs',functions:[{name:'item'}]},
+  {file:'core/role-context-facade.mjs',functions:[]},
+  {file:'core/runtime.mjs',functions:[{name:'getPage'},{name:'usageSnapshot'},
+    {name:'storedSourceEvidence'},{name:'projectRationale'}]},
+  {file:'core/session-context.mjs',functions:[{name:'hiddenEpisode'}],builders:[
+    {name:'contextQuery',kind:'nextSteps'},
+    {name:'nextStepPage',kind:'selectedInput'},
+  ]},
+  {file:'core/source-evidence.mjs',functions:[]},
+];
+const proofBuilders={file:'core/raw-lineage-storage.mjs',functions:['episodeSourceEvidenceCTE','episodeSourceEvidenceSQL']};
 const normalize=text=>text.replace(/\s+/g,' ').trim();
 function inventory(source) {
   const prepared=[],sqlLiterals=[],variables=new Map(),functions=new Map();
-  const walk=(node,fn='')=>{
+  const walk=(node,fn='',binding='')=>{
     if(!node||typeof node!=='object')return;
-    if(node.type==='FunctionDeclaration'){fn=node.id?.name??fn;functions.set(fn,source.slice(node.start,node.end));}
-    if(node.type==='VariableDeclarator'&&node.id.type==='Identifier'&&node.init)
-      variables.set(fn+':'+node.id.name,source.slice(node.init.start,node.init.end));
+    if(node.type==='FunctionDeclaration'||node.type==='FunctionExpression'&&node.id){
+      fn=node.id?.name??fn;binding='';assert.ok(!functions.has(fn),'unique function '+fn);
+      functions.set(fn,source.slice(node.start,node.end));
+    }
+    if(node.type==='VariableDeclarator'&&node.id.type==='Identifier'&&node.init){
+      binding=node.id.name;variables.set(fn+':'+binding,source.slice(node.init.start,node.init.end));
+    }
+    if(node.type==='Property'&&node.key.name==='query'&&node.value.type==='ObjectExpression'){
+      const sql=node.value.properties.find(property=>property.key.name==='sql');
+      if(sql)variables.set(fn+':query.sql',source.slice(sql.value.start,sql.value.end));
+    }
     if(node.type==='CallExpression'&&node.callee.type==='MemberExpression'&&node.callee.property.name==='prepare'){
       assert.equal(node.arguments.length,1);
-      prepared.push({fn,line:node.loc.start.line,expression:source.slice(node.arguments[0].start,node.arguments[0].end)});
+      prepared.push({fn,binding,line:node.loc.start.line,expression:source.slice(node.arguments[0].start,node.arguments[0].end)});
     }
-    // An independent SQL-literal census catches changed query builders even
-    // when the enclosing prepare(query.sql) call itself remains unchanged.
+    // Keep a separate literal census: missing and orphan catalog texts must
+    // fail even when a prepare call delegates to an unchanged SQL builder.
     const head=node.type==='TemplateLiteral'?node.quasis[0].value.cooked:node.type==='Literal'&&typeof node.value==='string'?node.value:'';
     if(/^\s*(?:SELECT|WITH|INSERT|UPDATE|DELETE|PRAGMA)\b/i.test(head))
-      sqlLiterals.push({fn,line:node.loc.start.line,expression:source.slice(node.start,node.end)});
+      sqlLiterals.push({fn,binding,line:node.loc.start.line,expression:source.slice(node.start,node.end)});
     for(const [key,value]of Object.entries(node))if(!['start','end','loc'].includes(key)){
-      if(Array.isArray(value))value.forEach(child=>walk(child,fn));else walk(value,fn);
+      if(Array.isArray(value))value.forEach(child=>walk(child,fn,binding));else walk(value,fn,binding);
     }
   };
   walk(parse(source,{ecmaVersion:'latest',sourceType:'module',locations:true}));return {prepared,sqlLiterals,variables,functions};
@@ -56,44 +103,86 @@ function variants(site,variables) {
   }
   return [...result];
 }
-function changedStatements() {
-  const files=git(['diff','--name-only',base]).trim().split('\n').filter(file=>file.startsWith('core/')&&file.endsWith('.mjs')&&!/\/(test|testing)\//.test(file));
-  const texts=new Map();let sites=0,literals=0;
-  const add=(site,variables,file)=>{
-    sites++;
-    for(const sql of variants(site,variables))texts.set(sql,[...(texts.get(sql)??[]),file+':'+site.line]);
+function statementCatalog() {
+  const sources=new Map(modules.map(({file})=>[file,inventory(readFileSync(new URL(file,root),'utf8'))]));
+  const texts=new Map(),producible=new Set();let sites=0,literals=0;
+  const add=(sql,file,site)=>{
+    sql=normalize(sql);
+    texts.set(sql,[...(texts.get(sql)??[]),`${file}:${site.line} (${site.fn})`]);
   };
-  for(const file of files){
-    const current=inventory(readFileSync(new URL(file,root),'utf8')),old=inventory(git(['show',base+':'+file]));
-    const prior=new Set(old.prepared.map(site=>normalize(site.expression)));
-    for(const site of current.prepared)if(!prior.has(normalize(site.expression)))add(site,current.variables,file);
-    const previousLiterals=new Set(old.sqlLiterals.map(site=>normalize(site.expression)));
-    for(const site of current.sqlLiterals)if(!previousLiterals.has(normalize(site.expression))){
-      literals++;add(site,current.variables,file);
+  const owned=(site,owner)=>site.fn===owner.name&&(!owner.bindings||owner.bindings.includes(site.binding));
+  for(const {file,functions}of modules){
+    const current=sources.get(file);
+    for(const owner of functions){
+      assert.ok(current.functions.has(owner.name),file+' owns '+owner.name);
+      const prepared=current.prepared.filter(site=>owned(site,owner));
+      const sqlLiterals=current.sqlLiterals.filter(site=>owned(site,owner));
+      assert.ok(prepared.length,file+' '+owner.name+' prepares statements');
+      for(const binding of owner.bindings??[])assert.ok(prepared.some(site=>site.binding===binding),file+' '+owner.name+'.'+binding);
+      for(const site of prepared){
+        sites++;
+        for(const sql of variants(site,current.variables))add(sql,file,site);
+      }
+      for(const site of sqlLiterals){
+        literals++;
+        for(const sql of variants(site,current.variables))producible.add(sql);
+      }
     }
   }
-  // Follow the changed next-step input through BOTH unchanged proof envelopes.
-  // Inventorying its SQL literal alone misses the statements SQLite prepares.
-  const projection=inventory(readFileSync(new URL('core/episode-reads.mjs',root),'utf8'));
-  const proof=inventory(readFileSync(new URL('core/raw-lineage-storage.mjs',root),'utf8'));
-  const proofFunctions=Object.fromEntries(['episodeSourceEvidenceCTE','episodeSourceEvidenceSQL']
-    .map(name=>[name,evaluate(proof.functions.get(name),{})]));
-  const envelopes=projection.sqlLiterals.filter(site=>site.expression.includes('WITH candidates AS MATERIALIZED (${query.sql})'));
-  assert.equal(envelopes.length,2,'header fence and full evidence envelopes');
-  const inputs=[...texts].filter(([sql,locations])=>sql.startsWith('SELECT e.* FROM json_each(?) wanted')&&
-    locations.some(location=>location.startsWith('core/session-context.mjs:')));
-  assert.equal(inputs.length,1,'the final next-step selected-ID input');
-  for(const [input,locations]of inputs)for(const site of envelopes)for(const rawLineage of [false,true]){
-    const sql=normalize(evaluate(site.expression,{query:{sql:input},layout:{rawLineage},...proofFunctions}));
-    texts.set(sql,[...locations,'core/episode-reads.mjs:'+site.line]);
+  // The next-step builder prepares both cursor shapes. Evaluate the whole
+  // current builder, so its final query (rather than a SQL fragment) is pinned.
+  const sessionFile='core/session-context.mjs',session=sources.get(sessionFile);
+  const projectionFile='core/episode-reads.mjs',projection=sources.get(projectionFile);
+  const proof=inventory(readFileSync(new URL(proofBuilders.file,root),'utf8'));
+  const proofFunctions=Object.fromEntries(proofBuilders.functions.map(name=>{
+    assert.ok(proof.functions.has(name),proofBuilders.file+' owns '+name);
+    return [name,evaluate(proof.functions.get(name),{})];
+  }));
+  let selectedInput;
+  for(const {file,builders=[]}of modules)for(const builder of builders){
+    const current=sources.get(file);
+    assert.ok(current.functions.has(builder.name),file+' owns builder '+builder.name);
+    if(builder.kind==='nextSteps'){
+      const build=evaluate(current.functions.get(builder.name),{});
+      const candidates=current.sqlLiterals.filter(site=>site.fn===builder.name&&site.expression.includes('episode_open_step_read'));
+      assert.equal(candidates.length,1,'next-step range input');
+      for(const after of [undefined,{ordinal:7,id:'synthetic-anchor'}])
+        add(build({ownerId:'synthetic',scope:'owner',projectId:''},'nextSteps',{after}).sql,file,candidates[0]);
+      // Independent source-literal expansion must yield the same full texts.
+      for(const sql of variants(candidates[0],current.variables))producible.add(sql);
+      sites++;literals++;
+    }else if(builder.kind==='selectedInput'){
+      const inputs=current.sqlLiterals.filter(site=>site.fn===builder.name);
+      assert.equal(inputs.length,1,'the final next-step selected-ID input');
+      [selectedInput]=inputs;
+      for(const sql of variants(selectedInput,current.variables)){add(sql,file,selectedInput);producible.add(sql);}
+      sites++;literals++;
+    }else assert.equal(builder.kind,'envelopes','known builder kind');
   }
-  // The retained base probe is now also part of the prefetch cost contract.
-  const cards=inventory(readFileSync(new URL('core/private-card-storage.mjs',root),'utf8'));
-  const probes=cards.prepared.filter(site=>site.expression.includes('state=? AND id>? ORDER BY id LIMIT ?'));
-  assert.equal(probes.length,2,'token prefetch and physical visibility probes');
-  for(const site of probes)add(site,cards.variables,'core/private-card-storage.mjs');
+  assert.ok(selectedInput,'selected-ID input has a named owner');
+  // Follow that selected input through BOTH production proof envelopes.
+  // The first is prepared here; the second is returned to the session reader.
+  const envelopeOwner=modules.find(({file})=>file===projectionFile).builders.find(builder=>builder.kind==='envelopes').name;
+  const envelopes=projection.sqlLiterals.filter(site=>site.fn===envelopeOwner);
+  assert.equal(envelopes.length,2,'header fence and full evidence envelopes');
+  assert.equal(projection.prepared.filter(site=>site.fn===envelopeOwner).length,1,'header fence preparation');
+  const fence=projection.prepared.find(site=>site.fn===envelopeOwner);
+  for(const input of variants(selectedInput,session.variables))for(const rawLineage of [false,true]){
+    const scope={query:{sql:input},layout:{rawLineage},...proofFunctions};
+    add(evaluate(fence.expression,scope),projectionFile,fence);
+    // Read the returned query from its actual object-property initializer.
+    const returned=projection.variables.get(envelopeOwner+':query.sql');
+    assert.ok(returned,'full evidence query has an initializer');
+    add(evaluate(returned,scope),projectionFile,envelopes.find(site=>site.expression===returned));
+    for(const site of envelopes)producible.add(normalize(evaluate(site.expression,scope)));
+  }
+  sites+=2;literals+=envelopes.length;
+  assert.deepEqual([...texts.keys()].sort(),[...producible].sort(),
+    'catalog equals every producible owned statement text: no missing or orphan texts');
   assert.ok([...texts.keys()].some(sql=>sql.includes('invalid_raw_ancestry')&&sql.includes('FROM memories WHERE owner_id=?')&&sql.includes('AND id = ?')),
     'get includes the populated memoryAncestry variant');
+  const probes=[...texts.keys()].filter(sql=>/FROM private_cards WHERE .*state=\? AND id>\? ORDER BY id LIMIT \?$/.test(sql));
+  assert.equal(probes.length,2,'token prefetch and physical visibility probes');
   assert.ok(sites>0);assert.ok(literals>0);
   return {texts,sites,literals};
 }
@@ -161,7 +250,7 @@ function assertPlan(db,sql,sites,statistics) {
   if(/\b(?:FROM|JOIN) suppressed\b/.test(sql))assert.ok(plan.some(row=>/USING PRIMARY KEY|sqlite_autoindex_suppressed_1/.test(row.detail)),label);
 }
 
-test('every added or changed production statement has bounded indexed inputs with and without statistics',{timeout:60000},async t=>{
+test('every owned production statement has bounded indexed inputs with and without statistics',{timeout:60000},async t=>{
   const model=rationaleModel();
   model.relate=()=>({edges:[{from:0,to:1,relation:'supports-decision',fromReceipt:0,toReceipt:0}]});
   const f=await lineageFixture(t,{base:33,options:{model}}),memories=[];
@@ -204,12 +293,12 @@ test('every added or changed production statement has bounded indexed inputs wit
   for(const table of ['memories','receipts','private_cards','card_bindings','card_memory_bindings','card_body_sources','qualification_anchors','procedural_tags','suppressed','rationale_edges','session_episodes','episode_sources','episode_memory_links','raw_conversations','raw_messages','raw_receipt_lineage','raw_receipt_origins','raw_source_maps'])
     assert.ok(f.db.prepare(`SELECT count(*) n FROM ${table}`).get().n>0,table+' has real public-call rows');
   assert.equal(f.db.prepare("SELECT 1 FROM sqlite_master WHERE name='sqlite_stat1'").get(),undefined);
-  const {texts,sites,literals}=changedStatements();
+  const {texts,sites,literals}=statementCatalog();
   assert.throws(()=>assertInputBounds('SELECT id FROM private_cards WHERE owner_id=? AND scope=? AND project_id=? AND state IN (?,?) AND id>? ORDER BY id LIMIT ?', 'negative control'),
     /unbounded multi-state prefetch/,'an indexed multi-state sort must be refused');
   for(const statistics of ['absent','analyzed']) {
     if(statistics==='analyzed') {f.db.exec('ANALYZE');assert.ok(f.db.prepare('SELECT count(*) n FROM sqlite_stat1').get().n>0);}
     for(const [sql,locations]of texts)assertPlan(f.db,sql,locations,statistics);
   }
-  t.diagnostic(`Derived ${sites} prepare/literal sites (${literals} independent changed SQL literals) and ${texts.size} distinct texts; each pinned twice.`);
+  t.diagnostic(`Derived ${sites} prepare/literal sites (${literals} independent source SQL literals) and ${texts.size} distinct texts; each pinned twice.`);
 });
