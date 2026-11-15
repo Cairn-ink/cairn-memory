@@ -14,6 +14,7 @@ export { ok };
 export const forgottenText = 'forgetneedle synthetic victim';
 export const stepText = 'stepneedle review forgotten evidence';
 export const neighbourStep = 'neighbourstep review nearby evidence';
+export const unknownStep = 'unknownstep review undated evidence';
 export const otherStep = 'independentstep review retained evidence';
 const fixtureClock = Date.now();
 export const range = { since: new Date(fixtureClock - 7 * 86400000).toISOString(),
@@ -53,7 +54,7 @@ export async function setup(t, options = {}) {
     interpretEpisode(request) {
       const result = interpretation(request), text = request.input.sources[0].text;
       const field = value => ({ value, anchors: [{ sourceIndex: 0, start: 0, end: text.length }] });
-      return { ...result, gist: field(text), nextStep: field(text.includes('independent') ? otherStep : text.includes('neighbour') ? neighbourStep : stepText) };
+      return { ...result, gist: field(text), nextStep: field(text.includes('independent') ? otherStep : text.includes('neighbour') ? neighbourStep : text.includes('unknown') ? unknownStep : stepText) };
     },
     select: ({ input }) => ({ refs: input.maps.flatMap(map => map.items.flatMap(item => {
       const ref = item.type === 'unfiled' ? item.ref : item.type === 'ref' && item.ref.childType === 'memory'
@@ -71,7 +72,7 @@ export async function setup(t, options = {}) {
       const request = f.request(eventId, content, ordinal);
       const value = ok(await core.captureRaw({ namespace, client, sessionId, eventId,
         messages: request.messages.map(message => ({ id: message.id, role: message.role, content: message.content,
-          occurredAt: new Date(fixtureClock + offset).toISOString(), messageOrdinal: ordinal, part: { ...message.part } })),
+          occurredAt: offset === null ? null : new Date(fixtureClock + offset).toISOString(), messageOrdinal: ordinal, part: { ...message.part } })),
         ...(episode ? { episodeContext: { clientLabel: 'Synthetic client', generation: 'initial', origin: 'ordinary' } } : {}) }));
       ok(value.interpretation);
     } finally { await core.close(); }
@@ -79,15 +80,27 @@ export async function setup(t, options = {}) {
   if (options.differentMessages) {
     await capture('target', 'victim', '[VICTIM] synthetic source evidence', 1);
     await capture('target', 'survivor', '[SURVIVOR] retained evidence', 2);
-  } else await capture('target', 'pair', '[PAIR] synthetic source evidence', 1);
+  } else await capture('target', 'pair', options.sessionless ? '[SURVIVOR] retained evidence' : '[PAIR] synthetic source evidence', 1);
   await capture('unrelated', 'other', '[OTHER] independent evidence', 1, -2 * 86400000);
   for (const session of options.noEpisodes ? [] : options.episodeOtherOnly ? ['independent'] : ['target', 'independent']) {
     for (const ordinal of [3, 4]) await capture(session, session + '-episode-' + ordinal,
-      session === 'target' ? forgottenText + ' episode evidence' : 'independent episode evidence', ordinal,
-      session === 'target' ? 0 : -3 * 86400000, true);
+      session === 'target' ? (options.sessionless ? 'unknown unnamed episode evidence' : forgottenText + ' episode evidence') : 'independent episode evidence', ordinal,
+      session === 'target' ? 0 : Object.hasOwn(options, 'independentOffset') ? options.independentOffset : -3 * 86400000, true);
   }
   if (options.neighbour) for (const ordinal of [3, 4])
     await capture('neighbour', 'neighbour-' + ordinal, 'neighbour episode evidence', ordinal, 0, true);
+  if (options.unknownTime) for (const ordinal of [3, 4])
+    await capture('unknown', 'unknown-' + ordinal, 'unknown episode evidence', ordinal, null, true);
+  if (options.sessionless || options.twoNamed) {
+    const writer = openMemoryCore(config);
+    try {
+      const source = options.twoNamed ? sql(path, db => db.prepare(`SELECT s.*,e.client,e.session_key FROM episode_sources s
+        JOIN session_episodes e ON e.id=s.origin_episode_id WHERE s.text LIKE 'independent%' ORDER BY s.id LIMIT 1`).get()) : null;
+      ok(writer.admit({ namespace, memory: { content: forgottenText, kind: 'context' }, receipts: [source ? {
+        client: source.client, sessionId: source.session_key, eventId: source.message_id, role: source.role, excerpt: source.text
+      } : { client: 'cairn-local-mcp', sessionId: 'explicit-tool', eventId: 'explicit-memory', role: 'user', excerpt: 'Explicit independent evidence.' }] }));
+    } finally { await writer.close(); }
+  }
   // Seed historical identities before safety triggers are installed, then use
   // the supported offline migration with a closed-handle backup and quiescence.
   if (options.seedBeforeMigration) sql(path, db => options.seedBeforeMigration(db, { namespace, client }));
@@ -105,7 +118,8 @@ export async function setup(t, options = {}) {
     const targetReceipt = db.prepare('SELECT * FROM receipts WHERE memory_id=?').get(target.id);
     const conversation = db.prepare(`SELECT c.* FROM raw_receipt_lineage l JOIN raw_conversations c ON c.id=l.conversation_id
       WHERE l.receipt_id=?`).get(targetReceipt.id);
-    return { target, targetReceipt, conversation, episodes, layout: attestContentSafety(db) };
+    const episodeSources = db.prepare('SELECT * FROM episode_sources ORDER BY id').all();
+    return { target, targetReceipt, conversation, episodes, episodeSources, layout: attestContentSafety(db) };
   });
   const cards = createScopedCardAccess(namespace, { actorId: 'synthetic-test' });
   const openReader = () => openMemoryCore({ ...config, privateCards: cards.configuration, rawSearch: false });

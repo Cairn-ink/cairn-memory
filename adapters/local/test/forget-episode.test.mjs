@@ -28,15 +28,18 @@ function committed(f, operation, connection) {
       .get(f.conversation.client, f.conversation.session_key).n, 1, 'source session fence commits');
     assert.ok(db.prepare('SELECT 1 FROM raw_source_exclusions WHERE conversation_id=?').get(f.conversation.id), 'source exclusion commits');
     for (const episode of f.episodes) {
-      const fenced = db.prepare('SELECT 1 FROM raw_session_fences WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND session_key=?')
-        .get(episode.owner_id, episode.scope, episode.project_id, episode.client, episode.session_key);
+      const named = episode.client === f.conversation.client && episode.session_key === f.conversation.session_key;
       const current = db.prepare('SELECT * FROM session_episodes WHERE id=?').get(episode.id);
-      if (fenced) {
-        assert.equal(current.deleted, 1, 'every fenced Episode is withheld in the transaction');
+      if (named) {
+        assert.equal(current.deleted, 1, 'every named Episode is withheld in the transaction');
         assert.equal(JSON.parse(current.record).processing.state, 'invalidated');
         assert.equal(JSON.parse(current.record).nextStep, null);
         assert.equal(db.prepare('SELECT count(*) n FROM episode_sources WHERE episode_id=?').get(episode.id).n, 0);
-      } else assert.deepEqual(current, episode, 'unfenced Episode stays byte-for-byte unchanged');
+      } else {
+        assert.deepEqual(current, episode, 'unnamed Episode stays byte-for-byte unchanged');
+        assert.deepEqual(db.prepare('SELECT * FROM episode_sources WHERE episode_id=? ORDER BY id').all(episode.id),
+          f.episodeSources.filter(source => source.episode_id === episode.id), 'all unnamed source rows stay unchanged');
+      }
     }
   };
   if (connection) check(connection); else sql(f.path, check);
@@ -56,7 +59,7 @@ async function reads(f) {
     const items = ok(result).items;
     for (const episode of f.episodes) {
       const deleted = sql(f.path, db => db.prepare('SELECT deleted FROM session_episodes WHERE id=?').get(episode.id).deleted);
-      assert.equal(items.some(item => item.id === episode.id), !deleted, 'Episode list withholds exactly the invalidated Episodes');
+      assert.equal(items.some(item => item.id === episode.id), !deleted, 'Episode list withholds exactly the deleted named Episodes');
     }
     pages.push(result);
   }
@@ -109,13 +112,7 @@ for (const [name, options] of cases) for (const operation of ['forget', 'correct
     await reads(f);
   });
 }
-for (const operation of ['forget', 'correct']) test('window-selected neighbour Episodes ' + operation, { concurrency: false }, async t => {
-  const f = await setup(t, { layout: 53, neighbour: true });
-  ok(await f.act(operation));
-  // Deliberately derive the expectation from actual fences: session-keyed hiding is valid too.
-  committed(f, operation);
-  await reads(f);
-});
+// Window and unknown-time preservation now run on every layout in forget-episode-scope.test.mjs.
 test('pending direct Raw readers whole-result needle scan', {
   skip: 'Pending the direct-reader fix on its separate branch; this branch only withholds Episodes.'
 }, async t => {
