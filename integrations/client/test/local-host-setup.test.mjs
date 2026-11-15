@@ -325,13 +325,15 @@ for (const nested of [false,true]) test(`Claude delayed transcript (${nested?'mi
   const path=nested?join(f.request.sourceRoot,'new','nested','session.jsonl'):f.sourcePath;
   if(!nested)unlinkSync(path);
   const changes={transcript_path:path};
-  assert.equal((await f.hook('SessionStart',changes)).status,'ready');
+  const startOutcome=await f.hook('SessionStart',changes);console.log('DIAG '+JSON.stringify({nested,event:'SessionStart',startOutcome}));
+  assert.equal(startOutcome.status,'ready');
   const starts=join(f.request.installationDirectory,'state','starts'),names=readdirSync(starts);
   assert.equal(names.length,1); assert.equal(lstatSync(join(starts,names[0])).mode&0o777,0o600);
   assert.doesNotMatch(readFileSync(join(starts,names[0]),'utf8'),/session\.jsonl|synthetic_source_secret/);
   if(nested)mkdirSync(join(f.request.sourceRoot,'new','nested'),{recursive:true,mode:0o700});
   writeFileSync(path,'',{mode:0o600});f.append('first copper turn',{path});f.append('second copper turn',{path});
-  assert.equal((await f.hook('Stop',changes)).status,'progress');
+  const stopOutcome=await f.hook('Stop',changes);console.log('DIAG '+JSON.stringify({nested,event:'Stop',stopOutcome,platform:process.platform,node:process.version}));
+  assert.equal(stopOutcome.status,'progress',JSON.stringify(stopOutcome));
   const db=new DatabaseSync(f.request.databasePath);t.after(()=>db.close());
   assert.equal(db.prepare('SELECT count(*) n FROM raw_messages').get().n,2);
   assert.deepEqual(db.prepare('SELECT sealed FROM raw_parts ORDER BY rowid').all().map(row=>Buffer.from(row.sealed).toString()),['first copper turn','second copper turn']);
