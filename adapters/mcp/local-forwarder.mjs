@@ -1,4 +1,4 @@
-// Keep this import closure Node-core-only. Entry routing is an R4 responsibility.
+// Keep this import closure Node-core-only, including before entry fallback.
 import { createConnection } from 'node:net';
 import { spawn } from 'node:child_process';
 import { randomInt } from 'node:crypto';
@@ -89,7 +89,7 @@ async function connectAttempt(args, options, deadline) {
 export async function runForwarder(args = process.argv.slice(2), options = {}) {
   const input = options.input ?? process.stdin, output = options.output ?? process.stdout;
   const ledger = requestLedger();
-  let socket, incoming, closed = false, recovering, initialize, initialized;
+  let socket, incoming, closed = false, attached = false, recovering, initialize, initialized;
   const outgoing = frameGuard({ onFrame(message, bytes) {
     ledger.request(message);
     if (message.method === 'initialize') initialize = Buffer.from(bytes);
@@ -97,15 +97,19 @@ export async function runForwarder(args = process.argv.slice(2), options = {}) {
   }, queued: () => queuedBytes(socket, incoming, output) });
   let finish;
   const done = new Promise(resolve => { finish = resolve; });
-  const close = code => {
+  const close = (code, preserveStdio = false) => {
     if (closed) return;
     closed = true; input.unpipe(outgoing); outgoing.unpipe(); incoming?.unpipe();
     socket?.destroy(); outgoing.destroy(); incoming?.destroy(); ledger.clear();
     initialize = initialized = undefined;
     input.off('end', end); output.off('close', end);
     // Own async stream errors through final close, including teardown aborts.
-    input.once('close', () => input.off('error', failed)); output.once('close', () => output.off('error', failed));
-    input.destroy(); output.end();
+    if (preserveStdio) {
+      input.off('error', failed); output.off('error', failed);
+    } else {
+      input.once('close', () => input.off('error', failed)); output.once('close', () => output.off('error', failed));
+      input.destroy(); output.end();
+    }
     process.off('SIGTERM', term); process.off('SIGINT', term); finish(code);
   };
   const failed = () => close('daemon_transport');
@@ -123,6 +127,7 @@ export async function runForwarder(args = process.argv.slice(2), options = {}) {
   async function establish(replay = false) {
     const connection = await connectOrStart(args, options);
     if (closed) { connection.socket.destroy(); return; }
+    attached = true;
     socket = connection.socket;
     options.onConnected?.(connection);
     let replayId, replayResolve, replayReject;
@@ -171,10 +176,14 @@ export async function runForwarder(args = process.argv.slice(2), options = {}) {
     if (!closed) outgoing.pipe(socket, { end: false });
   }
   try { await establish(); if (!closed) input.pipe(outgoing); }
-  catch { close('daemon_transport'); }
+  catch (error) {
+    if (!attached && !closed) close({ refused: /^daemon_[a-z_]+$/.test(error.code) ? error.code : 'daemon_transport' }, true);
+    else close('daemon_transport');
+  }
   return done;
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const code = await runForwarder();
+  const result = await runForwarder();
+  const code = result?.refused ?? result;
   if (code) { process.stderr.write(code + '\n'); process.exitCode = 1; }
 }
