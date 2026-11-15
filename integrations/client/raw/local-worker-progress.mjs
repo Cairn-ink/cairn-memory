@@ -8,6 +8,7 @@ import { validateCursor, writeCursor } from './local-worker-state.mjs';
 import { RECORD_LIMIT, openWorkerSource, producerInput, producerOptions, sourceSize, verifyCursorSource, anchor, sourceReason } from './local-worker-source.mjs';
 
 const clone = value => structuredClone(value);
+const DISPATCH_LIMIT = 32;
 const project = options => options.authority.namespace.projectId || null;
 const projection = pending => {
   const { sessionId, messageId, projectId, occurredAt, ...opaque } = pending;
@@ -26,7 +27,7 @@ function timestamp(previous = 0) {
 // The caller owns the per-session lock and source handle for this entire run.
 export async function runProgress({ options,identity,context,opened,cursor,operation,bytes }) {
   const initialOffset = cursor.offset, counts = { completedRecords:0,completedParts:0,dispatchedParts:0,savedParts:0,skippedParts:0 };
-  let scan, scanStart, scanEnd, selected, binding, range, batch, recovery = false, persistenceFault = false;
+  let scan, scanStart, scanEnd, selected, binding, range, batch, recovery = false, persistenceFault = false, retried = false;
   const finish = (status,reason,remainingWork = false) => summary(status,reason,cursor,
     { ...counts,bytesAdvanced:cursor.offset-initialOffset,remainingWork });
   const persist = async next => {
@@ -55,7 +56,7 @@ export async function runProgress({ options,identity,context,opened,cursor,opera
   const availableProof = () => bytes.remaining >= range.end-range.start+(options.authority.client === 'codex' ? 65537 : 0)+8192;
   try {
     if (cursor.blockedReason) return finish('blocked',cursor.blockedReason,true);
-    while (counts.completedRecords < 64 && counts.dispatchedParts < 32) {
+    while (counts.completedRecords < 64 && counts.dispatchedParts < DISPATCH_LIMIT) {
       operation.check();
       if (!selected) {
         if (cursor.pending) {
@@ -106,26 +107,37 @@ export async function runProgress({ options,identity,context,opened,cursor,opera
       }
       if (!availableProof() || operation.remaining() < 3000) return finish('waiting','work_limit',true);
       operation.check();
-      const startedAt = timestamp(cursor.pending.lastAttemptAt), dispatch = clone(cursor);
-      dispatch.pending.attempts++; dispatch.pending.lastAttemptAt = startedAt;
-      dispatch.pending.nextEligibleAt = startedAt+280000; dispatch.pending.state = 'dispatched';
-      await persist(dispatch);
       let response;
-      try {
-        operation.check();
-        const remaining = operation.remaining();
-        if (remaining < 3000) fault('work_limit');
-        const transport = createLocalCaptureTransport({ ...options.transport,deadlineMs:remaining });
-        counts.dispatchedParts++;
-        response = await transport.capture(batch.body,{ signal:operation.signal });
-      } catch (error) {
-        const next = clone(cursor), uncertain = error.uncertain === true;
-        next.pending.state = uncertain ? 'uncertain' : 'unavailable';
-        next.pending.nextEligibleAt = uncertain ? timestamp(next.pending.lastAttemptAt)+125000 : null;
-        await persist(next);
-        let reason = error.reason === 'cancelled' || error.reason === 'work_limit' ? error.reason : uncertain ? 'uncertain' : 'unavailable';
-        try { operation.check(); } catch (stopped) { reason = stopped.reason; }
-        return finish(uncertain || ['cancelled','work_limit'].includes(reason) ? 'waiting' : 'blocked',reason,true);
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const startedAt = timestamp(cursor.pending.lastAttemptAt), dispatch = clone(cursor);
+        // One bounded pre-delivery retry shares this durable attempt, so a
+        // transient failure cannot consume the four recovery attempts faster.
+        if (attempt === 0) dispatch.pending.attempts++;
+        dispatch.pending.lastAttemptAt = startedAt;
+        dispatch.pending.nextEligibleAt = startedAt+280000; dispatch.pending.state = 'dispatched';
+        await persist(dispatch);
+        try {
+          operation.check();
+          const remaining = operation.remaining();
+          if (remaining < 3000) fault('work_limit');
+          const transport = createLocalCaptureTransport({ ...options.transport,deadlineMs:remaining });
+          counts.dispatchedParts++;
+          response = await transport.capture(batch.body,{ signal:operation.signal });
+          break;
+        } catch (error) {
+          const uncertain = error.uncertain === true;
+          let reason = error.reason === 'cancelled' || error.reason === 'work_limit' ? error.reason : uncertain ? 'uncertain' : 'unavailable';
+          let stopped = false;
+          try { operation.check(); } catch (stop) { stopped = true; reason = stop.reason; }
+          if (attempt === 0 && !retried && counts.dispatchedParts < DISPATCH_LIMIT && !uncertain && !stopped && !['cancelled','work_limit'].includes(reason) && operation.remaining() >= 3000) {
+            retried = true; continue;
+          }
+          const next = clone(cursor);
+          next.pending.state = uncertain ? 'uncertain' : 'unavailable';
+          next.pending.nextEligibleAt = uncertain ? timestamp(next.pending.lastAttemptAt)+125000 : null;
+          await persist(next);
+          return finish(uncertain || ['cancelled','work_limit'].includes(reason) ? 'waiting' : 'blocked',reason,true);
+        }
       }
       if (response.status === 409 && response.body.error === 'storage_busy') {
         // An explicit temporary refusal is not an uncertain dispatch or a
