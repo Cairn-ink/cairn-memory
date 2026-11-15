@@ -4,6 +4,7 @@ import { transaction, isStorageBusy } from './database.mjs';
 import { localControlInput } from './local-authority-input.mjs';
 import { rawBoundary } from './raw-input.mjs';
 import { createRawControlStorage } from './raw-control-storage.mjs';
+import { createRawSourceRoots } from './raw-source-roots.mjs';
 import { fail } from './validation.mjs';
 
 const where = 'owner_id=? AND scope=? AND project_id=? AND client=?';
@@ -55,6 +56,7 @@ export const LOCAL_RAW_HIDE_WINDOW_MS = 30 * 60 * 1000;
 /** Private local selection only. Every mutation joins its caller's transaction. */
 export function createLocalRawPrivacyStorage(db) {
   const uuid = createLocalUuidFence(db);
+  const sourceRoots = createRawSourceRoots(db);
   const nsWhere = 'owner_id=? AND scope=? AND project_id=?';
   const raw = createRawControlStorage(db);
   const secret = db.prepare('SELECT secret FROM episode_identity WHERE singleton=1').get().secret;
@@ -131,19 +133,29 @@ export function createLocalRawPrivacyStorage(db) {
       fail('local_raw_privacy_write_failed');
     }
   }
-  // Both callers select under the enclosing Memory write transaction. Reuse
-  // exactly the fence selection, including compatibility ranges and neighbours.
+  // Snapshot all receipt names and proven origins before invalidation removes
+  // keeper proof. Time-window and unknown-time matches only select fences.
   function invalidateMemoryEpisodesInside(ns, memory, episodes) {
-    const { sessions } = memoryHidePlanInside(ns, memory);
-    for (const session of sessions) {
+    required();
+    const sessions = new Map();
+    const add = (client, sessionKey) => sessions.set(JSON.stringify([client, sessionKey]), { client, sessionKey });
+    for (const receipt of db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(memory.id)) {
+      if (!receipt.session_id || receipt.session_id === 'explicit-tool') continue;
+      for (const root of sourceRoots.receipt(ns, receipt).roots) add(root.client, root.sessionKey);
+      if (['claude-code', 'codex'].includes(receipt.client))
+        for (const key of sourceRoots.keys(ns, receipt.client, receipt.session_id)) add(receipt.client, key);
+    }
+    const selected = new Set();
+    for (const session of sessions.values()) {
       const rows = db.prepare(`SELECT id FROM session_episodes WHERE ${nsWhere} AND client=? AND session_key=? AND deleted=0`)
-        .all(...rawBoundary(ns), session.client, session.session_key);
-      for (const row of rows) {
-        episodes.invalidateSources(ns, row.id);
-        // Invalidating clears anchors and steps; the existing source-deletion
-        // path also withholds the row from receipt-time lists and inspection.
-        episodes.deleteSourceEpisode(ns, row.id);
-      }
+        .all(...rawBoundary(ns), session.client, session.sessionKey);
+      for (const row of rows) selected.add(row.id);
+    }
+    for (const id of selected) {
+      episodes.invalidateSources(ns, id);
+      // Existing recursive invalidation clears consumers' passages and steps.
+      // Deletion also withholds named rows from receipt-time lists and get.
+      episodes.deleteSourceEpisode(ns, id);
     }
   }
   function hideMemoryInside(ns, memory) {
