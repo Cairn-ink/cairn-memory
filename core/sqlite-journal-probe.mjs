@@ -102,8 +102,8 @@ function runProbe(path, structured) {
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', structured ? observedProbe : probe, uri.href], {
     encoding: 'utf8', timeout: 5000, maxBuffer: 4096, env: {},
   });
+  checkChildResult(result, 'sqlite_journal_probe_failed');
   if (!structured) {
-    if (result.error || result.status !== 0 || result.signal) throw new Error('sqlite_journal_probe_failed');
     const value = JSON.parse(result.stdout);
     if (fingerprint(path) !== before) throw new Error('sqlite_journal_probe_changed');
     if (value.mode === 'delete') {
