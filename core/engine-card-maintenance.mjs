@@ -102,21 +102,39 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
           .map(row => [row.memoryId, row.vector]));
         storage.validate(ns, snapshot.memories, check); check();
         const timestamp = new Date(now()).toISOString();
-        const clusters = partitionCardClusters(clusterMemories(snapshot.memories, vectorMap, check)), cards = storage.cards(ns, check);
+        const topics = clusterMemories(snapshot.memories, vectorMap, check), cards = storage.cards(ns, check);
         const purged = storage.recentPurges(ns, timestamp, check);
+        const topicKey = key => key.replace(/#\d+$/, '');
+        const purgedTopics = new Set(purged.map(card => topicKey(card.clusterKey))), priorTopics = new Map();
+        // Compare whole topics, including the union of prior parts. Counting
+        // each part separately loses continuity as soon as a topic exceeds 12.
+        for (const card of [...cards, ...purged]) if (card.clusterKey.startsWith('similarity:')) {
+          const key = topicKey(card.clusterKey);
+          if (!priorTopics.has(key)) priorTopics.set(key, { key, builtAt: card.builtAt, ids: new Set() });
+          const prior = priorTopics.get(key);
+          if (card.builtAt < prior.builtAt) prior.builtAt = card.builtAt;
+          for (const ref of card.sourceRevisions) prior.ids.add(ref.memoryId);
+        }
         // A deleted seed must not turn a stale topic into a new key and bypass
         // its debounce. Reuse a prior similarity key for a majority-overlapping
         // source set; MOC identities remain exact and never merge this way.
-        for (const cluster of clusters) if (cluster.key.startsWith('similarity:')) {
-          const ids = new Set(cluster.memories.map(m => m.id));
-          const match = [...cards, ...purged].filter(card => card.clusterKey?.startsWith('similarity:')).map(card => ({ card,
-            overlap: card.sourceRevisions.filter(ref => ids.has(ref.memoryId)).length /
-              Math.max(ids.size, card.sourceRevisions.length) })).filter(value => value.overlap >= .65)
-            .sort((a, b) => b.overlap - a.overlap || a.card.builtAt.localeCompare(b.card.builtAt))[0];
-          if (match) cluster.key = match.card.clusterKey.replace(/#\d+$/, '') + (cluster.key.match(/#\d+$/)?.[0] ?? '');
+        const blockedTopics = new Set();
+        for (const cluster of topics) {
+          check();
+          let blocked = purgedTopics.has(cluster.key);
+          if (cluster.key.startsWith('similarity:')) {
+            const ids = new Set(cluster.memories.map(m => m.id));
+            const matches = [...priorTopics.values()].map(prior => ({ prior,
+              overlap: [...prior.ids].filter(id => ids.has(id)).length / Math.max(ids.size, prior.ids.size) }))
+              .filter(value => value.overlap >= .65)
+              .sort((a, b) => b.overlap - a.overlap || a.prior.builtAt.localeCompare(b.prior.builtAt));
+            if (matches.length) cluster.key = matches[0].prior.key;
+            blocked ||= matches.some(match => purgedTopics.has(match.prior.key));
+          }
+          if (blocked) blockedTopics.add(cluster.key);
         }
-        const eligible = new Map();
-        for (const cluster of clusters) {
+        const eligible = new Map(), blocked = new Map();
+        for (const cluster of partitionCardClusters(topics)) {
           check();
           // Five items establish pressure without a token estimate. The only
           // smaller eligible case is a four-Memory chain: meter its actual
@@ -127,12 +145,17 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
               policy: { id: 'rank-first-whole-v1' }, budget: { maxItems: 12, maxTokens: 1000000 },
               representation: 'representation-v2-dated', deadlineAt: end, snapshotOf: () => null }).diagnostics.budget.used : 0;
           cluster.trigger = cardTrigger(cluster.memories, edges, tokens);
-          if (cluster.trigger.eligible) eligible.set(cluster.key, cluster);
+          if (cluster.trigger.eligible) {
+            if (blockedTopics.has(topicKey(cluster.key))) { blocked.set(cluster.key, cluster); result.debounced++; }
+            else eligible.set(cluster.key, cluster);
+          }
         }
         for (const card of cards) {
           check();
-          const cluster = eligible.get(card.clusterKey) ?? eligible.get(card.clusterKey.endsWith('#0')
-            ? card.clusterKey.slice(0, -2) : card.clusterKey + '#0');
+          const alias = card.clusterKey.endsWith('#0') ? card.clusterKey.slice(0, -2) : card.clusterKey + '#0';
+          // Blocked parts still stale shifted source sets on the original
+          // schedule, but are never destinations for carry or publication.
+          const cluster = eligible.get(card.clusterKey) ?? blocked.get(card.clusterKey) ?? eligible.get(alias) ?? blocked.get(alias);
           const sameSources = cluster && JSON.stringify(card.sourceRevisions) === JSON.stringify(cardMemoryRevisions(cluster.memories));
           if (card.status === 'current' && sameSources && cluster.key === card.clusterKey) { eligible.delete(cluster.key); continue; }
           // Search before staling against the old key: another eligible set
@@ -161,13 +184,8 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
             if (commit) await commit(() => storage.retire(ns, card.id, timestamp)); else storage.retire(ns, card.id, timestamp);
           }
           if (newlyStale || now() - Date.parse(card.row.updated_at) < ENGINE_CARD_LIMITS.debounceMs) {
-            eligible.delete(cluster.key); result.debounced++;
+            eligible.delete(cluster.key); if (!blocked.has(cluster.key)) result.debounced++;
           }
-        }
-        for (const card of purged) {
-          const cluster = eligible.get(card.clusterKey) ?? eligible.get(card.clusterKey.endsWith('#0')
-            ? card.clusterKey.slice(0, -2) : card.clusterKey + '#0');
-          if (cluster && eligible.delete(cluster.key)) result.debounced++;
         }
         for (const cluster of eligible.values()) {
           check();
@@ -202,29 +220,34 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
           const attempt = commit ? await commit(claim) : claim();
           if (!attempt) { result.debounced++; continue; }
           result.modelCalls++;
+          let writing = false;
           try {
             const output = await callModel(model, 'consolidate', CONSOLIDATE_PROMPT, request(), {
               deadline, beforeDispatch: checkPause, validateFresh: () => { check(); storage.validate(ns, requestSources, check); }, failureCode: 'consolidation_failed' });
             const value = validateConsolidation(output, memories, model, cluster.memories); check();
-            const publish = () => storage.commit(ns, cluster, value, new Date(now()).toISOString(), check);
-            const card = value.body && (commit ? await commit(publish) : publish());
-            if (card) {
-              const { supersededCount = 0, ...published } = card;
-              result.deleted += supersededCount; result.built.push(published);
-            }
             // Context can identify an old current line in another Card. Reuse
             // ordinary staling and its debounce; one generation ends this pass.
             // Only current lines count: a Card that already lists the Memory
             // under Timeline is up to date, and retiring it would make two
             // Cards rebuild each other for ever.
+            const retirements = [];
             for (const other of cards.filter(card => card.status === 'current')) {
               const covered = cardSourceKeys([{ type: 'card', metadata: { origin: 'engine' }, text: currentCardLines(other.row.body),
                 sourceMemoryRefs: other.sourceRevisions.map(ref => ({ namespace: ns, ...ref })) }]);
               if (requestSources.some(memory => value.outOfDateIds.includes(memory.id) && covered.has(memoryPackKey({
                 namespace: ns, memoryId: memory.id, revision: memory.revision })))) {
-                if (commit) await commit(() => storage.retire(ns, other.id, new Date(now()).toISOString()));
-                else storage.retire(ns, other.id, new Date(now()).toISOString());
+                retirements.push(other.id);
               }
+            }
+            // Publication (when there is a body) and every retirement chosen
+            // by this output share one guarded dispatcher unit and transaction.
+            const publish = () => storage.commit(ns, cluster, value, new Date(now()).toISOString(), check, retirements, requestSources);
+            writing = true;
+            const card = commit ? await commit(publish) : publish();
+            writing = false;
+            if (card) {
+              const { supersededCount = 0, ...published } = card;
+              result.deleted += supersededCount; result.built.push(published);
             }
             // Valid output without a committed Card must not reopen a missing
             // fingerprint on every subsequent maintenance pass.
@@ -234,7 +257,7 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
             let code;
             try { code = error?.code; }
             catch { /* Unreadable failure framing is terminal. */ }
-            if (code === 'namespace_paused') {
+            if (code === 'namespace_paused' || writing) {
               const release = () => storage.release(ns, attempt);
               if (commit) await dispatchCommit(storage, release, undefined, { compensating: true }); else release();
             }
