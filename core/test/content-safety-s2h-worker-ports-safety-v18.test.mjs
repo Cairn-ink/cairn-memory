@@ -3,7 +3,11 @@
 // count toward the family gate (170 cases each); the safety layout does not.
 // The cases module comes first so the shared test clock loads first, as before.
 import { workerPortCases } from '../testing/content-safety-s2h-worker-ports-cases.mjs';
+import assert from 'node:assert/strict';
 import test from 'node:test';
 import { familyGate } from '../testing/receipt-event-time-gates.mjs';
 
-for (const [name, fn] of workerPortCases([{version:18,family:'safety'}], familyGate('native worker-ports safety v18', 0))) test(name, fn);
+const cases = workerPortCases([{version:18,family:'safety'}], familyGate('native worker-ports safety v18', 0));
+// Every slice registers its whole layout; an empty inventory must never pass.
+assert.equal(cases.length, 170, 'worker-ports slice case count');
+for (const [name, fn] of cases) test(name, fn);
