@@ -19,7 +19,7 @@ const until = async (predicate, reason, ms = 15000) => {
 };
 const ok = r => { assert.equal(r.ok, true, JSON.stringify(r)); return r.value; };
 export async function installedAssertions(t, { install = false } = {}) {
-  const scratch = await mkdtemp(join(tmpdir(), 'entry-')), clients = [], owned = new Map(), logs = new Set();
+  const scratch = await mkdtemp(join(tmpdir(), 'entry-')), clients = [], owned = new Map(), logs = new Set(), lockTokens = new Map();
   const dir = await runtimeDirectory(), baseline = new Set(await readdir(dir.path));
   // Claim key ownership via an exclusive atomic link, rather than assuming
   // absence in a directory snapshot proves that this test created the key.
@@ -74,6 +74,12 @@ export async function installedAssertions(t, { install = false } = {}) {
       let d; try { d = JSON.parse(await readFile(join(dir.path, name))); } catch (e) { if (e.code === 'ENOENT') continue; throw e; }
       if (d.identity.store.path !== store || !d.identity.package.path.startsWith(scratch + '/')) continue;
       owned.set(d.incarnation, d); logs.add(name.replace(/\.json$/, '.log')); values.push({ name, ...d });
+      const lockName = name.replace(/\.json$/, '.lock');
+      try {
+        const lock = JSON.parse(await readFile(join(dir.path, lockName)));
+        if (lock.pid === d.owner.pid && lock.start === d.owner.start && /^[a-f0-9-]{36}$/.test(lock.token))
+          lockTokens.set(lockName + '.reap-' + lock.token, d.incarnation);
+      } catch (error) { if (error.code !== 'ENOENT') throw error; }
     }
     return values;
   }
@@ -88,11 +94,12 @@ export async function installedAssertions(t, { install = false } = {}) {
     } });
     child.stderr.on('data', b => { entry.stderr += b; });
     child.on('exit', (code, signal) => { entry.exit = { code, signal }; });
-    entry.request = async (method, params = {}) => {
+    entry.rawRequest = async (method, params = {}) => {
       const id = ++next; child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
       const response = await until(() => entry.lines.find(m => m.id === id), 'response ' + method + ' ' + entry.stderr);
-      assert.equal(entry.lines.filter(m => m.id === id).length, 1, 'no duplicate response'); assert.ok(!response.error, JSON.stringify(response)); return response.result;
+      assert.equal(entry.lines.filter(m => m.id === id).length, 1, 'no duplicate response'); return response;
     };
+    entry.request = async (...args) => { const response = await entry.rawRequest(...args); assert.ok(!response.error, JSON.stringify(response)); return response.result; };
     entry.tool = async (name, args) => JSON.parse((await entry.request('tools/call', { name, arguments: args })).content[0].text);
     // Both frames are buffered before attach/refusal, testing real same-process
     // fallback preservation, not just a mocked stream consumer.
@@ -110,6 +117,16 @@ export async function installedAssertions(t, { install = false } = {}) {
     const ids = entry.lines.filter(m => Object.hasOwn(m, 'id')).map(m => m.id);
     assert.equal(new Set(ids).size, ids.length, 'no delayed duplicate MCP responses');
   }
+  async function cleanupMarkers() {
+    // The lifetime-lock reaper deliberately retains token-specific election
+    // markers. These prefixes were recorded from this test's exact owners,
+    // under unique package/store identities; never remove another identity.
+    for (const name of await readdir(dir.path)) {
+      if (baseline.has(name)) continue;
+      if ([...lockTokens.keys()].some(prefix => name === prefix || name.startsWith(prefix + '.owner-') || name.startsWith(prefix + '.reap-')))
+        await rm(join(dir.path, name));
+    }
+  }
   t.after(async () => {
     try {
       for (const c of clients) if (!c.exit) c.child.stdin.end();
@@ -119,6 +136,7 @@ export async function installedAssertions(t, { install = false } = {}) {
       await until(() => [...owned.values()].every(d => !startAwareAlive(d.owner)), 'every test daemon stopped');
       await until(async () => (await descriptors()).length === 0, 'test endpoints removed');
       for (const name of logs) if (!baseline.has(name)) await rm(join(dir.path, name), { force: true });
+      await cleanupMarkers();
       if (ownKey) {
         const current = await lstat(keyPath, { bigint: true });
         assert.equal(current.dev, ownKey.dev); assert.equal(current.ino, ownKey.ino);
@@ -182,6 +200,32 @@ export async function installedAssertions(t, { install = false } = {}) {
   });
   assert.equal(result.status, 0, result.stderr);
   assert.equal((await descriptors()).length, 5, 'setup check spawns no daemon');
+  // Two idle installed sessions recover through the actual packaged bin.
+  const idleVictim = (await descriptors()).find(d => d.identity.package.path === root && d.identity.configuration.namespace.ownerId === 'synthetic-entry-owner' && d.identity.configuration.namespace.projectId === null);
+  assert.ok(idleVictim && startAwareAlive(idleVictim.owner));
+  process.kill(idleVictim.owner.pid, 'SIGKILL');
+  const fresh = await until(async () => (await descriptors()).find(d => d.name === idleVictim.name && d.incarnation !== idleVictim.incarnation), 'idle SIGKILL elects fresh daemon');
+  assert.notDeepEqual(fresh.owner, idleVictim.owner);
+  await until(() => !startAwareAlive(idleVictim.owner), 'old idle owner is gone');
+  for (const c of [a, b]) assert.equal((await c.tool('inspect_memory', {})).ok, true, 'next tool works after idle reconnect');
+  assert.equal((await descriptors()).filter(d => d.name === idleVictim.name).length, 1);
+
+  // Stop only this test's verified daemon to hold a tool request in flight,
+  // then kill it before it can respond. Passing the unknown-outcome assertion
+  // also proves the forwarder had recorded that request before socket loss.
+  assert.ok(startAwareAlive(fresh.owner)); process.kill(fresh.owner.pid, 'SIGSTOP');
+  let settled = false;
+  const pending = a.rawRequest('tools/call', { name: 'inspect_memory', arguments: {} }).then(response => { settled = true; return response; });
+  await delay(250); assert.equal(settled, false);
+  assert.ok(startAwareAlive(fresh.owner)); process.kill(fresh.owner.pid, 'SIGKILL');
+  const unknown = await pending; assert.equal(unknown.error.message, 'daemon_transport');
+  await until(() => a.exit, 'in-flight session exits with unknown outcome');
+  assert.deepEqual(a.exit, { code: 1, signal: null });
+  assert.ok(a.stderr.includes('daemon_outcome_unknown\n')); assert.ok(!a.stderr.includes('cairn_daemon_fallback:'));
+  const recovered = await until(async () => (await descriptors()).find(d => d.name === fresh.name && d.incarnation !== fresh.incarnation), 'other installed session elects fresh daemon');
+  assert.notDeepEqual(recovered.owner, fresh.owner);
+  assert.equal((await b.tool('inspect_memory', {})).ok, true, 'other session reconnects after in-flight SIGKILL');
+  t.diagnostic('packaged SIGKILL: both idle sessions reconnected; in-flight session outcome unknown; peer reconnected');
   const lossRoot = await tree('loss'), loss = await client(lossRoot);
   const victim = (await descriptors()).find(d => d.identity.package.path === lossRoot);
   assert.ok(victim && startAwareAlive(victim.owner));
@@ -200,11 +244,12 @@ export async function installedAssertions(t, { install = false } = {}) {
     const compared = spawnSync('cmp', [lossBackup, buildPath]); assert.equal(compared.status, 0);
     t.diagnostic(`cmp post-attach build restoration: rc=${compared.status}`);
   }
-  for (const c of [a, b, other, recreated, otherOwner, ownerSession]) await close(c);
+  for (const c of [b, other, recreated, otherOwner, ownerSession]) await close(c);
   const start = performance.now();
   await until(async () => (await descriptors()).length === 0, '30 second idle exit removes endpoints', 37000);
   assert.ok(performance.now() - start >= 28000 && performance.now() - start < 37000);
   await until(() => [...owned.values()].every(d => !startAwareAlive(d.owner)), 'idle daemon process exits after endpoint removal');
+  await cleanupMarkers();
   const endpoints = (await readdir(dir.path)).filter(n => [...logs].some(log => n.startsWith(log.slice(0, -4))) && !n.endsWith('.log'));
   assert.deepEqual(endpoints, [], 'ready socket and lock files are removed');
   t.diagnostic(`idle exit observed after ${(performance.now() - start).toFixed(0)}ms`);
