@@ -4,7 +4,9 @@
 
 - Apply the ten-minute wait after a purge to every part of the affected topic.
 - Publish a new Card and retire other Cards whose current lines it marks out of
-  date in one transaction, so a pause or failed write cannot leave only half applied.
+  date in one transaction, retaining bounded attempt accounting after failed writes.
+- Keep split similarity topics under distinct keys, and count public Card deletion
+  toward the topic's wait even when its action name resembles a replacement.
 
 ## Unreleased — daily shared embedding budget
 

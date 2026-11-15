@@ -181,8 +181,8 @@ receipt preserves the topic key and recent change time; forget cannot trigger
 an immediate model request.
 The debounce covers every part of the topic, including its tail, even when the
 purged Card used an older unpartitioned key or a different part suffix.
-Clearing a superseded Card after its replacement commits does not restart the
-wait for sibling parts.
+A completed replacement that remains current under the same part key does not
+restart the wait for sibling parts; a public deletion still starts that wait.
 
 An optional `cardRelations.read({namespace, memoryIds, memories, signal})` port
 returns `{from, to, kind, slot}` edges. Only endpoints in the cluster and equal
@@ -334,6 +334,8 @@ When a build marks an ID appearing on another current Card's current lines in
 the same namespace, it retires that Card through the existing staling path.
 Publication and all retirements selected by that output commit together; an
 output without a body applies its retirements together without publishing a Card.
+A paused write releases its attempt; other write failures keep the same terminal
+or transient attempt accounting as a failed publication.
 Retirement hides it immediately; a later pass rebuilds after the ordinary
 ten-minute debounce, with at most one generation per pass. Context is bounded,
 so changes outside the selected context can remain unrecognized.
