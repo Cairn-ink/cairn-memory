@@ -164,6 +164,16 @@ function applyHostedPlaceholder(reply) {
   return value;
 }
 
+// Mirrors the hosted wire layer: clone and map only stored automatic tag
+// origins. The engine and stored tag keep their truthful 'model' value.
+function applyHostedOriginMapping(reply) {
+  const value = structuredClone(reply);
+  for (const name of ['procedural', 'background']) for (const item of value.groups[name].items) {
+    if (item.procedural?.origin === 'model') item.procedural.origin = 'agent-inferred';
+  }
+  return value;
+}
+
 const emptyGroup = enabled => ({ enabled, returned: 0, complete: true,
   budget_exhausted: false, status: enabled ? 'complete' : 'disabled', items: [] });
 // The core API predates the hosted envelope. Compose only its fixed version and
@@ -443,4 +453,145 @@ test(`hosted placeholders followed by whole item trimming fit the same exact rep
     beforeChars: JSON.stringify(before).length, afterChars: JSON.stringify(after).length, trimmedChars: JSON.stringify(value).length,
     beforeTokens: f.counter.countTokens(JSON.stringify(before)), afterTokens: f.counter.countTokens(JSON.stringify(after)),
     trimmedTokens: f.counter.countTokens(JSON.stringify(value)), popped, deltas }));
+});
+
+for (const layout of [53, 18, 33]) for (const kind of ['instruction', 'preference'])
+for (const delivery of ['ordinary', 'short keeps tag', 'short loses tag'])
+test(`hosted maps an automatically captured ${kind} origin: ${delivery}, layout ${layout}`, async t => {
+  const f = await fixture(t, layout), content = 'Synthetic automatically captured ' + kind;
+  const episodic = openMemoryCore({ path: f.path, model: f.model, ...episodeOptions }); f.ws.defer(() => episodic.close());
+  f.model.items = [{ content, kind, confidence: .9, sourceIndices: [0], procedural: true }];
+  const qualify = rationaleModel().qualifyCandidates;
+  f.model.qualifyCandidates = input => {
+    const output = qualify(input);
+    output.qualifications[0].procedural = { evidenceIndices: [input.input.items[0].candidates[0].candidateIndex] };
+    return output;
+  };
+  f.tick();
+  const capture = ok(await episodic.capture({ namespace: ns, client: 'synthetic', sessionId: 'synthetic-auto-tag-session',
+    eventId: 'synthetic-auto-tag-capture', episodeContext: { clientLabel: 'Synthetic', generation: 'initial', origin: 'ordinary' },
+    messages: [{ id: 'synthetic-auto-tag-message', role: 'user', content: 'Synthetic automatic tag source' }] }));
+  assert.equal(capture.admission.memories.length, 1);
+  const memory = { ...capture.admission.memories[0], content }, before = get(f, memory);
+  assert.equal(before.procedural.procedural, true);
+  assert.equal(before.procedural.origin, 'model', 'real capture stores an automatic tag');
+  assert.equal(before.procedural.anchors.length, 1);
+  assert.equal(before.procedural.anchors[0].receiptId, before.receipts[0].id);
+  if (delivery !== 'ordinary') {
+    let shared;
+    if (delivery === 'short keeps tag') {
+      // Append independent evidence through public admission without replacing
+      // the captured tag, whose anchor stays on the original remaining receipt.
+      shared = support('auto-tag-withheld');
+      assert.equal(admit(f, content, kind, [shared]).id, memory.id);
+    } else {
+      const row = rows(f, memory)[0];
+      shared = { client: row.client, sessionId: row.session_id, eventId: row.event_id, role: row.role, excerpt: row.excerpt };
+    }
+    assert.deepEqual(get(f, memory).procedural, before.procedural, 'appending evidence preserves the automatic tag');
+    const hidden = rows(f, memory).find(row => row.excerpt === shared.excerpt);
+    const donor = admit(f, 'Synthetic retired automatic tag donor', 'decision', [shared]);
+    deny(f, ...withhold(f, donor, 'forget', shared), hidden.id, hidden.receipt_key);
+    if (delivery === 'short loses tag') deny(f, before.procedural.anchors[0].digest);
+  }
+  assert.equal(f.db.prepare('SELECT origin FROM procedural_tags WHERE memory_id=?').get(memory.id).origin, 'model');
+  if (delivery === 'short loses tag' && kind === 'preference') deny(f, memory.id, content);
+  const result = read(f), value = ok(result), group = value.groups.procedural;
+  if (delivery === 'short loses tag') {
+    if (kind === 'instruction') {
+      assert.deepEqual(group.items.map(item => item.memory.id), [memory.id]);
+      assert.equal(group.items[0].memory.content, content);
+      assert.equal(Object.hasOwn(group.items[0], 'procedural'), false);
+      assert.deepEqual(group.items[0].receipts, []);
+      assert.deepEqual(group.items[0].receipts, projected(get(f, memory).receipts));
+    } else {
+      assert.deepEqual(group.items, []);
+      absent(result, [memory.id, content]);
+    }
+    assert.equal(group.returned, kind === 'instruction' ? 1 : 0);
+    assert.equal(group.status, 'complete');
+    const reply = validate(f, result); // Placeholder alone; no origin mapping.
+    assert.deepEqual(applyHostedOriginMapping(reply), reply, 'a dropped tag needs no mapping');
+    assert.deepEqual(read(f), result);
+    return;
+  }
+  assert.deepEqual(group.items.map(item => item.memory.id), [memory.id]);
+  assert.equal(group.returned, 1);
+  const item = group.items[0];
+  assert.equal(item.memory.content, content);
+  assert.deepEqual(item.receipts, projected(get(f, memory).receipts));
+  assert.equal(item.receipts.length, 1);
+  assert.deepEqual(item.procedural, before.procedural);
+  assert.equal(item.procedural.origin, 'model', 'session output preserves the stored automatic origin');
+  for (const anchor of item.procedural.anchors) assert.ok(item.receipts.some(receipt => receipt.id === anchor.receiptId));
+  // Compose the same fixed hosted shell without the existing envelope helper:
+  // that helper intentionally refuses unexpected raw origin enum failures.
+  const reply = { version: 1, ...value, groups: { ...value.groups, commitments: emptyGroup(false) } };
+  const unmapped = applyHostedPlaceholder(reply);
+  assert.deepEqual(schemaErrors(unmapped), [{ path: '/groups/procedural/items/0/procedural/origin', keyword: 'enum' }],
+    'the sole failure without wire mapping is the automatic tag origin enum');
+  assert.equal(conforms('session-start-response', unmapped), false);
+  assert.throws(() => parseSessionStartResponse(unmapped, request, limits(f)), /invalid_reply/);
+  const relaxed = structuredClone(canonical);
+  relaxed.$defs.contextMemory.properties.procedural.properties.origin.anyOf[0].enum.push('model');
+  assert.deepEqual(schemaErrors(unmapped, relaxed), [], 'relaxing only the origin enum removes every schema failure');
+  const mapped = applyHostedOriginMapping(unmapped), expected = structuredClone(unmapped);
+  expected.groups.procedural.items[0].procedural.origin = 'agent-inferred';
+  assert.deepEqual(mapped, expected, 'wire mapping changes only the automatic tag origin');
+  accepted(f, mapped);
+  assert.equal(item.procedural.origin, 'model', 'wire mapping never mutates the engine reply');
+  assert.equal(f.db.prepare('SELECT origin FROM procedural_tags WHERE memory_id=?').get(memory.id).origin, 'model');
+  assert.deepEqual(read(f), result, 'both snapshots and repeated calls retain the engine origin');
+});
+
+for (const layout of [53, 18, 33]) for (const kind of ['instruction', 'preference'])
+test(`hosted drops the whole mixed withheld and remaining anchor tag for ${kind}, layout ${layout}`, async t => {
+  const f = await fixture(t, layout), shared = support('mixed-tag-withheld'), remaining = support('mixed-tag-remaining');
+  const memory = admit(f, 'Synthetic mixed anchor hosted ' + kind, kind, [shared, remaining], {
+    anchors: [shared, remaining].map((source, receiptIndex) => ({ receiptIndex, start: 0, end: source.excerpt.length })),
+  });
+  const before = get(f, memory), hidden = rows(f, memory).find(row => row.excerpt === shared.excerpt);
+  assert.equal(before.procedural.anchors.length, 2);
+  const hiddenAnchor = before.procedural.anchors.find(anchor => anchor.receiptId === hidden.id);
+  assert.ok(hiddenAnchor);
+  const donor = admit(f, 'Synthetic retired mixed anchor donor', 'decision', [shared]);
+  deny(f, ...withhold(f, donor, 'forget', shared), hidden.id, hidden.receipt_key, hiddenAnchor.digest);
+  if (kind === 'preference') deny(f, memory.id, memory.content);
+  const result = read(f), group = ok(result).groups.procedural;
+  if (kind === 'instruction') {
+    assert.deepEqual(group.items.map(item => item.memory.id), [memory.id]);
+    assert.equal(Object.hasOwn(group.items[0], 'procedural'), false, 'drop both anchors, not just the withheld anchor');
+    assert.deepEqual(group.items[0].receipts, projected(get(f, memory).receipts));
+    assert.deepEqual(group.items[0].receipts.map(receipt => receipt.excerpt), [remaining.excerpt]);
+  } else {
+    assert.deepEqual(group.items, []);
+    absent(result, [memory.id, memory.content]);
+  }
+  assert.equal(group.returned, kind === 'instruction' ? 1 : 0);
+  assert.equal(group.status, 'complete');
+  validate(f, result);
+  absent(result, [...f.tokenizer.needles]);
+  assert.deepEqual(read(f), result);
+});
+
+for (const layout of [53, 18, 33])
+test(`hosted keeps a valid negative tag on a short instruction, layout ${layout}`, async t => {
+  const f = await fixture(t, layout), shared = support('negative-tag-withheld'), remaining = support('negative-tag-remaining');
+  const memory = admit(f, 'Synthetic negative tag hosted instruction', 'instruction', [shared, remaining]);
+  ok(f.core.setProceduralMemory({ namespace: ns, memoryId: memory.id,
+    expectedRevision: memory.revision, expectedTagRevision: 0, procedural: null }));
+  const tag = { tagRevision: 1, procedural: false, origin: null, anchors: [] };
+  assert.deepEqual(get(f, memory).procedural, tag);
+  const hidden = rows(f, memory).find(row => row.excerpt === shared.excerpt);
+  const donor = admit(f, 'Synthetic retired negative tag donor', 'decision', [shared]);
+  deny(f, ...withhold(f, donor, 'forget', shared), hidden.id, hidden.receipt_key);
+  const result = read(f), group = ok(result).groups.procedural;
+  assert.deepEqual(group.items.map(item => item.memory.id), [memory.id]);
+  assert.equal(group.returned, 1);
+  assert.equal(group.status, 'complete');
+  assert.deepEqual(group.items[0].procedural, tag);
+  assert.deepEqual(group.items[0].receipts, projected(get(f, memory).receipts));
+  assert.deepEqual(group.items[0].receipts.map(receipt => receipt.excerpt), [remaining.excerpt]);
+  validate(f, result);
+  assert.deepEqual(read(f), result);
 });

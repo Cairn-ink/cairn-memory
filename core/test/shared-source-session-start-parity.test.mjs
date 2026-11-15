@@ -277,3 +277,56 @@ test(`short ${group} item consumes one of six slots and its delivery budget, lay
   assert.equal(ok(read(f, group, f.core, null, { maxChars: chars - 1 })).groups[group].returned, 5,
     'one less character rejects the sixth whole item, including the short item in the cost');
 });
+
+for (const layout of [53, 18, 33]) for (const kind of ['instruction', 'preference'])
+test(`short ${kind} drops a tag anchored on both withheld and remaining receipts, layout ${layout}`, async t => {
+  const f = await fixture(t, layout), shared = support('mixed-tag-withheld'), remaining = support('mixed-tag-remaining');
+  const memory = admit(f, 'Synthetic mixed anchor parity ' + kind, kind, [shared, remaining], {
+    anchors: [shared, remaining].map((source, receiptIndex) => ({ receiptIndex, start: 0, end: source.excerpt.length })),
+  });
+  const before = get(f, memory), hidden = rows(f, memory).find(row => row.excerpt === shared.excerpt);
+  assert.equal(before.procedural.anchors.length, 2);
+  const hiddenAnchor = before.procedural.anchors.find(anchor => anchor.receiptId === hidden.id);
+  assert.ok(hiddenAnchor);
+  const donor = admit(f, 'Synthetic retired mixed parity donor', 'decision', [shared]);
+  const needles = [...withhold(f, donor, 'forget', shared), hidden.id, hidden.receipt_key, hiddenAnchor.digest];
+  if (kind === 'preference') needles.push(memory.id, memory.content);
+  deny(f, ...needles);
+  const result = read(f, 'procedural'), group = ok(result).groups.procedural;
+  const expected = get(f, memory);
+  assert.equal(Object.hasOwn(expected, 'procedural'), false, 'get also drops the entire mixed-anchor tag');
+  assert.deepEqual(expected.receipts.map(receipt => receipt.excerpt), [remaining.excerpt]);
+  if (kind === 'instruction') {
+    assert.deepEqual(group.items.map(item => item.memory.id), [memory.id]);
+    parity(f, group.items[0], memory);
+    assert.equal(Object.hasOwn(group.items[0], 'procedural'), false);
+  } else assert.deepEqual(group.items, []);
+  assert.equal(group.returned, kind === 'instruction' ? 1 : 0);
+  assert.equal(group.status, 'complete');
+  absent(result, needles);
+  assert.deepEqual(read(f, 'procedural'), result);
+});
+
+for (const layout of [53, 18, 33])
+test(`short instruction retains a valid negative tag and remaining receipt, layout ${layout}`, async t => {
+  const f = await fixture(t, layout), shared = support('negative-tag-withheld'), remaining = support('negative-tag-remaining');
+  const memory = admit(f, 'Synthetic negative tag parity instruction', 'instruction', [shared, remaining]);
+  ok(f.core.setProceduralMemory({ namespace: ns, memoryId: memory.id,
+    expectedRevision: memory.revision, expectedTagRevision: 0, procedural: null }));
+  const tag = { tagRevision: 1, procedural: false, origin: null, anchors: [] };
+  assert.deepEqual(get(f, memory).procedural, tag);
+  const hidden = rows(f, memory).find(row => row.excerpt === shared.excerpt);
+  const donor = admit(f, 'Synthetic retired negative parity donor', 'decision', [shared]);
+  const needles = [...withhold(f, donor, 'forget', shared), hidden.id, hidden.receipt_key];
+  deny(f, ...needles);
+  const result = read(f, 'procedural'), group = ok(result).groups.procedural;
+  assert.deepEqual(group.items.map(item => item.memory.id), [memory.id]);
+  const expected = parity(f, group.items[0], memory);
+  assert.deepEqual(expected.receipts.map(receipt => receipt.excerpt), [remaining.excerpt]);
+  assert.deepEqual(group.items[0].procedural, tag);
+  assert.deepEqual(group.items[0].procedural, expected.procedural);
+  assert.equal(group.returned, 1);
+  assert.equal(group.status, 'complete');
+  absent(result, needles);
+  assert.deepEqual(read(f, 'procedural'), result);
+});
