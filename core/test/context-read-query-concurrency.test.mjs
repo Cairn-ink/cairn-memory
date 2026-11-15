@@ -98,3 +98,20 @@ test('query policy accepts integers 1 through 16 and rejects every invalid suppl
     assert.equal(contextOptions(input(legacy)).policy.maxConcurrentQueries, base.family === 'hosted' ? 4 : 1);
   }
 });
+
+// The hosted product's own policy shape (no maxConcurrentQueries). The product
+// hands it to the durable semantic worker, not to this ledger; this pins what
+// the same shape would get here: the hosted family default of four queries,
+// with the legacy maxConcurrent field accepted.
+test('product-shaped hosted policy without maxConcurrentQueries admits four scoped queries; fifth is slot_busy', async t => {
+  const hold = deferred(); t.after(() => hold.resolve());
+  const policy = { family: 'hosted', maxRequests: 1000000, maxConcurrent: 4, maxUsd: 20, estimateUsd: hostedPolicy().estimateUsd };
+  const f = fixture(policy, hold);
+  const settled = Promise.allSettled(Array.from({ length: 4 }, () => f.run({})));
+  try {
+    assert.equal(f.calls, 4, 'four product-shaped queries reached the fake embedding port');
+    assert.equal(f.status().query.active, 4);
+    await busy(f, f.run({}));
+    assert.equal(f.calls, 4, 'the fifth query never invokes the embedder');
+  } finally { hold.resolve(); await settled; }
+});
