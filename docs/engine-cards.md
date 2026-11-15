@@ -179,6 +179,8 @@ maintenance can build a fresh Card from the topic's remaining eligible Memories
 after the existing ten-minute debounce. The deleted row's text-free routing
 receipt preserves the topic key and recent change time; forget cannot trigger
 an immediate model request.
+The debounce covers every part of the topic, including its tail, even when the
+purged Card used an older unpartitioned key or a different part suffix.
 
 An optional `cardRelations.read({namespace, memoryIds, memories, signal})` port
 returns `{from, to, kind, slot}` edges. Only endpoints in the cluster and equal
@@ -275,7 +277,7 @@ If the trigger no longer holds, maintenance deletes the stale Card body while
 retaining its row and lineage records. The pass's `deleted` count includes only
 deletions performed by that pass, excluding rows already purged by forget or
 an earlier rebuild. Retirement also leaves a text-free routing tombstone that
-holds a re-emerging topic for the same ten-minute debounce. Current/history
+holds every part of a re-emerging topic for the same ten-minute debounce. Current/history
 candidate and context reads skip purged Cards and can return the remaining Memories. Explicit fetches of erased Card
 evidence still refuse; old snapshots still fail their freshness fences.
 
@@ -328,6 +330,8 @@ A later statement alone does not rewrite an existing Card: until maintenance
 identifies the change and rebuilds, an older Card can still deliver that line.
 When a build marks an ID appearing on another current Card's current lines in
 the same namespace, it retires that Card through the existing staling path.
+Publication and all retirements selected by that output commit together; an
+output without a body applies its retirements together without publishing a Card.
 Retirement hides it immediately; a later pass rebuilds after the ordinary
 ten-minute debounce, with at most one generation per pass. Context is bounded,
 so changes outside the selected context can remain unrecognized.

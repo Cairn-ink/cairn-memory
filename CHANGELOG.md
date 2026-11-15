@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — engine Card maintenance
+
+- Apply the ten-minute wait after a purge to every part of the affected topic.
+- Publish a new Card and retire other Cards whose current lines it marks out of
+  date in one transaction, so a pause or failed write cannot leave only half applied.
+
 ## Unreleased — daily shared embedding budget
 
 - Share the estimated embedding budget across all connections to a running
