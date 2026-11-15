@@ -99,6 +99,8 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
     }
     let tag = group === 'procedural' ? proceduralStorage.inspect(row.id) : null;
     if(tag&&!anchorsDeliverable(db,ns,row.id,tag.anchors,memo))tag=null;
+    // Preferences require a delivered positive tag; instructions may be untagged.
+    if (group === 'procedural' && row.kind === 'preference' && !tag?.procedural) return null;
     if (tag?.procedural) for (const anchor of tag.anchors) {
       const receipt = evidence.receipts.find(r => r.id === anchor.receiptId);
       if (!receipt || sourceDigest(receipt.excerpt) !== anchor.digest) fail('storage_error');
@@ -221,6 +223,7 @@ export function assembleSessionContext({ runtime, model, ns, config }) {
       continue;
     }
     const item = candidates.items[position];
+    if (item === null) { positions[name]++; continue; }
     if (position >= 12 || group.items.length >= 6) { stopped[name] = true; continue; }
     if (item.tooLarge) { stopped[name] = true; continue; }
     group.items.push(item);
@@ -236,13 +239,14 @@ export function assembleSessionContext({ runtime, model, ns, config }) {
   if (config.groups.background) {
     if (!fits()) fail('context_item_too_large');
     const candidates = snapshot.groups.background;
-    const eligibleCount = candidates.identities.length;
+    const eligibleCount = candidates.identities.length - candidates.items.filter(item => item === null).length;
     const group = { enabled: true, returned: 0, complete: false,
       budget_exhausted: true, status: 'budget_exhausted', items: [] };
     value.groups.background = group; // Last key; legacy groups are now immutable.
     if (!eligibleCount) complete('background');
     const existingCount = value.groups.nextSteps.returned + value.groups.procedural.returned;
     for (const item of candidates.items) {
+      if (item === null) continue;
       if (item.tooLarge || group.returned >= 6 || existingCount + group.returned >= 12) break;
       value.framing = BACKGROUND_FRAMING;
       group.items.push(item);
