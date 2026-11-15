@@ -1,4 +1,5 @@
 import { lstat, stat } from 'node:fs/promises';
+import { appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { types } from 'node:util';
 import { ownData, localAuthorityInput } from '../../../core/local-authority-input.mjs';
@@ -88,6 +89,11 @@ export function createLocalCaptureTransport(options) {
         stage = 'reply';
         const result = localCaptureReply(output, request); scope.check(); return result;
       } catch (error) {
+        // Diagnostic branch only: fixed labels and codes, no request content.
+        try { appendFileSync('/tmp/cairn-diag-transport.jsonl', JSON.stringify({ at: Date.now(), stage: error instanceof LocalCaptureTransportError ? error.stage : stage,
+          inner: error instanceof LocalCaptureTransportError, uncertain: scope?.uncertain ?? false, name: error?.name, code: error?.code ?? null,
+          errno: error?.errno ?? null, syscall: error?.syscall ?? null, exitCode: error?.exitCode ?? null, signal: error?.signal ?? null,
+          aborted: call_aborted(callOptions), node: process.version }) + '\n'); } catch {}
         throw new LocalCaptureTransportError(scope?.uncertain ?? false,
           error instanceof LocalCaptureTransportError ? error.stage : stage,
           error instanceof LocalCaptureTransportError && Object.hasOwn(error, 'exitCode') ? error : undefined);
@@ -96,3 +102,5 @@ export function createLocalCaptureTransport(options) {
     },
   });
 }
+
+function call_aborted(options) { try { return options?.signal?.aborted === true; } catch { return null; } }

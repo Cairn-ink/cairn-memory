@@ -11,7 +11,7 @@ permissions:
 jobs:
   macos-capture:
     runs-on: macos-latest
-    timeout-minutes: 75
+    timeout-minutes: 100
     strategy:
       fail-fast: false
       matrix:
@@ -36,29 +36,32 @@ jobs:
       - run: node integrations/client/testing/run.mjs integrations/client/test/local-source-close.test.mjs
       - run: node integrations/client/testing/run.mjs --isolated-host integrations/client/test/local-macos-transport-diagnostic.test.mjs
       - run: node integrations/client/testing/run.mjs --isolated-host packages/setup/test/local-capture-interrupted.test.mjs
-      - name: Full local-host suite (20 runs) with diagnostics
+      - name: Full local-host suite (30 runs) with diagnostics
         shell: bash
         run: |
-          fails=0
-          for i in $(seq 1 20); do
-            start=$(date +%s)
+          set +e
+          fails=0; diag=/tmp/cairn-diag-transport.jsonl; all="$RUNNER_TEMP/transport-all.jsonl"; : > "$all"
+          for i in $(seq 1 30); do
+            rm -f "$diag"; start=$(date +%s)
             if npm run test:local-host > "$RUNNER_TEMP/full-$i.log" 2>&1; then r=pass; else r=FAIL; fails=$((fails+1)); fi
-            echo "full $i: $r in $(( $(date +%s) - start )) s; DIAG lines $(grep -c 'DIAG ' "$RUNNER_TEMP/full-$i.log"), DIAG-HOOK lines $(grep -c 'DIAG-HOOK ' "$RUNNER_TEMP/full-$i.log")"
+            t=0; [ -f "$diag" ] && t=$(wc -l < "$diag") && sed "s/^/{\"run\":$i,\"result\":\"$r\",\"line\":/; s/$/}/" "$diag" >> "$all"
+            echo "full $i: $r in $(( $(date +%s) - start )) s; DIAG $(grep -c 'DIAG ' "$RUNNER_TEMP/full-$i.log"), DIAG-HOOK $(grep -c 'DIAG-HOOK ' "$RUNNER_TEMP/full-$i.log"), unavailable $(grep -c 'capture_refused:unavailable' "$RUNNER_TEMP/full-$i.log"), transport failures $t"
             if [ "$r" = FAIL ]; then
               echo "::group::full $i failure blocks"
-              awk '/^not ok /{p=1} p{print} p && /^  \.\.\.$/{p=0}' "$RUNNER_TEMP/full-$i.log" | head -200
+              awk '/^ *not ok /{p=1} p{print} p && /^ *\.\.\.$/{p=0}' "$RUNNER_TEMP/full-$i.log" | head -300
               echo "::endgroup::"
-              echo "::group::full $i non-ready hook outcomes and unexpected Stop outcomes"
-              grep -h -E 'DIAG-HOOK |DIAG .*"status":"(blocked|failed|busy|waiting)"|DIAG .*Stop-retry' "$RUNNER_TEMP/full-$i.log" | head -200
-              echo "::endgroup::"
-              echo "::group::full $i lines around each failure"
-              grep -n -B25 -E '^not ok ' "$RUNNER_TEMP/full-$i.log" | head -300
+              echo "::group::full $i unexpected outcomes and transport failures"
+              grep -h -E 'capture_refused:unavailable|DIAG .*"status":"(blocked|failed|busy|waiting)"|DIAG .*Stop-retry' "$RUNNER_TEMP/full-$i.log" | head -100
+              [ -f "$diag" ] && cat "$diag"
               echo "::endgroup::"
             fi
           done
-          echo "full-suite failures: $fails / 20"; echo "$fails" > "$RUNNER_TEMP/fails-full"
+          echo "::group::transport failure stages across all runs (count, stage, code, uncertain, result)"
+          node -e 'const fs=require("fs");const rows=fs.readFileSync(process.argv[1],"utf8").split("\n").filter(Boolean).map(l=>JSON.parse(l));const m=new Map();for(const r of rows){const k=[r.line.stage,r.line.code,r.line.syscall,r.line.exitCode,r.line.signal,r.line.uncertain,r.line.aborted,r.result].join(" ");m.set(k,(m.get(k)||0)+1)}for(const [k,v] of [...m].sort((a,b)=>b[1]-a[1]))console.log(v,k)' "$all"
+          echo "::endgroup::"
+          echo "full-suite failures: $fails / 30"; echo "$fails" > "$RUNNER_TEMP/fails-full"
       - name: Summary
         shell: bash
         run: |
-          echo "full $(cat "$RUNNER_TEMP/fails-full")/20"
+          echo "full $(cat "$RUNNER_TEMP/fails-full")/30"
           test "$(cat "$RUNNER_TEMP/fails-full")" -eq 0
