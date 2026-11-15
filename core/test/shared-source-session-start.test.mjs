@@ -103,16 +103,54 @@ function short(f, content, kind, address = source) {
 }
 const read = (f, input = config) => f.core.sessionStartContext({ namespace: ns, ...input });
 
+// Independent public reads supply the survivor oracle. Do not sort receipts:
+// their ids and excerpts must retain the order returned by get for this Memory.
+const memoryItem = ({ memory, receipts }) => ({
+  memory: { id: memory.id, content: memory.content, kind: memory.kind },
+  receipts: receipts.map(({ id, excerpt }) => ({ id, excerpt })),
+});
+function assertGroups(f, value, expected) {
+  assert.deepEqual(Object.keys(value.groups), Object.keys(expected), 'group order');
+  for (const [name, { memoryIds, episodeIds, ...fields }] of Object.entries(expected)) {
+    const { items, ...actualFields } = value.groups[name];
+    assert.deepEqual(actualFields, fields, name + ' literal counts and completion');
+    if (memoryIds) {
+      const saved = memoryIds.map(memoryId => ok(f.core.get({ namespace: ns, memoryId })));
+      for (const item of saved) assert.equal(item.exhausted, true, 'get returned the complete receipt list');
+      assert.deepEqual(items.map(memoryItem), saved.map(memoryItem), name + ' ordered Memories and receipts from get');
+    } else {
+      const saved = episodeIds.map(episodeId => ok(f.core.getEpisode({ namespace: ns, episodeId })).episode);
+      assert.deepEqual(items.map(({ episodeId, nextStep }) => ({ episodeId, nextStep })),
+        saved.map(episode => ({ episodeId: episode.id, nextStep: episode.nextStep })), 'ordered Episode ids and steps from getEpisode');
+      for (const episode of saved) {
+        assert.equal(episode.nextStep.status, 'open');
+        assert.equal(episode.nextStep.text, 'Synthetic independent next action');
+      }
+    }
+  }
+}
+
 // Read the SAME production store through the actual pre-line engine, never a
 // replacement runtime, evidence reader or assembler. Archive only into the
-// owned test workspace and check both subprocess exit codes explicitly.
+// owned test workspace and check both subprocess exit codes explicitly. Only
+// the separately named parity cases may check availability or call baseCore.
+const baseRevision = 'b5146a53';
+const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
+function baseAvailable(t) {
+  if (spawnSync('git', ['cat-file', '-e', baseRevision + '^{commit}'],
+    { cwd: repositoryRoot, timeout: 30000 }).status !== 0) {
+    t.skip('base revision unavailable');
+    return false;
+  }
+  return true;
+}
 async function baseCore(f) {
   const root = join(f.ws.path, 'base'); mkdirSync(root);
-  const archive = spawnSync('git', ['archive', 'b5146a53', 'core', 'plugins/cairn-memory/lib'], {
-    cwd: fileURLToPath(new URL('../../', import.meta.url)), maxBuffer: 128 * 1024 * 1024,
+  const archive = spawnSync('git', ['archive', baseRevision, 'core', 'plugins/cairn-memory/lib'], {
+    cwd: repositoryRoot, timeout: 30000, maxBuffer: 128 * 1024 * 1024,
   });
   assert.equal(archive.status, 0, String(archive.stderr)); assert.equal(archive.signal, null);
-  const unpack = spawnSync('tar', ['-xf', '-', '-C', root], { input: archive.stdout });
+  const unpack = spawnSync('tar', ['-xf', '-', '-C', root], { input: archive.stdout, timeout: 30000 });
   assert.equal(unpack.status, 0, String(unpack.stderr)); assert.equal(unpack.signal, null);
   const base = await import(pathToFileURL(join(root, 'core/index.mjs')).href);
   const core = base.openMemoryCore({ path: f.path, model: port() });
@@ -123,7 +161,7 @@ function survivors(value, group, ids) {
   return value.groups[group]?.items.filter(item => !ids.includes(item.memory?.id ?? item.episodeId)) ?? [];
 }
 
-for (const layout of [53, 18, 33]) test(`exact organized/manual/correction/forget/capture reproduction, layout ${layout}`, async t => {
+async function exactReproduction(t, layout) {
   const f = await fixture(t, layout);
   const first = admitOrganized(f), duplicate = admitOrganized(f);
   assert.deepEqual(duplicate.memories.map(memory => memory.id), first.memories.map(memory => memory.id));
@@ -147,18 +185,21 @@ for (const layout of [53, 18, 33]) test(`exact organized/manual/correction/forge
   const episodes = ok(f.core.listEpisodes({ namespace: ns, since: '2026-01-01T00:00:00.000Z',
     until: '2026-12-31T23:59:59.999Z', timeBasis: 'event' }));
   assert.equal(episodes.items.length, 1); ok(f.core.getEpisode({ namespace: ns, episodeId: f.seed }));
+  return { f, captured, needles: ['Manual fact', 'Updated manual fact', 'Organized fact', 'Use diagrams.', '"session"', '"source"',
+    manual.id, corrected.id, first.memories[0].id, captured.id, ...withheldIds] };
+}
+
+for (const layout of [53, 18, 33]) test(`exact organized/manual/correction/forget/capture reproduction, layout ${layout}`, async t => {
+  const { f, needles } = await exactReproduction(t, layout);
   const result = read(f, { maxTokens: 1024, maxChars: 4096 }), value = ok(result);
-  const base = await baseCore(f);
-  const expected = ok(base.sessionStartContext({ namespace: ns, maxTokens: 1024, maxChars: 4096 }));
-  assert.deepEqual(value.groups.nextSteps, expected.groups.nextSteps);
-  assert.deepEqual(value.groups.procedural.items, survivors(expected, 'procedural', [captured.id]));
-  assert.equal(value.groups.procedural.returned, 0); assert.equal(value.groups.procedural.complete, true);
-  forbidden(result, ['Manual fact', 'Updated manual fact', 'Organized fact', 'Use diagrams.', '"session"', '"source"',
-    manual.id, corrected.id, first.memories[0].id, captured.id, ...withheldIds]);
+  assertGroups(f, value, {
+    nextSteps: { enabled: true, returned: 1, complete: true, budget_exhausted: false, status: 'complete', episodeIds: [f.seed] },
+    procedural: { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [] },
+  });
+  forbidden(result, needles);
 });
 
-for (const layout of [53, 18, 33]) for (const group of ['procedural', 'background']) for (const oversized of [false, true])
-test(`short ${group} is absent alongside survivors and placeholder=${oversized}, layout ${layout}`, async t => {
+async function alongsideSurvivors(t, layout, group, oversized) {
   const f = await fixture(t, layout), kind = group === 'procedural' ? 'instruction' : 'context';
   const denied = short(f, 'Synthetic withheld ' + group, kind);
   const kept = admit(f, 'Synthetic retained ' + group, kind);
@@ -172,20 +213,50 @@ test(`short ${group} is absent alongside survivors and placeholder=${oversized},
       content: kept.content, kind, receipt: support('synthetic-refreshed-' + group) })).memory;
     assert.equal(refreshed.id, kept.id); assert.ok(huge.id);
   }
-  const base = await baseCore(f), expected = ok(base.sessionStartContext({ namespace: ns, ...config }));
+  return { f, denied, kept };
+}
+
+for (const layout of [53, 18, 33]) for (const group of ['procedural', 'background']) for (const oversized of [false, true])
+test(`short ${group} is absent alongside survivors and placeholder=${oversized}, layout ${layout}`, async t => {
+  const { f, denied, kept } = await alongsideSurvivors(t, layout, group, oversized);
   const result = read(f), value = ok(result);
-  assert.deepEqual(value.groups[group].items, survivors(expected, group, [denied.memory.id]));
-  assert.ok(value.groups[group].items.some(item => item.memory.id === kept.id));
-  assert.equal(value.groups[group].returned, value.groups[group].items.length);
+  const retained = { enabled: true, returned: 1, memoryIds: [kept.id], ...(oversized
+    ? { complete: false, budget_exhausted: true, status: 'budget_exhausted' }
+    : { complete: true, budget_exhausted: false, status: 'complete' }) };
+  const empty = { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [] };
+  assertGroups(f, value, {
+    nextSteps: { enabled: true, returned: 1, complete: true, budget_exhausted: false, status: 'complete', episodeIds: [f.seed] },
+    procedural: group === 'procedural' ? retained : empty,
+    background: group === 'background' ? retained : empty,
+  });
   assert.deepEqual(read(f), result, 'same state yields byte-equivalent snapshot assembly');
-  assert.deepEqual(value.groups.nextSteps, expected.groups.nextSteps);
-  if (oversized) assert.equal(value.groups[group].status, 'budget_exhausted');
-  else assert.equal(value.groups[group].status, 'complete');
   forbidden(result, [...denied.denied, denied.memory.id]);
   // The counter sees only attempted public envelopes and delivered background
   // items. Neither the private null nor the withheld payload consumes budget.
   f.model.countTokens = text => { forbidden(text, [denied.memory.id, source.excerpt]); return 1; };
   assert.deepEqual(read(f), result);
+});
+
+for (const layout of [53, 18, 33]) test(`base parity: exact organized/manual/correction/forget/capture reproduction, layout ${layout}`, async t => {
+  if (!baseAvailable(t)) return;
+  const { f, captured, needles } = await exactReproduction(t, layout);
+  const input = { maxTokens: 1024, maxChars: 4096 };
+  const result = read(f, input), value = ok(result);
+  forbidden(result, needles);
+  const base = await baseCore(f), expected = ok(base.sessionStartContext({ namespace: ns, ...input }));
+  assert.deepEqual(value.groups.nextSteps, expected.groups.nextSteps);
+  assert.deepEqual(value.groups.procedural.items, survivors(expected, 'procedural', [captured.id]));
+});
+
+for (const layout of [53, 18, 33]) for (const group of ['procedural', 'background']) for (const oversized of [false, true])
+test(`base parity: short ${group} is absent alongside survivors and placeholder=${oversized}, layout ${layout}`, async t => {
+  if (!baseAvailable(t)) return;
+  const { f, denied } = await alongsideSurvivors(t, layout, group, oversized);
+  const result = read(f), value = ok(result);
+  forbidden(result, [...denied.denied, denied.memory.id]);
+  const base = await baseCore(f), expected = ok(base.sessionStartContext({ namespace: ns, ...config }));
+  assert.deepEqual(value.groups[group].items, survivors(expected, group, [denied.memory.id]));
+  assert.deepEqual(value.groups.nextSteps, expected.groups.nextSteps);
 });
 
 for (const group of ['procedural', 'background']) for (const count of [1, 12, 13])
@@ -194,11 +265,18 @@ test(`every ${group} candidate is short, count ${count}`, async t => {
   const beyondProbe = count === 13 ? admit(f, 'Synthetic survivor beyond the thirteen-row probe', kind) : null;
   for (let i = 0; i < count; i++) denied.push(short(f, 'Synthetic all withheld ' + i, kind,
     { ...source, sessionId: 'synthetic-denied-session-' + i, eventId: 'synthetic-denied-message-' + i }));
-  const value = ok(read(f));
+  const result = read(f), value = ok(result);
   assert.deepEqual(value.groups[group]?.items ?? [], []); assert.equal(value.groups[group]?.returned ?? 0, 0);
-  if (count < 13) assert.equal(value.groups[group].status, 'complete');
-  if (beyondProbe) forbidden(value, [beyondProbe.id, beyondProbe.content]);
-  for (const item of denied) forbidden(value, [...item.denied, item.memory.id]);
+  const empty = { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [] };
+  assertGroups(f, value, {
+    nextSteps: { enabled: true, returned: 1, complete: true, budget_exhausted: false, status: 'complete', episodeIds: [f.seed] },
+    procedural: group === 'procedural' && count === 13
+      ? { enabled: true, returned: 0, complete: false, budget_exhausted: true, status: 'budget_exhausted', memoryIds: [] } : empty,
+    ...(group === 'background' && count === 13 ? {} : { background: empty }),
+  });
+  if (group === 'background' && count === 13) assert.equal(value.backgroundOmitted, true);
+  if (beyondProbe) forbidden(result, [beyondProbe.id, beyondProbe.content]);
+  for (const item of denied) forbidden(result, [...item.denied, item.memory.id]);
 });
 
 for (const layout of [53, 18, 33]) for (const oversized of [false, true])
@@ -215,18 +293,35 @@ test(`next steps keep the independent step alongside short sources and placehold
     for (let i = 0; i < 101; i++) admit(f, 'Synthetic oversized beside step', 'instruction', [support('synthetic-step-many-' + i)]);
   }
   // A short background Memory must not abort an otherwise deliverable step.
-  short(f, 'Synthetic short background beside step', 'fact');
-  const value = ok(read(f));
+  const background = short(f, 'Synthetic short background beside step', 'fact');
+  const result = read(f), value = ok(result);
   assert.deepEqual(value.groups.nextSteps.items.map(item => item.episodeId), [f.seed]);
-  forbidden(value, [...denied.denied, memory.id, captured.episode.id, saved.id, 'Synthetic Episode instruction']);
+  assertGroups(f, value, {
+    nextSteps: { enabled: true, returned: 1, complete: true, budget_exhausted: false, status: 'complete', episodeIds: [f.seed] },
+    procedural: { enabled: true, returned: 0, memoryIds: [], ...(oversized
+      ? { complete: false, budget_exhausted: true, status: 'budget_exhausted' }
+      : { complete: true, budget_exhausted: false, status: 'complete' }) },
+    background: { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [] },
+  });
+  forbidden(result, [...denied.denied, denied.memory.id, ...background.denied, background.memory.id,
+    memory.id, captured.episode.id, saved.id, 'Synthetic Episode instruction']);
 });
 
 for (const group of ['procedural', 'background']) test(`forget between snapshots still fails closed for ${group}`, async t => {
   // Legacy layout isolates the existing two-snapshot index-revision refusal
   // from S2h's earlier owner-suppression callback/delivery fence.
   const f = await fixture(t, 18), kind = group === 'procedural' ? 'instruction' : 'fact';
-  short(f, 'Synthetic already short candidate', kind);
+  const denied = short(f, 'Synthetic already short candidate', kind);
   const target = admit(f, 'Synthetic concurrent target', kind);
+  const before = read(f), value = ok(before);
+  const empty = { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [] };
+  const retained = { enabled: true, returned: 1, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [target.id] };
+  assertGroups(f, value, {
+    nextSteps: { enabled: true, returned: 1, complete: true, budget_exhausted: false, status: 'complete', episodeIds: [f.seed] },
+    procedural: group === 'procedural' ? retained : empty,
+    background: group === 'background' ? retained : empty,
+  });
+  forbidden(before, [...denied.denied, denied.memory.id]);
   const writer = openMemoryCore({ path: f.path }); f.ws.defer(() => writer.close());
   let changed = false;
   f.model.countTokens = text => {
@@ -239,6 +334,7 @@ for (const group of ['procedural', 'background']) test(`forget between snapshots
   const result = read(f);
   assert.equal(changed, true, 'forget ran after preparation and before the authoritative reread');
   assert.deepEqual(result, { ok: false, error: { code: 'index_revision_conflict', retryable: false } });
+  forbidden(result, [...denied.denied, denied.memory.id, target.id, target.content]);
 });
 
 test('all next-step sources withheld leaves an empty group and a successful call', async t => {
@@ -249,6 +345,11 @@ test('all next-step sources withheld leaves an empty group and a successful call
   const result = read(f), value = ok(result);
   assert.deepEqual(value.groups.nextSteps.items, []);
   assert.equal(value.groups.nextSteps.returned, 0); assert.equal(value.groups.nextSteps.status, 'complete');
+  assertGroups(f, value, {
+    nextSteps: { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', episodeIds: [] },
+    procedural: { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [] },
+    background: { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [] },
+  });
   forbidden(result, [...denied.denied, f.seed, denied.memory.id]);
 });
 
@@ -260,9 +361,15 @@ for (const group of ['procedural', 'background']) test(`six retained ${group} it
   // have room for all six whole items.
   const input = { ...config, groups: { nextSteps: false, procedural: group === 'procedural', background: group === 'background' } };
   if (group === 'procedural') delete input.backgroundBudget;
-  const result = read(f, input), value = ok(result).groups[group];
-  assert.deepEqual(value.items.map(item => item.memory.id), kept);
-  assert.equal(value.returned, 6); assert.equal(value.status, 'complete');
+  const result = read(f, input), value = ok(result);
+  const retained = { enabled: true, returned: 6, complete: true, budget_exhausted: false, status: 'complete', memoryIds: kept };
+  assertGroups(f, value, {
+    nextSteps: { enabled: false, returned: 0, complete: true, budget_exhausted: false, status: 'disabled', episodeIds: [] },
+    procedural: group === 'procedural' ? retained
+      : { enabled: false, returned: 0, complete: true, budget_exhausted: false, status: 'disabled', memoryIds: [] },
+    ...(group === 'background' ? { background: retained } : {}),
+  });
+  assert.deepEqual(value.groups[group].items.map(item => item.memory.id), kept);
   forbidden(result, [...denied.denied, denied.memory.id]);
 });
 
@@ -274,11 +381,23 @@ test('a short tagged preference loses its anchors and all metadata', async t => 
   const target = admit(f, 'Synthetic preference donor', 'fact', [source]); forget(f, target);
   const result = read(f), value = ok(result);
   assert.deepEqual(value.groups.procedural.items, []); assert.equal(value.groups.procedural.returned, 0);
+  assertGroups(f, value, {
+    nextSteps: { enabled: true, returned: 1, complete: true, budget_exhausted: false, status: 'complete', episodeIds: [f.seed] },
+    procedural: { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [] },
+    background: { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [] },
+  });
   forbidden(result, [memory.id, 'Synthetic withheld tagged preference', source.excerpt, ...receiptIds]);
 });
 
 test('the final comparison notices a short item becoming deliverable without an epoch change', async t => {
   const f = await fixture(t, 18), denied = short(f, 'Synthetic stable-identity short item', 'instruction');
+  const before = read(f), value = ok(before);
+  assertGroups(f, value, {
+    nextSteps: { enabled: true, returned: 1, complete: true, budget_exhausted: false, status: 'complete', episodeIds: [f.seed] },
+    procedural: { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [] },
+    background: { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [] },
+  });
+  forbidden(before, [...denied.denied, denied.memory.id]);
   let changed = false;
   f.model.countTokens = text => {
     if (text && !changed) {
