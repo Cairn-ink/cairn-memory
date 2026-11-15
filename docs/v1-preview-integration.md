@@ -150,6 +150,13 @@ server restart. Unknown usage retains conservative charges; no automatic retry.
 Caps are neither durable nor account-wide. SDK configuration adds
 `embedder` and `policy:{family:'hosted',maxRequests,maxUsd,maxConcurrentQueries,estimateUsd}`
 to contextRead; `estimateUsd(texts)` is trusted synchronous policy.
+Maintenance receives `floor(9 * maxRequests / 10)` requests; maxRequests below 2 disables maintenance indexing.
+Monetary estimates must upper-bound input tokens × list price, rounded up.
+Settlement records actual spend and preserves successful results. Reaching a
+class or combined monetary cap blocks further dispatches until the next UTC day,
+even if later settlements refund reservations. Total recorded spend is at most
+the cap plus the sum of positive (actual − estimate) errors of calls in flight
+when the cap was crossed; the excess is zero with honest upper-bound estimates.
 `maxConcurrentQueries` accepts integers 1–16 and defaults to 4 for hosted
 providers. It bounds scoped queries across the server; each connection and the
 unbound path retain one query slot, with one separate maintenance slot.

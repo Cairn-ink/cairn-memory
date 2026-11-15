@@ -41,7 +41,10 @@ export function localEmbeddingFactory({ verify = verifyPack, start = startBundle
     const dispatch = contextBudget({ embedder: raw, policy, budgetConfigured: true });
     const embedder = Object.freeze({ ...pack.metadata, embed(texts, options = {}) {
       if (closedHandle) return Promise.reject(refusal('provider_error'));
-      if (consumeLocalReservation(options.localReservation, raw)) return raw.embed(texts, options);
+      if (options.localReservation !== undefined) {
+        if (!consumeLocalReservation(options.localReservation, raw, options.budgetClass)) return Promise.reject(refusal('budget_denied'));
+        return raw.embed(texts, options);
+      }
       const signal = options.signal ?? new AbortController().signal;
       return dispatch(raw, texts, { budgetClass: 'query', signal, deadlineAt: Math.min(performance.now() + 5000, options.deadlineAt ?? Infinity), guard: options.beforeDispatch ?? (() => {}) });
     } });

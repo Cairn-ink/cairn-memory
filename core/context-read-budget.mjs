@@ -13,11 +13,12 @@ function engineGuard(work) {
 const ledgers = new Map();
 const enginePorts = new WeakSet();
 export const isBudgetEmbeddingPort = port => enginePorts.has(port);
-// A one-use, synchronous handoff lets the local port use this same ledger
-// for direct calls without charging again when core already reserved it.
+// A one-use handoff survives awaits until the underlying operation settles.
+// The local port shares this ledger without charging a core reservation again.
 const reservations = new WeakMap();
-export function consumeLocalReservation(token, port) {
-  if (!token || reservations.get(token) !== JSON.stringify([port.id, port.revision])) return false;
+export function consumeLocalReservation(token, port, budgetClass) {
+  const reserved = token && reservations.get(token);
+  if (!reserved || reserved.binding !== JSON.stringify([port.id, port.revision]) || reserved.budgetClass !== budgetClass) return false;
   reservations.delete(token); return true;
 }
 const refused = code => Object.assign(new Error(code), { code });
@@ -49,9 +50,12 @@ export function withContextReadBudgetScope(scope, work, enabled = true) {
   return ledgerScope.run(scope, work);
 }
 const counters = () => ({ requests: 0, usd: 0, active: 0 });
+// Settled money reaching a ceiling stays exhausted for this window, even if
+// another in-flight call later refunds part of its reservation.
+const settledCaps = new WeakSet();
 function ledgerFor(binding, day, maxRequests, maxUsd) {
   let window = ledgers.get(binding);
-  if (!window || window.day !== day) {
+  if (!window || window.day < day) {
     window = { day, query: counters(), maintenance: counters(), unbound: { active: 0 }, lastDenial: null };
     ledgers.set(binding, window);
   }
@@ -114,7 +118,7 @@ export function contextBudget(options, { now = Date.now } = {}) {
     };
     // Both classes draw from one total allowance. Maintenance also has its
     // own 90% ceiling; queries can consume the remainder, shared by all scopes.
-    if (!Number.isFinite(usd) || usd < 0 ||
+    if (settledCaps.has(window) || settledCaps.has(ledger) || !Number.isFinite(usd) || usd < 0 ||
         window.query.requests + window.maintenance.requests + 1 > maxRequests ||
         ledger.requests + 1 > ledger.maxRequests ||
         window.query.usd + window.maintenance.usd + usd > maxUsd || ledger.usd + usd > ledger.maxUsd) {
@@ -140,24 +144,30 @@ export function contextBudget(options, { now = Date.now } = {}) {
       if (!Number.isFinite(value) || value < 0 || actualUsd !== undefined) throw refused('provider_error');
       actualUsd = value;
     };
+    const recordSettlement = () => {
+      if (actualUsd !== undefined) ledger.usd += actualUsd - usd;
+      if (Number.isFinite(ledger.maxUsd) && ledger.usd >= ledger.maxUsd) settledCaps.add(ledger);
+      if (Number.isFinite(maxUsd) && window.query.usd + window.maintenance.usd >= maxUsd) settledCaps.add(window);
+    };
     try {
       beforeDispatch();
       // Adapters with internal awaits must call beforeDispatch immediately
       // before HTTP transmission. Core also fences every await/settlement.
       invoked = true; onInvoke?.();
       if (local) {
-        const localReservation = {}; reservations.set(localReservation, binding);
-        try { operation = invoke({ signal, beforeDispatch, deadlineAt, localReservation }); }
-        finally { reservations.delete(localReservation); }
+        const localReservation = {}; reservations.set(localReservation, { binding, budgetClass });
+        operation = invoke({ signal, beforeDispatch, deadlineAt, localReservation, budgetClass });
+        const discard = () => { reservations.delete(localReservation); };
+        operation.then(discard, discard);
       } else operation = invoke({ signal, beforeDispatch, deadlineAt, settleUsd });
     } catch (error) {
       ledger.active--;
       if (budgetClass === 'query') connection.active--;
       if (!invoked) { ledger.requests--; ledger.usd -= usd; }
-      else if (actualUsd !== undefined) ledger.usd += actualUsd - usd;
+      else recordSettlement();
       throw error;
     }
-    const settled = () => { ledger.active--; if (budgetClass === 'query') connection.active--; if (actualUsd !== undefined) ledger.usd += actualUsd - usd; };
+    const settled = () => { ledger.active--; if (budgetClass === 'query') connection.active--; recordSettlement(); };
     operation.then(settled, settled);
     let timer, aborted;
     const timeout = new Promise((resolve, reject) => {
