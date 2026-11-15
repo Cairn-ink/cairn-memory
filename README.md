@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(max-width: 600px)" srcset="docs/images/readme-hero-mobile.png">
-    <img src="docs/images/readme-hero.png" alt="Cairn.ink Memory: AI memory you can inspect and change. One memory for Claude Code and Codex. A hand-drawn island carries a cairn of three stones, labelled Cards, Memories and Conversations. Open source." width="1200">
+    <img src="docs/images/readme-hero.png" alt="Cairn.ink Memory: AI memory you can inspect and change. One memory for Claude Code and Codex. A hand-drawn island carries a three-stone cairn that stands for Cards, Memories and Conversations. Open source." width="1200">
   </picture>
 </p>
 
@@ -50,7 +50,7 @@ first asks: where should your memory live?
 | --- | --- | --- |
 | Account | None | A [cairn.ink](https://cairn.ink) account, one browser sign-in |
 | Where memory lives | A SQLite database on this computer | cairn.ink |
-| Saved automatically | Your Claude Code and Codex conversations, as plain text (on Linux and WSL for now) | Your conversations, which cairn.ink turns into memories |
+| Saved automatically | Your Claude Code and Codex conversations, as plain text (on Linux and WSL; on macOS, Claude Code only for now) | Your conversations, which cairn.ink turns into memories |
 | Saving a memory | Your agent saves one when you ask | Automatic, or ask your agent |
 | Getting it back | Your agent searches when you ask | Relevant memories are added to each prompt |
 | Other computers | Not synced | The same memory wherever you sign in |
@@ -117,7 +117,7 @@ stones of a cairn.
 
 | Layer | What it holds | Local mode | Cloud mode |
 | --- | --- | --- | --- |
-| **Conversations** | What was said, as searchable text | Saved automatically on your computer (Linux and WSL) | Sent to cairn.ink |
+| **Conversations** | What was said, as searchable text | Saved automatically on your computer (Linux and WSL; Claude Code on macOS) | Sent to cairn.ink |
 | **Memories** | The preferences, decisions and facts worth keeping, each with its Source Receipt | Saved when you or your agent ask | Extracted from your conversations automatically, or saved on request |
 | **Cards** | Topic pages that pull related memories together into a map | Not built by default | The map you browse on cairn.ink |
 
@@ -159,8 +159,8 @@ hosted MCP endpoint, the Codex rules and the plugin's privacy contract.
   packages from npm.
 - **Saved conversations.** On Linux and WSL, Local mode saves the text of your
   Claude Code and Codex conversations into that database automatically, up to
-  200 MB. Saving
-  needs no account, no key and no model calls. Turn it off with
+  200 MB. On macOS it saves Claude Code conversations. Saving needs no account,
+  no key and no model calls. Turn it off with
   `npx @cairn-ink/memory config --local-capture off`,
   or install with `npx @cairn-ink/memory setup --local --no-capture`.
   `npx @cairn-ink/memory raw list` lists saved conversations without their text.
@@ -170,11 +170,12 @@ hosted MCP endpoint, the Codex rules and the plugin's privacy contract.
 - **Model keys.** Saving conversations never calls a model, and keyword search,
   inspecting, correcting and forgetting use no model either. If the memory
   server can see an `OPENAI_API_KEY`, your memories and search text are sent to
-  OpenAI for semantic search, estimated at most about US$1 per server run, and
-  `recall_memory` sends the text it selects. Pausing or turning off saving does
-  not stop these requests yet. Saved conversations are sent only if you opt in
-  with `--raw-semantic` or configure `--context-embedder` yourself. To keep
-  everything on your computer, do not give the server a key.
+  OpenAI for semantic search, with those embedding requests estimated at most
+  about US$1 per server run. `recall_memory` also sends the text it selects,
+  and its model calls are not counted in that estimate. Pausing or turning off
+  saving does not stop these requests yet. Saved conversations are sent only if
+  you opt in with `--raw-semantic` or configure `--context-embedder` yourself.
+  To keep everything on your computer, do not give the server a key.
   `--no-context-semantic` turns off semantic search and its requests, but with
   a key present `recall_memory` still calls the model whenever your agent uses
   it. [Defaults, costs and off switches](docs/defaults.md) has the details.

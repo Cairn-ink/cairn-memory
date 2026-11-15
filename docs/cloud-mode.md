@@ -82,7 +82,7 @@ shows technical diagnostics. Review and allow the four Cairn entries in Codex
 confirmation. Unqualified Codex alone may offer manual MCP tools.
 
 [Setup options and credential handling](../packages/setup/README.md) ·
-[chichi's release checklist](npx-setup-release.md)
+[the release checklist](npx-setup-release.md)
 
 **Manual fallback:** from your terminal, run:
 
