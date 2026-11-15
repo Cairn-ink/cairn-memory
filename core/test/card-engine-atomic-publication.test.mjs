@@ -223,11 +223,12 @@ test('a suppression epoch refusal retains the abandoned claim when terminal comp
       beforeUnit = cardRows(db);
     }
   });
-  const dispatch = host.dispatch;
-  t.mock.method(host, 'dispatch', function(connection, work, deadline, options) {
-    if (options?.compensating) compensations.push(work.name);
-    return Reflect.apply(dispatch, this, [connection, work, deadline, options]);
-  });
+  // The dispatcher host is frozen and does not expose its dispatch method, so
+  // record which compensation the pass invokes at the storage boundary.
+  for (const name of ['finish', 'release']) {
+    const original = storage[name];
+    storage[name] = function(...args) { compensations.push(name); return Reflect.apply(original, this, args); };
+  }
   const result = await host.run(() => pass(storage, model));
   assert.equal(result.state, 'refused'); assert.equal(result.modelCalls, 1); assert.deepEqual(result.built, []);
   assert.ok(beforeUnit); assert.deepEqual(cardRows(db), beforeUnit, 'refusal and refused compensation add no Card writes');
