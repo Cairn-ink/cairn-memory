@@ -45,7 +45,11 @@ async function reads(f) {
   const namespace = f.namespace;
   const pages = [];
   noNeedles(await f.core.get({ namespace, memoryId: f.target.id }));
-  const listed = await f.core.list({ namespace, limit: 50 }); ok(listed); noNeedles(listed);
+  const listed = await f.core.list({ namespace, limit: 50 });
+  // core/runtime.mjs:547 refuses the whole list when the same-session survivor's Raw source is fenced.
+  if (f.layout.suppressionRevision) assert.deepEqual(listed, { ok: false, error: { code: 'revision_conflict', retryable: false } });
+  else ok(listed);
+  noNeedles(listed);
   for (const timeBasis of ['event', 'receipt']) {
     const result = await f.core.listEpisodes({ namespace, ...range, timeBasis });
     noNeedles(result);

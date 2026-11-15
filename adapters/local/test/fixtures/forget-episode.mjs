@@ -15,7 +15,9 @@ export const forgottenText = 'forgetneedle synthetic victim';
 export const stepText = 'stepneedle review forgotten evidence';
 export const neighbourStep = 'neighbourstep review nearby evidence';
 export const otherStep = 'independentstep review retained evidence';
-export const range = { since: '1900-01-01T00:00:00.000Z', until: '2100-01-01T00:00:00.000Z', limit: 50 };
+const fixtureClock = Date.now();
+export const range = { since: new Date(fixtureClock - 7 * 86400000).toISOString(),
+  until: new Date(fixtureClock + 86400000).toISOString(), limit: 50 };
 export function sql(path, work) {
   const db = new DatabaseSync(path);
   try { return work(db); } finally { db.close(); }
@@ -23,15 +25,9 @@ export function sql(path, work) {
 export async function setup(t, options = {}) {
   const f = fixture(t, { client: 'codex' });
   await f.core.close();
-  let path = f.databasePath;
+  let path = f.databasePath, older;
   if (options.layout !== 29) {
-    const older = safetyFixture(t, 33); path = older.path;
-    if (options.layout === 48) await older.migrate();
-    if (options.layout === 53) {
-      copySqliteFixture(path, older.backupPath);
-      await (options.cardLineage ? migrateCardLineage : migrateReceiptEventTime)({ path, backupPath: older.backupPath,
-        expected: { storeId: older.storeId, base: 33 }, quiescence });
-    }
+    older = safetyFixture(t, 33); path = older.path;
   }
   const namespace = f.namespace, client = f.client;
   const control = openMemoryCore({ path, rawConversations: { mode: 'off', readPolicy: () => ({ generation: 'synthetic', reason: null }) } });
@@ -75,7 +71,7 @@ export async function setup(t, options = {}) {
       const request = f.request(eventId, content, ordinal);
       const value = ok(await core.captureRaw({ namespace, client, sessionId, eventId,
         messages: request.messages.map(message => ({ id: message.id, role: message.role, content: message.content,
-          occurredAt: new Date(Date.now() + offset).toISOString(), messageOrdinal: ordinal, part: { ...message.part } })),
+          occurredAt: new Date(fixtureClock + offset).toISOString(), messageOrdinal: ordinal, part: { ...message.part } })),
         ...(episode ? { episodeContext: { clientLabel: 'Synthetic client', generation: 'initial', origin: 'ordinary' } } : {}) }));
       ok(value.interpretation);
     } finally { await core.close(); }
@@ -92,6 +88,15 @@ export async function setup(t, options = {}) {
   }
   if (options.neighbour) for (const ordinal of [3, 4])
     await capture('neighbour', 'neighbour-' + ordinal, 'neighbour episode evidence', ordinal, 0, true);
+  // Seed historical identities before safety triggers are installed, then use
+  // the supported offline migration with a closed-handle backup and quiescence.
+  if (options.seedBeforeMigration) sql(path, db => options.seedBeforeMigration(db, { namespace, client }));
+  if (options.layout === 48) await older.migrate();
+  if (options.layout === 53) {
+    copySqliteFixture(path, older.backupPath);
+    await (options.cardLineage ? migrateCardLineage : migrateReceiptEventTime)({ path, backupPath: older.backupPath,
+      expected: { storeId: older.storeId, base: 33 }, quiescence });
+  }
   const state = sql(path, db => {
     const memories = db.prepare('SELECT * FROM memories WHERE deleted=0').all();
     const episodes = db.prepare('SELECT * FROM session_episodes WHERE deleted=0').all();

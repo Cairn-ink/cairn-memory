@@ -32,7 +32,15 @@ for (const layout of [29, 33]) for (const operation of ['forget', 'correct']) fo
       assert.equal(withoutEpoch(current.result), withoutEpoch(reference.result), 'only Episode epoch advancement may change the acknowledgement');
       for (const table of Object.keys(reference.tables)) {
         if (['session_episodes', 'episode_sources', 'episode_events', 'namespace_epochs'].includes(table)) continue;
-        assert.equal(JSON.stringify(current.tables[table]), JSON.stringify(reference.tables[table]), table + ' bytes match the reference operation');
+        if (table === 'raw_conversations') {
+          for (const value of reference.tables[table]) {
+            const before = JSON.parse(value), after = current.tables[table].map(JSON.parse).find(row => row.id === before.id);
+            // Source removal reaches its origin: core/raw-source-roots.mjs:207–230 then :139–140.
+            assert.equal(after.revision, before.revision + Number(before.id === f.conversation.id), 'exact source-header revision increment');
+            assert.deepEqual({ ...after, revision: before.revision }, before, 'all other Raw header columns match');
+          }
+          assert.equal(current.tables[table].length, reference.tables[table].length);
+        } else assert.equal(JSON.stringify(current.tables[table]), JSON.stringify(reference.tables[table]), table + ' bytes match the reference operation');
       }
       const decode = rows => rows.map(JSON.parse);
       assert.ok(decode(reference.tables.session_episodes).every(row => row.deleted === 0));
