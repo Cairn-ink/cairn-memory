@@ -31,52 +31,34 @@ jobs:
         run: echo "ImageOS=$ImageOS ImageVersion=$ImageVersion"
       - run: npm ci --prefix adapters/mcp --ignore-scripts
       - run: npm ci --prefix adapters/openai --ignore-scripts
-      - name: Lazy Codex forget named fence (30 isolated runs)
-        shell: bash
-        run: |
-          fails=0
-          for i in $(seq 1 30); do
-            if node integrations/client/testing/run.mjs --isolated-host --import ./integrations/client/test/fixtures/local-host-observer.mjs \
-                --test-name-pattern='lazy codex forget named fence' integrations/client/test/local-host-setup.test.mjs > "$RUNNER_TEMP/lazy-$i.log" 2>&1; then
-              echo "lazy $i: pass"
-            else
-              fails=$((fails+1)); echo "lazy $i: FAIL"
-            fi
-            grep -h -E 'DIAG |^not ok' "$RUNNER_TEMP/lazy-$i.log" | sed "s/^/lazy $i: /" || true
-          done
-          echo "lazy isolated failures: $fails / 30"; echo "$fails" > "$RUNNER_TEMP/fails-lazy"
-      - name: Claude delayed transcript (30 isolated runs of both cases)
-        shell: bash
-        run: |
-          fails=0
-          for i in $(seq 1 30); do
-            if node integrations/client/testing/run.mjs --isolated-host --import ./integrations/client/test/fixtures/local-host-observer.mjs \
-                --test-name-pattern='Claude delayed transcript' integrations/client/test/local-host-setup.test.mjs > "$RUNNER_TEMP/delayed-$i.log" 2>&1; then
-              echo "delayed $i: pass"
-            else
-              fails=$((fails+1)); echo "delayed $i: FAIL"
-            fi
-            grep -h -E 'DIAG |^not ok' "$RUNNER_TEMP/delayed-$i.log" | sed "s/^/delayed $i: /" || true
-          done
-          echo "delayed isolated failures: $fails / 30"; echo "$fails" > "$RUNNER_TEMP/fails-delayed"
       # The same steps that precede the local-host suite in the real job.
       - run: node integrations/client/testing/run.mjs integrations/client/test/local-source-open.test.mjs integrations/client/test/local-source-parity.test.mjs
       - run: node integrations/client/testing/run.mjs integrations/client/test/local-source-close.test.mjs
       - run: node integrations/client/testing/run.mjs --isolated-host integrations/client/test/local-macos-transport-diagnostic.test.mjs
       - run: node integrations/client/testing/run.mjs --isolated-host packages/setup/test/local-capture-interrupted.test.mjs
-      - name: Full local-host suite (8 runs) with diagnostics
+      - name: Full local-host suite (20 runs) with diagnostics
         shell: bash
         run: |
           fails=0
-          for i in $(seq 1 8); do
-            if npm run test:local-host > "$RUNNER_TEMP/full-$i.log" 2>&1; then echo "full $i: pass"; else fails=$((fails+1)); echo "full $i: FAIL"; fi
-            grep -h -E 'DIAG .*"status":"(blocked|failed)|DIAG .*Stop-retry|^not ok' "$RUNNER_TEMP/full-$i.log" | sed "s/^/full $i: /" || true
-            echo "full $i: DIAG lines $(grep -c 'DIAG ' "$RUNNER_TEMP/full-$i.log"), non-ready/progress $(grep 'DIAG ' "$RUNNER_TEMP/full-$i.log" | grep -c -v -E '"status":"(ready|progress)"')"
+          for i in $(seq 1 20); do
+            start=$(date +%s)
+            if npm run test:local-host > "$RUNNER_TEMP/full-$i.log" 2>&1; then r=pass; else r=FAIL; fails=$((fails+1)); fi
+            echo "full $i: $r in $(( $(date +%s) - start )) s; DIAG lines $(grep -c 'DIAG ' "$RUNNER_TEMP/full-$i.log"), DIAG-HOOK lines $(grep -c 'DIAG-HOOK ' "$RUNNER_TEMP/full-$i.log")"
+            if [ "$r" = FAIL ]; then
+              echo "::group::full $i failure blocks"
+              awk '/^not ok /{p=1} p{print} p && /^  \.\.\.$/{p=0}' "$RUNNER_TEMP/full-$i.log" | head -200
+              echo "::endgroup::"
+              echo "::group::full $i non-ready hook outcomes and unexpected Stop outcomes"
+              grep -h -E 'DIAG-HOOK |DIAG .*"status":"(blocked|failed|busy|waiting)"|DIAG .*Stop-retry' "$RUNNER_TEMP/full-$i.log" | head -200
+              echo "::endgroup::"
+              echo "::group::full $i lines around each failure"
+              grep -n -B25 -E '^not ok ' "$RUNNER_TEMP/full-$i.log" | head -300
+              echo "::endgroup::"
+            fi
           done
-          echo "full-suite failures: $fails / 8"; echo "$fails" > "$RUNNER_TEMP/fails-full"
+          echo "full-suite failures: $fails / 20"; echo "$fails" > "$RUNNER_TEMP/fails-full"
       - name: Summary
         shell: bash
         run: |
-          total=$(( $(cat "$RUNNER_TEMP/fails-lazy") + $(cat "$RUNNER_TEMP/fails-delayed") + $(cat "$RUNNER_TEMP/fails-full") ))
-          echo "lazy $(cat "$RUNNER_TEMP/fails-lazy")/30, delayed $(cat "$RUNNER_TEMP/fails-delayed")/30, full $(cat "$RUNNER_TEMP/fails-full")/8"
-          test "$total" -eq 0
+          echo "full $(cat "$RUNNER_TEMP/fails-full")/20"
+          test "$(cat "$RUNNER_TEMP/fails-full")" -eq 0
