@@ -7,11 +7,13 @@ import { copySqliteFixture, safetyFixture, quiescence } from '../../../../core/t
 import { localPlainPort } from '../../../../core/testing/raw-capture-fixtures.mjs';
 import { rationaleModel } from '../../../../core/testing/rationale-model.mjs';
 import { interpretation } from '../../../../core/testing/episode-capture-helpers.mjs';
+import { createScopedCardAccess } from '../../../mcp/private-card-access.mjs';
 import { fixture, ok } from './workspace.mjs';
 
 export { ok };
 export const forgottenText = 'forgetneedle synthetic victim';
 export const stepText = 'stepneedle review forgotten evidence';
+export const neighbourStep = 'neighbourstep review nearby evidence';
 export const otherStep = 'independentstep review retained evidence';
 export const range = { since: '1900-01-01T00:00:00.000Z', until: '2100-01-01T00:00:00.000Z', limit: 50 };
 export function sql(path, work) {
@@ -55,7 +57,7 @@ export async function setup(t, options = {}) {
     interpretEpisode(request) {
       const result = interpretation(request), text = request.input.sources[0].text;
       const field = value => ({ value, anchors: [{ sourceIndex: 0, start: 0, end: text.length }] });
-      return { ...result, gist: field(text), nextStep: field(text.includes('independent') ? otherStep : stepText) };
+      return { ...result, gist: field(text), nextStep: field(text.includes('independent') ? otherStep : text.includes('neighbour') ? neighbourStep : stepText) };
     },
     select: ({ input }) => ({ refs: input.maps.flatMap(map => map.items.flatMap(item => {
       const ref = item.type === 'unfiled' ? item.ref : item.type === 'ref' && item.ref.childType === 'memory'
@@ -100,10 +102,20 @@ export async function setup(t, options = {}) {
       WHERE l.receipt_id=?`).get(targetReceipt.id);
     return { target, targetReceipt, conversation, episodes, layout: attestContentSafety(db) };
   });
-  let core = openMemoryCore({ ...config, raw: false });
-  f.workspace.defer(() => core.close());
-  return { ...f, ...state, path, config, model, get core() { return core; },
-    async reopen() { await core.close(); core = openMemoryCore({ ...config, raw: false }); },
+  const cards = createScopedCardAccess(namespace, { actorId: 'synthetic-test' });
+  const openReader = () => openMemoryCore({ ...config, privateCards: cards.configuration, rawSearch: false });
+  let core = openReader();
+  f.workspace.defer(async () => { cards.revoke(); await core.close(); });
+  const cardIds = {};
+  // Match the recording probe's real retained-receipt Card contributors.
+  for (const label of ['survivor', 'other']) {
+    const memory = sql(path, db => db.prepare('SELECT * FROM memories WHERE content=? AND deleted=0').get('synthetic retained ' + label));
+    cardIds[label] = ok(await cards.call(core, 'createCardDraft', { actionId: 'draft-' + label, drafting: 'authored',
+      input: { sourcePolicy: 'retained-receipts-v1', memoryRefs: [{ type: 'memory', namespace, memoryId: memory.id, revision: memory.revision }],
+        title: 'Synthetic retained Card', body: 'Synthetic authored body.' } })).id;
+  }
+  return { ...f, ...state, path, config, model, cards, cardIds, get core() { return core; },
+    async reopen() { await core.close(); core = openReader(); },
     async close() { await core.close(); },
     act(operation) {
       const input = { namespace, memoryId: state.target.id, expectedRevision: state.target.revision };
