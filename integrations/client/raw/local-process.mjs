@@ -49,7 +49,7 @@ export function localProcessScope(deadlineMs, signal) {
     async run(executable, args, env, input, { probe = false } = {}) {
       check();
       let child;
-      try { child = spawn(executable, args, { shell: false, detached: false, env, stdio: ['pipe', 'pipe', 'pipe'] }); }
+      try { child = spawn(executable, args, { shell: false, detached: false, env, stdio: [probe ? 'ignore' : 'pipe', 'pipe', 'pipe'] }); }
       catch { failed = true; throw new LocalCaptureTransportError(uncertain, probe ? 'probe' : 'spawn'); }
       // An ENOENT/permission spawn failure with no PID is known not-started.
       // Once the OS allocates the capture child, delivery is conservatively uncertain.
@@ -69,16 +69,16 @@ export function localProcessScope(deadlineMs, signal) {
       const stderr = chunk => { stderrBytes += chunk.byteLength; if (stderrBytes > stderrLimit) fail(); };
       const finish = () => { stdinFinished = true; };
       child.stdout.on('data', stdout); child.stderr.on('data', stderr);
-      child.stdout.on('error', fail); child.stderr.on('error', fail); child.stdin.on('error', fail);
-      child.stdin.once('finish', finish);
+      child.stdout.on('error', fail); child.stderr.on('error', fail);
+      if (!probe) { child.stdin.on('error', fail); child.stdin.once('finish', finish); }
       try {
         const done = new Promise(resolve => {
           child.once('error', spawnFail);
           child.once('close', (code, signal) => { closed = true; resolve({ code, signal }); });
         });
-        try { child.stdin.end(input); } catch { fail(); }
+        if (!probe) { try { child.stdin.end(input); } catch { fail(); } }
         const outcome = await done;
-        if (outcome.code !== 0 || outcome.signal !== null || !stdinFinished) failed = true;
+        if (outcome.code !== 0 || outcome.signal !== null || (!probe && !stdinFinished)) failed = true;
         try { check(); }
         catch { throw new LocalCaptureTransportError(uncertain, probe ? 'probe' : spawnFailed ? 'spawn' : 'child_exit',
           { exitCode: outcome.code, signal: outcome.signal }); }
@@ -86,8 +86,9 @@ export function localProcessScope(deadlineMs, signal) {
       } finally {
         clearTimeout(probeTimer); clearTimeout(escalation); terminate = undefined;
         child.stdout.off('data', stdout); child.stderr.off('data', stderr);
-        child.stdout.off('error', fail); child.stderr.off('error', fail); child.stdin.off('error', fail);
-        child.stdin.off('finish', finish); child.off('error', spawnFail);
+        child.stdout.off('error', fail); child.stderr.off('error', fail);
+        if (!probe) { child.stdin.off('error', fail); child.stdin.off('finish', finish); }
+        child.off('error', spawnFail);
       }
     },
   };
