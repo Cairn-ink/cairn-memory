@@ -1,9 +1,9 @@
 import { createHash, createHmac } from 'node:crypto';
-import { lstat, stat, realpath, readFile } from 'node:fs/promises';
+import { lstat, stat, realpath, readFile, statfs } from 'node:fs/promises';
 import { statSync, realpathSync } from 'node:fs';
 import { resolve, join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { refuse } from './local-daemon-state.mjs';
+import { refuse, assertLocalFilesystem } from './local-daemon-state.mjs';
 
 export const DAEMON_PROTOCOL = 1;
 // Runtime location intentionally has no environment input. These are the ONLY
@@ -51,8 +51,18 @@ export function daemonVector(args) {
     raw: !values.has('--no-raw'), rawSearch: !values.has('--no-raw-search'), contextRead: values.has('--no-context-read') ? false : 'context-read-v1',
   } };
 }
-export async function physicalStore(path, cwd = process.cwd()) {
+// Scope this probe to one connection attempt, never to a daemon's lifetime.
+export function storeFilesystemProbe(probe = statfs) {
+  const parents = new Map();
+  return parent => {
+    if (!parents.has(parent)) parents.set(parent, Promise.resolve().then(() => probe(parent)));
+    return parents.get(parent);
+  };
+}
+export async function physicalStore(path, cwd = process.cwd(), filesystem = statfs) {
   const absolute = resolve(cwd, path), canonicalPath = await realpath(absolute);
+  const parent = dirname(canonicalPath);
+  assertLocalFilesystem(parent, (await filesystem(parent)).type);
   const info = await stat(canonicalPath, { bigint: true });
   if (!info.isFile() || info.nlink !== 1n) throw refuse('daemon_store_alias');
   // Parent canonicalization permits safe symlinks; pin the resulting physical file.
@@ -60,7 +70,7 @@ export async function physicalStore(path, cwd = process.cwd()) {
   if (again.dev !== info.dev || again.ino !== info.ino) throw refuse('daemon_store_changed');
   return { path: canonicalPath, dev: String(info.dev), ino: String(info.ino) };
 }
-export async function creationIdentity(path, cwd = process.cwd()) {
+export async function creationIdentity(path, cwd = process.cwd(), filesystem = statfs) {
   let absolute = resolve(cwd, path);
   try { absolute = await realpath(absolute); }
   catch (error) {
@@ -69,17 +79,18 @@ export async function creationIdentity(path, cwd = process.cwd()) {
     catch (missing) { if (missing.code !== 'ENOENT') throw missing; }
   }
   const parent = await realpath(dirname(absolute)), info = await stat(parent, { bigint: true });
+  assertLocalFilesystem(parent, (await filesystem(parent)).type);
   return { path: join(parent, basename(absolute)), parent: { path: parent, dev: String(info.dev), ino: String(info.ino) } };
 }
 export function creationDigest(record) {
   return createHash('sha256').update(canonical({ uid: process.getuid(), creation: record })).digest('hex');
 }
-export async function assertStoreLocation(path, directory) {
-  const creation = await creationIdentity(path);
+export async function assertStoreLocation(path, directory, filesystem) {
+  const creation = await creationIdentity(path, undefined, filesystem);
   if (creation.path === directory.path || creation.path.startsWith(directory.path + '/')) throw refuse('daemon_store_location');
 }
-export async function assertStore(record) {
-  const current = await physicalStore(record.store.path);
+export async function assertStore(record, filesystem) {
+  const current = await physicalStore(record.store.path, undefined, filesystem);
   if (canonical(current) !== canonical(record.store)) throw refuse('daemon_store_changed');
 }
 export function assertStoreSync(record) {
@@ -133,13 +144,13 @@ export async function engineBuild(root = packageRoot) {
   return hash.digest('hex');
 }
 export async function createIdentity(args, { key, environment = selectedEnvironment(), cwd,
-  uid = process.getuid?.(), build, root = packageRoot, node = { executable: process.execPath, version: process.version, execArgv: process.execArgv }, protocol = DAEMON_PROTOCOL } = {}) {
+  uid = process.getuid?.(), build, root = packageRoot, node = { executable: process.execPath, version: process.version, execArgv: process.execArgv }, protocol = DAEMON_PROTOCOL, filesystem } = {}) {
   const vector = daemonVector(args);
   if (!vector.eligible) return vector;
   if (!Buffer.isBuffer(key) || key.length !== 32) throw refuse('daemon_identity_key');
   if (!Array.isArray(node.execArgv) || node.execArgv.some(arg => !['--no-warnings', '--experimental-sqlite'].includes(arg))) throw refuse('daemon_node_injection');
   const selected = selectedEnvironment(environment);
-  const store = await physicalStore(vector.configuration.path, cwd);
+  const store = await physicalStore(vector.configuration.path, cwd, filesystem);
   const configuration = { ...vector.configuration, path: store.path,
     // Explicit effective defaults of the managed vector; advanced flags are ineligible.
     contextSemantic: Boolean(selected.OPENAI_API_KEY), contextReadPersonal: false,

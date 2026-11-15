@@ -18,7 +18,8 @@ export async function until(predicate, marker, milliseconds = 12000) {
   assert.fail(marker);
 }
 export async function workspace(t) {
-  const root = await mkdtemp('/tmp/cr3-'); await mkdir(join(root, 'run'), { mode: 0o700 });
+  await mkdir('/tmp/cairn-es-r2', { recursive: true });
+  const root = await mkdtemp('/tmp/cairn-es-r2/d-'); await mkdir(join(root, 'run'), { mode: 0o700 });
   const path = join(root, 'synthetic.sqlite');
   const seed = openMemoryCore({ path, raw: false }); await seed.close();
   const children = [], owners = new Map(), exits = [], messages = [];

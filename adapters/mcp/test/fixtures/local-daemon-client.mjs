@@ -63,7 +63,13 @@ try {
     send({ kind: 'candidate-done', acquired });
   } else {
     const candidates = [];
+    let bytesRead = 0;
+    const read = process.stdin.read.bind(process.stdin);
+    process.stdin.read = (...args) => { const bytes = read(...args); if (bytes) bytesRead += bytes.length; return bytes; };
     const result = await runForwarder(configuration.args, { ...configuration.options,
+      ...(configuration.storeType === undefined ? {} : { storeStatfs: async parent => {
+        send({ kind: 'store-statfs', parent }); return { type: configuration.storeType };
+      } }),
       onCandidate(child) {
         // Production detaches/unrefs candidates. This fixture supervises their
         // actual wait status until test teardown, including idle resets caused
@@ -77,7 +83,7 @@ try {
       onConnected({ descriptor, ready }) { send({ kind: 'connected', owner: descriptor.owner,
         incarnation: descriptor.incarnation, metadata: ready.metadata }); },
     });
-    send({ kind: 'forwarder-done', code: result });
+    send({ kind: 'forwarder-done', code: result, bytesRead });
     if (result) process.exitCode = 1;
     // Keep the supervisor alive after stdio EOF so detached children's actual
     // wait status is reported, including losers and the idle-exiting winner.

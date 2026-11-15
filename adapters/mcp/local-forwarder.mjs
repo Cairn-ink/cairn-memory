@@ -5,7 +5,7 @@ import { randomInt } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { once } from 'node:events';
-import { createIdentity, selectedEnvironment, assertStore, assertStoreLocation, canonical, daemonVector, creationIdentity, creationDigest, physicalStore } from './local-daemon-identity.mjs';
+import { createIdentity, selectedEnvironment, assertStore, assertStoreLocation, canonical, daemonVector, creationIdentity, creationDigest, physicalStore, storeFilesystemProbe } from './local-daemon-identity.mjs';
 import { runtimeDirectory, identityKey, endpointPaths, readPrivate, checkedEntry, refuse } from './local-daemon-state.mjs';
 import { authenticateClient, frameGuard, requestLedger, queuedBytes, QUEUE_BYTES } from './local-daemon-wire.mjs';
 
@@ -35,29 +35,30 @@ function spawnCandidate(payload, environment, options) {
   options.onCandidate?.(child);
 }
 async function connectAttempt(args, options, deadline) {
+  const filesystem = storeFilesystemProbe(options.storeStatfs);
   const environment = selectedEnvironment(options.environment);
   const directory = await runtimeDirectory({ root: options.root });
   const vector = daemonVector(args);
   if (!vector.eligible) throw refuse('daemon_not_eligible');
-  await assertStoreLocation(vector.configuration.path, directory);
-  const creation = await creationIdentity(vector.configuration.path);
+  await assertStoreLocation(vector.configuration.path, directory, filesystem);
+  const creation = await creationIdentity(vector.configuration.path, undefined, filesystem);
   const creationLock = resolve(directory.path, 'p-' + creationDigest(creation).slice(0, 32) + '.lock');
   let provisioned = false;
   while (performance.now() < deadline) {
     let exists = false;
-    try { await physicalStore(creation.path); exists = true; } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    try { await physicalStore(creation.path, undefined, filesystem); exists = true; } catch (error) { if (error.code !== 'ENOENT') throw error; }
     const creating = await checkedEntry(directory, creationLock, { missing: true });
     if (exists && !creating) break;
     if (!provisioned && performance.now() < deadline) { provisioned = true; spawnCandidate({ creation, root: options.root }, environment, options); }
     await delay(Math.min(25 + randomInt(76), Math.max(1, deadline - performance.now())));
   }
   if (performance.now() >= deadline) throw refuse('daemon_connect_timeout');
-  const identity = await createIdentity(args, { key: await identityKey(directory), environment, build: options.build });
+  const identity = await createIdentity(args, { key: await identityKey(directory), environment, build: options.build, filesystem });
   if (!identity.eligible) throw refuse('daemon_not_eligible');
   const paths = endpointPaths(directory, identity.digest);
   let spawned = false;
   while (performance.now() < deadline) {
-    await directory.validate(); await assertStore(identity.record);
+    await directory.validate(); await assertStore(identity.record, filesystem);
     const text = await readPrivate(directory, paths.ready, { missing: true });
     if (text) {
       let descriptor; try { descriptor = JSON.parse(text); } catch { throw refuse('daemon_descriptor'); }

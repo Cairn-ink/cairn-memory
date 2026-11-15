@@ -7,7 +7,8 @@ import { runtimeDirectory, identityKey, endpointPaths, checkedEntry, logCode, re
 import { startAwareAlive } from '../local-daemon-liveness.mjs';
 
 async function setup(t) {
-  const root = await mkdtemp('/tmp/cr3-i-'); t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir('/tmp/cairn-es-r2', { recursive: true });
+  const root = await mkdtemp('/tmp/cairn-es-r2/i-'); t.after(() => rm(root, { recursive: true, force: true }));
   const directory = await runtimeDirectory({ root: join(root, 'run') });
   const path = join(root, 'synthetic.sqlite'); await writeFile(path, 'synthetic metadata only');
   const args = ['--db', path, '--owner', 'synthetic-owner'];

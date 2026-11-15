@@ -7,7 +7,7 @@ import { randomBytes } from 'node:crypto';
 export const refuse = code => Object.assign(Error(code), { code });
 const localTypes = new Set([0xef53, 0x58465342, 0x9123683e, 0x794c7630, 0x01021994, 0x858458f6]);
 export function assertLocalFilesystem(path, type) {
-  if (path.startsWith('/mnt/')) throw refuse('daemon_filesystem');
+  if (path === '/mnt' || path.startsWith('/mnt/')) throw refuse('daemon_filesystem');
   if (!localTypes.has(Number(type))) throw refuse('daemon_filesystem');
 }
 export async function runtimeDirectory({ root, uid = process.getuid?.() } = {}) {
