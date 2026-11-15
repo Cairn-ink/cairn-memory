@@ -12,15 +12,17 @@ export function assertLocalFilesystem(path, type) {
 }
 export async function runtimeDirectory({ root, uid = process.getuid?.() } = {}) {
   if (!Number.isSafeInteger(uid) || process.platform !== 'linux') throw refuse('daemon_platform');
-  let path = root;
-  if (path === undefined) {
-    path = `/run/user/${uid}`;
-    try { await lstat(path); }
-    catch (error) { if (error.code !== 'ENOENT') throw refuse('daemon_directory'); path = `/tmp/cairn-${uid}`; }
+  let parent = root;
+  if (parent === undefined) {
+    parent = `/run/user/${uid}`;
+    try { await lstat(parent); }
+    catch (error) { if (error.code !== 'ENOENT') throw refuse('daemon_directory'); parent = `/tmp/cairn-${uid}`; }
   }
-  if (typeof path !== 'string' || !path.startsWith('/') || resolve(path) !== path) throw refuse('daemon_directory');
-  try { await mkdir(path, { mode: 0o700 }); } catch (error) { if (error.code !== 'EEXIST') throw refuse('daemon_directory'); }
-  async function validate(pin) {
+  if (typeof parent !== 'string' || !parent.startsWith('/') || resolve(parent) !== parent) throw refuse('daemon_directory');
+  async function create(path) {
+    try { await mkdir(path, { mode: 0o700 }); } catch (error) { if (error.code !== 'EEXIST') throw refuse('daemon_directory'); }
+  }
+  async function validate(path, pin) {
     const info = await lstat(path, { bigint: true });
     if (info.isSymbolicLink() || !info.isDirectory()) throw refuse('daemon_directory_type');
     if (info.uid !== BigInt(uid)) throw refuse('daemon_directory_owner');
@@ -30,8 +32,14 @@ export async function runtimeDirectory({ root, uid = process.getuid?.() } = {}) 
     if (pin && (info.dev !== pin.dev || info.ino !== pin.ino)) throw refuse('daemon_directory_changed');
     return { dev: info.dev, ino: info.ino };
   }
-  const pin = await validate();
-  return Object.freeze({ path, uid, validate: () => validate(pin) });
+  await create(parent);
+  const parentPin = await validate(parent), path = join(parent, 'cairn-memory');
+  await create(path);
+  const pin = await validate(path);
+  return Object.freeze({ path, uid, validate: async () => {
+    await validate(parent, parentPin);
+    return validate(path, pin);
+  } });
 }
 export function endpointPaths(directory, digest) {
   if (!/^[a-f0-9]{64}$/.test(digest)) throw refuse('daemon_identity');

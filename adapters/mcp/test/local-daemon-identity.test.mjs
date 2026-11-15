@@ -122,3 +122,12 @@ test('package physical location splits identical builds and reinstalled director
   assert.notEqual(first.record.package.ino, replaced.record.package.ino);
   assert.notEqual(first.digest, replaced.digest);
 });
+test('runtime subfolder pins both itself and its private parent', async t => {
+  const f = await setup(t), parent = join(f.root, 'run');
+  assert.equal(f.directory.path, join(parent, 'cairn-memory'));
+  await chmod(parent, 0o755);
+  await assert.rejects(f.directory.validate(), { code: 'daemon_directory_mode' });
+  await chmod(parent, 0o700);
+  await rename(parent, join(f.root, 'old-parent')); await mkdir(parent, { mode: 0o700 });
+  await assert.rejects(f.directory.validate(), { code: 'daemon_directory_changed' });
+});

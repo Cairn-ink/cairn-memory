@@ -84,20 +84,20 @@ export async function workspace(t) {
   async function bootstrap() {
     const directory = await runtimeDirectory({ root: join(root, 'run') });
     const identity = await createIdentity(args, { key: await identityKey(directory), environment: {}, node: { executable: process.execPath, version: process.version, execArgv: [] } });
-    return { args, environment: {}, identity: identity.record, root: directory.path };
+    return { args, environment: {}, identity: identity.record, root: join(root, 'run') };
   }
   async function descriptor() {
-    const names = (await readdir(join(root, 'run'))).filter(name => /^d-.*\.json$/.test(name));
+    const names = (await readdir(join(root, 'run', 'cairn-memory'))).filter(name => /^d-.*\.json$/.test(name));
     if (!names.length) return;
-    return JSON.parse(await readFile(join(root, 'run', names[0]), 'utf8'));
+    return JSON.parse(await readFile(join(root, 'run', 'cairn-memory', names[0]), 'utf8'));
   }
   t.after(async () => {
     try {
     for (const entry of children) if (!entry.exit) entry.process.kill('SIGCONT');
     for (const entry of children) if (!entry.exit && entry.role === 'forwarder') entry.process.stdin.end();
     await until(() => children.every(entry => entry.exit || entry.role !== 'forwarder' || entry.messages.some(m => m.kind === 'forwarder-done')), 'forwarder supervision must stop reconnects before daemon cleanup');
-    for (const name of (await readdir(join(root, 'run'))).filter(name => /^d-.*\.json$/.test(name))) {
-      const descriptor = JSON.parse(await readFile(join(root, 'run', name), 'utf8')); owners.set(descriptor.owner.pid, descriptor.owner);
+    for (const name of (await readdir(join(root, 'run', 'cairn-memory'))).filter(name => /^d-.*\.json$/.test(name))) {
+      const descriptor = JSON.parse(await readFile(join(root, 'run', 'cairn-memory', name), 'utf8')); owners.set(descriptor.owner.pid, descriptor.owner);
     }
     for (const owner of owners.values()) {
       const current = processStart(owner.pid);
