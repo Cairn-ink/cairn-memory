@@ -1682,5 +1682,18 @@
   },
   "integrations/client/raw/local-session-start.mjs": {
     "literal:state_invalid": 1
+  },
+  "adapters/mcp/local-daemon-identity.mjs": {
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "key:sessionId": 1,
+    "key:uid": 1
+  },
+  "adapters/mcp/local-daemon-liveness.mjs": {
+    "key:pid": 1
+  },
+  "adapters/mcp/local-daemon-wire.mjs": {
+    "literal:daemon_request_id": 1,
+    "literal:id": 2
   }
 }
