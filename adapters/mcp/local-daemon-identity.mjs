@@ -88,7 +88,8 @@ export function assertStoreSync(record) {
 }
 const runtimeFiles = ['local-daemon-identity.mjs', 'local-daemon-state.mjs', 'local-daemon-wire.mjs',
   'local-daemon-liveness.mjs', 'local-daemon.mjs', 'local-forwarder.mjs'];
-export async function engineBuild(root = fileURLToPath(new URL('../../', import.meta.url))) {
+const packageRoot = fileURLToPath(new URL('../../', import.meta.url));
+export async function engineBuild(root = packageRoot) {
   // Only a source checkout has this inventory. A missing installed build record
   // must refuse, never silently select the source computation.
   let source = false;
@@ -132,7 +133,7 @@ export async function engineBuild(root = fileURLToPath(new URL('../../', import.
   return hash.digest('hex');
 }
 export async function createIdentity(args, { key, environment = selectedEnvironment(), cwd,
-  uid = process.getuid?.(), build, node = { executable: process.execPath, version: process.version, execArgv: process.execArgv }, protocol = DAEMON_PROTOCOL } = {}) {
+  uid = process.getuid?.(), build, root = packageRoot, node = { executable: process.execPath, version: process.version, execArgv: process.execArgv }, protocol = DAEMON_PROTOCOL } = {}) {
   const vector = daemonVector(args);
   if (!vector.eligible) return vector;
   if (!Buffer.isBuffer(key) || key.length !== 32) throw refuse('daemon_identity_key');
@@ -150,7 +151,10 @@ export async function createIdentity(args, { key, environment = selectedEnvironm
     privateCards: null, privateCardCurrentDependencies: null, methodPackages: null, methodReadPersonal: false,
     assets: null, roleProfiles: null, sessionEpisodes: null, sessionEpisodesAccess: null, contextReadSources: null,
   };
-  const record = { version: 1, protocol, uid, store, configuration, build: build ?? await engineBuild(),
+  const path = await realpath(root), info = await stat(path, { bigint: true });
+  if (!info.isDirectory()) throw refuse('daemon_build');
+  const record = { version: 1, protocol, uid, store, configuration, build: build ?? await engineBuild(root),
+    package: { path, dev: String(info.dev), ino: String(info.ino) },
     node: { ...node, executable: await realpath(node.executable) },
     environment: createHmac('sha256', key).update(canonical(selected)).digest('hex') };
   return { eligible: true, record, digest: createHash('sha256').update(canonical(record)).digest('hex') };
