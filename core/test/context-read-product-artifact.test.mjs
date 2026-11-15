@@ -46,7 +46,8 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   // The private checkpoint wall-cost estimator adds one Worker-only module. Card lineage adds the retained-lineage
   // implementation and exact base/lineage DDL, plus the offline installer's observation/classification dependencies.
   // Include three-layer assembly and the private sidecar attestation module.
-  assert.equal(expected.length, 131, 'private_maintenance_admission_closure_pin');
+  // core/database.mjs now imports the inert, unbound core/commit-dispatch.mjs seam.
+  assert.equal(expected.length, 132, 'private_maintenance_admission_closure_pin');
   assert.ok(expected.includes('core/context-product-checkpoint-cost.mjs'));
   assert.ok(expected.includes('core/context-read-three-layer.mjs'));
   for (const file of ['core/card-lineage.mjs', 'core/card-lineage-schema.mjs', 'core/card-lineage-base-schema.mjs',

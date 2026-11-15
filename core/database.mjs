@@ -1,4 +1,5 @@
 import './content-write-safety.mjs';
+import { bindCommitConnection, hasCommitDispatcher, recordCommit, isCommitBusy, assertCommitWriteRouted } from './commit-dispatch.mjs';
 import { inContentSuppressionRequestInside, withoutContentSuppressionReadCacheInside } from './content-suppression-storage.mjs';
 import { beginContentWrite, contentWriteOperation } from './content-write-context.mjs';
 import { contentSafetyInventory, installContentSafetyInside } from './content-safety-migration.mjs';
@@ -39,7 +40,7 @@ import { migrateVersion14, migrateVersion15, migrateVersion16 } from './episode-
 
 export const STORAGE_BUSY_TIMEOUT_MS = 5_000;
 export const isStorageBusy = error => error?.code === 'ERR_SQLITE_ERROR' &&
-  Number.isInteger(error.errcode) && [5, 6].includes(error.errcode & 0xff);
+  Number.isInteger(error.errcode) && [5, 6].includes(error.errcode & 0xff) || isCommitBusy(error);
 
 export const APPLICATION_ID = 0x43414952;
 const VERSION = CONFIRMATION_SCHEMA_VERSION;
@@ -318,6 +319,13 @@ function checkedReadConnection(db, check) {
   return bindContentSafetyConnection(wrap(db), db);
 }
 export function readTransaction(db, work, acquisition) {
+  // The embedded context reader opens through its retained read-only opener.
+  // Bind that engine-owned connection during the same host construction scope.
+  if (!hasCommitDispatcher(db)) {
+    // Retained read-only auxiliary handles can intentionally use timeout=0.
+    // Their enforced query_only scope below cannot become a canonical writer.
+    bindCommitConnection(db, undefined, { canonical: false });
+  }
   if (discardedConnections.has(db) || !db.isOpen) fail('store_closed');
   if (activeReads.has(db) || db.isTransaction || typeof work !== 'function' ||
       types.isAsyncFunction(work) || types.isGeneratorFunction(work)) fail('storage_error');
@@ -374,9 +382,12 @@ registerContentReadSnapshot((db,work)=>readTransaction(db,()=>{checkInstalledCon
 // Reviewed read-only mode: keep transaction fences and statement counts, acquiring
 // SHARED on the first SELECT. Writers must retain BEGIN IMMEDIATE.
 export function transaction(db, work, check, { deferred = false } = {}) {
+  if (hasCommitDispatcher(db) && (types.isAsyncFunction(work) || types.isGeneratorFunction(work))) fail('storage_error');
   if (activeReads.has(db) || discardedConnections.has(db)) fail('storage_error');
   check?.();
   const execute = () => {
+    if (!deferred) assertCommitWriteRouted(db, 'transaction');
+    const before = hasCommitDispatcher(db) ? db.prepare("SELECT total_changes() AS n").get().n : undefined;
     db.exec(deferred ? "BEGIN" : "BEGIN IMMEDIATE");
     let contentWrite;
     try {
@@ -385,11 +396,13 @@ export function transaction(db, work, check, { deferred = false } = {}) {
         contentWrite = beginContentWrite(db);
         return work();
       });
+      if (hasCommitDispatcher(db) && result && typeof result.then === 'function') fail('storage_error');
       contentWrite?.validate(result);
       contentWrite?.close();
       contentWrite = null;
       check?.();
       db.exec("COMMIT");
+      if (before !== undefined && db.prepare("SELECT total_changes() AS n").get().n !== before) recordCommit(db);
       return result;
     } catch (error) {
       if(db.isTransaction)db.exec("ROLLBACK");
@@ -450,7 +463,7 @@ export function openDatabase(path, options = {}) {
       if (methodPackages && layout.base < 30) fail('unsupported_database');
       if (currentDependencies && layout.base !== 33) fail('unsupported_database');
       location.check();
-      return db;
+      return bindCommitConnection(db);
     } catch (error) {
       try { db.close(); } catch { /* Preserve the construction failure. */ }
       throw error;
@@ -789,7 +802,7 @@ export function openDatabase(path, options = {}) {
         installContentSafetyInside(db, base, contentSafetyInventory(db));
       }
     });
-    return db;
+    return bindCommitConnection(db);
   } catch (error) {
     db?.close();
     throw error;

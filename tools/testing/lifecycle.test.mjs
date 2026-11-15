@@ -204,12 +204,14 @@ test(`${terminate ? 'catchable termination' : 'ordinary parent exit'} waits for 
     const grand = join(owner.path, 'grand.mjs');
     const child = join(owner.path, 'child.mjs');
     const file = join(owner.path, 'script.mjs');
-    const watcher = `import { existsSync, writeFileSync } from 'node:fs'; import { tmpdir } from 'node:os';
+    // The parent reads both pid markers as soon as the grandchild's exists, so
+    // each is written to a temporary file and renamed into place.
+    const watcher = `import { existsSync, renameSync, writeFileSync } from 'node:fs'; import { tmpdir } from 'node:os';
 const scratch = tmpdir(); process.on('SIGTERM', () => { writeFileSync(existsSync(scratch) ? ${JSON.stringify(observed)} : ${JSON.stringify(violation)}, 'synthetic'); });
 setInterval(() => { if (!existsSync(scratch)) writeFileSync(${JSON.stringify(violation)}, 'synthetic'); }, 10);
 `;
-    writeFileSync(grand, watcher + `writeFileSync(${JSON.stringify(grandReady)}, String(process.pid));`);
-    writeFileSync(child, watcher + `import { spawn } from 'node:child_process'; spawn(process.execPath, [${JSON.stringify(grand)}], { stdio: 'ignore' }); writeFileSync(${JSON.stringify(childReady)}, String(process.pid));`);
+    writeFileSync(grand, watcher + `writeFileSync(${JSON.stringify(grandReady + '.tmp')}, String(process.pid)); renameSync(${JSON.stringify(grandReady + '.tmp')}, ${JSON.stringify(grandReady)});`);
+    writeFileSync(child, watcher + `import { spawn } from 'node:child_process'; spawn(process.execPath, [${JSON.stringify(grand)}], { stdio: 'ignore' }); writeFileSync(${JSON.stringify(childReady + '.tmp')}, String(process.pid)); renameSync(${JSON.stringify(childReady + '.tmp')}, ${JSON.stringify(childReady)});`);
     writeFileSync(file, watcher + `import { spawn } from 'node:child_process'; spawn(process.execPath, [${JSON.stringify(child)}], { stdio: 'ignore' });
 const readiness = setInterval(() => { if (existsSync(${JSON.stringify(grandReady)})) { clearInterval(readiness); writeFileSync(${JSON.stringify(ready)}, 'ready'); ${terminate ? '' : 'process.exit(0);'} } }, 10);`);
     const run = launch(owner, ['--script', file]);
