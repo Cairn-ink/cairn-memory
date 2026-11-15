@@ -163,8 +163,10 @@ def test_shutdown_reaps_active_sdk_server(install, tmp_path):
     _, provider, manager = install("shutdown")
     hanging = tmp_path / "hanging.mjs"
     marker = tmp_path / "started"
-    hanging.write_text("import fs from 'node:fs'; fs.writeFileSync(" + json.dumps(str(marker))
-                       + ",String(process.pid)); setInterval(()=>{},1000);\n")
+    # The test reads the pid as soon as the marker exists; publish it complete.
+    hanging.write_text("import fs from 'node:fs'; fs.writeFileSync(" + json.dumps(str(marker) + ".tmp")
+                       + ",String(process.pid)); fs.renameSync(" + json.dumps(str(marker) + ".tmp") + ","
+                       + json.dumps(str(marker)) + "); setInterval(()=>{},1000);\n")
     provider._config["executable_path"] = str(hanging)
     results = []
     worker = threading.Thread(target=lambda: results.append(call(manager, "inspect")))
