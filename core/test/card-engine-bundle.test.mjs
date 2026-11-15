@@ -10,6 +10,9 @@ import { createHash } from 'node:crypto';
 import { assembleContext, deliveredCardText, meteredText } from '../context-read-assembly.mjs';
 import { assembleThreeLayerContext } from '../context-read-three-layer.mjs';
 import { modelRequestText, MODEL_INPUT_TOKENS } from '../model-call.mjs';
+import { DatabaseSync } from 'node:sqlite';
+import { cardTrigger, clusterMemories, partitionCardClusters } from '../engine-card-clusters.mjs';
+import { withContentWriteOperation } from '../content-write-context.mjs';
 
 const output = (memories, retired = []) => ({ currentState: [{ text: 'ok', memoryIds: [memories.at(-1).id] }],
   timeline: retired.map(id => ({ text: 'model prose never stored', date: 'untrusted date', memoryIds: [id] })), contradictions: [] });
@@ -219,3 +222,131 @@ test('the out-of-date marking prompt is pinned', () => {
   assert.match(CONSOLIDATE_PROMPT, /Records are never out of date/u);
   assert.match(CONSOLIDATE_PROMPT, /has done its work once the entry is gone/u);
 });
+
+// Removal crosses both the partition boundary and the five-current-Memory trigger.
+// Run the same public forget against MOC routing and a changing similarity seed.
+for (const filed of [true, false]) for (const count of [13, 5])
+  test(`${filed ? 'filed topic' : 'similarity'} forget ${count}→${count - 1} purges in the transaction and obeys the trigger after debounce`, async t => {
+    const f = engineCardFixture(t);
+    let memories = f.seed(count).sort((a, b) => a.id.localeCompare(b.id));
+    if (filed) memories = f.file(memories, 'Orion synthetic topic').memories;
+    memories.sort((a, b) => a.id.localeCompare(b.id));
+    // Make the similarity seed an own-part source, not merely added context.
+    memories.forEach((memory, i) => f.db.prepare('UPDATE memories SET created_at=? WHERE id=?')
+      .run(new Date(Date.UTC(2026, 0, i + 1)).toISOString(), memory.id));
+    const victim = memories[0];
+    const forgottenText = f.db.prepare('SELECT content FROM memories WHERE id=?').get(victim.id).content;
+    const noForgottenText = value => assert.equal(JSON.stringify(value).includes(forgottenText), false,
+      'whole value excludes forgotten Memory text');
+    const identity = f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get();
+    const storage = createEngineCardStorage({ db: f.db, identity, upgrade: true, ready() {} });
+    const before = storage.snapshot(ns, 512, () => {}).memories;
+    const groups = clusterMemories(before);
+    assert.equal(groups.length, 1);
+    assert.ok(groups[0].key.startsWith(filed ? 'moc:' : 'similarity:'));
+    const parts = partitionCardClusters(groups);
+    assert.deepEqual(parts.map(part => part.memories.length), count === 13 ? [12, 1] : [5]);
+    assert.equal(cardTrigger(parts[0].memories, undefined, 0).eligible, true);
+    const firstPass = ok(await f.pass()), first = firstPass.built[0];
+    assert.equal(firstPass.built.length, 1, JSON.stringify(firstPass));
+    assert.equal(first.clusterKey, parts[0].key);
+    assert.ok(first.sourceRevisions.some(ref => ref.memoryId === victim.id));
+    assert.ok(f.db.prepare('SELECT body FROM private_cards WHERE id=?').get(first.id).body.includes(forgottenText),
+      'the needle was actually stored in the Card body');
+    const records = () => f.db.prepare("SELECT * FROM card_operations WHERE method IN ('consolidateAttempt','consolidateOutcome')").all();
+    assert.deepEqual(records().map(row => row.method).sort(), ['consolidateAttempt', 'consolidateOutcome']);
+    ok(await f.refresh());
+    const previous = ok(await f.read('Orion', { intent: 'history', budget: { maxItems: 24, maxTokens: 6000 } }));
+    assert.ok(previous.metered.items.some(item => item.ref.id === first.id));
+
+    // Observe the runtime's own connection before the final receipt DELETE,
+    // while its public forget transaction is still open. No maintenance ran.
+    const prepare = DatabaseSync.prototype.prepare;
+    let observedForgetTransaction = false;
+    const probe = t.mock.method(DatabaseSync.prototype, 'prepare', function(sql) {
+      if (sql === 'DELETE FROM receipts WHERE memory_id = ?') {
+        assert.equal(this.isTransaction, true);
+        const query = text => Reflect.apply(prepare, this, [text]);
+        assert.deepEqual({ ...query('SELECT state,title,body FROM private_cards WHERE id=?').get(first.id) },
+          { state: 'deleted', title: null, body: null });
+        assert.equal(query('SELECT deleted FROM memories WHERE id=?').get(victim.id).deleted, 1);
+        assert.equal(query("SELECT count(*) n FROM card_operations WHERE method IN ('consolidateAttempt','consolidateOutcome')").get().n, 0);
+        observedForgetTransaction = true;
+      }
+      return Reflect.apply(prepare, this, [sql]);
+    });
+    let forgotten;
+    try { forgotten = ok(f.core.forget({ namespace: ns, memoryId: victim.id, expectedRevision: victim.revision })); }
+    finally { probe.mock.restore(); }
+    assert.equal(forgotten.forgotten, true);
+    assert.equal(observedForgetTransaction, true, 'purge is part of forget, before commit');
+    assert.deepEqual(records(), []);
+    const purged = f.db.prepare('SELECT * FROM private_cards WHERE id=?').get(first.id);
+    assert.equal(purged.state, 'deleted'); assert.equal(purged.title, null); assert.equal(purged.body, null);
+    assert.equal(f.db.prepare('SELECT count(*) n FROM card_memory_bindings WHERE card_id=?').get(first.id).n, 0);
+    const scanCanonicalValues = () => {
+      for (const { name } of f.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all()) {
+        const rows = f.db.prepare('SELECT * FROM "' + name.replaceAll('"', '""') + '"').all();
+        noForgottenText({ table: name, rows });
+      }
+    };
+    scanCanonicalValues(); noForgottenText(forgotten);
+    const worker = createEngineCardMaintenance({ storage, model: f.model });
+    const redelivered = worker.deliver(ns, structuredClone(firstPass));
+    assert.deepEqual(redelivered.built, []);
+    assert.equal(redelivered.state, 'refused'); noForgottenText(redelivered);
+    noForgottenText(await f.trusted.call(f.core, 'fetchCandidateEvidence', { readSet: [ns], snapshot: previous.snapshot }));
+    ok(await f.refresh());
+    for (const intent of ['current', 'history']) {
+      const delivered = ok(await f.read('Orion', { intent, budget: { maxItems: 24, maxTokens: 6000 } }));
+      noForgottenText(delivered);
+      assert.ok(delivered.metered.items.every(item => item.ref.id !== first.id && item.ref.id !== victim.id));
+    }
+
+    const survivors = storage.snapshot(ns, 512, () => {}).memories;
+    const remaining = clusterMemories(survivors);
+    assert.equal(remaining.length, 1); assert.equal(survivors.length, count - 1);
+    assert.equal(remaining[0].key.includes('#'), false, '12 or fewer keeps the bare cluster key');
+    if (filed) assert.equal(remaining[0].key, groups[0].key);
+    else assert.notEqual(remaining[0].key, groups[0].key, 'forget removed the similarity seed');
+    // core/engine-card-clusters.mjs:45: five current Memories, or the existing
+    // recurrence/chain condition, plus >=5 Memories or >=1200 packed tokens.
+    // With no relations and zero metered pressure, four cannot trigger.
+    assert.deepEqual(cardTrigger(survivors, undefined, 0), {
+      eligible: count === 13, recurring: false, topic: count === 13, chain: null,
+      pressure: count === 13, memories: count - 1, conversations: count === 13 ? 6 : 4, tokens: 0,
+    });
+    // core/private-card-input.mjs:207 and engine-card-storage.mjs:219 use a
+    // strict updated_at > now - 600000 boundary; expiry itself permits rebuild.
+    assert.equal(ENGINE_CARD_LIMITS.debounceMs, 600000);
+    const purgedAt = Date.parse(purged.updated_at);
+    const pass = offset => withContentWriteOperation('maintainCards', [ns], () =>
+      createEngineCardMaintenance({ storage, model: f.model, now: () => purgedAt + offset })
+        .maintain({ namespace: ns, budget: { maxMs: 5000 } }));
+    for (const offset of [0, 599999]) {
+      const next = await pass(offset);
+      assert.equal(next.state, 'ready', JSON.stringify(next)); assert.deepEqual(next.built, []);
+      assert.equal(next.modelCalls, 0); assert.equal(next.deleted, 0);
+      assert.equal(next.debounced, count === 13 ? 1 : 0); noForgottenText(next);
+    }
+    const expired = await pass(600000);
+    assert.equal(expired.state, 'ready', JSON.stringify(expired));
+    assert.equal(expired.modelCalls, count === 13 ? 1 : 0);
+    assert.equal(expired.built.length, count === 13 ? 1 : 0);
+    if (count === 13) {
+      assert.notEqual(expired.built[0].id, first.id);
+      assert.equal(expired.built[0].clusterKey, remaining[0].key);
+      assert.deepEqual(new Set(expired.built[0].sourceRevisions.map(ref => ref.memoryId)), new Set(survivors.map(memory => memory.id)));
+    }
+    noForgottenText(expired); noForgottenText(records());
+    for (const request of f.model.calls.slice(1)) noForgottenText(request);
+    assert.equal(f.model.calls.length, count === 13 ? 2 : 1);
+    assert.ok(records().every(row => JSON.parse(row.result).sourceRevisions.every(ref => ref.memoryId !== victim.id)));
+    ok(await f.refresh());
+    for (const intent of ['current', 'history']) {
+      const delivered = ok(await f.read('Orion', { intent, budget: { maxItems: 24, maxTokens: 6000 } }));
+      noForgottenText(delivered);
+      noForgottenText(await f.trusted.call(f.core, 'fetchCandidateEvidence', { readSet: [ns], snapshot: delivered.snapshot }));
+    }
+    scanCanonicalValues();
+  });
