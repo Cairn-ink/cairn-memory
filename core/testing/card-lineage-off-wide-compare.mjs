@@ -271,7 +271,7 @@ export function ledgerAdditionSummary(key, entries = [], sqlAdditionMethods = []
   return { callCount: calls.length, calls };
 }
 
-export function reconstructWideTrace(key, archived, entries = [], sqlAdditionMethods = []) {
+export function reconstructWideTrace(key, archived, entries = [], sqlAdditionMethods = [], policy = {}) {
   validateSqlAdditions(entries, sqlAdditionMethods); checkCallRanges(archived);
   const wanted = orderedEntries(key, entries), insertions = new Map();
   const ordinals = new Map();
@@ -294,6 +294,38 @@ export function reconstructWideTrace(key, archived, entries = [], sqlAdditionMet
     }
   }
   assert.equal(consumed, wanted.length, 'every ledger entry consumed exactly once');
+  // Opener probes are a separate, closed block: their transaction/read texts
+  // must not enter the purge classifier used by currentAdditionSummary.
+  // Indexes and counts refer to the archive, before any insertion. They use
+  // the same insertion map and offset reconstruction as ordinary ledger rows.
+  const probe = policy.openerProbes;
+  if (probe) {
+    const entries = probe.sqlAdditions.filter(entry => entry.key === key);
+    const groups = new Map();
+    for (const entry of entries) {
+      const group = groups.get(entry.index) ?? [];
+      group.push(entry); groups.set(entry.index, group);
+    }
+    const anchors = archived.statements.flatMap((row, index) => index > 0 &&
+      JSON.stringify(row) === JSON.stringify(probe.anchorAfter) &&
+      JSON.stringify(archived.statements[index - 1]) === JSON.stringify(probe.anchorBefore) ? [index] : []);
+    if (Object.hasOwn(probe.counts, key)) {
+      assert.equal(anchors.length, probe.counts[key], `${key} exact archived opener probe count`);
+      assert.deepEqual([...groups.keys()], anchors, `${key} one probe at every archived opener`);
+    } else assert.equal(entries.length, 0, 'no probe on an unlisted key');
+    for (const group of groups.values()) {
+      const entry = group[0];
+      const call = archived.calls.filter(call => call[0] === entry.method)[entry.ordinal - 1];
+      assert.ok(call && (call.length === 4 || call[0] === 'open' && call.length === 3), 'probe belongs to its literal opener call');
+      const start = call.length === 4 ? call[2] : 0, end = call.at(-1);
+      assert.equal(start + entry.after + 1, entry.index, 'probe anchor has its literal call-relative ordinal');
+      assert.ok(entry.index > start && entry.index < end, 'probe stays inside its archived opener');
+      assert.deepEqual(archived.statements[entry.index - 1], probe.anchorBefore, 'exact opener predecessor row');
+      assert.deepEqual(archived.statements[entry.index], probe.anchorAfter, 'exact unchanged opener BEGIN row');
+      assert.ok(!insertions.has(entry.index - 1), 'opener probe does not overlap another addition group');
+      insertions.set(entry.index - 1, group.map(entry => entry.statement));
+    }
+  }
   const statements = [], offsets = [];
   archived.statements.forEach((row, index) => {
     offsets[index] = statements.length; statements.push(row, ...(insertions.get(index) ?? []));
@@ -394,10 +426,10 @@ export function compareWideTables(current, archived, removedRows = []) {
   assert.deepEqual(current, expected, 'every table population, minus only explicitly reviewed rows');
 }
 
-export function compareWideTraces({ key, current, archived, sqlAdditions = [], sqlAdditionMethods = [], cardStatementTexts = {}, cardStatementExecutions, checkArchivedCardTexts = true, receiptWalk = false }) {
+export function compareWideTraces({ key, current, archived, sqlAdditions = [], sqlAdditionMethods = [], cardStatementTexts = {}, cardStatementExecutions, checkArchivedCardTexts = true, receiptWalk = false, sqlAdditionPolicy = {} }) {
   validateCardStatementTexts(cardStatementTexts, sqlAdditions);
   if (checkArchivedCardTexts) assertArchivedCardStatementTexts([archived], cardStatementTexts, sqlAdditions);
-  const reconstructed = reconstructWideTrace(key, archived, sqlAdditions, sqlAdditionMethods);
+  const reconstructed = reconstructWideTrace(key, archived, sqlAdditions, sqlAdditionMethods, sqlAdditionPolicy);
   const { positions } = currentAdditionSummary(key, current, sqlAdditions, sqlAdditionMethods, cardStatementTexts);
   assertCardExecutions(key, archived, cardStatementExecutions);
   assertCardExecutions(key, current, cardStatementExecutions, positions);

@@ -8,6 +8,7 @@ import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { eventTimeSafetyFixture } from '../testing/receipt-event-time-fixture.mjs';
 import { transaction } from '../database.mjs';
 import { createRawLineageStorage } from '../raw-lineage-storage.mjs';
+import { validateOpenerData, assertArchivedOpeners, currentOpenerPins, assertCurrentOpenerCensus } from '../testing/card-lineage-off-wide-opener.mjs';
 import { normalizeSQL, summary, currentReceiptWalkSQLTexts, receiptWalkSQLTexts, receiptWalkSQL,
   workloadKeys, validateSqlAdditions, reviseSQL, compareWideTraces, assertWidePins, validateCardStatementTexts, assertArchivedCardStatementTexts, wideArchiveMode } from '../testing/card-lineage-off-wide-compare.mjs';
 
@@ -15,6 +16,7 @@ const revision='fd5c59ef8e67cc58bb855a95f8910c668150bfa3';
 const root=fileURLToPath(new URL('../../',import.meta.url));
 const pins=JSON.parse(readFileSync(new URL('./fixtures/card-lineage-off-wide-baseline.json',import.meta.url),'utf8'));
 const receiptWalkPins=JSON.parse(readFileSync(new URL('./fixtures/card-lineage-off-wide-receipt-walk.json',import.meta.url),'utf8'));
+const openerPins=JSON.parse(readFileSync(new URL('./fixtures/card-lineage-off-wide-opener.json',import.meta.url),'utf8'));
 const observedReceiptWalkSQL={current:new Set(),archived:new Set()};
 let archivedReceiptWalkTraces=0;
 const revisedArchives=[];
@@ -62,13 +64,16 @@ const added=['inspectCardOperation','revalidateEvidence','fetchCandidateEvidence
   'listMethodEffects','getMethodPackageUsage','disableMethodBinding','resolveMethodsForRole','listMethodBindingEvents','readMethodAttachmentBytes'];
 // Each sqlRevisions entry is an intended, reviewed SQL text change against the archived revision. It replaces only the
 // SQL text of one archived statement; method and bound arguments are never substituted. Delete the list when `revision` advances.
-const sqlRevisions=pins.sqlRevisions??[],sqlAdditions=pins.sqlAdditions??[],sqlAdditionMethods=pins.sqlAdditionMethods??[],cardStatementTexts=pins.cardStatementTexts??{};
+const sqlRevisions=[...(pins.sqlRevisions??[]),...openerPins.sqlRevisions],sqlAdditions=pins.sqlAdditions??[],sqlAdditionMethods=pins.sqlAdditionMethods??[],cardStatementTexts=pins.cardStatementTexts??{};
 const cardStatementExecutions=pins.cardStatementExecutions;
+const sqlAdditionPolicy={...(pins.sqlAdditionPolicy??{sqlTexts:[],familyMethods:[],anchorSQLTexts:[],anchorAfterSQLTexts:[]}),openerProbes:openerPins.openerProbes};
 test('reviewed SQL additions have explicit workload, allowed call method, ordinal, anchor and full statement rows',()=>{
-  validateSqlAdditions(sqlAdditions,sqlAdditionMethods);validateCardStatementTexts(cardStatementTexts,sqlAdditions);
+  validateOpenerData(openerPins);
+  validateSqlAdditions(sqlAdditions,sqlAdditionMethods,sqlAdditionPolicy);validateCardStatementTexts(cardStatementTexts,sqlAdditions);
 });
-test('archived SQL revisions name only workload keys and revise each statement once',()=>{
-  for(const entry of sqlRevisions)assert.ok(workloadKeys.includes(entry.key)&&Number.isInteger(entry.index)&&
+test('archived SQL revisions name workload keys or exactly the reviewed open:52/open:53 BEGIN and revise each statement once',()=>{
+  for(const entry of sqlRevisions)assert.ok((workloadKeys.includes(entry.key)||
+    ['open:52','open:53'].includes(entry.key)&&entry.index===1&&entry.old==='BEGIN IMMEDIATE'&&entry.new==='BEGIN')&&Number.isInteger(entry.index)&&
     typeof entry.old==='string'&&typeof entry.new==='string'&&entry.old!==entry.new,JSON.stringify(entry.key)+' revision entry');
   assert.equal(new Set(sqlRevisions.map(({key,index})=>key+'#'+index)).size,sqlRevisions.length,'no statement revised twice');
 });
@@ -84,19 +89,24 @@ for(const base of [23,33])for(const mode of ['open','workload'])for(const eventT
       if(wideArchiveMode(Boolean(baseline),requireArchive)==='pins') {
         t.skip('archive revision not available');return;
       }
-      const old=run(baseline.path,oldPath,mode,cell);reviseSQL(key,old.statements,sqlRevisions);
-      if(workloadKeys.includes(key))revisedArchives.push(old);
-      const reconstructed=compareWideTraces({key,current,archived:old,sqlAdditions,sqlAdditionMethods,cardStatementTexts,cardStatementExecutions,checkArchivedCardTexts:false,receiptWalk:Boolean(receiptWalkPins.records[key])});
+      const old=run(baseline.path,oldPath,mode,cell);
+      assertArchivedOpeners(key,old,openerPins);
+      // Frozen summaries describe the untouched archive, before revisions or additions.
       if(receiptWalkPins.records[key]) {
         observeReceiptWalkSQL(old.statements,'archived');archivedReceiptWalkTraces++;
         assert.deepEqual(summary(old),pins.records[key],'receipt cells retain their frozen archived pins');
       } else if(workloadKeys.includes(key)) {
-        assertWidePins(key,reconstructed,sqlAdditions,pins.records[key],sqlAdditionMethods,cardStatementTexts,cardStatementExecutions);
+        assertWidePins(key,old,sqlAdditions,pins.records[key],sqlAdditionMethods,cardStatementTexts,cardStatementExecutions);
       } else {
         assert.deepEqual(summary(old),pins.records[key],'frozen opening pins come only from the archived baseline');
       }
+      reviseSQL(key,old.statements,sqlRevisions);
+      if(workloadKeys.includes(key))revisedArchives.push(old);
+      const reconstructed=compareWideTraces({key,current,archived:old,sqlAdditions,sqlAdditionMethods,cardStatementTexts,cardStatementExecutions,sqlAdditionPolicy,checkArchivedCardTexts:false,receiptWalk:Boolean(receiptWalkPins.records[key])});
+      if(!receiptWalkPins.records[key])assertWidePins(key,reconstructed,sqlAdditions,currentOpenerPins(key,pins.records[key],openerPins),sqlAdditionMethods,cardStatementTexts,cardStatementExecutions);
     });
-    assert.equal(pins.revision,revision);assertWidePins(key,current,sqlAdditions,receiptWalkPins.records[key]??pins.records[key],sqlAdditionMethods,cardStatementTexts,cardStatementExecutions);
+    assert.equal(pins.revision,revision);assertWidePins(key,current,sqlAdditions,receiptWalkPins.records[key]??currentOpenerPins(key,pins.records[key],openerPins),sqlAdditionMethods,cardStatementTexts,cardStatementExecutions);
+    assertCurrentOpenerCensus(key,current,openerPins);
     assert.ok(current.statements.every(entry=>entry.length===3&&Array.isArray(entry[2])),'SQL execution includes bound arguments');
     assert.equal(current.statements.some(([sql])=>/card_body_|card_operations_owner_action/.test(sql)),false,'no extended lineage scan');
     if(mode==='workload') {
