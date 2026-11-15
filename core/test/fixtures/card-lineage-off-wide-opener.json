@@ -1,0 +1,447 @@
+{
+  "review": "Coordinator deferred-open round 4; frozen archive summaries remain in card-lineage-off-wide-baseline.json. All indexes refer to the unmodified archive. Opener SQL additions are listed in full per occurrence; their texts never enter the purge classifier.",
+  "sqlRevisions": [
+    {
+      "key": "open:52",
+      "index": 1,
+      "old": "BEGIN IMMEDIATE",
+      "new": "BEGIN"
+    },
+    {
+      "key": "open:53",
+      "index": 1,
+      "old": "BEGIN IMMEDIATE",
+      "new": "BEGIN"
+    },
+    {
+      "key": "workload:52",
+      "index": 1,
+      "old": "BEGIN IMMEDIATE",
+      "new": "BEGIN"
+    },
+    {
+      "key": "workload:53",
+      "index": 1,
+      "old": "BEGIN IMMEDIATE",
+      "new": "BEGIN"
+    },
+    {
+      "key": "workload:53",
+      "index": 15668,
+      "old": "BEGIN IMMEDIATE",
+      "new": "BEGIN"
+    }
+  ],
+  "openerProbes": {
+    "anchorBefore": [
+      "PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;",
+      "exec",
+      []
+    ],
+    "anchorAfter": [
+      "BEGIN IMMEDIATE",
+      "exec",
+      []
+    ],
+    "counts": {
+      "open:23": 1,
+      "open:33": 1,
+      "workload:23": 1,
+      "workload:33": 2
+    },
+    "sqlAdditionMethods": [
+      "open",
+      "openRawCaptureCore"
+    ],
+    "sqlAdditions": [
+      {
+        "key": "open:23",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "BEGIN",
+          "exec",
+          []
+        ]
+      },
+      {
+        "key": "open:23",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "PRAGMA user_version",
+          "get",
+          []
+        ]
+      },
+      {
+        "key": "open:23",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "SELECT schema_version AS cookie,name,type,sql FROM pragma_schema_version LEFT JOIN sqlite_schema ON ( name GLOB 'content_safety_*' OR name GLOB 'content_identity_*' OR name='owner_suppression_epochs' OR name GLOB 'content_suppression*' OR name GLOB 'safety_*') LIMIT 65",
+          "iterate",
+          []
+        ]
+      },
+      {
+        "key": "open:23",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "SELECT schema_version AS cookie,(SELECT user_version FROM pragma_user_version) AS physical, (SELECT application_id FROM pragma_application_id) AS applicationId FROM pragma_schema_version",
+          "get",
+          []
+        ]
+      },
+      {
+        "key": "open:23",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "ROLLBACK",
+          "exec",
+          []
+        ]
+      },
+      {
+        "key": "open:33",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "BEGIN",
+          "exec",
+          []
+        ]
+      },
+      {
+        "key": "open:33",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "PRAGMA user_version",
+          "get",
+          []
+        ]
+      },
+      {
+        "key": "open:33",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "SELECT schema_version AS cookie,name,type,sql FROM pragma_schema_version LEFT JOIN sqlite_schema ON ( name GLOB 'content_safety_*' OR name GLOB 'content_identity_*' OR name='owner_suppression_epochs' OR name GLOB 'content_suppression*' OR name GLOB 'safety_*') LIMIT 65",
+          "iterate",
+          []
+        ]
+      },
+      {
+        "key": "open:33",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "SELECT schema_version AS cookie,(SELECT user_version FROM pragma_user_version) AS physical, (SELECT application_id FROM pragma_application_id) AS applicationId FROM pragma_schema_version",
+          "get",
+          []
+        ]
+      },
+      {
+        "key": "open:33",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "ROLLBACK",
+          "exec",
+          []
+        ]
+      },
+      {
+        "key": "workload:23",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "BEGIN",
+          "exec",
+          []
+        ]
+      },
+      {
+        "key": "workload:23",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "PRAGMA user_version",
+          "get",
+          []
+        ]
+      },
+      {
+        "key": "workload:23",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "SELECT schema_version AS cookie,name,type,sql FROM pragma_schema_version LEFT JOIN sqlite_schema ON ( name GLOB 'content_safety_*' OR name GLOB 'content_identity_*' OR name='owner_suppression_epochs' OR name GLOB 'content_suppression*' OR name GLOB 'safety_*') LIMIT 65",
+          "iterate",
+          []
+        ]
+      },
+      {
+        "key": "workload:23",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "SELECT schema_version AS cookie,(SELECT user_version FROM pragma_user_version) AS physical, (SELECT application_id FROM pragma_application_id) AS applicationId FROM pragma_schema_version",
+          "get",
+          []
+        ]
+      },
+      {
+        "key": "workload:23",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "ROLLBACK",
+          "exec",
+          []
+        ]
+      },
+      {
+        "key": "workload:33",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "BEGIN",
+          "exec",
+          []
+        ]
+      },
+      {
+        "key": "workload:33",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "PRAGMA user_version",
+          "get",
+          []
+        ]
+      },
+      {
+        "key": "workload:33",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "SELECT schema_version AS cookie,name,type,sql FROM pragma_schema_version LEFT JOIN sqlite_schema ON ( name GLOB 'content_safety_*' OR name GLOB 'content_identity_*' OR name='owner_suppression_epochs' OR name GLOB 'content_suppression*' OR name GLOB 'safety_*') LIMIT 65",
+          "iterate",
+          []
+        ]
+      },
+      {
+        "key": "workload:33",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "SELECT schema_version AS cookie,(SELECT user_version FROM pragma_user_version) AS physical, (SELECT application_id FROM pragma_application_id) AS applicationId FROM pragma_schema_version",
+          "get",
+          []
+        ]
+      },
+      {
+        "key": "workload:33",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "ROLLBACK",
+          "exec",
+          []
+        ]
+      },
+      {
+        "key": "workload:33",
+        "method": "openRawCaptureCore",
+        "ordinal": 1,
+        "after": 0,
+        "index": 9264,
+        "statement": [
+          "BEGIN",
+          "exec",
+          []
+        ]
+      },
+      {
+        "key": "workload:33",
+        "method": "openRawCaptureCore",
+        "ordinal": 1,
+        "after": 0,
+        "index": 9264,
+        "statement": [
+          "PRAGMA user_version",
+          "get",
+          []
+        ]
+      },
+      {
+        "key": "workload:33",
+        "method": "openRawCaptureCore",
+        "ordinal": 1,
+        "after": 0,
+        "index": 9264,
+        "statement": [
+          "SELECT schema_version AS cookie,name,type,sql FROM pragma_schema_version LEFT JOIN sqlite_schema ON ( name GLOB 'content_safety_*' OR name GLOB 'content_identity_*' OR name='owner_suppression_epochs' OR name GLOB 'content_suppression*' OR name GLOB 'safety_*') LIMIT 65",
+          "iterate",
+          []
+        ]
+      },
+      {
+        "key": "workload:33",
+        "method": "openRawCaptureCore",
+        "ordinal": 1,
+        "after": 0,
+        "index": 9264,
+        "statement": [
+          "SELECT schema_version AS cookie,(SELECT user_version FROM pragma_user_version) AS physical, (SELECT application_id FROM pragma_application_id) AS applicationId FROM pragma_schema_version",
+          "get",
+          []
+        ]
+      },
+      {
+        "key": "workload:33",
+        "method": "openRawCaptureCore",
+        "ordinal": 1,
+        "after": 0,
+        "index": 9264,
+        "statement": [
+          "ROLLBACK",
+          "exec",
+          []
+        ]
+      }
+    ]
+  },
+  "archivedOpeners": {
+    "open:23": [
+      1
+    ],
+    "open:33": [
+      1
+    ],
+    "open:52": [
+      1
+    ],
+    "open:53": [
+      1
+    ],
+    "workload:23": [
+      1
+    ],
+    "workload:33": [
+      1,
+      9264
+    ],
+    "workload:52": [
+      1
+    ],
+    "workload:53": [
+      1,
+      15668
+    ]
+  },
+  "currentSql": {
+    "open:23": "81bfe05acf80ccfb7fa7156317284816b18da6ddde4a6b3b90f24b3a7a5811da",
+    "open:33": "86a1d6904e1ac1576aef80430c58a8f4b07191c54e402a7529ddb102366a0aa1",
+    "open:52": "d5eb8ce3dff9d76c60cddfeedb911b2f62d87907e46f29767328e9cfa0cce973",
+    "open:53": "7a647c9fb1a2993f0874fa1c71a5eb079dc98f21317f084ba600445bcd4158a9",
+    "workload:23": "516fcafe8644b19596547847ab40716bf13a78990a03a4761c1073beeaf8f852",
+    "workload:33": "fe5c5d5228818113ec2ccffb044c52963483cc038a91e8b3c2449d31a5d9bf4f",
+    "workload:52": "9c85f823ad4027b11cbcfa95168c8e07aa2ce201b1bb96dfa89448cae111c24a",
+    "workload:53": "aff696703214ed5954b8019021a3b55337760df69789548ed9c970e907c456bb"
+  },
+  "currentCensus": {
+    "open:23": {
+      "BEGIN": 1,
+      "BEGIN IMMEDIATE": 1,
+      "COMMIT": 1,
+      "ROLLBACK": 1
+    },
+    "open:33": {
+      "BEGIN": 1,
+      "BEGIN IMMEDIATE": 1,
+      "COMMIT": 1,
+      "ROLLBACK": 1
+    },
+    "open:52": {
+      "BEGIN": 1,
+      "BEGIN IMMEDIATE": 0,
+      "COMMIT": 1,
+      "ROLLBACK": 0
+    },
+    "open:53": {
+      "BEGIN": 1,
+      "BEGIN IMMEDIATE": 0,
+      "COMMIT": 1,
+      "ROLLBACK": 0
+    },
+    "workload:23": {
+      "BEGIN": 186,
+      "BEGIN IMMEDIATE": 61,
+      "COMMIT": 242,
+      "ROLLBACK": 5
+    },
+    "workload:33": {
+      "BEGIN": 301,
+      "BEGIN IMMEDIATE": 97,
+      "COMMIT": 392,
+      "ROLLBACK": 6
+    },
+    "workload:52": {
+      "BEGIN": 205,
+      "BEGIN IMMEDIATE": 72,
+      "COMMIT": 267,
+      "ROLLBACK": 10
+    },
+    "workload:53": {
+      "BEGIN": 329,
+      "BEGIN IMMEDIATE": 127,
+      "COMMIT": 434,
+      "ROLLBACK": 22
+    }
+  }
+}
