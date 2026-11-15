@@ -47,7 +47,7 @@ test('default help changes are exact and preserve every pinned safety line', () 
     'Preferred memory reads: find_memory_candidates and read_memory_context (contextRead is on).\n' +
     '--no-context-read removes these tools; --no-context-semantic keeps reads BM25-only.\n' +
     "With OPENAI_API_KEY available to the Cairn MCP server, memories and search text\n" +
-    "go to OpenAI for semantic search, up to an estimated US$1 per server run.\n" +
+    "go to OpenAI for semantic search, up to an estimated US$1 per day per running Cairn server.\n" +
     "Saved conversations are sent only with --raw-semantic or an explicit\n" +
     "--context-embedder configuration. Raw document and query embeddings are off by default.\n" +
     "To keep everything on this computer, don't give the server a key.\n" +

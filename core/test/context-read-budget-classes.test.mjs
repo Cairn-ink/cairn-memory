@@ -38,9 +38,9 @@ for (const scoped of [false, true]) test(`R3 held maintenance permits a query ($
   } finally { hold.resolve(); await pending; }
 });
 
-test('slots refuse immediately: one per connection, two queries server-wide by default, one maintenance', async t => {
+test('slots refuse immediately: one per connection, two queries server-wide by policy, one maintenance', async t => {
   const hold = deferred(); t.after(() => hold.resolve());
-  const f = budget({ embed: async () => { await hold.promise; return [[1]]; } });
+  const f = budget({ selectedPolicy: { maxConcurrentQueries: 2 }, embed: async () => { await hold.promise; return [[1]]; } });
   const a = {}, b = {}, c = {};
   const first = f.run('query', a), second = f.run('query', b), upkeep = f.run('maintenance', {});
   try {
@@ -55,12 +55,12 @@ test('slots refuse immediately: one per connection, two queries server-wide by d
 
 test('policy alone changes the hosted query concurrency ceiling; unbound still has one query slot', async t => {
   const hold = deferred(); t.after(() => hold.resolve());
-  const f = budget({ selectedPolicy: { maxConcurrent: 3 }, embed: async () => { await hold.promise; return [[1]]; } });
+  const f = budget({ selectedPolicy: { maxConcurrentQueries: 3 }, embed: async () => { await hold.promise; return [[1]]; } });
   const operations = [f.run('query', {}), f.run('query', {}), f.run('query', {})];
   try { await denied(f.run('query', {}), f, 'slot_busy', 'query'); }
   finally { hold.resolve(); await Promise.all(operations); }
   const other = deferred(); t.after(() => other.resolve());
-  const single = budget({ selectedPolicy: { maxConcurrent: 100 }, embed: async () => { await other.promise; return [[1]]; } });
+  const single = budget({ selectedPolicy: { maxConcurrentQueries: 16 }, embed: async () => { await other.promise; return [[1]]; } });
   const pending = single.run();
   try { await denied(single.run(), single, 'slot_busy', 'query'); }
   finally { other.resolve(); await pending; }

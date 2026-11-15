@@ -43,7 +43,7 @@ test('N=12 overlapping connections preserve sequential Raw coverage and semantic
   } };
   const host = createLocalSharedRuntime({ path, namespace: ns, contextCounter: counter,
     contextEmbedding: { embedder, policy: { family: 'hosted', maxRequests: 10000, maxUsd: 1,
-      maxConcurrent: 12, estimateUsd: () => 0 } } });
+      maxConcurrentQueries: 12, estimateUsd: () => 0 } } });
   w.defer(() => host.close());
   const clients = [];
   for (let i = 0; i < 12; i++) clients.push((await connect(t, host)).client);

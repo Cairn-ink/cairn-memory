@@ -50,7 +50,7 @@ test('A3 eight parallel connections preserve single-connection Raw coverage and 
   } };
   const configuration = { namespace: ns, contextCounter: counter,
     contextEmbedding: { embedder, policy: { family: 'hosted', maxRequests: 10000, maxUsd: 1,
-      maxConcurrent: 8, estimateUsd: () => 0 } } };
+      maxConcurrentQueries: 8, estimateUsd: () => 0 } } };
   // Independent identical fixtures prevent either runtime's sidecar from
   // warming the other. Decision (A): strict parity uses host mode on both
   // fixtures; the unbound server has one query slot on shared daily totals.

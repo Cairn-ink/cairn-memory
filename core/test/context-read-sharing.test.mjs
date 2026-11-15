@@ -41,12 +41,12 @@ test('two concurrent scoped semantic queries stay ready during a separate mainte
     return base.embed(texts, controls);
   } };
   t.after(() => gate.resolve());
-  const f = inHostMode(() => coreFixture(t, { embedder, selectedPolicy: policy({ family: 'hosted', maxConcurrent: 2 }) })); f.admit('apple');
+  const f = inHostMode(() => coreFixture(t, { embedder, selectedPolicy: policy({ family: 'hosted', maxConcurrentQueries: 2 }) })); f.admit('apple');
   const maintenance = {};
   ok(await withContextReadBudgetScope(maintenance, () => f.call('refreshContextIndex', refresh())));
   // This is the same ledger/port seam used by Raw and Memory maintenance;
   // leave the existing index fully published while the provider is in flight.
-  const dispatch = inHostMode(() => contextBudget({ budgetConfigured: true, embedder, policy: policy({ family: 'hosted', maxConcurrent: 2 }) }));
+  const dispatch = inHostMode(() => contextBudget({ budgetConfigured: true, embedder, policy: policy({ family: 'hosted', maxConcurrentQueries: 2 }) }));
   blocking = true;
   const operation = withContextReadBudgetScope(maintenance, () => dispatch(embedder, ['maintenance-document'], { budgetClass: 'maintenance',
     guard() {}, signal: new AbortController().signal, deadlineAt: performance.now() + 10000 }));
@@ -66,7 +66,7 @@ test('scoped and unscoped calls share the server USD allowance across connection
   let calls = 0;
   const embedder = { id: 'sharing-ledger-' + randomUUID(), revision: '1', embed: async () => { calls++; return [[1]]; } };
   const dispatch = inHostMode(() => contextBudget({ budgetConfigured: true, embedder,
-    policy: { family: 'hosted', maxConcurrent: 2, maxRequests: 100, maxUsd: 1, estimateUsd: () => .6 } }));
+    policy: { family: 'hosted', maxConcurrentQueries: 2, maxRequests: 100, maxUsd: 1, estimateUsd: () => .6 } }));
   const run = () => dispatch(embedder, ['synthetic'], { guard() {}, signal: new AbortController().signal, deadlineAt: performance.now() + 5000 });
   const a = {}, b = {};
   await withContextReadBudgetScope(a, run);
@@ -76,13 +76,13 @@ test('scoped and unscoped calls share the server USD allowance across connection
   assert.equal(calls, 1);
 });
 
-test('unscoped maxConcurrent refusal is independent of USD and request caps', async () => {
+test('unscoped query slot refusal is independent of USD and request caps', async () => {
   const gate = deferred(); let calls = 0;
   const embedder = { id: 'sharing-unscoped-' + randomUUID(), revision: '1', async embed() {
     if (++calls === 1) await gate.promise; return [[1]];
   } };
   const dispatch = inHostMode(() => contextBudget({ budgetConfigured: true, embedder,
-    policy: { family: 'hosted', maxConcurrent: 1, maxRequests: 2, maxUsd: 1, estimateUsd: () => 0 } }));
+    policy: { family: 'hosted', maxConcurrentQueries: 1, maxRequests: 2, maxUsd: 1, estimateUsd: () => 0 } }));
   const run = () => dispatch(embedder, ['synthetic'], { guard() {}, signal: new AbortController().signal, deadlineAt: performance.now() + 5000 });
   const first = run();
   try { await assert.rejects(run(), { code: 'budget_denied' }); }
