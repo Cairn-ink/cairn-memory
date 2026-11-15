@@ -5,7 +5,11 @@
 // production dispatcher (not strict mode). --policy selects the embedding limits:
 // synthetic (generous, the default), hosted-default (the default provider's caps
 // and price estimate) or local-default (the local embedder's one-document calls).
-// The embedder is always the in-process fake; no network or key is used.
+// --consolidator scripted adds the offline scripted consolidator and private
+// Cards, as a daemon with a model configured runs Card upkeep before each index
+// refresh; it creates engine Cards during the run. Use the same value on every
+// tree being compared. The embedder is always the in-process fake; no network or
+// key is used.
 import { parseArgs } from 'node:util';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
@@ -21,6 +25,7 @@ import { createCairnServer } from '../adapters/mcp/server.mjs';
 import { DEFAULT_CONTEXT_PROVIDER } from '../adapters/mcp/context-read-provider.mjs';
 import { estimateEmbeddingUsd } from '../adapters/openai/embedding.mjs';
 import { localPolicy } from '../adapters/local-embedder/index.mjs';
+import { scriptedConsolidator } from '../core/testing/engine-card-fixture.mjs';
 
 const namespace = { ownerId: 'synthetic-context-coverage', scope: 'personal', projectId: null };
 const sets = { combined: ['memory', 'card'], memory: ['memory'], card: ['card'] };
@@ -31,7 +36,7 @@ const elapsed = start => Math.round(performance.now() - start);
 
 function configuration() {
   const { values } = parseArgs({ options: { ...Object.fromEntries(
-    ['docs', 'cards', 'scenario', 'embed-latency-ms', 'poll-ms', 'limit-min', 'out', 'policy'].map(name => [name, { type: 'string' }])),
+    ['docs', 'cards', 'scenario', 'embed-latency-ms', 'poll-ms', 'limit-min', 'out', 'policy', 'consolidator'].map(name => [name, { type: 'string' }])),
     host: { type: 'boolean' } } });
   const integer = (name, fallback, minimum = 0) => {
     const raw = values[name] ?? String(fallback), n = Number(raw);
@@ -41,12 +46,14 @@ function configuration() {
   const scenario = values.scenario ?? 'combined', limitMin = Number(values['limit-min'] ?? 45);
   const policy = values.policy ?? 'synthetic';
   if (!['synthetic', 'hosted-default', 'local-default'].includes(policy)) throw Error('invalid_option');
+  const consolidator = values.consolidator ?? 'none';
+  if (!['none', 'scripted'].includes(consolidator)) throw Error('invalid_option');
   if (!['combined', 'memory', 'mixed'].includes(scenario) || !Number.isFinite(limitMin) || limitMin <= 0 ||
       !Number.isSafeInteger(Math.ceil(limitMin * 60000)) || limitMin * 60000 > 2147483647) throw Error('invalid_option');
   const embedLatencyMs = integer('embed-latency-ms', 300), pollMs = integer('poll-ms', 15000, 1);
   if (embedLatencyMs > 2147483647 || pollMs > 2147483647) throw Error('invalid_option');
   return { docs: integer('docs', 2600), cards: integer('cards', 300), scenario, embedLatencyMs, pollMs,
-    limitMs: Math.ceil(limitMin * 60000), out: values.out, mode: values.host ? 'host' : 'unbound', policy };
+    limitMs: Math.ceil(limitMin * 60000), out: values.out, mode: values.host ? 'host' : 'unbound', policy, consolidator };
 }
 
 function embeddingPolicy(name) {
@@ -122,8 +129,12 @@ async function main() {
     } };
     start = performance.now();
     timer = setTimeout(() => stop.abort(), options.limitMs);
+    // The local policy requires a synchronous pack status; the synthetic pack is ready.
+    const contextEmbedding = { embedder, policy: embeddingPolicy(options.policy),
+      ...(options.policy === 'local-default' ? { localStatus: () => ({ state: 'ready', reason: null }) } : {}) };
     const serverOptions = { path, namespace, raw: true, rawSearch: false, contextRead: 'context-read-v1',
-      contextSemantic: true, contextCounter: counter, contextEmbedding: { embedder, policy: embeddingPolicy(options.policy) } };
+      contextSemantic: true, contextCounter: counter, contextEmbedding,
+      ...(options.consolidator === 'scripted' ? { model: scriptedConsolidator(), privateCards: 'local-v1' } : {}) };
     streams = pipes(); client = new Client({ name: 'synthetic-context-coverage', version: '1' });
     if (options.mode === 'host') {
       server = shared.createLocalSharedRuntime(serverOptions);
@@ -156,6 +167,7 @@ async function main() {
       }
       polls++;
       emit({ kind: 'poll', poll: polls, elapsedMs: elapsed(start), scenario: options.scenario, mode: options.mode, policy: options.policy,
+        consolidator: options.consolidator,
         docs: seededDocs, cards: seededCards, seedMs, views: progress, embedCalls, embedItems });
       allReady = wanted.every(view => firstReadyMs[view] !== null);
       if (allReady || stop.signal.aborted) break;
@@ -173,7 +185,7 @@ async function main() {
     }
     for (const stream of streams ?? []) stream.destroy();
     try { await workspace?.cleanup(); } catch { failed = true; }
-    emit({ kind: 'summary', scenario: options.scenario, mode: options.mode, policy: options.policy,
+    emit({ kind: 'summary', scenario: options.scenario, mode: options.mode, policy: options.policy, consolidator: options.consolidator,
       docs: seededDocs, cards: seededCards, seedMs, elapsedMs,
       pollMs: options.pollMs, limitMs: options.limitMs, embedLatencyMs: options.embedLatencyMs,
       polls, firstReadyMs, allReady, limitReached: !allReady && !failed && signalCode === 0,
