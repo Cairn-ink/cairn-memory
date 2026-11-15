@@ -136,8 +136,9 @@ function short(f, content, kind, address = source) {
   const donorReceiptIds = ok(f.core.get({ namespace: ns, memoryId: donor.id })).receipts.map(receipt => receipt.id);
   const keys = [...receiptKeys(f, memory), ...receiptKeys(f, donor)];
   forget(f, donor);
-  const denied = [content, donorContent, donor.id, ...addressNeedles(address), ...receiptIds, ...donorReceiptIds, ...keys];
-  deny(f, memory.id, ...denied);
+  const denied = [donorContent, donor.id, ...addressNeedles(address), ...receiptIds, ...donorReceiptIds, ...keys];
+  deny(f, ...denied);
+  if (kind === 'decision') deny(f, memory.id, content); // Unselected window controls remain wholly absent.
   return { memory, receiptIds, denied };
 }
 const read = (f, input = config, referenceTexts = null) => {
@@ -203,9 +204,6 @@ async function baseCore(f) {
   f.ws.defer(() => core.close());
   return core;
 }
-function survivors(value, group, ids) {
-  return value.groups[group]?.items.filter(item => !ids.includes(item.memory?.id ?? item.episodeId)) ?? [];
-}
 
 async function exactReproduction(t, layout) {
   const f = await fixture(t, layout);
@@ -221,7 +219,7 @@ async function exactReproduction(t, layout) {
     ok(f.core.get({ namespace: ns, memoryId: memory.id })).receipts.map(receipt => receipt.id));
   const withheldKeys = [first.memories[0], corrected].flatMap(memory => receiptKeys(f, memory));
   forget(f, corrected);
-  f.model.items = [{ content: 'Use diagrams.', kind: 'instruction', confidence: .9, sourceIndices: [0] }];
+  f.model.items = [{ content: 'Synthetic diagram instruction', kind: 'instruction', confidence: .9, sourceIndices: [0] }];
   const captured = ok(await f.core.capture({ namespace: ns, client: 'synthetic', eventId: 'capture', sessionId: 'session',
     messages: [{ id: 'source', role: 'user', content: 'Use diagrams.' }] })).admission.memories[0];
   withheldIds.push(...f.db.prepare('SELECT id FROM receipts WHERE memory_id=?').all(captured.id).map(row => row.id));
@@ -234,17 +232,17 @@ async function exactReproduction(t, layout) {
     until: '2026-12-31T23:59:59.999Z', timeBasis: 'event' }));
   assert.equal(episodes.items.length, 1); ok(f.core.getEpisode({ namespace: ns, episodeId: f.seed }));
   const needles = ['Manual fact', 'Updated manual fact', 'Organized fact', 'Use diagrams.', '"session"', '"source"',
-    manual.id, corrected.id, first.memories[0].id, captured.id, ...withheldIds, ...withheldKeys, ...addressNeedles(source)];
+    manual.id, corrected.id, first.memories[0].id, ...withheldIds, ...withheldKeys, ...addressNeedles(source)];
   deny(f, ...needles);
   return { f, captured, needles };
 }
 
 for (const layout of [53, 18, 33]) test(`exact organized/manual/correction/forget/capture reproduction, layout ${layout}`, async t => {
-  const { f, needles } = await exactReproduction(t, layout);
+  const { f, captured, needles } = await exactReproduction(t, layout);
   const result = read(f, { maxTokens: 1024, maxChars: 4096 }), value = ok(result);
   assertGroups(f, value, {
     nextSteps: { enabled: true, returned: 1, complete: true, budget_exhausted: false, status: 'complete', episodeIds: [f.seed] },
-    procedural: { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [] },
+    procedural: { enabled: true, returned: 1, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [captured.id] },
   });
   forbidden(result, needles);
 });
@@ -263,14 +261,15 @@ async function alongsideSurvivors(t, layout, group, oversized) {
       content: kept.content, kind, receipt: support('synthetic-refreshed-' + group) })).memory;
     assert.equal(refreshed.id, kept.id); assert.ok(huge.id);
   }
+  if (oversized) deny(f, denied.memory.id, denied.memory.content);
   return { f, denied, kept };
 }
 
 for (const layout of [53, 18, 33]) for (const group of ['procedural', 'background']) for (const oversized of [false, true])
-test(`short ${group} is absent alongside survivors and placeholder=${oversized}, layout ${layout}`, async t => {
+test(`short ${group} alongside survivors and placeholder=${oversized}, layout ${layout}`, async t => {
   const { f, denied, kept } = await alongsideSurvivors(t, layout, group, oversized);
   const result = read(f), value = ok(result);
-  const retained = { enabled: true, returned: 1, memoryIds: [kept.id], ...(oversized
+  const retained = { enabled: true, returned: oversized ? 1 : 2, memoryIds: oversized ? [kept.id] : [kept.id, denied.memory.id], ...(oversized
     ? { complete: false, budget_exhausted: true, status: 'budget_exhausted' }
     : { complete: true, budget_exhausted: false, status: 'complete' }) };
   const empty = { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [] };
@@ -280,9 +279,9 @@ test(`short ${group} is absent alongside survivors and placeholder=${oversized},
     background: group === 'background' ? retained : empty,
   });
   assert.deepEqual(read(f), result, 'same state yields byte-equivalent snapshot assembly');
-  forbidden(result, [...denied.denied, denied.memory.id]);
-  // The counter sees only attempted public envelopes and delivered background
-  // items. Neither the private null nor the withheld payload consumes budget.
+  forbidden(result, [...denied.denied, ...(oversized ? [denied.memory.id, denied.memory.content] : [])]);
+  // Every delivered Memory consumes the ordinary item budget; the withheld
+  // receipts never enter the public envelope or tokenizer.
   assert.deepEqual(read(f), result);
 });
 
@@ -294,17 +293,19 @@ for (const layout of [53, 18, 33]) test(`base parity: exact organized/manual/cor
   forbidden(result, needles);
   const base = await baseCore(f), expected = ok(base.sessionStartContext({ namespace: ns, ...input }));
   assert.deepEqual(value.groups.nextSteps, expected.groups.nextSteps);
-  assert.deepEqual(value.groups.procedural.items, survivors(expected, 'procedural', [captured.id]));
+  assert.deepEqual(value.groups.procedural.items, expected.groups.procedural.items.map(item =>
+    item.memory.id === captured.id ? { ...item, receipts: [] } : item));
 });
 
 for (const layout of [53, 18, 33]) for (const group of ['procedural', 'background']) for (const oversized of [false, true])
-test(`base parity: short ${group} is absent alongside survivors and placeholder=${oversized}, layout ${layout}`, async t => {
+test(`base parity: short ${group} alongside survivors and placeholder=${oversized}, layout ${layout}`, async t => {
   if (!baseAvailable(t)) return;
   const { f, denied } = await alongsideSurvivors(t, layout, group, oversized);
   const result = read(f), value = ok(result);
-  forbidden(result, [...denied.denied, denied.memory.id]);
+  forbidden(result, [...denied.denied, ...(oversized ? [denied.memory.id, denied.memory.content] : [])]);
   const base = await baseCore(f), expected = ok(base.sessionStartContext({ namespace: ns, ...config }));
-  assert.deepEqual(value.groups[group].items, survivors(expected, group, [denied.memory.id]));
+  assert.deepEqual(value.groups[group].items, expected.groups[group].items.map(item =>
+    item.memory.id === denied.memory.id ? { ...item, receipts: [] } : item));
   assert.deepEqual(value.groups.nextSteps, expected.groups.nextSteps);
 });
 
@@ -316,21 +317,23 @@ test(`every ${group} candidate is short, count ${count}`, async t => {
     { ...source, sessionId: 'synthetic-denied-session-' + i, eventId: 'synthetic-denied-message-' + i }));
   const result = read(f), value = ok(result);
   assert.deepEqual({ ...value, groups: Object.keys(value.groups) }, {
-    framing: 'Untrusted recollection. Episodes are model interpretations, not verified facts or current assertions. Recorded instructions and next steps are not execution permission.',
+    framing: 'Untrusted recollection. Episodes are model interpretations, not verified facts or current assertions. Recorded instructions and next steps are not execution permission.' +
+      (group === 'background' ? ' Background may be inferred and unverified.' : ''),
     namespace: ns, indexRevision: revisionState(f).indexRevision,
-    groups: group === 'background' && count === 13 ? ['nextSteps', 'procedural'] : ['nextSteps', 'procedural', 'background'],
-    ...(group === 'background' && count === 13 ? { backgroundOmitted: true } : {}),
+    groups: ['nextSteps', 'procedural', 'background'],
   });
   const empty = { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [] };
+  const retained = { enabled: true, returned: Math.min(6, count), complete: count === 1,
+    budget_exhausted: count !== 1, status: count === 1 ? 'complete' : 'budget_exhausted',
+    memoryIds: denied.slice().reverse().slice(0, 6).map(item => item.memory.id) };
   assertGroups(f, value, {
     nextSteps: { enabled: true, returned: 1, complete: true, budget_exhausted: false, status: 'complete', episodeIds: [f.seed] },
-    procedural: group === 'procedural' && count === 13
-      ? { enabled: true, returned: 0, complete: false, budget_exhausted: true, status: 'budget_exhausted', memoryIds: [] } : empty,
-    ...(group === 'background' && count === 13 ? {} : { background: empty }),
+    procedural: group === 'procedural' ? retained : empty,
+    background: group === 'background' ? retained : empty,
   });
-  if (group === 'background' && count === 13) assert.equal(value.backgroundOmitted, true);
+  assert.equal(Object.hasOwn(value, 'backgroundOmitted'), false);
   if (beyondProbe) forbidden(result, [beyondProbe.id, beyondProbe.content]);
-  for (const item of denied) forbidden(result, [...item.denied, item.memory.id]);
+  for (const item of denied) forbidden(result, item.denied);
 });
 
 for (const layout of [53, 18, 33]) for (const oversized of [false, true])
@@ -348,18 +351,19 @@ test(`next steps keep the independent step alongside short sources and placehold
   }
   // A short background Memory must not abort an otherwise deliverable step.
   const background = short(f, 'Synthetic short background beside step', 'fact');
-  deny(f, memory.id, captured.episode.id, saved.id, 'Synthetic Episode instruction');
+  deny(f, captured.episode.id, saved.id);
+  if (oversized) deny(f, memory.id, 'Synthetic Episode instruction', denied.memory.id, denied.memory.content);
   const result = read(f), value = ok(result);
   assert.deepEqual(value.groups.nextSteps.items.map(item => item.episodeId), [f.seed]);
   assertGroups(f, value, {
     nextSteps: { enabled: true, returned: 1, complete: true, budget_exhausted: false, status: 'complete', episodeIds: [f.seed] },
-    procedural: { enabled: true, returned: 0, memoryIds: [], ...(oversized
+    procedural: { enabled: true, returned: oversized ? 0 : 2, memoryIds: oversized ? [] : [denied.memory.id, memory.id], ...(oversized
       ? { complete: false, budget_exhausted: true, status: 'budget_exhausted' }
       : { complete: true, budget_exhausted: false, status: 'complete' }) },
-    background: { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [] },
+    background: { enabled: true, returned: 1, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [background.memory.id] },
   });
-  forbidden(result, [...denied.denied, denied.memory.id, ...background.denied, background.memory.id,
-    memory.id, captured.episode.id, saved.id, 'Synthetic Episode instruction']);
+  forbidden(result, [...denied.denied, ...background.denied, captured.episode.id, saved.id,
+    ...(oversized ? [denied.memory.id, denied.memory.content, memory.id, 'Synthetic Episode instruction'] : [])]);
 });
 
 for (const group of ['procedural', 'background']) test(`forget between snapshots still fails closed for ${group}`, async t => {
@@ -370,13 +374,13 @@ for (const group of ['procedural', 'background']) test(`forget between snapshots
   const target = admit(f, 'Synthetic concurrent target', kind);
   const before = read(f), value = ok(before);
   const empty = { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [] };
-  const retained = { enabled: true, returned: 1, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [target.id] };
+  const retained = { enabled: true, returned: 2, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [target.id, denied.memory.id] };
   assertGroups(f, value, {
     nextSteps: { enabled: true, returned: 1, complete: true, budget_exhausted: false, status: 'complete', episodeIds: [f.seed] },
     procedural: group === 'procedural' ? retained : empty,
     background: group === 'background' ? retained : empty,
   });
-  forbidden(before, [...denied.denied, denied.memory.id]);
+  forbidden(before, denied.denied);
   const writer = openMemoryCore({ path: f.path }); f.ws.defer(() => writer.close());
   let changed = false;
   f.tokenizer.onCount = text => {
@@ -402,13 +406,13 @@ test('all next-step sources withheld leaves an empty group and a successful call
   assert.equal(value.groups.nextSteps.returned, 0); assert.equal(value.groups.nextSteps.status, 'complete');
   assertGroups(f, value, {
     nextSteps: { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', episodeIds: [] },
-    procedural: { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [] },
+    procedural: { enabled: true, returned: 1, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [denied.memory.id] },
     background: { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [] },
   });
-  forbidden(result, [...denied.denied, f.seed, denied.memory.id]);
+  forbidden(result, [...denied.denied, f.seed]);
 });
 
-for (const group of ['procedural', 'background']) test(`six retained ${group} items plus a trailing short item remain complete`, async t => {
+for (const group of ['procedural', 'background']) test(`six retained ${group} items plus a trailing short item exhaust the six-item cap`, async t => {
   const f = await fixture(t, 53), kind = group === 'procedural' ? 'instruction' : 'fact';
   const denied = short(f, 'Synthetic trailing short candidate', kind), kept = [];
   for (let i = 0; i < 6; i++) kept.unshift(admit(f, 'Synthetic retained cap item ' + i, kind).id);
@@ -416,8 +420,9 @@ for (const group of ['procedural', 'background']) test(`six retained ${group} it
   // have room for all six whole items.
   const input = { ...config, groups: { nextSteps: false, procedural: group === 'procedural', background: group === 'background' } };
   if (group === 'procedural') delete input.backgroundBudget;
+  deny(f, denied.memory.id, denied.memory.content);
   const result = read(f, input), value = ok(result);
-  const retained = { enabled: true, returned: 6, complete: true, budget_exhausted: false, status: 'complete', memoryIds: kept };
+  const retained = { enabled: true, returned: 6, complete: false, budget_exhausted: true, status: 'budget_exhausted', memoryIds: kept };
   assertGroups(f, value, {
     nextSteps: { enabled: false, returned: 0, complete: true, budget_exhausted: false, status: 'disabled', episodeIds: [] },
     procedural: group === 'procedural' ? retained
@@ -454,10 +459,10 @@ test('the final comparison notices a short item becoming deliverable without an 
   const before = read(f), value = ok(before);
   assertGroups(f, value, {
     nextSteps: { enabled: true, returned: 1, complete: true, budget_exhausted: false, status: 'complete', episodeIds: [f.seed] },
-    procedural: { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [] },
+    procedural: { enabled: true, returned: 1, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [denied.memory.id] },
     background: { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [] },
   });
-  forbidden(before, [...denied.denied, denied.memory.id]);
+  forbidden(before, denied.denied);
   let changed = false;
   f.tokenizer.onCount = text => {
     if (text && !changed) {
@@ -624,7 +629,7 @@ test(`real receipt purge fact in the snapshot window refuses ${group}, layout 53
 });
 
 for (const group of ['procedural', 'background'])
-test(`a short ${group} item inside the first six is filled from the seventh at identical budget`, async t => {
+test(`a short ${group} item inside the first six consumes a slot at identical delivery budget`, async t => {
   const f = await fixture(t, 53), kind = group === 'procedural' ? 'instruction' : 'fact', kept = [];
   for (let i = 0; i < 6; i++) kept.unshift(admit(f, 'Synthetic full cap survivor ' + i, kind).id);
   // Preserve the exact survivor ids, timestamps and receipt ids in the twin.
@@ -637,30 +642,37 @@ test(`a short ${group} item inside the first six is filled from the seventh at i
   const twin = connectFixture({ path: twinPath, model, tokenizer: tokenizerRecorder(t, model),
     ws: f.ws, seed: f.seed, tick: f.tick });
   const denied = short(f, 'Synthetic short inside the first six', kind);
-  // Three unrelated, untagged preferences balance the three public writes
-  // (admit, donor admit, forget). No short Memory has ever existed in the twin.
+  // Balance namespace epochs without selecting any additional twin Memories.
   for (let i = 0; i < 3; i++) admit(twin, 'Synthetic unselected twin preference ' + i, 'preference');
   const physical = f.db.prepare(`SELECT id FROM memories WHERE deleted=0 AND kind=? ORDER BY updated_at DESC,id`).all(kind);
   assert.deepEqual(physical.map(row => row.id), [denied.memory.id, ...kept], 'seven candidates; the first is short');
-  deny(twin, ...denied.denied, denied.memory.id);
+  deny(twin, ...denied.denied);
   const result = read(f, onlyGroup(group)), value = ok(result);
-  assertOnlyGroup(f, value, group, kept, 'complete');
+  assertOnlyGroup(f, value, group, [denied.memory.id, ...kept.slice(0, 5)], 'budget_exhausted');
   assert.equal(value.groups[group].returned, 6);
-  assert.equal(value.groups[group].items[5].memory.id, kept[5], 'physical seventh fills the sixth real slot');
-  forbidden(result, [...denied.denied, denied.memory.id]);
+  assert.equal(value.groups[group].items[0].memory.id, denied.memory.id, 'the short Memory consumes the first real slot');
+  assert.equal(value.groups[group].items[5].memory.id, kept[4], 'physical seventh stays outside the six-item cap');
+  forbidden(result, [...denied.denied, kept[5]]);
   const expected = read(twin, onlyGroup(group)); ok(expected);
-  assert.deepEqual(result, expected, 'same six real items, order, envelope and literal complete status');
-  assert.equal(JSON.stringify(result).length, JSON.stringify(expected).length, 'identical envelope character cost');
+  const twinValue = ok(expected), actualGroup = value.groups[group], twinGroup = twinValue.groups[group];
+  assertOnlyGroup(twin, twinValue, group, kept, 'complete');
+  assert.deepEqual(actualGroup.items.slice(1), twinGroup.items.slice(0, 5), 'the five retained whole items are unchanged');
+  const itemDelta = JSON.stringify(actualGroup.items[0]).length - JSON.stringify(twinGroup.items[5]).length;
+  const statusDelta = JSON.stringify({ complete: false, budget_exhausted: true, status: 'budget_exhausted' }).length -
+    JSON.stringify({ complete: true, budget_exhausted: false, status: 'complete' }).length;
+  assert.equal(JSON.stringify(result).length - JSON.stringify(expected).length, itemDelta + statusDelta,
+    'the short Memory has exactly its ordinary serialized item cost and completion status cost');
   const actualCounts = f.tokenizer.reads.at(-1), twinCounts = twin.tokenizer.reads.at(-1);
-  assert.ok(actualCounts.texts.length > 0);
-  assert.deepEqual(actualCounts.texts, twinCounts.texts, 'every tokenizer input is byte-identical, including background counts');
-  assert.deepEqual(actualCounts.counts, twinCounts.counts, 'identical token consumption for every count');
+  assert.ok(actualCounts.texts.includes(JSON.stringify(result)), 'the whole delivered short item is charged in the final envelope');
+  assert.ok(twinCounts.texts.includes(JSON.stringify(expected)));
+  if (group === 'background') assert.ok(actualCounts.texts.includes(JSON.stringify(actualGroup.items)));
+  assert.deepEqual(actualCounts.counts, twinCounts.counts, 'the same count operations use the constant test tokenizer');
   assert.equal(actualCounts.counts.reduce((sum, count) => sum + count, 0),
     twinCounts.counts.reduce((sum, count) => sum + count, 0));
 });
 
 for (const group of ['procedural', 'background']) for (const count of [12, 13])
-test(`seven short ${group} items at the ${count}-candidate boundary leave five real items`, async t => {
+test(`seven short ${group} items at the ${count}-candidate boundary reach the six-item cap`, async t => {
   const f = await fixture(t, 53), kind = group === 'procedural' ? 'instruction' : 'fact', kept = [], denied = [];
   const thirteenth = count === 13 ? admit(f, 'Synthetic thirteenth candidate must not refill', kind) : null;
   for (let i = 11; i >= 0; i--) {
@@ -674,8 +686,8 @@ test(`seven short ${group} items at the ${count}-candidate boundary leave five r
     ...(thirteenth ? [thirteenth.id] : [])]);
   if (thirteenth) deny(f, thirteenth.id, thirteenth.content);
   const result = read(f, onlyGroup(group)), value = ok(result);
-  assertOnlyGroup(f, value, group, kept, count === 12 ? 'complete' : 'budget_exhausted');
-  assert.equal(value.groups[group].returned, 5);
-  for (const item of denied) forbidden(result, [...item.denied, item.memory.id]);
+  assertOnlyGroup(f, value, group, denied.slice().reverse().slice(0, 6).map(item => item.memory.id), 'budget_exhausted');
+  assert.equal(value.groups[group].returned, 6);
+  for (const item of denied) forbidden(result, item.denied);
   if (thirteenth) forbidden(result, [thirteenth.id, thirteenth.content]);
 });

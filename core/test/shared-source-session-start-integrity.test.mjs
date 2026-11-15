@@ -169,7 +169,7 @@ test(`marker omission plus ${markedCorruption ? 'marked' : 'unmarked'} corrupt $
   const before = rows(f, memory), denied = withhold(f, 'forget', shared);
   const survivor = admit(f, 'Synthetic intact companion', kindFor(group));
   assert.deepEqual(rows(f, memory), before, 'withholding leaves both receipt rows intact');
-  assert.deepEqual(ok(read(f, group)).groups[group].items.map(item => item.memory.id), [survivor.id]);
+  assert.deepEqual(ok(read(f, group)).groups[group].items.map(item => item.memory.id), [survivor.id, memory.id]);
   const needles = corrupt(f, before.find(row => row.excerpt === other.excerpt));
   deny(f, memory.id, memory.content, ...denied, ...needles);
   // Even corruption inside the marker-hidden set must win. 5aff2691 hides it;
@@ -179,22 +179,26 @@ test(`marker omission plus ${markedCorruption ? 'marked' : 'unmarked'} corrupt $
 
 for (const layout of [53, 18, 33]) for (const group of ['procedural', 'background'])
 for (const operation of ['forget', 'same-address correction', 'reject'])
-test(`intact ${group} rows behind ${operation} markers stay absent beside a survivor, layout ${layout}`, async t => {
+test(`intact ${group} rows behind ${operation} markers retain their Memory beside a survivor, layout ${layout}`, async t => {
   const f = await fixture(t, layout), shared = support('legitimate-withheld-needle');
   const memory = admit(f, 'Synthetic legitimately withheld Memory needle', kindFor(group), [shared]);
   const original = rows(f, memory), denied = withhold(f, operation, shared);
   const survivor = admit(f, 'Synthetic retained independent Memory', kindFor(group));
   const expected = ok(f.core.get({ namespace: ns, memoryId: survivor.id }));
   assert.deepEqual(rows(f, memory), original, 'marker state does not corrupt the stored receipt');
-  const needles = [memory.id, memory.content, ...original.map(row => row.id), ...denied];
+  const needles = [...original.map(row => row.id), ...denied];
   deny(f, ...needles);
   const result = read(f, group), value = ok(result);
   const delivered = value.groups[group];
   assert.deepEqual({ ...delivered, items: delivered.items.map(item => item.memory.id) }, {
-    enabled: true, returned: 1, complete: true, budget_exhausted: false, status: 'complete', items: [survivor.id],
+    enabled: true, returned: 2, complete: true, budget_exhausted: false, status: 'complete', items: [survivor.id, memory.id],
   });
   assert.equal(delivered.items[0].memory.content, survivor.content);
   assert.deepEqual(delivered.items[0].receipts, expected.receipts.map(({ id, role, excerpt }) => ({ id, role, excerpt })));
+  const short = delivered.items[1], projected = ok(f.core.get({ namespace: ns, memoryId: memory.id }));
+  assert.equal(short.memory.content, memory.content);
+  assert.deepEqual(short.receipts, projected.receipts.map(({ id, role, excerpt }) => ({ id, role, excerpt })));
+  assert.deepEqual(short.receipts, []);
   assert.equal(Object.hasOwn(value, 'backgroundOmitted'), false);
   absent(result, needles);
   assert.deepEqual(read(f, group), result, 'both snapshots and repeated reads make the same decision');
