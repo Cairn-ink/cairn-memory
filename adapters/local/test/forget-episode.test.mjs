@@ -44,13 +44,15 @@ function committed(f, operation, connection) {
   };
   if (connection) check(connection); else sql(f.path, check);
 }
-async function reads(f) {
+async function reads(f, options) {
   const namespace = f.namespace;
   const pages = [];
   noNeedles(await f.core.get({ namespace, memoryId: f.target.id }));
   const listed = await f.core.list({ namespace, limit: 50 });
-  // core/runtime.mjs:547 refuses the whole list when the same-session survivor's Raw source is fenced.
-  if (f.layout.suppressionRevision) assert.deepEqual(listed, { ok: false, error: { code: 'revision_conflict', retryable: false } });
+  // core/runtime.mjs:547 refuses a selected survivor with denied Raw ancestry.
+  // The shared-message survivor is denied; the separate-message shape still lists.
+  if (f.layout.suppressionRevision && !options.differentMessages)
+    assert.deepEqual(listed, { ok: false, error: { code: 'revision_conflict', retryable: false } });
   else ok(listed);
   noNeedles(listed);
   for (const timeBasis of ['event', 'receipt']) {
@@ -74,7 +76,15 @@ async function reads(f) {
     { readSet: [namespace], query: 'synthetic', limit: 12 },
     { readSet: [namespace], query: 'synthetic', limit: 12, includeQualification: true },
     { readSet: [namespace], query: 'synthetic', limit: 12, contextMode: 'rationale-evidence' },
-  ]) { const result = await f.core.recall(input); ok(result); noNeedles(result); }
+  ]) {
+    const result = await f.core.recall(input);
+    // Main's unchanged receipt filter rejects the fenced survivor receipt on
+    // 29/33 too: core/runtime.mjs:597,632. Episode deletion is not consulted.
+    if (!f.layout.suppressionRevision && input.contextMode === 'rationale-evidence')
+      assert.deepEqual(result, { ok: false, error: { code: 'source_unavailable', retryable: false } });
+    else ok(result);
+    noNeedles(result);
+  }
   // Session start is also the public next-step reader; check both groups and the whole envelope.
   for (const groups of [{ nextSteps: true, procedural: false }, { nextSteps: true, procedural: true, background: true }]) {
     const result = await f.core.sessionStartContext({ namespace, groups, maxChars: 8000, maxTokens: 2000 });
@@ -107,9 +117,9 @@ for (const [name, options] of cases) for (const operation of ['forget', 'correct
     try { ok(await f.act(operation)); } finally { registerContentWriteGuard(beginContentWriteSafety); }
     if (options.layout >= 48) assert.equal(commits, 1, 'post-state is checked before COMMIT');
     committed(f, operation);
-    await reads(f);
+    await reads(f, options);
     await f.reopen();
-    await reads(f);
+    await reads(f, options);
   });
 }
 // Window and unknown-time preservation now run on every layout in forget-episode-scope.test.mjs.

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { readSqliteFixture } from '../../../../core/testing/content-safety-s2h-fixture.mjs';
 import { createMemoryRuntime } from '../../../../core/runtime.mjs';
-import { batch, draft } from '../../../../core/testing/episode-helpers.mjs';
+import { batch, digest } from '../../../../core/testing/episode-helpers.mjs';
 import { sql, ok, range, forgottenText, stepText } from './forget-episode.mjs';
 
 export const layouts = [{ layout: 29 }, { layout: 33 }, { layout: 48 }, { layout: 53 }, { layout: 53, cardLineage: true }];
@@ -30,7 +30,7 @@ export function assertStored(f, before, { named = [], consumers = [], upstream =
     } else {
       const bump = Number(upstream.includes(old.id));
       assert.equal(row.revision, old.revision + bump, 'exact upstream Episode revision bump, zero elsewhere');
-      assert.deepEqual({ ...row, revision: old.revision }, old, 'all other Episode columns remain identical');
+      assert.deepEqual({ ...row, revision: old.revision }, { ...old }, 'all other Episode columns remain identical');
       assert.deepEqual(after.sources.filter(value => value.episode_id === row.id),
         before.sources.filter(value => value.episode_id === row.id), 'sorted source rows remain byte-identical');
     }
@@ -40,7 +40,7 @@ export function assertStored(f, before, { named = [], consumers = [], upstream =
     if (origin && !named.includes(origin.id) && !consumers.includes(origin.id)) {
       const row = after.headers.find(value => value.id === old.id), bump = Number(upstream.includes(origin.id));
       assert.equal(row.revision, old.revision + bump, 'exact upstream Raw-header bump, zero elsewhere');
-      assert.deepEqual({ ...row, revision: old.revision }, old, 'all other neighbour Raw-header columns remain identical');
+      assert.deepEqual({ ...row, revision: old.revision }, { ...old }, 'all other neighbour Raw-header columns remain identical');
     }
   }
   return after;
@@ -59,14 +59,22 @@ export function copySummary(f, sourceIds, session = 'consumer') {
     const input = { ...batch(session + '-event', 'Consumer registration evidence.', session), client: f.client,
       eventStart: new Date().toISOString(), eventEnd: new Date().toISOString(), eventTimeCoverage: 'complete' };
     const registered = runtime.reserveEpisodeBatch(ns, input);
-    const job = draft({ runtime }, registered, input);
+    // The shared draft helper uses its own fixed namespace. Claim and publish
+    // with this fixture's namespace throughout the reserve/claim/commit cycle.
+    const writer = runtime.claimEpisodeWriter(ns, { episodeId: registered.episodeId, generation: input.generation });
+    const claim = runtime.claimEpisodeDraft(ns, { episodeId: registered.episodeId, generation: input.generation,
+      writerToken: writer.token, trigger: 'batch', watermark: registered.position });
     const sources = sql(f.path, db => sourceIds.map(id => db.prepare('SELECT * FROM episode_sources WHERE id=?').get(id)));
     const anchors = sources.map((source, sourceIndex) => ({ sourceIndex, start: 0, end: source.text.length }));
     const field = value => ({ value, anchors });
-    runtime.commitEpisodeDraft(ns, { ...job.commit, sources: sourceIds.map(sourceId => ({ sourceId })),
+    runtime.commitEpisodeDraft(ns, { episodeId: registered.episodeId, token: claim.token,
+      sources: sourceIds.map(sourceId => ({ sourceId })),
       result: { type: field('work'), language: 'mixed', gist: field('consumerneedle derived summary'), outcome: null,
-        nextStep: field('consumerstep act on derived evidence'), disposition: null } });
-    runtime.releaseEpisodeWriter(ns, { episodeId: registered.episodeId, token: job.writer.token });
+        nextStep: field('consumerstep act on derived evidence'), disposition: null },
+      dispositions: [{ eventId: input.eventId, omitted: 0 }],
+      modelMetadata: { adapter: 'scripted', model: null, profile: null, promptVersion: 'storage-test',
+        digest: digest('prompt'), portVersion: 'episode-v1' } });
+    runtime.releaseEpisodeWriter(ns, { episodeId: registered.episodeId, token: writer.token });
     return registered.episodeId;
   } finally { runtime.close(); }
 }
@@ -105,7 +113,12 @@ export async function assertReads(f, before, { named = [], consumers = [], needl
   }
   for (const extra of [{}, { includeQualification: true }, { contextMode: 'rationale-evidence' }]) {
     const result = await f.core.recall({ readSet: [namespace], query: 'synthetic', limit: 12, ...extra });
-    ok(result); noNeedles(result, needles);
+    // Main also filters the survivor's fenced receipt without suppression:
+    // core/runtime.mjs:597,632 refuses evidence when no safe receipt remains.
+    if (!safety && extra.contextMode === 'rationale-evidence')
+      assert.deepEqual(result, { ok: false, error: { code: 'source_unavailable', retryable: false } });
+    else ok(result);
+    noNeedles(result, needles);
   }
   const openSteps = after.episodes.filter(row => !row.deleted && JSON.parse(row.record).nextStep?.status === 'open');
   for (const groups of [{ nextSteps: true, procedural: false }, { nextSteps: true, procedural: true, background: true }]) {
