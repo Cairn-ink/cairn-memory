@@ -40,11 +40,11 @@ jobs:
         shell: bash
         run: |
           set +e
-          fails=0; okall=0; failall=0; diag=/tmp/cairn-diag-transport.jsonl; all="$RUNNER_TEMP/transport-all.jsonl"; : > "$all"
+          : > "$RUNNER_TEMP/raw-all.jsonl"; fails=0; okall=0; failall=0; diag=/tmp/cairn-diag-transport.jsonl; all="$RUNNER_TEMP/transport-all.jsonl"; : > "$all"
           for i in $(seq 1 30); do
             rm -f "$diag"; start=$(date +%s)
             if npm run test:local-host > "$RUNNER_TEMP/full-$i.log" 2>&1; then r=pass; else r=FAIL; fails=$((fails+1)); fi
-            t=0; ok=0; [ -f "$diag" ] && ok=$(grep -c '"stage":"ok"' "$diag"); [ -f "$diag" ] && t=$(grep -v -c '"stage":"ok"' "$diag") && grep -v '"stage":"ok"' "$diag" | sed "s/^/{\"run\":$i,\"result\":\"$r\",\"line\":/; s/$/}/" >> "$all"
+            t=0; ok=0; [ -f "$diag" ] && ok=$(grep -c '"stage":"ok"' "$diag"); [ -f "$diag" ] && grep -v '"stage":"ok"' "$diag" >> "$RUNNER_TEMP/raw-all.jsonl"; [ -f "$diag" ] && t=$(grep -v -c -E '"stage":"(ok|probe-detail|run-detail)"' "$diag") && grep -v -E '"stage":"(ok|probe-detail|run-detail)"' "$diag" | sed "s/^/{\"run\":$i,\"result\":\"$r\",\"line\":/; s/$/}/" >> "$all"
             okall=$((okall+ok)); failall=$((failall+t))
             echo "full $i: $r in $(( $(date +%s) - start )) s; DIAG $(grep -c 'DIAG ' "$RUNNER_TEMP/full-$i.log"), DIAG-HOOK $(grep -c 'DIAG-HOOK ' "$RUNNER_TEMP/full-$i.log"), unavailable $(grep -c 'capture_refused:unavailable' "$RUNNER_TEMP/full-$i.log"), transport calls ok $ok, failed $t"
             if [ "$r" = FAIL ]; then
@@ -60,6 +60,7 @@ jobs:
           echo "::group::transport failure stages across all runs (count, stage, code, uncertain, result)"
           node -e 'const fs=require("fs");const rows=fs.readFileSync(process.argv[1],"utf8").split("\n").filter(Boolean).map(l=>JSON.parse(l));const m=new Map();for(const r of rows){const k=[r.line.stage,r.line.code,r.line.syscall,r.line.exitCode,r.line.signal,r.line.uncertain,r.line.aborted,r.result].join(" ");m.set(k,(m.get(k)||0)+1)}for(const [k,v] of [...m].sort((a,b)=>b[1]-a[1]))console.log(v,k)' "$all"
           echo "::endgroup::"
+          echo "::group::probe and run detail lines across all runs"; grep -h -E '"stage":"(probe-detail|run-detail)"' "$RUNNER_TEMP/raw-all.jsonl" || true; echo "::endgroup::"
           echo "transport calls across runs: ok $okall, failed $failall"; echo "full-suite failures: $fails / 30"; echo "$fails" > "$RUNNER_TEMP/fails-full"
       - name: Summary
         shell: bash

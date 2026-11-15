@@ -1,3 +1,4 @@
+import { appendFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
 import { types } from 'node:util';
@@ -56,6 +57,8 @@ export function localProcessScope(deadlineMs, signal) {
       if (!probe && Number.isInteger(child.pid)) uncertain = true;
       const output = [], stdoutLimit = probe ? 128 : 262144, stderrLimit = probe ? 128 : 65536;
       let stdoutBytes = 0, stderrBytes = 0, stdinFinished = false, closed = false, spawnFailed = false, escalation, probeTimer;
+      const diagStart = performance.now(); let diagFailedBy = null, diagExitAt = null;
+      child.once('exit', () => { diagExitAt = performance.now(); });
       const kill = () => {
         if (closed) return;
         try { child.kill('SIGTERM'); } catch { /* No arbitrary process error leaves this boundary. */ }
@@ -64,12 +67,13 @@ export function localProcessScope(deadlineMs, signal) {
       const fail = () => { failed = true; kill(); };
       const spawnFail = () => { spawnFailed = true; fail(); };
       terminate = kill;
-      if (probe) probeTimer = setTimeout(fail, Math.min(2000, Math.max(0, workEnd - performance.now())));
-      const stdout = chunk => { stdoutBytes += chunk.byteLength; if (stdoutBytes > stdoutLimit) fail(); else if (!failed) output.push(chunk); };
+      if (probe) probeTimer = setTimeout(() => { diagFailedBy ??= 'probe_timer'; fail(); }, Math.min(2000, Math.max(0, workEnd - performance.now())));
+      const stdout = chunk => { stdoutBytes += chunk.byteLength; if (stdoutBytes > stdoutLimit) { diagFailedBy ??= 'stdout_limit'; fail(); } else if (!failed) output.push(chunk); };
       const stderr = chunk => { stderrBytes += chunk.byteLength; if (stderrBytes > stderrLimit) fail(); };
       const finish = () => { stdinFinished = true; };
       child.stdout.on('data', stdout); child.stderr.on('data', stderr);
-      child.stdout.on('error', fail); child.stderr.on('error', fail); child.stdin.on('error', fail);
+      const diagStdinError = error => { diagFailedBy ??= 'stdin_error:' + (error?.code ?? 'none'); fail(); };
+      child.stdout.on('error', fail); child.stderr.on('error', fail); child.stdin.on('error', diagStdinError);
       child.stdin.once('finish', finish);
       try {
         const done = new Promise(resolve => {
@@ -78,15 +82,20 @@ export function localProcessScope(deadlineMs, signal) {
         });
         try { child.stdin.end(input); } catch { fail(); }
         const outcome = await done;
-        if (outcome.code !== 0 || outcome.signal !== null || !stdinFinished) failed = true;
+        if (outcome.code !== 0 || outcome.signal !== null || !stdinFinished) { diagFailedBy ??= outcome.code !== 0 || outcome.signal !== null ? 'exit_status' : 'stdin_not_finished'; failed = true; }
+        const diagWasFailed = failed, diagNow = performance.now();
         try { check(); }
-        catch { throw new LocalCaptureTransportError(uncertain, probe ? 'probe' : spawnFailed ? 'spawn' : 'child_exit',
+        catch { try { appendFileSync('/tmp/cairn-diag-transport.jsonl', JSON.stringify({ at: Date.now(), stage: probe ? 'probe-detail' : 'run-detail',
+          failedBy: diagFailedBy ?? (diagWasFailed ? 'failed_before_close' : diagNow >= workEnd ? 'work_deadline' : 'signal_or_other'), stdinFinished,
+          elapsedMs: Math.round(diagNow - diagStart), exitToCloseMs: diagExitAt === null ? null : Math.round(diagNow - diagExitAt),
+          workEndRemainingMs: Math.round(workEnd - diagNow), stdoutBytes, code: outcome.code, signal: outcome.signal, node: process.version }) + '\n'); } catch {}
+          throw new LocalCaptureTransportError(uncertain, probe ? 'probe' : spawnFailed ? 'spawn' : 'child_exit',
           { exitCode: outcome.code, signal: outcome.signal }); }
         return Buffer.concat(output);
       } finally {
         clearTimeout(probeTimer); clearTimeout(escalation); terminate = undefined;
         child.stdout.off('data', stdout); child.stderr.off('data', stderr);
-        child.stdout.off('error', fail); child.stderr.off('error', fail); child.stdin.off('error', fail);
+        child.stdout.off('error', fail); child.stderr.off('error', fail); child.stdin.off('error', diagStdinError);
         child.stdin.off('finish', finish); child.off('error', spawnFail);
       }
     },
