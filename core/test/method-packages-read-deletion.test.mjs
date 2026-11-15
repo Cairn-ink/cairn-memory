@@ -9,14 +9,14 @@ import {fixture,ok,input,file,childHost,moduleURL} from '../testing/method-packa
 const source=`
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
-import {existsSync,writeFileSync,readFileSync} from 'node:fs';
+import {existsSync,writeFileSync,readFileSync,renameSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {openMemoryCore} from ${JSON.stringify(moduleURL('core/contract.mjs'))};
 ${childHost}
 const config=JSON.parse(readFileSync(process.argv[1],'utf8')),role=process.argv[2];
 const until=async path=>{const end=Date.now()+15000;while(!existsSync(path)){assert.ok(Date.now()<end,'barrier '+path);await delay(2);}};
 const core=openMemoryCore({path:config.path,methodPackages:methods}),call=(method,input)=>core[method](input,token);
-writeFileSync(config[role+'Ready'],String(process.pid));await until(config.start);
+writeFileSync(config[role+'Ready']+'.tmp',String(process.pid));renameSync(config[role+'Ready']+'.tmp',config[role+'Ready']);await until(config.start);
 try{
   if(role==='reader'){
     const args={version:config.version,intent:'history',path:'long'},first=ok(call('readMethodFile',args));
