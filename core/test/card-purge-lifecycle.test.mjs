@@ -171,21 +171,46 @@ test('growing a filed topic carries its full first part and builds only an eligi
 });
 
 test('forgetting a similarity seed keeps the ten-minute debounce without retaining its body', async t => {
-  const f = engineCardFixture(t), memories = f.seed(30);
+  const f = engineCardFixture(t), memories = f.seed(30).sort((a, b) => a.id.localeCompare(b.id));
+  // The routing seed must belong to the first dated part, not just its context.
+  memories.forEach((memory, i) => f.db.prepare('UPDATE memories SET created_at=? WHERE id=?')
+    .run(new Date(Date.UTC(2026, 0, i + 1)).toISOString(), memory.id));
   const first = ok(await f.pass()).built[0]; assert.ok(first);
-  const seed = memories.slice().sort((a, b) => a.id.localeCompare(b.id))[0];
-  ok(f.core.forget({ namespace: ns, memoryId: seed.id, expectedRevision: seed.revision }));
+  const seed = memories[0];
+  assert.ok(first.sourceRevisions.some(ref => ref.memoryId === seed.id));
+  const others = [ok(await f.pass()).built[0], ok(await f.pass()).built[0]];
+  assert.ok(others.every(card => card && !card.sourceRevisions.some(ref => ref.memoryId === seed.id)));
+  const cardRow = id => f.db.prepare('SELECT * FROM private_cards WHERE id=?').get(id);
+  const bindings = id => f.db.prepare('SELECT * FROM card_memory_bindings WHERE card_id=? ORDER BY receipt_id').all(id);
+  const untouched = others.map(card => ({ row: cardRow(card.id), bindings: bindings(card.id) }));
+  const receipts = f.db.prepare('SELECT id FROM receipts WHERE memory_id=?').all(seed.id).map(row => row.id);
+  assert.ok(cardRow(first.id).body.includes(seed.content), 'the forgotten text was in the bound part');
+  const forgotten = ok(f.core.forget({ namespace: ns, memoryId: seed.id, expectedRevision: seed.revision }));
   const row = f.db.prepare('SELECT * FROM private_cards WHERE id=?').get(first.id);
   assert.equal(row.title, null); assert.equal(row.body, null);
+  assert.equal(row.state, 'deleted'); assert.deepEqual(bindings(first.id), []);
+  assert.deepEqual(others.map(card => ({ row: cardRow(card.id), bindings: bindings(card.id) })), untouched,
+    'forget leaves parts not bound to the source byte-identical');
+  const noForgottenSource = value => {
+    for (const needle of [seed.content, seed.id, ...receipts]) assert.equal(JSON.stringify(value).includes(needle), false);
+  };
+  const scan = () => {
+    noForgottenSource(f.db.prepare('SELECT * FROM private_cards').all());
+    noForgottenSource(f.db.prepare('SELECT * FROM card_memory_bindings').all());
+    noForgottenSource(f.db.prepare("SELECT * FROM card_operations WHERE method IN ('consolidateAttempt','consolidateOutcome')").all());
+  };
+  scan(); noForgottenSource(forgotten);
   const identity = f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get();
   const storage = createEngineCardStorage({ db: f.db, identity, ready() {} });
   const pass = offset => createEngineCardMaintenance({ storage, model: f.model, now: () => Date.parse(row.updated_at) + offset })
     .maintain({ namespace: ns, budget: { maxMs: 5000 } });
-  assert.equal((await pass(0)).modelCalls, 0);
-  assert.equal((await pass(599999)).modelCalls, 0);
+  const immediate = await pass(0); assert.equal(immediate.modelCalls, 0); noForgottenSource(immediate); scan();
+  const waiting = await pass(599999); assert.equal(waiting.modelCalls, 0); noForgottenSource(waiting); scan();
   const rebuilt = await pass(600001); assert.equal(rebuilt.built.length, 1, JSON.stringify(rebuilt));
   assert.ok(rebuilt.built[0].sourceRevisions.every(ref => ref.memoryId !== seed.id));
-  assert.equal(f.model.calls.length, 2);
+  noForgottenSource(rebuilt); scan();
+  for (const request of f.model.calls.slice(3)) noForgottenSource(request);
+  assert.equal(f.model.calls.length, 4);
 });
 
 test('the live Card scan crosses two 128-row pages with 257 live Cards', async t => {
