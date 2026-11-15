@@ -86,7 +86,7 @@ export function buildArtifact({ version = packageVersion, runCommand = command, 
   const userconfig = join(directory, 'empty.npmrc');
   writeFileSync(userconfig, '', { mode: 0o600 });
   const copied = [...runtimeFiles.map((path) => [path, path]), ...extraFiles];
-  const files = copied.map(([, target]) => target).concat('package.json', 'npm-shrinkwrap.json').sort();
+  const files = copied.map(([, target]) => target).concat('package.json', 'npm-shrinkwrap.json', 'engine-build.json').sort();
   if (new Set(files).size !== files.length) throw new Error('duplicate_artifact_path');
   const sourceHashes = {};
   for (const [source, target] of copied) {
@@ -97,7 +97,7 @@ export function buildArtifact({ version = packageVersion, runCommand = command, 
     if (!lstatSync(sourcePath).isFile()) throw new Error('nonregular_artifact_source');
     mkdirSync(dirname(join(stagingPath, target)), { recursive: true });
     copyFileSync(sourcePath, join(stagingPath, target));
-    sourceHashes[target] = hash(readFileSync(sourcePath));
+    sourceHashes[target] = hash(readFileSync(join(stagingPath, target)));
   }
   chmodSync(join(stagingPath, 'bin/cairn-memory.mjs'), 0o755);
   const manifest = { name: packageName, version, private: true, type: 'module',
@@ -107,6 +107,13 @@ export function buildArtifact({ version = packageVersion, runCommand = command, 
     dependencies: { '@modelcontextprotocol/server': '2.3.1', zod: '4.6.7', tiktoken: '1.0.22' } };
   writeFileSync(join(stagingPath, 'package.json'), JSON.stringify(manifest, null, 2) + '\n');
   writeFileSync(join(stagingPath, 'npm-shrinkwrap.json'), JSON.stringify(productionLock(manifest), null, 2) + '\n');
+  const stagedHashes = Object.fromEntries(files.filter(name => name !== 'engine-build.json')
+    .map(name => [name, hash(readFileSync(join(stagingPath, name)))]));
+  const digest = createHash('sha256');
+  for (const [name, value] of Object.entries(stagedHashes)) digest.update(name + '\0' + value + '\0');
+  writeFileSync(join(stagingPath, 'engine-build.json'), JSON.stringify({ version: 1, sourceHashes: stagedHashes,
+    digest: digest.digest('hex') }, null, 2) + '\n');
+  sourceHashes['engine-build.json'] = hash(readFileSync(join(stagingPath, 'engine-build.json')));
   const packed = JSON.parse(runCommand('npm', ['pack', '--offline', '--ignore-scripts', '--json',
     '--pack-destination', directory], stagingPath, userconfig));
   if (packed.length !== 1 || packed[0].filename !== `${packageName}-${version}.tgz`) throw new Error('unexpected_artifact_name');

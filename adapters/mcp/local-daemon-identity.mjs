@@ -89,6 +89,36 @@ export function assertStoreSync(record) {
 const runtimeFiles = ['local-daemon-identity.mjs', 'local-daemon-state.mjs', 'local-daemon-wire.mjs',
   'local-daemon-liveness.mjs', 'local-daemon.mjs', 'local-forwarder.mjs'];
 export async function engineBuild(root = fileURLToPath(new URL('../../', import.meta.url))) {
+  // Only a source checkout has this inventory. A missing installed build record
+  // must refuse, never silently select the source computation.
+  let source = false;
+  try { source = (await lstat(join(root, 'packaging/artifact-files.json'))).isFile(); }
+  catch (error) { if (error.code !== 'ENOENT') throw refuse('daemon_build'); }
+  try { await lstat(join(root, 'engine-build.json')); source = false; }
+  catch (error) { if (error.code !== 'ENOENT') throw refuse('daemon_build'); }
+  if (!source) {
+    try {
+      const metadata = join(root, 'engine-build.json');
+      if (!(await lstat(metadata)).isFile()) throw refuse('daemon_build');
+      const build = JSON.parse(await readFile(metadata, 'utf8'));
+      if (build?.version !== 1 || !build.sourceHashes || Array.isArray(build.sourceHashes) ||
+          typeof build.sourceHashes !== 'object' || typeof build.digest !== 'string' || !/^[a-f0-9]{64}$/.test(build.digest)) throw refuse('daemon_build');
+      const digest = createHash('sha256');
+      for (const name of Object.keys(build.sourceHashes).sort()) {
+        const value = build.sourceHashes[name];
+        if (!name || name.startsWith('/') || name.split('/').some(part => !part || part === '.' || part === '..') ||
+            name.includes('\\') || name === 'engine-build.json' || typeof value !== 'string' || !/^[a-f0-9]{64}$/.test(value)) throw refuse('daemon_build');
+        digest.update(name + '\0' + value + '\0');
+      }
+      if (digest.digest('hex') !== build.digest) throw refuse('daemon_build');
+      for (const name of ['package.json', 'npm-shrinkwrap.json', ...runtimeFiles.map(name => 'adapters/mcp/' + name)]) {
+        const path = join(root, name);
+        if (!(await lstat(path)).isFile() || createHash('sha256').update(await readFile(path)).digest('hex') !== build.sourceHashes[name])
+          throw refuse('daemon_build');
+      }
+      return build.digest;
+    } catch { throw refuse('daemon_build'); }
+  }
   const inventory = JSON.parse(await readFile(join(root, 'packaging/artifact-files.json'), 'utf8'));
   const files = [...new Set([...inventory, 'package.json', 'adapters/mcp/package-lock.json',
     'adapters/openai/package-lock.json', ...runtimeFiles.map(name => 'adapters/mcp/' + name)])].sort();

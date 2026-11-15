@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "9348fab3be55f3078f3dcbe787443453ff47775bdfac6db02823c6d37070ce06",
-  "bytes": 1405365,
+  "sha256": "b67ebb453808f59c399d3f031301cea63e01465cf12f0fe5fff7a86e44effeb2",
+  "bytes": 1437794,
   "files": [
     "LICENSE",
     "README.md",
@@ -46,6 +46,12 @@
     "adapters/mcp/context-read-transport.mjs",
     "adapters/mcp/local-authority-router.mjs",
     "adapters/mcp/local-context-continuations.mjs",
+    "adapters/mcp/local-daemon-identity.mjs",
+    "adapters/mcp/local-daemon-liveness.mjs",
+    "adapters/mcp/local-daemon-state.mjs",
+    "adapters/mcp/local-daemon-wire.mjs",
+    "adapters/mcp/local-daemon.mjs",
+    "adapters/mcp/local-forwarder.mjs",
     "adapters/mcp/local-shared-runtime.mjs",
     "adapters/mcp/method-package-access.mjs",
     "adapters/mcp/method-package-command.mjs",
@@ -355,6 +361,7 @@
     "docs/role-profiles-local.md",
     "docs/topic-overview.md",
     "docs/v1-preview-integration.md",
+    "engine-build.json",
     "evaluation/live/diagnostics.mjs",
     "integrations/client/common-profile.mjs",
     "integrations/client/control-state.mjs",
@@ -593,6 +600,12 @@
     "adapters/mcp/method-package-access.mjs": "1a9d5f630fad641fc2efe447602c5d79d3392394157186772ca06ba88ba33509",
     "adapters/mcp/local-authority-router.mjs": "ebddbcf382d0d69f199d124a01569d68b11f4a8399834b8411ed45f98ae57a47",
     "adapters/mcp/local-context-continuations.mjs": "ad824cc65a83e60a71b97f9fa1418807fd7acbc429afa731c73edb87fd1d5e38",
+    "adapters/mcp/local-daemon.mjs": "d2568c9b122f4f9365e42d3ce23d7d2e5612b1f5dfaf1cbb0d20513fec742081",
+    "adapters/mcp/local-daemon-identity.mjs": "e60c9433c1850ac3cf4eb5834be1bb3ed75be1a8cd580924ae8ab1759a0cefb1",
+    "adapters/mcp/local-daemon-liveness.mjs": "ecdaa9906f4a1945f28d173499fc4aa1f9d872231b110f3dcdd49b9d1c87bbbb",
+    "adapters/mcp/local-daemon-state.mjs": "b4e0d16048b09601ee8e1b781a50f8943c20b202bc73e5ae768300bf0ba3bfed",
+    "adapters/mcp/local-daemon-wire.mjs": "aeb5ab55fa4887256b3f727af5e73e39c2baea3900c71610aad7e946da29a65c",
+    "adapters/mcp/local-forwarder.mjs": "1707228bd52ed88f15e443b88769655fd6dad9cdcbc4d9dceebdeb2aba3b57f5",
     "adapters/mcp/local-shared-runtime.mjs": "d5a1a4baba2513eade1dcce141bb354dd19bc31a592198583a7ba60ecf613dc8",
     "adapters/mcp/server.mjs": "06a62756beae3f02517e24344a6295090cb2b0407b1fb836693bc3f84e46c109",
     "adapters/mcp/private-card-access.mjs": "fc95ae394d96a945d6d6ecd2e8ec8f182d36ac8094977a6b6ed42932f2ee7cca",
@@ -820,10 +833,11 @@
     "bin/cairn-memory.mjs": "7c24872a106de8d06c0a66499002f46aa8894b588b005ac9d39a50df4e586981",
     "README.md": "c69cc385f74cfc658b2e3a00dd842ea84fe595a6ecdf9f9cda9b16049b6dc588",
     "THIRD_PARTY_NOTICES.md": "f53d69106bd47f5c23acf119a83d3adc61ddcdcaf4ec908a1cf4f6cee9e4f23c",
-    "licenses/tiktoken-LICENSE": "1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b"
+    "licenses/tiktoken-LICENSE": "1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b",
+    "engine-build.json": "11b5ea72a10d96bcdada6f846dddb98b8523d319a5cf21aa89d150f165e94700"
   },
   "generatedHashes": {
-    "package.json": "e1ce4e94cf7882d3dfb03117e2f4e5551876193f6884d202925c9644a293da13",
+    "package.json": "e255ff4d23e921de9bed8e058c64e57aed3e1bc6a8ed242cee52a716add2d69c",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8"
   }
 }
