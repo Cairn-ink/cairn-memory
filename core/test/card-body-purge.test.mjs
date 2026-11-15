@@ -175,6 +175,7 @@ test(`supersession erases the old Card bytes atomically: sealed=${sealed}, forge
   });
   const f = sealed ? await lineageFixture(t, { options: { model } }) : engineCardFixture(t, { model });
   const memories = seed(f), w = worker(f, model), first = (await w.pass()).built[0]; assert.ok(first);
+  const oldBody = rows(f).find(row => row.id === first.id).body;
   // Admission returns metadata; retain canonical text before the rebuild.
   const markerSource = f.db.prepare('SELECT deleted,currentness,content FROM memories WHERE id=?').get(memories[0].id);
   assert.ok(markerSource.content.includes(marker));
@@ -205,6 +206,7 @@ test(`supersession erases the old Card bytes atomically: sealed=${sealed}, forge
   assert.equal(next.built[0].clusterKey, first.clusterKey);
   assert.equal(next.deleted, 1, 'the rebuild counts the body it purged in this pass');
   const current = rows(f).find(row => row.id === next.built[0].id);
+  const newBody = current.body;
   assert.equal(current.state, 'confirmed'); assert.ok(current.body.includes(marker));
   const source = f.db.prepare('SELECT deleted,currentness,content FROM memories WHERE id=?').get(memories[0].id);
   assert.deepEqual({ ...source }, { deleted: 0, currentness: 'current', content: markerSource.content });
@@ -212,6 +214,7 @@ test(`supersession erases the old Card bytes atomically: sealed=${sealed}, forge
   assertNoMarker(f, ns, current.id);
   const old = rows(f).find(row => row.id === first.id);
   assert.equal(old.state, 'deleted'); assert.equal(old.title, null); assert.equal(old.body, null);
+  assert.notEqual(oldBody, newBody);
   for (const table of ['card_bindings', 'card_memory_bindings', 'card_raw_bindings']) {
     if (f.db.prepare("SELECT 1 FROM sqlite_master WHERE name=?").get(table))
       assert.equal(f.db.prepare(`SELECT count(*) n FROM ${table} WHERE card_id=?`).get(first.id).n, 0);

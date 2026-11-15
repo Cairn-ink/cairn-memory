@@ -29,6 +29,8 @@ Before evaluating triggers, a cluster larger than 12 Memories is sorted by event
 date, with memory ID breaking ties, and divided into consecutive parts of 12.
 Each part has key `<cluster key>#<part index>` (zero-based); clusters of 12 or
 fewer keep their key. Similarity-key reuse and exact-source carry apply per part.
+Past 12 Memories in a topic, new Memories join a Card in groups: a tail becomes a
+Card at 5 sources; until then they appear as individual Memories.
 Each part needs one of three conditions plus budget pressure: at least
 8 memories, 3 conversations and 14 days; a chain of at least 3 supersedes or
 contradicts edges on one slot; or at least 5 current Memories, whatever their

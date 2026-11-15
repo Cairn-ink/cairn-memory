@@ -116,6 +116,9 @@ release.
 
 ## Unreleased — engine-generated topic Cards
 
+- Past 12 Memories in a topic, new Memories join a Card in groups: a tail becomes
+  a Card at 5 sources; until then they appear as individual Memories.
+
 - Engine Cards bundle dated verbatim Memories within 850 body tokens and divide
   large topics into event-ordered parts of at most 12 with independent reuse and
   rebuilds. A Card citing a Memory in the read's item window takes that hit's
