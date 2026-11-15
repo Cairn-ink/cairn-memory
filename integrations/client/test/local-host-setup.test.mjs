@@ -12,6 +12,12 @@ import { initLocalRawStore } from '../raw/local-setup-init.mjs';
 import { DatabaseSync } from 'node:sqlite';
 const { createLocalRawHost } = await import('../raw/local-host.mjs');
 const { lazyFixture } = await import('./fixtures/local-setup-workspace.mjs');
+const diagHook = async (f,label,event,changes,expected) => {
+  const outcome = await f.hook(event,changes);
+  console.log('DIAG '+JSON.stringify({label,event,outcome,platform:process.platform,node:process.version}));
+  if (event === 'Stop' && outcome.status !== expected) console.log('DIAG '+JSON.stringify({label,event:'Stop-retry',outcome:await f.hook(event,changes)}));
+  return outcome;
+};
 import { localPlainPort } from '../../../core/testing/raw-capture-fixtures.mjs';
 import { searchFixture } from '../../../core/testing/raw-search-fixtures.mjs';
 import { installRawSearchTestClock } from '../../../core/testing/raw-search-clock.mjs';
@@ -22,12 +28,12 @@ test(`lazy ${client} ${action} ${match} fence survives off/on in current and his
   installRawSearchTestClock(t);
   const f = await lazyFixture(t,client),namespace = f.request.namespace; await f.hook();
   const now = Date.now(),at = new Date(now-(match === 'named' ? 86400000:0)).toISOString();
-  f.append('copper fenced session',{at}); assert.equal((await f.hook('Stop')).status,'progress');
+  f.append('copper fenced session',{at}); assert.equal((await diagHook(f,`lazy ${client} ${action} ${match}`+' first','Stop',undefined,'progress')).status,'progress');
   const selected = f.cursor(),controlPath = join(f.request.sourceRoot,'control.jsonl'),controlId = '22222222-2222-4222-8222-222222222222';
   writeFileSync(controlPath,client === 'codex' ? JSON.stringify({type:'session_meta',payload:{id:controlId,cli_version:'0.162.0',history_mode:'paginated',source:'cli',originator:'codex-tui'}})+'\n':'',{mode:0o600});
   const changes = {session_id:controlId,transcript_path:controlPath},controlAt = new Date(now-172800000).toISOString();
-  assert.equal((await f.hook('SessionStart',changes)).status,'ready');
-  f.append('copper unfenced control',{path:controlPath,at:controlAt,nativeSessionId:controlId}); assert.equal((await f.hook('Stop',changes)).status,'progress');
+  assert.equal((await diagHook(f,`lazy ${client} ${action} ${match}`+' control','SessionStart',changes,'ready')).status,'ready');
+  f.append('copper unfenced control',{path:controlPath,at:controlAt,nativeSessionId:controlId}); assert.equal((await diagHook(f,`lazy ${client} ${action} ${match}`+' control','Stop',changes,'progress')).status,'progress');
   const privacyCore = openMemoryCore({path:f.request.databasePath,raw:true,rawSearch:false}); f.workspace.defer(()=>privacyCore.close());
   const memory = ok(privacyCore.admit({namespace,memory:{content:'Synthetic private fact',kind:'fact'},receipts:[{client,
     sessionId:match === 'named' ? selected.wireSessionId:'explicit-unrelated-tool',eventId:'memory-event',role:'user',excerpt:'Synthetic private fact'}]})).memory;
@@ -46,7 +52,7 @@ test(`lazy ${client} ${action} ${match} fence survives off/on in current and his
   for (const event of (client === 'codex' ? ['Stop','UserPromptSubmit','SessionStart']:['Stop','SessionStart'])) assert.equal((await f.hook(event)).status,'blocked');
   assert.deepEqual(privacy(),protectedRows); assert.equal(db.prepare('SELECT count(*) n FROM raw_parts WHERE sealed IS NOT NULL').get().n,parts);
   assert.equal((await f.hook('Stop',changes)).status,'ready');
-  f.append('copper control resumed',{path:controlPath,at:controlAt,nativeSessionId:controlId}); assert.equal((await f.hook('Stop',changes)).status,'progress');
+  f.append('copper control resumed',{path:controlPath,at:controlAt,nativeSessionId:controlId}); assert.equal((await diagHook(f,`lazy ${client} ${action} ${match}`+' control resumed','Stop',changes,'progress')).status,'progress');
   assert.ok(db.prepare('SELECT sealed FROM raw_parts WHERE sealed IS NOT NULL').all()
     .every(row=>!Buffer.from(row.sealed).toString('utf8').includes('copper paused')),'no off-period content is stored, even behind a fence');
   // Advance the indexed discovery cadence before requiring the newly resumed
@@ -325,13 +331,13 @@ for (const nested of [false,true]) test(`Claude delayed transcript (${nested?'mi
   const path=nested?join(f.request.sourceRoot,'new','nested','session.jsonl'):f.sourcePath;
   if(!nested)unlinkSync(path);
   const changes={transcript_path:path};
-  assert.equal((await f.hook('SessionStart',changes)).status,'ready');
+  assert.equal((await diagHook(f,`delayed ${nested?'missing parents':'missing file'}`,'SessionStart',changes,'ready')).status,'ready');
   const starts=join(f.request.installationDirectory,'state','starts'),names=readdirSync(starts);
   assert.equal(names.length,1); assert.equal(lstatSync(join(starts,names[0])).mode&0o777,0o600);
   assert.doesNotMatch(readFileSync(join(starts,names[0]),'utf8'),/session\.jsonl|synthetic_source_secret/);
   if(nested)mkdirSync(join(f.request.sourceRoot,'new','nested'),{recursive:true,mode:0o700});
   writeFileSync(path,'',{mode:0o600});f.append('first copper turn',{path});f.append('second copper turn',{path});
-  assert.equal((await f.hook('Stop',changes)).status,'progress');
+  assert.equal((await diagHook(f,`delayed ${nested?'missing parents':'missing file'}`,'Stop',changes,'progress')).status,'progress');
   const db=new DatabaseSync(f.request.databasePath);t.after(()=>db.close());
   assert.equal(db.prepare('SELECT count(*) n FROM raw_messages').get().n,2);
   assert.deepEqual(db.prepare('SELECT sealed FROM raw_parts ORDER BY rowid').all().map(row=>Buffer.from(row.sealed).toString()),['first copper turn','second copper turn']);

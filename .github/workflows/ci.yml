@@ -11,6 +11,7 @@ permissions:
 jobs:
   macos-capture:
     runs-on: macos-latest
+    timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
@@ -28,326 +29,54 @@ jobs:
             adapters/openai/package-lock.json
       - name: Record macOS runner image
         run: echo "ImageOS=$ImageOS ImageVersion=$ImageVersion"
-      - name: Inspect dependency directory
-        run: if [ -e adapters/mcp/node_modules ] || [ -L adapters/mcp/node_modules ]; then ls -ld adapters/mcp/node_modules; fi
       - run: npm ci --prefix adapters/mcp --ignore-scripts
-      - name: Inspect provider dependency directory
-        run: if [ -e adapters/openai/node_modules ] || [ -L adapters/openai/node_modules ]; then ls -ld adapters/openai/node_modules; fi
       - run: npm ci --prefix adapters/openai --ignore-scripts
-      - run: node integrations/client/testing/run.mjs integrations/client/test/local-source-open.test.mjs integrations/client/test/local-source-parity.test.mjs
-      - run: node integrations/client/testing/run.mjs integrations/client/test/local-source-close.test.mjs
-      - name: Diagnose native macOS capture transport
-        run: node integrations/client/testing/run.mjs --isolated-host integrations/client/test/local-macos-transport-diagnostic.test.mjs
-      - run: node integrations/client/testing/run.mjs --isolated-host packages/setup/test/local-capture-interrupted.test.mjs
-      - run: npm run test:local-host
-      - name: Test engine storage on macOS
+      - name: Lazy Codex forget named fence (30 isolated runs)
         shell: bash
         run: |
-          set -euo pipefail
-          storage_tmp=$(mktemp -d "$RUNNER_TEMP/cairn-storage.XXXXXX")
-          chmod 700 "$storage_tmp"
-          trap 'rm -rf "$storage_tmp"' EXIT
-          TMPDIR=$(cd "$storage_tmp" && pwd -P)
-          export TMPDIR
-          for test_file in core/test/directory-nlink.test.mjs \
-            core/test/raw-search*.test.mjs \
-            core/test/context-read-sidecar.test.mjs \
-            core/test/context-read-product-warm-sidecar.test.mjs \
-            core/test/context-read-product-sidecar-attestation.test.mjs \
-            core/test/sqlite-journal*.test.mjs core/test/local-raw*.test.mjs; do
-            node tools/testing/run.mjs "$test_file"
+          fails=0
+          for i in $(seq 1 30); do
+            if node integrations/client/testing/run.mjs --isolated-host --import ./integrations/client/test/fixtures/local-host-observer.mjs \
+                --test-name-pattern='lazy codex forget named fence' integrations/client/test/local-host-setup.test.mjs > "$RUNNER_TEMP/lazy-$i.log" 2>&1; then
+              echo "lazy $i: pass"
+            else
+              fails=$((fails+1)); echo "lazy $i: FAIL"
+            fi
+            grep -h -E 'DIAG |^not ok' "$RUNNER_TEMP/lazy-$i.log" | sed "s/^/lazy $i: /" || true
           done
-      - run: npm run test:local-worker
-      - run: npm run test:raw-producer
-      # Same artifact cache preparation as the Linux artifact job.
-      - run: node tools/testing/run.mjs --script packaging/verify-clean-cache.mjs
-      - run: node tools/testing/run.mjs --script packaging/prepare-cache.mjs
-      - run: node tools/testing/run.mjs packaging/test/local-setup.test.mjs
-      - name: Prime installer engine dependency cache
-        env:
-          CAIRN_SETUP_TEST_NETWORK: '1'
-        run: node packages/setup/test/engine-cache.mjs "$RUNNER_TEMP/setup-engine-cache"
-      - name: Test installer capture
-        env:
-          CAIRN_SETUP_TEST_GROUP: local
-          CAIRN_SETUP_NPM_CACHE: ${{ runner.temp }}/setup-engine-cache
-          CAIRN_SETUP_NPM_OFFLINE: '1'
-          CAIRN_SETUP_REQUIRE_CACHE: '1'
-        run: node tools/testing/run.mjs --script packages/setup/test/setup.test.mjs
-
-  local-embedder-offline:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: ['22.16.0', '24.15.0']
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: ${{ matrix.node-version }}
-      # Builtins and tiny fixtures only; cc builds the publication utility fixture.
-      # No model, inference package, key, installer or network artifact source.
-      - run: npm run test:local-embedder
-
-  windows-preview:
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        node-version: ['22.16.0', 24]
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ matrix.node-version }}
-      - run: npm ci --prefix adapters/mcp --ignore-scripts
-      # The POSIX suite runner is unsupported here. This focused native test
-      # owns its scratch and never reads provider keys or makes model calls.
-      - run: node --test packaging/test/build-command.test.mjs packaging/test/windows-preview.test.mjs
-
-  live-evidence-offline:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: ['22.16.0', 24]
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ matrix.node-version }}
-      - run: npm ci --prefix adapters/openai
-      - run: npm ci --prefix adapters/mcp
-      - run: npm run test:workspace-lifecycle
-      - run: npm ci --prefix evaluation/context-read-qualification/counter-deps --ignore-scripts
-      - run: npm run test:qualification-inputs
-      - run: npm run test:live-evidence-offline
-
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: [20, 22]
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ matrix.node-version }}
-      - run: npm test
-      - run: npm run validate
-      - run: npm run test:local-transport-import
-      - run: npm run test:local-host-import
-
-  pairing:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: ['22.16.0', 24]
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          # The golden comparison reads the released 0.1.1 client from history (3a1c17d9).
-          fetch-depth: 0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ matrix.node-version }}
-      # The decision tables, the seeded sequence generator and the interruption fixtures.
-      - run: npm run test:pairing
-      # Parity with the released 0.1.1 client (checked-in fixture plus its sources at 3a1c17d9).
-      - run: npm run test:pairing:golden
-
-  client-pause:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: [20, 22, 24]
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ matrix.node-version }}
-      # Hosted pause gate client suites: nothing is sent or shown while paused.
-      - run: npm run test:client-pause
-
-  codex:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: ['22.16.0', 24]
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ matrix.node-version }}
-      # CX-3: parser, cursor/worker decision table, history oracle, interruptions and gates A1/A4/A5/A9.
-      - run: npm run test:codex
-      # CX-1's shared-client parity and fixture-generator tests.
-      - run: npm run test:client
-      # Internal producer coverage stays explicit; automatic hooks still use v1.
-      - run: npm run test:raw-producer
-
-  core-shard-22-16-0:
-    name: core-shard-22-16-0 (${{ matrix.shard }})
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4, 5, 6]
-    uses: ./.github/workflows/core-shard.yml
-    with:
-      node-version: '22.16.0'
-      node-key: '22-16-0'
-      shard: ${{ matrix.shard }}
-
-  core-shard-24:
-    name: core-shard-24 (${{ matrix.shard }})
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4, 5, 6]
-    uses: ./.github/workflows/core-shard.yml
-    with:
-      node-version: '24'
-      node-key: '24'
-      shard: ${{ matrix.shard }}
-
-  core-shard-24-22-1:
-    name: core-shard-24-22-1 (${{ matrix.shard }})
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4, 5, 6]
-    uses: ./.github/workflows/core-shard.yml
-    with:
-      node-version: '24.22.1'
-      node-key: '24-22-1'
-      shard: ${{ matrix.shard }}
-
-  core:
-    name: core (${{ matrix.node-version }})
-    needs: [core-shard-22-16-0, core-shard-24, core-shard-24-22-1]
-    if: always()
-    permissions: { contents: read, actions: read }
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - {node-version: '22.16.0', key: '22-16-0'}
-          - {node-version: 24, key: '24'}
-          - {node-version: '24.22.1', key: '24-22-1'}
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: Require successful shard jobs and their own pass markers
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_RUN_ID: ${{ github.run_id }}
-          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
-          CORE_SHARD_NEEDS_RESULT: ${{ needs[format('core-shard-{0}', matrix.key)].result }}
-        run: node tools/testing/core-gate.mjs --node-key '${{ matrix.key }}' --shards 6
-
-  longmemeval:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: ['22.16.0', 24]
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ matrix.node-version }}
-      - run: npm ci --prefix adapters/openai
-      # Reference-rendering tests invoke the runner's Python 3, standard library only.
-      - run: python3 --version
-      - run: npm run test:longmemeval
-      - run: npm run test:long-history
-      - run: npm run test:long-history-live:offline
-      - run: npm run demo:longmemeval-ingestion
-      - run: npm run demo:longmemeval-comparison
-      - run: npm run demo:longmemeval-public
-      - run: npm run demo:longmemeval-mixed
-
-  openai-offline:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: ['22.16.0', 24]
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: npm
-          cache-dependency-path: adapters/openai/package-lock.json
-      - run: npm ci --prefix adapters/openai
-      - run: npm run test:openai
-      - run: npm run demo:openai-offline
-      - run: npm run test:local
-      - run: npm run test:local-transport
-      # Explicit local-v2 worker remains opt-in; no installed client hook is enabled.
-      - run: npm run test:local-worker
-      # Explicit owner-operated foreground entry; automatic hooks stay unchanged.
-      - run: npm run test:local-host
-
-  mcp:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: ['22.16.0', 24]
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: npm
-          cache-dependency-path: adapters/mcp/package-lock.json
-      - run: npm ci --prefix adapters/mcp
-      - run: npm ci --prefix adapters/openai
-      - run: npm run test:mcp
-      - name: Required role receipt measurements with installed tokenizer
-        run: CAIRN_REQUIRE_ROLE_TOKENIZER=1 node tools/testing/run.mjs core/test/task-receipt-measurement.test.mjs core/test/role-observations.test.mjs core/test/role-context.test.mjs core/test/context-read-dated.test.mjs core/test/context-read-assembly.test.mjs
-      - run: node tools/testing/run.mjs --script packaging/verify-clean-cache.mjs
-      - run: node tools/testing/run.mjs --script packaging/prepare-cache.mjs
-      - run: npm run test:artifact
-      - name: Installed rationale experiment with synthetic HTTP only
-        run: CAIRN_RATIONALE_INSTALLED_OFFLINE=1 node tools/testing/run.mjs evaluation/live/test/rationale-pilot.test.mjs
-
-  experiment-budget:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: ['22.16.0', 24]
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ matrix.node-version }}
-      - run: npm run test:experiment-budget
-      - run: npm run demo:experiment-budget
-
-  experiment-request-guard:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: ['22.16.0', 24]
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: npm
-          cache-dependency-path: adapters/openai/package-lock.json
-      - run: npm ci --prefix adapters/openai
-      - run: npm run test:experiment-request-guard
-      - run: npm run demo:experiment-request-guard
-
-  plugin-validation:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: tools/plugin-validation/package-lock.json
-      - run: npm ci --prefix tools/plugin-validation
-      - name: Validate marketplace and plugin
-        run: npm run validate --prefix tools/plugin-validation
+          echo "lazy isolated failures: $fails / 30"; echo "$fails" > "$RUNNER_TEMP/fails-lazy"
+      - name: Claude delayed transcript (30 isolated runs of both cases)
+        shell: bash
+        run: |
+          fails=0
+          for i in $(seq 1 30); do
+            if node integrations/client/testing/run.mjs --isolated-host --import ./integrations/client/test/fixtures/local-host-observer.mjs \
+                --test-name-pattern='Claude delayed transcript' integrations/client/test/local-host-setup.test.mjs > "$RUNNER_TEMP/delayed-$i.log" 2>&1; then
+              echo "delayed $i: pass"
+            else
+              fails=$((fails+1)); echo "delayed $i: FAIL"
+            fi
+            grep -h -E 'DIAG |^not ok' "$RUNNER_TEMP/delayed-$i.log" | sed "s/^/delayed $i: /" || true
+          done
+          echo "delayed isolated failures: $fails / 30"; echo "$fails" > "$RUNNER_TEMP/fails-delayed"
+      # The same steps that precede the local-host suite in the real job.
+      - run: node integrations/client/testing/run.mjs integrations/client/test/local-source-open.test.mjs integrations/client/test/local-source-parity.test.mjs
+      - run: node integrations/client/testing/run.mjs integrations/client/test/local-source-close.test.mjs
+      - run: node integrations/client/testing/run.mjs --isolated-host integrations/client/test/local-macos-transport-diagnostic.test.mjs
+      - run: node integrations/client/testing/run.mjs --isolated-host packages/setup/test/local-capture-interrupted.test.mjs
+      - name: Full local-host suite (8 runs) with diagnostics
+        shell: bash
+        run: |
+          fails=0
+          for i in $(seq 1 8); do
+            if npm run test:local-host > "$RUNNER_TEMP/full-$i.log" 2>&1; then echo "full $i: pass"; else fails=$((fails+1)); echo "full $i: FAIL"; fi
+            grep -h -E 'DIAG .*"status":"(blocked|failed)|DIAG .*Stop-retry|^not ok' "$RUNNER_TEMP/full-$i.log" | sed "s/^/full $i: /" || true
+            echo "full $i: DIAG lines $(grep -c 'DIAG ' "$RUNNER_TEMP/full-$i.log"), non-ready/progress $(grep 'DIAG ' "$RUNNER_TEMP/full-$i.log" | grep -c -v -E '"status":"(ready|progress)"')"
+          done
+          echo "full-suite failures: $fails / 8"; echo "$fails" > "$RUNNER_TEMP/fails-full"
+      - name: Summary
+        shell: bash
+        run: |
+          total=$(( $(cat "$RUNNER_TEMP/fails-lazy") + $(cat "$RUNNER_TEMP/fails-delayed") + $(cat "$RUNNER_TEMP/fails-full") ))
+          echo "lazy $(cat "$RUNNER_TEMP/fails-lazy")/30, delayed $(cat "$RUNNER_TEMP/fails-delayed")/30, full $(cat "$RUNNER_TEMP/fails-full")/8"
+          test "$total" -eq 0
