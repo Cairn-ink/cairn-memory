@@ -1272,7 +1272,7 @@ test('public sibling forget withholds a directly inserted fixture receipt on eve
   assert.equal(hasId(values.session, f.memory.id), false, 'session withholds the short Memory entirely');
   assert.equal(JSON.stringify(values.session).includes(f.memory.content), false, 'session withholds the short Memory content');
   assert.deepEqual(values.session.groups.background.items.map(item => ({ id: item.memory.id, content: item.memory.content })),
-    [{ id: f.independent.id, content: f.independent.content }], 'session still delivers the independent survivor');
+    [{ id: f.independent.id, content: 'Synthetic prepared independent wording' }], 'session still delivers the independent survivor');
   assert.equal(values.session.groups.background.returned, 1);
   assert.equal(values.session.groups.background.status, 'complete');
   absent(values.session, [f.sibling.content, f.memory.content, denied.excerpt, denied.id, siblingRow.id,
