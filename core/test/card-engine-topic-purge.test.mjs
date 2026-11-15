@@ -104,6 +104,21 @@ test(`A2: filed tombstone ${suffix || '(bare)'} debounces #0, #1 and the eligibl
   }
   assert.deepEqual(new Set(built.map(card => card.clusterKey)), new Set([0, 1, 2].map(i => `${cluster.key}#${i}`)));
   assert.deepEqual(built.map(card => card.sourceRevisions.length).sort((a, b) => b - a), [12, 12, 5]);
+  // Shift every published part again. Completing one replacement must not
+  // impose a fresh topic cooldown on the two still-stale sibling parts.
+  const added = f.add('Orion newly dated earlier synthetic milestone.', -1, 99);
+  ok(f.core.applyPlacement({ namespace: ns, expectedIndexRevision: ok(f.core.map({ namespace: ns })).indexRevision,
+    expectedMemoryRevisions: [{ memoryId: added.id, revision: added.revision }],
+    proposal: { items: [{ memoryId: added.id, parentIds: [filed.mocId] }] } }));
+  assert.equal((await w.pass()).modelCalls, 0, 'all shifted parts first take the ordinary stale cooldown');
+  w.advance(ENGINE_CARD_LIMITS.debounceMs + 1);
+  const replacements = [];
+  for (let i = 0; i < 3; i++) {
+    const pass = await w.pass();
+    assert.equal(pass.modelCalls, 1, 'a completed supersession must not debounce sibling replacements');
+    replacements.push(...pass.built);
+  }
+  assert.deepEqual(new Set(replacements.map(card => card.clusterKey)), new Set(built.map(card => card.clusterKey)));
 });
 
 test('A3: a blocked destination cannot be carried while an unrelated topic still builds', async t => {
