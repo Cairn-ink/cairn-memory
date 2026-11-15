@@ -49,12 +49,12 @@ test('default openMemoryCore close settles without waiting forever on Raw provid
     t.diagnostic(JSON.stringify({abortObserved:aborted,closeSettledWithin2500ms:closeBounded}));
     if(closeBounded) {
       const before=sidecarSnapshot(path);
-      // Detachment must keep the unsettled provider's concurrency reservation.
+      // Detachment keeps the unsettled maintenance slot reserved until settlement.
       const dispatch=contextBudget({budgetConfigured:true,embedder,policy:{family:'hosted',maxRequests:10,maxConcurrent:1,maxUsd:1,estimateUsd:()=>0}});
-      await assert.rejects(dispatch(embedder,['synthetic query'],{signal:new AbortController().signal,deadlineAt:performance.now()+5000,guard(){}}),{code:'budget_denied'});
+      await assert.rejects(dispatch(embedder,['synthetic maintenance'],{budgetClass:'maintenance',signal:new AbortController().signal,deadlineAt:performance.now()+5000,guard(){}}),{code:'budget_denied'});
       release();await active;await closing;await delay(30);
       assert.equal(sidecarSnapshot(path),before,'late provider result wrote after close');
-      await dispatch(embedder,['synthetic query'],{signal:new AbortController().signal,deadlineAt:performance.now()+5000,guard(){}});
+      await dispatch(embedder,['synthetic maintenance'],{budgetClass:'maintenance',signal:new AbortController().signal,deadlineAt:performance.now()+5000,guard(){}});
     } else {release();await active;await closing;}
     assert.equal(aborted,true,'provider must be aborted before shutdown joins');
     assert.equal(closeBounded,true,'default core.close still waits for the cancelled provider promise');

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
-import { contextBudget } from '../context-read-budget.mjs';
+import { contextBudget, withContextReadBudgetScope } from '../context-read-budget.mjs';
 import { contextOptions } from '../context-read-input.mjs';
 
 function dispatcher(port, overrides = {}) {
@@ -40,7 +40,7 @@ test('R04/R10 review 1: active operations are shared across policy profiles unti
   const first = dispatcher(embedder)();
   try {
     await assert.rejects(dispatcher(embedder, { maxRequests: 9, maxUsd: 9 })(), { code: 'budget_denied' });
-    await dispatcher(embedder, { maxRequests: 9, maxUsd: 9, maxConcurrent: 2 })();
+    await withContextReadBudgetScope({}, () => dispatcher(embedder, { maxRequests: 9, maxUsd: 9, maxConcurrent: 2 })());
     await assert.rejects(dispatcher(embedder, { maxRequests: 9, maxUsd: 9 })(), { code: 'budget_denied' });
     assert.equal(calls, 2);
   } finally { release(); await first; }

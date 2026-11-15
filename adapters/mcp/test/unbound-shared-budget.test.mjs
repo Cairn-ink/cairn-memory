@@ -45,8 +45,8 @@ for (const mode of ['unbound', 'runtime', 'dispatcher']) for (const cap of ['req
   t.mock.method(globalThis, 'clearTimeout', token => { if (!timers.has(token)) nativeClear(token); });
   const options = { path, namespace: ns, raw: false, contextCounter: counter,
     ...((cap === 'concurrency' || mode === 'unbound') ? { privateCards: 'local-v1' } : {}),
-    contextEmbedding: { embedder, policy: { family: 'hosted', maxRequests: cap === 'requests' ? 1 : 100,
-      maxUsd: cap === 'usd' ? 1 : 100, maxConcurrent: 1, estimateUsd: () => 1 } } };
+    contextEmbedding: { embedder, policy: { family: 'hosted', maxRequests: cap === 'requests' ? 2 : 100,
+      maxUsd: cap === 'usd' ? 2 : 100, maxConcurrent: 1, estimateUsd: () => 1 } } };
   const dispatcher = mode === 'dispatcher' ? createCommitDispatcher({ strict: true }) : null;
   const server = mode === 'unbound' ? createCairnServer(options)
     : (dispatcher ? dispatcher.open(() => createLocalCairnRuntime(options, { dispatcher }))
@@ -55,9 +55,8 @@ for (const mode of ['unbound', 'runtime', 'dispatcher']) for (const cap of ['req
   t.after(async () => { release.resolve(); await client.close(); await server.close(); a.destroy(); b.destroy(); });
   await server.connect(new StdioServerTransport(a, a));
   await client.connect(new StdioServerTransport(b, b));
-  // Coordinator 11-14 (A): main's unbound upkeep maintains the combined
-  // projection. Exercise the same ready projection so the query reaches the
-  // paid dispatch guard; all original send-count and denial assertions remain.
+  // The unbound upkeep maintains the combined projection. Exercise the same
+  // ready projection so the user read reaches the query-class dispatch guard.
   const types = mode === 'unbound' && cap !== 'concurrency' ? ['memory', 'card'] : ['memory'];
   if (cap !== 'concurrency') await context(client, { query: 'synthetic budget warm-up', types, intent: 'current', semantic: false });
   assert.ok(pending, 'the real unbound server armed maintenance');
@@ -70,8 +69,13 @@ for (const mode of ['unbound', 'runtime', 'dispatcher']) for (const cap of ['req
   try {
     const result = await context(client, { query: 'synthetic unique semantic budget query', types,
       intent: 'current', semantic: true, deadlineMs: 5000 });
-    assert.equal(sends, mode === 'unbound' ? 1 : 2, 'R2O3_UNBOUND_SHARED_BUDGET ' + mode + ' ' + cap);
-    assert.equal(result.diagnostics.candidates.channels.semantic.causes.includes('budget_denied'), mode === 'unbound',
+    assert.equal(sends, 2, 'R2O3_UNBOUND_SHARED_BUDGET ' + mode + ' ' + cap);
+    assert.equal(result.diagnostics.candidates.channels.semantic.causes.includes('budget_denied'), false,
       'R2O3_UNBOUND_SHARED_BUDGET ' + JSON.stringify(result.diagnostics));
+    if (cap !== 'concurrency') {
+      const exhausted = await context(client, { query: 'synthetic exhausted server budget', types, intent: 'current', semantic: true });
+      assert.equal(sends, 2);
+      assert.ok(exhausted.diagnostics.candidates.channels.semantic.causes.includes('budget_denied'));
+    }
   } finally { release.resolve(); }
 });

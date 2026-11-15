@@ -4,7 +4,7 @@ Cairn.ink Memory 安裝程式 <version>
 ? 記憶要存在哪裡？(1/2)
 記憶留在這台電腦，安裝程式不會傳送你的資料。
 若 Cairn MCP server 的環境有 OPENAI_API_KEY，語意搜尋會把記憶與搜尋文字傳給
-  OpenAI，每次 server 執行的預估費用上限為 US$1。已保存的對話只有在你用
+  OpenAI，每個執行中的 Cairn server 每天預估上限約 US$1。已保存的對話只有在你用
   --raw-semantic（或明確設定 --context-embedder）啟用後才會傳送。要讓所有資料都
   留在這台電腦，請不要提供金鑰給 server。--no-context-semantic 只會關閉
   embeddings；有金鑰時，回想和其他模型功能仍會把記憶文字傳給 OpenAI。
@@ -20,8 +20,8 @@ Claude Code 本機擷取預設開啟，會把這台電腦上該工具的對話�
   對話，先用 raw list，再用 raw delete <conversation-id> 預覽；加上 --yes
   才會刪除。關閉方式：setup --local --no-capture 或 config --local-capture
   off；重新開啟：config --local-capture on。若 Cairn MCP server 的環境有
-  OPENAI_API_KEY，語意搜尋會把記憶與搜尋文字傳給 OpenAI，每次 server
-  執行的預估費用上限為 US$1。已保存的對話只有在你用 --raw-semantic（或明確設定
+  OPENAI_API_KEY，語意搜尋會把記憶與搜尋文字傳給 OpenAI，每個執行中的 Cairn
+  server 每天預估上限約 US$1。已保存的對話只有在你用 --raw-semantic（或明確設定
   --context-embedder）啟用後才會傳送。要讓所有資料都留在這台電腦，請不要提供金鑰
   給 server。--no-context-semantic 只會關閉
   embeddings；有金鑰時，回想和其他模型功能仍會把記憶文字傳給 OpenAI。
@@ -33,8 +33,8 @@ Codex 本機擷取預設開啟，會把這台電腦上該工具的對話文字�
   對話，先用 raw list，再用 raw delete <conversation-id> 預覽；加上 --yes
   才會刪除。關閉方式：setup --local --no-capture 或 config --local-capture
   off；重新開啟：config --local-capture on。若 Cairn MCP server 的環境有
-  OPENAI_API_KEY，語意搜尋會把記憶與搜尋文字傳給 OpenAI，每次 server
-  執行的預估費用上限為 US$1。已保存的對話只有在你用 --raw-semantic（或明確設定
+  OPENAI_API_KEY，語意搜尋會把記憶與搜尋文字傳給 OpenAI，每個執行中的 Cairn
+  server 每天預估上限約 US$1。已保存的對話只有在你用 --raw-semantic（或明確設定
   --context-embedder）啟用後才會傳送。要讓所有資料都留在這台電腦，請不要提供金鑰
   給 server。--no-context-semantic 只會關閉
   embeddings；有金鑰時，回想和其他模型功能仍會把記憶文字傳給 OpenAI。
