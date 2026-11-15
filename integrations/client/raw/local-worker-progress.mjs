@@ -8,6 +8,7 @@ import { validateCursor, writeCursor } from './local-worker-state.mjs';
 import { RECORD_LIMIT, openWorkerSource, producerInput, producerOptions, sourceSize, verifyCursorSource, anchor, sourceReason } from './local-worker-source.mjs';
 
 const clone = value => structuredClone(value);
+const DISPATCH_LIMIT = 32;
 const project = options => options.authority.namespace.projectId || null;
 const projection = pending => {
   const { sessionId, messageId, projectId, occurredAt, ...opaque } = pending;
@@ -55,7 +56,7 @@ export async function runProgress({ options,identity,context,opened,cursor,opera
   const availableProof = () => bytes.remaining >= range.end-range.start+(options.authority.client === 'codex' ? 65537 : 0)+8192;
   try {
     if (cursor.blockedReason) return finish('blocked',cursor.blockedReason,true);
-    while (counts.completedRecords < 64 && counts.dispatchedParts < 32) {
+    while (counts.completedRecords < 64 && counts.dispatchedParts < DISPATCH_LIMIT) {
       operation.check();
       if (!selected) {
         if (cursor.pending) {
@@ -128,7 +129,7 @@ export async function runProgress({ options,identity,context,opened,cursor,opera
           let reason = error.reason === 'cancelled' || error.reason === 'work_limit' ? error.reason : uncertain ? 'uncertain' : 'unavailable';
           let stopped = false;
           try { operation.check(); } catch (stop) { stopped = true; reason = stop.reason; }
-          if (attempt === 0 && !retried && !uncertain && !stopped && !['cancelled','work_limit'].includes(reason) && operation.remaining() >= 3000) {
+          if (attempt === 0 && !retried && counts.dispatchedParts < DISPATCH_LIMIT && !uncertain && !stopped && !['cancelled','work_limit'].includes(reason) && operation.remaining() >= 3000) {
             retried = true; continue;
           }
           const next = clone(cursor);

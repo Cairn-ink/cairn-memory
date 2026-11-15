@@ -56,6 +56,31 @@ test('one definite failure retries the same frozen batch with a second durable d
   assert.equal(f.cursor().offset, statSync(f.sourcePath).size); assert.equal(f.cursor().issuedOrdinal, 1);
 });
 
+test('a definite failure on transport call 32 cannot retry beyond the hook ceiling', async t => {
+  const rows = Array.from({ length: 32 }, (_, index) => ({ ...claude(`synthetic row ${index}`), uuid: `synthetic-message-${index}` }));
+  const { f, worker } = await setup(t, { rows });
+  let calls = 0, failedProjection;
+  useCapture(async request => {
+    calls++;
+    if (calls === 32) {
+      failedProjection = f.cursor().pending.projection;
+      throw new LocalCaptureTransportError(false, 'probe');
+    }
+    return complete(request);
+  });
+  const result = await worker.run(f.context), cursor = f.cursor();
+  assert.equal(calls, 32); assert.equal(result.dispatchedParts, 32);
+  assert.equal(result.status, 'blocked'); assert.equal(result.reason, 'unavailable');
+  assert.equal(result.completedRecords, 31); assert.equal(result.completedParts, 31);
+  assert.equal(result.savedParts, 31); assert.equal(result.skippedParts, 0);
+  assert.equal(result.hasPending, true); assert.equal(result.remainingWork, true);
+  assert.equal(cursor.offset, Buffer.byteLength(rows.slice(0, 31).map(JSON.stringify).join('\n') + '\n'));
+  assert.equal(cursor.issuedOrdinal, 32); assert.equal(cursor.blockedReason, null);
+  assert.deepEqual(cursor.pending.projection, failedProjection);
+  assert.equal(cursor.pending.state, 'unavailable'); assert.equal(cursor.pending.attempts, 1);
+  assert.equal(cursor.pending.nextEligibleAt, null); assert.ok(Number.isInteger(cursor.pending.lastAttemptAt));
+});
+
 test('an uncertain failure is never retried and preserves its cooldown', async t => {
   const { f, worker } = await setup(t); let calls = 0;
   useCapture(async () => { calls++; throw new LocalCaptureTransportError(true, 'child_exit'); });

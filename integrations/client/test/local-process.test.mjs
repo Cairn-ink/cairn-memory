@@ -25,7 +25,8 @@ test('an immediate successful version probe ignores stdin and needs no finish ev
   } finally { scope.close(); }
 });
 
-test('a capture child exiting zero without reading large stdin still fails', async t => {
+// Guard against applying probe stdin handling (ignore, no input or finish) to capture.
+test('capture rejects unread large stdin instead of inheriting probe stdin handling', async t => {
   const spawn = cp.spawn;
   let outcome, finished = false;
   t.mock.method(cp, 'spawn', function (executable, args, options) {
