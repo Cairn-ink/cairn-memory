@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { openMemoryCore } from '../index.mjs';
 import { migrateReceiptEventTime } from '../content-safety-migration.mjs';
@@ -12,7 +15,8 @@ import { interpretation } from '../testing/episode-capture-helpers.mjs';
 import { rationaleModel } from '../testing/rationale-model.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 
-// Standalone synthetic fixtures: no archived engine, git command or other test module.
+// Self-contained cases use only current production APIs and synthetic fixtures.
+// Only separately named base-parity cases may inspect or archive git history.
 const ns = { ownerId: 'synthetic', scope: 'personal', projectId: null };
 const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
 const support = id => ({ client: 'synthetic', sessionId: 'synthetic-session-' + id,
@@ -26,17 +30,32 @@ const failure = (result, needles) => {
   assert.deepEqual(result, { ok: false, error: { code: 'storage_error', retryable: false } });
   absent(result, needles);
 };
-const read = (f, group) => f.core.sessionStartContext({ namespace: ns,
-  groups: { nextSteps: false, procedural: group === 'procedural', ...(group === 'background' ? { background: true } : {}) },
-  maxTokens: 2000, maxChars: 8000,
-  ...(group === 'background' ? { backgroundBudget: { maxTokens: 2000, maxChars: 8000 } } : {}) });
+const deny = (f, ...needles) => { for (const needle of needles) f.tokenizer.needles.add(needle); };
+function read(f, group, core = f.core) {
+  const record = { texts: [], needles: [...f.tokenizer.needles] };
+  f.tokenizer.reads.push(record);
+  assert.equal(f.tokenizer.active, null);
+  f.tokenizer.active = record;
+  try {
+    return core.sessionStartContext({ namespace: ns,
+      groups: { nextSteps: false, procedural: group === 'procedural', ...(group === 'background' ? { background: true } : {}) },
+      maxTokens: 2000, maxChars: 8000,
+      ...(group === 'background' ? { backgroundBudget: { maxTokens: 2000, maxChars: 8000 } } : {}) });
+  } finally { f.tokenizer.active = null; }
+}
 
 async function fixture(t, layout) {
   t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-11-01T00:00:00.000Z') });
   const ws = createTestWorkspace(t, { prefix: 'shared-session-integrity-' });
   const path = join(ws.path, 'store.sqlite'), host = lineageHost();
+  const tokenizer = { reads: [], active: null, needles: new Set() };
   const model = { ...rationaleModel(), extract: () => ({ items: [] }),
-    interpretEpisode: interpretation, countTokens: () => 1 };
+    interpretEpisode: interpretation, countTokens: text => { tokenizer.active?.texts.push(text); return 1; } };
+  // Scan every recorded input outside the engine's callback error mapping.
+  t.after(() => {
+    for (const { texts, needles } of tokenizer.reads) for (const text of texts)
+      for (const needle of needles) assert.equal(text.includes(needle), false, 'tokenizer input excludes a withheld needle');
+  });
   // Match the production opener/seed/event-time migration; Card lineage stays off.
   const initial = openMemoryCore({ path, model, ...episodeOptions, ...(layout === 18 ? {} : {
     privateCards: { ...host.options, currentDependencies: { version: 'card-current-dependencies-v1' } },
@@ -65,7 +84,32 @@ async function fixture(t, layout) {
     assert.equal(control.card_lineage_revision, 0);
   }
   const core = openMemoryCore({ path, model, decisionReview: 'required-v1' }); ws.defer(() => core.close());
-  return { core, model, db, tick: () => t.mock.timers.tick(1) };
+  return { core, model, tokenizer, db, path, ws, tick: () => t.mock.timers.tick(1) };
+}
+
+// Same availability/visible-skip contract as shared-source-session-start.test.mjs.
+const baseRevision = 'b5146a53';
+const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
+function baseAvailable(t) {
+  if (spawnSync('git', ['cat-file', '-e', baseRevision + '^{commit}'],
+    { cwd: repositoryRoot, timeout: 30000 }).status !== 0) {
+    t.skip('base revision unavailable');
+    return false;
+  }
+  return true;
+}
+async function baseCore(f) {
+  const root = join(f.ws.path, 'base'); mkdirSync(root);
+  const archive = spawnSync('git', ['archive', baseRevision, 'core', 'plugins/cairn-memory/lib'], {
+    cwd: repositoryRoot, timeout: 30000, maxBuffer: 128 * 1024 * 1024,
+  });
+  assert.equal(archive.status, 0, String(archive.stderr)); assert.equal(archive.signal, null);
+  const unpack = spawnSync('tar', ['-xf', '-', '-C', root], { input: archive.stdout, timeout: 30000 });
+  assert.equal(unpack.status, 0, String(unpack.stderr)); assert.equal(unpack.signal, null);
+  const base = await import(pathToFileURL(join(root, 'core/index.mjs')).href);
+  const core = base.openMemoryCore({ path: f.path, model: f.model });
+  f.ws.defer(() => core.close());
+  return core;
 }
 function admit(f, content, kind, receipts = [support(content)]) {
   f.tick();
@@ -111,6 +155,7 @@ test(`unmarked corrupt ${group} receipt fails the whole session with the base co
   assert.deepEqual(ok(read(f, group)).groups[group].items.map(item => item.memory.id), [memory.id]);
   const needles = corrupt(f, rows(f, memory)[0]);
   assert.deepEqual(markers(f), [], 'corruption needs no suppression marker');
+  deny(f, memory.id, memory.content, ...needles);
   // 5aff2691: ok/empty/complete. Tag: source_unavailable. Base and fix: storage_error.
   failure(read(f, group), [memory.id, memory.content, ...needles]);
 });
@@ -126,6 +171,7 @@ test(`marker omission plus ${markedCorruption ? 'marked' : 'unmarked'} corrupt $
   assert.deepEqual(rows(f, memory), before, 'withholding leaves both receipt rows intact');
   assert.deepEqual(ok(read(f, group)).groups[group].items.map(item => item.memory.id), [survivor.id]);
   const needles = corrupt(f, before.find(row => row.excerpt === other.excerpt));
+  deny(f, memory.id, memory.content, ...denied, ...needles);
   // Even corruption inside the marker-hidden set must win. 5aff2691 hides it;
   // the tag refuses with source_unavailable; the base and fix use storage_error.
   failure(read(f, group), [memory.id, memory.content, ...denied, ...needles]);
@@ -141,7 +187,7 @@ test(`intact ${group} rows behind ${operation} markers stay absent beside a surv
   const expected = ok(f.core.get({ namespace: ns, memoryId: survivor.id }));
   assert.deepEqual(rows(f, memory), original, 'marker state does not corrupt the stored receipt');
   const needles = [memory.id, memory.content, ...original.map(row => row.id), ...denied];
-  f.model.countTokens = text => { absent(text, needles); return 1; };
+  deny(f, ...needles);
   const result = read(f, group), value = ok(result);
   const delivered = value.groups[group];
   assert.deepEqual({ ...delivered, items: delivered.items.map(item => item.memory.id) }, {
@@ -168,7 +214,45 @@ test(`corrupt thirteenth ${group} candidate stays outside source reads, layout $
   assert.equal(prior.budget_exhausted, true);
   assert.equal(prior.status, 'budget_exhausted');
   const needles = corrupt(f, rows(f, outside)[0]);
+  deny(f, outside.id, outside.content, ...needles.filter(needle => needle !== 'synthetic'));
   const result = read(f, group);
   assert.deepEqual(result, before, 'tag, previous fix and current fix share the twelve-row source-read bound');
   absent(result, [outside.id, outside.content, ...needles.filter(needle => needle !== 'synthetic')]);
+});
+
+for (const layout of [53, 18, 33]) for (const group of ['procedural', 'background'])
+test(`base parity: unmarked corrupt ${group} receipt fails the whole session, layout ${layout}`, async t => {
+  if (!baseAvailable(t)) return;
+  const f = await fixture(t, layout), address = support('unmarked-private-needle');
+  const memory = admit(f, 'Synthetic corrupt Memory needle', kindFor(group), [address]);
+  assert.deepEqual(markers(f), []);
+  const needles = [memory.id, memory.content, ...corrupt(f, rows(f, memory)[0])];
+  deny(f, ...needles);
+  const current = read(f, group);
+  failure(current, needles);
+  const base = await baseCore(f), expected = read(f, group, base);
+  failure(expected, needles);
+  assert.deepEqual(expected, current, 'the real base returns the same exact corruption envelope');
+});
+
+for (const layout of [53, 18, 33]) for (const group of ['procedural', 'background'])
+for (const markedCorruption of [false, true])
+test(`base parity: marker omission plus ${markedCorruption ? 'marked' : 'unmarked'} corrupt ${group} receipt fails, layout ${layout}`, async t => {
+  if (!baseAvailable(t)) return;
+  const f = await fixture(t, layout), shared = support('withheld-private-needle');
+  const other = markedCorruption ? { ...shared, excerpt: 'Synthetic alternate withheld support' } : support('corrupt-private-needle');
+  const memory = admit(f, 'Synthetic mixed integrity Memory needle', kindFor(group), [shared, other]);
+  const before = rows(f, memory), denied = withhold(f, 'forget', shared);
+  const survivor = admit(f, 'Synthetic intact companion', kindFor(group));
+  const base = await baseCore(f);
+  // Case (i): intact marker-only sources succeed on the base, which delivered
+  // the stored target too. This sanity read precedes installing corrupt needles.
+  assert.deepEqual(ok(read(f, group, base)).groups[group].items.map(item => item.memory.id), [survivor.id, memory.id]);
+  const needles = [memory.id, memory.content, ...denied,
+    ...corrupt(f, before.find(row => row.excerpt === other.excerpt))];
+  deny(f, ...needles);
+  const current = read(f, group), expected = read(f, group, base);
+  failure(current, needles);
+  failure(expected, needles);
+  assert.deepEqual(expected, current, 'integrity wins over markers with the same exact envelope on the real base');
 });
