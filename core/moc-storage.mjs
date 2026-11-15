@@ -1,4 +1,5 @@
 import { performance } from 'node:perf_hooks';
+import { hasCommitDispatcher } from './commit-dispatch.mjs';
 import { cachedContentLayout, checkInstalledContentSafety } from './content-safety-schema.mjs';
 import { contentReadSafety, receiptReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { contentSuppressionRequestFenceInside, contentSuppressionReasonInside, cachedContentSuppressionRequestInside,
@@ -345,6 +346,9 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
 
   function classificationSnapshot(ns, ids, guards, expectedIndex) {
     return transaction(db, () => {
+      // Capture runs in an uncached writer context. Retain its classification
+      // owner epoch explicitly so catalog-derived text is fenced on placement.
+      if (hasCommitDispatcher(db)) contentSuppressionRequestInside(db, [ns]);
       assertIndexAvailable(ns);
       assertEpochValue(ns, expectedIndex);
       const expected = guardsMap(guards);

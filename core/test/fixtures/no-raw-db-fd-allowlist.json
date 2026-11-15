@@ -1765,6 +1765,66 @@
     "reason": "Sensitive installer capture request metadata temp, exclusively created 0600 in an owner-checked 0700 directory with cleanup; canonical store/sidecar aliases refused."
   },
   {
+    "path": "adapters/mcp/local-daemon-identity.mjs",
+    "source": "import { lstat, stat, realpath, readFile } from 'node:fs/promises'",
+    "reason": "Read immutable shipped source artifacts and dependency manifests to bind engine identity. Store paths use metadata stat/realpath only, never readFile/open on DB, WAL or SHM."
+  },
+  {
+    "path": "adapters/mcp/local-daemon-identity.mjs",
+    "source": "import { statSync, realpathSync } from 'node:fs'",
+    "reason": "Read immutable shipped source artifacts and dependency manifests to bind engine identity. Store paths use metadata stat/realpath only, never readFile/open on DB, WAL or SHM."
+  },
+  {
+    "path": "adapters/mcp/local-daemon-identity.mjs",
+    "source": "const inventory = JSON.parse(await readFile(join(root, 'packaging/artifact-files.json'), 'utf8'));",
+    "reason": "Read immutable shipped source artifacts and dependency manifests to bind engine identity. Store paths use metadata stat/realpath only, never readFile/open on DB, WAL or SHM."
+  },
+  {
+    "path": "adapters/mcp/local-daemon-identity.mjs",
+    "source": "hash.update(name + '\\0').update(await readFile(path)).update('\\0');",
+    "reason": "Read immutable shipped source artifacts and dependency manifests to bind engine identity. Store paths use metadata stat/realpath only, never readFile/open on DB, WAL or SHM."
+  },
+  {
+    "path": "adapters/mcp/local-daemon-liveness.mjs",
+    "source": "import { readFileSync, readlinkSync } from 'node:fs'",
+    "reason": "Read only Linux /proc PID stat and kernel boot-id metadata for start-time-aware process ownership. No database, WAL or SHM descriptor is opened."
+  },
+  {
+    "path": "adapters/mcp/local-daemon-liveness.mjs",
+    "source": "const source = readFileSync(`/proc/${pid}/stat`, 'utf8');",
+    "reason": "Read only Linux /proc PID stat and kernel boot-id metadata for start-time-aware process ownership. No database, WAL or SHM descriptor is opened."
+  },
+  {
+    "path": "adapters/mcp/local-daemon-liveness.mjs",
+    "source": "boot: readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim(),",
+    "reason": "Read only Linux /proc PID stat and kernel boot-id metadata for start-time-aware process ownership. No database, WAL or SHM descriptor is opened."
+  },
+  {
+    "path": "adapters/mcp/local-daemon-state.mjs",
+    "source": "import { constants } from 'node:fs'",
+    "reason": "Private daemon coordination metadata, capability, identity-key, fixed-code log, or source-artifact/OS metadata only; generated endpoint names never designate a DB, WAL or SHM. No raw store descriptor is opened."
+  },
+  {
+    "path": "adapters/mcp/local-daemon-state.mjs",
+    "source": "import { lstat, mkdir, realpath, statfs, open, link, rename, unlink } from 'node:fs/promises'",
+    "reason": "Private daemon coordination metadata, capability, identity-key, fixed-code log, or source-artifact/OS metadata only; generated endpoint names never designate a DB, WAL or SHM. No raw store descriptor is opened."
+  },
+  {
+    "path": "adapters/mcp/local-daemon-state.mjs",
+    "source": "const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);",
+    "reason": "Private daemon coordination metadata, capability, identity-key, fixed-code log, or source-artifact/OS metadata only; generated endpoint names never designate a DB, WAL or SHM. No raw store descriptor is opened."
+  },
+  {
+    "path": "adapters/mcp/local-daemon-state.mjs",
+    "source": "const file = await open(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);",
+    "reason": "Private daemon coordination metadata, capability, identity-key, fixed-code log, or source-artifact/OS metadata only; generated endpoint names never designate a DB, WAL or SHM. No raw store descriptor is opened."
+  },
+  {
+    "path": "adapters/mcp/local-daemon.mjs",
+    "source": "import { chmod } from 'node:fs/promises'",
+    "reason": "Private daemon coordination metadata, capability, identity-key, fixed-code log, or source-artifact/OS metadata only; generated endpoint names never designate a DB, WAL or SHM. No raw store descriptor is opened."
+  },
+  {
     "path": "integrations/client/raw/local-source-open.mjs",
     "source": "import { constants } from 'node:fs'",
     "reason": "Local transcript opener only; never accepts a database path from capture authority."

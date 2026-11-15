@@ -1,4 +1,5 @@
 import { cachedContentLayout } from './content-safety-schema.mjs';
+import { dispatchCommit, hasCommitDispatcher } from './commit-dispatch.mjs';
 import { hasContentSuppressionRequestInside, contentSuppressionRequestInside, assertContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { assertContentScopes, contentSafetyFacade, contentScopeEpochGuard, contentAuthorityPort } from './content-safety-boundary.mjs';
 import { ROLE_WRITES, roleWriteInput } from './role-profile-input.mjs';
@@ -35,8 +36,12 @@ export function createRoleProfileFacade(storage,options,config) {
         expectedRevision:method==='deleteRoleProfileRelease'?payload.expectedRevision:payload.expectedRegistryRevision,
         payloadBinding:storage.bind('role-profile-action-v1',[method,input]),input});
       const scopes=[...new Map((payload.changeReason?.reasonRefs??[]).map(ref=>{const ns=cardNamespace(ref.namespace);return [canonicalJSON(ns),ns];})).values()];
-      const access=roleAccess(options.authority,request,token,scopes);access.check();
+      const access=roleAccess(options.authority,request,token,scopes);
+      const mutate=()=>{access.check();
       return {ok:true,value:storage.mutate(method,namespace,payload,request.payloadBinding,fields,changeReason,options.attribution)};
+      };
+      const result=hasCommitDispatcher(storage.db)?dispatchCommit(storage.db,mutate):mutate();
+      return result&&typeof result.then==='function'?result.catch(privateFailure):result;
     }catch(error){return privateFailure(error);}
   };
   return contentSafetyFacade({...result,readRoleTaskContext:createRoleContextReader(storage,options,config)}, { writeBoundary:storage, portGuard:scopes=>contentScopeEpochGuard(storage.db,scopes),
