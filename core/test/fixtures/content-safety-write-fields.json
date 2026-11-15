@@ -1695,5 +1695,8 @@
   "adapters/mcp/local-daemon-wire.mjs": {
     "literal:daemon_request_id": 1,
     "literal:id": 2
+  },
+  "adapters/mcp/local-forwarder.mjs": {
+    "literal:id": 1
   }
 }
