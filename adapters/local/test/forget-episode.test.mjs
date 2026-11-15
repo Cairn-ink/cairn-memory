@@ -114,4 +114,11 @@ for (const operation of ['forget', 'correct']) test('window-selected neighbour E
 });
 test('pending direct Raw readers whole-result needle scan', {
   skip: 'Pending the direct-reader fix on its separate branch; this branch only withholds Episodes.'
-}, () => {});
+}, async t => {
+  for (const operation of ['forget', 'correct']) {
+    const f = await setup(t, { layout: 53 });
+    ok(await f.act(operation));
+    noNeedles(await f.core.listRawConversations({ namespace: f.namespace, limit: 50 }));
+    noNeedles(await f.core.getConversation({ namespace: f.namespace, conversationId: f.conversation.id, limit: 50 }));
+  }
+});
