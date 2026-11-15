@@ -43,10 +43,13 @@ export function rawSearchOptions(value) {
   // The process-local budget is shared with Memory by exact provider identity.
   // Hosted durable accounting is deliberately unavailable on this local seam.
   const policy = options.policy && ownData(options.policy,
-    ['family','maxBatchDocuments','maxRequests','maxConcurrent','maxUsd','estimateUsd']);
+    ['family','maxBatchDocuments','maxRequests','maxConcurrent','maxConcurrentQueries','maxUsd','estimateUsd']);
+  if (policy && Object.hasOwn(policy,'maxConcurrentQueries') && (!Number.isInteger(policy.maxConcurrentQueries) ||
+      policy.maxConcurrentQueries < 1 || policy.maxConcurrentQueries > 16)) fail('invalid_input');
   if (embedder && (!policy || !['local','hosted'].includes(policy.family) ||
       !Number.isSafeInteger(policy.maxRequests) || policy.maxRequests < 0 ||
-      !Number.isSafeInteger(policy.maxConcurrent) || policy.maxConcurrent < 1 ||
+      (policy.maxConcurrent === undefined ? !Object.hasOwn(policy,'maxConcurrentQueries') :
+        !Number.isSafeInteger(policy.maxConcurrent) || policy.maxConcurrent < 1) ||
       !Number.isFinite(policy.maxUsd) || policy.maxUsd < 0 ||
       policy.family === 'hosted' && typeof policy.estimateUsd !== 'function' ||
       policy.family === 'local' && policy.maxBatchDocuments !== 1)) fail('invalid_input');

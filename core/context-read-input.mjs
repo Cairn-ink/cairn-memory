@@ -48,17 +48,20 @@ export function contextOptions(value) {
   if (counter && (typeof counter.id !== 'string' || !counter.id.isWellFormed() ||
       counter.id.includes('\0') || counter.id.length < 1 || counter.id.length > 200)) fail('invalid_input');
   const policy = options.policy === undefined ? {} : ownData(options.policy,
-    ['family', 'maxRequests', 'maxUsd', 'maxConcurrent', 'estimateUsd', 'maxBatchDocuments']);
+    ['family', 'maxRequests', 'maxUsd', 'maxConcurrent', 'maxConcurrentQueries', 'estimateUsd', 'maxBatchDocuments']);
   const family = policy.family ?? 'local';
   if (!['local', 'hosted'].includes(family)) fail('invalid_input');
+  if (Object.hasOwn(policy, 'maxConcurrentQueries') && (!Number.isInteger(policy.maxConcurrentQueries) ||
+      policy.maxConcurrentQueries < 1 || policy.maxConcurrentQueries > 16)) fail('invalid_input');
   const explicitLocal = Object.hasOwn(policy, 'maxBatchDocuments');
   const localStatus = options.localStatus;
   if (explicitLocal) {
     if (family !== 'local' || policy.family !== 'local' || policy.maxBatchDocuments !== 1 || policy.maxConcurrent !== 1 ||
-        !Number.isSafeInteger(policy.maxRequests) || policy.maxRequests < 1 || Object.keys(policy).length !== 4 ||
+        !Number.isSafeInteger(policy.maxRequests) || policy.maxRequests < 1 ||
+        Object.keys(policy).some(key => !['family', 'maxRequests', 'maxConcurrent', 'maxConcurrentQueries', 'maxBatchDocuments'].includes(key)) ||
         !embedder || typeof localStatus !== 'function' || types.isAsyncFunction(localStatus)) fail('invalid_input');
   } else if (Object.hasOwn(options, 'localStatus')) fail('invalid_input');
-  const budgeted = explicitLocal || ['maxRequests', 'maxUsd', 'maxConcurrent', 'estimateUsd'].some(key => Object.hasOwn(policy, key));
+  const budgeted = explicitLocal || ['maxRequests', 'maxUsd', 'maxConcurrent', 'maxConcurrentQueries', 'estimateUsd'].some(key => Object.hasOwn(policy, key));
   if (!explicitLocal && budgeted && (!Number.isSafeInteger(policy.maxRequests) || policy.maxRequests < 1 ||
       !Number.isFinite(policy.maxUsd) || policy.maxUsd <= 0 || typeof policy.estimateUsd !== 'function' ||
       types.isAsyncFunction(policy.estimateUsd) || policy.maxConcurrent !== undefined &&
@@ -69,7 +72,8 @@ export function contextOptions(value) {
     ...(explicitLocal ? { localStatus } : {}),
     preset: sources?.includes('moc-v1') ? 'rrf-k60-d12-moc-v1' : family === 'hosted' ? 'rrf-k10' : 'rrf-k60-d12',
     ...(sources ? { sources } : {}),
-    policy: Object.freeze({ ...policy, maxConcurrent: policy.maxConcurrent ?? 1 }),
+    policy: Object.freeze({ ...policy, maxConcurrent: policy.maxConcurrent ?? 2,
+      maxConcurrentQueries: policy.maxConcurrentQueries ?? (family === 'hosted' ? 4 : 1) }),
     budgetConfigured: budgeted });
 }
 export function contextSnapshot(value, depth = 0, budget = { nodes: 8192, units: 100000 }) {

@@ -112,7 +112,11 @@ refresh closes in `finally`. Pack/runtime initialization failures reject
 programmatic construction. CLI catches operational failures and retains a
 configured unavailable provider so fresh lexical results remain usable.
 
-The policy is exactly `{family:'local',maxRequests,maxConcurrent:1,maxBatchDocuments:1}`.
+The factory policy is `{family:'local',maxRequests,maxConcurrent:1,maxConcurrentQueries:1,maxBatchDocuments:1}`.
+`maxConcurrentQueries` bounds queries across shared-server connections; each
+connection and the unbound path still have one query slot. Maintenance has one
+separate slot. The legacy `maxConcurrent` field is retained for compatibility.
+Maintenance receives `floor(9 * maxRequests / 10)` requests; maxRequests below 2 disables maintenance indexing.
 It has no USD fields or usage callbacks. Attempts and active slots are shared by
 identity across handles/stores/query/refresh and retained after reopening.
 Warm-up consumes no attempt. A crash, invoked token refusal or timeout consumes

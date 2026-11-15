@@ -69,7 +69,7 @@ for (const stop of ['provider-refusal', 'adapter-cancellation', 'deadline-expiry
       if (attempts.length === 2) { request = options; entered.resolve(); await release.promise; }
       return [vector()];
     });
-    const policy = { ...localPolicy, maxRequests: 3 };
+    const policy = { ...localPolicy, maxRequests: 4 };
     f.reopen({ embedder, policy, localStatus });
     const operation = f.call('refreshContextIndex', refresh());
     try {
@@ -95,8 +95,10 @@ for (const stop of ['provider-refusal', 'adapter-cancellation', 'deadline-expiry
       const resumed = ok(await f.call('refreshContextIndex', refresh()));
       assert.equal(resumed.status, 'complete'); assert.equal(resumed.progress.embedded, 1); assert.equal(resumed.progress.embeddingAttempts, 1);
       assert.equal(vectors(f, embedder.revision).length, 2); assert.equal(attempts.filter(text => text === attempts[0]).length, 1);
+      const reserved = ok(await f.call('findCandidates', query({ semantic: true })));
+      assert.equal(reserved.channels.semantic.state, 'ready');
       const capped = ok(await f.call('findCandidates', query({ semantic: true })));
-      assert.equal(capped.channels.semantic.state, 'budget_denied'); assert.equal(capped.items.length, 2); assert.equal(attempts.length, 3);
+      assert.equal(capped.channels.semantic.state, 'budget_denied'); assert.equal(capped.items.length, 2); assert.equal(attempts.length, 4);
     } finally { release.resolve(); await operation; clock.mock.restore(); }
   });
 }

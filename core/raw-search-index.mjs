@@ -175,7 +175,7 @@ export async function openRawSearch(value) {
         if(port&&queryAllowed&&!query&&complete&&scopedRows.length&&embedding.semanticCapacity(chunks,port).eligible){
           try{
             if(Buffer.byteLength(input.query)+64>8192)fail('provider_error');
-            const result=await dispatch(port,[input.query],{signal:new AbortController().signal,deadlineAt,guard:queryGuard});
+            const result=await dispatch(port,[input.query],{budgetClass:'query',signal:new AbortController().signal,deadlineAt,guard:queryGuard});
             if(!Array.isArray(result)||result.length!==1)fail('invalid_vector');
             query={input:input.query,embedder:metadata,vector:result[0]};
           }catch(error){guard();if(interrupted(error))throw error;
