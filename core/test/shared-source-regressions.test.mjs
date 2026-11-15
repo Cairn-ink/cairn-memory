@@ -1270,6 +1270,8 @@ test('public sibling forget withholds a directly inserted fixture receipt on eve
   });
   values.session = ok(values.session);
   assert.equal(hasId(values.session, f.memory.id), false, 'session withholds the short Memory entirely');
+  absent(values.session, [f.sibling.content, f.memory.content, denied.excerpt, denied.id, siblingRow.id,
+    denied.receipt_key, denied.client, denied.session_id, denied.event_id, ...expectedMarkers]);
   assert.deepEqual(values.get.receipts.map(row => row.id), remaining);
   assert.deepEqual(values.fetch.items[0].receipts.map(row => row.id), remaining);
   assert.deepEqual(values.legacyGet.receipts.map(row => row.excerpt), values.get.receipts.map(row => row.excerpt));

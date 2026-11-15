@@ -12,6 +12,8 @@ import { lineageHost } from '../testing/card-lineage-fixture.mjs';
 import { options as episodeOptions } from '../testing/episode-helpers.mjs';
 import { interpretation } from '../testing/episode-capture-helpers.mjs';
 import { rationaleModel } from '../testing/rationale-model.mjs';
+import { transaction } from '../database.mjs';
+import { suppressReceiptsInside, writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 
 const ns = { ownerId: 'synthetic', scope: 'personal', projectId: null };
@@ -22,9 +24,13 @@ const config = { maxTokens: 2000, maxChars: 8000, groups: { background: true },
 const support = id => ({ ...source, sessionId: 'synthetic-independent-session', eventId: id,
   excerpt: 'Synthetic independent support ' + id });
 const forbidden = (value, strings) => {
-  const whole = JSON.stringify(value);
+  const whole = typeof value === 'string' ? value : JSON.stringify(value);
   for (const text of strings) assert.equal(whole.includes(text), false, 'whole result excludes ' + text);
 };
+const addressNeedles = address => [address.excerpt, JSON.stringify(address.sessionId), JSON.stringify(address.eventId),
+  JSON.stringify(address), '"role":' + JSON.stringify(address.role) + ',"excerpt":' + JSON.stringify(address.excerpt)];
+const receiptKeys = (f, memory) => f.db.prepare('SELECT receipt_key FROM receipts WHERE memory_id=?').all(memory.id)
+  .map(row => row.receipt_key);
 function port() {
   const model = { ...rationaleModel(), items: [], countTokens: () => 1,
     classify: ({ input }) => ({ items: input.memories.map(memory => ({ memoryId: memory.id, parentIds: [] })) }),
@@ -40,12 +46,38 @@ function port() {
   return model;
 }
 
+// Install once, before opening the fixture. Hooks never replace this recorder.
+// Assert outside countTokens: the engine deliberately maps callback exceptions.
+function tokenizerRecorder(t, model) {
+  const recorder = { needles: new Set(), reads: [], active: null, onCount: null };
+  const count = model.countTokens;
+  model.countTokens = text => {
+    recorder.active?.texts.push(text);
+    recorder.onCount?.(text);
+    const tokens = count.call(model, text);
+    recorder.active?.counts.push(tokens);
+    return tokens;
+  };
+  t.after(() => {
+    for (const { texts, needles } of recorder.reads) for (const text of texts) forbidden(text, needles);
+  });
+  return recorder;
+}
+const deny = (f, ...needles) => { for (const needle of needles) f.tokenizer.needles.add(needle); };
+function connectFixture(f) {
+  const db = new DatabaseSync(f.path), core = openMemoryCore({ path: f.path, model: f.model });
+  let closed = false;
+  const close = () => { if (!closed) { closed = true; core.close(); db.close(); } };
+  f.ws.defer(close);
+  return Object.assign(f, { db, core, close });
+}
+
 // Build the production family through its public opener, seed one Episode,
 // close all handles, and only then migrate event time. Never enable Card lineage.
 async function fixture(t, layout) {
   t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-11-01T00:00:00.000Z') });
   const ws = createTestWorkspace(t, { prefix: 'shared-session-' }), path = join(ws.path, 'store.sqlite');
-  const model = port(), host = lineageHost();
+  const model = port(), tokenizer = tokenizerRecorder(t, model), host = lineageHost();
   const initial = openMemoryCore({ path, model, ...episodeOptions, ...(layout === 18 ? {} : {
     privateCards: { ...host.options, currentDependencies: { version: 'card-current-dependencies-v1' } },
     methodPackages: { version: 'method-packages-local-v1', storage: 'local-plain-v1', authority: host.options.authority },
@@ -65,15 +97,15 @@ async function fixture(t, layout) {
     copySqliteFixture(path, backupPath);
     await migrateReceiptEventTime({ path, backupPath, expected: { storeId, base: 33 }, quiescence });
   }
-  const db = new DatabaseSync(path); ws.defer(() => db.close());
+  const f = connectFixture({ model, tokenizer, path, ws, seed, tick: () => t.mock.timers.tick(1) });
+  const { db } = f;
   assert.equal(db.prepare('PRAGMA user_version').get().user_version, layout);
   if (layout === 53) {
     const control = db.prepare('SELECT * FROM content_safety_control').get();
     assert.equal(control.receipt_event_time, 1);
     assert.equal(control.card_lineage_revision, 0);
   }
-  const core = openMemoryCore({ path, model }); ws.defer(() => core.close());
-  return { core, model, db, path, ws, seed, tick: () => t.mock.timers.tick(1) };
+  return f;
 }
 function admit(f, content, kind, receipts = [support(content)]) {
   f.tick();
@@ -97,11 +129,21 @@ function short(f, content, kind, address = source) {
   const receiptIds = ok(f.core.get({ namespace: ns, memoryId: memory.id })).receipts.map(receipt => receipt.id);
   const donorContent = 'Synthetic forgotten donor ' + content;
   const donor = admit(f, donorContent, 'fact', [address]);
+  const donorReceiptIds = ok(f.core.get({ namespace: ns, memoryId: donor.id })).receipts.map(receipt => receipt.id);
+  const keys = [...receiptKeys(f, memory), ...receiptKeys(f, donor)];
   forget(f, donor);
-  return { memory, receiptIds, denied: [content, donorContent, address.excerpt,
-    JSON.stringify(address.sessionId), JSON.stringify(address.eventId), ...receiptIds] };
+  const denied = [content, donorContent, donor.id, ...addressNeedles(address), ...receiptIds, ...donorReceiptIds, ...keys];
+  deny(f, memory.id, ...denied);
+  return { memory, receiptIds, denied };
 }
-const read = (f, input = config) => f.core.sessionStartContext({ namespace: ns, ...input });
+const read = (f, input = config) => {
+  const record = { texts: [], counts: [], needles: [...f.tokenizer.needles] };
+  f.tokenizer.reads.push(record);
+  assert.equal(f.tokenizer.active, null);
+  f.tokenizer.active = record;
+  try { return f.core.sessionStartContext({ namespace: ns, ...input }); }
+  finally { f.tokenizer.active = null; }
+};
 
 // Independent public reads supply the survivor oracle. Do not sort receipts:
 // their ids and excerpts must retain the order returned by get for this Memory.
@@ -173,11 +215,13 @@ async function exactReproduction(t, layout) {
     content: 'Updated manual fact', kind: 'fact', receipt: source })).memory;
   const withheldIds = [first.memories[0], corrected].flatMap(memory =>
     ok(f.core.get({ namespace: ns, memoryId: memory.id })).receipts.map(receipt => receipt.id));
+  const withheldKeys = [first.memories[0], corrected].flatMap(memory => receiptKeys(f, memory));
   forget(f, corrected);
   f.model.items = [{ content: 'Use diagrams.', kind: 'instruction', confidence: .9, sourceIndices: [0] }];
   const captured = ok(await f.core.capture({ namespace: ns, client: 'synthetic', eventId: 'capture', sessionId: 'session',
     messages: [{ id: 'source', role: 'user', content: 'Use diagrams.' }] })).admission.memories[0];
   withheldIds.push(...f.db.prepare('SELECT id FROM receipts WHERE memory_id=?').all(captured.id).map(row => row.id));
+  withheldKeys.push(...receiptKeys(f, captured));
   ok(await f.core.recall({ readSet: [ns], query: 'diagrams' }));
   ok(f.core.list({ namespace: ns })); ok(f.core.map({ namespace: ns, purpose: 'recall' }));
   assert.equal(ok(f.core.listEpisodes({ namespace: ns, since: '2025-01-01T00:00:00.000Z',
@@ -185,8 +229,10 @@ async function exactReproduction(t, layout) {
   const episodes = ok(f.core.listEpisodes({ namespace: ns, since: '2026-01-01T00:00:00.000Z',
     until: '2026-12-31T23:59:59.999Z', timeBasis: 'event' }));
   assert.equal(episodes.items.length, 1); ok(f.core.getEpisode({ namespace: ns, episodeId: f.seed }));
-  return { f, captured, needles: ['Manual fact', 'Updated manual fact', 'Organized fact', 'Use diagrams.', '"session"', '"source"',
-    manual.id, corrected.id, first.memories[0].id, captured.id, ...withheldIds] };
+  const needles = ['Manual fact', 'Updated manual fact', 'Organized fact', 'Use diagrams.', '"session"', '"source"',
+    manual.id, corrected.id, first.memories[0].id, captured.id, ...withheldIds, ...withheldKeys, ...addressNeedles(source)];
+  deny(f, ...needles);
+  return { f, captured, needles };
 }
 
 for (const layout of [53, 18, 33]) test(`exact organized/manual/correction/forget/capture reproduction, layout ${layout}`, async t => {
@@ -233,7 +279,6 @@ test(`short ${group} is absent alongside survivors and placeholder=${oversized},
   forbidden(result, [...denied.denied, denied.memory.id]);
   // The counter sees only attempted public envelopes and delivered background
   // items. Neither the private null nor the withheld payload consumes budget.
-  f.model.countTokens = text => { forbidden(text, [denied.memory.id, source.excerpt]); return 1; };
   assert.deepEqual(read(f), result);
 });
 
@@ -294,6 +339,7 @@ test(`next steps keep the independent step alongside short sources and placehold
   }
   // A short background Memory must not abort an otherwise deliverable step.
   const background = short(f, 'Synthetic short background beside step', 'fact');
+  deny(f, memory.id, captured.episode.id, saved.id, 'Synthetic Episode instruction');
   const result = read(f), value = ok(result);
   assert.deepEqual(value.groups.nextSteps.items.map(item => item.episodeId), [f.seed]);
   assertGroups(f, value, {
@@ -324,12 +370,11 @@ for (const group of ['procedural', 'background']) test(`forget between snapshots
   forbidden(before, [...denied.denied, denied.memory.id]);
   const writer = openMemoryCore({ path: f.path }); f.ws.defer(() => writer.close());
   let changed = false;
-  f.model.countTokens = text => {
+  f.tokenizer.onCount = text => {
     if (text && !changed) {
       changed = true;
       ok(writer.forget({ namespace: ns, memoryId: target.id, expectedRevision: target.revision }));
     }
-    return 1;
   };
   const result = read(f);
   assert.equal(changed, true, 'forget ran after preparation and before the authoritative reread');
@@ -342,6 +387,7 @@ test('all next-step sources withheld leaves an empty group and a successful call
   const row = f.db.prepare(`SELECT e.client,e.session_key AS sessionId,s.message_id AS eventId,s.role,s.text AS excerpt
     FROM session_episodes e JOIN episode_sources s ON s.origin_episode_id=e.id WHERE s.episode_id=?`).get(f.seed);
   const denied = short(f, 'Synthetic short Memory at the only step address', 'instruction', row);
+  deny(f, f.seed);
   const result = read(f), value = ok(result);
   assert.deepEqual(value.groups.nextSteps.items, []);
   assert.equal(value.groups.nextSteps.returned, 0); assert.equal(value.groups.nextSteps.status, 'complete');
@@ -378,7 +424,12 @@ test('a short tagged preference loses its anchors and all metadata', async t => 
   const memory = ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic withheld tagged preference', kind: 'preference' },
     receipts: [source], procedural: { anchors: [{ receiptIndex: 0, start: 0, end: source.excerpt.length }] } })).memory;
   const receiptIds = ok(f.core.get({ namespace: ns, memoryId: memory.id })).receipts.map(receipt => receipt.id);
-  const target = admit(f, 'Synthetic preference donor', 'fact', [source]); forget(f, target);
+  const target = admit(f, 'Synthetic preference donor', 'fact', [source]);
+  const needles = [memory.id, 'Synthetic withheld tagged preference', target.id, target.content, ...addressNeedles(source),
+    ...receiptIds, ...ok(f.core.get({ namespace: ns, memoryId: target.id })).receipts.map(receipt => receipt.id),
+    ...receiptKeys(f, memory), ...receiptKeys(f, target)];
+  forget(f, target);
+  deny(f, ...needles);
   const result = read(f), value = ok(result);
   assert.deepEqual(value.groups.procedural.items, []); assert.equal(value.groups.procedural.returned, 0);
   assertGroups(f, value, {
@@ -386,7 +437,7 @@ test('a short tagged preference loses its anchors and all metadata', async t => 
     procedural: { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [] },
     background: { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [] },
   });
-  forbidden(result, [memory.id, 'Synthetic withheld tagged preference', source.excerpt, ...receiptIds]);
+  forbidden(result, needles);
 });
 
 test('the final comparison notices a short item becoming deliverable without an epoch change', async t => {
@@ -399,17 +450,193 @@ test('the final comparison notices a short item becoming deliverable without an 
   });
   forbidden(before, [...denied.denied, denied.memory.id]);
   let changed = false;
-  f.model.countTokens = text => {
+  f.tokenizer.onCount = text => {
     if (text && !changed) {
       changed = true;
       // Deliberate old-writer fixture: bypass the public forget epoch so only
       // the existing full-snapshot comparison can detect this transition.
       f.db.prepare("DELETE FROM suppressed WHERE fingerprint GLOB 'rs1:*'").run();
     }
-    return 1;
   };
   const result = read(f);
   assert.equal(changed, true);
   assert.deepEqual(result, { ok: false, error: { code: 'revision_conflict', retryable: false } });
   forbidden(result, [denied.memory.id, source.excerpt]);
+});
+
+function onlyGroup(group) {
+  const input = { ...config, groups: {
+    nextSteps: false, procedural: group === 'procedural', background: group === 'background',
+  } };
+  if (group === 'procedural') delete input.backgroundBudget;
+  return input;
+}
+function assertOnlyGroup(f, value, group, memoryIds, status) {
+  const retained = { enabled: true, returned: memoryIds.length, complete: status === 'complete',
+    budget_exhausted: status === 'budget_exhausted', status, memoryIds };
+  assertGroups(f, value, {
+    nextSteps: { enabled: false, returned: 0, complete: true, budget_exhausted: false, status: 'disabled', episodeIds: [] },
+    procedural: group === 'procedural' ? retained
+      : { enabled: false, returned: 0, complete: true, budget_exhausted: false, status: 'disabled', memoryIds: [] },
+    ...(group === 'background' ? { background: retained } : {}),
+  });
+}
+const revisionState = f => ({
+  indexRevision: f.db.prepare('SELECT epoch FROM namespace_epochs WHERE owner_id=? AND scope=? AND project_id=?')
+    .get(ns.ownerId, ns.scope, ns.projectId ?? '').epoch,
+  memories: f.db.prepare('SELECT id,revision,deleted FROM memories ORDER BY id').all(),
+});
+const windowAddress = group => ({ client: 'synthetic-window-client', sessionId: 'synthetic-window-session-' + group,
+  eventId: 'synthetic-window-message-' + group, role: 'user', excerpt: 'Synthetic withheld window excerpt ' + group });
+function windowNeedles(f, memories, address) {
+  return [...memories.flatMap(memory => [memory.id, memory.content,
+    ...f.db.prepare('SELECT id,receipt_key FROM receipts WHERE memory_id=?').all(memory.id)
+      .flatMap(row => [row.id, row.receipt_key])]), address.client, ...addressNeedles(address)];
+}
+
+for (const layout of [53, 18, 33]) for (const group of ['procedural', 'background'])
+test(`sibling forget in the snapshot window refuses ${group}, layout ${layout}`, async t => {
+  const f = await fixture(t, layout), kind = group === 'procedural' ? 'instruction' : 'fact';
+  const address = windowAddress(group), selected = admit(f, 'Synthetic selected window Memory ' + group, kind, [address]);
+  // A non-procedural preference is a sibling, but is outside both candidate groups.
+  const sibling = admit(f, 'Synthetic forgotten window sibling ' + group, 'preference', [address]);
+  const needles = windowNeedles(f, [selected, sibling], address);
+  assert.equal(ok(f.core.get({ namespace: ns, memoryId: selected.id })).receipts.length, 1);
+  const writer = openMemoryCore({ path: f.path }); f.ws.defer(() => writer.close());
+  let changed = false, acknowledgement;
+  deny(f, ...needles);
+  f.tokenizer.onCount = text => {
+    if (text && !changed) {
+      changed = true;
+      acknowledgement = writer.forget({ namespace: ns, memoryId: sibling.id, expectedRevision: sibling.revision });
+    }
+  };
+  const result = read(f, onlyGroup(group));
+  assert.equal(changed, true, 'first nonempty count runs between the two snapshots');
+  assert.equal(ok(acknowledgement).forgotten, true);
+  assert.deepEqual(result, { ok: false, error: {
+    code: layout === 53 ? 'evidence_unavailable' : 'index_revision_conflict', retryable: false,
+  } });
+  const after = ok(f.core.get({ namespace: ns, memoryId: selected.id }));
+  assert.equal(after.memory.revision, selected.revision, 'forget changed the sibling, not the selected Memory');
+  assert.deepEqual(after.receipts, [], 'the still-live selected Memory is now short');
+  assert.equal(f.db.prepare('SELECT count(*) AS n FROM receipts WHERE memory_id=?').get(selected.id).n, 1);
+  forbidden(result, needles);
+  // The fixture's after-hook also scans EVERY tokenizer input. On legacy
+  // layouts this deliberately pins stale content reaching countTokens before
+  // the final index fence refuses. Do not hide that defect by moving the hook.
+});
+
+async function factOnlyWindow(t, layout, group, marker) {
+  const f = await fixture(t, layout), kind = group === 'procedural' ? 'instruction' : 'fact';
+  const address = windowAddress(group), selected = admit(f, 'Synthetic fact-window Memory ' + group, kind, [address]);
+  const saved = ok(f.core.get({ namespace: ns, memoryId: selected.id }));
+  assert.equal(saved.receipts.length, 1);
+  const needles = windowNeedles(f, [selected], address);
+  const writer = new DatabaseSync(f.path); f.ws.defer(() => writer.close());
+  const before = revisionState(f);
+  const ownerEpoch = () => {
+    const row = f.db.prepare('SELECT epoch_hi,epoch_lo FROM owner_suppression_epochs WHERE owner_id=?').get(ns.ownerId);
+    return row ? (BigInt(row.epoch_hi) << 32n) + BigInt(row.epoch_lo) : 0n;
+  };
+  const beforeOwner = layout === 53 ? ownerEpoch() : null;
+  let changed = false, fact;
+  deny(f, ...needles);
+  f.tokenizer.onCount = text => {
+    if (text && !changed) {
+      changed = true;
+      const options = { reason: 'purge', actionId: 'synthetic-session-fact-only' };
+      // Both are real storage writers, in their required transaction. No
+      // canonical rows or epoch cells are written by the fixture.
+      transaction(writer, () => {
+        if (marker) suppressReceiptsInside(writer, ns, selected.id, options, undefined, true);
+        else fact = writeContentSuppressionInside(writer, { namespace: ns, kind: 'receipt',
+          key: saved.receipts[0].id, ...options });
+      });
+    }
+  };
+  const result = read(f, onlyGroup(group));
+  assert.equal(changed, true);
+  assert.deepEqual(revisionState(f), before, 'no namespace index or Memory revision moves');
+  assert.equal(f.db.prepare('SELECT count(*) AS n FROM receipts WHERE memory_id=?').get(selected.id).n, 1,
+    'the writer did not delete the physical receipt');
+  assert.deepEqual(ok(f.core.get({ namespace: ns, memoryId: selected.id })).receipts, [], 'the selected Memory is short');
+  if (layout === 53) {
+    assert.equal(ownerEpoch(), beforeOwner + 1n, 'one real receipt fact advances the owner fence');
+    const row = f.db.prepare('SELECT kind,stable_key,match_mode,reason FROM content_suppressions WHERE owner_id=? ORDER BY epoch_hi DESC,epoch_lo DESC LIMIT 1').get(ns.ownerId);
+    assert.deepEqual({ ...row }, { kind: 'receipt', stable_key: saved.receipts[0].id, match_mode: 'incarnation', reason: 'purge' });
+    if (!marker) assert.equal(typeof fact.factId, 'string');
+  }
+  const markers = f.db.prepare("SELECT fingerprint FROM suppressed WHERE fingerprint GLOB 'rs1:*' ORDER BY fingerprint").all();
+  assert.equal(markers.length, marker ? 2 : 0);
+  assert.deepEqual(result, { ok: false, error: {
+    code: layout === 53 ? 'evidence_unavailable' : 'revision_conflict', retryable: false,
+  } });
+  forbidden(result, needles);
+}
+
+for (const layout of [53, 18, 33]) for (const group of ['procedural', 'background'])
+test(`real marker-only suppression in the snapshot window refuses ${group}, layout ${layout}`, async t => {
+  await factOnlyWindow(t, layout, group, true);
+});
+for (const group of ['procedural', 'background'])
+test(`real receipt purge fact in the snapshot window refuses ${group}, layout 53`, async t => {
+  await factOnlyWindow(t, 53, group, false);
+});
+
+for (const group of ['procedural', 'background'])
+test(`a short ${group} item inside the first six is filled from the seventh at identical budget`, async t => {
+  const f = await fixture(t, 53), kind = group === 'procedural' ? 'instruction' : 'fact', kept = [];
+  for (let i = 0; i < 6; i++) kept.unshift(admit(f, 'Synthetic full cap survivor ' + i, kind).id);
+  // Preserve the exact survivor ids, timestamps and receipt ids in the twin.
+  // Copy only after closing every handle, before the short Memory ever exists.
+  const twinPath = join(f.ws.path, 'twin.sqlite');
+  f.close();
+  copySqliteFixture(f.path, twinPath);
+  connectFixture(f);
+  const model = port();
+  const twin = connectFixture({ path: twinPath, model, tokenizer: tokenizerRecorder(t, model),
+    ws: f.ws, seed: f.seed, tick: f.tick });
+  const denied = short(f, 'Synthetic short inside the first six', kind);
+  // Three unrelated, untagged preferences balance the three public writes
+  // (admit, donor admit, forget). No short Memory has ever existed in the twin.
+  for (let i = 0; i < 3; i++) admit(twin, 'Synthetic unselected twin preference ' + i, 'preference');
+  const physical = f.db.prepare(`SELECT id FROM memories WHERE deleted=0 AND kind=? ORDER BY updated_at DESC,id`).all(kind);
+  assert.deepEqual(physical.map(row => row.id), [denied.memory.id, ...kept], 'seven candidates; the first is short');
+  deny(twin, ...denied.denied, denied.memory.id);
+  const result = read(f, onlyGroup(group)), value = ok(result);
+  assertOnlyGroup(f, value, group, kept, 'complete');
+  assert.equal(value.groups[group].returned, 6);
+  assert.equal(value.groups[group].items[5].memory.id, kept[5], 'physical seventh fills the sixth real slot');
+  forbidden(result, [...denied.denied, denied.memory.id]);
+  const expected = read(twin, onlyGroup(group)); ok(expected);
+  assert.deepEqual(result, expected, 'same six real items, order, envelope and literal complete status');
+  assert.equal(JSON.stringify(result).length, JSON.stringify(expected).length, 'identical envelope character cost');
+  const actualCounts = f.tokenizer.reads.at(-1), twinCounts = twin.tokenizer.reads.at(-1);
+  assert.ok(actualCounts.texts.length > 0);
+  assert.deepEqual(actualCounts.texts, twinCounts.texts, 'every tokenizer input is byte-identical, including background counts');
+  assert.deepEqual(actualCounts.counts, twinCounts.counts, 'identical token consumption for every count');
+  assert.equal(actualCounts.counts.reduce((sum, count) => sum + count, 0),
+    twinCounts.counts.reduce((sum, count) => sum + count, 0));
+});
+
+for (const group of ['procedural', 'background']) for (const count of [12, 13])
+test(`seven short ${group} items at the ${count}-candidate boundary leave five real items`, async t => {
+  const f = await fixture(t, 53), kind = group === 'procedural' ? 'instruction' : 'fact', kept = [], denied = [];
+  const thirteenth = count === 13 ? admit(f, 'Synthetic thirteenth candidate must not refill', kind) : null;
+  for (let i = 11; i >= 0; i--) {
+    if (i < 7) denied.push(short(f, 'Synthetic boundary short ' + i, kind, {
+      ...source, sessionId: 'synthetic-boundary-session-' + i, eventId: 'synthetic-boundary-message-' + i,
+    }));
+    else kept.unshift(admit(f, 'Synthetic boundary survivor ' + i, kind).id);
+  }
+  const physical = f.db.prepare(`SELECT id FROM memories WHERE deleted=0 AND kind=? ORDER BY updated_at DESC,id`).all(kind);
+  assert.deepEqual(physical.map(row => row.id), [...denied.map(item => item.memory.id).reverse(), ...kept,
+    ...(thirteenth ? [thirteenth.id] : [])]);
+  if (thirteenth) deny(f, thirteenth.id, thirteenth.content);
+  const result = read(f, onlyGroup(group)), value = ok(result);
+  assertOnlyGroup(f, value, group, kept, count === 12 ? 'complete' : 'budget_exhausted');
+  assert.equal(value.groups[group].returned, 5);
+  for (const item of denied) forbidden(result, [...item.denied, item.memory.id]);
+  if (thirteenth) forbidden(result, [thirteenth.id, thirteenth.content]);
 });
