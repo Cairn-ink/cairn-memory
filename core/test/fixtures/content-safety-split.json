@@ -926,7 +926,7 @@
   "implementations": [
     {
       "file": "core/content-suppression-storage.mjs",
-      "sha256": "b8336d533368b5751be1a5ee37b279dd7a51c7c03a7bfab172214027559f6c20",
+      "sha256": "3c6637bb9d327f711d295beb43712d61d7ec87daa06915cb7446f6405320425d",
       "reason": "The retry reset clears only this connection’s request-local denial memos. Canonical writers, insertion capabilities and their separately pinned regions retain their exact bytes."
     },
     {
@@ -1003,7 +1003,8 @@
       "file": "core/database.mjs",
       "start": "export function openDatabase(",
       "end": null,
-      "sha256": "6d48893fb40b6a01adb4a5ffc122222ad042b91ef0c28f15345c8ebc8429bb9a"
+      "sha256": "606c10ad38893a5a7346dc7b15fe32fc8734d646fa56867475f65c8e24fd25d5",
+      "reason": "Reviewed mechanical option A delta: remove the open-time dispatcher timeout clamp; pristine creation and all safety installation statements remain unchanged."
     }
   ],
   "imports": [
@@ -1283,6 +1284,7 @@
         "suppressOwnerInside",
         "suppressReceiptsInside",
         "suppressionEpoch",
+        "withContentSuppressionAttempt",
         "withContentSuppressionCeilingsInside",
         "withContentSuppressionReadInside",
         "withContentSuppressionRequest",
@@ -1307,7 +1309,8 @@
         "withoutContentSuppressionReadCacheInside": "Isolates nested writers from provisional serving request caches.",
         "withMemoryCandidateBatchInside": "Shares SQL rows only within one synchronous Memory candidate batch; canonical S1 and suppression decisions remain independent.",
         "resetContentSuppressionRequestInside": "Discards only request-local read memos for a connection before a fresh retry; it performs no SQL and exposes no fact insertion or writer capability.",
-        "registerEngineCardPurgeInside": "Lets the Card storage module install its erasure purge at load; the registry performs no SQL and exposes no fact insertion or writer capability."
+        "registerEngineCardPurgeInside": "Lets the Card storage module install its erasure purge at load; the registry performs no SQL and exposes no fact insertion or writer capability.",
+        "withContentSuppressionAttempt": "Internal host-only account epoch seeding and accepted-attempt merge; no suppression SQL or decision changes."
       }
     },
     "core/content-write-changes.mjs": {
@@ -1412,9 +1415,11 @@
       "exports": [
         "consumeLocalReservation",
         "contextBudget",
-        "isBudgetEmbeddingPort"
+        "isBudgetEmbeddingPort",
+        "withContextReadBudgetScope"
       ],
       "additions": {
+        "withContextReadBudgetScope": "Selects an opaque connection or maintenance ledger containing counters only; adds no SQL, authority grant, provider payload retention or fact writer.",
         "isBudgetEmbeddingPort": "Recognizes only fixed ledger wrappers through a module-private WeakSet; their real embedder still receives its single E1 fence."
       }
     }

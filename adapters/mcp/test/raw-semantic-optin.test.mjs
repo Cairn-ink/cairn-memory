@@ -66,7 +66,7 @@ for (const mode of ['ambient','raw-flag','explicit-provider','off','explicit-pro
   }
   assert.ok(JSON.stringify(response).includes(rawText),'three-layer reads must still find saved Raw through BM25');
   if (!rawEnabled) assert.equal(rawEmbedding, undefined, 'Raw must not receive an embedder without opt-in');
-  else assert.equal(rawEmbedding.embedder, embedder);
+  else { assert.deepEqual({ ...rawEmbedding.embedder, embed: embedder.embed }, embedder); assert.equal(rawEmbedding.policy, automatic.policy); }
   const rawCalls = calls.filter(c => c.raw || c.texts.some(s => s.includes(rawText)));
   if (rawEnabled) {
     assert.ok(rawCalls.some(c => c.texts.some(s => s.includes(rawText))),'Raw documents embedded');
