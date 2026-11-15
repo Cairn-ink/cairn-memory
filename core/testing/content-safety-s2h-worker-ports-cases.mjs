@@ -1,14 +1,16 @@
 // The native worker-ports matrix, shared by its layout slices so that each
 // slice runs as its own test file (one file was the slowest CI shard). The
 // case loops and test bodies below are byte-identical to the former single
-// file and deliberately left unindented; each slice passes its layouts and
-// its own family gate. The import order is unchanged, so module evaluation
-// order is too.
+// file, except that each loop defines its case for the calling slice instead
+// of calling test(); they are deliberately left unindented. Each slice passes
+// its layouts and its own family gate and registers the cases itself, so
+// node:test attributes every case to the slice file that runs it. The import
+// order is unchanged, except that node:test is imported by the slices after
+// this module, so the shared test clock still loads first.
 import { testClock } from '../testing/context-product-test-clock.mjs';
 // familyGate is unused here; the import keeps the original evaluation order.
 import { familyGate } from '../testing/receipt-event-time-gates.mjs';
 // Install the shared clock before product factories capture their timers.
-import test from 'node:test';
 import { randomUUID } from 'node:crypto';
 import { semanticHandle } from '../context-semantic-coordinator.mjs';
 import { semanticClient } from '../context-semantic-client.mjs';
@@ -29,8 +31,9 @@ function targetFact(db,mutation){
    reason:{forget:'user_forget',correction:'correction_supersession',privacy:'privacy_erase'}[mutation],actionId:'synthetic-port',
    ...(mutation==='correction'?{matchMode:'revision-through',sourceVersion:JSON.stringify(['memory-revision-through-v1',row.revision])}:{})});
 }
-export function registerWorkerPortCases(semanticSafetyLayouts,complete){
-for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])for(const [mode,name]of [[1,'load'],[2,'cas'],[3,'provider'],[4,'getter'],[5,'proxy'],[6,'listOwners'],[8,'anchor Proxy'],[9,'anchor accessor'],[10,'inventory Proxy'],[11,'error accessor'],[15,'thenable'],[16,'reservation seal'],[17,'transmission prepare'],[18,'transmission seal'],[19,'compensation'],[22,'last price sample'],[23,'CAS bool Proxy'],[24,'CAS error accessor'],[28,'refused dispatch retry']])for(const mutation of ['account','forget','correction','privacy'])test(`native worker E1 ${layout.family} v${layout.version} ${journal} ${name} ${mutation}`,async t=>{
+export function workerPortCases(semanticSafetyLayouts,complete){
+const cases=[],define=(name,fn)=>{cases.push([name,fn]);};
+for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])for(const [mode,name]of [[1,'load'],[2,'cas'],[3,'provider'],[4,'getter'],[5,'proxy'],[6,'listOwners'],[8,'anchor Proxy'],[9,'anchor accessor'],[10,'inventory Proxy'],[11,'error accessor'],[15,'thenable'],[16,'reservation seal'],[17,'transmission prepare'],[18,'transmission seal'],[19,'compensation'],[22,'last price sample'],[23,'CAS bool Proxy'],[24,'CAS error accessor'],[28,'refused dispatch retry']])for(const mutation of ['account','forget','correction','privacy'])define(`native worker E1 ${layout.family} v${layout.version} ${journal} ${name} ${mutation}`,async t=>{
  const portState=new SharedArrayBuffer(64),state=new Int32Array(portState);
  t.after(()=>{Atomics.store(state,11,1);Atomics.notify(state,11);});
  const s=await setupProductSemantic(t,{...layout,safety:true,corpus:12,canonicalMode:journal,host:{portState,factMutation:mutation,counterDivisor:1000}});
@@ -86,7 +89,7 @@ for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])
 
 // These cases isolate the first protected service snapshot through the real
 // service Worker and semantic client. They need no lexical/vector sidecar.
-for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])for(const mutation of ['account','forget','correction','privacy'])test(`native snapshot refusal survives client catch ${layout.family} v${layout.version} ${journal} ${mutation}`,async t=>{
+for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])for(const mutation of ['account','forget','correction','privacy'])define(`native snapshot refusal survives client catch ${layout.family} v${layout.version} ${journal} ${mutation}`,async t=>{
  const portState=new SharedArrayBuffer(64),state=new Int32Array(portState);
  t.after(()=>{Atomics.store(state,11,1);Atomics.notify(state,11);});
  const s=await setupProductSemantic(t,{...layout,safety:true,corpus:1,canonicalMode:journal,host:{portState,factMutation:mutation,counterDivisor:1000}});
@@ -120,7 +123,7 @@ for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])
 
 // Refusing caller method lookup/async policy cannot consume a provider attempt.
 // No fact is inserted here; ordinary lexical availability is a control.
-for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])for(const [mode,name]of [[12,'poisoned Promise.catch'],[13,'provider accessor'],[14,'provider prototype Proxy'],[26,'inert CAS bool return'],[33,'detached provider dispatch callback']])test(`native protected model port ${layout.family} v${layout.version} ${journal} ${name}`,async t=>{
+for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])for(const [mode,name]of [[12,'poisoned Promise.catch'],[13,'provider accessor'],[14,'provider prototype Proxy'],[26,'inert CAS bool return'],[33,'detached provider dispatch callback']])define(`native protected model port ${layout.family} v${layout.version} ${journal} ${name}`,async t=>{
  const portState=new SharedArrayBuffer(64),state=new Int32Array(portState);
  const s=await setupProductSemantic(t,{...layout,safety:true,corpus:12,canonicalMode:journal,host:{portState,factMutation:'account',counterDivisor:1000}});
  ok(await s.coordinator.setOwnerSemantic({ownerId:ns.ownerId,semantic:true,expectedRevision:0},s.token));
@@ -149,4 +152,5 @@ for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])
  await testClock.advance(5001,{waitForWorkers:false});
  if(layout.family==='event-time')complete(t.name);
 });
+return cases;
 }
