@@ -268,4 +268,3 @@ test(`short ${group} item consumes one of six slots and its delivery budget, lay
   assert.equal(ok(read(f, group, f.core, null, { maxChars: chars - 1 })).groups[group].returned, 5,
     'one less character rejects the sixth whole item, including the short item in the cost');
 });
-

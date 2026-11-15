@@ -86,17 +86,16 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
   function sourcedMemory(ns, row, group, memo) {
     if (!db.prepare(`SELECT 1 FROM index_read_memories WHERE owner_id=? AND scope=? AND project_id=? AND id=? AND revision=?`)
       .get(ns.ownerId, ns.scope, ns.projectId, row.id, row.revision)) fail('index_revision_conflict');
-    let evidence;
-    try { evidence = readSourceEvidence(row,memo); }
+    let evidence, deliveryReceipts;
+    try { evidence = readSourceEvidence(row,memo,receipts => { deliveryReceipts = receipts; }); }
     catch (error) {
       if (error.code === 'context_item_too_large') return { memory: memoryMetadata(row, decisionReview), tooLarge: true };
       if (error.code === 'source_unavailable') {
-        // Only delivery markers may make an otherwise valid source set absent.
-        // Validate every stored row, including withheld rows, without delivering it.
+        // Validate every stored row before accepting a marker-only shortage.
+        // Reuse the ordinary safe receipt projection, never the stored evidence.
         storedSourceEvidence(row);
-        return null;
-      }
-      throw error;
+        evidence = { receipts: deliveryReceipts.map(({ id, role, excerpt }) => ({ id, role, excerpt })) };
+      } else throw error;
     }
     let tag = group === 'procedural' ? proceduralStorage.inspect(row.id) : null;
     if(tag&&!anchorsDeliverable(db,ns,row.id,tag.anchors,memo))tag=null;
@@ -222,9 +221,6 @@ export function assembleSessionContext({ runtime, model, ns, config }) {
       continue;
     }
     const item = candidates.items[position];
-    // Keep the physical identities for the authoritative reread, but a short
-    // Memory contributes no delivered metadata, count or budget consumption.
-    if (item === null) { positions[name]++; continue; }
     if (position >= 12 || group.items.length >= 6) { stopped[name] = true; continue; }
     if (item.tooLarge) { stopped[name] = true; continue; }
     group.items.push(item);
@@ -240,14 +236,13 @@ export function assembleSessionContext({ runtime, model, ns, config }) {
   if (config.groups.background) {
     if (!fits()) fail('context_item_too_large');
     const candidates = snapshot.groups.background;
-    const eligibleCount = candidates.identities.length - candidates.items.filter(item => item === null).length;
+    const eligibleCount = candidates.identities.length;
     const group = { enabled: true, returned: 0, complete: false,
       budget_exhausted: true, status: 'budget_exhausted', items: [] };
     value.groups.background = group; // Last key; legacy groups are now immutable.
     if (!eligibleCount) complete('background');
     const existingCount = value.groups.nextSteps.returned + value.groups.procedural.returned;
     for (const item of candidates.items) {
-      if (item === null) continue;
       if (item.tooLarge || group.returned >= 6 || existingCount + group.returned >= 12) break;
       value.framing = BACKGROUND_FRAMING;
       group.items.push(item);

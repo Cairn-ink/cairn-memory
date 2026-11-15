@@ -659,7 +659,7 @@ export function createMemoryRuntime(input, internal) {
     return {...value,sources:projected,...(edges ? {edges,status:!value.view && edges.some(edge=>edge.relation==='challenges-premise') ? 'reconfirmation-suggested' : 'unassessed'} : {})};
   }
 
-  function readSourceEvidence(row, memo = createContentReadMemo(db)) {
+  function readSourceEvidence(row, memo = createContentReadMemo(db), onShort) {
     const ns = { ownerId: row.owner_id, scope: row.scope, projectId: row.project_id || null };
     const original = snapshotReceipts(ns, row.id, memo);
     const allowed = unmarkedReceipts(ns, original, memo);
@@ -667,7 +667,10 @@ export function createMemoryRuntime(input, internal) {
     const receiptCount = detailDto(row).receiptCount;
     if (receiptCount > 100 || allowed.length > 100) fail('context_item_too_large');
     const receipts = safeReceipts(ns, allowed, memo);
-    if (receipts.length < receiptCount) fail('source_unavailable');
+    if (receipts.length < receiptCount) {
+      onShort?.(receipts);
+      fail('source_unavailable');
+    }
     const evidence = sourceEvidence(row, receipts, receiptCount, receiptKey);
     if (!contentReadSafety(db, { identity, namespace: ns, intent: 'history', memo, ref: { type: 'memory', namespace: ns,
       memoryId: row.id, revision: row.revision }, receipts }).allowed) fail('revision_conflict');
