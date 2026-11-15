@@ -308,6 +308,9 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // marked Memory with that Card's current lines; the output module returns
   // outOfDateIds to maintenance and no longer builds memoryIds entries. All
   // are internal comparisons: no acknowledgement, projection or stored field.
+  // Whole-topic continuity keeps an in-memory `ids` set per prior topic in
+  // maintenance (key:ids 1). A closed-shape test pins that no pass result and
+  // no stored row carries that key.
   // R2k dispatch branches duplicate existing opaque operation inputs:
   // classificationEventId (1 -> 2) selects the same batch for draft commit;
   // episodeId (4 -> 6) addresses the async read-only attempt outcome lookup

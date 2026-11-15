@@ -1654,6 +1654,7 @@
   },
   "core/engine-card-maintenance.mjs": {
     "key:id": 1,
+    "key:ids": 1,
     "key:memoryIds": 1,
     "key:memoryId": 1,
     "key:sourceMemoryRefs": 1
