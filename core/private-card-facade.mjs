@@ -31,7 +31,8 @@ function verifyCardMutationGrant(value,request) {
   return {generation:verifyPrivateGrant(ordinary,request),audit:{actorId:data.actorId,authorizedAt:data.authorizedAt,authorizationKind:data.authorizationKind}};
 }
 export function privateFailure(error) {
-  let code = error instanceof MemoryStoreError ? error.code : 'storage_error';
+  let code = error instanceof MemoryStoreError || ['storage_busy', 'storage_error'].includes(error?.code)
+    ? error.code : 'storage_error';
   if (isStorageBusy(error)) code = 'storage_busy';
   if (['invalid_identifier', 'invalid_revision', 'invalid_text'].includes(code)) code = 'invalid_input';
   return { ok: false, error: { code, retryable: code === 'storage_busy' } };

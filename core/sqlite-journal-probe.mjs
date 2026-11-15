@@ -197,7 +197,17 @@ const create = `
       try { process.kill(pid, 0); } catch (error) { if (error.code === 'ESRCH') dead = true; }
       if (!dead) throw Error('live_stage');
       dev = String(current.dev); ino = String(current.ino);
-      unlinkSync(stage);
+      // Claim a fresh unpredictable entry before checking the unlink target.
+      // A substitution at the original stage name must never be deleted.
+      const claimed = join(directory, prefix + pid + '-' + randomUUID());
+      renameSync(stage, claimed);
+      const held = lstatSync(claimed, { bigint: true });
+      if (!held.isFile() || held.isSymbolicLink() ||
+          ['dev','ino','nlink'].some(key => String(held[key]) !== proof.file[key])) {
+        renameSync(claimed, stage);
+        throw Error('changed_stage');
+      }
+      unlinkSync(claimed);
     } else {
     if (replacing || init) {
       if (!target.endsWith('.context-read-product-v1.1.sqlite')) throw Error('unsafe_cache');
@@ -328,7 +338,7 @@ const create = `
       }
       if (dir !== undefined) { closeSync(dir); dir = undefined; }
     }
-    value={dev,ino};
+    value=recovering?{dev,ino,directorySynced:true}:{dev,ino};
   } catch (error) { value={error:error.code??'EIO',errcode:Number.isInteger(error.errcode)?error.errcode:null,published}; }
   finally {
     if (fd !== undefined) closeSync(fd);
@@ -341,7 +351,7 @@ const create = `
 // A timeout is retryable only with an absent target, or a dead creator's exact
 // two-link stage whose durable publication can be finished. No database fd is
 // opened here. All other published states remain for existing admission checks.
-function recoverCreationTimeout(path) {
+function recoverCreationTimeout(path, creatorPid) {
   try {
     let file;
     try { file = sqliteFileStat(path); }
@@ -358,7 +368,7 @@ function recoverCreationTimeout(path) {
     for (const name of readdirSync(directory)) {
       if (!name.startsWith(prefix) || !/^[1-9][0-9]*-[0-9a-f-]{36}$/.test(name.slice(prefix.length))) continue;
       const pid = Number(name.slice(prefix.length).split('-')[0]);
-      if (!Number.isSafeInteger(pid)) continue;
+      if (!Number.isSafeInteger(pid) || pid !== creatorPid) continue;
       let dead = false;
       try { process.kill(pid, 0); } catch (error) { if (error.code === 'ESRCH') dead = true; }
       if (!dead) continue;
@@ -368,7 +378,10 @@ function recoverCreationTimeout(path) {
         JSON.stringify({ name, file: proof, directory: snapshot(parent, ['dev','ino','mode','uid','gid']) })], {
         encoding: 'utf8', timeout: 5000, maxBuffer: 4096, env: {},
       });
-      if (result.error || result.status !== 0 || result.signal || JSON.parse(result.stdout).error) return false;
+      if (result.error || result.status !== 0 || result.signal) return false;
+      const ack = JSON.parse(result.stdout);
+      if (!ack || Array.isArray(ack) || Object.keys(ack).sort().join(',') !== 'dev,directorySynced,ino' ||
+          ack.dev !== proof.dev || ack.ino !== proof.ino || ack.directorySynced !== true) return false;
       const after = sqliteFileStat(path);
       return after.isFile() && !after.isSymbolicLink() && after.nlink === 1n &&
         ['dev','ino','mode','uid','gid','size','mtimeNs'].every(key => after[key] === file[key]);
@@ -406,7 +419,7 @@ function runCreation(path, productReplacement, productInitialization, structured
     ...(productReplacement || productInitialization ? [productReplacement ? 'replace-product-cache' : 'initialize-product-cache', productReplacement ?? '', ...(productInitialization ? [JSON.stringify(productInitialization), ...(structured?['observe-native']:[])] : [])] : [])], {
     encoding: 'utf8', timeout: 5000, maxBuffer: structured ? 65536 : 4096, env: {},
   });
-  checkChildResult(result, 'sqlite_file_creation_failed', result.error?.code === 'ETIMEDOUT' && recoverCreationTimeout(path));
+  checkChildResult(result, 'sqlite_file_creation_failed', result.error?.code === 'ETIMEDOUT' && recoverCreationTimeout(path, result.pid));
   if(structured){
     const events=[];let value,calls,complete=!result.error && result.status===0 && !result.signal;
     try {
