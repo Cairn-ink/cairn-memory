@@ -4,13 +4,14 @@ import { engineCardFixture, ns, ok } from '../testing/engine-card-fixture.mjs';
 import { createEngineCardStorage } from '../engine-card-storage.mjs';
 import { createEngineCardMaintenance } from '../engine-card-maintenance.mjs';
 import { clusterMemories, partitionCardClusters, ENGINE_CARD_LIMITS } from '../engine-card-clusters.mjs';
+import { cardHost } from '../testing/raw-source-fixtures.mjs';
 
 const noop = () => {};
-function worker(f) {
+function worker(f, ports = {}) {
   const storage = createEngineCardStorage({ db: f.db, upgrade: true, ready: noop,
     identity: f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get() });
   let clock = Date.now();
-  const w = createEngineCardMaintenance({ storage, model: f.model, now: () => clock });
+  const w = createEngineCardMaintenance({ storage, model: f.model, now: () => clock, ...ports });
   return { storage, pass: () => w.maintain({ namespace: ns, budget: { maxMs: 5000 } }),
     time: () => clock, advance: ms => { clock += ms; } };
 }
@@ -136,4 +137,96 @@ test('A3: a blocked destination cannot be carried while an unrelated topic still
   assert.ok(destinations.every(key => !key.startsWith(`moc:${filed.mocId}`)), 'blocked parts are excluded before carry');
   assert.deepEqual(f.db.prepare("SELECT result FROM card_operations WHERE method='consolidate' AND action_id=?").get(carried.id), before);
   assert.ok(f.model.calls.every(call => call.memories.every(memory => memory.content.startsWith('Vega'))));
+});
+
+for (const smallerWins of [false, true])
+test(`disjoint similarity clusters keep distinct destinations when the ${smallerWins ? 'smaller' : 'larger'} cluster inherits the seed key`, async t => {
+  const f = engineCardFixture(t); f.seed(30);
+  let memberships;
+  const w = worker(f, { vectors: { read: () => memberships.map((group, i) => group.map(memory =>
+    ({ memoryId: memory.id, revision: memory.revision, vector: i ? [0, 1] : [1, 0] }))).flat() } });
+  const original = clusterMemories(w.storage.snapshot(ns, 512, noop).memories)[0];
+  // The seed's natural key belongs to the losing cluster in both variants.
+  const large = smallerWins ? original.memories.slice(0, 20) : original.memories.slice(10);
+  const small = smallerWins ? original.memories.slice(20) : original.memories.slice(0, 10);
+  // A later legacy source set can retain an earlier seed's identity. Here the
+  // 13-source cluster has 10/13 overlap with that 11-source prior topic.
+  const prior = smallerWins ? { ...original, memories: [original.memories[0], ...small] } : original;
+  const old = seedCard(w, prior);
+  w.storage.retire(ns, old.id, new Date(w.time() - ENGINE_CARD_LIMITS.debounceMs - 1).toISOString());
+  const added = f.seed(3, 'Synthetic additions');
+  const current = w.storage.snapshot(ns, 512, noop).memories;
+  memberships = [large, [...small, ...current.filter(memory => added.some(value => value.id === memory.id))]];
+  const expected = memberships.flatMap(memories => partitionCardClusters([{ key: 'expected', memories }]))
+    .filter(part => part.memories.length >= 5).map(part => part.memories.map(memory => memory.id).sort());
+  const built = [];
+  for (let i = 0; i < 8; i++) built.push(...(await w.pass()).built);
+  assert.equal(built.length, expected.length, 'no eligible part is overwritten or left unbuilt');
+  const actual = built.map(card => card.sourceRevisions.map(ref => ref.memoryId).sort());
+  assert.deepEqual(actual.sort(), expected.sort(), 'each eligible source set is built exactly once');
+  assert.equal(new Set(built.map(card => card.clusterKey)).size, expected.length);
+  assert.equal(new Set(built.map(card => topicKey(card.clusterKey))).size, 2);
+  const winner = memberships[smallerWins ? 1 : 0];
+  assert.ok(built.filter(card => card.sourceRevisions.some(ref => winner.some(memory => memory.id === ref.memoryId)))
+    .every(card => topicKey(card.clusterKey) === original.key), 'the highest qualifying overlap owns the prior key');
+});
+
+test('a purged legacy topic blocks both the continuity winner and its displaced natural-key owner', async t => {
+  const f = engineCardFixture(t); f.seed(30);
+  let groups;
+  const w = worker(f, { vectors: { read: () => groups.flatMap((group, i) => group.map(memory =>
+    ({ memoryId: memory.id, revision: memory.revision, vector: i ? [0, 1] : [1, 0] }))) } });
+  const original = clusterMemories(w.storage.snapshot(ns, 512, noop).memories)[0];
+  const legacy = seedCard(w, original), small = original.memories.slice(0, 10), large = original.memories.slice(10);
+  f.seed(3, 'Synthetic additions');
+  const current = w.storage.snapshot(ns, 512, noop).memories;
+  groups = [large, [...small, ...current.filter(memory => !original.memories.some(old => old.id === memory.id))]];
+  // The larger group qualifies by 20/30 overlap; the smaller owns the exact
+  // natural seed key. Both must stay blocked even after key displacement.
+  w.storage.retire(ns, legacy.id, new Date(w.time()).toISOString(), true);
+  for (const advance of [0, ENGINE_CARD_LIMITS.debounceMs - 1]) {
+    w.advance(advance);
+    const result = await w.pass();
+    assert.equal(result.modelCalls, 0); assert.deepEqual(result.built, []);
+    assert.equal(result.debounced, 3, 'all eligible parts of both matching purged topics are blocked');
+  }
+  w.advance(2);
+  const built = [];
+  for (let i = 0; i < 5; i++) built.push(...(await w.pass()).built);
+  assert.equal(built.length, 3);
+  assert.equal(new Set(built.map(card => card.clusterKey)).size, 3);
+  assert.equal(new Set(built.map(card => topicKey(card.clusterKey))).size, 2);
+});
+
+for (const actionId of ['engine-supersede.user-delete', 'ordinary-user-delete'])
+test(`public deletion starts the topic cooldown even with action id ${actionId}`, async t => {
+  const host = cardHost(), f = engineCardFixture(t, { privateCards: host.options });
+  f.file(f.seed(18), 'Orion');
+  const w = worker(f), parts = partitionCardClusters(clusterMemories(w.storage.snapshot(ns, 512, noop).memories));
+  const old = seedCard(w, parts[0]);
+  t.mock.timers.enable({ apis: ['Date'], now: w.time() });
+  try { ok(host.call(f.core, 'deleteKnowledgeCard', { namespace: ns, actionId, cardId: old.id, expectedRevision: 1 })); }
+  finally { t.mock.timers.reset(); }
+  assert.ok(w.storage.recentPurges(ns, new Date(w.time()).toISOString(), noop).some(card => card.id === old.id),
+    'a caller-chosen action id cannot exempt the tombstone');
+  const result = await w.pass();
+  assert.equal(result.modelCalls, 0); assert.deepEqual(result.built, []);
+  w.advance(ENGINE_CARD_LIMITS.debounceMs + 1);
+  const rebuilt = [];
+  for (let i = 0; i < 2; i++) rebuilt.push(...(await w.pass()).built);
+  assert.equal(rebuilt.length, 2);
+});
+
+test('a real same-part replacement exempts its purge only while the published replacement remains current', async t => {
+  const f = engineCardFixture(t); f.file(f.seed(18), 'Orion');
+  const w = worker(f), part = partitionCardClusters(clusterMemories(w.storage.snapshot(ns, 512, noop).memories))[0];
+  const old = seedCard(w, part);
+  w.storage.retire(ns, old.id, new Date(w.time()).toISOString());
+  w.advance(ENGINE_CARD_LIMITS.debounceMs + 1);
+  const replacement = w.storage.commit(ns, part, { body: 'Synthetic completed replacement.' }, new Date(w.time()).toISOString(), noop);
+  assert.ok(replacement);
+  assert.ok(!w.storage.recentPurges(ns, new Date(w.time()).toISOString(), noop).some(card => card.id === old.id));
+  w.storage.retire(ns, replacement.id, new Date(w.time()).toISOString());
+  assert.ok(w.storage.recentPurges(ns, new Date(w.time()).toISOString(), noop).some(card => card.id === old.id),
+    'a stale replacement is no longer a completed current publication');
 });

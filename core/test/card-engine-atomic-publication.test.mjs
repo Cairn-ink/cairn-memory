@@ -5,12 +5,14 @@ import { syncBuiltinESMExports } from 'node:module';
 import { copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync, StatementSync } from 'node:sqlite';
-import { engineCardFixture, scriptedConsolidator, ns } from '../testing/engine-card-fixture.mjs';
+import { engineCardFixture, scriptedConsolidator, ns, ok } from '../testing/engine-card-fixture.mjs';
 import { createEngineCardStorage } from '../engine-card-storage.mjs';
 import { createEngineCardMaintenance } from '../engine-card-maintenance.mjs';
 import { clusterMemories, partitionCardClusters } from '../engine-card-clusters.mjs';
 import { bindCommitConnection, bindCommitRuntime, createCommitDispatcher } from '../commit-dispatch.mjs';
 import { control } from '../testing/context-semantic-pause-fixture.mjs';
+import { safetyFixture, receipt } from '../testing/content-safety-s2h-fixture.mjs';
+import { openMemoryCore } from '../index.mjs';
 
 const noop = () => {}, clock = Date.UTC(2026, 5, 1), timestamp = new Date(clock).toISOString();
 const failure = code => Object.assign(Error('synthetic write refusal'), { code });
@@ -60,6 +62,13 @@ function observeCommits(t, f) {
   });
   return { split: () => split, restore: () => mock.mock.restore() };
 }
+// Discover the complete Card-table inventory; include optional installed
+// layouts, routing, effects and attempt rows, not just visible Card payloads.
+function cardRows(db) {
+  return Object.fromEntries(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND (name='private_cards' OR name GLOB 'card_*') ORDER BY name")
+    .all().map(({ name }) => [name, db.prepare(`SELECT * FROM "${name}" ORDER BY rowid`).all()]));
+}
+const attempts = db => db.prepare("SELECT method,result FROM card_operations WHERE method IN ('consolidateAttempt','consolidateOutcome') ORDER BY rowid").all();
 
 test('B1: a real pause after output validation rolls back the unit; resume publishes and retires together', async t => {
   const f = fixture(t), pauseDb = new DatabaseSync(f.path); t.after(() => pauseDb.close());
@@ -87,13 +96,16 @@ test('B1: a real pause after output validation rolls back the unit; resume publi
   assert.equal(observed.split(), false, 'resume also has no committed publication-only state');
 });
 
-test('B2: refusal before the unit and failure during retirement both release the attempt and allow retry', async t => {
+test('B2: non-pause refusal before the unit or during retirement rolls back and finishes terminal', async t => {
   for (const location of ['before write', 'retirement statement']) {
     const f = fixture(t), commit = f.storage.commit, run = StatementSync.prototype.run;
-    let injected = false;
+    let injected = false, beforeUnit, afterUnit;
     f.storage.commit = (...args) => {
-      if (!injected && location === 'before write') { injected = true; throw failure('storage_busy'); }
-      return commit(...args);
+      beforeUnit = cardRows(f.db);
+      try {
+        if (!injected && location === 'before write') { injected = true; throw failure('storage_busy'); }
+        return commit(...args);
+      } catch (error) { afterUnit = cardRows(f.db); throw error; }
     };
     const mock = t.mock.method(StatementSync.prototype, 'run', function(...args) {
       if (!injected && location === 'retirement statement' &&
@@ -108,11 +120,12 @@ test('B2: refusal before the unit and failure during retirement both release the
     assert.equal(refused.reason, location === 'before write' ? 'storage_busy' : 'consolidation_failed');
     assert.deepEqual(state(f), { published: false, retired: false }, location);
     assert.deepEqual(f.db.prepare('SELECT * FROM private_cards ORDER BY id').all(), before);
-    assert.equal(f.db.prepare("SELECT count(*) n FROM card_operations WHERE method IN ('consolidateAttempt','consolidateOutcome')").get().n, 0,
-      'failed combined writes release the attempt rather than recording a terminal output');
+    assert.deepEqual(afterUnit, beforeUnit, 'the refused unit rolls back every Card-table row before compensation');
+    assert.deepEqual(attempts(f.db).map(row => row.method), ['consolidateAttempt', 'consolidateOutcome']);
+    assert.equal(JSON.parse(attempts(f.db)[1].result).outcome, 'terminal');
     const next = await host.run(() => pass(f.storage, f.model));
-    assert.equal(next.modelCalls, 1); assert.equal(next.built.length, 1, JSON.stringify(next));
-    assert.deepEqual(state(f), { published: true, retired: true });
+    assert.equal(next.modelCalls, 0); assert.deepEqual(next.built, [], JSON.stringify(next));
+    assert.deepEqual(state(f), { published: false, retired: false });
   }
 });
 
@@ -152,9 +165,76 @@ test('retirement-only output applies all current-line retirements in one unit an
   assert.ok([f.old.id, second.id].every(id => f.db.prepare('SELECT revision FROM private_cards WHERE id=?').get(id).revision === 1),
     'a failure in the second retirement also rolls back the first');
   const resumed = await host.run(() => pass(f.storage, model));
-  assert.equal(resumed.modelCalls, 1); assert.deepEqual(resumed.built, []);
-  assert.ok([f.old.id, second.id].every(id => f.db.prepare('SELECT revision FROM private_cards WHERE id=?').get(id).revision === 2));
+  assert.equal(resumed.modelCalls, 0); assert.deepEqual(resumed.built, []);
+  assert.ok([f.old.id, second.id].every(id => f.db.prepare('SELECT revision FROM private_cards WHERE id=?').get(id).revision === 1));
+  assert.equal(JSON.parse(attempts(f.db).find(row => row.method === 'consolidateOutcome').result).outcome, 'terminal');
   assert.deepEqual(f.db.prepare('SELECT * FROM private_cards WHERE id=?').get(history.id), historyBefore);
+});
+
+test('a deterministic publication refusal spends only once across six later passes and a worker restart', async t => {
+  const f = fixture(t), get = StatementSync.prototype.get;
+  // Exercise the actual dependency-limit branch without creating 128 unrelated
+  // Cards. Only its existing count read is saturated; all writes are real.
+  const mock = t.mock.method(StatementSync.prototype, 'get', function(...args) {
+    if (this.sourceSQL.startsWith('SELECT count(*) AS n FROM (SELECT DISTINCT c.id') &&
+        f.parts[1].memories.some(memory => memory.id === args[0])) return { n: 128 };
+    return Reflect.apply(get, this, args);
+  });
+  const host = hosted(f), before = f.db.prepare('SELECT * FROM private_cards ORDER BY id').all();
+  const first = await host.run(() => pass(f.storage, f.model));
+  assert.equal(first.reason, 'dependency_limit_reached'); assert.equal(first.modelCalls, 1);
+  assert.deepEqual(first.built, []); assert.deepEqual(state(f), { published: false, retired: false });
+  assert.equal(JSON.parse(attempts(f.db).find(row => row.method === 'consolidateOutcome')?.result ?? '{}').outcome, 'terminal');
+  for (let i = 0; i < 6; i++) {
+    const result = await host.run(() => createEngineCardMaintenance({ storage: f.storage, model: f.model,
+      now: () => clock + (i + 1) * 3600000 }).maintain({ namespace: ns, budget: { maxMs: 5000 } }));
+    assert.equal(result.modelCalls, 0); assert.deepEqual(result.built, []);
+  }
+  mock.mock.restore();
+  assert.equal(f.model.calls.length, 1);
+  assert.deepEqual(f.db.prepare('SELECT * FROM private_cards ORDER BY id').all(), before);
+  assert.deepEqual(state(f), { published: false, retired: false });
+});
+
+test('a suppression epoch refusal retains the abandoned claim when terminal compensation is also refused', async t => {
+  const base = safetyFixture(t, 23); await base.migrate();
+  const core = openMemoryCore({ path: base.path }), db = base.connect();
+  t.after(() => { core.close(); db.close(); });
+  for (let i = 0; i < 18; i++) {
+    const memory = ok(core.admit({ namespace: ns, memory: { content: `Orion synthetic milestone ${i}`, kind: 'fact' },
+      receipts: [receipt(`synthetic-${i}`)] })).memory;
+    db.prepare('UPDATE memories SET created_at=? WHERE id=?').run(new Date(Date.UTC(2026, 0, 1 + i)).toISOString(), memory.id);
+  }
+  const storage = storageFor(db), parts = partitionCardClusters(clusterMemories(storage.snapshot(ns, 512, noop).memories));
+  const first = storage.commit(ns, parts[0], { body: 'Synthetic unchanged first part.' }, timestamp, noop);
+  const oldMemory = parts[0].memories[0], context = parts[0].memories[1];
+  const other = storage.commit(ns, { key: 'moc:synthetic-other-current', memories: [oldMemory] },
+    { body: `2026-01-01: ${oldMemory.content} [${oldMemory.id}]` }, timestamp, noop);
+  const model = scriptedConsolidator(({ input }) => ({ currentState: [{ text: 'ok', memoryIds: [input.memories[0].id] }],
+    timeline: [{ date: oldMemory.date, text: 'replaced', memoryIds: [oldMemory.id] }], contradictions: [] }));
+  let units = 0, validated = false, beforeUnit;
+  const count = model.countTokens;
+  model.countTokens = text => { if (text.startsWith('2026-')) validated = true; return count(text); };
+  const compensations = [], host = hosted({ db, storage }, ({ point }) => {
+    if (point === 'attempt' && ++units === 3) {
+      assert.equal(validated, true);
+      assert.ok(model.calls[0].memories.some(memory => memory.id === context.id));
+      ok(core.forget({ namespace: ns, memoryId: context.id, expectedRevision: context.revision }));
+      beforeUnit = cardRows(db);
+    }
+  });
+  const dispatch = host.dispatch;
+  t.mock.method(host, 'dispatch', function(connection, work, deadline, options) {
+    if (options?.compensating) compensations.push(work.name);
+    return Reflect.apply(dispatch, this, [connection, work, deadline, options]);
+  });
+  const result = await host.run(() => pass(storage, model));
+  assert.equal(result.state, 'refused'); assert.equal(result.modelCalls, 1); assert.deepEqual(result.built, []);
+  assert.ok(beforeUnit); assert.deepEqual(cardRows(db), beforeUnit, 'refusal and refused compensation add no Card writes');
+  assert.equal(db.prepare('SELECT state FROM private_cards WHERE id=?').get(first.id).state, 'deleted', 'the external forget itself purges its dependent Card');
+  assert.equal(db.prepare('SELECT revision FROM private_cards WHERE id=?').get(other.id).revision, 1, 'no cross-Card retirement');
+  assert.deepEqual(attempts(db).map(row => row.method), ['consolidateAttempt'], 'the retained epoch also refuses finish, as for pre-fix publication');
+  assert.deepEqual(compensations, ['finish'], 'non-pause refusal attempts terminal finish under the retained account');
 });
 
 test('B4: direct publication matches the baseline rows and result bytes with no intermediate committed split', async t => {
