@@ -12,6 +12,7 @@ the trigger in plain words and the last bounded pass. These methods are present
 only when the model implements
 `consolidate`; ordinary handles retain their established method surface.
 Writable pinned stores reuse installed Card tables without upgrading their schema.
+See [defaults, costs and off switches](defaults.md) for the local controls.
 
 ## Trigger
 
@@ -65,10 +66,19 @@ other Memories from the same original cluster, newest first, up to 24 total.
 Context is added only while the existing input and adapter envelopes still fit.
 `rawSpans` is an empty array; no Raw text is sent. When available, `relations`
 supplies up to 192 same-part edges; `supersedes` points from newer to older.
-`maintainCards` accepts the existing boolean `rawSpans` consent option; omitted
-or `false` also excludes receipt excerpts from pressure metering. Bundle model
-requests remain Memory-only even with consent. The local MCP server opts in
-only with `rawSemantic: true` and `contextSemantic !== false`.
+The Raw opt-in no longer affects bundle building. Bundles are built from Memory
+content only and never send Raw spans or receipt excerpts to `consolidate`, with
+the opt-in on or off. Without Raw spans, the feature is slightly weaker at telling
+that something is no longer true.
+
+`maintainCards` still accepts the boolean `rawSpans` consent option. It controls
+whether receipt excerpts enter the token counter when metering pressure for a
+four-Memory chain; omitted or `false` excludes those excerpts. It can therefore
+affect whether that chain qualifies to build a bundle. The resulting bundle
+request still contains only Memory content. The local MCP server enables this
+pressure opt-in only with `rawSemantic: true` and `contextSemantic !== false`.
+Those local switches also retain their separate control over Raw embeddings as
+explained in the [defaults table](defaults.md).
 
 The model identifies only out-of-date Memories: later statements that change,
 replace, remove, cancel or negate the same thing. Daily records remain true for
