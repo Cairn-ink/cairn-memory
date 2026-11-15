@@ -64,7 +64,7 @@ test(`A1: a purged ${generation} similarity topic blocks every part until cooldo
   assert.ok(rebuilt.every(card => card.sourceRevisions.every(ref => ref.memoryId !== cluster.memories[0].id)));
 });
 
-test('similarity continuity for a legacy full topic is inherited by every newly partitioned key', async t => {
+test('similarity continuity is chosen for the whole legacy topic before partitioning', async t => {
   const f = engineCardFixture(t); f.seed(30);
   const w = worker(f), cluster = clusterMemories(w.storage.snapshot(ns, 512, noop).memories)[0];
   const legacy = seedCard(w, cluster);
@@ -75,12 +75,10 @@ test('similarity continuity for a legacy full topic is inherited by every newly 
   w.storage.snapshot = (...args) => {
     const page = snapshot(...args); return { ...page, memories: [...page.memories].reverse() };
   };
-  const built = [];
-  for (let i = 0; i < 3; i++) {
-    const result = await w.pass(); assert.equal(result.built.length, 1, JSON.stringify(result)); built.push(...result.built);
-  }
-  assert.ok(built.every(card => topicKey(card.clusterKey) === cluster.key), 'resolve continuity before partitioning');
-  assert.deepEqual(new Set(built.map(card => card.clusterKey)), new Set([0, 1, 2].map(i => `${cluster.key}#${i}`)));
+  const result = await w.pass(); assert.equal(result.built.length, 1, JSON.stringify(result));
+  assert.equal(topicKey(result.built[0].clusterKey), cluster.key, 'resolve continuity before partitioning');
+  assert.equal(result.built[0].clusterKey, `${cluster.key}#0`);
+  assert.equal(result.built[0].sourceRevisions.length, 12);
 });
 
 for (const suffix of ['', '#0', '#1'])
