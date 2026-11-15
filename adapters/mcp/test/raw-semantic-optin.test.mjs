@@ -20,7 +20,14 @@ const memoryText = 'Synthetic memory-only copper atlas';
 const cardText = 'Synthetic card-only silver compass';
 const query = 'cobalt telescope';
 
-for (const mode of ['ambient','raw-flag','explicit-provider','off','explicit-provider-off']) test(`real MCP Raw semantic boundary: ${mode}`, { timeout:60000 }, async t => {
+// The shared provider arguments cap a process at 20 embedding requests. This
+// test is not about that cap: its readiness loop and the server's background
+// refresh spend a load-dependent number of requests, so it uses its own cap.
+// The cap itself is pinned by the request-cap tests below.
+const providerArgs = maxRequests => contextProviderArgs.map((arg, index, args) =>
+  args[index - 1] === '--context-embed-max-requests' ? String(maxRequests) : arg);
+
+async function start(t, mode, { maxRequests = 1000, id = 'synthetic-optin-' + mode } = {}) {
   t.mock.method(globalThis,'fetch',() => assert.fail('recording embedder must never contact a provider'));
   const workspace = createTestWorkspace(t), path = join(workspace.path,'store.sqlite');
   const host = cardHost(), writer = openMemoryCore({path,raw:true,privateCards:host.options});
@@ -29,13 +36,13 @@ for (const mode of ['ambient','raw-flag','explicit-provider','off','explicit-pro
   const draft = ok(host.call(writer,'createCardDraft',{namespace,actionId:'draft',drafting:'authored',input:{title:cardText,body:cardText,authoredInput:{text:'Synthetic card support',occurredAt:null}}}));
   ok(host.call(writer,'confirmCardDraft',{namespace,cardId:draft.id,expectedRevision:draft.revision,actionId:'confirm',applicability:'current'}));
   await writer.close();
-  const flags = mode === 'raw-flag' ? ['--raw-semantic'] : mode.startsWith('explicit-provider') ? contextProviderArgs : [];
+  const flags = mode === 'raw-flag' ? ['--raw-semantic'] : mode.startsWith('explicit-provider') ? providerArgs(maxRequests) : [];
   const parsed = parseConfiguration(['--db',path,'--owner',namespace.ownerId,...flags,...(mode.endsWith('off') ? ['--no-context-semantic'] : [])]);
   const {contextProvider,...config} = parsed;
   // Use the real ambient-key configuration and policy, replacing only its port.
   const automatic = createContextEmbedding(contextProvider,{OPENAI_API_KEY:'synthetic-not-a-key'});
   const base = createFakeEmbedder({dimensions:8}), calls = [];
-  const embedder = {...base,id:'synthetic-optin-'+mode,async embed(texts,controls) {
+  const embedder = {...base,id,async embed(texts,controls) {
     calls.push({texts:[...texts],raw:/core\/raw-search-(?:index|maintenance)\.mjs/.test(new Error().stack)});
     return base.embed(texts,controls);
   }};
@@ -51,6 +58,11 @@ for (const mode of ['ambient','raw-flag','explicit-provider','off','explicit-pro
   workspace.defer(() => server.close()); await server.contextCounterReady;
   const client = new Client({name:'synthetic-optin',version:'1'}), [a,b] = InMemoryTransport.createLinkedPair();
   workspace.defer(() => client.close()); await server.connect(a); await client.connect(b);
+  return { client, server, rawManager, rawEmbedding, embedder, calls };
+}
+
+for (const mode of ['ambient','raw-flag','explicit-provider','off','explicit-provider-off']) test(`real MCP Raw semantic boundary: ${mode}`, { timeout:60000 }, async t => {
+  const { client, server, rawManager, rawEmbedding, embedder, calls } = await start(t, mode);
   const enabled = !mode.endsWith('off'), rawEnabled = enabled && mode !== 'ambient';
   let response;
   for (let turn=0;turn<24;turn++) {
@@ -89,5 +101,43 @@ for (const mode of ['ambient','raw-flag','explicit-provider','off','explicit-pro
     assert.equal(status.embeddingBudget,null);
     assert.equal(ok(await rawManager.methods.searchRaw({namespace,query})).semantic.reason,status.semantic.reason);
   }
+  await client.close(); await server.close();
+});
+
+// A spent request cap is designed behaviour: semantic queries are refused as
+// budget_denied without a provider call, and reads still succeed lexically.
+async function capQuery(client, query) {
+  const value = ok(await contextCall(client,'find_memory_candidates',{query,types:['memory','card'],intent:'current'}));
+  return { value, text: JSON.stringify(value) };
+}
+const deniedChannel = '"semantic":{"state":"budget_denied","causes":["budget_denied"]}';
+
+test('request cap spent: semantic queries are denied as budget_denied with no provider call', { timeout:60000 }, async t => {
+  const { client, server, calls } = await start(t, 'explicit-provider', { maxRequests: 1, id: 'synthetic-optin-cap-1' });
+  // Whoever spends the single request first (background refresh, Raw
+  // maintenance or this query), the cap is spent once one call was made.
+  await capQuery(client, 'copper atlas cap-first');
+  for (let turn = 0; turn < 50 && calls.length < 1; turn++) await delay(100);
+  assert.equal(calls.length, 1, 'exactly one provider call within a cap of one');
+  for (const query of ['copper atlas cap-second', 'copper atlas cap-third']) {
+    const { text } = await capQuery(client, query);
+    assert.ok(text.includes(deniedChannel), 'spent cap reports budget_denied: ' + text);
+    assert.ok(!calls.some(call => call.texts.includes(query)), 'a denied query never reaches the provider');
+  }
+  assert.equal(calls.length, 1, 'no provider call after the cap is spent');
+  await client.close(); await server.close();
+});
+
+test('request cap not reached: the same semantic query is embedded', { timeout:60000 }, async t => {
+  const { client, server, calls } = await start(t, 'explicit-provider', { maxRequests: 1000, id: 'synthetic-optin-cap-1000' });
+  const query = 'copper atlas cap-second';
+  let text;
+  // A query arriving while a background embed holds the single slot is refused
+  // at once, so allow a few spaced attempts; the cap itself never refuses here.
+  for (let turn = 0; turn < 10 && !calls.some(call => call.texts.includes(query)); turn++) {
+    ({ text } = await capQuery(client, query));
+    if (!calls.some(call => call.texts.includes(query))) await delay(200);
+  }
+  assert.ok(calls.some(call => call.texts.includes(query)), 'query embedded below the cap: ' + text);
   await client.close(); await server.close();
 });
