@@ -5,9 +5,9 @@ import { randomInt } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { once } from 'node:events';
-import { createIdentity, selectedEnvironment, assertStore, assertStoreLocation, canonical, daemonVector, creationIdentity, creationDigest, physicalStore, storeFilesystemProbe } from './local-daemon-identity.mjs';
+import { createIdentity, selectedEnvironment, assertStore, assertStoreLocation, canonical, daemonVector, creationIdentity, creationDigest, physicalStore, storeFilesystemProbe, DAEMON_PROTOCOL } from './local-daemon-identity.mjs';
 import { runtimeDirectory, identityKey, endpointPaths, readPrivate, checkedEntry, refuse } from './local-daemon-state.mjs';
-import { authenticateClient, frameGuard, requestLedger, queuedBytes, QUEUE_BYTES } from './local-daemon-wire.mjs';
+import { authenticateClient, frameGuard, requestLedger, queuedBytes, QUEUE_BYTES, DAEMON_UNRESPONSIVE_MS, DAEMON_LIVENESS_METHOD } from './local-daemon-wire.mjs';
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 export async function connectOrStart(args, options = {}) {
@@ -62,6 +62,7 @@ async function connectAttempt(args, options, deadline) {
     const text = await readPrivate(directory, paths.ready, { missing: true });
     if (text) {
       let descriptor; try { descriptor = JSON.parse(text); } catch { throw refuse('daemon_descriptor'); }
+      if (descriptor.protocol !== DAEMON_PROTOCOL) throw refuse('daemon_protocol');
       if (canonical(descriptor.identity) !== canonical(identity.record)) throw refuse('daemon_identity');
       const info = await checkedEntry(directory, paths.socket, { socket: true, missing: true });
       if (info) {
@@ -90,8 +91,11 @@ async function connectAttempt(args, options, deadline) {
 export async function runForwarder(args = process.argv.slice(2), options = {}) {
   const input = options.input ?? process.stdin, output = options.output ?? process.stdout;
   const ledger = requestLedger();
-  let socket, incoming, closed = false, attached = false, recovering, initialize, initialized;
+  const monotonicMs = () => Number(process.hrtime.bigint() / 1000000n);
+  const unresponsiveMs = options.unresponsiveMs ?? DAEMON_UNRESPONSIVE_MS;
+  let socket, incoming, watchdog, lastByte = monotonicMs(), closed = false, attached = false, recovering, initialize, initialized;
   const outgoing = frameGuard({ onFrame(message, bytes) {
+    if (!ledger.pending.size) lastByte = monotonicMs();
     ledger.request(message);
     if (message.method === 'initialize') initialize = Buffer.from(bytes);
     if (message.method === 'notifications/initialized') initialized = Buffer.from(bytes);
@@ -100,7 +104,7 @@ export async function runForwarder(args = process.argv.slice(2), options = {}) {
   const done = new Promise(resolve => { finish = resolve; });
   const close = (code, preserveStdio = false) => {
     if (closed) return;
-    closed = true; input.unpipe(outgoing); outgoing.unpipe(); incoming?.unpipe();
+    closed = true; clearInterval(watchdog); input.unpipe(outgoing); outgoing.unpipe(); incoming?.unpipe();
     socket?.destroy(); outgoing.destroy(); incoming?.destroy(); ledger.clear();
     initialize = initialized = undefined;
     input.off('end', end); output.off('close', end);
@@ -117,31 +121,39 @@ export async function runForwarder(args = process.argv.slice(2), options = {}) {
   const end = () => close(null), term = () => close('daemon_terminated');
   input.once('end', end); input.on('error', failed); output.on('error', failed); output.once('close', end);
   process.once('SIGTERM', term); process.once('SIGINT', term); outgoing.on('error', failed);
-  async function transportErrors() {
+  async function transportErrors(code = 'daemon_transport') {
     for (const id of ledger.pending.keys()) {
-      const bytes = JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32000, message: 'daemon_transport' } }) + '\n';
+      const bytes = JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32000, message: code } }) + '\n';
       if (output.writableLength + Buffer.byteLength(bytes) > QUEUE_BYTES) throw refuse('daemon_queue_limit');
       if (!output.write(bytes)) await once(output, 'drain');
     }
     ledger.clear();
   }
   async function establish(replay = false) {
-    const connection = await connectOrStart(args, options);
+    const connection = await (options.connect ?? connectOrStart)(args, options);
     if (closed) { connection.socket.destroy(); return; }
     attached = true;
     socket = connection.socket;
+    lastByte = monotonicMs();
     options.onConnected?.(connection);
-    let replayId, replayResolve, replayReject;
+    let replayId, replayResolve, replayReject, detached = false;
     const replayDone = new Promise((resolve, reject) => { replayResolve = resolve; replayReject = reject; });
     // Only initialization is replayed. Its response belongs to the private replay,
     // and must not appear as a duplicate response on the client's stdout.
-    const filter = frameGuard({ onFrame(message) { ledger.response(message); }, queued: () => queuedBytes(socket, outgoing, output) });
+    const filter = frameGuard({ onFrame(message) {
+      if (!detached && socket === connection.socket) ledger.response(message);
+    }, queued: () => queuedBytes(socket, outgoing, output) });
     incoming = filter;
     const originalPush = filter.push.bind(filter);
     filter.push = (bytes, encoding) => {
-      if (bytes && replayId !== undefined) {
+      if (bytes) {
+        if (closed || socket !== connection.socket || detached) return true;
         const message = JSON.parse(bytes.toString('utf8'));
-        if (message.id === replayId && !message.method) {
+        if (message.method === DAEMON_LIVENESS_METHOD && !Object.hasOwn(message, 'id')) {
+          if (message.params?.protocol !== DAEMON_PROTOCOL) throw refuse('daemon_protocol');
+          return true;
+        }
+        if (replayId !== undefined && message.id === replayId && !message.method) {
           replayId = undefined;
           if (message.error) replayReject(refuse('daemon_reinitialize')); else replayResolve();
           return true;
@@ -149,23 +161,29 @@ export async function runForwarder(args = process.argv.slice(2), options = {}) {
       }
       return originalPush(bytes, encoding);
     };
-    filter.on('error', failed); filter.pipe(output, { end: false }); socket.pipe(filter);
-    const lost = () => {
+    filter.on('error', () => { if (!detached && socket === connection.socket) failed(); });
+    filter.pipe(output, { end: false }); socket.pipe(filter);
+    const lost = (code = 'daemon_transport') => {
       if (closed || socket !== connection.socket) return;
+      detached = true; clearInterval(watchdog);
       replayReject?.(refuse('daemon_transport'));
-      outgoing.unpipe(connection.socket); filter.unpipe(output); filter.destroy();
+      outgoing.unpipe(connection.socket); connection.socket.unpipe(filter); filter.unpipe(output); filter.destroy(); connection.socket.destroy();
       if (recovering) return;
       const toolInFlight = ledger.tools > 0;
       recovering = (async () => {
         input.pause();
-        await transportErrors();
-        if (toolInFlight) { close('daemon_outcome_unknown'); return; }
+        await transportErrors(code);
+        if (toolInFlight) { close(code === 'daemon_unresponsive' ? code : 'daemon_outcome_unknown'); return; }
         if (outgoing.pendingBytes || outgoing.readableLength || outgoing.writableLength) { close('daemon_transport'); return; }
         await establish(true);
         if (!closed) input.resume();
       })().catch(() => close('daemon_transport')).finally(() => { recovering = undefined; });
     };
-    socket.once('close', lost);
+    socket.once('close', () => lost());
+    socket.on('data', () => { if (!detached && socket === connection.socket) lastByte = monotonicMs(); });
+    watchdog = setInterval(() => {
+      if (ledger.pending.size && monotonicMs() - lastByte >= unresponsiveMs) lost('daemon_unresponsive');
+    }, Math.max(1, Math.min(250, unresponsiveMs)));
     if (replay && initialize) {
       replayId = JSON.parse(initialize.toString('utf8')).id;
       const timer = setTimeout(() => replayReject(refuse('daemon_reinitialize_timeout')), 2000);

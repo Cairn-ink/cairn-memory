@@ -2,18 +2,33 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, createConnection } from 'node:net';
 import { once } from 'node:events';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { authenticateClient, authenticateServer, frameGuard, requestLedger, proof, verifyProof, FRAME_BYTES, QUEUE_BYTES } from '../local-daemon-wire.mjs';
 
 async function pair(t, serverWork) {
-  const root = await mkdtemp('/tmp/cr3-w-'), sockets = [];
+  await mkdir('/tmp/cairn-es-r2', { recursive: true });
+  const root = await mkdtemp('/tmp/cairn-es-r2/w-'), sockets = [];
   const server = createServer(socket => { sockets.push(socket); socket.on('error', () => {}); void serverWork(socket).catch(() => socket.destroy()); });
   await new Promise(resolve => server.listen(join(root, 'wire.sock'), resolve));
   t.after(async () => { for (const socket of sockets) socket.destroy(); await new Promise(resolve => server.close(resolve)); await rm(root, { recursive: true, force: true }); });
   const socket = createConnection(join(root, 'wire.sock')); sockets.push(socket); socket.on('error', () => {}); await once(socket, 'connect'); return socket;
 }
-const descriptor = () => ({ protocol: 1, identity: { protocol: 1, build: 'synthetic-build' }, incarnation: 'a'.repeat(64), capability: 'b'.repeat(64) });
+const descriptor = () => ({ protocol: 2, identity: { protocol: 2, build: 'synthetic-build' }, incarnation: 'a'.repeat(64), capability: 'b'.repeat(64) });
+test('server independently refuses a protocol-one hello before authentication or MCP', async t => {
+  const d = descriptor(); let code, admissions = 0;
+  const socket = await pair(t, async peer => {
+    try {
+      await authenticateServer(peer, d, { deadline: performance.now() + 1000, admitting: () => true,
+        authenticated: async () => { admissions++; } });
+    } catch (error) { code = error.code; peer.destroy(); }
+  });
+  const closed = once(socket, 'close');
+  socket.write(JSON.stringify({ kind: 'hello', protocol: 1, identity: d.identity,
+    incarnation: d.incarnation, clientNonce: 'c'.repeat(64) }) + '\n');
+  await closed;
+  assert.equal(code, 'daemon_protocol'); assert.equal(admissions, 0);
+});
 test('each authentication uses fresh client and server challenges', async t => {
   const d = descriptor(), clients = [], servers = [];
   for (let i = 0; i < 2; i++) {
@@ -34,7 +49,7 @@ test('mutual challenge keeps MCP bytes behind auth; capability identity version 
     const socket = await pair(t, async peer => {
       if (kind === 'nonce') {
         peer.once('data', bytes => {
-          const hello = JSON.parse(bytes), transcript = { protocol: 1, identity: d.identity, incarnation: d.incarnation, clientNonce: hello.clientNonce, serverNonce: 'c'.repeat(64) };
+          const hello = JSON.parse(bytes), transcript = { protocol: 2, identity: d.identity, incarnation: d.incarnation, clientNonce: hello.clientNonce, serverNonce: 'c'.repeat(64) };
           peer.write(JSON.stringify({ kind: 'challenge', clientNonce: 'wrong', serverNonce: transcript.serverNonce, mac: proof(d.capability, 'server', transcript) }) + '\n');
           peer.once('data', () => peer.write(JSON.stringify({ kind: 'ready', metadata: {}, mac: proof(d.capability, 'ready', { ...transcript, metadata: {} }) }) + '\n'));
         }); return;
@@ -43,7 +58,7 @@ test('mutual challenge keeps MCP bytes behind auth; capability identity version 
       peer.on('data', bytes => { mcpBytes += bytes.length; }); peer.resume();
     });
     const seen = { ...d, capability: kind === 'capability' ? 'c'.repeat(64) : d.capability };
-    const identity = { ...d.identity, ...(kind === 'identity' ? { build: 'wrong-build' } : {}), ...(kind === 'protocol' ? { protocol: 2 } : {}) };
+    const identity = { ...d.identity, ...(kind === 'identity' ? { build: 'wrong-build' } : {}), ...(kind === 'protocol' ? { protocol: 1 } : {}) };
     if (kind === 'valid') { await authenticateClient(socket, seen, identity, performance.now() + 1000); socket.write('synthetic-MCP\n'); }
     else {
       await assert.rejects(authenticateClient(socket, seen, identity, performance.now() + 1000), undefined, kind + ' must refuse before MCP');
@@ -54,8 +69,8 @@ test('mutual challenge keeps MCP bytes behind auth; capability identity version 
 });
 test('client independently refuses an authenticated peer advertising a different full identity or protocol', async t => {
   for (const kind of ['identity', 'protocol']) {
-    const d = descriptor(), identity = { ...d.identity, ...(kind === 'identity' ? { build: 'different' } : { protocol: 2 }) };
-    const advertised = { ...d, ...(kind === 'protocol' ? { protocol: 2, identity } : {}) };
+    const d = descriptor(), identity = { ...d.identity, ...(kind === 'identity' ? { build: 'different' } : { protocol: 1 }) };
+    const advertised = { ...d, ...(kind === 'protocol' ? { protocol: 1, identity } : {}) };
     const socket = await pair(t, peer => authenticateServer(peer, { ...d, identity }, { deadline: performance.now() + 1000, admitting: () => true }));
     await assert.rejects(authenticateClient(socket, advertised, identity, performance.now() + 1000), undefined, 'client must compare full identity and protocol before MCP: ' + kind);
     socket.destroy();

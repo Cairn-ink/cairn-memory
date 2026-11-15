@@ -31,7 +31,7 @@ test('every managed identity input splits; safe aliases share and hardlinks refu
   await changed(f.args, { node: { ...f.options.node, execArgv: ['--no-warnings'] } });
   const executable = join(f.root, 'synthetic-node'); await writeFile(executable, 'synthetic executable identity');
   await changed(f.args, { node: { ...f.options.node, executable } });
-  await changed(f.args, { protocol: 2 });
+  await changed(f.args, { protocol: 1 });
   for (const environment of [{ OPENAI_API_KEY: '' }, { OPENAI_API_KEY: 'synthetic-A' }, { OPENAI_API_KEY: 'synthetic-B' }, { TZ: 'UTC' }]) await changed(f.args, { environment });
   const a = await f.identity({ environment: { OPENAI_API_KEY: 'synthetic-A' } }), b = await f.identity({ environment: { OPENAI_API_KEY: 'synthetic-B' } });
   assert.notEqual(a.digest, b.digest, 'credential values must split via keyed digest');

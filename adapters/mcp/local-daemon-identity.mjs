@@ -5,7 +5,7 @@ import { resolve, join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { refuse, assertLocalFilesystem } from './local-daemon-state.mjs';
 
-export const DAEMON_PROTOCOL = 1;
+export const DAEMON_PROTOCOL = 2;
 // Runtime location intentionally has no environment input. These are the ONLY
 // inherited values. Include provider/product reads even when the managed vector
 // cannot activate them. Node injection is refused before spawning a candidate.

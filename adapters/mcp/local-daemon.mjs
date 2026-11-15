@@ -7,7 +7,7 @@ import { withFileLock } from '../../integrations/client/file-lock.mjs';
 import { runtimeDirectory, endpointPaths, identityKey, checkedEntry, readPrivate, writePrivate, removePrivate, logCode, refuse } from './local-daemon-state.mjs';
 import { createIdentity, daemonVector, canonical, assertStore, assertStoreSync, assertStoreLocation, creationIdentity, creationDigest, physicalStore, DAEMON_PROTOCOL } from './local-daemon-identity.mjs';
 import { localProcessIdentity, startAwareAlive } from './local-daemon-liveness.mjs';
-import { authenticateServer, frameGuard, requestLedger, queuedBytes } from './local-daemon-wire.mjs';
+import { authenticateServer, frameGuard, requestLedger, queuedBytes, QUEUE_BYTES, DAEMON_LIVENESS_MS, DAEMON_LIVENESS_FRAME } from './local-daemon-wire.mjs';
 
 async function reapEndpoint(directory, paths, live) {
   const text = await readPrivate(directory, paths.ready, { missing: true });
@@ -118,8 +118,9 @@ async function serve(directory, paths, identity, bootstrap, owner, { idleMs, gra
     socket.on('error', () => {});
     if (draining || sockets.size >= 64) { socket.destroy(); return; }
     clearTimeout(idle); sockets.add(socket);
-    let input, output, handle;
+    let input, output, handle, heartbeat;
     const drop = () => {
+      clearInterval(heartbeat);
       void handle?.close().catch(() => {}); input?.destroy(); output?.destroy(); socket.destroy();
     };
     socket.once('close', () => { drop(); sockets.delete(socket); handles.delete(socket); armIdle(); });
@@ -146,7 +147,12 @@ async function serve(directory, paths, identity, bootstrap, owner, { idleMs, gra
       handle = runtime.attach(input, output);
       handles.get(socket).handle = handle;
         } });
+      if (socket.destroyed || draining) { drop(); return; }
       output.pipe(socket); socket.pipe(input); socket.resume();
+      heartbeat = setInterval(() => {
+        if (socket.writableLength + Buffer.byteLength(DAEMON_LIVENESS_FRAME) > QUEUE_BYTES) { drop(); return; }
+        socket.write(DAEMON_LIVENESS_FRAME);
+      }, DAEMON_LIVENESS_MS);
       // No tool text, ids, paths or response bodies in daemon-owned collections.
     })().catch(() => { log('daemon_refused'); drop(); });
   });

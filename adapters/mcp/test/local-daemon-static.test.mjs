@@ -61,6 +61,17 @@ test('forwarder closure is exactly Node core plus identity state and wire', () =
     'adapters/mcp/local-daemon-wire.mjs', 'adapters/mcp/local-forwarder.mjs',
   ], 'forwarder import closure must exclude server SDK core stateLock and pairing');
 });
+test('protocol-two liveness is private and T has no environment or argv input', () => {
+  const wire = readFileSync(resolve(root, 'adapters/mcp/local-daemon-wire.mjs'), 'utf8');
+  const forwarder = readFileSync(resolve(root, 'adapters/mcp/local-forwarder.mjs'), 'utf8');
+  const daemon = readFileSync(resolve(root, 'adapters/mcp/local-daemon.mjs'), 'utf8');
+  assert.match(wire, /DAEMON_UNRESPONSIVE_MS = 30000, DAEMON_LIVENESS_MS = 5000/);
+  assert.match(forwarder, /process\.hrtime\.bigint\(\)/);
+  const filter = forwarder.indexOf('message.method === DAEMON_LIVENESS_METHOD');
+  assert.ok(filter >= 0 && filter < forwarder.indexOf('return originalPush(bytes, encoding)'));
+  assert.match(daemon, /socket\.write\(DAEMON_LIVENESS_FRAME\)/);
+  assert.doesNotMatch(wire + forwarder + daemon, /Date\.now\(/);
+});
 test('A8 every environment read in daemon closure is pinned to identity allowlist', t => {
   const sources = closure('adapters/mcp/local-daemon.mjs', true), reads = [];
   const property = node => node?.type === 'MemberExpression' ? node.computed ? node.property.type === 'Literal' ? node.property.value : undefined : node.property.name : undefined;

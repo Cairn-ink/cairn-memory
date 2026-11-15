@@ -80,8 +80,20 @@ try {
           send({ kind: 'candidate-exit', pid: child.pid, code, signal }); resolve();
         })));
       },
-      onConnected({ descriptor, ready }) { send({ kind: 'connected', owner: descriptor.owner,
-        incarnation: descriptor.incarnation, metadata: ready.metadata }); },
+      onConnected({ socket, descriptor, ready }) {
+        if (configuration.observeLiveness) {
+          let buffer = '';
+          socket.on('data', chunk => {
+            buffer += chunk; let end;
+            while ((end = buffer.indexOf('\n')) >= 0) {
+              const message = JSON.parse(buffer.slice(0, end)); buffer = buffer.slice(end + 1);
+              if (message.method === 'notifications/cairn/daemon_liveness') send({ kind: 'liveness-seen' });
+            }
+          });
+        }
+        send({ kind: 'connected', owner: descriptor.owner,
+          incarnation: descriptor.incarnation, metadata: ready.metadata });
+      },
     });
     send({ kind: 'forwarder-done', code: result, bytesRead });
     if (result) process.exitCode = 1;
