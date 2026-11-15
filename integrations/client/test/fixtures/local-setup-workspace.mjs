@@ -42,8 +42,12 @@ export async function setupFixture(t,{ client='claude-code' } = {}) {
   const setup=()=>scoped(()=>setupLocalRaw(request));
   const api=createLocalRawSetup({installationDirectory:request.installationDirectory});
   const invoke=action=>scoped(()=>api[action]());
-  const hook=(event='SessionStart',changes={})=>scoped(()=>runLocalRawHook({installationDirectory:request.installationDirectory,event,
-    payload:{hook_event_name:event,session_id:sessionId,transcript_path:sourcePath,...changes}}));
+  const hook=async(event='SessionStart',changes={})=>{
+    const outcome=await scoped(()=>runLocalRawHook({installationDirectory:request.installationDirectory,event,
+      payload:{hook_event_name:event,session_id:sessionId,transcript_path:sourcePath,...changes}}));
+    if(!['ready','progress'].includes(outcome?.status))console.log('DIAG-HOOK '+JSON.stringify({client,event,status:outcome?.status,reason:outcome?.reason,at:Date.now(),node:process.version}));
+    return outcome;
+  };
   const control=()=>ok(core.getLocalCaptureControl({namespace:request.namespace,client}));
   const snapshot=(path=root)=>workspaceSnapshot(path,databasePath);
   return {workspace,root,request,core,binary,dependencies,sourcePath,clientConfigPath,api,setup,invoke,hook,control,snapshot,scoped,

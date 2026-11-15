@@ -67,11 +67,11 @@ export async function runLocalRawHook(value,options = {}) {
     if (!present) return await stateLock(paths.lock,async () => {
       if ((await readLocalInstallation(paths.root)).phase !== 'active') fail('authority_changed');
       const outcome = await host.markStart({...selection,start:'eof'},{signal:call.signal});
-      return hookResult(outcome.status,outcome.status === 'ready' ? null:'capture_refused');
+      return hookResult(outcome.status,outcome.status === 'ready' ? null:'capture_refused:'+outcome.reason);
     });
     const outcome = await (input.event === 'SessionStart' || input.event === 'UserPromptSubmit'
       ? host.initialize({ ...selection,start:'eof' },{ signal:call.signal }) : host.run(selection,{ signal:call.signal }));
-    return hookResult(outcome.status,['ready','progress'].includes(outcome.status) ? null:'capture_refused');
+    return hookResult(outcome.status,['ready','progress'].includes(outcome.status) ? null:'capture_refused:'+outcome.reason);
   } catch (error) {
     const outcome = failure(error); return hookResult(outcome.status,outcome.reason);
   }
