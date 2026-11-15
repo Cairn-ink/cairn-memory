@@ -90,6 +90,7 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
     try { evidence = readSourceEvidence(row,memo); }
     catch (error) {
       if (error.code === 'context_item_too_large') return { memory: memoryMetadata(row, decisionReview), tooLarge: true };
+      if (error.code === 'source_unavailable') return null;
       throw error;
     }
     let tag = group === 'procedural' ? proceduralStorage.inspect(row.id) : null;
@@ -215,8 +216,11 @@ export function assembleSessionContext({ runtime, model, ns, config }) {
       stopped[name] = true;
       continue;
     }
-    if (position >= 12 || group.items.length >= 6) { stopped[name] = true; continue; }
     const item = candidates.items[position];
+    // Keep the physical identities for the authoritative reread, but a short
+    // Memory contributes no delivered metadata, count or budget consumption.
+    if (item === null) { positions[name]++; continue; }
+    if (position >= 12 || group.items.length >= 6) { stopped[name] = true; continue; }
     if (item.tooLarge) { stopped[name] = true; continue; }
     group.items.push(item);
     group.returned++;
@@ -231,17 +235,19 @@ export function assembleSessionContext({ runtime, model, ns, config }) {
   if (config.groups.background) {
     if (!fits()) fail('context_item_too_large');
     const candidates = snapshot.groups.background;
+    const eligibleCount = candidates.identities.length - candidates.items.filter(item => item === null).length;
     const group = { enabled: true, returned: 0, complete: false,
       budget_exhausted: true, status: 'budget_exhausted', items: [] };
     value.groups.background = group; // Last key; legacy groups are now immutable.
-    if (!candidates.identities.length) complete('background');
+    if (!eligibleCount) complete('background');
     const existingCount = value.groups.nextSteps.returned + value.groups.procedural.returned;
     for (const item of candidates.items) {
+      if (item === null) continue;
       if (item.tooLarge || group.returned >= 6 || existingCount + group.returned >= 12) break;
       value.framing = BACKGROUND_FRAMING;
       group.items.push(item);
       group.returned++;
-      if (group.returned === candidates.identities.length) complete('background');
+      if (group.returned === eligibleCount) complete('background');
       const text = JSON.stringify(group.items);
       if (!fits() || text.length > config.backgroundBudget.maxChars ||
           count(text) > config.backgroundBudget.maxTokens) {
@@ -252,7 +258,7 @@ export function assembleSessionContext({ runtime, model, ns, config }) {
       }
     }
     if (!group.returned) value.framing = SESSION_FRAMING;
-    if ((!group.returned && candidates.identities.length) || !fits()) {
+    if ((!group.returned && eligibleCount) || !fits()) {
       delete value.groups.background;
       value.framing = SESSION_FRAMING;
       value.backgroundOmitted = true;

@@ -1268,7 +1268,8 @@ test('public sibling forget withholds a directly inserted fixture receipt on eve
     session: core.sessionStartContext({ namespace: ns, groups: { nextSteps: true, procedural: false, background: true },
       maxTokens: 2000, maxChars: 8000 }),
   });
-  error(values.session, 'source_unavailable');
+  values.session = ok(values.session);
+  assert.equal(hasId(values.session, f.memory.id), false, 'session withholds the short Memory entirely');
   assert.deepEqual(values.get.receipts.map(row => row.id), remaining);
   assert.deepEqual(values.fetch.items[0].receipts.map(row => row.id), remaining);
   assert.deepEqual(values.legacyGet.receipts.map(row => row.excerpt), values.get.receipts.map(row => row.excerpt));
