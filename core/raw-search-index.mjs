@@ -1,3 +1,4 @@
+import { rawSearchRequestState, withRawSearchRequestScope } from './raw-search-request-scope.mjs';
 import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { rawSearchOptions,searchInput,immutable,same,RAW_SEARCH_VERSION,RAW_SEARCH_LIMITS } from './raw-search-input.mjs';
 import { fail } from './validation.mjs';
@@ -65,14 +66,46 @@ export async function openRawSearch(value) {
       const operation=withContentSuppressionRequest(async()=>{try{ready();return await work(...args);}catch(error){safeFailure(error);}},{fresh:true});
       operations.add(operation);operation.then(()=>operations.delete(operation),()=>operations.delete(operation));return operation;
     };
-    function retain(map,key,entry,limit) {
-      for(const [id,value] of map)if(value.expires<performance.now())map.delete(id);
-      while(map.size>=limit)map.delete(map.keys().next().value);
+    const requestOwner = {};
+    function requestState() {
+      return rawSearchRequestState(requestOwner, () => {
+        const state = { prepared: new Map(), searches: new Map(), routes: new Set(), close() {
+          for (const handle of state.routes) sharedPrepared.delete(handle);
+          state.routes.clear(); state.prepared.clear(); state.searches.clear();
+        } };
+        return state;
+      }) ?? { prepared, searches };
+    }
+    function retain(map,key,entry,limit,drop=id=>map.delete(id)) {
+      for(const [id,value] of map)if(value.expires<performance.now())drop(id);
+      while(map.size>=limit)drop(map.keys().next().value);
       map.set(key,{...entry,expires:performance.now()+5000});
     }
     const checkSources=(sources,intent,at=Infinity)=>{for(const source of sources)authority.check(source,intent,at);};
+    // Scoped routing is metadata-only: the module-level authority WeakMap
+    // must not become a second strong owner of invocation text or handles.
+    function scopedPreparedRoute(stateRef, ticket, handleRef) {
+      return { identity: authority.identity, resolve(at) {
+        ready();
+        const live = stateRef.deref()?.prepared.get(ticket), handle = handleRef.deref();
+        if (!live || !handle || live.handle !== handle || live.expires < performance.now()) fail('source_unavailable');
+        return { ...live, access() { live.access(() => {
+          ready(); expired(at); checkSources(live.sources, live.intent, at);
+        }); } };
+      } };
+    }
     function retainPrepared(ticket,entry) {
-      retain(prepared,ticket,entry,RAW_SEARCH_LIMITS.preparations);
+      const state = requestState(), { prepared } = state;
+      retain(prepared,ticket,entry,RAW_SEARCH_LIMITS.preparations, id => {
+        const handle = prepared.get(id)?.handle;
+        if (state.routes) { sharedPrepared.delete(handle); state.routes.delete(handle); }
+        prepared.delete(id);
+      });
+      if (state.routes) {
+        state.routes.add(entry.handle);
+        sharedPrepared.set(entry.handle, scopedPreparedRoute(new WeakRef(state), ticket, new WeakRef(entry.handle)));
+        return;
+      }
       sharedPrepared.set(entry.handle,{identity:authority.identity,resolve(at){
         ready();
         const live=prepared.get(ticket);
@@ -83,6 +116,11 @@ export async function openRawSearch(value) {
           ready();expired(at);checkSources(live.sources,live.intent,at);
         });}};
       }});
+    }
+    function dropPrepared(ticket) {
+      const state = requestState(), handle = state.prepared.get(ticket)?.handle;
+      if (state.routes) { sharedPrepared.delete(handle); state.routes.delete(handle); }
+      state.prepared.delete(ticket);
     }
     async function retry(work,at,onExhausted) {
       while(true)try{expired(at);return await work(at);}catch(error){
@@ -213,7 +251,7 @@ export async function openRawSearch(value) {
           borrowed=cache.install(cacheProof.key,scopedRows,vectors,metadata,snapshot.hintBytes,()=>expired(deadlineAt));
         }
         expired(deadlineAt);
-        retain(searches,proof,{candidateSources,intent:input.intent,access,candidates},4);
+        retain(requestState().searches,proof,{candidateSources,intent:input.intent,access,candidates},4);
         return output;
       }finally{vectors=null;borrowed?.release();residency?.release();}
     }
@@ -225,7 +263,7 @@ export async function openRawSearch(value) {
       conversationId:source.ref.conversationId,messageId:source.ref.messageId,ordinal:source.ordinal,
       role:source.role,occurredAt:source.occurredAt,classification,ranges},check);
     function candidateEntry(candidate,intent) {
-      const entry=searches.get(candidate?.proof);
+      const entry=requestState().searches.get(candidate?.proof);
       if(!entry||entry.expires<performance.now()||entry.intent!==intent||!entry.candidates.some(row=>same(row,candidate)))fail('stale_publication');
       return {...entry,sources:entry.candidateSources.get(candidate.id)};
     }
@@ -265,9 +303,9 @@ export async function openRawSearch(value) {
       const source=rows[0].source;
       const output=preparedOutput(source,candidate.classification,ranges);
       const ticket=authority.bind('raw-search-prepared-v1',[candidate.proof,++serial]);
-      const handle=Object.freeze({value:output,ticket,validate(){return revalidate([ticket])[0];}});
+      const handle=Object.freeze({value:output,ticket,validate(){return revalidate([handle])[0];}});
       retainPrepared(ticket,{sources:entry.sources,intent,access,value:output,handle});
-      try{revalidate([ticket]);}catch(error){prepared.delete(ticket);throw error;}return handle;
+      try{revalidate([ticket]);}catch(error){dropPrepared(ticket);throw error;}return handle;
     }
     async function prepareMany(candidates,{intent='current',deadlineAt=performance.now()+1000,onPrepared=()=>{}}={},token) {
       if(!Array.isArray(candidates)||candidates.length>24||!['current','history'].includes(intent)||
@@ -314,9 +352,9 @@ export async function openRawSearch(value) {
             const output=preparedOutput(rows[0],candidate.classification,ranges,check);
             check();
             const ticket=authority.bind('raw-search-prepared-v1',[candidate.proof,++serial]);
-            handle=Object.freeze({value:output,ticket,validate(){return revalidate([ticket])[0];}});
+            handle=Object.freeze({value:output,ticket,validate(){return revalidate([handle])[0];}});
             retainPrepared(ticket,{sources:entry.sources,intent,access,value:output,handle});
-            try{revalidate([ticket]);}catch(error){prepared.delete(ticket);handle=null;throw error;}
+            try{revalidate([ticket]);}catch(error){dropPrepared(ticket);handle=null;throw error;}
           }catch(error){if(interrupted(error))throw error;}
           check();handles.push(handle);onPrepared(handle,index);
         }
@@ -336,7 +374,7 @@ export async function openRawSearch(value) {
         ordinal:source.ordinal,role:source.role,occurredAt:source.occurredAt,classification:source.classification,
         ranges:[{source:source.ref,text,classification:source.classification}]});
       const ticket=authority.bind('raw-search-source-prepared-v1',[instance,++serial,source.ref]);
-      const handle=Object.freeze({value:output,ticket,validate(){return revalidate([ticket])[0];}});
+      const handle=Object.freeze({value:output,ticket,validate(){return revalidate([handle])[0];}});
       retainPrepared(ticket,{sources:[source],intent,access,value:output,handle});
       revalidate([ticket]);return handle;
     }
@@ -348,7 +386,7 @@ export async function openRawSearch(value) {
       try {
         ready();if(!Array.isArray(handles)||handles.length>RAW_SEARCH_LIMITS.preparations)fail('invalid_input');
         const entries=handles.map(handle=>{
-          const own=prepared.get(typeof handle==='string'?handle:handle?.ticket);
+          const own=requestState().prepared.get(typeof handle==='string'?handle:handle?.ticket);
           if(own&&(typeof handle==='string'||own.handle===handle)){
             if(own.expires<performance.now())fail('source_unavailable');return own;
           }
@@ -379,9 +417,9 @@ export async function openRawSearch(value) {
           checkpoint:authority.bind('raw-search-progress-v1',progress.checkpointAdvances),lastActualWork:progress.lastActualWork}};
     };
     return Object.freeze({search:tracked(search),prepare:tracked(prepare),prepareMany:tracked(prepareMany),prepareSource:tracked(prepareSource),classify:tracked(classify),validate:revalidate,revalidate,
-      maintain:tracked(async(input,token)=>{const access=authority.authorize('rawSearchMaintenance',{},token);
+      maintain:tracked((input,token)=>withRawSearchRequestScope(async()=>{const access=authority.authorize('rawSearchMaintenance',{},token);
         cache.maintain();
-        await maintenance.maintain(input,access);return status();}),
+        await maintenance.maintain(input,access);return status();})),
       status:()=>withContentSuppressionRequest(async()=>{try{ready();await storage.status();return status();}catch{return {state:'unavailable',eligible:null,indexed:null,embedded:null,coverage:'unknown',error:'raw_search_unavailable'};}},{fresh:true}),
       purge:tracked(async()=>{cache.close();await maintenance.close();await storage.dropOwner();prepared.clear();searches.clear();}),
       close:()=>withContentSuppressionRequest(async()=>{if(closed)return;closed=true;

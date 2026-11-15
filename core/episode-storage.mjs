@@ -1,4 +1,5 @@
 import { cachedContentLayout } from './content-safety-schema.mjs';
+import { hasCommitDispatcher } from './commit-dispatch.mjs';
 import { contentReadSafety } from './content-safety.mjs';
 import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { createHmac, randomUUID } from 'node:crypto';
@@ -906,6 +907,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       transaction(db, () => cleanupKeep(ns, kept, code));
       keepCleanup.delete(kept.key.eventId);
     } catch (error) {
+      if (hasCommitDispatcher(db) && isStorageBusy(error)) throw error;
       if (!isStorageBusy(error)) throw error;
     }
   }

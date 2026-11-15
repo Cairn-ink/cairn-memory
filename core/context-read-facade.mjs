@@ -1,3 +1,5 @@
+import { bindCommitRuntime, dispatchCommit, dispatchSynchronousCommit, hasCommitDispatcher, withCommitBinding } from './commit-dispatch.mjs';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { cardLineageItemInside, cardLineageNamespaceInside } from './card-lineage.mjs';
 import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, cachedContentSuppressionRequestInside, hasContentSuppressionRequestInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
 import { contentScopeEpochGuard, assertContentScopes, contentSafetyFacade, assertContentPort, contentAuthorityPort } from './content-safety-boundary.mjs';
@@ -65,6 +67,22 @@ function metadata(port) {
   return { id, revision, dimensions, normalization };
 }
 
+// Hosts keep this opaque key for the connection lifetime. No key selects the
+// legacy single partition; the key is not serialized into engine cursors.
+const rankingPartition = new AsyncLocalStorage();
+const maintenanceObservation = new AsyncLocalStorage();
+// Private upkeep seam. A host retains only a fence checker for its enum view;
+// ordinary reads/refreshes do not acquire or retain an observation.
+export async function observeContextMaintenance(work, { host = false, previous } = {}) {
+  const observation = { host, previous };
+  const result = await maintenanceObservation.run(observation, work);
+  return { result, current: observation.current };
+}
+export function withContextReadRankingPartition(key, work) {
+  if (!key || typeof key !== 'object') throw TypeError('invalid_ranking_partition');
+  return rankingPartition.run(key, work);
+}
+
 export function openContextCore(baseOptions, contextRead, openBase) {
   const busyTimeoutMs = busyTimeoutOption(baseOptions);
   const busyOptions = busyTimeoutMs === undefined ? {} : { busyTimeoutMs };
@@ -89,7 +107,7 @@ export function openContextCore(baseOptions, contextRead, openBase) {
         const result = await base.maintainCards(input);
         if (result.ok && result.value.built?.length && !context.productCapabilities.types.includes('card')) {
           context.close();
-          context = createContextFacade(resolve(baseOptions.path), options, { readOnly, ...busyOptions });
+          context = withCommitBinding(context, () => createContextFacade(resolve(baseOptions.path), options, { readOnly, ...busyOptions }));
         }
         return result;
       },
@@ -123,7 +141,7 @@ function createContextFacade(path, options, { readOnly, ...busyOptions }) {
       productSqlite: options.product?.sqlite,
       validateProduct: options.product ? validateContextProductLayout : undefined,
       preflight: () => { if (readOnly && !options.product?.sqlite) (options.product ? assertContextReadCanonicalDelete : assertContextReadReadOnlyAuxiliaries)(path, options.product?.observer); } });
-    return initializeContextFacade(path, options, { readOnly, database });
+    return bindCommitRuntime(initializeContextFacade(path, options, { readOnly, database }), database?.db);
   } catch (error) {
     try { if (database?.db.isOpen) database.db.close(); } catch { /* Preserve the initialization refusal. */ }
     throw error;
@@ -132,8 +150,16 @@ function createContextFacade(path, options, { readOnly, ...busyOptions }) {
 function initializeContextFacade(path, options, { readOnly, database }) {
   if(options.authority)options={...options,authority:contentAuthorityPort(options.authority)};
   let closed = false;
-  let retainedSourceBytes = 0;
-  const rankings = new Map(), controllers = new Set(), indexes = new Map(), dispatch = contextBudget(options);
+  const defaultRankings = { rankings: new Map(), retainedSourceBytes: 0 };
+  let rankingPartitions = new WeakMap();
+  const rankingState = () => {
+    const key = rankingPartition.getStore();
+    if (!key) return defaultRankings;
+    let state = rankingPartitions.get(key);
+    if (!state) rankingPartitions.set(key, state = { rankings: new Map(), retainedSourceBytes: 0 });
+    return state;
+  };
+  const controllers = new Set(), indexes = new Map(), dispatch = contextBudget(options);
   const memoryOnly = path === ':memory:';
   const guardTimeouts = new WeakSet();
   const guardAuxiliaries = () => {
@@ -302,10 +328,11 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   // U5c-2 retained state includes identities, witnesses, fences and diagnostics;
   // the scan corpora never enter a ranking. Oldest eviction never renews TTL.
   function dropRanking(id) {
-    retainedSourceBytes -= rankings.get(id)?.sourceBytes ?? 0; rankings.delete(id);
+    const state = rankingState();
+    state.retainedSourceBytes -= state.rankings.get(id)?.sourceBytes ?? 0; state.rankings.delete(id);
   }
   function expireRankings() {
-    for (const [id, ranking] of rankings) if (Date.now() >= ranking.expires) dropRanking(id);
+    for (const [id, ranking] of rankingState().rankings) if (Date.now() >= ranking.expires) dropRanking(id);
   }
   const requestBinding = input => bind('ranking-request', [input.readSet, input.query, input.types, input.intent, input.semantic, ...(options.sources ? [input.sources] : [])]);
   const accessBinding = access => bind('access', access.accessGenerations);
@@ -359,7 +386,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     } catch { fail('invalid_cursor'); }
     if (!token || token.v !== 1 || token.b !== requestBinding(input) || !Number.isInteger(token.p) || token.p < 1 || token.p > (options.sources ? 32 : 24)) fail('invalid_cursor');
     expireRankings();
-    const ranking = rankings.get(token.r);
+    const ranking = rankingState().rankings.get(token.r);
     if (!ranking || token.e !== ranking.expires || token.c !== ranking.configuration || token.a !== accessBinding(access) ||
         token.g !== ranking.index || token.p >= ranking.items.length || Date.now() >= token.e) fail('cursor_stale');
     if (ranking.configuration !== rankingConfiguration(ranking.trace, ranking.sourceState, ranking.items)) fail('cursor_stale');
@@ -394,7 +421,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         const time = performance.now();
         const remaining = Math.floor(deadlineAt - time);
         if (remaining < 1) throw Object.assign(new MemoryStoreError('index_unavailable'), { reason: 'timeout' });
-        maintenance = storage.reconcile({ ...projection, budget: { maxItems: 1024, maxMs: remaining } }, { isCurrent: access.check });
+        maintenance = hasCommitDispatcher(db)
+          ? await storage.reconcileAsync({ ...projection, budget: { maxItems: 1024, maxMs: remaining } }, { isCurrent: access.check })
+          : storage.reconcile({ ...projection, budget: { maxItems: 1024, maxMs: remaining } }, { isCurrent: access.check });
         diagnostics.trace.timings.maintenanceMs = performance.now() - time;
         diagnostics.trace.maintenance = maintenance.metrics;
       }
@@ -524,8 +553,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       const sourceBytes = ranking.sourceBytes ?? 0;
       if (sourceBytes > SOURCE_LIMITS.retainedBytes) fail('context_item_too_large');
       // Evict before transferring request-local state into retained ownership.
-      while (rankings.size >= 128 || retainedSourceBytes + sourceBytes > SOURCE_LIMITS.retainedBytes) dropRanking(rankings.keys().next().value);
-      rankings.set(ranking.id, ranking); retainedSourceBytes += sourceBytes;
+      const state = rankingState();
+      while (state.rankings.size >= 128 || state.retainedSourceBytes + sourceBytes > SOURCE_LIMITS.retainedBytes) dropRanking(state.rankings.keys().next().value);
+      state.rankings.set(ranking.id, ranking); state.retainedSourceBytes += sourceBytes;
       access.check();
       if (sourceState) read(() => assertSourcesInside(input, sourceState, 'cursor_stale'));
       storage.assertState(projection, current);
@@ -553,6 +583,11 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     } catch (error) { return failure(error); }
   }
   async function refreshContextIndex(original, token) {
+    // Coordinator 11-14 (A): preserve main's ordinary refresh statements.
+    return hasCommitDispatcher(db) || maintenanceObservation.getStore()?.host
+      ? refreshHostContextIndex(original, token) : refreshUnboundContextIndex(original, token);
+  }
+  async function refreshUnboundContextIndex(original, token) {
     let controller, diagnostics, lease, deadlineAt;
     try {
       ready();
@@ -600,6 +635,97 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       diagnostics.coverage = coverage(input, current, preflight, 'lexical', 0, 0, maintenance);
       diagnostics.coverage.stops = { deadline: performance.now() >= deadlineAt,
         budget: maintenance.metrics.transformed + vectorProgress.attempted >= input.budget.maxItems || diagnostics.channels.semantic.causes.includes('budget_denied') };
+      return success({ status: !options.embedder || diagnostics.channels.semantic.state === 'ready' ? 'complete' : 'partial',
+        progress: { lexical: maintenance.progress, transformed: maintenance.metrics.transformed,
+          embeddingAttempts: vectorProgress.attempted, embedded: vectorProgress.embedded }, coverage: diagnostics.coverage, channels: diagnostics.channels,
+          ...(options.localStatus ? { trace: { localEmbedder: diagnostics.trace.localEmbedder } } : {}) });
+    } catch (error) {
+      if (diagnostics && !['scope_changed', 'authority_required', 'store_closed'].includes(error.code)) sampleTrace(diagnostics.trace);
+      lease?.invalidate(error);
+      if (diagnostics && deadlineAt !== undefined) diagnostics.coverage.stops.deadline ||= performance.now() >= deadlineAt;
+      if (diagnostics) diagnostics.coverage.maintenance.reason ??= maintenanceReasons.get(error.reason) ?? null;
+      return failure(error, ['scope_changed', 'authority_required', 'store_closed'].includes(error.code) ? undefined : diagnostics);
+    }
+    finally { lease?.release(); if (controller) { assertContentPort({invoke:()=>controller.abort()}); controllers.delete(controller); } }
+  }
+  async function refreshHostContextIndex(original, token) {
+    let controller, diagnostics, lease, deadlineAt;
+    try {
+      ready();
+      if (readOnly) fail('invalid_input');
+      const { payload, input } = contextInput('refreshContextIndex', original, supportedTypes), access = authorize('refreshContextIndex', input, payload, token);
+      // A host's all-idle combined turn can reuse only a complete maintenance
+      // result, after rechecking its entire canonical/sidecar fence. This is
+      // content-free upkeep state; failures always take the normal refresh path.
+      const retained = maintenanceObservation.getStore();
+      if (retained?.host && retained.previous && await retained.previous.current()) {
+        access.check();
+        retained.current = retained.previous.current;
+        return retained.previous.result;
+      }
+      diagnostics = { channels: { lexical: channel('unavailable'), semantic: channel(options.embedder ? 'unavailable' : 'absent') },
+        coverage: unknownCoverage(input), trace: trace({ semantic: Boolean(options.embedder) }) };
+      sampleTrace(diagnostics.trace);
+      if (options.embedder && !dispatch) { diagnostics.channels.semantic = channel('budget_denied'); fail('invalid_input'); }
+      deadlineAt = performance.now() + input.budget.maxMs; const projection = selected(input, access);
+      lease = acquireSidecar(projection, access); const storage = lease.storage;
+      const remaining = Math.floor(deadlineAt - performance.now());
+      if (remaining < 1) { diagnostics.coverage.stops.deadline = true; fail('index_unavailable'); }
+      const maintenance = hasCommitDispatcher(db)
+        ? await storage.reconcileAsync({ ...projection, budget: { ...input.budget, maxMs: remaining } }, { isCurrent: access.check })
+        : storage.reconcile({ ...projection, budget: { ...input.budget, maxMs: remaining } }, { isCurrent: access.check });
+      diagnostics.trace.maintenance = maintenance.metrics;
+      access.check();
+      let vectorProgress = { attempted: 0, embedded: 0 }, preflight, current = storage.state(projection);
+      maintenanceCoverage(diagnostics.coverage, maintenance, { deadlineAt, maxItems: input.budget.maxItems });
+      if (!current.ready) {
+        diagnostics.coverage.maintenance.progress = maintenance.progress;
+        sampleTrace(diagnostics.trace); access.check();
+        return success({ status: 'rebuilding', progress: { lexical: maintenance.progress, transformed: maintenance.metrics.transformed,
+          embeddingAttempts: 0, embedded: 0 }, coverage: diagnostics.coverage, channels: diagnostics.channels,
+          ...(options.localStatus ? { trace: { localEmbedder: diagnostics.trace.localEmbedder } } : {}) });
+      }
+      diagnostics.channels.lexical = channel('ready');
+      if (options.embedder) {
+        controller = new AbortController(); controllers.add(controller);
+        const remainingItems = input.budget.maxItems - maintenance.metrics.transformed, remainingMs = Math.floor(deadlineAt - performance.now());
+        try {
+          if (remainingItems > 0 && remainingMs > 0) vectorProgress = await storage.refreshVectors({ ...projection,
+            budget: { maxItems: remainingItems, maxMs: remainingMs } }, dispatch.port(options.embedder,{signal:controller.signal,deadlineAt,
+            guard:()=>{access.check();storage.assertState(projection,current,{checkpoint:false});}}), { signal: controller.signal, maxBatchDocuments: options.policy.maxBatchDocuments,
+            isCurrent: () => { access.check(); return true; },
+            onProgress: progress => { vectorProgress = progress; } });
+          access.check();
+          preflight = storage.semanticPreflight(projection, options.embedder, { deadlineAt });
+          preflight.release?.();
+          diagnostics.channels.semantic = channel(preflight.state);
+        } catch (error) { diagnostics.channels.semantic = degradation(error); }
+      }
+      sampleTrace(diagnostics.trace);
+      access.check(); current = storage.state(projection);
+      if (!current.ready) fail('index_unavailable');
+      diagnostics.coverage = coverage(input, current, preflight, 'lexical', 0, 0, maintenance);
+      diagnostics.coverage.stops = { deadline: performance.now() >= deadlineAt,
+        budget: maintenance.metrics.transformed + vectorProgress.attempted >= input.budget.maxItems || diagnostics.channels.semantic.causes.includes('budget_denied') };
+      const observation = maintenanceObservation.getStore();
+      if (observation && (observation.host || hasCommitDispatcher(db))) {
+        const expected = current;
+        observation.current = async () => {
+          const check = () => {
+            ready(); access.check();
+            // This is the sidecar's complete canonical/index fence, including
+            // Card dependencies, lineage and the owner suppression epoch.
+            storage.assertState(projection, expected, { checkpoint: false });
+            return true;
+          };
+          try {
+            // Both connections keep 5 ms native waits for this synchronous
+            // probe. Only the rolled-back probe retries, outside transactions.
+            return hasCommitDispatcher(db) ? await dispatchCommit(storage, () => dispatchSynchronousCommit(db, check))
+              : withContentSuppressionRequest(check, { fresh: true });
+          } catch { return false; }
+        };
+      }
       return success({ status: !options.embedder || diagnostics.channels.semantic.state === 'ready' ? 'complete' : 'partial',
         progress: { lexical: maintenance.progress, transformed: maintenance.metrics.transformed,
           embeddingAttempts: vectorProgress.attempted, embedded: vectorProgress.embedded }, coverage: diagnostics.coverage, channels: diagnostics.channels,
@@ -873,6 +999,6 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       }, noOwner: ['getContextReadCapabilities'], failure: facadeFailure }), close() {
     if (closed) return;
     closed = true; for (const controller of controllers) assertContentPort({invoke:()=>controller.abort()});
-    rankings.clear(); retainedSourceBytes = 0; for (const entry of indexes.values()) entry.storage.close(); indexes.clear(); if (db?.isOpen) db.close();
+    defaultRankings.rankings.clear(); defaultRankings.retainedSourceBytes = 0; rankingPartitions = new WeakMap(); for (const entry of indexes.values()) entry.storage.close(); indexes.clear(); if (db?.isOpen) db.close();
   } };
 }

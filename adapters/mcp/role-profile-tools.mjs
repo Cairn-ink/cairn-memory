@@ -1,3 +1,4 @@
+import { withSynchronousCommitScope } from '../../core/commit-dispatch.mjs';
 import * as z from 'zod/v4';
 import { identifier } from '../../core/validation.mjs';
 import { methodPath } from '../../core/method-package-input.mjs';
@@ -57,5 +58,5 @@ export function registerRoleProfileTools(tool, core, access) {
       range: z.strictObject({ start: zero, end: zero }).refine(range => range.end >= range.start && range.end - range.start <= 4000).optional(), ...shared }),
   ]);
   tool('read_role_task_context', trust + 'Read now, retain original identities with then/file, refresh the whole selection, or compare recorded predecessor edges. Keep the receipt verbatim: a lost receipt cannot be recovered. Historical content is labeled separately from applicability. Default/max 4000 local tokens includes this single text block and escaped receipt; diagnostics are client metadata. No semantic search or provider calls.',
-    input, input => access.call(core, 'readRoleTaskContext', { ...input, readSet: access.readSet }), true);
+    input, input => withSynchronousCommitScope('read_role_task_context', () => access.call(core, 'readRoleTaskContext', { ...input, readSet: access.readSet })), true);
 }
