@@ -181,6 +181,8 @@ receipt preserves the topic key and recent change time; forget cannot trigger
 an immediate model request.
 The debounce covers every part of the topic, including its tail, even when the
 purged Card used an older unpartitioned key or a different part suffix.
+Clearing a superseded Card after its replacement commits does not restart the
+wait for sibling parts.
 
 An optional `cardRelations.read({namespace, memoryIds, memories, signal})` port
 returns `{from, to, kind, slot}` edges. Only endpoints in the cluster and equal
