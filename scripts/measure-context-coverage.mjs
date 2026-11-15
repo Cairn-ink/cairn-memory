@@ -5,11 +5,13 @@
 // production dispatcher (not strict mode). --policy selects the embedding limits:
 // synthetic (generous, the default), hosted-default (the default provider's caps
 // and price estimate) or local-default (the local embedder's one-document calls).
-// --consolidator scripted adds the offline scripted consolidator and private
-// Cards, as a daemon with a model configured runs Card upkeep before each index
-// refresh; it creates engine Cards during the run. Use the same value on every
-// tree being compared. The embedder is always the in-process fake; no network or
-// key is used.
+// --consolidator scripted adds the offline scripted consolidator as the model, so
+// Card upkeep runs before each index refresh, as on a daemon with a model
+// configured. With this seed (one conversation, no dated recurrence or
+// supersession) no engine Card cluster forms, so it measures the upkeep scans and
+// bookkeeping, not consolidation or publication. Use the same value on every tree
+// being compared. The embedder is always the in-process fake; no network or key
+// is used.
 import { parseArgs } from 'node:util';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
@@ -22,10 +24,6 @@ import { openMemoryCore } from '../core/contract.mjs';
 import { createFakeEmbedder } from '../core/context-read-embedder.mjs';
 import { cardHost } from '../core/testing/raw-source-fixtures.mjs';
 import { createCairnServer } from '../adapters/mcp/server.mjs';
-import { DEFAULT_CONTEXT_PROVIDER } from '../adapters/mcp/context-read-provider.mjs';
-import { estimateEmbeddingUsd } from '../adapters/openai/embedding.mjs';
-import { localPolicy } from '../adapters/local-embedder/index.mjs';
-import { scriptedConsolidator } from '../core/testing/engine-card-fixture.mjs';
 
 const namespace = { ownerId: 'synthetic-context-coverage', scope: 'personal', projectId: null };
 const sets = { combined: ['memory', 'card'], memory: ['memory'], card: ['card'] };
@@ -56,11 +54,17 @@ function configuration() {
     limitMs: Math.ceil(limitMin * 60000), out: values.out, mode: values.host ? 'host' : 'unbound', policy, consolidator };
 }
 
-function embeddingPolicy(name) {
-  if (name === 'hosted-default') return Object.freeze({ family: 'hosted', maxRequests: DEFAULT_CONTEXT_PROVIDER.maxRequests,
-    maxUsd: DEFAULT_CONTEXT_PROVIDER.maxUsd, maxConcurrentQueries: 4,
-    estimateUsd: texts => estimateEmbeddingUsd(texts, { model: DEFAULT_CONTEXT_PROVIDER.model }) });
-  if (name === 'local-default') return localPolicy(Number.MAX_SAFE_INTEGER);
+// Policy modules load only when selected, so the default invocation keeps its
+// original import graph.
+async function embeddingPolicy(name) {
+  if (name === 'hosted-default') {
+    const [{ DEFAULT_CONTEXT_PROVIDER }, { estimateEmbeddingUsd }] = await Promise.all([
+      import('../adapters/mcp/context-read-provider.mjs'), import('../adapters/openai/embedding.mjs')]);
+    return Object.freeze({ family: 'hosted', maxRequests: DEFAULT_CONTEXT_PROVIDER.maxRequests,
+      maxUsd: DEFAULT_CONTEXT_PROVIDER.maxUsd, maxConcurrentQueries: 4,
+      estimateUsd: texts => estimateEmbeddingUsd(texts, { model: DEFAULT_CONTEXT_PROVIDER.model }) });
+  }
+  if (name === 'local-default') return (await import('../adapters/local-embedder/index.mjs')).localPolicy(Number.MAX_SAFE_INTEGER);
   return { family: 'local', maxRequests: 1000000, maxUsd: 1000, estimateUsd: () => 0 };
 }
 
@@ -130,11 +134,13 @@ async function main() {
     start = performance.now();
     timer = setTimeout(() => stop.abort(), options.limitMs);
     // The local policy requires a synchronous pack status; the synthetic pack is ready.
-    const contextEmbedding = { embedder, policy: embeddingPolicy(options.policy),
+    const contextEmbedding = { embedder, policy: await embeddingPolicy(options.policy),
       ...(options.policy === 'local-default' ? { localStatus: () => ({ state: 'ready', reason: null }) } : {}) };
     const serverOptions = { path, namespace, raw: true, rawSearch: false, contextRead: 'context-read-v1',
       contextSemantic: true, contextCounter: counter, contextEmbedding,
-      ...(options.consolidator === 'scripted' ? { model: scriptedConsolidator(), privateCards: 'local-v1' } : {}) };
+      // Loaded only when selected: the fixture's tokenizer is not a default dependency.
+      ...(options.consolidator === 'scripted'
+        ? { model: (await import('../core/testing/engine-card-fixture.mjs')).scriptedConsolidator() } : {}) };
     streams = pipes(); client = new Client({ name: 'synthetic-context-coverage', version: '1' });
     if (options.mode === 'host') {
       server = shared.createLocalSharedRuntime(serverOptions);
