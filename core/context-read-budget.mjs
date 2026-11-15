@@ -86,6 +86,9 @@ export function contextReadBudgetDiagnostic(port) {
 export function contextBudget(options, { now = Date.now } = {}) {
   if (!options.budgetConfigured) return null;
   const { policy } = options;
+  const maxConcurrentQueries = Object.hasOwn(policy, 'maxConcurrentQueries') ? policy.maxConcurrentQueries :
+    policy.family === 'hosted' ? 4 : 1;
+  if (!Number.isInteger(maxConcurrentQueries) || maxConcurrentQueries < 1 || maxConcurrentQueries > 16) throw refused('invalid_input');
   const local = policy.family === 'local' && policy.maxBatchDocuments === 1;
   const port = options.embedder;
   const binding = JSON.stringify([port?.id, port?.revision]);
@@ -118,7 +121,7 @@ export function contextBudget(options, { now = Date.now } = {}) {
       deny(budgetClass === 'maintenance' ? 'maintenance_cap' : 'query_cap');
     }
     if (budgetClass === 'maintenance' ? ledger.active >= 1 :
-        connection.active >= 1 || ledger.active >= (scoped ? policy.maxConcurrent ?? 2 : 1)) deny('slot_busy');
+        connection.active >= 1 || ledger.active >= (scoped ? maxConcurrentQueries : 1)) deny('slot_busy');
     if (isSignalAborted(signal) || performance.now() >= deadlineAt) throw refused('timeout');
     // Reserve synchronously, immediately before invoking the port. Unknown
     // usage keeps the conservative full charge. Every invocation reserves anew.

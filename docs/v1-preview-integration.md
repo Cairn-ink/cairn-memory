@@ -144,11 +144,16 @@ without models. `--check-config` checks syntax without database/key/provider acc
 For MCP, put `--check-config` first.
 
 Request caps are positive safe integers; USD caps finite and positive. Reservations
-precede transport and share cumulative totals across handles by embedder identity
-within the process. Unknown usage retains conservative charges; no automatic retry.
+precede transport and share UTC-day totals across handles by embedder identity
+within the process. The in-memory allowance resets at UTC midnight and on
+server restart. Unknown usage retains conservative charges; no automatic retry.
 Caps are neither durable nor account-wide. SDK configuration adds
-`embedder` and `policy:{family:'hosted',maxRequests,maxUsd,maxConcurrent,estimateUsd}`
+`embedder` and `policy:{family:'hosted',maxRequests,maxUsd,maxConcurrentQueries,estimateUsd}`
 to contextRead; `estimateUsd(texts)` is trusted synchronous policy.
+`maxConcurrentQueries` accepts integers 1–16 and defaults to 4 for hosted
+providers. It bounds scoped queries across the server; each connection and the
+unbound path retain one query slot, with one separate maintenance slot.
+The legacy `maxConcurrent` field remains accepted but does not control these slots.
 Sources: `adapters/mcp/context-read-configuration.mjs:4`,
 `adapters/mcp/context-read-provider.mjs:4`, `core/context-read-input.mjs:22`.
 

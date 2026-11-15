@@ -6,7 +6,7 @@ import { contextBudget, consumeLocalReservation } from '../../core/context-read-
 const shared = new Map();
 export function localPolicy(maxRequests) {
   if (!Number.isSafeInteger(maxRequests) || maxRequests < 1) fail('invalid_input');
-  return Object.freeze({ family: 'local', maxRequests, maxConcurrent: 1, maxBatchDocuments: 1 });
+  return Object.freeze({ family: 'local', maxRequests, maxConcurrent: 1, maxConcurrentQueries: 1, maxBatchDocuments: 1 });
 }
 function selection(value) {
   closed(value, ['packPath', 'threads', 'maxRequests']); absolutePath(value.packPath);

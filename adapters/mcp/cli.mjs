@@ -26,7 +26,7 @@ Defaults: Raw retention and Raw search maintenance are on (--no-raw disables ret
 Preferred memory reads: find_memory_candidates and read_memory_context (contextRead is on).
 --no-context-read removes these tools; --no-context-semantic keeps reads BM25-only.
 With OPENAI_API_KEY available to the Cairn MCP server, memories and search text
-go to OpenAI for semantic search, up to an estimated US$1 per server run.
+go to OpenAI for semantic search, up to an estimated US$1 per day per running Cairn server.
 Saved conversations are sent only with --raw-semantic or an explicit
 --context-embedder configuration. Raw document and query embeddings are off by default.
 To keep everything on this computer, don't give the server a key.

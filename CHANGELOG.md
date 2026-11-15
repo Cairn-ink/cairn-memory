@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — daily shared embedding budget
+
+- Share the estimated embedding budget across all connections to a running
+  Cairn server, resetting at UTC midnight. The in-memory allowance also resets
+  on server restart; it is not an account-wide spending cap.
+- Give queries and maintenance separate slots. Maintenance can use at most
+  90% of the configured daily dollar and request caps, reserving 10% for searches.
+- Allow four concurrent OpenAI queries across the shared server by default,
+  or one with the local CPU embedder. Each connection and the unbound path
+  retain one query slot, alongside one server-wide maintenance slot.
+
 ## 0.6.7 — 2026-11-14
 
 - Raw search now opens on macOS (directory link counts differ there).
