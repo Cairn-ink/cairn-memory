@@ -1,7 +1,11 @@
 // Synthetic process fixture. Its single IPC bootstrap is the only configuration input.
+import { daemonStderrTail } from './local-daemon-diagnostics.mjs';
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
 import { once } from 'node:events';
 import { runForwarder, connectOrStart } from '../../local-forwarder.mjs';
 import { runCandidate } from '../../local-daemon.mjs';
+import { processStart } from '../../local-daemon-liveness.mjs';
 
 const [configuration] = await once(process, 'message');
 const send = message => { if (process.connected) process.send(message); };
@@ -62,7 +66,19 @@ try {
     });
     send({ kind: 'candidate-done', acquired });
   } else {
-    const candidates = [];
+    const candidates = [], liveCandidates = new Map();
+    let connected = false, failedRespawn = false;
+    if (configuration.options?.failRespawnOnce || configuration.options?.failEveryCandidate) {
+      const spawn = childProcess.spawn;
+      childProcess.spawn = function(executable, args, options) {
+        if ((configuration.options?.failEveryCandidate || connected && !failedRespawn) && args.some(arg => arg.endsWith('/local-daemon.mjs'))) {
+          failedRespawn = true;
+          return spawn(executable, [new URL('./local-daemon-losing-candidate.mjs', import.meta.url).pathname], options);
+        }
+        return spawn(executable, args, options);
+      };
+      syncBuiltinESMExports();
+    }
     let bytesRead = 0;
     const read = process.stdin.read.bind(process.stdin);
     process.stdin.read = (...args) => { const bytes = read(...args); if (bytes) bytesRead += bytes.length; return bytes; };
@@ -75,12 +91,30 @@ try {
         // actual wait status until test teardown, including idle resets caused
         // by later sessions; their lifetime is not bounded by forwarder EOF.
         child.ref();
-        send({ kind: 'candidate', pid: child.pid });
-        candidates.push(new Promise(resolve => child.on('exit', (code, signal) => {
-          send({ kind: 'candidate-exit', pid: child.pid, code, signal }); resolve();
+        // Socket close can reach reconnect before Node delivers the old
+        // child's exit event. Count actual live processes, retaining every
+        // child's independent close/exit record below.
+        for (const [pid, start] of liveCandidates) {
+          const current = processStart(pid);
+          if (!current || current.zombie || current.start !== start) {
+            liveCandidates.delete(pid);
+            send({ kind: 'candidate-observed-dead', pid, start, observed: current });
+          }
+        }
+        const start = processStart(child.pid)?.start;
+        liveCandidates.set(child.pid, start);
+        child.once('exit', () => {
+          if (!configuration.options?.retainExitedCandidateRecords && liveCandidates.get(child.pid) === start) liveCandidates.delete(child.pid);
+        });
+        send({ kind: 'candidate', pid: child.pid, start, active_candidates: liveCandidates.size });
+        const stderr = daemonStderrTail();
+        child.stderr.on('data', bytes => stderr.write(bytes));
+        candidates.push(new Promise(resolve => child.on('close', (code, signal) => {
+          send({ kind: 'candidate-exit', pid: child.pid, code, signal, stderr: stderr.read() }); resolve();
         })));
       },
       onConnected({ socket, descriptor, ready }) {
+        connected = true;
         if (configuration.observeLiveness) {
           let buffer = '';
           socket.on('data', chunk => {

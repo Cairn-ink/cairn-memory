@@ -1,3 +1,4 @@
+import { daemonStderrTail } from './fixtures/local-daemon-diagnostics.mjs';
 import assert from 'node:assert/strict';
 import { fork } from 'node:child_process';
 import { once } from 'node:events';
@@ -12,17 +13,21 @@ import { processStart } from '../local-daemon-liveness.mjs';
 export const ns = { ownerId: 'synthetic-daemon-owner', scope: 'personal', projectId: null };
 export const query = { query: 'synthetic cobalt telescope', types: ['memory'], intent: 'current', semantic: false };
 export const ok = value => { assert.equal(value.ok, true, JSON.stringify(value)); return value.value; };
+const diagnostics = new Set();
+const safeTail = text => Buffer.from(text.split('\n').filter(line => !/sk-|ghp_|Bearer|token=|crn_pat_/.test(line)).join('\n')).subarray(-2048).toString();
 export async function until(predicate, marker, milliseconds = 12000) {
   const end = performance.now() + milliseconds;
   while (performance.now() < end) { const result = await predicate(); if (result) return result; await delay(20); }
-  assert.fail(marker);
+  assert.fail(marker + '\n' + JSON.stringify([...diagnostics].map(snapshot => snapshot())));
 }
 export async function workspace(t) {
-  await mkdir('/tmp/cairn-es-r2', { recursive: true });
-  const root = await mkdtemp('/tmp/cairn-es-r2/d-'); await mkdir(join(root, 'run'), { mode: 0o700 });
+  await mkdir('/tmp/cairn-es-r3', { recursive: true });
+  const root = await mkdtemp('/tmp/cairn-es-r3/d-'); await mkdir(join(root, 'run'), { mode: 0o700 });
   const path = join(root, 'synthetic.sqlite');
   const seed = openMemoryCore({ path, raw: false }); await seed.close();
   const children = [], owners = new Map(), exits = [], messages = [];
+  const snapshot = () => children.map(entry => ({ role: entry.role, closeCode: entry.messages.findLast(m => m.kind === 'forwarder-done')?.code ?? null, exit: entry.exit, messages: entry.messages, stderr: safeTail(entry.stderr) }));
+  diagnostics.add(snapshot);
   const args = ['--db', path, '--owner', ns.ownerId];
   let nextId = 0;
   function child(configuration) {
@@ -36,7 +41,8 @@ export async function workspace(t) {
       entry.messages.push(message); messages.push(message);
       if (message.kind === 'connected') owners.set(message.owner.pid, message.owner);
     });
-    process.stderr.on('data', bytes => { entry.stderr += bytes; assert.ok(entry.stderr.length < 8192, 'child stderr must remain bounded'); });
+    const stderr = daemonStderrTail();
+    process.stderr.on('data', bytes => { stderr.write(bytes); entry.stderr = stderr.read(); });
     let buffer = '';
     process.stdout.on('data', bytes => {
       buffer += bytes;
@@ -106,14 +112,24 @@ export async function workspace(t) {
       try { process.kill(owner.pid, 'SIGCONT'); process.kill(owner.pid, 'SIGTERM'); } catch (e) { if (e.code !== 'ESRCH') throw e; }
     }
     for (const entry of children) if (!entry.exit && entry.role === 'candidate') entry.process.kill('SIGTERM');
-    await until(() => children.every(entry => entry.exit), 'every spawned direct child must record exit code and signal');
-    // Candidate exits are reported by the spawning fixture, including losers.
+    // The fixture waits for every candidate before exiting. A candidate still
+    // waiting on the lifetime lock can win as the recorded owner exits, so stop
+    // these descendants before waiting for their supervising forwarder.
+    const signalled = new Set();
+    await until(() => {
+      let liveCandidate = false;
+      for (const candidate of messages.filter(m => m.kind === 'candidate')) {
+        const live = processStart(candidate.pid);
+        if (!live || live.zombie || live.start !== candidate.start) continue;
+        liveCandidate = true;
+        if (signalled.has(candidate)) continue;
+        signalled.add(candidate);
+        try { process.kill(candidate.pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+      }
+      return !liveCandidate && children.every(entry => entry.exit);
+    }, 'every candidate descendant and its supervisor must record exit');
     const candidatePids = new Set(messages.filter(m => m.kind === 'candidate').map(m => m.pid));
-    for (const pid of candidatePids) {
-      const live = processStart(pid);
-      if (live && !live.zombie) { try { process.kill(pid, 'SIGTERM'); } catch {} }
-      await until(() => { const current = processStart(pid); return !current || current.zombie; }, 'no candidate descendant may survive cleanup');
-    }
+    // Candidate exits are reported by the spawning fixture, including losers.
     for (const owner of owners.values()) await until(() => {
       const current = processStart(owner.pid); return !current || current.zombie || current.start !== owner.start;
     }, 'no daemon descendant may survive cleanup');
@@ -122,13 +138,17 @@ export async function workspace(t) {
     assert.equal(exits.length, children.length, 'every child has an exit record');
     assert.equal(messages.filter(m => m.kind === 'candidate-exit').length, candidatePids.size, 'every detached candidate must record actual exit code and signal');
     } finally {
+      for (const candidate of messages.filter(m => m.kind === 'candidate')) {
+        const current = processStart(candidate.pid);
+        if (current && !current.zombie && current.start === candidate.start) { try { process.kill(candidate.pid, 'SIGKILL'); } catch {} }
+      }
       for (const owner of owners.values()) {
         const current = processStart(owner.pid);
         if (current && !current.zombie && current.start === owner.start) { try { process.kill(owner.pid, 'SIGKILL'); } catch {} }
       }
       for (const entry of children) if (!entry.exit) entry.process.kill('SIGKILL');
       try { await until(() => children.every(entry => entry.exit), 'cleanup must reap every direct child after failure'); }
-      finally { await rm(root, { recursive: true, force: true }); }
+      finally { diagnostics.delete(snapshot); await rm(root, { recursive: true, force: true }); }
     }
   });
   return { root, path, args, children, owners, exits, messages, child, forward, connect, bootstrap, descriptor, probeConnection };

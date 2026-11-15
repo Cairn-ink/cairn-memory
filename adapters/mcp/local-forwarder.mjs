@@ -27,12 +27,15 @@ function spawnCandidate(payload, environment, options) {
   const child = spawn(process.execPath, [...process.execArgv, fileURLToPath(new URL('./local-daemon.mjs', import.meta.url))], {
     detached: true, shell: false, env: launchEnvironment, stdio: ['ignore', 'ignore', 'pipe', 'pipe'],
   });
-  child.on('error', () => {});
+  const candidate = { exited: false };
+  child.once('exit', () => { candidate.exited = true; });
+  child.on('error', () => { candidate.exited = true; });
   let stderrBytes = 0;
   child.stderr.on('data', bytes => { stderrBytes += bytes.length; if (stderrBytes > 4096) child.stderr.destroy(); });
   child.stderr.on('error', () => {}); child.stderr.unref();
   child.stdio[3].on('error', () => {}); child.stdio[3].end(bytes); child.stdio[3].unref(); child.unref();
   options.onCandidate?.(child);
+  return candidate;
 }
 async function connectAttempt(args, options, deadline) {
   const filesystem = storeFilesystemProbe(options.storeStatfs);
@@ -43,20 +46,22 @@ async function connectAttempt(args, options, deadline) {
   await assertStoreLocation(vector.configuration.path, directory, filesystem);
   const creation = await creationIdentity(vector.configuration.path, undefined, filesystem);
   const creationLock = resolve(directory.path, 'p-' + creationDigest(creation).slice(0, 32) + '.lock');
-  let provisioned = false;
+  const candidateLimit = 3;
+  let candidate, attempts = 0;
+  const canSpawn = () => (!candidate || candidate.exited) && attempts < candidateLimit;
+  const launch = payload => { attempts++; candidate = spawnCandidate(payload, environment, options); };
   while (performance.now() < deadline) {
     let exists = false;
     try { await physicalStore(creation.path, undefined, filesystem); exists = true; } catch (error) { if (error.code !== 'ENOENT') throw error; }
     const creating = await checkedEntry(directory, creationLock, { missing: true });
     if (exists && !creating) break;
-    if (!provisioned && performance.now() < deadline) { provisioned = true; spawnCandidate({ creation, root: options.root }, environment, options); }
+    if (canSpawn() && performance.now() < deadline) launch({ creation, root: options.root });
     await delay(Math.min(25 + randomInt(76), Math.max(1, deadline - performance.now())));
   }
   if (performance.now() >= deadline) throw refuse('daemon_connect_timeout');
   const identity = await createIdentity(args, { key: await identityKey(directory), environment, build: options.build, filesystem });
   if (!identity.eligible) throw refuse('daemon_not_eligible');
   const paths = endpointPaths(directory, identity.digest);
-  let spawned = false;
   while (performance.now() < deadline) {
     await directory.validate(); await assertStore(identity.record, filesystem);
     const text = await readPrivate(directory, paths.ready, { missing: true });
@@ -79,9 +84,8 @@ async function connectAttempt(args, options, deadline) {
         }
       }
     }
-    if (!spawned && performance.now() < deadline) {
-      spawned = true;
-      spawnCandidate({ args, environment, identity: identity.record, root: options.root, build: options.build }, environment, options);
+    if (canSpawn() && performance.now() < deadline) {
+      launch({ args, environment, identity: identity.record, root: options.root, build: options.build });
     }
     await delay(Math.min(25 + randomInt(76), Math.max(1, deadline - performance.now())));
   }

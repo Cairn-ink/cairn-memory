@@ -5,10 +5,11 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { runForwarder } from '../local-forwarder.mjs';
 import { DAEMON_LIVENESS_FRAME as live, DAEMON_UNRESPONSIVE_MS } from '../local-daemon-wire.mjs';
 
+const diagnostics = new Set();
 const until = async (predicate, message) => {
   const end = performance.now() + 3000;
   while (performance.now() < end) { if (predicate()) return; await delay(5); }
-  assert.fail(message);
+  assert.fail(message + '\n' + JSON.stringify([...diagnostics].map(snapshot => snapshot())));
 };
 const frame = message => JSON.stringify(message) + '\n';
 async function harness(t, { unresponsiveMs = 2000, replay, swapped } = {}) {
@@ -32,6 +33,8 @@ async function harness(t, { unresponsiveMs = 2000, replay, swapped } = {}) {
     return { socket, descriptor: {}, ready: {} };
   };
   let result;
+  const snapshot = () => ({ closeCode: result?.code ?? null, messages: peers.flatMap(p => p.requests), candidates: [] });
+  diagnostics.add(snapshot);
   const done = runForwarder([], { input, output, connect, unresponsiveMs,
     onConnected() { if (peers.length > 1) swapped?.(peers); },
   }).then(code => { result = { code }; return code; });
@@ -39,7 +42,7 @@ async function harness(t, { unresponsiveMs = 2000, replay, swapped } = {}) {
     input.end();
     await done;
     for (const { socket, peer } of peers) { socket.destroy(); peer.destroy(); }
-    output.destroy();
+    output.destroy(); diagnostics.delete(snapshot);
   });
   await until(() => peers.length === 1, 'first socket attached');
   return { input, output, peers, done, result: () => result,
