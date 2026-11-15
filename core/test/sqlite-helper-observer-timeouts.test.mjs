@@ -28,26 +28,40 @@ function build(h) {
   }
   assert.fail('OBSERVER_RETRY_CONVERGES');
 }
-for (const site of ['creation-265', 'probe-364', 'probe-394']) test(`OBSERVER_LIVE ${site}: public envelope, balanced counters, successful retry`, t => {
+const unavailableStatus = {
+  profile: 'context-read-product-v1.1',
+  lexical: { state: 'unavailable', reason: 'storage_unavailable', progress: null },
+  semantic: { state: 'disabled', reason: 'not_enabled' },
+  coverage: { status: 'unavailable', freshness: 'unverified', byType: { memory: { eligible: null, indexed: null, embedded: null } }, namespaces: ownerCoverage },
+};
+for (const site of ['creation-265', 'probe-364', 'probe-394'])
+for (const observed of site === 'creation-265' ? [true] : [true, false])
+for (const [fault, mode] of [['timeout', 1], ['exit', 2]])
+test(`OBSERVER_LIVE ${site} ${observed ? 'observer' : 'plain'} ${fault}: public envelope, balanced counters, successful retry`, t => {
   const f = fixture(t), observer = nativeObserver();
   let h;
   if (site !== 'creation-265') {
-    h = index(t, f.path, observer); build(h);
-    if (site === 'probe-394') { h.close(); h = index(t, f.path, observer); }
+    h = index(t, f.path, observed ? observer : undefined); build(h);
+    if (site === 'probe-394') { h.close(); h = index(t, f.path, observed ? observer : undefined); }
     // Force a real cache miss without any raw database descriptor.
     const path = f.path + PRODUCT_SIDECAR_SUFFIX, s = statSync(path);
     utimesSync(path, s.atime, new Date(s.mtimeMs + 1000));
   } else h = index(t, f.path, observer, true);
   const frame = nativeTelemetry(site, 1); observer.select(frame);
-  faults.arm(site === 'creation-265' ? 3 : 4); t.after(() => faults.reset());
+  faults.arm(site === 'creation-265' ? 3 : 4, mode); t.after(() => faults.reset());
   const method = site === 'creation-265' ? 'refreshContextIndex' : 'getContextIndexStatus';
   const result = h.run(method, method === 'refreshContextIndex' ? refresh : input);
-  assert.equal(faults.counts.reached, 1, 'OBSERVER_REAL_CHILD_TIMEOUT');
-  assert.deepEqual(result, { ok: false, error: { code: 'storage_busy', retryable: true } }, 'OBSERVER_PUBLIC_BUSY');
+  console.log(JSON.stringify({ marker: 'STATUS_RESULT', site, observed, fault, method, result }));
+  assert.equal(faults.counts.injected, 1, 'OBSERVER_REAL_CHILD_FAULT');
+  if (fault === 'timeout') assert.equal(faults.counts.reached, 1, 'OBSERVER_REAL_CHILD_TIMEOUT');
+  if (site !== 'creation-265' && observed) {
+    assert.equal(result.ok, true, 'OBSERVER_PUBLIC_STATUS');
+    assert.deepEqual(result.value, unavailableStatus, 'OBSERVER_FULL_STATUS_VALUE');
+  } else assert.deepEqual(result, { ok: false, error: { code: mode === 1 ? 'storage_busy' : 'storage_error', retryable: mode === 1 } }, 'OBSERVER_PUBLIC_BUSY');
   const v = new Int32Array(frame.buffer);
   assert.equal(v[5], 0, 'OBSERVER_SLOT5_BALANCED');
-  assert.equal(v[6], 1, 'OBSERVER_SLOT6_INCOMPLETE');
-  sealNative(frame); assert.equal(drainNative(frame, true).coverage, 'incomplete');
+  assert.equal(v[6], observed ? 1 : 0, 'OBSERVER_SLOT6_INCOMPLETE');
+  sealNative(frame); assert.equal(drainNative(frame, true).coverage, observed ? 'incomplete' : 'complete');
   const next = nativeTelemetry(site + '-retry', 1); observer.select(next);
   faults.reset();
   if (site === 'creation-265') build(h);

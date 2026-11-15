@@ -16,3 +16,10 @@ test('FIXTURE_ORIGINALS_RESTORED: subsequent same-process test sees all original
   assert.equal(threads.Worker, originals[1], 'FIXTURE_ORIGINALS_RESTORED_Worker');
   assert.equal(DatabaseSync.prototype.prepare, originals[2], 'FIXTURE_ORIGINALS_RESTORED_prepare');
 });
+test('FIXTURE_FAILED_BODY: an intentionally throwing subtest restores before its sibling', () => {
+  const result = children.spawnSync(process.execPath, ['--test', new URL('./fixtures/sqlite-helper-failing-body.mjs', import.meta.url).pathname], { encoding: 'utf8', env: {}, timeout: 10000 });
+  assert.equal(result.status, 1, 'intentional failure is contained in a separate test process');
+  assert.match(result.stdout, /INTENTIONAL_BODY_FAILURE/);
+  assert.match(result.stdout, /FAILED_BODY_RESTORED/, 'FIXTURE_FAILED_BODY_RESTORED');
+  assert.equal(children.spawnSync, originals[0]);
+});

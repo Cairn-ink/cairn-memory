@@ -12,6 +12,7 @@ const stall = "console.log('CHILD_STALL_REACHED'); Atomics.wait(new Int32Array(n
 // Track the actual native receiver, rather than only the public reader handle.
 const connections = new WeakMap(), prepare = DatabaseSync.prototype.prepare;
 let connectionSequence = 0;
+let creationResult, recoverySource, recoveryResult;
 function schemaCall(database, work) {
   if (!connections.has(database)) connections.set(database, ++connectionSequence);
   const id = connections.get(database);
@@ -40,12 +41,15 @@ export const faults = {
   },
   restore() {
     children.spawnSync = spawnSync; threads.Worker = NativeWorker; DatabaseSync.prototype.prepare = prepare;
-    syncBuiltinESMExports(); state.fill(0);
+    syncBuiltinESMExports(); faults.reset();
   },
   arm(target, mode = 1, header = false) {
     state.fill(0); state[1] = target; state[2] = Number(header); state[0] = mode;
   },
-  reset() { state.fill(0); },
+  reset() { state.fill(0); creationResult = recoverySource = recoveryResult = undefined; },
+  creationResult(work) { creationResult = work; },
+  recoverySource(work) { recoverySource = work; },
+  recoveryResult(work) { recoveryResult = work; },
   recovery(mode) { state[11] = mode; },
   get counts() { return { injected: state[3], probes: state[4], creations: state[5], reached: state[6], readyBusy: state[8], busyConnection: state[9], retriedConnection: state[10], recoveries: state[12], recoverySynced: state[13] }; },
 };
@@ -56,11 +60,12 @@ const patchedSpawn = (command, args, options) => {
     if (state[11] === 1) return spawnSync(command, [...args.slice(0, 2), 'process.exit(23);', ...args.slice(3)], options);
     if (state[11] === 2) return spawnSync(command, [...args.slice(0, 2), stall, ...args.slice(3)], { ...options, timeout: 1500 });
     const traced = [...args];
+    if (recoverySource) traced[2] = recoverySource(source);
     if (state[11] === 3) traced[2] = "Object.defineProperty(process,'platform',{value:'win32'});\n" + source;
     traced[2] = traced[2].replace('fsyncSync(dir);', "fsyncSync(dir); process.stderr.write('RECOVERY_DIRECTORY_SYNCED');");
     const result = spawnSync(command, traced, options);
     Atomics.store(state, 13, Number(result.stderr?.includes('RECOVERY_DIRECTORY_SYNCED')));
-    return result;
+    return recoveryResult ? recoveryResult(result, JSON.parse(args[5])) : result;
   }
   const creation = typeof source === 'string' && source.includes('fsyncSync(fd);');
   const probe = typeof source === 'string' && source.includes('PRAGMA journal_mode') && path.includes('nolock=1');
@@ -102,7 +107,7 @@ const patchedSpawn = (command, args, options) => {
     }
     const result = spawnSync(command, args, {...options,timeout:1500});
     Atomics.store(state, 6, Number(result.stdout?.includes(mode === 8 ? '"mode":' : 'CHILD_STALL_REACHED')));
-    return result;
+    return creationResult && creation ? creationResult(result, path) : result;
   }
   if (mode === 1) {
     if (creation) {
