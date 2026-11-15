@@ -65,10 +65,12 @@ export async function measureRawSearch(t,targets) {
     mkdirSync(directory,{mode:0o700});
     let db,reader,storage,service,ancestryProbe,retained=false;
     const preparationHolds={current:null,single:[],batch:[]},holdKinds=new WeakMap();
-    const originalExec=DatabaseSync.prototype.exec,starts=new WeakMap(),configured=new WeakSet(),sections=[],readWaits=[],sharedIntervals=[],sharedStarts=new WeakMap();
+    const originalExec=DatabaseSync.prototype.exec,originalPrepare=DatabaseSync.prototype.prepare,starts=new WeakMap(),configured=new WeakSet(),sections=[],readWaits=[],sharedIntervals=[],sharedStarts=new WeakMap();
     DatabaseSync.prototype.exec=function(sql){
       const began=performance.now(),value=originalExec.call(this,sql);
-      if(sql==='BEGIN'){
+      // The ordinary opener also probes pristine stores before initialization.
+      // Keep this observer check outside the lineage statement census.
+      if(sql==='BEGIN'&&originalPrepare.call(this,"SELECT 1 FROM sqlite_schema WHERE type='table' AND name='store_metadata'").get()){
         if(preparationHolds.current){
           const stack=new Error().stack;
           // Only the source reader's initial read -> prepare call, excluding
@@ -367,7 +369,9 @@ export async function captureContention(path,service,token,targets){
   const original=DatabaseSync.prototype.exec,active=new WeakMap(),intervals=[],configured=new WeakSet();
   DatabaseSync.prototype.exec=function(sql){
     const value=original.call(this,sql);
-    if(sql==='BEGIN'){
+    // The ordinary opener also probes pristine stores before initialization.
+      // Keep this observer check outside the lineage statement census.
+      if(sql==='BEGIN'&&originalPrepare.call(this,"SELECT 1 FROM sqlite_schema WHERE type='table' AND name='store_metadata'").get()){
       if(!configured.has(this)){this.function('raw_search_capture_hold',value=>{active.set(this,process.hrtime.bigint());return value;});configured.add(this);}
       this.prepare('SELECT raw_search_capture_hold(store_id) FROM store_metadata WHERE singleton=1').get();
     }
