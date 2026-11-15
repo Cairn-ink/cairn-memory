@@ -3,6 +3,18 @@ import { spawnSync } from 'node:child_process';
 import { lstatSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
+// Transport failures say nothing about file safety. Do not retain child output,
+// spawn arguments, or Error objects (which can contain paths) in the cause.
+function checkChildResult(result, message) {
+  if (!result.error && result.status === 0 && !result.signal) return;
+  const errno = result.error?.code, signal = result.signal;
+  const cause = typeof errno === 'string' && /^E[A-Z0-9]+$/.test(errno) ? errno
+    : typeof signal === 'string' && /^SIG[A-Z0-9]+$/.test(signal) ? signal : 'EIO';
+  throw Object.assign(new Error(message), {
+    code: errno === 'ETIMEDOUT' ? 'storage_busy' : 'storage_error', cause,
+  });
+}
+
 // Pure metadata predicates shared by the number-stat and bigint-stat guards.
 // Callers supply lstat snapshots; these predicates perform no filesystem access.
 export const sameJournal = (actual, expected) =>
@@ -332,6 +344,7 @@ function runCreation(path, productReplacement, productInitialization, structured
     ...(productReplacement || productInitialization ? [productReplacement ? 'replace-product-cache' : 'initialize-product-cache', productReplacement ?? '', ...(productInitialization ? [JSON.stringify(productInitialization), ...(structured?['observe-native']:[])] : [])] : [])], {
     encoding: 'utf8', timeout: 5000, maxBuffer: structured ? 65536 : 4096, env: {},
   });
+  checkChildResult(result, 'sqlite_file_creation_failed');
   if(structured){
     const events=[];let value,calls,complete=!result.error && result.status===0 && !result.signal;
     try {
@@ -343,7 +356,6 @@ function runCreation(path, productReplacement, productInitialization, structured
     }catch{complete=false;}
     return {value,calls,events,complete:complete && Boolean(value)};
   }
-  if (result.error || result.status !== 0 || result.signal) throw new Error('sqlite_file_creation_failed');
   const value = JSON.parse(result.stdout);
   if (value.error) throw Object.assign(new Error('sqlite_file_creation_failed'), { code: Number.isInteger(value.errcode) ? 'ERR_SQLITE_ERROR' : value.error, ...(Number.isInteger(value.errcode) ? {errcode:value.errcode} : {}), published: value.published });
   return value;
