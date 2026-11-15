@@ -175,6 +175,9 @@ test(`supersession erases the old Card bytes atomically: sealed=${sealed}, forge
   });
   const f = sealed ? await lineageFixture(t, { options: { model } }) : engineCardFixture(t, { model });
   const memories = seed(f), w = worker(f, model), first = (await w.pass()).built[0]; assert.ok(first);
+  // Admission returns metadata; retain canonical text before the rebuild.
+  const markerSource = f.db.prepare('SELECT deleted,currentness,content FROM memories WHERE id=?').get(memories[0].id);
+  assert.ok(markerSource.content.includes(marker));
   const retainedSeals = seals(f);
   // Add a source while preserving the marker in its original Memory; only
   // the superseded Card's copy must disappear.
@@ -204,7 +207,7 @@ test(`supersession erases the old Card bytes atomically: sealed=${sealed}, forge
   const current = rows(f).find(row => row.id === next.built[0].id);
   assert.equal(current.state, 'confirmed'); assert.ok(current.body.includes(marker));
   const source = f.db.prepare('SELECT deleted,currentness,content FROM memories WHERE id=?').get(memories[0].id);
-  assert.deepEqual({ ...source }, { deleted: 0, currentness: 'current', content: memories[0].content });
+  assert.deepEqual({ ...source }, { deleted: 0, currentness: 'current', content: markerSource.content });
   assert.ok(next.built[0].sourceRevisions.some(ref => ref.memoryId === memories[0].id));
   assertNoMarker(f, ns, current.id);
   const old = rows(f).find(row => row.id === first.id);
@@ -225,6 +228,14 @@ test(`supersession erases the old Card bytes atomically: sealed=${sealed}, forge
       if (sql === 'DELETE FROM receipts WHERE memory_id = ?') {
         assert.equal(this.isTransaction, true);
         assertNoMarker({ db: this });
+        assert.deepEqual(rows({ db: this }).find(row => row.id === old.id), old,
+          'forget leaves the already purged predecessor unchanged');
+        const replacement = rows({ db: this }).find(row => row.id === current.id);
+        assert.equal(replacement.state, 'deleted'); assert.equal(replacement.title, null); assert.equal(replacement.body, null);
+        for (const table of ['card_bindings', 'card_memory_bindings', 'card_raw_bindings']) {
+          if (this.prepare("SELECT 1 FROM sqlite_master WHERE name=?").get(table))
+            assert.equal(this.prepare(`SELECT count(*) n FROM ${table} WHERE card_id=?`).get(current.id).n, 0);
+        }
         observed = true;
       }
       return Reflect.apply(prepare, this, [sql]);
@@ -232,7 +243,7 @@ test(`supersession erases the old Card bytes atomically: sealed=${sealed}, forge
     let forgotten;
     try { forgotten = ok(forget(f, memories[0])); }
     finally { probe.mock.restore(); }
-    assert.equal(observed, true, 'both bundles are purged before forget commits');
+    assert.equal(observed, true, 'the replacement is purged before forget commits; the predecessor stays erased');
     assertNoMarker(f);
     for (const { name } of f.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all()) {
       const values = f.db.prepare('SELECT * FROM "' + name.replaceAll('"', '""') + '"').all();
