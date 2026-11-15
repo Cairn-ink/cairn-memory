@@ -195,7 +195,7 @@ test('R06 review 5: revoke after reservation but before transport, retaining con
     if (paused) { entered(); await new Promise(resolve => { release = resolve; }); }
     options.beforeDispatch(); transmissions++; return fake.embed(texts, options);
   } };
-  const caps = overrides => policy({ maxRequests: 1, maxUsd: 1, maxConcurrent: 1, estimateUsd: () => 1, ...overrides });
+  const caps = overrides => policy({ maxRequests: 2, maxUsd: 2, maxConcurrent: 1, estimateUsd: () => 1, ...overrides });
   const f = coreFixture(t, { embedder, selectedPolicy: caps() }); f.admit('apple');
   const operation = f.call('refreshContextIndex', refresh());
   try {
@@ -209,7 +209,7 @@ test('R06 review 5: revoke after reservation but before transport, retaining con
   f.reopen({ policy: caps({ maxConcurrent: 2 }) });
   assert.equal(ok(await f.call('refreshContextIndex', refresh())).channels.semantic.state, 'budget_denied');
   assert.equal(transmissions, 0, 'an invoked port keeps conservative request and USD charges across profiles');
-  f.reopen({ policy: caps({ maxRequests: 2, maxUsd: 2, maxConcurrent: 3 }) });
+  f.reopen({ policy: caps({ maxRequests: 3, maxUsd: 2.5, maxConcurrent: 3 }) });
   assert.equal(ok(await f.call('refreshContextIndex', refresh())).status, 'complete'); assert.equal(transmissions, 1);
   assert.equal(ok(await f.call('findCandidates', query({ semantic: true }))).channels.semantic.state, 'budget_denied');
 });
