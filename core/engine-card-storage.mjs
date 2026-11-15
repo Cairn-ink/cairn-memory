@@ -216,15 +216,33 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       // Routing receipts contain source identities, never body/title text.
       // Tombstones preserve similarity-key continuity and the forget debounce
       // without occupying any live Card page or becoming serving candidates.
-      // A supersession purge already committed its replacement. It must not
-      // restart the topic cooldown while sibling parts are still rebuilding.
+      // Only an internal supersession with its still-current, same-part
+      // publication can bypass cooldown. Public deletions atomically record
+      // their action in the ledger, even if its name mimics supersession.
       for (const row of db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o
         ON (o.owner_id,o.scope,o.project_id,o.action_id,o.target_id)=(c.owner_id,c.scope,c.project_id,c.id,c.id)
         WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state='deleted' AND c.updated_at>?
         AND o.method='consolidate' AND NOT EXISTS(SELECT 1 FROM card_effects e
+          JOIN private_cards replacement ON replacement.owner_id=c.owner_id
+            AND replacement.scope=c.scope AND replacement.project_id=c.project_id
+          JOIN card_operations publication ON (publication.owner_id,publication.scope,publication.project_id,
+            publication.action_id,publication.target_id)=(replacement.owner_id,replacement.scope,replacement.project_id,
+              replacement.id,replacement.id)
           WHERE e.owner_id=c.owner_id AND e.scope=c.scope AND e.project_id=c.project_id
-          AND e.entity_type='card' AND e.entity_id=c.id AND e.kind='card_deleted'
-          AND e.action_id GLOB 'engine-supersede.*') ORDER BY c.id`).iterate(...boundary(ns), since)) {
+          AND e.entity_type='card' AND e.entity_id=c.id AND e.kind='card_deleted' AND e.revision=c.revision
+          AND e.action_id GLOB 'engine-supersede.*'
+          AND NOT EXISTS(SELECT 1 FROM card_operations action WHERE action.owner_id=e.owner_id
+            AND action.scope=e.scope AND action.project_id=e.project_id AND action.action_id=e.action_id)
+          AND replacement.id!=c.id AND replacement.id GLOB 'engine-card.*'
+          AND replacement.state='confirmed' AND replacement.revision=1 AND replacement.body_revision=1
+          AND replacement.created_at=c.updated_at AND replacement.updated_at=c.updated_at
+          AND publication.method='consolidate' AND publication.created_at=c.updated_at
+          AND json_extract(publication.result,'$.origin')='engine'
+          AND json_extract(publication.result,'$.id')=replacement.id
+          AND json_extract(publication.result,'$.revision')=replacement.revision
+          AND json_extract(publication.result,'$.builtAt')=publication.created_at
+          AND json_extract(publication.result,'$.clusterKey')=json_extract(o.result,'$.clusterKey'))
+        ORDER BY c.id`).iterate(...boundary(ns), since)) {
         check(); const metadata = engineCardMetadataInside(db, ns, row);
         if (metadata) result.push({ ...metadata, row });
       }

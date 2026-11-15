@@ -1,5 +1,6 @@
 import { isStorageBusy } from './database.mjs';
 import { performance } from 'node:perf_hooks';
+import { createHash } from 'node:crypto';
 import { dispatchCommit, hasCommitDispatcher } from './commit-dispatch.mjs';
 import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { assertContentPort, inertContentPortValue } from './content-safety-boundary.mjs';
@@ -118,7 +119,8 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
         // A deleted seed must not turn a stale topic into a new key and bypass
         // its debounce. Reuse a prior similarity key for a majority-overlapping
         // source set; MOC identities remain exact and never merge this way.
-        const blockedTopics = new Set();
+        const blockedClusters = new Set(), matchesByCluster = new Map();
+        const naturalKeys = new Set(topics.map(cluster => cluster.key));
         for (const cluster of topics) {
           check();
           let blocked = purgedTopics.has(cluster.key);
@@ -128,10 +130,37 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
               overlap: [...prior.ids].filter(id => ids.has(id)).length / Math.max(ids.size, prior.ids.size) }))
               .filter(value => value.overlap >= .65)
               .sort((a, b) => b.overlap - a.overlap || a.prior.builtAt.localeCompare(b.prior.builtAt));
-            if (matches.length) cluster.key = matches[0].prior.key;
+            if (matches.length) matchesByCluster.set(cluster, matches[0]);
             blocked ||= matches.some(match => purgedTopics.has(match.prior.key));
           }
-          if (blocked) blockedTopics.add(cluster.key);
+          if (blocked) blockedClusters.add(cluster);
+        }
+        // Award continuity before natural keys: the best overlap owns a prior
+        // key, with the existing build-time/stable traversal order for ties.
+        const ownedKeys = new Set(), inherited = new Set();
+        for (const [cluster, match] of [...matchesByCluster].sort(([, a], [, b]) =>
+          b.overlap - a.overlap || a.prior.builtAt.localeCompare(b.prior.builtAt))) {
+          if (ownedKeys.has(match.prior.key)) continue;
+          cluster.key = match.prior.key; ownedKeys.add(cluster.key); inherited.add(cluster);
+        }
+        const blockedTopics = new Set();
+        for (const cluster of topics) {
+          check();
+          if (!inherited.has(cluster)) {
+            if (ownedKeys.has(cluster.key)) {
+              // A continuity winner can take another cluster's natural seed.
+              // Derive a stable identity from that displaced cluster's full
+              // source set, reserving all natural keys before trying a salt.
+              const naturalKey = cluster.key, sources = cluster.memories.map(memory => memory.id).sort();
+              let salt = 0;
+              do { cluster.key = 'similarity:' + createHash('sha256').update(JSON.stringify([naturalKey, sources, salt++])).digest('hex'); }
+              while (ownedKeys.has(cluster.key) || naturalKeys.has(cluster.key));
+            }
+            ownedKeys.add(cluster.key);
+          }
+          // Blocking belongs to the matched source set, even when it loses
+          // continuity ownership or its natural key has to be displaced.
+          if (blockedClusters.has(cluster)) blockedTopics.add(cluster.key);
         }
         const eligible = new Map(), blocked = new Map();
         for (const cluster of partitionCardClusters(topics)) {
@@ -146,6 +175,7 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
               representation: 'representation-v2-dated', deadlineAt: end, snapshotOf: () => null }).diagnostics.budget.used : 0;
           cluster.trigger = cardTrigger(cluster.memories, edges, tokens);
           if (cluster.trigger.eligible) {
+            if (eligible.has(cluster.key) || blocked.has(cluster.key)) fail('storage_error');
             if (blockedTopics.has(topicKey(cluster.key))) { blocked.set(cluster.key, cluster); result.debounced++; }
             else eligible.set(cluster.key, cluster);
           }
@@ -220,7 +250,6 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
           const attempt = commit ? await commit(claim) : claim();
           if (!attempt) { result.debounced++; continue; }
           result.modelCalls++;
-          let writing = false;
           try {
             const output = await callModel(model, 'consolidate', CONSOLIDATE_PROMPT, request(), {
               deadline, beforeDispatch: checkPause, validateFresh: () => { check(); storage.validate(ns, requestSources, check); }, failureCode: 'consolidation_failed' });
@@ -242,9 +271,7 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
             // Publication (when there is a body) and every retirement chosen
             // by this output share one guarded dispatcher unit and transaction.
             const publish = () => storage.commit(ns, cluster, value, new Date(now()).toISOString(), check, retirements, requestSources);
-            writing = true;
             const card = commit ? await commit(publish) : publish();
-            writing = false;
             if (card) {
               const { supersededCount = 0, ...published } = card;
               result.deleted += supersededCount; result.built.push(published);
@@ -257,7 +284,7 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
             let code;
             try { code = error?.code; }
             catch { /* Unreadable failure framing is terminal. */ }
-            if (code === 'namespace_paused' || writing) {
+            if (code === 'namespace_paused') {
               const release = () => storage.release(ns, attempt);
               if (commit) await dispatchCommit(storage, release, undefined, { compensating: true }); else release();
             }
