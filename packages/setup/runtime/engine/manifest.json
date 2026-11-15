@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "44d0d104559b97ec5e59c06937fd6c080c1ee880fa25ad59ef83211c91e35beb",
-  "bytes": 1405228,
+  "sha256": "7a1c5be98b1b2301b28a6c14e8798fa7df897688005a899e6be001c0875f9be8",
+  "bytes": 1405299,
   "files": [
     "LICENSE",
     "README.md",
@@ -673,7 +673,7 @@
     "docs/defaults.md": "929e72d788dfe6f5d06c84ade14acc679c408e06ad1a1fe6a3c1376666987372",
     "docs/method-packages-local.md": "3912f7d95956e74be91d031c6eeba1ead4ca194fdb15854d0ded05de196a3815",
     "docs/assets-local.md": "4553ca1854b9d4862ac76ae25ce90e451c6ee875d806b84c51d4c00e6b828c5c",
-    "docs/v1-preview-integration.md": "d8ef73987239f17ddd237b6a83904812ab07cbb7b4faec697840f5735b5213aa",
+    "docs/v1-preview-integration.md": "d5e5e95fb971224ff1e6b530f7fbb91b8e523dd200729454ded02eaaa07b03b9",
     "core/role-context-evidence.mjs": "a4864c9697c1e05c6fced3e4882cc3561343b764f64856476fbdaba961f4e629",
     "core/role-context-facade.mjs": "b20bc0293d21d1b6db0508a2401c15f795bacc2c11b9eeb7035ae12a5d243c27",
     "core/role-context-input.mjs": "54b813670733acdd512ab5d1a4e18819111897fbcacaf830ce8be8c5194fe3b3",

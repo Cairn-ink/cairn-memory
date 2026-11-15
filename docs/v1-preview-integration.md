@@ -154,7 +154,9 @@ Maintenance receives `floor(9 * maxRequests / 10)` requests; maxRequests below 2
 Monetary estimates must upper-bound input tokens × list price, rounded up.
 Settlement records actual spend and preserves successful results. Reaching a
 class or combined monetary cap blocks further dispatches until the next UTC day,
-even if later settlements refund reservations. Total recorded spend is at most
+even if later settlements refund reservations and whatever caps a later handle's
+policy carries: one embedder has one monetary allowance per server-day. Request
+ceilings are checked against the dispatching policy's `maxRequests`. Total recorded spend is at most
 the cap plus the sum of positive (actual − estimate) errors of calls in flight
 when the cap was crossed; the excess is zero with honest upper-bound estimates.
 `maxConcurrentQueries` accepts integers 1–16 and defaults to 4 for hosted
