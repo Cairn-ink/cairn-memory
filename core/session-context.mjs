@@ -65,7 +65,7 @@ export function contextQuery(ns, group, { rawAncestry = false, after } = {}) {
     ORDER BY m.updated_at DESC,m.id ASC LIMIT ?`;
   return { sql, params };
 }
-export function createSessionContextStorage({ db, epoch, indexStorage, readSourceEvidence, proceduralStorage, decisionReview, assertEpisodeRead, episodeProjection }) {
+export function createSessionContextStorage({ db, epoch, indexStorage, readSourceEvidence, storedSourceEvidence, proceduralStorage, decisionReview, assertEpisodeRead, episodeProjection }) {
   function step(row) {
     const record = JSON.parse(row.record), nextStep = record.nextStep;
     const sources = [];
@@ -90,7 +90,12 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
     try { evidence = readSourceEvidence(row,memo); }
     catch (error) {
       if (error.code === 'context_item_too_large') return { memory: memoryMetadata(row, decisionReview), tooLarge: true };
-      if (error.code === 'source_unavailable') return null;
+      if (error.code === 'source_unavailable') {
+        // Only delivery markers may make an otherwise valid source set absent.
+        // Validate every stored row, including withheld rows, without delivering it.
+        storedSourceEvidence(row);
+        return null;
+      }
       throw error;
     }
     let tag = group === 'procedural' ? proceduralStorage.inspect(row.id) : null;
