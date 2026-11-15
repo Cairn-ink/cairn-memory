@@ -77,7 +77,7 @@ function corrupt(f, receipt) {
   const needle = 'Synthetic corrupted excerpt needle';
   assert.equal(f.db.prepare('UPDATE receipts SET excerpt=? WHERE id=?').run(needle, receipt.id).changes, 1);
   const stored = f.db.prepare('SELECT * FROM receipts WHERE id=?').get(receipt.id);
-  assert.deepEqual(stored, { ...receipt, excerpt: needle }, 'only the excerpt changes; its receipt key stays stale');
+  assert.deepEqual({ ...stored }, { ...receipt, excerpt: needle }, 'only the excerpt changes; its receipt key stays stale');
   return [needle, receipt.excerpt, receipt.id, receipt.client, receipt.session_id, receipt.event_id];
 }
 function withhold(f, operation, receipt) {
