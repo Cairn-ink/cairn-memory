@@ -59,11 +59,11 @@ async function start(t, mode, { maxRequests = 1000, id = 'synthetic-optin-' + mo
   workspace.defer(() => server.close()); await server.contextCounterReady;
   const client = new Client({name:'synthetic-optin',version:'1'}), [a,b] = InMemoryTransport.createLinkedPair();
   workspace.defer(() => client.close()); await server.connect(a); await client.connect(b);
-  return { client, server, rawManager, rawEmbedding, embedder, calls };
+  return { client, server, rawManager, rawEmbedding, embedder, calls, automatic };
 }
 
 for (const mode of ['ambient','raw-flag','explicit-provider','off','explicit-provider-off']) test(`real MCP Raw semantic boundary: ${mode}`, { timeout:60000 }, async t => {
-  const { client, server, rawManager, rawEmbedding, embedder, calls } = await start(t, mode);
+  const { client, server, rawManager, rawEmbedding, embedder, calls, automatic } = await start(t, mode);
   const enabled = !mode.endsWith('off'), rawEnabled = enabled && mode !== 'ambient';
   let response;
   for (let turn=0;turn<24;turn++) {
