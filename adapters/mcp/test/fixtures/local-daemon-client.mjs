@@ -21,6 +21,11 @@ try {
     } catch (error) { code = error.code; }
     send({ kind: 'connection-probe-result', code, execArgv: process.execArgv });
   } else if (configuration.role === 'candidate') {
+    let fault;
+    if (configuration.midWrite) {
+      const { installDaemonMidWrite } = await import('./local-daemon-mid-write.mjs');
+      fault = installDaemonMidWrite({ send, ...configuration.midWrite });
+    }
     if (configuration.observeConnections) {
       const createServer = net.createServer;
       net.createServer = (...args) => {
@@ -40,7 +45,7 @@ try {
         }`), import.meta.url);
     }
     let armed = false;
-    process.on('message', message => { if (message.kind === 'arm') { armed = true; send({ kind: 'armed' }); } });
+    process.on('message', message => { if (message.kind === 'arm') { armed = true; fault?.arm(); send({ kind: 'armed' }); } });
     const acquired = await runCandidate(configuration.bootstrap, { ...configuration.lifecycle,
       ...(configuration.providerBarrier ? { runtimeOptions: { model: {
         contextWindow: 8192, countTokens: () => 1, rank: () => ({ refs: [] }),
