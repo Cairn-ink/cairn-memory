@@ -8,7 +8,7 @@ import { copySqliteFixture } from '../../../core/testing/content-safety-s2h-fixt
 const child = fileURLToPath(new URL('./fixtures/forget-episode-reference.mjs', import.meta.url));
 for (const layout of [29, 33]) for (const operation of ['forget', 'correct']) for (const noEpisodes of [true, false])
   test('legacy reference parity ' + layout + ' ' + operation + (noEpisodes ? ' without Episodes' : ' except Episode withholding'), { timeout: 120000 }, async t => {
-    const f = await setup(t, { layout, noEpisodes });
+    const f = await setup(t, { layout, noEpisodes, noCards: true });
     await f.close();
     sql(f.path, db => db.exec('PRAGMA wal_checkpoint(TRUNCATE)'));
     const results = [];

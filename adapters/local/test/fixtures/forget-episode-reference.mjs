@@ -10,7 +10,9 @@ if (mode === 'reference') registerHooks({ load(url, context, next) {
   const result = next(url, context);
   const decode = value => typeof value === 'string' ? value : Buffer.from(value).toString('utf8');
   if (url.endsWith('/core/runtime.mjs')) result.source = decode(result.source)
-    .replaceAll('      localRawPrivacy?.invalidateMemoryEpisodesInside(ns, current, episodes);\n', '');
+    .replaceAll('      localRawPrivacy?.invalidateMemoryEpisodesInside(ns, current, episodes);\n', '')
+    .replaceAll('      if (localRawPrivacy) rawLineage.excludeMemory(ns, id, suppression);\n', '')
+    .replaceAll('      if (!localRawPrivacy) rawLineage.excludeMemory(ns, id, suppression);', '      rawLineage.excludeMemory(ns, id, suppression);');
   if (url.endsWith('/core/local-authority-storage.mjs')) {
     const source = decode(result.source), start = source.indexOf('  function hideMemoryInside('), end = source.indexOf('  function readRange(', start);
     result.source = source.slice(0, start) + referenceHide + source.slice(end);

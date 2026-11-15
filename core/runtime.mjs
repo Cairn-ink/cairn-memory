@@ -353,14 +353,16 @@ export function createMemoryRuntime(input, internal) {
         AND fingerprint = ? AND deleted = 0 AND id != ?`)
         .get(...boundary(ns), value.fingerprint, id);
       if (other) fail("memory_conflict");
+      const suppression = { reason: 'correction_supersession', actionId: 'memory-correct-'+id+'-'+expectedRevision };
+      // Resolve legacy keep proof before Episode source invalidation removes its IDs.
+      if (localRawPrivacy) rawLineage.excludeMemory(ns, id, suppression);
       localRawPrivacy?.invalidateMemoryEpisodesInside(ns, current, episodes);
       localRawPrivacy?.hideMemoryInside(ns, current);
       sourceRoots.touchMemory(ns, id);
-      const suppression = { reason: 'correction_supersession', actionId: 'memory-correct-'+id+'-'+expectedRevision };
       writeContentSuppressionInside(db, { namespace: ns, kind: 'memory', key: id, matchMode: 'revision-through',
         sourceVersion: JSON.stringify(['memory-revision-through-v1', current.revision]), ...suppression });
       suppressReceiptsInside(db, ns, id, suppression);
-      rawLineage.excludeMemory(ns, id, suppression);
+      if (!localRawPrivacy) rawLineage.excludeMemory(ns, id, suppression);
       stagedEvidence.purgeNamespace(ns);
       if (current.fingerprint !== value.fingerprint) suppress(ns, current.fingerprint);
       const now = new Date().toISOString();
@@ -393,14 +395,16 @@ export function createMemoryRuntime(input, internal) {
       const current = activeRow(ns, id);
       if (!current) return { forgotten: false, indexRevision: epoch(ns) };
       if (expectedRevision !== undefined && current.revision !== expectedRevision) fail("revision_conflict");
+      const suppression = { reason: suppressionReason, actionId: 'memory-forget-'+id };
+      // Resolve legacy keep proof before Episode source invalidation removes its IDs.
+      if (localRawPrivacy) rawLineage.excludeMemory(ns, id, suppression);
       localRawPrivacy?.invalidateMemoryEpisodesInside(ns, current, episodes);
       localRawPrivacy?.hideMemoryInside(ns, current);
       sourceRoots.touchMemory(ns, id);
       suppress(ns, current.fingerprint);
-      const suppression = { reason: suppressionReason, actionId: 'memory-forget-'+id };
       writeContentSuppressionInside(db, { namespace: ns, kind: 'memory', key: id, ...suppression });
       suppressReceiptsInside(db, ns, id, suppression);
-      rawLineage.excludeMemory(ns, id, suppression);
+      if (!localRawPrivacy) rawLineage.excludeMemory(ns, id, suppression);
       stagedEvidence.purgeNamespace(ns);
       const now = new Date().toISOString();
       const effects = conflictStorage.invalidateMemory(id, { reason });

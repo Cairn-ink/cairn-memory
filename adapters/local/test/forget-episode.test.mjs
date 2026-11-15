@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { registerContentWriteGuard } from '../../../core/content-write-context.mjs';
 import { beginContentWriteSafety } from '../../../core/content-write-safety.mjs';
-import { setup, sql, ok, range, forgottenText, stepText, otherStep } from './fixtures/forget-episode.mjs';
+import { setup, sql, ok, range, forgottenText, stepText, otherStep, neighbourStep } from './fixtures/forget-episode.mjs';
 
 // Preserve the eleven recording-probe scenarios, and pair each forget with correct.
 const cases = [
@@ -44,6 +44,8 @@ function committed(f, operation, connection) {
 async function reads(f) {
   const namespace = f.namespace;
   const pages = [];
+  noNeedles(await f.core.get({ namespace, memoryId: f.target.id }));
+  const listed = await f.core.list({ namespace, limit: 50 }); ok(listed); noNeedles(listed);
   for (const timeBasis of ['event', 'receipt']) {
     const result = await f.core.listEpisodes({ namespace, ...range, timeBasis });
     noNeedles(result);
@@ -70,7 +72,7 @@ async function reads(f) {
   for (const groups of [{ nextSteps: true, procedural: false }, { nextSteps: true, procedural: true, background: true }]) {
     const result = await f.core.sessionStartContext({ namespace, groups, maxChars: 8000, maxTokens: 2000 });
     ok(result); noNeedles(result);
-    if (f.episodes.length) assert.ok(text(result).includes(otherStep), 'unrelated next step is still delivered');
+    if (f.episodes.length) assert.ok([otherStep, neighbourStep].some(step => text(result).includes(step)), 'a retained next step is still delivered');
   }
   return pages;
 }

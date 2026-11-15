@@ -81,9 +81,9 @@ export async function setup(t, options = {}) {
     } finally { await core.close(); }
   }
   if (options.differentMessages) {
-    await capture('target', 'victim', '[VICTIM] ' + forgottenText, 1);
+    await capture('target', 'victim', '[VICTIM] synthetic source evidence', 1);
     await capture('target', 'survivor', '[SURVIVOR] retained evidence', 2);
-  } else await capture('target', 'pair', '[PAIR] ' + forgottenText, 1);
+  } else await capture('target', 'pair', '[PAIR] synthetic source evidence', 1);
   await capture('unrelated', 'other', '[OTHER] independent evidence', 1, -2 * 86400000);
   for (const session of options.noEpisodes ? [] : options.episodeOtherOnly ? ['independent'] : ['target', 'independent']) {
     for (const ordinal of [3, 4]) await capture(session, session + '-episode-' + ordinal,
@@ -108,7 +108,7 @@ export async function setup(t, options = {}) {
   f.workspace.defer(async () => { cards.revoke(); await core.close(); });
   const cardIds = {};
   // Match the recording probe's real retained-receipt Card contributors.
-  for (const label of ['survivor', 'other']) {
+  for (const label of options.noCards ? [] : ['survivor', 'other']) {
     const memory = sql(path, db => db.prepare('SELECT * FROM memories WHERE content=? AND deleted=0').get('synthetic retained ' + label));
     cardIds[label] = ok(await cards.call(core, 'createCardDraft', { actionId: 'draft-' + label, drafting: 'authored',
       input: { sourcePolicy: 'retained-receipts-v1', memoryRefs: [{ type: 'memory', namespace, memoryId: memory.id, revision: memory.revision }],
