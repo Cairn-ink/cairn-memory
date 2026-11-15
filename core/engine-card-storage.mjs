@@ -216,10 +216,15 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       // Routing receipts contain source identities, never body/title text.
       // Tombstones preserve similarity-key continuity and the forget debounce
       // without occupying any live Card page or becoming serving candidates.
+      // A supersession purge already committed its replacement. It must not
+      // restart the topic cooldown while sibling parts are still rebuilding.
       for (const row of db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o
         ON (o.owner_id,o.scope,o.project_id,o.action_id,o.target_id)=(c.owner_id,c.scope,c.project_id,c.id,c.id)
         WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state='deleted' AND c.updated_at>?
-        AND o.method='consolidate' ORDER BY c.id`).iterate(...boundary(ns), since)) {
+        AND o.method='consolidate' AND NOT EXISTS(SELECT 1 FROM card_effects e
+          WHERE e.owner_id=c.owner_id AND e.scope=c.scope AND e.project_id=c.project_id
+          AND e.entity_type='card' AND e.entity_id=c.id AND e.kind='card_deleted'
+          AND e.action_id GLOB 'engine-supersede.*') ORDER BY c.id`).iterate(...boundary(ns), since)) {
         check(); const metadata = engineCardMetadataInside(db, ns, row);
         if (metadata) result.push({ ...metadata, row });
       }
