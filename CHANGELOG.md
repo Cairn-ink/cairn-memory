@@ -2,7 +2,9 @@
 
 ## Unreleased — daily shared embedding budget
 
-- Forgetting or correcting a memory now withholds Episodes from its fenced source conversations in the same transaction.
+- Forgetting or correcting a memory now removes summaries of its receipt-named conversations and clears summaries built from their passages in the same transaction.
+- Known limit: Forgetting a memory saved without a conversation leaves nearby conversations' summaries stored; read-time withholding is separate work.
+- Known limit: Forgetting or correcting can be refused when a summary mixes a named conversation with an unrelated conversation that is also fenced; narrowing the forget fence to named conversations removes this limit.
 
 - Share the estimated embedding budget across all connections to a running
   Cairn server, resetting at UTC midnight. The in-memory allowance also resets
