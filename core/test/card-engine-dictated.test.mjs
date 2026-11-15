@@ -44,8 +44,12 @@ test('topic trigger counts distinct Memories per conversation and preserves recu
 });
 
 test('topic consolidation builds immediately from the whole topic, then rebuilds ten minutes after staling and after forget', async t => {
-  const f = engineCardFixture(t, { model: completeModel() });
   let clock = Date.UTC(2026, 5, 1);
+  // Public forget and maintenance must share a monotonic clock: supersession
+  // now retains a purge tombstone with the maintenance timestamp as well.
+  t.mock.timers.enable({ apis: ['Date'], now: clock });
+  const advance = ms => { clock += ms; t.mock.timers.setTime(clock); };
+  const f = engineCardFixture(t, { model: completeModel() });
   const w = worker(f, () => clock), memories = [];
   for (let i = 0; i < 4; i++) memories.push(f.add(`Orion item ${i} ready.`, 0, 0));
   assert.equal((await run(w)).modelCalls, 0);
@@ -58,12 +62,13 @@ test('topic consolidation builds immediately from the whole topic, then rebuilds
   const body = f.db.prepare('SELECT body FROM private_cards WHERE id=?').get(first.built[0].id).body;
   for (const memory of memories) assert.ok(body.includes(`[${memory.id}]`));
   assert.match(ok(f.core.getEngineCardStatus({ namespace: ns })).trigger, /five.*topic part/);
-  clock += 60000;
+  advance(60000);
   memories.push(f.add('Orion item six ready.', 0, 0), f.add('Orion item seven ready.', 0, 0));
   const stale = await run(w); assert.equal(stale.built.length, 0); assert.equal(stale.debounced, 1);
   assert.equal(f.db.prepare('SELECT revision FROM private_cards WHERE id=?').get(first.built[0].id).revision, 2);
-  clock += 599999; assert.equal((await run(w)).modelCalls, 0);
-  clock += 1;
+  assert.equal(Date.parse(f.db.prepare('SELECT updated_at FROM private_cards WHERE id=?').get(first.built[0].id).updated_at), clock);
+  advance(599999); assert.equal((await run(w)).modelCalls, 0);
+  advance(1);
   const rebuilt = await run(w); assert.equal(rebuilt.built.length, 1, JSON.stringify(rebuilt));
   assert.notEqual(rebuilt.built[0].id, first.built[0].id);
   assert.equal(rebuilt.built[0].sourceRevisions.length, 8);
@@ -74,7 +79,10 @@ test('topic consolidation builds immediately from the whole topic, then rebuilds
   assert.ok(hidden.metered.items.every(item => item.ref.type !== 'card'));
   assert.ok(!JSON.stringify(hidden.metered).includes(memories[0].id));
   const updated = Date.parse(f.db.prepare('SELECT updated_at FROM private_cards WHERE id=?').get(rebuilt.built[0].id).updated_at);
-  clock = updated + 600000;
+  assert.equal(updated, clock, 'forget starts its wait on the same clock as supersession');
+  assert.equal((await run(w)).modelCalls, 0);
+  advance(599999); assert.equal((await run(w)).modelCalls, 0);
+  advance(1);
   const forgotten = await run(w); assert.equal(forgotten.built.length, 1, JSON.stringify(forgotten));
   assert.equal(forgotten.built[0].sourceRevisions.length, 7);
   assert.ok(!f.model.calls.at(-1).memories.some(memory => memory.id === memories[0].id));
