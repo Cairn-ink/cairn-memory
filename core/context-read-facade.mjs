@@ -477,7 +477,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
             embeddingGuard();
             let vectors,invoked=false;
             assertContentPort({before:true});
-            try { vectors = await dispatch(options.embedder, [input.query], { signal: controller.signal, deadlineAt, guard,onInvoke:()=>{invoked=true;} }); }
+            try { vectors = await dispatch(options.embedder, [input.query], { budgetClass: 'query', signal: controller.signal, deadlineAt, guard,onInvoke:()=>{invoked=true;} }); }
             finally { try { guard('post-send'); } finally { if(invoked)assertContentPort(); } }
             if (!Array.isArray(vectors) || vectors.length !== 1) throw Object.assign(new Error(), { code: 'provider_error' });
             const query = validateVector(vectors[0], options.embedder);
@@ -619,7 +619,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         const remainingItems = input.budget.maxItems - maintenance.metrics.transformed, remainingMs = Math.floor(deadlineAt - performance.now());
         try {
           if (remainingItems > 0 && remainingMs > 0) vectorProgress = await storage.refreshVectors({ ...projection,
-            budget: { maxItems: remainingItems, maxMs: remainingMs } }, dispatch.port(options.embedder,{signal:controller.signal,deadlineAt,
+            budget: { maxItems: remainingItems, maxMs: remainingMs } }, dispatch.port(options.embedder,{budgetClass:'maintenance',signal:controller.signal,deadlineAt,
             guard:()=>{access.check();storage.assertState(projection,current,{checkpoint:false});}}), { signal: controller.signal, maxBatchDocuments: options.policy.maxBatchDocuments,
             isCurrent: () => { access.check(); return true; },
             onProgress: progress => { vectorProgress = progress; } });
@@ -691,7 +691,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         const remainingItems = input.budget.maxItems - maintenance.metrics.transformed, remainingMs = Math.floor(deadlineAt - performance.now());
         try {
           if (remainingItems > 0 && remainingMs > 0) vectorProgress = await storage.refreshVectors({ ...projection,
-            budget: { maxItems: remainingItems, maxMs: remainingMs } }, dispatch.port(options.embedder,{signal:controller.signal,deadlineAt,
+            budget: { maxItems: remainingItems, maxMs: remainingMs } }, dispatch.port(options.embedder,{budgetClass:'maintenance',signal:controller.signal,deadlineAt,
             guard:()=>{access.check();storage.assertState(projection,current,{checkpoint:false});}}), { signal: controller.signal, maxBatchDocuments: options.policy.maxBatchDocuments,
             isCurrent: () => { access.check(); return true; },
             onProgress: progress => { vectorProgress = progress; } });

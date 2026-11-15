@@ -69,7 +69,7 @@ export function contextOptions(value) {
     ...(explicitLocal ? { localStatus } : {}),
     preset: sources?.includes('moc-v1') ? 'rrf-k60-d12-moc-v1' : family === 'hosted' ? 'rrf-k10' : 'rrf-k60-d12',
     ...(sources ? { sources } : {}),
-    policy: Object.freeze({ ...policy, maxConcurrent: policy.maxConcurrent ?? 1 }),
+    policy: Object.freeze({ ...policy, maxConcurrent: policy.maxConcurrent ?? 2 }),
     budgetConfigured: budgeted });
 }
 export function contextSnapshot(value, depth = 0, budget = { nodes: 8192, units: 100000 }) {

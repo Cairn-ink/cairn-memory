@@ -170,8 +170,7 @@ hosted MCP endpoint, the Codex rules and the plugin's privacy contract.
 - **Model keys.** Saving conversations never calls a model, and keyword search,
   inspecting, correcting and forgetting use no model either. If the memory
   server can see an `OPENAI_API_KEY`, your memories and search text are sent to
-  OpenAI for semantic search, with those embedding requests estimated at most
-  about US$1 per server run. `recall_memory` also sends the text it selects,
+  OpenAI for semantic search, up to an estimated US$1 per day per running Cairn server. `recall_memory` also sends the text it selects,
   and its model calls are not counted in that estimate. Pausing or turning off
   saving does not stop these requests yet. Saved conversations are sent only if
   you opt in with `--raw-semantic` or configure `--context-embedder` yourself.

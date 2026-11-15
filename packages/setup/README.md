@@ -260,7 +260,7 @@ Node 路徑變動時，重跑 `setup --local`。
 `read_memory_context`. Automatic hooks fill Raw without a model; setup does not register `capture_memory`. Saving, inspecting, correcting and forgetting
 need no model key. Semantic recall needs a model key; without one it reports
 `model_not_configured`. With `OPENAI_API_KEY` available to the Cairn MCP server, memories and search text
-go to OpenAI for semantic search, up to an estimated US$1 per server run. Saved
+go to OpenAI for semantic search, up to an estimated US$1 per day per running Cairn server. Saved
 conversations are sent only if you opt in with `--raw-semantic` (or explicitly
 configure `--context-embedder`). To keep everything on this computer, don't give
 the server a key. `--no-context-semantic` only turns off embeddings; with a key,
@@ -277,7 +277,7 @@ authentication fields. Unrelated entries and file contents are never printed.
 `fetch_memory_candidate_evidence`、`read_memory_context`。自動 hooks 不需要模型就能保存 Raw，setup 不會註冊 `capture_memory`。
 保存、查看、更正與遺忘不需要模型金鑰；語意回想需要模型金鑰，
 沒有時回報 `model_not_configured`。若 Cairn MCP server 的環境有 `OPENAI_API_KEY`，語意搜尋會把記憶與搜尋文字
-傳給 OpenAI，每次 server 執行的預估費用上限為 US$1。已保存的對話只有在你用
+傳給 OpenAI，每個執行中的 Cairn server 每天預估上限約 US$1。已保存的對話只有在你用
 `--raw-semantic`（或明確設定 `--context-embedder`）啟用後才會傳送。
 要讓所有資料都留在這台電腦，請不要提供金鑰給 server。`--no-context-semantic` 只會關閉
 embeddings；有金鑰時，回想和其他模型功能仍會把記憶文字傳給 OpenAI。

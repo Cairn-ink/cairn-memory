@@ -43,7 +43,7 @@ export function localEmbeddingFactory({ verify = verifyPack, start = startBundle
       if (closedHandle) return Promise.reject(refusal('provider_error'));
       if (consumeLocalReservation(options.localReservation, raw)) return raw.embed(texts, options);
       const signal = options.signal ?? new AbortController().signal;
-      return dispatch(raw, texts, { signal, deadlineAt: Math.min(performance.now() + 5000, options.deadlineAt ?? Infinity), guard: options.beforeDispatch ?? (() => {}) });
+      return dispatch(raw, texts, { budgetClass: 'query', signal, deadlineAt: Math.min(performance.now() + 5000, options.deadlineAt ?? Infinity), guard: options.beforeDispatch ?? (() => {}) });
     } });
     return Object.freeze({ embedder, policy,
       localStatus: () => closedHandle ? Object.freeze({ state: 'closed', reason: 'closed' }) : bundle.localStatus(),
