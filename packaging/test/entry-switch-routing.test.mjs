@@ -15,12 +15,14 @@ const rows = [
   ['advanced', [...base, '--context-read', 'context-read-v1'], 'cli'],
   ['setup check personal', ['--check-config', ...base], 'cli'],
   ['setup check project', ['--check-config', ...base, '--project', 'p'], 'cli'],
-  ['local', ['local', 'status'], 'local'], ['subcommand', ['safety', 'inspect'], 'cli'],
+  ['local', ['local', 'status'], 'local'], ['local daemon', ['local','daemon','status'], 'local'],
+  ['daemon status', ['daemon','status'], 'support'], ['daemon stop', ['daemon','stop'], 'support'], ['subcommand', ['safety', 'inspect'], 'cli'],
 ];
 for (const [name, args, expected] of rows) test('routing: ' + name, async () => {
   let route, spawns = 0, calls = [], errors = [];
   const rc = await runEntry(args, { platform: 'linux', stderr: s => errors.push(s), load: async name => {
     calls.push(name);
+    if (name.endsWith('local-daemon-liveness.mjs')) return { runDaemonCommand: async vector => { assert.deepEqual(vector,args.slice(1)); route = 'support'; return 0; } };
     if (name.endsWith('local-daemon-identity.mjs')) return { daemonVector };
     if (name.endsWith('local-forwarder.mjs')) return { runForwarder: async vector => {
       assert.deepEqual(vector, args); route = 'daemon'; spawns++; return null;
@@ -32,6 +34,7 @@ for (const [name, args, expected] of rows) test('routing: ' + name, async () => 
     assert.fail(name);
   } });
   assert.equal(rc, 0); assert.equal(route, expected); assert.deepEqual(errors, []);
+  if (expected !== 'support') assert.ok(!calls.some(s => s.endsWith('local-daemon-liveness.mjs')), 'only explicit daemon commands load support code');
   if (expected !== 'daemon') { assert.equal(spawns, 0); assert.ok(!calls.some(s => s.endsWith('local-forwarder.mjs'))); }
   if (expected === 'local') assert.equal(calls.length, 1, 'local stays first');
 });

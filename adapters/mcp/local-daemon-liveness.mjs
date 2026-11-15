@@ -1,9 +1,12 @@
 // Linux OS metadata only; no environment, store or SQLite access.
 import { readFileSync, readlinkSync, statSync } from 'node:fs';
+import { readdir } from 'node:fs/promises';
+import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { withFileLock } from '../../integrations/client/file-lock.mjs';
-import { canonical } from './local-daemon-identity.mjs';
+import { canonical, physicalStore } from './local-daemon-identity.mjs';
 import { DAEMON_UNRESPONSIVE_MS } from './local-daemon-wire.mjs';
-import { readPrivate, checkedEntry, refuse } from './local-daemon-state.mjs';
+import { runtimeDirectory, endpointPaths, readPrivate, checkedEntry, refuse } from './local-daemon-state.mjs';
 
 export function processStart(pid) {
   try {
@@ -79,4 +82,48 @@ export async function takeOver(directory, paths, observed, {
     validatePath: path => checkedEntry(directory, path, { missing: true }),
     read: path => readPrivate(directory, path, { missing: true }),
   });
+}
+
+export async function runDaemonCommand(args, {
+  platform = process.platform, root, write = text => process.stdout.write(text), graceMs = 5000,
+} = {}) {
+  if (platform !== 'linux') { write('daemon_platform\n'); return 0; }
+  const [action, flag, path, ...extra] = args;
+  if (!['status', 'stop'].includes(action) || extra.length || (flag !== undefined && (flag !== '--db' || !path))) throw refuse('daemon_arguments');
+  const directory = await runtimeDirectory({ root });
+  const store = path === undefined ? undefined : await physicalStore(path);
+  const entries = [];
+  for (const name of (await readdir(directory.path)).filter(name => /^d-[a-f0-9]{32}\.json$/.test(name)).sort()) {
+    const text = await readPrivate(directory, join(directory.path, name), { missing: true });
+    if (!text) continue;
+    const descriptor = JSON.parse(text);
+    if (descriptor.identity?.uid !== directory.uid || !/^[a-f0-9]{64}$/.test(descriptor.identity.build ?? '') || !/^[a-f0-9]{64}$/.test(descriptor.incarnation ?? '')) throw refuse('daemon_descriptor');
+    if (store && (store.dev !== descriptor.identity.store?.dev || store.ino !== descriptor.identity.store?.ino)) continue;
+    const paths = endpointPaths(directory, createHash('sha256').update(canonical(descriptor.identity)).digest('hex'));
+    if (paths.ready !== join(directory.path, name)) throw refuse('daemon_identity');
+    const stamp = await readDaemonHeartbeat(directory, paths, descriptor);
+    entries.push({ descriptor, stamp });
+  }
+  if (action === 'status') {
+    write(JSON.stringify({ daemons: entries.map(({ descriptor, stamp }) => ({
+      store: createHash('sha256').update(canonical({ dev: descriptor.identity.store.dev, ino: descriptor.identity.store.ino })).digest('hex').slice(0,12),
+      running: verifiedOwner(descriptor.owner), build: descriptor.identity.build.slice(0,12),
+      attached_sessions: stamp?.attachedSessions ?? null,
+      stamp_age_seconds: stamp && stamp.owner.boot === localProcessIdentity().boot ? Math.max(0, daemonMonotonicMs() - stamp.monotonicMs) / 1000 : null,
+      last_codes: stamp?.codes ?? [],
+    })) }) + '\n');
+  } else {
+    const signalled = [];
+    for (const { descriptor } of entries) {
+      // Read-only discovery is never authority to signal without this check.
+      if (!verifiedOwner(descriptor.owner)) continue;
+      try { process.kill(descriptor.owner.pid, 'SIGTERM'); signalled.push(descriptor.owner); }
+      catch (error) { if (error.code !== 'ESRCH') throw error; }
+    }
+    const deadline = performance.now() + graceMs;
+    while (signalled.some(owner => verifiedOwner(owner)) && performance.now() < deadline) await new Promise(resolve => setTimeout(resolve, 20));
+    const still_running = signalled.filter(owner => verifiedOwner(owner)).length;
+    write(JSON.stringify({ stopped: signalled.length - still_running, still_running }) + '\n');
+  }
+  return 0;
 }

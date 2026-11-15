@@ -128,3 +128,11 @@ test('blocking process-boundary guards remain explicit and ordered', () => {
   assert.match(forwarder, /input\.destroy\(\); output\.end\(\)/, 'fatal transport must terminate stdio and release pipe handles');
   assert.doesNotMatch(forwarder, /import\s*\([^)]*(?:server|cli|shared-runtime)/, 'daemon failures must never load full server fallback');
 });
+
+test('support command closure never opens SQLite or loads MCP SDK or core', () => {
+  const sources = closure('adapters/mcp/local-daemon-liveness.mjs');
+  for (const [path, { source }] of sources) {
+    assert.ok(!relative(root, path).startsWith('core/'));
+    assert.doesNotMatch(source, /(?:node:sqlite|@modelcontextprotocol|openMemoryCore|openDatabase)/);
+  }
+});

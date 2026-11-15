@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 function loadModule(specifier) {
   switch (specifier) {
     case '../integrations/client/raw/local-setup-cli.mjs': return import('../integrations/client/raw/local-setup-cli.mjs');
+    case '../adapters/mcp/local-daemon-liveness.mjs': return import('../adapters/mcp/local-daemon-liveness.mjs');
     case '../adapters/mcp/local-daemon-identity.mjs': return import('../adapters/mcp/local-daemon-identity.mjs');
     case '../adapters/mcp/local-forwarder.mjs': return import('../adapters/mcp/local-forwarder.mjs');
     case '../adapters/mcp/cli.mjs': return import('../adapters/mcp/cli.mjs');
@@ -19,6 +20,10 @@ export async function runEntry(args = process.argv.slice(2), {
   if (args[0] === 'local') {
     const { runLocalSetupCli } = await load('../integrations/client/raw/local-setup-cli.mjs');
     return await runLocalSetupCli(args.slice(1));
+  }
+  if (args[0] === 'daemon') {
+    const { runDaemonCommand } = await load('../adapters/mcp/local-daemon-liveness.mjs');
+    return await runDaemonCommand(args.slice(1), { platform });
   }
   if (platform === 'linux') {
     let identity;
