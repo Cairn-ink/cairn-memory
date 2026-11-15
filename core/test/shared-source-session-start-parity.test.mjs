@@ -176,10 +176,19 @@ test(`short tagged ${kind} anchor ${anchorOnRemaining ? 'remaining' : 'withheld'
   const before = get(f, memory), hidden = rows(f, memory).find(row => row.excerpt === shared.excerpt);
   const donor = admit(f, 'Synthetic forgotten tag sibling', 'fact', [shared]);
   const needles = [...withhold(f, donor, 'forget', shared), hidden.id, hidden.receipt_key];
+  if (kind === 'preference' && !anchorOnRemaining) needles.push(memory.id, memory.content);
   deny(f, ...needles);
   const result = read(f, 'procedural'), item = ok(result).groups.procedural.items[0];
+  if (kind === 'preference' && !anchorOnRemaining) {
+    assert.deepEqual(ok(result).groups.procedural.items, []);
+    assert.equal(ok(result).groups.procedural.returned, 0);
+    assert.equal(ok(result).groups.procedural.status, 'complete');
+    absent(result, [...needles, memory.id, memory.content]);
+    assert.deepEqual(read(f, 'procedural'), result, 'private absence is identical in both snapshots');
+    return;
+  }
   const expected = parity(f, item, memory);
-  assert.equal(ok(result).groups.procedural.returned, 1, 'selected tagged preference remains an untagged item if its anchor is withheld');
+  assert.equal(ok(result).groups.procedural.returned, 1, 'instructions remain eligible without a tag; preferences retain a delivered positive tag');
   if (anchorOnRemaining) {
     assert.deepEqual(item.procedural, before.procedural);
     assert.deepEqual(item.procedural, expected.procedural);
