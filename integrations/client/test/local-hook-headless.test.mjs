@@ -8,11 +8,17 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
-// Test-only host substitution for malformed host outcomes. Real behavior is the
-// default, including every capture, filesystem spy and transport-failure test.
+// Test-only observation of real source entry points, plus host substitution for
+// malformed outcomes. Source wrappers always delegate to the real implementation.
 register('data:text/javascript,'+encodeURIComponent(`
 export async function load(url,context,next) {
   const result = await next(url,context);
+  const name = url.endsWith('/integrations/client/raw/local-source-open.mjs') ? 'openLocalSource':
+    url.endsWith('/integrations/client/raw/local-worker-source.mjs') ? 'openWorkerSource':null;
+  if (name) {
+    const source = String(result.source).replace('export async function '+name+'(', 'async function actual_'+name+'(');
+    return {...result,source:source+'\\nexport function '+name+'(...args) { globalThis[Symbol.for("cairn.test.hook.source")]?.('+JSON.stringify(name)+'); return actual_'+name+'(...args); }'};
+  }
   if (!url.endsWith('/integrations/client/raw/local-host.mjs')) return result;
   const source = String(result.source).replace('export function createLocalRawHost(', 'function actualLocalRawHost(');
   return {...result,source:source+'\\nexport function createLocalRawHost(...args) { return globalThis[Symbol.for("cairn.test.hook.host")]?.(...args) ?? actualLocalRawHost(...args); }'};
@@ -49,17 +55,36 @@ for (const seeded of [false,true]) test(`headless Claude has no transcript or st
   const f = await lazyFixture(t,'claude-code');
   assert.deepEqual(events('claude-code'),['SessionStart','Stop','PreCompact']);
   if (seeded) { await f.hook(); f.append('Synthetic saved before headless'); await f.hook('Stop'); }
-  const state = join(f.request.installationDirectory,'state'),before = stateSnapshot(state),accesses = [],writes = [];
-  const inside = path => typeof path === 'string' && [f.request.sourceRoot,state].some(root=>path===root || path.startsWith(root+'/'));
-  // Observe the real fs methods, including metadata probes and sync APIs. No
-  // source open means no source FileHandle can escape observation of its reads.
+  const state = join(f.request.installationDirectory,'state'),before = stateSnapshot(state),accesses = [],sourceCalls = [],writes = [];
+  const sourceKey = Symbol.for('cairn.test.hook.source');
+  globalThis[sourceKey] = name => sourceCalls.push(name);
+  const inside = value => {
+    const path = Buffer.isBuffer(value) ? value.toString():value instanceof URL ? fileURLToPath(value):value;
+    return typeof path === 'string' && ([f.request.sourceRoot,state].some(root=>path===root || path.startsWith(root+'/')) ||
+      path === '/proc/self/fd' || path.startsWith('/proc/self/fd/'));
+  };
+  // Linux openSource starts at / and opens /proc/self/fd/<parent>/<component>;
+  // macOS openLocalSource opens absolute ancestor prefixes and the source path.
+  // Keep the actual FileHandles (and their private fields) while observing every
+  // returned handle's reads and metadata probes, including fd-relative opens.
   for (const [module,names] of [[fsp,['open','stat','lstat','realpath','readFile','readdir','access','mkdir','writeFile','rename','unlink','link','rm']],
     [fs,['openSync','statSync','lstatSync','realpathSync','readFileSync','readdirSync','accessSync','mkdirSync','writeFileSync','renameSync','unlinkSync']]]) {
     for (const name of names) {
       const original = module[name];
       t.mock.method(module,name,function(...args) {
         if (args.some(inside)) accesses.push({name,path:args.find(inside)});
-        return Reflect.apply(original,this,args);
+        const result = Reflect.apply(original,this,args);
+        if (module !== fsp || name !== 'open') return result;
+        return result.then(handle => {
+          for (const method of ['read','readFile','stat','readv']) {
+            const actual = handle[method];
+            t.mock.method(handle,method,function(...values) {
+              if (inside(args[0])) accesses.push({name:'FileHandle.'+method,fd:handle.fd,path:args[0]});
+              return Reflect.apply(actual,this,values);
+            });
+          }
+          return handle;
+        });
       });
     }
   }
@@ -70,9 +95,9 @@ for (const seeded of [false,true]) test(`headless Claude has no transcript or st
         assert.deepEqual(await hook(f,event,{headless:true}),skip);
       }
     });
-    assert.deepEqual(accesses,[],'no transcript/stat/read or session-state access');
+    assert.deepEqual({accesses,sourceCalls},{accesses:[],sourceCalls:[]},'no transcript/stat/read, source opener or session-state access');
     assert.deepEqual(writes,[],'no durable writes anywhere during skip');
-  } finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+  } finally { delete globalThis[sourceKey]; t.mock.restoreAll(); syncBuiltinESMExports(); }
   assert.deepEqual(stateSnapshot(state),before,'all state contents and metadata unchanged');
 });
 
