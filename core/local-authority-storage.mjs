@@ -88,7 +88,7 @@ export function createLocalRawPrivacyStorage(db) {
     }
     db.prepare('INSERT INTO local_raw_hide_windows VALUES(?,?,?,?,?)').run(...rawBoundary(ns), start, end);
   }
-  function hideMemoryInside(ns, memory) {
+  function memoryHidePlanInside(ns, memory) {
     required();
     // Snapshot is taken under the very same write transaction as correction or
     // forgetting, before any receipt deletion. Never read receipt text.
@@ -100,7 +100,8 @@ export function createLocalRawPrivacyStorage(db) {
       anchors.push(...[memory.created_at, memory.updated_at].map(finiteTime).filter(value => value !== null));
     if (!anchors.length) fail('local_raw_hide_anchor_missing');
     try {
-      for (const anchor of anchors) addWindowInside(ns, anchor - LOCAL_RAW_HIDE_WINDOW_MS, anchor + LOCAL_RAW_HIDE_WINDOW_MS);
+      const matches = new Map();
+      const add = (client, session_key) => matches.set(JSON.stringify([client, session_key]), { client, session_key });
       for (const receipt of receipts) {
         if (!['claude-code','codex'].includes(receipt.client) || !receipt.session_id || receipt.session_id === 'explicit-tool') continue;
         // Persist only hashed keys, never a real client's session ID. If the
@@ -108,7 +109,7 @@ export function createLocalRawPrivacyStorage(db) {
         const sessions = [hashSession(ns, receipt.client, receipt.session_id)];
         if (/^s1:[a-f0-9]{64}$/.test(receipt.session_id)) sessions.push(receipt.session_id);
         for (const session of new Set(sessions))
-          fenceInside(ns, receipt.client, session);
+          add(receipt.client, session);
       }
       // Compatibility scans only conversations without a range row. Once
       // filled, forget uses the range index and never revisits their messages.
@@ -117,7 +118,6 @@ export function createLocalRawPrivacyStorage(db) {
           AND r.client=c.client AND r.session_key=c.session_key
         WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND r.session_key IS NULL`).all(...rawBoundary(ns));
       for (const session of missing) saveRangeInside(ns, session.client, session.session_key, legacyRange(ns, session.client, session.session_key));
-      const matches = new Map();
       for (const anchor of anchors) {
         const sessions = db.prepare(`SELECT client,session_key FROM local_raw_session_ranges
           WHERE ${nsWhere} AND unknown_time=0 AND min_ms<=? AND max_ms>=?
@@ -125,7 +125,32 @@ export function createLocalRawPrivacyStorage(db) {
           .all(...rawBoundary(ns), anchor + LOCAL_RAW_HIDE_WINDOW_MS, anchor - LOCAL_RAW_HIDE_WINDOW_MS, ...rawBoundary(ns));
         for (const session of sessions) matches.set(JSON.stringify([session.client,session.session_key]), session);
       }
-      for (const session of matches.values()) fenceInside(ns, session.client, session.session_key);
+      return { anchors, sessions: [...matches.values()] };
+    } catch (error) {
+      if (isStorageBusy(error)) throw error;
+      fail('local_raw_privacy_write_failed');
+    }
+  }
+  // Both callers select under the enclosing Memory write transaction. Reuse
+  // exactly the fence selection, including compatibility ranges and neighbours.
+  function invalidateMemoryEpisodesInside(ns, memory, episodes) {
+    const { sessions } = memoryHidePlanInside(ns, memory);
+    for (const session of sessions) {
+      const rows = db.prepare(`SELECT id FROM session_episodes WHERE ${nsWhere} AND client=? AND session_key=? AND deleted=0`)
+        .all(...rawBoundary(ns), session.client, session.session_key);
+      for (const row of rows) {
+        episodes.invalidateSources(ns, row.id);
+        // Invalidating clears anchors and steps; the existing source-deletion
+        // path also withholds the row from receipt-time lists and inspection.
+        episodes.deleteSourceEpisode(ns, row.id);
+      }
+    }
+  }
+  function hideMemoryInside(ns, memory) {
+    const { anchors, sessions } = memoryHidePlanInside(ns, memory);
+    try {
+      for (const anchor of anchors) addWindowInside(ns, anchor - LOCAL_RAW_HIDE_WINDOW_MS, anchor + LOCAL_RAW_HIDE_WINDOW_MS);
+      for (const session of sessions) fenceInside(ns, session.client, session.session_key);
     } catch (error) {
       if (isStorageBusy(error)) throw error;
       fail('local_raw_privacy_write_failed');
@@ -215,5 +240,5 @@ export function createLocalRawPrivacyStorage(db) {
       db.prepare('INSERT INTO local_raw_session_modes VALUES(?,?,?,?,?,?)').run(...args, interpretation);
     }
   }
-  return { fenceInside, beforeDelete:uuid.beforeDelete, hideMemoryInside, arrivalBlocked, fenceArrivalInside, fenceArrival, recordRangeInside, assertModeInside };
+  return { fenceInside, beforeDelete:uuid.beforeDelete, invalidateMemoryEpisodesInside, hideMemoryInside, arrivalBlocked, fenceArrivalInside, fenceArrival, recordRangeInside, assertModeInside };
 }

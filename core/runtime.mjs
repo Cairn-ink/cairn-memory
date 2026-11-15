@@ -353,6 +353,7 @@ export function createMemoryRuntime(input, internal) {
         AND fingerprint = ? AND deleted = 0 AND id != ?`)
         .get(...boundary(ns), value.fingerprint, id);
       if (other) fail("memory_conflict");
+      localRawPrivacy?.invalidateMemoryEpisodesInside(ns, current, episodes);
       localRawPrivacy?.hideMemoryInside(ns, current);
       sourceRoots.touchMemory(ns, id);
       const suppression = { reason: 'correction_supersession', actionId: 'memory-correct-'+id+'-'+expectedRevision };
@@ -392,6 +393,7 @@ export function createMemoryRuntime(input, internal) {
       const current = activeRow(ns, id);
       if (!current) return { forgotten: false, indexRevision: epoch(ns) };
       if (expectedRevision !== undefined && current.revision !== expectedRevision) fail("revision_conflict");
+      localRawPrivacy?.invalidateMemoryEpisodesInside(ns, current, episodes);
       localRawPrivacy?.hideMemoryInside(ns, current);
       sourceRoots.touchMemory(ns, id);
       suppress(ns, current.fingerprint);
