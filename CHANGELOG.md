@@ -2,6 +2,9 @@
 
 ## Unreleased — daily shared embedding budget
 
+- Skip saving Claude Code runs started by scripts or the Agent SDK (for example
+  `claude -p`), detected from the hook's environment without reading the transcript.
+
 - Share the estimated embedding budget across all connections to a running
   Cairn server, resetting at UTC midnight. The in-memory allowance also resets
   on server restart; it is not an account-wide spending cap.

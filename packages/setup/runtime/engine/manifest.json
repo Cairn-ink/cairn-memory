@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "9348fab3be55f3078f3dcbe787443453ff47775bdfac6db02823c6d37070ce06",
-  "bytes": 1405365,
+  "sha256": "be79e224bd14ff403d2af0f0cfc4ee4abcfcc76b2a1ad829df457fd6f5ef4a9d",
+  "bytes": 1405653,
   "files": [
     "LICENSE",
     "README.md",
@@ -635,9 +635,9 @@
     "integrations/client/raw/local-setup-files.mjs": "f54b51f466531ad76798de6982146e7080bd60d2004c259bcf7e0fc59cf2055a",
     "integrations/client/raw/local-settings-lock.mjs": "0e3a1973363798d9cf037b972743b1c53f154a1ffda6729b5e0f4660826ecbbc",
     "integrations/client/raw/local-setup.mjs": "6eedfeebb327344e87633e9bc8f24bdab62d4ea0eb5e91b180719c1f0722b55d",
-    "integrations/client/raw/local-setup-cli.mjs": "b6692ce9a2f9afda13f668f76d1c4c7290a3bb79953d6939f854bfc2414cc4ad",
+    "integrations/client/raw/local-setup-cli.mjs": "544e623c9ad2829038dd94b5f159bc623451b9b9bc6569732cbaf51648b7af15",
     "integrations/client/raw/local-setup-init.mjs": "30c3b1b5d996ad5ef443dc596964d9979d1e0177092fd9934795fdc00a8bd67c",
-    "integrations/client/raw/local-hook.mjs": "ea42b1ce3fb409b8712bd3f19b72209609955cf34a6d945754c3e26a7fa08c51",
+    "integrations/client/raw/local-hook.mjs": "fe55d39745713f25bfbca1a379df50ae3ee3b9011f3503e11957c46bd6d29d44",
     "integrations/client/raw/local-codex-qualification.mjs": "96fae8a0e3821d08a7d2347c5e4e42570a5e15378f74aa25120d93dfe404bdac",
     "integrations/client/raw/local-session-start.mjs": "9975bb99bf3a7d89f45495492abee7d89b1219497a4fdadbe01018309bc142b2",
     "integrations/client/raw/local-session-fence.mjs": "ec0a9ea5e45158423f70fdb1a8cf0df1a8b1b4424df452b8cde671436bbbea39",
