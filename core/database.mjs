@@ -486,6 +486,29 @@ export function openDatabase(path, options = {}) {
     // URI mode=rw is mandatory for fences: no mkdir or creation fallback.
     db = new DatabaseSync(fence ? noncreatingStoreURI(path) : path, { timeout });
     db.exec("PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;");
+    const needsWriter = Symbol('open needs writer');
+    try {
+      transaction(db, () => {
+        if (fence) {
+          pin.check();
+          assertStoreIdentity(db, fence);
+        }
+        if (contentSafety !== undefined && (db.prepare('PRAGMA application_id').get().application_id !== 0 ||
+            db.prepare('PRAGMA user_version').get().user_version !== 0 ||
+            db.prepare('SELECT count(*) n FROM sqlite_schema').get().n !== 0)) fail('unsupported_database');
+        const layout = attestContentSafety(db);
+        // Only suppression-revision layouts have a read-only ordinary open.
+        // Older layouts retain the IMMEDIATE body below, after rolling back
+        // this snapshot; all checks must run again under the writer lock.
+        if (!layout.suppressionRevision) throw needsWriter;
+        if (db.prepare('PRAGMA application_id').get().application_id !== APPLICATION_ID) fail('unsupported_database');
+        assertContentFeatures(layout, { privateCards, rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls, methodPackages, assets, roleProfiles, currentDependencies });
+        validateContextProductLayout(db, layout);
+      }, undefined, { deferred: true });
+      return db;
+    } catch (error) {
+      if (error !== needsWriter) throw error;
+    }
     transaction(db, () => {
       if (fence) {
         // Before initialize() and all migration/schema or application writes.
