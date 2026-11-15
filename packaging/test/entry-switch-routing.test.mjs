@@ -40,6 +40,39 @@ test('non-Linux bypasses identity and forwarder entirely', async () => {
   await runEntry(base, { platform: 'darwin', load: async s => { imports.push(s); return { start: async () => {} }; } });
   assert.deepEqual(imports, ['../adapters/mcp/cli.mjs']);
 });
+for (const args of [base, ['--check-config', ...base], ['--check-config', ...base, '--project', 'p']]) {
+  test('identity import refusal falls back once: ' + args.join(' '), async () => {
+    const calls = [], errors = [];
+    const rc = await runEntry(args, { platform: 'linux', stderr: s => errors.push(s), load: async name => {
+      calls.push(name);
+      if (name.endsWith('local-daemon-identity.mjs')) throw Error('synthetic_import_failure');
+      assert.equal(name, '../adapters/mcp/cli.mjs');
+      return { start: async () => { calls.push('start'); } };
+    } });
+    assert.equal(rc, 0);
+    assert.deepEqual(calls, ['../adapters/mcp/local-daemon-identity.mjs', '../adapters/mcp/cli.mjs', 'start']);
+    assert.deepEqual(errors, ['cairn_daemon_fallback:daemon_build\n']);
+  });
+}
+test('identity refusal preserves real check-config stdout accepted by setup', () => {
+  for (const extra of [[], ['--project', 'p']]) {
+    const child = spawnSync(process.execPath, [new URL('./fixtures/entry-identity-refusal.mjs', import.meta.url).pathname,
+      '--check-config', ...base, ...extra], { encoding: 'utf8', env: {}, timeout: 15000 });
+    assert.equal(child.status, 0, child.stderr); assert.equal(child.signal, null);
+    assert.equal(child.stderr, 'cairn_daemon_fallback:daemon_build\n');
+    const report = JSON.parse(child.stdout);
+    assert.equal(report.ok, true); assert.equal(report.databaseOpened, false);
+    assert.equal(report.providerContacted, false); assert.equal(report.modelKeyPresent, false);
+    assert.equal(report.contextRead, 'context-read-v1'); assert.equal(report.raw, true); assert.equal(report.rawSearch, true);
+  }
+});
+test('eligibility exceptions after the import keep their original failure', async () => {
+  const errors = [];
+  await assert.rejects(runEntry(base, { platform: 'linux', stderr: s => errors.push(s), load: async () => ({
+    daemonVector() { throw Error('synthetic_vector_failure'); },
+  }) }), /synthetic_vector_failure/);
+  assert.deepEqual(errors, []);
+});
 test('pre-stdin refusal leaves both streams intact for the same-process fallback', async () => {
   const input = new PassThrough(), output = new PassThrough(); let read = 0, fallback = 0, stderr = [];
   const frames = [{ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }, { jsonrpc: '2.0', id: 2, method: 'tools/list' }];

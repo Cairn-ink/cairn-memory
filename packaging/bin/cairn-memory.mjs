@@ -21,8 +21,10 @@ export async function runEntry(args = process.argv.slice(2), {
     return await runLocalSetupCli(args.slice(1));
   }
   if (platform === 'linux') {
-    const { daemonVector } = await load('../adapters/mcp/local-daemon-identity.mjs');
-    if (daemonVector(args).eligible) {
+    let identity;
+    try { identity = await load('../adapters/mcp/local-daemon-identity.mjs'); }
+    catch { stderr('cairn_daemon_fallback:daemon_build\n'); }
+    if (identity && identity.daemonVector(args).eligible) {
       let forwarder, result;
       try {
         forwarder = await load('../adapters/mcp/local-forwarder.mjs');
