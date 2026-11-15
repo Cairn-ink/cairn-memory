@@ -88,7 +88,7 @@
     "start": "export function createPrivateEvidenceStorage(",
     "end": "  function selectedReceiptRef(",
     "purpose": "private evidence storage: memo receipt projection sink",
-    "sha256": "866203b0a2ec5885a575988e9da3199572e5fce077068961819e4a1d028042f6"
+    "sha256": "b4f1a1a7e206e17dd337995d95430d155275595308a334dd3f3bc2bd7d67cc25"
   },
   {
     "file": "core/layout-base-upgrade.mjs",

@@ -10,9 +10,7 @@ export const summary = record => ({ calls: record.calls.map(([method, result, st
   sql: hash(record.statements), tables: record.dump.map(([name, rows]) => [name, rows.length, hash(rows)]),
   effectWitnesses: hash(record.effectWitnesses) });
 
-// Exact texts observed in the listed cells and the filter-off witness. The
-// archived batch variant occurs only in the archived baseline's trace,
-// which runs only when the baseline revision is in the local history.
+// Exact texts observed in the listed cells and the filter-off witness.
 // Seek and overflow pages are not observed here and receive no exemption.
 export const currentReceiptWalkSQLTexts=new Set([
   "SELECT id,revision,deleted,updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id=? AND scope=? AND project_id=? AND deleted=? ORDER BY updated_at DESC,id LIMIT ?",
@@ -20,9 +18,10 @@ export const currentReceiptWalkSQLTexts=new Set([
   "SELECT id,revision,deleted,updated_at, (SELECT encoding FROM pragma_encoding) AS receipt_encoding FROM memories INDEXED BY namespace_memories WHERE owner_id=? AND scope=? AND project_id=? AND deleted=? ORDER BY updated_at DESC,id LIMIT ?",
   "SELECT r.*,wanted.key AS wanted_entry, json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted FROM json_each(?) wanted CROSS JOIN receipts r ON r.rowid IN ( SELECT rowid FROM receipts INDEXED BY memory_receipts WHERE memory_id=json_extract(wanted.value,'$[0]') ORDER BY created_at,id LIMIT 5) ORDER BY wanted.key,r.created_at,r.id",
 ]);
-export const archivedReceiptWalkSQLTexts=new Set([
-  "SELECT r.*, json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted FROM json_each(?) wanted CROSS JOIN receipts r INDEXED BY memory_receipts ON r.memory_id=json_extract(wanted.value,'$[0]') LIMIT 5",
-]);
+// The archived baseline is now this line's own production tree, which emits
+// the current texts only. The batch variant of the earlier baseline no longer
+// occurs in any listed trace, so it receives no exemption.
+export const archivedReceiptWalkSQLTexts=new Set([]);
 export const receiptWalkSQLTexts=new Set([...currentReceiptWalkSQLTexts,...archivedReceiptWalkSQLTexts]);
 export const receiptWalkSQL=([sql])=>receiptWalkSQLTexts.has(normalizeSQL(sql));
 

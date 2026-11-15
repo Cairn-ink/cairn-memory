@@ -270,6 +270,16 @@
     "reason": "Bundled Markdown model prompts read as program resources, never a database path."
   },
   {
+    "path": "adapters/openai/index.mjs",
+    "source": "const rationalePrompt = readFileSync(new URL('../../core/prompts/relate-rationale.md', import.meta.url), 'utf8');",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "adapters/openai/index.mjs",
+    "source": "const focusedRationalePrompt = rationalePrompt + '\\n' + readFileSync(new URL('../../core/prompts/relate-claim-focus.md', import.meta.url), 'utf8');",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
     "path": "packages/setup/lib/codex-runtime.mjs",
     "source": "const version = JSON.parse(readFileSync(new URL('../package.json',import.meta.url))).version;",
     "reason": "Installer package/runtime metadata, ownership files and exclusive staging/lock files, not the SQLite store."

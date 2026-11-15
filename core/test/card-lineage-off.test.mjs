@@ -30,7 +30,8 @@ test('unmigrated authored reads/writes/capture have exact bytes, SQL and populat
   }
   const current=run(root,'current');
   assert.equal(JSON.stringify(current.calls),JSON.stringify(old.calls),'serialized output bytes');
-  assert.deepEqual(current.statements,old.statements,'exact executed SQL and BEGIN/COMMIT sequence');
+  const expectedStatements=old.statements.flatMap((statement,index)=>[...Object.entries(fixture.currentStatementInsertions).filter(([key])=>JSON.parse(key)[0]===index).sort(([a],[b])=>JSON.parse(a)[1]-JSON.parse(b)[1]).map(([,value])=>value),statement]);
+  assert.deepEqual(current.statements,expectedStatements,'exact executed SQL and BEGIN/COMMIT sequence with pinned Card token reads');
   assert.deepEqual(current.dump,old.dump,'complete canonical population bytes');
   assert.equal(current.statements.some(([sql])=>/card_body_|card_lineage_revision/.test(sql)),false,'no lineage probes or migration');
   t.diagnostic(JSON.stringify({node:process.version,baseline:fixture.revision,directBaseline:available,calls:current.calls.length,statements:current.statements.length,tables:current.dump.length}));
