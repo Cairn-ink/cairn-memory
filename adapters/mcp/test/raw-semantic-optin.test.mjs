@@ -27,7 +27,7 @@ const query = 'cobalt telescope';
 const providerArgs = maxRequests => contextProviderArgs.map((arg, index, args) =>
   args[index - 1] === '--context-embed-max-requests' ? String(maxRequests) : arg);
 
-async function start(t, mode, { maxRequests = 1000, id = 'synthetic-optin-' + mode } = {}) {
+async function start(t, mode, { maxRequests = 1000, id = 'synthetic-optin-' + mode, rawSearch = true } = {}) {
   t.mock.method(globalThis,'fetch',() => assert.fail('recording embedder must never contact a provider'));
   const workspace = createTestWorkspace(t), path = join(workspace.path,'store.sqlite');
   const host = cardHost(), writer = openMemoryCore({path,raw:true,privateCards:host.options});
@@ -37,7 +37,8 @@ async function start(t, mode, { maxRequests = 1000, id = 'synthetic-optin-' + mo
   ok(host.call(writer,'confirmCardDraft',{namespace,cardId:draft.id,expectedRevision:draft.revision,actionId:'confirm',applicability:'current'}));
   await writer.close();
   const flags = mode === 'raw-flag' ? ['--raw-semantic'] : mode.startsWith('explicit-provider') ? providerArgs(maxRequests) : [];
-  const parsed = parseConfiguration(['--db',path,'--owner',namespace.ownerId,...flags,...(mode.endsWith('off') ? ['--no-context-semantic'] : [])]);
+  const parsed = parseConfiguration(['--db',path,'--owner',namespace.ownerId,...flags,...(mode.endsWith('off') ? ['--no-context-semantic'] : []),
+    ...(rawSearch ? [] : ['--no-raw-search'])]);
   const {contextProvider,...config} = parsed;
   // Use the real ambient-key configuration and policy, replacing only its port.
   const automatic = createContextEmbedding(contextProvider,{OPENAI_API_KEY:'synthetic-not-a-key'});
@@ -54,7 +55,7 @@ async function start(t, mode, { maxRequests = 1000, id = 'synthetic-optin-' + mo
   };
   try { server = createCairnServer({...config,privateCards:'local-v1',contextCounter:{id:'synthetic-counter',countTokens:text=>Buffer.byteLength(text)},contextEmbedding:{embedder,policy:automatic.policy}}); }
   finally { delete globalThis[RAW_MANAGER_OBSERVER]; }
-  assert.ok(rawManager, 'observe the actual manager from real MCP construction');
+  if (rawSearch) assert.ok(rawManager, 'observe the actual manager from real MCP construction');
   workspace.defer(() => server.close()); await server.contextCounterReady;
   const client = new Client({name:'synthetic-optin',version:'1'}), [a,b] = InMemoryTransport.createLinkedPair();
   workspace.defer(() => client.close()); await server.connect(a); await client.connect(b);
@@ -106,38 +107,60 @@ for (const mode of ['ambient','raw-flag','explicit-provider','off','explicit-pro
 
 // A spent request cap is designed behaviour: semantic queries are refused as
 // budget_denied without a provider call, and reads still succeed lexically.
+// Raw search is off here so that only Memory/Card maintenance and these
+// queries spend the cap, and every check starts once Memory/Card vectors are
+// published: before that a query reports partial coverage and dispatches
+// nothing. Once spent, the cap stays spent; a busy slot would clear.
 async function capQuery(client, query) {
   const value = ok(await contextCall(client,'find_memory_candidates',{query,types:['memory','card'],intent:'current'}));
   return { value, text: JSON.stringify(value) };
 }
+const semanticState = text => text.match(/"semantic":\{"state":"([a-z_]+)"/)?.[1];
 const deniedChannel = '"semantic":{"state":"budget_denied","causes":["budget_denied"]}';
 
+// Probe with fresh queries until one is embedded with the semantic channel
+// ready. Partial coverage dispatches nothing, so waiting costs no requests.
+async function untilSemanticReady(client, calls) {
+  for (let turn = 0; turn < 100; turn++) {
+    const query = 'copper atlas readiness ' + turn, { text } = await capQuery(client, query);
+    const state = semanticState(text);
+    if (state === 'ready' && calls.some(call => call.texts.includes(query))) return;
+    // A probe may also meet the background refresh holding the single slot.
+    assert.ok(['partial_coverage', 'stale_index', 'unavailable', 'budget_denied'].includes(state), 'only startup states before readiness: ' + text);
+    await delay(150);
+  }
+  assert.fail('Memory/Card semantic search never became ready');
+}
+
 test('request cap spent: semantic queries are denied as budget_denied with no provider call', { timeout:60000 }, async t => {
-  const { client, server, calls } = await start(t, 'explicit-provider', { maxRequests: 1, id: 'synthetic-optin-cap-1' });
-  // Whoever spends the single request first (background refresh, Raw
-  // maintenance or this query), the cap is spent once one call was made.
-  await capQuery(client, 'copper atlas cap-first');
-  for (let turn = 0; turn < 50 && calls.length < 1; turn++) await delay(100);
-  assert.equal(calls.length, 1, 'exactly one provider call within a cap of one');
-  for (const query of ['copper atlas cap-second', 'copper atlas cap-third']) {
+  const { client, server, calls } = await start(t, 'explicit-provider', { maxRequests: 12, id: 'synthetic-optin-cap-12', rawSearch: false });
+  await untilSemanticReady(client, calls);
+  // With Raw search off every granted request reaches the recording embedder,
+  // so calls.length counts the requests spent. Spend the rest of the cap with
+  // fresh queries; a refusal before then can only be a briefly busy slot.
+  for (let turn = 0; turn < 60 && calls.length < 12; turn++) {
+    const query = 'copper atlas spend ' + turn, { text } = await capQuery(client, query);
+    if (calls.some(call => call.texts.includes(query))) assert.equal(semanticState(text), 'ready', text);
+    else { assert.equal(semanticState(text), 'budget_denied', text); await delay(100); }
+  }
+  assert.equal(calls.length, 12, 'exactly the cap of 12 provider calls');
+  const before = calls.length;
+  // Spent, the cap refuses every later query, with no provider call.
+  for (const query of ['copper atlas after-cap-1', 'copper atlas after-cap-2']) {
+    await delay(500);
     const { text } = await capQuery(client, query);
-    assert.ok(text.includes(deniedChannel), 'spent cap reports budget_denied: ' + text);
+    assert.ok(text.includes(deniedChannel), 'cap stays spent: ' + text);
     assert.ok(!calls.some(call => call.texts.includes(query)), 'a denied query never reaches the provider');
   }
-  assert.equal(calls.length, 1, 'no provider call after the cap is spent');
+  assert.equal(calls.length, before, 'no provider call after the cap is spent');
   await client.close(); await server.close();
 });
 
-test('request cap not reached: the same semantic query is embedded', { timeout:60000 }, async t => {
-  const { client, server, calls } = await start(t, 'explicit-provider', { maxRequests: 1000, id: 'synthetic-optin-cap-1000' });
-  const query = 'copper atlas cap-second';
-  let text;
-  // A query arriving while a background embed holds the single slot is refused
-  // at once, so allow a few spaced attempts; the cap itself never refuses here.
-  for (let turn = 0; turn < 10 && !calls.some(call => call.texts.includes(query)); turn++) {
-    ({ text } = await capQuery(client, query));
-    if (!calls.some(call => call.texts.includes(query))) await delay(200);
-  }
-  assert.ok(calls.some(call => call.texts.includes(query)), 'query embedded below the cap: ' + text);
+test('request cap not reached: the same semantic query is embedded and ready', { timeout:60000 }, async t => {
+  const { client, server, calls } = await start(t, 'explicit-provider', { maxRequests: 1000, id: 'synthetic-optin-cap-1000', rawSearch: false });
+  await untilSemanticReady(client, calls);
+  const query = 'copper atlas after-cap-1', { text } = await capQuery(client, query);
+  assert.equal(semanticState(text), 'ready', 'semantic channel ready below the cap: ' + text);
+  assert.ok(calls.some(call => call.texts.includes(query)), 'query embedded below the cap');
   await client.close(); await server.close();
 });
