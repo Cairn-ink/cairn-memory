@@ -67,7 +67,8 @@ test(`A1: a purged ${generation} similarity topic blocks every part until cooldo
 test('similarity continuity for a legacy full topic is inherited by every newly partitioned key', async t => {
   const f = engineCardFixture(t); f.seed(30);
   const w = worker(f), cluster = clusterMemories(w.storage.snapshot(ns, 512, noop).memories)[0];
-  seedCard(w, cluster);
+  const legacy = seedCard(w, cluster);
+  w.storage.retire(ns, legacy.id, new Date(w.time() - ENGINE_CARD_LIMITS.debounceMs - 1).toISOString());
   // Change only traversal order so the natural seed changes, with exactly the
   // same topic and source revisions. The existing full-topic Card still votes.
   const snapshot = w.storage.snapshot;
