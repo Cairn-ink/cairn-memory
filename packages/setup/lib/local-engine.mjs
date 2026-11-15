@@ -50,7 +50,7 @@ function validateManifest(manifest) {
   const hashes = { ...manifest.sourceHashes, ...manifest.generatedHashes };
   if (new Set(manifest.files).size !== manifest.files.length ||
       JSON.stringify(Object.keys(hashes).sort()) !== JSON.stringify([...manifest.files].sort()) ||
-      Object.keys(manifest.generatedHashes).sort().join(',') !== 'npm-shrinkwrap.json,package.json' ||
+      Object.keys(manifest.generatedHashes).sort().join(',') !== 'engine-build.json,npm-shrinkwrap.json,package.json' ||
       Object.keys(manifest.sourceHashes).some(name => Object.hasOwn(manifest.generatedHashes, name)) ||
       !manifest.files.includes('bin/cairn-memory.mjs') ||
       !manifest.files.every(name => pathOK(name) && /^[a-f0-9]{64}$/u.test(hashes[name]))) {

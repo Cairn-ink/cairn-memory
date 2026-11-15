@@ -833,11 +833,11 @@
     "bin/cairn-memory.mjs": "efb71394c8c75ed5485943e6808180036d8406128c763ab6c780c3a72993e010",
     "README.md": "c69cc385f74cfc658b2e3a00dd842ea84fe595a6ecdf9f9cda9b16049b6dc588",
     "THIRD_PARTY_NOTICES.md": "f53d69106bd47f5c23acf119a83d3adc61ddcdcaf4ec908a1cf4f6cee9e4f23c",
-    "licenses/tiktoken-LICENSE": "1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b",
-    "engine-build.json": "3b048ef3c1f1b23280f3305dcaeb0d07e9645425f0ca4e5ecd568f680a8308de"
+    "licenses/tiktoken-LICENSE": "1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b"
   },
   "generatedHashes": {
     "package.json": "e255ff4d23e921de9bed8e058c64e57aed3e1bc6a8ed242cee52a716add2d69c",
-    "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8"
+    "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8",
+    "engine-build.json": "3b048ef3c1f1b23280f3305dcaeb0d07e9645425f0ca4e5ecd568f680a8308de"
   }
 }

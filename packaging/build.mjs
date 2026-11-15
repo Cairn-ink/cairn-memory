@@ -113,7 +113,6 @@ export function buildArtifact({ version = packageVersion, runCommand = command, 
   for (const [name, value] of Object.entries(stagedHashes)) digest.update(name + '\0' + value + '\0');
   writeFileSync(join(stagingPath, 'engine-build.json'), JSON.stringify({ version: 1, sourceHashes: stagedHashes,
     digest: digest.digest('hex') }, null, 2) + '\n');
-  sourceHashes['engine-build.json'] = hash(readFileSync(join(stagingPath, 'engine-build.json')));
   const packed = JSON.parse(runCommand('npm', ['pack', '--offline', '--ignore-scripts', '--json',
     '--pack-destination', directory], stagingPath, userconfig));
   if (packed.length !== 1 || packed[0].filename !== `${packageName}-${version}.tgz`) throw new Error('unexpected_artifact_name');

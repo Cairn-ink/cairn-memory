@@ -17,6 +17,8 @@ test('staged build record covers the actual archive and installed verification r
   assert.deepEqual(walk(root), archive); assert.equal(archive.length, a.files.length);
   t.diagnostic(`archive/filesystem cross-check: ${archive.length} files`);
   assert.ok(archive.includes('engine-build.json'));
+  assert.ok(!Object.hasOwn(a.sourceHashes, 'engine-build.json'), 'generated metadata is not a repository source');
+  assert.deepEqual(Object.keys(a.sourceHashes).sort(), archive.filter(n => !['engine-build.json', 'package.json', 'npm-shrinkwrap.json'].includes(n)));
   assert.ok(!archive.some(n => /(?:demo-transcript|walkthrough)\.mjs$/.test(n)));
   const digest = createHash('sha256');
   assert.deepEqual(Object.keys(build.sourceHashes).sort(), archive.filter(n => n !== 'engine-build.json'));
