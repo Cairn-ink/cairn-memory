@@ -83,17 +83,20 @@ async function serve(directory, paths, identity, bootstrap, owner, { idleMs, gra
   const descriptor = { version: 1, protocol: DAEMON_PROTOCOL, identity, owner,
     incarnation: randomBytes(32).toString('hex'), capability: randomBytes(32).toString('hex'), socket: null };
   const done = new Promise((resolve, reject) => { doneResolve = resolve; doneReject = reject; });
+  // A rejected import from this package cannot become healthy in this process
+  // (ESM caches failures). Stop admissions and retain ownership through cleanup.
+  const failedImport = error => { void shutdown().catch(doneReject); throw error; };
   // Provider creation and heavy import are single-flight and follow authentication.
   const activate = () => activated ??= (async () => {
-    const { createLocalSharedRuntime } = await import('./local-shared-runtime.mjs');
+    const { createLocalSharedRuntime } = await import('./local-shared-runtime.mjs').catch(failedImport);
     const configuration = daemonVector(bootstrap.args).configuration;
     configuration.path = identity.store.path;
     let model;
     if (bootstrap.environment.OPENAI_API_KEY) {
-      const { createOpenAIModel } = await import('../openai/index.mjs');
+      const { createOpenAIModel } = await import('../openai/index.mjs').catch(failedImport);
       model = createOpenAIModel({ apiKey: bootstrap.environment.OPENAI_API_KEY });
       if (configuration.contextRead) {
-        const { prepareContextEmbedding, contextEmbeddingPort } = await import('./context-read-provider.mjs');
+        const { prepareContextEmbedding, contextEmbeddingPort } = await import('./context-read-provider.mjs').catch(failedImport);
         embedding = await prepareContextEmbedding(undefined, bootstrap.environment);
         configuration.contextEmbedding = contextEmbeddingPort(embedding);
       }

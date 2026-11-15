@@ -16,6 +16,17 @@ try {
     } catch (error) { code = error.code; }
     send({ kind: 'connection-probe-result', code, execArgv: process.execArgv });
   } else if (configuration.role === 'candidate') {
+    if (configuration.activationImportFailure) {
+      const { register } = await import('node:module');
+      const target = new URL('../../local-shared-runtime.mjs', import.meta.url).href;
+      register('data:text/javascript,' + encodeURIComponent(`
+        export async function resolve(specifier, context, next) {
+          const result = await next(specifier, context);
+          if (result.url === ${JSON.stringify(target)})
+            throw Object.assign(Error('synthetic_module_load_failure'), { code: 'ERR_MODULE_NOT_FOUND', url: result.url });
+          return result;
+        }`), import.meta.url);
+    }
     let armed = false;
     process.on('message', message => { if (message.kind === 'arm') { armed = true; send({ kind: 'armed' }); } });
     const acquired = await runCandidate(configuration.bootstrap, { ...configuration.lifecycle,
