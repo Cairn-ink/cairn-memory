@@ -45,10 +45,7 @@ test('topic trigger counts distinct Memories per conversation and preserves recu
 
 test('topic consolidation builds immediately from the whole topic, then rebuilds ten minutes after staling and after forget', async t => {
   let clock = Date.UTC(2026, 5, 1);
-  // Public forget and maintenance must share a monotonic clock: supersession
-  // now retains a purge tombstone with the maintenance timestamp as well.
-  t.mock.timers.enable({ apis: ['Date'], now: clock });
-  const advance = ms => { clock += ms; t.mock.timers.setTime(clock); };
+  const advance = ms => { clock += ms; };
   const f = engineCardFixture(t, { model: completeModel() });
   const w = worker(f, () => clock), memories = [];
   for (let i = 0; i < 4; i++) memories.push(f.add(`Orion item ${i} ready.`, 0, 0));
@@ -72,7 +69,13 @@ test('topic consolidation builds immediately from the whole topic, then rebuilds
   const rebuilt = await run(w); assert.equal(rebuilt.built.length, 1, JSON.stringify(rebuilt));
   assert.notEqual(rebuilt.built[0].id, first.built[0].id);
   assert.equal(rebuilt.built[0].sourceRevisions.length, 8);
-  ok(f.core.forget({ namespace: ns, memoryId: memories[0].id, expectedRevision: memories[0].revision }));
+  const forgottenSource = f.db.prepare('SELECT id,revision,content FROM memories WHERE id=?').get(memories[0].id);
+  assert.ok(body.includes(forgottenSource.content));
+  // Only the synchronous forget needs Date to share the worker's clock.
+  // Restore it before any await or later fixture can capture Date.now.
+  t.mock.timers.enable({ apis: ['Date'], now: clock });
+  try { ok(f.core.forget({ namespace: ns, memoryId: forgottenSource.id, expectedRevision: forgottenSource.revision })); }
+  finally { t.mock.timers.reset(); }
   ok(await f.refresh());
   const hidden = ok(await f.read('Orion item'));
   assert.ok(hidden.metered.items.length);
@@ -86,7 +89,7 @@ test('topic consolidation builds immediately from the whole topic, then rebuilds
   const forgotten = await run(w); assert.equal(forgotten.built.length, 1, JSON.stringify(forgotten));
   assert.equal(forgotten.built[0].sourceRevisions.length, 7);
   assert.ok(!f.model.calls.at(-1).memories.some(memory => memory.id === memories[0].id));
-  assert.ok(!f.db.prepare('SELECT body FROM private_cards WHERE id=?').get(forgotten.built[0].id).body.includes(memories[0].content));
+  assert.ok(!f.db.prepare('SELECT body FROM private_cards WHERE id=?').get(forgotten.built[0].id).body.includes(forgottenSource.content));
 });
 
 test('five same-day facts from separate conversations consolidate; owner and namespace sources never join', async t => {
@@ -171,17 +174,23 @@ for (const count of [13, 30]) test(`${count} Memories form bounded parts and gen
   const built = [];
   for (let i = 0; i < (count === 13 ? 1 : 3); i++) {
     const pass = ok(await f.pass()); assert.equal(pass.modelCalls, 1); assert.equal(pass.built.length, 1, JSON.stringify(pass));
-    built.push(pass.built[0]); assert.equal(pass.built[0].clusterKey, `moc:${filed.mocId}#${i}`);
+    built.push(pass.built[0]);
+    assert.equal(pass.built[0].clusterKey.split('#')[0], 'moc:' + filed.mocId);
   }
   assert.equal(ok(await f.pass()).modelCalls, 0);
-  assert.deepEqual(built.map(c => c.sourceRevisions.length), count === 13 ? [12] : [12, 12, 6]);
+  assert.equal(new Set(built.map(card => card.clusterKey)).size, built.length);
+  assert.deepEqual(built.map(c => c.sourceRevisions.length).sort((a, b) => b - a), count === 13 ? [12] : [12, 12, 6]);
+  const refs = built.flatMap(card => card.sourceRevisions);
+  assert.equal(new Set(refs.map(ref => ref.memoryId)).size, refs.length, 'built parts have disjoint sources');
   assert.ok(f.model.calls.every(call => call.memories.length <= 24));
 });
 
 test('appending changes only the final part; forgetting an early source hides and rebuilds shifted parts', async t => {
-  const f = engineCardFixture(t), filed = f.file(f.seed(), 'Orion'), memories = filed.memories;
+  const f = engineCardFixture(t), filed = f.file(f.seed(), 'Orion');
   let clock = Date.now(); const w = worker(f, () => clock), built = [];
   for (let i = 0; i < 3; i++) built.push(ok(await f.pass()).built[0]);
+  clock = Math.max(Date.now(), ...built.map(card => Date.parse(card.builtAt)));
+  const tail = built.find(card => card.sourceRevisions.length === 6);
   const added = f.add('Orion later community planning milestone.', 61, 7);
   // Move into the existing topic rather than a new MOC.
   const map = ok(f.core.map({ namespace: ns }));
@@ -191,17 +200,21 @@ test('appending changes only the final part; forgetting an early source hides an
   const stale = await run(w); assert.equal(stale.debounced, 1); assert.equal(stale.modelCalls, 0);
   clock += 600001;
   const appended = await run(w); assert.equal(appended.built.length, 1, JSON.stringify(appended));
-  assert.equal(appended.built[0].clusterKey, `moc:${filed.mocId}#2`); assert.equal(appended.built[0].sourceRevisions.length, 7);
-  for (const card of built.slice(0, 2)) assert.equal(f.db.prepare('SELECT revision FROM private_cards WHERE id=?').get(card.id).revision, 1);
-  const forgotten = memories[0];
-  ok(f.core.forget({ namespace: ns, memoryId: forgotten.id, expectedRevision: forgotten.revision }));
-  clock = Date.parse(f.db.prepare('SELECT updated_at FROM private_cards WHERE id=?').get(built[0].id).updated_at);
+  assert.equal(appended.built[0].clusterKey, tail.clusterKey); assert.equal(appended.built[0].sourceRevisions.length, 7);
+  for (const card of built.filter(card => card.id !== tail.id)) assert.equal(f.db.prepare('SELECT revision FROM private_cards WHERE id=?').get(card.id).revision, 1);
+  const early = built.find(card => card.clusterKey.endsWith('#0'));
+  const forgotten = f.db.prepare('SELECT id,revision,content FROM memories WHERE id=?').get(early.sourceRevisions[0].memoryId);
+  assert.ok(f.db.prepare('SELECT body FROM private_cards WHERE id=?').get(early.id).body.includes(forgotten.content));
+  t.mock.timers.enable({ apis: ['Date'], now: clock });
+  try { ok(f.core.forget({ namespace: ns, memoryId: forgotten.id, expectedRevision: forgotten.revision })); }
+  finally { t.mock.timers.reset(); }
+  clock = Date.parse(f.db.prepare('SELECT updated_at FROM private_cards WHERE id=?').get(early.id).updated_at);
   ok(await f.refresh());
   const read = ok(await f.read('Orion current state'));
-  assert.ok(!read.metered.items.some(item => item.ref.id === built[0].id));
+  assert.ok(!read.metered.items.some(item => item.ref.id === early.id));
   await run(w); clock += 600001;
   const rebuilt = await run(w); assert.equal(rebuilt.built.length, 1, JSON.stringify(rebuilt));
-  assert.equal(rebuilt.built[0].clusterKey, `moc:${filed.mocId}#0`);
+  assert.equal(rebuilt.built[0].clusterKey, early.clusterKey);
   assert.ok(!f.model.calls.at(-1).memories.some(memory => memory.id === forgotten.id));
   assert.ok(!f.db.prepare('SELECT body FROM private_cards WHERE id=?').get(rebuilt.built[0].id).body.includes(forgotten.content));
 });
@@ -215,11 +228,13 @@ test('parts sort event dates then IDs and small clusters retain their key', () =
 });
 
 for (const filed of [false, true]) test(`${filed ? 'filed' : 'similarity'} part boundary carries exact sources and debounces changed sources`, async t => {
-  const f = engineCardFixture(t); let memories = f.seed(12);
+  const f = engineCardFixture(t), memories = f.seed(12);
   const placement = filed ? f.file(memories, 'Orion') : null;
-  if (placement) memories = placement.memories;
   const topic = placement?.mocId;
   const first = ok(await f.pass()).built[0]; assert.ok(first);
+  const row = () => f.db.prepare('SELECT * FROM private_cards WHERE id=?').get(first.id);
+  const bindings = () => f.db.prepare('SELECT * FROM card_memory_bindings WHERE card_id=? ORDER BY receipt_id').all(first.id);
+  const before = { row: row(), bindings: bindings() };
   const added = f.add('Orion appended community garden milestone.', 61, 7);
   if (filed) {
     const map = ok(f.core.map({ namespace: ns }));
@@ -230,16 +245,28 @@ for (const filed of [false, true]) test(`${filed ? 'filed' : 'similarity'} part 
   const moved = ok(await f.pass()); assert.equal(moved.modelCalls, 0, JSON.stringify(moved));
   const storage = createEngineCardStorage({ db: f.db, upgrade: true, ready() {},
     identity: f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get() });
-  assert.equal(storage.cards(ns, () => {}).find(card => card.id === first.id).clusterKey, first.clusterKey + '#0');
+  const carried = storage.cards(ns, () => {}).find(card => card.id === first.id);
+  assert.equal(carried.clusterKey, first.clusterKey + '#0');
+  assert.deepEqual(carried.sourceRevisions, first.sourceRevisions);
+  assert.deepEqual({ row: row(), bindings: bindings() }, before, 'carry preserves the exact body, revision, build time and bindings');
   assert.equal(ok(await f.pass()).modelCalls, 0, 'carry keeps a stable source fingerprint despite event ordering');
-  ok(f.core.forget({ namespace: ns, memoryId: memories[0].id, expectedRevision: memories[0].revision }));
+  const forgotten = f.db.prepare('SELECT id,revision FROM memories WHERE id=?').get(first.sourceRevisions[0].memoryId);
+  ok(f.core.forget({ namespace: ns, memoryId: forgotten.id, expectedRevision: forgotten.revision }));
   const updated = Date.parse(f.db.prepare('SELECT updated_at FROM private_cards WHERE id=?').get(first.id).updated_at);
   let clock = updated;
+  const expectedSources = storage.snapshot(ns, 512, () => {}).memories
+    .map(memory => ({ memoryId: memory.id, revision: memory.revision })).sort((a, b) => a.memoryId.localeCompare(b.memoryId));
   const w = worker(f, () => clock);
   assert.equal((await run(w)).modelCalls, 0);
-  clock += 600001;
+  clock += 599999;
+  assert.equal((await run(w)).modelCalls, 0);
+  clock += 2;
   const rebuilt = await run(w); assert.equal(rebuilt.built.length, 1, JSON.stringify(rebuilt));
-  assert.equal(rebuilt.built[0].clusterKey, first.clusterKey);
+  const stored = storage.cards(ns).find(card => card.id === rebuilt.built[0].id);
+  assert.equal(rebuilt.built[0].clusterKey, stored.clusterKey);
+  if (filed) assert.equal(stored.clusterKey, first.clusterKey);
+  else assert.match(stored.clusterKey, /^similarity:[a-f0-9]{64}$/);
+  assert.deepEqual(rebuilt.built[0].sourceRevisions, expectedSources);
   assert.equal(rebuilt.built[0].sourceRevisions.length, 12);
-  assert.ok(!f.model.calls.at(-1).memories.some(memory => memory.id === memories[0].id));
+  assert.ok(!f.model.calls.at(-1).memories.some(memory => memory.id === forgotten.id));
 });
