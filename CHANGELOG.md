@@ -2,6 +2,8 @@
 
 ## Unreleased — daily shared embedding budget
 
+- Forgetting or correcting a memory now withholds Episodes from its fenced source conversations in the same transaction.
+
 - Share the estimated embedding budget across all connections to a running
   Cairn server, resetting at UTC midnight. The in-memory allowance also resets
   on server restart; it is not an account-wide spending cap.

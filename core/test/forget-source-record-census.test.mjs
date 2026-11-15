@@ -21,7 +21,7 @@ const records = {
   confirmation_actions: { columns: ["result"], canTrip: false, reason: "Audit result identities; ordinary forget and correct do not rewrite this ledger." },
   confirmation_conflicts: { columns: ["result"], canTrip: false, reason: "Dropped audit results retain Memory identities, handled by existing audit and terminal matching." },
   confirmation_supersessions: { columns: ["previous_receipt_ids", "receipt_ids", "result"], canTrip: false, reason: "Dropped audit results and receipt arrays use existing audit and terminal matching." },
-  episode_keep_actions: { columns: ["keep_source_ids", "memory_ids"], canTrip: false, reason: "Exact Episode source IDs; neither source invalidation nor step clearing rewrites completed keeps." },
+  episode_keep_actions: { columns: ["keep_source_ids", "memory_ids"], canTrip: false, reason: "Exact Episode source IDs; completed keeps stay unchanged, and exclusions resolve their receipt proof before invalidation removes the referenced IDs." },
   episode_memory_links: { columns: ["receipt_ids"], canTrip: false, reason: "Receipt IDs; links are not rewritten by the operation." },
   memory_supersessions: { columns: ["receipt_ids"], canTrip: false, reason: "Receipt IDs; source mutations do not rewrite supersession proofs." },
   method_binding_events: { columns: ["reason_refs"], canTrip: false, reason: "Reason references may include retained content; source mutations do not write binding events." },
