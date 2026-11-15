@@ -1,5 +1,6 @@
 import { faults } from './fixtures/sqlite-helper-child-faults.mjs';
-import test from 'node:test';
+import test, { beforeEach } from 'node:test';
+beforeEach(t => faults.install?.(t));
 import assert from 'node:assert/strict';
 import { symlinkSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
