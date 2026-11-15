@@ -212,11 +212,11 @@ test('a suppression epoch refusal retains the abandoned claim when terminal comp
     { body: `2026-01-01: ${oldMemory.content} [${oldMemory.id}]` }, timestamp, noop);
   const model = scriptedConsolidator(({ input }) => ({ currentState: [{ text: 'ok', memoryIds: [input.memories[0].id] }],
     timeline: [{ date: oldMemory.date, text: 'replaced', memoryIds: [oldMemory.id] }], contradictions: [] }));
-  let units = 0, validated = false, beforeUnit;
+  let validated = false, beforeUnit;
   const count = model.countTokens;
   model.countTokens = text => { if (text.startsWith('2026-')) validated = true; return count(text); };
   const compensations = [], host = hosted({ db, storage }, ({ point }) => {
-    if (point === 'attempt' && ++units === 3) {
+    if (point === 'attempt' && validated && !beforeUnit) {
       assert.equal(validated, true);
       assert.ok(model.calls[0].memories.some(memory => memory.id === context.id));
       ok(core.forget({ namespace: ns, memoryId: context.id, expectedRevision: context.revision }));
