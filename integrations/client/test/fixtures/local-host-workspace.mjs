@@ -33,6 +33,9 @@ export async function hostFixture(t,{ client = 'claude-code' } = {}) {
   let exec=false,hostPresent=true;
   const detectHost=async()=>{
     if(!hostPresent)return undefined;
+    // macOS host tests inject only this scratch-owned fake host. Production
+    // Codex ancestry pinning remains Linux-only.
+    if(process.platform==='darwin')return {binaryPath:binary,identity,kind:'cli',...(exec?{execSession:true}:{})};
     const detected=await detectRunningHost({pid:42,proc:'/synthetic/proc',identity:async()=>identity,link:async()=>binary,
       read:async path=>Buffer.from(path.endsWith('cmdline')?'codex\0'+(exec?'exec\0':''):'42 (codex) S 1 0 0')});
     const {processPath,...host}=detected;return host;

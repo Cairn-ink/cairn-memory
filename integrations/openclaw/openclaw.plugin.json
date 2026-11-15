@@ -1,0 +1,81 @@
+{
+  "id": "cairn-memory",
+  "name": "Cairn memory",
+  "description": "Owner-private hosted Cairn memory tools",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "endpoint": {
+        "type": "string",
+        "default": "https://cairn.ink"
+      },
+      "token": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source",
+          "provider",
+          "id"
+        ],
+        "properties": {
+          "source": {
+            "const": "file"
+          },
+          "provider": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+          },
+          "id": {
+            "const": "value"
+          }
+        }
+      },
+      "activeMemoryTimeoutMs": {
+        "type": "integer",
+        "minimum": 250,
+        "maximum": 120000,
+        "default": 5000
+      }
+    }
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": [
+      "cairn_recall_memory",
+      "cairn_remember_memory",
+      "cairn_forget_memory"
+    ]
+  },
+  "toolMetadata": {
+    "cairn_recall_memory": {
+      "optional": true
+    },
+    "cairn_remember_memory": {
+      "optional": true
+    },
+    "cairn_forget_memory": {
+      "optional": true
+    }
+  },
+  "configContracts": {
+    "secretInputs": {
+      "paths": [
+        {
+          "path": "token",
+          "expected": "string",
+          "ownerKind": "capability"
+        }
+      ]
+    }
+  },
+  "cliCommands": [
+    {
+      "name": "cairn",
+      "description": "Configure hosted Cairn memory",
+      "hasSubcommands": true
+    }
+  ]
+}

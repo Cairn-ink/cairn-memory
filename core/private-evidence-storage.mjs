@@ -1,7 +1,7 @@
 import { hasCardLineage, cardLineageItemInside, cardLineageNamespaceInside } from './card-lineage.mjs';
 import { contentSuppressionReasonInside, cachedContentSuppressionRequestInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
-import { contentReadSafety, memoryReadEligible, receiptReadSafety, anchoredReadSafety, createContentReadMemo } from './content-safety.mjs';
+import { contentReadSafety, memoryReadEligible, receiptReadSafety, anchoredReadSafety, createContentReadMemo, isEngineCard, engineCardRevisionsInside } from './content-safety.mjs';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { createQualificationStorage } from './claim-qualification-storage.mjs';
@@ -212,7 +212,10 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     let turn = previous?.turn ?? 0, scannedRows = 0, scannedBodyUnits = 0, stopped = null;
     const byType = Object.fromEntries(input.types.map(type => [type, { scanned: 0, included: 0, partial: true }]));
     const exhausted = new Set(), blocked = new Set(), matches = [], queryWords = words(input.query);
+    const deadline = Symbol('selection deadline');
+    let deniedTraversalTimedOut = false;
     function next(type, metadataOnly = false) {
+      let candidateAfter = after[type];
       const layout=cachedContentLayout(db);
       let columns = metadataOnly ? (layout?.suppressionRevision
         ? 'id,revision'+(type==='card'?',body_revision':'') : 'id') : '*';
@@ -220,11 +223,30 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
         SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id
         LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=memories.id
         AND (ac.owner_id IS NOT memories.owner_id OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry`;
-      const row = type === 'memory' ? db.prepare(`SELECT ${columns} FROM memories WHERE ${where}
-        AND deleted=0 AND id>? ORDER BY id LIMIT 1`).get(...boundary(ns), after[type]) :
-        db.prepare(`SELECT ${columns} FROM private_cards WHERE ${where} AND state='confirmed' AND id>? ORDER BY id LIMIT 1`)
-          .get(...boundary(ns), after[type]);
-      return row;
+      while (true) {
+        // A denied prefix has no caller-supplied row bound. Check the shared
+        // deadline before continuing it, including metadata-only lookahead.
+        if (candidateAfter !== after[type] && performance.now() - started >= input.deadlineMs) {
+          stopped = 'deadline'; deniedTraversalTimedOut = true; return deadline;
+        }
+        const row = type === 'memory' ? db.prepare(`SELECT ${columns} FROM memories WHERE ${where}
+        AND deleted=0 AND id>? ORDER BY id LIMIT 1`).get(...boundary(ns), candidateAfter) :
+          db.prepare(`SELECT ${columns} FROM private_cards WHERE ${where} AND state='confirmed' AND id>? ORDER BY id LIMIT 1`)
+            .get(...boundary(ns), candidateAfter);
+        if (!row || type !== 'card' || !isEngineCard(row.id)) return row;
+        // The query guarantees confirmed state, including metadata-only peeks.
+        // Legacy peeks select only id; fetch the full candidate only for engines.
+        const candidate = row.revision === undefined ?
+          db.prepare(`SELECT * FROM private_cards WHERE ${where} AND state='confirmed' AND id>? ORDER BY id LIMIT 1`)
+            .get(...boundary(ns), candidateAfter) : { ...row, state: 'confirmed' };
+        if (engineCardRevisionsInside(db, ns, candidate) &&
+          contentReadSafety(db, { identity, namespace: ns, memo, method: 'getCard',
+            ref: { type: 'card', namespace: ns, cardId: candidate.id,
+              revision: candidate.revision, bodyRevision: candidate.body_revision } }).allowed) return row;
+        // Advance only this private scan position. Denied engines never enter
+        // contributor checks, body budgets, counts, stream turns or cursor ids.
+        candidateAfter = row.id;
+      }
     }
     function assertContributor(type,row,peek=false) {
       const layout=cachedContentLayout(db);
@@ -249,6 +271,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
       turn = (turn + 1) % input.types.length;
       if (exhausted.has(type) || blocked.has(type)) continue;
       const row = next(type);
+      if (row === deadline) break;
       if (!row) { exhausted.add(type); continue; }
       // Scanned counts, body-unit budgets and cursor identities are outputs.
       assertContributor(type,row);
@@ -265,8 +288,9 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
       byType[type].included++;
     }
     // A metadata-only bounded peek tells callers which streams actually ended.
-    for (const type of input.types) if (!blocked.has(type)) {
-      const peek=next(type,true);assertContributor(type,peek,true);if(!peek)exhausted.add(type);
+    for (const type of input.types) if (!deniedTraversalTimedOut && !blocked.has(type)) {
+      const peek=next(type,true);if(peek===deadline)break;
+      assertContributor(type,peek,true);if(!peek)exhausted.add(type);
     }
     const complete = exhausted.size === input.types.length;
     for (const type of input.types) byType[type].partial = !exhausted.has(type);

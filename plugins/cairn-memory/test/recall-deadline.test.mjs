@@ -177,3 +177,13 @@ for (const mode of ['immediate', 'slow-default', 'slow-cancelled']) {
     assert.deepEqual(await readdir(workspace.path), []);
   });
 }
+
+
+test('RH-04 hard termination lets cancellation settle before exit', async t => {
+  const result = await invocation(t, { forceHardCap: true, recallMs: 5000 });
+  assert.equal(result.stdout, '', 'forced_cap_no_context');
+  assert.equal(result.events.filter(event => event.kind === 'recall-fetch').length, 1);
+  const aborted = result.events.filter(event => event.kind === 'recall-aborted');
+  assert.equal(aborted.length, 1, 'hard_cap_settles_cancellation');
+  assert.equal(aborted[0].source, 'application');
+});

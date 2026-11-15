@@ -53,6 +53,7 @@ const {withLocalHostDependencies}=await import(pathToFileURL(join(installed,'int
 const {runLocalHostCli}=await import(pathToFileURL(join(installed,'integrations/client/raw/local-host-cli.mjs')));
 const qualification=await import(pathToFileURL(join(installed,'integrations/codex/qualification.mjs')));
 const detectHost=async()=>{
+  if(process.platform==='darwin')return {binaryPath:settings.syntheticBinary,identity:await qualification.binaryIdentity(settings.syntheticBinary),kind:'cli'};
   const host=await qualification.detectRunningHost({pid:42,proc:'/synthetic/proc',link:async()=>settings.syntheticBinary,
     identity:()=>qualification.binaryIdentity(settings.syntheticBinary),read:async path=>Buffer.from(path.endsWith('cmdline')?'codex\0':'42 (codex) S 1 0 0')});
   const {processPath,...bound}=host;return bound;

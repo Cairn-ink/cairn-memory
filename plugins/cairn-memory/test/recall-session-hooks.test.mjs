@@ -33,6 +33,7 @@ crypto.randomUUID = () => '11111111-1111-4111-8111-111111111111';
 syncBuiltinESMExports();
 const legacy = ${legacy};
 globalThis.fetch = async (url, wire) => {
+  if (new URL(url).pathname.endsWith('/pause-state')) return Response.json({paused:false,generation:0,enforced:true});
   const body = JSON.parse(wire.body);
   await appendFile(process.env.CAIRN_TEST_REQUEST_LOG, JSON.stringify({url, body})+'\\n');
   if (url.endsWith('/capture')) return Response.json({duplicate:false,memoryCount:1});

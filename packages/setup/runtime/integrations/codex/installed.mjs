@@ -70,7 +70,8 @@ function launchWorker(configPath, config, content) {
 }
 
 export async function runInstalled(configPath, event, stream, { signal, launch = launchWorker,
-  detectHost = detectRunningHost, noticeOptions = {} } = {}) {
+  detectHost = detectRunningHost, deliver, recallDeadline, noticeOptions = {} } = {}) {
+  const gateDeadline = recallDeadline ?? performance.now() + (event === 'worker' ? 62500 : 2000);
   const config = await readInstallation(configPath);
   if (!config.enabled || signal.aborted) return '';
   if(event==='qualify') {
@@ -131,13 +132,14 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
     const targetId = hostedTargetId(config);
     if (event === 'worker') {
       const token = await readCredential(configPath, config.endpoint);
-      const remote = await observeHostedPause(config, token, signal);
+      const remote = await observeHostedPause(config, token, signal, { deadlineMs: gateDeadline });
       if (remote.paused || signal.aborted) return '';
       const handoff = input;
       const guard = automaticGuard(config.root, config.endpoint, policy);
       const transport = installedTransport(config, token, remote.generation);
       await workerFromHandoff(handoff, { clientOptions: options, targetId, transport, guard,
-        mode: 'hosted', overallMs: 60000, qualifiedCreatorVersion: qualification.version, qualifyCreator });
+        mode: 'hosted', overallMs: 60000, deadlineMs: gateDeadline, signal,
+        qualifiedCreatorVersion: qualification.version, qualifyCreator });
       return '';
     }
     const hook = validateHook(input);
@@ -151,11 +153,11 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
       await promptBoundary({ root: config.root, targetId, projectId, sessionId: hook.sessionId, path: hook.path });
       if (!await promptRecallEnabled(configPath) || signal.aborted) return '';
       const token = await readCredential(configPath, config.endpoint);
-      return await recallContext(input, config, token, projectId, signal, async () => await promptRecallEnabled(configPath) && Boolean(await boundBinary(qualification.host)), publishHost);
+      return await recallContext(input, config, token, projectId, signal, async () => await promptRecallEnabled(configPath) && Boolean(await boundBinary(qualification.host)), publishHost, deliver, { deadlineMs: recallDeadline });
     }
     if (event === 'SessionStart') {
       const token = sessionToken;
-      const remote = await observeHostedPause(config, token, signal);
+      const remote = await observeHostedPause(config, token, signal, { deadlineMs: gateDeadline });
       if (remote.paused || signal.aborted) return '';
       if (hook.path) await establishPauseBoundary({ root: config.root,targetId,projectId,
         sessionId: hook.sessionId,path: hook.path });

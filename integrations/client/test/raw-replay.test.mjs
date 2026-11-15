@@ -10,6 +10,7 @@ async function replay(f,pending) {
   const { source,...binding } = f.input;
   const child = spawn(process.execPath,[fileURLToPath(new URL('./fixtures/raw-replay-child.mjs',import.meta.url)),
     f.path,JSON.stringify(binding),JSON.stringify(pending)],{ stdio:['ignore','pipe','pipe'] });
+  child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
   let stdout = '',stderr = '',settled = false;
   child.stdout.on('data',bytes => { stdout += bytes; if (stdout.length>65536) child.kill('SIGKILL'); });
   child.stderr.on('data',bytes => { if (stderr.length<65536) stderr += bytes; });

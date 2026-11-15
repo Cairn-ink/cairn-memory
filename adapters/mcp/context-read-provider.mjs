@@ -16,7 +16,7 @@ export function createContextEmbedding(configuration, env = process.env) {
   embeddingPrice(configuration.model);
   const embedder = createOpenAIEmbedder({ apiKey, model: configuration.model, dimensions: configuration.dimensions });
   return Object.freeze({ embedder, policy: Object.freeze({ family: 'hosted', maxRequests: configuration.maxRequests,
-    maxUsd: configuration.maxUsd, maxConcurrent: 1, estimateUsd: texts => estimateEmbeddingUsd(texts, { model: configuration.model }) }) });
+    maxUsd: configuration.maxUsd, maxConcurrentQueries: 4, estimateUsd: texts => estimateEmbeddingUsd(texts, { model: configuration.model }) }) });
 }
 
 /** Async only at the owner boundary; createCairnServer remains synchronous. */

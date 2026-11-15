@@ -64,9 +64,12 @@ test('A1 NFKC expansion, code points, cutoff tail and qualifiers remain visibly 
     const state=await f.cursor();assert.equal(state.truncated,1);assert.equal(state.unconfirmedTail,true);
     const body=[...f.receiver.values()][0];assert.ok(body.messages[0].content.isWellFormed());
     assert.ok(body.messages[0].content.length<=4000);
+    // The strict engine DTO uses its own field names. This compatibility pin
+    // projects text/identity; hosted time/window metadata is not core input.
+    const messages=body.messages.map(({id,role,content})=>({id,role,content}));
     const snap=captureSnapshot({namespace:{ownerId:'synthetic',scope:'project',projectId:body.project_id},
-      client:body.client,eventId:body.event_id,sessionId:body.session_id,messages:body.messages});
-    assert.deepEqual(snap.messages,body.messages);
+      client:body.client,eventId:body.event_id,sessionId:body.session_id,messages});
+    assert.deepEqual(snap.messages,messages);
   }
 });
 

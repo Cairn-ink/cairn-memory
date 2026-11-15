@@ -1,0 +1,106 @@
+[
+  [
+    "await-in-commit-closure",
+    "core/capture.mjs",
+    "      const finish = () => operations.finishAdmission({ ...owned, items: items.map(({ receiptTimes, ...item }) =>\n      receiptTimes ? { ...item, receipts: item.receipts.map((receipt, index) =>\n        ({ ...receipt, occurredAt: receiptTimes[index] })) } : item) });",
+    "      const finish = async () => { await Promise.resolve(); return operations.finishAdmission({ ...owned, items: items.map(({ receiptTimes, ...item }) =>\n      receiptTimes ? { ...item, receipts: item.receipts.map((receipt, index) =>\n        ({ ...receipt, occurredAt: receiptTimes[index] })) } : item) }) };",
+    "core/test/commit-dispatch-capture.test.mjs",
+    "await inside a commit closure must never be introduced"
+  ],
+  [
+    "replay-earlier-provider-phase",
+    "core/capture.mjs",
+    "    const output = episodeRun?.skip ? { items: [] } : await callModel(",
+    "    if (operations.commit) await callModel(model, 'extract', request.system, request.input, { failureCode: 'extraction_failed', deadline });\n    const output = episodeRun?.skip ? { items: [] } : await callModel(",
+    "core/test/commit-dispatch-capture.test.mjs",
+    "extract provider must stay at exactly 1 per request under a 3s lock"
+  ],
+  [
+    "skip-pause-guard-rerun",
+    "core/admission-storage.mjs",
+    "      const closed = guard('finishGuard', ns, input, row, now);",
+    "      const closed = null;",
+    "core/test/commit-dispatch-capture.test.mjs",
+    "pause guard must rerun during admission backoff"
+  ],
+  [
+    "skip-forget-guard-rerun",
+    "core/moc-storage.mjs",
+    "      assertEpochValue(ns, expectedIndex);\n      if (initialClassification)",
+    "      // Fault: retain pre-model index authorization.\n      if (initialClassification)",
+    "core/test/commit-dispatch-capture.test.mjs",
+    "forget guard must rerun during placement backoff"
+  ],
+  [
+    "skip-native-transaction-check",
+    "core/commit-dispatch.mjs",
+    "      const checkIdle = point => {\n        if (!db.isOpen) fail('store_closed');\n        const refuseActive = () => { try { db.close(); } catch { /* Refuse reuse even when native close fails. */ } fail('storage_transaction_active'); };\n        if (db.isTransaction !== false) refuseActive();\n        onAwait?.({ point, isOpen: db.isOpen, isTransaction: db.isTransaction });\n        // A diagnostic callback cannot leave a transaction open either.\n        if (db.isTransaction !== false) refuseActive();\n      };",
+    "      const checkIdle = () => {};",
+    "core/test/commit-dispatch.test.mjs",
+    "native transaction state must fail closed"
+  ],
+  [
+    "synchronous-backoff",
+    "core/commit-dispatch.mjs",
+    "          timer = setTimeout(() => finish(), waitMs);",
+    "          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, waitMs); finish();",
+    "core/test/commit-dispatch-capture.test.mjs",
+    "timer backoff must keep event loop responsive"
+  ],
+  [
+    "ignore-original-deadline",
+    "core/commit-dispatch.mjs",
+    "      const end = Math.min(scope?.deadlineAt ?? started + 5000, started + remaining);",
+    "      const end = started + 5000;",
+    "core/test/commit-dispatch-capture.test.mjs",
+    "deadline expiry must return storage_busy with no partial state"
+  ],
+  [
+    "default-takes-dispatcher",
+    "core/commit-dispatch.mjs",
+    "  const binding = bindings.get(connection);\n  if (!binding) return work();",
+    "  const binding = bindings.get(connection);\n  if (!binding) return createCommitDispatcher().open(() => dispatchCommit(bindCommitConnection(connection), work, deadline));",
+    "core/test/commit-dispatch.test.mjs",
+    "default path must never take the dispatcher"
+  ],
+  [
+    "remove-short-native-timeout",
+    "core/database.mjs",
+    "    commitBusyTimeout() ?? STORAGE_BUSY_TIMEOUT_MS);",
+    "    STORAGE_BUSY_TIMEOUT_MS);",
+    "core/test/commit-dispatch-capture.test.mjs",
+    "timer backoff must keep event loop responsive"
+  ],
+  [
+    "card-skip-isCurrent-on-retry",
+    "core/private-card-facade.mjs",
+    "        let finalGeneration;\n        try { const final=verify(options.authority.isCurrent(grant,request));finalGeneration=final.generation;\n          if(JSON.stringify(final.audit)!==JSON.stringify(verified.audit))fail('scope_changed'); }\n        catch { fail('scope_changed'); }\n        if (generation !== finalGeneration) fail('scope_changed');\n",
+    "        const finalGeneration = generation;\n",
+    "adapters/mcp/test/commit-dispatch-routes.test.mjs",
+    "Card grant must be rechecked during backoff"
+  ],
+  [
+    "role-skip-isCurrent-on-retry",
+    "core/role-profile-facade.mjs",
+    "      const mutate=()=>{access.check();",
+    "      const mutate=()=>{",
+    "adapters/mcp/test/commit-dispatch-routes.test.mjs",
+    "role grant must be rechecked during backoff"
+  ],
+  [
+    "episode-whole-orchestration-retry",
+    "core/episode-capture.mjs",
+    "episode = await interpret({ runtime, ns, model, episodeId,\n      generation: batch.generation,\n      writerToken, trigger: 'batch', watermark: registered.position, staging: registered.staging,\n      onPendingFailure: failure => { pendingFailure = failure; }, deadline: sharedDeadline });",
+    "episode = await dispatchCommit(runtime, async () => interpret({ runtime, ns, model, episodeId,\n      generation: batch.generation,\n      writerToken, trigger: 'batch', watermark: registered.position, staging: registered.staging,\n      onPendingFailure: failure => { pendingFailure = failure; }, deadline: sharedDeadline }));",
+    "adapters/mcp/test/commit-dispatch-routes.test.mjs",
+    "episode orchestration must not become the retry boundary"
+  ],
+  [
+    "activation-one-route-removed",
+    "core/contract.mjs",
+    "const synchronousCommits = new Set(`admit correct forget supersede",
+    "const synchronousCommits = new Set(`correct forget supersede",
+    "adapters/mcp/test/local-shared-contention.test.mjs",
+    "A4 B-H read p95 must stay within 2x unlocked baseline"
+  ]
+]

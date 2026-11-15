@@ -338,13 +338,14 @@ test('R04/R05 budgets retain concurrency until actual settlement and enforce req
   hang = false; release(); await settled; await new Promise(resolve => setImmediate(resolve));
   assert.equal(ok(await f.call('findCandidates', query({ semantic: true }))).channels.semantic.state, 'ready');
   const cappedPort = spyEmbedder({ ...createFakeEmbedder(), id: 'synthetic-capped-test' }), capped = coreFixture(t, { embedder: cappedPort.port,
-    selectedPolicy: policy({ maxRequests: 1, maxUsd: .25, estimateUsd: () => .25 }) }); capped.admit('apple');
+    selectedPolicy: policy({ maxRequests: 2, maxUsd: .5, estimateUsd: () => .25 }) }); capped.admit('apple');
   ok(await capped.call('refreshContextIndex', refresh()));
+  assert.equal(ok(await capped.call('findCandidates', query({ semantic: true }))).channels.semantic.state, 'ready');
   assert.equal(ok(await capped.call('findCandidates', query({ semantic: true }))).channels.semantic.state, 'budget_denied');
-  assert.equal(cappedPort.calls.length, 1);
-  capped.reopen({ policy: policy({ maxRequests: 1, maxUsd: .25, estimateUsd: () => .25 }) });
+  assert.equal(cappedPort.calls.length, 2);
+  capped.reopen({ policy: policy({ maxRequests: 2, maxUsd: .5, estimateUsd: () => .25 }) });
   assert.equal(ok(await capped.call('findCandidates', query({ semantic: true }))).channels.semantic.state, 'budget_denied');
-  assert.equal(cappedPort.calls.length, 1, 'closing/reopening a handle cannot reset the process policy ledger');
+  assert.equal(cappedPort.calls.length, 2, 'closing/reopening a handle cannot reset the process policy ledger');
   const expensivePort = spyEmbedder({ ...createFakeEmbedder(), id: 'synthetic-expensive-test' }), expensive = coreFixture(t, { embedder: expensivePort.port,
     selectedPolicy: policy({ maxUsd: .1, estimateUsd: () => .2 }) }); expensive.admit('apple');
   const stopped = ok(await expensive.call('refreshContextIndex', refresh()));

@@ -1,3 +1,4 @@
+import { deferred } from '../../../tools/testing/deferred.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -46,7 +47,7 @@ async function fixture(t) {
   };
 }
 function gate(t, f, syncNumber, work) {
-  const entered = Promise.withResolvers(), release = Promise.withResolvers();
+  const entered = deferred(), release = deferred();
   let count = 0;
   const completed = f.scope.run(async () => {
     if (++count === syncNumber) { entered.resolve(); await release.promise; }

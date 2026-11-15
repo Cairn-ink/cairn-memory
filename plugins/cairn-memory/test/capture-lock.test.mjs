@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { access, link, mkdtemp, utimes, writeFile } from "node:fs/promises";
+import { access, link, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { withLockClock } from "../../../integrations/client/testing/lock-contention.mjs";
-import { withFileLock } from "../lib/file-lock.mjs";
+import { pathToFileURL } from "node:url";
+const { withFileLock } = await import(process.env.CAIRN_CAPTURE_TEST_FILE_LOCK ?
+  pathToFileURL(process.env.CAIRN_CAPTURE_TEST_FILE_LOCK) : new URL("../lib/file-lock.mjs", import.meta.url));
 
 test("a live lock is never reclaimed based only on age", async (t) => {
   const dir = await mkdtemp(join(tmpdir(), "cairn-live-lock-test-"));
@@ -57,4 +59,17 @@ test("a definitively dead owner is recovered without unlinking its successor", a
   );
   assert.equal(successorEntered, true);
   await assert.rejects(access(lock));
+});
+
+test("a try-only capture lock attempt does not poll a held lock", async t => {
+  const dir = await mkdtemp(join(tmpdir(), "cairn-try-lock-test-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const lock = join(dir, "capture.lock");
+  await withLockClock(t, async clock => {
+    await withFileLock(lock, async () => {
+      assert.equal(await withFileLock(lock, () => assert.fail("contended lock entered"),
+        { tryOnly: true, timeoutMs: 60, pollMs: 10 }), false);
+      assert.equal(clock.elapsed(), 0);
+    });
+  });
 });

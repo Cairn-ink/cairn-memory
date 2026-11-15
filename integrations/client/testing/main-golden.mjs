@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { VERSION } from "../../../plugins/cairn-memory/lib/version.mjs";
 import { createTestWorkspace } from "../../../tools/testing/workspace.mjs";
-import { observeHosted } from "../test/observe-legacy.mjs";
+import { observeHosted, legacyCaptureBody } from "../test/observe-legacy.mjs";
 export const BASE = "3a1c17d9c888b28e878f5e2d8de0180d9b49fa4e";
 const repo = fileURLToPath(new URL("../../../", import.meta.url));
 const preload = fileURLToPath(new URL("./golden-preload.mjs", import.meta.url));
@@ -44,7 +44,7 @@ async function goldenControlTimeout(plugin) {
   await writeFile(path, source.replaceAll("timeoutMs: 250,", "timeoutMs: 30_000,"));
 
 }
-export async function observeStandalone(plugin) {
+export async function observeStandalone(plugin, { modes, telemetry } = {}) {
   await goldenControlTimeout(plugin);
   const candidate = !(await readFile(join(plugin, "lib/version.mjs"), "utf8")).includes("0.1.1");
   const workspace = createTestWorkspace(null, { prefix: "cx2-golden-" });
@@ -95,7 +95,7 @@ export async function observeStandalone(plugin) {
       "concurrent-darwin",
       "concurrent-win32",
     ];
-    for (const mode of environments) {
+    for (const mode of environments.filter(mode => !modes || modes.includes(mode))) {
       for (const entry of ["hook", "launch-capture"]) {
         const directory = join(workspace.path, `${mode}-${entry}`);
         await mkdir(directory);
@@ -250,6 +250,10 @@ export async function observeStandalone(plugin) {
             message: { content: "Please remember concise examples." },
           }) + "\n",
         );
+        // A new session's first turn is written after SessionStart. Prewritten
+        // history now has its own exclusion tests instead of masquerading as it.
+        const transcriptText = await readFile(transcript, "utf8");
+        if (candidate && entry === "hook" && !concurrent) await writeFile(transcript, "");
         const env = {
           PATH: process.env.PATH,
           HOME: home,
@@ -288,7 +292,7 @@ export async function observeStandalone(plugin) {
           CAIRN_TEST_REQUESTS: requestsFile,
           CLAUDE_PLUGIN_OPTION_API_ENDPOINT: "https://synthetic.invalid",
           CLAUDE_PLUGIN_OPTION_API_TOKEN: "synthetic-token",
-          ...(concurrent ? { CLAUDE_PLUGIN_OPTION_TELEMETRY: "false" } : {}),
+          ...(concurrent || telemetry === false ? { CLAUDE_PLUGIN_OPTION_TELEMETRY: "false" } : {}),
         };
         async function run(action, index = 0, scriptEntry = entry) {
           const args = [join(plugin, `scripts/${scriptEntry}.mjs`)];
@@ -324,7 +328,13 @@ export async function observeStandalone(plugin) {
         else if (entry === "hook") {
           outcomes = [];
           for (const action of ["start", "recall", "capture", "capture"]) {
+            if (action === "start" && candidate) {
+              const boundary = await run("start-boundary");
+              if (boundary.code !== 0 || boundary.stdout || boundary.stderr)
+                throw new Error("startup_boundary_not_silent");
+            }
             outcomes.push(await run(action));
+            if (action === "start" && candidate) await writeFile(transcript, transcriptText);
           }
         } else outcomes = [await run("capture")];
         if (
@@ -350,7 +360,7 @@ export async function observeStandalone(plugin) {
           } catch (error) {
             if (
               (mode.startsWith("plugin-empty") ||
-                (candidate && mode.startsWith("local-marker-"))) &&
+                (candidate && (mode.startsWith("local-marker-") || ["standalone-win32", "coordination-foreign"].includes(mode)))) &&
               error.code === "ENOENT"
             )
               return null;
@@ -361,11 +371,28 @@ export async function observeStandalone(plugin) {
         // No telemetry runs in concurrent cases, whose install ID was seeded.
         const identity = await optionalIdentity("install-id");
         let requestBytes = await readFile(requestsFile, "utf8");
+        requestBytes = requestBytes.split("\n").map(line => {
+          if (!line) return line;
+          const request = JSON.parse(line);
+          if (!request.url.endsWith("/capture")) return line;
+          request.body = JSON.stringify(legacyCaptureBody(JSON.parse(request.body)));
+          return JSON.stringify(request);
+        }).join("\n");
         if (concurrent) {
           // Scheduling order is unspecified; compare the multiset of exact wire bytes.
-          requestBytes = requestBytes.trimEnd().split("\n").sort().join("\n") + "\n";
-          const count = requestBytes.trimEnd().split("\n").length;
-          if (count !== 12) throw new Error(`golden_dropped_hooks:${mode}:${count}`);
+          const lines = requestBytes.trimEnd().split("\n").filter(Boolean).sort();
+          requestBytes = lines.join("\n") + (lines.length ? "\n" : "");
+          const count = lines.length;
+          const expected = candidate && mode === "concurrent-win32" && entry === "launch-capture" ? 0 : 12;
+          if (count !== expected) throw new Error(`golden_dropped_hooks:${mode}:${count}`);
+        }
+        if (candidate && mode.endsWith("win32")) {
+          const audit = (await readFile(requestsFile + '.observations', 'utf8').catch(() => ''))
+            .trim().split('\n').filter(Boolean).map(JSON.parse);
+          const sends = audit.filter(event => event.kind === 'recall');
+          const expected = concurrent ? entry === 'hook' ? 12 : 0 : entry === 'hook' ? 1 : 0;
+          if (sends.length !== expected || sends.some(event => !event.fresh || !event.valid || event.paused))
+            throw new Error(`windows_requires_fresh_process_observation:${mode}:${entry}`);
         }
         variants.push({ mode, entry, key, identity, requestBytes, outcomes });
         if (mode === "default-unreadable") await chmod(legacy, 0o700);
@@ -398,6 +425,36 @@ export function candidateGolden(base) {
     }).join("\n");
     if (variant.mode.startsWith("concurrent-")) {
       variant.requestBytes = variant.requestBytes.trimEnd().split("\n").sort().join("\n") + "\n";
+    }
+    // Hosted operations now require the shared verified-namespace, owner-private pause lock.
+    // Standalone identity/control behavior remains covered, while unverifiable hosted
+    // recall/capture fail closed. Keep the historical fixture itself immutable.
+    if (["standalone-win32", "concurrent-win32"].includes(variant.mode)) {
+      // Windows recall is authorized by its own fresh active observation. These
+      // fixtures prewrite their transcript: first-prompt tags cannot cover it,
+      // and a detached first capture without tags establishes EOF instead.
+      const lines = variant.requestBytes.split("\n").filter(Boolean).filter(line => {
+        const request = JSON.parse(line);
+        return !request.url.endsWith("/capture") &&
+          !(request.url.endsWith("/telemetry") && JSON.parse(request.body).event === "capture_succeeded");
+      });
+      variant.requestBytes = lines.join("\n") + (lines.length ? "\n" : "");
+      if (variant.mode === "standalone-win32" && variant.entry === "launch-capture") {
+        variant.key = null;
+        variant.identity = null;
+      }
+    }
+    if (variant.mode === "coordination-foreign") {
+      const lines = variant.requestBytes.split("\n").filter(Boolean).filter(line => {
+        const request = JSON.parse(line);
+        return !request.url.endsWith("/recall") && !request.url.endsWith("/capture") &&
+          !(request.url.endsWith("/telemetry") && JSON.parse(request.body).event === "capture_succeeded");
+      });
+      variant.requestBytes = lines.join("\n") + (lines.length ? "\n" : "");
+      if (["standalone-win32", "coordination-foreign"].includes(variant.mode)) {
+        variant.key = null;
+        if (variant.entry === "launch-capture") variant.identity = null;
+      }
     }
     // Coordinator's round-10 tie-break: local 0.1.2 history is not first use.
     // These remain actual-base fixtures, but are refusal tests rather than parity.

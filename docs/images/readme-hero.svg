@@ -1,32 +1,44 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="440" viewBox="0 0 1200 440" role="img" aria-labelledby="title desc">
-  <title id="title">Cairn Memory — AI memory you can inspect and change</title>
-  <desc id="desc">The official Cairn stacked-stone mark and wordmark, with Memory as the product descriptor. An illustrated saved preference connects to its submitted source text. Open-source developer preview with explicit memory tools.</desc>
-  <rect width="1200" height="440" rx="24" fill="#FAF7F2"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="480" viewBox="0 0 1200 480" role="img" aria-labelledby="title desc">
+  <title id="title">Cairn.ink Memory — AI memory you can inspect and change</title>
+  <desc id="desc">The official Cairn stacked-stone mark with the Cairn.ink Memory name. A hand-drawn island carries a cairn of three stones, labelled from top to bottom Cards, Memories and Conversations. One memory for Claude Code and Codex, on your computer or on cairn.ink. Open-source developer preview.</desc>
+  <rect width="1200" height="480" rx="24" fill="#FAF7F2"/>
   <!-- Official Cairn geometry, unchanged; scaled equally in both axes. -->
-  <g transform="translate(48 36) scale(1.47)" fill="#1F1D1A">
+  <g transform="translate(48 34) scale(1.9)" fill="#1F1D1A">
     <ellipse cx="12" cy="28" rx="10.5" ry="3.6" opacity="0.95"/>
     <ellipse cx="11.5" cy="19.5" rx="7.8" ry="3.2" opacity="0.78" transform="rotate(-6 11.5 19.5)"/>
     <ellipse cx="12.5" cy="11" rx="5.2" ry="3.6" opacity="0.62" transform="rotate(9 12.5 11)"/>
   </g>
-  <g fill="#1F1D1A" font-family="'EB Garamond', Georgia, serif" font-weight="400">
-    <text x="104" y="80" font-size="56" font-weight="500" letter-spacing="-0.5" style="font-feature-settings: 'lnum', 'onum';">Cairn</text>
-    <text x="48" y="179" font-size="66">AI memory</text>
-    <text x="48" y="250" font-size="66">you can inspect</text>
-    <text x="48" y="321" font-size="66" fill="#5A7A4E">and change.</text>
+  <text x="106" y="86" fill="#1F1D1A"><tspan font-family="'EB Garamond', Georgia, serif" font-size="50" font-weight="500" letter-spacing="-0.5">Cairn.ink</tspan><tspan dx="12" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="500">Memory</tspan></text>
+  <g fill="#1F1D1A" font-family="'EB Garamond', Georgia, serif" font-weight="400" font-size="58" letter-spacing="-0.3">
+    <text x="48" y="162">AI memory</text>
+    <text x="48" y="225">you can inspect</text>
+    <text x="48" y="288" fill="#5A7A4E">and change.</text>
   </g>
-  <g fill="#1F1D1A" font-family="Inter, Arial, sans-serif">
-    <text x="252" y="78" font-size="28" font-weight="500">Memory</text>
-    <text x="48" y="379" font-size="23">Save context. Inspect. Correct. Forget.</text>
-    <text x="48" y="413" font-size="19" fill="#6B6560">Open source · Explicit memory tools</text>
-    <text x="1148" y="63" text-anchor="end" font-size="19" fill="#6B6560">Developer preview</text>
-    <rect x="750" y="119" width="398" height="102" rx="12" fill="#FFFFFF" stroke="#E5DFD4" stroke-width="2"/>
-    <text x="774" y="151" font-size="19" fill="#5A7A4E" font-weight="600">Saved memory</text>
-    <text x="774" y="192" font-size="27" font-weight="500">Keep reports brief.</text>
-    <path d="M949 222v27m-7-7 7 7 7-7" fill="none" stroke="#5A7A4E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    <rect x="750" y="255" width="398" height="126" rx="12" fill="#F4F0E8"/>
-    <text x="774" y="287" font-size="19" fill="#5A7A4E" font-weight="600">Source Receipt</text>
-    <text x="774" y="324" font-size="25">“Please keep my</text>
-    <text x="774" y="359" font-size="25">reports short.”</text>
-    <text x="1148" y="413" text-anchor="end" font-size="17" fill="#6B6560">Illustrated example · submitted source text</text>
+  <g font-family="Inter, Arial, sans-serif">
+    <text x="1152" y="64" text-anchor="end" font-size="18" fill="#6B6560">Open source · Developer preview</text>
+    <text x="48" y="338" font-size="20" fill="#1F1D1A">One memory for Claude Code and Codex.</text>
+    <text x="48" y="367" font-size="20" fill="#6B6560">On your computer, or on cairn.ink.</text>
+  </g>
+  <rect x="49" y="401" width="380" height="44" rx="12" fill="#FFFFFF" stroke="#E5DFD4" stroke-width="2"/>
+  <text x="66" y="430" font-family="'JetBrains Mono', ui-monospace, monospace" font-size="20" font-weight="500" fill="#1F1D1A" xml:space="preserve"><tspan fill="#5A7A4E">$</tspan> npx @cairn-ink/memory setup</text>
+  <!-- Hand-drawn island from Cairn's island set, reused unchanged (570x335 source). -->
+  <image href="readme-hero-island.png" x="462" y="112" width="524" height="308"/>
+  <g fill="none" stroke="#5A7A4E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M764 200 L822 158 H994"/>
+    <path d="M777 238 H994"/>
+    <path d="M782 276 L852 326 H994"/>
+  </g>
+  <g fill="#5A7A4E">
+    <circle cx="764" cy="200" r="3.5"/><circle cx="777" cy="238" r="3.5"/><circle cx="782" cy="276" r="3.5"/>
+  </g>
+  <g font-family="Inter, Arial, sans-serif">
+    <text x="1006" y="162" font-size="21" font-weight="600" fill="#5A7A4E">Cards</text>
+    <text x="1006" y="186" font-size="17" fill="#1F1D1A">How it fits together</text>
+    <text x="1006" y="242" font-size="21" font-weight="600" fill="#5A7A4E">Memories</text>
+    <text x="1006" y="266" font-size="17" fill="#1F1D1A">What to keep,</text>
+    <text x="1006" y="289" font-size="17" fill="#1F1D1A">with its source</text>
+    <text x="1006" y="330" font-size="21" font-weight="600" fill="#5A7A4E">Conversations</text>
+    <text x="1006" y="354" font-size="17" fill="#1F1D1A">Everything</text>
+    <text x="1006" y="377" font-size="17" fill="#1F1D1A">that was said</text>
   </g>
 </svg>

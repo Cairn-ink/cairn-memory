@@ -9,7 +9,7 @@ import { contentWriteChanges } from './content-write-changes.mjs';
 import { CONTENT_TERMINAL_FIELDS, CONTENT_TERMINAL_ACK_FIELDS, registerContentWriteGuard } from './content-write-context.mjs';
 import { fail } from './validation.mjs';
 import { hasCardLineage, loadCardBodyContributorsInside, verifyCardLineageCommitmentsInside, lineageHmac } from './card-lineage.mjs';
-import { engineCardRevisionsInside } from './content-safety.mjs';
+import { engineCardMetadataInside, engineCardRevisionsInside, isEngineCard } from './content-safety.mjs';
 
 const names = {memory:'memories',receipt:'receipts',card:'private_cards','submitted-note':'card_notes',raw:'raw_conversations'};
 const kinds = Object.fromEntries(Object.entries(names).map(([kind,table])=>[table,kind]));
@@ -39,6 +39,51 @@ const referenceKinds = field => /MemoryIds?$/.test(field)||/^memoryIds?$/.test(f
   /ReceiptIds?$/.test(field)||/^receiptIds?$/.test(field)?'receipt':
   /CardIds?$/.test(field)||/^cardIds?$/.test(field)?'card':
   /^(?:source|note)Ids?$/.test(field)?'submitted-note':field==='conversationId'?'raw':null;
+
+// Closure membership is schema data, never a search through payload strings.
+// JSON paths address typed reference objects only; '*' visits one array level.
+// The schema coverage test checks direct FKs and the declared polymorphic slots.
+const engineCardClosureReferences = {
+  private_cards: { columns: ['id'] },
+  card_operations: { columns: ['target_id'], json: [
+    { column: 'result', path: [], key: 'id', rowMethods: ['createCardDraft', 'editCardDraft', 'confirmCardDraft',
+      'cancelCardDraft', 'editKnowledgeCard', 'deleteKnowledgeCard', 'declareCardCurrentDependencies',
+      'revalidateCardCurrentDependencies', 'consolidate'] },
+    { column: 'result', path: ['cardRefs', '*'], key: 'cardId', when: ['type', 'card'] }] },
+  card_body_provenance: { columns: ['card_id'] },
+  card_body_sources: { columns: ['card_id'] },
+  card_body_authorizations: { columns: ['card_id', 'request_target'] },
+  card_bindings: { columns: ['card_id'] },
+  card_memory_bindings: { columns: ['card_id'] },
+  card_raw_bindings: { columns: ['card_id'] },
+  card_effects: { columns: [{ key: 'entity_id', when: ['entity_type', 'card'] }] },
+  card_applicability_reviews: { columns: ['card_id'] },
+  card_current_dependencies: { columns: ['card_id'] },
+  card_moc_title_sources: { columns: ['card_id'] },
+  card_moc_refs: { columns: ['card_id'] },
+  card_raw_pending_invalidations: { columns: ['card_id'] },
+  content_identity_reservations: { columns: [
+    { key: 'stable_key', when: ['kind', 'card'] }, { key: 'incarnation', when: ['kind', 'card'] }] },
+  content_suppressions: { columns: [
+    { key: 'stable_key', when: ['kind', 'card'] }, { key: 'incarnation', when: ['kind', 'card'] }] },
+  method_changes: { json: [{ column: 'reason_refs', path: ['*'], key: 'cardId', when: ['type', 'card'] }] },
+  method_binding_events: { json: [{ column: 'reason_refs', path: ['*'], key: 'cardId', when: ['type', 'card'] }] },
+  role_profile_releases: { json: [{ column: 'payload', path: ['fields', 'related', '*'], key: 'cardId', when: ['type', 'card'] }] },
+  role_profile_changes: { json: [{ column: 'payload', path: ['reasonRefs', '*'], key: 'cardId', when: ['type', 'card'] }] },
+};
+function closureRowReferencesCard(table, row, keys) {
+  const refs=engineCardClosureReferences[table];
+  if(!refs||!row)return false;
+  const matches=(node,slot)=>node&&(!slot.when||node[slot.when[0]]===slot.when[1])&&keys.has(node[slot.key]);
+  if(refs.columns?.some(slot=>matches(row,typeof slot==='string'?{key:slot}:slot)))return true;
+  return refs.json?.some(slot=>{
+    if(row[slot.column]==null||slot.rowMethods&&!slot.rowMethods.includes(row.method))return false;
+    let nodes;
+    try{nodes=[JSON.parse(row[slot.column])];}catch{fail('evidence_unavailable');}
+    for(const part of slot.path)nodes=nodes.flatMap(node=>part==='*'?(Array.isArray(node)?node:[]):[node?.[part]]);
+    return nodes.some(node=>matches(node,slot));
+  })??false;
+}
 
 /** A session spans just one mutation. No SQL or session is allocated on open,
  * reads, legacy cells, or trusted maintenance without a facade write context. */
@@ -187,6 +232,7 @@ export function beginContentWriteSafety(db, operation) {
       return dependentMemo=createContentReadMemo(source);
     }
     function automaticallyInvalidatedCard(key,ns){
+      if(engineMemoryInvalidatedCard(key,ns))return true;
       if(lineage)return lineageInvalidatedCard(key,ns);
       const change=canonical.find(c=>c.table==='private_cards'&&c.row.id===key),row=change?.row??get('private_cards',key);
       if(!row||row.state!=='confirmed'||changedBindings.has(key)||change&&(!change.old||
@@ -269,6 +315,85 @@ export function beginContentWriteSafety(db, operation) {
         }
       }
       return timestamp===undefined||row.updated_at===timestamp;
+    }
+    function engineMemoryInvalidatedCard(key,ns) {
+      const change=canonical.find(c=>c.table==='private_cards'&&c.row.id===key),row=change?.row;
+      const sameNamespace=value=>value&&JSON.stringify(boundary(value))===JSON.stringify(boundary(ns));
+      if(!change?.old||!['draft','confirmed'].includes(row.state)||!sameNamespace(namespace(row))||
+        !scopes.some(sameNamespace)||!engineCardMetadataInside(db,ns,row)||
+        change.columns.some((c,i)=>!['id','revision','updated_at'].includes(c.name)&&change.old[i]!==undefined))return false;
+      const previous=oldValue(change,'revision');
+      if(!Number.isSafeInteger(previous)||previous<1||!Number.isSafeInteger(row.revision)||row.revision<=previous)return false;
+      // Check both identities of an update: moving a binding or authority row
+      // away from this Card is still a change to this Card's closure.
+      const belongs=c=>c.row.card_id===key||c.old&&oldValue(c,'card_id')===key;
+      if([...canonical,...removed].some(c=>
+        (bindingTables.has(c.table)||['card_body_provenance','card_body_sources','card_body_authorizations'].includes(c.table))&&belongs(c)||
+        c.table==='card_body_authorizations'&&(c.row.request_target===key||c.old&&oldValue(c,'request_target')===key)||
+        c.table==='card_operations'&&(c.row.target_id===key||c.old&&oldValue(c,'target_id')===key)))return false;
+      const cardEffect=c=>c.row.entity_type==='card'&&c.row.entity_id===key||
+        c.old&&oldValue(c,'entity_type')==='card'&&oldValue(c,'entity_id')===key;
+      const effects=canonical.filter(c=>c.table==='card_effects'&&cardEffect(c)).sort((a,b)=>a.row.ordinal-b.row.ordinal);
+      if(effects.length!==row.revision-previous||removed.some(c=>c.table==='card_effects'&&cardEffect(c)))return false;
+      // Enumerate all changed bound Memories, including any whose entire
+      // effect interval is missing. Native sessions retain only old/final rows.
+      const causes=[];
+      for(const memory of canonical.filter(c=>c.table==='memories'&&c.old&&oldValue(c,'revision')!==c.row.revision)) {
+        if(!db.prepare('SELECT 1 FROM card_memory_bindings WHERE card_id=? AND memory_id=? LIMIT 1').get(key,memory.row.id))continue;
+        const revision=oldValue(memory,'revision');
+        if(!sameNamespace(namespace(memory.row))||!Number.isSafeInteger(revision)||revision<1||
+          !Number.isSafeInteger(memory.row.revision)||memory.row.revision<=revision||
+          memory.columns.some((c,i)=>['owner_id','scope','project_id'].includes(c.name)&&memory.old[i]!==undefined))return false;
+        causes.push({memory,revision});
+      }
+      let timestamp;
+      for(const [index,effect]of effects.entries()) {
+        const e=effect.row;
+        if(effect.old||e.kind!=='evidence_invalidated'||e.revision!==previous+index+1||!sameNamespace(namespace(e)))return false;
+        // Consume each Memory's interval in ordinal order; neither a duplicate
+        // nor a jump can explain the next trigger effect.
+        const cause=causes.find(c=>c.revision<c.memory.row.revision&&
+          e.action_id==='memory-revision-'+c.memory.row.id+'-'+(c.revision+1));
+        if(!cause)return false;
+        cause.revision++;timestamp=cause.memory.row.updated_at;
+      }
+      if(!causes.length||causes.some(c=>c.revision!==c.memory.row.revision))return false;
+      // This only hides an engine Card: every read rejects its advanced revision.
+      // It grants no serving authority or retention exception; text, bindings,
+      // seals and purge behavior stay unchanged, including prior source denials.
+      return row.updated_at===timestamp;
+    }
+    function engineForgottenCard(key,ns) {
+      // A source cascade may terminally forget a bound Memory without a public
+      // forget ancestor. Same-action terminal facts and removed bindings prove
+      // ownership; a method name alone cannot authorize this transition.
+      const change=canonical.find(c=>c.table==='private_cards'&&c.row.id===key),row=change?.row;
+      const sameNamespace=value=>value&&JSON.stringify(boundary(value))===JSON.stringify(boundary(ns));
+      if(!change?.old||row.state!=='deleted'||row.title!==null||row.body!==null||
+        row.revision!==oldValue(change,'revision')+1||
+        !sameNamespace(namespace(row))||!scopes.some(sameNamespace)||!engineCardMetadataInside(db,ns,row)||
+        change.columns.some((c,i)=>!['id','state','revision','title','body','updated_at'].includes(c.name)&&change.old[i]!==undefined))return false;
+      // Purging removes live bindings, but never rewrites a receipt or sealed
+      // authority. Moving a row away still changes this Card's closure.
+      const touches=(c,column)=>c.row[column]===key||c.old&&oldValue(c,column)===key;
+      if([...canonical,...removed].some(c=>
+        ['card_body_provenance','card_body_sources','card_body_authorizations'].includes(c.table)&&touches(c,'card_id')||
+        c.table==='card_body_authorizations'&&touches(c,'request_target')||
+        c.table==='card_operations'&&touches(c,'target_id'))||
+        canonical.some(c=>bindingTables.has(c.table)&&touches(c,'card_id'))||
+        [...bindingTables].some(table=>exists(table)&&db.prepare('SELECT 1 FROM '+table+' WHERE card_id=? LIMIT 1').get(key)))return false;
+      const effects=canonical.filter(c=>c.table==='card_effects'&&c.row.entity_type==='card'&&c.row.entity_id===key);
+      if(effects.length!==1||effects[0].old)return false;
+      const effect=effects[0].row;
+      return effect.kind==='card_deleted'&&effect.revision===row.revision&&
+        JSON.stringify(boundary(namespace(effect)))===JSON.stringify(boundary(ns))&&
+        newFacts.some(f=>f.kind==='card'&&f.match_mode==='incarnation'&&f.reason==='purge'&&f.action_id===effect.action_id&&
+          contentSuppressionTargetMatches(f,ns,{kind:'card',key}))&&
+        removed.some(c=>c.table==='card_memory_bindings'&&c.row.card_id===key&&
+          terminalFacts.some(f=>f.kind==='memory'&&f.match_mode==='incarnation'&&f.action_id===effect.action_id&&
+            contentSuppressionTargetMatches(f,ns,{kind:'memory',key:c.row.memory_id})&&
+            canonical.some(m=>m.table==='memories'&&m.old&&m.row.id===c.row.memory_id&&m.row.deleted===1&&m.row.content===null&&
+              oldValue(m,'deleted')===0&&JSON.stringify(boundary(namespace(m.row)))===JSON.stringify(boundary(ns)))));
     }
     const sourceAuthority=createRawLineageStorage(db);
     function engineRetiredCard(key,ns) {
@@ -403,18 +528,106 @@ export function beginContentWriteSafety(db, operation) {
       }
     }
     const validateRows=lineage?(_db,_ceilings,work)=>work():withContentSuppressionCeilingsInside;
-    if(lineage) {
+    {
       const sourceMethods=new Set(['forget','correct','deleteSourceNote','deleteConversation','setRawCaptureControl']);
       let sourceOperation=false;
       for(let context=operation;context;context=context.parent)sourceOperation ||= sourceMethods.has(context.method);
-      if(sourceOperation) {
+      // Review rejection and either episode cascade also run forgetMutation.
+      // Their actual terminal Memory fact selects validation without expanding
+      // the method classification or granting authority to ordinary writes.
+      sourceOperation ||= terminalFacts.some(f=>f.kind==='memory'&&f.match_mode==='incarnation');
+      // Only this operation's declared terminal Card may be user-deleted.
+      // Match its canonical acknowledgement, scoped fact and request claim;
+      // a second purge fact cannot declare another target for the operation.
+      const declaredCardDeletion=row=>operation.method==='deleteKnowledgeCard'&&
+        CONTENT_TERMINAL_FIELDS[operation.method]==='private_cards.id'&&
+        scopes.some(ns=>JSON.stringify(boundary(ns))===JSON.stringify(boundary(namespace(row))))&&
+        row.id===result?.[CONTENT_TERMINAL_ACK_FIELDS[operation.method]]&&
+        terminalFacts.some(f=>f.kind==='card'&&f.match_mode==='incarnation'&&
+          contentSuppressionTargetMatches(f,namespace(row),{kind:'card',key:row.id})&&
+          canonical.some(c=>c.table==='card_body_authorizations'&&!c.old&&c.row.method===operation.method&&
+            c.row.request_target===row.id&&c.row.host_action_id===f.action_id&&
+            JSON.stringify(boundary(namespace(c.row)))===JSON.stringify(boundary(namespace(row)))));
+      // Older suppression-enabled layouts have the same native deletion and
+      // operation receipt, but no lineage authorization table. Keep that
+      // existing terminal path under the common closure audit as well.
+      const legacyCardDeletion=row=>!lineage&&operation.method==='deleteKnowledgeCard'&&
+        CONTENT_TERMINAL_FIELDS[operation.method]==='private_cards.id'&&
+        row.id===result?.[CONTENT_TERMINAL_ACK_FIELDS[operation.method]]&&
+        terminalFacts.some(f=>f.kind==='card'&&f.match_mode==='incarnation'&&
+          contentSuppressionTargetMatches(f,namespace(row),{kind:'card',key:row.id}));
+      // Every existing engine transition has one explanation and one closure
+      // audit, including declared deletion and internal maintenance transactions.
+      // An empty allowance freezes every declared structural reference table.
+      const frozenCardRows=Object.fromEntries(Object.keys(engineCardClosureReferences).map(table=>[table,[]]));
+      const before=c=>c.old?Object.fromEntries(c.columns.map((column,i)=>
+        [column.name,c.old[i]===undefined?c.row[column.name]:c.old[i]])):null;
+      function engineClosure(change) {
+        const row=change.row,ns=namespace(row),key=row.id;
+        const keys=new Set([key,before(change)?.id]);keys.delete(undefined);
+        const sameNamespace=value=>JSON.stringify(boundary(namespace(value)))===JSON.stringify(boundary(ns));
+        const effects=canonical.filter(c=>c.table==='card_effects'&&c.row.entity_type==='card'&&keys.has(c.row.entity_id));
+        const facts=canonical.filter(c=>c.table==='content_suppressions'&&c.row.kind==='card'&&keys.has(c.row.stable_key));
+        const purged=change.old&&row.state==='deleted'&&row.title===null&&row.body===null&&
+          row.revision===oldValue(change,'revision')+1&&scopes.some(s=>JSON.stringify(boundary(s))===JSON.stringify(boundary(ns)))&&
+          engineCardMetadataInside(db,ns,row)&&change.columns.every((c,i)=>
+            ['id','state','revision','title','body','updated_at'].includes(c.name)||change.old[i]===undefined)&&
+          effects.length===1&&!effects[0].old&&effects[0].row.kind==='card_deleted'&&
+          effects[0].row.revision===row.revision&&sameNamespace(effects[0].row)&&
+          facts.length===1&&!facts[0].old&&facts[0].row.reason==='purge'&&facts[0].row.match_mode==='incarnation'&&
+          facts[0].row.action_id===effects[0].row.action_id&&contentSuppressionTargetMatches(facts[0].row,ns,{kind:'card',key});
+        // The suppression writer inserts this reservation only on first purge.
+        // Existing reservations are not rewritten; updates/removals never qualify.
+        const reservations=canonical.filter(c=>c.table==='content_identity_reservations'&&!c.old&&
+          sameNamespace(c.row)&&c.row.kind==='card'&&c.row.stable_key===key&&c.row.incarnation===key&&
+          c.row.evidence_origin==='writer'&&facts.length===1&&facts[0].row.evidence_origin==='writer');
+        const purgeWrites=()=>({...frozenCardRows,private_cards:[change],card_effects:effects,content_suppressions:facts,
+          content_identity_reservations:reservations,
+          ...Object.fromEntries([...bindingTables,'card_current_dependencies'].map(table=>[table,
+            removed.filter(c=>c.table===table&&keys.has(c.row.card_id))]))});
+        const ownAction=purged?effects[0].row.action_id:null;
+        const receipts=canonical.filter(c=>c.table==='card_operations'&&!c.old&&c.row.action_id===ownAction&&
+          c.row.method===operation.method&&c.row.target_id===key&&sameNamespace(c.row)&&c.row.result===JSON.stringify(result));
+        const authorizations=canonical.filter(c=>c.table==='card_body_authorizations'&&!c.old&&
+          c.row.host_action_id===ownAction&&c.row.method===operation.method&&c.row.request_target===key&&
+          c.row.authorization_kind==='operation'&&c.row.card_id===null&&sameNamespace(c.row)&&
+          c.row.actor_id&&c.row.authorized_at&&receipts.length===1&&
+          c.row.payload_binding===lineageHmac(identity,'card-action-audit-s2-v1',
+            [identity.storeId,row.owner_id,ownAction,receipts[0].row.payload_binding]));
+        // Predicates retain their existing proofs. Allowances add no authority.
+        const paths=[
+          {accept:purged&&sourceOperation&&engineForgottenCard(key,ns),writes:purgeWrites},
+          {accept:purged&&(lineage?declaredCardDeletion(row):legacyCardDeletion(row))&&receipts.length===1&&
+              authorizations.length===(lineage?1:0),
+            writes:()=>({...purgeWrites(),card_operations:receipts,card_body_authorizations:authorizations})},
+          {accept:engineMemoryInvalidatedCard(key,ns),
+            writes:()=>({...frozenCardRows,private_cards:[change],card_effects:effects})},
+          {accept:operation.method==='maintainCards'&&purged,writes:purgeWrites},
+          {accept:row.state!=='deleted'&&engineRetiredCard(key,ns),
+            writes:()=>({...frozenCardRows,private_cards:[change]})},
+        ].filter(path=>path.accept);
+        if(paths.length!==1)fail('evidence_unavailable');
+        const allowed=paths[0].writes();
+        for(const c of [...canonical,...removed])if(closureRowReferencesCard(c.table,c.row,keys)||c.old&&closureRowReferencesCard(c.table,before(c),keys)) {
+          if(!Object.hasOwn(allowed,c.table)||!allowed[c.table].includes(c))fail('evidence_unavailable');
+        }
+        if(purged)for(const table of [...bindingTables,'card_current_dependencies'])if(exists(table)&&
+          [...keys].some(id=>db.prepare('SELECT 1 FROM '+quote(table)+' WHERE card_id=? LIMIT 1').get(id)))fail('evidence_unavailable');
+      }
+      if(removed.some(c=>c.table==='private_cards'&&isEngineCard(c.row.id)))fail('evidence_unavailable');
+      for(const change of canonical)if(change.table==='private_cards'&&
+        (isEngineCard(change.row.id)||isEngineCard(before(change)?.id))&&
+        (change.old||['deleted','cancelled'].includes(change.row.state)))engineClosure(change);
+      if(lineage&&(!sourceOperation||operation.method==='deleteKnowledgeCard')&&operation.method!=='maintainCards'&&canonical.some(c=>
+        c.table==='private_cards'&&isEngineCard(c.row.id)&&c.row.state==='deleted'&&!declaredCardDeletion(c.row)))fail('evidence_unavailable');
+      if(lineage&&sourceOperation) {
         // Audit removals have no surviving row for generic reference walking.
         // Validate effects even when the source writer leaves its Card untouched.
         if(removed.some(c=>c.table==='card_effects'))fail('evidence_unavailable');
         for(const {table,row,old}of canonical) {
           if(['card_body_sources','card_body_provenance'].includes(table)||table==='card_body_authorizations'&&row.authorization_kind!=='operation')fail('evidence_unavailable');
-          if(table==='private_cards'&&!lineageInvalidatedCard(row.id,namespace(row)))fail('evidence_unavailable');
-          if(table==='card_effects'&&(old||row.entity_type==='card'&&!lineageInvalidatedCard(row.entity_id,namespace(row))))fail('evidence_unavailable');
+          if(table==='private_cards'&&!engineForgottenCard(row.id,namespace(row))&&!engineMemoryInvalidatedCard(row.id,namespace(row))&&!lineageInvalidatedCard(row.id,namespace(row)))fail('evidence_unavailable');
+          if(table==='card_effects'&&(old||row.entity_type==='card'&&!engineForgottenCard(row.entity_id,namespace(row))&&!engineMemoryInvalidatedCard(row.entity_id,namespace(row))&&!lineageInvalidatedCard(row.entity_id,namespace(row))))fail('evidence_unavailable');
         }
       }
     }

@@ -1,5 +1,6 @@
 // Owner-only local state. Only ENOENT means absence; never follow symlinks.
 import { constants } from "node:fs";
+import { lstatSync, realpathSync, openSync, fstatSync, readFileSync, closeSync, readdirSync } from "node:fs";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { lstat, mkdir, open, link, rename, unlink, realpath, readdir } from "node:fs/promises";
 import { dirname, basename, isAbsolute, join, resolve } from "node:path";
@@ -7,6 +8,9 @@ import { randomUUID } from "node:crypto";
 
 // A deterministic test seam at durable state writes; inert outside its async scope.
 const writeObservers = new AsyncLocalStorage();
+// Restrict the host-container exception to one explicitly scoped state file.
+const hostStateFiles = new AsyncLocalStorage();
+export const withHostStateFile = (path, work) => hostStateFiles.run(path, work);
 export const withWriteObserver = (observer, work) => writeObservers.run(observer, work);
 export async function notifyWrite(path, kind = "write") {
   await writeObservers.getStore()?.({ path, kind });
@@ -46,6 +50,58 @@ export async function checkedPath(
     throw new Error("state_permissions");
   }
   return info;
+}
+
+// Plugin data roots are host-managed containers. Their authority files and
+// locks remain owner-only; the container may be readable or a host profile alias.
+export async function hostDirectory(path, { create = true } = {}) {
+  if (!isAbsolute(path) || resolve(path) !== path) throw new Error("invalid_state_path");
+  let canonical, info;
+  try { canonical = await realpath(path); info = await lstat(canonical); }
+  catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    if (!create) {
+      await hostDirectory(dirname(path), { create: false });
+      return undefined;
+    }
+    await mkdir(path, { recursive: true, mode: 0o700 });
+    await notifyWrite(path, "directory");
+    canonical = await realpath(path); info = await lstat(canonical);
+  }
+  if (!info.isDirectory()) throw new Error("invalid_state_type");
+  if (typeof process.getuid === "function" && info.uid !== process.getuid()) throw new Error("state_owner");
+  if ((info.mode & 0o022) !== 0) throw new Error("state_permissions");
+  return canonical;
+}
+
+// One canonical path per configured host root and process. The gate, its
+// authority files and local state use this pin; the configured spelling is only
+// re-checked, so a retargeted symlink fails closed instead of switching roots.
+const rootPins = new Map();
+async function canonicalPath(path) {
+  // A missing root is created later below its canonical parent.
+  const tail = [];
+  for (let existing = path; ; existing = dirname(existing)) {
+    try { return join(await realpath(existing), ...tail); }
+    catch (error) {
+      if (error.code !== "ENOENT" || dirname(existing) === existing) throw error;
+      tail.unshift(basename(existing));
+    }
+  }
+}
+export async function canonicalHostRoot(path) {
+  if (!isAbsolute(path) || resolve(path) !== path) throw new Error("invalid_state_path");
+  if (!rootPins.has(path)) {
+    const canonical = await canonicalPath(path);
+    if (!rootPins.has(path)) rootPins.set(path, canonical);
+  }
+  return rootPins.get(path);
+}
+// Synchronous, so a holder can re-check between its last await and its start
+// or commit. Both the pin and the configured path must still name the pin.
+export function sameCanonicalRoot(root, configured = root) {
+  try { return realpathSync(root) === root && realpathSync(configured) === root; }
+  catch { return false; }
 }
 
 export async function privateDirectory(path) {
@@ -100,6 +156,50 @@ export async function privateRead(path, { missing = false, portable = false } = 
   }
   throw new Error("state_changed");
 }
+// The final hosted admission cannot yield after reading publication authority.
+// These synchronous readers have the same private metadata boundary as the
+// asynchronous readers. They are used only for content-free pause records.
+function checkedPathSync(path, { directory = false, missing = false } = {}) {
+  if (!isAbsolute(path) || resolve(path) !== path) throw new Error("invalid_state_path");
+  let canonical, info;
+  try {
+    canonical = join(realpathSync(dirname(path)), basename(path));
+    info = lstatSync(canonical);
+  } catch (error) {
+    if (missing && error.code === "ENOENT") return undefined;
+    throw error;
+  }
+  if (info.isSymbolicLink()) throw new Error("state_symlink");
+  if (directory ? !info.isDirectory() : !info.isFile()) throw new Error("invalid_state_type");
+  if (typeof process.getuid === "function" && info.uid !== process.getuid()) throw new Error("state_owner");
+  if ((info.mode & 0o777) !== (directory ? 0o700 : 0o600)) throw new Error("state_permissions");
+  return { canonical, info };
+}
+export function privateReadSync(path, { missing = false } = {}) {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const before = checkedPathSync(path, { missing });
+    if (!before) return undefined;
+    let file;
+    try { file = openSync(before.canonical, constants.O_RDONLY | constants.O_NOFOLLOW); }
+    catch (error) {
+      if (missing && error.code === "ENOENT") return undefined;
+      throw error;
+    }
+    try {
+      const after = fstatSync(file);
+      if (after.ino !== before.info.ino || after.dev !== before.info.dev) continue;
+      if (!after.isFile() || (typeof process.getuid === "function" && after.uid !== process.getuid()) ||
+          (after.mode & 0o777) !== 0o600) throw new Error("state_changed");
+      if (after.size > 64 * 1024) throw new Error("state_too_large");
+      return readFileSync(file, "utf8");
+    } finally { closeSync(file); }
+  }
+  throw new Error("state_changed");
+}
+export function privateListSync(path, { missing = false } = {}) {
+  const entry = checkedPathSync(path, { directory: true, missing });
+  return entry ? readdirSync(entry.canonical) : undefined;
+}
 export async function syncDirectory(path) {
   const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
@@ -111,9 +211,14 @@ export async function syncDirectory(path) {
 export async function privateWrite(
   path,
   bytes,
-  { exclusive = false, checkpoint = async () => {} } = {},
+  { exclusive = false, checkpoint = async () => {}, hostParent = false } = {},
 ) {
-  await privateDirectory(dirname(path));
+  hostParent ||= hostStateFiles.getStore() === path;
+  const parent = hostParent ? await hostDirectory(dirname(path)) : dirname(path);
+  // Root authority is written only through the canonical root, never an alias
+  // that a later retarget could point at another root's files.
+  if (hostParent && parent !== dirname(path)) throw new Error("state_path_changed");
+  if (!hostParent) await privateDirectory(parent);
   await checkedPath(path, { missing: true });
   const temporary = `${path}.tmp-${process.pid}-${randomUUID()}`;
   const file = await open(temporary, "wx", 0o600);
@@ -132,7 +237,7 @@ export async function privateWrite(
         if (error.code !== "EEXIST") throw error;
       }
     } else await rename(temporary, path);
-    await syncDirectory(dirname(path));
+    await syncDirectory(parent);
     await checkpoint("published");
     await notifyWrite(path);
   } finally {

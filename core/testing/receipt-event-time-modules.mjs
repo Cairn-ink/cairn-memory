@@ -19,12 +19,13 @@ const frozenExceptions = JSON.parse(readFileSync(new URL('../test/fixtures/recei
 // change no loader or feature consumer. The private sidecar-handle registry
 // adds an identity-ack field and passes it to storage; loaders stay unchanged.
 const exceptions = frozenExceptions.map(entry => {
-  // Observed-host diagnostic I/O is best-effort after validation. The existing
-  // package-metadata resolution expression and its namespace use are unchanged.
+  // The format registry gains one native digest, moving the existing
+  // package-metadata resolution expression down one line. The expression and
+  // its namespace use are unchanged.
   if (entry.file === 'integrations/codex/qualification.mjs') {
     assert.equal(entry.sha256, '9c37710cfffa802fbc42286c6e9bf8c3bf8bdf3d4c34a0c163d672868714cdac',
       'frozen host metadata loader pin');
-    return { ...entry, line: 83, sha256: 'd5bea045ed4c3fefd45e325f268833f1d535b075ab63ad5dd8dd0409c57dd380' };
+    return { ...entry, line: 84, sha256: '09780178396bda8140f2ef56399e110e9d7fb1f708a62ba6534643d00f4ea56c' };
   }
   // The wait policy scopes the opening check and repeats it after timeout
   // configuration. These changes add no loader and no feature consumer.

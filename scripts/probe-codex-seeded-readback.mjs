@@ -54,8 +54,8 @@ async function server(work) {
   }
   try {
     const init = await call('initialize', { clientInfo: { name: 'codex_exec', version: '1' }, capabilities: { experimentalApi: true } });
-    const observed = /\/(0\.16[3-6]\.0) /u.exec(init.userAgent)?.[1];
-    if (!observed || (version && observed !== version)) throw new Error('requires_native_0.163.0_to_0.166.0');
+    const observed = /\/(0\.16[3-6]\.0|0\.167\.[02]) /u.exec(init.userAgent)?.[1];
+    if (!observed || (version && observed !== version)) throw new Error('requires_native_0.163.0_to_0.167.2');
     version = observed;
     child.stdin.write('{"method":"initialized"}\n'); await work(call);
   } finally {

@@ -185,12 +185,11 @@ for (let index = 0; index < sequences.length; index++) {
       }) + "\n",
     );
     globalThis.fetch = async (url, request) => {
+      // The bodyless authority GET is separate from the content/identity oracle.
+      if (new URL(url).pathname === "/api/memory/pause-state")
+        return Response.json({ paused: false, generation: 0, enforced: true });
       requests.push(JSON.parse(request.body));
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ memories: [], memoryCount: 1 }),
-      };
+      return Response.json({ memories: [], memoryCount: 1 });
     };
     Object.defineProperty(process, "stdin", {
       configurable: true,

@@ -16,7 +16,7 @@ test("capture schema is a strict conversation-text allowlist", async () => {
   assert.equal(capture.properties.messages.items.additionalProperties, false);
   assert.deepEqual(
     Object.keys(capture.properties.messages.items.properties).sort(),
-    ["content", "id", "role"],
+    ["content", "id", "occurred_at", "role"],
   );
 });
 
@@ -245,7 +245,8 @@ test("session-start rejects unknown fields at every nested object boundary", () 
   }
 });
 test("schema interpreter keyword inventory is closed", () => {
-  const known = new Set(["$schema", "$id", "$defs", "$ref", "title", "description", "default",
+  // $comment documents format normalization; it imposes no validation rule.
+  const known = new Set(["$schema", "$id", "$defs", "$ref", "$comment", "title", "description", "default",
     "type", "oneOf", "anyOf", "const", "enum", "required", "properties", "additionalProperties",
     "minItems", "maxItems", "items", "minLength", "maxLength", "pattern", "format", "minimum",
     "maximum"]);

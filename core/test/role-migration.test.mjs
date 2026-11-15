@@ -47,7 +47,7 @@ test('C04/C05 fresh opt-in, premature/partial schemas, unsupported v19 and valid
 });
 test('C05 feature-off bytes and DTOs stay identical; flag-off writers retain v32 and guards',t=>{
  const w=workspace(t),h=host();const saved=restoreHistoricalStore(w.path,'compatibility').expected;
- let c=openMemoryCore({path:w.path});assert.deepEqual(Object.keys(c),saved.keys);assert.equal(JSON.stringify(c.get({namespace:{ownerId:'synthetic-method-owner',scope:'personal',projectId:null},memoryId:saved.id})),JSON.stringify(saved.get));c.close();
+ let c=openMemoryCore({path:w.path});assert.deepEqual(Object.keys(c),saved.keys.flatMap(name=>name==='admit'?['isSuppressed',name]:[name]));assert.equal(JSON.stringify(c.get({namespace:{ownerId:'synthetic-method-owner',scope:'personal',projectId:null},memoryId:saved.id})),JSON.stringify(saved.get));c.close();
  c=openMemoryCore({path:w.path,roleProfiles:h.options});ok(c.publishRoleProfileRelease(publish(),{}));c.close();const before=readFileSync(w.path);c=openMemoryCore({path:w.path});assert.equal(c.readRoleTaskContext,undefined);c.close();assert.deepEqual(readFileSync(w.path),before);
  const db=new DatabaseSync(w.path);assert.equal(db.prepare('PRAGMA user_version').get().user_version,32);assert.throws(()=>db.exec('INSERT OR REPLACE INTO role_profiles SELECT * FROM role_profiles'));validateAssets(db);db.close();
 });

@@ -1,3 +1,4 @@
+import { openLocalSource } from './local-source-open.mjs';
 import { detectLocalCodexHost } from './local-codex-qualification.mjs';
 import { localCodexQualification } from './local-codex-qualification.mjs';
 import { checkLocalSession } from './local-session-fence.mjs';
@@ -114,7 +115,7 @@ export function createLocalRawHost(value) {
         const source = await sessionSourceMetadata(selected.sourcePath,selected.sessionId,{ signal:op.signal,
           qualifiedCreatorVersion:qualification.version,
           qualifyCreator: version => hasQualifiedCreator(profile.installation.qualificationConfigPath,version,{ signal:op.signal }),
-          ...(deps.openSource ? { openSource:deps.openSource } : {}) });
+          openSource:deps.openSource ?? openLocalSource });
         op.check();
         if (!source?.interactive) fail('source_unqualified');
         formatAuthority = source.formatAuthority;

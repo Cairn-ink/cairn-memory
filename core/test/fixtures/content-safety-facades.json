@@ -320,6 +320,10 @@
       "kind": "gated",
       "operation": "read"
     },
+    "isSuppressed": {
+      "kind": "gated",
+      "operation": "read"
+    },
     "keepEpisode": {
       "kind": "gated",
       "operation": "write",
@@ -816,6 +820,10 @@
       "operation": "read"
     },
     "isAwaiting": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "isSuppressed": {
       "kind": "gated",
       "operation": "read"
     },

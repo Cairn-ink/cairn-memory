@@ -1,7 +1,7 @@
 import { contentSuppressionRequestInside, hasContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { assertContentOutput, assertContentScopes } from './content-safety-boundary.mjs';
-import { writeContentSuppressionInside, allocateContentKey } from './content-suppression-storage.mjs';
+import { writeContentSuppressionInside, allocateContentKey, requireSuppressionTransaction, registerEngineCardPurgeInside } from './content-suppression-storage.mjs';
 import { contentReadSafety, sourceReadSafety, cardContributorsInside, createContentReadMemo } from './content-safety.mjs';
 import { createCardCurrentStorage, cardDependencyFence } from './card-current-storage.mjs';
 import { CARD_CURRENT_METHODS } from './card-current-input.mjs';
@@ -26,6 +26,49 @@ const now = () => new Date().toISOString();
 const size = value => Buffer.byteLength(JSON.stringify({ ok: true, value }), 'utf8');
 const attribution = () => ({ sourceAuthor: null, claimant: null, subject: null,
   eventTime: null, commitment: 'unknown', status: 'unassessed' });
+
+// Cache only successful presence probes per handle, never rows or a miss.
+// installPrivateCards/installCardMemorySources run only in openDatabase startup,
+// offline upgradeLayoutBase, or engine maintenance's ensureLayout transaction.
+// Those installers finish before mutation work; none calls forgetting or
+// owner/namespace erasure. Safety/lineage migration seeds retained incarnation/
+// span facts only. No purge shares an uncommitted table-creation transaction.
+// Unsupported external DDL/rollback can make a later purge fail closed.
+const memoryBindingTables = new WeakSet();
+
+// The caller owns the forget/suppression transaction. Do not use serving
+// eligibility here: stale bodies and older rebuild rows must also be erased.
+export function purgeEngineCardsInside(db, ns, actionId, memoryId) {
+  requireSuppressionTransaction(db);
+  if (!memoryBindingTables.has(db)) {
+    if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_memory_bindings'").get()) return;
+    memoryBindingTables.add(db);
+  }
+  const rows = db.prepare(`SELECT c.* FROM private_cards c
+    JOIN card_operations o ON (o.owner_id,o.scope,o.project_id,o.action_id,o.target_id)=
+      (c.owner_id,c.scope,c.project_id,c.id,c.id)
+    WHERE c.owner_id=? ${ns.scope === 'owner' ? '' : 'AND c.scope=? AND c.project_id=?'}
+      AND o.method='consolidate' AND json_extract(o.result,'$.origin')='engine'
+      AND (c.title IS NOT NULL OR c.body IS NOT NULL)
+      ${memoryId === undefined ? '' : `AND EXISTS(SELECT 1 FROM card_memory_bindings b
+        WHERE b.card_id=c.id AND b.memory_id=?)`}
+    ORDER BY c.id`).all(ns.ownerId, ...(ns.scope === 'owner' ? [] : [ns.scope, ns.projectId ?? '']),
+      ...(memoryId === undefined ? [] : [memoryId]));
+  if (!rows.length) return;
+  const identity = db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata WHERE singleton=1').get();
+  const writers = createPrivateCardStorage({ db, identity, ready() {} }).engineCardWriters();
+  const namespaces = new Map();
+  for (const row of rows) {
+    const namespace = { ownerId: row.owner_id, scope: row.scope, projectId: row.project_id };
+    writers.purge(namespace, row, actionId);
+    namespaces.set(JSON.stringify(namespace), namespace);
+  }
+  for (const namespace of namespaces.values()) db.prepare(`INSERT INTO card_epochs VALUES(?,?,?,2)
+    ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET generation=generation+1`)
+    .run(namespace.ownerId, namespace.scope, namespace.projectId);
+}
+
+registerEngineCardPurgeInside(purgeEngineCardsInside);
 
 /** Uses the same canonical SQLite handle as all existing Memory operations. */
 export function createPrivateCardStorage({ db, identity, ready, memoryMapInside, memoryTopicInside, rawSources = false }) {
@@ -155,10 +198,10 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
   const ledger = createOperationLedger(db, 'card_operations');
   const receipt = (row, effectCount = 0) => ({ id: row.id, revision: row.revision,
     state: row.state, bodyRevision: row.body_revision ?? null, effectCount });
-  function purgeCard(ns, row, state, actionId) {
+  function purgeCard(ns, row, state, actionId, timestamp = now()) {
     writeContentSuppressionInside(db, { namespace: ns, kind: 'card', key: row.id, reason: 'purge', actionId });
     db.prepare(`UPDATE private_cards SET state=?,revision=revision+1,title=NULL,body=NULL,
-      updated_at=? WHERE id=?`).run(state, now(), row.id);
+      updated_at=? WHERE id=?`).run(state, timestamp, row.id);
     db.prepare('DELETE FROM card_bindings WHERE card_id=?').run(row.id);
     db.prepare('DELETE FROM card_memory_bindings WHERE card_id=?').run(row.id);
     raw.put(row.id,[]);
@@ -382,7 +425,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
           sources: collectCardBodySourcesInside(db, identity, ns, refs,
             ref => sourceReadSafety(db, { identity, namespace: ns, ref }).allowed) });
       },
-      purge(ns, row, actionId) { purgeCard(ns, row, 'deleted', actionId); },
+      purge(ns, row, actionId, timestamp) { purgeCard(ns, row, 'deleted', actionId, timestamp); },
     }; },
     // Internal shared-read seams: caller owns scope authorization and transaction.
     cardDetailInside(ns, id, readSet, intent) { ready(); return detail(ns, card(ns, id), readSet, intent); },

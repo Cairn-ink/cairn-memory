@@ -6,6 +6,7 @@ import threading
 import time
 
 import pytest
+from hermes_cli.config import save_env_value
 
 
 def wait_until(predicate, deadline):
@@ -19,8 +20,7 @@ def resolver_profile(install, cloud):
     endpoint = cloud.endpoint.replace("127.0.0.1", "localhost")
     provider.save_config({"mode": "hosted", "api_endpoint": endpoint,
                           "prefetch_timeout_ms": "250"}, str(home))
-    hosted.write_credential(home, {"endpoint": endpoint, "token": "synthetic-memory-token",
-                                  "token_id": "synthetic-token-id", "expires_at": None})
+    save_env_value("CAIRN_MEMORY_TOKEN", "synthetic-memory-token")
     provider.initialize("conversation", hermes_home=str(home), platform="cli", agent_context="primary")
     return provider, hosted, endpoint
 

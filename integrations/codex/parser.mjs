@@ -1,3 +1,4 @@
+import { sourceTimestamp } from '../client/source-time.mjs';
 import { normalizeBlocks, hash, PROFILE } from '../client/common-profile.mjs';
 
 export const CODEX_COMMIT = '36650394c5b38c2990ccf2a3457165ca3e9d9726';
@@ -5,7 +6,7 @@ export const FORMAT = 'codex-0.157.1-paginated-v1';
 // Seed versions have frozen native format evidence. Other hosts require a
 // binary-identity verdict; a version string never widens the parser by itself.
 export const QUALIFIED_CREATORS = Object.freeze(['0.157.1', '0.160.1', '0.161.0', '0.162.0',
-  '0.163.0', '0.164.0', '0.165.0', '0.166.0']);
+  '0.163.0', '0.164.0', '0.165.0', '0.166.0', '0.167.0', '0.167.2']);
 export const MAX_READ = 1048576, MAX_LINE = 262144;
 const tops = new Set(['session_meta','response_item','inter_agent_communication',
   'inter_agent_communication_metadata','compacted','turn_context','token_usage_record',
@@ -92,6 +93,12 @@ export function parseLine(bytes, { sessionId, wireSessionId, epoch, start, end }
   }
   const clean = normalizeBlocks(texts);
   if (clean.reason) return excluded(clean.reason);
-  return { start, end, ...clean, message: { id: hash(PROFILE,'codex',wireSessionId,epoch,start,end),
-    role: user ? 'user' : 'assistant', content: clean.content } };
+  const completed = typeof p.completed_at_ms === 'number' && Number.isFinite(p.completed_at_ms) ?
+    new Date(p.completed_at_ms) : null;
+  const occurredAt = sourceTimestamp(row.timestamp) ? row.timestamp :
+    completed && Number.isFinite(completed.getTime()) && sourceTimestamp(completed.toISOString()) ? completed.toISOString() : undefined;
+  return { start, end, ...clean,
+    ...(occurredAt === undefined ? {} : { occurred_at: occurredAt }),
+    message: { id: hash(PROFILE,'codex',wireSessionId,epoch,start,end),
+      role: user ? 'user' : 'assistant', content: clean.content } };
 }

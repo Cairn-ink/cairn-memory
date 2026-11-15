@@ -217,13 +217,13 @@ test('creator proof accepts any qualified cached binary but rejects stale policy
 test('version-only refusal leaves the cursor retryable; later creator evidence captures the unchanged history',async t=>{
   const {fixture:captureFixture,header,item}=await import('./helpers.mjs');
   const {runWorker}=await import('../worker.mjs');
-  const q=await fixture(t),f=await captureFixture(t,{text:header({cli_version:'0.167.0'})+item('Version retry.')});
+  const q=await fixture(t),f=await captureFixture(t,{text:header({cli_version:'0.168.0'})+item('Version retry.')});
   const options={guard:f.guard,transport:f.transport,qualifiedCreatorVersion:'0.164.0',
     qualifyCreator:version=>hasQualifiedCreator(q.configPath,version)};
   const observed=await f.cursor();
   assert.equal((await runWorker(f.binding,options)).status,'creator_unqualified');
   assert.deepEqual(await f.cursor(),observed);assert.equal(f.calls.length,0);
-  await qualifyBinary(q.configPath,q.host,{collect:async()=>result('0.167.0')});
+  await qualifyBinary(q.configPath,q.host,{collect:async()=>result('0.168.0')});
   await runWorker(f.binding,options);await runWorker(f.binding,options);
   assert.deepEqual(f.calls.flatMap(row=>row.messages.map(m=>m.content)),['Version retry.']);
 });

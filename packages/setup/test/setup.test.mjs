@@ -140,6 +140,7 @@ async function fixture(t, state = {}, options = {}) {
         ...(options.clipboard ? {WAYLAND_DISPLAY:'fixture',XDG_RUNTIME_DIR:workspace.path} : {}), ...options.env },
     });
     wireChild(proc, server.server);
+    proc.stdout.setEncoding('utf8'); proc.stderr.setEncoding('utf8');
     let stdout = '', stderr = '';
     const timer = setTimeout(() => { proc.kill('SIGKILL'); reject(new Error('fixture deadline')); }, 20000);
     proc.stdout.on('data', value => { stdout += value; }); proc.stderr.on('data', value => { stderr += value; });

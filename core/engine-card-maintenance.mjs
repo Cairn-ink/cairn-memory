@@ -1,4 +1,6 @@
+import { isStorageBusy } from './database.mjs';
 import { performance } from 'node:perf_hooks';
+import { dispatchCommit, hasCommitDispatcher } from './commit-dispatch.mjs';
 import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { assertContentPort, inertContentPortValue } from './content-safety-boundary.mjs';
 import { callModel, modelRequestText, MODEL_INPUT_TOKENS } from './model-call.mjs';
@@ -42,7 +44,8 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
     return result;
   }
   async function maintain(input) {
-    object(input, ['namespace', 'budget']); const ns = cardNamespace(input.namespace);
+    object(input, ['namespace', 'budget', 'rawSpans']); const ns = cardNamespace(input.namespace);
+    if (Object.hasOwn(input, 'rawSpans') && typeof input.rawSpans !== 'boolean') fail('invalid_input');
     const budget = input.budget ?? {}; object(budget, ['maxItems', 'maxMs']);
     const maxItems = budget.maxItems ?? ENGINE_CARD_LIMITS.memories, maxMs = budget.maxMs ?? 1000;
     if (!Number.isSafeInteger(maxItems) || maxItems < 1 || maxItems > ENGINE_CARD_LIMITS.memories ||
@@ -58,12 +61,13 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
     try {
       const checkPause = storage.pauseGuard(ns, end);
       checkPause();
+      const commit = hasCommitDispatcher(storage) ? work => dispatchCommit(storage, () => { checkPause(); return work(); }, deadline) : null;
       await withContentSuppressionRequest(async () => {
         const scope = JSON.stringify(ns), previous = scans.get(scope);
-        let page = storage.snapshot(ns, maxItems, check, previous?.after ?? '');
+        let page = commit ? await commit(() => storage.snapshot(ns, maxItems, check, previous?.after ?? '')) : storage.snapshot(ns, maxItems, check, previous?.after ?? '');
         let scan = previous;
         if (scan && (scan.epoch !== page.epoch || now() - scan.startedAt >= ENGINE_CARD_LIMITS.debounceMs)) {
-          scans.delete(scope); scan = null; page = storage.snapshot(ns, maxItems, check);
+          scans.delete(scope); scan = null; page = commit ? await commit(() => storage.snapshot(ns, maxItems, check)) : storage.snapshot(ns, maxItems, check);
         }
         scan ??= { memories: [], epoch: page.epoch, after: '', startedAt: now() };
         scan.memories.push(...page.memories); scan.after = page.after;
@@ -97,13 +101,15 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
         const vectorMap = new Map(vectorRows.filter(row => snapshot.memories.some(m => m.id === row.memoryId && m.revision === row.revision))
           .map(row => [row.memoryId, row.vector]));
         storage.validate(ns, snapshot.memories, check); check();
+        const timestamp = new Date(now()).toISOString();
         const clusters = partitionCardClusters(clusterMemories(snapshot.memories, vectorMap, check)), cards = storage.cards(ns, check);
+        const purged = storage.recentPurges(ns, timestamp, check);
         // A deleted seed must not turn a stale topic into a new key and bypass
         // its debounce. Reuse a prior similarity key for a majority-overlapping
         // source set; MOC identities remain exact and never merge this way.
         for (const cluster of clusters) if (cluster.key.startsWith('similarity:')) {
           const ids = new Set(cluster.memories.map(m => m.id));
-          const match = cards.filter(card => card.clusterKey?.startsWith('similarity:')).map(card => ({ card,
+          const match = [...cards, ...purged].filter(card => card.clusterKey?.startsWith('similarity:')).map(card => ({ card,
             overlap: card.sourceRevisions.filter(ref => ids.has(ref.memoryId)).length /
               Math.max(ids.size, card.sourceRevisions.length) })).filter(value => value.overlap >= .65)
             .sort((a, b) => b.overlap - a.overlap || a.card.builtAt.localeCompare(b.card.builtAt))[0];
@@ -114,16 +120,15 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
           check();
           // Five items establish pressure without a token estimate. The only
           // smaller eligible case is a four-Memory chain: meter its actual
-          // Memory/receipt wire with the existing product packer, including
+          // Memory wire (plus receipts only with consent) with the product packer, including
           // framing, references, metadata, dates and source deduplication.
           const tokens = cluster.memories.length < 5 && edges && chainLength(cluster.memories, edges) >= 3
-            ? assembleContext({ prepared: storage.pressureItems(ns, cluster.memories), counter: model,
+            ? assembleContext({ prepared: storage.pressureItems(ns, cluster.memories, { rawSpans: input.rawSpans === true }), counter: model,
               policy: { id: 'rank-first-whole-v1' }, budget: { maxItems: 12, maxTokens: 1000000 },
               representation: 'representation-v2-dated', deadlineAt: end, snapshotOf: () => null }).diagnostics.budget.used : 0;
           cluster.trigger = cardTrigger(cluster.memories, edges, tokens);
           if (cluster.trigger.eligible) eligible.set(cluster.key, cluster);
         }
-        const timestamp = new Date(now()).toISOString();
         for (const card of cards) {
           check();
           const cluster = eligible.get(card.clusterKey) ?? eligible.get(card.clusterKey.endsWith('#0')
@@ -133,24 +138,36 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
           // Search before staling against the old key: another eligible set
           // may already occupy that topic while these exact sources moved on.
           // An occupied exact match must not hide another free destination.
-          const destination = card.status === 'current' && [...eligible.values()].find(candidate =>
+          const carry = candidate =>
             candidate.key !== card.clusterKey && candidate.memories.length === card.sourceRevisions.length && candidate.memories.every(memory =>
               card.sourceRevisions.some(ref => ref.memoryId === memory.id && ref.revision === memory.revision)) &&
-            storage.carry(ns, card, candidate, check));
+            storage.carry(ns, card, candidate, check);
+          let destination;
+          if (commit && card.status === 'current') {
+            for (const candidate of eligible.values()) if (await commit(() => carry(candidate))) { destination = candidate; break; }
+          } else destination = card.status === 'current' && [...eligible.values()].find(carry);
           if (destination) {
             eligible.delete(destination.key); continue;
           }
           if (!cluster) {
             if (now() - Date.parse(card.row.updated_at) >= ENGINE_CARD_LIMITS.debounceMs) {
-              storage.retire(ns, card.id, timestamp, true); result.deleted++;
+              if (commit) await commit(() => storage.retire(ns, card.id, timestamp, true)); else storage.retire(ns, card.id, timestamp, true);
+              result.deleted++;
             }
             continue;
           }
           const newlyStale = card.row.revision === 1;
-          if (newlyStale) storage.retire(ns, card.id, timestamp);
+          if (newlyStale) {
+            if (commit) await commit(() => storage.retire(ns, card.id, timestamp)); else storage.retire(ns, card.id, timestamp);
+          }
           if (newlyStale || now() - Date.parse(card.row.updated_at) < ENGINE_CARD_LIMITS.debounceMs) {
             eligible.delete(cluster.key); result.debounced++;
           }
+        }
+        for (const card of purged) {
+          const cluster = eligible.get(card.clusterKey) ?? eligible.get(card.clusterKey.endsWith('#0')
+            ? card.clusterKey.slice(0, -2) : card.clusterKey + '#0');
+          if (cluster && eligible.delete(cluster.key)) result.debounced++;
         }
         for (const cluster of eligible.values()) {
           check();
@@ -181,15 +198,20 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
             requestSources.push(memory);
           }
           if (!fits()) { result.state = 'input_budget'; continue; }
-          const attempt = storage.claim(ns, cluster, new Date(now()).toISOString(), check);
+          const claim = () => storage.claim(ns, cluster, new Date(now()).toISOString(), check);
+          const attempt = commit ? await commit(claim) : claim();
           if (!attempt) { result.debounced++; continue; }
           result.modelCalls++;
           try {
             const output = await callModel(model, 'consolidate', CONSOLIDATE_PROMPT, request(), {
               deadline, beforeDispatch: checkPause, validateFresh: () => { check(); storage.validate(ns, requestSources, check); }, failureCode: 'consolidation_failed' });
             const value = validateConsolidation(output, memories, model, cluster.memories); check();
-            const card = value.body && storage.commit(ns, cluster, value, new Date(now()).toISOString(), check);
-            if (card) result.built.push(card);
+            const publish = () => storage.commit(ns, cluster, value, new Date(now()).toISOString(), check);
+            const card = value.body && (commit ? await commit(publish) : publish());
+            if (card) {
+              const { supersededCount = 0, ...published } = card;
+              result.deleted += supersededCount; result.built.push(published);
+            }
             // Context can identify an old current line in another Card. Reuse
             // ordinary staling and its debounce; one generation ends this pass.
             // Only current lines count: a Card that already lists the Memory
@@ -199,19 +221,27 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
               const covered = cardSourceKeys([{ type: 'card', metadata: { origin: 'engine' }, text: currentCardLines(other.row.body),
                 sourceMemoryRefs: other.sourceRevisions.map(ref => ({ namespace: ns, ...ref })) }]);
               if (requestSources.some(memory => value.outOfDateIds.includes(memory.id) && covered.has(memoryPackKey({
-                namespace: ns, memoryId: memory.id, revision: memory.revision })))) storage.retire(ns, other.id, new Date(now()).toISOString());
+                namespace: ns, memoryId: memory.id, revision: memory.revision })))) {
+                if (commit) await commit(() => storage.retire(ns, other.id, new Date(now()).toISOString()));
+                else storage.retire(ns, other.id, new Date(now()).toISOString());
+              }
             }
             // Valid output without a committed Card must not reopen a missing
             // fingerprint on every subsequent maintenance pass.
-            storage.finish(ns, attempt, card ? 'succeeded' : 'terminal', new Date(now()).toISOString());
+            const finish = () => storage.finish(ns, attempt, card ? 'succeeded' : 'terminal', new Date(now()).toISOString());
+            if (commit) await dispatchCommit(storage, finish, undefined, { compensating: true }); else finish();
           } catch (error) {
             let code;
             try { code = error?.code; }
             catch { /* Unreadable failure framing is terminal. */ }
-            if (code === 'namespace_paused') storage.release(ns, attempt);
+            if (code === 'namespace_paused') {
+              const release = () => storage.release(ns, attempt);
+              if (commit) await dispatchCommit(storage, release, undefined, { compensating: true }); else release();
+            }
             else {
               const transient = ['model_timeout', 'model_cancelled', 'consolidation_transient'].includes(code);
-              storage.finish(ns, attempt, transient ? 'transient' : 'terminal', new Date(now()).toISOString());
+              const finish = () => storage.finish(ns, attempt, transient ? 'transient' : 'terminal', new Date(now()).toISOString());
+              if (commit) await dispatchCommit(storage, finish, undefined, { compensating: true }); else finish();
             }
             throw error;
           }
@@ -223,7 +253,12 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
     } catch (error) {
       result.built = [];
       let code;
-      try { const proposed = error?.code; if (failureReasons.has(proposed)) code = proposed; } catch { /* Port exception properties are untrusted. */ }
+      try {
+        // Preserve the ordinary path's single read of an untrusted accessor.
+        const proposed = error?.code;
+        if (hasCommitDispatcher(storage) && (proposed === 'storage_busy' || isStorageBusy(error))) code = 'storage_busy';
+        else if (failureReasons.has(proposed)) code = proposed;
+      } catch { /* Port exception properties are untrusted. */ }
       result.state = code === 'namespace_paused' ? 'paused' : code === 'model_timeout' ? 'deadline' : 'refused';
       result.reason = result.state === 'deadline' ? 'deadline' : code ?? 'consolidation_failed';
     } finally { active = false; last = { namespace: JSON.stringify(ns), value: structuredClone(result) }; }

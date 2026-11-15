@@ -358,7 +358,7 @@ test('A11 check-config never resolves tokenizer/WASM, links SQLite or opens a da
     const logs=[],log=console.log;console.log=value=>logs.push(JSON.parse(value));
     for(const provider of [[],${JSON.stringify(contextProviderArgs)}])await start(['--check-config','--db',${JSON.stringify(path)},'--owner',${JSON.stringify(ns.ownerId)},'--context-read','context-read-v1',...provider],env);
     console.log=log;assert.equal(tokenizerResolutions,0);assert.equal(existsSync(${JSON.stringify(join(workspace.path, 'missing'))}),false);
-    for(const [i,result] of logs.entries())assert.deepEqual(result,{ok:true,mode:'configuration-check',contextRead:'context-read-v1',contextReadPersonal:false,
+    for(const [i,result] of logs.entries())assert.deepEqual(result,{ok:true,mode:'configuration-check',contextRead:'context-read-v1',rawSemantic:i>0,rawSemanticReason:i?null:'raw_semantic_not_enabled',contextReadPersonal:false,
       scope:'personal',provider:i?{provider:'openai',model:'text-embedding-3-small',dimensions:8,maxRequests:20,maxUsd:.1}:null,preset:i?'rrf-k10':'rrf-k60-d12',
       modelKeyInspected:false,databaseOpened:false,providerContacted:false,automaticCapture:false});
     sqliteAllowed=true;const {createCairnServer}=await import(${JSON.stringify(new URL('../server.mjs', import.meta.url).href)});

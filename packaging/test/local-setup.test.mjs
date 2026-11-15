@@ -92,14 +92,33 @@ for(const client of ['claude-code','codex'])test(`A1–A6/A8/A9 installed ${clie
     actualGeneratedCommand:true,providerCapture:'installed trusted-code HTTP/ancestry instrumentation',processes:f.receipts}));
   await f.workspace.cleanup();assert.equal(existsSync(f.workspace.path),false);
 });
-for(const client of ['claude-code','codex'])test(`A5 installed ${client}: closed event/source/host refusals dispatch nothing`,{timeout:120000},async t=>{
+for(const client of ['claude-code','codex'])test(`A5 installed ${client}: refusals dispatch nothing and payload namespace cannot redirect capture`,{timeout:120000},async t=>{
   const f=await installedSetupFixture(t,client);await f.invoke('cli',['init','--database',f.request.databasePath]);await f.setup();await f.activate();
   const payload={hook_event_name:'SessionStart',session_id:f.sessionId,transcript_path:f.sourcePath};
-  for(const changes of [{hook_event_name:'Stop'},{transcript_path:f.request.databasePath},{namespace:f.request.namespace},{transcript_path:null}]){
+  for(const changes of [{hook_event_name:'Stop'},{transcript_path:f.request.databasePath},{transcript_path:null}]){
     const trace=await f.invoke('hook',[],{event:'SessionStart',payload:{...payload,...changes}});assert.equal(trace.filter(row=>['source','worker','spawn'].includes(row.kind)).length,0);
   }
   if(client==='codex')for(const flags of [{exec:true},{missing:true}]){const trace=await f.invoke('hook',[],{event:'SessionStart',...flags});assert.equal(trace.filter(row=>['source','worker','spawn'].includes(row.kind)).length,0);}
-  assert.equal((await f.inspect()).events,0);await f.workspace.cleanup();assert.equal(existsSync(f.workspace.path),false);
+  assert.equal((await f.inspect()).events,0);
+  const injected={ownerId:'synthetic-injected-owner',scope:'project',projectId:'synthetic-injected-project'};
+  await f.invoke('hook',[],{event:'SessionStart',payload:{...payload,namespace:injected}});
+  if(client==='codex')await f.invoke('hook',[],{event:'UserPromptSubmit',payload:{...payload,hook_event_name:'UserPromptSubmit',namespace:injected}});
+  f.append('Synthetic namespace isolation capture');
+  const captured=await f.invoke('hook',[],{event:'Stop',payload:{...payload,hook_event_name:'Stop',namespace:injected},key:true});
+  assert.ok(captured.some(row=>row.kind==='worker'),'valid unknown-key payload captures');
+  const stored=await f.inspect();assert.ok(stored.events>0);assert.ok(stored.parts.length>0);assert.equal(stored.memories,1);
+  for(const {table,fields,rows:values} of stored.namespaces)for(const row of values){
+    if(fields.includes('owner_id'))assert.equal(row.owner_id,f.request.namespace.ownerId,table);
+    if(fields.includes('scope'))assert.equal(row.scope,f.request.namespace.scope,table);
+    if(fields.includes('project_id'))assert.equal(row.project_id??'',f.request.namespace.projectId??'',table);
+    assert.notEqual(row.owner_id,injected.ownerId,table);assert.notEqual(row.project_id,injected.projectId,table);
+  }
+  for(const table of ['memories','raw_conversations','raw_events','local_capture_controls'])assert.ok(stored.namespaces.find(entry=>entry.table===table)?.rows.length,table+' inspected');
+  assert.equal(stored.namespaces.flatMap(entry=>entry.rows).filter(row=>row.owner_id===injected.ownerId||row.project_id===injected.projectId).length,0,'zero injected namespace rows or authorizations');
+  assert.deepEqual(JSON.parse(readFileSync(f.configPath)).authority.namespace,f.request.namespace);
+  assert.deepEqual(JSON.parse(readFileSync(join(f.request.usageRoot,'local-setup-budget.json'))).namespace,f.request.namespace);
+  assert.deepEqual(JSON.parse(readFileSync(join(f.request.installationDirectory,'installation.json'))).request.namespace,f.request.namespace);
+  await f.workspace.cleanup();assert.equal(existsSync(f.workspace.path),false);
 });
 test('A7 installed foreground cancellation awaits actual B4a close and quiet hook emits no context',{timeout:120000},async t=>{
   const f=await installedSetupFixture(t);await f.invoke('cli',['init','--database',f.request.databasePath]);await f.setup();await f.activate();await f.invoke('hook',[],{event:'SessionStart'});

@@ -1,25 +1,9 @@
 import { HOSTED_SCHEMAS } from "./hosted-schemas.mjs";
+import { sourceTimestamp, dateTime } from "./source-time.mjs";
+export { SOURCE_TIMESTAMP_PATTERN, sourceTimestamp, utcInstant } from "./source-time.mjs";
 
-// UTC RFC 3339, finite calendar instant. Date.parse alone normalizes February 30.
-export function utcInstant(value) {
-  if (typeof value !== "string") return false;
-  const pattern = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|\+00:00)$/;
-  const match = pattern.exec(value);
-  if (!match || !Number.isFinite(Date.parse(value))) return false;
-  const [, year, month, day, hour, minute, second] = match.map(Number);
-  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
-  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  return month >= 1 && month <= 12 && day >= 1 && day <= days[month - 1] &&
-    hour < 24 && minute < 60 && second < 60;
-}
-
-function dateTime(value) {
-  if (typeof value !== "string") return false;
-  const match = /^(.*)([+-])(\d{2}):(\d{2})$/.exec(value);
-  if (!match) return utcInstant(value);
-  return Number(match[3]) <= 23 && Number(match[4]) <= 59 &&
-    utcInstant(match[1] + "Z") && Number.isFinite(Date.parse(value));
-}
+// The schema pattern approximates the standalone source-time rule.
+const sourceTimeSchema = HOSTED_SCHEMAS["capture-request"].properties.messages.items.properties.occurred_at;
 
 const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 // This interpreter supports only the keywords used by the frozen hosted schemas.
@@ -32,6 +16,10 @@ export function conforms(name, value) {
   // portable schema pattern with the same explicit host-id check as callers.
   if (name === "recall-request" && object(value) && Object.hasOwn(value, "session_id") &&
       optionalHostSessionId(value.session_id) === undefined) return false;
+  // JSON Schema cannot compare sibling integers. Apply the capture window's
+  // semantic relation in addition to its independently bounded schema fields.
+  if (name === "capture-request" && object(value) && object(value.window) &&
+      value.window.slice > value.window.slices) return false;
   function check(schema, input) {
     if (schema.$ref) return check(root.$defs[schema.$ref.slice("#/$defs/".length)], input);
     if (schema.oneOf && schema.oneOf.filter((s) => check(s, input)).length !== 1) return false;
@@ -66,7 +54,8 @@ export function conforms(name, value) {
       const length = [...input].length;
       if (length < (schema.minLength ?? 0) || length > (schema.maxLength ?? Infinity)) return false;
       if (schema.pattern && !new RegExp(schema.pattern).test(input)) return false;
-      if (schema.format === "date-time" && !dateTime(input)) return false;
+      if (schema.format === "date-time" &&
+          !(schema === sourceTimeSchema ? sourceTimestamp(input) : dateTime(input))) return false;
       if (schema.format === "uuid" &&
           !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(input)) return false;
     }

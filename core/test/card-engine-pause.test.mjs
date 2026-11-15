@@ -72,7 +72,7 @@ for (const disabled of [false, true]) test(`Card transport refuses ${disabled ? 
     };
   }
   const pass = await createEngineCardMaintenance({ storage, model: f.model })
-    .maintain({ namespace: ns, budget: { maxMs: 5000 } });
+    .maintain({ namespace: ns, budget: { maxMs: 5000 }, rawSpans: true });
   assert.equal(selected, true);
   assert.equal(validations, 2, 'injection is followed by the final pre-dispatch validation');
   assert.equal(f.model.calls.length, 0);

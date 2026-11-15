@@ -254,7 +254,7 @@ test('A5 official Claude full event fields remain inert, including background ta
     background_tasks:[{id:'synthetic',type:'shell',status:'running',description:'inert',command:'never execute'}],
     session_crons:[{id:'synthetic',schedule:'0 * * * *',recurring:true,prompt:'never interpret'}]})).status,'ready');
   assert.equal((await f.hook('PreCompact',{cwd:f.root,trigger:'manual',custom_instructions:null})).status,'ready');
-  assert.equal((await f.hook('Stop',{background_tasks:[{command:'inert',profilePath:'/forged'}]})).status,'blocked');
+  assert.equal((await f.hook('Stop',{background_tasks:[{command:'inert',profilePath:'/forged'}]})).status,'ready');
 });
 test('A1 readonly status creates no transient setup lock or installation-directory mutation',async t=>{
   const f=await setupFixture(t);await f.setup();const before=lstatSync(f.request.installationDirectory,{bigint:true}).mtimeNs;
@@ -419,4 +419,40 @@ for(const unsafe of ['writable-parent','foreign-parent'])test(`Claude missing fi
   try {assert.equal((await f.hook('SessionStart',{transcript_path:join(parent,'missing.jsonl')})).status,'blocked');}
   finally {fs.promises.lstat=original;syncBuiltinESMExports();}
   assert.equal(existsSync(join(f.request.installationDirectory,'state','starts')),false);
+});
+
+for (const client of ['claude-code','codex']) for (const mode of [0o700,0o750,0o755]) test(`${client} native lock accepts safe client directory ${mode.toString(8)}`,async t => {
+  const f = await setupFixture(t,{client});
+  const { dirname } = await import('node:path');
+  const { chmod, lstat } = await import('node:fs/promises');
+  const { stateLock } = await import('../state-lock.mjs');
+  const parent = dirname(f.clientConfigPath), lock = f.clientConfigPath+'.cairn-local.lock';
+  await chmod(parent,mode);
+  assert.equal((await f.setup()).status,'prepared');
+  assert.equal((await f.invoke('activate')).status,'active');
+  assert.equal((await f.invoke('status')).status,'active');
+  assert.equal((await f.invoke('disable')).status,'disabled');
+  assert.equal((await f.invoke('status')).status,'disabled');
+  assert.equal((await f.invoke('activate')).status,'active');
+  assert.equal((await lstat(parent)).mode & 0o777,mode);
+  // Unspecified callers still require a private parent.
+  if (mode !== 0o700) await assert.rejects(stateLock(lock,()=>assert.fail('private lock entered')),/state_permissions/);
+});
+
+for (const kind of ['readable','symlink','foreign']) test(`native settings lock refuses ${kind} lock file`,async t => {
+  const f = await setupFixture(t);
+  const { nativeSettingsLock } = await import('../raw/local-settings-lock.mjs');
+  const fs = (await import('node:fs')).default;
+  const { syncBuiltinESMExports } = await import('node:module');
+  const { writeFile, symlink } = await import('node:fs/promises');
+  const lock = f.clientConfigPath+'.cairn-local.lock';
+  if (kind === 'symlink') await symlink(f.clientConfigPath,lock);
+  else await writeFile(lock,'{}',{ mode:kind === 'readable' ? 0o644:0o600 });
+  const original = fs.promises.lstat;
+  if (kind === 'foreign') {
+    fs.promises.lstat = async (path,...args) => { const info = await original(path,...args); if (path === lock) info.uid = process.getuid()+1; return info; };
+    syncBuiltinESMExports();
+  }
+  try { await assert.rejects(nativeSettingsLock(lock,f.request,()=>assert.fail('unsafe lock entered')),/state_permissions|state_symlink|state_owner/); }
+  finally { fs.promises.lstat = original; syncBuiltinESMExports(); }
 });

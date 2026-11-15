@@ -5,7 +5,7 @@ import { register } from 'node:module';
 register('data:text/javascript,'+encodeURIComponent(`
 export async function load(url,context,next) {
   const result=await next(url,context);
-  const names=url.endsWith('/integrations/codex/source.mjs')?['openSource','source']:
+  const names=url.endsWith('/integrations/client/raw/local-source-open.mjs')?['openLocalSource','source']:
     url.endsWith('/integrations/client/raw/local-worker.mjs')?['createLocalRawWorker','worker']:null;
   if(!names)return result;
   const [name,kind]=names;

@@ -63,7 +63,51 @@ export const HOSTED_SCHEMAS = {
               "type": "string",
               "minLength": 1,
               "maxLength": 20000
+            },
+            "occurred_at": {
+              "type": "string",
+              "format": "date-time",
+              "maxLength": 40,
+              "description": "Optional record timestamp, preserved exactly by the client.",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?(Z|[+-]\\d{2}:\\d{2})$",
+              "$comment": "Pattern is an approximation: sourceTimestamp in source-time.mjs additionally requires a real calendar date, bounded time and offset fields, and finite Date.parse."
             }
+          }
+        }
+      },
+      "sent_at": {
+        "type": "string",
+        "format": "date-time",
+        "description": "Client clock at this send attempt; not part of event identity."
+      },
+      "window": {
+        "$comment": "Semantic validation in hosted-contract.mjs additionally requires slice <= slices.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "slice",
+          "slices",
+          "initial"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "slice": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4096
+          },
+          "slices": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4096
+          },
+          "initial": {
+            "type": "boolean"
           }
         }
       }

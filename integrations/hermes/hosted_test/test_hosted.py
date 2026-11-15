@@ -1,6 +1,5 @@
 import importlib
 import json
-import os
 from pathlib import Path
 import stat
 import threading
@@ -35,20 +34,11 @@ def wait_prefetch_completion(provider):
 def test_hosted_setup_permissions_activation_and_no_token_leak(install, cloud, monkeypatch, capsys):
     home, provider, _, hosted = install(configured=False)
     setup_inputs(monkeypatch, hosted, cloud.endpoint)
-    original_putenv = os.putenv
-    def guard_environment(key, value):
-        if value in ("synthetic-pasted-secret", b"synthetic-pasted-secret"):
-            pytest.fail("credential entered process environment")
-        return original_putenv(key, value)
-    monkeypatch.setattr(os, "putenv", guard_environment)
     config = {}
     provider.post_setup(str(home), config)
-    credential = home / "cairn" / "hosted-credential.json"
-    assert stat.S_IMODE(credential.stat().st_mode) == 0o600
-    assert stat.S_IMODE(credential.parent.stat().st_mode) == 0o700
-    saved = json.loads(credential.read_text())
-    assert saved == {"endpoint": cloud.endpoint, "token": "synthetic-pasted-secret",
-                     "token_id": "synthetic-token-id", "expires_at": None}
+    assert stat.S_IMODE((home / ".env").stat().st_mode) == 0o600
+    assert (home / ".env").read_text() == "CAIRN_MEMORY_TOKEN=synthetic-pasted-secret\n"
+    assert not (home / "cairn" / "hosted-credential.json").exists()
     assert json.loads((home / "cairn.json").read_text()) == {"mode": "hosted", "api_endpoint": cloud.endpoint}
     assert config["memory"]["provider"] == "cairn"
     assert "provider: cairn" in (home / "config.yaml").read_text()
@@ -56,7 +46,6 @@ def test_hosted_setup_permissions_activation_and_no_token_leak(install, cloud, m
     assert "synthetic-pasted-secret" not in captured.out + captured.err
     for filename in ("cairn.json", "config.yaml"):
         assert "synthetic-pasted-secret" not in (home / filename).read_text()
-    assert not (home / ".env").exists()
     assert provider.is_available()
 
 
@@ -102,32 +91,13 @@ def test_setup_accepts_reversed_scopes_and_expiry(install, cloud, monkeypatch):
     setup_inputs(monkeypatch, hosted, cloud.endpoint)
     provider.post_setup(str(home), {})
     assert provider.is_available()
-    assert json.loads((home / "cairn" / "hosted-credential.json").read_text())["expires_at"] == "2099-01-01T00:00:00Z"
+    assert set(json.loads((home / "cairn.json").read_text())) == {"mode", "api_endpoint"}
 
 
-@pytest.mark.parametrize("damage", ["missing", "endpoint", "expired", "symlink-file", "symlink-dir", "bad-json"])
-def test_availability_fails_closed_without_network(install, cloud, damage):
-    home, provider, _, hosted = install(initialize=False)
-    target = home / "cairn" / "hosted-credential.json"
-    value = json.loads(target.read_text())
-    if damage == "missing":
-        target.unlink()
-    elif damage == "endpoint":
-        value["endpoint"] = "https://example.invalid"
-        target.write_text(json.dumps(value))
-    elif damage == "expired":
-        value["expires_at"] = "2000-01-01T00:00:00Z"
-        target.write_text(json.dumps(value))
-    elif damage == "bad-json":
-        target.write_text("{")
-    elif damage == "symlink-file":
-        destination = home / "credential-target"
-        target.rename(destination)
-        target.symlink_to(destination)
-    else:
-        destination = home / "directory-target"
-        target.parent.rename(destination)
-        target.parent.symlink_to(destination, target_is_directory=True)
+@pytest.mark.parametrize("token", ["", "synthetic invalid", "synthetic\ntoken"])
+def test_availability_fails_closed_without_network(install, cloud, monkeypatch, token):
+    home, provider, _, _ = install(initialize=False)
+    monkeypatch.setenv("CAIRN_MEMORY_TOKEN", token)
     assert not provider.is_available()
     with pytest.raises(ValueError):
         provider.initialize("conversation", hermes_home=str(home), platform="cli", agent_context="primary")
@@ -159,42 +129,6 @@ def test_origin_and_default_cap(install, cloud):
     for endpoint in ("https://example.invalid/", "http://localhost:1234", "http://[::1]:1234", cloud.endpoint):
         assert hosted.validate_config({"mode": "hosted", "api_endpoint": endpoint})
     assert hosted.validate_config({"mode": "hosted", "api_endpoint": cloud.endpoint}).get("prefetch_timeout_ms", "2500") == "2500"
-
-
-@pytest.mark.parametrize("component", ["file", "directory"])
-def test_credential_writer_refuses_symlinks(install, cloud, component):
-    home, _, _, hosted = install(initialize=False)
-    target = home / "cairn" / "hosted-credential.json"
-    credential = json.loads(target.read_text())
-    if component == "file":
-        destination = home / "untouched-file"
-        destination.write_text("synthetic marker")
-        target.unlink()
-        target.symlink_to(destination)
-    else:
-        destination = home / "untouched-directory"
-        target.parent.rename(destination)
-        target.parent.symlink_to(destination, target_is_directory=True)
-    before = destination.stat().st_mode
-    with pytest.raises((OSError, ValueError)):
-        hosted.write_credential(home, credential)
-    assert destination.stat().st_mode == before
-    if component == "file":
-        assert destination.read_text() == "synthetic marker"
-
-
-def test_credential_temp_is_private_from_creation(install, cloud, monkeypatch):
-    home, _, _, hosted = install(initialize=False)
-    credential = json.loads((home / "cairn" / "hosted-credential.json").read_text())
-    original = hosted.os.replace
-    observed = []
-    def replace(source, target, **kwargs):
-        observed.append(stat.S_IMODE(os.stat(source, dir_fd=kwargs["src_dir_fd"]).st_mode))
-        return original(source, target, **kwargs)
-    monkeypatch.setattr(hosted.os, "replace", replace)
-    hosted.write_credential(home, credential)
-    assert observed == [0o600]
-    assert sorted(p.name for p in (home / "cairn").iterdir()) == ["hosted-credential.json"]
 
 
 def test_fast_partial_recall_and_formatting(install, cloud):
@@ -327,12 +261,12 @@ def test_tools_round_trip_via_memory_manager_and_protocol_pin(install, cloud):
     requests = cloud.requests_for("/api/mcp")
     assert len(requests) == 3
     assert requests[0][1]["params"] == {"protocolVersion": "2025-06-18", "capabilities": {},
-                                        "clientInfo": {"name": "cairn-hermes", "version": "0.2.0"}}
+                                        "clientInfo": {"name": "cairn-hermes", "version": "0.3.0"}}
     assert requests[0][1]["method"] == "initialize"
     for _, body, headers in requests:
         assert headers["Content-Type"] == "application/json"
         assert headers["Accept"] == "application/json, text/event-stream"
-        assert headers["User-Agent"] == "cairn-hermes/0.2.0"
+        assert headers["User-Agent"] == "cairn-hermes/0.3.0"
         assert headers["Authorization"].split()[0] == "Bearer"
         assert "session_id" not in json.dumps(body)
         if body["method"] == "tools/call":
@@ -495,52 +429,15 @@ def test_hosted_never_uses_local_bridge_and_static_schemas(install, monkeypatch)
     assert call(manager, "remember", content="Synthetic memory")["ok"]
 
 
-def test_local_setup_helpers_and_validation_before_activation(install, monkeypatch, tmp_path):
-    home, provider, _, hosted = install(configured=False)
-    node = tmp_path / "node"
-    node.write_text("synthetic executable")
-    node.chmod(0o700)
-    script = tmp_path / "cairn.mjs"
-    script.touch()
-    steps = []
-    import hermes_cli.memory_setup as setup
-    import hermes_cli.config as config_module
-    real_save = config_module.save_config
-    def prompt(name, schema, values, env_writes):
-        assert name == "cairn"
-        assert {f["key"] for f in schema} >= {"node_path", "executable_path", "api_key"}
-        values.update(node_path=str(node), executable_path=str(script))
-        env_writes["CAIRN_MEMORY_OPENAI_API_KEY"] = "synthetic-local-key"
-        steps.append("prompt")
-        return True
-    def write_env(values, **kwargs):
-        assert (home / "cairn.json").exists()
-        steps.append("env")
-    def save(config):
-        assert json.loads((home / "cairn.json").read_text())["node_path"] == str(node)
-        steps.append("activation")
-        return real_save(config)
-    setup_inputs(monkeypatch, hosted, "", "local")
-    monkeypatch.setattr(setup, "_prompt_schema_fields", prompt)
-    monkeypatch.setattr(setup, "_write_env_vars", write_env)
-    monkeypatch.setattr(config_module, "save_config", save)
-    provider.post_setup(str(home), {})
-    assert steps == ["prompt", "env", "activation"]
-    assert "provider: cairn" in (home / "config.yaml").read_text()
-    assert not (home / "cairn").exists()
-
-
 def test_invalid_local_setup_does_not_activate(install, monkeypatch):
     home, provider, _, hosted = install(configured=False)
-    import hermes_cli.memory_setup as setup
-    setup_inputs(monkeypatch, hosted, "", "local")
-    def prompt(name, schema, values, env_writes):
-        values["node_path"] = "relative-invalid-path"
-        return True
-    monkeypatch.setattr(setup, "_prompt_schema_fields", prompt)
+    answers = iter(["local", "relative-invalid-path", "relative-invalid-script", "", "", ""])
+    monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
+    monkeypatch.setattr(hosted.getpass, "getpass", lambda prompt: "synthetic-local-key")
     provider.post_setup(str(home), {})
     assert not (home / "config.yaml").exists()
     assert not (home / "cairn.json").exists()
+    assert not (home / ".env").exists()
 
 
 def test_profile_instances_bind_only_at_initialize(install, cloud, monkeypatch):

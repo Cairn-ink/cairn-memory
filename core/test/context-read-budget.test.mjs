@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
-import { contextBudget } from '../context-read-budget.mjs';
+import { contextBudget, withContextReadBudgetScope } from '../context-read-budget.mjs';
 import { contextOptions } from '../context-read-input.mjs';
 
 function dispatcher(port, overrides = {}) {
@@ -28,10 +28,10 @@ test('R04/R10 review 1: concurrency, caps and family changes constrain the same 
   const embedder = port(() => { transmissions++; return [[1]]; });
   await dispatcher(embedder)();
   await assert.rejects(dispatcher(embedder, { maxConcurrent: 2 })(), { code: 'budget_denied' });
-  await dispatcher(embedder, { family: 'hosted', maxRequests: 2, maxUsd: 2, maxConcurrent: 3 })();
+  await assert.rejects(dispatcher(embedder, { family: 'hosted', maxRequests: 2, maxUsd: 2, maxConcurrent: 3 })(), { code: 'budget_denied' });
   await assert.rejects(dispatcher(embedder, { maxRequests: 2, maxUsd: 100, maxConcurrent: 4 })(), { code: 'budget_denied' });
   await assert.rejects(dispatcher(embedder, { maxRequests: 100, maxUsd: 2, maxConcurrent: 5 })(), { code: 'budget_denied' });
-  assert.equal(transmissions, 2);
+  assert.equal(transmissions, 1);
 });
 
 test('R04/R10 review 1: active operations are shared across policy profiles until actual settlement', async () => {
@@ -40,7 +40,7 @@ test('R04/R10 review 1: active operations are shared across policy profiles unti
   const first = dispatcher(embedder)();
   try {
     await assert.rejects(dispatcher(embedder, { maxRequests: 9, maxUsd: 9 })(), { code: 'budget_denied' });
-    await dispatcher(embedder, { maxRequests: 9, maxUsd: 9, maxConcurrent: 2 })();
+    await withContextReadBudgetScope({}, () => dispatcher(embedder, { maxRequests: 9, maxUsd: 9, maxConcurrentQueries: 2 })());
     await assert.rejects(dispatcher(embedder, { maxRequests: 9, maxUsd: 9 })(), { code: 'budget_denied' });
     assert.equal(calls, 2);
   } finally { release(); await first; }

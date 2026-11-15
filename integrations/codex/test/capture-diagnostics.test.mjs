@@ -219,7 +219,7 @@ function validateNotice(schema,value) {
     assert.equal(schema.properties[key].type,typeof leaf);
   }
 }
-for(const version of ['0.163.0','0.164.0','0.165.0','0.166.0']) test(`SessionStart output conforms to recorded ${version} schema`,async t=>{
+for(const version of ['0.163.0','0.164.0','0.165.0','0.166.0','0.167.0','0.167.2']) test(`SessionStart output conforms to recorded ${version} schema`,async t=>{
   const format=JSON.parse(await readFile(new URL(`./fixtures/binary-${version}/format.json`,import.meta.url)));
   const schema=format.hooks['session-start.command.output'];
   assert.equal(schema.properties.systemMessage.type,'string');

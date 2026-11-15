@@ -1,4 +1,5 @@
 import { captureSnapshot } from './capture-input.mjs';
+import { bindCommitRuntime, dispatchSynchronousCommit, withSynchronousCommitScope } from './commit-dispatch.mjs';
 import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
 import { registerContentWriteBoundary } from './content-write-context.mjs';
 import { contentScopeEpochGuard, assertContentOutput, contentReceiptCount, assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
@@ -32,8 +33,9 @@ import { createQualifiedTransitionStorage } from './qualified-transition-storage
 import { createRationaleStorage } from './rationale-storage.mjs';
 import { fail, object, receiptEventTime } from "./validation.mjs";
 import { privateCardOptions } from './private-card-input.mjs';
-import { createPrivateCardStorage } from './private-card-storage.mjs';
+import { createPrivateCardStorage, purgeEngineCardsInside } from './private-card-storage.mjs';
 import { createRawCardInvalidation } from './card-raw-sources.mjs';
+import { purgeEngineCardOperationsInside } from './private-card-schema.mjs';
 import { createRawSourceRoots } from './raw-source-roots.mjs';
 import { createRawDeletionStorage } from './raw-deletion-storage.mjs';
 import { createRawLineageStorage, isSourceSnapshotOverflow, SOURCE_SNAPSHOT_MS } from './raw-lineage-storage.mjs';
@@ -139,6 +141,7 @@ export function createMemoryRuntime(input, internal) {
     return epoch(ns);
   }
 
+  // admitMutation retains its existing-row content-safety check too.
   function isSuppressed(ns, value) {
     if(db.prepare(`SELECT 1 FROM suppressed WHERE ${where} AND fingerprint = ?`).get(...boundary(ns),value))return true;
     if(cachedContentLayout(db)?.suppressionRevision){
@@ -403,6 +406,8 @@ export function createMemoryRuntime(input, internal) {
       qualificationStorage.clear(id);
       proceduralStorage.clear(id);
       episodes.invalidateMemory(ns, id, current.review_state === 'awaiting');
+      purgeEngineCardsInside(db, ns, suppression.actionId, id);
+      purgeEngineCardOperationsInside(db, ns, id);
       db.prepare(`UPDATE memories SET content = NULL, deleted = 1,
         revision = revision + 1, updated_at = ? WHERE id = ?`).run(now, id);
       db.prepare("DELETE FROM receipts WHERE memory_id = ?").run(id);
@@ -819,7 +824,7 @@ export function createMemoryRuntime(input, internal) {
     if (captureSourceDepth && !db.isTransaction && scopes.some(ns =>
         { const proof=cachedContentSuppressionRequestInside(db,ns.ownerId);
           return !proof?.facts || !proof.readSet.some(selected=>selected.scope==='owner' ||
-            selected.scope===ns.scope && (selected.projectId??'')===(ns.projectId??'')); })) return transaction(db, check);
+            selected.scope===ns.scope && (selected.projectId??'')===(ns.projectId??'')); })) return dispatchSynchronousCommit(db, () => transaction(db, check));
     check();
   };
   function captureSourceRead(ns, work) {
@@ -839,7 +844,7 @@ export function createMemoryRuntime(input, internal) {
       if (isSourceSnapshotOverflow(error)) {
         // The incomplete read has rolled back and released SHARED. Respect an
         // earlier RESERVED writer before validating the entire source population.
-        try { return transaction(db,work); }
+        try { return dispatchSynchronousCommit(db, () => transaction(db,work)); }
         catch (failure) { if(isStorageBusy(failure))throw captureSourceBusy(); throw failure; }
       }
       if (isStorageBusy(error)) throw captureSourceBusy();
@@ -888,6 +893,7 @@ export function createMemoryRuntime(input, internal) {
         return { rows, epoch: current };
       }, undefined, { deferred: true });
     },
+    isSuppressed(ns, value) { ready(); return readTransaction(db, () => isSuppressed(ns, value)); },
     isAwaiting(ns, id) { ready(); return activeRow(ns, id)?.review_state === 'awaiting'; },
     resolveReview(ns, action, input) { ready(); return resolveReview(ns, action, input); },
     prepareEpisodeKeep(ns,input) { ready(); return episodes.prepareKeep(ns,input); },
@@ -919,15 +925,15 @@ export function createMemoryRuntime(input, internal) {
     closeEpisodeNextStep(ns, input) { ready(); return episodes.closeNextStep(ns, input); },
     sessionContextSnapshot(ns, groups, expected) { ready(); return sessionContextStorage(ns, groups, expected); },
     episodeRange(ns, operation, filter, cursor) { ready(); return episodeReads(ns, operation, filter, cursor); },
-    privateCards: privateCards ? cardStorage : undefined,
+    privateCards: privateCards ? bindCommitRuntime(cardStorage, db) : undefined,
     ...(internal?.engineCards ? {
       engineCardAvailable() { ready(); return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_applicability_reviews'").get()) ||
         !input.existingStore && !input.storeFence && [18,20,21,22].includes(db.prepare('PRAGMA user_version').get().user_version); },
       async engineCardStorage() {
         ready();
         const { createEngineCardStorage } = await import('./engine-card-storage.mjs');
-        ready(); return createEngineCardStorage({ db, identity, ready, rawReader: rawCapture?.engineSourceReader(),
-          upgrade: !input.existingStore && !input.storeFence });
+        ready(); return withSynchronousCommitScope('lazy Card storage init', () => bindCommitRuntime(createEngineCardStorage({ db, identity, ready, rawReader: rawCapture?.engineSourceReader(),
+          upgrade: !input.existingStore && !input.storeFence }), db));
       },
     } : {}),
     methodPackages: methodStorage,
@@ -1025,7 +1031,7 @@ export function createMemoryRuntime(input, internal) {
     filterCaptureSources: captureSourceBoundary('filterCaptureSources'),
     assertCaptureSources: captureSourceBoundary('assertCaptureSources') });
   recallJournalModes.set(result, { db });
-  return result;
+  return bindCommitRuntime(result, db);
   } catch (error) {
     try { db.close(); } catch { /* Preserve the construction failure. */ }
     throw error;

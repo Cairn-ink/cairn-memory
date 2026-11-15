@@ -58,28 +58,40 @@ export function createLocalCaptureTransport(options) {
   } catch { throw new LocalCaptureTransportError(false); }
   return Object.freeze({
     async capture(value, callOptions = {}) {
-      let scope;
+      let scope, stage = 'request';
       try {
         const call = ownData(callOptions, ['signal']);
         if (call.signal !== undefined && (types.isProxy(call.signal) || !(call.signal instanceof AbortSignal))) throw Error();
         scope = localProcessScope(deadlineMs, call.signal);
         const request = requestForTarget(detached(value), { authority });
         const encoded = JSON.stringify(request); scope.check();
+        stage = 'config_snapshot';
         const snapshot = await readConfigurationSnapshot(input.configPath); scope.check();
+        stage = 'authority_check';
         if (JSON.stringify(localAuthorityInput(snapshot.config.authority)) !== JSON.stringify(authority)) throw Error();
         // The single configured own-data value is snapshotted here, not at
         // constructor time; unrelated environment properties are never read.
+        stage = 'credential_check';
         const key = selectedKey(env, snapshot.config.provider.apiKeyEnv);
+        stage = 'home_check';
         const home = await stat(input.home); scope.check();
         if (!home.isDirectory() || typeof process.getuid === 'function' && home.uid !== process.getuid()) throw Error();
+        stage = 'runtime_check';
         if (!(await lstat(input.runtimeRoot)).isDirectory()) throw Error(); scope.check();
         if (!(await lstat(cli)).isFile()) throw Error(); scope.check();
         const baseEnv = { HOME: input.home, PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' };
+        stage = 'probe';
         supported(await scope.run(input.nodeExecutable, ['--version'], baseEnv, undefined, { probe: true }));
+        stage = 'spawn';
         const output = await scope.run(input.nodeExecutable, [cli, '--config', input.configPath, '--config-digest', snapshot.digest],
           { ...baseEnv, ...key }, encoded);
+        stage = 'reply';
         const result = localCaptureReply(output, request); scope.check(); return result;
-      } catch { throw new LocalCaptureTransportError(scope?.uncertain ?? false); }
+      } catch (error) {
+        throw new LocalCaptureTransportError(scope?.uncertain ?? false,
+          error instanceof LocalCaptureTransportError ? error.stage : stage,
+          error instanceof LocalCaptureTransportError && Object.hasOwn(error, 'exitCode') ? error : undefined);
+      }
       finally { scope?.close(); }
     },
   });

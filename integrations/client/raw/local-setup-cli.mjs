@@ -20,14 +20,15 @@ not dollars. Disable preserves identity/data; reactivation may require explicit
 local-host rearm. Operator guide: docs/raw-local-journal.md (relative to the
 installed package root), including the closed request schema and separate consents.
 `;
-async function input(stream,signal) {
+// Hook stdin has its own byte bound; setup/settings keep their existing reader.
+async function hookInput(stream,signal) {
   const chunks = []; let size = 0;
   const timer = setTimeout(() => stream.destroy(),1000);
   const cancel = () => stream.destroy(); signal.addEventListener('abort',cancel,{ once:true });
   try {
-    for await (const chunk of stream) { size += Buffer.byteLength(chunk); if (size > 65536) fail('event_refused'); chunks.push(Buffer.from(chunk)); }
+    for await (const chunk of stream) { size += Buffer.byteLength(chunk); if (size > 8388608) fail('event_refused'); chunks.push(Buffer.from(chunk)); }
     if (!size || signal.aborted) fail('event_refused');
-    try { return json(new TextDecoder('utf-8',{ fatal:true }).decode(Buffer.concat(chunks))); } catch { fail('event_refused'); }
+    try { return JSON.parse(new TextDecoder('utf-8',{ fatal:true }).decode(Buffer.concat(chunks))); } catch { fail('event_refused'); }
   } finally { clearTimeout(timer); signal.removeEventListener('abort',cancel); }
 }
 export async function runLocalSetupCli(args = process.argv.slice(2),io = {}) {
@@ -46,7 +47,7 @@ export async function runLocalSetupCli(args = process.argv.slice(2),io = {}) {
     } else if (args.length === 3 && ['status','activate','disable'].includes(args[0]) && args[1] === '--installation' && absolute(args[2])) {
       outcome = await createLocalRawSetup({ installationDirectory:args[2] })[args[0]]({ signal:controller.signal });
     } else if (hook && args.length === 5 && args[1] === '--installation' && absolute(args[2]) && args[3] === '--event') {
-      await runLocalRawHook({ installationDirectory:args[2],event:args[4],payload:await input(stdin,controller.signal) },{ signal:controller.signal });
+      await runLocalRawHook({ installationDirectory:args[2],event:args[4],payload:await hookInput(stdin,controller.signal) },{ signal:controller.signal });
       // Fail open for the native client, but never emit an internal status DTO
       // or arbitrary diagnostics as prompt/model context.
       return 0;

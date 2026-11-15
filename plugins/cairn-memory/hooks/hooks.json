@@ -6,6 +6,12 @@
           {
             "type": "command",
             "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hook.mjs", "start-boundary"],
+            "timeout": 2
+          },
+          {
+            "type": "command",
+            "command": "node",
             "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hook.mjs", "start"],
             "async": true
           }

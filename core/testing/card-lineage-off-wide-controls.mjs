@@ -16,6 +16,7 @@ globalThis.Date=class extends NativeDate {
 Object.defineProperty(performance,'now',{value:()=>0,configurable:true});
 
 export const statements=[];
+export const normalizeTraceSQL=sql=>sql.replace(/\s+/g,' ').trim();
 export const effectWitnesses=[];
 const prepare=DatabaseSync.prototype.prepare,exec=DatabaseSync.prototype.exec;
 const marker='synthetic-lineage-off-sql-v1';
@@ -35,9 +36,9 @@ export function startTrace() {
       const fn=statement[method];
       statement[method]=function(...args){
         // Snapshot arguments before execution, including exact binary bytes.
-        record([sql.replace(/\s+/g,' ').trim(),method,structuredClone(args)]);
+        record([normalizeTraceSQL(sql),method,structuredClone(args)]);
         const result=Reflect.apply(fn,this,args);
-        if(method==='get'&&sql.replace(/\s+/g,' ').trim()==='SELECT * FROM "card_effects" WHERE "effect_id" IS ?'&&
+        if(method==='get'&&normalizeTraceSQL(sql)==='SELECT * FROM "card_effects" WHERE "effect_id" IS ?'&&
           /^[0-9a-f]{32}$/.test(result?.effect_id))witness(result);
         return result;
       };
@@ -45,7 +46,7 @@ export function startTrace() {
     return statement;
   };
   DatabaseSync.prototype.exec=function(sql){
-    record([sql.replace(/\s+/g,' ').trim(),'exec',[]]);
+    record([normalizeTraceSQL(sql),'exec',[]]);
     return Reflect.apply(exec,this,[sql]);
   };
 }

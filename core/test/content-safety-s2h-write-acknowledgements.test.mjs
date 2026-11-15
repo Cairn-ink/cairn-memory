@@ -297,6 +297,10 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // manager. Ordinary Raw capture reconstructs existing message/event/session
   // identities before journal registration. Pin these existing projections;
   // neither adds acknowledgement fields or changes the native write guard.
+  // Capture-window metadata adds two literal id occurrences in the hosted
+  // schema (required key and property). This opaque window identity is transport
+  // metadata, not writer authority or a new acknowledgement/terminal field.
+  // Lock liveness preflight adds key:pid (1 -> 2): process metadata, never content or writer identity.
   // Recall's recency keyset adds one private last-position id in the signed
   // cursor boundary. It adds no writer acknowledgement or terminal exemption.
   // Engine Card bundles: maintenance builds one pack key (memoryId) and passes
@@ -304,6 +308,15 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // marked Memory with that Card's current lines; the output module returns
   // outOfDateIds to maintenance and no longer builds memoryIds entries. All
   // are internal comparisons: no acknowledgement, projection or stored field.
+  // R2k dispatch branches duplicate existing opaque operation inputs:
+  // classificationEventId (1 -> 2) selects the same batch for draft commit;
+  // episodeId (4 -> 6) addresses the async read-only attempt outcome lookup
+  // and the bound writer-release ownership check; eventId (7 -> 8) addresses
+  // the bound admission claim. These add no returned acknowledgement fields.
+  // All three names already belong to content-write-safety.mjs's opaque set;
+  // content identities still pass its canonical fail-closed walker unchanged.
+  // One budget dispatcher now serves scoped and unbound callers; its single
+  // `id: port.id` is provider metadata, never a writer/content identity.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));
   const files=JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json',import.meta.url),'utf8'));
   const actual={};

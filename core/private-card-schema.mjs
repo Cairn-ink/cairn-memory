@@ -1,6 +1,36 @@
 // v19 was never implemented. v20 is only the explicit local note/Card slice.
 export const PRIVATE_CARD_SCHEMA_VERSION = 21;
 export const CARD_DEPENDENCY_LIMIT = 128;
+
+// Cache only successful presence probes per handle, never rows or a miss.
+// installPrivateCards/installCardMemorySources run only in openDatabase startup,
+// offline upgradeLayoutBase, or engine maintenance's ensureLayout transaction.
+// Those installers finish before mutation work; none calls forgetting or
+// owner/namespace erasure. Safety/lineage migration seeds retained incarnation/
+// span facts only. No purge shares an uncommitted table-creation transaction.
+// Unsupported external DDL/rollback can make a later purge fail closed.
+const operationsTables = new WeakSet();
+
+// The caller owns the canonical forget/erasure transaction. Old attempts did
+// not retain their full source set, so an opaque legacy fingerprint cannot be
+// proved independent of a forgotten source and must be removed conservatively.
+export function purgeEngineCardOperationsInside(db, ns, memoryId) {
+  if (!db.isTransaction) throw new Error('storage_error');
+  if (!operationsTables.has(db)) {
+    if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_operations'").get()) return;
+    operationsTables.add(db);
+  }
+  const selection = memoryId === undefined ? '' : ` AND (target_id=?
+    OR json_type(result,'$.sourceRevisions') IS NOT 'array'
+    OR EXISTS(SELECT 1 FROM json_each(result,'$.sourceRevisions')
+      WHERE json_extract(value,'$.memoryId')=?))`;
+  db.prepare(`DELETE FROM card_operations WHERE owner_id=?
+    ${ns.scope === 'owner' ? '' : 'AND scope=? AND project_id=?'}
+    AND method IN ('consolidateAttempt','consolidateOutcome'${memoryId === undefined ? ",'consolidateCleanup'" : ''})${selection}`)
+    .run(ns.ownerId, ...(ns.scope === 'owner' ? [] : [ns.scope, ns.projectId ?? '']),
+      ...(memoryId === undefined ? [] : [memoryId, memoryId]));
+}
+
 export function installPrivateCards(db) {
   db.exec(`
     CREATE TABLE card_notes (

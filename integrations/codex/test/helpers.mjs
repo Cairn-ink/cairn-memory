@@ -7,6 +7,8 @@ import { establishPauseBoundary } from '../worker.mjs';
 
 export const session='11111111-1111-4111-8111-111111111111';
 export const timestamp='2026-09-30T00:00:00.000Z';
+// Send time is deliberately per-attempt; every identity-bearing field is pinned.
+export const stableCapture = ({ sent_at, ...body }) => body;
 export const jsonl = row => JSON.stringify({timestamp,...row})+'\n';
 export const header = (overrides={}) => jsonl({type:'session_meta',payload:{
   session_id:session,id:session,timestamp,cwd:'/synthetic/CWD_CANARY',originator:'codex_cli_rs',
@@ -44,7 +46,7 @@ export async function fixture(t, {text=header(),cap=10000,mode='api-key',observe
       return {status:'complete',eventId:'wrong'};
     }
     const duplicate=receiver.has(body.event_id);
-    if (duplicate && JSON.stringify(receiver.get(body.event_id))!==JSON.stringify(body)) throw new Error('changed replay');
+    if (duplicate && JSON.stringify(stableCapture(receiver.get(body.event_id)))!==JSON.stringify(stableCapture(body))) throw new Error('changed replay');
     receiver.set(body.event_id,structuredClone(body));
     if(failure?.at===count && failure.kind==='lost') throw new Error('lost reply');
     return {status:duplicate?'duplicate':'complete',eventId:body.event_id};

@@ -103,7 +103,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
         controls.beforeDispatch();invoked=true;
         return trackedPort.embed(texts,controls);
       }};
-      vectors=await dispatch(chargedPort,selected.map(c=>c.input),{signal:controller.signal,deadlineAt,
+      vectors=await dispatch(chargedPort,selected.map(c=>c.input),{budgetClass:'maintenance',signal:controller.signal,deadlineAt,
         guard:()=>{if(closed)fail('store_closed');protect(row.source);}});
       authority.check(row.source);
       if (!Array.isArray(vectors)||vectors.length!==selected.length) fail('invalid_vector');

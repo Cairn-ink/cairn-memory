@@ -1,3 +1,4 @@
+import { assertFrozenRetry } from "../../../tools/testing/capture-attempt.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, writeFile, appendFile, mkdir, lstat, readdir, symlink, unlink, cp, chmod } from 'node:fs/promises';
@@ -53,7 +54,7 @@ async function fixture(t,{answers=[''],args,config='',hooks,paired=false,claudeP
     `process.env.FAKE_STATE=${JSON.stringify(statePath)};process.env.FAKE_CALLS=${JSON.stringify(calls)};\n${source}`;
   // Freeze native-shaped schema/serde strings in this fake executable so the
   // production format collector (rather than a version-only seam) decides.
-  const evidenceVersion=['0.162.0','0.163.0','0.164.0','0.165.0','0.166.0'].includes(state.version)?state.version:'0.160.1';
+  const evidenceVersion=['0.162.0','0.163.0','0.164.0','0.165.0','0.166.0','0.167.0','0.167.2'].includes(state.version)?state.version:'0.160.1';
   const evidence=JSON.parse(await readFile(new URL(`../../../integrations/codex/test/fixtures/binary-${evidenceVersion}/format.json`,import.meta.url)));
   const embedded='\n/*\n'+Object.values(evidence.hooks).map(value=>JSON.stringify(value,null,2)).join('\n')+'\n'+SERDE_MARKERS.join('\n')+'\n*/\n';
   await writeFile(join(bin,'codex'),`#!${process.execPath}\n${command}${nativeBinary?'':embedded}`,{mode:0o755});
@@ -93,9 +94,12 @@ async function fixture(t,{answers=[''],args,config='',hooks,paired=false,claudeP
     const child = spawn(executable,[harness,...flags],{cwd:ws.path,
       env:{...env,...envOverrides,CX5_TEST_CLI_MODULE:module},stdio:['ignore','pipe','pipe','ipc']});
     wireChild(child,server.server);
+    child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
     let stdout='',stderr='';child.stdout.on('data',x=>stdout+=x);child.stderr.on('data',x=>stderr+=x);
-    const timer=setTimeout(()=>child.kill('SIGKILL'),30000);
-    const code=await new Promise((resolve,reject)=>{child.on('error',reject);child.on('close',resolve);});clearTimeout(timer);
+    let timedOut=false;
+    const timer=setTimeout(()=>{timedOut=true;child.kill('SIGKILL');},30000);
+    const {code,signal}=await new Promise((resolve,reject)=>{child.on('error',reject);child.on('close',(code,signal)=>resolve({code,signal}));});clearTimeout(timer);
+    if(code===null)t.diagnostic(JSON.stringify({fixtureExit:code,signal,timedOut}));
     assert.ok(!(stdout+stderr).includes(secret));assert.ok(!(stdout+stderr).includes(mcpSecret));
     screens.push(stdout+stderr);
     return {code,stdout,stderr};
@@ -537,7 +541,7 @@ test('CX-5 processing/quota preserve the frozen range and never acknowledge text
   const first=f.requests.find(r=>r.route.endsWith('/capture')).body;
   f.capture({error:'quota_reached'});await f.invoke('worker');const refused=await f.cursor();assert.ok(refused.pending);
   assert.equal(refused.status,'quota_reached');
-  const captures=f.requests.filter(r=>r.route.endsWith('/capture'));assert.deepEqual(captures[1].body,first);
+  const captures=f.requests.filter(r=>r.route.endsWith('/capture'));assertFrozenRetry(captures[1].body,first);
 });
 
 test('CX-5 production launcher sends only closed stdin handoff; child env and discarded streams contain no hook token',async t=>{
@@ -952,7 +956,7 @@ test('CX-5 app-server format verdict controls recall independently of install-ti
   assert.match(status.stdout,/Find memories when you ask: on for verified hosts only/);
 });
 
-for (const version of ['0.163.0','0.164.0','0.165.0','0.166.0']) test(`Q07 installed capture and recall on native ${version} records`,async t=>{
+for (const version of ['0.163.0','0.164.0','0.165.0','0.166.0','0.167.0','0.167.2']) test(`Q07 installed capture and recall on native ${version} records`,async t=>{
   const f=await memoryRuntime(t,{state:{version}}); f.host.kind='app-server';
   const file=new URL(`../../../integrations/codex/test/fixtures/native-rollout-${version}-hooks-recall.jsonl`,import.meta.url);
   let text=await readFile(file,'utf8'); const originalId=JSON.parse(text.split('\n')[0]).payload.id;

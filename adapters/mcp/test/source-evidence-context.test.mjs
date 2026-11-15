@@ -42,6 +42,7 @@ async function host(t, path, mode, recallContext = false) {
       ...(recallContext ? ['--recall-context', 'source-evidence'] : [])],
     env: { OPENAI_API_KEY: '', NODE_NO_WARNINGS: '1' }, stderr: 'pipe' });
   let pending = ''; const ranks = [], waiting = [];
+  transport.stderr.setEncoding('utf8');
   transport.stderr.on('data', chunk => {
     pending += chunk.toString(); let newline;
     while ((newline = pending.indexOf('\n')) >= 0) {

@@ -1,20 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="600" height="320" viewBox="0 0 600 320" role="img" aria-labelledby="title desc">
-  <title id="title">Cairn Memory — AI memory you can inspect and change</title>
-  <desc id="desc">The official Cairn stacked-stone mark and wordmark with a Memory descriptor. Save context. Inspect. Correct. Forget. Open-source developer preview.</desc>
-  <rect width="600" height="320" rx="24" fill="#FAF7F2"/>
-  <g transform="translate(36 27) scale(1.2)" fill="#1F1D1A">
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="500" viewBox="0 0 600 500" role="img" aria-labelledby="title desc">
+  <title id="title">Cairn.ink Memory — AI memory you can inspect and change</title>
+  <desc id="desc">The official Cairn stacked-stone mark with the Cairn.ink Memory name, above a hand-drawn island that carries a cairn of three stones. One memory for Claude Code and Codex. Open-source developer preview.</desc>
+  <rect width="600" height="500" rx="24" fill="#FAF7F2"/>
+  <!-- Official Cairn geometry, unchanged; scaled equally in both axes. -->
+  <g transform="translate(36 26) scale(1.55)" fill="#1F1D1A">
     <ellipse cx="12" cy="28" rx="10.5" ry="3.6" opacity="0.95"/>
     <ellipse cx="11.5" cy="19.5" rx="7.8" ry="3.2" opacity="0.78" transform="rotate(-6 11.5 19.5)"/>
     <ellipse cx="12.5" cy="11" rx="5.2" ry="3.6" opacity="0.62" transform="rotate(9 12.5 11)"/>
   </g>
-  <g fill="#1F1D1A" font-family="'EB Garamond', Georgia, serif" font-weight="400">
-    <text x="82" y="65" font-size="48" font-weight="500" letter-spacing="-0.4" style="font-feature-settings: 'lnum', 'onum';">Cairn</text>
-    <text x="36" y="144" font-size="56">AI memory you can</text>
-    <text x="36" y="202" font-size="56" fill="#5A7A4E">inspect and change.</text>
+  <text x="84" y="68" fill="#1F1D1A"><tspan font-family="'EB Garamond', Georgia, serif" font-size="42" font-weight="500" letter-spacing="-0.4">Cairn.ink</tspan><tspan dx="10" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="500">Memory</tspan></text>
+  <g fill="#1F1D1A" font-family="'EB Garamond', Georgia, serif" font-weight="400" font-size="52" letter-spacing="-0.3">
+    <text x="36" y="142">AI memory you can</text>
+    <text x="36" y="198" fill="#5A7A4E">inspect and change.</text>
   </g>
-  <g fill="#1F1D1A" font-family="Inter, Arial, sans-serif">
-    <text x="211" y="63" font-size="24" font-weight="500">Memory</text>
-    <text x="36" y="251" font-size="21">Save context. Inspect. Correct. Forget.</text>
-    <text x="36" y="288" font-size="18" fill="#6B6560">Open source · Developer preview</text>
+  <g font-family="Inter, Arial, sans-serif">
+    <text x="36" y="242" font-size="20" fill="#1F1D1A">One memory for Claude Code and Codex.</text>
+    <text x="36" y="272" font-size="17" fill="#6B6560">Open source · Developer preview</text>
   </g>
+  <!-- Hand-drawn island from Cairn's island set, reused unchanged. -->
+  <image href="readme-hero-island.png" x="124" y="282" width="352" height="207"/>
 </svg>

@@ -2801,8 +2801,9 @@ diff and round 2/full-package diff --check exit 0. Release files remain 0.2.0.
 ## CX-5 round 2 review corrections — 2026-10-08
 
 This installed hosted slice applies the selected local daily cap/concurrency only
-to Codex workers. Claude's released start/capture/recall/pause/resume behavior is
-unchanged; no policy or unavailable H5 endpoint can stop it. Status alone reads
+to Codex workers. Claude does not apply this local policy. Its hosted recall and capture now
+require the shared enforced pause-state observer and fail closed when it is
+unavailable. Its foreground capture launcher remains network-free. Status reads
 policy and recent availability observations best-effort, without network or control
 authority. Server-enforced endpoint quota and local pause retain their existing
 shared behavior. This narrows the round-1 shared-client cap proposal; it does not

@@ -3,9 +3,11 @@
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import gzip
 import importlib
+import ipaddress
 import json
 from pathlib import Path
 import shutil
+import socket
 import threading
 import time
 import uuid
@@ -13,7 +15,39 @@ import uuid
 import pytest
 
 from agent.memory_manager import MemoryManager
+from hermes_cli.config import save_env_value
 from plugins.memory import load_memory_provider
+
+
+@pytest.fixture(autouse=True)
+def loopback_only(monkeypatch):
+    """Refuse accidental external DNS or connections in this synthetic suite."""
+    resolve = socket.getaddrinfo
+    connect = socket.socket.connect
+    connect_ex = socket.socket.connect_ex
+
+    def allowed(host):
+        if isinstance(host, bytes):
+            host = host.decode("ascii")
+        assert host == "localhost" or ipaddress.ip_address(host).is_loopback
+
+    def local_resolve(host, *args, **kwargs):
+        allowed(host)
+        return resolve(host, *args, **kwargs)
+
+    def local_connect(sock, address):
+        if sock.family in (socket.AF_INET, socket.AF_INET6):
+            allowed(address[0])
+        return connect(sock, address)
+
+    def local_connect_ex(sock, address):
+        if sock.family in (socket.AF_INET, socket.AF_INET6):
+            allowed(address[0])
+        return connect_ex(sock, address)
+
+    monkeypatch.setattr(socket, "getaddrinfo", local_resolve)
+    monkeypatch.setattr(socket.socket, "connect", local_connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", local_connect_ex)
 
 
 class FakeCloud:
@@ -22,6 +56,9 @@ class FakeCloud:
         self.credential_value = {"valid": True, "token_id": "synthetic-token-id",
                                  "scopes": ["memory:capture", "memory:recall"], "expires_at": None}
         self.credential_delay = 0
+        self.pause_status = 200
+        self.pause_value = {"paused": False, "generation": 0, "enforced": True}
+        self.pause_delay = 0
         self.recall_status = 200
         self.recall_delay = 0
         self.recall_release = threading.Event()
@@ -119,6 +156,10 @@ def cloud():
             if self.path == "/api/cli-auth/v1/credential":
                 time.sleep(state.credential_delay)
                 self.respond(state.credential_status, state.credential_value)
+            elif self.path == "/api/memory/pause-state":
+                delay, status, value = state.pause_delay, state.pause_status, state.pause_value
+                time.sleep(delay)
+                self.respond(status, value)
             else:
                 self.respond(404, {})
 
@@ -185,6 +226,8 @@ def install(tmp_path, monkeypatch, cloud):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     managers = []
     providers = []
+    monkeypatch.setenv("CAIRN_MEMORY_TOKEN", "")
+    monkeypatch.setenv("CAIRN_MEMORY_OPENAI_API_KEY", "")
 
     def make(name="profile", *, configured=True, initialize=True, cap="250"):
         home = tmp_path / name
@@ -200,8 +243,7 @@ def install(tmp_path, monkeypatch, cloud):
             return home, provider, None, hosted
         provider.save_config({"mode": "hosted", "api_endpoint": cloud.endpoint,
                               "prefetch_timeout_ms": cap}, str(home))
-        hosted.write_credential(home, {"endpoint": cloud.endpoint, "token": "synthetic-memory-token",
-                                      "token_id": "synthetic-token-id", "expires_at": None})
+        save_env_value("CAIRN_MEMORY_TOKEN", "synthetic-memory-token")
         (home / "config.yaml").write_text("memory:\n  provider: cairn\n")
         assert provider.is_available()
         manager = MemoryManager()

@@ -160,7 +160,9 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
     closeJobs(ns, plan.jobs);
     db.prepare(`DELETE FROM raw_job_sources WHERE ${where} AND source_client=? AND session_key=?`)
       .run(...rawBoundary(ns), root.client, root.sessionKey);
-    for (const memory of plan.memories) {
+    // The complete plan and its result/effect ids keep their original order.
+    // Purge and unbind terminal sources before retained siblings bump revision.
+    for (const memory of plan.memories.toSorted((a, b) => Number(b.forget) - Number(a.forget))) {
       if (memory.forget) forgetMutation(ns, memory.id, undefined, 'forgotten', 'purge');
       else removeReceipts(ns, memory.id, memory.receiptIds, { reason: 'purge', actionId });
     }

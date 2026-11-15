@@ -31,7 +31,9 @@ function providerVector(input, metadata) {
   return validateVector(Float32Array.from(input, component => component / norm), metadata);
 }
 export function estimateEmbeddingUsd(texts, { model = DEFAULT_EMBEDDING_MODEL, usdPerMillionTokens } = {}) {
-  return tokenBound(texts) * price(model, usdPerMillionTokens) / 1_000_000;
+  // UTF-8 bytes plus framing bound the byte-level tokenizer's input tokens.
+  // Round the priced bound UP to a nanodollar, including custom reviewed rates.
+  return Math.ceil(tokenBound(texts) * price(model, usdPerMillionTokens) * 1000) / 1_000_000_000;
 }
 export function createOpenAIEmbedder({ apiKey, model = DEFAULT_EMBEDDING_MODEL, dimensions = DEFAULT_EMBEDDING_DIMENSIONS,
   endpoint = 'https://api.openai.com/v1/embeddings', fetchImpl = globalThis.fetch, usdPerMillionTokens, ...unknown } = {}) {
@@ -85,7 +87,7 @@ export function createOpenAIEmbedder({ apiKey, model = DEFAULT_EMBEDDING_MODEL, 
       if (json?.object !== 'list' || json.model !== model) throw failure('provider_error');
       if (json?.usage !== undefined) {
         const usage = json.usage;
-        if (!Number.isSafeInteger(usage?.prompt_tokens) || usage.prompt_tokens < 0 || usage.prompt_tokens > tokenBound(texts) ||
+        if (!Number.isSafeInteger(usage?.prompt_tokens) || usage.prompt_tokens < 0 ||
             usage.total_tokens !== usage.prompt_tokens) throw failure('provider_error');
         settleUsd(usage.prompt_tokens * rate / 1_000_000);
       }

@@ -26,7 +26,10 @@ async function fixture(t) {
     const stream=new PassThrough();stream.end(readFileSync(0));Object.defineProperty(process,'stdin',{value:stream});
     process.stdout.write=(value,_encoding,callback)=>{writeSync(1,value);if(typeof _encoding==='function')_encoding();else callback?.();return true;};
     globalThis.fetch=async(url,options)=>{const path=new URL(url).pathname;
-      if(path.endsWith('/pause-state'))throw new Error('Claude must never require the Codex pause gate');
+      if(path.endsWith('/pause-state')) {
+        if(process.env.CAIRN_TEST_PAUSE_MODE==='missing')return Response.json({error:'missing'},{status:404});
+        return Response.json({paused:false,generation:0,enforced:process.env.CAIRN_TEST_PAUSE_MODE!=='unenforced'});
+      }
       appendFileSync(${JSON.stringify(calls)},JSON.stringify({path,body:JSON.parse(options.body)})+'\\n');
       return Response.json(path.endsWith('/recall')?{memories:[{
         id:'12345678-1234-4234-8234-123456789abc',content:'Memory still works.',kind:'preference',scope:'personal',projectId:null,
@@ -84,8 +87,8 @@ for(const value of ['rel-data','']) test('Claude legacy '+JSON.stringify(value)+
     value ? ['/api/memory/capture','/api/memory/recall'] : []);
 });
 
-for(const response of [()=>Response.json({error:'missing'},{status:404}),()=>Response.json({paused:false,generation:0,enforced:false})]) {
-  test('Claude keeps working when shared pause gate is unavailable; status reports it; Codex cap never limits Claude',async t=>{
+for(const [mode,response] of [['missing',()=>Response.json({error:'missing'},{status:404})],['unenforced',()=>Response.json({paused:false,generation:0,enforced:false})]]) {
+  test('Claude fails closed when shared pause gate is unavailable; status reports it; Codex cap remains separate',async t=>{
     const f=await fixture(t),policy={version:1,dailyCap:1,concurrency:2};await privateWrite(f.policyFile,JSON.stringify(policy));
     const guard=automaticGuard(f.root,endpoint,policy);const permit=await guard.reserve();assert.equal(permit.ok,true);
     await guard.dispatch(permit.id,()=>({started:true,operation:Promise.resolve()}));await guard.release(permit.id,{terminated:true,accepted:true});
@@ -94,10 +97,10 @@ for(const response of [()=>Response.json({error:'missing'},{status:404}),()=>Res
     try {await assert.rejects(observeHostedPause({root:f.root,endpoint},'synthetic-Codex-token',AbortSignal.timeout(2000)),/pause_unavailable/);}
     finally {globalThis.fetch=original;}
     const transcript=join(f.ws.path,'transcript.jsonl');await writeFile(transcript,JSON.stringify({type:'user',uuid:'u',message:{content:'Memory still works.'}})+'\n');
-    const capture=await f.run('capture',{hook_event_name:'Stop',session_id:'s',cwd:'/project',transcript_path:transcript});
-    const recall=await f.run('recall',{hook_event_name:'UserPromptSubmit',session_id:'s',cwd:'/project',prompt:'Remember?'});
-    assert.equal(capture.code,0);assert.equal(recall.code,0);assert.match(recall.stdout,/Memory still works/);
-    assert.deepEqual((await readFile(f.calls,'utf8')).trim().split('\n').map(JSON.parse).map(x=>x.path),['/api/memory/capture','/api/memory/recall']);
+    const capture=await f.run('capture',{hook_event_name:'Stop',session_id:'s',cwd:'/project',transcript_path:transcript},{CAIRN_TEST_PAUSE_MODE:mode});
+    const recall=await f.run('recall',{hook_event_name:'UserPromptSubmit',session_id:'s',cwd:'/project',prompt:'Remember?'},{CAIRN_TEST_PAUSE_MODE:mode});
+    assert.equal(capture.code,0);assert.equal(recall.code,0);assert.equal(recall.stdout,'');
+    assert.deepEqual((await readFile(f.calls,'utf8')).trim().split('\n').filter(Boolean).map(JSON.parse),[]);
     const status=await f.run('status');assert.equal(status.code,0);assert.match(status.stdout,/shared pause gate unavailable/);
     assert.match(status.stdout,/Codex daily cap applies only to Codex/);
     assert.equal((await guard.status()).state.used,1); // Claude never reserves/charges the local Codex guard.

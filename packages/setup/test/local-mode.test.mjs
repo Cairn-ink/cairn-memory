@@ -11,6 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { assertFixtureClients, fixtureBinaryGuard } from './fixture-clients.mjs';
 import { engineCacheComplete, skipMissingEngineCache } from './engine-cache.mjs';
+import { SERDE_MARKERS } from '../../../integrations/codex/schema-evidence.mjs';
 
 runTest('local mode contract', async parent => {
 const pending = [];
@@ -76,10 +77,19 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
   for (const [client, enabled, initial] of [['claude', claude, claudeState], ['codex', codex, codexState]]) {
     paths[client] = join(ws.path, client + '.json'); calls[client] = join(ws.path, client + '.jsonl');
     await writeFile(paths[client], JSON.stringify(initial)); await writeFile(calls[client], '');
-    if (enabled) await writeFile(join(bin, client), `#!${process.execPath}\n${fixtureBinaryGuard(ws.path)}process.env.FAKE_STATE=${JSON.stringify(paths[client])};process.env.FAKE_CALLS=${JSON.stringify(calls[client])};\n` +
-      await readFile(new URL(`./fake-${client}.mjs`, import.meta.url), 'utf8'), { mode: 0o755 });
+    if (enabled) {
+      let source = `#!${process.execPath}\n${fixtureBinaryGuard(ws.path)}process.env.FAKE_STATE=${JSON.stringify(paths[client])};process.env.FAKE_CALLS=${JSON.stringify(calls[client])};\n` +
+        await readFile(new URL(`./fake-${client}.mjs`, import.meta.url), 'utf8');
+      if (client === 'codex' && initial.formatEvidence) {
+        const evidence = await json(new URL('../../../integrations/codex/test/fixtures/binary-0.162.0/format.json', import.meta.url));
+        source += '\n/*\n' + Object.values(evidence.hooks).map(value => JSON.stringify(value, null, 2)).join('\n') + '\n' + SERDE_MARKERS.join('\n') + '\n*/\n';
+      }
+      await writeFile(join(bin, client), source, { mode: 0o755 });
+    }
   }
   const moduleURL = pathToFileURL(join(testedPackageRoot, 'lib/setup.mjs')).href;
+  // Generic installer orchestration and screen fixtures model Linux. Tests of
+  // platform behavior pass an explicit platform; engine children use the real OS.
   const harness = join(ws.path, 'harness.mjs');
   await writeFile(harness, `import{main}from${JSON.stringify(moduleURL)};import{writeSync,readFileSync,chmodSync}from'node:fs';
     import{spawn}from'node:child_process';import fsPromises from'node:fs/promises';import{syncBuiltinESMExports}from'node:module';
@@ -92,6 +102,12 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
     import{SetupError}from${JSON.stringify(pathToFileURL(join(testedPackageRoot, 'lib/errors.mjs')).href)};
     const mkdtemp=fsPromises.mkdtemp;fsPromises.mkdtemp=(path,...args)=>{if(String(path).startsWith('/tmp/cairn-codex-inspect-'))throw Object.assign(new Error('unowned inspection parent'),{code:'EACCES'});return mkdtemp(path,...args);};syncBuiltinESMExports();
     const config=JSON.parse(process.env.LOCAL_TEST_OPTIONS),answers=config.answers??[];
+    if(config.foreignClaudeOwner){const original=fsPromises.lstat;fsPromises.lstat=async(path,...args)=>{
+      const stat=await original(path,...args);if(path===process.env.HOME+'/.claude')Object.defineProperty(stat,'uid',{value:process.getuid()+1});return stat;
+    };syncBuiltinESMExports();}
+    if(config.foreignCodexOwner){const original=fsPromises.lstat;fsPromises.lstat=async(path,...args)=>{
+      const stat=await original(path,...args);if(path===process.env.CODEX_HOME)Object.defineProperty(stat,'uid',{value:process.getuid()+1});return stat;
+    };syncBuiltinESMExports();}
     const output=line=>writeSync(1,String(line)+'\\n');
     output.literal=line=>{for(const part of String(line).split('\\n'))writeSync(1,JSON.stringify({literal:part})+'\\n');};
     const answer=async q=>{output(JSON.stringify({prompt:q}));
@@ -103,7 +119,7 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
       const options=parseOptions(process.argv.slice(2)),selection=parseClient(options.argv,SetupError),t=translator(options.lang??'en');
       const context={env:process.env,inspection:config.inspection,write:output,t,interactive:config.interactive??false,
         prompt:answer,runClaude:run,
-        installerVersion:${JSON.stringify(version)},nodeVersion:process.versions.node,supportedNode:()=>true,platform:process.platform};
+        installerVersion:${JSON.stringify(version)},nodeVersion:process.versions.node,supportedNode:()=>true,platform:config.platform??'linux'};
       try{const result=await routeLocalMode(options,selection,context);
         if(result.detection){
           const progress={};
@@ -119,7 +135,7 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
         registerCodex({root:process.env.CAIRN_MEMORY_HOME,checkpoint:d.operation.checkpoints.codex,env:process.env,inspection:config.inspection,write:output,t:translator('en')}));output(state);}
       catch(error){output(error.key);process.exitCode=error.code??1;}
     }else process.exitCode=await main(process.argv.slice(2),{interactive:config.interactive??false,disableLocalMode:config.disableLocalMode??false,
-      inspection:config.inspection,localInstallerVersion:config.installerVersion,platform:config.platform??process.platform,nodeVersion:config.nodeVersion??process.versions.node,
+      inspection:config.inspection,localInstallerVersion:config.installerVersion,platform:config.platform??'linux',nodeVersion:config.nodeVersion??process.versions.node,
       write:output,prompt:answer,
       authOptions:{request:async()=>{throw new Error('Local mode must not authorize');}}});`);
   const env = { HOME: home, CODEX_HOME: codexHome, CAIRN_MEMORY_HOME: root, LANG: 'en_US.UTF-8',
@@ -129,6 +145,7 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
     assertFixtureClients({ ...env, ...options.env }, ws.path);
     const child = spawn(nodeExecutable, [harness, ...args], { cwd: ws.path,
       env: { ...env, ...options.env, LOCAL_TEST_OPTIONS: JSON.stringify(options) }, stdio: ['ignore', 'pipe', 'pipe'] });
+    child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
     let stdout = '', stderr = '';
     child.stdout.on('data', bytes => { stdout += bytes; }); child.stderr.on('data', bytes => { stderr += bytes; });
     // A surviving npm child can still own these pipes after setup is killed.
@@ -163,6 +180,220 @@ async function seed(f, { state = 'installed', selected = ['claude', 'codex'], re
   }
   return { d, vector };
 }
+
+for (const client of ['claude', 'codex']) test(`${client} accepts trailing config separators in setup`, async t => {
+  if (!needCache(t)) return;
+  const f = await localFixture(t, { claude: client === 'claude', codex: client === 'codex',
+    codexState: { version: '0.162.0', formatEvidence: true } });
+  const directory = client === 'claude' ? join(f.home, '.claude') : f.codexHome;
+  await mkdir(directory, { mode: 0o755 }); await chmod(directory, 0o755);
+  const env = { [client === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME']: directory + '/' };
+  const result = await f.run(['setup', '--local', '--client', client], { env });
+  assert.equal(result.code, 0, result.display);
+  assert.equal((await json(join(f.root, 'capture', client, 'installation.json'))).phase, 'active');
+  assert.equal((await lstat(directory)).mode & 0o777, 0o755);
+});
+
+test('saved capture off skips unsafe Claude capture directory on later setup', async t => {
+  if (!needCache(t)) return;
+  const f = await localFixture(t, { codex: false }), directory = join(f.home, '.claude');
+  await mkdir(directory, { mode: 0o777 }); await chmod(directory, 0o777);
+  const initial = await f.run(['setup', '--local', '--client', 'claude', '--no-capture']);
+  assert.equal(initial.code, 0, initial.display);
+  const result = await f.run(['setup', '--local', '--client', 'claude']);
+  assert.equal(result.code, 0, result.display);
+  assert.match(result.display, /Claude Code local capture: off/);
+  assert.equal((await lstat(directory)).mode & 0o777, 0o777);
+  await assert.rejects(lstat(join(directory, 'settings.json')), { code: 'ENOENT' });
+});
+
+for (const lang of ['en', 'zh']) test(`blocked capture setup ends with honest saving outcome (${lang})`, async t => {
+  if (!needCache(t)) return;
+  const f = await localFixture(t, { codex: false }), directory = join(f.home, '.claude');
+  await mkdir(directory, { mode: 0o755 });
+  await writeFile(join(directory, 'settings.json'), '{"hooks":42}\n', { mode: 0o600 });
+  const result = await f.run(['setup', '--local', '--client', 'claude', '--lang', lang]);
+  assert.equal(result.code, 2, result.display);
+  const last = result.display.trimEnd().split('\n').at(-1);
+  assert.equal(last, translator(lang)('local_capture_setup_off', { client: 'Claude Code', reason: 'not_installed' }));
+  assert.ok(!result.display.includes(translator(lang)('local_done')));
+  const status = await f.run(['status', '--client', 'claude', '--lang', lang]);
+  assert.match(status.display, /not_installed/);
+});
+
+// Use the unpacked setup fixture so these cases never need to pack a release.
+for (const mode of [0o700, 0o750, 0o755, null]) test(`Claude config directory ${mode === null ? 'missing' : mode.toString(8)} installs capture without chmod`, async t => {
+  if (!needCache(t)) return;
+  const f = await localFixture(t, { codex: false }), config = join(f.home, '.claude');
+  if (mode !== null) { await mkdir(config, { mode }); await chmod(config, mode); }
+  const run = async args => {
+    const result = await f.run(args);
+    t.diagnostic(`${args.join(' ')} exit ${result.code}`);
+    assert.equal(result.code, 0, result.display + result.stderr);
+    return result;
+  };
+  const result = await run(['setup', '--local', '--client', 'claude']);
+  assert.match(result.display, /Claude Code local capture: on/);
+  assert.equal((await json(join(f.root, 'capture/claude/installation.json'))).phase, 'active');
+  assert.equal((await lstat(config)).mode & 0o777, mode ?? 0o700);
+  const settings = await json(join(config, 'settings.json'));
+  assert.deepEqual(Object.keys(settings.hooks).sort(), ['PreCompact', 'SessionStart', 'Stop']);
+  const { hookCommand } = await import('../../../integrations/client/raw/local-setup-files.mjs');
+  for (const event of ['SessionStart', 'Stop', 'PreCompact']) {
+    assert.deepEqual(settings.hooks[event], [{ hooks: [{ type: 'command',
+      command: hookCommand(join(f.root, 'capture/claude'), event).replace(
+        fileURLToPath(new URL('../../../', import.meta.url)).replace(/\/$/, ''),
+        join(f.root, 'engine', (await f.descriptor()).engine.id, 'app/node_modules/cairn-memory-local-preview')),
+      timeout: 160 }] }]);
+  }
+  for (const directory of ['', 'capture', 'capture/claude', 'capture-usage', 'capture-support', 'capture-support/claude']) {
+    assert.equal((await lstat(join(f.root, directory))).mode & 0o777, 0o700, directory);
+  }
+  const before = await readFile(join(config, 'settings.json'), 'utf8');
+  await run(['setup', '--local', '--client', 'claude']);
+  assert.equal(await readFile(join(config, 'settings.json'), 'utf8'), before);
+  assert.match((await run(['status', '--client', 'claude'])).display, /Claude Code local capture: on/);
+  if (mode === 0o755) {
+    assert.match((await run(['config', '--local-capture', 'off', '--client', 'claude'])).display, /Claude Code local capture: off/);
+    assert.deepEqual((await json(join(config, 'settings.json'))).hooks, {});
+    assert.match((await run(['status', '--client', 'claude'])).display, /Claude Code local capture: off/);
+    assert.match((await run(['config', '--local-capture', 'on', '--client', 'claude'])).display, /Claude Code local capture: on/);
+    assert.equal(await readFile(join(config, 'settings.json'), 'utf8'), before);
+    assert.match((await run(['status', '--client', 'claude'])).display, /Claude Code local capture: on/);
+    await run(['uninstall', '--local', '--client', 'claude', '--yes']);
+    assert.deepEqual((await json(join(config, 'settings.json'))).hooks, {});
+    assert.match((await run(['status', '--client', 'claude'])).display, /Claude Code local capture: off/);
+  }
+  assert.equal((await lstat(config)).mode & 0o777, mode ?? 0o700);
+});
+
+for (const unsafe of ['775', '777', 'symlink', 'symlink-component', 'file', 'foreign-owner', 'private-root']) test(`Claude unsafe directory ${unsafe} refuses before setup writes`, async t => {
+  const f = await localFixture(t, { codex: false }), config = join(f.home, '.claude');
+  let inventory;
+  if (unsafe === 'private-root') { await mkdir(f.root, { mode: 0o755 }); await chmod(f.root, 0o755); }
+  else if (unsafe === 'file') await writeFile(config, 'synthetic sentinel', { mode: 0o600 });
+  else if (unsafe.startsWith('symlink')) {
+    const target = join(f.home, 'client-config'); await mkdir(target, { mode: 0o700 });
+    if (unsafe === 'symlink') await symlink(target, config);
+    else {
+      const alias = join(f.home, 'alias'); await symlink(target, alias);
+      await mkdir(join(target, 'config'), { mode: 0o700 });
+      f.env.CLAUDE_CONFIG_DIR = join(alias, 'config');
+    }
+  } else {
+    await mkdir(config, { mode: 0o700 });
+    await writeFile(join(config, 'settings.json'), '{"synthetic":"unchanged"}\n', { mode: 0o600 });
+    if (unsafe !== 'foreign-owner') await chmod(config, parseInt(unsafe, 8));
+  }
+  // Inventory records symlinks themselves; it never follows them.
+  async function snapshot(path) {
+    const result = {};
+    for (const entry of await readdir(path, { withFileTypes: true })) {
+      const child = join(path, entry.name), stat = await lstat(child);
+      result[entry.name] = { mode: stat.mode, uid: stat.uid,
+        value: entry.isSymbolicLink() ? await fsPromises.readlink(child) :
+          entry.isDirectory() ? await snapshot(child) : await readFile(child, 'utf8') };
+    }
+    return result;
+  }
+  inventory = await snapshot(f.home);
+  const result = await f.run(['setup', '--local', '--client', 'claude'], { foreignClaudeOwner: unsafe === 'foreign-owner' });
+  t.diagnostic(`unsafe ${unsafe} setup exit ${result.code}`);
+  assert.equal(result.code, 2, result.display + result.stderr);
+  assert.match(result.display, /The local memory directory is unsafe/);
+  if (unsafe === '775') assert.equal(result.display.trim().split('\n').at(-1), 'Claude Code: conversation saving is OFF (unsafe_path).');
+  assert.deepEqual(await snapshot(f.home), inventory);
+  assert.equal((await f.calls('claude')).some(args => args[0] === 'mcp' && args[1] === 'add'), false);
+});
+
+for (const custom of [false, true]) for (const mode of [0o700, 0o750, 0o755, null]) test(`Codex config directory ${mode === null ? 'missing' : mode.toString(8)} installs capture without chmod (custom=${custom})`, async t => {
+  if (!needCache(t)) return;
+  const f = await localFixture(t, { claude: false, codexState: { version: '0.162.0',
+    formatEvidence: fileURLToPath(new URL('../../../integrations/codex/test/fixtures/', import.meta.url)) } }), config = custom ? join(f.home, 'codex-config') : f.codexHome;
+  if (custom) f.env.CODEX_HOME = config;
+  else delete f.env.CODEX_HOME;
+  if (mode !== null) { await mkdir(config, { mode }); await chmod(config, mode); }
+  const run = async args => {
+    const result = await f.run(args);
+    t.diagnostic(`${args.join(' ')} exit ${result.code}`);
+    assert.equal(result.code, 0, result.display + result.stderr);
+    return result;
+  };
+  const result = await run(['setup', '--local', '--client', 'codex']);
+  assert.match(result.display, /Codex local capture: on/);
+  assert.equal((await json(join(f.root, 'capture/codex/installation.json'))).phase, 'active');
+  assert.equal((await lstat(config)).mode & 0o777, mode ?? 0o700);
+  const settings = await json(join(config, 'hooks.json'));
+  assert.deepEqual(Object.keys(settings.hooks).sort(), ['PreCompact', 'SessionStart', 'Stop', 'UserPromptSubmit']);
+  const { hookCommand } = await import('../../../integrations/client/raw/local-setup-files.mjs');
+  for (const event of ['SessionStart', 'UserPromptSubmit', 'Stop', 'PreCompact']) {
+    assert.deepEqual(settings.hooks[event], [{ hooks: [{ type: 'command',
+      command: hookCommand(join(f.root, 'capture/codex'), event).replace(
+        fileURLToPath(new URL('../../../', import.meta.url)).replace(/\/$/, ''),
+        join(f.root, 'engine', (await f.descriptor()).engine.id, 'app/node_modules/cairn-memory-local-preview')),
+      timeout: 160 }] }]);
+  }
+  for (const directory of ['', 'capture', 'capture/codex', 'capture-usage', 'capture-support', 'capture-support/codex']) {
+    assert.equal((await lstat(join(f.root, directory))).mode & 0o777, 0o700, directory);
+  }
+  const before = await readFile(join(config, 'hooks.json'), 'utf8');
+  await run(['setup', '--local', '--client', 'codex']);
+  assert.equal(await readFile(join(config, 'hooks.json'), 'utf8'), before);
+  assert.match((await run(['status', '--client', 'codex'])).display, /Codex local capture: on/);
+  if (mode === 0o755) {
+    assert.match((await run(['config', '--local-capture', 'off', '--client', 'codex'])).display, /Codex local capture: off/);
+    assert.deepEqual((await json(join(config, 'hooks.json'))).hooks, {});
+    assert.match((await run(['status', '--client', 'codex'])).display, /Codex local capture: off/);
+    assert.match((await run(['config', '--local-capture', 'on', '--client', 'codex'])).display, /Codex local capture: on/);
+    assert.equal(await readFile(join(config, 'hooks.json'), 'utf8'), before);
+    assert.match((await run(['status', '--client', 'codex'])).display, /Codex local capture: on/);
+    await run(['uninstall', '--local', '--client', 'codex', '--yes']);
+    assert.deepEqual((await json(join(config, 'hooks.json'))).hooks, {});
+    assert.match((await run(['status', '--client', 'codex'])).display, /Codex local capture: off/);
+  }
+  assert.equal((await lstat(config)).mode & 0o777, mode ?? 0o700);
+});
+
+for (const unsafe of ['775', '777', 'symlink', 'symlink-component', 'file', 'foreign-owner', 'private-root', 'custom-writable']) test(`Codex unsafe directory ${unsafe} refuses before setup writes`, async t => {
+  const f = await localFixture(t, { claude: false }), config = f.codexHome;
+  let inventory;
+  if (unsafe === 'custom-writable') {
+    f.env.CODEX_HOME = join(f.home, 'custom-config');
+    await mkdir(f.env.CODEX_HOME, { mode: 0o775 }); await chmod(f.env.CODEX_HOME, 0o775);
+  } else if (unsafe === 'private-root') { await mkdir(f.root, { mode: 0o755 }); await chmod(f.root, 0o755); }
+  else if (unsafe === 'file') await writeFile(config, 'synthetic sentinel', { mode: 0o600 });
+  else if (unsafe.startsWith('symlink')) {
+    const target = join(f.home, 'client-config'); await mkdir(target, { mode: 0o700 });
+    if (unsafe === 'symlink') await symlink(target, config);
+    else {
+      const alias = join(f.home, 'alias'); await symlink(target, alias);
+      await mkdir(join(target, 'config'), { mode: 0o700 });
+      f.env.CODEX_HOME = join(alias, 'config');
+    }
+  } else {
+    await mkdir(config, { mode: 0o700 });
+    await writeFile(join(config, 'hooks.json'), '{"synthetic":"unchanged"}\n', { mode: 0o600 });
+    if (unsafe !== 'foreign-owner') await chmod(config, parseInt(unsafe, 8));
+  }
+  // Inventory records symlinks themselves; it never follows them.
+  async function snapshot(path) {
+    const result = {};
+    for (const entry of await readdir(path, { withFileTypes: true })) {
+      const child = join(path, entry.name), stat = await lstat(child);
+      result[entry.name] = { mode: stat.mode, uid: stat.uid,
+        value: entry.isSymbolicLink() ? await fsPromises.readlink(child) :
+          entry.isDirectory() ? await snapshot(child) : await readFile(child, 'utf8') };
+    }
+    return result;
+  }
+  inventory = await snapshot(f.home);
+  const result = await f.run(['setup', '--local', '--client', 'codex'], { foreignCodexOwner: unsafe === 'foreign-owner' });
+  t.diagnostic(`unsafe ${unsafe} setup exit ${result.code}`);
+  assert.equal(result.code, 2, result.display + result.stderr);
+  assert.match(result.display, unsafe === 'file' ? /Cannot inspect Codex/ : /The local memory directory is unsafe/);
+  assert.deepEqual(await snapshot(f.home), inventory);
+  assert.equal((await f.calls('codex')).some(call => call.args[0] === 'mcp' && call.args[1] === 'add' && !call.args.includes('--help')), false);
+});
 
 test('descriptor strict JSON, exact keys, bounds, vectors and published references', async t => {
   const f = await localFixture(t), { d, vector } = await seed(f, { state: 'pending', register: false });
@@ -366,6 +597,7 @@ for (const lang of ['zh', 'en']) test('L01/L04 fresh local, exact argv, durable 
   assert.equal((await lstat(join(f.root, 'installation.json'))).mode & 0o777, 0o600);
   const screen = result.display.replaceAll(version, '<version>').replace(/[ \t]+$/gmu, '');
   for (const line of screen.trimEnd().split('\n')) if (!result.literals.includes(line)) assert.ok(columns(line) <= 80, line);
+  for (const literal of ['OPENAI_API_KEY', '--raw-semantic', '--no-context-semantic', 'US$1']) assert.ok(screen.includes(literal), literal);
   const snapshot = new URL(`./snapshots/local-setup-${lang}.txt`, import.meta.url);
   if (process.env.UPDATE_SETUP_SNAPSHOTS === '1') await writeFile(snapshot, screen);
   assert.equal(screen, await readFile(snapshot, 'utf8'));
@@ -539,15 +771,17 @@ test('cloud installation metadata still routes cloud when its Codex CLI is unava
   assert.match(cloud.display, /terminal|interactive/iu); assert.deepEqual(await f.inventory(), before);
 });
 
-test('partial local setup reports the saved engine and Claude registration on a Codex directory failure', async t => {
+test('unsafe Codex capture directory refuses before installing the engine or registering Claude', async t => {
   if (!needCache(t)) return;
   const f = await localFixture(t); await f.config('# preserve\n'); await chmod(f.codexHome, 0o777);
-  const result = await f.run(); assert.equal(result.code, 1, result.display);
-  assert.doesNotMatch(result.display, /Nothing was changed/);
-  assert.match(result.display, /local engine installed/); assert.match(result.display, /Claude Code connected to local memory/);
-  assert.ok(result.literals.includes('npx @cairn-ink/memory setup --local'));
-  assert.equal((await f.descriptor()).operation.checkpoints.claude.state, 'done');
-  await chmod(f.codexHome, 0o700); assert.equal((await f.run(['setup'])).code, 0);
+  const before = await f.inventory();
+  const result = await f.run(); assert.equal(result.code, 2, result.display);
+  assert.match(result.display, /The local memory directory is unsafe/);
+  assert.doesNotMatch(result.display, /local engine installed|Claude Code connected to local memory/);
+  assert.deepEqual(await f.inventory(), before);
+  assert.equal((await f.calls('claude')).some(call => call.args[1] === 'add' && !call.args.includes('--help')), false);
+  await assert.rejects(lstat(f.root), { code: 'ENOENT' });
+  await chmod(f.codexHome, 0o700); assert.equal((await f.run(['setup', '--local'])).code, 0);
 });
 
 for (const [name, holder, child, expected] of [
@@ -1265,6 +1499,40 @@ test('L32 candidate selection, canonical paths, private copy and cleanup', async
   await inspectCodexServers({ ...base, env: { ...f.env, TMPDIR: cleanAlias }, home: f.codexHome });
   assert.equal(dirname((await f.calls('codex')).at(-1).cwd), await realpath(fallback));
   await noAttempts(options);
+});
+
+
+for (const lang of ['en', 'zh']) test(`macOS Codex saving outcome keeps the reason and gives the Claude-only hint (${lang})`, async t => {
+  if (!needCache(t)) return;
+  const f = await localFixture(t);
+  const result = await f.run(['setup', '--local', '--client', 'codex', '--lang', lang], { platform:'darwin' });
+  assert.equal(result.code, 2, result.display);
+  assert.ok(result.display.replace(/\s/g, '').includes(translator(lang)('local_capture_codex_macos').replace(/\s/g, '')));
+  assert.equal(result.display.trimEnd().split('\n').at(-1), translator(lang)('local_capture_setup_off', { client:'Codex', reason:'qualification_required' }));
+  const status = await f.run(['status', '--client', 'codex', '--lang', lang], { platform:'darwin' });
+  assert.ok(status.display.replace(/\s/g, '').includes(translator(lang)('local_capture_codex_macos').replace(/\s/g, '')));
+});
+
+for (const action of ['setup-opt-out', 'config-off']) test(`capture ${action} suppresses opt-in notices and status honors off`, async t => {
+  if (!needCache(t)) return;
+  const f = await localFixture(t);
+  let result;
+  if (action === 'setup-opt-out') result = await f.run(['setup', '--local', '--no-capture']);
+  else {
+    const setup = await f.run(['setup', '--local', '--client', 'claude']); assert.equal(setup.code, 0, setup.display);
+    assert.match(setup.display, /Claude Code local capture: on/);
+    const codex = await f.run(['setup', '--local', '--client', 'codex', '--no-capture']); assert.equal(codex.code, 0, codex.display);
+    result = await f.run(['config', '--local-capture', 'off']);
+  }
+  assert.equal(result.code, 0, result.display);
+  assert.doesNotMatch(result.display, /on by default|approve the new entries|qualification/);
+  for (const client of ['Claude Code', 'Codex']) assert.ok(result.display.includes(`${client} local capture: off (off)`));
+  for (const platform of ['linux', 'darwin', 'win32']) {
+    const status = await f.run(['status'], { platform });
+    assert.equal(status.code, 0, status.display);
+    for (const client of ['Claude Code', 'Codex']) assert.ok(status.display.includes(`${client} local capture: off (off)`));
+    assert.doesNotMatch(status.display, /local capture: blocked|approve the new entries/);
+  }
 });
 
 await Promise.all(pending);
