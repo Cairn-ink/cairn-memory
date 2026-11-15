@@ -97,6 +97,7 @@ for (const sealed of [false, true]) test(`forget falls back through candidates, 
 test('more than 129 rebuilds retain only live Cards and still rebuild the newest part', async t => {
   let clock = Date.UTC(2030, 0, 1);
   t.mock.timers.enable({ apis: ['Date'], now: clock });
+  t.after(() => t.mock.timers.reset());
   const f = engineCardFixture(t), parts = ['Orion', 'Vega', 'Lyra'].map(topic => f.file(f.seed(17, topic), topic));
   const identity = f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get();
   const storage = createEngineCardStorage({ db: f.db, identity, ready() {}, upgrade: true });
@@ -106,14 +107,17 @@ test('more than 129 rebuilds retain only live Cards and still rebuild the newest
   // Change a bound source in the eligible five-Memory tail. Continual appends
   // would add unchanged full parts and ineligible tails instead of rebuilding.
   const changeSource = (part, i) => {
-    const target = part.memories.at(-1);
-    const content = f.db.prepare('SELECT content FROM memories WHERE id=?').get(target.id).content;
+    const tail = storage.cards(ns).find(card => card.clusterKey.split('#')[0] === 'moc:' + part.mocId &&
+      card.sourceRevisions.length === 5);
+    const target = tail.sourceRevisions.at(-1);
+    const content = f.db.prepare('SELECT content FROM memories WHERE id=?').get(target.memoryId).content;
     const memory = ok(f.core.admit({ namespace: ns, memory: { content, kind: 'fact' }, receipts: [{ client: 'synthetic',
       sessionId: 'synthetic-rebuild', eventId: 'synthetic-rebuild-' + i, role: 'user', excerpt: content }] })).memory;
-    assert.equal(memory.id, target.id, 'the source changes revision without growing the partition');
+    assert.equal(memory.id, target.memoryId, 'the source changes revision without growing the partition');
     ok(f.core.applyPlacement({ namespace: ns, expectedIndexRevision: ok(f.core.map({ namespace: ns })).indexRevision,
       expectedMemoryRevisions: [{ memoryId: memory.id, revision: memory.revision }],
       proposal: { items: [{ memoryId: memory.id, parentIds: [part.mocId] }] } }));
+    return tail.clusterKey;
   };
   for (let i = 0; i < parts.length * 2; i++) assert.equal((await pass()).built.length, 1);
   const fullParts = storage.cards(ns).filter(card => card.clusterKey.endsWith('#0'));
@@ -122,11 +126,11 @@ test('more than 129 rebuilds retain only live Cards and still rebuild the newest
   for (let i = 0; i < 132; i++) {
     const part = parts[i % parts.length];
     advance();
-    changeSource(part, i);
+    const changedKey = changeSource(part, i);
     assert.equal((await pass()).modelCalls, 0, 'the source write stales the tail and starts its wait');
     advance();
     const result = await pass(); assert.equal(result.built.length, 1, JSON.stringify({ i, result }));
-    assert.equal(result.built[0].clusterKey, 'moc:' + part.mocId + '#1');
+    assert.equal(result.built[0].clusterKey, changedKey);
     assert.equal(result.built[0].sourceRevisions.length, 5);
     const live = storage.cards(ns); assert.equal(live.length, parts.length * 2);
     assert.ok(live.every(card => card.row.state === 'confirmed' && card.status === 'current'));
@@ -137,7 +141,8 @@ test('more than 129 rebuilds retain only live Cards and still rebuild the newest
   assert.equal(f.db.prepare("SELECT count(*) n FROM private_cards WHERE state='deleted' AND title IS NULL AND body IS NULL").get().n, 132);
   const newest = storage.cards(ns).sort((a, b) => b.builtAt.localeCompare(a.builtAt))[0];
   advance();
-  changeSource(parts.find(part => newest.clusterKey === 'moc:' + part.mocId + '#1'), 132);
+  changeSource(parts.find(part => part.memories.some(memory =>
+    newest.sourceRevisions.some(ref => ref.memoryId === memory.id))), 132);
   assert.equal((await pass()).modelCalls, 0);
   advance();
   const result = await pass(); assert.equal(result.built.length, 1, JSON.stringify(result));
@@ -161,9 +166,9 @@ test('growing a filed topic carries its full first part and builds only an eligi
     assert.equal(result.modelCalls, i === 4 ? 1 : 0);
     assert.deepEqual({ row: row(), bindings: bindings() }, before, 'an append leaves the full part unchanged');
     const metadata = JSON.parse(f.db.prepare("SELECT result FROM card_operations WHERE action_id=? AND method='consolidate'").get(first.id).result);
-    assert.equal(metadata.clusterKey, 'moc:' + topic.mocId + '#0');
+    assert.equal(metadata.clusterKey, first.clusterKey + '#0');
     if (i === 4) {
-      assert.equal(result.built[0].clusterKey, 'moc:' + topic.mocId + '#1');
+      assert.equal(result.built[0].clusterKey, first.clusterKey + '#1');
       assert.equal(result.built[0].sourceRevisions.length, 5);
     }
   }
@@ -176,8 +181,12 @@ test('forgetting a similarity seed keeps the ten-minute debounce without retaini
   memories.forEach((memory, i) => f.db.prepare('UPDATE memories SET created_at=? WHERE id=?')
     .run(new Date(Date.UTC(2026, 0, i + 1)).toISOString(), memory.id));
   const first = ok(await f.pass()).built[0]; assert.ok(first);
-  const seed = memories[0];
+  // Select a bound source from the built Card, then load its canonical text.
+  // Aligned dates keep the routing seed in this part, but membership is read.
+  const seed = f.db.prepare('SELECT id,revision,content FROM memories WHERE id=?').get(first.sourceRevisions[0].memoryId);
   assert.ok(first.sourceRevisions.some(ref => ref.memoryId === seed.id));
+  assert.equal(seed.id, f.db.prepare('SELECT id FROM memories WHERE deleted=0 ORDER BY id LIMIT 1').get().id,
+    'the selected bound source is also the similarity routing seed');
   const others = [ok(await f.pass()).built[0], ok(await f.pass()).built[0]];
   assert.ok(others.every(card => card && !card.sourceRevisions.some(ref => ref.memoryId === seed.id)));
   const cardRow = id => f.db.prepare('SELECT * FROM private_cards WHERE id=?').get(id);
@@ -185,6 +194,7 @@ test('forgetting a similarity seed keeps the ten-minute debounce without retaini
   const untouched = others.map(card => ({ row: cardRow(card.id), bindings: bindings(card.id) }));
   const receipts = f.db.prepare('SELECT id FROM receipts WHERE memory_id=?').all(seed.id).map(row => row.id);
   assert.ok(cardRow(first.id).body.includes(seed.content), 'the forgotten text was in the bound part');
+  const callsBeforeForget = f.model.calls.length;
   const forgotten = ok(f.core.forget({ namespace: ns, memoryId: seed.id, expectedRevision: seed.revision }));
   const row = f.db.prepare('SELECT * FROM private_cards WHERE id=?').get(first.id);
   assert.equal(row.title, null); assert.equal(row.body, null);
@@ -209,8 +219,8 @@ test('forgetting a similarity seed keeps the ten-minute debounce without retaini
   const rebuilt = await pass(600001); assert.equal(rebuilt.built.length, 1, JSON.stringify(rebuilt));
   assert.ok(rebuilt.built[0].sourceRevisions.every(ref => ref.memoryId !== seed.id));
   noForgottenSource(rebuilt); scan();
-  for (const request of f.model.calls.slice(3)) noForgottenSource(request);
-  assert.equal(f.model.calls.length, 4);
+  for (const request of f.model.calls.slice(callsBeforeForget)) noForgottenSource(request);
+  assert.equal(f.model.calls.length, callsBeforeForget + 1);
 });
 
 test('the live Card scan crosses two 128-row pages with 257 live Cards', async t => {
