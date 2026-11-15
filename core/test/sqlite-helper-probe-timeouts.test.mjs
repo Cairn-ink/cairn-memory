@@ -78,3 +78,22 @@ for (const shape of ['wal', 'symlink']) test(`PROBE_UNSAFE_UNCHANGED ${shape}: e
   assert.throws(() => pinStoreFile(path), { code: 'unsafe_database_file' });
   assert.throws(() => assertContextReadCanonicalDelete(path), { code: 'index_unavailable', reason: shape === 'wal' ? 'auxiliary_file' : 'unsafe_file' });
 });
+
+for (const observed of [false, true]) test(`PROBE_TRUNCATED observed=${observed}: partial reply timeout is uncached`, t => {
+  const f = fixture(t); faults.arm(4, 8); t.after(() => faults.reset());
+  const options = observed ? { observe: nativeObserver().journalProbe } : undefined;
+  assert.throws(() => probeRollbackJournal(f.path, options), { code: 'storage_busy', cause: 'ETIMEDOUT' }, 'PROBE_TRUNCATED_BUSY');
+  assert.equal(faults.counts.reached, 1);
+  faults.reset(); const result = probeRollbackJournal(f.path, options);
+  assert.deepEqual(result, { mode: 'delete' });
+  assert.equal(faults.counts.probes, 1, 'PROBE_TRUNCATED_NOT_CACHED');
+});
+
+for (const observed of [false, true]) test(`PROBE_IDENTITY_CHANGED observed=${observed}: old DELETE answer cannot bless replacement WAL file`, t => {
+  const f = fixture(t); faults.arm(4, 9); t.after(() => faults.reset());
+  const options = observed ? { observe: nativeObserver().journalProbe } : undefined;
+  assert.throws(() => probeRollbackJournal(f.path, options), observed ? { code: 'index_unavailable', reason: 'storage_unavailable' } : /sqlite_journal_probe_changed/, 'PROBE_IDENTITY_REFUSED');
+  faults.reset();
+  assert.throws(() => pinStoreFile(f.path), { code: 'unsafe_database_file' }, 'PROBE_REPLACEMENT_WAL_REFUSED');
+  assert.equal(faults.counts.probes, 1, 'PROBE_IDENTITY_NOT_CACHED');
+});

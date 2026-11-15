@@ -484,7 +484,16 @@ export function openDatabase(path, options = {}) {
     } catch (error) {
       if (error.code !== 'ENOENT') throw error;
       try { createExclusiveSqliteFile(path); }
-      catch (creation) { if (creation.code !== 'EEXIST') throw creation; if (contentSafety !== undefined) fail('unsupported_database'); }
+      catch (creation) {
+        if (contentSafety !== undefined && creation.code === 'storage_busy') {
+          // S2H creation requires a missing target. Even a fully recovered
+          // publication cannot retry through the existing-file check above.
+          try { lstatSync(path); creation.code = 'storage_error'; }
+          catch (state) { if (state.code !== 'ENOENT') creation.code = 'storage_error'; }
+        }
+        if (creation.code !== 'EEXIST') throw creation;
+        if (contentSafety !== undefined) fail('unsupported_database');
+      }
     }
     const stat = lstatSync(path);
     if (!stat.isFile() || (process.platform !== "win32" && (stat.mode & 0o077))) {
