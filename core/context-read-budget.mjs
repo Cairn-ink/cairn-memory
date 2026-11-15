@@ -112,6 +112,9 @@ export function contextBudget(options, { now = Date.now } = {}) {
     const maxRequests = policy.maxRequests ?? Infinity, maxUsd = local ? Infinity : policy.maxUsd;
     const { window, connection, scoped } = ledgerFor(binding, new Date(now()).toISOString().slice(0, 10), maxRequests, maxUsd);
     const ledger = window[budgetClass];
+    // Later handles with other policies overwrite ledger.maxUsd. Settlement
+    // latches against the ceiling this dispatch was admitted under.
+    const classMaxUsd = ledger.maxUsd;
     const deny = reason => {
       window.lastDenial = Object.freeze({ class: budgetClass, reason });
       throw refused('budget_denied');
@@ -146,7 +149,7 @@ export function contextBudget(options, { now = Date.now } = {}) {
     };
     const recordSettlement = () => {
       if (actualUsd !== undefined) ledger.usd += actualUsd - usd;
-      if (Number.isFinite(ledger.maxUsd) && ledger.usd >= ledger.maxUsd) settledCaps.add(ledger);
+      if (Number.isFinite(classMaxUsd) && ledger.usd >= classMaxUsd) settledCaps.add(ledger);
       if (Number.isFinite(maxUsd) && window.query.usd + window.maintenance.usd >= maxUsd) settledCaps.add(window);
     };
     try {

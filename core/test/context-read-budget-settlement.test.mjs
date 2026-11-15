@@ -117,3 +117,24 @@ for (const budgetClass of ['query', 'maintenance']) test(`honest ${budgetClass} 
     assert.ok(f.status().maintenance.usd <= .9);
   }
 });
+
+test('a reached maintenance ceiling stays latched after a higher-cap handle on the same embedder overwrites it', async t => {
+  const hold = deferred(); t.after(() => hold.resolve());
+  let calls = 0;
+  const embedder = { id: 'synthetic-settlement-' + randomUUID(), revision: '1',
+    embed: async () => { if (++calls === 1) await hold.promise; return [[1]]; } };
+  const handle = (maxUsd, estimate) => {
+    const dispatch = contextBudget({ budgetConfigured: true, embedder,
+      policy: { family: 'hosted', maxRequests: 100, maxUsd, maxConcurrentQueries: 4, estimateUsd: () => estimate } });
+    return budgetClass => withContextReadBudgetScope({}, () => dispatch(embedder, ['synthetic'], {
+      budgetClass, guard() {}, signal: new AbortController().signal, deadlineAt: performance.now() + 5000 }));
+  };
+  const low = handle(1, .9), high = handle(100, .4);
+  const first = low('maintenance');
+  await assert.rejects(high('maintenance'), { code: 'budget_denied' });
+  assert.equal(contextReadBudgetDiagnostic(embedder).lastDenial.reason, 'slot_busy');
+  hold.resolve(); assert.deepEqual(await first, [[1]]);
+  await assert.rejects(high('maintenance'), { code: 'budget_denied' });
+  assert.deepEqual(contextReadBudgetDiagnostic(embedder).lastDenial, { class: 'maintenance', reason: 'maintenance_cap' });
+  near(contextReadBudgetDiagnostic(embedder).maintenance.usd, .9); assert.equal(calls, 1);
+});
