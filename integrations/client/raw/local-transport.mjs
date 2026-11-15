@@ -87,7 +87,9 @@ export function createLocalCaptureTransport(options) {
         const output = await scope.run(input.nodeExecutable, [cli, '--config', input.configPath, '--config-digest', snapshot.digest],
           { ...baseEnv, ...key }, encoded);
         stage = 'reply';
-        const result = localCaptureReply(output, request); scope.check(); return result;
+        const result = localCaptureReply(output, request); scope.check();
+        try { appendFileSync('/tmp/cairn-diag-transport.jsonl', JSON.stringify({ at: Date.now(), stage: 'ok', node: process.version }) + '\n'); } catch {}
+        return result;
       } catch (error) {
         // Diagnostic branch only: fixed labels and codes, no request content.
         try { appendFileSync('/tmp/cairn-diag-transport.jsonl', JSON.stringify({ at: Date.now(), stage: error instanceof LocalCaptureTransportError ? error.stage : stage,
