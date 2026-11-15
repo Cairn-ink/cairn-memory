@@ -1,7 +1,12 @@
+// The native worker-ports matrix, shared by its layout slices so that each
+// slice runs as its own test file (one file was the slowest CI shard). The
+// case loops and test bodies below are byte-identical to the former single
+// file and deliberately left unindented; each slice passes its layouts and
+// its own family gate. The import order is unchanged, so module evaluation
+// order is too.
 import { testClock } from '../testing/context-product-test-clock.mjs';
+// familyGate is unused here; the import keeps the original evaluation order.
 import { familyGate } from '../testing/receipt-event-time-gates.mjs';
-const complete=familyGate('native worker-ports',510);
-const semanticSafetyLayouts=[{version:18,family:'safety'},...([18,23,33].map(version=>({version,family:'event-time'})))];
 // Install the shared clock before product factories capture their timers.
 import test from 'node:test';
 import { randomUUID } from 'node:crypto';
@@ -24,6 +29,7 @@ function targetFact(db,mutation){
    reason:{forget:'user_forget',correction:'correction_supersession',privacy:'privacy_erase'}[mutation],actionId:'synthetic-port',
    ...(mutation==='correction'?{matchMode:'revision-through',sourceVersion:JSON.stringify(['memory-revision-through-v1',row.revision])}:{})});
 }
+export function registerWorkerPortCases(semanticSafetyLayouts,complete){
 for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])for(const [mode,name]of [[1,'load'],[2,'cas'],[3,'provider'],[4,'getter'],[5,'proxy'],[6,'listOwners'],[8,'anchor Proxy'],[9,'anchor accessor'],[10,'inventory Proxy'],[11,'error accessor'],[15,'thenable'],[16,'reservation seal'],[17,'transmission prepare'],[18,'transmission seal'],[19,'compensation'],[22,'last price sample'],[23,'CAS bool Proxy'],[24,'CAS error accessor'],[28,'refused dispatch retry']])for(const mutation of ['account','forget','correction','privacy'])test(`native worker E1 ${layout.family} v${layout.version} ${journal} ${name} ${mutation}`,async t=>{
  const portState=new SharedArrayBuffer(64),state=new Int32Array(portState);
  t.after(()=>{Atomics.store(state,11,1);Atomics.notify(state,11);});
@@ -143,3 +149,4 @@ for(const layout of semanticSafetyLayouts)for(const journal of ['DELETE','WAL'])
  await testClock.advance(5001,{waitForWorkers:false});
  if(layout.family==='event-time')complete(t.name);
 });
+}
