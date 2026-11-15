@@ -235,7 +235,10 @@ test('a suppression epoch refusal retains the abandoned claim when terminal comp
   assert.equal(db.prepare('SELECT state FROM private_cards WHERE id=?').get(first.id).state, 'deleted', 'the external forget itself purges its dependent Card');
   assert.equal(db.prepare('SELECT revision FROM private_cards WHERE id=?').get(other.id).revision, 1, 'no cross-Card retirement');
   assert.deepEqual(attempts(db).map(row => row.method), ['consolidateAttempt'], 'the retained epoch also refuses finish, as for pre-fix publication');
-  assert.deepEqual(compensations, ['finish'], 'non-pause refusal attempts terminal finish under the retained account');
+  // The dispatcher validates the retained suppression epoch before it runs a
+  // compensating unit's work, so neither storage.finish nor storage.release
+  // executes here: the reservation stays and its attempt cap bounds later spend.
+  assert.deepEqual(compensations, [], 'the refused compensation never reaches storage');
 });
 
 test('B4: direct publication matches the baseline rows and result bytes with no intermediate committed split', async t => {
