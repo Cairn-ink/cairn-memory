@@ -219,7 +219,7 @@ async function exactReproduction(t, layout) {
     ok(f.core.get({ namespace: ns, memoryId: memory.id })).receipts.map(receipt => receipt.id));
   const withheldKeys = [first.memories[0], corrected].flatMap(memory => receiptKeys(f, memory));
   forget(f, corrected);
-  f.model.items = [{ content: 'Synthetic diagram instruction', kind: 'instruction', confidence: .9, sourceIndices: [0] }];
+  f.model.items = [{ content: 'Use diagrams.', kind: 'instruction', confidence: .9, sourceIndices: [0] }];
   const captured = ok(await f.core.capture({ namespace: ns, client: 'synthetic', eventId: 'capture', sessionId: 'session',
     messages: [{ id: 'source', role: 'user', content: 'Use diagrams.' }] })).admission.memories[0];
   withheldIds.push(...f.db.prepare('SELECT id FROM receipts WHERE memory_id=?').all(captured.id).map(row => row.id));
@@ -231,10 +231,50 @@ async function exactReproduction(t, layout) {
   const episodes = ok(f.core.listEpisodes({ namespace: ns, since: '2026-01-01T00:00:00.000Z',
     until: '2026-12-31T23:59:59.999Z', timeBasis: 'event' }));
   assert.equal(episodes.items.length, 1); ok(f.core.getEpisode({ namespace: ns, episodeId: f.seed }));
-  const needles = ['Manual fact', 'Updated manual fact', 'Organized fact', 'Use diagrams.', '"session"', '"source"',
-    manual.id, corrected.id, first.memories[0].id, ...withheldIds, ...withheldKeys, ...addressNeedles(source)];
+  // The forgotten donor is the manual fact and its correction. Both contents
+  // differ from the survivor's 'Use diagrams.'; neither gets a content exception.
+  const needles = ['Manual fact', 'Updated manual fact', 'Organized fact', '"session"', '"source"',
+    manual.id, corrected.id, first.memories[0].id, ...withheldIds, ...withheldKeys,
+    ...addressNeedles(source).filter(text => text !== source.excerpt)];
   deny(f, ...needles);
   return { f, captured, needles };
+}
+
+function assertReproductionPositions(f, result, captured, needles) {
+  forbidden(result, needles); // Donor content/ids and every other original needle stay forbidden everywhere.
+  const scan = value => {
+    const positions = [];
+    function walk(input, path = [], parent = null) {
+      if (typeof input === 'string') {
+        if (!input.includes(source.excerpt)) return;
+        assert.equal(path.at(-1) === 'content' && path.at(-2) === 'memory' && parent?.id === captured.id, true,
+          'shared text is permitted only in the survivor memory.content: ' + JSON.stringify(path));
+        assert.equal(input, source.excerpt, 'the survivor content contains the shared wording exactly once');
+        positions.push(path);
+      } else if (input && typeof input === 'object') {
+        // Walk every group/item and every receipts[] entry, next-step source
+        // text and anchor, and procedural tag anchor, including nested fields.
+        for (const [key, child] of Object.entries(input)) {
+          assert.equal(key.includes(source.excerpt), false, 'shared text never appears as a field name');
+          walk(child, [...path, key], input);
+        }
+      }
+    }
+    walk(value);
+    return positions;
+  };
+  const expectedPositions = [['value', 'groups', 'procedural', 'items', '0', 'memory', 'content']];
+  assert.deepEqual(scan(result), expectedPositions,
+    'the survivor content appears exactly once in the result, in its own field');
+  const texts = f.tokenizer.reads.flatMap(record => record.texts);
+  assert.ok(texts.some(text => text.includes(source.excerpt)), 'the delivered content is charged to the tokenizer');
+  for (const text of texts) {
+    forbidden(text, needles);
+    if (text.includes(source.excerpt)) {
+      assert.deepEqual(scan(JSON.parse(text)), expectedPositions,
+        'a tokenizer input contains the shared text only once, in the survivor content position');
+    }
+  }
 }
 
 for (const layout of [53, 18, 33]) test(`exact organized/manual/correction/forget/capture reproduction, layout ${layout}`, async t => {
@@ -244,7 +284,7 @@ for (const layout of [53, 18, 33]) test(`exact organized/manual/correction/forge
     nextSteps: { enabled: true, returned: 1, complete: true, budget_exhausted: false, status: 'complete', episodeIds: [f.seed] },
     procedural: { enabled: true, returned: 1, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [captured.id] },
   });
-  forbidden(result, needles);
+  assertReproductionPositions(f, result, captured, needles);
 });
 
 async function alongsideSurvivors(t, layout, group, oversized) {
@@ -290,7 +330,7 @@ for (const layout of [53, 18, 33]) test(`base parity: exact organized/manual/cor
   const { f, captured, needles } = await exactReproduction(t, layout);
   const input = { maxTokens: 1024, maxChars: 4096 };
   const result = read(f, input), value = ok(result);
-  forbidden(result, needles);
+  assertReproductionPositions(f, result, captured, needles);
   const base = await baseCore(f), expected = ok(base.sessionStartContext({ namespace: ns, ...input }));
   assert.deepEqual(value.groups.nextSteps, expected.groups.nextSteps);
   assert.deepEqual(value.groups.procedural.items, expected.groups.procedural.items.map(item =>
