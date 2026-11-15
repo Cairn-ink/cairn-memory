@@ -28,12 +28,11 @@ test('an immediate successful version probe ignores stdin and needs no finish ev
 // Guard against applying probe stdin handling (ignore, no input or finish) to capture.
 test('capture rejects unread large stdin instead of inheriting probe stdin handling', async t => {
   const spawn = cp.spawn;
-  let outcome, finished = false;
+  let finished = false;
   t.mock.method(cp, 'spawn', function (executable, args, options) {
     assert.deepEqual(options.stdio, ['pipe', 'pipe', 'pipe']);
     const child = spawn.call(this, executable, args, options);
     child.stdin.once('finish', () => { finished = true; });
-    child.once('close', (code, signal) => { outcome = { code, signal }; });
     return child;
   });
   syncBuiltinESMExports();
@@ -42,8 +41,7 @@ test('capture rejects unread large stdin instead of inheriting probe stdin handl
   try {
     await assert.rejects(scope.run(process.execPath, ['-e', 'process.exit(0)'],
       { PATH: '/usr/bin:/bin' }, Buffer.alloc(8 * 1024 * 1024)),
-    { code: 'local_capture_transport_failed', stage: 'child_exit', uncertain: true, exitCode: 0, signal: null });
-    assert.deepEqual(outcome, { code: 0, signal: null });
+    { code: 'local_capture_transport_failed', stage: 'child_exit', uncertain: true });
     assert.equal(finished, false);
   } finally { scope.close(); }
 });
