@@ -1,5 +1,11 @@
 // Offline coverage-at-size harness. Run explicitly in a supervised heavy slot.
-// Uses APIs present on d4bfba57; no schedule override, test clock or manual refresh.
+// The default (unbound createCairnServer, synthetic policy) uses APIs present on
+// d4bfba57; no schedule override, test clock or manual refresh.
+// --host measures one connection attached to the shared local runtime, with its
+// production dispatcher (not strict mode). --policy selects the embedding limits:
+// synthetic (generous, the default), hosted-default (the default provider's caps
+// and price estimate) or local-default (the local embedder's one-document calls).
+// The embedder is always the in-process fake; no network or key is used.
 import { parseArgs } from 'node:util';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
@@ -12,6 +18,9 @@ import { openMemoryCore } from '../core/contract.mjs';
 import { createFakeEmbedder } from '../core/context-read-embedder.mjs';
 import { cardHost } from '../core/testing/raw-source-fixtures.mjs';
 import { createCairnServer } from '../adapters/mcp/server.mjs';
+import { DEFAULT_CONTEXT_PROVIDER } from '../adapters/mcp/context-read-provider.mjs';
+import { estimateEmbeddingUsd } from '../adapters/openai/embedding.mjs';
+import { localPolicy } from '../adapters/local-embedder/index.mjs';
 
 const namespace = { ownerId: 'synthetic-context-coverage', scope: 'personal', projectId: null };
 const sets = { combined: ['memory', 'card'], memory: ['memory'], card: ['card'] };
@@ -21,20 +30,31 @@ const count = value => Number.isFinite(value) && value >= 0 ? value : null;
 const elapsed = start => Math.round(performance.now() - start);
 
 function configuration() {
-  const { values } = parseArgs({ options: Object.fromEntries(
-    ['docs', 'cards', 'scenario', 'embed-latency-ms', 'poll-ms', 'limit-min', 'out'].map(name => [name, { type: 'string' }])) });
+  const { values } = parseArgs({ options: { ...Object.fromEntries(
+    ['docs', 'cards', 'scenario', 'embed-latency-ms', 'poll-ms', 'limit-min', 'out', 'policy'].map(name => [name, { type: 'string' }])),
+    host: { type: 'boolean' } } });
   const integer = (name, fallback, minimum = 0) => {
     const raw = values[name] ?? String(fallback), n = Number(raw);
     if (!/^\d+$/.test(raw) || !Number.isSafeInteger(n) || n < minimum) throw Error('invalid_option');
     return n;
   };
   const scenario = values.scenario ?? 'combined', limitMin = Number(values['limit-min'] ?? 45);
+  const policy = values.policy ?? 'synthetic';
+  if (!['synthetic', 'hosted-default', 'local-default'].includes(policy)) throw Error('invalid_option');
   if (!['combined', 'memory', 'mixed'].includes(scenario) || !Number.isFinite(limitMin) || limitMin <= 0 ||
       !Number.isSafeInteger(Math.ceil(limitMin * 60000)) || limitMin * 60000 > 2147483647) throw Error('invalid_option');
   const embedLatencyMs = integer('embed-latency-ms', 300), pollMs = integer('poll-ms', 15000, 1);
   if (embedLatencyMs > 2147483647 || pollMs > 2147483647) throw Error('invalid_option');
   return { docs: integer('docs', 2600), cards: integer('cards', 300), scenario, embedLatencyMs, pollMs,
-    limitMs: Math.ceil(limitMin * 60000), out: values.out };
+    limitMs: Math.ceil(limitMin * 60000), out: values.out, mode: values.host ? 'host' : 'unbound', policy };
+}
+
+function embeddingPolicy(name) {
+  if (name === 'hosted-default') return Object.freeze({ family: 'hosted', maxRequests: DEFAULT_CONTEXT_PROVIDER.maxRequests,
+    maxUsd: DEFAULT_CONTEXT_PROVIDER.maxUsd, maxConcurrentQueries: 4,
+    estimateUsd: texts => estimateEmbeddingUsd(texts, { model: DEFAULT_CONTEXT_PROVIDER.model }) });
+  if (name === 'local-default') return localPolicy(Number.MAX_SAFE_INTEGER);
+  return { family: 'local', maxRequests: 1000000, maxUsd: 1000, estimateUsd: () => 0 };
 }
 
 function pipes() {
@@ -54,7 +74,7 @@ async function main() {
   let signalCode = 0;
   const interrupt = () => { signalCode = 130; stop.abort(); }, terminate = () => { signalCode = 143; stop.abort(); };
   process.on('SIGINT', interrupt); process.on('SIGTERM', terminate);
-  let workspace, seeder, server, client, streams, output, timer, start, seedMs = 0, polls = 0;
+  let workspace, seeder, server, connection, client, streams, output, timer, start, seedMs = 0, polls = 0;
   let embedCalls = 0, embedItems = 0, seededDocs = 0, seededCards = 0, allReady = false, failed = false, elapsedMs = 0;
   const emit = value => {
     const line = JSON.stringify(value) + '\n'; process.stdout.write(line);
@@ -87,8 +107,9 @@ async function main() {
     // no root node_modules. SDK 2.3.1 ships paired CJS/MJS export targets.
     const require = createRequire(new URL('../adapters/mcp/package.json', import.meta.url));
     const sdk = name => import(pathToFileURL(require.resolve(name).replace(/\.cjs$/, '.mjs')).href);
-    const [{ Client }, { StdioServerTransport }] = await Promise.all([
+    const [{ Client }, { StdioServerTransport }, shared] = await Promise.all([
       sdk('@modelcontextprotocol/client'), sdk('@modelcontextprotocol/server/stdio'),
+      options.mode === 'host' ? import('../adapters/mcp/local-shared-runtime.mjs') : null,
     ]);
     const fake = createFakeEmbedder();
     const embedder = { ...fake, async embed(texts, controls = {}) {
@@ -101,11 +122,16 @@ async function main() {
     } };
     start = performance.now();
     timer = setTimeout(() => stop.abort(), options.limitMs);
-    server = createCairnServer({ path, namespace, raw: true, rawSearch: false, contextRead: 'context-read-v1',
-      contextSemantic: true, contextCounter: counter,
-      contextEmbedding: { embedder, policy: { family: 'local', maxRequests: 1000000, maxUsd: 1000, estimateUsd: () => 0 } } });
+    const serverOptions = { path, namespace, raw: true, rawSearch: false, contextRead: 'context-read-v1',
+      contextSemantic: true, contextCounter: counter, contextEmbedding: { embedder, policy: embeddingPolicy(options.policy) } };
     streams = pipes(); client = new Client({ name: 'synthetic-context-coverage', version: '1' });
-    await server.connect(new StdioServerTransport(streams[0], streams[0]));
+    if (options.mode === 'host') {
+      server = shared.createLocalSharedRuntime(serverOptions);
+      connection = server.attach(streams[0], streams[0]);
+    } else {
+      server = createCairnServer(serverOptions);
+      await server.connect(new StdioServerTransport(streams[0], streams[0]));
+    }
     await client.connect(new StdioServerTransport(streams[1], streams[1]));
     let nextPollAt = start;
     while (!stop.signal.aborted) {
@@ -129,7 +155,7 @@ async function main() {
         progress[view] = { ready, eligible: total('eligible'), embedded: total('embedded'), byType };
       }
       polls++;
-      emit({ kind: 'poll', poll: polls, elapsedMs: elapsed(start), scenario: options.scenario,
+      emit({ kind: 'poll', poll: polls, elapsedMs: elapsed(start), scenario: options.scenario, mode: options.mode, policy: options.policy,
         docs: seededDocs, cards: seededCards, seedMs, views: progress, embedCalls, embedItems });
       allReady = wanted.every(view => firstReadyMs[view] !== null);
       if (allReady || stop.signal.aborted) break;
@@ -142,12 +168,13 @@ async function main() {
   } finally {
     elapsedMs = start === undefined ? 0 : elapsed(start);
     clearTimeout(timer); stop.abort();
-    for (const close of [() => client?.close(), () => server?.close(), () => seeder?.close()]) {
+    for (const close of [() => client?.close(), () => connection?.close(), () => server?.close(), () => seeder?.close()]) {
       try { await close(); } catch { failed = true; }
     }
     for (const stream of streams ?? []) stream.destroy();
     try { await workspace?.cleanup(); } catch { failed = true; }
-    emit({ kind: 'summary', scenario: options.scenario, docs: seededDocs, cards: seededCards, seedMs, elapsedMs,
+    emit({ kind: 'summary', scenario: options.scenario, mode: options.mode, policy: options.policy,
+      docs: seededDocs, cards: seededCards, seedMs, elapsedMs,
       pollMs: options.pollMs, limitMs: options.limitMs, embedLatencyMs: options.embedLatencyMs,
       polls, firstReadyMs, allReady, limitReached: !allReady && !failed && signalCode === 0,
       failed, interrupted: signalCode !== 0, embedCalls, embedItems });
