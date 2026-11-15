@@ -47,7 +47,8 @@ export function endpointPaths(directory, digest) {
   const socket = join(directory.path, base + '.sock');
   if (Buffer.byteLength(socket) > 100) throw refuse('daemon_socket_length');
   return Object.freeze({ socket, ready: join(directory.path, base + '.json'),
-    lock: join(directory.path, base + '.lock'), log: join(directory.path, base + '.log') });
+    lock: join(directory.path, base + '.lock'), takeover: join(directory.path, base + '.takeover.lock'),
+    stamp: join(directory.path, base + '.stamp'), log: join(directory.path, base + '.log') });
 }
 export async function checkedEntry(directory, path, { socket = false, missing = false } = {}) {
   await directory.validate();

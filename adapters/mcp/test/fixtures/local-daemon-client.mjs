@@ -1,5 +1,6 @@
 // Synthetic process fixture. Its single IPC bootstrap is the only configuration input.
 import { daemonStderrTail } from './local-daemon-diagnostics.mjs';
+import net from 'node:net';
 import childProcess from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 import { once } from 'node:events';
@@ -20,6 +21,13 @@ try {
     } catch (error) { code = error.code; }
     send({ kind: 'connection-probe-result', code, execArgv: process.execArgv });
   } else if (configuration.role === 'candidate') {
+    if (configuration.observeConnections) {
+      const createServer = net.createServer;
+      net.createServer = (...args) => {
+        const server = createServer(...args); server.on('connection', () => send({ kind: 'connection-accepted' })); return server;
+      };
+      syncBuiltinESMExports();
+    }
     if (configuration.activationImportFailure) {
       const { register } = await import('node:module');
       const target = new URL('../../local-shared-runtime.mjs', import.meta.url).href;
@@ -82,7 +90,19 @@ try {
     let bytesRead = 0;
     const read = process.stdin.read.bind(process.stdin);
     process.stdin.read = (...args) => { const bytes = read(...args); if (bytes) bytesRead += bytes.length; return bytes; };
+    if (configuration.observeTakeover) {
+      const kill = process.kill.bind(process);
+      process.kill = (pid, signal) => {
+        const result = kill(pid, signal);
+        if (signal === 'SIGTERM' || signal === 'SIGKILL') send({ kind: 'takeover-signal', pid, signal });
+        return result;
+      };
+    }
     const result = await runForwarder(configuration.args, { ...configuration.options,
+      ...(configuration.holdTakeoverLock ? { takeoverOptions: { afterLock: async () => {
+        send({ kind: 'takeover-locked' });
+        while ((await once(process, 'message'))[0].kind !== 'release-takeover') {}
+      } } } : {}),
       ...(configuration.storeType === undefined ? {} : { storeStatfs: async parent => {
         send({ kind: 'store-statfs', parent }); return { type: configuration.storeType };
       } }),

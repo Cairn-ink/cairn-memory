@@ -54,11 +54,11 @@ function closure(entry, external = false) {
   }
   visit(resolve(root, entry)); return sources;
 }
-test('forwarder closure is exactly Node core plus identity state and wire', () => {
+test('forwarder closure stays Node-core-only through verified takeover helpers', () => {
   const sources = closure('adapters/mcp/local-forwarder.mjs');
   assert.deepEqual([...sources.keys()].map(file => relative(root, file)).sort(), [
-    'adapters/mcp/local-daemon-identity.mjs', 'adapters/mcp/local-daemon-state.mjs',
-    'adapters/mcp/local-daemon-wire.mjs', 'adapters/mcp/local-forwarder.mjs',
+    'adapters/mcp/local-daemon-identity.mjs', 'adapters/mcp/local-daemon-liveness.mjs', 'adapters/mcp/local-daemon-state.mjs',
+    'adapters/mcp/local-daemon-wire.mjs', 'adapters/mcp/local-forwarder.mjs', 'integrations/client/file-lock.mjs',
   ], 'forwarder import closure must exclude server SDK core stateLock and pairing');
 });
 test('protocol-two liveness is private and T has no environment or argv input', () => {

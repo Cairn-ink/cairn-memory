@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 import { withFileLock } from '../../integrations/client/file-lock.mjs';
 import { runtimeDirectory, endpointPaths, identityKey, checkedEntry, readPrivate, writePrivate, removePrivate, logCode, refuse } from './local-daemon-state.mjs';
 import { createIdentity, daemonVector, canonical, assertStore, assertStoreSync, assertStoreLocation, creationIdentity, creationDigest, physicalStore, DAEMON_PROTOCOL } from './local-daemon-identity.mjs';
-import { localProcessIdentity, startAwareAlive } from './local-daemon-liveness.mjs';
+import { localProcessIdentity, startAwareAlive, daemonMonotonicMs } from './local-daemon-liveness.mjs';
 import { authenticateServer, frameGuard, requestLedger, queuedBytes, QUEUE_BYTES, DAEMON_LIVENESS_MS, DAEMON_LIVENESS_FRAME } from './local-daemon-wire.mjs';
 
 async function reapEndpoint(directory, paths, live) {
@@ -23,7 +23,10 @@ async function reapEndpoint(directory, paths, live) {
   // Holding the lifetime lock excludes other publishers; compare incarnation again.
   const current = JSON.parse(await readPrivate(directory, paths.ready));
   if (current.incarnation !== old.incarnation) throw refuse('daemon_incarnation');
+  const stamp = await readPrivate(directory, paths.stamp, { missing: true });
+  if (stamp && JSON.parse(stamp).incarnation !== old.incarnation) throw refuse('daemon_incarnation');
   if (socket) await removePrivate(directory, paths.socket, { socket: true });
+  await removePrivate(directory, paths.stamp);
   await removePrivate(directory, paths.ready);
 }
 
@@ -77,11 +80,20 @@ async function provisionStore(bootstrap, directory) {
 
 async function serve(directory, paths, identity, bootstrap, owner, { idleMs, graceMs, exit, runtimeOptions }) {
   let host, embedding, activated, draining = false, idle, outer, closed = false, doneResolve, doneReject;
-  let logTail = Promise.resolve();
-  const log = code => { logTail = logTail.then(() => logCode(directory, paths.log, code)).catch(() => {}); };
+  let logTail = Promise.resolve(), stampTail = Promise.resolve(), stampTimer;
+  const codes = [];
+  const log = code => { codes.push(code); if (codes.length > 8) codes.shift(); logTail = logTail.then(() => logCode(directory, paths.log, code)).catch(() => {}); };
   const sockets = new Set(), handles = new Map();
   const descriptor = { version: 1, protocol: DAEMON_PROTOCOL, identity, owner,
     incarnation: randomBytes(32).toString('hex'), capability: randomBytes(32).toString('hex'), socket: null };
+  const refreshStamp = () => {
+    stampTail = stampTail.then(() => writePrivate(directory, paths.stamp, canonical({
+      version: 1, incarnation: descriptor.incarnation, owner, build: identity.build,
+      attachedSessions: handles.size, monotonicMs: daemonMonotonicMs(), codes: [...codes],
+    })));
+    stampTail.catch(doneReject);
+    return stampTail;
+  };
   const done = new Promise((resolve, reject) => { doneResolve = resolve; doneReject = reject; });
   // A rejected import from this package cannot become healthy in this process
   // (ESM caches failures). Stop admissions and retain ownership through cleanup.
@@ -123,7 +135,7 @@ async function serve(directory, paths, identity, bootstrap, owner, { idleMs, gra
       clearInterval(heartbeat);
       void handle?.close().catch(() => {}); input?.destroy(); output?.destroy(); socket.destroy();
     };
-    socket.once('close', () => { drop(); sockets.delete(socket); handles.delete(socket); armIdle(); });
+    socket.once('close', () => { drop(); sockets.delete(socket); handles.delete(socket); if (!draining) void refreshStamp(); armIdle(); });
     void (async () => {
       await directory.validate(); await assertStore(identity);
       await authenticateServer(socket, descriptor, { deadline: performance.now() + 2000, admitting: () => !draining,
@@ -146,6 +158,7 @@ async function serve(directory, paths, identity, bootstrap, owner, { idleMs, gra
       handles.set(socket, { socket, input, output });
       handle = runtime.attach(input, output);
       handles.get(socket).handle = handle;
+      void refreshStamp();
         } });
       if (socket.destroyed || draining) { drop(); return; }
       output.pipe(socket); socket.pipe(input); socket.resume();
@@ -161,14 +174,18 @@ async function serve(directory, paths, identity, bootstrap, owner, { idleMs, gra
     if (text && JSON.parse(text).incarnation !== descriptor.incarnation) throw refuse('daemon_incarnation');
     const info = await checkedEntry(directory, paths.socket, { socket: true, missing: true });
     if (info && descriptor.socket && (String(info.dev) !== descriptor.socket.dev || String(info.ino) !== descriptor.socket.ino)) throw refuse('daemon_endpoint_changed');
+    const stamp = await readPrivate(directory, paths.stamp, { missing: true });
+    if (stamp && JSON.parse(stamp).incarnation !== descriptor.incarnation) throw refuse('daemon_incarnation');
     if (info) await removePrivate(directory, paths.socket, { socket: true });
+    await removePrivate(directory, paths.stamp);
     if (text) await removePrivate(directory, paths.ready);
   }
   async function shutdown() {
     if (draining) return;
-    draining = true; clearTimeout(idle); log('daemon_draining');
+    draining = true; clearTimeout(idle); clearInterval(stampTimer); log('daemon_draining');
     server.close(); // Stop admissions before revocation; lifetime lock remains held.
     outer = setTimeout(() => { log('daemon_grace_expired'); exit(1); }, graceMs);
+    await stampTail.catch(() => {});
     // Connection close synchronously revokes grants; it does not own the runtime.
     for (const entry of handles.values()) void entry.handle?.close().catch(() => {});
     for (const socket of sockets) socket.destroy();
@@ -190,10 +207,13 @@ async function serve(directory, paths, identity, bootstrap, owner, { idleMs, gra
     await chmod(paths.socket, 0o600);
     const info = await checkedEntry(directory, paths.socket, { socket: true });
     descriptor.socket = { dev: String(info.dev), ino: String(info.ino) };
+    log('daemon_ready'); await refreshStamp();
     await writePrivate(directory, paths.ready, canonical(descriptor));
-    log('daemon_ready'); armIdle(); await done;
+    stampTimer = setInterval(() => { if (!draining) void refreshStamp(); }, DAEMON_LIVENESS_MS);
+    armIdle(); await done;
   } finally {
-    process.off('SIGTERM', term); process.off('SIGINT', term); clearTimeout(idle);
+    process.off('SIGTERM', term); process.off('SIGINT', term); clearTimeout(idle); clearInterval(stampTimer);
+    await stampTail.catch(() => {});
     if (!closed) {
       // A failed cleanup must terminate the process while ownership is retained.
       // Returning to withFileLock would release it while old code could write.

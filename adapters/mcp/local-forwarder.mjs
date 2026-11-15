@@ -7,6 +7,7 @@ import { resolve } from 'node:path';
 import { once } from 'node:events';
 import { createIdentity, selectedEnvironment, assertStore, assertStoreLocation, canonical, daemonVector, creationIdentity, creationDigest, physicalStore, storeFilesystemProbe, DAEMON_PROTOCOL } from './local-daemon-identity.mjs';
 import { runtimeDirectory, identityKey, endpointPaths, readPrivate, checkedEntry, refuse } from './local-daemon-state.mjs';
+import { takeOver } from './local-daemon-liveness.mjs';
 import { authenticateClient, frameGuard, requestLedger, queuedBytes, QUEUE_BYTES, DAEMON_UNRESPONSIVE_MS, DAEMON_LIVENESS_METHOD } from './local-daemon-wire.mjs';
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -69,6 +70,7 @@ async function connectAttempt(args, options, deadline) {
       let descriptor; try { descriptor = JSON.parse(text); } catch { throw refuse('daemon_descriptor'); }
       if (descriptor.protocol !== DAEMON_PROTOCOL) throw refuse('daemon_protocol');
       if (canonical(descriptor.identity) !== canonical(identity.record)) throw refuse('daemon_identity');
+      if (await takeOver(directory, paths, descriptor, { ...options.takeoverOptions, staleMs: options.unresponsiveMs ?? DAEMON_UNRESPONSIVE_MS, deadline })) continue;
       const info = await checkedEntry(directory, paths.socket, { socket: true, missing: true });
       if (info) {
         if (String(info.dev) !== descriptor.socket?.dev || String(info.ino) !== descriptor.socket?.ino) throw refuse('daemon_endpoint_changed');
