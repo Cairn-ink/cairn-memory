@@ -390,7 +390,9 @@ def test_extended_timeout_or_shutdown_reaps_active_helper_and_sdk_without_retry(
     assert (bridge.CAPTURE_SDK_TIMEOUT_SECONDS, bridge.CAPTURE_HELPER_TIMEOUT_SECONDS) == (120, 125)
     marker = tmp_path / (action + "-started")
     hanging = tmp_path / (action + "-hanging.mjs")
-    hanging.write_text("import fs from 'node:fs';fs.writeFileSync(" + json.dumps(str(marker)) + ",String(process.pid));setInterval(()=>{},1000);\n")
+    # The test reads the pid as soon as the marker exists; publish it complete.
+    hanging.write_text("import fs from 'node:fs';fs.writeFileSync(" + json.dumps(str(marker) + ".tmp") + ",String(process.pid));fs.renameSync("
+                       + json.dumps(str(marker) + ".tmp") + "," + json.dumps(str(marker)) + ");setInterval(()=>{},1000);\n")
     provider._config["executable_path"] = str(hanging)
     monkeypatch.setattr(module, "CAPTURE_TIMEOUT_SECONDS", 2)
     real_popen = subprocess.Popen

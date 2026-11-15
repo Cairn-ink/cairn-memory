@@ -23,7 +23,7 @@ def test_native_deadline_cold_inspection_and_scripted_recovery(isolated_profile,
     preload = r"""
       import assert from 'node:assert/strict';
       import {qualificationPoolWire} from __WIRE_HELPER__;
-      import {appendFileSync,existsSync,writeFileSync} from 'node:fs';
+      import {appendFileSync,existsSync,renameSync,writeFileSync} from 'node:fs';
       const log=__LOG__, forbid=__FORBID__;
       const lateExtract=__LATE_EXTRACT__, lateClassify=__LATE_CLASSIFY__;
       globalThis.fetch=async(url,request)=>{
@@ -40,7 +40,7 @@ def test_native_deadline_cold_inspection_and_scripted_recovery(isolated_profile,
           case 'cairn_extract':
             if(input.messages.some(m=>m.content.includes('STALL_EXTRACT'))){
               await new Promise(resolve=>setTimeout(resolve,5000));
-              writeFileSync(lateExtract,'completed');
+              writeFileSync(lateExtract+'.tmp','completed');renameSync(lateExtract+'.tmp',lateExtract);
             }
             result={items:[{content:'Synthetic memory: '+input.messages[0].content,
               kind:'decision',confidence:0.99,sourceIndices:input.messages.map(m=>m.index)}]};break;
@@ -55,7 +55,7 @@ def test_native_deadline_cold_inspection_and_scripted_recovery(isolated_profile,
           case 'cairn_classify':
             if(input.memories.some(m=>m.content.includes('STALL_CLASSIFY'))){
               await new Promise(resolve=>setTimeout(resolve,5000));
-              writeFileSync(lateClassify,'completed');
+              writeFileSync(lateClassify+'.tmp','completed');renameSync(lateClassify+'.tmp',lateClassify);
             }
             result={items:input.memories.map(m=>({memoryId:m.id,parentIds:[],
               newL1:{title:'Synthetic recovery map',parentL2Ids:[]}}))};break;
