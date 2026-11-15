@@ -84,12 +84,14 @@ function fencedSources(f, rows) {
       ON f.owner_id=e.owner_id AND f.scope=e.scope AND f.project_id=e.project_id AND f.client=e.client AND f.session_key=e.session_key
     WHERE s.episode_id=? LIMIT 1`).get(row.id)));
 }
-export async function assertReads(f, before, { named = [], consumers = [], needles = [forgottenText, stepText] } = {}) {
+export async function assertReads(f, before, { named = [], consumers = [], needles = [forgottenText, stepText],
+  listRefused = Boolean(f.layout.suppressionRevision), evidenceUnavailable = !f.layout.suppressionRevision } = {}) {
   const namespace = f.namespace, after = snapshot(f), safety = Boolean(f.layout.suppressionRevision);
   noNeedles(await f.core.get({ namespace, memoryId: f.target.id }), needles);
   const listed = await f.core.list({ namespace, limit: 50 });
-  // core/runtime.mjs:547: the retained same-session survivor has a fenced Raw source, as on main.
-  if (safety) assert.deepEqual(listed, { ok: false, error: { code: 'revision_conflict', retryable: false } });
+  // core/runtime.mjs:547: retained Raw ancestry denies the shared-message
+  // survivor. Conversation deletion removes that ancestry before a later read.
+  if (listRefused) assert.deepEqual(listed, { ok: false, error: { code: 'revision_conflict', retryable: false } });
   else ok(listed);
   noNeedles(listed, needles);
   for (const timeBasis of ['event', 'receipt']) {
@@ -113,9 +115,9 @@ export async function assertReads(f, before, { named = [], consumers = [], needl
   }
   for (const extra of [{}, { includeQualification: true }, { contextMode: 'rationale-evidence' }]) {
     const result = await f.core.recall({ readSet: [namespace], query: 'synthetic', limit: 12, ...extra });
-    // Main also filters the survivor's fenced receipt without suppression:
-    // core/runtime.mjs:597,632 refuses evidence when no safe receipt remains.
-    if (!safety && extra.contextMode === 'rationale-evidence')
+    // core/runtime.mjs:597,632 refuses evidence when no safe receipt remains;
+    // this also applies after deletion removes a retained receipt's Raw origin.
+    if (evidenceUnavailable && extra.contextMode === 'rationale-evidence')
       assert.deepEqual(result, { ok: false, error: { code: 'source_unavailable', retryable: false } });
     else ok(result);
     noNeedles(result, needles);
