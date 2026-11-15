@@ -30,6 +30,17 @@ function forget(t, f, w, memory) {
   finally { t.mock.timers.reset(); }
 }
 const topicKey = key => key.replace(/#\d+$/, '');
+// Admission ids are random and a similarity topic's natural key is derived
+// from its smallest id. Seed every Memory up front and keep the three largest
+// ids out of the prior topic as the later "additions", so an addition can
+// never become a seed and change which cluster owns the natural key.
+function priorAndAdditions(f, w) {
+  f.seed(33);
+  const all = clusterMemories(w.storage.snapshot(ns, 512, noop).memories)[0];
+  assert.equal(all.memories.length, 33);
+  const memories = [...all.memories].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  return { original: { ...all, memories: memories.slice(0, 30) }, added: memories.slice(30) };
+}
 
 for (const generation of ['partitioned', 'legacy unpartitioned'])
 test(`A1: a purged ${generation} similarity topic blocks every part until cooldown ends`, async t => {
@@ -141,11 +152,11 @@ test('A3: a blocked destination cannot be carried while an unrelated topic still
 
 for (const smallerWins of [false, true])
 test(`disjoint similarity clusters keep distinct destinations when the ${smallerWins ? 'smaller' : 'larger'} cluster inherits the seed key`, async t => {
-  const f = engineCardFixture(t); f.seed(30);
+  const f = engineCardFixture(t);
   let memberships;
   const w = worker(f, { vectors: { read: () => memberships.map((group, i) => group.map(memory =>
     ({ memoryId: memory.id, revision: memory.revision, vector: i ? [0, 1] : [1, 0] }))).flat() } });
-  const original = clusterMemories(w.storage.snapshot(ns, 512, noop).memories)[0];
+  const { original, added } = priorAndAdditions(f, w);
   // The seed's natural key belongs to the losing cluster in both variants.
   const large = smallerWins ? original.memories.slice(0, 20) : original.memories.slice(10);
   const small = smallerWins ? original.memories.slice(20) : original.memories.slice(0, 10);
@@ -154,7 +165,6 @@ test(`disjoint similarity clusters keep distinct destinations when the ${smaller
   const prior = smallerWins ? { ...original, memories: [original.memories[0], ...small] } : original;
   const old = seedCard(w, prior);
   w.storage.retire(ns, old.id, new Date(w.time() - ENGINE_CARD_LIMITS.debounceMs - 1).toISOString());
-  const added = f.seed(3, 'Synthetic additions');
   const current = w.storage.snapshot(ns, 512, noop).memories;
   memberships = [large, [...small, ...current.filter(memory => added.some(value => value.id === memory.id))]];
   const expected = memberships.flatMap(memories => partitionCardClusters([{ key: 'expected', memories }]))
@@ -172,13 +182,12 @@ test(`disjoint similarity clusters keep distinct destinations when the ${smaller
 });
 
 test('a purged legacy topic blocks both the continuity winner and its displaced natural-key owner', async t => {
-  const f = engineCardFixture(t); f.seed(30);
+  const f = engineCardFixture(t);
   let groups;
   const w = worker(f, { vectors: { read: () => groups.flatMap((group, i) => group.map(memory =>
     ({ memoryId: memory.id, revision: memory.revision, vector: i ? [0, 1] : [1, 0] }))) } });
-  const original = clusterMemories(w.storage.snapshot(ns, 512, noop).memories)[0];
+  const { original } = priorAndAdditions(f, w);
   const legacy = seedCard(w, original), small = original.memories.slice(0, 10), large = original.memories.slice(10);
-  f.seed(3, 'Synthetic additions');
   const current = w.storage.snapshot(ns, 512, noop).memories;
   groups = [large, [...small, ...current.filter(memory => !original.memories.some(old => old.id === memory.id))]];
   // The larger group qualifies by 20/30 overlap; the smaller owns the exact
