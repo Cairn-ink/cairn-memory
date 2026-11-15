@@ -230,3 +230,39 @@ test('a real same-part replacement exempts its purge only while the published re
   assert.ok(w.storage.recentPurges(ns, new Date(w.time()).toISOString(), noop).some(card => card.id === old.id),
     'a stale replacement is no longer a completed current publication');
 });
+
+// The whole-topic continuity map keeps an in-memory `ids` set per prior topic.
+// It is working state only: no pass result and no row the pass writes may
+// carry an `ids` key.
+test('the in-memory topic membership set never reaches a pass result or a stored row', async t => {
+  const f = engineCardFixture(t); f.seed(30);
+  const w = worker(f), cluster = clusterMemories(w.storage.snapshot(ns, 512, noop).memories)[0];
+  // A prior similarity Card makes the continuity map, and its `ids` set, live.
+  seedCard(w, cluster);
+  const hasIdsKey = value => {
+    if (!value || typeof value !== 'object') return false;
+    if (Array.isArray(value)) return value.some(hasIdsKey);
+    return Object.entries(value).some(([key, child]) => key === 'ids' || hasIdsKey(child));
+  };
+  const storedRowsCarryIds = () => {
+    for (const { name } of f.db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'").all()) {
+      for (const row of f.db.prepare(`SELECT * FROM "${name}"`).all()) for (const [column, value] of Object.entries(row)) {
+        if (column === 'ids') return name;
+        if (typeof value !== 'string' || !/^[\[{]/.test(value)) continue;
+        let parsed; try { parsed = JSON.parse(value); } catch { continue; }
+        if (hasIdsKey(parsed)) return name + '.' + column;
+      }
+    }
+    return null;
+  };
+  assert.equal(storedRowsCarryIds(), null, 'baseline store has no ids key');
+  let built = 0;
+  for (let i = 0; i < 6; i++) {
+    w.advance(ENGINE_CARD_LIMITS.debounceMs + 1);
+    const pass = await w.pass();
+    assert.equal(hasIdsKey(pass), false, JSON.stringify(pass));
+    built += pass.built.length;
+  }
+  assert.ok(built > 0, 'the passes published at least one Card');
+  assert.equal(storedRowsCarryIds(), null);
+});
