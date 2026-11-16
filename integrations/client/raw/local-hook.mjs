@@ -5,11 +5,17 @@ import { join, relative } from 'node:path';
 import { types } from 'node:util';
 import { ownData } from '../../../core/local-authority-input.mjs';
 import { readLocalInstallation } from './local-setup.mjs';
-import { createLocalRawHost } from './local-host.mjs';
+import { createLocalRawHost, localHostResult } from './local-host.mjs';
 import { directory, events } from './local-setup-files.mjs';
-import { absolute, exact, locations, runtime, checkSignal, fail, failure } from './local-setup-input.mjs';
+import { absolute, exact, locations, runtime, checkSignal, fail, failure, reasons as setupReasons } from './local-setup-input.mjs';
 
-const hookResult = (status,reason = null) => Object.freeze({ version:'local-raw-hook-v1',status,reason });
+export const hookReasons = Object.freeze([...setupReasons,'headless_skipped']);
+function hookResult(status,reason = null) {
+  // Reuse the host's validator and its host/worker reason lists, without copying
+  // them or changing the host. Setup failures and this skip are hook-local.
+  localHostResult(status,hookReasons.includes(reason) ? null:reason);
+  return Object.freeze({ version:'local-raw-hook-v1',status,reason });
+}
 function payload(value,event,client) {
   if (!value || typeof value !== 'object' || types.isProxy(value) || Array.isArray(value) ||
       ![Object.prototype,null].includes(Object.getPrototypeOf(value))) fail('event_refused');
@@ -50,9 +56,12 @@ async function source(record,path,allowMissing = false) {
 export async function runLocalRawHook(value,options = {}) {
   try {
     const input = exact(value,['installationDirectory','event','payload']);
-    const call = ownData(options,['signal']); checkSignal(call.signal); runtime();
+    const call = ownData(options,['signal','headless']); checkSignal(call.signal); runtime();
+    const headless = Object.hasOwn(call,'headless') ? call.headless:false;
+    if (typeof headless !== 'boolean') fail('invalid_input');
     const paths = locations(input.installationDirectory),record = await readLocalInstallation(paths.root);
     if (record.phase !== 'active') fail(record.phase === 'rearm_required' ? 'rearm_required':'authority_changed');
+    if (record.request.client === 'claude-code' && headless) return hookResult('ready','headless_skipped');
     const {source:nativeSource,...selection} = payload(input.payload,input.event,record.request.client);
     const host = createLocalRawHost({ profilePath:paths.profile });
     // No source contents or transcript metadata are inspected before the real
@@ -67,11 +76,11 @@ export async function runLocalRawHook(value,options = {}) {
     if (!present) return await stateLock(paths.lock,async () => {
       if ((await readLocalInstallation(paths.root)).phase !== 'active') fail('authority_changed');
       const outcome = await host.markStart({...selection,start:'eof'},{signal:call.signal});
-      return hookResult(outcome.status,outcome.status === 'ready' ? null:'capture_refused');
+      return hookResult(outcome.status,outcome.status === 'ready' ? null:outcome.reason);
     });
     const outcome = await (input.event === 'SessionStart' || input.event === 'UserPromptSubmit'
       ? host.initialize({ ...selection,start:'eof' },{ signal:call.signal }) : host.run(selection,{ signal:call.signal }));
-    return hookResult(outcome.status,['ready','progress'].includes(outcome.status) ? null:'capture_refused');
+    return hookResult(outcome.status,['ready','progress'].includes(outcome.status) ? null:outcome.reason);
   } catch (error) {
     const outcome = failure(error); return hookResult(outcome.status,outcome.reason);
   }

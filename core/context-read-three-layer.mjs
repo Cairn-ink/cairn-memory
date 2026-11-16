@@ -1,6 +1,6 @@
 import { performance } from 'node:perf_hooks';
 import { assertContentPort } from './content-safety-boundary.mjs';
-import { assembleContext, ASSEMBLY_FRAMING, meteredText, cardSourceKeys, memoryPackKey, sourceDateFields } from './context-read-assembly.mjs';
+import { assembleContext, ASSEMBLY_FRAMING, meteredText, cardSourceKeys, engineCardHits, deliveredCardText, memoryPackKey, sourceDateFields } from './context-read-assembly.mjs';
 import { ASSEMBLY_DEFAULTS, ASSEMBLY_LIMITS, CONTEXT_VERSION, namespaceKey } from './context-read-input.mjs';
 import { createBM25, scoreBM25 } from './context-read-bm25.mjs';
 import { tokenizeT1, termFrequencies } from './context-read-tokenize.mjs';
@@ -178,7 +178,7 @@ const overlap = (a, b) => {
 };
 const datedOrder = (a, b) => a.date && b.date ? binary(a.date, b.date) || a.rank - b.rank : a.date ? -1 : b.date ? 1 : a.rank - b.rank;
 
-// Cards share ordinary ranking. Their bound Memory sources are removed only
+// A Card can borrow its best cited Memory hit. Bound sources are removed only
 // from a trial pack that actually contains the Card and fits its budget.
 export function assembleThreeLayerContext(args, raw = unavailable('unavailable')) {
   const fallback = coverage => {
@@ -249,8 +249,8 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
       unit.rank = unit.memories[0]?.rank ?? args.prepared.length + unit.evidence[0].rank;
       unit.turns = [...new Set([...unit.memories.flatMap(item => item.turnIds ?? []), ...unit.evidence.map(item => item.key)])];
       const bodies = [];
-      for (const memory of unit.memories) if (!bodies.some(body => body === memory.text ||
-        overlap(new Set(tokenizeT1(body)), new Set(tokenizeT1(memory.text))) >= .6)) bodies.push(memory.text);
+      for (const memory of unit.memories) if (!bodies.some(body => body === deliveredCardText(memory, args.intent) ||
+        overlap(new Set(tokenizeT1(body)), new Set(tokenizeT1(deliveredCardText(memory, args.intent)))) >= .6)) bodies.push(deliveredCardText(memory, args.intent));
       unit.wire = unit.memories.length ? memoryWire(unit.memories[0], args.representation, bodies.join('\n'))
         : { layer: 'Raw', ...unit.evidence[0].wire };
       if (args.representation === 'representation-v2-dated' && unit.memories.length > 1) {
@@ -292,6 +292,17 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
     const documents = units.map(unit => ({ id: unit.id, text: unit.lexicalText })), bm = createBM25(documents), terms = tokenizeT1(args.query);
     const scores = units.map(unit => scoreBM25(terms, termFrequencies(unit.lexicalText), bm) ?? 0), max = Math.max(1e-12, ...scores);
     units.forEach((unit, i) => { unit.bm25 = scores[i] / max; unit.prior = unit.memories[0]?.type === 'memory' ? 61 / (60 + unit.rank) : 0; });
+    const hits = args.prepared.some(item => item.type === 'card' && item.metadata?.origin === 'engine')
+      ? engineCardHits(args.prepared, args.budget.maxItems) : new Map();
+    const memoryUnits = new Map(units.flatMap(unit => unit.memories.filter(item => item.type === 'memory').map(item => [item, unit])));
+    for (const unit of units) {
+      const hit = unit.memories.map(card => hits.get(card)).filter(Boolean).sort((a, b) => a.rank - b.rank)[0];
+      const source = memoryUnits.get(hit);
+      if (source) {
+        unit.bm25 = source.bm25; unit.prior = source.prior;
+        unit.rank = source.rank; unit.cardHit = true;
+      }
+    }
     const selected = [], remaining = [...units], sessions = new Set(), turns = new Set();
     const stops = { budget: false, items: false, deadline: false }, breadth = countListQuestion(args.query);
     const deduped = proposed => {
@@ -324,18 +335,24 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
       return { metered, used, fits: used <= args.budget.maxTokens && bytes };
     };
     if (!fits([]).fits) fail('context_item_too_large');
-    while (remaining.length && selected.length < args.budget.maxItems) {
+    // A Memory unit that a selected Card already replaces is not delivered, so it
+    // takes no item slot: count delivered units, and skip units that would vanish.
+    const replaced = unit => { const covered = cardSourceKeys(selected.flatMap(other => other.memories));
+      return covered.size > 0 && unit.memories.length > 0 && !unit.evidence.length &&
+        unit.memories.every(item => item.type === 'memory' && covered.has(memoryPackKey(item.ref))); };
+    while (remaining.length && deduped(selected).length < args.budget.maxItems) {
       check();
       remaining.sort((a, b) => {
-        const score = unit => unit.bm25 + unit.prior - .15 * unit.cost / 250
+        const score = unit => unit.bm25 + unit.prior - (unit.cardHit ? 0 : .15 * unit.cost / 250)
           + (breadth ? .30 : .15) * unit.sessions.filter(session => !sessions.has(session)).length
           + .05 * unit.turns.filter(turn => !turns.has(turn)).length
           - .30 * Math.max(0, ...selected.map(other => overlap(unit.terms, other.terms)));
         return score(b) - score(a) || a.rank - b.rank || binary(a.id, b.id);
       });
       const unit = remaining.shift();
+      if (replaced(unit)) continue;
       const covered = cardSourceKeys(unit.memories), cardRank = Math.min(...unit.memories.filter(item => item.type === 'card').map(item => item.rank));
-      if (covered.size && selected.some(other => other.memories.some(item => item.type === 'memory' &&
+      if (!unit.cardHit && covered.size && selected.some(other => other.memories.some(item => item.type === 'memory' &&
         item.rank < cardRank && covered.has(memoryPackKey(item.ref))))) continue;
       if (!fits([...selected, unit]).fits) { stops.budget = true; continue; }
       selected.push(unit); unit.sessions.forEach(session => sessions.add(session)); unit.turns.forEach(turn => turns.add(turn));

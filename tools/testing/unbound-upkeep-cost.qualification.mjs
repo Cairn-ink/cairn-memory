@@ -19,6 +19,10 @@ const median = values => { const sorted = [...values].sort((a,b) => a-b); return
 
 for (const [shape, demand] of [
   ['memory-only', [['memory']]],
+  ['two-type-no-demand', []],
+  ['two-type-memory-demand', [['memory']]],
+  ['two-type-card-demand', [['card']]],
+  ['raw-enabled', [['memory', 'card']]],
   ['separate', [['memory'], ['card']]],
   ['combined-only', [['memory', 'card']]],
   ['mixed', [['memory', 'card'], ['memory'], ['card']]],
@@ -42,11 +46,14 @@ for (const [shape, demand] of [
   const nativeSet = globalThis.setTimeout, nativeClear = globalThis.clearTimeout;
   t.mock.method(globalThis, 'setTimeout', function(callback, ms, ...args) {
     const label = owner.getStore();
-    if (!label || ms !== 1000 || !new Error().stack.includes('at arm (')) return nativeSet(callback, ms, ...args);
+    if (!label || ![0, 1000].includes(ms) || !new Error().stack.includes('at arm (')) return nativeSet(callback, ms, ...args);
     const state = states.get(label), token = { unref() {} }; tokens.add(token);
-    state.pending = AsyncLocalStorage.bind(callback); state.arms++; return token;
+    state.pending.set(token, AsyncLocalStorage.bind(callback)); state.arms++; return token;
   });
-  t.mock.method(globalThis, 'clearTimeout', token => { if (!tokens.has(token)) nativeClear(token); });
+  t.mock.method(globalThis, 'clearTimeout', token => {
+    if (!tokens.has(token)) return nativeClear(token);
+    for (const state of states.values()) state.pending.delete(token);
+  });
   let meter;
   // This exact wrapper measures both imported trees in the same process.
   for (const method of methods) {
@@ -66,7 +73,8 @@ for (const [shape, demand] of [
     const { StdioServerTransport } = await import(pathToFileURL(adapterRequire.resolve('@modelcontextprotocol/server/stdio')));
     const { streams, context } = await import(pathToFileURL(join(root, 'adapters/mcp/test/local-shared-support.mjs')));
     const path = join(w.path, label + '.sqlite'), cards = shape === 'memory-only' ? null : cardHost();
-    const seed = openMemoryCore({ path, raw: false, ...(cards ? { privateCards: cards.options } : {}) });
+    const raw = shape === 'raw-enabled';
+    const seed = openMemoryCore({ path, raw, ...(cards ? { privateCards: cards.options } : {}) });
     const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
     for (let i = 0; i < 3; i++) ok(seed.admit({ namespace: ns, memory: { content: 'Synthetic idle upkeep memory ' + i, kind: 'fact' },
       receipts: [{ client: 'synthetic', sessionId: 'upkeep', eventId: String(i), role: 'user', excerpt: 'Synthetic source ' + i }] }));
@@ -76,8 +84,8 @@ for (const [shape, demand] of [
       ok(await cards.call(seed, 'confirmCardDraft', { namespace: ns, actionId: 'confirm', cardId: card.id, expectedRevision: 1, applicability: 'current' }));
     }
     seed.close();
-    states.set(label, { arms: 0 });
-    const configuration = { path, namespace: ns, raw: false, ...(cards ? { privateCards: 'local-v1' } : {}),
+    states.set(label, { arms: 0, pending: new Map() });
+    const configuration = { path, namespace: ns, raw, ...(cards ? { privateCards: 'local-v1' } : {}),
       contextCounter: { id: 'synthetic-cost-counter', countTokens: text => Math.ceil(text.length / 4) },
       contextEmbedding: { embedder: { id: 'synthetic-cost-' + label, revision: '1', dimensions: 1, normalization: 'none',
         async embed(texts) { return texts.map(() => [1]); } },
@@ -90,6 +98,7 @@ for (const [shape, demand] of [
       owner.run(label, () => host.attach(a,a));
       server = { connect: async () => {}, close: () => host.close() };
       assert.equal(host.inspect().connections, 1, 'shared cost measures exactly one connection');
+      if (raw) assert.equal(host.inspect().runtime.rawManagers, 1, 'Raw-enabled cost owns a real Raw manager');
     } else server = owner.run(label, () => createCairnServer(configuration));
 
     w.defer(async () => { await client.close(); await server.close(); a.destroy(); b.destroy(); });
@@ -100,12 +109,22 @@ for (const [shape, demand] of [
   }
   const pass = async (label, measured) => {
     const state = states.get(label), before = state.arms, counts = Object.fromEntries(methods.map(method => [method,0]));
-    assert.equal(typeof state.pending, 'function');
+    const scheduled = [...state.pending];
+    assert.equal(scheduled.length, shape === 'raw-enabled' ? 2 : 1,
+      'each pass includes context upkeep and, when enabled, Raw upkeep');
     const started = performance.now(); meter = measured ? counts : undefined;
     try {
-      state.pending();
-      for (let i = 0; state.arms === before && i < 10000; i++) await turn();
-      assert.equal(state.arms, before + 1, 'the complete upkeep pass settled and rearmed');
+      // Drive both timers separately. A single pending slot would let Raw's
+      // rearm overwrite context upkeep and measure only the cheap Raw poll.
+      for (const [token, callback] of scheduled) {
+        assert.equal(typeof callback, 'function');
+        state.pending.delete(token);
+        const arms = state.arms;
+        callback();
+        for (let i = 0; state.arms === arms && i < 10000; i++) await turn();
+        assert.equal(state.arms, arms + 1, 'the complete upkeep turn settled and rearmed');
+      }
+      assert.equal(state.arms, before + scheduled.length, 'every scheduled upkeep turn completed');
     } finally { meter = undefined; }
     return { counts, statements: Object.values(counts).reduce((a,b) => a+b,0), wallMs: performance.now()-started };
   };

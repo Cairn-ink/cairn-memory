@@ -216,10 +216,33 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       // Routing receipts contain source identities, never body/title text.
       // Tombstones preserve similarity-key continuity and the forget debounce
       // without occupying any live Card page or becoming serving candidates.
+      // Only an internal supersession with its still-current, same-part
+      // publication can bypass cooldown. Public deletions atomically record
+      // their action in the ledger, even if its name mimics supersession.
       for (const row of db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o
         ON (o.owner_id,o.scope,o.project_id,o.action_id,o.target_id)=(c.owner_id,c.scope,c.project_id,c.id,c.id)
         WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state='deleted' AND c.updated_at>?
-        AND o.method='consolidate' ORDER BY c.id`).iterate(...boundary(ns), since)) {
+        AND o.method='consolidate' AND NOT EXISTS(SELECT 1 FROM card_effects e
+          JOIN private_cards replacement ON replacement.owner_id=c.owner_id
+            AND replacement.scope=c.scope AND replacement.project_id=c.project_id
+          JOIN card_operations publication ON (publication.owner_id,publication.scope,publication.project_id,
+            publication.action_id,publication.target_id)=(replacement.owner_id,replacement.scope,replacement.project_id,
+              replacement.id,replacement.id)
+          WHERE e.owner_id=c.owner_id AND e.scope=c.scope AND e.project_id=c.project_id
+          AND e.entity_type='card' AND e.entity_id=c.id AND e.kind='card_deleted' AND e.revision=c.revision
+          AND e.action_id GLOB 'engine-supersede.*'
+          AND NOT EXISTS(SELECT 1 FROM card_operations action WHERE action.owner_id=e.owner_id
+            AND action.scope=e.scope AND action.project_id=e.project_id AND action.action_id=e.action_id)
+          AND replacement.id!=c.id AND replacement.id GLOB 'engine-card.*'
+          AND replacement.state='confirmed' AND replacement.revision=1 AND replacement.body_revision=1
+          AND replacement.created_at=c.updated_at AND replacement.updated_at=c.updated_at
+          AND publication.method='consolidate' AND publication.created_at=c.updated_at
+          AND json_extract(publication.result,'$.origin')='engine'
+          AND json_extract(publication.result,'$.id')=replacement.id
+          AND json_extract(publication.result,'$.revision')=replacement.revision
+          AND json_extract(publication.result,'$.builtAt')=publication.created_at
+          AND json_extract(publication.result,'$.clusterKey')=json_extract(o.result,'$.clusterKey'))
+        ORDER BY c.id`).iterate(...boundary(ns), since)) {
         check(); const metadata = engineCardMetadataInside(db, ns, row);
         if (metadata) result.push({ ...metadata, row });
       }
@@ -370,57 +393,66 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
     });
   }
   function retire(ns, id, timestamp, deleted = false) {
-    return transaction(db, () => {
-      const row = db.prepare(`SELECT * FROM private_cards WHERE ${where} AND id=?`).get(...boundary(ns), id);
-      if (!row || !engineCardMetadataInside(db, ns, row)) fail('source_unavailable');
-      if (row.state === 'deleted' || !deleted && row.revision !== 1) return;
-      // Tombstone debounce and claims use the maintenance pass's clock too.
-      if (deleted) writers.purge(ns, row, 'engine-retire.' + randomUUID(), timestamp);
-      else db.prepare('UPDATE private_cards SET revision=revision+1,updated_at=? WHERE id=?').run(timestamp, id);
-      advance(ns);
-    });
+    return transaction(db, () => retireInside(ns, id, timestamp, deleted));
   }
-  function commit(ns, cluster, value, timestamp, check) {
+  function retireInside(ns, id, timestamp, deleted = false) {
+    const row = db.prepare(`SELECT * FROM private_cards WHERE ${where} AND id=?`).get(...boundary(ns), id);
+    if (!row || !engineCardMetadataInside(db, ns, row)) fail('source_unavailable');
+    if (row.state === 'deleted' || !deleted && row.revision !== 1) return;
+    // Tombstone debounce and claims use the maintenance pass's clock too.
+    if (deleted) writers.purge(ns, row, 'engine-retire.' + randomUUID(), timestamp);
+    else db.prepare('UPDATE private_cards SET revision=revision+1,updated_at=? WHERE id=?').run(timestamp, id);
+    advance(ns);
+  }
+  function commit(ns, cluster, value, timestamp, check, retirements = [], requestSources = cluster.memories) {
     ready(); check();
     return transaction(db, () => inContentSuppressionRequestInside(db, () => {
       check();
-      const refs = cluster.memories.map(m => m.source);
-      if (!sourcesCurrent(ns, refs, check)) fail('source_unavailable');
-      // Re-entrant or concurrent maintenance must not publish a second Card.
-      const existing = db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o ON o.target_id=c.id
-        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state='confirmed' AND c.revision=1
-        AND o.method='consolidate' AND json_extract(o.result,'$.clusterKey')=?`)
-        .all(...boundary(ns), cluster.key);
-      if (existing.some(row => engineCardRevisionsInside(db, ns, row))) return null;
-      // Publish and supersession share the canonical transaction. Preserve
-      // identities/seals, but erase every older engine payload for this key.
-      const superseded = db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o
-        ON (o.owner_id,o.scope,o.project_id,o.action_id,o.target_id)=(c.owner_id,c.scope,c.project_id,c.id,c.id)
-        WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND o.method='consolidate'
-        AND json_extract(o.result,'$.origin')='engine' AND json_extract(o.result,'$.clusterKey')=?
-        AND (c.title IS NOT NULL OR c.body IS NOT NULL) ORDER BY c.id`).all(...boundary(ns), cluster.key)
-        .filter(row => row.state !== 'confirmed' || row.revision !== 1 || !engineCardRevisionsInside(db, ns, row));
-      for (const row of superseded) { check(); writers.purge(ns, row, 'engine-supersede.' + randomUUID(), timestamp); }
-      for (const ref of refs) if (db.prepare(`SELECT count(*) AS n FROM (SELECT DISTINCT c.id
-        FROM card_memory_bindings b JOIN private_cards c ON c.id=b.card_id WHERE b.memory_id=?
-        AND c.state IN ('draft','confirmed') LIMIT 128)`).get(ref.memoryId).n >= 128) fail('dependency_limit_reached');
-      const shared = tokenizeT1(cluster.memories[0].content).find(term =>
-        cluster.memories.filter(memory => tokenizeT1(memory.content).includes(term)).length >= cluster.memories.length / 2);
-      const id = 'engine-card.' + randomUUID(), title = 'Topic: ' + (shared ?? 'current state and history');
-      const metadata = { id, revision: 1, origin: 'engine', builtAt: timestamp, clusterKey: cluster.key,
-        sourceRevisions: cardMemoryRevisions(cluster.memories) };
-      db.prepare(`INSERT INTO private_cards VALUES(?,?,?,?,1,'confirmed',?,?,1,?,?,?)`)
-        .run(id, ...boundary(ns), title, value.body, timestamp, timestamp, timestamp);
-      const insert = db.prepare('INSERT INTO card_memory_bindings VALUES(?,?,?,?,?,?)');
-      // Position is display metadata, not a source-set bound. The existing
-      // receipt binding format has sixteen positions and no position uniqueness.
-      refs.forEach((ref, i) => insert.run(id, ref.memoryId, ref.memoryRevision, ref.receiptId, JSON.stringify(ref), i % 16));
-      writers.seal(ns, id, refs);
-      reviewCardApplicabilityInside(db, id, 1, 'current');
-      db.prepare('INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)').run(...boundary(ns), id,
-        'consolidate', bind('engine-card-cluster-v1', cluster.key), id, JSON.stringify(metadata), timestamp);
-      advance(ns); check();
-      return { ...metadata, supersededCount: superseded.length };
+      // Context may mark another Card's line out of date. Validate those
+      // sources in the same snapshot as publication and its retirements.
+      if (!sourcesCurrent(ns, requestSources.map(memory => memory.source), check)) fail('source_unavailable');
+      let card = null;
+      if (value.body) {
+        const refs = cluster.memories.map(m => m.source);
+        // Re-entrant or concurrent maintenance must not publish a second Card.
+        const existing = db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o ON o.target_id=c.id
+          WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.state='confirmed' AND c.revision=1
+          AND o.method='consolidate' AND json_extract(o.result,'$.clusterKey')=?`)
+          .all(...boundary(ns), cluster.key);
+        if (!existing.some(row => engineCardRevisionsInside(db, ns, row))) {
+          // Publish and supersession share the canonical transaction. Preserve
+          // identities/seals, but erase every older engine payload for this key.
+          const superseded = db.prepare(`SELECT c.* FROM private_cards c JOIN card_operations o
+            ON (o.owner_id,o.scope,o.project_id,o.action_id,o.target_id)=(c.owner_id,c.scope,c.project_id,c.id,c.id)
+            WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND o.method='consolidate'
+            AND json_extract(o.result,'$.origin')='engine' AND json_extract(o.result,'$.clusterKey')=?
+            AND (c.title IS NOT NULL OR c.body IS NOT NULL) ORDER BY c.id`).all(...boundary(ns), cluster.key)
+            .filter(row => row.state !== 'confirmed' || row.revision !== 1 || !engineCardRevisionsInside(db, ns, row));
+          for (const row of superseded) { check(); writers.purge(ns, row, 'engine-supersede.' + randomUUID(), timestamp); }
+          for (const ref of refs) if (db.prepare(`SELECT count(*) AS n FROM (SELECT DISTINCT c.id
+            FROM card_memory_bindings b JOIN private_cards c ON c.id=b.card_id WHERE b.memory_id=?
+            AND c.state IN ('draft','confirmed') LIMIT 128)`).get(ref.memoryId).n >= 128) fail('dependency_limit_reached');
+          const shared = tokenizeT1(cluster.memories[0].content).find(term =>
+            cluster.memories.filter(memory => tokenizeT1(memory.content).includes(term)).length >= cluster.memories.length / 2);
+          const id = 'engine-card.' + randomUUID(), title = 'Topic: ' + (shared ?? 'current state and history');
+          const metadata = { id, revision: 1, origin: 'engine', builtAt: timestamp, clusterKey: cluster.key,
+            sourceRevisions: cardMemoryRevisions(cluster.memories) };
+          db.prepare(`INSERT INTO private_cards VALUES(?,?,?,?,1,'confirmed',?,?,1,?,?,?)`)
+            .run(id, ...boundary(ns), title, value.body, timestamp, timestamp, timestamp);
+          const insert = db.prepare('INSERT INTO card_memory_bindings VALUES(?,?,?,?,?,?)');
+          // Position is display metadata, not a source-set bound. The existing
+          // receipt binding format has sixteen positions and no position uniqueness.
+          refs.forEach((ref, i) => insert.run(id, ref.memoryId, ref.memoryRevision, ref.receiptId, JSON.stringify(ref), i % 16));
+          writers.seal(ns, id, refs);
+          reviewCardApplicabilityInside(db, id, 1, 'current');
+          db.prepare('INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)').run(...boundary(ns), id,
+            'consolidate', bind('engine-card-cluster-v1', cluster.key), id, JSON.stringify(metadata), timestamp);
+          advance(ns); check();
+          card = { ...metadata, supersededCount: superseded.length };
+        }
+      }
+      for (const id of retirements) { check(); retireInside(ns, id, timestamp); }
+      check(); return card;
     }, [ns]));
   }
   // Each pass owns a versioned canonical decision. Probes must run outside

@@ -427,6 +427,73 @@ test('shared combined-only idle reuse refreshes again after a Memory write', { t
   assert.equal(result.diagnostics.candidates.channels.semantic.state, 'ready', 'R2O5_COMBINED_WRITE_REENABLES');
 });
 
+test('demand transitions Memory to Memory+Card to Memory keep retained results in their own view', { timeout: 15000 }, async t => {
+  const f = await realFixture(t, { shared: true }), selected = [];
+  let now = 100;
+  const demand = createContextMaintenanceDemand(() => now);
+  const loop = drivenLoop(t, f.core, { ...f.access, async call(core, method, args) {
+    const result = await f.access.call(core, method, args);
+    selected.push({ types: args.types, result }); return result;
+  } }, { demand, host: true });
+  let previousFull;
+  for (const types of [['memory'], combined, ['memory']]) {
+    now += 30 * 60 * 1000;
+    demand.note(types);
+    const start = selected.length;
+    await loop.tick();
+    assert.deepEqual(selected.at(-1).types, types, 'R2O6_TRANSITION_REFRESH');
+    if (types.length === 1) assert.notStrictEqual(selected.at(-1).result, previousFull,
+      'R2O6_TRANSITION_NO_CROSS_VIEW_REUSE');
+    for (let i = 0; i < 8; i++) await loop.tick();
+    for (const call of selected.slice(start)) {
+      assert.equal(ok(call.result).status, 'complete');
+      assert.deepEqual(Object.keys(call.result.value.coverage.byType).sort(), [...call.types].sort(),
+        'R2O6_TRANSITION_RESULT_VIEW_MATCH');
+    }
+    // Once the demanded view is idle, the host falls back to its full view.
+    assert.deepEqual(selected.at(-1).types, combined);
+    previousFull = selected.at(-1).result;
+    await loop.tick();
+    assert.strictEqual(selected.at(-1).result, previousFull, 'R2O6_TRANSITION_FULL_REUSED');
+    const read = await context(f.client, input(types));
+    assert.equal(read.diagnostics.candidates.channels.semantic.state, 'ready');
+  }
+});
+
+for (const outcome of ['refused', 'partial']) test(`a ${outcome} full-view completion clears the earlier retained result`, { timeout: 15000 }, async t => {
+  const f = await realFixture(t, { shared: true }), selected = [];
+  let nextOutcome;
+  // Inject a transient completion at the scheduler/core boundary. The real
+  // canonical/sidecar fence stays current, so it cannot mask stale retention.
+  const loop = drivenLoop(t, f.core, { ...f.access, async call(core, method, args) {
+    let result;
+    if (nextOutcome) {
+      result = nextOutcome; nextOutcome = undefined;
+    } else result = await f.access.call(core, method, args);
+    selected.push(result); return result;
+  } }, { demand: f.demand, host: true });
+  for (let i = 0; i < 8; i++) await loop.tick();
+  const before = selected.at(-1);
+  assert.equal(ok(before).status, 'complete');
+  await loop.tick();
+  assert.strictEqual(selected.at(-1), before, 'control: full-view result was retained');
+  nextOutcome = outcome === 'refused'
+    ? { ok: false, error: { code: 'index_unavailable', retryable: false } }
+    : { ok: true, value: { ...structuredClone(before.value), status: 'partial' } };
+  const completion = nextOutcome;
+  await loop.tick();
+  assert.strictEqual(selected.at(-1), completion, 'control: transient completion reached the scheduler');
+  await loop.tick();
+  const after = selected.at(-1);
+  assert.notStrictEqual(after, before, 'R2O6_FULL_RETENTION_CLEARED_' + outcome);
+  assert.notStrictEqual(after, completion, 'incomplete results cannot be retained either');
+  assert.equal(ok(after).status, 'complete');
+  assert.deepEqual(after.value.coverage.byType, before.value.coverage.byType,
+    'control: no durable invalidation forced the new refresh');
+  await loop.tick();
+  assert.strictEqual(selected.at(-1), after, 'the new complete result may be retained');
+});
+
 // Raw construction also installs Card storage, so it advertises the two-type
 // full view. Neither fixture configures private Cards or a consolidator.
 for (const raw of [false, true]) test(`shared full-view idle reuse refreshes again after a Memory write raw=${raw}`, { timeout: 15000 }, async t => {
