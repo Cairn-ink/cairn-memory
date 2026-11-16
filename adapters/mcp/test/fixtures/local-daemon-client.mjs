@@ -25,6 +25,19 @@ try {
     } catch (error) { code = error.code; }
     send({ kind: 'connection-probe-result', code, execArgv: process.execArgv });
   } else if (configuration.role === 'candidate') {
+    if (configuration.beforeLifetimeAcquisition) {
+      const mkdir = fsPromises.mkdir; let paused = false;
+      fsPromises.mkdir = async function(path, options) {
+        // withFileLock's setup precedes its acquisition deadline. Delay here
+        // so spawning the intervening owner cannot consume that deadline.
+        if (!paused && options?.recursive && String(path).endsWith('/cairn-memory')) {
+          paused = true; send({ kind: 'lifetime-acquisition-pending' });
+          while ((await once(process, 'message'))[0].kind !== 'release-lifetime-acquisition') {}
+        }
+        return mkdir(path, options);
+      };
+      syncBuiltinESMExports();
+    }
     let monitor;
     if (configuration.instrumentSlices) {
       const { installDaemonSliceMonitor } = await import('../../../../tools/testing/fixtures/daemon-event-loop-monitor.mjs');

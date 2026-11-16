@@ -46,8 +46,7 @@ export async function runCandidate(bootstrap, { idleMs = 30000, graceMs = 5000, 
   if (!identity.eligible || canonical(identity.record) !== canonical(bootstrap.identity)) throw refuse('daemon_identity');
   const paths = endpointPaths(directory, identity.digest), live = localProcessIdentity();
   await checkedEntry(directory, paths.lock, { missing: true });
-  const prior = await readPrivate(directory, paths.lock, { missing: true });
-  const predecessor = prior ? JSON.parse(prior) : undefined;
+  let predecessor, lifetimeOwner;
   // Lock before ANY server, SDK, core, provider, SQLite or tokenizer import.
   // stateLock cannot record start time in its context. Use its unchanged underlying
   // withFileLock seam directly, with stricter daemon-specific owner validation.
@@ -57,10 +56,20 @@ export async function runCandidate(bootstrap, { idleMs = 30000, graceMs = 5000, 
     await afterLock(); // Programmatic instrumentation only; never accepted by bootstrap/argv/env.
     await serve(directory, paths, identity.record, bootstrap, live, { idleMs, graceMs, exit, runtimeOptions });
   }, { timeoutMs: 250, pollMs: 10, context: { ...live, store: { dev: identity.record.store.dev, ino: identity.record.store.ino } },
-    isAlive: (_pid, owner) => startAwareAlive(owner, live),
+    isAlive: (_pid, owner) => {
+      const alive = startAwareAlive(owner, live);
+      // The same callback checks reaper markers. Only an owner read from the
+      // lifetime lock itself can supply the displaced endpoint's predecessor.
+      if (!alive && owner.pid === lifetimeOwner?.pid && owner.token === lifetimeOwner.token) predecessor = owner;
+      return alive;
+    },
     validateOwner: owner => { startAwareAlive(owner, live); },
     validatePath: path => checkedEntry(directory, path, { missing: true }),
-    read: path => readPrivate(directory, path, { missing: true }),
+    read: async path => {
+      const text = await readPrivate(directory, path, { missing: true });
+      if (path === paths.lock) lifetimeOwner = text ? JSON.parse(text) : undefined;
+      return text;
+    },
   });
 }
 
