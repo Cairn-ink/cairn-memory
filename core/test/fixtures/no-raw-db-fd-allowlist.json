@@ -1086,8 +1086,8 @@
   },
   {
     "path": "core/store-fence.mjs",
-    "source": "import {lstatSync} from 'node:fs'",
-    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+    "source": "import {lstatSync,realpathSync} from 'node:fs'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors; realpathSync resolves only the store's parent directory for the identity-only pin, never opening the database inode."
   },
   {
     "path": "core/topic-members-session.mjs",
@@ -1691,18 +1691,13 @@
   },
   {
     "path": "core/local-authority-schema.mjs",
-    "source": "import { lstatSync, readFileSync, writeFileSync, renameSync, rmSync, statfsSync } from 'node:fs'",
-    "reason": "Free-space check on the store's directory and the optional peer-index retry marker beside the store; no database, journal, WAL or SHM path is opened."
+    "source": "import { readdirSync, writeFileSync, renameSync, unlinkSync, statfsSync } from 'node:fs'",
+    "reason": "Free-space check on the store's directory and the optional peer-index retry marker, whose state is encoded in empty file names; marker entries are listed by readdir and never opened, and no database, journal, WAL or SHM path is opened."
   },
   {
     "path": "core/local-authority-schema.mjs",
-    "source": "const value = JSON.parse(readFileSync(marker, 'utf8'));",
-    "reason": "Reads only the small JSON retry marker '<store>.peer-index-retry' after lstat confirms a regular file; never a database descriptor."
-  },
-  {
-    "path": "core/local-authority-schema.mjs",
-    "source": "writeFileSync(temporary, JSON.stringify({ notBefore: Date.now() + delayMs, delayMs, reason }), { flag: 'wx', mode: 0o600 });",
-    "reason": "Writes only a fresh temporary retry-marker file that is renamed onto '<store>.peer-index-retry'; never a database descriptor."
+    "source": "writeFileSync(temporary, '', { flag: 'wx', mode: 0o600 });",
+    "reason": "Creates only a fresh, empty temporary retry-marker file (O_EXCL) that is renamed onto its encoded name; never a database descriptor."
   },
   {
     "path": "core/local-raw-search.mjs",
