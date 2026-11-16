@@ -361,7 +361,13 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         if(sideWritable&&!wantsWrite) {
           // This request used to open a read-only connection. Preserve its
           // header refusal as well as the stricter non-write companion rule.
-          const mode=probeRollbackJournal(sidePath,observer ? {observe:observer.journalProbe} : {});
+          let mode;
+          try { mode=probeRollbackJournal(sidePath,observer ? {observe:observer.journalProbe} : {}); }
+          catch(error) {
+            // An incomplete observed probe keeps the existing status DTO.
+            if(observer && ['storage_busy','storage_error'].includes(error.code))unavailable('storage_unavailable');
+            throw error;
+          }
           if(mode.code===14 || mode.mode && mode.mode!=='delete')unavailable('incompatible');
         }
       }
@@ -391,7 +397,12 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         catch(e) {attribution?.captureFailure(e); if(e.code!=='EEXIST')throw e; }},()=>acquire(false,checkAdmission));
       checkAdmission?.();
     } else if (!sqlite) {
-      const mode = probeRollbackJournal(sidePath, observer ? { observe: observer.journalProbe } : {});
+      let mode;
+      try { mode = probeRollbackJournal(sidePath, observer ? { observe: observer.journalProbe } : {}); }
+      catch(error) {
+        if(observer && ['storage_busy','storage_error'].includes(error.code))unavailable('storage_unavailable');
+        throw error;
+      }
       if (mode.code === 14 || mode.mode && mode.mode !== 'delete') unavailable('incompatible');
     }
     const admittedIdentity=productFile(sidePath), files=sqlite?.files(sidePath);

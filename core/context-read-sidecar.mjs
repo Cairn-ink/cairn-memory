@@ -53,7 +53,7 @@ function walHeader(path, observer) {
   protectedFile(path);
   let result;
   try { result = probeRollbackJournal(path, observer ? { observe: observer.journalProbe } : {}); }
-  catch (error) { if (observer && error?.code === 'ERR_SQLITE_ERROR') throw error; unavailable('unsafe_file'); }
+  catch (error) { if (['storage_busy','storage_error'].includes(error?.code) || observer && error?.code === 'ERR_SQLITE_ERROR') throw error; unavailable('unsafe_file'); }
   if (result.stage === 'open') unavailable('unsafe_file');
   // nolock SQLite refuses WAL with CANTOPEN before it can create companions.
   // Other malformed/inaccessible files fail closed through ordinary validation.
