@@ -1701,5 +1701,11 @@
   },
   "adapters/mcp/local-forwarder.mjs": {
     "literal:id": 1
+  },
+  "adapters/mcp/local-daemon-state.mjs": {
+    "literal:daemon_temp_invalid": 1
+  },
+  "adapters/mcp/local-daemon.mjs": {
+    "literal:daemon_temp_invalid": 3
   }
 }
