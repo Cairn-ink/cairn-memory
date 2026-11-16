@@ -117,6 +117,9 @@ async function scanFailureCandidate(t, w, bootstrap, mode) {
   process.stderr.on('data', bytes => { stderr += bytes; });
   process.once('exit', (code, signal) => { exit = { code, signal }; });
   t.after(async () => {
+    // Refusal disconnects IPC before the seam child's natural exit completes.
+    const deadline = performance.now() + 10000;
+    while (!exit && performance.now() < deadline) await delay(20);
     if (!exit) process.kill('SIGTERM');
     await until(() => exit, 'scan seam child is reaped');
     assert.equal(exit.code, 0, stderr);
