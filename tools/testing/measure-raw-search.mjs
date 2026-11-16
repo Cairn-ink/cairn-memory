@@ -369,9 +369,7 @@ export async function captureContention(path,service,token,targets){
   const original=DatabaseSync.prototype.exec,active=new WeakMap(),intervals=[],configured=new WeakSet();
   DatabaseSync.prototype.exec=function(sql){
     const value=original.call(this,sql);
-    // The ordinary opener also probes pristine stores before initialization.
-      // Keep this observer check outside the lineage statement census.
-      if(sql==='BEGIN'&&originalPrepare.call(this,"SELECT 1 FROM sqlite_schema WHERE type='table' AND name='store_metadata'").get()){
+    if(sql==='BEGIN'){
       if(!configured.has(this)){this.function('raw_search_capture_hold',value=>{active.set(this,process.hrtime.bigint());return value;});configured.add(this);}
       this.prepare('SELECT raw_search_capture_hold(store_id) FROM store_metadata WHERE singleton=1').get();
     }
