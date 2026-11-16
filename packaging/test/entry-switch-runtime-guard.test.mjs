@@ -2,6 +2,7 @@
 // Reflective or deliberately obfuscated code remains outside this syntactic check.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mkdtemp, readFile, readdir, lstat, rm, writeFile } from 'node:fs/promises';
 import { join, dirname, resolve, normalize } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -30,6 +31,10 @@ function unguardedMutations(source, { helper = false } = {}) {
   // Resolve ordinary path expressions against a symbolic runtime root. This
   // retains dirname/.. ancestry without treating a sibling lease as runtime.
   const runtimeRoot = '/__cairn_guard__/cairn-memory', paths = new Map();
+  // At most 32 fixed-point passes and fewer than 64 concrete paths per
+  // variable or builder expansion. Reaching either bound means unknown,
+  // which is a violation when used as a possibly recursive delete target.
+  const maxPasses = 32, maxResolvedPaths = 64, unknownPath = Symbol('unknown path');
   walk(ast, node => nodes.push(node));
   // Exempt exactly the shared helper body, never the rest of its module.
   const guarded = helper ? nodes.find(node => node.type === 'FunctionDeclaration' && node.id.name === 'ownedRuntimeFiles') : undefined;
@@ -49,9 +54,13 @@ function unguardedMutations(source, { helper = false } = {}) {
     const name = method(node.callee), builder = { dirname, join, resolve, normalize }[name];
     if (!builder) return [];
     const arguments_ = node.arguments.map(resolvedPaths);
+    if (arguments_.some(values => values.includes(unknownPath))) return [unknownPath];
     if (arguments_.some(values => values.length === 0)) return [];
     let combinations = [[]];
-    for (const values of arguments_) combinations = combinations.flatMap(parts => values.map(value => [...parts, value]));
+    for (const values of arguments_) {
+      if (combinations.length * values.length >= maxResolvedPaths) return [unknownPath];
+      combinations = combinations.flatMap(parts => values.map(value => [...parts, value]));
+    }
     return combinations.map(parts => builder(...parts));
   }
   function runtimePath(node) {
@@ -66,33 +75,60 @@ function unguardedMutations(source, { helper = false } = {}) {
     if (node.type === 'TemplateLiteral') return node.expressions.some(runtimePath);
     return false;
   }
-  let changed;
-  do {
-    changed = false;
+  let changed, changing;
+  const noteChange = name => { changed = true; changing.add(name); };
+  for (let pass = 0; pass < maxPasses; pass++) {
+    changed = false; changing = new Set();
     for (const node of outside) {
       const binding = node.type === 'VariableDeclarator' ? node.id : node.type === 'AssignmentExpression' ? node.left : undefined;
       const value = node.type === 'VariableDeclarator' ? node.init : node.right;
       if (binding?.type !== 'Identifier') continue;
       for (const path of resolvedPaths(value)) {
         if (!paths.has(binding.name)) paths.set(binding.name, new Set());
-        if (!paths.get(binding.name).has(path)) { paths.get(binding.name).add(path); changed = true; }
+        const current = paths.get(binding.name);
+        if (current.has(unknownPath)) break;
+        if (!current.has(path)) {
+          if (path === unknownPath || current.size + 1 >= maxResolvedPaths) paths.set(binding.name, new Set([unknownPath]));
+          else current.add(path);
+          noteChange(binding.name);
+        }
       }
-      if (runtimePath(value) && !tainted.has(binding.name)) { tainted.add(binding.name); changed = true; }
+      if (runtimePath(value) && !tainted.has(binding.name)) { tainted.add(binding.name); noteChange(binding.name); }
       const expression = value?.type === 'AwaitExpression' ? value.argument : value;
       if ((expression?.type === 'CallExpression' && method(expression.callee) === 'runtimeDirectory' ||
         expression?.type === 'Identifier' && directories.has(expression.name)) && !directories.has(binding.name)) {
-        directories.add(binding.name); changed = true;
+        directories.add(binding.name); noteChange(binding.name);
       }
       const name = method(value);
-      if (mutations.has(name) && aliases.get(binding.name) !== name) { aliases.set(binding.name, name); changed = true; }
+      if (mutations.has(name) && aliases.get(binding.name) !== name) { aliases.set(binding.name, name); noteChange(binding.name); }
     }
-  } while (changed);
+    if (!changed) break;
+    if (pass === maxPasses - 1) for (const name of changing) paths.set(name, new Set([unknownPath]));
+  }
+  // Propagate unknown to dependent bindings without another fixed-point loop.
+  // Each binding enters this worklist at most once, including cycles.
+  const dependents = new Map();
+  for (const node of outside) {
+    const binding = node.type === 'VariableDeclarator' ? node.id : node.type === 'AssignmentExpression' ? node.left : undefined;
+    const value = node.type === 'VariableDeclarator' ? node.init : node.right;
+    if (binding?.type !== 'Identifier') continue;
+    walk(value, input => {
+      if (input.type !== 'Identifier') return;
+      if (!dependents.has(input.name)) dependents.set(input.name, new Set());
+      dependents.get(input.name).add(binding.name);
+    });
+  }
+  const unknown = [...paths].filter(([, values]) => values.has(unknownPath)).map(([name]) => name);
+  for (let index = 0; index < unknown.length; index++) for (const name of dependents.get(unknown[index]) ?? []) {
+    if (paths.get(name)?.has(unknownPath)) continue;
+    paths.set(name, new Set([unknownPath])); unknown.push(name);
+  }
   // Do not evaluate nonliteral options: an identifier, call or spread may
   // enable recursion. Only a plain inline object can establish otherwise.
   const recursive = node => node.arguments.slice(1).some(options => options.type !== 'ObjectExpression' ||
     options.properties.some(option => option.type === 'SpreadElement' ||
       (option.key?.name ?? option.key?.value) === 'recursive' && option.value?.value === true));
-  const ancestor = node => resolvedPaths(node).some(path => path.startsWith('/') &&
+  const ancestor = node => resolvedPaths(node).some(path => path === unknownPath || path.startsWith('/') &&
     (path === '/' || path === runtimeRoot || runtimeRoot.startsWith(path + '/')));
   return outside.filter(node => node.type === 'CallExpression' && mutations.has(method(node.callee)) &&
     (node.arguments.slice(0, method(node.callee).startsWith('rename') ? 2 : 1).some(runtimePath) ||
@@ -144,6 +180,44 @@ for (const operation of ['rm', 'rmdir', 'rmSync', 'rmdirSync']) test('static gua
   for (const options of ['{ recursive: false }', '{ force: true }']) {
     const source = `await fs.${operation}(dirname(directory.path), ${options});`;
     assert.deepEqual(unguardedMutations(source), [], source);
+  }
+});
+
+test('path analysis terminates within two seconds and flags bounded unknown recursive targets', () => {
+  const manyPaths = Array.from({ length: 65 }, (_, i) => `target = '/scratch-${i}';`).join('\n');
+  const sources = [
+    "let target = directory.path; target = join(target, 'child'); await rm(target, { recursive: true });",
+    // A growing sibling has no runtime taint: only unknown-path handling can
+    // conservatively reject it when the pass bound is reached.
+    "let target = join(dirname(directory.path), 'scratch'); target = join(target, 'child'); await rm(target, { recursive: true });",
+    `let target; ${manyPaths} const copy = target; await rm(copy, { recursive: true });`,
+    // The dependent precedes its input; unknown must propagate even if the
+    // pass limit is reached before an ordinary fixed point.
+    `let copy = target; let target = join(dirname(directory.path), 'scratch');
+     target = join(target, 'child'); await fs.promises.rmdir(copy, options);`,
+    `let part; ${Array.from({ length: 9 }, (_, i) => `part = 'segment-${i}';`).join('\n')}
+     const target = join(part, part, part); await rm(target, { recursive: true });`,
+  ];
+  for (const source of sources) {
+    // A child-process deadline also makes the pre-fix infinite loop fail
+    // promptly; a node:test timeout cannot interrupt synchronous analysis.
+    const child = `
+      import { parse } from ${JSON.stringify(new URL('../../tools/testing/vendor/acorn/acorn.mjs', import.meta.url).href)};
+      import { join, dirname, resolve, normalize } from 'node:path';
+      const property = ${property.toString()};
+      const mutations = new Set(${JSON.stringify([...mutations])});
+      ${walk.toString()}
+      ${unguardedMutations.toString()}
+      process.stdout.write(JSON.stringify(unguardedMutations(${JSON.stringify(source)})));
+    `;
+    const started = performance.now();
+    const result = spawnSync(process.execPath, ['--input-type=module', '--eval', child], { encoding: 'utf8', timeout: 2000 });
+    const elapsed = performance.now() - started;
+    assert.equal(result.error, undefined, 'scanner must finish before its 2000 ms child deadline');
+    assert.equal(result.signal, null);
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(elapsed < 3000, 'scanner plus child startup/reaping stays within 3000 ms');
+    assert.equal(JSON.parse(result.stdout).length, 1, source);
   }
 });
 
