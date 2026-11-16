@@ -28,3 +28,49 @@ test('qualification and fault modules stay outside production imports and packag
   const identity = readFileSync(new URL('../local-daemon-identity.mjs', import.meta.url),'utf8');
   assert.match(identity, /!\['--no-warnings', '--experimental-sqlite'\]\.includes\(arg\)/);
 });
+
+import { classifyDaemonIdle } from '../../../tools/testing/fixtures/daemon-idle.mjs';
+import { qualificationCommand } from '../../../tools/testing/fixtures/daemon-qualification.mjs';
+const readyMemory = { ok: true, value: { coverage: { maintenance: { state: 'ready' }, byType: { memory: { indexed: 8, eligible: 8 } } } } };
+test('qualification waits on rebuilding/missing indexes and preserves other failures', () => {
+  for (const state of ['rebuilding', 'missing']) {
+    const result = { ok: false, error: { code: 'index_unavailable', details: { coverage: { maintenance: { state } } } } };
+    assert.equal(classifyDaemonIdle({ result }).idle, false);
+  }
+  for (const error of [{ code: 'storage_busy' }, { code: 'index_unavailable' }, { code: 'index_unavailable', details: { coverage: { maintenance: { state: 'ready' } } } }]) {
+    assert.throws(() => classifyDaemonIdle({ result: { ok: false, error } }), /qualification_upkeep_failed/);
+  }
+});
+test('qualification distinguishes complete Raw index from a partial read and retains deadline measurements', () => {
+  assert.equal(classifyDaemonIdle({ result: readyMemory, rawIndex: { coverage: 'complete' }, rawReadCoverage: 'partial' }).idle, true);
+  assert.equal(classifyDaemonIdle({ result: readyMemory, rawIndex: { coverage: 'partial' }, rawReadCoverage: 'included' }).idle, false);
+  // When no complete-index surface exists, preserve the read criterion.
+  assert.equal(classifyDaemonIdle({ result: readyMemory, rawReadCoverage: 'included' }).idle, true);
+  const timedOut = classifyDaemonIdle({ result: readyMemory, rawReadCoverage: 'partial', deadlineReached: true });
+  assert.deepEqual({ idle: timedOut.idle, report: timedOut.report, exitCode: timedOut.exitCode }, { idle: false, report: true, exitCode: 2 });
+});
+test('qualification failed child diagnostics redact paths, split markers and bound UTF-8 bytes', async () => {
+  let stderr = '';
+  const source = `process.stderr.write('/private/synthetic-store.sqlite failed\\n');
+    process.stderr.write('split s'); setTimeout(() => {
+    process.stderr.write('k-secret\\n'); process.stderr.write(('界'.repeat(200)+'\\n').repeat(9));
+    process.stderr.write('tail /private/again.sqlite\\n'); process.exitCode=7; }, 10);`;
+  await assert.rejects(qualificationCommand(process.execPath, ['-e', source], text => { stderr += text; }), error => {
+    assert.match(error.message, /^qualification_child_failed:.*"code":7/);
+    assert.doesNotMatch(error.message, /stderr|private|secret|界/); return true;
+  });
+  assert.doesNotMatch(stderr, /\/private|sk-secret|split s|\ufffd/);
+  assert.match(stderr, /<path>/); assert.ok(Buffer.byteLength(stderr) <= 2048);
+});
+
+test('qualification entrypoints print code-only failures without an uncaught path-bearing stack', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { tmpdir } = await import('node:os');
+  for (const name of ['daemon-event-loop-slice', 'daemon-attach-latency']) {
+    const file = new URL('../../../tools/testing/' + name + '.qualification.mjs', import.meta.url);
+    const child = spawnSync(process.execPath, [file.pathname, '--store', tmpdir() + '/nonexistent-synthetic.sqlite'], { env: { TMPDIR: tmpdir() }, encoding: 'utf8', timeout: 10000 });
+    assert.equal(child.error, undefined); assert.equal(child.signal, null); assert.equal(child.status, 1);
+    assert.doesNotMatch(child.stderr, /\/(?:home|tmp|private)\//);
+    assert.match(child.stderr, /qualification_child_failed/);
+  }
+});

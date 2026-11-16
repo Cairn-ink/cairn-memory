@@ -6,17 +6,21 @@ import { runtimeDirectory } from '../../../adapters/mcp/local-daemon-state.mjs';
 import { workspace, until, ok } from '../../../adapters/mcp/test/local-daemon-support.mjs';
 import { verifiedOwner, localProcessIdentity, processStart, startAwareAlive } from '../../../adapters/mcp/local-daemon-liveness.mjs';
 
+import { qualificationStderr } from './qualification-stderr.mjs';
 const commands = new Set();
-async function command(file, args) {
+async function command(file, args, diagnostic = text => process.stderr.write(text)) {
   const child = spawn(file, args, { env: {}, stdio: ['ignore', 'pipe', 'pipe'] });
-  let stdout = '', stderr = '';
-  child.stdout.on('data', b => { stdout += b; }); child.stderr.on('data', b => { stderr = (stderr+b).slice(-2048); });
+  let stdout = ''; const stderr = qualificationStderr();
+  child.stdout.on('data', b => { stdout += b; }); child.stderr.on('data', b => stderr.write(b));
   const live = child.pid ? processStart(child.pid) : null;
   const owner = live ? { ...localProcessIdentity(), pid: child.pid, start: live.start } : null;
   const done = new Promise((resolve, reject) => { child.once('error', reject); child.once('close', (code, signal) => resolve({ code, signal })); });
   const job = { child, owner, done }; commands.add(job);
-  let rc; try { rc = await done; } finally { commands.delete(job); }
-  if (rc.code !== 0) throw Error('qualification_child_failed:' + JSON.stringify({ ...rc, stderr }));
+  let rc; try { rc = await done; } catch { throw Error('qualification_child_spawn_failed'); } finally { commands.delete(job); }
+  if (rc.code !== 0) {
+    diagnostic(stderr.read());
+    throw Error('qualification_child_failed:' + JSON.stringify(rc));
+  }
   return stdout;
 }
 export const daemonStoreCommand = async (action, path, n, ns) => JSON.parse(await command(process.execPath,
@@ -69,3 +73,12 @@ export async function stopQualificationOwner(w, descriptor) {
 }
 export const daemonQualificationQuery = { query: 'synthetic cobalt telescope engineering', types: ['memory'], intent: 'current', semantic: false };
 export { until as waitQualification, ok as qualificationValue };
+export { command as qualificationCommand };
+
+// Entrypoints catch failures so Node never prints path-bearing exception stacks.
+export function reportQualificationFailure(error, write = text => process.stderr.write(text)) {
+  const message = String(error?.message ?? '');
+  const code = /^qualification_[a-z_]+$/.test(message) || /^qualification_child_failed:\{\"code\":(?:null|-?\d+),\"signal\":(?:null|\"[A-Z0-9]+\")\}$/.test(message) ? message : 'qualification_failed';
+  write(code + '\n');
+  process.exitCode = 1;
+}

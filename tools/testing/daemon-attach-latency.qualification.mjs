@@ -1,6 +1,7 @@
 // Outside CI; each sample uses the same private store copy, no provider keys.
-import { createDaemonQualification, daemonStoreCommand, waitQualification, stopQualificationOwner } from './fixtures/daemon-qualification.mjs';
+import { createDaemonQualification, daemonStoreCommand, waitQualification, stopQualificationOwner, reportQualificationFailure } from './fixtures/daemon-qualification.mjs';
 import { join } from 'node:path';
+async function main() {
 const q = await createDaemonQualification(process.argv.slice(2)), { w, before } = q;
 const samples = { per_session: [], cold: [], warm: [] };
 let coldFallbacks = 0, afterActivation;
@@ -47,3 +48,6 @@ try {
       schema_before: before.schema_digest, schema_after: afterActivation.schema_digest,
       performed: before.schema_version !== afterActivation.schema_version || before.schema_digest !== afterActivation.schema_digest, note: before.schema_version === afterActivation.schema_version && before.schema_digest === afterActivation.schema_digest ? 'none_needed' : 'first_activation_migrated' } }));
 } finally { await q.close(); }
+
+}
+try { await main(); } catch (error) { reportQualificationFailure(error); }
