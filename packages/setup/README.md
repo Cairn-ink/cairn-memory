@@ -72,7 +72,7 @@ Several sessions saving at once no longer stop one of them from saving. Default
 reads keep the Raw excerpts they already validated when a read reaches its time
 limit, marked partial, instead of dropping them.
 
-**Search catches up after saving.** Each turn is saved to the local store as soon as it ends. Raw search covers a newly saved conversation only after the local index reaches it. Raw search builds its index in the background while Cairn is running, at roughly one saved message per second: allow about 15 minutes for 1,000 saved messages and roughly 2 hours for 10,000. After each new saved message it re-checks the whole index (about 6 minutes per 1,000 saved messages). Until a build or re-check finishes, Raw search still returns results but reports partial coverage. While you keep working, each new save restarts the indexing pass, so a conversation saved during a busy session may not be searchable until you pause. Until the index has caught up, newly saved conversations may be missing from results. The coverage report marks such results as partial, but assistants using the memory tool see only the results, so an empty answer then doesn't mean nothing was saved. Memories, and conversations the index already covers, are not affected and stay searchable as before.
+**Search catches up after saving.** Each turn is saved to the local store as soon as it ends. From installer 0.6.8, Raw search indexes newly saved conversations first, so a new save is usually searchable within about 10 seconds (a long turn can take about half a minute, and a turn with very many messages up to about two minutes). Raw search builds its full index in the background while Cairn is running: allow about 15 minutes per 1,000 saved messages on a typical computer and up to about 20 minutes on a slower one; larger stores take less time per message (for 10,000, about 1.5 hours, or about 3 hours on a slower computer). After upgrading from 0.6.7, this first full indexing pass runs once more, so Raw search reports partial coverage for about as long as a first build. After each new saved message it re-checks the whole index (about 5 minutes per 1,000 saved messages), so while saves keep arriving the full pass may not finish until saving pauses; new saves are still indexed first. Times depend on how your conversations are shaped; many long turns take longer. Until a build or re-check finishes, Raw search still returns results but reports partial coverage. Until the first full pass has finished, conversations it hasn't reached yet may be missing from results. The coverage report marks such results as partial, but assistants using the memory tool see only the results, so an empty answer then doesn't mean nothing was saved. Memories, and conversations the index already covers, are not affected and stay searchable as before.
 
 With `--no-capture`, setup prints only the off capture status, without the
 default-on notice or Codex hook-approval prompt. After `--no-capture` or
@@ -92,10 +92,12 @@ Known limits in this release:
 - Local setup doesn't support a custom `CLAUDE_CONFIG_DIR` yet: setup stops with "The Claude Code local entry could not be verified." Fixed in the next release.
 - If `~/.claude` or `~/.codex` (or `CLAUDE_CONFIG_DIR` / `CODEX_HOME`) is a symbolic link, local setup stops without connecting that tool. Fixed in the next release.
 - macOS with Node from Homebrew: setup records Node's versioned path, so rerun setup after `brew upgrade` updates Node. Fixed in the next release.
-- Claude Code runs started by scripts or the Agent SDK (for example `claude -p`) are saved like interactive sessions.
-- Deleting a conversation or forgetting a memory removes that text from Cairn's database at once, and it is never shown again; conversations a forget only hides stay saved until you delete them. Local search index files can keep word lists (and, with semantic search, vectors) from deleted items until background cleanup reaches them. Cleanup runs only while Cairn is running, may not reach them while new conversations keep being saved, and never covers index files for a search setup you no longer use. As with most databases, deleted text can also remain in unused file space until it is overwritten.
+- From 0.6.8, Claude Code runs started by scripts or the Agent SDK (for example `claude -p`) are not saved. Interactive sessions keep being saved as before. In 0.6.6 and 0.6.7, these runs are still saved; to keep them out of the store on those versions, run `npx @cairn-ink/memory config --local-capture off --client claude`. This also stops saving interactive Claude Code sessions until you run `npx @cairn-ink/memory config --local-capture on --client claude`.
+- Deleting a conversation or forgetting a memory removes that text from Cairn's database at once, and it is never shown again; conversations a forget only hides stay saved until you delete them. Search never returns deleted text, but local search index files can keep word lists (and, with semantic search, vectors) from deleted items until background cleanup removes them. Cleanup runs only while Cairn is running, can take a while on a large store, and never covers index files for a search setup you no longer use. As with most databases, deleted text can also remain in unused file space until it is overwritten.
+- Recall that asks for sources or reasons can be refused (`source_unavailable`) after you forget or correct a memory, until the other memories that came from a conversation it hid are corrected or forgotten. This needs a model key and is unchanged from 0.6.7; ordinary recall keeps working.
+- After you forget something, the conversation it came from and any resumed or forked copy of it (for example `claude --resume`) are not saved from then on. Any conversation that tries to save a message dated within 30 minutes of the forgotten message is not saved from then on either, including one you start right after the forget. To resume saving, start a new conversation more than 30 minutes after the forgotten message was written.
+- After any local forget, correct, conversation delete or Episode forget, conversations whose message times are unknown are hidden from Raw search, and a conversation that saves a message without a time is not saved from then on, including new conversations. Memories are kept. Claude Code and Codex normally record message times, so this only affects messages whose transcript entry has no timestamp.
 - When capture resumes after being turned off, Cairn reads up to the last 4 KiB of the conversation file, and for Codex up to the first 4 KiB to find its session header; some of those bytes may have been written while capture was off. They are used only to identify the session and check the file wasn't replaced, never saved or sent.
-- A later release indexes newly saved conversations first.
 
 Going back to 0.6.5: an **attested base-33 store with card lineage revision 1**
 (physical 53, lineage 1) that 0.6.6 opened with Raw on is refused with
@@ -162,7 +164,7 @@ npx @cairn-ink/memory raw delete <conversation-id> --yes
 多個工作階段同時保存，不再導致其中一個停止保存。預設讀取到達時間上限時，
 會保留已驗證的 Raw 片段並標示為 partial，不會把這些片段丟掉。
 
-**保存後，搜尋需要時間追上。** 每一輪對話結束時就會存進本機資料庫，但 Raw 搜尋要等本機索引處理到這段對話，才找得到它。Raw 搜尋會在 Cairn 執行時於背景建立索引，速度大約每秒一則已保存訊息：1,000 則約需 15 分鐘，10,000 則約 2 小時。每保存一則新訊息，它會重新檢查整個索引（每 1,000 則約 6 分鐘）。建立或重新檢查完成之前，Raw 搜尋仍會回傳結果，但會回報 partial（部分涵蓋）。持續使用時，每次新的保存都會讓索引從頭再跑一次，所以忙碌工作階段中保存的對話，可能要等你停下來後才搜得到。索引追上之前，新保存的對話可能不會出現在結果裡。涵蓋報告會把這類結果標為 partial，但透過記憶工具使用的助理只看得到結果本身，所以這段期間的空結果不代表沒有保存。Memories 與索引已涵蓋的對話不受影響，照常可以搜尋。
+**保存後，搜尋需要時間追上。** 每一輪對話結束時就會存進本機資料庫。從安裝器 0.6.8 起，Raw 搜尋會優先為新保存的對話建索引，新保存的內容通常約 10 秒內就搜得到（很長的一輪可能要半分鐘左右，訊息非常多的一輪最多約兩分鐘）。Raw 搜尋會在 Cairn 執行時於背景建立完整索引：一般電腦每 1,000 則已保存訊息約需 15 分鐘，較慢的電腦最多約 20 分鐘；資料越多，每則花的時間越少（10,000 則在一般電腦約 1.5 小時，較慢的電腦約 3 小時）。從 0.6.7 升級後，這第一輪完整建索引會再跑一次，所以會有一段和首次建立差不多長的時間，Raw 搜尋回報 partial（部分涵蓋）。每保存一則新訊息，它會重新檢查整個索引（每 1,000 則約 5 分鐘），所以持續有新的保存時，完整索引可能要等保存停下來才跑得完；新保存的內容仍會優先建索引。實際時間取決於你的對話型態；長的回合越多，花的時間越久。建立或重新檢查完成之前，Raw 搜尋仍會回傳結果，但會回報 partial（部分涵蓋）。第一輪完整建索引完成之前，還沒處理到的對話可能不會出現在結果裡。涵蓋報告會把這類結果標為 partial，但透過記憶工具使用的助理只看得到結果本身，所以這段期間的空結果不代表沒有保存。Memories 與索引已涵蓋的對話不受影響，照常可以搜尋。
 
 使用 `--no-capture` 時，設定只會顯示擷取已關閉，不再顯示預設開啟通知或
 Codex 的 hooks 核准提示。執行 `--no-capture` 或 `config --local-capture off`
@@ -182,10 +184,12 @@ Codex 的 hooks 核准提示。執行 `--no-capture` 或 `config --local-capture
 - 本機設定還不支援自訂的 `CLAUDE_CONFIG_DIR`：設定會停在「無法確認 Claude Code 的本機記憶項目」。下一版修正。
 - 若 `~/.claude` 或 `~/.codex`（或 `CLAUDE_CONFIG_DIR`／`CODEX_HOME`）是符號連結，本機設定會停止，不會連接該工具。下一版修正。
 - macOS 上用 Homebrew 安裝的 Node：設定會記下 Node 帶版本號的路徑，所以 `brew upgrade` 更新 Node 之後請重新執行 setup。下一版修正。
-- 由腳本或 Agent SDK 啟動的 Claude Code 執行（例如 `claude -p`）會和互動式工作階段一樣被保存。
-- 刪除對話或忘記記憶時，那段文字會立刻從 Cairn 的資料庫移除，之後不會再出現；只是因「忘記」而隱藏的對話仍然保存著，要刪除才會移除。本機搜尋索引檔可能還留著被刪內容的詞彙清單（開啟語意搜尋時還有向量），要等背景清理處理到才會移除。清理只在 Cairn 執行時進行，持續有新對話存入時可能一直輪不到，而不再使用的搜尋設定留下的索引檔不會被清理。和多數資料庫一樣，刪掉的文字也可能留在檔案未使用的空間，直到被覆寫。
+- 從 0.6.8 起，由腳本或 Agent SDK 啟動的 Claude Code 執行（例如 `claude -p`）不會被保存，互動對話仍照常保存。0.6.6 與 0.6.7 仍會保存這些執行；使用這兩個版本時，可以執行 `npx @cairn-ink/memory config --local-capture off --client claude`，避免它們存進來。這也會停止保存互動式 Claude Code 對話，直到你執行 `npx @cairn-ink/memory config --local-capture on --client claude`。
+- 刪除對話或忘記記憶時，那段文字會立刻從 Cairn 的資料庫移除，之後不會再出現；只是因「忘記」而隱藏的對話仍然保存著，要刪除才會移除。搜尋不會回傳被刪除的文字，但本機搜尋索引檔可能還留著被刪內容的詞彙清單（開啟語意搜尋時還有向量），要等背景清理移除。清理只在 Cairn 執行時進行，資料多時可能要一段時間，而不再使用的搜尋設定留下的索引檔不會被清理。和多數資料庫一樣，刪掉的文字也可能留在檔案未使用的空間，直到被覆寫。
+- 忘記或更正記憶之後，要求附上來源或理由的回想可能被拒絕（`source_unavailable`），直到被隱藏對話所產生的其他記憶都被更正或忘記為止。這需要設定模型金鑰，行為和 0.6.7 相同；一般回想照常可用。
+- 忘記某些內容之後，它原本所在的對話，以及這個對話被接續或分支出的副本（例如 `claude --resume`），從那之後都不會被保存。任何對話只要有訊息的時間落在被忘記訊息前後 30 分鐘內，從那之後也不會被保存，包括忘記之後馬上開的新對話。要恢復保存，請在被忘記的那則訊息寫下 30 分鐘之後再開新對話。
+- 在本機忘記、更正、刪除對話或忘記 Episode 之後，訊息時間不明的對話會從 Raw 搜尋中隱藏，而且從那之後，只要對話裡有沒有時間的訊息，整段對話就不會被保存，新對話也一樣。記憶會保留。Claude Code 和 Codex 平常都會記錄訊息時間，所以這只影響逐字稿裡沒有時間戳記的訊息。
 - 從關閉狀態恢復擷取時，Cairn 會讀取對話檔最後至多 4 KiB，Codex 還會讀取開頭至多 4 KiB 來找出 session 標頭；其中一部分可能是關閉期間寫入的。這些位元組只用來辨識 session、確認檔案沒有被替換，不會保存或送出。
-- 之後的版本會優先為新保存的對話建索引。
 
 降回 0.6.5 時，若 0.6.6 已在開啟 Raw 的情況下開過
 **經驗證的 base-33、card lineage revision 1 資料庫**（physical 53、lineage 1），
@@ -260,7 +264,7 @@ Node 路徑變動時，重跑 `setup --local`。
 `read_memory_context`. Automatic hooks fill Raw without a model; setup does not register `capture_memory`. Saving, inspecting, correcting and forgetting
 need no model key. Semantic recall needs a model key; without one it reports
 `model_not_configured`. With `OPENAI_API_KEY` available to the Cairn MCP server, memories and search text
-go to OpenAI for semantic search, up to an estimated US$1 per server run. Saved
+go to OpenAI for semantic search, up to an estimated US$1 per day per running Cairn server. Saved
 conversations are sent only if you opt in with `--raw-semantic` (or explicitly
 configure `--context-embedder`). To keep everything on this computer, don't give
 the server a key. `--no-context-semantic` only turns off embeddings; with a key,
@@ -277,7 +281,7 @@ authentication fields. Unrelated entries and file contents are never printed.
 `fetch_memory_candidate_evidence`、`read_memory_context`。自動 hooks 不需要模型就能保存 Raw，setup 不會註冊 `capture_memory`。
 保存、查看、更正與遺忘不需要模型金鑰；語意回想需要模型金鑰，
 沒有時回報 `model_not_configured`。若 Cairn MCP server 的環境有 `OPENAI_API_KEY`，語意搜尋會把記憶與搜尋文字
-傳給 OpenAI，每次 server 執行的預估費用上限為 US$1。已保存的對話只有在你用
+傳給 OpenAI，每個執行中的 Cairn server 每天預估上限約 US$1。已保存的對話只有在你用
 `--raw-semantic`（或明確設定 `--context-embedder`）啟用後才會傳送。
 要讓所有資料都留在這台電腦，請不要提供金鑰給 server。`--no-context-semantic` 只會關閉
 embeddings；有金鑰時，回想和其他模型功能仍會把記憶文字傳給 OpenAI。
