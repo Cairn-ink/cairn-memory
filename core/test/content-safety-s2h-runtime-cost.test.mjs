@@ -10,13 +10,18 @@ import { transaction } from '../database.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 const fixed=new Map();
 for(const base of [18,23,33])for(const n of [1,12])test(`R2 direct runtime recentReceipts v${base} ${n} receipts`,async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-11-14T00:00:00.000Z')});
  const cells=[];
  for(const [safety,facts]of costGatePopulations()){
   const f=safetyFixture(t,base);if(safety)await f.migrate();const db=f.connect(),core=openMemoryCore({path:f.path}),runtime=createMemoryRuntime({path:f.path});
   t.after(()=>{runtime.close();core.close();db.close();});
-  let memory;
-  for(let i=0;i<n;i++)memory=ok(core.admit({namespace:ns,memory:{content:'Synthetic recent receipt Memory',kind:'fact'},receipts:[receipt('runtime-recent-'+i)]})).memory;
+  let memory;const receiptTimes=[];
+  for(let i=0;i<n;i++){
+   t.mock.timers.tick(1);receiptTimes.push(new Date().toISOString());
+   memory=ok(core.admit({namespace:ns,memory:{content:'Synthetic recent receipt Memory',kind:'fact'},receipts:[receipt('runtime-recent-'+i)]})).memory;
+  }
   assert.equal(db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(memory.id).n,n,'actual retained receipt population');
+  assert.deepEqual(db.prepare('SELECT created_at FROM receipts WHERE memory_id=? ORDER BY created_at,id').all(memory.id).map(row=>row.created_at),receiptTimes,'one controlled timestamp group per receipt');
   if(facts)transaction(db,()=>{for(let i=0;i<facts;i++)writeContentSuppressionInside(db,{namespace:ns,kind:'memory',key:'unrelated-'+i,reason:'purge',actionId:'fact-'+i});});
   assertCostGateCell(db,base,safety,facts,ns.ownerId,{testName:t.name,n});
   const cases=[['runtime',memory,n],['empty-count',memory,0],['missing-ref',{id:'absent',revision:1},1]],records=[];
