@@ -31,10 +31,11 @@ export async function workspace(t) {
   const args = ['--db', path, '--owner', ns.ownerId];
   let nextId = 0;
   function child(configuration) {
+    const startedAt = performance.now();
     const process = fork(new URL('./fixtures/local-daemon-client.mjs', import.meta.url), [], {
       execArgv: [], env: {}, detached: true, stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
     });
-    const entry = { process, role: configuration.role ?? 'forwarder', messages: [], responses: new Map(), stderr: '', lines: [], exit: null };
+    const entry = { process, startedAt, responseTimes: new Map(), role: configuration.role ?? 'forwarder', messages: [], responses: new Map(), stderr: '', lines: [], exit: null };
     children.push(entry);
     process.stdin.on('error', () => {}); // Expected EPIPE after injected transport death.
     process.on('message', message => {
@@ -50,7 +51,7 @@ export async function workspace(t) {
       while ((end = buffer.indexOf('\n')) >= 0) {
         const line = buffer.slice(0, end); buffer = buffer.slice(end + 1);
         const message = JSON.parse(line); entry.lines.push(message);
-        if (Object.hasOwn(message, 'id')) entry.responses.set(message.id, message);
+        if (Object.hasOwn(message, 'id')) { entry.responses.set(message.id, message); entry.responseTimes.set(message.id, performance.now()); }
       }
     });
     process.on('exit', (code, signal) => { entry.exit = { pid: process.pid, code, signal }; exits.push(entry.exit); });

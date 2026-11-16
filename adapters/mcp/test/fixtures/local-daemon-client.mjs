@@ -11,7 +11,10 @@ import { processStart } from '../../local-daemon-liveness.mjs';
 const [configuration] = await once(process, 'message');
 const send = message => { if (process.connected) process.send(message); };
 try {
-  if (configuration.role === 'connection-probe') {
+  if (configuration.role === 'per-session') {
+    process.argv = [process.execPath, new URL('../../cli.mjs', import.meta.url).pathname, ...configuration.args];
+    const { start } = await import('../../cli.mjs'); await start();
+  } else if (configuration.role === 'connection-probe') {
     // The owner identity describes a normal Node process. node:test on Node 24
     // carries runner flags that production correctly refuses as injection.
     let code = null;
@@ -21,6 +24,15 @@ try {
     } catch (error) { code = error.code; }
     send({ kind: 'connection-probe-result', code, execArgv: process.execArgv });
   } else if (configuration.role === 'candidate') {
+    let monitor;
+    if (configuration.instrumentSlices) {
+      const { installDaemonSliceMonitor } = await import('../../../../tools/testing/fixtures/daemon-event-loop-monitor.mjs');
+      monitor = installDaemonSliceMonitor();
+      process.on('message', message => {
+        if (message.kind === 'slice-phase') { monitor.phase(message.phase); send({ kind: 'slice-phase-ready', phase: message.phase }); }
+        if (message.kind === 'slice-report') send({ kind: 'slice-report', sequence: message.sequence, value: monitor.report() });
+      });
+    }
     let fault;
     if (configuration.midWrite) {
       const { installDaemonMidWrite } = await import('./local-daemon-mid-write.mjs');
@@ -77,6 +89,7 @@ try {
         };
       },
     });
+    monitor?.close();
     send({ kind: 'candidate-done', acquired });
   } else {
     const candidates = [], liveCandidates = new Map();
@@ -103,7 +116,7 @@ try {
         return result;
       };
     }
-    const result = await runForwarder(configuration.args, { ...configuration.options,
+    let result = await runForwarder(configuration.args, { ...configuration.options,
       ...(configuration.holdTakeoverLock ? { takeoverOptions: { afterLock: async () => {
         send({ kind: 'takeover-locked' });
         while ((await once(process, 'message'))[0].kind !== 'release-takeover') {}
@@ -154,6 +167,11 @@ try {
           incarnation: descriptor.incarnation, metadata: ready.metadata });
       },
     });
+    if (configuration.fallbackSession && result?.refused) {
+      send({ kind: 'fallback-session', code: result.refused });
+      process.argv = [process.execPath, new URL('../../cli.mjs', import.meta.url).pathname, ...configuration.args];
+      const { start } = await import('../../cli.mjs'); await start(); result = null;
+    }
     send({ kind: 'forwarder-done', code: result, bytesRead });
     if (result) process.exitCode = 1;
     // Keep the supervisor alive after stdio EOF so detached children's actual
