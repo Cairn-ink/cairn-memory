@@ -94,14 +94,22 @@ async function provisionStore(bootstrap, directory) {
 }
 
 async function serve(directory, paths, identity, bootstrap, owner, { idleMs, graceMs, exit, runtimeOptions }) {
-  let host, embedding, activated, draining = false, idle, outer, shutdownTask, doneResolve, doneReject;
+  let host, embedding, activated, draining = false, idle, outer, shutdownTask, doneResolve, doneReject, startupTask;
   let logTail = Promise.resolve(), stampTail = Promise.resolve(), stampTimer;
+  let writersFenced = false, logSealed = false;
+  const producers = new Set(), socketClosures = new Set();
+  const track = promise => {
+    const task = Promise.resolve(promise); producers.add(task);
+    void task.finally(() => producers.delete(task)).catch(() => {});
+    return task;
+  };
   const codes = [];
-  const log = code => { codes.push(code); if (codes.length > 8) codes.shift(); logTail = logTail.then(() => logCode(directory, paths.log, code)).catch(() => {}); };
+  const log = code => { if (logSealed) return; codes.push(code); if (codes.length > 8) codes.shift(); logTail = logTail.then(() => logCode(directory, paths.log, code)).catch(() => {}); };
   const sockets = new Set(), handles = new Map();
   const descriptor = { version: 1, protocol: DAEMON_PROTOCOL, identity, owner,
     incarnation: randomBytes(32).toString('hex'), capability: randomBytes(32).toString('hex'), socket: null };
   const refreshStamp = () => {
+    if (writersFenced || draining) return stampTail;
     stampTail = stampTail.then(() => writePrivate(directory, paths.stamp, canonical({
       version: 1, incarnation: descriptor.incarnation, owner, build: identity.build,
       attachedSessions: handles.size, monotonicMs: daemonMonotonicMs(), codes: [...codes],
@@ -145,13 +153,17 @@ async function serve(directory, paths, identity, bootstrap, owner, { idleMs, gra
     socket.on('error', () => {});
     if (draining || sockets.size >= 64) { socket.destroy(); return; }
     clearTimeout(idle); sockets.add(socket);
-    let input, output, handle, heartbeat;
+    let input, output, handle, heartbeat, handleClose;
     const drop = () => {
       clearInterval(heartbeat);
-      void handle?.close().catch(() => {}); input?.destroy(); output?.destroy(); socket.destroy();
+      if (handle && !handleClose) handleClose = track(handle.close().catch(() => {})); input?.destroy(); output?.destroy(); socket.destroy();
     };
-    socket.once('close', () => { drop(); sockets.delete(socket); handles.delete(socket); if (!draining) void refreshStamp(); armIdle(); });
-    void (async () => {
+    const closed = new Promise(resolve => socket.once('close', () => {
+      drop(); sockets.delete(socket); handles.delete(socket);
+      if (!draining) void refreshStamp(); armIdle(); resolve();
+    }));
+    socketClosures.add(closed); void closed.then(() => socketClosures.delete(closed));
+    track((async () => {
       await directory.validate(); await assertStore(identity);
       await authenticateServer(socket, descriptor, { deadline: performance.now() + 2000, admitting: () => !draining,
         ready: () => ({ owner, incarnation: descriptor.incarnation, counters: host.inspect() }),
@@ -159,6 +171,7 @@ async function serve(directory, paths, identity, bootstrap, owner, { idleMs, gra
       const runtime = await activate();
       if (draining || socket.destroyed) throw refuse('daemon_draining');
       await assertStore(identity);
+      if (draining || socket.destroyed) throw refuse('daemon_draining');
       const ledger = requestLedger();
       const queued = () => [...handles.values()].reduce((sum, value) => sum + queuedBytes(value.input, value.output, value.socket), 0);
       const connectionQueued = () => queuedBytes(input, output, socket);
@@ -182,7 +195,7 @@ async function serve(directory, paths, identity, bootstrap, owner, { idleMs, gra
         socket.write(DAEMON_LIVENESS_FRAME);
       }, DAEMON_LIVENESS_MS);
       // No tool text, ids, paths or response bodies in daemon-owned collections.
-    })().catch(() => { log('daemon_refused'); drop(); });
+    })().catch(() => { log('daemon_refused'); drop(); }));
   });
   async function cleanupEndpoint() {
     const text = await readPrivate(directory, paths.ready, { missing: true });
@@ -198,36 +211,52 @@ async function serve(directory, paths, identity, bootstrap, owner, { idleMs, gra
   function shutdown() {
     return shutdownTask ??= (async () => {
       draining = true; clearTimeout(idle); clearInterval(stampTimer); log('daemon_draining');
+      const listenerClosed = new Promise(resolve => server.once('close', resolve));
       server.close(); // Stop admissions before revocation; lifetime lock remains held.
       outer = setTimeout(() => { log('daemon_grace_expired'); exit(1); }, graceMs);
-      await stampTail.catch(() => {});
-      // Connection close synchronously revokes grants; it does not own the runtime.
-      for (const entry of handles.values()) void entry.handle?.close().catch(() => {});
+      // Revoke synchronously, then join every continuation that can enqueue IO.
+      for (const entry of handles.values()) track(entry.handle?.close().catch(() => {}));
       for (const socket of sockets) socket.destroy();
+      await startupTask?.catch(() => {});
+      await Promise.all([...socketClosures]);
+      while (producers.size) await Promise.allSettled([...producers]);
       await activated?.catch(() => {});
       while (host?.inspect().inFlight) await new Promise(resolve => setTimeout(resolve, 10));
       await host?.close();
-      await embedding?.close?.(); await cleanupEndpoint();
-      log('daemon_exit'); await logTail; clearTimeout(outer); doneResolve();
+      await embedding?.close?.();
+      writersFenced = true;
+      await stampTail.catch(() => {});
+      await cleanupEndpoint();
+      log('daemon_exit'); logSealed = true; await logTail;
+      // TERM may have overlapped a pending bind. Startup is now settled.
+      if (server.listening) await new Promise(resolve => server.close(resolve));
+      await listenerClosed;
+      clearTimeout(outer); doneResolve();
     })();
   }
   const term = () => { void shutdown().catch(doneReject); };
   process.once('SIGTERM', term); process.once('SIGINT', term);
   server.on('error', () => { doneReject(refuse('daemon_listener')); });
-  try {
-    await directory.validate();
+  const startupGuard = () => { if (draining) throw refuse('daemon_draining'); };
+  startupTask = (async () => {
+    await directory.validate(); startupGuard();
     // Bind already satisfies the checked 0600 mode if killed before chmod.
     const previousMask = process.umask(0o177);
     try {
       await new Promise((resolve, reject) => { server.once('error', reject); server.listen(paths.socket, () => { server.off('error', reject); resolve(); }); });
     } finally { process.umask(previousMask); }
-    await chmod(paths.socket, 0o600);
-    const info = await checkedEntry(directory, paths.socket, { socket: true });
+    startupGuard();
+    await chmod(paths.socket, 0o600); startupGuard();
+    const info = await checkedEntry(directory, paths.socket, { socket: true }); startupGuard();
     descriptor.socket = { dev: String(info.dev), ino: String(info.ino) };
-    log('daemon_ready'); await refreshStamp();
-    await writePrivate(directory, paths.ready, canonical(descriptor));
+    log('daemon_ready'); await refreshStamp(); startupGuard();
+    await writePrivate(directory, paths.ready, canonical(descriptor)); startupGuard();
     stampTimer = setInterval(() => { if (!draining) void refreshStamp(); }, DAEMON_LIVENESS_MS);
-    armIdle(); await done;
+    armIdle();
+  })();
+  try {
+    try { await startupTask; } catch (error) { if (!draining) throw error; }
+    await done;
   } finally {
     clearTimeout(idle); clearInterval(stampTimer);
     // Every exit shares the same bounded cleanup, including listener/setup
