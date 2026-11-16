@@ -5,7 +5,9 @@
 - The synchronous start hook now has 1 second (was 300 ms), including Node
   startup, to record where a new session starts.
 - On a very slow or busy computer, the first turn of a new session after a
-  pause can still be skipped. Nothing written during a pause is sent.
+  pause can still be skipped: a start hook that runs out of time records
+  nothing, so that turn is not sent. The other known limitations listed for
+  0.3.7 still apply.
 - The protocol and installer are unchanged.
 
 ## Unreleased — engine Card maintenance

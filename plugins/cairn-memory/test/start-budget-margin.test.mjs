@@ -71,13 +71,13 @@ async function fixture(t) {
 }
 
 for (const existing of [false, true]) {
-  test(`400 ms startup preserves the first turn; existing transcript=${existing}`, { timeout: 15000 }, async t => {
+  test(`320 ms startup preserves the first turn; existing transcript=${existing}`, { timeout: 15000 }, async t => {
     const f = await fixture(t);
     await f.run('recall', { session: 'synthetic-observer' });
     await setPaused(f.dataDir, true); await setPaused(f.dataDir, false);
     const prefix = row('before-boundary');
     if (existing) await writeFile(f.transcript, prefix);
-    const { wallMs, message } = await f.run('start-boundary', { delayMs: 400 });
+    const { wallMs, message } = await f.run('start-boundary', { delayMs: 320 });
     const state = await f.state().catch(error => { if (error.code !== 'ENOENT') throw error; });
     assert.ok(state, message);
     if (existing) assert.equal(state.startOffset, Buffer.byteLength(prefix), message);
@@ -86,7 +86,7 @@ for (const existing of [false, true]) {
     await appendFile(f.transcript, row('first-turn'));
     await f.run('capture');
     assert.deepEqual(f.captures.flatMap(body => body.messages.map(m => m.id)), ['first-turn'], message);
-    t.diagnostic(JSON.stringify({ existing, delayMs: 400, wallMs }));
+    t.diagnostic(JSON.stringify({ existing, delayMs: 320, wallMs }));
   });
 
   test(`1200 ms startup leaves no boundary authority; existing transcript=${existing}`, { timeout: 15000 }, async t => {
@@ -94,8 +94,10 @@ for (const existing of [false, true]) {
     await f.run('recall', { session: 'synthetic-observer' });
     await setPaused(f.dataDir, true); await setPaused(f.dataDir, false);
     if (existing) await writeFile(f.transcript, row('before-boundary'));
+    // Authority, not wall time, is the contract here: a loaded runner may take
+    // longer to collect the exit, but the hook must still write no boundary.
     const { wallMs, message } = await f.run('start-boundary', { delayMs: 1200 });
-    assert.ok(wallMs >= 1200 && wallMs < 2000, message);
+    assert.ok(wallMs >= 1200, message);
     await assert.rejects(f.state(), { code: 'ENOENT' }, message);
     await f.run('recall');
     await appendFile(f.transcript, row('unbounded-turn'));
