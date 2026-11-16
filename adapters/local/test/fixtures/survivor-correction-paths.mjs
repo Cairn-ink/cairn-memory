@@ -25,18 +25,18 @@ export function oldDecision(f) {
   });
 }
 
-// Observe the real entry via its mandatory transaction check, even if a legacy
-// layout or a serving-layout cache would let it return without preparing SQL.
-// No loader replacement, public testing option or guard exemption is involved.
+// installedContentLayout's first statement calls WeakSet.has before any cache
+// return or SQL. Observe its direct helper caller, including on legacy layouts.
+// The native isTransaction accessor need not be configurable or on a prototype.
 export async function traceCorrection(t, run, allowed = true) {
   const prototype = DatabaseSync.prototype, prepare = prototype.prepare;
-  const descriptor = Object.getOwnPropertyDescriptor(prototype, 'isTransaction');
-  assert.equal(typeof descriptor?.get, 'function');
+  const has = WeakSet.prototype.has;
+  assert.equal(typeof has, 'function');
   const statements = [], helperStatements = []; let helperEntries = 0;
-  Object.defineProperty(prototype, 'isTransaction', { ...descriptor, get() {
-    if (new Error().stack.includes('at memoryCorrectionDenialsInside')) helperEntries++;
-    return Reflect.apply(descriptor.get, this, []);
-  } });
+  WeakSet.prototype.has = function (...args) {
+    if (/at installedContentLayout[^\n]*\n\s*at memoryCorrectionDenialsInside\b/.test(new Error().stack)) helperEntries++;
+    return Reflect.apply(has, this, args);
+  };
   prototype.prepare = function (query, ...args) {
     statements.push(query);
     if (new Error().stack.includes('at memoryCorrectionDenialsInside')) helperStatements.push(query);
@@ -46,7 +46,7 @@ export async function traceCorrection(t, run, allowed = true) {
   try { result = await run(); }
   finally {
     prototype.prepare = prepare;
-    Object.defineProperty(prototype, 'isTransaction', descriptor);
+    WeakSet.prototype.has = has;
   }
   assert.ok(statements.length > 0, 'the correction SQL was observed');
   if (allowed) {
