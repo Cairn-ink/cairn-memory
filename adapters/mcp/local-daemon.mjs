@@ -9,12 +9,16 @@ import { createIdentity, daemonVector, canonical, assertStore, assertStoreSync, 
 import { localProcessIdentity, startAwareAlive, daemonMonotonicMs } from './local-daemon-liveness.mjs';
 import { authenticateServer, frameGuard, requestLedger, queuedBytes, QUEUE_BYTES, DAEMON_LIVENESS_MS, DAEMON_LIVENESS_FRAME } from './local-daemon-wire.mjs';
 
-async function reapEndpoint(directory, paths, live) {
+async function reapEndpoint(directory, paths, live, predecessor) {
   const text = await readPrivate(directory, paths.ready, { missing: true });
   const socket = await checkedEntry(directory, paths.socket, { socket: true, missing: true });
   if (text === undefined) {
-    // No published incarnation means no proof of death. Never unlink on a timeout.
-    if (socket) throw refuse('daemon_endpoint_uncertain');
+    // The lifetime lock excludes publishers. Its recorded predecessor must
+    // additionally be start/boot/namespace-verified dead before orphan removal.
+    if (socket) {
+      if (!predecessor || startAwareAlive(predecessor, live)) throw refuse('daemon_endpoint_uncertain');
+      await removePrivate(directory, paths.socket, { socket: true });
+    }
     return;
   }
   let old; try { old = JSON.parse(text); } catch { throw refuse('daemon_descriptor'); }
@@ -42,15 +46,17 @@ export async function runCandidate(bootstrap, { idleMs = 30000, graceMs = 5000, 
   if (!identity.eligible || canonical(identity.record) !== canonical(bootstrap.identity)) throw refuse('daemon_identity');
   const paths = endpointPaths(directory, identity.digest), live = localProcessIdentity();
   await checkedEntry(directory, paths.lock, { missing: true });
+  const prior = await readPrivate(directory, paths.lock, { missing: true });
+  const predecessor = prior ? JSON.parse(prior) : undefined;
   // Lock before ANY server, SDK, core, provider, SQLite or tokenizer import.
   // stateLock cannot record start time in its context. Use its unchanged underlying
   // withFileLock seam directly, with stricter daemon-specific owner validation.
   return withFileLock(paths.lock, async () => {
     await directory.validate();
-    await reapEndpoint(directory, paths, live);
+    await reapEndpoint(directory, paths, live, predecessor);
     await afterLock(); // Programmatic instrumentation only; never accepted by bootstrap/argv/env.
     await serve(directory, paths, identity.record, bootstrap, live, { idleMs, graceMs, exit, runtimeOptions });
-  }, { timeoutMs: 250, pollMs: 10, context: live,
+  }, { timeoutMs: 250, pollMs: 10, context: { ...live, store: { dev: identity.record.store.dev, ino: identity.record.store.ino } },
     isAlive: (_pid, owner) => startAwareAlive(owner, live),
     validateOwner: owner => { startAwareAlive(owner, live); },
     validatePath: path => checkedEntry(directory, path, { missing: true }),
@@ -200,7 +206,8 @@ async function serve(directory, paths, identity, bootstrap, owner, { idleMs, gra
   server.on('error', () => { doneReject(refuse('daemon_listener')); });
   try {
     await directory.validate();
-    const previousMask = process.umask(0o077);
+    // Bind already satisfies the checked 0600 mode if killed before chmod.
+    const previousMask = process.umask(0o177);
     try {
       await new Promise((resolve, reject) => { server.once('error', reject); server.listen(paths.socket, () => { server.off('error', reject); resolve(); }); });
     } finally { process.umask(previousMask); }

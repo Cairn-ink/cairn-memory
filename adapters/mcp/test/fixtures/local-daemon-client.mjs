@@ -57,6 +57,23 @@ try {
           return result;
         }`), import.meta.url);
     }
+    if (configuration.unpublishedSocket) {
+      const chmod = fsPromises.chmod;
+      fsPromises.chmod = async function(path, mode) {
+        if (String(path).endsWith('.sock') && configuration.unpublishedSocket === 'before-chmod') {
+          send({ kind: 'socket-bound-unpublished' });
+          await new Promise(() => {});
+        }
+        const result = await chmod(path, mode);
+        if (String(path).endsWith('.sock')) {
+          send({ kind: 'socket-bound-unpublished' });
+          if (configuration.unpublishedSocket === 'exit') process.exit(17);
+          await new Promise(() => {});
+        }
+        return result;
+      };
+      syncBuiltinESMExports();
+    }
     let armed = false;
     process.on('message', message => { if (message.kind === 'arm') { armed = true; fault?.arm(); send({ kind: 'armed' }); } });
     const acquired = await runCandidate(configuration.bootstrap, { ...configuration.lifecycle,

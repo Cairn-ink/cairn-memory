@@ -84,6 +84,8 @@ export async function takeOver(directory, paths, observed, {
   });
 }
 
+export const daemonStoreKey = store => createHash('sha256').update(canonical({ dev: store.dev, ino: store.ino })).digest('hex').slice(0,12);
+
 export async function runDaemonCommand(args, {
   platform = process.platform, root, write = text => process.stdout.write(text), graceMs = 5000,
 } = {}) {
@@ -92,7 +94,21 @@ export async function runDaemonCommand(args, {
   if (!['status', 'stop'].includes(action) || extra.length || (flag !== undefined && (flag !== '--db' || !path))) throw refuse('daemon_arguments');
   const directory = await runtimeDirectory({ root });
   const store = path === undefined ? undefined : await physicalStore(path);
-  const entries = [];
+  const entries = [], uncertain = [];
+  // Bound sockets are discoverable before a ready descriptor is published.
+  // Lifetime-lock metadata supplies the physical-store identity, never a path.
+  for (const name of (await readdir(directory.path)).filter(name => /^d-[a-f0-9]{32}\.sock$/.test(name)).sort()) {
+    const base = name.slice(0, -5);
+    if (await readPrivate(directory, join(directory.path, base + '.json'), { missing: true })) continue;
+    let owner, removable = false;
+    try {
+      await checkedEntry(directory, join(directory.path, name), { socket: true });
+      const lock = await readPrivate(directory, join(directory.path, base + '.lock'), { missing: true });
+      if (lock) { owner = JSON.parse(lock); removable = !startAwareAlive(owner); }
+    } catch { removable = false; }
+    if (store && (owner?.store?.dev !== store.dev || owner?.store?.ino !== store.ino)) continue;
+    uncertain.push({ code: 'endpoint_uncertain', auto_removable: removable });
+  }
   for (const name of (await readdir(directory.path)).filter(name => /^d-[a-f0-9]{32}\.json$/.test(name)).sort()) {
     const text = await readPrivate(directory, join(directory.path, name), { missing: true });
     if (!text) continue;
@@ -106,12 +122,12 @@ export async function runDaemonCommand(args, {
   }
   if (action === 'status') {
     write(JSON.stringify({ daemons: entries.map(({ descriptor, stamp }) => ({
-      store: createHash('sha256').update(canonical({ dev: descriptor.identity.store.dev, ino: descriptor.identity.store.ino })).digest('hex').slice(0,12),
+      store: daemonStoreKey(descriptor.identity.store),
       running: verifiedOwner(descriptor.owner), build: descriptor.identity.build.slice(0,12),
       attached_sessions: stamp?.attachedSessions ?? null,
       stamp_age_seconds: stamp && stamp.owner.boot === localProcessIdentity().boot ? Math.max(0, daemonMonotonicMs() - stamp.monotonicMs) / 1000 : null,
       last_codes: stamp?.codes ?? [],
-    })) }) + '\n');
+    })).concat(uncertain) }) + '\n');
   } else {
     const signalled = [];
     for (const { descriptor } of entries) {
