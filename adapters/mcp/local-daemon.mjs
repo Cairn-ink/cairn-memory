@@ -1,8 +1,8 @@
 import { createServer, Socket } from 'node:net';
-import { chmod } from 'node:fs/promises';
+import { chmod, opendir, unlink } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { resolve } from 'node:path';
+import { resolve, join, basename } from 'node:path';
 import { withFileLock } from '../../integrations/client/file-lock.mjs';
 import { runtimeDirectory, endpointPaths, identityKey, checkedEntry, readPrivate, writePrivate, removePrivate, logCode, refuse } from './local-daemon-state.mjs';
 import { createIdentity, daemonVector, canonical, assertStore, assertStoreSync, assertStoreLocation, creationIdentity, creationDigest, physicalStore, DAEMON_PROTOCOL } from './local-daemon-identity.mjs';
@@ -96,6 +96,49 @@ async function provisionStore(bootstrap, directory) {
   });
 }
 
+async function cleanupTemps(directory, paths, report) {
+  const pattern = new RegExp('^' + basename(paths.stamp, '.stamp') + '\\.(stamp|json)\\.tmp-[a-f0-9]{24}$');
+  const deadline = performance.now() + 1000;
+  let stream, entries = 0, matches = 0;
+  try {
+    await directory.validate();
+    stream = await opendir(directory.path);
+    for (;;) {
+      if (performance.now() >= deadline) { report('daemon_temp_budget'); break; }
+      if (entries === 4096) { report('daemon_temp_overflow'); break; }
+      const entry = await stream.read();
+      if (!entry) break;
+      entries++;
+      if (performance.now() >= deadline) { report('daemon_temp_budget'); break; }
+      if (!pattern.test(entry.name)) continue;
+      if (matches === 256) { report('daemon_temp_overflow'); break; }
+      matches++;
+      const path = join(directory.path, entry.name);
+      try {
+        const before = await checkedEntry(directory, path, { missing: true });
+        if (!before) continue;
+        if (before.nlink !== 1n) throw refuse('daemon_temp_invalid');
+        const after = await checkedEntry(directory, path, { missing: true });
+        if (!after) continue;
+        if (after.nlink !== 1n || before.dev !== after.dev || before.ino !== after.ino) throw refuse('daemon_temp_invalid');
+        // Sequential and awaited: the scheduling deadline never abandons IO.
+        await unlink(path);
+      } catch (error) {
+        if (error.code === 'ENOENT') continue;
+        if (error.code?.startsWith('daemon_directory')) throw error;
+        report('daemon_temp_invalid');
+      }
+    }
+  } catch {
+    report('daemon_temp_scan'); throw refuse('daemon_temp_scan');
+  } finally {
+    if (stream) {
+      try { await stream.close(); }
+      catch { report('daemon_temp_scan'); throw refuse('daemon_temp_scan'); }
+    }
+  }
+}
+
 async function serve(directory, paths, identity, bootstrap, owner, { idleMs, graceMs, exit, runtimeOptions, budget }) {
   budget.deadline = Infinity;
   let host, embedding, activated, draining = false, idle, outer, shutdownTask, doneResolve, doneReject, startupTask;
@@ -108,7 +151,7 @@ async function serve(directory, paths, identity, bootstrap, owner, { idleMs, gra
     return task;
   };
   const codes = [];
-  const log = code => { if (logSealed) return; codes.push(code); if (codes.length > 8) codes.shift(); logTail = logTail.then(() => logCode(directory, paths.log, code, { deadline: Math.min(budget.deadline, performance.now() + 1000) })).catch(() => {}); };
+  const log = (code, inStamp = true) => { if (logSealed) return; if (inStamp) { codes.push(code); if (codes.length > 8) codes.shift(); } logTail = logTail.then(() => logCode(directory, paths.log, code, { deadline: Math.min(budget.deadline, performance.now() + 1000) })).catch(() => {}); };
   const sockets = new Set(), handles = new Map();
   const descriptor = { version: 1, protocol: DAEMON_PROTOCOL, identity, owner,
     incarnation: randomBytes(32).toString('hex'), capability: randomBytes(32).toString('hex'), socket: null };
@@ -243,6 +286,7 @@ async function serve(directory, paths, identity, bootstrap, owner, { idleMs, gra
   server.on('error', () => { doneReject(refuse('daemon_listener')); });
   const startupGuard = () => { if (draining) throw refuse('daemon_draining'); };
   startupTask = (async () => {
+    await cleanupTemps(directory, paths, code => log(code, false)); startupGuard();
     await directory.validate(); startupGuard();
     // Bind already satisfies the checked 0600 mode if killed before chmod.
     const previousMask = process.umask(0o177);

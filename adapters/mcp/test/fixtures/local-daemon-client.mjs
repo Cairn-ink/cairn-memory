@@ -25,6 +25,52 @@ try {
     } catch (error) { code = error.code; }
     send({ kind: 'connection-probe-result', code, execArgv: process.execArgv });
   } else if (configuration.role === 'candidate') {
+    let restoreTempClock;
+    if (configuration.observeTempScan) {
+      const opendir = fsPromises.opendir;
+      fsPromises.opendir = async (...args) => {
+        const directory = await opendir(...args), read = directory.read.bind(directory), close = directory.close.bind(directory);
+        let reads = 0;
+        directory.read = (...args) => { reads++; return read(...args); };
+        directory.close = async (...args) => {
+          try {
+            const result = await close(...args); restoreTempClock?.(); restoreTempClock = undefined;
+            send({ kind: 'temp-scan-closed', reads });
+            if (configuration.holdTempScanClose) while ((await once(process, 'message'))[0].kind !== 'release-temp-scan-close') {}
+            return result;
+          }
+          finally { restoreTempClock?.(); restoreTempClock = undefined; }
+        };
+        return directory;
+      };
+      syncBuiltinESMExports();
+    }
+    if (configuration.cleanupUnlinkBarrier) {
+      const unlink = fsPromises.unlink; let gated = false;
+      fsPromises.unlink = async path => {
+        if (!gated && /\.(stamp|json)\.tmp-[a-f0-9]{24}$/.test(String(path))) {
+          gated = true; send({ kind: 'temp-unlink-pending' });
+          while ((await once(process, 'message'))[0].kind !== 'release-temp-unlink') {}
+        }
+        return unlink(path);
+      };
+      syncBuiltinESMExports();
+    }
+    if (configuration.stampWriteBarrier) {
+      const open = fsPromises.open;
+      fsPromises.open = async (path, ...args) => {
+        const file = await open(path, ...args);
+        if (/\.stamp\.tmp-[a-f0-9]{24}$/.test(String(path))) {
+          const write = file.writeFile.bind(file);
+          file.writeFile = async (...args) => {
+            await write(...args); send({ kind: 'stamp-write-pending' });
+            await new Promise(() => {});
+          };
+        }
+        return file;
+      };
+      syncBuiltinESMExports();
+    }
     if (configuration.beforeLifetimeAcquisition) {
       const mkdir = fsPromises.mkdir; let paused = false;
       fsPromises.mkdir = async function(path, options) {
@@ -106,6 +152,16 @@ try {
         },
       } } } : {}),
       afterLock: async () => {
+        if (configuration.tempScanClock) {
+          // Isolate the match-count control from the independently tested real
+          // one-second budget. Restore before bind/publication or admission.
+          const previous = Object.getOwnPropertyDescriptor(performance, 'now'), instant = performance.now();
+          Object.defineProperty(performance, 'now', { configurable: true, value: () => instant });
+          restoreTempClock = () => {
+            if (previous) Object.defineProperty(performance, 'now', previous);
+            else delete performance.now;
+          };
+        }
         if (configuration.holdAfterLock) {
           send({ kind: 'candidate-after-lock' });
           while ((await once(process, 'message'))[0].kind !== 'release-candidate-lock') {}

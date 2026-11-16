@@ -138,7 +138,8 @@ export async function identityKey(directory, { deadline = performance.now() + 10
   if (!/^[a-f0-9]{64}$/.test(key)) throw refuse('daemon_identity_key');
   return Buffer.from(key, 'hex');
 }
-const logCodes = new Set(['daemon_ready', 'daemon_draining', 'daemon_exit', 'daemon_failed', 'daemon_refused', 'daemon_grace_expired']);
+const logCodes = new Set(['daemon_ready', 'daemon_draining', 'daemon_exit', 'daemon_failed', 'daemon_refused', 'daemon_grace_expired',
+  'daemon_temp_invalid', 'daemon_temp_overflow', 'daemon_temp_budget', 'daemon_temp_scan']);
 export async function logCode(directory, path, code, { deadline = performance.now() + 1000 } = {}) {
   if (!logCodes.has(code)) throw refuse('daemon_log_code');
   // Serialize at the host. A full log is truncated, never rotated onto unchecked paths.
