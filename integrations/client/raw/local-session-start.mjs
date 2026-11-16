@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { readdir, unlink } from 'node:fs/promises';
 import { privateDirectory, privateRead, privateWrite, checkedPath, syncDirectory } from '../private-state.mjs';
+import { stateLock } from '../state-lock.mjs';
 import { keyed } from './local-worker-state.mjs';
 import { fault } from './local-worker-input.mjs';
 
@@ -16,13 +17,15 @@ export async function hasSessionStart(identity,context) {
   return text !== undefined && text === binding(identity,context);
 }
 export async function clearSessionStarts(stateRoot) {
-  for (const kind of ['starts','resume']) {
+  const clear = async kind => {
     const directory=join(stateRoot,kind);
-    if (!await checkedPath(directory,{directory:true,missing:true})) continue;
+    if (!await checkedPath(directory,{directory:true,missing:true})) return;
     for (const name of await readdir(directory)) {
       if (!/^[a-f0-9]{64}\.json$/.test(name)) fault('state_invalid');
       const path=join(directory,name); await checkedPath(path); await unlink(path);
     }
     await syncDirectory(directory);
-  }
+  };
+  await clear('starts');
+  await stateLock(join(stateRoot,'.resume.lock'),()=>clear('resume'));
 }

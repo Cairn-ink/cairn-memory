@@ -24,7 +24,7 @@ export function createLocalRawWorker(value) {
       await bindRoot(options,identity,initialize,operation);
       return await stateLock(identity.lockPath,async () => {
         let outcome;
-        identity.resumeContext = context;
+        identity.resumeContext = context; identity.resumeConfig = config;
         try {
           outcome = await (async () => {
             try {
@@ -73,7 +73,7 @@ export function createLocalRawWorker(value) {
           })();
           return outcome;
         } finally {
-          if (!mark) await refreshResumeHint(identity,context,cursor,outcome?.remainingWork === true);
+          if (!mark) await refreshResumeHint(identity,context,cursor,outcome?.remainingWork === true,config);
         }
       });
     } catch (error) {

@@ -5,13 +5,17 @@ import { checkedPath, privateDirectory, privateRead, privateWrite, privateRemove
 import { stateLock } from '../state-lock.mjs';
 import { fault, exact, integer, digest, reasons } from './local-worker-input.mjs';
 import { ownData } from '../../../core/local-authority-input.mjs';
+import { checkHostPermission } from './local-host-permission.mjs';
 import { assertSessionRearm } from './local-rearm-state.mjs';
 
 export const keyed = (key, purpose, value) => createHmac('sha256',key).update(JSON.stringify(['local-raw-worker-v1',purpose,value]));
 export async function loadIdentity(options, context, operation) {
   try {
-    operation.check(); await checkedPath(options.stateRoot,{ directory: true });
-    const text = await privateRead(options.identityKeyPath); operation.check();
+    if (operation.check() === false) return {status:'deadline'};
+    await checkedPath(options.stateRoot,{ directory: true });
+    if (operation.check() === false) return {status:'deadline'};
+    const text = await privateRead(options.identityKeyPath);
+    if (operation.check() === false) return {status:'deadline'};
     if (!/^[a-f0-9]{64}\n?$/.test(text)) fault('key_invalid');
     const key = Buffer.from(text.trim(),'hex'), { authority } = options;
     const keyCommitment = keyed(key,'installation-key',null).digest('hex');
@@ -22,7 +26,7 @@ export async function loadIdentity(options, context, operation) {
     const directory = join(options.stateRoot,'sessions');
     return { key,keyCommitment,sessionKey,wireSessionId,authorityCommitment,directory,stateRoot:options.stateRoot,
       claimPath: join(directory,sessionKey+'.claim.json'), cursorPath: join(directory,sessionKey+'.json'), lockPath: join(directory,sessionKey+'.lock') };
-  } catch (error) { if (error?.reason === 'cancelled' || error?.reason === 'work_limit') throw error; fault('key_invalid'); }
+  } catch (error) { if (operation.check() === false) return {status:'deadline'}; if (error?.reason === 'cancelled' || error?.reason === 'work_limit') throw error; fault('key_invalid'); }
 }
 export async function bindRoot(options, identity, initialize, operation) {
   try {
@@ -100,18 +104,25 @@ export function validateCursor(value, identity, client) {
   }
   return cursor;
 }
-export async function readSession(identity, client, rearming = false) {
+export async function readSession(identity, client, rearming = false,operation) {
   try {
-    const claimText = await privateRead(identity.claimPath,{ missing:true }), cursorText = await privateRead(identity.cursorPath,{ missing:true });
-    if (claimText === undefined && cursorText === undefined) { if (!rearming) await assertSessionRearm(identity,null); return null; }
+    if (operation?.check() === false) return {status:'deadline'};
+    const claimText = await privateRead(identity.claimPath,{ missing:true });
+    if (operation?.check() === false) return {status:'deadline'};
+    const cursorText = await privateRead(identity.cursorPath,{ missing:true });
+    if (operation?.check() === false) return {status:'deadline'};
+    if (claimText === undefined && cursorText === undefined) {
+      if (!rearming && (await assertSessionRearm(identity,null,operation))?.status === 'deadline') return {status:'deadline'};
+      return null;
+    }
     if (claimText === undefined || cursorText === undefined) fault('state_invalid');
     const claim = exact(JSON.parse(claimText),['version','sessionKey','wireSessionId','keyCommitment']);
     if (claim.version !== 'local-raw-claim-v1' || claim.sessionKey !== identity.sessionKey ||
         claim.wireSessionId !== identity.wireSessionId || claim.keyCommitment !== identity.keyCommitment) fault('state_invalid');
     const cursor = validateCursor(JSON.parse(cursorText),identity,client);
-    if (!rearming) await assertSessionRearm(identity,cursor);
+    if (!rearming && (await assertSessionRearm(identity,cursor,operation))?.status === 'deadline') return {status:'deadline'};
     return cursor;
-  } catch (error) { if (['authority_changed','codex_boundary_required'].includes(error.reason)) throw error; fault('state_invalid'); }
+  } catch (error) { if (operation?.check() === false) return {status:'deadline'}; if (['authority_changed','codex_boundary_required'].includes(error.reason)) throw error; fault('state_invalid'); }
 }
 export async function writeCursor(identity, cursor) {
   const text = JSON.stringify(cursor);
@@ -119,7 +130,7 @@ export async function writeCursor(identity, cursor) {
   // Publish recovery authority before the dispatch cursor can become durable:
   // a hook killed immediately after dispatch must already have a sealed hint.
   if (identity.resumeContext && cursor.pending?.state !== 'blocked' && cursor.pending)
-    await refreshResumeHint(identity,identity.resumeContext,cursor);
+    await refreshResumeHint(identity,identity.resumeContext,cursor,false,identity.resumeConfig);
   await privateWrite(identity.cursorPath,text);
 }
 export async function initializeSession(identity, cursor) {
@@ -134,13 +145,17 @@ export async function initializeSession(identity, cursor) {
 const resumeName = /^[a-f0-9]{64}\.json$/;
 const resumeDirectory = identity => join(identity.stateRoot,'resume');
 export const dropResumeHint = (identity, name = identity.sessionKey+'.json') => privateRemove(join(resumeDirectory(identity),name));
-async function resumeNames(identity) {
+async function resumeNames(identity,operation) {
   const path = resumeDirectory(identity);
+  if (operation?.check() === false) return {status:'deadline'};
   if (!await checkedPath(path,{directory:true,missing:true})) return [];
+  if (operation?.check() === false) return {status:'deadline'};
   const directory = await opendir(path), names = [];
   try {
     for (;;) {
+      if (operation?.check() === false) return {status:'deadline'};
       const entry = await directory.read();
+      if (operation?.check() === false) return {status:'deadline'};
       if (!entry) return names;
       if (!resumeName.test(entry.name)) { await dropResumeHint(identity,entry.name); fault('state_invalid'); }
       names.push(entry.name);
@@ -158,8 +173,8 @@ async function resumeRecord(identity,name) {
   return hint;
 }
 // The caller holds the session lock. The separate bounded-directory lock only
-// serializes cap/eviction decisions; it never acquires a session lock.
-export async function refreshResumeHint(identity,context,cursor,remainingWork = false) {
+// serializes hint publication and cleanup; it never acquires a session lock.
+export async function refreshResumeHint(identity,context,cursor,remainingWork = false,config) {
   await stateLock(join(identity.stateRoot,'.resume.lock'),async () => {
     if (!(cursor?.pending && cursor.pending.state !== 'blocked') && !remainingWork) {
       await dropResumeHint(identity); return;
@@ -176,6 +191,9 @@ export async function refreshResumeHint(identity,context,cursor,remainingWork = 
     try {
       const cipher = createCipheriv('aes-256-gcm',key,iv); cipher.setAAD(Buffer.from(identity.sessionKey));
       const sealed = Buffer.concat([cipher.update(JSON.stringify({sessionId:context.sessionId,sourcePath:context.sourcePath}),'utf8'),cipher.final()]);
+      // Disable revokes the core grant before locking this directory to clear.
+      try { await checkHostPermission(config); }
+      catch { await dropResumeHint(identity); return; }
       await privateWrite(join(resumeDirectory(identity),name),JSON.stringify({version:'local-raw-resume-v1',updatedAt:Date.now(),
         iv:iv.toString('hex'),tag:cipher.getAuthTag().toString('hex'),sealed:sealed.toString('hex')}));
     } finally { key.fill(0); }
@@ -183,17 +201,24 @@ export async function refreshResumeHint(identity,context,cursor,remainingWork = 
 }
 async function chooseResumeHintInside(options,identity,operation) {
   const now = Date.now(), hints = [];
-  for (const name of await resumeNames(identity)) {
-    operation.check();
+  const names = await resumeNames(identity,operation);
+  if (names.status === 'deadline') return names;
+  for (const name of names) {
+    if (operation.check() === false) return {status:'deadline'};
     let hint;
     try { hint = await resumeRecord(identity,name); }
-    catch { await dropResumeHint(identity,name); return null; }
+    catch {
+      if (operation.check() === false) return {status:'deadline'};
+      await dropResumeHint(identity,name); return null;
+    }
+    if (operation.check() === false) return {status:'deadline'};
     if (!hint) continue;
     if (now-hint.updatedAt > 7*24*60*60*1000) { await dropResumeHint(identity,name); continue; }
     if (now-hint.updatedAt >= 10*60*1000) hints.push({name,hint});
   }
   hints.sort((a,b)=>a.hint.updatedAt-b.hint.updatedAt || a.name.localeCompare(b.name));
   if (!hints.length) return null;
+  if (operation.check() === false) return {status:'deadline'};
   const {name,hint} = hints[0], sessionKey = name.slice(0,-5), key = keyed(identity.key,'resume-hint',null).digest();
   let selectedIdentity;
   try {
@@ -203,14 +228,20 @@ async function chooseResumeHintInside(options,identity,operation) {
     // Validate the native selection before any source-path proof or metadata.
     if (typeof selection.sessionId !== 'string' || typeof selection.sourcePath !== 'string') fault('state_invalid');
     selectedIdentity = await loadIdentity(options,selection,operation);
+    if (selectedIdentity.status === 'deadline') return selectedIdentity;
+    if (operation.check() === false) return {status:'deadline'};
     if (selectedIdentity.sessionKey !== sessionKey) fault('state_invalid');
     return {selection,sessionKey};
-  } catch { await dropResumeHint(identity,name); return null; }
-  finally { key.fill(0); selectedIdentity?.key.fill(0); }
+  } catch {
+    if (operation.check() === false) return {status:'deadline'};
+    await dropResumeHint(identity,name); return null;
+  }
+  finally { key.fill(0); selectedIdentity?.key?.fill(0); }
 }
 
 export async function chooseResumeHint(options,identity,operation) {
   // Never mistake privateWrite's transient atomic-replacement file for an
   // untrusted entry while another session publishes a hint.
+  if (operation.check() === false) return {status:'deadline'};
   return stateLock(join(identity.stateRoot,'.resume.lock'),()=>chooseResumeHintInside(options,identity,operation));
 }

@@ -5,8 +5,9 @@ import { checkHostPermission,checkRearmSession } from './local-host-permission.m
 import { loadIdentity, readSession, chooseResumeHint, dropResumeHint } from './local-worker-state.mjs';
 import { inspectExistingStorePin } from '../../../core/existing-store.mjs';
 
-export async function withSessionIdentity(profile,config,selection,work) {
-  const identity=await loadIdentity({stateRoot:profile.stateRoot,identityKeyPath:profile.identityKeyPath,authority:localAuthorityInput(config.authority)},selection,{check(){}});
+export async function withSessionIdentity(profile,config,selection,work,operation = {check(){}}) {
+  const identity=await loadIdentity({stateRoot:profile.stateRoot,identityKeyPath:profile.identityKeyPath,authority:localAuthorityInput(config.authority)},selection,operation);
+  if (identity.status === 'deadline') return identity;
   try { return await work(identity); } finally { identity.key.fill(0); }
 }
 export async function checkLocalSession(profile,config,selection) {
@@ -33,24 +34,48 @@ export async function fenceLocalSession(profilePath,selection) {
 
 // These checks precede even source()'s lstat/realpath proof. readSession also
 // rejects a stale authority or incomplete rearm without reading the transcript.
-export async function checkSweepSession(profile,config,selection) {
-  await withSessionIdentity(profile,config,selection,async identity => {
+export async function checkSweepSession(profile,config,selection,operation = {check(){}}) {
+  return withSessionIdentity(profile,config,selection,async identity => {
     try {
+      if (operation.check() === false) return {status:'deadline'};
       hostSelection(selection,false);
-      if (!await readSession(identity,config.authority.client)) fail('state_invalid');
+      const cursor = await readSession(identity,config.authority.client,false,operation);
+      if (cursor?.status === 'deadline') return cursor;
+      if (!cursor) fail('state_invalid');
+      if (operation.check() === false) return {status:'deadline'};
       await checkRearmSession(config,identity);
-    } catch (error) { await dropResumeHint(identity); throw error; }
-  });
+      if (operation.check() === false) return {status:'deadline'};
+    } catch (error) {
+      if (operation.check() === false) return {status:'deadline'};
+      await dropResumeHint(identity); throw error;
+    }
+  },operation);
 }
-export async function selectLocalResume(profilePath) {
-  const profile = await readHostProfile(profilePath), config = await readHostConfiguration(profile);
-  await checkHostPermission(config);
-  return withSessionIdentity(profile,config,{sessionId:''},async identity => {
-    const options = {stateRoot:profile.stateRoot,identityKeyPath:profile.identityKeyPath,authority:localAuthorityInput(config.authority)};
-    const candidate = await chooseResumeHint(options,identity,{check(){}});
-    if (!candidate) return null;
-    try { await checkSweepSession(profile,config,candidate.selection); }
-    catch { await dropResumeHint(identity,candidate.sessionKey+'.json'); return null; }
-    return candidate.selection;
-  });
+export async function selectLocalResume(profilePath,operation = {check(){}}) {
+  try {
+    if (operation.check() === false) return {status:'deadline'};
+    const profile = await readHostProfile(profilePath);
+    if (operation.check() === false) return {status:'deadline'};
+    const config = await readHostConfiguration(profile);
+    if (operation.check() === false) return {status:'deadline'};
+    await checkHostPermission(config);
+    if (operation.check() === false) return {status:'deadline'};
+    return await withSessionIdentity(profile,config,{sessionId:''},async identity => {
+      const options = {stateRoot:profile.stateRoot,identityKeyPath:profile.identityKeyPath,authority:localAuthorityInput(config.authority)};
+      const candidate = await chooseResumeHint(options,identity,operation);
+      if (operation.check() === false) return {status:'deadline'};
+      if (!candidate || candidate.status === 'deadline') return candidate;
+      try {
+        const outcome = await checkSweepSession(profile,config,candidate.selection,operation);
+        if (operation.check() === false || outcome?.status === 'deadline') return {status:'deadline'};
+      } catch {
+        if (operation.check() === false) return {status:'deadline'};
+        await dropResumeHint(identity,candidate.sessionKey+'.json'); return null;
+      }
+      return candidate.selection;
+    },operation);
+  } catch (error) {
+    if (operation.check() === false) return {status:'deadline'};
+    throw error;
+  }
 }

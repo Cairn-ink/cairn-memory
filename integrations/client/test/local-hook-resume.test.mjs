@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import { register, syncBuiltinESMExports } from 'node:module';
 import { performance } from 'node:perf_hooks';
-import { createCipheriv, randomBytes } from 'node:crypto';
+import { createCipheriv, randomBytes, randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -32,6 +32,8 @@ const { runLocalRawHook } = await import('../raw/local-hook.mjs');
 const { readHostProfile, readHostConfiguration } = await import('../raw/local-host-profile.mjs');
 const { withSessionIdentity, selectLocalResume } = await import('../raw/local-session-fence.mjs');
 const { keyed, refreshResumeHint, chooseResumeHint } = await import('../raw/local-worker-state.mjs');
+const { stateLock } = await import('../state-lock.mjs');
+const { hostFixture } = await import('./fixtures/local-host-workspace.mjs');
 const { workerOperation } = await import('../raw/local-worker-input.mjs');
 const { FORMAT } = await import('../../codex/parser.mjs');
 const { LocalCaptureTransportError } = await import('../raw/local-process.mjs');
@@ -256,7 +258,7 @@ test('oldest selection, 64 hint cap, expiry, and at most one candidate',async t=
   const f=await setup(t);await failCapture(f);
   await f.identity(async identity=>{
     for(let n=0;n<65;n++)await refreshResumeHint({...identity,sessionKey:n.toString(16).padStart(64,'0')},
-      {sessionId:'synthetic-'+n,sourcePath:f.sourcePath},{pending:{state:'prepared'}});
+      {sessionId:'synthetic-'+n,sourcePath:f.sourcePath},{pending:{state:'prepared'}},false,f.config);
     assert.equal(hints(f).length,64);
     const names=hints(f);assert.ok(!names.includes('0'.repeat(64)+'.json'));
     for(const name of names){const hint=read(join(f.resume,name));hint.updatedAt=Date.now()-7*24*60*60*1000-1;write(join(f.resume,name),hint);}
@@ -306,4 +308,138 @@ test('own Stop wins the lock after a later Stop selects its hint',{timeout:20000
   assert.equal((await own).status,'progress');assert.equal(hints(f).length,0);assert.equal(removed,1);
   assert.deepEqual(rows(f),{events:[event],parts:1});
   t.mock.restoreAll();syncBuiltinESMExports();
+});
+
+for (const phase of ['selection','source proof']) test(`preparation deadline stops slow ${phase} at the real hook budget`,async t=>{
+  const f=await setup(t);await failCapture(f);age(f);
+  if(phase==='selection')fs.copyFileSync(join(f.resume,hints(f)[0]),join(f.resume,'f'.repeat(64)+'.json'));
+  const before=hints(f);
+  let elapsed=0,crossed=false,crossIndex=0,sweeps=0,hintReads=0,lateHintReads=0;
+  t.mock.method(performance,'now',()=>elapsed);
+  globalThis[runKey]=async(host,selection,options)=>{
+    if(options?.sweep){sweeps++;return {status:'ready'};}
+    elapsed=134000;return {status:'ready'};
+  };
+  const accesses=sourceSpy(t,f.request.sourceRoot);
+  const cross=()=>{elapsed+=2000;crossed=true;crossIndex=accesses.length;};
+  const open=fsp.open;
+  t.mock.method(fsp,'open',async function(path,...args){
+    const handle=await open.call(this,path,...args);
+    if(String(path).startsWith(f.resume+'/')){
+      const readFile=handle.readFile;
+      t.mock.method(handle,'readFile',async function(...values){
+        if(crossed)lateHintReads++;
+        const result=await readFile.apply(this,values);hintReads++;
+        if(phase==='selection'&&!crossed)cross();
+        return result;
+      });
+    }
+    return handle;
+  });
+  for(const method of ['lstat','realpath']){
+    const original=fsp[method];
+    t.mock.method(fsp,method,async function(path,...args){
+      const inside=path===f.request.sourceRoot||String(path).startsWith(f.request.sourceRoot+'/');
+      if(crossed&&inside)elapsed+=9000;
+      const result=await original.call(this,path,...args);
+      if(phase==='source proof'&&elapsed===134000&&method==='lstat'&&path===f.request.sourceRoot)cross();
+      return result;
+    });
+  }
+  syncBuiltinESMExports();
+  try {
+    assert.deepEqual(await f.b(),{version:'local-raw-hook-v1',status:'ready',reason:null});
+    assert.equal(crossed,true,'the synthetic helper crossed 135 seconds');
+    assert.deepEqual(accesses.slice(crossIndex),[],'no source metadata or bytes after crossing');
+    assert.equal(lateHintReads,0,'no next hint read after crossing');
+    assert.ok(elapsed<155000+9000,`returned at ${elapsed} ms`);
+    assert.equal(sweeps,0,'no swept host.run after crossing');
+    assert.deepEqual(hints(f),before,'deadline preserves unproven hints');
+    if(phase==='selection')assert.equal(hintReads,1);
+  } finally {t.mock.restoreAll();syncBuiltinESMExports();}
+});
+
+test('disable race: an in-flight worker cannot publish after revoke and clear',async t=>{
+  const f=await setup(t);f.append('Synthetic deferred response');
+  let entered,release;
+  const ready=new Promise(resolve=>{entered=resolve}),gate=new Promise(resolve=>{release=resolve});
+  globalThis[captureKey]=async()=>{entered();await gate;throw new LocalCaptureTransportError(false,'synthetic');};
+  const worker=f.hook('Stop');await ready;
+  try {assert.equal((await f.invoke('disable')).status,'disabled');assert.equal(hints(f).length,0);}
+  finally {release();}
+  await worker;delete globalThis[captureKey];assert.equal(hints(f).length,0);
+  assert.equal((await f.invoke('activate')).status,'active');
+  assert.equal(await selectLocalResume(f.profile.profilePath),null);assert.equal(hints(f).length,0);
+});
+
+test('disable race: clear waits for a publisher holding the resume lock',async t=>{
+  const f=await setup(t);
+  let entered,release,disabling=false,paused=false,contended=false;
+  const ready=new Promise(resolve=>{entered=resolve}),gate=new Promise(resolve=>{release=resolve});
+  const open=fsp.open,link=fsp.link,readdir=fsp.readdir;
+  t.mock.method(fsp,'open',async function(path,flags,...args){
+    if(!paused&&flags==='wx'&&String(path).startsWith(f.resume+'/')){paused=true;entered();await gate;}
+    return open.call(this,path,flags,...args);
+  });
+  t.mock.method(fsp,'link',async function(from,to,...args){
+    try {return await link.call(this,from,to,...args);}
+    catch(error){if(disabling&&to===join(f.profile.stateRoot,'.resume.lock')){contended=true;release();}throw error;}
+  });
+  t.mock.method(fsp,'readdir',async function(path,...args){
+    const names=await readdir.call(this,path,...args);
+    // Without the clear lock this lists before publication; release only AFTER
+    // taking that snapshot, so the mutation deterministically leaves a hint.
+    if(disabling&&path===f.resume)release();
+    return names;
+  });
+  syncBuiltinESMExports();
+  try {
+    const publish=f.identity(identity=>stateLock(identity.lockPath,()=>refreshResumeHint(identity,
+      {sessionId,sourcePath:f.sourcePath},f.a(),true,f.config)));
+    await ready;disabling=true;
+    const disabled=await f.invoke('disable');await publish;
+    assert.equal(disabled.status,'disabled');assert.equal(hints(f).length,0);assert.equal(contended,true);
+    assert.equal((await f.invoke('activate')).status,'active');assert.equal(await selectLocalResume(f.profile.profilePath),null);
+  } finally {release();t.mock.restoreAll();syncBuiltinESMExports();}
+});
+
+test('disable race: publish before disable is removed by the clear',async t=>{
+  const f=await setup(t);await failCapture(f);assert.equal(hints(f).length,1);
+  assert.equal((await f.invoke('disable')).status,'disabled');assert.equal(hints(f).length,0);
+});
+
+for(const mode of ['explicit','lazy'])test(`${mode} rearm drops only its own session hint`,async t=>{
+  if(mode==='lazy'){
+    const f=await setup(t);await f.invoke('disable');await f.invoke('activate');
+    const own=f.a().sessionKey+'.json',other=fs.readdirSync(f.directory).find(name=>/^[a-f0-9]{64}\.json$/.test(name)&&name!==own);
+    fs.mkdirSync(f.resume,{recursive:true,mode:0o700});write(join(f.resume,own),{});write(join(f.resume,other),{});
+    assert.equal((await f.hook('SessionStart')).status,'ready');
+    assert.equal(fs.existsSync(join(f.resume,own)),false);assert.equal(fs.existsSync(join(f.resume,other)),true);
+  }else{
+    const f=await hostFixture(t);assert.equal((await f.call('prepare')).status,'ready');assert.equal((await f.call('initialize')).status,'ready');
+    const cursor=read(join(f.stateRoot,'sessions',fs.readdirSync(join(f.stateRoot,'sessions')).find(name=>/^[a-f0-9]{64}\.json$/.test(name))));
+    const resume=join(f.stateRoot,'resume'),own=cursor.sessionKey+'.json',other='0'.repeat(64)+'.json';
+    fs.mkdirSync(resume,{mode:0o700});write(join(resume,own),{});write(join(resume,other),{});
+    f.disable();const control=ok(f.core.getLocalCaptureControl({namespace:f.namespace,client:f.client}));
+    ok(f.core.setLocalCaptureControl({namespace:f.namespace,client:f.client,targetId:control.targetId,expectedStoreId:control.storeId,
+      expectedRevision:control.revision,automaticCaptureEnabled:true,rawNoticeVersion:control.rawNoticeVersion}));
+    const result=await f.call('rearm',{...f.selection,expectedRevision:0,actionId:randomUUID()});
+    assert.equal(result.status,'ready',JSON.stringify(result));
+    assert.equal(fs.existsSync(join(resume,own)),false);assert.equal(fs.existsSync(join(resume,other)),true);
+  }
+});
+
+test('conversation deletion drops its hint with zero transcript access',async t=>{
+  const f=await setup(t);f.append('Synthetic captured response');assert.equal((await f.hook('Stop')).status,'progress');
+  await failCapture(f);age(f);
+  const conversation=ok(f.core.listRawConversations({namespace:f.request.namespace,client:'claude-code'})).conversations[0];
+  assert.ok(conversation);ok(f.core.deleteConversation({namespace:f.request.namespace,conversationId:conversation.id,
+    expectedRevision:conversation.revision,actionId:randomUUID()}));
+  const accesses=sourceSpy(t,f.request.sourceRoot);
+  try {assert.equal(await selectLocalResume(f.profile.profilePath),null);assert.deepEqual(accesses,[]);assert.equal(hints(f).length,0);}
+  finally {t.mock.restoreAll();syncBuiltinESMExports();}
+});
+
+test('selection reports its deadline as a typed outcome before reading the profile',async()=>{
+  assert.deepEqual(await selectLocalResume('/synthetic-unused-profile',{check:()=>false}),{status:'deadline'});
 });

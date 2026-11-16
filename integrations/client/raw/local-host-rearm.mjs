@@ -8,7 +8,7 @@ import { dirname, join, basename } from 'node:path';
 import { readHostProfile, readHostConfiguration, hostSelection, canonicalHostPath, overlaps } from './local-host-profile.mjs';
 import { inspectPreparation } from './local-host-preparation.mjs';
 import { readRearmAuthority, inspectRearmBoundary, checkRearmSession } from './local-host-permission.mjs';
-import { loadIdentity, bindRoot, readSession, validateCursor, writeCursor } from './local-worker-state.mjs';
+import { loadIdentity, bindRoot, readSession, validateCursor, writeCursor, dropResumeHint } from './local-worker-state.mjs';
 import { sourceBudget, openWorkerSource, qualifySource, verifyCursorSource, sourceSize, completeBoundary, cursorSource,
   producerInput, producerOptions, sourceReason } from './local-worker-source.mjs';
 import { prepareRawRecord } from './message.mjs';
@@ -205,6 +205,7 @@ export async function lazyRearm(profile,config,context,operation) {
         validateCursor(action.replacementCursor,adopted,config.authority.client);
         await prove(action);
         const actual = sha(await privateRead(identity.cursorPath));
+        await dropResumeHint(identity);
         if (actual === action.oldCursorDigest) await writeCursor(adopted,action.replacementCursor);
         else if (actual !== action.replacementCursorDigest) rearmFail('rearm_invalid');
         await prove(action);
@@ -396,6 +397,7 @@ export async function executeRearm(profilePath,value,operation,deps = {},statusC
             operation.check(); await writeRearmRecord(sessionRearmPath(identity),action);
           }
           await prove();
+          await dropResumeHint(identity);
           if (sha(cursorText) === action.oldCursorDigest) {
             operation.check(); await writeCursor(adopted,action.replacementCursor); cursor = clone(action.replacementCursor);
           }
