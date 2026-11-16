@@ -1,5 +1,6 @@
 import { isStorageBusy } from './database.mjs';
 import { performance } from 'node:perf_hooks';
+import { createHash } from 'node:crypto';
 import { dispatchCommit, hasCommitDispatcher } from './commit-dispatch.mjs';
 import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { assertContentPort, inertContentPortValue } from './content-safety-boundary.mjs';
@@ -8,8 +9,8 @@ import { countTokens, modelPortValue } from './model-budget.mjs';
 import { cardNamespace } from './private-card-input.mjs';
 import { object, fail } from './validation.mjs';
 import { CONSOLIDATE_PROMPT, validateConsolidation } from './engine-card-output.mjs';
-import { ENGINE_CARD_LIMITS, cardTrigger, clusterMemories, chainLength, cardMemoryRevisions } from './engine-card-clusters.mjs';
-import { assembleContext } from './context-read-assembly.mjs';
+import { ENGINE_CARD_LIMITS, cardTrigger, clusterMemories, partitionCardClusters, chainLength, cardMemoryRevisions } from './engine-card-clusters.mjs';
+import { assembleContext, cardSourceKeys, currentCardLines, memoryPackKey } from './context-read-assembly.mjs';
 
 /** Called only by a bounded maintenance pass, never admission/capture. The model
  * port uses the same callModel envelope, tokenizer, deadline and guarded adapter
@@ -102,21 +103,67 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
           .map(row => [row.memoryId, row.vector]));
         storage.validate(ns, snapshot.memories, check); check();
         const timestamp = new Date(now()).toISOString();
-        const clusters = clusterMemories(snapshot.memories, vectorMap, check), cards = storage.cards(ns, check);
+        const topics = clusterMemories(snapshot.memories, vectorMap, check), cards = storage.cards(ns, check);
         const purged = storage.recentPurges(ns, timestamp, check);
+        const topicKey = key => key.replace(/#\d+$/, '');
+        const purgedTopics = new Set(purged.map(card => topicKey(card.clusterKey))), priorTopics = new Map();
+        // Compare whole topics, including the union of prior parts. Counting
+        // each part separately loses continuity as soon as a topic exceeds 12.
+        for (const card of [...cards, ...purged]) if (card.clusterKey.startsWith('similarity:')) {
+          const key = topicKey(card.clusterKey);
+          if (!priorTopics.has(key)) priorTopics.set(key, { key, builtAt: card.builtAt, ids: new Set() });
+          const prior = priorTopics.get(key);
+          if (card.builtAt < prior.builtAt) prior.builtAt = card.builtAt;
+          for (const ref of card.sourceRevisions) prior.ids.add(ref.memoryId);
+        }
         // A deleted seed must not turn a stale topic into a new key and bypass
         // its debounce. Reuse a prior similarity key for a majority-overlapping
         // source set; MOC identities remain exact and never merge this way.
-        for (const cluster of clusters) if (cluster.key.startsWith('similarity:')) {
-          const ids = new Set(cluster.memories.map(m => m.id));
-          const match = [...cards, ...purged].filter(card => card.clusterKey?.startsWith('similarity:')).map(card => ({ card,
-            overlap: card.sourceRevisions.filter(ref => ids.has(ref.memoryId)).length /
-              Math.max(ids.size, card.sourceRevisions.length) })).filter(value => value.overlap >= .65)
-            .sort((a, b) => b.overlap - a.overlap || a.card.builtAt.localeCompare(b.card.builtAt))[0];
-          if (match) cluster.key = match.card.clusterKey;
+        const blockedClusters = new Set(), matchesByCluster = new Map();
+        const naturalKeys = new Set(topics.map(cluster => cluster.key));
+        for (const cluster of topics) {
+          check();
+          let blocked = purgedTopics.has(cluster.key);
+          if (cluster.key.startsWith('similarity:')) {
+            const ids = new Set(cluster.memories.map(m => m.id));
+            const matches = [...priorTopics.values()].map(prior => ({ prior,
+              overlap: [...prior.ids].filter(id => ids.has(id)).length / Math.max(ids.size, prior.ids.size) }))
+              .filter(value => value.overlap >= .65)
+              .sort((a, b) => b.overlap - a.overlap || a.prior.builtAt.localeCompare(b.prior.builtAt));
+            if (matches.length) matchesByCluster.set(cluster, matches[0]);
+            blocked ||= matches.some(match => purgedTopics.has(match.prior.key));
+          }
+          if (blocked) blockedClusters.add(cluster);
         }
-        const eligible = new Map();
-        for (const cluster of clusters) {
+        // Award continuity before natural keys: the best overlap owns a prior
+        // key, with the existing build-time/stable traversal order for ties.
+        const ownedKeys = new Set(), inherited = new Set();
+        for (const [cluster, match] of [...matchesByCluster].sort(([, a], [, b]) =>
+          b.overlap - a.overlap || a.prior.builtAt.localeCompare(b.prior.builtAt))) {
+          if (ownedKeys.has(match.prior.key)) continue;
+          cluster.key = match.prior.key; ownedKeys.add(cluster.key); inherited.add(cluster);
+        }
+        const blockedTopics = new Set();
+        for (const cluster of topics) {
+          check();
+          if (!inherited.has(cluster)) {
+            if (ownedKeys.has(cluster.key)) {
+              // A continuity winner can take another cluster's natural seed.
+              // Derive a stable identity from that displaced cluster's full
+              // source set, reserving all natural keys before trying a salt.
+              const naturalKey = cluster.key, sources = cluster.memories.map(memory => memory.id).sort();
+              let salt = 0;
+              do { cluster.key = 'similarity:' + createHash('sha256').update(JSON.stringify([naturalKey, sources, salt++])).digest('hex'); }
+              while (ownedKeys.has(cluster.key) || naturalKeys.has(cluster.key));
+            }
+            ownedKeys.add(cluster.key);
+          }
+          // Blocking belongs to the matched source set, even when it loses
+          // continuity ownership or its natural key has to be displaced.
+          if (blockedClusters.has(cluster)) blockedTopics.add(cluster.key);
+        }
+        const eligible = new Map(), blocked = new Map();
+        for (const cluster of partitionCardClusters(topics)) {
           check();
           // Five items establish pressure without a token estimate. The only
           // smaller eligible case is a four-Memory chain: meter its actual
@@ -127,13 +174,20 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
               policy: { id: 'rank-first-whole-v1' }, budget: { maxItems: 12, maxTokens: 1000000 },
               representation: 'representation-v2-dated', deadlineAt: end, snapshotOf: () => null }).diagnostics.budget.used : 0;
           cluster.trigger = cardTrigger(cluster.memories, edges, tokens);
-          if (cluster.trigger.eligible) eligible.set(cluster.key, cluster);
+          if (cluster.trigger.eligible) {
+            if (eligible.has(cluster.key) || blocked.has(cluster.key)) fail('storage_error');
+            if (blockedTopics.has(topicKey(cluster.key))) { blocked.set(cluster.key, cluster); result.debounced++; }
+            else eligible.set(cluster.key, cluster);
+          }
         }
         for (const card of cards) {
           check();
-          const cluster = eligible.get(card.clusterKey);
+          const alias = card.clusterKey.endsWith('#0') ? card.clusterKey.slice(0, -2) : card.clusterKey + '#0';
+          // Blocked parts still stale shifted source sets on the original
+          // schedule, but are never destinations for carry or publication.
+          const cluster = eligible.get(card.clusterKey) ?? blocked.get(card.clusterKey) ?? eligible.get(alias) ?? blocked.get(alias);
           const sameSources = cluster && JSON.stringify(card.sourceRevisions) === JSON.stringify(cardMemoryRevisions(cluster.memories));
-          if (card.status === 'current' && sameSources) { eligible.delete(cluster.key); continue; }
+          if (card.status === 'current' && sameSources && cluster.key === card.clusterKey) { eligible.delete(cluster.key); continue; }
           // Search before staling against the old key: another eligible set
           // may already occupy that topic while these exact sources moved on.
           // An occupied exact match must not hide another free destination.
@@ -160,24 +214,18 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
             if (commit) await commit(() => storage.retire(ns, card.id, timestamp)); else storage.retire(ns, card.id, timestamp);
           }
           if (newlyStale || now() - Date.parse(card.row.updated_at) < ENGINE_CARD_LIMITS.debounceMs) {
-            eligible.delete(cluster.key); result.debounced++;
+            eligible.delete(cluster.key); if (!blocked.has(cluster.key)) result.debounced++;
           }
         }
-        for (const card of purged) if (eligible.delete(card.clusterKey)) result.debounced++;
         for (const cluster of eligible.values()) {
           check();
           if (cluster.memories.length > ENGINE_CARD_LIMITS.sources) { result.state = 'source_limit'; continue; }
-          let rawSpans = [], rawTimer;
-          if (input.rawSpans === true) try {
-            rawSpans = await Promise.race([storage.rawSpans(ns, cluster.memories, check),
-              new Promise((_, reject) => { rawTimer = setTimeout(() => reject(Object.assign(Error('deadline'),
-                { code: 'model_timeout' })), deadline.remainingMs()); })]);
-          } finally { clearTimeout(rawTimer); }
-          const memories = cluster.memories.map(({ id, revision, content, date, currentness }) => ({ id, revision, content, date, currentness }));
+          const requestSources = [...cluster.memories];
+          const memories = requestSources.map(({ id, revision, content, date, currentness }) => ({ id, revision, content, date, currentness }));
           const ids = new Set(memories.map(memory => memory.id));
           const relevantRelations = edges?.filter(edge => ids.has(edge?.from) && ids.has(edge?.to) &&
             ['supersedes', 'contradicts'].includes(edge.kind)).slice(0, 192).map(({ from, to, kind, slot }) => ({ from, to, kind, slot }));
-          const request = () => ({ memories, rawSpans, ...(relevantRelations?.length ? { relations: relevantRelations } : {}) });
+          const request = () => ({ memories, rawSpans: [], ...(relevantRelations?.length ? { relations: relevantRelations } : {}) });
           const fits = () => {
             if (countTokens(model, modelRequestText(CONSOLIDATE_PROMPT, request())) > MODEL_INPUT_TOKENS) return false;
             const fit = modelPortValue(model, 'fitsConsolidationRequest', 'invalid_input');
@@ -186,11 +234,16 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
               [{ system: CONSOLIDATE_PROMPT, input: structuredClone(request()), maxOutputTokens: 1024 }]) }) === true; }
             finally { assertContentPort(); }
           };
-          while (rawSpans.length && !fits()) {
-            const shorter = rawSpans.map(span => { const points = [...span.text];
-              return { ...span, text: points.slice(0, Math.max(1, Math.floor(points.length / 2))).join('') }; });
-            if (shorter.every((span, index) => span.text.length === rawSpans[index].text.length)) break;
-            rawSpans = shorter;
+          // Own sources always go first. Newest same-topic context follows,
+          // bounded by both the existing adapter envelope and 24 Memories.
+          if (fits()) for (const memory of [...(cluster.contextMemories ?? [])]
+            .filter(memory => !ids.has(memory.id)).sort((a, b) => Date.parse(b.date) - Date.parse(a.date) || a.id.localeCompare(b.id))) {
+            check();
+            if (memories.length >= 24) break;
+            const { id, revision, content, date, currentness } = memory;
+            memories.push({ id, revision, content, date, currentness });
+            if (!fits()) { memories.pop(); continue; }
+            requestSources.push(memory);
           }
           if (!fits()) { result.state = 'input_budget'; continue; }
           const claim = () => storage.claim(ns, cluster, new Date(now()).toISOString(), check);
@@ -199,10 +252,26 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
           result.modelCalls++;
           try {
             const output = await callModel(model, 'consolidate', CONSOLIDATE_PROMPT, request(), {
-              deadline, beforeDispatch: checkPause, validateFresh: () => { check(); storage.validate(ns, cluster.memories, check); }, failureCode: 'consolidation_failed' });
-            const value = validateConsolidation(output, memories, model); check();
-            const publish = () => storage.commit(ns, cluster, value, new Date(now()).toISOString(), check);
-            const card = value && (commit ? await commit(publish) : publish());
+              deadline, beforeDispatch: checkPause, validateFresh: () => { check(); storage.validate(ns, requestSources, check); }, failureCode: 'consolidation_failed' });
+            const value = validateConsolidation(output, memories, model, cluster.memories); check();
+            // Context can identify an old current line in another Card. Reuse
+            // ordinary staling and its debounce; one generation ends this pass.
+            // Only current lines count: a Card that already lists the Memory
+            // under Timeline is up to date, and retiring it would make two
+            // Cards rebuild each other for ever.
+            const retirements = [];
+            for (const other of cards.filter(card => card.status === 'current')) {
+              const covered = cardSourceKeys([{ type: 'card', metadata: { origin: 'engine' }, text: currentCardLines(other.row.body),
+                sourceMemoryRefs: other.sourceRevisions.map(ref => ({ namespace: ns, ...ref })) }]);
+              if (requestSources.some(memory => value.outOfDateIds.includes(memory.id) && covered.has(memoryPackKey({
+                namespace: ns, memoryId: memory.id, revision: memory.revision })))) {
+                retirements.push(other.id);
+              }
+            }
+            // Publication (when there is a body) and every retirement chosen
+            // by this output share one guarded dispatcher unit and transaction.
+            const publish = () => storage.commit(ns, cluster, value, new Date(now()).toISOString(), check, retirements, requestSources);
+            const card = commit ? await commit(publish) : publish();
             if (card) {
               const { supersededCount = 0, ...published } = card;
               result.deleted += supersededCount; result.built.push(published);
