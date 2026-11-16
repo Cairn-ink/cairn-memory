@@ -19,11 +19,13 @@ export async function runEntry(args = process.argv.slice(2), {
 } = {}) {
   if (args[0] === 'local') {
     const { runLocalSetupCli } = await load('../integrations/client/raw/local-setup-cli.mjs');
-    return await runLocalSetupCli(args.slice(1));
+    const code = await runLocalSetupCli(args.slice(1));
+    return process.exitCode ?? code;
   }
   if (args[0] === 'daemon') {
     const { runDaemonCommand } = await load('../adapters/mcp/local-daemon-liveness.mjs');
-    return await runDaemonCommand(args.slice(1), { platform });
+    const code = await runDaemonCommand(args.slice(1), { platform });
+    return process.exitCode ?? code;
   }
   if (platform === 'linux') {
     let identity;
@@ -36,21 +38,21 @@ export async function runEntry(args = process.argv.slice(2), {
       } catch { result = { refused: 'daemon_build' }; }
       if (forwarder) result = await forwarder.runForwarder(args);
       if (!result?.refused) {
-        if (result) { stderr(result + '\n'); return 1; }
-        return 0;
+        if (result) { stderr(result + '\n'); return process.exitCode ?? 1; }
+        return process.exitCode ?? 0;
       }
       stderr('cairn_daemon_fallback:' + result.refused + '\n');
     }
   }
   const { start } = await load('../adapters/mcp/cli.mjs');
   await start();
-  return 0;
+  return process.exitCode ?? 0;
 }
 const entryPath = fileURLToPath(import.meta.url);
 if (process.argv[1] && (process.argv[1] === entryPath || realpathSync(process.argv[1]) === entryPath)) {
-  try { process.exitCode = await runEntry(); }
+  try { const code = await runEntry(); process.exitCode ??= code; }
   catch {
     console.error('cairn_mcp_start_failed: check documented startup arguments and dependencies');
-    process.exitCode = 1;
+    process.exitCode ??= 1;
   }
 }
