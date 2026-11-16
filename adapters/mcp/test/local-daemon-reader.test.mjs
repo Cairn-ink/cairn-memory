@@ -205,4 +205,43 @@ if (process.argv[2] === 'fifo') {
       assert.equal(connection.descriptor.incarnation, expected.incarnation); assert.ok(calls >= 2); assert.ok(performance.now() - start < 2000); assert.ok(candidates.length <= 3);
     } finally { net.createConnection = createConnection; syncBuiltinESMExports(); connection?.socket.destroy(); await Promise.all(candidates); }
   });
+
+  test('g: repeated connect EAGAIN cannot renew the original deadline or authenticate later', { timeout: 15000 }, async t => {
+    const w = await workspace(t), a = w.forward(); a.release(); await w.connect(a);
+    const createConnection = net.createConnection, candidates = [], authentications = [];
+    const connectMs = 700, toleranceMs = 150, start = performance.now();
+    let calls = 0, connection;
+    net.createConnection = (...args) => {
+      calls++;
+      // Continue EAGAIN well past the original deadline. Then expose the real
+      // endpoint, so an incorrectly renewed inner loop can authenticate late
+      // even if connectOrStart's outer timer has already refused the caller.
+      if (performance.now() - start < connectMs + 400) {
+        const socket = new net.Socket();
+        queueMicrotask(() => socket.destroy(Object.assign(Error('synthetic'), { code: 'EAGAIN' })));
+        return socket;
+      }
+      const socket = createConnection(...args), write = socket.write.bind(socket);
+      socket.write = (...bytes) => { authentications.push(performance.now() - start); return write(...bytes); };
+      socket.on('connect', () => { connection = socket; });
+      return socket;
+    };
+    syncBuiltinESMExports();
+    try {
+      await assert.rejects(connectOrStart(w.args, { root: join(w.root, 'run'), environment: {}, connectMs,
+        onCandidate: child => candidates.push(once(child, 'exit')),
+      }), { code: 'daemon_connect_timeout' });
+      const refusedMs = performance.now() - start;
+      assert.ok(refusedMs <= connectMs + toleranceMs, 'refusal within original 700ms + 150ms scheduling tolerance: ' + refusedMs);
+      assert.ok(calls >= 2, 'EAGAIN was retried');
+      await delay(Math.max(0, start + connectMs * 2 + 400 - performance.now()));
+      assert.deepEqual(authentications, [], 'no authentication after the original deadline');
+      assert.ok(candidates.length <= 3, 'original three-candidate limit is retained');
+      t.diagnostic(JSON.stringify({ connectMs, toleranceMs, refusedMs, calls, candidates: candidates.length, authentications }));
+    } finally {
+      net.createConnection = createConnection; syncBuiltinESMExports(); connection?.destroy();
+      await Promise.all(candidates);
+    }
+  });
+
 }
