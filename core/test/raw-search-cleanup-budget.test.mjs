@@ -159,6 +159,56 @@ import { createRawSearchAuthority } from '../raw-search-authority.mjs';
 import { openReadDatabase } from '../read-database.mjs';
 import { openRawSearchStorage } from '../raw-search-storage.mjs';
 
+test('missing version stays armed after a full lap and removes a later denial within 32 passes', async t => {
+  const own = Object.getOwnPropertyDescriptor(performance, 'now'); let now = 0;
+  Object.defineProperty(performance, 'now', { configurable: true, value: () => now });
+  t.after(() => { if (own) Object.defineProperty(performance, 'now', own); else delete performance.now; });
+  const f = sourceFixture(t);
+  for (let i = 0; i < 32; i++) ok(await f.core.captureRaw(request(
+    splitRaw('synthetic copper missing version '+i, { id: 'message-'+i, ordinal: 1 })[0],
+    { sessionId: 'synthetic-'+i, eventId: 'synthetic-'+i })));
+  const s = await searchFixture(f); await consumeRecentHints(f, s);
+  for (let i = 0; i < 24; i++) { now += 1010; await s.maintain({ maxItems: 16, maxMs: 5000 }); }
+  const reader = openReadDatabase(f.path, { contextRead: true });
+  const authority = createRawSearchAuthority(reader, s.options);
+  const storage = await openRawSearchStorage({ directory: s.directory, identity: authority.identity,
+    bind: authority.bind, quotaBytes: 512*1024*1024 });
+  assert.equal(storage.head().checkpoint.coverageComplete, true);
+  assert.equal(storage.head().checkpoint.cleanup.afterSegment, 0);
+  const { version, ...withoutVersion } = authority;
+  assert.equal(typeof version, 'function');
+  assert.equal(Object.hasOwn(withoutVersion, 'version'), false);
+  let reads = 0, ring = false; const checked = new Set(), ringRemoved = new Set();
+  const wrapped = { ...withoutVersion, disposition(source) {
+    checked.add(JSON.stringify(source)); now += 1;
+    const result = authority.disposition(source);
+    if (ring && result === 'remove') ringRemoved.add(JSON.stringify(source));
+    return result;
+  } };
+  const port = { ...storage, snapshot(input) { ring = input.limit === 1; if (ring) reads++; return storage.snapshot(input); } };
+  const maintenance = createRawSearchMaintenance(port, wrapped, s.options);
+  t.after(async () => { await maintenance.close(); await storage.close(); reader.db.close(); });
+  const pass = async () => { now += 1010; await maintenance.maintain({ maxItems: 16, maxMs: 12 }, guard => guard?.()); };
+  const rows = (await storage.snapshot({ limit: 64 })).rows;
+  assert.equal(rows.length, 32);
+  for (let i = 0; i < rows.length; i++) await pass();
+  assert.equal(checked.size, rows.length, 'first full lap checks every existing row');
+  assert.equal(storage.head().checkpoint.cleanup.afterSegment, 0, 'first full lap finished');
+  const before = reads;
+  for (let i = 0; i < 16; i++) await pass();
+  assert.equal(reads - before, 16, 'missing version keeps reading ring snapshots after the first full lap');
+  // This row is next in the ring, beyond the sweep's first page. Record the
+  // ring's removal decision so a restarted sweep cannot satisfy the test.
+  const old = rows[16];
+  f.db.prepare('INSERT INTO raw_source_exclusions VALUES(?,?,?,?,1)').run(old.source.ref.conversationId,
+    old.source.ref.messageId, old.source.ref.span.start, old.source.ref.span.end);
+  let passes = 0;
+  while ((await storage.lookup([old.key])).length && passes < 32) { await pass(); passes++; }
+  assert.equal((await storage.lookup([old.key])).length, 0, 'missing-version ring removes a later denial within 32 passes');
+  assert.ok(ringRemoved.has(JSON.stringify(old.source)), 'the ring decides removal before the sweep reaches the denied row');
+  t.diagnostic(`missing version: 16 quiet snapshots; later denial removed in ${passes} passes; bound 32`);
+});
+
 for (const denial of ['exclusion', 'delete']) test(`idle ring re-arms for ${denial} and removes deep residue during saves`, async t => {
   const own = Object.getOwnPropertyDescriptor(performance, 'now'); let now = 0;
   Object.defineProperty(performance, 'now', { configurable: true, value: () => now });

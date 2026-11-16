@@ -28,6 +28,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
   let active=null,closed=false,stopped=false,noProgress=0,quantum=0,quotaBlocked=false;
   // These versions belong only to this authority connection. A resumed
   // persisted cursor must finish its partial lap, then a full lap from zero.
+  const versionAvailable=typeof authority.version==='function';
   let cleanupVersion,cleanupIdle=false,cleanupFullLap=null,cleanupSkip=false;
   let access = () => {};
   const inventoryFence = at => {try{return authority.fence(undefined,at);}catch(error){if(['source_budget_exceeded','search_deadline'].includes(error.code))return null;throw error;}};
@@ -219,7 +220,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
             // Read after the final disposition: a denial during that check
             // can invalidate a source already visited earlier in this lap.
             const endVersion=authority.version?.();
-            cleanupIdle=cleanupFullLap&&endVersion===cleanupVersion;
+            cleanupIdle=versionAvailable&&cleanupFullLap&&endVersion===cleanupVersion;
             ring.afterSegment=0;ring.throughSegment=storage.tail();
             cleanupVersion=endVersion;cleanupFullLap=true;
           }
