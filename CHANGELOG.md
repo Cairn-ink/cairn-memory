@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.8 — 2026-11-16: wider start-boundary margin
+
+- The synchronous start hook now has 1 second (was 300 ms), including Node
+  startup, to record where a new session starts.
+- On a very slow or busy computer, the first turn of a new session after a
+  pause can still be skipped. Nothing written during a pause is sent.
+- The protocol and installer are unchanged.
+
 ## Unreleased — engine Card maintenance
 
 - Apply the ten-minute wait after a purge to every part of the affected topic.

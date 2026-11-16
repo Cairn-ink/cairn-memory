@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { appendFile, readdir, unlink, writeFile } from 'node:fs/promises';
+import { appendFile, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { readControlState, setPaused } from '../lib/control-state.mjs';
+import { captureCursorPath } from '../lib/capture-cursor.mjs';
 import { withFileLock } from '../lib/file-lock.mjs';
 import { harness, oldTime, row } from './capture-window-harness.mjs';
 
@@ -55,6 +56,8 @@ test('hosted-paused pending birth grants no authority',
     assert.deepEqual(ids(f), [], 'paused-period text must never be sent');
     await unlink(f.transcript);
     await f.run('start-boundary', { session_id: 'synthetic-after-resume' });
+    assert.equal(JSON.parse(await readFile(captureCursorPath(f.dataDir, 'synthetic-after-resume'), 'utf8')
+      .catch(() => 'null'))?.startPending, true, 'start-boundary missed its budget');
     await appendFile(f.transcript, row('after-resume', new Date().toISOString()));
     await f.run('capture', { session_id: 'synthetic-after-resume' });
     assert.deepEqual(ids(f), ['after-resume'], 'validated active birth sends its first turn');
@@ -156,6 +159,7 @@ for (const pending of [false, true]) test(`copied prefix remains filtered across
     if (pending) {
       await setPaused(f.dataDir, true); await setPaused(f.dataDir, false);
       await f.run('start-boundary');
+      assert.equal((await f.state().catch(() => null))?.startPending, true, 'start-boundary missed its budget');
     }
     await f.run('recall');
     await f.write(row('copied-first', oldTime));
