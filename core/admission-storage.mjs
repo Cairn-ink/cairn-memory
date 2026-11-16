@@ -13,7 +13,7 @@ const key = (ns, input) => [ns.ownerId, ns.scope, ns.projectId, input.client, in
 
 /** Content-free job state around the shared admission mutation transaction. */
 export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes, isSuppressed, activeRow, epoch,
-  conflictStorage, stagedEvidence, classificationJournal, episodes, proceduralStorage, assertSources, sourceRoots, memoryAncestry = () => '', privacyMemoryDenied = row => {
+  conflictStorage, stagedEvidence, classificationJournal, episodes, proceduralStorage, withSources, sourceRoots, memoryAncestry = () => '', privacyMemoryDenied = row => {
     if(!cachedContentLayout(db)?.suppressionRevision)return false;
     const namespace={ownerId:row.owner_id,scope:row.scope,projectId:row.project_id};
     return !contentReadSafety(db,{namespace,selectedMemory:row,intent:'history',ref:{type:'memory',namespace,memoryId:row.id,revision:row.revision}}).allowed;
@@ -175,7 +175,7 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
   }
 
   function finishAdmission(ns, input, hooks, deadline) {
-    const result = transaction(db, () => {
+    const result = transaction(db, () => withSources(ns, input.items.map(item => item.receipts), assertSources => {
       const now = time(ns, input);
       const row = read(ns, input);
       const closed = guard('finishGuard', ns, input, row, now);
@@ -204,6 +204,7 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
       }
       const entries = activeItems.map(({ item, receiptNow }) => {
         const result = admitMutation(ns, item, { automatic: true,
+          assertSources,
           ...(hooks?.captureQualifiedDuplicates ? { captureQualifiedDuplicates: hooks.captureQualifiedDuplicates } : {}) }, receiptNow);
         const memoryId = result.memory.id;
         if (item.procedural !== undefined) proceduralStorage.write(result.memory, item.procedural, 'model', item.receipts);
@@ -225,7 +226,7 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
       if (!input.keepActionId) stagedEvidence.mark(ns, input, 'admitted');
       if (hooks?.initialClassification && !input.keepActionId) classificationJournal.insert(ns, input, memories);
       return { duplicate: false, memories, suppressedCount, indexRevision: epoch(ns), ...extra };
-    }, deadline?.check);
+    }), deadline?.check);
     if (result.closed) fail(result.closed);
     return result;
   }

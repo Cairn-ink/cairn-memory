@@ -254,18 +254,18 @@ export function createMemoryRuntime(input, internal) {
 
   function admit(ns, value, projection = {}) {
     ready();
-    return transaction(db, () => {
+    return transaction(db, () => rawLineage.withReceiptValidation(ns, [value.receipts], assertSources => {
       const now = new Date().toISOString();
       validateReceiptTimes(value, now);
-      rawLineage.assertReceipts(ns, value.receipts);
+      assertSources(ns, value.receipts);
       assertNotSuppressed(ns, value.fingerprint);
       conflictStorage.validateTargets(ns, value.conflictHints);
-      const result = admitMutation(ns, value, projection, now);
+      const result = admitMutation(ns, value, { ...projection, assertSources }, now);
       if (value.procedural !== undefined) proceduralStorage.write(result.memory, value.procedural, 'explicit', value.receipts);
       const changed = conflictStorage.insertBatch(ns,
         [{ memoryId: result.memory.id, hints: value.conflictHints }], "explicit-hint");
       return { ...result, changed: result.changed || changed, indexRevision: epoch(ns) };
-    });
+    }));
   }
 
   function validateReceiptTimes(value, now) {
@@ -283,7 +283,7 @@ export function createMemoryRuntime(input, internal) {
   // in a batch. Explicit and inferred writes share all mutation/invalidation rules.
   function admitMutation(ns, value, projection = {}, now = new Date().toISOString()) {
     validateReceiptTimes(value, now);
-    rawLineage.assertReceipts(ns, value.receipts);
+    (projection.assertSources ?? rawLineage.assertReceipts)(ns, value.receipts);
     assertNotSuppressed(ns, value.fingerprint);
     const receiptOrigin = !projection.automatic && value.origin === 'explicit' ? 'independent' : 'unknown';
     const insertedReceiptIds = [];
@@ -904,7 +904,7 @@ export function createMemoryRuntime(input, internal) {
   deletion = createRawDeletionStorage({ db, roots: sourceRoots, episodes, forgetMutation, removeReceipts, advanceEpoch });
   const admissionStorage = createAdmissionStorage({
     db, admitMutation, validateReceiptTimes, isSuppressed, activeRow, epoch, conflictStorage, stagedEvidence,
-    classificationJournal, episodes, proceduralStorage, assertSources: rawLineage.assertReceipts, sourceRoots, memoryAncestry, privacyMemoryDenied,
+    classificationJournal, episodes, proceduralStorage, withSources: rawLineage.withReceiptValidation, sourceRoots, memoryAncestry, privacyMemoryDenied,
   });
   const orderedStorage = createOrderedCaptureStorage({ db, admissionStorage, epoch, activeRow,
     supersessionStorage, receiptKey, isSuppressed });
@@ -939,7 +939,7 @@ export function createMemoryRuntime(input, internal) {
             selected.scope===ns.scope && (selected.projectId??'')===(ns.projectId??'')); })) return transaction(db, check);
     check();
   };
-  function captureSourceRead(ns, work) {
+  function captureSourceRead(ns, sources, work) {
     const layout = cachedContentLayout(db);
     if (!layout) fail('unsupported_database');
     // Legacy source checks retain their exact direct-call cost and semantics.
@@ -950,7 +950,7 @@ export function createMemoryRuntime(input, internal) {
     try { return readTransaction(db, () => {
       // Reattest the installed safety layout inside this source snapshot.
       checkInstalledContentSafety(db);
-      return withContentSuppressionReadInside(db,[ns],proof=>rawLineage.sourceSnapshot(work,proof,deadline));
+      return withContentSuppressionReadInside(db,[ns],proof=>rawLineage.sourceSnapshot(work,proof,deadline,sources.length ? ns : undefined));
     }); }
     catch (error) {
       if (isSourceSnapshotOverflow(error)) {
@@ -1064,8 +1064,8 @@ export function createMemoryRuntime(input, internal) {
     rebuildIndex(ns, input) { ready(); return indexStorage.rebuildIndex(ns, input); },
     inspectAdmission(ns, input) { ready(); return admissionStorage.inspectAdmission(ns, input); },
     claimAdmission(ns, input) { ready(); return admissionStorage.claimAdmission(ns, input); },
-    filterCaptureSources(ns, sources) { ready(); return captureSourceRead(ns, () => rawLineage.filter(ns, sources)); },
-    assertCaptureSources(ns, sources) { ready(); return captureSourceRead(ns, () => rawLineage.assertReceipts(ns, sources)); },
+    filterCaptureSources(ns, sources) { ready(); return captureSourceRead(ns, sources, () => rawLineage.filter(ns, sources)); },
+    assertCaptureSources(ns, sources) { ready(); return captureSourceRead(ns, sources, () => rawLineage.assertReceipts(ns, sources)); },
     captureSnapshot(ns, input, qualification, policy) {
       ready();
       // Old layouts validate new times, then omit them before hashing or staging.
