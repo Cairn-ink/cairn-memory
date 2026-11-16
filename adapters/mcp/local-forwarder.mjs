@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { once } from 'node:events';
 import { createIdentity, selectedEnvironment, assertStore, assertStoreLocation, canonical, daemonVector, creationIdentity, creationDigest, physicalStore, storeFilesystemProbe, DAEMON_PROTOCOL } from './local-daemon-identity.mjs';
-import { runtimeDirectory, identityKey, endpointPaths, readPrivate, checkedEntry, refuse } from './local-daemon-state.mjs';
+import { runtimeDirectory, identityKey, endpointPaths, readPrivate, checkedEntry, refuse, privateTransient } from './local-daemon-state.mjs';
 import { takeOver } from './local-daemon-liveness.mjs';
 import { authenticateClient, frameGuard, requestLedger, queuedBytes, QUEUE_BYTES, DAEMON_UNRESPONSIVE_MS, DAEMON_LIVENESS_METHOD } from './local-daemon-wire.mjs';
 
@@ -61,14 +61,14 @@ async function connectAttempt(args, options, deadline, endpointState) {
     await delay(Math.min(25 + randomInt(76), Math.max(1, deadline - performance.now())));
   }
   if (performance.now() >= deadline) throw refuse('daemon_connect_timeout');
-  const identity = await createIdentity(args, { key: await identityKey(directory), environment, build: options.build, filesystem });
+  const identity = await createIdentity(args, { key: await identityKey(directory, { deadline: Math.min(deadline, performance.now() + 1000) }), environment, build: options.build, filesystem });
   if (!identity.eligible) throw refuse('daemon_not_eligible');
   const paths = endpointPaths(directory, identity.digest);
   while (performance.now() < deadline) {
     await directory.validate(); await assertStore(identity.record, filesystem);
     let text, descriptor;
     try {
-      text = await readPrivate(directory, paths.ready, { missing: true });
+      text = await readPrivate(directory, paths.ready, { fileClass: 'descriptor', missing: true, openMissing: false });
       if (text) {
         try { descriptor = JSON.parse(text); } catch { throw refuse('daemon_descriptor'); }
         if (descriptor.protocol !== DAEMON_PROTOCOL) throw refuse('daemon_protocol');
@@ -76,7 +76,7 @@ async function connectAttempt(args, options, deadline, endpointState) {
         if (await takeOver(directory, paths, descriptor, { ...options.takeoverOptions, staleMs: options.unresponsiveMs ?? DAEMON_UNRESPONSIVE_MS, deadline })) continue;
       }
     } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
+      if (!privateTransient(error)) throw error;
       // A lifetime-lock winner can reap the predecessor's descriptor/stamp
       // between the private-file inode check and open. Re-read the published
       // generation and repeat every check within the original connect budget.
@@ -102,7 +102,7 @@ async function connectAttempt(args, options, deadline, endpointState) {
           clearTimeout(timer); return { socket, descriptor, ready };
         } catch (error) {
           clearTimeout(timer); socket.destroy();
-          if (!['ENOENT', 'ECONNREFUSED', 'daemon_transport', 'daemon_connect_timeout'].includes(error.code)) throw error;
+          if (!['ENOENT', 'EAGAIN', 'ECONNREFUSED', 'daemon_transport', 'daemon_connect_timeout'].includes(error.code)) throw error;
         }
       }
     }

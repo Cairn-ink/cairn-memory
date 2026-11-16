@@ -9,8 +9,8 @@ import { createIdentity, daemonVector, canonical, assertStore, assertStoreSync, 
 import { localProcessIdentity, startAwareAlive, daemonMonotonicMs } from './local-daemon-liveness.mjs';
 import { authenticateServer, frameGuard, requestLedger, queuedBytes, QUEUE_BYTES, DAEMON_LIVENESS_MS, DAEMON_LIVENESS_FRAME } from './local-daemon-wire.mjs';
 
-async function reapEndpoint(directory, paths, live, predecessor) {
-  const text = await readPrivate(directory, paths.ready, { missing: true });
+async function reapEndpoint(directory, paths, live, predecessor, budget) {
+  const text = await readPrivate(directory, paths.ready, { fileClass: 'descriptor', missing: true, deadline: budget.deadline });
   const socket = await checkedEntry(directory, paths.socket, { socket: true, missing: true });
   if (text === undefined) {
     // The lifetime lock excludes publishers. Its recorded predecessor must
@@ -25,9 +25,9 @@ async function reapEndpoint(directory, paths, live, predecessor) {
   if (!/^[a-f0-9]{64}$/.test(old.incarnation ?? '') || startAwareAlive(old.owner, live)) throw refuse('daemon_owner_live');
   if (socket && (String(socket.dev) !== old.socket.dev || String(socket.ino) !== old.socket.ino)) throw refuse('daemon_endpoint_changed');
   // Holding the lifetime lock excludes other publishers; compare incarnation again.
-  const current = JSON.parse(await readPrivate(directory, paths.ready));
+  const current = JSON.parse(await readPrivate(directory, paths.ready, { fileClass: 'descriptor', deadline: budget.deadline }));
   if (current.incarnation !== old.incarnation) throw refuse('daemon_incarnation');
-  const stamp = await readPrivate(directory, paths.stamp, { missing: true });
+  const stamp = await readPrivate(directory, paths.stamp, { fileClass: 'stamp', missing: true, deadline: budget.deadline });
   if (stamp && JSON.parse(stamp).incarnation !== old.incarnation) throw refuse('daemon_incarnation');
   if (socket) await removePrivate(directory, paths.socket, { socket: true });
   await removePrivate(directory, paths.stamp);
@@ -46,15 +46,17 @@ export async function runCandidate(bootstrap, { idleMs = 30000, graceMs = 5000, 
   if (!identity.eligible || canonical(identity.record) !== canonical(bootstrap.identity)) throw refuse('daemon_identity');
   const paths = endpointPaths(directory, identity.digest), live = localProcessIdentity();
   await checkedEntry(directory, paths.lock, { missing: true });
-  let predecessor, lifetimeOwner;
+  let predecessor, lifetimeOwner, held = false;
+  const acquisitionDeadline = performance.now() + 250, budget = { deadline: performance.now() + graceMs };
   // Lock before ANY server, SDK, core, provider, SQLite or tokenizer import.
   // stateLock cannot record start time in its context. Use its unchanged underlying
   // withFileLock seam directly, with stricter daemon-specific owner validation.
   return withFileLock(paths.lock, async () => {
+    held = true;
     await directory.validate();
-    await reapEndpoint(directory, paths, live, predecessor);
+    await reapEndpoint(directory, paths, live, predecessor, budget);
     await afterLock(); // Programmatic instrumentation only; never accepted by bootstrap/argv/env.
-    await serve(directory, paths, identity.record, bootstrap, live, { idleMs, graceMs, exit, runtimeOptions });
+    await serve(directory, paths, identity.record, bootstrap, live, { idleMs, graceMs, exit, runtimeOptions, budget });
   }, { timeoutMs: 250, pollMs: 10, context: { ...live, store: { dev: identity.record.store.dev, ino: identity.record.store.ino } },
     isAlive: (_pid, owner) => {
       const alive = startAwareAlive(owner, live);
@@ -66,7 +68,7 @@ export async function runCandidate(bootstrap, { idleMs = 30000, graceMs = 5000, 
     validateOwner: owner => { startAwareAlive(owner, live); },
     validatePath: path => checkedEntry(directory, path, { missing: true }),
     read: async path => {
-      const text = await readPrivate(directory, path, { missing: true });
+      const text = await readPrivate(directory, path, { fileClass: 'lock', missing: true, deadline: held ? budget.deadline : acquisitionDeadline });
       if (path === paths.lock) lifetimeOwner = text ? JSON.parse(text) : undefined;
       return text;
     },
@@ -79,6 +81,7 @@ async function provisionStore(bootstrap, directory) {
   if (canonical(creation) !== canonical(bootstrap.creation)) throw refuse('daemon_store_changed');
   const path = resolve(directory.path, 'p-' + creationDigest(creation).slice(0, 32) + '.lock'), live = localProcessIdentity();
   await checkedEntry(directory, path, { missing: true });
+  const acquisitionDeadline = performance.now() + 250;
   return withFileLock(path, async () => {
     await directory.validate();
     try { await physicalStore(creation.path); return; } catch (error) { if (error.code !== 'ENOENT') throw error; }
@@ -89,11 +92,12 @@ async function provisionStore(bootstrap, directory) {
     await core.close();
   }, { timeoutMs: 250, pollMs: 10, context: live,
     isAlive: (_pid, owner) => startAwareAlive(owner, live), validateOwner: owner => { startAwareAlive(owner, live); },
-    validatePath: p => checkedEntry(directory, p, { missing: true }), read: p => readPrivate(directory, p, { missing: true }),
+    validatePath: p => checkedEntry(directory, p, { missing: true }), read: p => readPrivate(directory, p, { fileClass: 'lock', missing: true, deadline: acquisitionDeadline }),
   });
 }
 
-async function serve(directory, paths, identity, bootstrap, owner, { idleMs, graceMs, exit, runtimeOptions }) {
+async function serve(directory, paths, identity, bootstrap, owner, { idleMs, graceMs, exit, runtimeOptions, budget }) {
+  budget.deadline = Infinity;
   let host, embedding, activated, draining = false, idle, outer, shutdownTask, doneResolve, doneReject, startupTask;
   let logTail = Promise.resolve(), stampTail = Promise.resolve(), stampTimer;
   let writersFenced = false, logSealed = false;
@@ -104,7 +108,7 @@ async function serve(directory, paths, identity, bootstrap, owner, { idleMs, gra
     return task;
   };
   const codes = [];
-  const log = code => { if (logSealed) return; codes.push(code); if (codes.length > 8) codes.shift(); logTail = logTail.then(() => logCode(directory, paths.log, code)).catch(() => {}); };
+  const log = code => { if (logSealed) return; codes.push(code); if (codes.length > 8) codes.shift(); logTail = logTail.then(() => logCode(directory, paths.log, code, { deadline: Math.min(budget.deadline, performance.now() + 1000) })).catch(() => {}); };
   const sockets = new Set(), handles = new Map();
   const descriptor = { version: 1, protocol: DAEMON_PROTOCOL, identity, owner,
     incarnation: randomBytes(32).toString('hex'), capability: randomBytes(32).toString('hex'), socket: null };
@@ -198,11 +202,11 @@ async function serve(directory, paths, identity, bootstrap, owner, { idleMs, gra
     })().catch(() => { log('daemon_refused'); drop(); }));
   });
   async function cleanupEndpoint() {
-    const text = await readPrivate(directory, paths.ready, { missing: true });
+    const text = await readPrivate(directory, paths.ready, { fileClass: 'descriptor', missing: true, deadline: budget.deadline });
     if (text && JSON.parse(text).incarnation !== descriptor.incarnation) throw refuse('daemon_incarnation');
     const info = await checkedEntry(directory, paths.socket, { socket: true, missing: true });
     if (info && descriptor.socket && (String(info.dev) !== descriptor.socket.dev || String(info.ino) !== descriptor.socket.ino)) throw refuse('daemon_endpoint_changed');
-    const stamp = await readPrivate(directory, paths.stamp, { missing: true });
+    const stamp = await readPrivate(directory, paths.stamp, { fileClass: 'stamp', missing: true, deadline: budget.deadline });
     if (stamp && JSON.parse(stamp).incarnation !== descriptor.incarnation) throw refuse('daemon_incarnation');
     if (info) await removePrivate(directory, paths.socket, { socket: true });
     await removePrivate(directory, paths.stamp);
@@ -210,7 +214,7 @@ async function serve(directory, paths, identity, bootstrap, owner, { idleMs, gra
   }
   function shutdown() {
     return shutdownTask ??= (async () => {
-      draining = true; clearTimeout(idle); clearInterval(stampTimer); log('daemon_draining');
+      draining = true; clearTimeout(idle); budget.deadline = performance.now() + graceMs; clearInterval(stampTimer); log('daemon_draining');
       const listenerClosed = new Promise(resolve => server.once('close', resolve));
       server.close(); // Stop admissions before revocation; lifetime lock remains held.
       outer = setTimeout(() => { log('daemon_grace_expired'); exit(1); }, graceMs);

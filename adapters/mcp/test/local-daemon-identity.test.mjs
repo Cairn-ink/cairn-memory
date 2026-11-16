@@ -109,7 +109,7 @@ test('logs accept only fixed codes and cap file size', async t => {
   await writeFile(path, 'daemon_ready\n'.repeat(20164) + 'daemon_exit\n', { mode: 0o600 });
   await logCode(f.directory, path, 'daemon_exit');
   assert.ok((await lstat(path)).size <= 262144, 'log cap must bound disk bytes');
-  assert.ok(Buffer.byteLength(await readPrivate(f.directory, path, { maxBytes: 262144 })) <= 262144, 'log cap must bound disk bytes');
+  assert.ok(Buffer.byteLength(await readPrivate(f.directory, path, { fileClass: 'log', maxBytes: 262144 })) <= 262144, 'log cap must bound disk bytes');
 });
 test('package physical location splits identical builds and reinstalled directories', async t => {
   const f = await setup(t), a = join(f.root, 'package-a'), b = join(f.root, 'package-b');

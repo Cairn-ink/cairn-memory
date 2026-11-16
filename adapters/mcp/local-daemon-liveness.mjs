@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { withFileLock } from '../../integrations/client/file-lock.mjs';
 import { canonical, physicalStore } from './local-daemon-identity.mjs';
 import { DAEMON_UNRESPONSIVE_MS } from './local-daemon-wire.mjs';
-import { runtimeDirectory, endpointPaths, readPrivate, checkedEntry, refuse } from './local-daemon-state.mjs';
+import { runtimeDirectory, endpointPaths, readPrivate, checkedEntry, refuse, retryMetadata } from './local-daemon-state.mjs';
 
 export function processStart(pid) {
   try {
@@ -34,7 +34,7 @@ export function startAwareAlive(owner, live = localProcessIdentity(), read = pro
 // suspended time. Never use the wall clock to decide that an owner is stale.
 export const daemonMonotonicMs = () => Number(process.hrtime.bigint() / 1000000n);
 export async function readDaemonHeartbeat(directory, paths, descriptor) {
-  const text = await readPrivate(directory, paths.stamp, { missing: true });
+  const text = await readPrivate(directory, paths.stamp, { fileClass: 'stamp', missing: true, openMissing: false });
   if (!text) return;
   let stamp; try { stamp = JSON.parse(text); } catch { throw refuse('daemon_stamp'); }
   if (stamp.incarnation !== descriptor.incarnation || canonical(stamp.owner) !== canonical(descriptor.owner) || stamp.build !== descriptor.identity.build) return;
@@ -60,7 +60,7 @@ export async function takeOver(directory, paths, observed, {
   const incarnation = observed.incarnation, owner = canonical(observed.owner), live = localProcessIdentity();
   return withFileLock(paths.takeover, async () => {
     await afterLock(); // Programmatic test seam; never bootstrap/argv/environment.
-    const text = await readPrivate(directory, paths.ready, { missing: true });
+    const text = await readPrivate(directory, paths.ready, { fileClass: 'descriptor', missing: true });
     if (!text) return;
     const current = JSON.parse(text), fresh = await readDaemonHeartbeat(directory, paths, current);
     if (current.incarnation !== incarnation || canonical(current.owner) !== owner ||
@@ -80,7 +80,7 @@ export async function takeOver(directory, paths, observed, {
   }, { timeoutMs: Math.max(0, deadline - performance.now()), deadlineMs: deadline, pollMs: 20, context: live,
     isAlive: (_pid, owner) => startAwareAlive(owner, live), validateOwner: owner => { startAwareAlive(owner, live); },
     validatePath: path => checkedEntry(directory, path, { missing: true }),
-    read: path => readPrivate(directory, path, { missing: true }),
+    read: path => readPrivate(directory, path, { fileClass: 'lock', missing: true, deadline }),
   });
 }
 
@@ -92,25 +92,27 @@ export async function runDaemonCommand(args, {
   if (platform !== 'linux') { write('daemon_platform\n'); return 0; }
   const [action, flag, path, ...extra] = args;
   if (!['status', 'stop'].includes(action) || extra.length || (flag !== undefined && (flag !== '--db' || !path))) throw refuse('daemon_arguments');
+  const metadataDeadline = performance.now() + 1000;
   const directory = await runtimeDirectory({ root });
   const store = path === undefined ? undefined : await physicalStore(path);
+  const { entries, uncertain } = await retryMetadata(async () => {
   const entries = [], uncertain = [];
   // Bound sockets are discoverable before a ready descriptor is published.
   // Lifetime-lock metadata supplies the physical-store identity, never a path.
   for (const name of (await readdir(directory.path)).filter(name => /^d-[a-f0-9]{32}\.sock$/.test(name)).sort()) {
     const base = name.slice(0, -5);
-    if (await readPrivate(directory, join(directory.path, base + '.json'), { missing: true })) continue;
+    if (await readPrivate(directory, join(directory.path, base + '.json'), { fileClass: 'descriptor', missing: true })) continue;
     let owner, removable = false;
     try {
       await checkedEntry(directory, join(directory.path, name), { socket: true });
-      const lock = await readPrivate(directory, join(directory.path, base + '.lock'), { missing: true });
+      const lock = await readPrivate(directory, join(directory.path, base + '.lock'), { fileClass: 'lock', missing: true, deadline: metadataDeadline });
       if (lock) { owner = JSON.parse(lock); removable = !startAwareAlive(owner); }
     } catch { removable = false; }
     if (store && (owner?.store?.dev !== store.dev || owner?.store?.ino !== store.ino)) continue;
     uncertain.push({ code: 'endpoint_uncertain', auto_removable: removable });
   }
   for (const name of (await readdir(directory.path)).filter(name => /^d-[a-f0-9]{32}\.json$/.test(name)).sort()) {
-    const text = await readPrivate(directory, join(directory.path, name), { missing: true });
+    const text = await readPrivate(directory, join(directory.path, name), { fileClass: 'descriptor', missing: true });
     if (!text) continue;
     const descriptor = JSON.parse(text);
     if (descriptor.identity?.uid !== directory.uid || !/^[a-f0-9]{64}$/.test(descriptor.identity.build ?? '') || !/^[a-f0-9]{64}$/.test(descriptor.incarnation ?? '')) throw refuse('daemon_descriptor');
@@ -120,6 +122,8 @@ export async function runDaemonCommand(args, {
     const stamp = await readDaemonHeartbeat(directory, paths, descriptor);
     entries.push({ descriptor, stamp });
   }
+  return { entries, uncertain };
+  }, metadataDeadline);
   if (action === 'status') {
     write(JSON.stringify({ daemons: entries.map(({ descriptor, stamp }) => ({
       store: daemonStoreKey(descriptor.identity.store),

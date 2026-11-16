@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "cc582fa1ae9083a09fc5800f90c8680f5553827d764cec95255e56846943f848",
-  "bytes": 1450720,
+  "sha256": "204b894409ca7bd76dd9c3007489c6689b4de117dae0ca56a664c16925fca5c8",
+  "bytes": 1451622,
   "files": [
     "LICENSE",
     "README.md",
@@ -600,12 +600,12 @@
     "adapters/mcp/method-package-access.mjs": "1a9d5f630fad641fc2efe447602c5d79d3392394157186772ca06ba88ba33509",
     "adapters/mcp/local-authority-router.mjs": "ebddbcf382d0d69f199d124a01569d68b11f4a8399834b8411ed45f98ae57a47",
     "adapters/mcp/local-context-continuations.mjs": "ad824cc65a83e60a71b97f9fa1418807fd7acbc429afa731c73edb87fd1d5e38",
-    "adapters/mcp/local-daemon.mjs": "f9d3ce9fce477e6dc9bdb67da871fc409cdffa5ca61059bceb56f6c9b299893d",
+    "adapters/mcp/local-daemon.mjs": "e64d12393a8073f264e5fd63e96e0d5b05d953a98bbd509ff5aa9fcf8f4c418f",
     "adapters/mcp/local-daemon-identity.mjs": "bf1e35cb3480f394803421417d2477a0e311b016763c0d2b864b04581c24da73",
-    "adapters/mcp/local-daemon-liveness.mjs": "5179ee9a6faacf4f491e34e7ee0fdb96b2fe97b1289c8f72f11031a1b899c375",
-    "adapters/mcp/local-daemon-state.mjs": "69fde964c8466ee0a4a38b6a7fac8f99ef397cdd88dc5d51a4e3547711a8f10e",
+    "adapters/mcp/local-daemon-liveness.mjs": "bc8ee39ad2bd593ada7d74db6183c56fd7535bbb9759895af9fd22c51c44c9fa",
+    "adapters/mcp/local-daemon-state.mjs": "c61cb15346e52d89fea29f3483cd18a1f6a7511e6b534d5c13ebe8acada5d857",
     "adapters/mcp/local-daemon-wire.mjs": "c11f78b561651d2eaf9546d172f5ff53ba08bdda6a620723e4847260e537e7ec",
-    "adapters/mcp/local-forwarder.mjs": "2168bf9caf7bd961ef8afe551c16c10c78e081a97461cc9b2861453823468a18",
+    "adapters/mcp/local-forwarder.mjs": "efb24e0c8a094698c0f27f827dd87effd51df21e877b91fc9ddfb5e46cd240e1",
     "adapters/mcp/local-shared-runtime.mjs": "d5a1a4baba2513eade1dcce141bb354dd19bc31a592198583a7ba60ecf613dc8",
     "adapters/mcp/server.mjs": "06a62756beae3f02517e24344a6295090cb2b0407b1fb836693bc3f84e46c109",
     "adapters/mcp/private-card-access.mjs": "fc95ae394d96a945d6d6ecd2e8ec8f182d36ac8094977a6b6ed42932f2ee7cca",
@@ -838,6 +838,6 @@
   "generatedHashes": {
     "package.json": "e255ff4d23e921de9bed8e058c64e57aed3e1bc6a8ed242cee52a716add2d69c",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8",
-    "engine-build.json": "26a4b19ebb11a6f5bb649e313e2303ab65ddaadeed69dab9c9b84ea2b732a744"
+    "engine-build.json": "8b264914496467fe69c9d912871416a9d26d81fc41a450012b16395118b11cc7"
   }
 }
