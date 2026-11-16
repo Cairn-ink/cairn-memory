@@ -18,167 +18,11 @@ const until = async (predicate, reason, ms = 15000) => {
   assert.fail(reason);
 };
 const ok = r => { assert.equal(r.ok, true, JSON.stringify(r)); return r.value; };
-const identityPrefix = name => /^(d-[a-f0-9]{32})\./.exec(name)?.[1];
-const sameOwner = (a, b) => a != null && b != null &&
-  ['pid', 'start', 'boot', 'namespace'].every(key => a[key] === b[key]);
-const sameEntry = (a, b) => b != null &&
-  ['name', 'kind', 'inode', 'size', 'mtime'].every(key => a[key] === b[key]);
-// Read the immutable source allowlist, never log bytes through a path reader.
-const stateSource = await readFile(new URL('../../../adapters/mcp/local-daemon-state.mjs', import.meta.url), 'utf8');
-const codeList = /const logCodes = new Set\(\[([\s\S]*?)\]\);/.exec(stateSource);
-assert.ok(codeList, 'fixed log-code allowlist exists');
-const logCodes = new Set([...codeList[1].matchAll(/'(daemon_[a-z_]+)'/g)].map(match => match[1]));
-assert.ok(logCodes.size > 0, 'fixed log-code allowlist is nonempty');
-const logLimit = 262144;
-function logChange(before, after) {
-  if (before.kind !== 'file' || after?.kind !== 'file' || typeof before.content !== 'string' || typeof after.content !== 'string') return;
-  if (/[^\x00-\x7f]/.test(before.content) || /[^\x00-\x7f]/.test(after.content)) return;
-  if (BigInt(before.size) !== BigInt(Buffer.byteLength(before.content)) ||
-      BigInt(after.size) !== BigInt(Buffer.byteLength(after.content)) || BigInt(after.size) > BigInt(logLimit)) return;
-  if (sameEntry(before, after) && before.content === after.content) return [];
-  const lines = content => {
-    if (!content.endsWith('\n')) return;
-    const codes = content.slice(0, -1).split('\n');
-    return codes.every(code => logCodes.has(code)) ? codes : undefined;
-  };
-  if (after.content.startsWith(before.content)) {
-    const appended = lines(after.content.slice(before.content.length));
-    if (appended) return appended;
-  }
-  // After a reset only the retained new lines are observable. The old bytes
-  // plus those lines must exceed the writer's cap; equality does not reset.
-  if (BigInt(before.size) + BigInt(after.size) > BigInt(logLimit)) return lines(after.content);
-}
-const revivalEndpoint = suffix => /^\.(?:json|stamp|sock|lock(?:\.(?:owner|reap)-[a-z0-9-]+)*|takeover\.lock(?:\.(?:owner|reap)-[a-z0-9-]+)*)$/.test(suffix);
-
-// Pure comparison: no filesystem reads, clocks, process probes or mutation.
-// Liveness of baseline owners is sampled again in after.retired, even when
-// their descriptors and locks have disappeared or a successor replaced them.
-export function classifyRuntimeHygiene(before, after, {
-  prefixes = [], names = [], tokenPrefixes = [], owners = [],
-} = {}) {
-  const errors = [], diagnostics = [], current = new Map(after.entries.map(entry => [entry.name, entry]));
-  const isOwned = name => names.includes(name) || prefixes.some(prefix => name.startsWith(prefix + '.')) ||
-    tokenPrefixes.some(prefix => name === prefix || name.startsWith(prefix + '.owner-') || name.startsWith(prefix + '.reap-'));
-  for (const entry of after.entries) {
-    if (isOwned(entry.name)) errors.push('test-owned file remains: ' + entry.name);
-    else if (!before.entries.some(value => value.name === entry.name)) {
-      if (identityPrefix(entry.name)) diagnostics.push('foreign identity entry created: ' + entry.name);
-      else errors.push('non-identity entry created: ' + entry.name);
-    }
-  }
-  const groups = new Map();
-  for (const entry of before.entries) {
-    if (isOwned(entry.name)) continue;
-    const prefix = identityPrefix(entry.name);
-    if (!prefix) {
-      if (!sameEntry(entry, current.get(entry.name))) errors.push('non-identity entry changed: ' + entry.name);
-      continue;
-    }
-    if (!groups.has(prefix)) groups.set(prefix, []);
-    groups.get(prefix).push(entry);
-  }
-  for (const [prefix, entries] of groups) {
-    const previous = before.identities.find(identity => identity.prefix === prefix);
-    const next = after.identities.find(identity => identity.prefix === prefix);
-    const remaining = after.entries.filter(entry => identityPrefix(entry.name) === prefix);
-    if (previous?.alive && remaining.length === 0) {
-      const retired = after.retired.find(identity => identity.prefix === prefix && sameOwner(identity.owner, previous.owner));
-      if (retired?.alive !== false) errors.push('foreign identity gone without dead owner: ' + prefix);
-      continue;
-    }
-    const log = entries.find(entry => entry.name === prefix + '.log');
-    const appended = log ? logChange(log, current.get(log.name)) : undefined;
-    if (log && !appended) errors.push('foreign log changed invalidly: ' + log.name);
-    const revived = !previous?.alive && appended?.includes('daemon_ready');
-    if (revived) diagnostics.push('foreign identity revived: ' + prefix);
-    if (previous?.alive && previous.owner && next?.owner && !sameOwner(previous.owner, next.owner)) {
-      if (next.alive && !owners.some(owner => sameOwner(owner, next.owner)))
-        diagnostics.push('foreign identity takeover: ' + prefix);
-      else errors.push('foreign takeover has dead or test owner: ' + prefix);
-      continue;
-    }
-    if (!previous?.alive) {
-      for (const entry of entries) if (!(entry === log && appended) &&
-        !(revived && revivalEndpoint(entry.name.slice(prefix.length))) && !sameEntry(entry, current.get(entry.name)))
-        errors.push('dead or ownerless foreign entry changed: ' + entry.name);
-      continue;
-    }
-    for (const entry of entries) {
-      const value = current.get(entry.name), suffix = entry.name.slice(prefix.length);
-      const unchanged = sameEntry(entry, value);
-      const heartbeat = suffix === '.stamp' && value?.kind === entry.kind;
-      if (!unchanged && !heartbeat && !(entry === log && appended)) errors.push('live foreign entry changed: ' + entry.name);
-    }
-  }
-  return { errors, diagnostics };
-}
-
-// Shape validation is separate from liveness: malformed records are ownerless;
-// OS/probe failures for a well-formed owner still propagate.
-const ownerRecord = value => value !== null && typeof value === 'object' && !Array.isArray(value) &&
-  Number.isSafeInteger(value.pid) && value.pid > 0 && typeof value.start === 'string' &&
-  typeof value.boot === 'string' && value.boot.length > 0 && typeof value.namespace === 'string' && value.namespace.length > 0;
-
-export async function runtimeSnapshot(path, remembered = [], { afterMetadata = async () => {} } = {}) {
-  let logDirectory;
-  async function logContent(name) {
-    // All log reads use the real pinned directory and the typed fd reader.
-    logDirectory ??= await runtimeDirectory({ root: dirname(path) });
-    if (logDirectory.path !== path) throw Object.assign(Error('runtime_snapshot_directory'), { code: 'runtime_snapshot_directory' });
-    return readPrivate(logDirectory, join(path, name), { fileClass: 'log', missing: true, maxBytes: logLimit,
-      deadline: performance.now() + 1000 });
-  }
-  async function metadata(names) {
-    const values = [];
-    for (const name of names) {
-      let info;
-      try { info = await lstat(join(path, name), { bigint: true }); }
-      catch (error) { if (error.code === 'ENOENT') continue; throw error; }
-      values.push({ name, kind: info.isFile() ? 'file' : info.isSocket() ? 'socket' : info.isDirectory() ? 'directory' : info.isSymbolicLink() ? 'symlink' : 'other',
-        inode: String(info.ino), size: String(info.size), mtime: String(info.mtimeNs) });
-    }
-    return values;
-  }
-  const names = (await readdir(path)).sort(), identities = [];
-  const entries = await metadata(names.filter(name => !identityPrefix(name)));
-  for (const prefix of new Set(names.map(identityPrefix).filter(Boolean))) {
-    // At most three complete samples per identity. Recheck both anchors,
-    // including absence, so a new descriptor cannot hide behind a stable lock.
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      const sampled = await metadata((await readdir(path)).filter(name => identityPrefix(name) === prefix).sort());
-      await afterMetadata({ prefix, attempt }); // Test-only acquisition seam.
-      const log = sampled.find(entry => entry.name === prefix + '.log');
-      if (log) log.content = await logContent(log.name);
-      let owner;
-      for (const suffix of ['.json', '.lock']) {
-        if (!sampled.some(entry => entry.name === prefix + suffix && entry.kind === 'file')) continue;
-        try {
-          const value = JSON.parse(await readFile(join(path, prefix + suffix), 'utf8'));
-          const candidate = suffix === '.json' ? value?.owner : value;
-          if (ownerRecord(candidate)) { owner = candidate; break; }
-        } catch (error) { if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error; }
-      }
-      const alive = owner ? startAwareAlive(owner) : false;
-      const anchors = ['.json', '.lock'].map(suffix => prefix + suffix);
-      const checked = await metadata(anchors);
-      const logChecked = log ? (await metadata([log.name]))[0] : undefined;
-      const stable = (!log || (sameEntry(log, logChecked) && typeof log.content === 'string' &&
-        BigInt(log.size) === BigInt(Buffer.byteLength(log.content)))) && anchors.every(name => {
-        const previous = sampled.find(entry => entry.name === name), next = checked.find(entry => entry.name === name);
-        return previous ? next?.inode === previous.inode && next.kind === previous.kind : !next;
-      });
-      if (stable) { entries.push(...sampled); identities.push({ prefix, owner, alive }); break; }
-      if (attempt === 3) throw Object.assign(Error('runtime_snapshot_changed'), { code: 'runtime_snapshot_changed' });
-    }
-  }
-  entries.sort((a, b) => a.name.localeCompare(b.name));
-  return { entries, identities, retired: remembered.filter(identity => identity.owner)
-    .map(identity => ({ ...identity, alive: startAwareAlive(identity.owner) })) };
-}
+import { identityPrefix, sameEntry, runtimeSnapshot, classifyRuntimeHygiene, runtimeLease } from './installed-daemon-runtime.mjs';
+export { runtimeSnapshot, classifyRuntimeHygiene } from './installed-daemon-runtime.mjs';
 export async function installedAssertions(t, { install = false, exercise, recordLaunchPrefix = prefix => prefix } = {}) {
   const scratch = await mkdtemp(join(tmpdir(), 'entry-')), clients = [], owned = new Map(), logs = new Set(), lockTokens = new Map(), launchedPrefixes = new Set();
-  const dir = await runtimeDirectory(), before = await runtimeSnapshot(dir.path);
+  const dir = await runtimeDirectory(), releaseLease = await runtimeLease(dir), before = await runtimeSnapshot(dir.path);
   const baseline = new Set(before.entries.map(entry => entry.name));
   // Claim key ownership via an exclusive atomic link, rather than assuming
   // absence in a directory snapshot proves that this test created the key.
@@ -359,7 +203,7 @@ export async function installedAssertions(t, { install = false, exercise, record
       for (const diagnostic of hygiene.diagnostics) t.diagnostic(diagnostic);
       assert.deepEqual(hygiene.errors, [], 'test leaves no owned files and preserves pre-existing foreign runtime entries');
       t.diagnostic('runtime hygiene: no test-owned files remain');
-    } finally { await rm(scratch, { recursive: true, force: true }); }
+    } finally { try { await rm(scratch, { recursive: true, force: true }); } finally { await releaseLease(); } }
   });
   const root = await tree('a');
   // Test-only integration seam: exercise the same launch and teardown paths.
