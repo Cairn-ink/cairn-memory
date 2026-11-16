@@ -105,7 +105,9 @@ test('connection cursors do not cross processes; forget through B hides sentinel
   const first = ok(await a.tool('find_memory_candidates', { ...query, limit: 1 }));
   assert.ok(first.nextCursor, 'synthetic ranking must produce cursor');
   assert.equal((await b.tool('find_memory_candidates', { ...query, limit: 1, cursor: first.nextCursor })).error.code, 'cursor_stale', 'copied cross-process cursor must fail closed');
-  const victim = memories[0]; ok(await b.tool('forget_memory', { memoryId: victim.id, expectedRevision: victim.revision }));
+  const victim = ok(await b.tool('inspect_memory', { memoryId: memories[0].id })).memory;
+  assert.equal(victim.content, 'synthetic cobalt telescope SYNTHETIC_R3_SENTINEL_0');
+  ok(await b.tool('forget_memory', { memoryId: victim.id, expectedRevision: victim.revision }));
   const read = await a.tool('read_memory_context', query);
   assert.equal(read.ok, true);
   assert.ok(!JSON.stringify(read).includes(victim.id) && !JSON.stringify(read).includes(victim.content), 'forgotten sentinel must disappear from next cross-process read');
