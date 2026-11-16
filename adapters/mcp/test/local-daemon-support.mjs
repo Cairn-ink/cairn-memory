@@ -99,16 +99,23 @@ export async function workspace(t) {
   async function descriptor() {
     const names = (await readdir(join(root, 'run', 'cairn-memory'))).filter(name => /^d-.*\.json$/.test(name));
     if (!names.length) return;
-    return JSON.parse(await readFile(join(root, 'run', 'cairn-memory', names[0]), 'utf8'));
+    try { return JSON.parse(await readFile(join(root, 'run', 'cairn-memory', names[0]), 'utf8')); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
   }
   t.after(async () => {
     try {
     for (const entry of children) if (!entry.exit) entry.process.kill('SIGCONT');
     for (const entry of children) if (!entry.exit && entry.role === 'forwarder') entry.process.stdin.end();
-    await until(() => children.every(entry => entry.exit || entry.role !== 'forwarder' || entry.messages.some(m => m.kind === 'forwarder-done')), 'forwarder supervision must stop reconnects before daemon cleanup');
-    for (const name of (await readdir(join(root, 'run', 'cairn-memory'))).filter(name => /^d-.*\.json$/.test(name))) {
-      const descriptor = JSON.parse(await readFile(join(root, 'run', 'cairn-memory', name), 'utf8')); owners.set(descriptor.owner.pid, descriptor.owner);
-    }
+    await until(async () => {
+      if (!children.every(entry => entry.exit || entry.role !== 'forwarder' || entry.messages.some(m => m.kind === 'forwarder-done'))) return false;
+      for (const name of (await readdir(join(root, 'run', 'cairn-memory'))).filter(name => /^d-.*\.json$/.test(name))) {
+        let descriptor;
+        try { descriptor = JSON.parse(await readFile(join(root, 'run', 'cairn-memory', name), 'utf8')); }
+        catch (error) { if (error.code === 'ENOENT') return false; throw error; }
+        owners.set(descriptor.owner.pid, descriptor.owner);
+      }
+      return true;
+    }, 'forwarder supervision must stop reconnects before daemon cleanup');
     for (const owner of owners.values()) {
       const current = processStart(owner.pid);
       if (!current || current.zombie || current.start !== owner.start) continue;
