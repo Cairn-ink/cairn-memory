@@ -9,7 +9,7 @@ const bounded = text => {
 export function qualificationStderr() {
   const decoder = new StringDecoder('utf8');
   let pending = '', tail = '', oversized = false;
-  const safe = line => line.replace(/(?:[A-Za-z]:[\\/]|\/)[^\s"'<>]*/g, '<path>');
+  const safe = line => line.replace(/(?:[A-Za-z]:[\\/]|\/)[\s\S]*/, '<path>');
   const accepted = () => !oversized && !/sk-|ghp_|Bearer|token=|crn_pat_/.test(pending);
   function line() {
     if (accepted()) tail = bounded(tail + safe(pending) + '\n');

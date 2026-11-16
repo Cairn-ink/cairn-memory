@@ -23,8 +23,10 @@ test('qualification and fault modules stay outside production imports and packag
     assert.doesNotMatch(source, /(?:daemon-event-loop-monitor|local-daemon-mid-write|daemon-qualification)\.mjs/);
   }
   const child = readFileSync(new URL('./fixtures/local-daemon-client.mjs', import.meta.url),'utf8');
-  assert.ok(child.indexOf('monitor = installDaemonSliceMonitor()') < child.indexOf('await runCandidate('));
-  assert.ok(child.indexOf('fault = installDaemonMidWrite(') < child.indexOf('await runCandidate('));
+  for (const event of ['monitor = installDaemonSliceMonitor()', 'fault = installDaemonMidWrite(']) {
+    assert.ok(child.indexOf(event) >= 0, 'instrumentation must be present: ' + event);
+    assert.ok(child.indexOf(event) < child.indexOf('await runCandidate('));
+  }
   const identity = readFileSync(new URL('../local-daemon-identity.mjs', import.meta.url),'utf8');
   assert.match(identity, /!\['--no-warnings', '--experimental-sqlite'\]\.includes\(arg\)/);
 });
@@ -52,8 +54,9 @@ test('qualification distinguishes complete Raw index from a partial read and ret
 test('qualification failed child diagnostics redact paths, split markers and bound UTF-8 bytes', async () => {
   let stderr = '';
   const source = `process.stderr.write('/private/synthetic-store.sqlite failed\\n');
+    process.stderr.write(('界'.repeat(200)+'\\n').repeat(9));
     process.stderr.write('split s'); setTimeout(() => {
-    process.stderr.write('k-secret\\n'); process.stderr.write(('界'.repeat(200)+'\\n').repeat(9));
+    process.stderr.write('k-secret\\n');
     process.stderr.write('tail /private/again.sqlite\\n'); process.exitCode=7; }, 10);`;
   await assert.rejects(qualificationCommand(process.execPath, ['-e', source], text => { stderr += text; }), error => {
     assert.match(error.message, /^qualification_child_failed:.*"code":7/);
@@ -62,6 +65,18 @@ test('qualification failed child diagnostics redact paths, split markers and bou
   assert.doesNotMatch(stderr, /\/private|sk-secret|split s|\ufffd/);
   assert.match(stderr, /<path>/); assert.ok(Buffer.byteLength(stderr) <= 2048);
 });
+
+import { qualificationStderr } from '../../../tools/testing/fixtures/qualification-stderr.mjs';
+for (const suffix of ['Customer Project Titan.sqlite', 'quoted"name\'x.sqlite', 'tab\tname.sqlite', 'control\u0001\r\u001bname.sqlite', '多位元組 路徑.sqlite']) {
+  for (const prefix of ['/private/', 'C:\\private\\']) test('qualification redacts absolute path through line end: ' + JSON.stringify(prefix + suffix), () => {
+    const filter = qualificationStderr();
+    const input = Buffer.from('failed ' + prefix + suffix + ' followed by private text\nnext safe line\n');
+    // Byte-at-a-time also exercises UTF-8 and chunk boundaries.
+    for (const byte of input) filter.write(Buffer.from([byte]));
+    assert.equal(filter.read(), 'failed <path>\nnext safe line\n');
+    assert.ok(Buffer.byteLength(filter.read()) <= 2048);
+  });
+}
 
 test('qualification entrypoints print code-only failures without an uncaught path-bearing stack', async () => {
   const { spawnSync } = await import('node:child_process');
