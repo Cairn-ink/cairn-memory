@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import { open, unlink, rename, lstat, link, writeFile, readFile, readdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -211,10 +212,10 @@ export async function runtimeLease(directory) {
   assert.fail('installed daemon test scheduling lease timed out');
 }
 
-export async function installedDaemonRuntime({ diagnostic = () => {} } = {}) {
+export async function installedDaemonRuntime({ diagnostic = () => {}, recordLaunchPrefix = prefix => prefix } = {}) {
   const directory = await runtimeDirectory(), release = await runtimeLease(directory);
   const before = await runtimeSnapshot(directory.path), baseline = new Set(before.entries.map(entry => entry.name));
-  const prefixes = new Set(), owners = [], markers = new Set(), epochs = new Map(), ownNames = new Set();
+  const prefixes = new Set(), owners = [], markers = new Set(), epochs = new Map(), ownNames = new Set(), launches = [], publishedLogs = new Set();
   const mutateRuntime = ownedRuntimeFiles(directory, { prefixes, names: ownNames, tokenPrefixes: markers });
   let ownKey, finished = false;
   const keyPath = join(directory.path, 'identity-v1.key');
@@ -240,14 +241,47 @@ export async function installedDaemonRuntime({ diagnostic = () => {} } = {}) {
     assert.equal(result.signal, null); assert.equal(result.status, 0, 'supported daemon command exit code');
     return JSON.parse(result.stdout);
   }
-  async function collect(db) {
+  async function recordIdentity(launch, { provisioning = false } = {}) {
+    const { session, root, build } = launch;
+    const engine = await import(pathToFileURL(join(root, 'adapters/mcp/local-daemon-identity.mjs')));
+    if (!engine.daemonVector(session.args.slice(1)).eligible) return;
+    const state = await import(pathToFileURL(join(root, 'adapters/mcp/local-daemon-state.mjs')));
+    const creation = await engine.creationIdentity(launch.db, session.cwd);
+    const creationPrefix = 'p-' + engine.creationDigest(creation).slice(0, 32);
+    assert.match(creationPrefix, /^p-[a-f0-9]{32}$/, 'recorded provisioning prefix is nonempty and well-formed');
+    prefixes.add(creationPrefix);
+    try {
+      const identity = await engine.createIdentity(session.args.slice(1), { root, build, cwd: session.cwd,
+        environment: session.env, key: await state.identityKey(directory),
+        node: { executable: session.command, version: process.version, execArgv: [] } });
+      assert.equal(identity.eligible, true);
+      const prefix = recordLaunchPrefix(identityPrefix(state.endpointPaths(directory, identity.digest).ready.split('/').at(-1)));
+      assert.ok(typeof prefix === 'string' && /^d-[a-f0-9]{32}$/.test(prefix), 'recorded launch prefix is nonempty and well-formed');
+      prefixes.add(prefix); launch.prefixes.add(prefix);
+    } catch (error) { if (!provisioning || error.code !== 'ENOENT') throw error; }
+  }
+  async function collect(db, { agreement = false } = {}) {
     for (const name of (await readdir(directory.path)).filter(name => /^d-[a-f0-9]{32}\.json$/.test(name))) {
       const text = await readPrivate(directory, join(directory.path, name), { fileClass: 'descriptor', missing: true });
       if (!text) continue;
       const descriptor = JSON.parse(text);
       if (descriptor.identity.store.path !== db) continue;
       const prefix = name.slice(0, -5);
-      prefixes.add(prefix);
+      prefixes.add(prefix); publishedLogs.add(prefix + '.log');
+      if (agreement) {
+        // Publication selection is independent of the recorded digest. Compare
+        // each matching launch by package inode and its actual configuration.
+        for (const launch of launches.filter(launch => launch.db === db)) {
+          const vector = launch.session.args.slice(1), value = flag => vector[vector.indexOf(flag) + 1];
+          const config = descriptor.identity.configuration, pkg = descriptor.identity.package;
+          if (pkg.path !== launch.root || pkg.dev !== launch.dev || pkg.ino !== launch.ino ||
+              config.namespace.ownerId !== value('--owner') || config.namespace.projectId !== (vector.includes('--project') ? value('--project') : null) ||
+              config.raw !== !vector.includes('--no-raw') || config.rawSearch !== !vector.includes('--no-raw-search') ||
+              config.contextRead !== (vector.includes('--no-context-read') ? false : 'context-read-v1')) continue;
+          assert.ok(launch.prefixes.size > 0, 'publishing launch requires ownership recording');
+          for (const recorded of launch.prefixes) assert.equal(recorded, prefix, 'recorded launch prefix agrees with published identity');
+        }
+      }
       if (!owners.some(owner => sameOwner(owner, descriptor.owner))) owners.push(descriptor.owner);
       const lock = await readPrivate(directory, join(directory.path, prefix + '.lock'), { fileClass: 'lock', missing: true });
       if (lock) {
@@ -260,17 +294,31 @@ export async function installedDaemonRuntime({ diagnostic = () => {} } = {}) {
   function register(session, { expected } = {}) {
     const db = session.args[session.args.indexOf('--db') + 1];
     assert.ok(db && session.args.includes('--db'));
+    const root = dirname(dirname(realpathSync(session.args[0]))), info = statSync(root, { bigint: true });
+    // Save verified build identity before deliberate installed-build refusal
+    // controls; never infer attempted ownership from ready discovery.
+    const launch = { session, db, root, dev: String(info.dev), ino: String(info.ino),
+      build: JSON.parse(readFileSync(join(root, 'engine-build.json'), 'utf8')).digest, prefixes: new Set(), observed: false };
+    launches.push(launch);
+    // Start recording while the caller launches. Store failures to avoid an
+    // unhandled rejection before it can register client teardown and observe.
+    launch.recording = recordIdentity(launch, { provisioning: true }).catch(error => { launch.error = error; });
     let epoch = epochs.get(db);
     if (!epoch) { epoch = { session, db, running: 0, counted: 0, stopped: 0, expected, boundaries: 0 }; epochs.set(db, epoch); }
     // Reinstall boundaries register the new saved command generation here.
     epoch.session = session;
     return {
+      recording: launch.recording,
       async observe() {
+        launch.observed = true;
+        await launch.recording;
         const rows = command(session, 'status').daemons;
         assert.ok(rows.every(row => row.running === true), 'only running serving lifetimes');
         assert.ok(rows.length >= epoch.running, 'counted lifetimes persist until stop');
         epoch.counted += rows.length - epoch.running; epoch.running = rows.length;
-        await collect(db); return rows;
+        if (launch.error) throw launch.error;
+        await recordIdentity(launch); // Post-initialization ENOENT must propagate.
+        await collect(db, { agreement: true }); return rows;
       },
       async stop() { return stop(epoch); },
       status: () => command(session, 'status').daemons,
@@ -278,6 +326,11 @@ export async function installedDaemonRuntime({ diagnostic = () => {} } = {}) {
     };
   }
   async function stop(epoch) {
+    for (const launch of launches.filter(launch => launch.db === epoch.db && !launch.observed)) {
+      await launch.recording;
+      if (launch.error) throw launch.error;
+      await recordIdentity(launch); launch.observed = true;
+    }
     if (!existsSync(epoch.db)) { assert.equal(epoch.counted, 0); return; }
     await collect(epoch.db);
     const rows = command(epoch.session, 'status').daemons;
@@ -312,7 +365,7 @@ export async function installedDaemonRuntime({ diagnostic = () => {} } = {}) {
       assert.ok(owners.every(owner => !startAwareAlive(owner)), 'all owned daemon owners dead before removing logs or markers');
       for (const name of await readdir(directory.path)) {
         if (baseline.has(name)) continue;
-        const log = [...prefixes].some(prefix => name === prefix + '.log');
+        const log = publishedLogs.has(name);
         const marker = [...markers].some(prefix => name === prefix || name.startsWith(prefix + '.owner-') || name.startsWith(prefix + '.reap-'));
         if (log || marker) await mutateRuntime('remove', name);
       }

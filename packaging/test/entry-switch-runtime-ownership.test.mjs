@@ -1,9 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { readFile, writeFile, readdir, rm } from 'node:fs/promises';
+import { spawn, spawnSync } from 'node:child_process';
+import { readFile, writeFile, readdir, rm, mkdir, symlink } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
+import { buildArtifact, command } from '../build.mjs';
+import { installedDaemonRuntime, ownedRuntimeFiles } from './fixtures/installed-daemon-runtime.mjs';
 import { installedAssertions } from './fixtures/entry-switch-installed.mjs';
 
 test('a publishing launch rejects a well-formed recorded prefix with one flipped hex digit', { timeout: 120000 }, async t => {
@@ -101,4 +104,97 @@ test('a publishing launch cannot defer ENOENT ownership recording after initiali
       },
     });
   } finally { for (const hook of hooks) await hook(); }
+});
+
+// Exercise the shared runtime helper independently of the extracted fixture's
+// lease and recorder. All child argv/environment values are the saved session.
+async function runtimeOwnershipFixture(t, options = {}) {
+  const workspace = createTestWorkspace(t, { prefix: 'runtime-ownership-' });
+  const diagnostics = [], runtime = await installedDaemonRuntime({ ...options, diagnostic: text => {
+    diagnostics.push(text); t.diagnostic(text);
+  } });
+  workspace.defer(runtime.finish);
+  const artifact = buildArtifact({ ownDirectory: path => workspace.defer(() => rm(path, { recursive: true, force: true })) });
+  command('tar', ['-xzf', artifact.artifactPath, '-C', workspace.path], workspace.path, artifact.userconfig);
+  const root = join(workspace.path, 'package');
+  await mkdir(join(root, 'node_modules'));
+  for (const name of ['@modelcontextprotocol', 'zod', 'tiktoken']) await symlink(
+    new URL('../../adapters/' + (name === 'tiktoken' ? 'openai' : 'mcp') + '/node_modules/' + name, import.meta.url).pathname,
+    join(root, 'node_modules', name));
+  const db = join(workspace.path, 'synthetic.sqlite');
+  const session = owner => ({ command: process.execPath,
+    args: [join(root, 'bin/cairn-memory.mjs'), '--db', db, '--owner', owner],
+    cwd: workspace.path, env: { PATH: dirname(process.execPath), NODE_NO_WARNINGS: '1' } });
+  async function launch(saved, fallback = false) {
+    const child = spawn(saved.command, saved.args, { cwd: saved.cwd, env: saved.env, stdio: ['pipe', 'pipe', 'pipe'] });
+    let stdout = '', stderr = '';
+    child.stdout.on('data', data => { stdout += data; }); child.stderr.on('data', data => { stderr += data; });
+    child.stdin.on('error', () => {});
+    const done = new Promise((resolve, reject) => { child.once('error', reject); child.once('close', (code, signal) => resolve({ code, signal })); });
+    workspace.defer(async () => { child.stdin.end(); await done; });
+    let timer;
+    const response = new Promise((resolve, reject) => {
+      timer = setTimeout(() => reject(Error('synthetic_initialize_timeout')), 15000);
+      child.stdout.on('data', () => { if (stdout.includes('\n')) resolve(); });
+      child.once('close', () => { if (!stdout.includes('\n')) reject(Error('synthetic_initialize_closed')); });
+    });
+    child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {
+      protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'synthetic-ownership', version: '1' },
+    } }) + '\n');
+    try { await response; } finally { clearTimeout(timer); child.stdin.end(); }
+    assert.deepEqual(await done, { code: 0, signal: null }, stderr);
+    assert.equal(JSON.parse(stdout.trim()).result.serverInfo.name.length > 0, true);
+    assert.equal(stderr.includes('cairn_daemon_fallback:'), fallback);
+  }
+  return { workspace, root, runtime, session, launch, diagnostics };
+}
+
+test('shared installed runtime rejects never-ready log, temp and owner residue as test-owned', { timeout: 120000 }, async t => {
+  const f = await runtimeOwnershipFixture(t), { runtime, root } = f;
+  const first = f.session('synthetic-initial-owner'), initial = runtime.register(first);
+  await f.launch(first); await initial.observe(); await initial.stop();
+  const saved = f.session('synthetic-never-ready-owner'), attempt = runtime.register(saved);
+  // Wait for independent launch recording before deliberately refusing build
+  // publication. Older helpers have no recorder, which is this regression.
+  await attempt.recording;
+  const engine = await import(pathToFileURL(join(root, 'adapters/mcp/local-daemon-identity.mjs')));
+  const state = await import(pathToFileURL(join(root, 'adapters/mcp/local-daemon-state.mjs')));
+  const identity = await engine.createIdentity(saved.args.slice(1), { root, cwd: saved.cwd, environment: saved.env,
+    key: await state.identityKey(runtime.directory), node: { executable: saved.command, version: process.version, execArgv: [] } });
+  const prefix = 'd-' + identity.digest.slice(0, 32), names = [prefix + '.log', prefix + '.stamp.tmp-' + 'b'.repeat(24), prefix + '.lock.owner-synthetic'];
+  const mutate = ownedRuntimeFiles(runtime.directory, { prefixes: new Set([prefix]) });
+  f.workspace.defer(async () => { for (const name of names) await mutate('remove', name, { force: true }); });
+  const metadata = join(root, 'engine-build.json'), original = await readFile(metadata), backup = join(f.workspace.path, 'build-backup');
+  await writeFile(backup, original);
+  try {
+    await writeFile(metadata, '{malformed'); await f.launch(saved, true);
+    assert.ok(!(await readdir(runtime.directory.path)).includes(prefix + '.json'), 'attempt never published ready');
+    for (const name of names) await mutate('write', name, name.endsWith('.log') ? 'daemon_refused\n' : '{}', { flag: 'wx', mode: 0o600 });
+  } finally {
+    await writeFile(metadata, original);
+    const compared = spawnSync('cmp', [backup, metadata]); assert.equal(compared.status, 0);
+    t.diagnostic(`cmp shared refused-attempt build restoration: rc=${compared.status}`);
+  }
+  await attempt.observe();
+  await assert.rejects(runtime.finish(), error => {
+    assert.equal(error.code, 'ERR_ASSERTION');
+    for (const name of names) assert.ok(error.actual.includes('test-owned file remains: ' + name), 'each residue is owned: ' + name);
+    return true;
+  });
+});
+
+for (const value of ['', 'd-' + 'A'.repeat(32), 'flip', 'missing']) test('shared installed launch recorder rejects ' + (value || 'empty'), { timeout: 120000 }, async t => {
+  const f = await runtimeOwnershipFixture(t, { recordLaunchPrefix: prefix => {
+    if (value === 'missing') throw Object.assign(Error('synthetic_record_missing'), { code: 'ENOENT' });
+    return value === 'flip' ? prefix.slice(0, -1) + (prefix.endsWith('0') ? '1' : '0') : value;
+  } });
+  const saved = f.session('synthetic-publishing-owner'), accounting = f.runtime.register(saved);
+  await f.launch(saved);
+  await assert.rejects(accounting.observe(), error => {
+    assert.match(error.message, value === 'flip' ? /recorded launch prefix agrees with published identity/ :
+      value === 'missing' ? /synthetic_record_missing/ : /recorded launch prefix is nonempty and well-formed/); return true;
+  });
+  // Cleanup must retain the genuine publication independently of the corrupted
+  // recorder, so this negative control never leaves a serving candidate.
+  await accounting.stop();
 });
