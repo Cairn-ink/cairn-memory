@@ -503,9 +503,9 @@
   "core/sqlite-journal-probe.mjs": {
     "literal:applicationId": 1,
     "literal:application_id": 1,
-    "literal:gid": 1,
+    "literal:gid": 4,
     "literal:storeId": 2,
-    "literal:uid": 3
+    "literal:uid": 6
   },
   "core/isolated-file-read-child.mjs": {
     "key:invalid": 1
