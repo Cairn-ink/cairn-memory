@@ -8,12 +8,13 @@ import { Worker } from 'node:worker_threads';
 import { DatabaseSync } from 'node:sqlite';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { openMemoryCore } from '../index.mjs';
-import { attestContentSafety, attestedLocalRawPackage, LOCAL_RAW_PACKAGES, LOCAL_RAW_PRIVACY_DDL, LOCAL_RAW_PEER_INDEX_DDL } from '../content-safety-schema.mjs';
+import { attestContentSafety, attestedContentSafetyControl, attestedLocalRawPackage, contentSafetyDDL, LOCAL_RAW_PACKAGES, LOCAL_RAW_PRIVACY_DDL, LOCAL_RAW_PEER_INDEX_DDL } from '../content-safety-schema.mjs';
 import { installLocalRawPeerIndex, buildLocalRawPeerIndex, readLocalRawPeerIndexStatus } from '../local-authority-schema.mjs';
 import { inspectExistingStorePin } from '../existing-store.mjs';
 import { openDatabase, localRawPeerIndexAdmission } from '../database.mjs';
-import { readSqliteFixture } from '../testing/content-safety-s2h-fixture.mjs';
+import { copySqliteFixture, readSqliteFixture } from '../testing/content-safety-s2h-fixture.mjs';
 import { safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
+import { installCardMemoryInvalidation } from '../private-card-schema.mjs';
 import { createCommitDispatcher } from '../commit-dispatch.mjs';
 import { localPlainPort } from '../testing/raw-fixtures.mjs';
 import { rationaleModel } from '../testing/rationale-model.mjs';
@@ -128,6 +129,26 @@ test('attested v2 helper executes zero SQL and no space probe',async t=>{
     const core=openMemoryCore({path,raw:true,rawSearch:false});await core.close();
     assert.ok(!statements.some(sql=>sql===indexDDL || sql==='SELECT max(rowid) AS n FROM raw_messages' || packageProbe(sql)));
   } finally {db.close();}
+});
+
+test('attested control helper returns frozen value copies without SQL, including the optional receipt field',async t=>{
+  const f=await store(t,{l1:true}),ordinary=await store(t);
+  const row=f.db.prepare('SELECT * FROM content_safety_control WHERE singleton=1').get();
+  const expected=[row.singleton,row.base_layout,row.suppression_revision,row.card_lineage_revision,
+    row.migration_state,row.suppression_domain,row.migration_id,row.inventory_digest,row.receipt_event_time];
+  const legacy=safetyFixture(t,33);await legacy.migrate();
+  const legacyDB=legacy.connect();t.after(()=>legacyDB.close());attestContentSafety(legacyDB);
+  const legacyRow=legacyDB.prepare('SELECT * FROM content_safety_control WHERE singleton=1').get();
+  const statements=trace(t),first=attestedContentSafetyControl(f.db),second=attestedContentSafetyControl(f.db);
+  assert.deepEqual(first,expected);assert.deepEqual(second,expected);assert.notEqual(first,second);
+  assert.equal(Object.isFrozen(first),true);assert.equal(Object.isFrozen(second),true);
+  assert.throws(()=>{first[3]=0;},TypeError);
+  assert.deepEqual(attestedContentSafetyControl(f.db),expected);
+  assert.equal(attestedContentSafetyControl(ordinary.db),null);
+  assert.deepEqual(attestedContentSafetyControl(legacyDB),[legacyRow.singleton,legacyRow.base_layout,
+    legacyRow.suppression_revision,legacyRow.card_lineage_revision,legacyRow.migration_state,
+    legacyRow.suppression_domain,legacyRow.migration_id,legacyRow.inventory_digest]);
+  assert.deepEqual(statements,[]);
 });
 
 for(const available of [0,167,168]) test(`empty-table space floor is 168 bytes (${available})`,async t=>{
@@ -879,6 +900,86 @@ for(const existing of [false,true]) test(`side builder defers a valid replacemen
     assert.equal(schema(a.db),beforeA);assert.equal(schema(b.db),beforeB);
     assert.deepEqual(readSqliteFixture(held),bytesA);assert.deepEqual(readSqliteFixture(a.path),bytesB);
     assert.equal(core.list({namespace}).ok,true);
+  } finally {await core.close();}
+});
+
+// Keep the copy independently attestable: a lineage-zero control must have
+// the matching safety declarations, rather than failing full attestation first.
+function changeCopiedControl(db, field) {
+  const row=db.prepare('SELECT * FROM content_safety_control WHERE singleton=1').get();
+  if(field==='card_lineage_revision') {
+    const baseTriggers=new Set([...contentSafetyDDL(row.base_layout,false,true).matchAll(/CREATE TRIGGER (\w+)/g)].map(match=>match[1]));
+    const objects=db.prepare(`SELECT type,name FROM sqlite_schema WHERE name GLOB 'card_body_*'
+      OR name='card_operations_owner_action' OR name GLOB 'safety_*'
+      ORDER BY CASE type WHEN 'trigger' THEN 0 WHEN 'index' THEN 1 ELSE 2 END`).all();
+    db.exec('PRAGMA foreign_keys=OFF');
+    for(const object of objects)if(!baseTriggers.has(object.name))db.exec(`DROP ${object.type} "${object.name}"`);
+    db.exec('DROP TRIGGER card_memory_revision_invalidation');installCardMemoryInvalidation(db,true);
+  }
+  const guard=db.prepare("SELECT sql FROM sqlite_schema WHERE name='safety_control_update'").get().sql;
+  db.exec('DROP TRIGGER safety_control_update');
+  const value=field==='card_lineage_revision'?0:field==='migration_id'
+    ? (row[field][0]==='0'?'1':'0')+row[field].slice(1)
+    : (row[field][0]==='a'?'b':'a')+row[field].slice(1);
+  db.prepare(`UPDATE content_safety_control SET ${field}=? WHERE singleton=1`).run(value);
+  db.exec(guard);
+}
+
+for(const existing of [false,true])for(const field of [null,'card_lineage_revision','migration_id','inventory_digest'])
+test(`side compares a copied store's attested control by value (${field??'equal tuple'}, existingStore=${existing})`,async t=>{
+  const f=await store(t,{l1:true});space(t,f.path);
+  const admittedFile=fs.lstatSync(f.path),held=join(dirname(f.path),'admitted.sqlite'),copyPath=join(dirname(f.path),'control-copy.sqlite');
+  const before=schema(f.db),bytes=readSqliteFixture(f.path),control=attestedContentSafetyControl(f.db);
+  copySqliteFixture(f.path,copyPath);
+  const copy=new DatabaseSync(copyPath);let copySchema,copyBytes,copyControl;
+  try {
+    if(field)changeCopiedControl(copy,field);
+    const layout=attestContentSafety(copy);
+    assert.equal(layout.physical,f.pin.physical);
+    assert.equal(copy.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get().store_id,f.pin.storeId);
+    assert.deepEqual(localNames(copy),packageNames('v1'));
+    copyControl=attestedContentSafetyControl(copy);copySchema=schema(copy);
+    assert.deepEqual(copyControl.flatMap((value,i)=>value===control[i]?[]:[i]),
+      field?[['singleton','base_layout','suppression_revision','card_lineage_revision','migration_state',
+        'suppression_domain','migration_id','inventory_digest','receipt_event_time'].indexOf(field)]:[]);
+  } finally {copy.close();}
+  copyBytes=readSqliteFixture(copyPath);
+  const exec=DatabaseSync.prototype.exec,lstat=fs.lstatSync;
+  let runtime,side,installed=false,replaced=false,creates=0,rollbacks=0,identityChecks=0;
+  t.mock.method(DatabaseSync.prototype,'exec',function(sql){
+    if(sql===LOCAL_RAW_PRIVACY_DDL.join('\n')){runtime=this;installed=true;}
+    if(runtime&&this!==runtime&&sql==='BEGIN IMMEDIATE')side=this;
+    if(this===side&&sql===indexDDL)creates++;
+    if(this===side&&sql==='ROLLBACK'){assert.equal(this.isTransaction,true);rollbacks++;}
+    const result=exec.call(this,sql);
+    if(this===runtime&&installed&&sql==='COMMIT'&&!replaced){
+      installed=false;replaced=true;fs.renameSync(f.path,held);fs.renameSync(copyPath,f.path);
+    }
+    return result;
+  });
+  // Isolate the control fence while presenting the copy at the same canonical
+  // path and admitted file identity used by the replacement-store tests above.
+  const mock=t.mock.method(fs,'lstatSync',function(path,...args){
+    if(replaced&&path===f.path){identityChecks++;return admittedFile;}
+    return lstat.call(this,path,...args);
+  });
+  syncBuiltinESMExports();t.after(()=>{mock.mock.restore();syncBuiltinESMExports();});
+  const core=openMemoryCore({path:f.path,raw:true,rawSearch:false,...(existing?{existingStore:f.pin}:{})});
+  try {
+    assert.equal(replaced,true);assert.ok(identityChecks>=2);assert.ok(side);assert.equal(side.isOpen,false);
+    // This also proves full side attestation succeeded before the comparison.
+    assert.deepEqual(attestedContentSafetyControl(side),copyControl);
+    assert.deepEqual(attestedContentSafetyControl(runtime),control);
+    assert.equal(rollbacks,field?1:0);assert.equal(creates,field?0:1);
+    assert.equal(schema(f.db),before);assert.deepEqual(readSqliteFixture(held),bytes);
+    assert.equal(attestedLocalRawPackage(runtime),'v1');assert.equal(core.list({namespace}).ok,true);
+    const reopened=new DatabaseSync(f.path,{readOnly:true});
+    try {
+      assert.deepEqual(localNames(reopened),packageNames(field?'v1':'v2'));
+      if(field){assert.equal(schema(reopened),copySchema);assert.deepEqual(readSqliteFixture(f.path),copyBytes);}
+    } finally {reopened.close();}
+    if(field)assert.equal(retry(f.path).reason,'error');
+    else assert.deepEqual(retryNames(f.path),[]);
   } finally {await core.close();}
 });
 

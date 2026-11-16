@@ -4,7 +4,7 @@ import { inContentSuppressionRequestInside, withoutContentSuppressionReadCacheIn
 import { beginContentWrite, contentWriteOperation } from './content-write-context.mjs';
 import { contentSafetyInventory, installContentSafetyInside } from './content-safety-migration.mjs';
 import { SAFETY_SCHEMA_VERSIONS, resolveContentLayout, assertContentFeatures } from './content-safety-layout.mjs';
-import { attestContentSafety, cachedContentLayout, cardLineageRevision, checkInstalledContentSafety, registerContentReadSnapshot, bindContentSafetyConnection } from './content-safety-schema.mjs';
+import { attestContentSafety, attestedContentSafetyControl, checkInstalledContentSafety, registerContentReadSnapshot, bindContentSafetyConnection } from './content-safety-schema.mjs';
 import { validateContextProductLayout } from './context-product-schema.mjs';
 import { installCardCurrentDependencies, validateCardCurrentDependencies, assertNoCardCurrentDependencies } from './card-current-schema.mjs';
 import { installRoleProfiles, validateRoleProfiles, assertNoRoleProfiles } from './role-profile-schema.mjs';
@@ -62,11 +62,11 @@ function validateOrdinaryLocalStore(db) {
 }
 function rememberPeerIndexAdmission(db, location, physical, storeId, features, option) {
   if (!location) return;
-  const admittedLayout = cachedContentLayout(db);
-  const lineage = cardLineageRevision(admittedLayout);
+  const control = attestedContentSafetyControl(db);
   peerIndexAdmissions.set(db, Object.freeze({ ...location, storeId, validate(side) {
     const layout = attestContentSafety(side);
-    if (layout.physical !== physical || cardLineageRevision(layout) !== lineage) fail('unsupported_database');
+    if (layout.physical !== physical ||
+        JSON.stringify(attestedContentSafetyControl(side)) !== JSON.stringify(control)) fail('unsupported_database');
     if (option) validateExistingStore(side, option, layout);
     else if (layout.suppressionRevision) {
       assertContentFeatures(layout, features);
