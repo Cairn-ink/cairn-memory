@@ -194,8 +194,9 @@ export async function runtimeSnapshot(path, remembered = [], { afterMetadata = a
 
 // All installed daemon fixtures share this lease, including across supervised
 // runners with different TMPDIRs. It is outside the production runtime folder.
-export async function runtimeLease(directory, { timeoutMs = 300000, pollMs = 25 } = {}) {
-  const path = join(dirname(directory.path), '.installed-daemon-test.lease');
+// Unit controls supply an explicit per-test path; real fixtures keep the default.
+export async function runtimeLease(directory, { timeoutMs = 300000, pollMs = 25,
+  path = join(dirname(directory.path), '.installed-daemon-test.lease') } = {}) {
   let acquired, rejected, unlock;
   const ready = new Promise((resolve, reject) => { acquired = resolve; rejected = reject; });
   const held = new Promise(resolve => { unlock = resolve; });
@@ -219,8 +220,8 @@ export async function runtimeLease(directory, { timeoutMs = 300000, pollMs = 25 
   return () => released ??= (async () => { unlock(); assert.equal(await completion, true); })();
 }
 
-export async function installedDaemonRuntime({ diagnostic = () => {}, recordLaunchPrefix = prefix => prefix, snapshot = runtimeSnapshot } = {}) {
-  const directory = await runtimeDirectory(), release = await runtimeLease(directory);
+export async function installedDaemonRuntime({ diagnostic = () => {}, recordLaunchPrefix = prefix => prefix, snapshot = runtimeSnapshot, leaseOptions } = {}) {
+  const directory = await runtimeDirectory(), release = await runtimeLease(directory, leaseOptions);
   try {
     const before = await snapshot(directory.path), baseline = new Set(before.entries.map(entry => entry.name));
     const prefixes = new Set(), owners = [], markers = new Set(), epochs = new Map(), ownNames = new Set(), launches = [], publishedLogs = new Set();

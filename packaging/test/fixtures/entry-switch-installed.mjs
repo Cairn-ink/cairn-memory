@@ -20,9 +20,9 @@ const until = async (predicate, reason, ms = 15000) => {
 const ok = r => { assert.equal(r.ok, true, JSON.stringify(r)); return r.value; };
 import { identityPrefix, sameEntry, runtimeSnapshot, classifyRuntimeHygiene, runtimeLease, ownedRuntimeFiles } from './installed-daemon-runtime.mjs';
 export { runtimeSnapshot, classifyRuntimeHygiene } from './installed-daemon-runtime.mjs';
-export async function installedAssertions(t, { install = false, exercise, recordLaunchPrefix = prefix => prefix, snapshot = runtimeSnapshot } = {}) {
+export async function installedAssertions(t, { install = false, exercise, recordLaunchPrefix = prefix => prefix, snapshot = runtimeSnapshot, leaseOptions } = {}) {
   const scratch = await mkdtemp(join(tmpdir(), 'entry-')), clients = [], owned = new Map(), logs = new Set(), lockTokens = new Map(), launchedPrefixes = new Set();
-  const dir = await runtimeDirectory(), releaseLease = await runtimeLease(dir);
+  const dir = await runtimeDirectory(), releaseLease = await runtimeLease(dir, leaseOptions);
   let teardownRegistered = false;
   try {
   const before = await snapshot(dir.path);

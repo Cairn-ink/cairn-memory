@@ -12,7 +12,8 @@ import { localProcessIdentity, startAwareAlive } from '../../adapters/mcp/local-
 import { installedDaemonRuntime, runtimeLease, sameOwner } from './fixtures/installed-daemon-runtime.mjs';
 import { installedAssertions } from './fixtures/entry-switch-installed.mjs';
 
-const leasePath = directory => join(dirname(directory.path), '.installed-daemon-test.lease');
+const leasePath = directory => directory.leasePath;
+const leaseOptions = directory => ({ path: leasePath(directory), timeoutMs: 500 });
 const boundMs = 2000;
 async function until(predicate, message, ms = boundMs) {
   const deadline = performance.now() + ms;
@@ -22,13 +23,14 @@ async function until(predicate, message, ms = boundMs) {
 
 if (process.argv[2] === '--lease-holder') {
   process.send({ event: 'started' });
-  const release = await runtimeLease({ path: process.argv[3] });
+  assert.ok(process.argv[4], 'unit child requires an explicit test-scoped lease path');
+  const release = await runtimeLease({ path: process.argv[3] }, { path: process.argv[4] });
   process.send({ event: 'acquired', owner: localProcessIdentity() });
   await new Promise(resolve => process.once('message', resolve));
   await release(); process.disconnect();
 } else {
   function childHolder(t, directory) {
-    const child = spawn(process.execPath, [fileURLToPath(import.meta.url), '--lease-holder', directory.path], {
+    const child = spawn(process.execPath, [fileURLToPath(import.meta.url), '--lease-holder', directory.path, leasePath(directory)], {
       env: { PATH: dirname(process.execPath), NODE_NO_WARNINGS: '1' }, stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
     });
     const messages = []; let stderr = '', exit;
@@ -50,7 +52,7 @@ if (process.argv[2] === '--lease-holder') {
   }
   const directoryFor = t => {
     const workspace = createTestWorkspace(t, { prefix: 'runtime-lease-' });
-    return { path: join(workspace.path, 'runtime'), workspace };
+    return { path: join(workspace.path, 'runtime'), leasePath: join(workspace.path, 'unit.lease'), workspace };
   };
 
   test('scheduling lease publishes its PID and start-aware holder identity', { timeout: 10000 }, async t => {
@@ -100,18 +102,18 @@ if (process.argv[2] === '--lease-holder') {
   });
 
   test('initial snapshot failure releases the acquired lease before finish can be registered', { timeout: 10000 }, async t => {
-    const directory = await runtimeDirectory(), failure = Error('synthetic_initial_snapshot_failure');
+    const directory = directoryFor(t), actualDirectory = await runtimeDirectory(), failure = Error('synthetic_initial_snapshot_failure');
     let unexpected;
     try {
-      await assert.rejects(async () => { unexpected = await installedDaemonRuntime({ snapshot: async path => {
-        assert.equal(path, directory.path);
+      await assert.rejects(async () => { unexpected = await installedDaemonRuntime({ leaseOptions: leaseOptions(directory), snapshot: async path => {
+        assert.equal(path, actualDirectory.path);
         const owner = JSON.parse(await readFile(leasePath(directory), 'utf8'));
         assert.ok(sameOwner(owner, localProcessIdentity()), 'failure is injected after acquisition');
         throw failure;
       } }); }, error => error === failure);
     } finally { if (unexpected) await unexpected.finish(); }
     await assert.rejects(lstat(leasePath(directory)), { code: 'ENOENT' });
-    const start = performance.now(), release = await runtimeLease(directory, { timeoutMs: 500 });
+    const start = performance.now(), release = await runtimeLease(directory, leaseOptions(directory));
     try {
       t.diagnostic(`next acquisition ${Math.round(performance.now() - start)} ms (<500 ms)`);
       assert.ok(performance.now() - start < 500, 'next acquisition is immediate (<500 ms)');
@@ -121,18 +123,19 @@ if (process.argv[2] === '--lease-holder') {
   });
 
   test('extracted fixture snapshot failure releases the lease before teardown can be registered', { timeout: 10000 }, async t => {
-    const directory = await runtimeDirectory(), failure = Error('synthetic_extracted_snapshot_failure'), hooks = [];
+    const directory = directoryFor(t), actualDirectory = await runtimeDirectory(), failure = Error('synthetic_extracted_snapshot_failure'), hooks = [];
     try {
       await assert.rejects(installedAssertions({ after: hook => hooks.push(hook), diagnostic: () => {} }, {
+        leaseOptions: leaseOptions(directory),
         snapshot: async path => {
-          assert.equal(path, directory.path);
+          assert.equal(path, actualDirectory.path);
           const owner = JSON.parse(await readFile(leasePath(directory), 'utf8'));
           assert.ok(sameOwner(owner, localProcessIdentity()), 'failure is injected after acquisition');
           throw failure;
         },
       }), error => error === failure);
       assert.equal(hooks.length, 0, 'snapshot failed before any teardown hook was registered');
-      const start = performance.now(), release = await runtimeLease(directory, { timeoutMs: 500 });
+      const start = performance.now(), release = await runtimeLease(directory, leaseOptions(directory));
       try {
         assert.ok(performance.now() - start < 500, 'next acquisition is immediate (<500 ms)');
         t.diagnostic(`extracted failure: next acquisition ${Math.round(performance.now() - start)} ms (<500 ms)`);
