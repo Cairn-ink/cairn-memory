@@ -13,6 +13,7 @@ import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { createLocalSharedRuntime as createSharedRuntime } from '../local-shared-runtime.mjs';
 const createLocalSharedRuntime = options => createSharedRuntime(options, { strict: true });
 import { createCairnServer } from '../server.mjs';
+import { createContextReadAccess } from '../context-read-access.mjs';
 import { ns, counter, query, ok, connect, context, deferred, streams } from './local-shared-support.mjs';
 
 test('A3 eight parallel connections preserve single-connection Raw coverage and semantic ready rates', { timeout: 90000 }, async t => {
@@ -51,6 +52,21 @@ test('A3 eight parallel connections preserve single-connection Raw coverage and 
   const configuration = { namespace: ns, contextCounter: counter,
     contextEmbedding: { embedder, policy: { family: 'hosted', maxRequests: 10000, maxUsd: 1,
       maxConcurrentQueries: 8, estimateUsd: () => 0 } } };
+  // Main's upkeep selects the full Memory+Card view. Seed the exact Memory
+  // projection queried below, so the unbound readiness baseline is non-zero.
+  const seedAccess = createContextReadAccess(ns, false, { refresh: true });
+  const semanticSeed = openMemoryCore({ path: ordinaryPath, raw: true, contextRead: {
+    ...seedAccess.configuration, embedder, counter, policy: configuration.contextEmbedding.policy,
+  } });
+  try {
+    let seeded;
+    for (let i = 0; i < 30; i++) {
+      seeded = ok(await seedAccess.call(semanticSeed, 'refreshContextIndex', { readSet: [ns], types: query.types,
+        intent: 'current', budget: { maxItems: 16, maxMs: 1000 } }));
+      if (seeded.status === 'complete') break;
+    }
+    assert.equal(seeded.status, 'complete', 'synthetic unbound Memory projection is seeded');
+  } finally { semanticSeed.close(); seedAccess.revoke(); }
   // Independent identical fixtures prevent either runtime's sidecar from
   // warming the other. Decision (A): strict parity uses host mode on both
   // fixtures; the unbound server has one query slot on shared daily totals.
@@ -73,9 +89,8 @@ test('A3 eight parallel connections preserve single-connection Raw coverage and 
     const ordinary = await context(direct, input);
     const reference = await context(referenceClient, input);
     warm = await context(clients[0], input);
-    // Main's unbound upkeep may leave this exact semantic view unready.
-    // Wait for Raw there, and semantic readiness on both host fixtures.
-    if (ordinary.diagnostics.coverage.raw === 'included' &&
+    // All three independent fixtures must publish Raw and semantic coverage.
+    if (ordinary.diagnostics.coverage.raw === 'included' && ordinary.diagnostics.candidates.channels.semantic.state === 'ready' &&
         reference.diagnostics.coverage.raw === 'included' && reference.diagnostics.candidates.channels.semantic.state === 'ready' &&
         warm.diagnostics.coverage.raw === 'included' && warm.diagnostics.candidates.channels.semantic.state === 'ready') break;
   }
@@ -104,6 +119,7 @@ test('A3 eight parallel connections preserve single-connection Raw coverage and 
   assert.ok(single.rawItems.every(count => count > 0), 'single-connection baseline must contain published synthetic Raw');
   const rawCoverage = ({ rawIncluded, rawItems, reads }) => ({ rawIncluded, rawItems, reads });
   assert.deepEqual(rawCoverage(eight), rawCoverage(ordinary), 'A3_UNBOUND_RAW_EQUAL');
+  assert.ok(ordinary.semanticReady > 0, 'A3_UNBOUND_READY_NONZERO');
   assert.ok(eight.semanticReady >= ordinary.semanticReady, 'A3_READY_AT_LEAST_UNBOUND');
   assert.deepEqual(eight, reference, 'A3_HOST_REFERENCE_EQUAL');
   assert.deepEqual(eight, single);
