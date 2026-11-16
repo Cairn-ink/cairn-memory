@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { createRawSourceRoots } from '../../../core/raw-source-roots.mjs';
 import { layouts, label, snapshot, assertStored, assertReads } from './fixtures/forget-episode-assertions.mjs';
 import { recorded, assertRecorded } from './fixtures/forget-episode-recording.mjs';
-import { setup, sql, ok, forgottenText, stepText, otherStep } from './fixtures/forget-episode.mjs';
+import { setup, sql, forgottenText, stepText, otherStep } from './fixtures/forget-episode.mjs';
 
 // Older keeps stamp the consumer's receipt identity while recording exact
 // source IDs. Reuse that persisted shape; never infer authority from text.
