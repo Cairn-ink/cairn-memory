@@ -11,9 +11,9 @@ function finish() {
 }
 process.on('disconnect', finish);
 process.on('message', message => { if (message === 'release') finish(); });
-if (role === 'shared') {
+if (role === 'shared' || role === 'reserved') {
   db = new DatabaseSync(path);
-  db.exec('BEGIN'); db.prepare('SELECT count(*) FROM memories').get();
+  db.exec(role === 'reserved' ? 'BEGIN IMMEDIATE' : 'BEGIN'); db.prepare('SELECT count(*) FROM memories').get();
   process.send('ready');
 } else {
   function sample() {

@@ -41,7 +41,11 @@ for (const shape of [29,53]) {
     const f = await localOpenFixture(t, shape);
     const sql = LOCAL_RAW_PRIVACY_DDL.find(sql => /^CREATE INDEX/.test(sql.trim()));
     const name = /INDEX IF NOT EXISTS (\w+)/.exec(sql)[1];
-    const db = new DatabaseSync(f.path); db.exec(`DROP INDEX ${name}`); db.close();
+    const db = new DatabaseSync(f.path);
+    // Seed independently of the runtime probe so its always-complete mutation
+    // fails on the missing object's restoration, rather than fixture setup.
+    db.exec(LOCAL_RAW_PRIVACY_DDL.join('\n'));
+    db.exec(`DROP INDEX ${name}`); db.close();
     const { value, trace } = observeOpen(() => openMemoryCore(f.config)); await value.close();
     const check = new DatabaseSync(f.path);
     try { assert.ok(check.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name=?").get(name)); }
