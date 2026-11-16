@@ -926,7 +926,7 @@
   "implementations": [
     {
       "file": "core/content-suppression-storage.mjs",
-      "sha256": "3c6637bb9d327f711d295beb43712d61d7ec87daa06915cb7446f6405320425d",
+      "sha256": "656554b29fc837f97a05aa858f913a211117a1df6d337231968d39db8c658bd4",
       "reason": "The retry reset clears only this connection’s request-local denial memos. Canonical writers, insertion capabilities and their separately pinned regions retain their exact bytes."
     },
     {
@@ -951,7 +951,7 @@
       "file": "core/runtime.mjs",
       "start": "  function correct(",
       "end": "  function forgetMutation(",
-      "sha256": "89139a583446f96ff0364240b6ab46cad99979e68144a194b04e76bc63b5992c",
+      "sha256": "90a4b638bc4bbaddc9d831f4dd64e53d4253f2d7734ba384253feef7e1e2ff3d",
       "reason": "PR 1 passes each corrected receipt its matching optional receipt time; canonical post-state acknowledgement and terminal fact guards remain in this exact region."
     },
     {
@@ -959,7 +959,7 @@
       "file": "core/runtime.mjs",
       "start": "  function forgetMutationInside(",
       "end": "  function forget(ns,",
-      "sha256": "b410568c477b16d934ad31e27ac9331add75fdc202f24a39581d11293a9cd8da"
+      "sha256": "2521a3be4e4e674ed54272d163594a9e6a7301a02cbb77dd2d5e71075aaae614"
     },
     {
       "id": "remove-receipts",
@@ -1275,6 +1275,7 @@
         "contentSuppressionTargetMatches",
         "hasContentSuppressionRequestInside",
         "inContentSuppressionRequestInside",
+        "memoryCorrectionDenialsInside",
         "memorySuppressionObservationInside",
         "registerContentSuppressionReadMemoInside",
         "registerEngineCardPurgeInside",
@@ -1310,7 +1311,8 @@
         "withMemoryCandidateBatchInside": "Shares SQL rows only within one synchronous Memory candidate batch; canonical S1 and suppression decisions remain independent.",
         "resetContentSuppressionRequestInside": "Discards only request-local read memos for a connection before a fresh retry; it performs no SQL and exposes no fact insertion or writer capability.",
         "registerEngineCardPurgeInside": "Lets the Card storage module install its erasure purge at load; the registry performs no SQL and exposes no fact insertion or writer capability.",
-        "withContentSuppressionAttempt": "Internal host-only account epoch seeding and accepted-attempt merge; no suppression SQL or decision changes."
+        "withContentSuppressionAttempt": "Internal host-only account epoch seeding and accepted-attempt merge; no suppression SQL or decision changes.",
+        "memoryCorrectionDenialsInside": "Private correction preflight: enumerates the receipt-less Memory decision's target and Raw-ancestry facts only on the deny branch of correct(); returns typed fact/path rows, never source text."
       }
     },
     "core/content-write-changes.mjs": {
