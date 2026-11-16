@@ -9,7 +9,8 @@ import { eventTimeSafetyFixture } from '../testing/receipt-event-time-fixture.mj
 import { transaction } from '../database.mjs';
 import { createRawLineageStorage } from '../raw-lineage-storage.mjs';
 import { validateOpenerData, assertArchivedOpeners, currentOpenerPins, assertCurrentOpenerCensus } from '../testing/card-lineage-off-wide-opener.mjs';
-import { normalizeSQL, summary, currentReceiptWalkSQLTexts, receiptWalkSQLTexts, receiptWalkSQL,
+import * as receiptComparison from '../testing/card-lineage-off-wide-compare.mjs';
+import { normalizeSQL, summary, currentReceiptWalkSQLTexts, receiptWalkSQLTexts, receiptWalkSQL, receiptWalkSQLAdditions,
   workloadKeys, validateSqlAdditions, reviseSQL, compareWideTraces, assertWidePins, validateCardStatementTexts, assertArchivedCardStatementTexts, wideArchiveMode } from '../testing/card-lineage-off-wide-compare.mjs';
 
 const revision='c02e5135fad9ea449047e5b6325726f55c248864';
@@ -66,6 +67,47 @@ const added=['inspectCardOperation','revalidateEvidence','fetchCandidateEvidence
 // SQL text of one archived statement; method and bound arguments are never substituted. Delete the list when `revision` advances.
 const sqlRevisions=[...(pins.sqlRevisions??[]),...openerPins.sqlRevisions],sqlAdditions=pins.sqlAdditions??[],sqlAdditionMethods=pins.sqlAdditionMethods??[],cardStatementTexts=pins.cardStatementTexts??{};
 const sqlAdditionPolicy={...(pins.sqlAdditionPolicy??{sqlTexts:[],familyMethods:[],anchorSQLTexts:[],anchorAfterSQLTexts:[]}),openerProbes:openerPins.openerProbes};
+const receiptRecord=(rows,index=0,method='capture')=>({statements:rows,dump:[],effectWitnesses:[],
+  calls:[...Array.from({length:index},()=>['synthetic',{ok:true}]),[method,{ok:true},0,rows.length]]});
+const compareReceiptRecords=(key,current,archived)=>{
+  assertWidePins(key,current,[],summary(current),[],{},sqlAdditionPolicy);
+  compareWideTraces({key,current,archived,receiptWalk:true,checkArchivedCardTexts:false,sqlAdditionPolicy});
+};
+for(const mutation of ['deletion','reordering'])
+test(`unrelated receipt rows reject ${mutation} with replacement pins`,()=>{
+  const schema=[...receiptWalkSQLTexts].find(sql=>sql.startsWith('SELECT schema_version AS cookie'));
+  const attestation=[schema,'get',[]],select=['SELECT 1','get',[]];
+  const archived=receiptRecord([attestation,select],0,'getCard');
+  const rows=mutation==='deletion'?[select]:[select,attestation];
+  assert.throws(()=>compareReceiptRecords('workload:53',receiptRecord(rows,0,'getCard'),archived));
+});
+test('a listed receipt removal with the wrong multiplicity rejects replacement pins',()=>{
+  const entry={"key":"workload:52","callIndex":1,"method":"capture","archivedCount":135,"currentCount":132,"removedCount":3,"statement":["SELECT schema_version AS cookie,(SELECT user_version FROM pragma_user_version) AS physical, (SELECT application_id FROM pragma_application_id) AS applicationId,(SELECT json_array(singleton,base_layout,suppression_revision,card_lineage_revision,migration_state,suppression_domain,migration_id,inventory_digest,receipt_event_time) FROM content_safety_control WHERE singleton=1) AS control FROM pragma_schema_version","get",[]]};
+  const {key,callIndex,method,statement,archivedCount,currentCount}=entry;
+  const make=count=>Array.from({length:count},()=>statement);
+  assert.throws(()=>compareReceiptRecords(key,receiptRecord(make(currentCount+1),callIndex,method),
+    receiptRecord(make(archivedCount),callIndex,method)));
+});
+test('reviewed receipt rows are bounded per call even with matching replacement pins',()=>{
+  const spare=[...receiptWalkSQLTexts][0];
+  for(const sql of receiptWalkSQLTexts) {
+    const row=[sql,'all',['synthetic','original']];
+    const archived=receiptRecord([row,...Array.from({length:3},()=>[spare,'get',['spare']])]);
+    for(const added of [row,[sql,'all',['synthetic','changed']],[sql,'get',row[2]]])
+      assert.throws(()=>compareReceiptRecords('workload:53',receiptRecord([row,added]),archived),/reviewed receipt row multiplicity/);
+  }
+  const removals=receiptComparison.receiptWalkSQLRemovals;
+  assert.equal(removals.reduce((n,row)=>n+row.removedCount,0),144,'142 removed rows plus two explicit relocations');
+  for(const entry of receiptWalkSQLAdditions) {
+    const {key,callIndex,method,statement}=entry;
+    const entries=[...removals,...receiptWalkSQLAdditions].filter(row=>row.key===key&&row.callIndex===callIndex&&row.method===method);
+    const make=field=>entries.flatMap(row=>Array.from({length:row[field]},()=>row.statement));
+    const archived=receiptRecord(make('archivedCount'),callIndex,method),current=make('currentCount');
+    compareReceiptRecords(key,receiptRecord(current,callIndex,method),archived);
+    for(const added of [statement,[statement[0],statement[1],[...statement[2],'changed']]])
+      assert.throws(()=>compareReceiptRecords(key,receiptRecord([...current,added],callIndex,method),archived),/reviewed receipt row multiplicity/);
+  }
+});
 test('reviewed SQL additions have explicit workload, allowed call method, ordinal, anchor and full statement rows',()=>{
   validateOpenerData(openerPins);
   validateSqlAdditions(sqlAdditions,sqlAdditionMethods,sqlAdditionPolicy);validateCardStatementTexts(cardStatementTexts,sqlAdditions,sqlAdditionPolicy);
