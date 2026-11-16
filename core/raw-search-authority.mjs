@@ -701,6 +701,6 @@ export function createRawSearchAuthority(database, options) {
     deadline(at);resetContentSuppressionRequestInside(db);
   }
   return { reset,refresh,resume:()=>resumeAt,read,identity:{storeId:identity.store_id,fileIdentity:database.fileIdentity,ownerId:options.ownerId,readSet:options.readSet},
-    bind,authorize,inventory,recent,disposition,queryAllowed,check,open,prepareBatch,validate,fingerprint,fence,checkFence,cacheKey,
+    bind,authorize,inventory,recent,disposition,queryAllowed,check,open,prepareBatch,validate,fingerprint,fence,checkFence,cacheKey,version,
     inspect:(ref,intent='history')=>read(()=>inspectInside(ref,intent)) };
 }
