@@ -86,8 +86,14 @@ export async function workspace(t) {
     if (result.code) throw Object.assign(Error(result.code), { code: result.code });
   }
   async function connect(entry) {
-    const connected = await until(() => entry.messages.find(m => m.kind === 'connected'), 'authenticated connection must report metadata');
-    await entry.request('initialize', { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'synthetic-r3', version: '1' } });
+    const connections = () => entry.messages.filter(m => m.kind === 'connected');
+    const connected = await until(() => connections().at(-1), 'authenticated connection must report metadata');
+    const generation = connections().length;
+    const response = await entry.request('initialize', { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'synthetic-r3', version: '1' } });
+    if (response.error || !response.result?.protocolVersion)
+      throw Object.assign(Error('daemon test setup: initialization did not succeed'), { code: 'daemon_test_setup_initialize_failed', cause: response.error });
+    if (connections().length !== generation)
+      throw Object.assign(Error('daemon test setup: connection generation changed during initialization'), { code: 'daemon_test_setup_generation_changed' });
     entry.process.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
     return connected;
   }

@@ -45,3 +45,30 @@ test('SIGSTOP after attach gets daemon_unresponsive within T plus 1500ms', { tim
     if (startAwareAlive(descriptor.owner)) process.kill(descriptor.owner.pid, 'SIGCONT');
   }
 });
+
+for (const scenario of ['initialize error', 'missing initialize result', 'generation changed', 'current generation']) {
+  test('connect validates setup: ' + scenario, async t => {
+    const w = await workspace(t); await w.bootstrap();
+    const first = { kind: 'connected', incarnation: 'first' };
+    const current = { kind: 'connected', incarnation: 'current' };
+    const messages = [first], writes = [];
+    if (scenario === 'current generation') messages.push(current);
+    const entry = { messages, process: { stdin: { write: bytes => writes.push(bytes) } },
+      async request(method) {
+        assert.equal(method, 'initialize');
+        if (scenario === 'initialize error') return { error: { code: -32000, message: 'daemon_unresponsive' } };
+        if (scenario === 'missing initialize result') return {};
+        if (scenario === 'generation changed') messages.push(current);
+        return { result: { protocolVersion: '2025-03-26' } };
+      },
+    };
+    if (scenario === 'current generation') {
+      assert.equal(await w.connect(entry), current, 'returns the current authenticated generation');
+      assert.equal(JSON.parse(writes[0]).method, 'notifications/initialized');
+    } else {
+      await assert.rejects(w.connect(entry), { code: scenario === 'generation changed'
+        ? 'daemon_test_setup_generation_changed' : 'daemon_test_setup_initialize_failed' });
+      assert.equal(writes.length, 0, 'failed setup never sends initialized');
+    }
+  });
+}
