@@ -53,7 +53,7 @@ else {
 }
 `, { flag: 'wx', mode: 0o700 });
   const settings = join(workspace.path, 'settings.json');
-  writeFileSync(settings, JSON.stringify({ installed, configPath, home, trace, executable, modePath, client }), { flag: 'wx', mode: 0o600 });
+  writeFileSync(settings, JSON.stringify({ installed, configPath, home, trace, executable, modePath, client, usage }), { flag: 'wx', mode: 0o600 });
   const result = spawnSync(process.execPath, [driver, settings], { encoding: 'utf8', timeout: 45000, maxBuffer: 262144,
     env: { PATH: dirname(process.execPath), HOME: home, TMPDIR: workspace.path, TMP: workspace.path, TEMP: workspace.path, NODE_NO_WARNINGS: '1' } });
   assert.equal(result.error, undefined); assert.equal(result.signal, null); assert.equal(result.status, 0, result.stderr);
@@ -72,8 +72,8 @@ else {
     assert.equal(db.prepare('SELECT count(*) n FROM memories').get().n, 1);
   } finally { db.close(); }
   const ledgers = readdirSync(join(usage, 'usage')).filter(name => name.endsWith('.json')); assert.equal(ledgers.length, 1);
-  const ledger = JSON.parse(readFileSync(join(usage, 'usage', ledgers[0]), 'utf8')); assert.equal(ledger.used, 4); assert.deepEqual(ledger.reservations, []);
-  assert.equal(readFileSync(httpTrace, 'utf8').trim().split('\n').length, 7);
-  t.diagnostic(JSON.stringify({ client, closureFiles: closure.length, observedInstalledFiles: observed.size, normalCaptureChildExits: 5, completed: 3, incomplete: 2 }));
+  const ledger = JSON.parse(readFileSync(join(usage, 'usage', ledgers[0]), 'utf8')); assert.equal(ledger.used, 4, JSON.stringify(response.steps)); assert.deepEqual(ledger.reservations, [], JSON.stringify(response.steps));
+  assert.equal(readFileSync(httpTrace, 'utf8').trim().split('\n').length, 7, JSON.stringify(response.steps));
+  t.diagnostic(JSON.stringify({ client, closureFiles: closure.length, observedInstalledFiles: observed.size, normalCaptureChildExits: 5, completed: 3, incomplete: 2, steps: response.steps }));
   await workspace.cleanup(); assert.equal(existsSync(workspace.path), false);
 });
