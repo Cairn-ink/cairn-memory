@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { LOCAL_RAW_PRIVACY_DDL } from '../content-safety-schema.mjs';
+import { LOCAL_RAW_PRIVACY_DDL, LOCAL_RAW_PACKAGES } from '../content-safety-schema.mjs';
 import { installLocalRawPrivacy } from '../local-authority-schema.mjs';
 
 test('local installer uses the complete attestor-owned package, including both trigger bodies',()=>{
@@ -10,6 +10,7 @@ test('local installer uses the complete attestor-owned package, including both t
   assert.equal(installed,LOCAL_RAW_PRIVACY_DDL.join('\n'));
   assert.equal(LOCAL_RAW_PRIVACY_DDL.filter(sql=>sql.startsWith('CREATE TRIGGER')).length,2);
   assert.equal(LOCAL_RAW_PRIVACY_DDL.length,11);assert.equal(Object.isFrozen(LOCAL_RAW_PRIVACY_DDL),true);
+  assert.deepEqual(Object.values(LOCAL_RAW_PACKAGES).map(ddl=>ddl.length),[11,12]);
 });
 
 for(const replacement of ['CREATE VIEW IF NOT EXISTS local_raw_hide_windows','UNSUPPORTED local_raw_hide_windows'])

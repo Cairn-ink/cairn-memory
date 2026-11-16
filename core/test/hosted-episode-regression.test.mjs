@@ -30,3 +30,11 @@ for(const invalidPolicy of [false,true]) test(`non-local Episode preserves sourc
   assert.ok(trace.includes(fence),JSON.stringify(trace));
   assert.ok(!trace.some(sql=>/SAVEPOINT|raw_mutation_context|local_raw_/.test(sql)),JSON.stringify(trace));
 });
+
+test('hosted construction executes no local Raw package or peer-index probes',t=>{
+  const trace=[],prepare=DatabaseSync.prototype.prepare,exec=DatabaseSync.prototype.exec;
+  t.mock.method(DatabaseSync.prototype,'prepare',function(sql){trace.push(sql);return prepare.call(this,sql);});
+  t.mock.method(DatabaseSync.prototype,'exec',function(sql){trace.push(sql);return exec.call(this,sql);});
+  fixture(t,{kind:'episode',deletion:true,port:localPlainPort()});
+  assert.ok(!trace.some(sql=>/local_raw_|SELECT max\(rowid\) AS n FROM raw_messages/.test(sql)),JSON.stringify(trace));
+});

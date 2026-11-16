@@ -1,4 +1,6 @@
-import { LOCAL_RAW_PRIVACY_DDL } from './content-safety-schema.mjs';
+import { LOCAL_RAW_PRIVACY_DDL, LOCAL_RAW_PEER_INDEX_DDL, attestedLocalRawPackage } from './content-safety-schema.mjs';
+import { statfsSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { fail } from './validation.mjs';
 
 export const LOCAL_AUTHORITY_SCHEMA_VERSION = 29;
@@ -10,6 +12,43 @@ export function installLocalRawPrivacy(db) {
   const ddl = LOCAL_RAW_PRIVACY_DDL.join('\n');
   if (db) db.exec(ddl);
   return ddl;
+}
+
+const peerIndexPresent = db => Boolean(db.prepare("SELECT 1 FROM sqlite_schema WHERE type='index' AND name='local_raw_message_peers'").get());
+const peerIndexSize = db => db.prepare('SELECT max(rowid) AS n FROM raw_messages').get().n ?? 0;
+const peerIndexThreshold = 2_000_000;
+
+/** Read-only status on an already attested connection; never installs anything. */
+export function localRawPeerIndexState(db) {
+  return { present: peerIndexPresent(db), overThreshold: peerIndexSize(db) > peerIndexThreshold };
+}
+function upgradeLocalRawPeerIndex(db, path, offline, transaction) {
+  const version = attestedLocalRawPackage(db);
+  if (version === 'v2' || version === null && peerIndexPresent(db)) return 'present';
+  const n = peerIndexSize(db);
+  if (!offline && n > peerIndexThreshold) return 'over_threshold';
+  const { bavail, bsize } = statfsSync(dirname(path));
+  if (bavail * bsize < 2 * 84 * Math.max(n, 1)) return 'insufficient_space';
+  try {
+    // Inherits the package install's daemon synchronous commit scope. Probes
+    // above never acquire a writer; only the actual build enters this helper.
+    transaction(db, () => db.exec(LOCAL_RAW_PEER_INDEX_DDL.join('\n')));
+    return 'built';
+  } catch (error) {
+    const code = Number(error?.errcode) & 255;
+    if ([5,6].includes(code)) return 'busy';
+    if (!offline && [9,10,13].includes(code)) return 'deferred';
+    throw error;
+  }
+}
+/** Best-effort bounded build on every writable local open. The caller supplies
+ * the existing transaction helper to keep schema imports independent of openers. */
+export function installLocalRawPeerIndex(db, path, transaction) {
+  return upgradeLocalRawPeerIndex(db, path, false, transaction);
+}
+/** Explicit offline operator route retains the space and native lock limits. */
+export function buildLocalRawPeerIndex(db, path, transaction) {
+  return upgradeLocalRawPeerIndex(db, path, true, transaction);
 }
 
 export function validateRawSourcePrerequisites(db) {
