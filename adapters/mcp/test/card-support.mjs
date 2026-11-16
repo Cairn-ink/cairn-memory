@@ -1,3 +1,4 @@
+import { reviewExitError } from './review-diagnostics.mjs';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
@@ -50,9 +51,9 @@ export function review(workspace, path, card, { command = cli, extra = [] } = {}
   });
   const closed = new Promise(resolve => child.once('close', (code, signal) => {
     if (code !== 0 || signal || !completed) {
-      const error = new Error(`PTY supervisor exit ${code}, signal ${signal}: ${stderr}`);
+      const error = reviewExitError(completed, { code, signal, stderr });
       rejectPrompt(error); rejectDone(error);
-    } else { resolveDone(completed); rejectPrompt(new Error('review exited before prompt')); }
+    } else { resolveDone(completed); rejectPrompt(reviewExitError(completed, { code, signal, stderr })); }
     resolve();
   }));
   child.once('error', error => { rejectPrompt(error); rejectDone(error); });
