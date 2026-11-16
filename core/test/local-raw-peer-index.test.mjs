@@ -928,7 +928,8 @@ function changeCopiedControl(db, field) {
 for(const existing of [false,true])for(const field of [null,'card_lineage_revision','migration_id','inventory_digest'])
 test(`side compares a copied store's attested control by value (${field??'equal tuple'}, existingStore=${existing})`,async t=>{
   const f=await store(t,{l1:true});space(t,f.path);
-  const admittedFile=fs.lstatSync(f.path),held=join(dirname(f.path),'admitted.sqlite'),copyPath=join(dirname(f.path),'control-copy.sqlite');
+  const admittedFile=fs.lstatSync(f.path),admittedFileBigInt=fs.lstatSync(f.path,{bigint:true});
+  const held=join(dirname(f.path),'admitted.sqlite'),copyPath=join(dirname(f.path),'control-copy.sqlite');
   const before=schema(f.db),bytes=readSqliteFixture(f.path),control=attestedContentSafetyControl(f.db);
   copySqliteFixture(f.path,copyPath);
   const copy=new DatabaseSync(copyPath);let copySchema,copyBytes,copyControl;
@@ -960,7 +961,7 @@ test(`side compares a copied store's attested control by value (${field??'equal 
   // Isolate the control fence while presenting the copy at the same canonical
   // path and admitted file identity used by the replacement-store tests above.
   const mock=t.mock.method(fs,'lstatSync',function(path,...args){
-    if(replaced&&path===f.path){identityChecks++;return admittedFile;}
+    if(replaced&&path===f.path){identityChecks++;return args[0]?.bigint===true?admittedFileBigInt:admittedFile;}
     return lstat.call(this,path,...args);
   });
   syncBuiltinESMExports();t.after(()=>{mock.mock.restore();syncBuiltinESMExports();});
