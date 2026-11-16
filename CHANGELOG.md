@@ -10,6 +10,8 @@
 
 ## Unreleased — daily shared embedding budget
 
+- Save a conversation's last turn from a later session when its own final save didn't finish (for example, Claude Code was closed right after a reply).
+
 - Skip saving Claude Code runs started by scripts or the Agent SDK (for example
   `claude -p`), detected from the hook's environment without reading the transcript.
 

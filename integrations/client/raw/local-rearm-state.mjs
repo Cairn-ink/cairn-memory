@@ -88,12 +88,15 @@ export async function readGlobalRearm(profile) {
   const text = await privateRead(profile.rearmPath,{ missing:true });
   return text === undefined ? null:globalRecord(JSON.parse(text));
 }
-export async function readSessionRearm(identity) {
+export async function readSessionRearm(identity,operation) {
+  if (operation?.check() === false) return {status:'deadline'};
   const text = await privateRead(sessionRearmPath(identity),{ missing:true });
+  if (operation?.check() === false) return {status:'deadline'};
   return text === undefined ? null:sessionRecord(JSON.parse(text));
 }
-export async function assertSessionRearm(identity,cursor) {
-  const receipt = await readSessionRearm(identity);
+export async function assertSessionRearm(identity,cursor,operation) {
+  const receipt = await readSessionRearm(identity,operation);
+  if (receipt?.status === 'deadline') return receipt;
   if (!receipt && cursor?.rearmRevision === undefined) return null;
   if (!receipt || receipt.phase !== 'committed' || !cursor || cursor.rearmRevision !== receipt.revision ||
     receipt.sessionKey !== identity.sessionKey || receipt.wireSessionId !== identity.wireSessionId ||
@@ -101,7 +104,9 @@ export async function assertSessionRearm(identity,cursor) {
     cursor.source.identity !== receipt.replacementCursor.source.identity ||
     cursor.offset < receipt.replacementCursor.offset || cursor.issuedOrdinal < receipt.replacementCursor.issuedOrdinal)
     rearmFail('rearm_invalid');
+  if (operation?.check() === false) return {status:'deadline'};
   const root = await checkedPath(identity.stateRoot,{ directory:true });
+  if (operation?.check() === false) return {status:'deadline'};
   if (String(root.dev) !== receipt.rootDevice || String(root.ino) !== receipt.rootInode) rearmFail('rearm_invalid');
   return receipt;
 }

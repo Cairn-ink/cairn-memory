@@ -58,17 +58,20 @@ export function workerContext(value, client, initialize) {
 const aborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype,'aborted').get;
 const add = EventTarget.prototype.addEventListener, remove = EventTarget.prototype.removeEventListener;
 export function workerOperation(options) {
-  let signal;
+  let signal, deadlineMs;
   try {
-    signal = ownData(options,['signal']).signal;
+    const call = ownData(options,['signal','deadlineMs','sweep']); signal = call.signal;
+    deadlineMs = call.deadlineMs ?? 155000;
+    if (!Number.isSafeInteger(deadlineMs) || deadlineMs < 1 || deadlineMs > 155000 ||
+        call.sweep !== undefined && typeof call.sweep !== 'boolean') fault('invalid_input');
     if (signal !== undefined) { if (types.isProxy(signal)) fault('invalid_input'); aborted.call(signal); }
   } catch { fault('invalid_input'); }
-  const end = performance.now() + 155000, controller = new AbortController();
+  const end = performance.now() + deadlineMs, controller = new AbortController();
   let cancelled = signal !== undefined && aborted.call(signal);
   const cancel = () => { cancelled = true; controller.abort(); };
   if (signal !== undefined) add.call(signal,'abort',cancel,{ once: true });
   if (cancelled) controller.abort();
-  const timer = setTimeout(() => controller.abort(),153000);
+  const timer = setTimeout(() => controller.abort(),Math.max(0,deadlineMs-2000));
   return Object.freeze({ signal: controller.signal,
     remaining: () => Math.max(0,Math.floor(end-performance.now())),
     check() { if (controller.signal.aborted || performance.now() >= end-2000) fault(cancelled ? 'cancelled' : 'work_limit'); },

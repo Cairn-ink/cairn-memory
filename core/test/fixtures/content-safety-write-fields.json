@@ -952,10 +952,12 @@
     "key:wireSessionId": 1
   },
   "integrations/client/raw/local-worker-state.mjs": {
+    "key:sessionId": 1,
     "key:wireSessionId": 1,
     "literal:eventId": 1,
     "literal:key_invalid": 4,
-    "literal:state_invalid": 15,
+    "literal:sessionId": 1,
+    "literal:state_invalid": 20,
     "literal:wireSessionId": 4
   },
   "integrations/client/raw/local-host.mjs": {
@@ -1680,8 +1682,9 @@
     "key:projectId": 2
   },
   "integrations/client/raw/local-session-fence.mjs": {
-    "key:sessionId": 1,
-    "literal:preparation_invalid": 1
+    "key:sessionId": 2,
+    "literal:preparation_invalid": 1,
+    "literal:state_invalid": 1
   },
   "integrations/client/raw/local-session-start.mjs": {
     "literal:state_invalid": 1
