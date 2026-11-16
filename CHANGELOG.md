@@ -4,7 +4,7 @@
 
 - Forgetting or correcting a memory now removes summaries of its receipt-named conversations and clears summaries built from their passages in the same transaction.
 - Known limit: Forgetting a memory saved without a conversation leaves nearby conversations' summaries stored; read-time withholding is separate work.
-- Known limit: Forgetting or correcting can be refused when a summary mixes a named conversation with an unrelated conversation that is also fenced; delete the other conversation or the source conversation first, then retry. Narrowing the forget fence to named conversations removes this limit.
+- Known limit: Forgetting or correcting can be refused when a summary mixes named and unrelated fenced conversations. Delete the unrelated or source conversation, then retry; narrowing the forget fence to named conversations removes this limit.
 
 - Share the estimated embedding budget across all connections to a running
   Cairn server, resetting at UTC midnight. The in-memory allowance also resets
