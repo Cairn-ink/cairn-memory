@@ -8,7 +8,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { buildArtifact, command, packageName } from '../../build.mjs';
 import { verifyInstalledTree } from '../../../packages/setup/lib/local-engine.mjs';
-import { runtimeDirectory } from '../../../adapters/mcp/local-daemon-state.mjs';
+import { runtimeDirectory, readPrivate } from '../../../adapters/mcp/local-daemon-state.mjs';
 import { startAwareAlive } from '../../../adapters/mcp/local-daemon-liveness.mjs';
 
 const source = fileURLToPath(new URL('../../../', import.meta.url));
@@ -23,6 +23,32 @@ const sameOwner = (a, b) => a != null && b != null &&
   ['pid', 'start', 'boot', 'namespace'].every(key => a[key] === b[key]);
 const sameEntry = (a, b) => b != null &&
   ['name', 'kind', 'inode', 'size', 'mtime'].every(key => a[key] === b[key]);
+// Read the immutable source allowlist, never log bytes through a path reader.
+const stateSource = await readFile(new URL('../../../adapters/mcp/local-daemon-state.mjs', import.meta.url), 'utf8');
+const codeList = /const logCodes = new Set\(\[([\s\S]*?)\]\);/.exec(stateSource);
+assert.ok(codeList, 'fixed log-code allowlist exists');
+const logCodes = new Set([...codeList[1].matchAll(/'(daemon_[a-z_]+)'/g)].map(match => match[1]));
+assert.ok(logCodes.size > 0, 'fixed log-code allowlist is nonempty');
+const logLimit = 262144;
+function logChange(before, after) {
+  if (before.kind !== 'file' || after?.kind !== 'file' || typeof before.content !== 'string' || typeof after.content !== 'string') return;
+  if (BigInt(before.size) !== BigInt(Buffer.byteLength(before.content)) ||
+      BigInt(after.size) !== BigInt(Buffer.byteLength(after.content)) || BigInt(after.size) > BigInt(logLimit)) return;
+  if (sameEntry(before, after) && before.content === after.content) return [];
+  const lines = content => {
+    if (!content.endsWith('\n')) return;
+    const codes = content.slice(0, -1).split('\n');
+    return codes.every(code => logCodes.has(code)) ? codes : undefined;
+  };
+  if (after.content.startsWith(before.content)) {
+    const appended = lines(after.content.slice(before.content.length));
+    if (appended) return appended;
+  }
+  // After a reset only the retained new lines are observable. The old bytes
+  // plus those lines must exceed the writer's cap; equality does not reset.
+  if (BigInt(before.size) + BigInt(after.size) > BigInt(logLimit)) return lines(after.content);
+}
+const revivalEndpoint = suffix => /^\.(?:json|stamp|sock|lock(?:\.(?:owner|reap)-[a-z0-9-]+)*|takeover\.lock(?:\.(?:owner|reap)-[a-z0-9-]+)*)$/.test(suffix);
 
 // Pure comparison: no filesystem reads, clocks, process probes or mutation.
 // Liveness of baseline owners is sampled again in after.retired, even when
@@ -54,30 +80,34 @@ export function classifyRuntimeHygiene(before, after, {
   for (const [prefix, entries] of groups) {
     const previous = before.identities.find(identity => identity.prefix === prefix);
     const next = after.identities.find(identity => identity.prefix === prefix);
-    if (previous?.owner && next?.owner && !sameOwner(previous.owner, next.owner)) {
+    const remaining = after.entries.filter(entry => identityPrefix(entry.name) === prefix);
+    if (previous?.alive && remaining.length === 0) {
+      const retired = after.retired.find(identity => identity.prefix === prefix && sameOwner(identity.owner, previous.owner));
+      if (retired?.alive !== false) errors.push('foreign identity gone without dead owner: ' + prefix);
+      continue;
+    }
+    const log = entries.find(entry => entry.name === prefix + '.log');
+    const appended = log ? logChange(log, current.get(log.name)) : undefined;
+    if (log && !appended) errors.push('foreign log changed invalidly: ' + log.name);
+    const revived = !previous?.alive && appended?.includes('daemon_ready');
+    if (revived) diagnostics.push('foreign identity revived: ' + prefix);
+    if (previous?.alive && previous.owner && next?.owner && !sameOwner(previous.owner, next.owner)) {
       if (next.alive && !owners.some(owner => sameOwner(owner, next.owner)))
         diagnostics.push('foreign identity takeover: ' + prefix);
       else errors.push('foreign takeover has dead or test owner: ' + prefix);
       continue;
     }
     if (!previous?.alive) {
-      for (const entry of entries) if (!sameEntry(entry, current.get(entry.name)))
+      for (const entry of entries) if (!(entry === log && revived) &&
+        !(revived && revivalEndpoint(entry.name.slice(prefix.length))) && !sameEntry(entry, current.get(entry.name)))
         errors.push('dead or ownerless foreign entry changed: ' + entry.name);
-      continue;
-    }
-    const remaining = after.entries.filter(entry => identityPrefix(entry.name) === prefix);
-    if (remaining.length === 0) {
-      const retired = after.retired.find(identity => identity.prefix === prefix && sameOwner(identity.owner, previous.owner));
-      if (retired?.alive !== false) errors.push('foreign identity gone without dead owner: ' + prefix);
       continue;
     }
     for (const entry of entries) {
       const value = current.get(entry.name), suffix = entry.name.slice(prefix.length);
       const unchanged = sameEntry(entry, value);
       const heartbeat = suffix === '.stamp' && value?.kind === entry.kind;
-      const appended = suffix === '.log' && value?.kind === entry.kind && value.inode === entry.inode &&
-        BigInt(value.size) > BigInt(entry.size);
-      if (!unchanged && !heartbeat && !appended) errors.push('live foreign entry changed: ' + entry.name);
+      if (!unchanged && !heartbeat && !(entry === log && appended)) errors.push('live foreign entry changed: ' + entry.name);
     }
   }
   return { errors, diagnostics };
@@ -90,6 +120,14 @@ const ownerRecord = value => value !== null && typeof value === 'object' && !Arr
   typeof value.boot === 'string' && value.boot.length > 0 && typeof value.namespace === 'string' && value.namespace.length > 0;
 
 export async function runtimeSnapshot(path, remembered = [], { afterMetadata = async () => {} } = {}) {
+  let logDirectory;
+  async function logContent(name) {
+    // All log reads use the real pinned directory and the typed fd reader.
+    logDirectory ??= await runtimeDirectory({ root: dirname(path) });
+    if (logDirectory.path !== path) throw Object.assign(Error('runtime_snapshot_directory'), { code: 'runtime_snapshot_directory' });
+    return readPrivate(logDirectory, join(path, name), { fileClass: 'log', missing: true, maxBytes: logLimit,
+      deadline: performance.now() + 1000 });
+  }
   async function metadata(names) {
     const values = [];
     for (const name of names) {
@@ -109,6 +147,8 @@ export async function runtimeSnapshot(path, remembered = [], { afterMetadata = a
     for (let attempt = 1; attempt <= 3; attempt++) {
       const sampled = await metadata((await readdir(path)).filter(name => identityPrefix(name) === prefix).sort());
       await afterMetadata({ prefix, attempt }); // Test-only acquisition seam.
+      const log = sampled.find(entry => entry.name === prefix + '.log');
+      if (log) log.content = await logContent(log.name);
       let owner;
       for (const suffix of ['.json', '.lock']) {
         if (!sampled.some(entry => entry.name === prefix + suffix && entry.kind === 'file')) continue;
@@ -121,7 +161,9 @@ export async function runtimeSnapshot(path, remembered = [], { afterMetadata = a
       const alive = owner ? startAwareAlive(owner) : false;
       const anchors = ['.json', '.lock'].map(suffix => prefix + suffix);
       const checked = await metadata(anchors);
-      const stable = anchors.every(name => {
+      const logChecked = log ? (await metadata([log.name]))[0] : undefined;
+      const stable = (!log || (sameEntry(log, logChecked) && typeof log.content === 'string' &&
+        BigInt(log.size) === BigInt(Buffer.byteLength(log.content)))) && anchors.every(name => {
         const previous = sampled.find(entry => entry.name === name), next = checked.find(entry => entry.name === name);
         return previous ? next?.inode === previous.inode && next.kind === previous.kind : !next;
       });

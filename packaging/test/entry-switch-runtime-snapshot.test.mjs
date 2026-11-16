@@ -1,16 +1,59 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, rename, lstat, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, rename, lstat, rm, link, symlink, chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { runtimeSnapshot, classifyRuntimeHygiene } from './fixtures/entry-switch-installed.mjs';
 import { localProcessIdentity } from '../../adapters/mcp/local-daemon-liveness.mjs';
+import { runtimeDirectory } from '../../adapters/mcp/local-daemon-state.mjs';
 
 const prefix = 'd-' + 'a'.repeat(32);
 async function directory(t) {
   const path = await mkdtemp(join(tmpdir(), 'hygiene-snapshot-'));
   t.after(() => rm(path, { recursive: true, force: true }));
   return path;
+}
+
+test('snapshot records log bytes through the bounded private log reader', async t => {
+  const root = await directory(t), dir = await runtimeDirectory({ root }), content = 'daemon_ready\ndaemon_exit\n';
+  await writeFile(join(dir.path, prefix + '.log'), content, { mode: 0o600 });
+  const result = await runtimeSnapshot(dir.path);
+  assert.ok(result.entries.find(e => e.name === prefix + '.log').content === content, 'log content recorded privately');
+});
+
+test('snapshot retries a log rename and records its matching metadata and bytes', async t => {
+  const root = await directory(t), dir = await runtimeDirectory({ root }), file = join(dir.path, prefix + '.log'), attempts = [];
+  await writeFile(file, 'daemon_ready\n', { mode: 0o600 });
+  const result = await runtimeSnapshot(dir.path, [], { afterMetadata: async ({ attempt }) => {
+    attempts.push(attempt);
+    if (attempt !== 1) return;
+    await writeFile(file + '.replacement', 'daemon_ready\ndaemon_exit\n', { mode: 0o600 });
+    await rename(file + '.replacement', file);
+  } });
+  assert.deepEqual(attempts, [1, 2]);
+  const log = result.entries.find(e => e.name === prefix + '.log');
+  assert.equal(log.inode, String((await lstat(file, { bigint: true })).ino));
+  assert.ok(log.content === 'daemon_ready\ndaemon_exit\n', 'matching log bytes');
+  assert.equal(BigInt(log.size), BigInt(Buffer.byteLength(log.content)));
+});
+
+for (const [kind, code] of [['mode', 'daemon_entry_mode'], ['links', 'daemon_entry_links'],
+  ['symlink', 'daemon_entry_type'], ['directory', 'daemon_entry_type'], ['oversized', 'daemon_entry_changed']]) {
+  test(`snapshot private log reader refuses ${kind} by code only`, async t => {
+    const root = await directory(t), dir = await runtimeDirectory({ root }), file = join(dir.path, prefix + '.log');
+    if (kind === 'directory') {
+      // Rename an existing empty directory into the typed log name.
+      const empty = await mkdtemp(join(root, 'empty-')); await rename(empty, file);
+    } else if (kind === 'symlink') await symlink(join(root, 'absent'), file);
+    else {
+      await writeFile(file, kind === 'oversized' ? 'x'.repeat(262145) : 'daemon_ready\n', { mode: 0o600 });
+      if (kind === 'mode') await chmod(file, 0o644);
+      if (kind === 'links') await link(file, join(dir.path, prefix + '.extra-link'));
+    }
+    await assert.rejects(runtimeSnapshot(dir.path), error => {
+      assert.equal(error.code, code); assert.equal(error.message, code); return true;
+    });
+  });
 }
 const publish = (path, suffix, owner) => writeFile(join(path, prefix + suffix),
   JSON.stringify(suffix === '.json' ? { owner } : owner), { mode: 0o600 });
