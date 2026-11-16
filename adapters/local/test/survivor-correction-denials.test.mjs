@@ -7,8 +7,8 @@ import { registerContentWriteGuard } from '../../../core/content-write-context.m
 import { layouts, label, paired, correction, rows, noEcho, sql } from './fixtures/survivor-correction.mjs';
 import { checkpoint, bytes } from './fixtures/forget-episode-assertions.mjs';
 
-const denials = ['own memory fact', 'own receipt fact', 'ancestry plus own memory fact',
-  'ancestry plus own receipt fact', 'missing canonical row', 'canonical identity mismatch'];
+const denials = ['own memory fact', 'ancestry plus own memory fact',
+  'missing canonical row', 'canonical identity mismatch'];
 for (const options of layouts.filter(o => o.layout >= 48)) for (const denial of denials)
   test('survivor correction refuses ' + denial + ' ' + label(options), { concurrency: false }, async t => {
     const f = await paired(t, options, denial.startsWith('own') ? null : 'forget');
@@ -43,7 +43,7 @@ for (const options of layouts.filter(o => o.layout >= 48)) for (const denial of 
     finally { restore(); registerContentWriteGuard(beginContentWriteSafety); }
     noEcho(result, f.needles);
     assert.deepEqual(result, { ok: false, error: { code: 'memory_suppressed', retryable: false } });
-    if (denial.includes('canonical')) assert.equal(intercepted, 1, 'the canonical safety denial was exercised');
+    if (denial.includes('canonical')) assert.equal(intercepted, 2, 'the old decision and deny-only explanation both deny');
     assert.deepEqual(rows(f), before, 'no canonical, history, effect, audit, staged, epoch or fact row changes');
     assert.deepEqual(bytes(f), oldBytes, 'refusal leaves database and WAL byte-unchanged');
   });

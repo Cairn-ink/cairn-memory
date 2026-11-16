@@ -50,7 +50,7 @@ export async function paired(t, options, operation) {
 }
 export const correction = (f, content = callerText, patch = {}) => ({ namespace: f.namespace,
   memoryId: f.survivor.id, expectedRevision: f.survivor.revision, content, kind: 'context', receipt: callerReceipt, ...patch });
-export async function correctAndScan(t, f, content = callerText, containsSpan = false) {
+export async function correctAndScan(t, f, content = callerText, containsSpan = false, invoke = input => f.core.correct(input)) {
   const before = rows(f); let validations = 0, staged;
   registerContentWriteGuard((db, context) => {
     const state = beginContentWriteSafety(db, context);
@@ -61,7 +61,7 @@ export async function correctAndScan(t, f, content = callerText, containsSpan = 
     } };
   });
   let result;
-  try { result = await f.core.correct(correction(f, content)); }
+  try { result = await invoke(correction(f, content)); }
   finally { registerContentWriteGuard(beginContentWriteSafety); }
   const needles = containsSpan ? [forgottenText, 'forgetneedle', f.survivor.content] : f.needles;
   noEcho(result, needles);

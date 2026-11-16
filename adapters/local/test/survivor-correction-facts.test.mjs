@@ -6,7 +6,7 @@ import { layouts, label, paired, correction, rows, noEcho, sql } from './fixture
 import { checkpoint, bytes } from './fixtures/forget-episode-assertions.mjs';
 
 for (const options of layouts.filter(o => o.layout >= 48)) {
-  test('correction denials identify all fact kinds and paths ' + label(options), { concurrency: false }, async t => {
+  test('correction denials identify only the Memory decision path ' + label(options), { concurrency: false }, async t => {
     const f = await paired(t, options, 'forget');
     sql(f.path, db => transaction(db, () => {
       const target = { memoryId: f.survivor.id, revision: f.survivor.revision };
@@ -22,8 +22,7 @@ for (const options of layouts.filter(o => o.layout >= 48)) {
       const mixed = suppression.memoryCorrectionDenialsInside(db, f.namespace, target);
       assert.deepEqual(mixed.map(({ kind, matchMode, matchPath, reason }) => [kind, matchMode, matchPath, reason]).sort(), [
         ['memory', 'incarnation', 'target', 'user_forget'], ['raw', 'span', 'raw-ancestry', 'user_forget'],
-        ['receipt', 'incarnation', 'receipt', 'user_forget'],
-      ]);
+      ], 'a direct receipt marker is outside the receipt-less Memory decision');
     }));
   });
   test('survivor correction refuses a non-span Raw fact ' + label(options), { concurrency: false }, async t => {
