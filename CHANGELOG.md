@@ -2,6 +2,7 @@
 
 ## Unreleased — daily shared embedding budget
 
+- A memory saved from the same message as a forgotten or corrected memory can now be corrected without deleting its conversation.
 - Forgetting or correcting a memory now removes summaries of its receipt-named conversations and clears summaries built from their passages in the same transaction.
 - Known limit: Forgetting a memory saved without a conversation leaves nearby conversations' summaries stored; read-time withholding is separate work.
 - Known limit: Forgetting or correcting can be refused when a summary mixes named and unrelated fenced conversations. Delete the unrelated or source conversation, then retry; narrowing the forget fence to named conversations removes this limit.
