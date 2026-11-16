@@ -85,7 +85,7 @@ async function provisionStore(bootstrap, directory) {
 }
 
 async function serve(directory, paths, identity, bootstrap, owner, { idleMs, graceMs, exit, runtimeOptions }) {
-  let host, embedding, activated, draining = false, idle, outer, closed = false, doneResolve, doneReject;
+  let host, embedding, activated, draining = false, idle, outer, shutdownTask, doneResolve, doneReject;
   let logTail = Promise.resolve(), stampTail = Promise.resolve(), stampTimer;
   const codes = [];
   const log = code => { codes.push(code); if (codes.length > 8) codes.shift(); logTail = logTail.then(() => logCode(directory, paths.log, code)).catch(() => {}); };
@@ -186,20 +186,21 @@ async function serve(directory, paths, identity, bootstrap, owner, { idleMs, gra
     await removePrivate(directory, paths.stamp);
     if (text) await removePrivate(directory, paths.ready);
   }
-  async function shutdown() {
-    if (draining) return;
-    draining = true; clearTimeout(idle); clearInterval(stampTimer); log('daemon_draining');
-    server.close(); // Stop admissions before revocation; lifetime lock remains held.
-    outer = setTimeout(() => { log('daemon_grace_expired'); exit(1); }, graceMs);
-    await stampTail.catch(() => {});
-    // Connection close synchronously revokes grants; it does not own the runtime.
-    for (const entry of handles.values()) void entry.handle?.close().catch(() => {});
-    for (const socket of sockets) socket.destroy();
-    await activated?.catch(() => {});
-    while (host?.inspect().inFlight) await new Promise(resolve => setTimeout(resolve, 10));
-    await host?.close();
-    await embedding?.close?.(); await cleanupEndpoint();
-    log('daemon_exit'); await logTail; clearTimeout(outer); closed = true; doneResolve();
+  function shutdown() {
+    return shutdownTask ??= (async () => {
+      draining = true; clearTimeout(idle); clearInterval(stampTimer); log('daemon_draining');
+      server.close(); // Stop admissions before revocation; lifetime lock remains held.
+      outer = setTimeout(() => { log('daemon_grace_expired'); exit(1); }, graceMs);
+      await stampTail.catch(() => {});
+      // Connection close synchronously revokes grants; it does not own the runtime.
+      for (const entry of handles.values()) void entry.handle?.close().catch(() => {});
+      for (const socket of sockets) socket.destroy();
+      await activated?.catch(() => {});
+      while (host?.inspect().inFlight) await new Promise(resolve => setTimeout(resolve, 10));
+      await host?.close();
+      await embedding?.close?.(); await cleanupEndpoint();
+      log('daemon_exit'); await logTail; clearTimeout(outer); doneResolve();
+    })();
   }
   const term = () => { void shutdown().catch(doneReject); };
   process.once('SIGTERM', term); process.once('SIGINT', term);
@@ -219,15 +220,18 @@ async function serve(directory, paths, identity, bootstrap, owner, { idleMs, gra
     stampTimer = setInterval(() => { if (!draining) void refreshStamp(); }, DAEMON_LIVENESS_MS);
     armIdle(); await done;
   } finally {
-    process.off('SIGTERM', term); process.off('SIGINT', term); clearTimeout(idle); clearInterval(stampTimer);
-    await stampTail.catch(() => {});
-    if (!closed) {
-      // A failed cleanup must terminate the process while ownership is retained.
-      // Returning to withFileLock would release it while old code could write.
-      draining = true; server.close(); for (const socket of sockets) socket.destroy();
-      try { await host?.close(); await embedding?.close?.(); await cleanupEndpoint(); }
-      catch { exit(1); await new Promise(() => {}); }
+    clearTimeout(idle); clearInterval(stampTimer);
+    // Every exit shares the same bounded cleanup, including listener/setup
+    // errors racing activation or a shutdown already started by TERM/import.
+    // Its activation join and resource closes precede return to withFileLock.
+    try { await shutdown(); }
+    catch {
+      // Never unwind the lock callback if cleanup fails. The outer bound also
+      // exits in place while activation is pending; only process death may
+      // then permit recovery of this owner's lock.
+      exit(1); await new Promise(() => {});
     }
+    process.off('SIGTERM', term); process.off('SIGINT', term);
     clearTimeout(outer); await logTail;
   }
 }
