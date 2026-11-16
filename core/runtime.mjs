@@ -4,7 +4,7 @@ import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs'
 import { registerContentWriteBoundary } from './content-write-context.mjs';
 import { contentScopeEpochGuard, assertContentOutput, contentReceiptCount, assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
 import { receiptEventTimeEnabled, cachedContentLayout, installedContentLayout, checkInstalledContentSafety } from './content-safety-schema.mjs';
-import { writeContentSuppressionInside, suppressReceiptsInside, withContentSuppressionReadInside, requireSuppressionTransaction, allocateContentKey, contentSuppressionReasonInside, contentSuppressionRequestFenceInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, hasContentSuppressionRequestInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { writeContentSuppressionInside, suppressReceiptsInside, withContentSuppressionReadInside, requireSuppressionTransaction, allocateContentKey, contentSuppressionReasonInside, memoryCorrectionDenialsInside, contentSuppressionRequestFenceInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, hasContentSuppressionRequestInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { contentReadSafety, memoryContentIdentity, receiptReadSafety, anchoredReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { roleProfileOptions } from './role-profile-input.mjs';
 import { createRoleProfileStorage } from './role-profile-storage.mjs';
@@ -342,7 +342,22 @@ export function createMemoryRuntime(input, internal) {
   function correct(ns, id, value, expectedRevision, projection = {}) {
     ready();
     return transaction(db, () => {
-      memoryWriteSafety(ns,visibleRow(ns,id));
+      try {
+        memoryWriteSafety(ns,visibleRow(ns,id));
+      } catch (error) {
+        if (error?.code !== 'memory_suppressed') throw error;
+        // The old allow path is complete. Only explain an actual denial, using
+        // that receipt-less Memory target and its Raw ancestry, never receipt facts.
+        try {
+          const current = visibleRow(ns, id);
+          const safety = contentReadSafety(db, { namespace: ns, intent: 'history',
+            ref: { type: 'memory', namespace: ns, memoryId: current.id, revision: current.revision } });
+          const denials = memoryCorrectionDenialsInside(db, ns, { memoryId: current.id, revision: current.revision });
+          if (safety.allowed || !denials.some(denial => denial.reason === safety.reason) ||
+              denials.some(denial => denial.kind !== 'raw' || denial.matchMode !== 'span' || denial.matchPath !== 'raw-ancestry'))
+            fail('memory_suppressed');
+        } catch { fail('memory_suppressed'); }
+      }
       const result=rawCards.mutate(ns,'memory-correct-'+id+'-'+expectedRevision,() => {
       const current = visibleRow(ns, id);
       if (!current) fail("memory_not_found");
@@ -353,13 +368,16 @@ export function createMemoryRuntime(input, internal) {
         AND fingerprint = ? AND deleted = 0 AND id != ?`)
         .get(...boundary(ns), value.fingerprint, id);
       if (other) fail("memory_conflict");
+      const suppression = { reason: 'correction_supersession', actionId: 'memory-correct-'+id+'-'+expectedRevision };
+      // Resolve legacy keep proof before Episode source invalidation removes its IDs.
+      if (localRawPrivacy) rawLineage.excludeMemory(ns, id, suppression);
+      localRawPrivacy?.invalidateMemoryEpisodesInside(ns, current, episodes);
       localRawPrivacy?.hideMemoryInside(ns, current);
       sourceRoots.touchMemory(ns, id);
-      const suppression = { reason: 'correction_supersession', actionId: 'memory-correct-'+id+'-'+expectedRevision };
       writeContentSuppressionInside(db, { namespace: ns, kind: 'memory', key: id, matchMode: 'revision-through',
         sourceVersion: JSON.stringify(['memory-revision-through-v1', current.revision]), ...suppression });
       suppressReceiptsInside(db, ns, id, suppression);
-      rawLineage.excludeMemory(ns, id, suppression);
+      if (!localRawPrivacy) rawLineage.excludeMemory(ns, id, suppression);
       stagedEvidence.purgeNamespace(ns);
       if (current.fingerprint !== value.fingerprint) suppress(ns, current.fingerprint);
       const now = new Date().toISOString();
@@ -385,20 +403,32 @@ export function createMemoryRuntime(input, internal) {
     });
   }
 
-  function forgetMutation(ns, id, expectedRevision, reason = 'forgotten', suppressionReason = reason === 'forgotten' ? 'user_forget' : 'purge') {
-    return rawCards.mutate(ns,'memory-forget-'+id,() => forgetMutationInside(ns,id,expectedRevision,reason,suppressionReason));
+  function forgetMutation(ns, id, expectedRevision, reason = 'forgotten', suppressionReason = reason === 'forgotten' ? 'user_forget' : 'purge', { cascade = false } = {}) {
+    return rawCards.mutate(ns,'memory-forget-'+id,() => forgetMutationInside(ns,id,expectedRevision,reason,suppressionReason,cascade === true));
   }
-  function forgetMutationInside(ns, id, expectedRevision, reason, suppressionReason) {
+  function forgetMutationInside(ns, id, expectedRevision, reason, suppressionReason, cascade) {
       const current = activeRow(ns, id);
       if (!current) return { forgotten: false, indexRevision: epoch(ns) };
       if (expectedRevision !== undefined && current.revision !== expectedRevision) fail("revision_conflict");
-      localRawPrivacy?.hideMemoryInside(ns, current);
-      sourceRoots.touchMemory(ns, id);
-      suppress(ns, current.fingerprint);
+      // Cascades manage their Episodes after all Memories have used the sources.
+      if (cascade) {
+        localRawPrivacy?.hideMemoryInside(ns, current);
+        sourceRoots.touchMemory(ns, id);
+        suppress(ns, current.fingerprint);
+      }
       const suppression = { reason: suppressionReason, actionId: 'memory-forget-'+id };
+      if (!cascade) {
+        // Resolve legacy keep proof before Episode source invalidation removes its IDs.
+        if (localRawPrivacy) rawLineage.excludeMemory(ns, id, suppression);
+        localRawPrivacy?.invalidateMemoryEpisodesInside(ns, current, episodes);
+        localRawPrivacy?.hideMemoryInside(ns, current);
+        sourceRoots.touchMemory(ns, id);
+        suppress(ns, current.fingerprint);
+      }
       writeContentSuppressionInside(db, { namespace: ns, kind: 'memory', key: id, ...suppression });
       suppressReceiptsInside(db, ns, id, suppression);
-      rawLineage.excludeMemory(ns, id, suppression);
+      if (cascade && localRawPrivacy) rawLineage.excludeMemory(ns, id, suppression);
+      if (!localRawPrivacy) rawLineage.excludeMemory(ns, id, suppression);
       stagedEvidence.purgeNamespace(ns);
       const now = new Date().toISOString();
       const effects = conflictStorage.invalidateMemory(id, { reason });
