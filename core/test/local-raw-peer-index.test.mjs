@@ -328,6 +328,7 @@ test('busy COMMIT backoff survives a process boundary, doubles to 24h, retries o
     return exec.call(this,sql);
   });
   for(const hours of [6,12,24,24]) {
+    runtime=side=undefined;
     const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
     try {assert.equal(core.list({namespace}).ok,true);} finally {await core.close();}
     const marker=retry(f.path);
@@ -357,6 +358,7 @@ test('busy COMMIT backoff survives a process boundary, doubles to 24h, retries o
     now=marker.notBefore+1;
   }
   assert.equal(attempts,4);inject=false;
+  runtime=side=undefined;
   const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
   try {assert.equal(core.list({namespace}).ok,true);} finally {await core.close();}
   assert.equal(attempts,5);assert.equal(fs.existsSync(retryPath(f.path)),false);
