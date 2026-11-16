@@ -334,22 +334,39 @@ export async function installedDaemonRuntime({ diagnostic = () => {}, recordLaun
       };
     }
     async function stop(epoch) {
-      for (const launch of launches.filter(launch => launch.db === epoch.db && !launch.observed)) {
-        await launch.recording;
-        if (launch.error) throw launch.error;
-        await recordIdentity(launch); launch.observed = true;
+      const recordingErrors = [], unobserved = launches.filter(launch => launch.db === epoch.db && !launch.observed);
+      for (const launch of unobserved) {
+        try {
+          await launch.recording;
+          if (launch.error) throw launch.error;
+          await recordIdentity(launch);
+        } catch (error) { recordingErrors.push(error); }
+        launch.observed = true;
       }
-      if (!existsSync(epoch.db)) { assert.equal(epoch.counted, 0); return; }
-      await collect(epoch.db);
-      const rows = command(epoch.session, 'status').daemons;
-      assert.equal(rows.length, epoch.running, 'serving lifetimes remain through boundary');
-      const result = command(epoch.session, 'stop');
-      assert.equal(result.still_running, 0);
-      epoch.stopped += result.stopped; epoch.boundaries++;
-      assert.equal(epoch.stopped, epoch.counted, 'stopped count equals serving lifetime growth');
-      assert.deepEqual(command(epoch.session, 'status').daemons, [], 'empty status after stop');
-      diagnostic(JSON.stringify({ servingLifetimes: epoch.counted, stopped: epoch.stopped, boundary: epoch.boundaries }));
-      epoch.running = 0;
+      const errors = [...recordingErrors];
+      try {
+        if (!existsSync(epoch.db)) { assert.equal(epoch.counted, 0); }
+        else {
+          // Discovery and the supported stop are independent of recording. A
+          // setup failure may have published without ever reaching observe().
+          await collect(epoch.db);
+          const rows = command(epoch.session, 'status').daemons;
+          if (unobserved.length) {
+            assert.ok(rows.length >= epoch.running, 'counted lifetimes persist until stop');
+            epoch.counted += rows.length - epoch.running; epoch.running = rows.length;
+          }
+          assert.equal(rows.length, epoch.running, 'serving lifetimes remain through boundary');
+          const result = command(epoch.session, 'stop');
+          assert.equal(result.still_running, 0);
+          epoch.stopped += result.stopped; epoch.boundaries++;
+          assert.equal(epoch.stopped, epoch.counted, 'stopped count equals serving lifetime growth');
+          assert.deepEqual(command(epoch.session, 'status').daemons, [], 'empty status after stop');
+          diagnostic(JSON.stringify({ servingLifetimes: epoch.counted, stopped: epoch.stopped, boundary: epoch.boundaries }));
+          epoch.running = 0;
+        }
+      } catch (error) { errors.push(error); }
+      if (errors.length === 1) throw errors[0];
+      if (errors.length) throw new AggregateError(errors, 'installed daemon stop failed');
     }
     async function finish({ stopDaemons = true } = {}) {
       if (finished) return; finished = true;
@@ -361,6 +378,11 @@ export async function installedDaemonRuntime({ diagnostic = () => {}, recordLaun
             assert.equal(epoch.stopped, epoch.counted, 'stopped count equals serving lifetime growth');
             if (epoch.expected !== undefined) assert.equal(epoch.counted, epoch.expected, 'expected serving lifetime count');
           } catch (error) { errors.push(error); }
+        }
+        // Even a failed boundary or deliberately omitted stop must discover
+        // unobserved publications before deciding whether recovery is needed.
+        for (const epoch of epochs.values()) {
+          try { await collect(epoch.db); } catch (error) { errors.push(error); }
         }
         // A negative cleanup control must fail without leaving its synthetic
         // daemon behind. Recovery still uses the saved installed support command.

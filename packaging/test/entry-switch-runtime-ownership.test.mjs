@@ -4,6 +4,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { readFile, writeFile, readdir, rm, mkdir, symlink } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { startAwareAlive } from '../../adapters/mcp/local-daemon-liveness.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { buildArtifact, command } from '../build.mjs';
 import { installedDaemonRuntime, ownedRuntimeFiles } from './fixtures/installed-daemon-runtime.mjs';
@@ -197,4 +198,52 @@ for (const value of ['', 'd-' + 'A'.repeat(32), 'flip', 'missing']) test('shared
   // Cleanup must retain the genuine publication independently of the corrupted
   // recorder, so this negative control never leaves a serving candidate.
   await accounting.stop();
+});
+
+for (const seam of ['missing', 'malformed']) test('finish cleans an unobserved publishing launch despite ' + seam + ' recording', { timeout: 120000 }, async t => {
+  const f = await runtimeOwnershipFixture(t, { recordLaunchPrefix: () => {
+    if (seam === 'missing') throw Object.assign(Error('synthetic_record_missing'), { code: 'ENOENT' });
+    return 'd-' + 'A'.repeat(32);
+  } });
+  const saved = f.session('synthetic-unobserved-owner');
+  f.runtime.register(saved);
+  await f.launch(saved);
+  // Independent publication/death evidence: never use observe() or the
+  // fixture's private owners collection to establish cleanup success.
+  const published = [];
+  for (const name of await readdir(f.runtime.directory.path)) {
+    if (!/^d-[a-f0-9]{32}\.json$/.test(name)) continue;
+    const descriptor = JSON.parse(await readFile(join(f.runtime.directory.path, name), 'utf8'));
+    if (descriptor.identity.store.path === saved.args[saved.args.indexOf('--db') + 1])
+      published.push({ prefix: name.slice(0, -5), owner: descriptor.owner });
+  }
+  assert.equal(published.length, 1, 'launch independently verified published');
+  const [{ prefix, owner }] = published;
+  assert.equal(startAwareAlive(owner), true, 'published owner independently verified live');
+  const mutate = ownedRuntimeFiles(f.runtime.directory, { prefixes: new Set([prefix]) });
+  try {
+    await assert.rejects(f.runtime.finish(), error => {
+      const errors = error instanceof AggregateError ? error.errors : [error];
+      assert.ok(errors.some(value => seam === 'missing' ? value.code === 'ENOENT' && value.message === 'synthetic_record_missing' :
+        value.code === 'ERR_ASSERTION' && /recorded launch prefix is nonempty and well-formed/.test(value.message)),
+      'original recording failure is still reported');
+      return true;
+    });
+    const alive = startAwareAlive(owner);
+    t.diagnostic(`unobserved ${seam} recorder: owner independently alive after finish=${alive}`);
+    assert.equal(alive, false, 'published owner independently verified dead after finish');
+    assert.deepEqual((await readdir(f.runtime.directory.path)).filter(name => name.startsWith(prefix + '.')), [],
+      'all published runtime files are gone');
+  } finally {
+    // Keep the red control supervised too: stop through the saved installed
+    // command before deleting its proven-owned log or installation.
+    const result = spawnSync(saved.command, [saved.args[0], 'daemon', 'stop', '--db', saved.args[saved.args.indexOf('--db') + 1]], {
+      cwd: saved.cwd, env: saved.env, encoding: 'utf8', timeout: 12000,
+    });
+    assert.equal(result.error, undefined); assert.equal(result.signal, null); assert.equal(result.status, 0);
+    assert.equal(JSON.parse(result.stdout).still_running, 0);
+    assert.equal(startAwareAlive(owner), false, 'control recovery independently verifies death');
+    for (const name of await readdir(f.runtime.directory.path)) if (name.startsWith(prefix + '.')) await mutate('remove', name);
+    t.diagnostic(`unobserved ${seam} control recovery: installed stop rc=${result.status}; owner dead`);
+  }
 });
