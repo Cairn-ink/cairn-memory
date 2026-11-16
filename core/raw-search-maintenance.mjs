@@ -201,7 +201,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
         }
         checkpoint.cleanup=ring;
         const cleanupCheckpoint=structuredClone(checkpoint);
-        const fence=checkpoint.fenceRetry?null:inventoryFence(started+maxMs);
+        const fence=checkpoint.fenceRetry?null:inventoryFence();
         if(!fence&&!checkpoint.fenceRetry)checkpoint.fenceRetry=64;
         cleanupCheckpoint.fenceRetry=checkpoint.fenceRetry;
         if(checkpoint.cycleFence!==fence){checkpoint={...checkpoint,sweep:0,after:['','',-1],cycleFence:fence,denialsReconciled:false,coverageComplete:false};}
@@ -262,7 +262,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
         // All async preparation is over before this last canonical comparison;
         // sidecar commit occurs with no canonical lock. Delivery closes its gap.
         for(const row of staged)protect(row.source);
-        if(fence&&inventoryFence(started+maxMs)!==fence){
+        if(fence&&inventoryFence()!==fence){
           // Canonical capture or denial won the race. Discard this quantum's
           // positive work and retry on the host's next turn; source movement
           // is neither an index failure nor evidence of a stalled maintainer.
