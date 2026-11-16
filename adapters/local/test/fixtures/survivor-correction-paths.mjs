@@ -74,11 +74,14 @@ export async function hostedPair(t, options, operation, ownReceipt = false) {
   }
   // Hosted public admissions cite one message; no captureRaw, local authority,
   // local Raw privacy, Raw port or ingestion is configured.
-  const core = openMemoryCore({ path: f.path }); f.workspace.defer(() => core.close());
+  // Safety-layout reads require a token counter, as every hosted model port provides.
+  const core = openMemoryCore({ path: f.path, model: { countTokens: () => 1 } }); f.workspace.defer(() => core.close());
   const sourceReceipt = { client: 'synthetic-hosted', sessionId: 'shared-session', eventId: 'shared-message',
     role: 'user', excerpt: 'Hosted source message evidence.' };
   const admit = content => ok(core.admit({ namespace: ns, memory: { content, kind: 'context' }, receipts: [sourceReceipt] })).memory;
-  const victim = admit(forgottenText), survivor = admit('synthetic retained hosted survivor');
+  // admit() returns only { id, revision }; keep the survivor's text for the needle scan.
+  const survivorText = 'synthetic retained hosted survivor';
+  const victim = admit(forgottenText), survivor = admit(survivorText);
   const receipt = sql(f.path, db => db.prepare('SELECT * FROM receipts WHERE memory_id=?').get(survivor.id));
   const layout = sql(f.path, db => {
     assert.equal(db.prepare('SELECT count(*) n FROM raw_messages').get().n, 0);
@@ -89,7 +92,7 @@ export async function hostedPair(t, options, operation, ownReceipt = false) {
     ...(operation === 'correct' ? { content: 'Hosted sibling replacement.', kind: 'context', receipt: {
       ...sourceReceipt, eventId: 'sibling-replacement', excerpt: 'Explicit sibling replacement evidence.' } } : {}) }));
   const pair = { ...f, namespace: ns, core, survivor, receipt, sourceReceipt, layout,
-    needles: [forgottenText, 'forgetneedle', survivor.content] };
+    needles: [forgottenText, 'forgetneedle', survivorText] };
   if (ownReceipt) ownReceiptFact(pair);
   assert.deepEqual(oldDecision(pair), { allowed: true }, 'main\'s outcome: receipt-less Memory preflight allows');
   return pair;
