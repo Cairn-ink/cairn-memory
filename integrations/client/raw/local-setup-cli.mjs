@@ -47,7 +47,9 @@ export async function runLocalSetupCli(args = process.argv.slice(2),io = {}) {
     } else if (args.length === 3 && ['status','activate','disable'].includes(args[0]) && args[1] === '--installation' && absolute(args[2])) {
       outcome = await createLocalRawSetup({ installationDirectory:args[2] })[args[0]]({ signal:controller.signal });
     } else if (hook && args.length === 5 && args[1] === '--installation' && absolute(args[2]) && args[3] === '--event') {
-      await runLocalRawHook({ installationDirectory:args[2],event:args[4],payload:await hookInput(stdin,controller.signal) },{ signal:controller.signal });
+      const value = process.env.CLAUDE_CODE_ENTRYPOINT;
+      const headless = typeof value === 'string' && /^sdk-/.test(value);
+      await runLocalRawHook({ installationDirectory:args[2],event:args[4],payload:await hookInput(stdin,controller.signal) },{ signal:controller.signal,headless });
       // Fail open for the native client, but never emit an internal status DTO
       // or arbitrary diagnostics as prompt/model context.
       return 0;
