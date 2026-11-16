@@ -936,7 +936,7 @@
     },
     {
       "file": "core/content-safety-schema.mjs",
-      "sha256": "b8ab45bb74c7a8db067429df8cf4fae7d938175d6abca105f2cae455de3d8269",
+      "sha256": "32afdd3e2be6a1def24070385ebac5d8db293a7caf0ec1f21bf565bdf4907b8b",
       "reason": "Reviewed Card lineage: exact lineage tuple/DDL attestation and synchronous canonical snapshot registration; feature accessors expose only privately attested revisions and add no fact-only writer."
     },
     {
@@ -1003,7 +1003,7 @@
       "file": "core/database.mjs",
       "start": "export function openDatabase(",
       "end": null,
-      "sha256": "ea45c2cf9c134e21a6941226c558a1180d10484442b5c35f4a23cfb534ede0ea",
+      "sha256": "9052441dc5acff9d32d2dcb805f2aa9bccf39028519466db39b9d94c986bc252",
       "reason": "Reviewed mechanical option A delta: remove the open-time dispatcher timeout clamp; pristine creation and all safety installation statements remain unchanged; #647: S2H creation timeout stays retryable only while the target is absent (mapping only; open-time checks unchanged)."
     }
   ],
@@ -1191,6 +1191,7 @@
         "LOCAL_RAW_PEER_INDEX_DDL",
         "LOCAL_RAW_PRIVACY_DDL",
         "attestContentSafety",
+        "attestedContentSafetyControl",
         "attestedLocalRawPackage",
         "bindContentSafetyConnection",
         "cachedContentLayout",
@@ -1217,7 +1218,8 @@
         "LOCAL_RAW_PEER_INDEX_DDL": "Attestor-owned immutable declaration of the optional local peer index; data-only, executes no SQL.",
         "LOCAL_RAW_PACKAGES": "Frozen named local package versions (v1, v2) the attestor admits exactly; data-only, executes no SQL.",
         "attestedLocalRawPackage": "Reads the local package version recorded by attestation from the module-private layout cache; no SQL or mutation capability.",
-        "localRawPackageVersion": "Pure comparison of given local schema rows against the named local package versions; no SQL, connection cache or mutation."
+        "localRawPackageVersion": "Pure comparison of given local schema rows against the named local package versions; no SQL, connection cache or mutation.",
+        "attestedContentSafetyControl": "Returns a frozen value copy of the attested content-safety control tuple from the module-private layout cache; no SQL, lineage capability or mutation."
       }
     },
     "core/content-suppression-evidence.mjs": {
