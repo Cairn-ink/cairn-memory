@@ -19,15 +19,24 @@ const forget = (f, memory) => f.core.forget({ namespace: ns, memoryId: memory.id
 const rows = (f, namespace = ns) => f.db.prepare(`SELECT * FROM private_cards WHERE ${where} ORDER BY id`).all(...boundary(namespace));
 // Scan every column, including retained JSON, rather than relying on a list of
 // fields presumed not to hold text. Include immutable seals and suppression facts.
-function assertNoMarker(f, namespace = ns) {
+function assertNoMarker(f, namespace = ns, liveBundleId = null) {
   const tables = ['private_cards', 'card_body_authorizations', 'card_body_provenance', 'card_body_sources',
     'card_effects', 'card_operations', 'content_suppressions', 'content_identity_reservations', 'suppressed'];
   for (const table of tables) {
     if (!f.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table)) continue;
     for (const row of f.db.prepare(`SELECT * FROM ${table} WHERE ${where}`).all(...boundary(namespace))) {
-      for (const [column, value] of Object.entries(row)) if (typeof value === 'string' || value instanceof Uint8Array)
+      for (const [column, value] of Object.entries(row)) if (typeof value === 'string' || value instanceof Uint8Array) {
+        // Only this still-live source's new confirmed bundle may retain it.
+        if (table === 'private_cards' && row.id === liveBundleId && row.state === 'confirmed' && column === 'body') continue;
         assert.equal(Buffer.from(value).includes(Buffer.from(marker)), false, `forgotten marker survives in ${table}.${column}`);
+      }
     }
+  }
+  for (const table of ['card_bindings', 'card_memory_bindings', 'card_raw_bindings']) {
+    if (!f.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table)) continue;
+    const bindings = f.db.prepare(`SELECT b.* FROM ${table} b JOIN private_cards c ON c.id=b.card_id
+      WHERE c.owner_id=? AND c.scope=? AND c.project_id=?`).all(...boundary(namespace));
+    assert.equal(JSON.stringify(bindings).includes(marker), false, `marker survives in ${table}`);
   }
 }
 const seals = f => ['card_body_authorizations', 'card_body_provenance', 'card_body_sources'].map(table =>
@@ -156,7 +165,8 @@ test('late failure rolls back engine text, bindings, seals, effects and bookkeep
   ok(forget(f, memories[0])); assertNoMarker(f);
 });
 
-for (const sealed of [false, true]) test(`supersession erases the old Card bytes atomically: sealed=${sealed}`, async t => {
+for (const sealed of [false, true]) for (const forgetAfterRebuild of [false, true])
+test(`supersession erases the old Card bytes atomically: sealed=${sealed}, forget after rebuild=${forgetAfterRebuild}`, async t => {
   let generation = 0;
   const model = scriptedConsolidator(({ input }) => {
     const memory = generation++ === 0 ? input.memories.find(value => value.content.includes(marker))
@@ -165,6 +175,10 @@ for (const sealed of [false, true]) test(`supersession erases the old Card bytes
   });
   const f = sealed ? await lineageFixture(t, { options: { model } }) : engineCardFixture(t, { model });
   const memories = seed(f), w = worker(f, model), first = (await w.pass()).built[0]; assert.ok(first);
+  const oldBody = rows(f).find(row => row.id === first.id).body;
+  // Admission returns metadata; retain canonical text before the rebuild.
+  const markerSource = f.db.prepare('SELECT deleted,currentness,content FROM memories WHERE id=?').get(memories[0].id);
+  assert.ok(markerSource.content.includes(marker));
   const retainedSeals = seals(f);
   // Add a source while preserving the marker in its original Memory; only
   // the superseded Card's copy must disappear.
@@ -179,17 +193,28 @@ for (const sealed of [false, true]) test(`supersession erases the old Card bytes
   // A failure after purge must roll back the old payload and its bindings.
   assert.throws(() => withStatementFailure(/^INSERT INTO private_cards VALUES\(/, () =>
     w.storage.commit(ns, cluster, { body: 'Synthetic replacement.' }, '2026-07-01T00:00:00.000Z', () => {}), db => {
-      assert.equal(rows({ db }).find(row => row.id === first.id).body, null);
-      assert.equal(db.prepare('SELECT count(*) n FROM card_memory_bindings WHERE card_id=?').get(first.id).n, 0);
+      const old = rows({ db }).find(row => row.id === first.id);
+      assert.equal(old.state, 'deleted'); assert.equal(old.title, null); assert.equal(old.body, null);
+      for (const table of ['card_bindings', 'card_memory_bindings', 'card_raw_bindings']) {
+        if (db.prepare("SELECT 1 FROM sqlite_master WHERE name=?").get(table))
+          assert.equal(db.prepare(`SELECT count(*) n FROM ${table} WHERE card_id=?`).get(first.id).n, 0);
+      }
     }), /synthetic_abort/);
   assert.deepEqual(rows(f), before);
   assert.equal(f.db.prepare('SELECT count(*) n FROM card_memory_bindings WHERE card_id=?').get(first.id).n, memories.length);
   const next = await w.pass(); assert.equal(next.built.length, 1, JSON.stringify(next));
   assert.equal(next.built[0].clusterKey, first.clusterKey);
   assert.equal(next.deleted, 1, 'the rebuild counts the body it purged in this pass');
-  assertNoMarker(f);
+  const current = rows(f).find(row => row.id === next.built[0].id);
+  const newBody = current.body;
+  assert.equal(current.state, 'confirmed'); assert.ok(current.body.includes(marker));
+  const source = f.db.prepare('SELECT deleted,currentness,content FROM memories WHERE id=?').get(memories[0].id);
+  assert.deepEqual({ ...source }, { deleted: 0, currentness: 'current', content: markerSource.content });
+  assert.ok(next.built[0].sourceRevisions.some(ref => ref.memoryId === memories[0].id));
+  assertNoMarker(f, ns, current.id);
   const old = rows(f).find(row => row.id === first.id);
   assert.equal(old.state, 'deleted'); assert.equal(old.title, null); assert.equal(old.body, null);
+  assert.notEqual(oldBody, newBody);
   for (const table of ['card_bindings', 'card_memory_bindings', 'card_raw_bindings']) {
     if (f.db.prepare("SELECT 1 FROM sqlite_master WHERE name=?").get(table))
       assert.equal(f.db.prepare(`SELECT count(*) n FROM ${table} WHERE card_id=?`).get(first.id).n, 0);
@@ -198,6 +223,51 @@ for (const sealed of [false, true]) test(`supersession erases the old Card bytes
   assert.equal(w.storage.cards(ns).find(card => card.id === next.built[0].id).status, 'current');
   assertHidden(f, w, [old]);
   assert.equal((await w.pass()).modelCalls, 0, 'unchanged sources do not rebuild');
+  if (forgetAfterRebuild) {
+    const receipts = f.db.prepare('SELECT id FROM receipts WHERE memory_id=?').all(memories[0].id).map(row => row.id);
+    const calls = model.calls.length, prepare = DatabaseSync.prototype.prepare;
+    let observed = false;
+    const probe = t.mock.method(DatabaseSync.prototype, 'prepare', function(sql) {
+      if (sql === 'DELETE FROM receipts WHERE memory_id = ?') {
+        assert.equal(this.isTransaction, true);
+        assertNoMarker({ db: this });
+        assert.deepEqual(rows({ db: this }).find(row => row.id === old.id), old,
+          'forget leaves the already purged predecessor unchanged');
+        const replacement = rows({ db: this }).find(row => row.id === current.id);
+        assert.equal(replacement.state, 'deleted'); assert.equal(replacement.title, null); assert.equal(replacement.body, null);
+        for (const table of ['card_bindings', 'card_memory_bindings', 'card_raw_bindings']) {
+          if (this.prepare("SELECT 1 FROM sqlite_master WHERE name=?").get(table))
+            assert.equal(this.prepare(`SELECT count(*) n FROM ${table} WHERE card_id=?`).get(current.id).n, 0);
+        }
+        observed = true;
+      }
+      return Reflect.apply(prepare, this, [sql]);
+    });
+    let forgotten;
+    try { forgotten = ok(forget(f, memories[0])); }
+    finally { probe.mock.restore(); }
+    assert.equal(observed, true, 'the replacement is purged before forget commits; the predecessor stays erased');
+    assertNoMarker(f);
+    for (const { name } of f.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all()) {
+      const values = f.db.prepare('SELECT * FROM "' + name.replaceAll('"', '""') + '"').all();
+      assert.equal(JSON.stringify(values).includes(marker), false, `forgotten marker survives in ${name}`);
+    }
+    for (const row of rows(f)) {
+      assert.equal(row.state, 'deleted'); assert.equal(row.title, null); assert.equal(row.body, null);
+      for (const table of ['card_bindings', 'card_memory_bindings', 'card_raw_bindings']) {
+        if (f.db.prepare("SELECT 1 FROM sqlite_master WHERE name=?").get(table))
+          assert.equal(f.db.prepare(`SELECT count(*) n FROM ${table} WHERE card_id=?`).get(row.id).n, 0);
+      }
+    }
+    const records = f.db.prepare("SELECT * FROM card_operations WHERE method IN ('consolidateAttempt','consolidateOutcome')").all();
+    assert.deepEqual(records, []);
+    const delivered = w.storage.deliver(ns, structuredClone(next.built));
+    assert.deepEqual(delivered, []);
+    for (const needle of [marker, memories[0].id, ...receipts])
+      assert.equal(JSON.stringify({ forgotten, records, delivered }).includes(needle), false);
+    assert.equal(model.calls.length, calls, 'forget makes no model request');
+    assertHidden(f, w, [old, current]);
+  }
 });
 
 test('publication purges only its own engine routing key and namespace', async t => {

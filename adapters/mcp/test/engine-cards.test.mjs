@@ -8,7 +8,7 @@ import { contextCall } from './context-support.mjs';
 
 test('configured model builds Cards in default maintenance with authoring tools off, then falls back after forget', { timeout: 30000 }, async t => {
   t.mock.method(globalThis, 'fetch', () => assert.fail('offline scripted model cannot use a provider'));
-  const f = engineCardFixture(t), memories = f.seed();
+  const f = engineCardFixture(t), memories = f.seed(12);
   const server = createCairnServer({ path: f.path, namespace: ns, model: f.model, raw: false });
   f.workspace.defer(() => server.close()); assert.equal(await server.contextCounterReady, true);
   const client = new Client({ name: 'synthetic-engine-card-client', version: '1' });
@@ -27,7 +27,9 @@ test('configured model builds Cards in default maintenance with authoring tools 
     assert.fail(JSON.stringify(result));
   };
   const packed = await until(items => items.some(item => item.ref.type === 'card'));
-  assert.ok(packed.value.items.every(item => item.ref.type === 'card'));
+  assert.equal(packed.value.items.some(item => item.ref.type === 'memory'), false, 'twelve verbatim sources fit');
+  const body = packed.value.items.find(item => item.ref.type === 'card').body;
+  assert.ok(packed.value.items.filter(item => item.ref.type === 'memory').every(item => !body.includes(item.ref.id)));
   assert.equal(f.model.calls.length, 1);
   ok(f.core.forget({ namespace: ns, memoryId: memories[0].id, expectedRevision: memories[0].revision }));
   const fallback = await until(items => items.length > 0 && items.every(item => item.ref.type === 'memory'));
