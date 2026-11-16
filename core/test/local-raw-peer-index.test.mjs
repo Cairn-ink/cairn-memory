@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
 import { DatabaseSync } from 'node:sqlite';
@@ -11,13 +11,23 @@ import { openMemoryCore } from '../index.mjs';
 import { attestContentSafety, attestedLocalRawPackage, LOCAL_RAW_PACKAGES, LOCAL_RAW_PRIVACY_DDL, LOCAL_RAW_PEER_INDEX_DDL } from '../content-safety-schema.mjs';
 import { installLocalRawPeerIndex, readLocalRawPeerIndexStatus } from '../local-authority-schema.mjs';
 import { inspectExistingStorePin } from '../existing-store.mjs';
+import { openDatabase, localRawPeerIndexAdmission } from '../database.mjs';
 import { readSqliteFixture } from '../testing/content-safety-s2h-fixture.mjs';
 import { safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
 import { createCommitDispatcher } from '../commit-dispatch.mjs';
 
 const namespace = { ownerId: 'synthetic-owner', scope: 'personal', projectId: null };
-const retryPath = path => path + '.peer-index-retry';
-const retry = path => JSON.parse(fs.readFileSync(retryPath(path), 'utf8'));
+const retryPrefix = path => basename(path) + '.peer-index-retry.';
+const retryNames = path => fs.readdirSync(dirname(path)).filter(name=>name.startsWith(retryPrefix(path)));
+const retryPath = (path, {notBefore,delayMs,reason}) => path + '.peer-index-retry.' + notBefore + '.' + delayMs + '.' + reason;
+const putRetry = (path, value) => { const marker=retryPath(path,value);fs.writeFileSync(marker,'');return marker; };
+const retry = path => {
+  const names=retryNames(path);assert.equal(names.length,1);
+  const [notBefore,delayMs,reason]=names[0].slice(retryPrefix(path).length).split('.');
+  return {notBefore:Number(notBefore),delayMs:Number(delayMs),reason};
+};
+const offlineCommand = path => "cairn-memory raw index --db '" + path.replaceAll("'", "'\\''") + "'";
+const offlineArgv = path => ['cairn-memory','raw','index','--db',path];
 const packageProbe = sql => sql.startsWith('SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL AND (name GLOB');
 const nativeError = errcode => Object.assign(Error('synthetic native failure'), { code: 'ERR_SQLITE_ERROR', errcode });
 const indexDDL = LOCAL_RAW_PEER_INDEX_DDL.join('\n');
@@ -98,7 +108,7 @@ for(const rowid of [0,2_000_000,2_000_001]) test(`writable v1 open uses rowid th
   }
 });
 
-test('attested v2 build path executes zero SQL and no filesystem probe',async t=>{
+test('attested v2 helper executes zero SQL and no space probe',async t=>{
   // The adversarial matrix tests v2's full-schema cache; use that inherited
   // fixture here too, without loading a fixed historical git revision.
   const {spawnSync}=await import('node:child_process');
@@ -129,17 +139,17 @@ test('status is read-only and returns the documented present / threshold / defer
   const f=await store(t);seed(f.db,2_000_001);attestContentSafety(f.db);
   const statfs=space(t,f.path,0),statements=trace(t);
   const expected={present:false,overThreshold:true,deferredReason:null,deferredUntil:null,
-    offlineCommand:'cairn-memory raw index --db '+f.path};
+    offlineCommand:offlineCommand(f.path),offlineArgv:offlineArgv(f.path)};
   assert.deepEqual(readLocalRawPeerIndexStatus(f.db,f.path),expected);
   assert.equal(statements.length,2);assert.ok(statements.every(sql=>sql.startsWith('SELECT')));
   assert.equal(statfs.mock.callCount(),0);
   const notBefore=Date.now()+6*60*60*1000;
-  fs.writeFileSync(retryPath(f.path),JSON.stringify({notBefore,delayMs:6*60*60*1000,reason:'busy'}));
+  putRetry(f.path,{notBefore,delayMs:6*60*60*1000,reason:'busy'});
   statements.length=0;
   assert.deepEqual(readLocalRawPeerIndexStatus(f.db,f.path),{...expected,deferredReason:'busy',deferredUntil:notBefore});
   assert.equal(statements.length,2);assert.equal(retry(f.path).notBefore,notBefore);
   f.db.exec(indexDDL);statements.length=0;
-  assert.deepEqual(readLocalRawPeerIndexStatus(f.db,f.path),{...expected,present:true,deferredReason:'busy',deferredUntil:notBefore});
+  assert.deepEqual(readLocalRawPeerIndexStatus(f.db,f.path),{...expected,present:true});
   assert.equal(statements.length,2);assert.equal(statfs.mock.callCount(),0);
 });
 
@@ -221,7 +231,7 @@ test('non-SQLite programming errors propagate after side rollback and close',asy
   assert.throws(()=>openMemoryCore({path:f.path,raw:true,rawSearch:false}),{name:'TypeError',message:'synthetic programming error'});
   assert.equal(build.injections,1);assert.equal(build.closed,true);
   assert.equal(schema(f.db),before);assert.deepEqual(readSqliteFixture(f.path),bytes);
-  assert.equal(fs.existsSync(retryPath(f.path)),false);
+  assert.deepEqual(retryNames(f.path),[]);
 });
 
 test('native ROLLBACK failure retires the builder and leaves the runtime usable at v1',async t=>{
@@ -310,6 +320,7 @@ test('successful L1 side build leaves the same runtime readable and cookie-attes
   try {
     assert.notEqual(build.side,build.runtime);assert.equal(build.closed,true);
     assert.equal(build.statements.filter(sql=>sql===indexDDL).length,1);
+    assert.equal(readLocalRawPeerIndexStatus(build.runtime,f.path).present,true);
     assert.equal(core.list({namespace}).ok,true);
     assert.equal(attestedLocalRawPackage(build.runtime),'v2');
     attestContentSafety(f.db);assert.equal(attestedLocalRawPackage(f.db),'v2');
@@ -355,164 +366,152 @@ test('busy COMMIT backoff survives a process boundary, doubles to 24h, retries o
       assert.deepEqual(JSON.parse(child.stdout),{sqlProbes:0,statfs:0,connections:1,read:true});
       assert.deepEqual(retry(f.path),marker);
     }
-    now=marker.notBefore+1;
+    now=marker.notBefore; // Equality is the final valid instant; a past deadline is ignored.
   }
   assert.equal(attempts,4);inject=false;
   runtime=side=undefined;
   const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
   try {assert.equal(core.list({namespace}).ok,true);} finally {await core.close();}
-  assert.equal(attempts,5);assert.equal(fs.existsSync(retryPath(f.path)),false);
+  assert.equal(attempts,5);assert.deepEqual(retryNames(f.path),[]);
   attestContentSafety(f.db);assert.equal(attestedLocalRawPackage(f.db),'v2');
 });
 
-for(const contents of ['{broken','null','{}','{"notBefore":"later","delayMs":21600000,"reason":"busy"}'])
-test(`malformed retry marker is ignored (${contents})`,async t=>{
-  const f=await store(t,{l1:true});space(t,f.path);fs.writeFileSync(retryPath(f.path),contents);
-  const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
-  try {assert.equal(core.list({namespace}).ok,true);} finally {await core.close();}
-  assert.equal(fs.existsSync(retryPath(f.path)),false);
-  attestContentSafety(f.db);assert.equal(attestedLocalRawPackage(f.db),'v2');
-});
-
-test('deferral writes a private regular retry marker with only validated fields and no temporary files',async t=>{
+test('deferral writes exactly one empty private regular encoded marker and no temporary files',async t=>{
   const f=await store(t,{l1:true});space(t,f.path,0);
   const now=Date.now();t.mock.method(Date,'now',()=>now);
+  putRetry(f.path,{notBefore:now-1,delayMs:21600000,reason:'busy'});
+  fs.writeFileSync(f.path+'.peer-index-retry.invalid','');
   const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
   try {assert.equal(core.list({namespace}).ok,true);} finally {await core.close();}
-  assert.equal(fs.lstatSync(retryPath(f.path)).isFile(),true);
-  assert.equal(fs.statSync(retryPath(f.path)).mode&0o777,0o600);
-  const marker=retry(f.path);
-  assert.deepEqual(Object.keys(marker).sort(),['delayMs','notBefore','reason']);
-  assert.equal(Number.isSafeInteger(marker.notBefore),true);assert.equal(Number.isSafeInteger(marker.delayMs),true);
-  assert.ok(['busy','io','full','interrupt','space','error'].includes(marker.reason));
-  assert.deepEqual(marker,{notBefore:now+6*60*60*1000,delayMs:6*60*60*1000,reason:'space'});
+  const expected={notBefore:now+21600000,delayMs:21600000,reason:'space'};
+  assert.deepEqual(retry(f.path),expected);
+  const stat=fs.lstatSync(retryPath(f.path,expected));
+  assert.equal(stat.isFile(),true);assert.equal(stat.size,0);assert.equal(stat.mode&0o777,0o600);
   assert.deepEqual(localNames(f.db),packageNames('v1'));
   assert.deepEqual(fs.readdirSync(dirname(f.path)).filter(name=>name.endsWith('.tmp')),[]);
 });
 
-for(const dangling of [false,true]) for(const deferred of [false,true])
-test(`retry marker symlink is ignored and its target preserved (dangling=${dangling}, deferred=${deferred})`,async t=>{
-  const f=await store(t,{l1:true}),target=join(dirname(f.path),'retry-target.json');
-  const bytes=Buffer.from(JSON.stringify({notBefore:Number.MAX_SAFE_INTEGER,delayMs:6*60*60*1000,reason:'busy'}));
-  if(!dangling)fs.writeFileSync(target,bytes);
-  fs.symlinkSync(target,retryPath(f.path));assert.equal(fs.lstatSync(retryPath(f.path)).isSymbolicLink(),true);
-  const statfs=space(t,f.path,deferred?0:1e12),statements=trace(t);
+for(const suffix of [
+  'broken','1.21600000.busy.extra','-1.21600000.busy','later.21600000.busy',
+  '9007199254740992.21600000.busy','NOW.21600000.unknown','NOW.21600000.5',
+  'NOW.21600000.','NOW.0.busy','NOW.21599999.busy','NOW.86400001.busy',
+  'NOW.21600000x.busy','NOW.21600000.5.busy','NOW.9007199254740992.busy',
+  'PAST.21600000.busy','FUTURE.21600000.busy',
+]) test(`invalid or inactive retry name is ignored (${suffix})`,async t=>{
+  const f=await store(t,{l1:true}),now=Date.now();t.mock.method(Date,'now',()=>now);
+  const name=suffix.replace('NOW',String(now+21600000)).replace('PAST',String(now-1)).replace('FUTURE',String(now+86400001));
+  fs.writeFileSync(f.path+'.peer-index-retry.'+name,'content is never consulted');
+  assert.equal(readLocalRawPeerIndexStatus(f.db,f.path).deferredUntil,null);
+  const statfs=space(t,f.path),statements=trace(t);
   const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
   try {assert.equal(core.list({namespace}).ok,true);} finally {await core.close();}
-  assert.equal(statfs.mock.callCount(),1);
-  assert.equal(statements.filter(sql=>sql===indexDDL).length,deferred?0:1);
-  attestContentSafety(f.db);assert.equal(attestedLocalRawPackage(f.db),deferred?'v1':'v2');
-  if(deferred) {
-    assert.equal(fs.lstatSync(retryPath(f.path)).isFile(),true);
-    assert.equal(retry(f.path).reason,'space');assert.equal(retry(f.path).delayMs,6*60*60*1000);
-  } else assert.throws(()=>fs.lstatSync(retryPath(f.path)),{code:'ENOENT'});
-  if(dangling)assert.throws(()=>fs.lstatSync(target),{code:'ENOENT'});
-  else assert.deepEqual(fs.readFileSync(target),bytes);
-  assert.deepEqual(fs.readdirSync(dirname(f.path)).filter(name=>name.endsWith('.tmp')),[]);
+  assert.equal(statfs.mock.callCount(),1);assert.equal(statements.filter(sql=>sql===indexDDL).length,1);
+  assert.deepEqual(retryNames(f.path),[]);
 });
 
-for(const deferred of [false,true])
-test(`retry marker directory is ignored and preserved without failing open (deferred=${deferred})`,async t=>{
-  const f=await store(t,{l1:true}),marker=retryPath(f.path);
-  fs.mkdirSync(marker);fs.writeFileSync(join(marker,'keep'),'directory sentinel');
-  const before=fs.lstatSync(marker),statfs=space(t,f.path,deferred?0:1e12),statements=trace(t);
-  const rename=fs.renameSync;let attempts=0,renameFailed=false;
-  const mock=t.mock.method(fs,'renameSync',function(from,to){
-    if(to===marker)attempts++;
-    try{return rename.call(this,from,to);}catch(error){if(to===marker)renameFailed=true;throw error;}
+test('name-only reader selects the largest valid deadline within 24h and never inspects entries',async t=>{
+  const f=await store(t,{l1:true}),now=Date.now();t.mock.method(Date,'now',()=>now);
+  const markers=[
+    {notBefore:now,delayMs:21600000,reason:'busy'},
+    {notBefore:now+21600000,delayMs:21600000,reason:'io'},
+    {notBefore:now+86400000,delayMs:86400000,reason:'full'},
+    {notBefore:now+86400001,delayMs:86400000,reason:'error'},
+  ];
+  for(const marker of markers)putRetry(f.path,marker);
+  const statfs=space(t,f.path),statements=trace(t);
+  const mocks=[];
+  for(const operation of ['open','openSync','read','readSync','readFile','readFileSync','readlink','readlinkSync','stat','statSync','lstatSync']){
+    const original=fs[operation];
+    mocks.push(t.mock.method(fs,operation,function(path,...args){
+      assert.ok(!String(path).includes('.peer-index-retry.'),'marker '+operation);
+      return original.call(this,path,...args);
+    }));
+  }
+  syncBuiltinESMExports();t.after(()=>{for(const mock of mocks)mock.mock.restore();syncBuiltinESMExports();});
+  const status=readLocalRawPeerIndexStatus(f.db,f.path);
+  assert.equal(status.deferredUntil,markers[2].notBefore);assert.equal(status.deferredReason,'full');
+  statements.length=0;
+  for(let i=0;i<3;i++)assert.deepEqual(installLocalRawPeerIndex(f.db,f.path),{status:'skipped',reason:'backoff'});
+  assert.deepEqual(statements,[]);assert.equal(statfs.mock.callCount(),0);
+});
+
+for(const kind of ['swapped symlink','companion hard link','FIFO']) for(const encoded of [false,true])
+test(`marker ${kind} never opens its entry or target across two runtime opens (encoded=${encoded})`,async t=>{
+  const f=await store(t,{l1:true}),statfs=space(t,f.path),statements=trace(t);
+  // An encoded name can defer regardless of inode type; invalid names cannot.
+  // In either case the entry/target itself is never inspected.
+  const now=Date.now();t.mock.method(Date,'now',()=>now);
+  const marker=encoded?retryPath(f.path,{notBefore:now+21600000,delayMs:21600000,reason:'busy'})
+    :f.path+'.peer-index-retry.'+kind.replaceAll(' ','-');
+  const companion=f.path+'-journal';
+  if(kind==='swapped symlink')fs.symlinkSync(f.path,marker);
+  if(kind==='companion hard link'){
+    // A rollback leaves an empty persistent journal, created through SQLite.
+    f.db.exec('PRAGMA journal_mode=PERSIST; BEGIN IMMEDIATE; UPDATE store_metadata SET store_id=store_id; ROLLBACK');
+    fs.linkSync(companion,marker);
+  }
+  if(kind==='FIFO'){
+    const child=spawnSync('mkfifo',[marker],{encoding:'utf8'});assert.equal(child.status,0,child.stderr);
+  }
+  const mocks=[];
+  for(const operation of ['open','openSync','read','readSync','readFile','readFileSync','readlink','readlinkSync','stat','statSync','lstatSync']){
+    const original=fs[operation];
+    mocks.push(t.mock.method(fs,operation,function(path,...args){
+      assert.notEqual(String(path),marker,'marker '+operation);
+      return original.call(this,path,...args);
+    }));
+  }
+  const readdir=fs.readdirSync;let scans=0;
+  mocks.push(t.mock.method(fs,'readdirSync',function(path,...args){
+    const names=readdir.call(this,path,...args);
+    if(path===dirname(f.path)&&names.includes(basename(marker))&&kind==='swapped symlink'){
+      // Swap after enumeration, before the reader can consume the name.
+      fs.unlinkSync(marker);fs.symlinkSync(++scans%2?companion:f.path,marker);
+    }
+    return names;
+  }));
+  syncBuiltinESMExports();t.after(()=>{for(const mock of mocks)mock.mock.restore();syncBuiltinESMExports();});
+  for(let i=0;i<2;i++){
+    if(i&&!encoded)fs.symlinkSync(f.path,marker);
+    const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
+    try {assert.equal(core.list({namespace}).ok,true);} finally {await core.close();}
+    assert.deepEqual(retryNames(f.path),encoded?[basename(marker)]:[]);
+  }
+  assert.equal(statements.filter(sql=>sql===indexDDL).length,encoded?0:1);assert.equal(statfs.mock.callCount(),encoded?0:1);
+});
+
+test('success unlinks all matching names, tolerates directories, and never unlinks when enumeration is empty',async t=>{
+  const f=await store(t,{l1:true});f.db.exec(indexDDL);attestContentSafety(f.db);
+  const dir=f.path+'.peer-index-retry.directory';fs.mkdirSync(dir);
+  const marker=putRetry(f.path,{notBefore:Date.now()+21600000,delayMs:21600000,reason:'busy'});
+  const other=f.path+'.peer-index-retry.malformed';fs.writeFileSync(other,'');
+  const unlink=fs.unlinkSync,removed=[];
+  const mock=t.mock.method(fs,'unlinkSync',function(path){removed.push(path);return unlink.call(this,path);});
+  syncBuiltinESMExports();t.after(()=>{mock.mock.restore();syncBuiltinESMExports();});
+  assert.deepEqual(installLocalRawPeerIndex(f.db,f.path),{status:'present',reason:null});
+  assert.deepEqual(removed.sort(),[dir,marker,other].sort());assert.equal(fs.lstatSync(dir).isDirectory(),true);
+  fs.rmdirSync(dir);removed.length=0;
+  assert.deepEqual(installLocalRawPeerIndex(f.db,f.path),{status:'present',reason:null});
+  assert.deepEqual(removed,[]);
+});
+
+for(const operation of ['readdirSync','writeFileSync','renameSync','unlinkSync'])
+test(`marker ${operation} failure cannot fail an L1 open`,async t=>{
+  const f=await store(t,{l1:true}),before=schema(f.db),bytes=readSqliteFixture(f.path);
+  const statfs=space(t,f.path,0);
+  const marker=f.path+'.peer-index-retry.invalid';fs.writeFileSync(marker,'');
+  const original=fs[operation];let reached=0;
+  const mock=t.mock.method(fs,operation,function(path,...args){
+    if(operation==='readdirSync'?path===dirname(f.path):String(path).includes('.peer-index-retry.')){
+      reached++;throw Object.assign(Error('marker denied'),{code:'EPERM'});
+    }
+    return original.call(this,path,...args);
   });
   syncBuiltinESMExports();t.after(()=>{mock.mock.restore();syncBuiltinESMExports();});
   const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
-  try {assert.equal(core.list({namespace}).ok,true);} finally {await core.close();}
-  assert.equal(statfs.mock.callCount(),1);
-  assert.equal(statements.filter(sql=>sql===indexDDL).length,deferred?0:1);
-  assert.equal(attempts,deferred?1:0);assert.equal(renameFailed,deferred);
-  attestContentSafety(f.db);assert.equal(attestedLocalRawPackage(f.db),deferred?'v1':'v2');
-  const after=fs.lstatSync(marker);
-  assert.equal(after.isDirectory(),true);assert.equal(after.ino,before.ino);assert.equal(after.dev,before.dev);
-  assert.equal(fs.readFileSync(join(marker,'keep'),'utf8'),'directory sentinel');
-  assert.deepEqual(fs.readdirSync(dirname(f.path)).filter(name=>name.endsWith('.tmp')),[]);
-});
-
-test('a regular retry marker larger than 4096 bytes is ignored even with valid JSON',async t=>{
-  const f=await store(t,{l1:true}),statfs=space(t,f.path),statements=trace(t);
-  const marker={notBefore:Number.MAX_SAFE_INTEGER,delayMs:6*60*60*1000,reason:'busy'};
-  const contents=JSON.stringify(marker).padEnd(4097,' ');
-  assert.deepEqual(JSON.parse(contents),marker);fs.writeFileSync(retryPath(f.path),contents);
-  const stat=fs.lstatSync(retryPath(f.path));assert.equal(stat.isFile(),true);assert.equal(stat.size,4097);
-  const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
-  try {assert.equal(core.list({namespace}).ok,true);} finally {await core.close();}
-  assert.equal(statfs.mock.callCount(),1);assert.equal(statements.filter(sql=>sql===indexDDL).length,1);
-  assert.throws(()=>fs.lstatSync(retryPath(f.path)),{code:'ENOENT'});
-  attestContentSafety(f.db);assert.equal(attestedLocalRawPackage(f.db),'v2');
-});
-
-for(const [label,invalid] of [
-  ['negative notBefore',{notBefore:-1}],
-  ['string notBefore',{notBefore:String(Number.MAX_SAFE_INTEGER)}],
-  ['null notBefore',{notBefore:null}],
-  ['boolean notBefore',{notBefore:true}],
-  ['fractional notBefore',{notBefore:0.5}],
-  ['unsafe notBefore',{notBefore:Number.MAX_SAFE_INTEGER+1}],
-  ['string delayMs',{delayMs:'21600000'}],
-  ['null delayMs',{delayMs:null}],
-  ['boolean delayMs',{delayMs:true}],
-  ['fractional delayMs',{delayMs:21600000.5}],
-  ['unsafe delayMs',{delayMs:Number.MAX_SAFE_INTEGER+1}],
-  ['delayMs below six hours',{delayMs:6*60*60*1000-1}],
-  ['delayMs above 24 hours',{delayMs:24*60*60*1000+1}],
-  ['unknown reason',{reason:'unknown'}],
-  ['numeric reason',{reason:5}],
-  ['null reason',{reason:null}],
-  ['object reason',{reason:{}}],
-  ['array reason',{reason:['busy']}],
-]) test(`retry marker with invalid fields is ignored (${label})`,async t=>{
-  const f=await store(t,{l1:true}),statfs=space(t,f.path),statements=trace(t);
-  fs.writeFileSync(retryPath(f.path),JSON.stringify({notBefore:Number.MAX_SAFE_INTEGER,delayMs:6*60*60*1000,reason:'busy',...invalid}));
-  const status=readLocalRawPeerIndexStatus(f.db,f.path);
-  assert.equal(status.deferredUntil,null);assert.equal(status.deferredReason,null);
-  const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
-  try {assert.equal(core.list({namespace}).ok,true);} finally {await core.close();}
-  assert.equal(statfs.mock.callCount(),1);assert.equal(statements.filter(sql=>sql===indexDDL).length,1);
-  assert.throws(()=>fs.lstatSync(retryPath(f.path)),{code:'ENOENT'});
-  attestContentSafety(f.db);assert.equal(attestedLocalRawPackage(f.db),'v2');
-});
-
-for(const padded of [false,true])
-test(`valid retry markers allow extra keys and up to 4096 bytes (padded=${padded})`,async t=>{
-  const f=await store(t,{l1:true}),statfs=space(t,f.path),statements=trace(t);
-  // The reader validates required values, not an exact key set; the writer emits only three keys.
-  const marker={notBefore:Number.MAX_SAFE_INTEGER,delayMs:24*60*60*1000,reason:'busy',extra:'allowed'};
-  const contents=JSON.stringify(marker).padEnd(padded?4096:0,' ');fs.writeFileSync(retryPath(f.path),contents);
-  assert.equal(fs.statSync(retryPath(f.path)).size,padded?4096:Buffer.byteLength(contents));
-  const status=readLocalRawPeerIndexStatus(f.db,f.path);
-  assert.equal(status.deferredUntil,marker.notBefore);assert.equal(status.deferredReason,marker.reason);
-  const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
-  try {assert.equal(core.list({namespace}).ok,true);} finally {await core.close();}
-  assert.equal(statfs.mock.callCount(),0);assert.equal(statements.filter(sql=>sql===indexDDL).length,0);
-  assert.equal(fs.readFileSync(retryPath(f.path),'utf8'),contents);assert.deepEqual(retry(f.path),marker);
-  attestContentSafety(f.db);assert.equal(attestedLocalRawPackage(f.db),'v1');
-});
-
-for(const operation of ['readFileSync','writeFileSync','renameSync','rmSync'])
-test(`marker ${operation} failure cannot fail an L1 open`,async t=>{
-  const f=await store(t,{l1:true}),before=schema(f.db),bytes=readSqliteFixture(f.path);
-  const statfs=space(t,f.path,operation==='readFileSync'?1e12:0);
-  if(operation==='readFileSync')fs.writeFileSync(retryPath(f.path),'{}');
-  const original=fs[operation];let reached=0;
-  const mock=t.mock.method(fs,operation,function(path,...args){
-    if(String(path).startsWith(retryPath(f.path))){reached++;throw Object.assign(Error('marker denied'),{code:'EPERM'});}
-    return original.call(this,path,...args);
-  });
-  syncBuiltinESMExports();
-  t.after(()=>{mock.mock.restore();syncBuiltinESMExports();});
-  const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
   try {
-    assert.equal(core.list({namespace}).ok,true);
-    if(operation!=='readFileSync'){
-      assert.equal(schema(f.db),before);assert.deepEqual(readSqliteFixture(f.path),bytes);
-    }
-    assert.ok(reached>0);assert.equal(statfs.mock.callCount(),1);
+    assert.equal(core.list({namespace}).ok,true);assert.equal(schema(f.db),before);
+    assert.deepEqual(readSqliteFixture(f.path),bytes);assert.ok(reached>0);assert.equal(statfs.mock.callCount(),1);
   } finally {await core.close();}
 });
 
@@ -587,12 +586,223 @@ test('attested v2 status has the documented shape and present clears an expired 
   const statfs=space(t,f.path),statements=trace(t);
   assert.deepEqual(readLocalRawPeerIndexStatus(f.db,f.path),{
     present:true,overThreshold:false,deferredReason:null,deferredUntil:null,
-    offlineCommand:'cairn-memory raw index --db '+f.path,
+    offlineCommand:offlineCommand(f.path),offlineArgv:offlineArgv(f.path),
   });
-  assert.deepEqual(statements,['SELECT max(rowid) AS n FROM raw_messages']);
-  fs.writeFileSync(retryPath(f.path),JSON.stringify({notBefore:Date.now()-1,delayMs:21600000,reason:'busy'}));
+  assert.equal(statements.length,2);assert.ok(packageProbe(statements[0]));assert.equal(statements[1],'SELECT max(rowid) AS n FROM raw_messages');
+  putRetry(f.path,{notBefore:Date.now()-1,delayMs:21600000,reason:'busy'});
   statements.length=0;
   assert.deepEqual(installLocalRawPeerIndex(f.db,f.path),{status:'present',reason:null});
   assert.deepEqual(statements,[]);assert.equal(statfs.mock.callCount(),0);
-  assert.equal(fs.existsSync(retryPath(f.path)),false);
+  assert.deepEqual(retryNames(f.path),[]);
+});
+
+for(const existing of [false,true]) test(`side builder defers a valid replacement store without DDL (existingStore=${existing})`,async t=>{
+  const a=await store(t,{l1:true}),b=await store(t,{l1:true});space(t,a.path);
+  const beforeA=schema(a.db),beforeB=schema(b.db),bytesA=readSqliteFixture(a.path),bytesB=readSqliteFixture(b.path);
+  const held=join(dirname(a.path),'admitted.sqlite'),exec=DatabaseSync.prototype.exec;
+  let runtime,installed=false,replaced=false,creates=0;
+  t.mock.method(DatabaseSync.prototype,'exec',function(sql){
+    if(sql===LOCAL_RAW_PRIVACY_DDL.join('\n')){runtime=this;installed=true;}
+    if(sql===indexDDL)creates++;
+    const result=exec.call(this,sql);
+    if(this===runtime&&installed&&sql==='COMMIT'&&!replaced){
+      installed=false;replaced=true;fs.renameSync(a.path,held);fs.renameSync(b.path,a.path);
+    }
+    return result;
+  });
+  const core=openMemoryCore({path:a.path,raw:true,rawSearch:false,...(existing?{existingStore:a.pin}:{})});
+  try {
+    assert.equal(replaced,true);assert.equal(creates,0);assert.equal(retry(a.path).reason,'error');
+    assert.equal(schema(a.db),beforeA);assert.equal(schema(b.db),beforeB);
+    assert.deepEqual(readSqliteFixture(held),bytesA);assert.deepEqual(readSqliteFixture(a.path),bytesB);
+    assert.equal(core.list({namespace}).ok,true);
+  } finally {await core.close();}
+});
+
+for(const existing of [false,true]) test(`leaf removed after the side precheck is never recreated (existingStore=${existing})`,async t=>{
+  const f=await store(t,{l1:true}),before=schema(f.db);space(t,f.path);
+  const exec=DatabaseSync.prototype.exec,lstat=fs.lstatSync;let runtime,installed=false,armed=false,removed=false,creates=0;
+  t.mock.method(DatabaseSync.prototype,'exec',function(sql){
+    if(sql===LOCAL_RAW_PRIVACY_DDL.join('\n')){runtime=this;installed=true;}
+    if(sql===indexDDL)creates++;
+    const result=exec.call(this,sql);
+    if(this===runtime&&installed&&sql==='COMMIT'){installed=false;armed=true;}
+    return result;
+  });
+  const mock=t.mock.method(fs,'lstatSync',function(path,...args){
+    const result=lstat.call(this,path,...args);
+    if(armed&&path===f.path){armed=false;removed=true;fs.unlinkSync(f.path);}
+    return result;
+  });
+  syncBuiltinESMExports();t.after(()=>{mock.mock.restore();syncBuiltinESMExports();});
+  const core=openMemoryCore({path:f.path,raw:true,rawSearch:false,...(existing?{existingStore:f.pin}:{})});
+  try {
+    assert.equal(removed,true);assert.equal(fs.existsSync(f.path),false);assert.equal(creates,0);
+    assert.equal(schema(f.db),before);assert.equal(retry(f.path).reason,'error');
+    assert.equal(core.list({namespace}).ok,true);
+  } finally {await core.close();}
+});
+
+for(const drift of ['inherited index','store_id'])
+test(`side transaction refuses ${drift} drift before any DDL and leaves runtime unpoisoned`,async t=>{
+  const f=await store(t,{l1:true});space(t,f.path);
+  const exec=DatabaseSync.prototype.exec;
+  let runtime,installed=false,changed=false,side,creates=0,rollbacks=0,drifted;
+  t.mock.method(DatabaseSync.prototype,'exec',function(sql){
+    if(sql===LOCAL_RAW_PRIVACY_DDL.join('\n')){runtime=this;installed=true;}
+    if(runtime&&this!==runtime&&sql==='BEGIN IMMEDIATE')side=this;
+    if(this===side&&sql===indexDDL)creates++;
+    if(this===side&&sql==='ROLLBACK')rollbacks++;
+    const result=exec.call(this,sql);
+    if(this===runtime&&installed&&sql==='COMMIT'&&!changed){
+      installed=false;changed=true;
+      if(drift==='inherited index')f.db.exec('CREATE INDEX unadmitted_raw_index ON raw_messages(role)');
+      else f.db.prepare("UPDATE store_metadata SET store_id=? WHERE singleton=1").run('different-admitted-store');
+      drifted=schema(f.db);
+    }
+    return result;
+  });
+  const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
+  try {
+    assert.equal(changed,true);assert.ok(side);assert.equal(side.isOpen,false);
+    assert.equal(rollbacks,1);assert.equal(creates,0);assert.equal(retry(f.path).reason,'error');
+    assert.equal(schema(f.db),drifted);
+    // This accessor throws if optional side admission poisoned the runtime.
+    assert.equal(attestedLocalRawPackage(runtime),'v1');
+    if(drift==='inherited index')f.db.exec('DROP INDEX unadmitted_raw_index');
+    else f.db.prepare('UPDATE store_metadata SET store_id=? WHERE singleton=1').run(f.pin.storeId);
+    assert.equal(core.list({namespace}).ok,true);
+  } finally {await core.close();}
+});
+
+for(const existing of [false,true]) test(`post-BEGIN inode check refuses a replacement before DDL (existingStore=${existing})`,async t=>{
+  const a=await store(t,{l1:true}),b=await store(t,{l1:true});space(t,a.path);
+  const beforeA=schema(a.db),beforeB=schema(b.db),exec=DatabaseSync.prototype.exec;
+  let runtime,side,replaced=false,creates=0,rolledBack=false;
+  t.mock.method(DatabaseSync.prototype,'exec',function(sql){
+    if(sql===LOCAL_RAW_PRIVACY_DDL.join('\n'))runtime=this;
+    if(runtime&&this!==runtime&&sql==='BEGIN IMMEDIATE')side=this;
+    if(this===side&&sql===indexDDL)creates++;
+    if(this===side&&sql==='ROLLBACK')rolledBack=true;
+    const result=exec.call(this,sql);
+    if(this===side&&sql==='BEGIN IMMEDIATE'&&!replaced){
+      replaced=true;fs.renameSync(a.path,join(dirname(a.path),'admitted.sqlite'));fs.renameSync(b.path,a.path);
+    }
+    return result;
+  });
+  const core=openMemoryCore({path:a.path,raw:true,rawSearch:false,...(existing?{existingStore:a.pin}:{})});
+  try {
+    assert.equal(replaced,true);assert.equal(rolledBack,true);assert.equal(creates,0);assert.equal(side.isOpen,false);
+    assert.equal(retry(a.path).reason,'error');assert.equal(schema(a.db),beforeA);assert.equal(schema(b.db),beforeB);
+    assert.equal(core.list({namespace}).ok,true);
+  } finally {await core.close();}
+});
+
+test('side connection uses both runtime safety pragmas before full admission',async t=>{
+  const f=await store(t,{l1:true});space(t,f.path);
+  const exec=DatabaseSync.prototype.exec;let runtime,settings;
+  t.mock.method(DatabaseSync.prototype,'exec',function(sql){
+    if(sql===LOCAL_RAW_PRIVACY_DDL.join('\n'))runtime=this;
+    if(runtime&&this!==runtime&&sql==='BEGIN IMMEDIATE'){
+      settings={trusted:this.prepare('PRAGMA trusted_schema').get().trusted_schema,
+        foreignKeys:this.prepare('PRAGMA foreign_keys').get().foreign_keys};
+    }
+    return exec.call(this,sql);
+  });
+  const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
+  try {assert.deepEqual(settings,{trusted:0,foreignKeys:1});} finally {await core.close();}
+});
+
+test('current-schema status handles a stale v2 cache, leftover marker and shell metacharacters',async t=>{
+  const workspace=createTestWorkspace(t),path=join(workspace.path,"a space 'quote';$(name).sqlite");
+  space(t,path);
+  const exec=DatabaseSync.prototype.exec;let runtime;
+  t.mock.method(DatabaseSync.prototype,'exec',function(sql){
+    if(sql===LOCAL_RAW_PRIVACY_DDL.join('\n'))runtime=this;
+    return exec.call(this,sql);
+  });
+  const core=openMemoryCore({path,raw:true,rawSearch:false});
+  try {
+    assert.equal(readLocalRawPeerIndexStatus(runtime,path).present,true);
+    attestContentSafety(runtime);
+    putRetry(path,{notBefore:Date.now()+21600000,delayMs:21600000,reason:'busy'});
+    const expected={present:true,overThreshold:false,deferredReason:null,deferredUntil:null,
+      offlineCommand:offlineCommand(path),offlineArgv:offlineArgv(path)};
+    assert.deepEqual(readLocalRawPeerIndexStatus(runtime,path),expected);
+    assert.equal(retryNames(path).length,1); // Read-only status does not clear it.
+    const other=new DatabaseSync(path);
+    try {other.exec('DROP INDEX local_raw_message_peers');} finally {other.close();}
+    assert.equal(readLocalRawPeerIndexStatus(runtime,path).present,false);
+    assert.equal(readLocalRawPeerIndexStatus(runtime,path).deferredReason,'busy');
+  } finally {await core.close();}
+});
+
+for(const route of ['ordinary','existing','fence'])
+test(`side admission retains canonical file and runtime store identity (${route})`,async t=>{
+  const f=await store(t,{l1:true}),stat=fs.lstatSync(f.path);space(t,f.path);
+  const options=route==='existing'?{existingStore:f.pin}:route==='fence'?{storeFence:{
+    version:'store-fence-v1',dev:String(stat.dev),ino:String(stat.ino),applicationId:0x43414952,
+    userVersion:f.pin.physical,storeId:f.pin.storeId,
+  }}:{};
+  const exec=DatabaseSync.prototype.exec;let runtime;
+  t.mock.method(DatabaseSync.prototype,'exec',function(sql){
+    if(sql===LOCAL_RAW_PRIVACY_DDL.join('\n'))runtime=this;
+    return exec.call(this,sql);
+  });
+  const core=openMemoryCore({path:f.path,raw:true,rawSearch:false,...options});
+  try {
+    const admission=localRawPeerIndexAdmission(runtime);
+    assert.equal(admission.path,fs.realpathSync(f.path));
+    assert.deepEqual(admission.identity,{dev:String(stat.dev),ino:String(stat.ino)});
+    assert.equal(admission.storeId,f.pin.storeId);assert.match(admission.uri,/mode=rw$/);
+    assert.equal(readLocalRawPeerIndexStatus(runtime,f.path).present,true);
+    assert.equal(core.list({namespace}).ok,true);
+  } finally {await core.close();}
+});
+
+test('offline existing-store admission uses the complete ordinary validator inside its side transaction',async t=>{
+  const f=await store(t),before=schema(f.db);space(t,f.path);
+  const runtime=openDatabase(f.path,{existingStore:f.pin});
+  // This table is part of the opener validation, outside the local package.
+  f.db.exec('DROP TRIGGER card_raw_purge');
+  const drifted=schema(f.db),statements=trace(t);
+  try {
+    assert.deepEqual(installLocalRawPeerIndex(runtime,f.path),{status:'deferred',reason:'error'});
+    assert.ok(statements.includes('BEGIN IMMEDIATE'));assert.ok(statements.includes('ROLLBACK'));
+    assert.ok(!statements.includes(indexDDL));assert.equal(schema(f.db),drifted);assert.notEqual(drifted,before);
+  } finally {runtime.close();}
+});
+
+test('status is current immediately after a direct side build while runtime attestation remains v1',async t=>{
+  const f=await store(t,{l1:true});space(t,f.path);
+  const runtime=openDatabase(f.path,{existingStore:f.pin});
+  try {
+    assert.equal(attestedLocalRawPackage(runtime),'v1');
+    assert.deepEqual(installLocalRawPeerIndex(runtime,f.path),{status:'built',reason:null});
+    assert.equal(attestedLocalRawPackage(runtime),'v1');
+    assert.equal(readLocalRawPeerIndexStatus(runtime,f.path).present,true);
+    assert.equal(attestedLocalRawPackage(runtime),'v1'); // Status probes current rows without reattesting.
+  } finally {runtime.close();}
+});
+
+test('fenced side admission retains the checked fence store_id if metadata changes before handoff',async t=>{
+  const f=await store(t,{l1:true}),stat=fs.lstatSync(f.path);space(t,f.path);
+  const prepare=DatabaseSync.prototype.prepare,exec=DatabaseSync.prototype.exec;
+  let changed=false,creates=0;
+  t.mock.method(DatabaseSync.prototype,'prepare',function(sql){
+    const statement=prepare.call(this,sql);
+    if(!sql.startsWith('SELECT store_id,(SELECT user_version'))return statement;
+    return {get(){
+      changed=true;f.db.prepare('UPDATE store_metadata SET store_id=? WHERE singleton=1').run('changed-after-fence');
+      return statement.get();
+    }};
+  });
+  t.mock.method(DatabaseSync.prototype,'exec',function(sql){if(sql===indexDDL)creates++;return exec.call(this,sql);});
+  const core=openMemoryCore({path:f.path,raw:true,rawSearch:false,storeFence:{
+    version:'store-fence-v1',dev:String(stat.dev),ino:String(stat.ino),applicationId:0x43414952,
+    userVersion:f.pin.physical,storeId:f.pin.storeId,
+  }});
+  try {
+    assert.equal(changed,true);assert.equal(creates,0);assert.equal(retry(f.path).reason,'error');
+  } finally {await core.close();}
 });

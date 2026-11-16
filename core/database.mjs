@@ -4,14 +4,14 @@ import { inContentSuppressionRequestInside, withoutContentSuppressionReadCacheIn
 import { beginContentWrite, contentWriteOperation } from './content-write-context.mjs';
 import { contentSafetyInventory, installContentSafetyInside } from './content-safety-migration.mjs';
 import { SAFETY_SCHEMA_VERSIONS, resolveContentLayout, assertContentFeatures } from './content-safety-layout.mjs';
-import { attestContentSafety, checkInstalledContentSafety, registerContentReadSnapshot, bindContentSafetyConnection } from './content-safety-schema.mjs';
+import { attestContentSafety, cachedContentLayout, cardLineageRevision, checkInstalledContentSafety, registerContentReadSnapshot, bindContentSafetyConnection } from './content-safety-schema.mjs';
 import { validateContextProductLayout } from './context-product-schema.mjs';
 import { installCardCurrentDependencies, validateCardCurrentDependencies, assertNoCardCurrentDependencies } from './card-current-schema.mjs';
 import { installRoleProfiles, validateRoleProfiles, assertNoRoleProfiles } from './role-profile-schema.mjs';
 import { installAssets, validateAssets, assertNoAssets } from './asset-schema.mjs';
 import { types } from 'node:util';
 import { createExclusiveSqliteFile } from './sqlite-journal-probe.mjs';
-import { storeFenceOption,pinStoreFile,assertStoreIdentity,noncreatingStoreURI } from './store-fence.mjs';
+import { storeFenceOption,pinStoreFile,pinStorePath,assertStoreIdentity,noncreatingStoreURI } from './store-fence.mjs';
 import { migrateMethodPrerequisites } from './method-package-migration.mjs';
 import { randomBytes, randomUUID } from "node:crypto";
 import { installRawDeletion, RAW_DELETION_SCHEMA_VERSION } from './raw-deletion-schema.mjs';
@@ -43,6 +43,39 @@ export const isStorageBusy = error => error?.code === 'ERR_SQLITE_ERROR' &&
   Number.isInteger(error.errcode) && [5, 6].includes(error.errcode & 0xff) || isCommitBusy(error);
 
 export const APPLICATION_ID = 0x43414952;
+const peerIndexAdmissions = new WeakMap();
+/** Internal: the side writer must inherit admission, never infer it from a path. */
+export function localRawPeerIndexAdmission(db) { return peerIndexAdmissions.get(db); }
+
+// The settled schema29 branch of initialize(), shared verbatim with the side
+// admission. Lower Raw versions still take the original upgrade branches.
+function validateOrdinaryLocalStore(db) {
+  assertNoCardCurrentDependencies(db);assertNoRoleProfiles(db);assertNoAssets(db);
+  for (const name of ['raw_conversations','raw_messages','raw_parts','raw_events','raw_owner_usage','raw_capture_controls',
+    'private_cards','card_notes','card_applicability_reviews','evidence_mappings','raw_capture_events','raw_session_fences',
+    'raw_source_maps','raw_receipt_lineage','raw_receipt_origins','raw_exclusion_clocks','raw_source_exclusions',
+    'raw_deletion_actions','raw_job_sources','raw_closed_jobs','raw_deletion_effects']) {
+    if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name)) fail('unsupported_database');
+  }
+  validateRawSourcePrerequisites(db);
+  validateLocalAuthority(db);
+}
+function rememberPeerIndexAdmission(db, location, physical, storeId, features, option) {
+  if (!location) return;
+  const admittedLayout = cachedContentLayout(db);
+  const lineage = cardLineageRevision(admittedLayout);
+  peerIndexAdmissions.set(db, Object.freeze({ ...location, storeId, validate(side) {
+    const layout = attestContentSafety(side);
+    if (layout.physical !== physical || cardLineageRevision(layout) !== lineage) fail('unsupported_database');
+    if (option) validateExistingStore(side, option, layout);
+    else if (layout.suppressionRevision) {
+      assertContentFeatures(layout, features);
+      validateContextProductLayout(side, layout);
+    } else if (layout.base === LOCAL_AUTHORITY_SCHEMA_VERSION) validateOrdinaryLocalStore(side);
+    else validateExistingStore(side, { storeId }, layout);
+    if (side.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id !== storeId) fail('unsupported_database');
+  } }));
+}
 const VERSION = CONFIRMATION_SCHEMA_VERSION;
 // Existing layouts accepted without an upgrade by the ordinary opener.
 export const READ_SCHEMA_VERSIONS = Object.freeze([VERSION, 20, PRIVATE_CARD_SCHEMA_VERSION,
@@ -463,6 +496,7 @@ export function openDatabase(path, options = {}) {
       if (methodPackages && layout.base < 30) fail('unsupported_database');
       if (currentDependencies && layout.base !== 33) fail('unsupported_database');
       location.check();
+      rememberPeerIndexAdmission(db, location, layout.physical, option.storeId, undefined, option);
       return bindCommitConnection(db);
     } catch (error) {
       try { db.close(); } catch { /* Preserve the construction failure. */ }
@@ -470,7 +504,7 @@ export function openDatabase(path, options = {}) {
     }
   }
   if (typeof path !== "string" || !path.trim() || path.includes("\0")) fail("invalid_path");
-  let pin;
+  let pin, peerLocation;
   if (fence) {
     pin = pinStoreFile(path, fence);
   } else if (path !== ":memory:") {
@@ -499,6 +533,14 @@ export function openDatabase(path, options = {}) {
     if (!stat.isFile() || (process.platform !== "win32" && (stat.mode & 0o077))) {
       fail("unsafe_database_file");
     }
+    if (localControls) {
+      try { peerLocation = pinStorePath(path, { dev: String(stat.dev), ino: String(stat.ino) }); }
+      catch { /* Optional side admission unavailable; runtime opening is unchanged. */ }
+    }
+  }
+  if (fence && localControls) {
+    try { peerLocation = pinStorePath(path, pin.identity); }
+    catch { /* The mandatory fence retains its original checks below. */ }
   }
   let db;
   try {
@@ -526,6 +568,10 @@ export function openDatabase(path, options = {}) {
       const version = db.prepare("PRAGMA user_version").get().user_version;
       if ((methodPackages || assets || roleProfiles || currentDependencies) && !(appId === 0 && version === 0 && db.prepare('SELECT count(*) AS n FROM sqlite_master').get().n === 0) &&
           !(appId === APPLICATION_ID && [18,20,21,22,23,24,25,26,27,28,29,30,31,32,33].includes(version))) fail('unsupported_database');
+      if (appId === APPLICATION_ID && version === LOCAL_AUTHORITY_SCHEMA_VERSION) {
+        validateOrdinaryLocalStore(db);
+        return;
+      }
       if (version < 33) assertNoCardCurrentDependencies(db);
       if (version < 32) assertNoRoleProfiles(db);
       if (version < 31) assertNoAssets(db);
@@ -811,6 +857,13 @@ export function openDatabase(path, options = {}) {
         installContentSafetyInside(db, base, contentSafetyInventory(db));
       }
     });
+    if (peerLocation) {
+      // Read identity from the admitted runtime handle, never from another open.
+      // The pre-open canonical inode pin also covers new/ordinary openers.
+      const identity = db.prepare('SELECT store_id,(SELECT user_version FROM pragma_user_version) AS physical FROM store_metadata WHERE singleton=1').get();
+      rememberPeerIndexAdmission(db, peerLocation, identity.physical, fence?.storeId ?? identity.store_id,
+        { privateCards, rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls, methodPackages, assets, roleProfiles, currentDependencies });
+    }
     return bindCommitConnection(db);
   } catch (error) {
     db?.close();

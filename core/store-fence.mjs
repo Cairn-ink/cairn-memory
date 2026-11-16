@@ -2,9 +2,9 @@ import { validateContextProductLayout } from './context-product-schema.mjs';
 import { attestContentSafety } from './content-safety-schema.mjs';
 // Host-selected rollback-journal review fence. This module must stay SQLite-free
 // at link time: the CLI validates file identity before importing host SQLite.
-import {lstatSync} from 'node:fs';
+import {lstatSync,realpathSync} from 'node:fs';
 import {probeRollbackJournal} from './sqlite-journal-probe.mjs';
-import {isAbsolute,resolve} from 'node:path';
+import {basename,dirname,isAbsolute,join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {ownData} from './local-authority-input.mjs';
 import {fail,identifier} from './validation.mjs';
@@ -25,6 +25,20 @@ function fileIdentity(path) {
 }
 function regular(stat) {
   if(!stat.isFile()||stat.isSymbolicLink()||(stat.mode&0o077n)!==0n)fail('unsafe_database_file');
+}
+/** Identity-only pin: safe to check while SQLite owns a journal/transaction.
+ * Like the review fence, this uses lstat, never a raw descriptor on the inode. */
+export function pinStorePath(path, expected) {
+  path=resolve(path);
+  const canonical=join(realpathSync(dirname(path)),basename(path));
+  const first=fileIdentity(canonical);regular(first);
+  const identity=Object.freeze(filesystemIdentity(first));
+  if(expected&&(expected.dev!==identity.dev||expected.ino!==identity.ino))fail('unsafe_database_file');
+  return {path:canonical,identity,uri:noncreatingStoreURI(canonical),check(){
+    if(join(realpathSync(dirname(path)),basename(path))!==canonical)fail('unsafe_database_file');
+    const current=fileIdentity(canonical);regular(current);
+    if(String(current.dev)!==identity.dev||String(current.ino)!==identity.ino)fail('unsafe_database_file');
+  }};
 }
 function noCompanions(path) {
   // Refuse even dangling links and empty/persistent journals. A participant must

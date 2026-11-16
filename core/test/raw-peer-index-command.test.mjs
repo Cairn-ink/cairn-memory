@@ -85,8 +85,8 @@ test(`raw index validates its exact local command grammar: ${args.join(' ')}`,as
 });
 
 test('raw index ignores retry deadlines and clears the marker after its dedicated build',async t=>{
-  const f=await fixture(t,{high:true}),marker=f.path+'.peer-index-retry';
-  fs.writeFileSync(marker,JSON.stringify({notBefore:Date.now()+86400000,delayMs:86400000,reason:'full'}));
+  const f=await fixture(t,{high:true}),marker=f.path+'.peer-index-retry.'+(Date.now()+86400000)+'.86400000.full';
+  fs.writeFileSync(marker,'');
   const exec=DatabaseSync.prototype.exec;let side;
   t.mock.method(DatabaseSync.prototype,'exec',function(sql){
     if(sql==='BEGIN IMMEDIATE')side=this;
@@ -108,12 +108,12 @@ for(const errcode of [9,10,778,13,1,11]) test(`raw index native ${errcode} defer
   });
   assert.deepEqual(await command(f.path),{code:1,lines:['index: deferred']});
   assert.ok(side && side!==f.db);assert.equal(side.isOpen,false);assert.equal(schema(f.db),before);
-  assert.equal(present(f.db),false);assert.ok(JSON.parse(fs.readFileSync(f.path+'.peer-index-retry','utf8')).notBefore>Date.now());
+  assert.equal(present(f.db),false);assert.ok(fs.readdirSync(dirname(f.path)).some(name=>name.startsWith('offline.sqlite.peer-index-retry.')));
 });
 
 test('raw index present clears an old retry marker without a build',async t=>{
-  const f=await fixture(t,{v2:true}),marker=f.path+'.peer-index-retry';
-  fs.writeFileSync(marker,JSON.stringify({notBefore:Date.now()+86400000,delayMs:86400000,reason:'busy'}));
+  const f=await fixture(t,{v2:true}),marker=f.path+'.peer-index-retry.'+(Date.now()+86400000)+'.86400000.busy';
+  fs.writeFileSync(marker,'');
   assert.deepEqual(await command(f.path),{code:0,lines:['index: present']});
   assert.equal(fs.existsSync(marker),false);assert.equal(f.mock.mock.callCount(),0);
 });
