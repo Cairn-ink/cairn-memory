@@ -4,7 +4,7 @@ import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { withFileLock } from '../../integrations/client/file-lock.mjs';
-import { canonical, physicalStore } from './local-daemon-identity.mjs';
+import { canonical, physicalStore, assertStoreLocation } from './local-daemon-identity.mjs';
 import { DAEMON_UNRESPONSIVE_MS } from './local-daemon-wire.mjs';
 import { runtimeDirectory, endpointPaths, readPrivate, checkedEntry, refuse, retryMetadata } from './local-daemon-state.mjs';
 
@@ -94,6 +94,7 @@ export async function runDaemonCommand(args, {
   if (!['status', 'stop'].includes(action) || extra.length || (flag !== undefined && (flag !== '--db' || !path))) throw refuse('daemon_arguments');
   const metadataDeadline = performance.now() + 1000;
   const directory = await runtimeDirectory({ root });
+  if (path !== undefined) await assertStoreLocation(path, directory);
   const store = path === undefined ? undefined : await physicalStore(path);
   const { entries, uncertain } = await retryMetadata(async () => {
   const entries = [], uncertain = [];
