@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, readdir, lstat, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, dirname, resolve, normalize } from 'node:path';
 import { tmpdir } from 'node:os';
 import { parse } from '../../tools/testing/vendor/acorn/acorn.mjs';
 import * as runtime from './fixtures/installed-daemon-runtime.mjs';
@@ -15,7 +15,7 @@ function walk(node, visit) {
   }
 }
 const property = node => node?.type === 'MemberExpression' ? node.computed ? node.property.value : node.property.name : undefined;
-const mutations = new Set(['rm', 'unlink', 'rename', 'writeFile', 'rmSync', 'unlinkSync', 'renameSync', 'writeFileSync']);
+const mutations = new Set(['rm', 'rmdir', 'unlink', 'rename', 'writeFile', 'rmSync', 'rmdirSync', 'unlinkSync', 'renameSync', 'writeFileSync']);
 
 // Conservative syntactic dataflow, deliberately independent of the helper's
 // implementation. Track directory.path, aliases, and derived path variables;
@@ -25,15 +25,33 @@ const mutations = new Set(['rm', 'unlink', 'rename', 'writeFile', 'rmSync', 'unl
 function unguardedMutations(source, { helper = false } = {}) {
   const ast = parse(source, { ecmaVersion: 'latest', sourceType: 'module', locations: true });
   const nodes = [], aliases = new Map(), tainted = new Set(), directories = new Set(['dir', 'directory']);
+  // Resolve ordinary path expressions against a symbolic runtime root. This
+  // retains dirname/.. ancestry without treating a sibling lease as runtime.
+  const runtimeRoot = '/__cairn_guard__/cairn-memory', paths = new Map();
   walk(ast, node => nodes.push(node));
   // Exempt exactly the shared helper body, never the rest of its module.
   const guarded = helper ? nodes.find(node => node.type === 'FunctionDeclaration' && node.id.name === 'ownedRuntimeFiles') : undefined;
   const outside = nodes.filter(node => !guarded || node.start < guarded.start || node.end > guarded.end);
   for (const node of outside) {
-    if (node.type === 'ImportDeclaration' && /^(?:node:)?fs(?:\/promises)?$/.test(node.source.value))
+    if (node.type === 'ImportDeclaration' && /^(?:node:)?(?:fs(?:\/promises)?|path)$/.test(node.source.value))
       for (const specifier of node.specifiers) if (specifier.type === 'ImportSpecifier') aliases.set(specifier.local.name, specifier.imported.name);
   }
   const method = node => node?.type === 'Identifier' ? aliases.get(node.name) ?? node.name : property(node);
+  function resolvedPaths(node) {
+    if (!node) return [];
+    if (node.type === 'Literal' && typeof node.value === 'string') return [node.value];
+    if (node.type === 'Identifier') return [...(paths.get(node.name) ?? [])];
+    if (node.type === 'MemberExpression' && property(node) === 'path' &&
+      (directories.has(node.object.name) || property(node.object) === 'directory')) return [runtimeRoot];
+    if (node.type !== 'CallExpression') return [];
+    const name = method(node.callee), builder = { dirname, join, resolve, normalize }[name];
+    if (!builder) return [];
+    const arguments_ = node.arguments.map(resolvedPaths);
+    if (arguments_.some(values => values.length === 0)) return [];
+    let combinations = [[]];
+    for (const values of arguments_) combinations = combinations.flatMap(parts => values.map(value => [...parts, value]));
+    return combinations.map(parts => builder(...parts));
+  }
   function runtimePath(node) {
     if (!node) return false;
     if (node.type === 'Identifier') return tainted.has(node.name);
@@ -53,6 +71,10 @@ function unguardedMutations(source, { helper = false } = {}) {
       const binding = node.type === 'VariableDeclarator' ? node.id : node.type === 'AssignmentExpression' ? node.left : undefined;
       const value = node.type === 'VariableDeclarator' ? node.init : node.right;
       if (binding?.type !== 'Identifier') continue;
+      for (const path of resolvedPaths(value)) {
+        if (!paths.has(binding.name)) paths.set(binding.name, new Set());
+        if (!paths.get(binding.name).has(path)) { paths.get(binding.name).add(path); changed = true; }
+      }
       if (runtimePath(value) && !tainted.has(binding.name)) { tainted.add(binding.name); changed = true; }
       const expression = value?.type === 'AwaitExpression' ? value.argument : value;
       if ((expression?.type === 'CallExpression' && method(expression.callee) === 'runtimeDirectory' ||
@@ -63,8 +85,13 @@ function unguardedMutations(source, { helper = false } = {}) {
       if (mutations.has(name) && aliases.get(binding.name) !== name) { aliases.set(binding.name, name); changed = true; }
     }
   } while (changed);
+  const recursive = node => node.arguments.slice(1).some(options => options.type === 'ObjectExpression' &&
+    options.properties.some(option => (option.key?.name ?? option.key?.value) === 'recursive' && option.value?.value === true));
+  const ancestor = node => resolvedPaths(node).some(path => path.startsWith('/') &&
+    (path === '/' || path === runtimeRoot || runtimeRoot.startsWith(path + '/')));
   return outside.filter(node => node.type === 'CallExpression' && mutations.has(method(node.callee)) &&
-    node.arguments.slice(0, method(node.callee).startsWith('rename') ? 2 : 1).some(runtimePath))
+    (node.arguments.slice(0, method(node.callee).startsWith('rename') ? 2 : 1).some(runtimePath) ||
+      /^(?:rm|rmdir)(?:Sync)?$/.test(method(node.callee)) && recursive(node) && ancestor(node.arguments[0])))
     .map(node => ({ line: node.loc.start.line, operation: method(node.callee) }));
 }
 
@@ -89,8 +116,16 @@ test('static guard detects direct, aliased, namespace and derived-path bypasses'
     "import {rename} from 'node:fs/promises'; await rename(scratch, join(directory.path,name));",
     "import {rename} from 'node:fs/promises'; await rename(join(directory.path,name), scratch);",
     "import {rm} from 'node:fs/promises'; const d=await state.runtimeDirectory(); const copy=d; let target; target=join(copy.path,name); await rm(target);",
+    "await fs.promises.rm(dirname(directory.path), { recursive: true })",
+    "import {rm as erase} from 'node:fs/promises'; const parent=dirname(directory.path); await erase(parent, {recursive:true});",
+    "import {rmdir} from 'node:fs/promises'; await rmdir(dirname(dirname(directory.path)), {recursive:true});",
+    "import fs from 'node:fs'; fs.rmSync(resolve(directory.path,'../..'), {recursive:true});",
+    "import * as fs from 'node:fs/promises'; await fs.rmdir(directory.path, {recursive:true});",
+    "import {rmdirSync} from 'node:fs'; rmdirSync(join(directory.path,'..'), {recursive:true});",
   ]) assert.equal(unguardedMutations(source).length, 1, source);
   assert.deepEqual(unguardedMutations("import {unlink} from 'node:fs/promises'; const path=join(dirname(directory.path),'.installed-daemon-test.lease'); await unlink(path);"), []);
+  assert.deepEqual(unguardedMutations("await fs.promises.rm(join(dirname(directory.path),'scratch'), {recursive:true});"), []);
+  assert.deepEqual(unguardedMutations("await fs.promises.rm(dirname(directory.path));"), []);
 });
 
 test('foreign-name control throws before mutation and preserves every file', async t => {
