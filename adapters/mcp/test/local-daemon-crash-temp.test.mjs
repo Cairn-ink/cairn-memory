@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { watch, statSync } from 'node:fs';
+import { fork } from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
 import fs from 'node:fs/promises';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -104,4 +106,89 @@ test('one-second scheduling budget never abandons an outstanding unlink or direc
   assert.ok(candidate.messages.some(message => message.kind === 'temp-scan-closed'));
   await assert.rejects(fs.lstat(path), { code: 'ENOENT' });
   await until(async () => (await fs.readFile(join(directory, base + '.log'), 'utf8')).includes('daemon_temp_budget'), 'expired scheduling budget is logged');
+});
+
+async function scanFailureCandidate(t, w, bootstrap, mode) {
+  const process = fork(new URL('./fixtures/local-daemon-temp-scan.mjs', import.meta.url), ['child'], {
+    execArgv: [], env: {}, stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+  });
+  const events = []; let exit, stderr = '';
+  process.on('message', event => events.push(event));
+  process.stderr.on('data', bytes => { stderr += bytes; });
+  process.once('exit', (code, signal) => { exit = { code, signal }; });
+  t.after(async () => {
+    if (!exit) process.kill('SIGTERM');
+    await until(() => exit, 'scan seam child is reaped');
+    assert.equal(exit.code, 0, stderr);
+  });
+  process.send({ bootstrap, mode });
+  return { events, exited: () => exit };
+}
+
+for (const mode of ['opendir', 'read', 'close']) test('scan ' + mode + ' failure logs daemon_temp_scan and serves a Memory write', { timeout: 18000 }, async t => {
+  const w = await workspace(t), bootstrap = await w.bootstrap(), directory = join(w.root, 'run', 'cairn-memory'), base = prefix(bootstrap);
+  await fs.writeFile(join(directory, base + '.stamp.tmp-' + 'a'.repeat(24)), 'synthetic', { mode: 0o600 });
+  const candidate = await scanFailureCandidate(t, w, bootstrap, mode);
+  await until(w.descriptor, 'non-directory scan failure still publishes', 7000);
+  assert.ok(candidate.events.some(event => event.kind === 'scan-error' && event.operation === mode));
+  if (mode !== 'opendir') assert.ok(candidate.events.some(event => event.kind === 'scan-close-completed'), 'real directory close completed before publication');
+  if (mode === 'read') assert.equal(candidate.events.find(event => event.kind === 'scan-error').reads, 1, 'read fails mid-stream');
+  const session = w.forward(); session.release(); await w.connect(session);
+  ok(await session.tool('remember_memory', { content: 'synthetic scan failure recovery', kind: 'fact' }));
+  await until(async () => (await fs.readFile(join(directory, base + '.log'), 'utf8')).includes('daemon_temp_scan'), 'scan code logged');
+  let status = '';
+  assert.equal(await runDaemonCommand(['status'], { root: join(w.root, 'run'), write: value => { status += value; } }), 0);
+  assert.equal(status.includes('daemon_temp_scan'), false, 'cleanup scan code stays log-only');
+  assert.equal(w.children.some(child => child.stderr.includes('daemon_temp_scan')), false);
+});
+
+for (const mode of ['validate', 'directory', 'startup-directory']) test('pinned directory change refuses through existing validation: ' + mode, { timeout: 15000 }, async t => {
+  const w = await workspace(t), bootstrap = await w.bootstrap(), directory = join(w.root, 'run', 'cairn-memory'), base = prefix(bootstrap);
+  await fs.writeFile(join(directory, base + '.stamp.tmp-' + 'b'.repeat(24)), 'synthetic', { mode: 0o600 });
+  const candidate = await scanFailureCandidate(t, w, bootstrap, mode);
+  const refusal = await until(() => candidate.events.find(event => event.kind === 'startup-refused'), 'startup returns its directory refusal');
+  assert.equal(refusal.code, 'daemon_directory_changed');
+  assert.match(refusal.stack, /at validate .*local-daemon-state\.mjs:/, 'same runtimeDirectory.validate code path as ordinary startup validation');
+  assert.equal(refusal.sameObject, mode !== 'startup-directory', 'cleanup propagates the exact error object; baseline startup bypasses cleanup catch');
+  assert.equal(await w.descriptor(), undefined);
+  if (mode !== 'validate') assert.ok(candidate.events.some(event => event.kind === 'scan-close-completed'));
+  t.diagnostic(JSON.stringify({ mode, refusal }));
+});
+
+test('cleanup preserves every initial validate failure object', async () => {
+  const { cleanupSeam } = await import('./fixtures/local-daemon-temp-scan.mjs');
+  const { cleanupTemps } = await cleanupSeam();
+  for (const code of ['ENOENT', 'daemon_filesystem', 'daemon_directory_changed']) {
+    const expected = Object.assign(Error('synthetic'), { code });
+    await assert.rejects(cleanupTemps({ validate: async () => { throw expected; } }, { stamp: '/synthetic/d-' + 'a'.repeat(32) + '.stamp' }, () => {}), error => error === expected);
+  }
+});
+
+
+test('cleanup preserves directory-coded IO errors and per-file validate failures unchanged', async () => {
+  const { cleanupSeam } = await import('./fixtures/local-daemon-temp-scan.mjs');
+  const { cleanupTemps } = await cleanupSeam(), opendir = fs.opendir;
+  const base = 'd-' + 'a'.repeat(32), paths = { stamp: '/synthetic/' + base + '.stamp' };
+  try {
+    for (const operation of ['opendir', 'read', 'close', 'validate']) {
+      const expected = Object.assign(Error('synthetic'), { code: operation === 'validate' ? 'ENOENT' : 'daemon_directory_changed' });
+      let validations = 0, closed = false;
+      const directory = { path: '/synthetic', validate: async () => { if (operation === 'validate' && ++validations === 2) throw expected; } };
+      fs.opendir = async () => {
+        if (operation === 'opendir') throw expected;
+        return {
+          read: async () => {
+            if (operation === 'read') throw expected;
+            return operation === 'validate' ? { name: base + '.stamp.tmp-' + 'b'.repeat(24) } : null;
+          },
+          close: async () => { await delay(10); closed = true; if (operation === 'close') throw expected; },
+        };
+      };
+      syncBuiltinESMExports();
+      const reports = [];
+      await assert.rejects(cleanupTemps(directory, paths, code => reports.push(code)), error => error === expected);
+      assert.equal(closed, operation !== 'opendir', 'started directory close is awaited even on refusal');
+      assert.deepEqual(reports, [], 'directory failures retain existing refusal reporting');
+    }
+  } finally { fs.opendir = opendir; syncBuiltinESMExports(); }
 });

@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "a2ee7e683227ad96fb3ae0d56703bea8e0e81ec72e7b7060288255c850e8e2b2",
-  "bytes": 1452080,
+  "sha256": "6a2485e33e88651209c7b94c7e58f0f8d3e5ab95bc13584a4bdcd3a66a51b0b0",
+  "bytes": 1452148,
   "files": [
     "LICENSE",
     "README.md",
@@ -600,7 +600,7 @@
     "adapters/mcp/method-package-access.mjs": "1a9d5f630fad641fc2efe447602c5d79d3392394157186772ca06ba88ba33509",
     "adapters/mcp/local-authority-router.mjs": "ebddbcf382d0d69f199d124a01569d68b11f4a8399834b8411ed45f98ae57a47",
     "adapters/mcp/local-context-continuations.mjs": "ad824cc65a83e60a71b97f9fa1418807fd7acbc429afa731c73edb87fd1d5e38",
-    "adapters/mcp/local-daemon.mjs": "4e1ffb3b7bc79799cf46b660878204d7b1b5992c8b433867f48bbb1acd347c6b",
+    "adapters/mcp/local-daemon.mjs": "af5740de4a62aa5fb5d7a2a672a0b80d41bc96034d944f989890c2c8d8813320",
     "adapters/mcp/local-daemon-identity.mjs": "bf1e35cb3480f394803421417d2477a0e311b016763c0d2b864b04581c24da73",
     "adapters/mcp/local-daemon-liveness.mjs": "c3d69b1875215476d8ddc20f02f2b691028ed9f7b0ab53aef540659c245e9dfa",
     "adapters/mcp/local-daemon-state.mjs": "d9825bc4ea7932b0b35564f16654e137d7442a9130a325366267f604107abc4a",
@@ -838,6 +838,6 @@
   "generatedHashes": {
     "package.json": "e255ff4d23e921de9bed8e058c64e57aed3e1bc6a8ed242cee52a716add2d69c",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8",
-    "engine-build.json": "5f2b7f71140a7bb01b51543664edbcb1406dc0ce0b3c20d9eae45c9e9c432acb"
+    "engine-build.json": "75fc12252893f4007940b2e1d6789456c1751a90330e6e869fb3615527f3f960"
   }
 }

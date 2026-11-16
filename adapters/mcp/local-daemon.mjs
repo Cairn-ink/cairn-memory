@@ -100,8 +100,14 @@ async function cleanupTemps(directory, paths, report) {
   const pattern = new RegExp('^' + basename(paths.stamp, '.stamp') + '\\.(stamp|json)\\.tmp-[a-f0-9]{24}$');
   const deadline = performance.now() + 1000;
   let stream, entries = 0, matches = 0;
+  let validationFailure;
+  const pinnedDirectory = { ...directory, validate: async () => {
+    try { await directory.validate(); }
+    catch (error) { validationFailure = error; throw error; }
+  } };
+  const directoryFailure = error => error === validationFailure || error.code?.startsWith('daemon_directory');
   try {
-    await directory.validate();
+    await pinnedDirectory.validate();
     stream = await opendir(directory.path);
     for (;;) {
       if (performance.now() >= deadline) { report('daemon_temp_budget'); break; }
@@ -115,26 +121,30 @@ async function cleanupTemps(directory, paths, report) {
       matches++;
       const path = join(directory.path, entry.name);
       try {
-        const before = await checkedEntry(directory, path, { missing: true });
+        const before = await checkedEntry(pinnedDirectory, path, { missing: true });
         if (!before) continue;
         if (before.nlink !== 1n) throw refuse('daemon_temp_invalid');
-        const after = await checkedEntry(directory, path, { missing: true });
+        const after = await checkedEntry(pinnedDirectory, path, { missing: true });
         if (!after) continue;
         if (after.nlink !== 1n || before.dev !== after.dev || before.ino !== after.ino) throw refuse('daemon_temp_invalid');
         // Sequential and awaited: the scheduling deadline never abandons IO.
         await unlink(path);
       } catch (error) {
+        if (directoryFailure(error)) throw error;
         if (error.code === 'ENOENT') continue;
-        if (error.code?.startsWith('daemon_directory')) throw error;
         report('daemon_temp_invalid');
       }
     }
-  } catch {
-    report('daemon_temp_scan'); throw refuse('daemon_temp_scan');
+  } catch (error) {
+    if (directoryFailure(error)) throw error;
+    report('daemon_temp_scan');
   } finally {
     if (stream) {
       try { await stream.close(); }
-      catch { report('daemon_temp_scan'); throw refuse('daemon_temp_scan'); }
+      catch (error) {
+        if (directoryFailure(error)) throw error;
+        report('daemon_temp_scan');
+      }
     }
   }
 }
