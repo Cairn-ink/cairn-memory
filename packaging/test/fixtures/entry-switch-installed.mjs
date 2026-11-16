@@ -175,7 +175,7 @@ export async function runtimeSnapshot(path, remembered = [], { afterMetadata = a
   return { entries, identities, retired: remembered.filter(identity => identity.owner)
     .map(identity => ({ ...identity, alive: startAwareAlive(identity.owner) })) };
 }
-export async function installedAssertions(t, { install = false, exercise } = {}) {
+export async function installedAssertions(t, { install = false, exercise, recordLaunchPrefix = prefix => prefix } = {}) {
   const scratch = await mkdtemp(join(tmpdir(), 'entry-')), clients = [], owned = new Map(), logs = new Set(), lockTokens = new Map(), launchedPrefixes = new Set();
   const dir = await runtimeDirectory(), before = await runtimeSnapshot(dir.path);
   const baseline = new Set(before.entries.map(entry => entry.name));
@@ -250,13 +250,23 @@ export async function installedAssertions(t, { install = false, exercise } = {})
     const engine = await import(pathToFileURL(join(root, 'adapters/mcp/local-daemon-identity.mjs')));
     const state = await import(pathToFileURL(join(root, 'adapters/mcp/local-daemon-state.mjs')));
     const creation = await engine.creationIdentity(store);
-    launchedPrefixes.add('p-' + engine.creationDigest(creation).slice(0, 32));
+    const creationPrefix = 'p-' + engine.creationDigest(creation).slice(0, 32);
+    assert.match(creationPrefix, /^p-[a-f0-9]{32}$/, 'recorded provisioning prefix is nonempty and well-formed');
+    launchedPrefixes.add(creationPrefix);
+    const packagePath = await realpath(root), packageInfo = await stat(packagePath, { bigint: true });
+    const recordedPrefixes = new Set();
     async function recordIdentity() {
       try {
         const identity = await engine.createIdentity(args, { root, build, environment, key: await state.identityKey(dir),
           node: { executable: process.execPath, version: process.version, execArgv: [] } });
         assert.equal(identity.eligible, true);
-        launchedPrefixes.add('d-' + identity.digest.slice(0, 32));
+        // Use the installed module's filename, and the same name parser as
+        // hygiene. The seam only corrupts this recorder, never the child.
+        const recordedPrefix = recordLaunchPrefix(identityPrefix(state.endpointPaths(dir, identity.digest).ready.split('/').at(-1)));
+        assert.ok(typeof recordedPrefix === 'string' && /^d-[a-f0-9]{32}$/.test(recordedPrefix),
+          'recorded launch prefix is nonempty and well-formed');
+        launchedPrefixes.add(recordedPrefix);
+        recordedPrefixes.add(recordedPrefix);
       } catch (error) { if (error.code !== 'ENOENT') throw error; } // First launch may still be provisioning the store.
     }
     await recordIdentity();
@@ -286,8 +296,22 @@ export async function installedAssertions(t, { install = false, exercise } = {})
       child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
       assert.ok((await tools).tools.length > 0);
       assert.equal(entry.stderr.includes('cairn_daemon_fallback:'), expectedFallback, entry.stderr);
-    } finally { await recordIdentity(); } // Also own attempts that never published a descriptor.
-    await descriptors(); return entry;
+    } finally {
+      await recordIdentity(); // Also own attempts that never published a descriptor.
+      // Select observed filenames by this launch's physical package and argv,
+      // independently of the recorded digest or environment calculation.
+      const published = (await descriptors()).filter(d => d.identity.package.path === packagePath &&
+        d.identity.package.dev === String(packageInfo.dev) && d.identity.package.ino === String(packageInfo.ino) &&
+        d.identity.configuration.namespace.ownerId === owner &&
+        d.identity.configuration.namespace.projectId === (extra.includes('--project') ? extra[extra.indexOf('--project') + 1] : null) &&
+        d.identity.configuration.raw === !extra.includes('--no-raw') &&
+        d.identity.configuration.rawSearch === !extra.includes('--no-raw-search') &&
+        d.identity.configuration.contextRead === (extra.includes('--no-context-read') ? false : 'context-read-v1'));
+      if (!expectedFallback) assert.equal(published.length, 1, 'publishing launch has one observed identity');
+      for (const descriptor of published) for (const recordedPrefix of recordedPrefixes)
+        assert.equal(recordedPrefix, identityPrefix(descriptor.name), 'recorded launch prefix agrees with published identity');
+    }
+    return entry;
   }
   async function close(entry) {
     entry.child.stdin.end(); await until(() => entry.exit, 'client exits');

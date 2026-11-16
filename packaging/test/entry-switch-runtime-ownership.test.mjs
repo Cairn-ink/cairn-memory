@@ -6,6 +6,40 @@ import { join, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { installedAssertions } from './fixtures/entry-switch-installed.mjs';
 
+test('a publishing launch rejects a well-formed recorded prefix with one flipped hex digit', { timeout: 120000 }, async t => {
+  const hooks = [], context = { after: fn => hooks.push(fn), diagnostic: text => t.diagnostic(text) };
+  try {
+    await installedAssertions(context, {
+      recordLaunchPrefix: prefix => prefix.slice(0, -1) + (prefix.endsWith('0') ? '1' : '0'),
+      exercise: async ({ root, client, close, directory }) => {
+        await assert.rejects(async () => {
+          const entry = await client(root); await close(entry);
+        }, error => {
+          assert.equal(error.code, 'ERR_ASSERTION');
+          assert.match(error.message, /recorded launch prefix agrees with published identity/); return true;
+        });
+        assert.ok((await readdir(directory.path)).some(name => /^d-[a-f0-9]{32}\.json$/.test(name)), 'launch published ready');
+      },
+    });
+  } finally { for (const hook of hooks) await hook(); }
+});
+
+for (const prefix of ['', 'd-' + 'a'.repeat(31), 'd-' + 'A'.repeat(32), 'd-' + 'a'.repeat(32) + '.json']) {
+  test(`launch recording refuses ${prefix ? 'malformed prefix ' + prefix : 'empty prefix'}`, { timeout: 120000 }, async t => {
+    const hooks = [], context = { after: fn => hooks.push(fn), diagnostic: text => t.diagnostic(text) };
+    try {
+      await installedAssertions(context, { recordLaunchPrefix: () => prefix, exercise: async ({ root, client, close }) => {
+        await assert.rejects(async () => {
+          const entry = await client(root); await close(entry);
+        }, error => {
+          assert.equal(error.code, 'ERR_ASSERTION');
+          assert.match(error.message, /recorded launch prefix is nonempty and well-formed/); return true;
+        });
+      } });
+    } finally { for (const hook of hooks) await hook(); }
+  });
+}
+
 test('a launched installed attempt without a ready descriptor fails hygiene for its owned leftovers', { timeout: 120000 }, async t => {
   const hooks = [], leftovers = [];
   const context = { after: fn => hooks.push(fn), diagnostic: text => t.diagnostic(text) };
