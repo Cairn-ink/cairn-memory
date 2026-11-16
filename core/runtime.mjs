@@ -4,7 +4,7 @@ import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs'
 import { registerContentWriteBoundary } from './content-write-context.mjs';
 import { contentScopeEpochGuard, assertContentOutput, contentReceiptCount, assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
 import { receiptEventTimeEnabled, cachedContentLayout, installedContentLayout, checkInstalledContentSafety } from './content-safety-schema.mjs';
-import { writeContentSuppressionInside, suppressReceiptsInside, withContentSuppressionReadInside, requireSuppressionTransaction, allocateContentKey, contentSuppressionReasonInside, contentSuppressionRequestFenceInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, hasContentSuppressionRequestInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { writeContentSuppressionInside, suppressReceiptsInside, withContentSuppressionReadInside, requireSuppressionTransaction, allocateContentKey, contentSuppressionReasonInside, memoryCorrectionDenialsInside, contentSuppressionRequestFenceInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, hasContentSuppressionRequestInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { contentReadSafety, memoryContentIdentity, receiptReadSafety, anchoredReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { roleProfileOptions } from './role-profile-input.mjs';
 import { createRoleProfileStorage } from './role-profile-storage.mjs';
@@ -342,7 +342,17 @@ export function createMemoryRuntime(input, internal) {
   function correct(ns, id, value, expectedRevision, projection = {}) {
     ready();
     return transaction(db, () => {
-      memoryWriteSafety(ns,visibleRow(ns,id));
+      const current = visibleRow(ns, id);
+      if (current && cachedContentLayout(db)?.suppressionRevision) {
+        const safety = contentReadSafety(db, { namespace: ns, intent: 'history',
+          ref: { type: 'memory', namespace: ns, memoryId: current.id, revision: current.revision } });
+        const denials = memoryCorrectionDenialsInside(db, ns, { memoryId: current.id, revision: current.revision });
+        // Only a complete set of ancestry-only Raw span denials may be retired
+        // by replacing this revision. Canonical and own-receipt denials still refuse.
+        if ((!safety.allowed && !denials.some(denial => denial.reason === safety.reason)) ||
+            denials.some(denial => denial.kind !== 'raw' || denial.matchMode !== 'span' || denial.matchPath !== 'raw-ancestry'))
+          fail('memory_suppressed');
+      }
       const result=rawCards.mutate(ns,'memory-correct-'+id+'-'+expectedRevision,() => {
       const current = visibleRow(ns, id);
       if (!current) fail("memory_not_found");
