@@ -18,25 +18,27 @@ const until = async (predicate, reason, ms = 15000) => {
   assert.fail(reason);
 };
 const ok = r => { assert.equal(r.ok, true, JSON.stringify(r)); return r.value; };
-import { identityPrefix, sameEntry, runtimeSnapshot, classifyRuntimeHygiene, runtimeLease } from './installed-daemon-runtime.mjs';
+import { identityPrefix, sameEntry, runtimeSnapshot, classifyRuntimeHygiene, runtimeLease, ownedRuntimeFiles } from './installed-daemon-runtime.mjs';
 export { runtimeSnapshot, classifyRuntimeHygiene } from './installed-daemon-runtime.mjs';
 export async function installedAssertions(t, { install = false, exercise, recordLaunchPrefix = prefix => prefix } = {}) {
   const scratch = await mkdtemp(join(tmpdir(), 'entry-')), clients = [], owned = new Map(), logs = new Set(), lockTokens = new Map(), launchedPrefixes = new Set();
   const dir = await runtimeDirectory(), releaseLease = await runtimeLease(dir), before = await runtimeSnapshot(dir.path);
-  const baseline = new Set(before.entries.map(entry => entry.name));
+  const baseline = new Set(before.entries.map(entry => entry.name)), ownNames = new Set();
+  const mutateRuntime = ownedRuntimeFiles(dir, { prefixes: launchedPrefixes, names: ownNames, tokenPrefixes: lockTokens });
   // Claim key ownership via an exclusive atomic link, rather than assuming
   // absence in a directory snapshot proves that this test created the key.
   const keyPath = join(dir.path, 'identity-v1.key');
   let ownKey;
   if (!baseline.has('identity-v1.key')) {
-    const temporary = join(dir.path, 'test-key-' + randomBytes(12).toString('hex'));
-    await dir.validate();
-    await writeFile(temporary, randomBytes(32).toString('hex'), { flag: 'wx', mode: 0o600 });
+    const temporaryName = 'test-key-' + randomBytes(12).toString('hex'), temporary = join(dir.path, temporaryName);
+    ownNames.add(temporaryName);
+    await mutateRuntime('write', temporaryName, randomBytes(32).toString('hex'), { flag: 'wx', mode: 0o600 });
     try {
       const pin = await lstat(temporary, { bigint: true });
-      try { await link(temporary, keyPath); ownKey = pin; }
+      // Exclusive link creates a missing key; it never replaces an entry.
+      try { await link(temporary, keyPath); ownKey = pin; ownNames.add('identity-v1.key'); }
       catch (error) { if (error.code !== 'EEXIST') throw error; }
-    } finally { await rm(temporary); }
+    } finally { await mutateRuntime('remove', temporaryName); }
   }
   const artifact = buildArtifact({ ownDirectory: p => t.after(() => rm(p, { recursive: true, force: true })) });
   // Keep the verified build digest even for the deliberate tamper-refusal
@@ -79,7 +81,7 @@ export async function installedAssertions(t, { install = false, exercise, record
     for (const name of (await readdir(dir.path)).filter(n => /^d-.*\.json$/.test(n))) {
       let d; try { d = JSON.parse(await readFile(join(dir.path, name))); } catch (e) { if (e.code === 'ENOENT') continue; throw e; }
       if (d.identity.store.path !== store || !d.identity.package.path.startsWith(scratch + '/')) continue;
-      owned.set(d.incarnation, d); logs.add(name.replace(/\.json$/, '.log')); values.push({ name, ...d });
+      owned.set(d.incarnation, d); logs.add(name.replace(/\.json$/, '.log')); ownNames.add(name.replace(/\.json$/, '.log')); values.push({ name, ...d });
       const lockName = name.replace(/\.json$/, '.lock');
       try {
         const lock = JSON.parse(await readFile(join(dir.path, lockName)));
@@ -172,7 +174,7 @@ export async function installedAssertions(t, { install = false, exercise, record
     for (const name of await readdir(dir.path)) {
       if (baseline.has(name)) continue;
       if ([...lockTokens.keys()].some(prefix => name === prefix || name.startsWith(prefix + '.owner-') || name.startsWith(prefix + '.reap-')))
-        await rm(join(dir.path, name));
+        await mutateRuntime('remove', name);
     }
   }
   t.after(async () => {
@@ -183,12 +185,12 @@ export async function installedAssertions(t, { install = false, exercise, record
       for (const d of owned.values()) if (startAwareAlive(d.owner)) process.kill(d.owner.pid, 'SIGTERM');
       await until(() => [...owned.values()].every(d => !startAwareAlive(d.owner)), 'every test daemon stopped');
       await until(async () => (await descriptors()).length === 0, 'test endpoints removed');
-      for (const name of logs) if (!baseline.has(name)) await rm(join(dir.path, name), { force: true });
+      for (const name of logs) if (!baseline.has(name)) await mutateRuntime('remove', name, { force: true });
       await cleanupMarkers();
       if (ownKey) {
         const current = await lstat(keyPath, { bigint: true });
         assert.equal(current.dev, ownKey.dev); assert.equal(current.ino, ownKey.ino);
-        await rm(keyPath);
+        await mutateRuntime('remove', 'identity-v1.key');
       }
       const after = await runtimeSnapshot(dir.path, before.identities);
       const current = new Set(after.entries.map(entry => entry.name));
@@ -197,11 +199,11 @@ export async function installedAssertions(t, { install = false, exercise, record
         changed: before.entries.filter(entry => current.has(entry.name) && !sameEntry(entry, after.entries.find(value => value.name === entry.name))).map(entry => entry.name),
       }));
       const hygiene = classifyRuntimeHygiene(before, after, {
-        prefixes: [...launchedPrefixes, ...[...logs].map(name => name.slice(0, -4))], names: [...logs, ...(ownKey ? ['identity-v1.key'] : [])],
+        prefixes: [...launchedPrefixes, ...[...logs].map(name => name.slice(0, -4))], names: [...ownNames],
         tokenPrefixes: [...lockTokens.keys()], owners: [...owned.values()].map(descriptor => descriptor.owner),
       });
       for (const diagnostic of hygiene.diagnostics) t.diagnostic(diagnostic);
-      assert.deepEqual(hygiene.errors, [], 'test leaves no owned files and preserves pre-existing foreign runtime entries');
+      assert.deepEqual(hygiene.errors, [], 'test leaves no owned runtime files');
       t.diagnostic('runtime hygiene: no test-owned files remain');
     } finally { try { await rm(scratch, { recursive: true, force: true }); } finally { await releaseLease(); } }
   });

@@ -14,6 +14,7 @@ const base = (alive = true) => snapshot(['.lock', '.lock.owner-token', '.lock.re
 const copy = value => structuredClone(value);
 const classify = (before, after, ownership) => classifyRuntimeHygiene(before, after, ownership);
 const passes = result => assert.deepEqual(result.errors, []);
+const diagnoses = (result, expected) => { passes(result); assert.ok(result.diagnostics.includes(expected), JSON.stringify(result)); };
 const fails = result => assert.ok(result.errors.length > 0, JSON.stringify(result));
 // This is the exact former teardown rule: only names added to the folder matter.
 const oldRule = (before, after) => after.entries.filter(e => !before.entries.some(b => b.name === e.name));
@@ -21,51 +22,51 @@ const oldRule = (before, after) => after.entries.filter(e => !before.entries.som
 test('foreign identities created after baseline pass; the old global rule rejects the same snapshots', () => {
   const before = base(), after = copy(before);
   after.entries.push(entry('.json', {}, foreign)); after.identities.push(identity(successor, true, foreign));
-  assert.equal(oldRule(before, after).length, 1); passes(classify(before, after));
+  assert.equal(oldRule(before, after).length, 1); diagnoses(classify(before, after), 'foreign identity entry created: ' + foreign + '.json');
 });
 test('live heartbeat rename and append-only log pass, without mutating either snapshot', () => {
   const before = base(), after = copy(before);
   Object.assign(after.entries.find(e => e.name.endsWith('.stamp')), { inode: 2, size: 11, mtime: 2 });
   Object.assign(after.entries.find(e => e.name.endsWith('.log')), { content: 'daemon_ready\ndaemon_draining\n', size: 29, mtime: 2 });
-  const saved = copy({ before, after }); passes(classify(before, after));
+  const saved = copy({ before, after }); diagnoses(classify(before, after), 'foreign log append: ' + prefix + '.log');
   assert.deepEqual({ before, after }, saved);
   // A heartbeat crossing the snapshot may leave an atomic publication temp.
   after.entries.push(entry('.stamp.tmp-synthetic'));
-  assert.equal(oldRule(before, after).length, 1); passes(classify(before, after));
+  assert.equal(oldRule(before, after).length, 1); diagnoses(classify(before, after), 'foreign identity entry created: ' + prefix + '.stamp.tmp-synthetic');
 });
-test('dead or ownerless foreign entries must keep name, kind, inode, size and mtime exactly', () => {
+test('dead or ownerless foreign entry changes to name, kind, inode, size and mtime are diagnostic only', () => {
   for (const ownerless of [false, true]) for (const field of ['name', 'kind', 'inode', 'size', 'mtime']) {
     const before = base(false); if (ownerless) before.identities = [];
     const after = copy(before); after.entries[0][field] = typeof after.entries[0][field] === 'number' ? 99 : 'changed';
-    fails(classify(before, after));
+    diagnoses(classify(before, after), 'dead or ownerless foreign entry changed: ' + prefix + '.lock');
   }
 });
-test('touching a live foreign lock, owner, reaper, socket or descriptor fails', () => {
+test('touching a live foreign lock, owner, reaper, socket or descriptor is diagnostic only', () => {
   for (const suffix of ['.lock', '.lock.owner-token', '.lock.reap-token', '.sock', '.json']) {
     const before = base(), after = copy(before); after.entries.find(e => e.name === prefix + suffix).mtime++;
-    fails(classify(before, after));
+    diagnoses(classify(before, after), 'live foreign entry changed: ' + prefix + suffix);
   }
 });
-test('stamp keeps its name and kind; log metadata changes require content append or reset', () => {
+test('foreign stamp and invalid log metadata changes are diagnostic only', () => {
   for (const [suffix, changes] of [['.stamp', { name: prefix + '.renamed' }], ['.stamp', { kind: 'socket' }],
     ['.log', { inode: 2 }], ['.log', { size: 1 }], ['.log', { mtime: 2 }]]) {
     const before = base(), after = copy(before); Object.assign(after.entries.find(e => e.name === prefix + suffix), changes);
-    fails(classify(before, after));
+    diagnoses(classify(before, after), suffix === '.log' ? 'foreign log changed invalidly: ' + prefix + suffix : 'live foreign entry changed: ' + prefix + '.stamp');
   }
 });
-test('a live foreign identity may disappear wholly only after its owner dies', () => {
+test('foreign disappearance and owner liveness are diagnostic only', () => {
   const before = base();
-  passes(classify(before, snapshot([], [], [identity(owner, false)])));
-  fails(classify(before, snapshot([], [], [identity(owner, true)])));
-  fails(classify(before, snapshot([entry('.log')], [], [identity(owner, false)])));
+  diagnoses(classify(before, snapshot([], [], [identity(owner, false)])), 'foreign identity gone with dead owner: ' + prefix);
+  diagnoses(classify(before, snapshot([], [], [identity(owner, true)])), 'foreign identity gone without dead owner: ' + prefix);
+  diagnoses(classify(before, snapshot([entry('.log')], [], [identity(owner, false)])), 'live foreign entry changed: ' + prefix + '.lock');
 });
-test('a live non-test takeover passes with a diagnostic; a dead or test owner fails', () => {
+test('live, dead and test-owner foreign takeovers are diagnostic only', () => {
   const before = base(), after = base(); after.identities = [identity(successor)];
   after.entries.filter(e => !e.name.endsWith('.log')).forEach(e => e.inode++);
-  const result = classify(before, after); passes(result);
-  assert.equal(result.diagnostics.length, 1); assert.match(result.diagnostics[0], /takeover/);
-  fails(classify(before, after, { owners: [successor] }));
-  after.identities[0].alive = false; fails(classify(before, after));
+  const result = classify(before, after); diagnoses(result, 'foreign identity takeover: ' + prefix);
+  assert.ok(result.diagnostics.some(line => line === 'foreign identity takeover: ' + prefix));
+  diagnoses(classify(before, after, { owners: [successor] }), 'foreign takeover has dead or test owner: ' + prefix);
+  after.identities[0].alive = false; diagnoses(classify(before, after), 'foreign takeover has dead or test owner: ' + prefix);
 });
 test('test-owned identity files, token markers, logs and key may not remain, even if pre-existing', () => {
   for (const name of [own + '.stamp.tmp-synthetic', own + '.lock.owner-token', own + '.log', 'test-key', 'token.reap-child']) {
@@ -73,23 +74,24 @@ test('test-owned identity files, token markers, logs and key may not remain, eve
     fails(classify(before, after, { prefixes: [own], names: ['test-key', own + '.log'], tokenPrefixes: ['token'] }));
   }
 });
-test('non-identity entries and unrecognized files of pre-existing live identities stay exact', () => {
+test('foreign non-identity and unrecognized entry changes are diagnostic only', () => {
   for (const name of ['identity-v1.key', 'foreign.log', prefix + '.unknown']) {
     const before = base(), value = { ...entry('.log'), name }; before.entries.push(value);
     const after = copy(before); after.entries.at(-1).mtime++;
-    fails(classify(before, after)); passes(classify(before, copy(before)));
+    diagnoses(classify(before, after), (name === prefix + '.unknown' ? 'live foreign entry changed: ' : 'non-identity entry changed: ') + name);
+    diagnoses(classify(before, copy(before)), name === prefix + '.unknown' ? 'foreign identity live: ' + prefix : 'non-identity entry unchanged: ' + name);
   }
 });
 
-test('new non-identity entries fail', () => {
-  fails(classify(snapshot([]), snapshot([{ ...entry('.log'), name: 'foreign-key' }])));
+test('new foreign non-identity entries are diagnostic only', () => {
+  diagnoses(classify(snapshot([]), snapshot([{ ...entry('.log'), name: 'foreign-key' }])), 'non-identity entry created: foreign-key');
 });
 
 test('additions to dead or ownerless foreign identities are diagnostic only', () => {
   for (const ownerless of [false, true]) {
     const before = base(false); if (ownerless) before.identities = [];
     const after = copy(before); after.entries.push(entry('.lock.owner-new-foreign'));
-    const result = classify(before, after); passes(result);
+    const result = classify(before, after); diagnoses(result, 'foreign identity entry created: ' + prefix + '.lock.owner-new-foreign');
     assert.ok(result.diagnostics.some(line => line.includes(prefix + '.lock.owner-new-foreign')));
     assert.deepEqual(after.entries.slice(0, -1), before.entries);
   }
@@ -99,7 +101,7 @@ test('live content append permits a new inode and backwards wall-clock mtime', (
   const before = base(), after = copy(before);
   Object.assign(before.entries.find(e => e.name.endsWith('.log')), { mtime: '20' });
   Object.assign(after.entries.find(e => e.name.endsWith('.log')), { inode: 2, content: 'daemon_ready\ndaemon_exit\n', size: 25, mtime: '10' });
-  passes(classify(before, after));
+  diagnoses(classify(before, after), 'foreign log append: ' + prefix + '.log');
 });
 
 const replaceLog = (after, content, changes = {}) => Object.assign(after.entries.find(e => e.name === prefix + '.log'),
@@ -112,25 +114,24 @@ test('dead and ownerless foreign identities revive only with appended daemon_rea
     after.identities = [identity(successor)];
     after.entries = after.entries.filter(e => e.name.endsWith('.log'));
     replaceLog(after, 'daemon_ready\ndaemon_ready\n');
-    const result = classify(before, after); passes(result);
-    assert.deepEqual(result.diagnostics, ['foreign identity revived: ' + prefix]);
+    const result = classify(before, after); diagnoses(result, 'foreign identity revived: ' + prefix);
   }
 });
 
-test('non-ready append cannot excuse removed endpoints of dead or ownerless foreign identities', () => {
+test('non-ready append and removed foreign endpoints produce diagnostics without revival', () => {
   for (const ownerless of [false, true]) {
     const before = base(false); if (ownerless) before.identities = [];
     const after = copy(before); after.identities = [identity(successor)];
     after.entries = after.entries.filter(e => e.name.endsWith('.log'));
     replaceLog(after, 'daemon_ready\ndaemon_draining\n');
-    fails(classify(before, after));
+    diagnoses(classify(before, after), 'dead or ownerless foreign entry changed: ' + prefix + '.lock');
     const preserved = copy(before); replaceLog(preserved, 'daemon_ready\ndaemon_draining\n');
-    const result = classify(before, preserved); passes(result);
-    assert.deepEqual(result.diagnostics, [], 'non-ready append does not revive the identity');
+    const result = classify(before, preserved); diagnoses(result, 'foreign log append: ' + prefix + '.log');
+    assert.ok(!result.diagnostics.some(line => line.includes('revived')), 'non-ready append does not revive the identity');
   }
 });
 
-test('every foreign log rejects changed prefixes, non-codes, partial lines, wrong types and invalid shrink', () => {
+test('every foreign log diagnoses changed prefixes, non-codes, partial lines, wrong types and invalid shrink', () => {
   for (const state of ['live', 'dead', 'ownerless', 'takeover']) for (const [content, changes] of [
     ['daemon_exit\ndaemon_ready\n', {}], ['daemon_ready\nnot_a_code\n', {}],
     ['daemon_ready\ndaemon_exit', {}], ['daemon_ready\ndaemon_exit\n', { kind: 'socket' }],
@@ -139,31 +140,42 @@ test('every foreign log rejects changed prefixes, non-codes, partial lines, wron
     const before = base(state === 'live' || state === 'takeover');
     if (state === 'ownerless') before.identities = [];
     const after = copy(before); if (state === 'takeover') after.identities = [identity(successor)];
-    replaceLog(after, content, changes); fails(classify(before, after));
+    replaceLog(after, content, changes); diagnoses(classify(before, after), 'foreign log changed invalidly: ' + prefix + '.log');
   }
 });
 
-test('valid log reset crosses 262144 bytes; the exact boundary and invalid reset lines fail', () => {
+test('valid log reset crosses 262144 bytes; the exact boundary and invalid reset lines are diagnostic only', () => {
   // 21843 whole daemon_exit lines = 262116 bytes; two new lines cross the cap.
   for (const alive of [true, false]) {
     const before = base(alive), after = copy(before), old = 'daemon_exit\n'.repeat(21843);
     replaceLog(before, old); replaceLog(after, 'daemon_draining\ndaemon_ready\n');
-    passes(classify(before, after));
-    replaceLog(after, 'daemon_exit\n'); fails(classify(before, after));
-    replaceLog(after, 'not_a_code\n'.repeat(4)); fails(classify(before, after));
+    diagnoses(classify(before, after), 'foreign log reset: ' + prefix + '.log');
+    replaceLog(after, 'daemon_exit\n'); diagnoses(classify(before, after), 'foreign log changed invalidly: ' + prefix + '.log');
+    replaceLog(after, 'not_a_code\n'.repeat(4)); diagnoses(classify(before, after), 'foreign log changed invalidly: ' + prefix + '.log');
   }
   const before = base(), after = copy(before);
   replaceLog(before, 'daemon_exit\n'.repeat(21843) + 'daemon_draining\n'); // 262132 bytes.
   replaceLog(after, 'daemon_exit\n'); // Exactly 262144 is not a reset.
-  fails(classify(before, after));
+  diagnoses(classify(before, after), 'foreign log changed invalidly: ' + prefix + '.log');
 });
 
-test('revival preserves non-endpoint baseline entries and non-identity entries', () => {
+test('foreign changes during revival remain diagnostic for non-endpoints and non-identity entries', () => {
   for (const name of ['identity-v1.key', prefix + '.unknown', prefix + '.stamp.tmp-synthetic']) {
     const before = base(false); before.entries.push({ ...entry('.unknown'), name });
     const after = copy(before); after.identities = [identity(successor)];
     replaceLog(after, 'daemon_ready\ndaemon_ready\n');
-    passes(classify(before, after));
-    after.entries.find(e => e.name === name).mtime++; fails(classify(before, after));
+    diagnoses(classify(before, after), 'foreign identity revived: ' + prefix);
+    after.entries.find(e => e.name === name).mtime++; diagnoses(classify(before, after), (name === 'identity-v1.key' ? 'non-identity entry changed: ' : 'dead or ownerless foreign entry changed: ') + name);
+  }
+});
+
+// A foreign diagnostic cannot hide owned residue in the same comparison.
+test('foreign changes stay diagnostic while every owned class still fails', () => {
+  const before = base(false), after = copy(before); after.entries[0].mtime++;
+  for (const name of [own + '.json', own + '.log', 'identity-v1.key', 'own-token.reap-child']) {
+    const mixed = copy(after); mixed.entries.push({ ...entry('.json'), name });
+    const result = classify(before, mixed, { prefixes: [own], names: ['identity-v1.key'], tokenPrefixes: ['own-token'] });
+    assert.deepEqual(result.errors, ['test-owned file remains: ' + name]);
+    assert.ok(result.diagnostics.includes('dead or ownerless foreign entry changed: ' + prefix + '.lock'));
   }
 });

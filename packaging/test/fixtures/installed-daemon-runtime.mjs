@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { open, unlink, lstat, link, writeFile, readFile, readdir } from 'node:fs/promises';
+import { open, unlink, rename, lstat, link, writeFile, readFile, readdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { runtimeDirectory, readPrivate } from '../../../adapters/mcp/local-daemon-state.mjs';
@@ -12,6 +12,28 @@ export const sameOwner = (a, b) => a != null && b != null &&
   ['pid', 'start', 'boot', 'namespace'].every(key => a[key] === b[key]);
 export const sameEntry = (a, b) => b != null &&
   ['name', 'kind', 'inode', 'size', 'mtime'].every(key => a[key] === b[key]);
+
+// The sole runtime deletion/rewrite boundary for installed-test fixtures.
+// Collections stay live as launches, exclusive keys and tokens are recorded.
+// Names are basenames, never paths; rename checks both ends before any I/O.
+export function ownedRuntimeFiles(directory, { prefixes = new Set(), names = new Set(), tokenPrefixes = new Set() } = {}) {
+  function checked(name) {
+    const owned = typeof name === 'string' && name.length > 0 && !/[\\/\0]/.test(name) && name !== '.' && name !== '..' &&
+      (names.has(name) || [...prefixes].some(prefix => /^[dp]-[a-f0-9]{32}$/.test(prefix) && name.startsWith(prefix + '.')) ||
+        [...tokenPrefixes.keys()].some(prefix => name === prefix || name.startsWith(prefix + '.owner-') || name.startsWith(prefix + '.reap-')));
+    if (!owned) throw Object.assign(Error('runtime_fixture_foreign_name'), { code: 'runtime_fixture_foreign_name' });
+    return join(directory.path, name);
+  }
+  return async (action, name, value, options) => {
+    const path = checked(name), target = action === 'rename' ? checked(value) : undefined;
+    assert.ok(['remove', 'write', 'rename'].includes(action), 'known runtime mutation');
+    await directory.validate();
+    if (action === 'write') return writeFile(path, value, options);
+    if (action === 'rename') return rename(path, target);
+    try { await unlink(path); }
+    catch (error) { if (!value?.force || error.code !== 'ENOENT') throw error; }
+  };
+}
 // Read the immutable source allowlist, never log bytes through a path reader.
 const stateSource = await readFile(new URL('../../../adapters/mcp/local-daemon-state.mjs', import.meta.url), 'utf8');
 const codeList = /const logCodes = new Set\(\[([\s\S]*?)\]\);/.exec(stateSource);
@@ -53,7 +75,7 @@ export function classifyRuntimeHygiene(before, after, {
     if (isOwned(entry.name)) errors.push('test-owned file remains: ' + entry.name);
     else if (!before.entries.some(value => value.name === entry.name)) {
       if (identityPrefix(entry.name)) diagnostics.push('foreign identity entry created: ' + entry.name);
-      else errors.push('non-identity entry created: ' + entry.name);
+      else diagnostics.push('non-identity entry created: ' + entry.name);
     }
   }
   const groups = new Map();
@@ -61,7 +83,7 @@ export function classifyRuntimeHygiene(before, after, {
     if (isOwned(entry.name)) continue;
     const prefix = identityPrefix(entry.name);
     if (!prefix) {
-      if (!sameEntry(entry, current.get(entry.name))) errors.push('non-identity entry changed: ' + entry.name);
+      diagnostics.push((sameEntry(entry, current.get(entry.name)) ? 'non-identity entry unchanged: ' : 'non-identity entry changed: ') + entry.name);
       continue;
     }
     if (!groups.has(prefix)) groups.set(prefix, []);
@@ -73,31 +95,34 @@ export function classifyRuntimeHygiene(before, after, {
     const remaining = after.entries.filter(entry => identityPrefix(entry.name) === prefix);
     if (previous?.alive && remaining.length === 0) {
       const retired = after.retired.find(identity => identity.prefix === prefix && sameOwner(identity.owner, previous.owner));
-      if (retired?.alive !== false) errors.push('foreign identity gone without dead owner: ' + prefix);
+      diagnostics.push((retired?.alive === false ? 'foreign identity gone with dead owner: ' : 'foreign identity gone without dead owner: ') + prefix);
       continue;
     }
     const log = entries.find(entry => entry.name === prefix + '.log');
     const appended = log ? logChange(log, current.get(log.name)) : undefined;
-    if (log && !appended) errors.push('foreign log changed invalidly: ' + log.name);
+    if (log) diagnostics.push((!appended ? 'foreign log changed invalidly: ' : appended.length === 0 ? 'foreign log unchanged: ' :
+      current.get(log.name).content.startsWith(log.content) ? 'foreign log append: ' : 'foreign log reset: ') + log.name);
     const revived = !previous?.alive && appended?.includes('daemon_ready');
     if (revived) diagnostics.push('foreign identity revived: ' + prefix);
     if (previous?.alive && previous.owner && next?.owner && !sameOwner(previous.owner, next.owner)) {
       if (next.alive && !owners.some(owner => sameOwner(owner, next.owner)))
         diagnostics.push('foreign identity takeover: ' + prefix);
-      else errors.push('foreign takeover has dead or test owner: ' + prefix);
+      else diagnostics.push('foreign takeover has dead or test owner: ' + prefix);
       continue;
     }
     if (!previous?.alive) {
+      diagnostics.push((previous?.owner ? 'foreign identity dead: ' : 'foreign identity ownerless: ') + prefix);
       for (const entry of entries) if (!(entry === log && appended) &&
         !(revived && revivalEndpoint(entry.name.slice(prefix.length))) && !sameEntry(entry, current.get(entry.name)))
-        errors.push('dead or ownerless foreign entry changed: ' + entry.name);
+        diagnostics.push('dead or ownerless foreign entry changed: ' + entry.name);
       continue;
     }
+    diagnostics.push('foreign identity live: ' + prefix);
     for (const entry of entries) {
       const value = current.get(entry.name), suffix = entry.name.slice(prefix.length);
       const unchanged = sameEntry(entry, value);
       const heartbeat = suffix === '.stamp' && value?.kind === entry.kind;
-      if (!unchanged && !heartbeat && !(entry === log && appended)) errors.push('live foreign entry changed: ' + entry.name);
+      if (!unchanged && !heartbeat && !(entry === log && appended)) diagnostics.push('live foreign entry changed: ' + entry.name);
     }
   }
   return { errors, diagnostics };
@@ -189,18 +214,20 @@ export async function runtimeLease(directory) {
 export async function installedDaemonRuntime({ diagnostic = () => {} } = {}) {
   const directory = await runtimeDirectory(), release = await runtimeLease(directory);
   const before = await runtimeSnapshot(directory.path), baseline = new Set(before.entries.map(entry => entry.name));
-  const prefixes = new Set(), owners = [], markers = new Set(), epochs = new Map();
+  const prefixes = new Set(), owners = [], markers = new Set(), epochs = new Map(), ownNames = new Set();
+  const mutateRuntime = ownedRuntimeFiles(directory, { prefixes, names: ownNames, tokenPrefixes: markers });
   let ownKey, finished = false;
   const keyPath = join(directory.path, 'identity-v1.key');
   if (!baseline.has('identity-v1.key')) {
-    const temporary = join(directory.path, 'test-key-' + randomBytes(12).toString('hex'));
-    await directory.validate();
-    await writeFile(temporary, randomBytes(32).toString('hex'), { flag: 'wx', mode: 0o600 });
+    const temporaryName = 'test-key-' + randomBytes(12).toString('hex'), temporary = join(directory.path, temporaryName);
+    ownNames.add(temporaryName);
+    await mutateRuntime('write', temporaryName, randomBytes(32).toString('hex'), { flag: 'wx', mode: 0o600 });
     try {
       const pin = await lstat(temporary, { bigint: true });
-      try { await link(temporary, keyPath); ownKey = pin; }
+      // Exclusive link creates a missing key; it never replaces an entry.
+      try { await link(temporary, keyPath); ownKey = pin; ownNames.add('identity-v1.key'); }
       catch (error) { if (error.code !== 'EEXIST') throw error; }
-    } finally { await unlink(temporary); }
+    } finally { await mutateRuntime('remove', temporaryName); }
   }
   function command(session, action) {
     const db = session.args[session.args.indexOf('--db') + 1];
@@ -287,17 +314,17 @@ export async function installedDaemonRuntime({ diagnostic = () => {} } = {}) {
         if (baseline.has(name)) continue;
         const log = [...prefixes].some(prefix => name === prefix + '.log');
         const marker = [...markers].some(prefix => name === prefix || name.startsWith(prefix + '.owner-') || name.startsWith(prefix + '.reap-'));
-        if (log || marker) { await directory.validate(); await unlink(join(directory.path, name)); }
+        if (log || marker) await mutateRuntime('remove', name);
       }
       if (ownKey) {
         const pin = await lstat(keyPath, { bigint: true });
-        assert.equal(pin.dev, ownKey.dev); assert.equal(pin.ino, ownKey.ino); await unlink(keyPath);
+        assert.equal(pin.dev, ownKey.dev); assert.equal(pin.ino, ownKey.ino); await mutateRuntime('remove', 'identity-v1.key');
       }
       const after = await runtimeSnapshot(directory.path, before.identities);
-      const hygiene = classifyRuntimeHygiene(before, after, { prefixes: [...prefixes], owners, tokenPrefixes: [...markers], names: ownKey ? ['identity-v1.key'] : [] });
+      const hygiene = classifyRuntimeHygiene(before, after, { prefixes: [...prefixes], owners, tokenPrefixes: [...markers], names: [...ownNames] });
       diagnostic('runtime observed difference: ' + JSON.stringify(runtimeDifference(before, after)));
       for (const line of hygiene.diagnostics) diagnostic(line);
-      assert.deepEqual(hygiene.errors, [], 'owned entries absent; foreign entries obey class-aware hygiene');
+      assert.deepEqual(hygiene.errors, [], 'no test-owned runtime entries remain');
       if (errors.length) throw new AggregateError(errors, 'installed daemon lifetime accounting failed');
     } finally { await release(); }
   }

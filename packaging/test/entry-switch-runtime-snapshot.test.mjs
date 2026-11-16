@@ -77,7 +77,9 @@ for (const suffix of ['.json', '.lock']) {
     assert.equal(result.entries.find(e => e.name === prefix + suffix).inode, String(current.ino));
     assert.deepEqual(result.identities[0].owner, owner);
     assert.equal(result.identities[0].alive, true);
-    assert.deepEqual(classifyRuntimeHygiene(result, await runtimeSnapshot(path)).errors, []);
+    const classification = classifyRuntimeHygiene(result, await runtimeSnapshot(path));
+    assert.deepEqual(classification.errors, []);
+    assert.ok(classification.diagnostics.includes('foreign identity live: ' + prefix));
   });
 }
 
@@ -98,26 +100,29 @@ test('snapshot fails by code only after three unstable generations', async t => 
 
 for (const suffix of ['.lock', '.json']) for (const value of [{}, null, [], 7, 'ownerless', { owner: {} },
   { pid: 1 }, { owner: { pid: 1 } }, '{malformed']) {
-  test(`ownerless ${suffix} ${JSON.stringify(value)} is exact through real parsing`, async t => {
+  test(`ownerless ${suffix} ${JSON.stringify(value)} is classified through real parsing`, async t => {
     const path = await directory(t), file = join(path, prefix + suffix);
     await writeFile(file, value === '{malformed' ? value : JSON.stringify(value), { mode: 0o600 });
     const before = await runtimeSnapshot(path), after = await runtimeSnapshot(path);
     assert.equal(before.identities[0].owner, undefined);
     assert.equal(before.identities[0].alive, false);
-    assert.deepEqual(classifyRuntimeHygiene(before, after).errors, []);
+    const unchanged = classifyRuntimeHygiene(before, after);
+    assert.deepEqual(unchanged.errors, []);
+    assert.ok(unchanged.diagnostics.includes('foreign identity ownerless: ' + prefix));
     await writeFile(file, 'changed-ownerless-record');
     const changed = classifyRuntimeHygiene(before, await runtimeSnapshot(path));
-    assert.deepEqual(changed.errors, ['dead or ownerless foreign entry changed: ' + prefix + suffix]);
+    assert.deepEqual(changed.errors, []);
+    assert.ok(changed.diagnostics.includes('dead or ownerless foreign entry changed: ' + prefix + suffix));
   });
 }
 
- test('lossy UTF-8 prefixes are rejected through real snapshots without exposing content', async t => {
+ test('lossy UTF-8 foreign prefixes are diagnosed through real snapshots without exposing content', async t => {
   const root = await directory(t), dir = await runtimeDirectory({ root }), file = join(dir.path, prefix + '.log');
   await writeFile(file, Buffer.from([0xf0, 0x90, 0x80, 0x0a]), { mode: 0o600 });
   const before = await runtimeSnapshot(dir.path);
   await writeFile(file + '.replacement', Buffer.concat([Buffer.from([0xf0, 0x90, 0x81, 0x0a]), Buffer.from('daemon_ready\n')]), { mode: 0o600 });
   await rename(file + '.replacement', file);
   const result = classifyRuntimeHygiene(before, await runtimeSnapshot(dir.path));
-  assert.ok(result.errors.some(line => line === 'foreign log changed invalidly: ' + prefix + '.log'), 'non-ASCII log rejected');
-  assert.deepEqual(result.diagnostics, []);
+  assert.deepEqual(result.errors, []);
+  assert.ok(result.diagnostics.includes('foreign log changed invalidly: ' + prefix + '.log'), 'non-ASCII foreign log diagnosed');
 });
