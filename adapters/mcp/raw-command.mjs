@@ -52,15 +52,17 @@ export async function rawCommand(args, write = line => console.log(line), {testD
       // Use the same local guard and canonical validation as delete, but a
       // noncreating existing-store opener: no automatic build before this one.
       const {inspectExistingStorePin}=await import('../../core/existing-store.mjs');
-      const {openDatabase,transaction}=await import('../../core/database.mjs');
+      const {openDatabase}=await import('../../core/database.mjs');
       const {buildLocalRawPeerIndex}=await import('../../core/local-authority-schema.mjs');
       const storeId=db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id;
       const pin=await inspectExistingStorePin(path,storeId);
       db.close();db=undefined;
       db=openDatabase(path,{existingStore:pin});
-      const result=buildLocalRawPeerIndex(db,path,transaction);
-      write('index: '+(result==='busy'?'busy, close Claude Code and Codex and run again':result));
-      return result==='busy'?3:result==='insufficient_space'?1:0;
+      const result=buildLocalRawPeerIndex(db,path);
+      const label=result.reason==='busy'?'busy, close Claude Code and Codex and run again'
+        :result.reason==='space'?'insufficient_space':result.status;
+      write('index: '+label);
+      return result.reason==='busy'?3:['built','present'].includes(result.status)?0:1;
     }
     const {openMemoryCore}=await import('../../core/index.mjs');
     core=openMemoryCore({path,raw:true,rawSearch:false});

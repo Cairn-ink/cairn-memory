@@ -75,7 +75,7 @@ export function createMemoryRuntime(input, internal) {
     rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion), rawSources: Boolean(internal?.rawSources), localControls: Boolean(internal?.localControls), existingStore: input.existingStore, storeFence: input.storeFence, contentSafety: input.contentSafety });
   try {
   if (internal?.localRawPrivacy) transaction(db, () => installLocalRawPrivacy(db));
-  if (internal?.localRawPrivacy) installLocalRawPeerIndex(db, input.path, transaction);
+  if (internal?.localRawPrivacy) installLocalRawPeerIndex(db, input.path, busyTimeoutMs ?? 5000);
   const localRawPrivacy = internal?.localRawPrivacy ? createLocalRawPrivacyStorage(db) : null;
   const rawLineage = createRawLineageStorage(db);
   const sourceRoots = createRawSourceRoots(db);

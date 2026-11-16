@@ -263,6 +263,13 @@ const matchesSafetySchema = (rows, layout, receiptEventTime, lineage = 0, baseSc
 // Preserve quoted SQL bytes when comparing the complete inherited package.
 // Whitespace inside a CHECK literal is meaningful and cannot be normalized away.
 const exactDDL = sql => JSON.stringify((sql??'').match(/'(?:''|[^'])*'|"(?:""|[^"])*"|`(?:``|[^`])*`|\[[^\]]*\]|[A-Za-z_][A-Za-z_0-9]*|[0-9]+|[^\s;]/g)??[]);
+const matchesDeclarations = (rows, declarations) => rows.length === declarations.size && rows.every(row =>
+  declarations.has(row.name) && row.type === declarations.get(row.name).type &&
+  exactDDL(row.sql) === exactDDL(declarations.get(row.name).sql));
+/** Pure local-package comparison for the optional builder; no connection cache. */
+export function localRawPackageVersion(rows) {
+  return localRawPackages.find(([, declarations]) => matchesDeclarations(rows, declarations))?.[0] ?? null;
+}
 function verifyCompleteCardSchema(db,layout,eventTime) {
   const wanted=new Map(lineageBaseDeclarations[layout.base].map(row=>[row.name,{...row}]));
   if(eventTime)wanted.get('receipts').sql=extendedReceiptDeclarations[layout.base];
@@ -278,8 +285,7 @@ function verifyCompleteCardSchema(db,layout,eventTime) {
   if(layout.base===33 && actual.length===shippedLimit && actual.some(row=>local.has(row.name))) {
     actual=metadataRows(db.prepare('SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL LIMIT '+(wanted.size+largestLocalRawPackage+1)));
   }
-  const matches = declarations => actual.length===declarations.size && actual.every(row=>declarations.has(row.name) &&
-    row.type===declarations.get(row.name).type && exactDDL(row.sql)===exactDDL(declarations.get(row.name).sql));
+  const matches = declarations => matchesDeclarations(actual, declarations);
   if(matches(wanted)) return null;
   if(layout.base===33 && actual.some(row=>local.has(row.name))) {
     for(const [version, declarations] of localRawPackages) {

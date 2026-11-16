@@ -22,6 +22,12 @@ const cases = [
     name: 'altered peer index '+columns, ddl: s => s,
     after: `CREATE INDEX local_raw_message_peers ON raw_messages(${columns})`, accept: false,
   })),
+  ...[
+    ['UNIQUE', 'CREATE UNIQUE INDEX local_raw_message_peers ON raw_messages(message_id, conversation_id)'],
+    ['partial', 'CREATE INDEX local_raw_message_peers ON raw_messages(message_id, conversation_id) WHERE ordinal>0'],
+    ['COLLATE NOCASE', 'CREATE INDEX local_raw_message_peers ON raw_messages(message_id COLLATE NOCASE, conversation_id)'],
+    ['wrong table', 'CREATE INDEX local_raw_message_peers ON raw_parts(message_id, conversation_id)'],
+  ].map(([name,after])=>({name:'peer index '+name,ddl:s=>s,after,accept:false})),
   ...LOCAL_RAW_PRIVACY_DDL.map(sql => {
     const [,type,name] = /^CREATE (TABLE|INDEX|TRIGGER) IF NOT EXISTS (\w+)/.exec(sql);
     return { name: 'v2 minus '+name, ddl: () => LOCAL_RAW_PACKAGES.v2.join('\n'),

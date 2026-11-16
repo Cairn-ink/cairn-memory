@@ -83,3 +83,37 @@ test(`raw index validates its exact local command grammar: ${args.join(' ')}`,as
   const lines=[];assert.equal(await rawCommand(args,line=>lines.push(line)),2);
   assert.deepEqual(lines.map(JSON.parse),[{ok:false,error:{code:'invalid_raw_arguments',retryable:false}}]);
 });
+
+test('raw index ignores retry deadlines and clears the marker after its dedicated build',async t=>{
+  const f=await fixture(t,{high:true}),marker=f.path+'.peer-index-retry';
+  fs.writeFileSync(marker,JSON.stringify({notBefore:Date.now()+86400000,delayMs:86400000,reason:'full'}));
+  const exec=DatabaseSync.prototype.exec;let side;
+  t.mock.method(DatabaseSync.prototype,'exec',function(sql){
+    if(sql==='BEGIN IMMEDIATE')side=this;
+    return exec.call(this,sql);
+  });
+  assert.deepEqual(await command(f.path),{code:0,lines:['index: built']});
+  assert.ok(side && side!==f.db);assert.equal(side.isOpen,false);
+  assert.equal(fs.existsSync(marker),false);assert.ok(present(f.db));
+});
+
+for(const errcode of [9,10,778,13,1,11]) test(`raw index native ${errcode} defers on its side connection`,async t=>{
+  const f=await fixture(t),before=schema(f.db),exec=DatabaseSync.prototype.exec;
+  let side;
+  t.mock.method(DatabaseSync.prototype,'exec',function(sql){
+    if(sql.startsWith('CREATE INDEX IF NOT EXISTS local_raw_message_peers')){
+      side=this;exec.call(this,sql);throw Object.assign(Error('synthetic build failure'),{errcode});
+    }
+    return exec.call(this,sql);
+  });
+  assert.deepEqual(await command(f.path),{code:1,lines:['index: deferred']});
+  assert.ok(side && side!==f.db);assert.equal(side.isOpen,false);assert.equal(schema(f.db),before);
+  assert.equal(present(f.db),false);assert.ok(JSON.parse(fs.readFileSync(f.path+'.peer-index-retry','utf8')).notBefore>Date.now());
+});
+
+test('raw index present clears an old retry marker without a build',async t=>{
+  const f=await fixture(t,{v2:true}),marker=f.path+'.peer-index-retry';
+  fs.writeFileSync(marker,JSON.stringify({notBefore:Date.now()+86400000,delayMs:86400000,reason:'busy'}));
+  assert.deepEqual(await command(f.path),{code:0,lines:['index: present']});
+  assert.equal(fs.existsSync(marker),false);assert.equal(f.mock.mock.callCount(),0);
+});
