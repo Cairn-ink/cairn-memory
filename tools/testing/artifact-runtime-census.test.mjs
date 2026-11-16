@@ -61,6 +61,70 @@ if (process.argv.includes('--local-census') || process.argv.includes('--local-ce
     ]);
     assert.deepEqual(result.leaks, ['first.test.mjs']);
   });
+  test('an added exact-shape identity key is shared state with a named diagnostic, not a leak', async () => {
+    const output = [], key = { ...entry('identity-v1.key'), uid: String(process.getuid()) };
+    const snapshots = [{ entries: [] }, { entries: [key] }];
+    const result = await runCensus({ files: ['/private/path/key-created.test.mjs'], snapshot: async () => snapshots.shift(),
+      run: async () => ({ code: 0 }), write: line => output.push(JSON.parse(line)) });
+    assert.equal(result.code, 0);
+    assert.deepEqual(result.leaks, []);
+    assert.equal(output[0].file, 'key-created.test.mjs'); assert.equal(output[0].rc, 0);
+    assert.deepEqual(output[0].added, ['identity-v1.key']); assert.equal(output[0].leak, false);
+    assert.equal(output[0].shared_identity_key_created, true);
+    assert.equal(output[0].outcome, undefined);
+    assert.doesNotMatch(JSON.stringify(output), /private|path|inode|mode|uid/);
+  });
+  test('an added identity key in any unapproved shape stays red by test name', async t => {
+    for (const [shape, metadata] of [
+      ['mode-0644', { mode: String(0o100644) }],
+      ['symlink', { mode: String(0o120777) }],
+      ['directory', { mode: String(0o040600) }],
+      ['wrong-owner', { uid: String(process.getuid() + 1) }],
+      ['special-mode', { mode: String(0o104600) }],
+    ]) await t.test(shape, async () => {
+      const output = [], key = { ...entry('identity-v1.key'), uid: String(process.getuid()), ...metadata };
+      const snapshots = [{ entries: [] }, { entries: [key] }], file = shape + '.test.mjs';
+      const result = await runCensus({ files: [file], snapshot: async () => snapshots.shift(),
+        run: async () => ({ code: 0 }), write: line => output.push(JSON.parse(line)) });
+      assert.equal(result.code, 1); assert.deepEqual(result.leaks, [file]);
+      assert.equal(output[0].file, file); assert.equal(output[0].rc, 0);
+      assert.deepEqual(output[0].added, ['identity-v1.key']);
+      assert.equal(output[0].leak, true); assert.equal(output[0].outcome, 'RED');
+      assert.equal(output[0].shared_identity_key_created, undefined);
+    });
+  });
+  test('a shared identity key never exempts another addition, including key temps', async () => {
+    const key = { ...entry('identity-v1.key'), uid: String(process.getuid()) };
+    for (const name of [recognized, 'identity-v1.key.tmp-' + 'b'.repeat(24)]) {
+      const output = [], snapshots = [{ entries: [] }, { entries: [key, { ...key, name }] }];
+      const result = await runCensus({ files: ['key-and-leak.test.mjs'], snapshot: async () => snapshots.shift(),
+        run: async () => ({ code: 0 }), write: line => output.push(JSON.parse(line)) });
+      assert.equal(result.code, 1); assert.deepEqual(result.leaks, ['key-and-leak.test.mjs']);
+      assert.equal(output[0].file, 'key-and-leak.test.mjs'); assert.equal(output[0].rc, 0);
+      assert.deepEqual(output[0].added, ['identity-v1.key', name]);
+      assert.equal(output[0].leak, true); assert.equal(output[0].outcome, 'RED');
+      assert.equal(output[0].shared_identity_key_created, true);
+    }
+  });
+  test('a pre-existing shared identity key has no creation diagnostic', async () => {
+    const output = [], key = { ...entry('identity-v1.key'), uid: String(process.getuid()) };
+    const result = await runCensus({ files: ['existing-key.test.mjs'], snapshot: async () => ({ entries: [key] }),
+      run: async () => ({ code: 0 }), write: line => output.push(JSON.parse(line)) });
+    assert.equal(result.code, 0); assert.deepEqual(result.leaks, []);
+    assert.deepEqual(output[0].added, []); assert.equal(output[0].leak, false);
+    assert.equal(output[0].shared_identity_key_created, undefined);
+  });
+  test('a created shared identity key preserves snapshot diagnostics and child failure', async () => {
+    const output = [], key = { ...entry('identity-v1.key'), uid: String(process.getuid()) };
+    const snapshots = [{ entries: [], diagnostic: 'runtime_folder_missing' }, { entries: [key] }];
+    const result = await runCensus({ files: ['failing-key.test.mjs'], snapshot: async () => snapshots.shift(),
+      run: async () => ({ code: 7 }), write: line => output.push(JSON.parse(line)) });
+    assert.equal(result.code, 7); assert.deepEqual(result.leaks, []);
+    assert.equal(output[0].file, 'failing-key.test.mjs'); assert.equal(output[0].rc, 7);
+    assert.equal(output[0].diagnostic, 'runtime_folder_missing');
+    assert.equal(output[0].shared_identity_key_created, true);
+    assert.equal(output[0].leak, false);
+  });
   test('unrecognized names and snapshot errors are code-only and never leak paths or content', async () => {
     const output = [], results = [{ entries: [entry('secret-path-name')] }, { entries: [entry('secret-path-name', '2'), entry('/absolute/secret')] }];
     const result = await runCensus({ files: ['/private/path/safe.test.mjs'], snapshot: async () => results.shift(), run: async () => ({ code: 0 }), write: line => output.push(line) });

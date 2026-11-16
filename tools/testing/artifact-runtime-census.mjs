@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { readdir, lstat } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { constants, existsSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -57,7 +57,11 @@ export async function runCensus({ files, snapshot = runtimeSnapshot, run = super
     if (before.entries && after.entries) {
       const delta = runtimeDifference(before, after);
       for (const kind of ['added', 'changed', 'removed']) row[kind] = delta[kind].map(displayName);
-      row.leak = delta.added.length > 0;
+      // The uid's identity key persists across tests under the scheduling lease.
+      const sharedKey = delta.added.includes('identity-v1.key') && after.entries.some(entry =>
+        entry.name === 'identity-v1.key' && entry.mode === String(constants.S_IFREG | 0o600) && entry.uid === String(process.getuid?.()));
+      if (sharedKey) row.shared_identity_key_created = true;
+      row.leak = delta.added.some(name => name !== 'identity-v1.key' || !sharedKey);
       if (row.leak) row.outcome = 'RED';
       if (row.leak) leaks.push(row.file);
     }
