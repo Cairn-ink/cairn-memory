@@ -200,9 +200,10 @@ for (const value of ['', 'd-' + 'A'.repeat(32), 'flip', 'missing']) test('shared
   await accounting.stop();
 });
 
-for (const seam of ['missing', 'malformed']) test('finish cleans an unobserved publishing launch despite ' + seam + ' recording', { timeout: 120000 }, async t => {
+for (const residue of [false, true]) for (const seam of ['missing', 'malformed']) test('finish cleans an unobserved publishing launch despite ' + seam + ' recording' + (residue ? ' with owned residue' : ''), { timeout: 120000 }, async t => {
+  const recordingFailure = Object.assign(Error('synthetic_record_missing'), { code: 'ENOENT' });
   const f = await runtimeOwnershipFixture(t, { recordLaunchPrefix: () => {
-    if (seam === 'missing') throw Object.assign(Error('synthetic_record_missing'), { code: 'ENOENT' });
+    if (seam === 'missing') throw recordingFailure;
     return 'd-' + 'A'.repeat(32);
   } });
   const saved = f.session('synthetic-unobserved-owner');
@@ -221,17 +222,28 @@ for (const seam of ['missing', 'malformed']) test('finish cleans an unobserved p
   const [{ prefix, owner }] = published;
   assert.equal(startAwareAlive(owner), true, 'published owner independently verified live');
   const mutate = ownedRuntimeFiles(f.runtime.directory, { prefixes: new Set([prefix]) });
+  const residueName = prefix + '.unremoved-control';
+  if (residue) await mutate('write', residueName, 'synthetic owned residue', { flag: 'wx', mode: 0o600 });
   try {
     await assert.rejects(f.runtime.finish(), error => {
       const errors = error instanceof AggregateError ? error.errors : [error];
       assert.ok(errors.some(value => seam === 'missing' ? value.code === 'ENOENT' && value.message === 'synthetic_record_missing' :
         value.code === 'ERR_ASSERTION' && /recorded launch prefix is nonempty and well-formed/.test(value.message)),
       'original recording failure is still reported');
+      if (seam === 'missing') assert.ok(errors.includes(recordingFailure), 'original recording error object is retained');
+      if (residue) assert.ok(errors.some(value => value.code === 'ERR_ASSERTION' &&
+        /no test-owned runtime entries remain/.test(value.message) &&
+        value.actual.includes('test-owned file remains: ' + residueName)), 'owned-residue hygiene assertion is also reported');
       return true;
     });
     const alive = startAwareAlive(owner);
     t.diagnostic(`unobserved ${seam} recorder: owner independently alive after finish=${alive}`);
     assert.equal(alive, false, 'published owner independently verified dead after finish');
+    if (residue) {
+      assert.deepEqual((await readdir(f.runtime.directory.path)).filter(name => name.startsWith(prefix + '.')), [residueName],
+        'only the deliberate owned residue remains after owner death');
+      await mutate('remove', residueName);
+    }
     assert.deepEqual((await readdir(f.runtime.directory.path)).filter(name => name.startsWith(prefix + '.')), [],
       'all published runtime files are gone');
   } finally {

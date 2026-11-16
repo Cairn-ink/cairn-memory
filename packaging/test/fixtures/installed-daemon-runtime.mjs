@@ -408,7 +408,12 @@ export async function installedDaemonRuntime({ diagnostic = () => {}, recordLaun
         const hygiene = classifyRuntimeHygiene(before, after, { prefixes: [...prefixes], owners, tokenPrefixes: [...markers], names: [...ownNames] });
         diagnostic('runtime observed difference: ' + JSON.stringify(runtimeDifference(before, after)));
         for (const line of hygiene.diagnostics) diagnostic(line);
-        assert.deepEqual(hygiene.errors, [], 'no test-owned runtime entries remain');
+        try { assert.deepEqual(hygiene.errors, [], 'no test-owned runtime entries remain'); }
+        catch (error) {
+          // Hygiene must retain any earlier recording/accounting failure.
+          if (!errors.length) throw error;
+          errors.push(error);
+        }
         if (errors.length) throw new AggregateError(errors, 'installed daemon lifetime accounting failed');
       } finally { await release(); }
     }
