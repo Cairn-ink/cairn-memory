@@ -155,8 +155,8 @@ hosted MCP endpoint, the Codex rules and the plugin's privacy contract.
 - **Local.** Your memories and saved conversations are in a plaintext SQLite
   database, by default `~/.cairn-memory/data/memory.sqlite`, with plaintext
   search indexes in a folder beside it (`memory.sqlite.raw-search`) and, while a
-  postponed index build waits to retry, a small `memory.sqlite.peer-index-retry`
-  file holding only retry times. Nothing is
+  postponed index build waits to retry, an empty `memory.sqlite.peer-index-retry.*`
+  file whose name records only the retry timing and reason. Nothing is
   sent to Cairn, and no Cairn account is involved. Setup downloads the engine's
   packages from npm.
 - **Saved conversations.** On Linux and WSL, Local mode saves the text of your

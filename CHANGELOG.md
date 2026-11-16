@@ -8,7 +8,7 @@
   write lock for about a second or two at that size. The build is optional: if it
   cannot run or finish (store busy, disk full, I/O error), the store stays as it was
   and opens normally, and the next attempt waits 6 hours (doubling up to 24 hours,
-  recorded in a small `.peer-index-retry` file next to the store). A store above
+  recorded in the name of an empty `.peer-index-retry.*` file next to the store). A store above
   2,000,000 messages keeps working without the index; build it with
   `cairn-memory raw index --db <path>` while Claude Code and Codex are closed.
 - The index uses about 84 bytes of disk per stored message. The automatic build is
