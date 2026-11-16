@@ -93,6 +93,10 @@ try {
         },
       } } } : {}),
       afterLock: async () => {
+        if (configuration.holdAfterLock) {
+          send({ kind: 'candidate-after-lock' });
+          while ((await once(process, 'message'))[0].kind !== 'release-candidate-lock') {}
+        }
         if (!configuration.commitBarrier) return;
         const { DatabaseSync } = await import('node:sqlite');
         const prepare = DatabaseSync.prototype.prepare, exec = DatabaseSync.prototype.exec;
@@ -120,6 +124,32 @@ try {
   } else {
     const candidates = [], liveCandidates = new Map();
     let connected = false, failedRespawn = false;
+    if (configuration.losingElectionRace) {
+      const spawn = childProcess.spawn, open = fsPromises.open;
+      let launched = false, paused = false;
+      childProcess.spawn = function(executable, args, options) {
+        if (args.some(arg => arg.endsWith('/local-daemon.mjs'))) {
+          launched = true;
+          return spawn(executable, [new URL('./local-daemon-gated-candidate.mjs', import.meta.url).pathname,
+            configuration.losingElectionRace], options);
+        }
+        return spawn(executable, args, options);
+      };
+      fsPromises.open = async function(path, ...args) {
+        if (launched && !paused && String(path).endsWith(configuration.losingElectionEntry ?? '.stamp')) {
+          paused = true; send({ kind: 'private-open-pending' });
+          while ((await once(process, 'message'))[0].kind !== 'try-private-open') {}
+          try { return await open(path, ...args); }
+          catch (error) {
+            send({ kind: 'private-open-failed', name: error.name, code: error.code });
+            while ((await once(process, 'message'))[0].kind !== 'release-private-error') {}
+            throw error;
+          }
+        }
+        return open(path, ...args);
+      };
+      syncBuiltinESMExports();
+    }
     if (configuration.endpointReadRace) {
       const lstat = fsPromises.lstat; let paused = false;
       fsPromises.lstat = async function(path, ...args) {

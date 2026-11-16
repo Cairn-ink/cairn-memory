@@ -93,7 +93,7 @@ test('three failed candidates exhaust one connect budget without reading stdin',
   const w = await workspace(t), a = w.forward([], { failEveryCandidate: true });
   a.release(); a.process.stdin.write('{"jsonrpc":"2.0","id":1,"method":"tools/list"}\n');
   const begin = performance.now(), done = await until(() => a.messages.find(m => m.kind === 'forwarder-done'), 'bounded candidates refuse within one connect budget');
-  assert.deepEqual(done.code, { refused: 'daemon_connect_timeout' }); assert.equal(done.bytesRead, 0);
+  assert.deepEqual(done.code, { refused: 'daemon_connect_timeout', cause: { name: 'Error', code: 'daemon_connect_timeout' } }); assert.equal(done.bytesRead, 0);
   assert.ok(performance.now() - begin < 11500);
   assert.equal(a.messages.filter(m => m.kind === 'candidate').length, 3);
   assert.ok(a.messages.filter(m => m.kind === 'candidate').every(m => m.active_candidates === 1));

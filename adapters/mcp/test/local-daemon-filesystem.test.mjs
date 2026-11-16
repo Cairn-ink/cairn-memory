@@ -36,7 +36,7 @@ test('non-local store refusal precedes stdin; a local store attaches with one st
   rejected.release();
   rejected.process.stdin.write('{"jsonrpc":"2.0","id":1,"method":"initialize"}\n');
   const refusal = await until(() => rejected.messages.find(m => m.kind === 'forwarder-done'), 'filesystem refusal settles');
-  assert.deepEqual(refusal.code, { refused: 'daemon_filesystem' }); assert.equal(refusal.bytesRead, 0);
+  assert.deepEqual(refusal.code, { refused: 'daemon_filesystem', cause: { name: 'Error', code: 'daemon_filesystem' } }); assert.equal(refusal.bytesRead, 0);
   assert.equal(rejected.messages.filter(m => m.kind === 'candidate').length, 0);
   const local = w.child({ args: w.args, storeType: 0xef53, options: { root: join(w.root, 'run'), environment: {} } });
   local.release(); await w.connect(local);

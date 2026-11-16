@@ -24,7 +24,7 @@ test('a protocol-one descriptor refuses before any stdin byte', { timeout: 20000
     const b = w.forward(); b.release();
     b.process.stdin.write('{"jsonrpc":"2.0","id":91,"method":"tools/list"}\n');
     const result = await until(() => b.messages.find(m => m.kind === 'forwarder-done'), 'protocol refusal settles');
-    assert.deepEqual(result.code, { refused: 'daemon_protocol' }); assert.equal(result.bytesRead, 0);
+    assert.deepEqual(result.code, { refused: 'daemon_protocol', cause: { name: 'Error', code: 'daemon_protocol' } }); assert.equal(result.bytesRead, 0);
     assert.equal(b.messages.filter(m => m.kind === 'candidate').length, 0);
   } finally { await writeFile(path, bytes); }
 });

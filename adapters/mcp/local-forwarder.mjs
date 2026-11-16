@@ -66,12 +66,24 @@ async function connectAttempt(args, options, deadline, endpointState) {
   const paths = endpointPaths(directory, identity.digest);
   while (performance.now() < deadline) {
     await directory.validate(); await assertStore(identity.record, filesystem);
-    const text = await readPrivate(directory, paths.ready, { missing: true });
+    let text, descriptor;
+    try {
+      text = await readPrivate(directory, paths.ready, { missing: true });
+      if (text) {
+        try { descriptor = JSON.parse(text); } catch { throw refuse('daemon_descriptor'); }
+        if (descriptor.protocol !== DAEMON_PROTOCOL) throw refuse('daemon_protocol');
+        if (canonical(descriptor.identity) !== canonical(identity.record)) throw refuse('daemon_identity');
+        if (await takeOver(directory, paths, descriptor, { ...options.takeoverOptions, staleMs: options.unresponsiveMs ?? DAEMON_UNRESPONSIVE_MS, deadline })) continue;
+      }
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      // A lifetime-lock winner can reap the predecessor's descriptor/stamp
+      // between the private-file inode check and open. Re-read the published
+      // generation and repeat every check within the original connect budget.
+      await delay(Math.min(25, Math.max(1, deadline - performance.now())));
+      continue;
+    }
     if (text) {
-      let descriptor; try { descriptor = JSON.parse(text); } catch { throw refuse('daemon_descriptor'); }
-      if (descriptor.protocol !== DAEMON_PROTOCOL) throw refuse('daemon_protocol');
-      if (canonical(descriptor.identity) !== canonical(identity.record)) throw refuse('daemon_identity');
-      if (await takeOver(directory, paths, descriptor, { ...options.takeoverOptions, staleMs: options.unresponsiveMs ?? DAEMON_UNRESPONSIVE_MS, deadline })) continue;
       const info = await checkedEntry(directory, paths.socket, { socket: true, missing: true });
       if (info) {
         if (String(info.dev) !== descriptor.socket?.dev || String(info.ino) !== descriptor.socket?.ino) {
@@ -210,7 +222,7 @@ export async function runForwarder(args = process.argv.slice(2), options = {}) {
   }
   try { await establish(); if (!closed) input.pipe(outgoing); }
   catch (error) {
-    if (!attached && !closed) close({ refused: /^daemon_[a-z_]+$/.test(error.code) ? error.code : 'daemon_transport' }, true);
+    if (!attached && !closed) close({ refused: /^daemon_[a-z_]+$/.test(error.code) ? error.code : 'daemon_transport', cause: { name: error.name, code: error.code } }, true);
     else close('daemon_transport');
   }
   return done;

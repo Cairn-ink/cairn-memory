@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { workspace, until, ok } from './local-daemon-support.mjs';
 import { runtimeDirectory, endpointPaths, writePrivate } from '../local-daemon-state.mjs';
@@ -120,4 +120,41 @@ test('a busy healthy owner with a young stamp is never signalled', { timeout: 15
   const b = w.child({ args: w.args, observeTakeover: true, options: { root: join(w.root, 'run'), environment: {} } }); b.release();
   assert.equal((await w.connect(b)).incarnation, first.incarnation); await work;
   assert.equal(b.messages.filter(m => m.kind === 'takeover-signal').length, 0); assert.ok(startAwareAlive(first.owner));
+});
+
+for (const entry of ['.stamp', '.json']) for (const takeover of [false, true]) test('losing candidate attaches to an already-published winner after private-open race; entry=' + entry + '; takeover=' + takeover, { timeout: 25000 }, async t => {
+  const w = await workspace(t), { descriptor: old, candidate: predecessor } = await stopped(w);
+  if (takeover) await stale(w);
+  else { assert.ok(startAwareAlive(old.owner)); process.kill(old.owner.pid, 'SIGKILL'); await until(() => predecessor.exit, 'ordinary dead owner exits'); }
+  const gate = join(w.root, 'release-losing-candidate');
+  const b = w.child({ args: w.args, losingElectionRace: gate, losingElectionEntry: entry, observeTakeover: true,
+    options: { root: join(w.root, 'run'), environment: {}, takeoverOptions: { graceMs: 0 } } });
+  b.release();
+  await until(() => b.messages.some(m => m.kind === 'private-open-pending'), 'B checks the old private inode after launching its candidate');
+  assert.equal(b.messages.filter(m => m.kind === 'candidate').length, 1);
+  const winner = w.child({ role: 'candidate', bootstrap: await w.bootstrap(), holdAfterLock: true }); winner.release();
+  await until(() => winner.messages.some(m => m.kind === 'candidate-after-lock'), 'winner reaps the old endpoint while holding the lifetime lock');
+  b.process.send({ kind: 'try-private-open' });
+  const error = await until(() => b.messages.find(m => m.kind === 'private-open-failed'), 'B observes the real unlinked private-file open');
+  assert.deepEqual(error, { kind: 'private-open-failed', name: 'Error', code: 'ENOENT' });
+  winner.process.send({ kind: 'release-candidate-lock' });
+  const fresh = await until(async () => { const d = await w.descriptor(); return d?.incarnation !== old.incarnation && d; }, 'winner publishes before B resumes');
+  const a = w.forward(); a.release(); assert.equal((await w.connect(a)).incarnation, fresh.incarnation);
+  await writeFile(gate, '', { mode: 0o600 });
+  const loser = await until(() => b.messages.find(m => m.kind === 'candidate-exit'), 'B candidate loses the real lifetime-lock election');
+  assert.equal(loser.code, 0); assert.equal(loser.signal, null);
+  assert.equal(loser.stderr, 'synthetic_candidate_lost_lock\n');
+  b.process.send({ kind: 'release-private-error' });
+  // Check the outcome immediately: red/control evidence includes original name/code.
+  const outcome = await until(() => b.messages.find(m => m.kind === 'connected' || m.kind === 'forwarder-done'), 'B attaches within its original budget');
+  assert.equal(outcome.kind, 'connected', JSON.stringify(outcome));
+  const attached = await w.connect(b);
+  assert.equal(attached.incarnation, fresh.incarnation); assert.deepEqual(attached.owner, fresh.owner);
+  assert.ok(performance.now() - b.startedAt < 10500, 'the original ten-second budget is never restarted');
+  assert.equal(b.messages.filter(m => m.kind === 'candidate').length, 1, 'the loser attaches without launching a second candidate');
+  const signals = b.messages.filter(m => m.kind === 'takeover-signal');
+  assert.ok(signals.every(m => m.pid === old.owner.pid));
+  assert.equal(signals.filter(m => m.signal === 'SIGTERM').length, takeover ? 1 : 0);
+  assert.equal(signals.filter(m => m.signal === 'SIGKILL').length, takeover ? 1 : 0);
+  ok(await b.tool('remember_memory', { content: 'synthetic authenticated losing forwarder', kind: 'fact' }));
 });
