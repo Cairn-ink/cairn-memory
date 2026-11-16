@@ -936,7 +936,7 @@
     },
     {
       "file": "core/content-safety-schema.mjs",
-      "sha256": "c8f9e0bcf08902576a82510f357528ddfdbfa32365e986771a9a76006582c4b1",
+      "sha256": "b8ab45bb74c7a8db067429df8cf4fae7d938175d6abca105f2cae455de3d8269",
       "reason": "Reviewed Card lineage: exact lineage tuple/DDL attestation and synchronous canonical snapshot registration; feature accessors expose only privately attested revisions and add no fact-only writer."
     },
     {
@@ -1003,7 +1003,7 @@
       "file": "core/database.mjs",
       "start": "export function openDatabase(",
       "end": null,
-      "sha256": "b708788c5dc8e16106ad8d9ced95a9b9d0fa70789b04bc8ae12bfe0f66c1d4e6",
+      "sha256": "ea45c2cf9c134e21a6941226c558a1180d10484442b5c35f4a23cfb534ede0ea",
       "reason": "Reviewed mechanical option A delta: remove the open-time dispatcher timeout clamp; pristine creation and all safety installation statements remain unchanged; #647: S2H creation timeout stays retryable only while the target is absent (mapping only; open-time checks unchanged)."
     }
   ],
@@ -1187,8 +1187,11 @@
     },
     "core/content-safety-schema.mjs": {
       "exports": [
+        "LOCAL_RAW_PACKAGES",
+        "LOCAL_RAW_PEER_INDEX_DDL",
         "LOCAL_RAW_PRIVACY_DDL",
         "attestContentSafety",
+        "attestedLocalRawPackage",
         "bindContentSafetyConnection",
         "cachedContentLayout",
         "cardLineageRevision",
@@ -1197,6 +1200,7 @@
         "contentSafetyConnection",
         "contentSafetyDDL",
         "installedContentLayout",
+        "localRawPackageVersion",
         "receiptEventTimeEnabled",
         "registerContentReadSnapshot",
         "verifyContentSafetyDDL",
@@ -1209,7 +1213,11 @@
         "cardLineageRevision": "Reads the lineage bit only from the module-private set of attested layouts; no SQL or mutation capability.",
         "registerContentReadSnapshot": "Registers the native synchronous read-transaction seam without importing SQLite into the CLI/configuration graph; no fact writer.",
         "withCanonicalContentSnapshot": "Runs the trusted canonical read callback in the registered synchronous snapshot, preserving the final lineage fence without an await or fact insertion.",
-        "LOCAL_RAW_PRIVACY_DDL": "Attestor-owned immutable local privacy declarations shared with the local installer; this data-only export executes no SQL."
+        "LOCAL_RAW_PRIVACY_DDL": "Attestor-owned immutable local privacy declarations shared with the local installer; this data-only export executes no SQL.",
+        "LOCAL_RAW_PEER_INDEX_DDL": "Attestor-owned immutable declaration of the optional local peer index; data-only, executes no SQL.",
+        "LOCAL_RAW_PACKAGES": "Frozen named local package versions (v1, v2) the attestor admits exactly; data-only, executes no SQL.",
+        "attestedLocalRawPackage": "Reads the local package version recorded by attestation from the module-private layout cache; no SQL or mutation capability.",
+        "localRawPackageVersion": "Pure comparison of given local schema rows against the named local package versions; no SQL, connection cache or mutation."
       }
     },
     "core/content-suppression-evidence.mjs": {

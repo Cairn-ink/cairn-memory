@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased — local index for forget and delete lookups
+
+- Local stores gain one index on stored conversation messages (by message id, then
+  conversation). It is built automatically on the first local open after upgrading,
+  for stores with up to 2,000,000 stored messages; building it holds the store's
+  write lock for about a second or two at that size. The build is optional: if it
+  cannot run or finish (store busy, disk full, I/O error), the store stays as it was
+  and opens normally, and the next attempt waits 6 hours (doubling up to 24 hours,
+  recorded in the name of an empty `.peer-index-retry.*` file next to the store). A store above
+  2,000,000 messages keeps working without the index; build it with
+  `cairn-memory raw index --db <path>` while Claude Code and Codex are closed.
+- The index uses about 84 bytes of disk per stored message. The automatic build is
+  skipped when the store's disk has less than twice that free.
+- Going back to 0.6.8 or earlier: a store with card lineage revision 1 on which this
+  version built the index is refused with `unsupported_database`; reinstall this
+  version to recover access. Such stores without the index, and lineage-0 and ordinary
+  local stores, still open.
+- Known limit: when the index build commits, reads that are in progress at that moment
+  (for example a session-start context or memory read requested by the assistant) can
+  fail with `evidence_unavailable`. This happens only at the build, as a tool error to
+  the assistant; reading again works.
+
 ## Unreleased — engine Card maintenance
 
 - Apply the ten-minute wait after a purge to every part of the affected topic.

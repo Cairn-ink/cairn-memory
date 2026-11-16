@@ -18,7 +18,7 @@ import { createEpisodeReadProjection, createEpisodeReads } from './episode-reads
 import { createEpisodeStorage, episodeOptions } from './episode-storage.mjs';
 import { createProceduralStorage } from './procedural-storage.mjs';
 import { createHash } from "node:crypto";
-import { openDatabase, transaction, readTransaction, isConnectionDiscarded, isStorageBusy, busyTimeoutOption } from "./database.mjs";
+import { openDatabase, transaction, readTransaction, isConnectionDiscarded, isStorageBusy, busyTimeoutOption, localRawPeerIndexAdmission } from "./database.mjs";
 import { createMocStorage } from "./moc-storage.mjs";
 import { createAdmissionStorage } from "./admission-storage.mjs";
 import { createClassificationJournalStorage } from './classification-journal-storage.mjs';
@@ -39,7 +39,7 @@ import { purgeEngineCardOperationsInside } from './private-card-schema.mjs';
 import { createRawSourceRoots } from './raw-source-roots.mjs';
 import { createRawDeletionStorage } from './raw-deletion-storage.mjs';
 import { createRawLineageStorage, isSourceSnapshotOverflow, SOURCE_SNAPSHOT_MS } from './raw-lineage-storage.mjs';
-import { installLocalRawPrivacy } from './local-authority-schema.mjs';
+import { installLocalRawPrivacy, installLocalRawPeerIndex } from './local-authority-schema.mjs';
 import { createLocalRawPrivacyStorage } from './local-authority-storage.mjs';
 
 const where = "owner_id = ? AND scope = ? AND project_id = ?";
@@ -75,6 +75,7 @@ export function createMemoryRuntime(input, internal) {
     rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion), rawSources: Boolean(internal?.rawSources), localControls: Boolean(internal?.localControls), existingStore: input.existingStore, storeFence: input.storeFence, contentSafety: input.contentSafety });
   try {
   if (internal?.localRawPrivacy) transaction(db, () => installLocalRawPrivacy(db));
+  if (internal?.localRawPrivacy) installLocalRawPeerIndex(db, input.path, localRawPeerIndexAdmission(db), busyTimeoutMs ?? 5000);
   const localRawPrivacy = internal?.localRawPrivacy ? createLocalRawPrivacyStorage(db) : null;
   const rawLineage = createRawLineageStorage(db);
   const sourceRoots = createRawSourceRoots(db);

@@ -6,6 +6,7 @@ import { identifier } from '../../core/validation.mjs';
 const help = `Cairn Memory — local Raw conversation commands
 
 Usage:
+  cairn-memory raw index --db ABS
   cairn-memory raw list --db ABS --owner ID [--project ID]
   cairn-memory raw delete --db ABS --owner ID [--project ID] --conversation ID [--yes]
 
@@ -24,18 +25,18 @@ export async function rawCommand(args, write = line => console.log(line), {testD
   try {
     const [operation,...flags] = args, values = new Map();
     const invalid = () => { throw Object.assign(Error(),{code:'invalid_raw_arguments'}); };
-    if (!['list','delete'].includes(operation)) invalid();
+    if (!['list','delete','index'].includes(operation)) invalid();
     for (let i=0;i<flags.length;i++) {
       const flag=flags[i];
       if (values.has(flag)) invalid();
       if (flag==='--yes' && operation==='delete') { values.set(flag,true); continue; }
-      if (!['--db','--owner','--project',...(operation==='delete'?['--conversation']:[])].includes(flag) ||
+      if (!['--db',...(operation==='index'?[]:['--owner','--project']),...(operation==='delete'?['--conversation']:[])].includes(flag) ||
           !flags[i+1] || flags[i+1].startsWith('--')) invalid();
       values.set(flag,flags[++i]);
     }
     const path=values.get('--db'), ownerId=values.get('--owner'), projectId=values.get('--project')??null;
-    if (!path || !isAbsolute(path) || path.includes('\0') || !ownerId) invalid();
-    try { identifier(ownerId); if(projectId!==null)identifier(projectId); } catch { invalid(); }
+    if (!path || !isAbsolute(path) || path.includes('\0') || operation!=='index' && !ownerId) invalid();
+    try { if(operation!=='index')identifier(ownerId); if(projectId!==null)identifier(projectId); } catch { invalid(); }
     const id=values.get('--conversation');
     if(operation==='delete') {
       try { identifier(id); } catch { invalid(); }
@@ -47,6 +48,22 @@ export async function rawCommand(args, write = line => console.log(line), {testD
     db=new DatabaseSync(path,{readOnly:true,timeout:5000});
     if(!db.prepare("SELECT 1 FROM sqlite_schema WHERE name='local_raw_uuid_delete_guard' AND type='trigger'").get())
       throw Object.assign(Error(),{code:'unsupported_database'});
+    if(operation==='index') {
+      // Use the same local guard and canonical validation as delete, but a
+      // noncreating existing-store opener: no automatic build before this one.
+      const {inspectExistingStorePin}=await import('../../core/existing-store.mjs');
+      const {openDatabase,localRawPeerIndexAdmission}=await import('../../core/database.mjs');
+      const {buildLocalRawPeerIndex}=await import('../../core/local-authority-schema.mjs');
+      const storeId=db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id;
+      const pin=await inspectExistingStorePin(path,storeId);
+      db.close();db=undefined;
+      db=openDatabase(path,{existingStore:pin});
+      const result=buildLocalRawPeerIndex(db,path,localRawPeerIndexAdmission(db));
+      const label=result.reason==='busy'?'busy, close Claude Code and Codex and run again'
+        :result.reason==='space'?'insufficient_space':result.status;
+      write('index: '+label);
+      return result.reason==='busy'?3:['built','present'].includes(result.status)?0:1;
+    }
     const {openMemoryCore}=await import('../../core/index.mjs');
     core=openMemoryCore({path,raw:true,rawSearch:false});
     if(typeof core.deleteConversation!=='function')throw Object.assign(Error(),{code:'unsupported_database'});

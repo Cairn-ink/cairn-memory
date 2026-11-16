@@ -1,10 +1,10 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { resolveContentLayout } from './content-safety-layout.mjs';
-import { fail } from './validation.mjs';
+import { fail, MemoryStoreError } from './validation.mjs';
 import { cardLineageDDL, authoredInvalidationDDL } from './card-lineage-schema.mjs';
 import { lineageBaseDeclarations, extendedReceiptDeclarations } from './card-lineage-base-schema.mjs';
 
-// One exact package, owned by the attestor and reused by the local installer.
+// Frozen v1 package, owned by the attestor and reused by the local installer.
 export const LOCAL_RAW_PRIVACY_DDL = Object.freeze([
   `CREATE TABLE IF NOT EXISTS local_raw_hide_windows (
     owner_id TEXT NOT NULL, scope TEXT NOT NULL, project_id TEXT NOT NULL,
@@ -57,6 +57,13 @@ export const LOCAL_RAW_PRIVACY_DDL = Object.freeze([
       VALUES(NEW.owner_id,NEW.scope,NEW.project_id,NEW.client,NEW.session_key);
   END;`,
 ]);
+export const LOCAL_RAW_PEER_INDEX_DDL = Object.freeze([
+  'CREATE INDEX IF NOT EXISTS local_raw_message_peers ON raw_messages(message_id, conversation_id);',
+]);
+export const LOCAL_RAW_PACKAGES = Object.freeze({
+  v1: LOCAL_RAW_PRIVACY_DDL,
+  v2: Object.freeze([...LOCAL_RAW_PRIVACY_DDL, ...LOCAL_RAW_PEER_INDEX_DDL]),
+});
 const localDeclaration = sql => {
   if(typeof sql !== 'string') fail('unsupported_database');
   const match = /^CREATE (?:UNIQUE )?(TABLE|INDEX|TRIGGER) (\w+)\b/.exec(sql.trim().replace(' IF NOT EXISTS',''));
@@ -64,8 +71,13 @@ const localDeclaration = sql => {
   return [match[2], { type:match[1].toLowerCase(), sql:sql.trim().replace(' IF NOT EXISTS','') }];
 };
 // A future unsupported declaration must fail at module load, never destructure null.
-const localRawDeclarations = new Map(LOCAL_RAW_PRIVACY_DDL.map(localDeclaration));
-if (localRawDeclarations.size !== LOCAL_RAW_PRIVACY_DDL.length) throw Error('invalid_local_raw_package');
+const localRawPackages = Object.entries(LOCAL_RAW_PACKAGES).map(([version, ddl]) => {
+  const declarations = new Map(ddl.map(localDeclaration));
+  if (declarations.size !== ddl.length) throw Error('invalid_local_raw_package');
+  return [version, declarations];
+});
+const localRawDeclarations = new Map(localRawPackages.flatMap(([, declarations]) => [...declarations]));
+const largestLocalRawPackage = Math.max(...localRawPackages.map(([, declarations]) => declarations.size));
 
 const tables = `CREATE TABLE content_safety_control (
  singleton INTEGER PRIMARY KEY CHECK(singleton=1),
@@ -251,25 +263,54 @@ const matchesSafetySchema = (rows, layout, receiptEventTime, lineage = 0, baseSc
 // Preserve quoted SQL bytes when comparing the complete inherited package.
 // Whitespace inside a CHECK literal is meaningful and cannot be normalized away.
 const exactDDL = sql => JSON.stringify((sql??'').match(/'(?:''|[^'])*'|"(?:""|[^"])*"|`(?:``|[^`])*`|\[[^\]]*\]|[A-Za-z_][A-Za-z_0-9]*|[0-9]+|[^\s;]/g)??[]);
+const matchesDeclarations = (rows, declarations) => rows.length === declarations.size && rows.every(row =>
+  declarations.has(row.name) && row.type === declarations.get(row.name).type &&
+  exactDDL(row.sql) === exactDDL(declarations.get(row.name).sql));
+/** Pure local-package comparison for the optional builder; no connection cache. */
+export function localRawPackageVersion(rows) {
+  return localRawPackages.find(([, declarations]) => matchesDeclarations(rows, declarations))?.[0] ?? null;
+}
 function verifyCompleteCardSchema(db,layout,eventTime) {
   const wanted=new Map(lineageBaseDeclarations[layout.base].map(row=>[row.name,{...row}]));
   if(eventTime)wanted.get('receipts').sql=extendedReceiptDeclarations[layout.base];
   wanted.get('card_memory_revision_invalidation').sql=authoredInvalidationDDL(layout.base);
   for(const [name,row]of expectedSchema(layout.base,eventTime,true,1))wanted.set(name,{name,...row});
-  // Local Raw adds one closed, optional package to the inherited schema. Admit
-  // the entire exact package or none of it; never ignore a name/prefix family.
+  // Admit exactly one named local package or the unchanged inherited schema.
   // Metadata only: read-only openers execute no DDL or repair writes.
-  const local = new Map(LOCAL_RAW_PRIVACY_DDL.map(localDeclaration));
+  const local = localRawDeclarations;
   // Main's first inventory reads at most wanted+1 rows. Only a recognized
   // local object in that result authorizes the larger bounded package scan.
   const shippedLimit=wanted.size+1;
   let actual=metadataRows(db.prepare('SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL LIMIT '+shippedLimit));
   if(layout.base===33 && actual.length===shippedLimit && actual.some(row=>local.has(row.name))) {
-    actual=metadataRows(db.prepare('SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL LIMIT '+(wanted.size+local.size+1)));
+    actual=metadataRows(db.prepare('SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL LIMIT '+(wanted.size+largestLocalRawPackage+1)));
   }
-  if(layout.base===33&&actual.some(row=>local.has(row.name)))for(const [name,row]of local)wanted.set(name,row);
-  if(actual.length!==wanted.size||actual.some(row=>!wanted.has(row.name)||row.type!==wanted.get(row.name).type||
-    exactDDL(row.sql)!==exactDDL(wanted.get(row.name).sql)))fail('unsupported_database');
+  const matches = declarations => matchesDeclarations(actual, declarations);
+  if(matches(wanted)) return null;
+  if(layout.base===33 && actual.some(row=>local.has(row.name))) {
+    for(const [version, declarations] of localRawPackages) {
+      if(matches(new Map([...wanted,...declarations]))) return version;
+    }
+    // Code-only diagnostic: compare tokenized object sets, counting altered
+    // objects as one removal and one addition. Ties select the older package.
+    const signature = row => JSON.stringify([row.name,row.type,exactDDL(row.sql)]);
+    const present = new Set(actual.filter(row=>!wanted.has(row.name)).map(signature));
+    // Overflow is already refused. Foreign objects beyond the bound add the
+    // same distance to both versions; only their one differing object matters.
+    if(actual.length===wanted.size+largestLocalRawPackage+1 && !actual.some(row=>row.name==='local_raw_message_peers')) {
+      const peer=db.prepare("SELECT name,type,sql FROM sqlite_schema WHERE name='local_raw_message_peers'").get();
+      if(peer)present.add(signature(peer));
+    }
+    const distance = declarations => {
+      const expected = new Set([...declarations].map(([name,row])=>signature({name,...row})));
+      return [...present].filter(row=>!expected.has(row)).length + [...expected].filter(row=>!present.has(row)).length;
+    };
+    const nearest = localRawPackages.reduce((best, candidate)=>distance(candidate[1])<distance(best[1])?candidate:best);
+    const error = new MemoryStoreError('unsupported_database');
+    Object.defineProperty(error,'nearestLocalRawPackage',{value:nearest[0]});
+    throw error;
+  }
+  fail('unsupported_database');
 }
 const safetyObjects = `SELECT schema_version AS cookie,name,type,sql FROM pragma_schema_version LEFT JOIN sqlite_schema ON (
  name GLOB 'content_safety_*' OR name GLOB 'content_identity_*' OR name='owner_suppression_epochs'
@@ -354,7 +395,7 @@ export function attestContentSafety(db, physical) {
     const scanned = metadataRows(db.prepare(safetyObjects));
     const cookie = scanned[0]?.cookie;
     let rows = scanned.filter(row => row.name !== null);
-    let controlBinding, header;
+    let controlBinding, header, localRawPackage = null;
     if (!layout.suppressionRevision) {
       if (rows.length) fail('unsupported_database');
     } else {
@@ -393,7 +434,7 @@ export function attestContentSafety(db, physical) {
       if (row.card_lineage_revision === 1) {
         const invalidation=db.prepare("SELECT sql FROM sqlite_schema WHERE name='card_memory_revision_invalidation'").get();
         if(normalize(invalidation?.sql??'')!==normalize(authoredInvalidationDDL(layout.base)))fail('unsupported_database');
-        verifyCompleteCardSchema(db,layout,eventTime);
+        localRawPackage = verifyCompleteCardSchema(db,layout,eventTime);
         lineageLayouts.add(layout);
       }
       // Exact DDL closes the feature/revision vocabulary; the control row selects
@@ -404,16 +445,21 @@ export function attestContentSafety(db, physical) {
     header ??= db.prepare(headerSQL(false)).get();
     if (header.cookie !== cookie || header.physical !== physical || physical !== 0 && header.applicationId !== 0x43414952 ||
         layout.suppressionRevision && header.control !== controlBinding) fail('unsupported_database');
-    layouts.set(contentSafetyConnection(db), { layout, header });
+    layouts.set(contentSafetyConnection(db), { layout, header, localRawPackage });
     return layout;
   } catch (error) {
     if (contentSafetyBudgetError(error) || [5, 6].includes(Number(error?.errcode) & 255)) throw error;
     refused.add(contentSafetyConnection(db));
     // Preserve native operational error mapping/diagnostics for the first
     // failure; the native connection nevertheless stays permanently refused.
-    if ([7,10].includes(Number(error?.errcode) & 255)) throw error;
+    if ([7,10].includes(Number(error?.errcode) & 255) || error instanceof MemoryStoreError && error.nearestLocalRawPackage) throw error;
     fail('unsupported_database');
   }
+}
+/** No SQL: null means the cached layout did not select a local package. */
+export function attestedLocalRawPackage(db) {
+  if (refused.has(contentSafetyConnection(db))) fail('unsupported_database');
+  return layouts.get(contentSafetyConnection(db))?.localRawPackage ?? null;
 }
 /** Trusted adapters can reuse the opener's attestation without any new SQL. */
 export function cachedContentLayout(db) {

@@ -30,7 +30,7 @@ async function capture(f,session,id,text=secret,episode=false,namespace=ns,clien
     expectedConversationRevision:f.db.prepare('SELECT revision FROM raw_conversations WHERE id=?').get(result.raw.conversationId).revision};
 }
 
-test('raw --help prints both commands and no conversation text',async t=>{
+test('raw --help prints all commands and no conversation text',async t=>{
   const f=sourceFixture(t);localHandle(f);await capture(f,'help-target','help-private');
   const before=snapshot(f.db);
   const child=spawnSync(process.execPath,[new URL('../cli.mjs',import.meta.url).pathname,'raw','--help'],{encoding:'utf8',env:{},timeout:15000});
@@ -38,6 +38,7 @@ test('raw --help prints both commands and no conversation text',async t=>{
   assert.equal(child.stdout,`Cairn Memory — local Raw conversation commands
 
 Usage:
+  cairn-memory raw index --db ABS
   cairn-memory raw list --db ABS --owner ID [--project ID]
   cairn-memory raw delete --db ABS --owner ID [--project ID] --conversation ID [--yes]
 

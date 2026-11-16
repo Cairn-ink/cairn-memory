@@ -42,7 +42,7 @@ export function existingStorePath(path) {
   const parent = privateEntry(dirname(canonical), true), file = privateEntry(canonical, false);
   const uri = pathToFileURL(canonical);
   uri.searchParams.set('mode', 'rw');
-  return { uri: uri.href, check() {
+  return { path: canonical, identity: Object.freeze({ dev: String(file.dev), ino: String(file.ino) }), uri: uri.href, check() {
     if (join(realpathSync(dirname(path)), basename(path)) !== canonical) fail('unsafe_database_file');
     const currentParent = privateEntry(dirname(canonical), true), currentFile = privateEntry(canonical, false);
     if (parent.dev !== currentParent.dev || parent.ino !== currentParent.ino ||

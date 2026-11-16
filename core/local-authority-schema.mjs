@@ -1,4 +1,9 @@
-import { LOCAL_RAW_PRIVACY_DDL } from './content-safety-schema.mjs';
+import { LOCAL_RAW_PRIVACY_DDL, LOCAL_RAW_PEER_INDEX_DDL, LOCAL_RAW_PACKAGES, attestedLocalRawPackage, localRawPackageVersion } from './content-safety-schema.mjs';
+import { readdirSync, writeFileSync, renameSync, unlinkSync, statfsSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { DatabaseSync } from 'node:sqlite';
+import { assertCommitWriteRouted } from './commit-dispatch.mjs';
 import { fail } from './validation.mjs';
 
 export const LOCAL_AUTHORITY_SCHEMA_VERSION = 29;
@@ -10,6 +15,153 @@ export function installLocalRawPrivacy(db) {
   const ddl = LOCAL_RAW_PRIVACY_DDL.join('\n');
   if (db) db.exec(ddl);
   return ddl;
+}
+
+// Include foreign indexes/triggers on local tables and an overflow witness.
+const peerPackageSQL = "SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL AND (name GLOB 'local_raw_*' OR tbl_name GLOB 'local_raw_*') LIMIT " + (LOCAL_RAW_PACKAGES.v2.length + 1);
+const peerPackage = db => localRawPackageVersion(db.prepare(peerPackageSQL).all());
+const peerIndexSize = db => db.prepare('SELECT max(rowid) AS n FROM raw_messages').get().n ?? 0;
+const peerIndexThreshold = 2_000_000;
+const firstRetryMs = 6 * 60 * 60 * 1000, maxRetryMs = 24 * 60 * 60 * 1000;
+const markerPrefix = path => basename(path) + '.peer-index-retry.';
+const nativeSQLiteError = error => typeof error?.errcode === 'number';
+const systemError = error => typeof error?.code === 'string' && /^E[A-Z]+$/.test(error.code);
+const nativeReason = error => ({ 5: 'busy', 6: 'busy', 9: 'interrupt', 10: 'io', 13: 'full' })[error.errcode & 255] ?? 'error';
+const outcome = (status, reason = null) => ({ status, reason });
+function peerIndexRetryNames(path) {
+  if (path === ':memory:') return [];
+  try { return readdirSync(dirname(resolve(path))).filter(name => name.startsWith(markerPrefix(path))); }
+  catch { return []; }
+}
+function readPeerIndexRetry(path, names) {
+  const now = Date.now();
+  let latest = null;
+  for (const name of names) {
+    // Names are the entire format. Never inspect or open a marker entry, even
+    // if it is a swapped symlink, hard-linked companion, directory or FIFO.
+    const fields = /^(\d+)\.(\d+)\.(busy|io|full|interrupt|space|error)$/.exec(name.slice(markerPrefix(path).length));
+    if (!fields) continue;
+    const [, deadline, delay, reason] = fields, notBefore = Number(deadline), delayMs = Number(delay);
+    if (Number.isSafeInteger(notBefore) && notBefore >= now && notBefore <= now + maxRetryMs &&
+        Number.isSafeInteger(delayMs) && delayMs >= firstRetryMs && delayMs <= maxRetryMs &&
+        (!latest || notBefore > latest.notBefore)) latest = { notBefore, delayMs, reason };
+  }
+  return latest;
+}
+function clearPeerIndexRetry(path, names, keep) {
+  for (const name of names) {
+    if (name === keep) continue;
+    try { unlinkSync(join(dirname(resolve(path)), name)); } catch { /* Optional marker only; never follow. */ }
+  }
+}
+function deferPeerIndex(path, previous, reason, status = 'deferred') {
+  if (path !== ':memory:') {
+    const directory = dirname(resolve(path));
+    const delayMs = Math.min(maxRetryMs, previous ? previous.delayMs * 2 : firstRetryMs);
+    const name = markerPrefix(path) + (Date.now() + delayMs) + '.' + delayMs + '.' + reason;
+    // Keep temporary leaves outside the marker namespace so another publisher
+    // clearing old markers cannot unlink an in-progress exclusive write.
+    const temporary = join(directory, '.' + markerPrefix(path) + randomUUID() + '.tmp');
+    let pending = true;
+    try {
+      writeFileSync(temporary, '', { flag: 'wx', mode: 0o600 });
+      renameSync(temporary, join(directory, name));
+      pending = false;
+      clearPeerIndexRetry(path, peerIndexRetryNames(path), name);
+    } catch { /* Marker failures must never turn an optional build into a refusal. */ }
+    finally { if (pending) { try { unlinkSync(temporary); } catch { /* Optional marker only. */ } } }
+  }
+  return outcome(status, reason);
+}
+
+/** Read-only status on an already attested connection and absolute store path. */
+export function readLocalRawPeerIndexStatus(db, path) {
+  attestedLocalRawPackage(db); // Preserve refusal, but never use its stale package for presence.
+  const present = peerPackage(db) === 'v2';
+  const retry = present ? null : readPeerIndexRetry(path, peerIndexRetryNames(path));
+  const absolute = resolve(path);
+  return {
+    present,
+    overThreshold: peerIndexSize(db) > peerIndexThreshold,
+    deferredReason: retry?.reason ?? null,
+    deferredUntil: retry?.notBefore ?? null,
+    offlineCommand: "cairn-memory raw index --db '" + absolute.replaceAll("'", "'\\''") + "'",
+    offlineArgv: ['cairn-memory', 'raw', 'index', '--db', absolute],
+  };
+}
+function buildPeerIndexConnection(db, timeout, admission) {
+  // Schema-only, synchronous work within the same approved opening scope as
+  // the package install. Check routing on the bound runtime, but never transact
+  // on it: a failed side connection must not poison its attestation cache.
+  assertCommitWriteRouted(db, 'local raw peer index');
+  let builder;
+  try {
+    if (!admission) return outcome('deferred', 'error');
+    admission.check();
+    builder = new DatabaseSync(admission.uri, { timeout });
+    builder.exec('PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;');
+    builder.exec('BEGIN IMMEDIATE');
+    admission.check();
+    // Complete runtime admission, including the L1 census, on this handle only.
+    // A refusal cannot poison the runtime's safety-header cache.
+    admission.validate(builder);
+    const version = peerPackage(builder);
+    if (version !== 'v1') {
+      builder.exec('ROLLBACK');
+      return outcome(version === 'v2' ? 'present' : 'deferred', version === 'v2' ? null : 'error');
+    }
+    builder.exec(LOCAL_RAW_PEER_INDEX_DDL.join('\n'));
+    builder.exec('COMMIT');
+    // No fallible SQL/audit after COMMIT that could relabel committed v2 as v1.
+    return outcome('built');
+  } catch (error) {
+    try { if (builder?.isTransaction) builder.exec('ROLLBACK'); }
+    catch (rollback) { if (!nativeSQLiteError(rollback)) throw rollback; }
+    if (nativeSQLiteError(error)) return outcome('deferred', nativeReason(error));
+    if (systemError(error) || ['unsafe_database_file', 'unsupported_database', 'method_not_found'].includes(error?.code)) return outcome('deferred', 'error');
+    throw error;
+  } finally {
+    // Native close also rolls back any transaction left by a failed ROLLBACK.
+    // Once COMMIT succeeds, a native close error cannot undo the built result.
+    try { builder?.close(); } catch (error) { if (!nativeSQLiteError(error)) throw error; }
+  }
+}
+function upgradeLocalRawPeerIndex(db, path, offline, timeout, admission) {
+  // Preserve the existing accessor's refusal behaviour, even during backoff.
+  const cachedVersion = attestedLocalRawPackage(db), names = peerIndexRetryNames(path);
+  if (cachedVersion === 'v2') { clearPeerIndexRetry(path, names); return outcome('present'); }
+  const retry = readPeerIndexRetry(path, names);
+  if (!offline && retry && Date.now() < retry.notBefore) return outcome('skipped', 'backoff');
+  try {
+    const version = cachedVersion ?? peerPackage(db);
+    if (version === 'v2') { clearPeerIndexRetry(path, names); return outcome('present'); }
+    if (version !== 'v1') return deferPeerIndex(path, retry, 'error');
+    const n = peerIndexSize(db);
+    if (!offline && n > peerIndexThreshold) return outcome('skipped', 'over_threshold');
+    let space;
+    try { space = statfsSync(dirname(resolve(path))); }
+    catch (error) {
+      if (!systemError(error)) throw error;
+      return deferPeerIndex(path, retry, 'io');
+    }
+    if (space.bavail * space.bsize < 2 * 84 * Math.max(n, 1)) return deferPeerIndex(path, retry, 'space', 'skipped');
+    if (path === ':memory:') return deferPeerIndex(path, retry, 'error');
+    const result = buildPeerIndexConnection(db, timeout, admission);
+    if (result.status === 'deferred') return deferPeerIndex(path, retry, result.reason);
+    clearPeerIndexRetry(path, peerIndexRetryNames(path));
+    return result;
+  } catch (error) {
+    if (!nativeSQLiteError(error)) throw error;
+    return deferPeerIndex(path, retry, nativeReason(error));
+  }
+}
+/** Bounded, best-effort open-time build; only the opener supplies admission. */
+export function installLocalRawPeerIndex(db, path, admission, timeout = 5000) {
+  return upgradeLocalRawPeerIndex(db, path, false, timeout, admission);
+}
+/** Offline bypasses only the automatic threshold and the retry deadline. */
+export function buildLocalRawPeerIndex(db, path, admission, timeout = 5000) {
+  return upgradeLocalRawPeerIndex(db, path, true, timeout, admission);
 }
 
 export function validateRawSourcePrerequisites(db) {
