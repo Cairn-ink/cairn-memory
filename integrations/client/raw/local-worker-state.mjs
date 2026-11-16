@@ -1,7 +1,7 @@
-import { createHmac } from 'node:crypto';
+import { createHmac, createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { opendir } from 'node:fs/promises';
-import { checkedPath, privateDirectory, privateRead, privateWrite } from '../private-state.mjs';
+import { checkedPath, privateDirectory, privateRead, privateWrite, privateRemove } from '../private-state.mjs';
 import { stateLock } from '../state-lock.mjs';
 import { fault, exact, integer, digest, reasons } from './local-worker-input.mjs';
 import { ownData } from '../../../core/local-authority-input.mjs';
@@ -116,6 +116,10 @@ export async function readSession(identity, client, rearming = false) {
 export async function writeCursor(identity, cursor) {
   const text = JSON.stringify(cursor);
   if (Buffer.byteLength(text) >= 65536) fault('state_invalid');
+  // Publish recovery authority before the dispatch cursor can become durable:
+  // a hook killed immediately after dispatch must already have a sealed hint.
+  if (identity.resumeContext && cursor.pending?.state !== 'blocked' && cursor.pending)
+    await refreshResumeHint(identity,identity.resumeContext,cursor);
   await privateWrite(identity.cursorPath,text);
 }
 export async function initializeSession(identity, cursor) {
@@ -125,4 +129,88 @@ export async function initializeSession(identity, cursor) {
   if (claim.version !== 'local-raw-claim-v1' || claim.sessionKey !== identity.sessionKey ||
       claim.wireSessionId !== identity.wireSessionId || claim.keyCommitment !== identity.keyCommitment) fault('state_invalid');
   await writeCursor(identity,cursor);
+}
+
+const resumeName = /^[a-f0-9]{64}\.json$/;
+const resumeDirectory = identity => join(identity.stateRoot,'resume');
+export const dropResumeHint = (identity, name = identity.sessionKey+'.json') => privateRemove(join(resumeDirectory(identity),name));
+async function resumeNames(identity) {
+  const path = resumeDirectory(identity);
+  if (!await checkedPath(path,{directory:true,missing:true})) return [];
+  const directory = await opendir(path), names = [];
+  try {
+    for (;;) {
+      const entry = await directory.read();
+      if (!entry) return names;
+      if (!resumeName.test(entry.name)) { await dropResumeHint(identity,entry.name); fault('state_invalid'); }
+      names.push(entry.name);
+      if (names.length > 64) fault('state_invalid');
+    }
+  } finally { await directory.close(); }
+}
+async function resumeRecord(identity,name) {
+  const text = await privateRead(join(resumeDirectory(identity),name),{missing:true});
+  if (text === undefined) return null;
+  const hint = exact(JSON.parse(text),['version','updatedAt','iv','tag','sealed']);
+  if (hint.version !== 'local-raw-resume-v1' || !integer(hint.updatedAt) ||
+      !/^[a-f0-9]{24}$/.test(hint.iv) || !/^[a-f0-9]{32}$/.test(hint.tag) ||
+      typeof hint.sealed !== 'string' || !/^(?:[a-f0-9]{2})+$/.test(hint.sealed)) fault('state_invalid');
+  return hint;
+}
+// The caller holds the session lock. The separate bounded-directory lock only
+// serializes cap/eviction decisions; it never acquires a session lock.
+export async function refreshResumeHint(identity,context,cursor,remainingWork = false) {
+  await stateLock(join(identity.stateRoot,'.resume.lock'),async () => {
+    if (!(cursor?.pending && cursor.pending.state !== 'blocked') && !remainingWork) {
+      await dropResumeHint(identity); return;
+    }
+    await privateDirectory(resumeDirectory(identity));
+    const names = await resumeNames(identity), name = identity.sessionKey+'.json';
+    if (!names.includes(name) && names.length === 64) {
+      const hints = [];
+      for (const item of names) hints.push({ name:item,updatedAt:(await resumeRecord(identity,item))?.updatedAt ?? 0 });
+      hints.sort((a,b)=>a.updatedAt-b.updatedAt || a.name.localeCompare(b.name));
+      await dropResumeHint(identity,hints[0].name);
+    }
+    const key = keyed(identity.key,'resume-hint',null).digest(), iv = randomBytes(12);
+    try {
+      const cipher = createCipheriv('aes-256-gcm',key,iv); cipher.setAAD(Buffer.from(identity.sessionKey));
+      const sealed = Buffer.concat([cipher.update(JSON.stringify({sessionId:context.sessionId,sourcePath:context.sourcePath}),'utf8'),cipher.final()]);
+      await privateWrite(join(resumeDirectory(identity),name),JSON.stringify({version:'local-raw-resume-v1',updatedAt:Date.now(),
+        iv:iv.toString('hex'),tag:cipher.getAuthTag().toString('hex'),sealed:sealed.toString('hex')}));
+    } finally { key.fill(0); }
+  });
+}
+async function chooseResumeHintInside(options,identity,operation) {
+  const now = Date.now(), hints = [];
+  for (const name of await resumeNames(identity)) {
+    operation.check();
+    let hint;
+    try { hint = await resumeRecord(identity,name); }
+    catch { await dropResumeHint(identity,name); return null; }
+    if (!hint) continue;
+    if (now-hint.updatedAt > 7*24*60*60*1000) { await dropResumeHint(identity,name); continue; }
+    if (now-hint.updatedAt >= 10*60*1000) hints.push({name,hint});
+  }
+  hints.sort((a,b)=>a.hint.updatedAt-b.hint.updatedAt || a.name.localeCompare(b.name));
+  if (!hints.length) return null;
+  const {name,hint} = hints[0], sessionKey = name.slice(0,-5), key = keyed(identity.key,'resume-hint',null).digest();
+  let selectedIdentity;
+  try {
+    const cipher = createDecipheriv('aes-256-gcm',key,Buffer.from(hint.iv,'hex'));
+    cipher.setAAD(Buffer.from(sessionKey)); cipher.setAuthTag(Buffer.from(hint.tag,'hex'));
+    const selection = exact(JSON.parse(Buffer.concat([cipher.update(Buffer.from(hint.sealed,'hex')),cipher.final()]).toString('utf8')),['sessionId','sourcePath']);
+    // Validate the native selection before any source-path proof or metadata.
+    if (typeof selection.sessionId !== 'string' || typeof selection.sourcePath !== 'string') fault('state_invalid');
+    selectedIdentity = await loadIdentity(options,selection,operation);
+    if (selectedIdentity.sessionKey !== sessionKey) fault('state_invalid');
+    return {selection,sessionKey};
+  } catch { await dropResumeHint(identity,name); return null; }
+  finally { key.fill(0); selectedIdentity?.key.fill(0); }
+}
+
+export async function chooseResumeHint(options,identity,operation) {
+  // Never mistake privateWrite's transient atomic-replacement file for an
+  // untrusted entry while another session publishes a hint.
+  return stateLock(join(identity.stateRoot,'.resume.lock'),()=>chooseResumeHintInside(options,identity,operation));
 }

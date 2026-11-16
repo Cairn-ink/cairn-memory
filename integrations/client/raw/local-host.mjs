@@ -1,7 +1,7 @@
 import { openLocalSource } from './local-source-open.mjs';
 import { detectLocalCodexHost } from './local-codex-qualification.mjs';
 import { localCodexQualification } from './local-codex-qualification.mjs';
-import { checkLocalSession } from './local-session-fence.mjs';
+import { checkLocalSession, checkSweepSession } from './local-session-fence.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { performance } from 'node:perf_hooks';
 import { types } from 'node:util';
@@ -37,18 +37,20 @@ export function localHostResult(status, reason = null, worker = null) {
 }
 
 function operation(value, deps) {
-  let signal;
+  let signal, deadlineMs, sweep, shortBudget;
   try {
-    signal = ownData(value,['signal']).signal;
+    const call = ownData(value,['signal','deadlineMs','sweep']); signal = call.signal; sweep = call.sweep ?? false; shortBudget = call.deadlineMs !== undefined;
+    deadlineMs = call.deadlineMs ?? deps.deadlineMs ?? 155000;
+    if (!Number.isSafeInteger(deadlineMs) || deadlineMs < 1 || deadlineMs > 155000 || typeof sweep !== 'boolean') fail('invalid_input');
     if (signal !== undefined) { if (types.isProxy(signal)) fail('invalid_input'); aborted.call(signal); }
   } catch { fail('invalid_input'); }
-  const controller = new AbortController(), end = performance.now() + (deps.deadlineMs ?? 155000);
+  const controller = new AbortController(), end = performance.now() + deadlineMs;
   let cancelled = signal !== undefined && aborted.call(signal);
   const cancel = () => { cancelled = true; controller.abort(); };
   if (signal !== undefined) add.call(signal,'abort',cancel,{ once:true });
   if (cancelled) controller.abort();
   const timer = setTimeout(() => controller.abort(),Math.max(0,end-performance.now()-2000));
-  return { signal:controller.signal,remaining:() => Math.max(0,Math.floor(end-performance.now())),check() {
+  return { sweep,shortBudget,signal:controller.signal,remaining:() => Math.max(0,Math.floor(end-performance.now())),check() {
     if (controller.signal.aborted || performance.now() >= end-2000) fail(cancelled ? 'cancelled' : 'work_limit');
   }, close() { clearTimeout(timer); if (signal !== undefined) remove.call(signal,'abort',cancel); } };
 }
@@ -86,6 +88,10 @@ export function createLocalRawHost(value) {
       if (prepared !== 'ready') return localHostResult('blocked','preparation_required');
       if (action === 'status') return localHostResult('ready');
       if (profile.installation.client === 'codex' && action === 'markStart') fail('invalid_input');
+      if (op.sweep) {
+        if (action !== 'run') fail('invalid_input');
+        await checkSweepSession(profile,config,selected); op.check();
+      }
       let selectedPath,privatePaths;
       try {
         [selectedPath,...privatePaths] = await Promise.all([...(action === 'markStart' ? []:[selected.sourcePath]),profile.stateRoot,profile.identityKeyPath,
@@ -125,14 +131,14 @@ export function createLocalRawHost(value) {
       // Re-read the exact profile and preparation binding, then take a fresh
       // authority snapshot immediately before the trusted worker invocation.
       await freshPermission();
-      if (action !== 'markStart' && await lazyRearm(profile,config,{ ...selected,
+      if (!op.sweep && action !== 'markStart' && await lazyRearm(profile,config,{ ...selected,
         pluginRoot:profile.installation.client === 'claude-code' ? profile.installation.pluginRoot:null,formatAuthority },op)) {
         return localHostResult('ready');
       }
       const worker = createLocalRawWorker({ stateRoot:profile.stateRoot,identityKeyPath:profile.identityKeyPath,
         nodeExecutable:process.execPath,runtimeRoot,configPath:profile.configPath,expectedAuthority:config.authority,home:profile.home });
       const result = await worker[action]({ ...selected,pluginRoot:profile.installation.client === 'claude-code' ? profile.installation.pluginRoot : null,
-        formatAuthority },{ signal:op.signal });
+        formatAuthority },{ signal:op.signal,...(op.shortBudget ? {deadlineMs:Math.max(1,op.remaining())}:{}),...(op.sweep ? {sweep:true}:{}) });
       // The outer deadline includes preflight. Preserve the worker's exact
       // acknowledgement/progress even when cancellation won the host budget.
       await deps.checkpoint?.('after_dispatch');

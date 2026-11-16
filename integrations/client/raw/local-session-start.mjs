@@ -16,11 +16,13 @@ export async function hasSessionStart(identity,context) {
   return text !== undefined && text === binding(identity,context);
 }
 export async function clearSessionStarts(stateRoot) {
-  const directory=join(stateRoot,'starts');
-  if (!await checkedPath(directory,{directory:true,missing:true})) return;
-  for (const name of await readdir(directory)) {
-    if (!/^[a-f0-9]{64}\.json$/.test(name)) fault('state_invalid');
-    const path=join(directory,name); await checkedPath(path); await unlink(path);
+  for (const kind of ['starts','resume']) {
+    const directory=join(stateRoot,kind);
+    if (!await checkedPath(directory,{directory:true,missing:true})) continue;
+    for (const name of await readdir(directory)) {
+      if (!/^[a-f0-9]{64}\.json$/.test(name)) fault('state_invalid');
+      const path=join(directory,name); await checkedPath(path); await unlink(path);
+    }
+    await syncDirectory(directory);
   }
-  await syncDirectory(directory);
 }

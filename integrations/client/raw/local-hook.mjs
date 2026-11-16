@@ -1,5 +1,6 @@
+import { performance } from 'node:perf_hooks';
 import { stateLock } from '../state-lock.mjs';
-import { fenceLocalSession } from './local-session-fence.mjs';
+import { fenceLocalSession, selectLocalResume } from './local-session-fence.mjs';
 import { lstat, realpath } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { types } from 'node:util';
@@ -54,6 +55,7 @@ async function source(record,path,allowMissing = false) {
   return true;
 }
 export async function runLocalRawHook(value,options = {}) {
+  const startedAt = performance.now();
   try {
     const input = exact(value,['installationDirectory','event','payload']);
     const call = ownData(options,['signal','headless']); checkSignal(call.signal); runtime();
@@ -80,7 +82,22 @@ export async function runLocalRawHook(value,options = {}) {
     });
     const outcome = await (input.event === 'SessionStart' || input.event === 'UserPromptSubmit'
       ? host.initialize({ ...selection,start:'eof' },{ signal:call.signal }) : host.run(selection,{ signal:call.signal }));
-    return hookResult(outcome.status,['ready','progress'].includes(outcome.status) ? null:outcome.reason);
+    const result = hookResult(outcome.status,['ready','progress'].includes(outcome.status) ? null:outcome.reason);
+    if (input.event === 'Stop' && ['ready','progress'].includes(outcome.status) && 155000-(performance.now()-startedAt) >= 20000) {
+      // Best effort only: preserve the own-session outcome and the silent hook
+      // contract even for malformed hints, stale authority or a failed sweep.
+      try {
+        const selected = await selectLocalResume(paths.profile);
+        const remaining = 155000-(performance.now()-startedAt);
+        if (selected && remaining >= 20000) {
+          checkSignal(call.signal);
+          await source(record,selected.sourcePath);
+          const budget = Math.min(155000-(performance.now()-startedAt)-5000,15000);
+          if (budget >= 15000) await host.run(selected,{signal:call.signal,deadlineMs:Math.floor(budget),sweep:true});
+        }
+      } catch {}
+    }
+    return result;
   } catch (error) {
     const outcome = failure(error); return hookResult(outcome.status,outcome.reason);
   }

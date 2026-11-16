@@ -1,8 +1,8 @@
 import { localAuthorityInput } from '../../../core/local-authority-input.mjs';
-import { readHostProfile,readHostConfiguration,fail } from './local-host-profile.mjs';
+import { readHostProfile,readHostConfiguration,hostSelection,fail } from './local-host-profile.mjs';
 import { inspectPreparation } from './local-host-preparation.mjs';
 import { checkHostPermission,checkRearmSession } from './local-host-permission.mjs';
-import { loadIdentity } from './local-worker-state.mjs';
+import { loadIdentity, readSession, chooseResumeHint, dropResumeHint } from './local-worker-state.mjs';
 import { inspectExistingStorePin } from '../../../core/existing-store.mjs';
 
 export async function withSessionIdentity(profile,config,selection,work) {
@@ -28,5 +28,29 @@ export async function fenceLocalSession(profilePath,selection) {
       const result=core.fenceSession({namespace:config.authority.namespace,client:config.authority.client,sessionId:identity.wireSessionId});
       if (!result.ok) fail('capture_refused');
     } finally { await core.close(); }
+  });
+}
+
+// These checks precede even source()'s lstat/realpath proof. readSession also
+// rejects a stale authority or incomplete rearm without reading the transcript.
+export async function checkSweepSession(profile,config,selection) {
+  await withSessionIdentity(profile,config,selection,async identity => {
+    try {
+      hostSelection(selection,false);
+      if (!await readSession(identity,config.authority.client)) fail('state_invalid');
+      await checkRearmSession(config,identity);
+    } catch (error) { await dropResumeHint(identity); throw error; }
+  });
+}
+export async function selectLocalResume(profilePath) {
+  const profile = await readHostProfile(profilePath), config = await readHostConfiguration(profile);
+  await checkHostPermission(config);
+  return withSessionIdentity(profile,config,{sessionId:''},async identity => {
+    const options = {stateRoot:profile.stateRoot,identityKeyPath:profile.identityKeyPath,authority:localAuthorityInput(config.authority)};
+    const candidate = await chooseResumeHint(options,identity,{check(){}});
+    if (!candidate) return null;
+    try { await checkSweepSession(profile,config,candidate.selection); }
+    catch { await dropResumeHint(identity,candidate.sessionKey+'.json'); return null; }
+    return candidate.selection;
   });
 }
