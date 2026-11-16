@@ -9,7 +9,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { openMemoryCore } from '../index.mjs';
 import { attestContentSafety, attestedLocalRawPackage, LOCAL_RAW_PACKAGES, LOCAL_RAW_PRIVACY_DDL, LOCAL_RAW_PEER_INDEX_DDL } from '../content-safety-schema.mjs';
-import { installLocalRawPeerIndex, readLocalRawPeerIndexStatus } from '../local-authority-schema.mjs';
+import { installLocalRawPeerIndex, buildLocalRawPeerIndex, readLocalRawPeerIndexStatus } from '../local-authority-schema.mjs';
 import { inspectExistingStorePin } from '../existing-store.mjs';
 import { openDatabase, localRawPeerIndexAdmission } from '../database.mjs';
 import { readSqliteFixture } from '../testing/content-safety-s2h-fixture.mjs';
@@ -767,9 +767,22 @@ test('offline existing-store admission uses the complete ordinary validator insi
   f.db.exec('DROP TRIGGER card_raw_purge');
   const drifted=schema(f.db),statements=trace(t);
   try {
-    assert.deepEqual(installLocalRawPeerIndex(runtime,f.path),{status:'deferred',reason:'error'});
+    assert.deepEqual(installLocalRawPeerIndex(runtime,f.path,localRawPeerIndexAdmission(runtime)),{status:'deferred',reason:'error'});
     assert.ok(statements.includes('BEGIN IMMEDIATE'));assert.ok(statements.includes('ROLLBACK'));
     assert.ok(!statements.includes(indexDDL));assert.equal(schema(f.db),drifted);assert.notEqual(drifted,before);
+  } finally {runtime.close();}
+});
+
+for(const build of [installLocalRawPeerIndex,buildLocalRawPeerIndex])
+test(`${build.name} defers without an explicitly supplied admission`,async t=>{
+  const f=await store(t);space(t,f.path);
+  const runtime=openDatabase(f.path,{existingStore:f.pin});
+  try {
+    assert.ok(localRawPeerIndexAdmission(runtime));
+    const before=schema(f.db),statements=trace(t);
+    assert.deepEqual(build(runtime,f.path),{status:'deferred',reason:'error'});
+    assert.ok(!statements.some(sql=>/BEGIN|PRAGMA|CREATE/.test(sql)));
+    assert.equal(schema(f.db),before);assert.equal(retry(f.path).reason,'error');
   } finally {runtime.close();}
 });
 
@@ -778,7 +791,7 @@ test('status is current immediately after a direct side build while runtime atte
   const runtime=openDatabase(f.path,{existingStore:f.pin});
   try {
     assert.equal(attestedLocalRawPackage(runtime),'v1');
-    assert.deepEqual(installLocalRawPeerIndex(runtime,f.path),{status:'built',reason:null});
+    assert.deepEqual(installLocalRawPeerIndex(runtime,f.path,localRawPeerIndexAdmission(runtime)),{status:'built',reason:null});
     assert.equal(attestedLocalRawPackage(runtime),'v1');
     assert.equal(readLocalRawPeerIndexStatus(runtime,f.path).present,true);
     assert.equal(attestedLocalRawPackage(runtime),'v1'); // Status probes current rows without reattesting.

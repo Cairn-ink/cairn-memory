@@ -18,7 +18,7 @@ import { createEpisodeReadProjection, createEpisodeReads } from './episode-reads
 import { createEpisodeStorage, episodeOptions } from './episode-storage.mjs';
 import { createProceduralStorage } from './procedural-storage.mjs';
 import { createHash } from "node:crypto";
-import { openDatabase, transaction, readTransaction, isConnectionDiscarded, isStorageBusy, busyTimeoutOption } from "./database.mjs";
+import { openDatabase, transaction, readTransaction, isConnectionDiscarded, isStorageBusy, busyTimeoutOption, localRawPeerIndexAdmission } from "./database.mjs";
 import { createMocStorage } from "./moc-storage.mjs";
 import { createAdmissionStorage } from "./admission-storage.mjs";
 import { createClassificationJournalStorage } from './classification-journal-storage.mjs';
@@ -75,7 +75,7 @@ export function createMemoryRuntime(input, internal) {
     rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion), rawSources: Boolean(internal?.rawSources), localControls: Boolean(internal?.localControls), existingStore: input.existingStore, storeFence: input.storeFence, contentSafety: input.contentSafety });
   try {
   if (internal?.localRawPrivacy) transaction(db, () => installLocalRawPrivacy(db));
-  if (internal?.localRawPrivacy) installLocalRawPeerIndex(db, input.path, busyTimeoutMs ?? 5000);
+  if (internal?.localRawPrivacy) installLocalRawPeerIndex(db, input.path, localRawPeerIndexAdmission(db), busyTimeoutMs ?? 5000);
   const localRawPrivacy = internal?.localRawPrivacy ? createLocalRawPrivacyStorage(db) : null;
   const rawLineage = createRawLineageStorage(db);
   const sourceRoots = createRawSourceRoots(db);

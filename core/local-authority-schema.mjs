@@ -4,7 +4,6 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { assertCommitWriteRouted } from './commit-dispatch.mjs';
-import { localRawPeerIndexAdmission } from './database.mjs';
 import { fail } from './validation.mjs';
 
 export const LOCAL_AUTHORITY_SCHEMA_VERSION = 29;
@@ -90,14 +89,13 @@ export function readLocalRawPeerIndexStatus(db, path) {
     offlineArgv: ['cairn-memory', 'raw', 'index', '--db', absolute],
   };
 }
-function buildPeerIndexConnection(db, timeout) {
+function buildPeerIndexConnection(db, timeout, admission) {
   // Schema-only, synchronous work within the same approved opening scope as
   // the package install. Check routing on the bound runtime, but never transact
   // on it: a failed side connection must not poison its attestation cache.
   assertCommitWriteRouted(db, 'local raw peer index');
   let builder;
   try {
-    const admission = localRawPeerIndexAdmission(db);
     if (!admission) return outcome('deferred', 'error');
     admission.check();
     builder = new DatabaseSync(admission.uri, { timeout });
@@ -128,7 +126,7 @@ function buildPeerIndexConnection(db, timeout) {
     try { builder?.close(); } catch (error) { if (!nativeSQLiteError(error)) throw error; }
   }
 }
-function upgradeLocalRawPeerIndex(db, path, offline, timeout) {
+function upgradeLocalRawPeerIndex(db, path, offline, timeout, admission) {
   // Preserve the existing accessor's refusal behaviour, even during backoff.
   const cachedVersion = attestedLocalRawPackage(db), names = peerIndexRetryNames(path);
   if (cachedVersion === 'v2') { clearPeerIndexRetry(path, names); return outcome('present'); }
@@ -148,7 +146,7 @@ function upgradeLocalRawPeerIndex(db, path, offline, timeout) {
     }
     if (space.bavail * space.bsize < 2 * 84 * Math.max(n, 1)) return deferPeerIndex(path, retry, 'space', 'skipped');
     if (path === ':memory:') return deferPeerIndex(path, retry, 'error');
-    const result = buildPeerIndexConnection(db, timeout);
+    const result = buildPeerIndexConnection(db, timeout, admission);
     if (result.status === 'deferred') return deferPeerIndex(path, retry, result.reason);
     clearPeerIndexRetry(path, peerIndexRetryNames(path));
     return result;
@@ -157,13 +155,13 @@ function upgradeLocalRawPeerIndex(db, path, offline, timeout) {
     return deferPeerIndex(path, retry, nativeReason(error));
   }
 }
-/** Bounded, best-effort open-time build, after the package install commits. */
-export function installLocalRawPeerIndex(db, path, timeout = 5000) {
-  return upgradeLocalRawPeerIndex(db, path, false, timeout);
+/** Bounded, best-effort open-time build; only the opener supplies admission. */
+export function installLocalRawPeerIndex(db, path, admission, timeout = 5000) {
+  return upgradeLocalRawPeerIndex(db, path, false, timeout, admission);
 }
 /** Offline bypasses only the automatic threshold and the retry deadline. */
-export function buildLocalRawPeerIndex(db, path, timeout = 5000) {
-  return upgradeLocalRawPeerIndex(db, path, true, timeout);
+export function buildLocalRawPeerIndex(db, path, admission, timeout = 5000) {
+  return upgradeLocalRawPeerIndex(db, path, true, timeout, admission);
 }
 
 export function validateRawSourcePrerequisites(db) {

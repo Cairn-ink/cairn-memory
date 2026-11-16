@@ -52,13 +52,13 @@ export async function rawCommand(args, write = line => console.log(line), {testD
       // Use the same local guard and canonical validation as delete, but a
       // noncreating existing-store opener: no automatic build before this one.
       const {inspectExistingStorePin}=await import('../../core/existing-store.mjs');
-      const {openDatabase}=await import('../../core/database.mjs');
+      const {openDatabase,localRawPeerIndexAdmission}=await import('../../core/database.mjs');
       const {buildLocalRawPeerIndex}=await import('../../core/local-authority-schema.mjs');
       const storeId=db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id;
       const pin=await inspectExistingStorePin(path,storeId);
       db.close();db=undefined;
       db=openDatabase(path,{existingStore:pin});
-      const result=buildLocalRawPeerIndex(db,path);
+      const result=buildLocalRawPeerIndex(db,path,localRawPeerIndexAdmission(db));
       const label=result.reason==='busy'?'busy, close Claude Code and Codex and run again'
         :result.reason==='space'?'insufficient_space':result.status;
       write('index: '+label);
