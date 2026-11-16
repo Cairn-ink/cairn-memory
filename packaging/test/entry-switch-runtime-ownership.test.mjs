@@ -87,3 +87,18 @@ test('a launched installed attempt without a ready descriptor fails hygiene for 
     finally { for (const path of leftovers) await rm(path, { force: true }); }
   }
 });
+
+test('a publishing launch cannot defer ENOENT ownership recording after initialization', { timeout: 120000 }, async t => {
+  const hooks = [], context = { after: fn => hooks.push(fn), diagnostic: text => t.diagnostic(text) };
+  try {
+    await installedAssertions(context, {
+      recordLaunchPrefix: () => { throw Object.assign(Error('synthetic_record_missing'), { code: 'ENOENT' }); },
+      exercise: async ({ root, client, close, directory }) => {
+        await assert.rejects(async () => { const entry = await client(root); await close(entry); }, error => {
+          assert.match(error.message, /ownership recording|synthetic_record_missing/); return true;
+        });
+        assert.ok((await readdir(directory.path)).some(name => /^d-[a-f0-9]{32}\.json$/.test(name)), 'launch published ready');
+      },
+    });
+  } finally { for (const hook of hooks) await hook(); }
+});

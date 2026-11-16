@@ -32,6 +32,7 @@ assert.ok(logCodes.size > 0, 'fixed log-code allowlist is nonempty');
 const logLimit = 262144;
 function logChange(before, after) {
   if (before.kind !== 'file' || after?.kind !== 'file' || typeof before.content !== 'string' || typeof after.content !== 'string') return;
+  if (/[^\x00-\x7f]/.test(before.content) || /[^\x00-\x7f]/.test(after.content)) return;
   if (BigInt(before.size) !== BigInt(Buffer.byteLength(before.content)) ||
       BigInt(after.size) !== BigInt(Buffer.byteLength(after.content)) || BigInt(after.size) > BigInt(logLimit)) return;
   if (sameEntry(before, after) && before.content === after.content) return [];
@@ -98,7 +99,7 @@ export function classifyRuntimeHygiene(before, after, {
       continue;
     }
     if (!previous?.alive) {
-      for (const entry of entries) if (!(entry === log && revived) &&
+      for (const entry of entries) if (!(entry === log && appended) &&
         !(revived && revivalEndpoint(entry.name.slice(prefix.length))) && !sameEntry(entry, current.get(entry.name)))
         errors.push('dead or ownerless foreign entry changed: ' + entry.name);
       continue;
@@ -255,7 +256,7 @@ export async function installedAssertions(t, { install = false, exercise, record
     launchedPrefixes.add(creationPrefix);
     const packagePath = await realpath(root), packageInfo = await stat(packagePath, { bigint: true });
     const recordedPrefixes = new Set();
-    async function recordIdentity() {
+    async function recordIdentity({ provisioning = false } = {}) {
       try {
         const identity = await engine.createIdentity(args, { root, build, environment, key: await state.identityKey(dir),
           node: { executable: process.execPath, version: process.version, execArgv: [] } });
@@ -267,9 +268,9 @@ export async function installedAssertions(t, { install = false, exercise, record
           'recorded launch prefix is nonempty and well-formed');
         launchedPrefixes.add(recordedPrefix);
         recordedPrefixes.add(recordedPrefix);
-      } catch (error) { if (error.code !== 'ENOENT') throw error; } // First launch may still be provisioning the store.
+      } catch (error) { if (!provisioning || error.code !== 'ENOENT') throw error; } // Only the pre-initialization attempt may defer.
     }
-    await recordIdentity();
+    await recordIdentity({ provisioning: true });
     const child = spawn(process.execPath, [entryPath, ...args], {
       env: environment, stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -308,6 +309,7 @@ export async function installedAssertions(t, { install = false, exercise, record
         d.identity.configuration.rawSearch === !extra.includes('--no-raw-search') &&
         d.identity.configuration.contextRead === (extra.includes('--no-context-read') ? false : 'context-read-v1'));
       if (!expectedFallback) assert.equal(published.length, 1, 'publishing launch has one observed identity');
+      if (published.length) assert.ok(recordedPrefixes.size > 0, 'publishing launch requires ownership recording');
       for (const descriptor of published) for (const recordedPrefix of recordedPrefixes)
         assert.equal(recordedPrefix, identityPrefix(descriptor.name), 'recorded launch prefix agrees with published identity');
     }

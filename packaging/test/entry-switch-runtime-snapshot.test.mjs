@@ -110,3 +110,14 @@ for (const suffix of ['.lock', '.json']) for (const value of [{}, null, [], 7, '
     assert.deepEqual(changed.errors, ['dead or ownerless foreign entry changed: ' + prefix + suffix]);
   });
 }
+
+ test('lossy UTF-8 prefixes are rejected through real snapshots without exposing content', async t => {
+  const root = await directory(t), dir = await runtimeDirectory({ root }), file = join(dir.path, prefix + '.log');
+  await writeFile(file, Buffer.from([0xf0, 0x90, 0x80, 0x0a]), { mode: 0o600 });
+  const before = await runtimeSnapshot(dir.path);
+  await writeFile(file + '.replacement', Buffer.concat([Buffer.from([0xf0, 0x90, 0x81, 0x0a]), Buffer.from('daemon_ready\n')]), { mode: 0o600 });
+  await rename(file + '.replacement', file);
+  const result = classifyRuntimeHygiene(before, await runtimeSnapshot(dir.path));
+  assert.ok(result.errors.some(line => line === 'foreign log changed invalidly: ' + prefix + '.log'), 'non-ASCII log rejected');
+  assert.deepEqual(result.diagnostics, []);
+});

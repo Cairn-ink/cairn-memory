@@ -125,7 +125,8 @@ test('non-ready append cannot excuse removed endpoints of dead or ownerless fore
     replaceLog(after, 'daemon_ready\ndaemon_draining\n');
     fails(classify(before, after));
     const preserved = copy(before); replaceLog(preserved, 'daemon_ready\ndaemon_draining\n');
-    fails(classify(before, preserved)); // Without ready, even baseline log changes stay exact.
+    const result = classify(before, preserved); passes(result);
+    assert.deepEqual(result.diagnostics, [], 'non-ready append does not revive the identity');
   }
 });
 
