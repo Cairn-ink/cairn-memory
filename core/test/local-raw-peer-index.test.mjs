@@ -374,6 +374,126 @@ test(`malformed retry marker is ignored (${contents})`,async t=>{
   attestContentSafety(f.db);assert.equal(attestedLocalRawPackage(f.db),'v2');
 });
 
+test('deferral writes a private regular retry marker with only validated fields and no temporary files',async t=>{
+  const f=await store(t,{l1:true});space(t,f.path,0);
+  const now=Date.now();t.mock.method(Date,'now',()=>now);
+  const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
+  try {assert.equal(core.list({namespace}).ok,true);} finally {await core.close();}
+  assert.equal(fs.lstatSync(retryPath(f.path)).isFile(),true);
+  assert.equal(fs.statSync(retryPath(f.path)).mode&0o777,0o600);
+  const marker=retry(f.path);
+  assert.deepEqual(Object.keys(marker).sort(),['delayMs','notBefore','reason']);
+  assert.equal(Number.isSafeInteger(marker.notBefore),true);assert.equal(Number.isSafeInteger(marker.delayMs),true);
+  assert.ok(['busy','io','full','interrupt','space','error'].includes(marker.reason));
+  assert.deepEqual(marker,{notBefore:now+6*60*60*1000,delayMs:6*60*60*1000,reason:'space'});
+  assert.deepEqual(localNames(f.db),packageNames('v1'));
+  assert.deepEqual(fs.readdirSync(dirname(f.path)).filter(name=>name.endsWith('.tmp')),[]);
+});
+
+for(const dangling of [false,true]) for(const deferred of [false,true])
+test(`retry marker symlink is ignored and its target preserved (dangling=${dangling}, deferred=${deferred})`,async t=>{
+  const f=await store(t,{l1:true}),target=join(dirname(f.path),'retry-target.json');
+  const bytes=Buffer.from(JSON.stringify({notBefore:Number.MAX_SAFE_INTEGER,delayMs:6*60*60*1000,reason:'busy'}));
+  if(!dangling)fs.writeFileSync(target,bytes);
+  fs.symlinkSync(target,retryPath(f.path));assert.equal(fs.lstatSync(retryPath(f.path)).isSymbolicLink(),true);
+  const statfs=space(t,f.path,deferred?0:1e12),statements=trace(t);
+  const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
+  try {assert.equal(core.list({namespace}).ok,true);} finally {await core.close();}
+  assert.equal(statfs.mock.callCount(),1);
+  assert.equal(statements.filter(sql=>sql===indexDDL).length,deferred?0:1);
+  attestContentSafety(f.db);assert.equal(attestedLocalRawPackage(f.db),deferred?'v1':'v2');
+  if(deferred) {
+    assert.equal(fs.lstatSync(retryPath(f.path)).isFile(),true);
+    assert.equal(retry(f.path).reason,'space');assert.equal(retry(f.path).delayMs,6*60*60*1000);
+  } else assert.throws(()=>fs.lstatSync(retryPath(f.path)),{code:'ENOENT'});
+  if(dangling)assert.throws(()=>fs.lstatSync(target),{code:'ENOENT'});
+  else assert.deepEqual(fs.readFileSync(target),bytes);
+  assert.deepEqual(fs.readdirSync(dirname(f.path)).filter(name=>name.endsWith('.tmp')),[]);
+});
+
+for(const deferred of [false,true])
+test(`retry marker directory is ignored and preserved without failing open (deferred=${deferred})`,async t=>{
+  const f=await store(t,{l1:true}),marker=retryPath(f.path);
+  fs.mkdirSync(marker);fs.writeFileSync(join(marker,'keep'),'directory sentinel');
+  const before=fs.lstatSync(marker),statfs=space(t,f.path,deferred?0:1e12),statements=trace(t);
+  const rename=fs.renameSync;let attempts=0,renameFailed=false;
+  const mock=t.mock.method(fs,'renameSync',function(from,to){
+    if(to===marker)attempts++;
+    try{return rename.call(this,from,to);}catch(error){if(to===marker)renameFailed=true;throw error;}
+  });
+  syncBuiltinESMExports();t.after(()=>{mock.mock.restore();syncBuiltinESMExports();});
+  const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
+  try {assert.equal(core.list({namespace}).ok,true);} finally {await core.close();}
+  assert.equal(statfs.mock.callCount(),1);
+  assert.equal(statements.filter(sql=>sql===indexDDL).length,deferred?0:1);
+  assert.equal(attempts,deferred?1:0);assert.equal(renameFailed,deferred);
+  attestContentSafety(f.db);assert.equal(attestedLocalRawPackage(f.db),deferred?'v1':'v2');
+  const after=fs.lstatSync(marker);
+  assert.equal(after.isDirectory(),true);assert.equal(after.ino,before.ino);assert.equal(after.dev,before.dev);
+  assert.equal(fs.readFileSync(join(marker,'keep'),'utf8'),'directory sentinel');
+  assert.deepEqual(fs.readdirSync(dirname(f.path)).filter(name=>name.endsWith('.tmp')),[]);
+});
+
+test('a regular retry marker larger than 4096 bytes is ignored even with valid JSON',async t=>{
+  const f=await store(t,{l1:true}),statfs=space(t,f.path),statements=trace(t);
+  const marker={notBefore:Number.MAX_SAFE_INTEGER,delayMs:6*60*60*1000,reason:'busy'};
+  const contents=JSON.stringify(marker).padEnd(4097,' ');
+  assert.deepEqual(JSON.parse(contents),marker);fs.writeFileSync(retryPath(f.path),contents);
+  const stat=fs.lstatSync(retryPath(f.path));assert.equal(stat.isFile(),true);assert.equal(stat.size,4097);
+  const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
+  try {assert.equal(core.list({namespace}).ok,true);} finally {await core.close();}
+  assert.equal(statfs.mock.callCount(),1);assert.equal(statements.filter(sql=>sql===indexDDL).length,1);
+  assert.throws(()=>fs.lstatSync(retryPath(f.path)),{code:'ENOENT'});
+  attestContentSafety(f.db);assert.equal(attestedLocalRawPackage(f.db),'v2');
+});
+
+for(const [label,invalid] of [
+  ['negative notBefore',{notBefore:-1}],
+  ['string notBefore',{notBefore:String(Number.MAX_SAFE_INTEGER)}],
+  ['null notBefore',{notBefore:null}],
+  ['boolean notBefore',{notBefore:true}],
+  ['fractional notBefore',{notBefore:0.5}],
+  ['unsafe notBefore',{notBefore:Number.MAX_SAFE_INTEGER+1}],
+  ['string delayMs',{delayMs:'21600000'}],
+  ['null delayMs',{delayMs:null}],
+  ['boolean delayMs',{delayMs:true}],
+  ['fractional delayMs',{delayMs:21600000.5}],
+  ['unsafe delayMs',{delayMs:Number.MAX_SAFE_INTEGER+1}],
+  ['delayMs below six hours',{delayMs:6*60*60*1000-1}],
+  ['delayMs above 24 hours',{delayMs:24*60*60*1000+1}],
+  ['unknown reason',{reason:'unknown'}],
+  ['numeric reason',{reason:5}],
+  ['null reason',{reason:null}],
+  ['object reason',{reason:{}}],
+  ['array reason',{reason:['busy']}],
+]) test(`retry marker with invalid fields is ignored (${label})`,async t=>{
+  const f=await store(t,{l1:true}),statfs=space(t,f.path),statements=trace(t);
+  fs.writeFileSync(retryPath(f.path),JSON.stringify({notBefore:Number.MAX_SAFE_INTEGER,delayMs:6*60*60*1000,reason:'busy',...invalid}));
+  const status=readLocalRawPeerIndexStatus(f.db,f.path);
+  assert.equal(status.deferredUntil,null);assert.equal(status.deferredReason,null);
+  const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
+  try {assert.equal(core.list({namespace}).ok,true);} finally {await core.close();}
+  assert.equal(statfs.mock.callCount(),1);assert.equal(statements.filter(sql=>sql===indexDDL).length,1);
+  assert.throws(()=>fs.lstatSync(retryPath(f.path)),{code:'ENOENT'});
+  attestContentSafety(f.db);assert.equal(attestedLocalRawPackage(f.db),'v2');
+});
+
+for(const padded of [false,true])
+test(`valid retry markers allow extra keys and up to 4096 bytes (padded=${padded})`,async t=>{
+  const f=await store(t,{l1:true}),statfs=space(t,f.path),statements=trace(t);
+  // The reader validates required values, not an exact key set; the writer emits only three keys.
+  const marker={notBefore:Number.MAX_SAFE_INTEGER,delayMs:24*60*60*1000,reason:'busy',extra:'allowed'};
+  const contents=JSON.stringify(marker).padEnd(padded?4096:0,' ');fs.writeFileSync(retryPath(f.path),contents);
+  assert.equal(fs.statSync(retryPath(f.path)).size,padded?4096:Buffer.byteLength(contents));
+  const status=readLocalRawPeerIndexStatus(f.db,f.path);
+  assert.equal(status.deferredUntil,marker.notBefore);assert.equal(status.deferredReason,marker.reason);
+  const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
+  try {assert.equal(core.list({namespace}).ok,true);} finally {await core.close();}
+  assert.equal(statfs.mock.callCount(),0);assert.equal(statements.filter(sql=>sql===indexDDL).length,0);
+  assert.equal(fs.readFileSync(retryPath(f.path),'utf8'),contents);assert.deepEqual(retry(f.path),marker);
+  attestContentSafety(f.db);assert.equal(attestedLocalRawPackage(f.db),'v1');
+});
+
 for(const operation of ['readFileSync','writeFileSync','renameSync','rmSync'])
 test(`marker ${operation} failure cannot fail an L1 open`,async t=>{
   const f=await store(t,{l1:true}),before=schema(f.db),bytes=readSqliteFixture(f.path);
