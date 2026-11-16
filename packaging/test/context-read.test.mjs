@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { openSync,closeSync,readFileSync,writeFileSync,unlinkSync,copyFileSync,readdirSync } from 'node:fs';
+import { openSync,closeSync,readFileSync,writeFileSync,unlinkSync,copyFileSync,readdirSync,existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath,pathToFileURL } from 'node:url';
 import { createHash,randomUUID } from 'node:crypto';
@@ -20,7 +20,8 @@ const ok=result=>{assert.equal(result.ok,true,JSON.stringify(result));return res
 const root=fileURLToPath(new URL('../../',import.meta.url)),fixture=fileURLToPath(new URL('./fixtures/context-read-child.mjs',import.meta.url));
 const roots=['core/index.mjs','core/contract.mjs','adapters/mcp/cli.mjs','adapters/local/cli.mjs','integrations/client/raw/local-host-cli.mjs'];
 const samples=JSON.parse(readFileSync(new URL('../../core/test/fixtures/context-read/hr1-sample.json',import.meta.url)));
-const texts=[...samples.documents.map(row=>row.text),'中','中文資料庫','𠀀𠀁𠀂','ＡＢＣ１２','car'];
+const texts=[...samples.documents.map(row=>row.text),'中','中文資料庫','𠀀𠀁𠀂','ＡＢＣ１２','car',
+  ...Array.from({length:5},(_,i)=>`Canary consolidation marker${i}.`)];
 function child(workspace,args,{preload,key=false}={}) {
   const stem=join(workspace.path,'context-child-'+randomUUID()),out=openSync(stem+'.out','wx',0o600),err=openSync(stem+'.err','wx',0o600);
   let processChild;
@@ -49,11 +50,24 @@ test('R01/R03/R12/R13 actual artifact: captured sources, fresh lexical MCP, open
   finally { await pool.close(); }
   const captured=ok(await run(workspace,[fixture,f.root,f.path,JSON.stringify({mode:'capture',texts})]));
   assert.equal(captured.modelCalls,texts.length);assert.notEqual(captured.pid,process.pid);assert.equal(captured.memories.length,texts.length);
+  const refusals=join(workspace.path,'consolidation-refusals.jsonl');
   const trace=join(workspace.path,'context-loaded.jsonl'),preload='data:text/javascript,'+encodeURIComponent(`
     import {registerHooks} from 'node:module';import {appendFileSync} from 'node:fs';
     registerHooks({load(url,context,next){const result=next(url,context);appendFileSync(${JSON.stringify(trace)},JSON.stringify(url)+'\\n');return result;}});
-    globalThis.fetch=()=>{process.exit(91)};`);
-  const plain=await contextHost(workspace,f.path,{entry:f.entry,enabled:false,key:true,preload}),host=await contextHost(workspace,f.path,{entry:f.entry,key:true});
+    // Refuse default Card maintenance offline; every other fetch remains fatal.
+    globalThis.fetch=(url,options)=>{
+      let payload;try{payload=JSON.parse(options?.body);}catch{}
+      if(String(url)==='https://api.openai.com/v1/responses/input_tokens'&&options?.method==='POST'&&
+          payload?.text?.format?.name==='cairn_consolidate'){
+        appendFileSync(${JSON.stringify(refusals)},'refused\\n');return new Response('{}',{status:403});
+      }
+      process.exit(91);
+    };`);
+  const plain=await contextHost(workspace,f.path,{entry:f.entry,enabled:false,key:true,preload}),host=await contextHost(workspace,f.path,{entry:f.entry,key:true,preload});
+  // Cross the maintenance timer with a topic guaranteed to qualify.
+  const maintenanceDeadline=Date.now()+5000;
+  while(!existsSync(refusals)&&Date.now()<maintenanceDeadline)await new Promise(resolve=>setTimeout(resolve,25));
+  assert.ok(existsSync(refusals),'default maintenance reached the offline consolidation refusal');
   const baseline=(await plain.client.listTools()).tools,tools=(await host.client.listTools()).tools;
   assert.deepEqual(baseline.map(tool=>tool.name).sort(),['correct_memory','forget_memory','inspect_memory','recall_memory','remember_memory']);
   assert.deepEqual(tools.map(tool=>tool.name).sort(),['correct_memory','fetch_memory_candidate_evidence','find_memory_candidates','forget_memory','inspect_memory','read_memory_context','recall_memory','remember_memory']);
