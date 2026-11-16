@@ -12,18 +12,29 @@ import { scriptedConsolidator } from '../../../core/testing/engine-card-fixture.
 
 for (const [name, options, expected] of [
   ['default', {}, 0],
-  ['explicit opt-in', { rawSemantic: true }, 8],
+  ['explicit opt-in', { rawSemantic: true }, 0],
   ['semantic override', { rawSemantic: true, contextSemantic: false }, 0],
   ['explicit opt-out', { rawSemantic: false }, 0],
 ]) test(`shared runtime and connection preserve Card Raw consent: ${name}`, { timeout: 20000 }, async t => {
   t.mock.method(globalThis, 'fetch', () => assert.fail('recording model is offline'));
-  const model = scriptedConsolidator();
+  const requests = [], model = scriptedConsolidator();
+  const consolidate = model.consolidate;
+  model.consolidate = request => {
+    requests.push(structuredClone(request));
+    return consolidate(request);
+  };
+  const marker = 'SYNTHETIC_RAW_ONLY', receiptMarker = 'SYNTHETIC_RECEIPT_ONLY';
+  let extracted = 0;
   const f = sourceFixture(t, { lineage: true, model: { ...model, classify: undefined,
-    extract: ({ input }) => ({ items: [{ content: input.messages[0].content, kind: 'fact', confidence: 1, sourceIndices: [0] }] }) } });
-  const marker = 'Orion retained raw milestone';
-  for (let i = 0; i < 8; i++) await savedSource(f, `${marker} ${i}: synthetic conversation detail`, { sessionId: 'conversation-' + i });
+    extract: () => ({ items: [{ content: `Orion Memory milestone ${extracted++}: synthetic claim`, kind: 'fact', confidence: 1, sourceIndices: [0] }] }) } });
+  for (let i = 0; i < 8; i++) await savedSource(f, `${marker} ${i}: ${receiptMarker} retained synthetic detail`, { sessionId: 'conversation-' + i });
   const memories = f.db.prepare('SELECT id FROM memories ORDER BY id').all();
   assert.equal(memories.length, 8);
+  const excerpts = f.db.prepare('SELECT excerpt FROM receipts').all().map(row => row.excerpt);
+  assert.equal(excerpts.length, 8);
+  assert.ok(excerpts.every(excerpt => excerpt.includes(receiptMarker)), 'receipt needles exist in the store');
+  assert.ok(f.db.prepare('SELECT content FROM memories').all().every(row =>
+    !row.content.includes(marker) && !row.content.includes(receiptMarker)), 'needles are absent from Memory content');
   assert.equal(f.db.prepare('SELECT count(*) n FROM raw_parts WHERE saved=1').get().n, 8);
   memories.forEach((memory, i) => f.db.prepare('UPDATE memories SET created_at=? WHERE id=?')
     .run(new Date(Date.UTC(2026, 0, i * 3 + 1)).toISOString(), memory.id));
@@ -45,9 +56,14 @@ for (const [name, options, expected] of [
   while (!f.db.prepare("SELECT 1 FROM private_cards WHERE state='confirmed'").get() && Date.now() < end) await delay(50);
   await server.close();
   assert.equal(model.calls.length, 1);
-  assert.equal(model.calls[0].rawSpans.length, expected, 'R2N_SHARED_CARD_RAW_CONSENT');
-  assert.equal(opened, expected, 'only an explicit, non-overridden opt-in opens Raw parts');
+  assert.equal(requests.length, 1, 'observe the actual consolidation port request');
+  assert.equal(requests[0].input.rawSpans.length, expected);
+  assert.deepEqual(requests[0].input.rawSpans, []);
+  const wire = JSON.stringify(requests[0]);
+  assert.equal(wire.includes(marker), false, 'whole bundle request excludes Raw text');
+  assert.equal(wire.includes(receiptMarker), false, 'whole bundle request excludes receipt-only text');
+  assert.ok(excerpts.every(excerpt => !wire.includes(excerpt)), 'whole bundle request excludes every receipt excerpt');
+  assert.equal(opened, expected, 'bundle building never opens Raw parts');
   assert.equal(f.db.prepare("SELECT count(*) n FROM private_cards WHERE state='confirmed'").get().n, 1, 'Card still builds');
-  if (expected) assert.ok(model.calls[0].rawSpans.every(span => span.text.startsWith(marker)));
+  assert.deepEqual(model.calls[0].rawSpans, []);
 });
-

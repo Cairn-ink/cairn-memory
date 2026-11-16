@@ -1,6 +1,17 @@
 # Changelog
 
+## Unreleased — engine Card maintenance
+
+- Apply the ten-minute wait after a purge to every part of the affected topic.
+- Publish a new Card and retire other Cards whose current lines it marks out of
+  date in one transaction, retaining bounded attempt accounting after failed writes.
+- Keep split similarity topics under distinct keys, and count public Card deletion
+  toward the topic's wait even when its action name resembles a replacement.
+
 ## Unreleased — daily shared embedding budget
+
+- Skip saving Claude Code runs started by scripts or the Agent SDK (for example
+  `claude -p`), detected from the hook's environment without reading the transcript.
 
 - Share the estimated embedding budget across all connections to a running
   Cairn server, resetting at UTC midnight. The in-memory allowance also resets
@@ -75,9 +86,9 @@ release.
 
 ## Unreleased — Card consolidation respects the Raw opt-in
 
-- Engine Card consolidation uses memories only by default, including for library
-  callers. Set `rawSpans: true` on `maintainCards` to include saved conversation
-  excerpts. The local MCP server includes those excerpts only with
+- Engine Card bundle requests use Memories only, including for library callers.
+  The existing `rawSpans: true` consent on `maintainCards` permits receipt
+  excerpts in pressure metering. The local MCP server opts in only with
   `rawSemantic: true`, unless `contextSemantic: false` overrides it.
 
 ## Unreleased — forgotten-text read
@@ -116,10 +127,31 @@ release.
 
 ## Unreleased — engine-generated topic Cards
 
+- Past 12 Memories in a topic, new Memories join a Card in groups: a tail becomes
+  a Card at 5 sources; until then they appear as individual Memories.
+
+- Engine Cards bundle dated verbatim Memories within 850 body tokens and divide
+  large topics into event-ordered parts of at most 12 with independent reuse and
+  rebuilds. A Card citing a Memory in the read's item window takes that hit's
+  position and replaces its cited sources when it fits the pack budget; a hit on
+  an out-of-date statement delivers the Card without that statement. The model
+  marks out-of-date IDs only; current reads omit their Timeline and all citation
+  tags while retaining their coverage. Same-namespace Cards carrying an old
+  current line are retired for a later debounced rebuild.
+
+- Five current Memories in a topic part, whatever their conversations, qualify for a
+  Card, alongside the existing recurrence and change-chain conditions, with
+  the same budget pressure requirement. Trigger results include `topic`;
+  status describes the conditions in plain words. The first Card can build on
+  the next eligible maintenance pass without a ten-minute wait; rebuilds keep
+  their existing debounce.
+- Packing an engine Card now replaces only source Memories cited in its body.
+  Sources omitted by whole-line fitting remain available as Memory candidates.
+
 - When a consolidation model is configured, the engine builds topic Cards during
-  maintenance to summarize a topic's current state, history and contradictions.
+  maintenance to bundle a topic's current and out-of-date Memories.
   Cards follow their Memories when a topic is relabeled or refiled, without
-  regenerating the summary when the sources stay the same.
+  regenerating the body when the sources stay the same.
 - A forgotten, suppressed or excluded source hides its Card from reads.
   Maintenance rebuilds the Card from eligible sources when the topic still
   qualifies, or removes its stale body when it no longer does.
