@@ -425,20 +425,19 @@ export function contentSuppressionReasonInside(db, ns, target = {}) {
   return null;
 }
 
-/** Private correction preflight, in the caller's write transaction. Enumerate
- * every matching fact, including markers on this Memory's own receipts. Never
- * read source text or reuse a serving cache/acknowledgement ceiling. A fact may
- * appear once per match path; uncertain ancestry is an explicit non-fact denial. */
+/** Private denial-only correction preflight, in the caller's write transaction.
+ * Enumerate the receipt-less Memory decision's target and Raw ancestry only.
+ * Direct receipt markers are outside that decision. Never read source text or
+ * reuse a serving cache/acknowledgement ceiling; uncertain ancestry denies. */
 export function memoryCorrectionDenialsInside(db, ns, { memoryId, revision }) {
   requireSuppressionTransaction(db);
   const layout = installedContentLayout(db);
   if (!layout.suppressionRevision) return [];
-  const targets = [{ kind: 'memory', key: memoryId, revision,
-    version: JSON.stringify(['memory-revision-v1', revision]) },
-    ...db.prepare('SELECT id FROM receipts WHERE memory_id=?').all(memoryId).map(row => ({ kind: 'receipt', key: row.id }))];
+  const target = { kind: 'memory', key: memoryId, revision,
+    version: JSON.stringify(['memory-revision-v1', revision]) };
   const metadata = db.prepare('SELECT kind,match_mode FROM content_suppressions WHERE owner_id=? AND fact_id=?');
   const denials = [], seen = new Set();
-  for (const target of targets) for (const fact of matchingContentSuppressionsInside(db, ns, target, layout, true)) {
+  for (const fact of matchingContentSuppressionsInside(db, ns, target, layout, true)) {
     if (!fact.fact_id) {
       if (!seen.has('unproven')) denials.push({ factId: null, kind: null, matchMode: null,
         matchPath: 'unproven', reason: 'ineligible' });
@@ -447,7 +446,7 @@ export function memoryCorrectionDenialsInside(db, ns, { memoryId, revision }) {
     }
     const row = metadata.get(ns.ownerId, fact.fact_id);
     if (!row) fail('unsupported_database');
-    const matchPath = fact.ancestry ? 'raw-ancestry' : row.kind === 'receipt' ? 'receipt' : 'target';
+    const matchPath = fact.ancestry ? 'raw-ancestry' : 'target';
     const key = JSON.stringify([fact.fact_id, matchPath]);
     if (seen.has(key)) continue;
     seen.add(key);

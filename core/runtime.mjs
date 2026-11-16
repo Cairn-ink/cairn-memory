@@ -342,16 +342,21 @@ export function createMemoryRuntime(input, internal) {
   function correct(ns, id, value, expectedRevision, projection = {}) {
     ready();
     return transaction(db, () => {
-      const current = visibleRow(ns, id);
-      if (current && cachedContentLayout(db)?.suppressionRevision) {
-        const safety = contentReadSafety(db, { namespace: ns, intent: 'history',
-          ref: { type: 'memory', namespace: ns, memoryId: current.id, revision: current.revision } });
-        const denials = memoryCorrectionDenialsInside(db, ns, { memoryId: current.id, revision: current.revision });
-        // Only a complete set of ancestry-only Raw span denials may be retired
-        // by replacing this revision. Canonical and own-receipt denials still refuse.
-        if ((!safety.allowed && !denials.some(denial => denial.reason === safety.reason)) ||
-            denials.some(denial => denial.kind !== 'raw' || denial.matchMode !== 'span' || denial.matchPath !== 'raw-ancestry'))
-          fail('memory_suppressed');
+      try {
+        memoryWriteSafety(ns,visibleRow(ns,id));
+      } catch (error) {
+        if (error?.code !== 'memory_suppressed') throw error;
+        // The old allow path is complete. Only explain an actual denial, using
+        // that receipt-less Memory target and its Raw ancestry, never receipt facts.
+        try {
+          const current = visibleRow(ns, id);
+          const safety = contentReadSafety(db, { namespace: ns, intent: 'history',
+            ref: { type: 'memory', namespace: ns, memoryId: current.id, revision: current.revision } });
+          const denials = memoryCorrectionDenialsInside(db, ns, { memoryId: current.id, revision: current.revision });
+          if (safety.allowed || !denials.some(denial => denial.reason === safety.reason) ||
+              denials.some(denial => denial.kind !== 'raw' || denial.matchMode !== 'span' || denial.matchPath !== 'raw-ancestry'))
+            fail('memory_suppressed');
+        } catch { fail('memory_suppressed'); }
       }
       const result=rawCards.mutate(ns,'memory-correct-'+id+'-'+expectedRevision,() => {
       const current = visibleRow(ns, id);
