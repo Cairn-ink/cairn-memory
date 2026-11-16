@@ -108,7 +108,7 @@ if (process.argv[2] === 'child') {
             // The old shutdown reaches host close here. A correct producer join
             // holds that boundary until authentication settles instead.
             await delay(150);
-            t.diagnostic('after-close schedule: host closed before auth release=' + seen('host-closed'));
+            assert.equal(seen('host-closed'), false, 'host close waits for held authentication');
           }
           release('auth-pending');
           if (mode === 'refusal') {
@@ -117,6 +117,7 @@ if (process.argv[2] === 'child') {
           }
           if (mode !== 'after-close') release('provider-pending');
           await authentication; await work;
+          if (mode === 'after-close') await wait('host-closed');
         }
         await wait('candidate-returned'); await delay(200); release('candidate-returned');
         await until(() => exit, 'candidate exits');
