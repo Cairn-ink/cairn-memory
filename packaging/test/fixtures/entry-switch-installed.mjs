@@ -35,8 +35,10 @@ export function classifyRuntimeHygiene(before, after, {
     tokenPrefixes.some(prefix => name === prefix || name.startsWith(prefix + '.owner-') || name.startsWith(prefix + '.reap-'));
   for (const entry of after.entries) {
     if (isOwned(entry.name)) errors.push('test-owned file remains: ' + entry.name);
-    else if (!identityPrefix(entry.name) && !before.entries.some(value => value.name === entry.name))
-      errors.push('non-identity entry created: ' + entry.name);
+    else if (!before.entries.some(value => value.name === entry.name)) {
+      if (identityPrefix(entry.name)) diagnostics.push('foreign identity entry created: ' + entry.name);
+      else errors.push('non-identity entry created: ' + entry.name);
+    }
   }
   const groups = new Map();
   for (const entry of before.entries) {
@@ -59,8 +61,6 @@ export function classifyRuntimeHygiene(before, after, {
       continue;
     }
     if (!previous?.alive) {
-      for (const entry of after.entries) if (identityPrefix(entry.name) === prefix && !entries.some(value => value.name === entry.name))
-        errors.push('dead or ownerless foreign entry created: ' + entry.name);
       for (const entry of entries) if (!sameEntry(entry, current.get(entry.name)))
         errors.push('dead or ownerless foreign entry changed: ' + entry.name);
       continue;
@@ -83,33 +83,58 @@ export function classifyRuntimeHygiene(before, after, {
   return { errors, diagnostics };
 }
 
-async function runtimeSnapshot(path, remembered = []) {
-  const entries = [];
-  for (const name of (await readdir(path)).sort()) {
-    let info;
-    try { info = await lstat(join(path, name), { bigint: true }); }
-    catch (error) { if (error.code === 'ENOENT') continue; throw error; }
-    entries.push({ name, kind: info.isFile() ? 'file' : info.isSocket() ? 'socket' : info.isDirectory() ? 'directory' : info.isSymbolicLink() ? 'symlink' : 'other',
-      inode: String(info.ino), size: String(info.size), mtime: String(info.mtimeNs) });
-  }
-  const identities = [];
-  for (const prefix of new Set(entries.map(entry => identityPrefix(entry.name)).filter(Boolean))) {
-    let owner;
-    for (const suffix of ['.json', '.lock']) {
-      if (!entries.some(entry => entry.name === prefix + suffix && entry.kind === 'file')) continue;
-      try {
-        const value = JSON.parse(await readFile(join(path, prefix + suffix), 'utf8'));
-        const candidate = suffix === '.json' ? value.owner : value;
-        if (candidate) { startAwareAlive(candidate); owner = candidate; break; }
-      } catch (error) { if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error; }
+// Shape validation is separate from liveness: malformed records are ownerless;
+// OS/probe failures for a well-formed owner still propagate.
+const ownerRecord = value => value !== null && typeof value === 'object' && !Array.isArray(value) &&
+  Number.isSafeInteger(value.pid) && value.pid > 0 && typeof value.start === 'string' &&
+  typeof value.boot === 'string' && value.boot.length > 0 && typeof value.namespace === 'string' && value.namespace.length > 0;
+
+export async function runtimeSnapshot(path, remembered = [], { afterMetadata = async () => {} } = {}) {
+  async function metadata(names) {
+    const values = [];
+    for (const name of names) {
+      let info;
+      try { info = await lstat(join(path, name), { bigint: true }); }
+      catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+      values.push({ name, kind: info.isFile() ? 'file' : info.isSocket() ? 'socket' : info.isDirectory() ? 'directory' : info.isSymbolicLink() ? 'symlink' : 'other',
+        inode: String(info.ino), size: String(info.size), mtime: String(info.mtimeNs) });
     }
-    identities.push({ prefix, owner, alive: owner ? startAwareAlive(owner) : false });
+    return values;
   }
+  const names = (await readdir(path)).sort(), identities = [];
+  const entries = await metadata(names.filter(name => !identityPrefix(name)));
+  for (const prefix of new Set(names.map(identityPrefix).filter(Boolean))) {
+    // At most three complete samples per identity. Recheck both anchors,
+    // including absence, so a new descriptor cannot hide behind a stable lock.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const sampled = await metadata((await readdir(path)).filter(name => identityPrefix(name) === prefix).sort());
+      await afterMetadata({ prefix, attempt }); // Test-only acquisition seam.
+      let owner;
+      for (const suffix of ['.json', '.lock']) {
+        if (!sampled.some(entry => entry.name === prefix + suffix && entry.kind === 'file')) continue;
+        try {
+          const value = JSON.parse(await readFile(join(path, prefix + suffix), 'utf8'));
+          const candidate = suffix === '.json' ? value?.owner : value;
+          if (ownerRecord(candidate)) { owner = candidate; break; }
+        } catch (error) { if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error; }
+      }
+      const alive = owner ? startAwareAlive(owner) : false;
+      const anchors = ['.json', '.lock'].map(suffix => prefix + suffix);
+      const checked = await metadata(anchors);
+      const stable = anchors.every(name => {
+        const previous = sampled.find(entry => entry.name === name), next = checked.find(entry => entry.name === name);
+        return previous ? next?.inode === previous.inode && next.kind === previous.kind : !next;
+      });
+      if (stable) { entries.push(...sampled); identities.push({ prefix, owner, alive }); break; }
+      if (attempt === 3) throw Object.assign(Error('runtime_snapshot_changed'), { code: 'runtime_snapshot_changed' });
+    }
+  }
+  entries.sort((a, b) => a.name.localeCompare(b.name));
   return { entries, identities, retired: remembered.filter(identity => identity.owner)
     .map(identity => ({ ...identity, alive: startAwareAlive(identity.owner) })) };
 }
-export async function installedAssertions(t, { install = false } = {}) {
-  const scratch = await mkdtemp(join(tmpdir(), 'entry-')), clients = [], owned = new Map(), logs = new Set(), lockTokens = new Map();
+export async function installedAssertions(t, { install = false, exercise } = {}) {
+  const scratch = await mkdtemp(join(tmpdir(), 'entry-')), clients = [], owned = new Map(), logs = new Set(), lockTokens = new Map(), launchedPrefixes = new Set();
   const dir = await runtimeDirectory(), before = await runtimeSnapshot(dir.path);
   const baseline = new Set(before.entries.map(entry => entry.name));
   // Claim key ownership via an exclusive atomic link, rather than assuming
@@ -127,6 +152,9 @@ export async function installedAssertions(t, { install = false } = {}) {
     } finally { await rm(temporary); }
   }
   const artifact = buildArtifact({ ownDirectory: p => t.after(() => rm(p, { recursive: true, force: true })) });
+  // Keep the verified build digest even for the deliberate tamper-refusal
+  // vectors. Their possible identity must be owned before discovery succeeds.
+  const build = JSON.parse(await readFile(join(artifact.stagingPath, 'engine-build.json'))).digest;
   const manifest = JSON.parse(await readFile(new URL('../../../packages/setup/runtime/engine/manifest.json', import.meta.url)));
   let next = 0;
   const bundleHashes = { ...manifest.sourceHashes, ...manifest.generatedHashes };
@@ -175,8 +203,23 @@ export async function installedAssertions(t, { install = false } = {}) {
     return values;
   }
   async function client(root, extra = [], expectedFallback = false, owner = 'synthetic-entry-owner', entryPath = join(root, 'bin/cairn-memory.mjs')) {
-    const child = spawn(process.execPath, [entryPath, '--db', store, '--owner', owner, ...extra], {
-      env: { PATH: dirname(process.execPath), NODE_NO_WARNINGS: '1' }, stdio: ['pipe', 'pipe', 'pipe'],
+    const args = ['--db', store, '--owner', owner, ...extra];
+    const environment = { PATH: dirname(process.execPath), NODE_NO_WARNINGS: '1' };
+    const engine = await import(pathToFileURL(join(root, 'adapters/mcp/local-daemon-identity.mjs')));
+    const state = await import(pathToFileURL(join(root, 'adapters/mcp/local-daemon-state.mjs')));
+    const creation = await engine.creationIdentity(store);
+    launchedPrefixes.add('p-' + engine.creationDigest(creation).slice(0, 32));
+    async function recordIdentity() {
+      try {
+        const identity = await engine.createIdentity(args, { root, build, environment, key: await state.identityKey(dir),
+          node: { executable: process.execPath, version: process.version, execArgv: [] } });
+        assert.equal(identity.eligible, true);
+        launchedPrefixes.add('d-' + identity.digest.slice(0, 32));
+      } catch (error) { if (error.code !== 'ENOENT') throw error; } // First launch may still be provisioning the store.
+    }
+    await recordIdentity();
+    const child = spawn(process.execPath, [entryPath, ...args], {
+      env: environment, stdio: ['pipe', 'pipe', 'pipe'],
     });
     const entry = { child, lines: [], stderr: '', exit: null, buffer: '' }; clients.push(entry);
     child.stdin.on('error', () => {});
@@ -196,10 +239,12 @@ export async function installedAssertions(t, { install = false } = {}) {
     // fallback preservation, not just a mocked stream consumer.
     const initialize = entry.request('initialize', { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'synthetic-entry', version: '1' } });
     const tools = entry.request('tools/list');
-    assert.ok((await initialize).serverInfo);
-    child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
-    assert.ok((await tools).tools.length > 0);
-    assert.equal(entry.stderr.includes('cairn_daemon_fallback:'), expectedFallback, entry.stderr);
+    try {
+      assert.ok((await initialize).serverInfo);
+      child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
+      assert.ok((await tools).tools.length > 0);
+      assert.equal(entry.stderr.includes('cairn_daemon_fallback:'), expectedFallback, entry.stderr);
+    } finally { await recordIdentity(); } // Also own attempts that never published a descriptor.
     await descriptors(); return entry;
   }
   async function close(entry) {
@@ -240,7 +285,7 @@ export async function installedAssertions(t, { install = false } = {}) {
         changed: before.entries.filter(entry => current.has(entry.name) && !sameEntry(entry, after.entries.find(value => value.name === entry.name))).map(entry => entry.name),
       }));
       const hygiene = classifyRuntimeHygiene(before, after, {
-        prefixes: [...logs].map(name => name.slice(0, -4)), names: [...logs, ...(ownKey ? ['identity-v1.key'] : [])],
+        prefixes: [...launchedPrefixes, ...[...logs].map(name => name.slice(0, -4))], names: [...logs, ...(ownKey ? ['identity-v1.key'] : [])],
         tokenPrefixes: [...lockTokens.keys()], owners: [...owned.values()].map(descriptor => descriptor.owner),
       });
       for (const diagnostic of hygiene.diagnostics) t.diagnostic(diagnostic);
@@ -249,6 +294,8 @@ export async function installedAssertions(t, { install = false } = {}) {
     } finally { await rm(scratch, { recursive: true, force: true }); }
   });
   const root = await tree('a');
+  // Test-only integration seam: exercise the same launch and teardown paths.
+  if (exercise) return exercise({ root, client, close, directory: dir, store });
   const engine = await import(pathToFileURL(join(root, 'adapters/mcp/local-daemon-identity.mjs')));
   const costs = [];
   for (let i = 0; i < 50; i++) {

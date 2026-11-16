@@ -80,10 +80,18 @@ test('non-identity entries and unrecognized files of pre-existing live identitie
   }
 });
 
-test('new non-identity entries and additions to a dead foreign identity fail', () => {
+test('new non-identity entries fail', () => {
   fails(classify(snapshot([]), snapshot([{ ...entry('.log'), name: 'foreign-key' }])));
-  const before = base(false), after = copy(before); after.entries.push(entry('.stamp.tmp-synthetic'));
-  fails(classify(before, after));
+});
+
+test('additions to dead or ownerless foreign identities are diagnostic only', () => {
+  for (const ownerless of [false, true]) {
+    const before = base(false); if (ownerless) before.identities = [];
+    const after = copy(before); after.entries.push(entry('.lock.owner-new-foreign'));
+    const result = classify(before, after); passes(result);
+    assert.ok(result.diagnostics.some(line => line.includes(prefix + '.lock.owner-new-foreign')));
+    assert.deepEqual(after.entries.slice(0, -1), before.entries);
+  }
 });
 
 test('live log growth compares exact sizes without imposing a wall-clock mtime order', () => {
