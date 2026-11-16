@@ -4,6 +4,7 @@ import { transaction, isStorageBusy } from './database.mjs';
 import { localControlInput } from './local-authority-input.mjs';
 import { rawBoundary } from './raw-input.mjs';
 import { createRawControlStorage } from './raw-control-storage.mjs';
+import { createRawSourceRoots } from './raw-source-roots.mjs';
 import { fail } from './validation.mjs';
 
 const where = 'owner_id=? AND scope=? AND project_id=? AND client=?';
@@ -55,6 +56,7 @@ export const LOCAL_RAW_HIDE_WINDOW_MS = 30 * 60 * 1000;
 /** Private local selection only. Every mutation joins its caller's transaction. */
 export function createLocalRawPrivacyStorage(db) {
   const uuid = createLocalUuidFence(db);
+  const sourceRoots = createRawSourceRoots(db);
   const nsWhere = 'owner_id=? AND scope=? AND project_id=?';
   const raw = createRawControlStorage(db);
   const secret = db.prepare('SELECT secret FROM episode_identity WHERE singleton=1').get().secret;
@@ -88,7 +90,7 @@ export function createLocalRawPrivacyStorage(db) {
     }
     db.prepare('INSERT INTO local_raw_hide_windows VALUES(?,?,?,?,?)').run(...rawBoundary(ns), start, end);
   }
-  function hideMemoryInside(ns, memory) {
+  function memoryHidePlanInside(ns, memory) {
     required();
     // Snapshot is taken under the very same write transaction as correction or
     // forgetting, before any receipt deletion. Never read receipt text.
@@ -100,7 +102,8 @@ export function createLocalRawPrivacyStorage(db) {
       anchors.push(...[memory.created_at, memory.updated_at].map(finiteTime).filter(value => value !== null));
     if (!anchors.length) fail('local_raw_hide_anchor_missing');
     try {
-      for (const anchor of anchors) addWindowInside(ns, anchor - LOCAL_RAW_HIDE_WINDOW_MS, anchor + LOCAL_RAW_HIDE_WINDOW_MS);
+      const matches = new Map();
+      const add = (client, session_key) => matches.set(JSON.stringify([client, session_key]), { client, session_key });
       for (const receipt of receipts) {
         if (!['claude-code','codex'].includes(receipt.client) || !receipt.session_id || receipt.session_id === 'explicit-tool') continue;
         // Persist only hashed keys, never a real client's session ID. If the
@@ -108,7 +111,7 @@ export function createLocalRawPrivacyStorage(db) {
         const sessions = [hashSession(ns, receipt.client, receipt.session_id)];
         if (/^s1:[a-f0-9]{64}$/.test(receipt.session_id)) sessions.push(receipt.session_id);
         for (const session of new Set(sessions))
-          fenceInside(ns, receipt.client, session);
+          add(receipt.client, session);
       }
       // Compatibility scans only conversations without a range row. Once
       // filled, forget uses the range index and never revisits their messages.
@@ -117,7 +120,6 @@ export function createLocalRawPrivacyStorage(db) {
           AND r.client=c.client AND r.session_key=c.session_key
         WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND r.session_key IS NULL`).all(...rawBoundary(ns));
       for (const session of missing) saveRangeInside(ns, session.client, session.session_key, legacyRange(ns, session.client, session.session_key));
-      const matches = new Map();
       for (const anchor of anchors) {
         const sessions = db.prepare(`SELECT client,session_key FROM local_raw_session_ranges
           WHERE ${nsWhere} AND unknown_time=0 AND min_ms<=? AND max_ms>=?
@@ -125,7 +127,42 @@ export function createLocalRawPrivacyStorage(db) {
           .all(...rawBoundary(ns), anchor + LOCAL_RAW_HIDE_WINDOW_MS, anchor - LOCAL_RAW_HIDE_WINDOW_MS, ...rawBoundary(ns));
         for (const session of sessions) matches.set(JSON.stringify([session.client,session.session_key]), session);
       }
-      for (const session of matches.values()) fenceInside(ns, session.client, session.session_key);
+      return { anchors, sessions: [...matches.values()] };
+    } catch (error) {
+      if (isStorageBusy(error)) throw error;
+      fail('local_raw_privacy_write_failed');
+    }
+  }
+  // Snapshot all receipt names and proven origins before invalidation removes
+  // keeper proof. Time-window and unknown-time matches only select fences.
+  function invalidateMemoryEpisodesInside(ns, memory, episodes) {
+    required();
+    const sessions = new Map();
+    const add = (client, sessionKey) => sessions.set(JSON.stringify([client, sessionKey]), { client, sessionKey });
+    for (const receipt of db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(memory.id)) {
+      if (!receipt.session_id || receipt.session_id === 'explicit-tool') continue;
+      for (const root of sourceRoots.receipt(ns, receipt).roots) add(root.client, root.sessionKey);
+      if (['claude-code', 'codex'].includes(receipt.client))
+        for (const key of sourceRoots.keys(ns, receipt.client, receipt.session_id)) add(receipt.client, key);
+    }
+    const selected = new Set();
+    for (const session of sessions.values()) {
+      const rows = db.prepare(`SELECT id FROM session_episodes WHERE ${nsWhere} AND client=? AND session_key=? AND deleted=0`)
+        .all(...rawBoundary(ns), session.client, session.sessionKey);
+      for (const row of rows) selected.add(row.id);
+    }
+    for (const id of selected) {
+      episodes.invalidateSources(ns, id);
+      // Existing recursive invalidation clears consumers' passages and steps.
+      // Deletion also withholds named rows from receipt-time lists and get.
+      episodes.deleteSourceEpisode(ns, id);
+    }
+  }
+  function hideMemoryInside(ns, memory) {
+    const { anchors, sessions } = memoryHidePlanInside(ns, memory);
+    try {
+      for (const anchor of anchors) addWindowInside(ns, anchor - LOCAL_RAW_HIDE_WINDOW_MS, anchor + LOCAL_RAW_HIDE_WINDOW_MS);
+      for (const session of sessions) fenceInside(ns, session.client, session.session_key);
     } catch (error) {
       if (isStorageBusy(error)) throw error;
       fail('local_raw_privacy_write_failed');
@@ -215,5 +252,5 @@ export function createLocalRawPrivacyStorage(db) {
       db.prepare('INSERT INTO local_raw_session_modes VALUES(?,?,?,?,?,?)').run(...args, interpretation);
     }
   }
-  return { fenceInside, beforeDelete:uuid.beforeDelete, hideMemoryInside, arrivalBlocked, fenceArrivalInside, fenceArrival, recordRangeInside, assertModeInside };
+  return { fenceInside, beforeDelete:uuid.beforeDelete, invalidateMemoryEpisodesInside, hideMemoryInside, arrivalBlocked, fenceArrivalInside, fenceArrival, recordRangeInside, assertModeInside };
 }
