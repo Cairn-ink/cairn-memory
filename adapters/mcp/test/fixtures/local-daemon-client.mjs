@@ -196,11 +196,26 @@ try {
         return result;
       };
     }
+    let takeoverFaultInjected = false;
+    const takeoverFault = async stage => {
+      if (takeoverFaultInjected || configuration.takeoverFault !== stage) return;
+      takeoverFaultInjected = true;
+      send({ kind: 'takeover-read-pending', stage });
+      while ((await once(process, 'message'))[0].kind !== 'release-takeover-read') {}
+      throw Object.assign(Error('synthetic_private_missing'), { code: 'ENOENT' });
+    };
     let result = await runForwarder(configuration.args, { ...configuration.options,
-      ...(configuration.holdTakeoverLock ? { takeoverOptions: { afterLock: async () => {
-        send({ kind: 'takeover-locked' });
-        while ((await once(process, 'message'))[0].kind !== 'release-takeover') {}
-      } } } : {}),
+      ...((configuration.holdTakeoverLock || configuration.takeoverFault) ? { takeoverOptions: {
+        ...configuration.options?.takeoverOptions,
+        afterLock: async () => {
+          if (configuration.holdTakeoverLock) {
+            send({ kind: 'takeover-locked' });
+            while ((await once(process, 'message'))[0].kind !== 'release-takeover') {}
+          }
+          await takeoverFault('lock');
+        },
+        afterTerm: () => takeoverFault('term'),
+      } } : {}),
       ...(configuration.storeType === undefined ? {} : { storeStatfs: async parent => {
         send({ kind: 'store-statfs', parent }); return { type: configuration.storeType };
       } }),

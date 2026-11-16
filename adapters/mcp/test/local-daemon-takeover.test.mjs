@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, readdir, writeFile } from 'node:fs/promises';
+import { readFile, readdir, writeFile, lstat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { workspace, until, ok } from './local-daemon-support.mjs';
 import { runtimeDirectory, endpointPaths, writePrivate } from '../local-daemon-state.mjs';
@@ -14,6 +14,8 @@ async function endpoint(w) {
   return { descriptor, directory, paths: endpointPaths(directory, digest) };
 }
 async function stale(w) {
+  // Exempt from crash-temp exclusion: every call is awaited with the holder
+  // SIGSTOPped, before releasing any contender that could acquire its lock.
   const e = await endpoint(w), stamp = JSON.parse(await readFile(e.paths.stamp, 'utf8'));
   stamp.monotonicMs = daemonMonotonicMs() - 31000;
   await writePrivate(e.directory, e.paths.stamp, canonical(stamp));
@@ -40,6 +42,31 @@ test('stamp has only exact code-only fields, refreshes, and is removed with endp
   a.process.stdin.end(); await until(() => a.messages.some(m => m.kind === 'forwarder-done'), 'forwarder closes');
   assert.ok(startAwareAlive(descriptor.owner)); process.kill(descriptor.owner.pid, 'SIGTERM');
   await until(async () => !(await readdir(join(w.root, 'run', 'cairn-memory'))).some(n => /\.(stamp|json|sock)$/.test(n)), 'stamp and endpoint clean together');
+});
+
+for (const stage of ['lock', 'term']) test('takeover ENOENT releases its lock and re-verifies after ' + stage, { timeout: 20000 }, async t => {
+  const w = await workspace(t), { descriptor: old, candidate } = await stopped(w), e = await stale(w);
+  const b = w.child({ args: w.args, observeTakeover: true, takeoverFault: stage,
+    options: { root: join(w.root, 'run'), environment: {} } });
+  b.release();
+  await until(() => b.messages.some(m => m.kind === 'takeover-read-pending'), 'fault is inside the held takeover lock');
+  assert.equal(JSON.parse(await readFile(e.paths.takeover, 'utf8')).pid, b.process.pid);
+  const before = b.messages.filter(m => m.kind === 'takeover-signal');
+  assert.deepEqual(before.map(m => [m.pid, m.signal]), stage === 'term' ? [[old.owner.pid, 'SIGTERM']] : []);
+  process.kill(old.owner.pid, 'SIGKILL'); await until(() => candidate.exit, 'old owner actually dies');
+  const replacement = w.child({ role: 'candidate', bootstrap: await w.bootstrap() }); replacement.release();
+  const fresh = await until(async () => { const d = await w.descriptor(); return d?.incarnation !== old.incarnation && d; }, 'fresh election publishes before the injected error unwinds');
+  b.process.send({ kind: 'release-takeover-read' });
+  const connected = await w.connect(b);
+  assert.equal(connected.incarnation, fresh.incarnation); assert.deepEqual(connected.owner, fresh.owner);
+  await until(async () => {
+    try { await lstat(e.paths.takeover); return false; }
+    catch (error) { if (error.code === 'ENOENT') return true; throw error; }
+  }, 'the failed takeover releases its lock');
+  assert.deepEqual(b.messages.filter(m => m.kind === 'takeover-signal'), before, 'retry repeats the full fresh-stamp verification and never signals the new owner');
+  assert.ok(startAwareAlive(fresh.owner));
+  assert.equal(b.messages.filter(m => m.kind === 'candidate').length, 0);
+  ok(await b.tool('remember_memory', { content: 'synthetic fresh owner after takeover read failure', kind: 'fact' }));
 });
 
 test('fresh stopped stamp refuses before stdin within connect budget and never signals', { timeout: 15000 }, async t => {
