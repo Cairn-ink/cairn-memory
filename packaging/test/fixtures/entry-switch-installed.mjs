@@ -20,9 +20,12 @@ const until = async (predicate, reason, ms = 15000) => {
 const ok = r => { assert.equal(r.ok, true, JSON.stringify(r)); return r.value; };
 import { identityPrefix, sameEntry, runtimeSnapshot, classifyRuntimeHygiene, runtimeLease, ownedRuntimeFiles } from './installed-daemon-runtime.mjs';
 export { runtimeSnapshot, classifyRuntimeHygiene } from './installed-daemon-runtime.mjs';
-export async function installedAssertions(t, { install = false, exercise, recordLaunchPrefix = prefix => prefix } = {}) {
+export async function installedAssertions(t, { install = false, exercise, recordLaunchPrefix = prefix => prefix, snapshot = runtimeSnapshot } = {}) {
   const scratch = await mkdtemp(join(tmpdir(), 'entry-')), clients = [], owned = new Map(), logs = new Set(), lockTokens = new Map(), launchedPrefixes = new Set();
-  const dir = await runtimeDirectory(), releaseLease = await runtimeLease(dir), before = await runtimeSnapshot(dir.path);
+  const dir = await runtimeDirectory(), releaseLease = await runtimeLease(dir);
+  let teardownRegistered = false;
+  try {
+  const before = await snapshot(dir.path);
   const baseline = new Set(before.entries.map(entry => entry.name)), ownNames = new Set();
   const mutateRuntime = ownedRuntimeFiles(dir, { prefixes: launchedPrefixes, names: ownNames, tokenPrefixes: lockTokens });
   // Claim key ownership via an exclusive atomic link, rather than assuming
@@ -207,6 +210,8 @@ export async function installedAssertions(t, { install = false, exercise, record
       t.diagnostic('runtime hygiene: no test-owned files remain');
     } finally { try { await rm(scratch, { recursive: true, force: true }); } finally { await releaseLease(); } }
   });
+  // From here the hook owns release, including when the exercise fails.
+  teardownRegistered = true;
   const root = await tree('a');
   // Test-only integration seam: exercise the same launch and teardown paths.
   if (exercise) return exercise({ root, client, close, directory: dir, store });
@@ -315,4 +320,8 @@ export async function installedAssertions(t, { install = false, exercise, record
   const endpoints = (await readdir(dir.path)).filter(n => [...logs].some(log => n.startsWith(log.slice(0, -4))) && !n.endsWith('.log'));
   assert.deepEqual(endpoints, [], 'ready socket and lock files are removed');
   t.diagnostic(`idle exit observed after ${(performance.now() - start).toFixed(0)}ms`);
+  } catch (error) {
+    if (!teardownRegistered) await releaseLease();
+    throw error;
+  }
 }

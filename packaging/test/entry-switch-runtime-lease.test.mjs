@@ -10,6 +10,7 @@ import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { runtimeDirectory } from '../../adapters/mcp/local-daemon-state.mjs';
 import { localProcessIdentity, startAwareAlive } from '../../adapters/mcp/local-daemon-liveness.mjs';
 import { installedDaemonRuntime, runtimeLease, sameOwner } from './fixtures/installed-daemon-runtime.mjs';
+import { installedAssertions } from './fixtures/entry-switch-installed.mjs';
 
 const leasePath = directory => join(dirname(directory.path), '.installed-daemon-test.lease');
 const boundMs = 2000;
@@ -117,5 +118,26 @@ if (process.argv[2] === '--lease-holder') {
     }
     finally { await release(); }
     t.diagnostic('post-acquisition initialization failure released lease; next acquisition <500 ms');
+  });
+
+  test('extracted fixture snapshot failure releases the lease before teardown can be registered', { timeout: 10000 }, async t => {
+    const directory = await runtimeDirectory(), failure = Error('synthetic_extracted_snapshot_failure'), hooks = [];
+    try {
+      await assert.rejects(installedAssertions({ after: hook => hooks.push(hook), diagnostic: () => {} }, {
+        snapshot: async path => {
+          assert.equal(path, directory.path);
+          const owner = JSON.parse(await readFile(leasePath(directory), 'utf8'));
+          assert.ok(sameOwner(owner, localProcessIdentity()), 'failure is injected after acquisition');
+          throw failure;
+        },
+      }), error => error === failure);
+      assert.equal(hooks.length, 0, 'snapshot failed before any teardown hook was registered');
+      const start = performance.now(), release = await runtimeLease(directory, { timeoutMs: 500 });
+      try {
+        assert.ok(performance.now() - start < 500, 'next acquisition is immediate (<500 ms)');
+        t.diagnostic(`extracted failure: next acquisition ${Math.round(performance.now() - start)} ms (<500 ms)`);
+      } finally { await release(); }
+      await assert.rejects(lstat(leasePath(directory)), { code: 'ENOENT' });
+    } finally { for (const hook of hooks.reverse()) await hook(); }
   });
 }
