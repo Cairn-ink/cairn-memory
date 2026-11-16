@@ -28,29 +28,40 @@ const nativeSQLiteError = error => typeof error?.errcode === 'number';
 const systemError = error => typeof error?.code === 'string' && /^E[A-Z]+$/.test(error.code);
 const nativeReason = error => ({ 5: 'busy', 6: 'busy', 9: 'interrupt', 10: 'io', 13: 'full' })[error.errcode & 255] ?? 'error';
 const outcome = (status, reason = null) => ({ status, reason });
+function parsePeerIndexRetry(path, name) {
+  const prefix = markerPrefix(path);
+  if (!name.startsWith(prefix)) return null;
+  // Reserved leaves: <store file name>.peer-index-retry.<notBefore>.<delayMs>.<reason>.
+  // Both numbers are decimal nonnegative safe integers; reasons are fixed below.
+  // Names are the entire format. Never inspect or open a marker entry, even
+  // if it is a swapped symlink, hard-linked companion, directory or FIFO.
+  const fields = /^([0-9]+)\.([0-9]+)\.(busy|io|full|interrupt|space|error)$/.exec(name.slice(prefix.length));
+  if (!fields || fields[0].length !== name.length - prefix.length) return null;
+  const [, deadline, delay, reason] = fields, notBefore = Number(deadline), delayMs = Number(delay);
+  return Number.isSafeInteger(notBefore) && Number.isSafeInteger(delayMs) ? { notBefore, delayMs, reason } : null;
+}
 function peerIndexRetryNames(path) {
   if (path === ':memory:') return [];
-  try { return readdirSync(dirname(resolve(path))).filter(name => name.startsWith(markerPrefix(path))); }
+  try { return readdirSync(dirname(resolve(path))).filter(name => parsePeerIndexRetry(path, name)); }
   catch { return []; }
 }
 function readPeerIndexRetry(path, names) {
   const now = Date.now();
-  let latest = null;
+  let active = null, previous = null;
   for (const name of names) {
-    // Names are the entire format. Never inspect or open a marker entry, even
-    // if it is a swapped symlink, hard-linked companion, directory or FIFO.
-    const fields = /^(\d+)\.(\d+)\.(busy|io|full|interrupt|space|error)$/.exec(name.slice(markerPrefix(path).length));
-    if (!fields) continue;
-    const [, deadline, delay, reason] = fields, notBefore = Number(deadline), delayMs = Number(delay);
-    if (Number.isSafeInteger(notBefore) && notBefore >= now && notBefore <= now + maxRetryMs &&
-        Number.isSafeInteger(delayMs) && delayMs >= firstRetryMs && delayMs <= maxRetryMs &&
-        (!latest || notBefore > latest.notBefore)) latest = { notBefore, delayMs, reason };
+    const marker = parsePeerIndexRetry(path, name);
+    if (!marker || marker.delayMs < firstRetryMs || marker.delayMs > maxRetryMs) continue;
+    // Expiry ends backoff, not the delay history used by the next failure.
+    if (!previous || marker.notBefore > previous.notBefore) previous = marker;
+    if (marker.notBefore >= now && marker.notBefore <= now + maxRetryMs &&
+        (!active || marker.notBefore > active.notBefore)) active = marker;
   }
-  return latest;
+  return { active, previous };
 }
-function clearPeerIndexRetry(path, names, keep) {
+function clearPeerIndexRetry(path, names, published) {
   for (const name of names) {
-    if (name === keep) continue;
+    const marker = parsePeerIndexRetry(path, name);
+    if (!marker || published && !(marker.notBefore < published.now && marker.notBefore < published.notBefore)) continue;
     try { unlinkSync(join(dirname(resolve(path)), name)); } catch { /* Optional marker only; never follow. */ }
   }
 }
@@ -58,7 +69,8 @@ function deferPeerIndex(path, previous, reason, status = 'deferred') {
   if (path !== ':memory:') {
     const directory = dirname(resolve(path));
     const delayMs = Math.min(maxRetryMs, previous ? previous.delayMs * 2 : firstRetryMs);
-    const name = markerPrefix(path) + (Date.now() + delayMs) + '.' + delayMs + '.' + reason;
+    const now = Date.now(), notBefore = now + delayMs;
+    const name = markerPrefix(path) + notBefore + '.' + delayMs + '.' + reason;
     // Keep temporary leaves outside the marker namespace so another publisher
     // clearing old markers cannot unlink an in-progress exclusive write.
     const temporary = join(directory, '.' + markerPrefix(path) + randomUUID() + '.tmp');
@@ -67,7 +79,9 @@ function deferPeerIndex(path, previous, reason, status = 'deferred') {
       writeFileSync(temporary, '', { flag: 'wx', mode: 0o600 });
       renameSync(temporary, join(directory, name));
       pending = false;
-      clearPeerIndexRetry(path, peerIndexRetryNames(path), name);
+      // A failed publisher owns only its new leaf and strictly older expired
+      // history. Concurrent unexpired publications must survive both snapshots.
+      clearPeerIndexRetry(path, peerIndexRetryNames(path), { now, notBefore });
     } catch { /* Marker failures must never turn an optional build into a refusal. */ }
     finally { if (pending) { try { unlinkSync(temporary); } catch { /* Optional marker only. */ } } }
   }
@@ -78,7 +92,7 @@ function deferPeerIndex(path, previous, reason, status = 'deferred') {
 export function readLocalRawPeerIndexStatus(db, path) {
   attestedLocalRawPackage(db); // Preserve refusal, but never use its stale package for presence.
   const present = peerPackage(db) === 'v2';
-  const retry = present ? null : readPeerIndexRetry(path, peerIndexRetryNames(path));
+  const retry = present ? null : readPeerIndexRetry(path, peerIndexRetryNames(path)).active;
   const absolute = resolve(path);
   return {
     present,
@@ -130,29 +144,29 @@ function upgradeLocalRawPeerIndex(db, path, offline, timeout, admission) {
   // Preserve the existing accessor's refusal behaviour, even during backoff.
   const cachedVersion = attestedLocalRawPackage(db), names = peerIndexRetryNames(path);
   if (cachedVersion === 'v2') { clearPeerIndexRetry(path, names); return outcome('present'); }
-  const retry = readPeerIndexRetry(path, names);
-  if (!offline && retry && Date.now() < retry.notBefore) return outcome('skipped', 'backoff');
+  const { active, previous } = readPeerIndexRetry(path, names);
+  if (!offline && active) return outcome('skipped', 'backoff');
   try {
     const version = cachedVersion ?? peerPackage(db);
     if (version === 'v2') { clearPeerIndexRetry(path, names); return outcome('present'); }
-    if (version !== 'v1') return deferPeerIndex(path, retry, 'error');
+    if (version !== 'v1') return deferPeerIndex(path, previous, 'error');
     const n = peerIndexSize(db);
     if (!offline && n > peerIndexThreshold) return outcome('skipped', 'over_threshold');
     let space;
     try { space = statfsSync(dirname(resolve(path))); }
     catch (error) {
       if (!systemError(error)) throw error;
-      return deferPeerIndex(path, retry, 'io');
+      return deferPeerIndex(path, previous, 'io');
     }
-    if (space.bavail * space.bsize < 2 * 84 * Math.max(n, 1)) return deferPeerIndex(path, retry, 'space', 'skipped');
-    if (path === ':memory:') return deferPeerIndex(path, retry, 'error');
+    if (space.bavail * space.bsize < 2 * 84 * Math.max(n, 1)) return deferPeerIndex(path, previous, 'space', 'skipped');
+    if (path === ':memory:') return deferPeerIndex(path, previous, 'error');
     const result = buildPeerIndexConnection(db, timeout, admission);
-    if (result.status === 'deferred') return deferPeerIndex(path, retry, result.reason);
+    if (result.status === 'deferred') return deferPeerIndex(path, previous, result.reason);
     clearPeerIndexRetry(path, peerIndexRetryNames(path));
     return result;
   } catch (error) {
     if (!nativeSQLiteError(error)) throw error;
-    return deferPeerIndex(path, retry, nativeReason(error));
+    return deferPeerIndex(path, previous, nativeReason(error));
   }
 }
 /** Bounded, best-effort open-time build; only the opener supplies admission. */

@@ -15,6 +15,7 @@ import { openDatabase, localRawPeerIndexAdmission } from '../database.mjs';
 import { readSqliteFixture } from '../testing/content-safety-s2h-fixture.mjs';
 import { safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
 import { createCommitDispatcher } from '../commit-dispatch.mjs';
+import { localPlainPort } from '../testing/raw-fixtures.mjs';
 
 const namespace = { ownerId: 'synthetic-owner', scope: 'personal', projectId: null };
 const retryPrefix = path => basename(path) + '.peer-index-retry.';
@@ -29,6 +30,7 @@ const retry = path => {
 const offlineCommand = path => "cairn-memory raw index --db '" + path.replaceAll("'", "'\\''") + "'";
 const offlineArgv = path => ['cairn-memory','raw','index','--db',path];
 const packageProbe = sql => sql.startsWith('SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL AND (name GLOB');
+const identitySQL = 'SELECT store_id,(SELECT user_version FROM pragma_user_version) AS physical FROM store_metadata WHERE singleton=1';
 const nativeError = errcode => Object.assign(Error('synthetic native failure'), { code: 'ERR_SQLITE_ERROR', errcode });
 const indexDDL = LOCAL_RAW_PEER_INDEX_DDL.join('\n');
 const schema = db => JSON.stringify(db.prepare('SELECT type,name,tbl_name,sql FROM sqlite_schema ORDER BY type,name').all());
@@ -313,6 +315,93 @@ test(`native ${errcode} on ${probe} probe defers and preserves a usable v1 runti
   } finally {await core.close();}
 });
 
+for(const phase of ['prepare','get']) for(const errcode of [9,10,778])
+test(`native ${errcode} in optional identity ${phase} leaves a readable admitted v1 open`,async t=>{
+  const f=await store(t,{l1:true}),before=schema(f.db);
+  const physical=f.db.prepare('PRAGMA user_version').get().user_version;
+  space(t,f.path);const statements=trace(t),prepare=DatabaseSync.prototype.prepare;
+  let runtime,injections=0;
+  t.mock.method(DatabaseSync.prototype,'prepare',function(sql){
+    if(sql!==identitySQL)return prepare.call(this,sql);
+    runtime=this;
+    const inject=()=>{injections++;throw nativeError(errcode);};
+    if(phase==='prepare')return inject();
+    prepare.call(this,sql);
+    return {get:inject};
+  });
+  const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
+  try {
+    assert.equal(injections,1);assert.equal(runtime.isOpen,true);
+    assert.equal(localRawPeerIndexAdmission(runtime),undefined);
+    assert.equal(runtime.prepare('PRAGMA user_version').get().user_version,physical);
+    assert.equal(statements.filter(sql=>sql===indexDDL).length,0);
+    assert.equal(schema(f.db),before);
+    assert.deepEqual(localNames(f.db),packageNames('v1'));assert.equal(core.list({namespace}).ok,true);
+    assert.equal(attestedLocalRawPackage(runtime),'v1');assert.equal(retry(f.path).reason,'error');
+  } finally {await core.close();}
+});
+
+for(const phase of ['prepare','get'])
+test(`non-SQLite optional identity ${phase} errors still fail construction`,async t=>{
+  const f=await store(t,{l1:true}),prepare=DatabaseSync.prototype.prepare,error=Error('identity programming failure');
+  let runtime;
+  t.mock.method(DatabaseSync.prototype,'prepare',function(sql){
+    if(sql!==identitySQL)return prepare.call(this,sql);
+    runtime=this;
+    if(phase==='prepare')throw error;
+    return {get(){throw error;}};
+  });
+  assert.throws(()=>openMemoryCore({path:f.path,raw:true,rawSearch:false}),value=>value===error);
+  assert.equal(runtime.isOpen,false);assert.equal(localRawPeerIndexAdmission(runtime),undefined);
+});
+
+for(const fenced of [false,true])
+test(`public explicit Raw without localAuthority has identical SQL/fs and refusals with the feature off or v1 (fenced=${fenced})`,async t=>{
+  const workspace=createTestWorkspace(t),path=join(workspace.path,'explicit.sqlite');
+  const config={path,rawSearch:false,rawConversations:{mode:'raw-v1',capBytes:1000000,
+    port:localPlainPort(),readPolicy:()=>({generation:'synthetic-notice',reason:null})}};
+  const initial=openMemoryCore(config);await initial.close();
+  const db=new DatabaseSync(path);workspace.defer(()=>db.close());
+  assert.equal(localNames(db).length,0);
+  if(fenced){
+    const stat=fs.lstatSync(path);
+    config.storeFence={version:'store-fence-v1',dev:String(stat.dev),ino:String(stat.ino),applicationId:0x43414952,
+      userVersion:db.prepare('PRAGMA user_version').get().user_version,
+      storeId:db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get().store_id};
+  }
+  const calls=[],mocks=[],denied=Object.assign(Error('mandatory leaf denied'),{code:'EPERM'});
+  let failLeaf=false;
+  for(const operation of ['realpathSync','lstatSync','readdirSync','statfsSync']){
+    const original=fs[operation];
+    mocks.push(t.mock.method(fs,operation,function(target,...args){
+      calls.push({operation,path:String(target)});
+      if(failLeaf && operation==='lstatSync' && target===path)throw denied;
+      return original.call(this,target,...args);
+    }));
+  }
+  syncBuiltinESMExports();t.after(()=>{for(const mock of mocks)mock.mock.restore();syncBuiltinESMExports();});
+  const statements=trace(t),snapshots=[];
+  for(const enabled of [false,true]){
+    if(enabled)db.exec(LOCAL_RAW_PRIVACY_DDL.join('\n'));
+    calls.length=statements.length=0;
+    const core=openMemoryCore(config);
+    try {assert.equal(core.list({namespace}).ok,true);} finally {await core.close();}
+    snapshots.push({sql:[...statements],fs:[...calls]});
+    assert.ok(!statements.includes(identitySQL));
+    assert.ok(!statements.some(sql=>packageProbe(sql)||sql===indexDDL||sql==='SELECT max(rowid) AS n FROM raw_messages'));
+    for(const operation of ['realpathSync','readdirSync','statfsSync'])assert.equal(calls.filter(call=>call.operation===operation).length,0);
+    assert.ok(calls.some(call=>call.operation==='lstatSync'),'mandatory leaf checks still run');
+    failLeaf=true;
+    assert.throws(()=>openMemoryCore(config),error=>error===denied);
+    failLeaf=false;
+    calls.length=statements.length=0;
+    assert.throws(()=>openMemoryCore({...config,rawConversations:{...config.rawConversations,port:{}}}),{code:'raw_crypto_unavailable'});
+    assert.deepEqual(statements,[]);assert.deepEqual(calls,[]);
+  }
+  assert.deepEqual(snapshots[1],snapshots[0],'zero added SQL executions or filesystem calls');
+  assert.deepEqual(localNames(db),packageNames('v1'));
+});
+
 test('successful L1 side build leaves the same runtime readable and cookie-attested v2',async t=>{
   const f=await store(t,{l1:true});space(t,f.path);
   const build=interceptBuild(t);
@@ -366,7 +455,7 @@ test('busy COMMIT backoff survives a process boundary, doubles to 24h, retries o
       assert.deepEqual(JSON.parse(child.stdout),{sqlProbes:0,statfs:0,connections:1,read:true});
       assert.deepEqual(retry(f.path),marker);
     }
-    now=marker.notBefore; // Equality is the final valid instant; a past deadline is ignored.
+    now=marker.notBefore+1; // Ordinary retries occur after expiry and retain delay history.
   }
   assert.equal(attempts,4);inject=false;
   runtime=side=undefined;
@@ -380,24 +469,24 @@ test('deferral writes exactly one empty private regular encoded marker and no te
   const f=await store(t,{l1:true});space(t,f.path,0);
   const now=Date.now();t.mock.method(Date,'now',()=>now);
   putRetry(f.path,{notBefore:now-1,delayMs:21600000,reason:'busy'});
-  fs.writeFileSync(f.path+'.peer-index-retry.invalid','');
+  const unrelated=f.path+'.peer-index-retry.invalid';fs.writeFileSync(unrelated,'');
   const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
   try {assert.equal(core.list({namespace}).ok,true);} finally {await core.close();}
-  const expected={notBefore:now+21600000,delayMs:21600000,reason:'space'};
-  assert.deepEqual(retry(f.path),expected);
+  const expected={notBefore:now+43200000,delayMs:43200000,reason:'space'};
+  assert.deepEqual(retryNames(f.path).sort(),[basename(unrelated),basename(retryPath(f.path,expected))].sort());
   const stat=fs.lstatSync(retryPath(f.path,expected));
   assert.equal(stat.isFile(),true);assert.equal(stat.size,0);assert.equal(stat.mode&0o777,0o600);
   assert.deepEqual(localNames(f.db),packageNames('v1'));
   assert.deepEqual(fs.readdirSync(dirname(f.path)).filter(name=>name.endsWith('.tmp')),[]);
 });
 
-for(const suffix of [
-  'broken','1.21600000.busy.extra','-1.21600000.busy','later.21600000.busy',
-  '9007199254740992.21600000.busy','NOW.21600000.unknown','NOW.21600000.5',
-  'NOW.21600000.','NOW.0.busy','NOW.21599999.busy','NOW.86400001.busy',
-  'NOW.21600000x.busy','NOW.21600000.5.busy','NOW.9007199254740992.busy',
-  'PAST.21600000.busy','FUTURE.21600000.busy',
-]) test(`invalid or inactive retry name is ignored (${suffix})`,async t=>{
+for(const [suffix,reserved=false] of [
+  ['broken'],['1.21600000.busy.extra'],['-1.21600000.busy'],['later.21600000.busy'],
+  ['9007199254740992.21600000.busy'],['NOW.21600000.unknown'],['NOW.21600000.5'],
+  ['NOW.21600000.'],['NOW.0.busy',true],['NOW.21599999.busy',true],['NOW.86400001.busy',true],
+  ['NOW.21600000x.busy'],['NOW.21600000.5.busy'],['NOW.9007199254740992.busy'],
+  ['PAST.21600000.busy',true],['FUTURE.21600000.busy',true],['NOW.21600000.busy\n'],
+]) test(`invalid or inactive retry name is ignored (${JSON.stringify(suffix)})`,async t=>{
   const f=await store(t,{l1:true}),now=Date.now();t.mock.method(Date,'now',()=>now);
   const name=suffix.replace('NOW',String(now+21600000)).replace('PAST',String(now-1)).replace('FUTURE',String(now+86400001));
   fs.writeFileSync(f.path+'.peer-index-retry.'+name,'content is never consulted');
@@ -406,7 +495,7 @@ for(const suffix of [
   const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
   try {assert.equal(core.list({namespace}).ok,true);} finally {await core.close();}
   assert.equal(statfs.mock.callCount(),1);assert.equal(statements.filter(sql=>sql===indexDDL).length,1);
-  assert.deepEqual(retryNames(f.path),[]);
+  assert.deepEqual(retryNames(f.path),reserved?[]:[retryPrefix(f.path)+name]);
 });
 
 test('name-only reader selects the largest valid deadline within 24h and never inspects entries',async t=>{
@@ -472,34 +561,41 @@ test(`marker ${kind} never opens its entry or target across two runtime opens (e
   }));
   syncBuiltinESMExports();t.after(()=>{for(const mock of mocks)mock.mock.restore();syncBuiltinESMExports();});
   for(let i=0;i<2;i++){
-    if(i&&!encoded)fs.symlinkSync(f.path,marker);
+    if(i&&!encoded){fs.unlinkSync(marker);fs.symlinkSync(f.path,marker);}
     const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
     try {assert.equal(core.list({namespace}).ok,true);} finally {await core.close();}
-    assert.deepEqual(retryNames(f.path),encoded?[basename(marker)]:[]);
+    assert.deepEqual(retryNames(f.path),[basename(marker)]);
   }
   assert.equal(statements.filter(sql=>sql===indexDDL).length,encoded?0:1);assert.equal(statfs.mock.callCount(),encoded?0:1);
 });
 
-test('success unlinks all matching names, tolerates directories, and never unlinks when enumeration is empty',async t=>{
+test('success unlinks only full-grammar names, tolerates reserved directories, and leaves unrelated names',async t=>{
   const f=await store(t,{l1:true});f.db.exec(indexDDL);attestContentSafety(f.db);
-  const dir=f.path+'.peer-index-retry.directory';fs.mkdirSync(dir);
+  const now=Date.now();
+  const dir=retryPath(f.path,{notBefore:now,delayMs:21600000,reason:'io'});fs.mkdirSync(dir);
   const marker=putRetry(f.path,{notBefore:Date.now()+21600000,delayMs:21600000,reason:'busy'});
-  const other=f.path+'.peer-index-retry.malformed';fs.writeFileSync(other,'');
+  const expired=putRetry(f.path,{notBefore:now-1,delayMs:43200000,reason:'space'});
+  const inactive=putRetry(f.path,{notBefore:now+86400001,delayMs:0,reason:'error'});
+  const unrelated=['malformed','backup','directory','9007199254740992.21600000.busy',now+'.21600000.busy\n']
+    .map(suffix=>f.path+'.peer-index-retry.'+suffix);
+  for(const path of unrelated)fs.writeFileSync(path,'unrelated content');
   const unlink=fs.unlinkSync,removed=[];
   const mock=t.mock.method(fs,'unlinkSync',function(path){removed.push(path);return unlink.call(this,path);});
   syncBuiltinESMExports();t.after(()=>{mock.mock.restore();syncBuiltinESMExports();});
   assert.deepEqual(installLocalRawPeerIndex(f.db,f.path),{status:'present',reason:null});
-  assert.deepEqual(removed.sort(),[dir,marker,other].sort());assert.equal(fs.lstatSync(dir).isDirectory(),true);
+  assert.deepEqual(removed.sort(),[dir,marker,expired,inactive].sort());assert.equal(fs.lstatSync(dir).isDirectory(),true);
+  assert.deepEqual(retryNames(f.path).sort(),[dir,...unrelated].map(path=>basename(path)).sort());
   fs.rmdirSync(dir);removed.length=0;
   assert.deepEqual(installLocalRawPeerIndex(f.db,f.path),{status:'present',reason:null});
   assert.deepEqual(removed,[]);
+  assert.deepEqual(retryNames(f.path).sort(),unrelated.map(path=>basename(path)).sort());
 });
 
 for(const operation of ['readdirSync','writeFileSync','renameSync','unlinkSync'])
 test(`marker ${operation} failure cannot fail an L1 open`,async t=>{
   const f=await store(t,{l1:true}),before=schema(f.db),bytes=readSqliteFixture(f.path);
   const statfs=space(t,f.path,0);
-  const marker=f.path+'.peer-index-retry.invalid';fs.writeFileSync(marker,'');
+  putRetry(f.path,{notBefore:Date.now()-1,delayMs:21600000,reason:'busy'});
   const original=fs[operation];let reached=0;
   const mock=t.mock.method(fs,operation,function(path,...args){
     if(operation==='readdirSync'?path===dirname(f.path):String(path).includes('.peer-index-retry.')){
@@ -513,6 +609,56 @@ test(`marker ${operation} failure cannot fail an L1 open`,async t=>{
     assert.equal(core.list({namespace}).ok,true);assert.equal(schema(f.db),before);
     assert.deepEqual(readSqliteFixture(f.path),bytes);assert.ok(reached>0);assert.equal(statfs.mock.callCount(),1);
   } finally {await core.close();}
+});
+
+test('competing failure publishers preserve both markers across identical read and cleanup snapshots',async t=>{
+  const f=await store(t,{l1:true});space(t,f.path,0);
+  const start=Date.now();let now=start;t.mock.method(Date,'now',()=>now);
+  const expired=putRetry(f.path,{notBefore:start-1,delayMs:21600000,reason:'busy'});
+  const initial=[basename(expired)],first={notBefore:start+43200000,delayMs:43200000,reason:'space'},
+    second={notBefore:start+1+43200000,delayMs:43200000,reason:'space'};
+  const reads=[],cleanups=[],removed=[],readdir=fs.readdirSync,rename=fs.renameSync,unlink=fs.unlinkSync;
+  let nested=false,otherResult,cleanupSnapshot;
+  const mocks=[
+    t.mock.method(fs,'readdirSync',function(path,...args){
+      if(path!==dirname(f.path))return readdir.call(this,path,...args);
+      if(reads.length<2){reads.push([...initial]);return [...initial];}
+      cleanupSnapshot??=readdir.call(this,path,...args);
+      cleanups.push([...cleanupSnapshot]);return [...cleanupSnapshot];
+    }),
+    t.mock.method(fs,'renameSync',function(from,to){
+      const result=rename.call(this,from,to);
+      if(!nested){nested=true;now=start+1;otherResult=buildLocalRawPeerIndex(f.db,f.path);}
+      return result;
+    }),
+    t.mock.method(fs,'unlinkSync',function(path){removed.push(path);return unlink.call(this,path);}),
+  ];
+  syncBuiltinESMExports();t.after(()=>{for(const mock of mocks)mock.mock.restore();syncBuiltinESMExports();});
+  assert.deepEqual(buildLocalRawPeerIndex(f.db,f.path),{status:'skipped',reason:'space'});
+  assert.deepEqual(otherResult,{status:'skipped',reason:'space'});
+  assert.deepEqual(reads,[initial,initial]);assert.equal(cleanups.length,2);assert.deepEqual(cleanups[0],cleanups[1]);
+  const published=[retryPath(f.path,first),retryPath(f.path,second)];
+  for(const path of published){assert.ok(cleanups[0].includes(basename(path)));assert.ok(!removed.includes(path));}
+  assert.deepEqual(removed,[expired,expired]); // Stale cleanup snapshots may retry only the expired leaf.
+  for(const mock of mocks)mock.mock.restore();syncBuiltinESMExports();
+  assert.deepEqual(retryNames(f.path).sort(),published.map(path=>basename(path)).sort());
+  const status=readLocalRawPeerIndexStatus(f.db,f.path);
+  assert.equal(status.deferredUntil,second.notBefore);assert.equal(status.deferredReason,'space');
+  assert.deepEqual(installLocalRawPeerIndex(f.db,f.path),{status:'skipped',reason:'backoff'});
+});
+
+test('a failure publisher keeps unexpired and equal-deadline publications',async t=>{
+  const f=await store(t,{l1:true});space(t,f.path,0);
+  const now=Date.now();t.mock.method(Date,'now',()=>now);
+  const markers=[
+    {notBefore:now-1,delayMs:21600000,reason:'busy'},
+    {notBefore:now,delayMs:21600000,reason:'interrupt'},
+    {notBefore:now+43200000,delayMs:21600000,reason:'io'},
+  ];
+  for(const marker of markers)putRetry(f.path,marker);
+  assert.deepEqual(buildLocalRawPeerIndex(f.db,f.path),{status:'skipped',reason:'space'});
+  const own={notBefore:now+43200000,delayMs:43200000,reason:'space'};
+  assert.deepEqual(retryNames(f.path).sort(),[...markers.slice(1),own].map(marker=>basename(retryPath(f.path,marker))).sort());
 });
 
 test('two competing L1 runtime openers commit exactly one CREATE; the loser ends present',{timeout:45000},async t=>{

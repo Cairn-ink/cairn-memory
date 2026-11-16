@@ -469,7 +469,7 @@ export function busyTimeoutOption(input) {
 export function openDatabase(path, options = {}) {
   const busyTimeoutMs = busyTimeoutOption(options);
   const timeout = Math.min(STORAGE_BUSY_TIMEOUT_MS, busyTimeoutMs ?? STORAGE_BUSY_TIMEOUT_MS);
-  let { privateCards = false, rawConversations = false, rawCapture = false, rawLineage = false, rawDeletion = false, rawSources = false, localControls = false, methodPackages = false, assets = false, roleProfiles = false, currentDependencies = false, existingStore, storeFence, contentSafety } = options;
+  let { privateCards = false, rawConversations = false, rawCapture = false, rawLineage = false, rawDeletion = false, rawSources = false, localControls = false, localRawPrivacy = false, methodPackages = false, assets = false, roleProfiles = false, currentDependencies = false, existingStore, storeFence, contentSafety } = options;
   if ([rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls].some(value => typeof value !== 'boolean')) fail('invalid_input');
   rawDeletion ||= rawSources || localControls;
   rawLineage ||= rawDeletion;
@@ -533,12 +533,12 @@ export function openDatabase(path, options = {}) {
     if (!stat.isFile() || (process.platform !== "win32" && (stat.mode & 0o077))) {
       fail("unsafe_database_file");
     }
-    if (localControls) {
+    if (localRawPrivacy) {
       try { peerLocation = pinStorePath(path, { dev: String(stat.dev), ino: String(stat.ino) }); }
       catch { /* Optional side admission unavailable; runtime opening is unchanged. */ }
     }
   }
-  if (fence && localControls) {
+  if (fence && localRawPrivacy) {
     try { peerLocation = pinStorePath(path, pin.identity); }
     catch { /* The mandatory fence retains its original checks below. */ }
   }
@@ -857,12 +857,18 @@ export function openDatabase(path, options = {}) {
         installContentSafetyInside(db, base, contentSafetyInventory(db));
       }
     });
-    if (peerLocation) {
+    if (localRawPrivacy && peerLocation) {
       // Read identity from the admitted runtime handle, never from another open.
       // The pre-open canonical inode pin also covers new/ordinary openers.
-      const identity = db.prepare('SELECT store_id,(SELECT user_version FROM pragma_user_version) AS physical FROM store_metadata WHERE singleton=1').get();
-      rememberPeerIndexAdmission(db, peerLocation, identity.physical, fence?.storeId ?? identity.store_id,
-        { privateCards, rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls, methodPackages, assets, roleProfiles, currentDependencies });
+      try {
+        const identity = db.prepare('SELECT store_id,(SELECT user_version FROM pragma_user_version) AS physical FROM store_metadata WHERE singleton=1').get();
+        rememberPeerIndexAdmission(db, peerLocation, identity.physical, fence?.storeId ?? identity.store_id,
+          { privateCards, rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls, methodPackages, assets, roleProfiles, currentDependencies });
+      } catch (error) {
+        // Only the optional handoff is contained; initialization has committed.
+        if (typeof error?.errcode !== 'number') throw error;
+        peerIndexAdmissions.delete(db);
+      }
     }
     return bindCommitConnection(db);
   } catch (error) {

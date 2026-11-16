@@ -72,7 +72,7 @@ export function createMemoryRuntime(input, internal) {
   const sessionEpisodes = input.sessionEpisodes === undefined ? undefined : episodeOptions(input.sessionEpisodes);
   const decisionReview = decisionReviewOption(input);
   const db = openDatabase(input.path, { ...(busyTimeoutMs !== undefined ? { busyTimeoutMs } : {}), privateCards: Boolean(privateCards), currentDependencies: Boolean(privateCards?.currentDependencies) || Boolean(input.contentSafety && internal?.rawCapture), methodPackages: Boolean(methodPackages), assets: Boolean(assets), roleProfiles: Boolean(roleProfiles), rawCapture: Boolean(internal?.rawCapture),
-    rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion), rawSources: Boolean(internal?.rawSources), localControls: Boolean(internal?.localControls), existingStore: input.existingStore, storeFence: input.storeFence, contentSafety: input.contentSafety });
+    rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion), rawSources: Boolean(internal?.rawSources), localControls: Boolean(internal?.localControls), localRawPrivacy: Boolean(internal?.localRawPrivacy), existingStore: input.existingStore, storeFence: input.storeFence, contentSafety: input.contentSafety });
   try {
   if (internal?.localRawPrivacy) transaction(db, () => installLocalRawPrivacy(db));
   if (internal?.localRawPrivacy) installLocalRawPeerIndex(db, input.path, localRawPeerIndexAdmission(db), busyTimeoutMs ?? 5000);
