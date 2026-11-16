@@ -1691,8 +1691,18 @@
   },
   {
     "path": "core/local-authority-schema.mjs",
-    "source": "import { statfsSync } from 'node:fs'",
-    "reason": "Free-space check on the store's directory before the optional local peer-index build; statfsSync(dirname(path)) reads filesystem statistics and opens no database descriptor."
+    "source": "import { lstatSync, readFileSync, writeFileSync, renameSync, rmSync, statfsSync } from 'node:fs'",
+    "reason": "Free-space check on the store's directory and the optional peer-index retry marker beside the store; no database, journal, WAL or SHM path is opened."
+  },
+  {
+    "path": "core/local-authority-schema.mjs",
+    "source": "const value = JSON.parse(readFileSync(marker, 'utf8'));",
+    "reason": "Reads only the small JSON retry marker '<store>.peer-index-retry' after lstat confirms a regular file; never a database descriptor."
+  },
+  {
+    "path": "core/local-authority-schema.mjs",
+    "source": "writeFileSync(temporary, JSON.stringify({ notBefore: Date.now() + delayMs, delayMs, reason }), { flag: 'wx', mode: 0o600 });",
+    "reason": "Writes only a fresh temporary retry-marker file that is renamed onto '<store>.peer-index-retry'; never a database descriptor."
   },
   {
     "path": "core/local-raw-search.mjs",
