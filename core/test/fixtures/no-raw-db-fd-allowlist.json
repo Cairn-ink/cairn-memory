@@ -1690,6 +1690,11 @@
     "reason": "Fixed header only in a SQLite-free child; the raw descriptor never shares a process with a SQLite connection."
   },
   {
+    "path": "core/local-authority-schema.mjs",
+    "source": "import { statfsSync } from 'node:fs'",
+    "reason": "Free-space check on the store's directory before the optional local peer-index build; statfsSync(dirname(path)) reads filesystem statistics and opens no database descriptor."
+  },
+  {
     "path": "core/local-raw-search.mjs",
     "source": "import { mkdir } from 'node:fs/promises'",
     "reason": "Creates private search sidecar directories only; mkdir does not open or close a database file descriptor."
