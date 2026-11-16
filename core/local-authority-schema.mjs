@@ -50,11 +50,11 @@ function readPeerIndexRetry(path, names) {
   let active = null, previous = null;
   for (const name of names) {
     const marker = parsePeerIndexRetry(path, name);
-    if (!marker || marker.delayMs < firstRetryMs || marker.delayMs > maxRetryMs) continue;
+    if (!marker || marker.delayMs < firstRetryMs || marker.delayMs > maxRetryMs ||
+        marker.notBefore > now + maxRetryMs) continue;
     // Expiry ends backoff, not the delay history used by the next failure.
     if (!previous || marker.notBefore > previous.notBefore) previous = marker;
-    if (marker.notBefore >= now && marker.notBefore <= now + maxRetryMs &&
-        (!active || marker.notBefore > active.notBefore)) active = marker;
+    if (marker.notBefore >= now && (!active || marker.notBefore > active.notBefore)) active = marker;
   }
   return { active, previous };
 }

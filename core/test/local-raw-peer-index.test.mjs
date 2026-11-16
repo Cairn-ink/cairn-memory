@@ -16,6 +16,8 @@ import { readSqliteFixture } from '../testing/content-safety-s2h-fixture.mjs';
 import { safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
 import { createCommitDispatcher } from '../commit-dispatch.mjs';
 import { localPlainPort } from '../testing/raw-fixtures.mjs';
+import { rationaleModel } from '../testing/rationale-model.mjs';
+import { installRawSearchTestClock, rawSearchTestWait } from '../testing/raw-search-clock.mjs';
 
 const namespace = { ownerId: 'synthetic-owner', scope: 'personal', projectId: null };
 const retryPrefix = path => basename(path) + '.peer-index-retry.';
@@ -341,6 +343,102 @@ test(`native ${errcode} in optional identity ${phase} leaves a readable admitted
   } finally {await core.close();}
 });
 
+test('dropped identity admission preserves public Raw lifecycle and privacy rows exactly as a v1 threshold skip',async t=>{
+  installRawSearchTestClock(t);
+  const f=await store(t,{l1:true}),workspace=createTestWorkspace(t),controlPath=join(workspace.path,'control.sqlite');
+  // Share only the initial synthetic identity/secret, so stored fence keys can
+  // be compared exactly while newly generated memory/conversation IDs may differ.
+  fs.copyFileSync(f.path,controlPath);
+  const controlDB=new DatabaseSync(controlPath);workspace.defer(()=>controlDB.close());
+  // Identical inert content in another namespace; only the physical rowid differs.
+  seed(f.db,1);seed(controlDB,2_000_001);
+  assert.equal(f.db.prepare('SELECT max(rowid) AS n FROM raw_messages').get().n,1);
+  assert.equal(controlDB.prepare('SELECT max(rowid) AS n FROM raw_messages').get().n,2_000_001);
+  const statfs=space(t,f.path),statements=trace(t),prepare=DatabaseSync.prototype.prepare;
+  let droppedRuntime,controlRuntime,injections=0,drop=true;
+  const capture=t.mock.method(DatabaseSync.prototype,'prepare',function(sql){
+    if(sql!==identitySQL)return prepare.call(this,sql);
+    if(!drop){controlRuntime=this;return prepare.call(this,sql);}
+    droppedRuntime=this;prepare.call(this,sql);
+    return {get(){injections++;throw nativeError(9);}};
+  });
+  const dropped=openMemoryCore({path:f.path,raw:true,model:rationaleModel()});
+  let control;
+  try {
+    drop=false;control=openMemoryCore({path:controlPath,raw:true,model:rationaleModel()});
+    capture.mock.restore();
+    assert.equal(injections,1);assert.equal(localRawPeerIndexAdmission(droppedRuntime),undefined);
+    assert.ok(localRawPeerIndexAdmission(controlRuntime));assert.equal(statfs.mock.callCount(),1);
+    assert.equal(retry(f.path).reason,'error');assert.deepEqual(retryNames(controlPath),[]);
+    for(const runtime of [droppedRuntime,controlRuntime])assert.equal(attestedLocalRawPackage(runtime),'v1');
+
+    const ok=result=>{assert.equal(result.ok,true,JSON.stringify(result));return result.value;};
+    const texts=['Synthetic amber telescope.','Synthetic birch telescope.','Synthetic cedar telescope.'];
+    const start=Date.parse('2026-01-01T00:00:00.000Z');
+    t.mock.timers.enable({apis:['Date'],now:start});
+    async function sequence(core,db) {
+      const sources=[];
+      for(const [index,content] of texts.entries()) {
+        // Separate receipt anchors so forgetting one cannot hide the survivors.
+        t.mock.timers.setTime(start+index*2*60*60*1000);
+        const occurredAt=new Date().toISOString();
+        const saved=ok(await core.capture({namespace,client:'claude-code',sessionId:'equality-session-'+index,
+          eventId:'equality-event-'+index,messages:[{id:'equality-message-'+index,role:'user',content,
+            occurredAt}]}));
+        assert.equal(saved.admission.memories.length,1);
+        const conversation=ok(core.listRawConversations({namespace,client:'claude-code'})).conversations
+          .find(row=>row.firstReceivedAt===occurredAt);
+        assert.ok(conversation);
+        sources.push({memoryId:saved.admission.memories[0].id,conversationId:conversation.id,
+          revision:conversation.revision});
+      }
+      async function search(count) {
+        let found;
+        for(let attempt=0;attempt<16;attempt++) {
+          await rawSearchTestWait(1010);ok(await core.maintainRawSearch({namespace}));
+          found=ok(await core.searchRaw({namespace,query:'telescope',semantic:false}));
+          if(found.coverage.status==='complete' && found.candidates.length===count)break;
+        }
+        assert.equal(found.coverage.status,'complete');assert.equal(found.candidates.length,count);
+        return {coverage:found.coverage,semantic:found.semantic,candidates:found.candidates.map(hit=>({
+          content:texts[Number(hit.messageId.slice('equality-message-'.length))],namespace:hit.namespace,
+          messageId:hit.messageId,ordinal:hit.ordinal,role:hit.role,occurredAt:hit.occurredAt,
+          currentness:hit.currentness,classification:hit.classification,
+          spans:hit.ranges.map(range=>range.span),
+        })).sort((a,b)=>a.content.localeCompare(b.content))};
+      }
+      const before=await search(3);
+      const forgotten=ok(core.get({namespace,memoryId:sources[0].memoryId})).memory;
+      const forget=ok(core.forget({namespace,memoryId:forgotten.id,expectedRevision:forgotten.revision}));
+      const {conversationId,...deletion}=ok(core.deleteConversation({namespace,conversationId:sources[1].conversationId,
+        expectedRevision:sources[1].revision,actionId:'equality-delete'}));
+      assert.equal(conversationId,sources[1].conversationId);assert.equal(deletion.forgottenMemories,1);
+      const page=ok(core.list({namespace}));assert.equal(page.memories.length,1);
+      const memories=page.memories.map(row=>{
+        const {id,...metadata}=row;
+        return {...metadata,content:ok(core.get({namespace,memoryId:id})).memory.content};
+      }).sort((a,b)=>a.content.localeCompare(b.content));
+      assert.deepEqual(memories.map(row=>row.content),texts.slice(2));
+      const after=await search(1);assert.equal(after.candidates[0].content,texts[2]);
+      const privacy=Object.fromEntries(['raw_session_fences','local_raw_hide_windows','local_raw_uuid_fences',
+        'local_raw_uuid_jobs','local_raw_uuid_backfill'].map(table=>[table,
+        db.prepare('SELECT * FROM '+table).all().sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)))]));
+      assert.equal(privacy.raw_session_fences.length,2);assert.equal(privacy.local_raw_hide_windows.length,2);
+      assert.equal(privacy.local_raw_uuid_fences.length,2);assert.equal(privacy.local_raw_uuid_jobs.length,2);
+      assert.ok(privacy.local_raw_uuid_jobs.every(row=>row.complete===1));
+      return {forget,deletion,memories,nextCursor:page.nextCursor,exhausted:page.exhausted,before,after,privacy};
+    }
+    const actual=await sequence(dropped,f.db),expected=await sequence(control,controlDB);
+    assert.deepEqual(actual,expected);
+    assert.equal(localRawPeerIndexAdmission(droppedRuntime),undefined);
+    assert.equal(statements.filter(sql=>sql===indexDDL).length,0);
+    for(const db of [f.db,controlDB]) {
+      assert.deepEqual(localNames(db),packageNames('v1'));
+      attestContentSafety(db);assert.equal(attestedLocalRawPackage(db),'v1');
+    }
+  } finally {capture.mock.restore();await control?.close();await dropped.close();}
+});
+
 for(const phase of ['prepare','get'])
 test(`non-SQLite optional identity ${phase} errors still fail construction`,async t=>{
   const f=await store(t,{l1:true}),prepare=DatabaseSync.prototype.prepare,error=Error('identity programming failure');
@@ -478,6 +576,25 @@ test('deferral writes exactly one empty private regular encoded marker and no te
   assert.equal(stat.isFile(),true);assert.equal(stat.size,0);assert.equal(stat.mode&0o777,0o600);
   assert.deepEqual(localNames(f.db),packageNames('v1'));
   assert.deepEqual(fs.readdirSync(dirname(f.path)).filter(name=>name.endsWith('.tmp')),[]);
+});
+
+test('far-future retry names cannot override expired six-hour history on failure',async t=>{
+  const f=await store(t,{l1:true});let now=Date.now();t.mock.method(Date,'now',()=>now);
+  const farFuture=putRetry(f.path,{notBefore:Number.MAX_SAFE_INTEGER,delayMs:86400000,reason:'busy'});
+  putRetry(f.path,{notBefore:now-1,delayMs:21600000,reason:'busy'});
+  assert.equal(readLocalRawPeerIndexStatus(f.db,f.path).deferredUntil,null);
+  const statfs=space(t,f.path,0);
+  const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
+  try {assert.equal(core.list({namespace}).ok,true);} finally {await core.close();}
+  const expected={notBefore:now+43200000,delayMs:43200000,reason:'space'};
+  assert.equal(statfs.mock.callCount(),1);
+  assert.deepEqual(retryNames(f.path).sort(),[basename(farFuture),basename(retryPath(f.path,expected))].sort());
+  assert.equal(readLocalRawPeerIndexStatus(f.db,f.path).deferredUntil,expected.notBefore);
+  // Full-grammar ownership is unchanged: a subsequent successful build clears both.
+  statfs.mock.restore();space(t,f.path);now=expected.notBefore+1;
+  const successful=openMemoryCore({path:f.path,raw:true,rawSearch:false});
+  try {assert.deepEqual(localNames(f.db),packageNames('v2'));} finally {await successful.close();}
+  assert.deepEqual(retryNames(f.path),[]);
 });
 
 for(const [suffix,reserved=false] of [
