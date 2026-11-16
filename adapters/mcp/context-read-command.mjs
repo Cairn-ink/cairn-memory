@@ -27,7 +27,7 @@ export async function contextCommand(args, env = process.env) {
     console.log(JSON.stringify(result)); if (!result.ok) process.exitCode = 1;
   } catch (error) {
     const selected = [5,6].includes(Number(error?.errcode)&255) ? 'storage_busy' : error?.code === 'method_not_found' ? 'database_not_found' : error?.code;
-    const code = ['invalid_input', 'invalid_mcp_configuration', 'database_not_found', 'unsafe_database_file', 'unsupported_database', 'storage_busy'].includes(selected) ? selected : 'invalid_input';
+    const code = ['invalid_input', 'invalid_mcp_configuration', 'database_not_found', 'unsafe_database_file', 'unsupported_database', 'storage_busy', 'storage_error'].includes(selected) ? selected : 'invalid_input';
     console.log(JSON.stringify({ ok: false, error: { code, retryable: code === 'storage_busy' } })); process.exitCode = 1;
   } finally { try { access?.revoke(); core?.close(); pin?.close(); } finally { await embedding?.close?.(); } }
 }

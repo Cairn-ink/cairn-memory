@@ -1081,7 +1081,7 @@
   },
   {
     "path": "core/sqlite-journal-probe.mjs",
-    "source": "import { lstatSync } from 'node:fs'",
+    "source": "import { lstatSync, readdirSync } from 'node:fs'",
     "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
   },
   {
