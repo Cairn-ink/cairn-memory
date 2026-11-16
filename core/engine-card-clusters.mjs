@@ -4,7 +4,9 @@ import { tokenizeT1, termFrequencies } from './context-read-tokenize.mjs';
 
 import { ENGINE_CARD_LIMITS } from './private-card-input.mjs';
 export { ENGINE_CARD_LIMITS };
-export const cardMemoryRevisions = memories => memories.map(memory => ({ memoryId: memory.id, revision: memory.revision }));
+// Source identity stays stable when event ordering changes a routing key.
+export const cardMemoryRevisions = memories => memories.map(memory => ({ memoryId: memory.id, revision: memory.revision }))
+  .sort((a, b) => a.memoryId.localeCompare(b.memoryId));
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const cosine = (a, b) => {
   const vector = value => Array.isArray(value) || value instanceof Float32Array || value instanceof Float64Array;
@@ -45,9 +47,10 @@ export function cardTrigger(memories, relations, tokens) {
   const conversations = new Set(memories.flatMap(m => m.conversations));
   const recurring = memories.length >= 8 && conversations.size >= 3 &&
     dates.length >= 2 && Math.max(...dates) - Math.min(...dates) >= 14 * 86400000;
+  const topic = memories.filter(memory => memory.currentness === 'current').length >= 5;
   const chain = relations === undefined ? null : chainLength(memories, relations);
   const pressure = memories.length >= 5 || tokens >= 1200;
-  return { eligible: pressure && (recurring || chain >= 3), recurring, chain, pressure,
+  return { eligible: pressure && (recurring || chain >= 3 || topic), recurring, topic, chain, pressure,
     memories: memories.length, conversations: conversations.size, tokens };
 }
 
@@ -81,4 +84,16 @@ export function clusterMemories(memories, vectors = new Map(), check = () => {})
     groups.set(key, { key, memories: members });
   }
   return [...groups.values()];
+}
+
+/** Consecutive event-date parts bound each consolidation request. Small topics
+ * retain their identity; an append changes only the final part's sources. */
+export function partitionCardClusters(clusters) {
+  return clusters.flatMap(cluster => {
+    if (cluster.memories.length <= 12) return [cluster];
+    const memories = [...cluster.memories].sort((a, b) => Date.parse(a.date) - Date.parse(b.date) ||
+      a.id.localeCompare(b.id));
+    return Array.from({ length: Math.ceil(memories.length / 12) }, (_, index) =>
+      ({ ...cluster, key: `${cluster.key}#${index}`, contextMemories: memories, memories: memories.slice(index * 12, (index + 1) * 12) }));
+  });
 }
