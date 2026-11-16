@@ -207,6 +207,7 @@ test('r4 terminal rejection and its verified replay exempt only their own held r
 });
 
 test('r4 every literal identity-shaped acknowledgement field and projection occurrence requires classification',()=>{
+  // Capture receipt validation: the registration-order capability keeps a private read copy of an already-validated receipt's source identity (client, sessionId, eventId, role, excerpt). It is not a writer acknowledgement field; the native guard is unchanged.
   // Admission envelope validation adds literal applicationId (1) and storeId
   // (2): public schema/store binding fields with closed types, never secrets or
   // writer acknowledgement identities. The sidecar decision-table comment's

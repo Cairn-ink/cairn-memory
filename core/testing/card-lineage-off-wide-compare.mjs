@@ -297,7 +297,7 @@ const orderedEntries = (key, entries) => entries.filter(entry => entry.key === k
   .sort((a, b) => compareAnchors(a, b) || a.after - b.after);
 const statementSummary = ([sql, method, bindings]) => [hash(sql), method, hash(bindings)];
 const callStatements = (record, call) => record.statements.slice(call[2], call[3]);
-function receiptWalkCallRows(key, index, method, rows, oldRows) {
+function receiptWalkCallRows(key, index, method, rows, oldRows, records) {
   const exact = row => JSON.stringify(row);
   const counts = list => {
     const result = new Map();
@@ -311,7 +311,7 @@ function receiptWalkCallRows(key, index, method, rows, oldRows) {
   for (const triple of new Set([...previous.keys(), ...current.keys()])) {
     const oldCount = previous.get(triple) ?? 0, count = current.get(triple) ?? 0;
     if (count === oldCount) continue;
-    const entries = count > oldCount ? receiptWalkSQLAdditions : receiptWalkSQLRemovals;
+    const entries = count > oldCount ? records.additions : records.removals;
     const entry = entries.find(entry => entry.key === key && entry.callIndex === index &&
       entry.method === method && exact(entry.statement) === triple);
     assert.ok(entry && oldCount === entry.archivedCount && count === entry.currentCount &&
@@ -511,7 +511,8 @@ export function compareWideTables(current, archived, removedRows = []) {
   assert.deepEqual(current, expected, 'every table population, minus only explicitly reviewed rows');
 }
 
-export function compareWideTraces({ key, current, archived, sqlAdditions = [], sqlAdditionMethods = [], cardStatementTexts = {}, checkArchivedCardTexts = true, receiptWalk = false, sqlAdditionPolicy = defaultSqlAdditionPolicy }) {
+export function compareWideTraces({ key, current, archived, sqlAdditions = [], sqlAdditionMethods = [], cardStatementTexts = {}, checkArchivedCardTexts = true, receiptWalk = false, sqlAdditionPolicy = defaultSqlAdditionPolicy,
+  receiptWalkRecords = { additions: receiptWalkSQLAdditions, removals: receiptWalkSQLRemovals } }) {
   validateCardStatementTexts(cardStatementTexts, sqlAdditions, sqlAdditionPolicy);
   if (checkArchivedCardTexts) assertArchivedCardStatementTexts([archived], cardStatementTexts, sqlAdditions, sqlAdditionPolicy);
   const reconstructed = reconstructWideTrace(key, archived, sqlAdditions, sqlAdditionMethods, sqlAdditionPolicy);
@@ -535,7 +536,7 @@ export function compareWideTraces({ key, current, archived, sqlAdditions = [], s
       const rows = callStatements(current, call), oldRows = callStatements(archived, previous);
       const additions = [...positions].filter(position => position >= call[2] && position < call[3]).length;
       assert.ok(rows.length - additions <= oldRows.length, call[0] + ' statement count cannot rise after removing exactly ledger rows');
-      const retain = receiptWalkCallRows(key, index, call[0], rows, oldRows);
+      const retain = receiptWalkCallRows(key, index, call[0], rows, oldRows, receiptWalkRecords);
       assert.deepEqual(retain(rows), retain(callStatements(reconstructed, expected)), call[0] + ' reconstructed SQL and bindings');
       for(let at=call[2];at<call[3];at++)currentCovered.add(at);
       for(let at=expected[2];at<expected[3];at++)reconstructedCovered.add(at);

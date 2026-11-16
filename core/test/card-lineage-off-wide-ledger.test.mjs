@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { compareWideTraces, assertWidePins, summary, ledgerAdditionSummary, compareWideTables,
   currentReceiptWalkSQLTexts, reconstructWideTrace, currentAdditionSummary, validateSqlAdditions, hash, cardFamilySQL, forgettingMethods,
   assertArchivedCardStatementTexts, validateCardStatementTexts, normalizeSQL, wideArchiveMode } from '../testing/card-lineage-off-wide-compare.mjs';
@@ -26,6 +27,9 @@ function trace(parts) {
   calls.push(['modelCalls', []]); statements.push(row('PRAGMA optimize'));
   return { calls, statements, dump: [['memories', ['{"id":"synthetic-memory","deleted":1}']]], effectWitnesses: [] };
 }
+const syntheticReceiptWalkRecords = (key, callIndex, method, statement) => ({ additions: [], removals: [
+  { key, callIndex, method, statement: structuredClone(statement), archivedCount: 2, currentCount: 1, removedCount: 1 },
+] });
 function fixture(receiptWalk = false) {
   const key = receiptWalk ? 'workload:52' : 'workload:23';
   const receipt = row([...currentReceiptWalkSQLTexts][0], 'all', [...ns, 0, 10]);
@@ -38,7 +42,7 @@ function fixture(receiptWalk = false) {
   if (receiptWalk) oldParts[1][2].push(receipt);
   const sqlAdditions = additions.map(statement => ({ key, method: 'forget', ordinal: 2, after: 3, statement: structuredClone(statement),
     reference: 616, reason: 'Erase engine Card content and bookkeeping when its source is forgotten.' }));
-  return { key, receiptWalk, archived: trace(oldParts), current: trace(parts), sqlAdditions, sqlAdditionMethods: ['forget'], parts };
+  return { key, receiptWalk, ...(receiptWalk ? { receiptWalkRecords: syntheticReceiptWalkRecords(key, 2, 'read', receipt) } : {}), archived: trace(oldParts), current: trace(parts), sqlAdditions, sqlAdditionMethods: ['forget'], parts };
 }
 const compare = f => compareWideTraces(f);
 const pinned = f => ({ ...summary(f.current), sqlAdditions: ledgerAdditionSummary(f.key, f.sqlAdditions, f.sqlAdditionMethods) });
@@ -393,11 +397,34 @@ function neighbourFixture(kind = 'write', terminal = false, receiptWalk = false)
   const sqlAdditions = added.map(statement => ({ key, method, ordinal: 1, after: oldPrefix.length, statement,
     ...(terminal ? { atCallEnd: true } : {}), reference: 616, reason: 'Review each added execution beside an existing statement.' }));
   return { key, parts, receiptWalk, predecessor, successor,
+    ...(receiptWalk ? { receiptWalkRecords: syntheticReceiptWalkRecords(key, 1, method, receipt) } : {}),
     archived: trace([[method, success, [...oldPrefix, predecessor, ...suffix]]]), current: trace(parts),
     sqlAdditions, sqlAdditionMethods: [method], sqlAdditionPolicy: {
       sqlTexts: added.map(([sql]) => sql), familyMethods: [method], anchorSQLTexts: [], anchorAfterSQLTexts: [predecessor[0]],
     } };
 }
+for (const [family, make] of [
+  ['ledger', () => fixture(true)], ['cascade', () => cascadeFixture(true)],
+  ...['write', 'read'].flatMap(kind => [false, true].map(terminal =>
+    [`${kind} ${terminal ? 'terminal' : 'middle'} neighbour`, () => neighbourFixture(kind, terminal, true)])),
+]) test(`${family}: synthetic receipt reduction requires its own per-call records`, () => {
+  const f = make();
+  compare(f);
+  delete f.receiptWalkRecords;
+  assert.throws(() => compare(f), { code: 'ERR_ASSERTION', message: /reviewed receipt row multiplicity: .* archive 2, current 1/ });
+});
+test('wide gate comparison call sites cannot supply synthetic receipt records', () => {
+  const source = readFileSync(new URL('./card-lineage-off-wide.test.mjs', import.meta.url), 'utf8');
+  const calls = [...source.matchAll(/compareWideTraces\(\{([^{}]*)\}\)/g)];
+  assert.equal(calls.length, 2, 'both gate comparison call sites are checked');
+  assert.equal((source.match(/compareWideTraces\(/g) ?? []).length, calls.length, 'no unchecked comparison calls');
+  const allowed = new Set(['key', 'current', 'archived', 'receiptWalk', 'checkArchivedCardTexts',
+    'sqlAdditionPolicy', 'sqlAdditions', 'sqlAdditionMethods', 'cardStatementTexts']);
+  for (const [, options] of calls) for (const option of options.split(',')) {
+    const name = option.trim().split(':')[0];
+    assert.ok(allowed.has(name), `gate comparison option must use literal policy: ${name}`);
+  }
+});
 function checkNeighbourFixture(mode, f) {
   if (mode === 'archive') return compare(f);
   const pin = { ...summary(f.current),

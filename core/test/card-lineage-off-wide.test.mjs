@@ -73,6 +73,11 @@ const compareReceiptRecords=(key,current,archived)=>{
   assertWidePins(key,current,[],summary(current),[],{},sqlAdditionPolicy);
   compareWideTraces({key,current,archived,receiptWalk:true,checkArchivedCardTexts:false,sqlAdditionPolicy});
 };
+test('wide gate literal policy rejects the synthetic ledger receipt reduction',()=>{
+  const row=[[...currentReceiptWalkSQLTexts][0],'all',['synthetic-owner','personal','',0,10]];
+  assert.throws(()=>compareReceiptRecords('workload:52',receiptRecord([row],2,'read'),
+    receiptRecord([row,row],2,'read')), {code:'ERR_ASSERTION',message:/reviewed receipt row multiplicity: .* archive 2, current 1/});
+});
 for(const mutation of ['deletion','reordering'])
 test(`unrelated receipt rows reject ${mutation} with replacement pins`,()=>{
   const schema=[...receiptWalkSQLTexts].find(sql=>sql.startsWith('SELECT schema_version AS cookie'));
