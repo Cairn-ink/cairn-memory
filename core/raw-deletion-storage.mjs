@@ -163,7 +163,7 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
     // The complete plan and its result/effect ids keep their original order.
     // Purge and unbind terminal sources before retained siblings bump revision.
     for (const memory of plan.memories.toSorted((a, b) => Number(b.forget) - Number(a.forget))) {
-      if (memory.forget) forgetMutation(ns, memory.id, undefined, 'forgotten', 'purge');
+      if (memory.forget) forgetMutation(ns, memory.id, undefined, 'forgotten', 'purge', { cascade: true });
       else removeReceipts(ns, memory.id, memory.receiptIds, { reason: 'purge', actionId });
     }
     for (const id of plan.episodeIds) episodes.invalidateSources(ns, id);
