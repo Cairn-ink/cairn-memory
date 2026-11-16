@@ -1,6 +1,7 @@
 // Synthetic process fixture. Its single IPC bootstrap is the only configuration input.
 import { daemonStderrTail } from './local-daemon-diagnostics.mjs';
 import net from 'node:net';
+import fsPromises from 'node:fs/promises';
 import childProcess from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 import { once } from 'node:events';
@@ -94,6 +95,17 @@ try {
   } else {
     const candidates = [], liveCandidates = new Map();
     let connected = false, failedRespawn = false;
+    if (configuration.endpointReadRace) {
+      const lstat = fsPromises.lstat; let paused = false;
+      fsPromises.lstat = async function(path, ...args) {
+        if (connected && !paused && String(path).endsWith('.sock')) {
+          paused = true; send({ kind: 'endpoint-between-reads' });
+          while ((await once(process, 'message'))[0].kind !== 'release-endpoint-read') {}
+        }
+        return lstat(path, ...args);
+      };
+      syncBuiltinESMExports();
+    }
     if (configuration.options?.failRespawnOnce || configuration.options?.failEveryCandidate) {
       const spawn = childProcess.spawn;
       childProcess.spawn = function(executable, args, options) {

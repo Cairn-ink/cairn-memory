@@ -14,9 +14,10 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 export async function connectOrStart(args, options = {}) {
   const milliseconds = Math.min(options.connectMs ?? 10000, 10000), deadline = performance.now() + milliseconds;
   let timer;
+  const endpointState = { changed: false };
   try {
-    return await Promise.race([connectAttempt(args, options, deadline), new Promise((_, reject) => {
-      timer = setTimeout(() => reject(refuse('daemon_connect_timeout')), milliseconds);
+    return await Promise.race([connectAttempt(args, options, deadline, endpointState), new Promise((_, reject) => {
+      timer = setTimeout(() => reject(refuse(endpointState.changed ? 'daemon_endpoint_changed' : 'daemon_connect_timeout')), milliseconds);
     })]);
   } finally { clearTimeout(timer); }
 }
@@ -38,7 +39,7 @@ function spawnCandidate(payload, environment, options) {
   options.onCandidate?.(child);
   return candidate;
 }
-async function connectAttempt(args, options, deadline) {
+async function connectAttempt(args, options, deadline, endpointState) {
   const filesystem = storeFilesystemProbe(options.storeStatfs);
   const environment = selectedEnvironment(options.environment);
   const directory = await runtimeDirectory({ root: options.root });
@@ -73,7 +74,14 @@ async function connectAttempt(args, options, deadline) {
       if (await takeOver(directory, paths, descriptor, { ...options.takeoverOptions, staleMs: options.unresponsiveMs ?? DAEMON_UNRESPONSIVE_MS, deadline })) continue;
       const info = await checkedEntry(directory, paths.socket, { socket: true, missing: true });
       if (info) {
-        if (String(info.dev) !== descriptor.socket?.dev || String(info.ino) !== descriptor.socket?.ino) throw refuse('daemon_endpoint_changed');
+        if (String(info.dev) !== descriptor.socket?.dev || String(info.ino) !== descriptor.socket?.ino) {
+          endpointState.changed = true;
+          // A normal dead-owner election may publish between these reads.
+          // Re-enter every identity, takeover and authentication check without
+          // extending the original budget or trusting the changed socket.
+          await delay(Math.min(25, Math.max(1, deadline - performance.now())));
+          continue;
+        }
         const socket = createConnection({ path: paths.socket }); socket.on('error', () => {});
         const timer = setTimeout(() => socket.destroy(refuse('daemon_connect_timeout')), Math.min(2000, Math.max(1, deadline - performance.now())));
         try {
@@ -91,7 +99,7 @@ async function connectAttempt(args, options, deadline) {
     }
     await delay(Math.min(25 + randomInt(76), Math.max(1, deadline - performance.now())));
   }
-  throw refuse('daemon_connect_timeout');
+  throw refuse(endpointState.changed ? 'daemon_endpoint_changed' : 'daemon_connect_timeout');
 }
 
 export async function runForwarder(args = process.argv.slice(2), options = {}) {
