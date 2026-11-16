@@ -3,7 +3,7 @@ import { daemonStderrTail } from './local-daemon-diagnostics.mjs';
 import net from 'node:net';
 import fsPromises from 'node:fs/promises';
 import childProcess from 'node:child_process';
-import { syncBuiltinESMExports } from 'node:module';
+import { registerHooks, syncBuiltinESMExports } from 'node:module';
 import { once } from 'node:events';
 import { runForwarder, connectOrStart } from '../../local-forwarder.mjs';
 import { runCandidate } from '../../local-daemon.mjs';
@@ -57,6 +57,13 @@ try {
           return result;
         }`), import.meta.url);
     }
+    if (configuration.lazyImportFailure) {
+      const target = new URL('../../../../core/engine-card-maintenance.mjs', import.meta.url).href;
+      registerHooks({ load(url, context, next) {
+        if (url === target) { send({ kind: 'lazy-import-failed' }); throw Error('synthetic_lazy_import_failure'); }
+        return next(url, context);
+      } });
+    }
     if (configuration.unpublishedSocket) {
       const chmod = fsPromises.chmod;
       fsPromises.chmod = async function(path, mode) {
@@ -77,8 +84,9 @@ try {
     let armed = false;
     process.on('message', message => { if (message.kind === 'arm') { armed = true; fault?.arm(); send({ kind: 'armed' }); } });
     const acquired = await runCandidate(configuration.bootstrap, { ...configuration.lifecycle,
-      ...(configuration.providerBarrier ? { runtimeOptions: { model: {
+      ...((configuration.providerBarrier || configuration.lazyImportFailure) ? { runtimeOptions: { model: {
         contextWindow: 8192, countTokens: () => 1, rank: () => ({ refs: [] }),
+        ...(configuration.lazyImportFailure ? { consolidate: () => { throw Error('synthetic_import_should_fail_first'); } } : {}),
         async select() {
           send({ kind: 'provider-entered' }); await new Promise(resolve => setTimeout(resolve, 300));
           send({ kind: 'provider-settled' }); return { refs: [] };

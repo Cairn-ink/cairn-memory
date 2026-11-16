@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { fork } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdtemp, rm, mkdir, readFile, readdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, dirname, basename } from 'node:path';
+import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { openMemoryCore } from '../../../core/contract.mjs';
 import { runtimeDirectory, identityKey } from '../local-daemon-state.mjs';
@@ -21,8 +22,9 @@ export async function until(predicate, marker, milliseconds = 12000) {
   assert.fail(marker + '\n' + JSON.stringify([...diagnostics].map(snapshot => snapshot())));
 }
 export async function workspace(t) {
-  await mkdir('/tmp/cairn-es-r3', { recursive: true });
-  const root = await mkdtemp('/tmp/cairn-es-r3/d-'); await mkdir(join(root, 'run'), { mode: 0o700 });
+  // The runner nests TMPDIR; use its parent to keep Unix socket names <100B.
+  const scratch = /^cairn-test-run-/.test(basename(tmpdir())) ? dirname(tmpdir()) : tmpdir();
+  const root = await mkdtemp(join(scratch, 'd-')); await mkdir(join(root, 'run'), { mode: 0o700 });
   const path = join(root, 'synthetic.sqlite');
   const seed = openMemoryCore({ path, raw: false }); await seed.close();
   const children = [], owners = new Map(), exits = [], messages = [];
