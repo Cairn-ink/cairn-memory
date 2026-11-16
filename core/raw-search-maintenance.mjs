@@ -26,6 +26,10 @@ export function createRawSearchMaintenance(storage,authority,options) {
   const identity={key:JSON.stringify(authority.identity),physical:authority.identity.fileIdentity};
   const cadenceKey=JSON.stringify([authority.identity.storeId,identity.physical]);
   let active=null,closed=false,stopped=false,noProgress=0,quantum=0,quotaBlocked=false;
+  // These versions belong only to this authority connection. A resumed
+  // persisted cursor must finish its partial lap, then a full lap from zero.
+  const versionAvailable=typeof authority.version==='function';
+  let cleanupVersion,cleanupIdle=false,cleanupFullLap=null,cleanupSkip=false;
   let access = () => {};
   const inventoryFence = at => {try{return authority.fence(undefined,at);}catch(error){if(['source_budget_exceeded','search_deadline'].includes(error.code))return null;throw error;}};
   const protect = source => {
@@ -187,21 +191,45 @@ export function createRawSearchMaintenance(storage,authority,options) {
         // Every fourth busy turn belongs to reconciliation. This ring is
         // independent of the fence-bound proof sweep and of incoming saves.
         recentAttempts=0;if(checkpoint.recent)checkpoint.recent.streak=0;
+        const fence=checkpoint.fenceRetry?null:inventoryFence();
+        const ringStarted=performance.now(),ringBudget=maxMs/4;
         const ring=checkpoint.cleanup??{afterSegment:0,throughSegment:storage.tail()};
-        const cleanup=await storage.snapshot({after:ring.afterSegment,limit:Math.min(maxItems,16)});
-        let checked=0;
-        for(const row of cleanup.rows){
-          if(row.segment>ring.throughSegment)break;
-          if(performance.now()-started>=maxMs)break;
-          if(authority.disposition(row.source)==='remove')remove.push(row.segment);
-          ring.afterSegment=row.segment;progress.scanned++;checked++;
+        const currentVersion=authority.version?.();
+        if(cleanupFullLap===null){
+          cleanupFullLap=ring.afterSegment===0;cleanupVersion=currentVersion;
+          if(cleanupFullLap)ring.throughSegment=storage.tail();
         }
-        if(checked===cleanup.rows.length&&!cleanup.partial||ring.afterSegment>=ring.throughSegment||cleanup.rows[checked]?.segment>ring.throughSegment){
-          ring.afterSegment=0;ring.throughSegment=storage.tail();
+        if(cleanupIdle&&(currentVersion!==cleanupVersion||!fence)){
+          cleanupIdle=false;cleanupVersion=currentVersion;cleanupFullLap=ring.afterSegment===0;
+          // Inventory may have published new rows while cleanup was idle.
+          if(cleanupFullLap)ring.throughSegment=storage.tail();
+        }
+        if(cleanupSkip)cleanupSkip=false;
+        else if(!cleanupIdle){
+          // One materialized row bounds small-slice snapshot work. Larger
+          // slices retain the existing maximum page and cursor semantics.
+          const cleanup=await storage.snapshot({after:ring.afterSegment,limit:Math.min(maxItems,maxMs<=25?1:16)});
+          let checked=0;
+          for(const row of cleanup.rows){
+            if(row.segment>ring.throughSegment)break;
+            if(checked&&(performance.now()-ringStarted>=ringBudget||performance.now()-started>=maxMs))break;
+            if(authority.disposition(row.source)==='remove')remove.push(row.segment);
+            ring.afterSegment=row.segment;progress.scanned++;checked++;
+          }
+          if(checked===cleanup.rows.length&&!cleanup.partial||ring.afterSegment>=ring.throughSegment||cleanup.rows[checked]?.segment>ring.throughSegment){
+            // Read after the final disposition: a denial during that check
+            // can invalidate a source already visited earlier in this lap.
+            const endVersion=authority.version?.();
+            cleanupIdle=versionAvailable&&cleanupFullLap&&endVersion===cleanupVersion;
+            ring.afterSegment=0;ring.throughSegment=storage.tail();
+            cleanupVersion=endVersion;cleanupFullLap=true;
+          }
+          // One indivisible canonical read can exceed the entire share. Give
+          // the next reconciliation turn to the sweep and inventory.
+          cleanupSkip=performance.now()-ringStarted>ringBudget;
         }
         checkpoint.cleanup=ring;
         const cleanupCheckpoint=structuredClone(checkpoint);
-        const fence=checkpoint.fenceRetry?null:inventoryFence(started+maxMs);
         if(!fence&&!checkpoint.fenceRetry)checkpoint.fenceRetry=64;
         cleanupCheckpoint.fenceRetry=checkpoint.fenceRetry;
         if(checkpoint.cycleFence!==fence){checkpoint={...checkpoint,sweep:0,after:['','',-1],cycleFence:fence,denialsReconciled:false,coverageComplete:false};}
@@ -262,7 +290,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
         // All async preparation is over before this last canonical comparison;
         // sidecar commit occurs with no canonical lock. Delivery closes its gap.
         for(const row of staged)protect(row.source);
-        if(fence&&inventoryFence(started+maxMs)!==fence){
+        if(fence&&inventoryFence()!==fence){
           // Canonical capture or denial won the race. Discard this quantum's
           // positive work and retry on the host's next turn; source movement
           // is neither an index failure nor evidence of a stalled maintainer.
