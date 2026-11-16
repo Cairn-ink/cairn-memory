@@ -18,9 +18,100 @@ const until = async (predicate, reason, ms = 15000) => {
   assert.fail(reason);
 };
 const ok = r => { assert.equal(r.ok, true, JSON.stringify(r)); return r.value; };
+const identityPrefix = name => /^(d-[a-f0-9]{32})\./.exec(name)?.[1];
+const sameOwner = (a, b) => a != null && b != null &&
+  ['pid', 'start', 'boot', 'namespace'].every(key => a[key] === b[key]);
+const sameEntry = (a, b) => b != null &&
+  ['name', 'kind', 'inode', 'size', 'mtime'].every(key => a[key] === b[key]);
+
+// Pure comparison: no filesystem reads, clocks, process probes or mutation.
+// Liveness of baseline owners is sampled again in after.retired, even when
+// their descriptors and locks have disappeared or a successor replaced them.
+export function classifyRuntimeHygiene(before, after, {
+  prefixes = [], names = [], tokenPrefixes = [], owners = [],
+} = {}) {
+  const errors = [], diagnostics = [], current = new Map(after.entries.map(entry => [entry.name, entry]));
+  const isOwned = name => names.includes(name) || prefixes.some(prefix => name.startsWith(prefix + '.')) ||
+    tokenPrefixes.some(prefix => name === prefix || name.startsWith(prefix + '.owner-') || name.startsWith(prefix + '.reap-'));
+  for (const entry of after.entries) {
+    if (isOwned(entry.name)) errors.push('test-owned file remains: ' + entry.name);
+    else if (!identityPrefix(entry.name) && !before.entries.some(value => value.name === entry.name))
+      errors.push('non-identity entry created: ' + entry.name);
+  }
+  const groups = new Map();
+  for (const entry of before.entries) {
+    if (isOwned(entry.name)) continue;
+    const prefix = identityPrefix(entry.name);
+    if (!prefix) {
+      if (!sameEntry(entry, current.get(entry.name))) errors.push('non-identity entry changed: ' + entry.name);
+      continue;
+    }
+    if (!groups.has(prefix)) groups.set(prefix, []);
+    groups.get(prefix).push(entry);
+  }
+  for (const [prefix, entries] of groups) {
+    const previous = before.identities.find(identity => identity.prefix === prefix);
+    const next = after.identities.find(identity => identity.prefix === prefix);
+    if (previous?.owner && next?.owner && !sameOwner(previous.owner, next.owner)) {
+      if (next.alive && !owners.some(owner => sameOwner(owner, next.owner)))
+        diagnostics.push('foreign identity takeover: ' + prefix);
+      else errors.push('foreign takeover has dead or test owner: ' + prefix);
+      continue;
+    }
+    if (!previous?.alive) {
+      for (const entry of after.entries) if (identityPrefix(entry.name) === prefix && !entries.some(value => value.name === entry.name))
+        errors.push('dead or ownerless foreign entry created: ' + entry.name);
+      for (const entry of entries) if (!sameEntry(entry, current.get(entry.name)))
+        errors.push('dead or ownerless foreign entry changed: ' + entry.name);
+      continue;
+    }
+    const remaining = after.entries.filter(entry => identityPrefix(entry.name) === prefix);
+    if (remaining.length === 0) {
+      const retired = after.retired.find(identity => identity.prefix === prefix && sameOwner(identity.owner, previous.owner));
+      if (retired?.alive !== false) errors.push('foreign identity gone without dead owner: ' + prefix);
+      continue;
+    }
+    for (const entry of entries) {
+      const value = current.get(entry.name), suffix = entry.name.slice(prefix.length);
+      const unchanged = sameEntry(entry, value);
+      const heartbeat = suffix === '.stamp' && value?.kind === entry.kind;
+      const appended = suffix === '.log' && value?.kind === entry.kind && value.inode === entry.inode &&
+        BigInt(value.size) > BigInt(entry.size);
+      if (!unchanged && !heartbeat && !appended) errors.push('live foreign entry changed: ' + entry.name);
+    }
+  }
+  return { errors, diagnostics };
+}
+
+async function runtimeSnapshot(path, remembered = []) {
+  const entries = [];
+  for (const name of (await readdir(path)).sort()) {
+    let info;
+    try { info = await lstat(join(path, name), { bigint: true }); }
+    catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+    entries.push({ name, kind: info.isFile() ? 'file' : info.isSocket() ? 'socket' : info.isDirectory() ? 'directory' : info.isSymbolicLink() ? 'symlink' : 'other',
+      inode: String(info.ino), size: String(info.size), mtime: String(info.mtimeNs) });
+  }
+  const identities = [];
+  for (const prefix of new Set(entries.map(entry => identityPrefix(entry.name)).filter(Boolean))) {
+    let owner;
+    for (const suffix of ['.json', '.lock']) {
+      if (!entries.some(entry => entry.name === prefix + suffix && entry.kind === 'file')) continue;
+      try {
+        const value = JSON.parse(await readFile(join(path, prefix + suffix), 'utf8'));
+        const candidate = suffix === '.json' ? value.owner : value;
+        if (candidate) { startAwareAlive(candidate); owner = candidate; break; }
+      } catch (error) { if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error; }
+    }
+    identities.push({ prefix, owner, alive: owner ? startAwareAlive(owner) : false });
+  }
+  return { entries, identities, retired: remembered.filter(identity => identity.owner)
+    .map(identity => ({ ...identity, alive: startAwareAlive(identity.owner) })) };
+}
 export async function installedAssertions(t, { install = false } = {}) {
   const scratch = await mkdtemp(join(tmpdir(), 'entry-')), clients = [], owned = new Map(), logs = new Set(), lockTokens = new Map();
-  const dir = await runtimeDirectory(), baseline = new Set(await readdir(dir.path));
+  const dir = await runtimeDirectory(), before = await runtimeSnapshot(dir.path);
+  const baseline = new Set(before.entries.map(entry => entry.name));
   // Claim key ownership via an exclusive atomic link, rather than assuming
   // absence in a directory snapshot proves that this test created the key.
   const keyPath = join(dir.path, 'identity-v1.key');
@@ -142,8 +233,18 @@ export async function installedAssertions(t, { install = false } = {}) {
         assert.equal(current.dev, ownKey.dev); assert.equal(current.ino, ownKey.ino);
         await rm(keyPath);
       }
-      const remaining = (await readdir(dir.path)).filter(n => !baseline.has(n));
-      assert.deepEqual(remaining, [], 'test leaves no files in real cairn-memory runtime folder');
+      const after = await runtimeSnapshot(dir.path, before.identities);
+      const current = new Set(after.entries.map(entry => entry.name));
+      t.diagnostic('runtime folder difference: ' + JSON.stringify({
+        added: [...current].filter(name => !baseline.has(name)), removed: [...baseline].filter(name => !current.has(name)),
+        changed: before.entries.filter(entry => current.has(entry.name) && !sameEntry(entry, after.entries.find(value => value.name === entry.name))).map(entry => entry.name),
+      }));
+      const hygiene = classifyRuntimeHygiene(before, after, {
+        prefixes: [...logs].map(name => name.slice(0, -4)), names: [...logs, ...(ownKey ? ['identity-v1.key'] : [])],
+        tokenPrefixes: [...lockTokens.keys()], owners: [...owned.values()].map(descriptor => descriptor.owner),
+      });
+      for (const diagnostic of hygiene.diagnostics) t.diagnostic(diagnostic);
+      assert.deepEqual(hygiene.errors, [], 'test leaves no owned files and preserves pre-existing foreign runtime entries');
       t.diagnostic('runtime hygiene: no test-owned files remain');
     } finally { await rm(scratch, { recursive: true, force: true }); }
   });
