@@ -1,3 +1,4 @@
+import { reviewExitError } from './review-diagnostics.mjs';
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -74,11 +75,11 @@ export function rawHost(workspace, profilePath) {
     });
   }, notify(method, params) { child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method, ...(params ? { params } : {}) }) + '\n'); } };
 }
-export function terminal(workspace, profilePath, card, { extra = [] } = {}) {
+export function terminal(workspace, profilePath, card, { command = cli, extra = [] } = {}) {
   let child, closed;
   workspace.defer(async () => { if (!child) return; if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM'); await closed; });
   const args = [fileURLToPath(new URL('./fixtures/card-review-pty.py', import.meta.url)), process.execPath,
-    '--import', noNetwork, cli, 'review-card', '--retained-raw-profile', profilePath,
+    '--import', noNetwork, command, 'review-card', '--retained-raw-profile', profilePath,
     '--card', card.id, '--revision', String(card.revision), ...extra];
   child = spawn('/usr/bin/python3', args, { stdio: 'pipe', env: cleanEnv });
   let resolvePrompt, rejectPrompt, resolveDone, rejectDone, event, stderr = '';
@@ -91,8 +92,8 @@ export function terminal(workspace, profilePath, card, { extra = [] } = {}) {
   closed = new Promise(resolve => {
     child.once('error', error => { rejectPrompt(error); rejectDone(error); resolve(); });
     child.once('close', (code, signal) => {
-      if (code !== 0 || signal || !event) { const error = new Error(`Synthetic PTY supervisor exit ${code}/${signal}: ${stderr}`); rejectPrompt(error); rejectDone(error); }
-      else { resolveDone(event); rejectPrompt(Error('review exited before prompt')); }
+      if (code !== 0 || signal || !event) { const error = reviewExitError(event, { code, signal, stderr }); rejectPrompt(error); rejectDone(error); }
+      else { resolveDone(event); rejectPrompt(reviewExitError(event, { code, signal, stderr })); }
       resolve();
     });
   });

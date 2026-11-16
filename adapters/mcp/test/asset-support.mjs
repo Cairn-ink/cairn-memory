@@ -1,3 +1,4 @@
+import { reviewExitError } from './review-diagnostics.mjs';
 import { readdirSync,openSync,closeSync,readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -44,8 +45,8 @@ export function review(workspace,args,{command=cli,imports=[],group='assets',env
     catch(error){rejectPrompt(error);rejectDone(error);}
   });
   const closed=new Promise(resolve=>child.once('close',(code,signal)=>{
-    if(code!==0||signal||!completed){const error=Error(`PTY supervisor exit ${code}, signal ${signal}: ${stderr}`);rejectPrompt(error);rejectDone(error);}
-    else{resolveDone(completed);rejectPrompt(Error('method review exited before prompt'));}resolve();
+    if(code!==0||signal||!completed){const error=reviewExitError(completed, { code, signal, stderr });rejectPrompt(error);rejectDone(error);}
+    else{resolveDone(completed);rejectPrompt(reviewExitError(completed, { code, signal, stderr }));}resolve();
   }));
   child.once('error',error=>{rejectPrompt(error);rejectDone(error);});
   workspace.defer(async()=>{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGTERM');await closed;lines.close();});
