@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { registerContentWriteGuard } from '../../../core/content-write-context.mjs';
 import { beginContentWriteSafety } from '../../../core/content-write-safety.mjs';
-import { setup, sql, ok, range, forgottenText, stepText, otherStep, neighbourStep } from './fixtures/forget-episode.mjs';
+import { assertReads, snapshot } from './fixtures/forget-episode-assertions.mjs';
+import { recorded, assertRecorded } from './fixtures/forget-episode-recording.mjs';
+import { setup, sql, ok, range, forgottenText, stepText } from './fixtures/forget-episode.mjs';
 
 // Preserve the eleven recording-probe scenarios, and pair each forget with correct.
 const cases = [
@@ -44,59 +46,11 @@ function committed(f, operation, connection) {
   };
   if (connection) check(connection); else sql(f.path, check);
 }
-async function reads(f, options) {
-  const namespace = f.namespace;
-  const pages = [];
-  noNeedles(await f.core.get({ namespace, memoryId: f.target.id }));
-  const listed = await f.core.list({ namespace, limit: 50 });
-  // core/runtime.mjs:547 refuses a selected survivor with denied Raw ancestry.
-  // The shared-message survivor is denied; the separate-message shape still lists.
-  if (f.layout.suppressionRevision && !options.differentMessages)
-    assert.deepEqual(listed, { ok: false, error: { code: 'revision_conflict', retryable: false } });
-  else ok(listed);
-  noNeedles(listed);
-  for (const timeBasis of ['event', 'receipt']) {
-    const result = await f.core.listEpisodes({ namespace, ...range, timeBasis });
-    noNeedles(result);
-    const items = ok(result).items;
-    for (const episode of f.episodes) {
-      const deleted = sql(f.path, db => db.prepare('SELECT deleted FROM session_episodes WHERE id=?').get(episode.id).deleted);
-      assert.equal(items.some(item => item.id === episode.id), !deleted, 'Episode list withholds exactly the deleted named Episodes');
-    }
-    pages.push(result);
-  }
-  for (const episode of f.episodes) {
-    const result = await f.core.getEpisode({ namespace, episodeId: episode.id });
-    noNeedles(result);
-    const deleted = sql(f.path, db => db.prepare('SELECT deleted FROM session_episodes WHERE id=?').get(episode.id).deleted);
-    if (deleted) assert.equal(result.error?.code, 'episode_not_found');
-    else assert.equal(ok(result).episode.id, episode.id, 'unrelated Episode still reads');
-  }
-  for (const input of [
-    { readSet: [namespace], query: 'synthetic', limit: 12 },
-    { readSet: [namespace], query: 'synthetic', limit: 12, includeQualification: true },
-    { readSet: [namespace], query: 'synthetic', limit: 12, contextMode: 'rationale-evidence' },
-  ]) {
-    const result = await f.core.recall(input);
-    // Main's unchanged receipt filter rejects the fenced survivor receipt on
-    // 29/33 too: core/runtime.mjs:597,632. Episode deletion is not consulted.
-    if (!f.layout.suppressionRevision && input.contextMode === 'rationale-evidence')
-      assert.deepEqual(result, { ok: false, error: { code: 'source_unavailable', retryable: false } });
-    else ok(result);
-    noNeedles(result);
-  }
-  // Session start is also the public next-step reader; check both groups and the whole envelope.
-  for (const groups of [{ nextSteps: true, procedural: false }, { nextSteps: true, procedural: true, background: true }]) {
-    const result = await f.core.sessionStartContext({ namespace, groups, maxChars: 8000, maxTokens: 2000 });
-    ok(result); noNeedles(result);
-    if (f.episodes.length) assert.ok([otherStep, neighbourStep].some(step => text(result).includes(step)), 'a retained next step is still delivered');
-  }
-  return pages;
-}
 for (const [name, options] of cases) for (const operation of ['forget', 'correct']) {
   const caseName = name === 'X_53time_episodes' && operation === 'correct' ? 'X_53time_correct_episodes' : name + ' ' + operation;
   test(caseName, { concurrency: false, timeout: 120000 }, async t => {
     const f = await setup(t, options);
+    const before = { ...snapshot(f), episodes: f.episodes }, pin = recorded('forget-episode', caseName);
     if (!options.noEpisodes && !options.episodeOtherOnly) {
       const before = ok(await f.core.listEpisodes({ namespace: f.namespace, ...range, timeBasis: 'receipt' }));
       assert.ok(text(before).includes(stepText), 'a deliverable target step exists before mutation');
@@ -114,12 +68,14 @@ for (const [name, options] of cases) for (const operation of ['forget', 'correct
         }
       } };
     });
-    try { ok(await f.act(operation)); } finally { registerContentWriteGuard(beginContentWriteSafety); }
+    try { assertRecorded(await f.act(operation), pin.actions[0]); } finally { registerContentWriteGuard(beginContentWriteSafety); }
     if (options.layout >= 48) assert.equal(commits, 1, 'post-state is checked before COMMIT');
     committed(f, operation);
-    await reads(f, options);
+    await assertReads(f, before, { pin: pin.p1, named: f.episodes.filter(episode =>
+      episode.client === f.conversation.client && episode.session_key === f.conversation.session_key).map(episode => episode.id) });
     await f.reopen();
-    await reads(f, options);
+    await assertReads(f, before, { pin: pin.p1, named: f.episodes.filter(episode =>
+      episode.client === f.conversation.client && episode.session_key === f.conversation.session_key).map(episode => episode.id) });
   });
 }
 // Window and unknown-time preservation now run on every layout in forget-episode-scope.test.mjs.

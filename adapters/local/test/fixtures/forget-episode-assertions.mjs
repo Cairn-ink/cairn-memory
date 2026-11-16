@@ -3,7 +3,8 @@ import { existsSync } from 'node:fs';
 import { readSqliteFixture } from '../../../../core/testing/content-safety-s2h-fixture.mjs';
 import { createMemoryRuntime } from '../../../../core/runtime.mjs';
 import { batch, digest } from '../../../../core/testing/episode-helpers.mjs';
-import { sql, ok, range, forgottenText, stepText } from './forget-episode.mjs';
+import { assertRecorded, episodeRole } from './forget-episode-recording.mjs';
+import { sql, range, forgottenText, stepText } from './forget-episode.mjs';
 
 export const layouts = [{ layout: 29 }, { layout: 33 }, { layout: 48 }, { layout: 53 }, { layout: 53, cardLineage: true }];
 export const label = options => options.layout + (options.cardLineage ? ' lineage' : options.layout === 53 ? ' event time' : '');
@@ -78,59 +79,38 @@ export function copySummary(f, sourceIds, session = 'consumer') {
     return registered.episodeId;
   } finally { runtime.close(); }
 }
-function fencedSources(f, rows) {
-  return sql(f.path, db => rows.some(row => db.prepare(`SELECT 1 FROM episode_sources s
-    JOIN session_episodes e ON e.id=s.origin_episode_id JOIN raw_session_fences f
-      ON f.owner_id=e.owner_id AND f.scope=e.scope AND f.project_id=e.project_id AND f.client=e.client AND f.session_key=e.session_key
-    WHERE s.episode_id=? LIMIT 1`).get(row.id)));
-}
-export async function assertReads(f, before, { named = [], consumers = [], needles = [forgottenText, stepText],
-  listRefused = Boolean(f.layout.suppressionRevision), evidenceUnavailable = !f.layout.suppressionRevision } = {}) {
-  const namespace = f.namespace, after = snapshot(f), safety = Boolean(f.layout.suppressionRevision);
-  noNeedles(await f.core.get({ namespace, memoryId: f.target.id }), needles);
-  const listed = await f.core.list({ namespace, limit: 50 });
-  // core/runtime.mjs:547: retained Raw ancestry denies the shared-message
-  // survivor. Conversation deletion removes that ancestry before a later read.
-  if (listRefused) assert.deepEqual(listed, { ok: false, error: { code: 'revision_conflict', retryable: false } });
-  else ok(listed);
-  noNeedles(listed, needles);
+export async function assertReads(f, before, { named = [], needles = [forgottenText, stepText], pin } = {}) {
+  const namespace = f.namespace, after = snapshot(f);
+  assertRecorded(await f.core.get({ namespace, memoryId: f.target.id }), pin.get, needles);
+  assertRecorded(await f.core.list({ namespace, limit: 50 }), pin.list, needles);
   for (const timeBasis of ['event', 'receipt']) {
-    const candidates = after.episodes.filter(row => !row.deleted && (timeBasis === 'receipt' || JSON.parse(row.record).eventEnd));
     const result = await f.core.listEpisodes({ namespace, ...range, timeBasis });
-    // Unchanged readers refuse a fenced retained neighbour; read-time filtering is separate work.
-    if (safety && fencedSources(f, candidates)) assert.deepEqual(result, { ok: false, error: { code: 'conversation_deleted', retryable: false } });
-    else {
-      const items = ok(result).items;
-      for (const id of named) assert.equal(items.some(item => item.id === id), false, 'named Episode never lists');
-      for (const row of candidates) assert.ok(items.some(item => item.id === row.id), 'eligible retained metadata still lists');
+    const value = assertRecorded(result, pin['listEpisodes[' + timeBasis + ']'], needles);
+    if (value) {
+      const candidates = after.episodes.filter(row => !row.deleted && (timeBasis === 'receipt' || JSON.parse(row.record).eventEnd));
+      for (const id of named) assert.equal(value.items.some(item => item.id === id), false, 'named Episode never lists');
+      for (const row of candidates) assert.ok(value.items.some(item => item.id === row.id), 'eligible retained metadata still lists');
     }
-    noNeedles(result, needles);
   }
   for (const episode of before.episodes) {
     const result = await f.core.getEpisode({ namespace, episodeId: episode.id });
-    if (named.includes(episode.id)) assert.equal(result.error?.code, 'episode_not_found');
-    else if (safety && fencedSources(f, [episode])) assert.deepEqual(result, { ok: false, error: { code: 'conversation_deleted', retryable: false } });
-    else assert.equal(ok(result).episode.id, episode.id, 'unfenced retained Episode or blank consumer still reads');
-    noNeedles(result, needles);
+    const value = assertRecorded(result, pin['getEpisode:' + episodeRole(episode)], needles);
+    if (value) assert.equal(value.episode.id, episode.id, 'the requested retained Episode or blank consumer still reads');
   }
-  for (const extra of [{}, { includeQualification: true }, { contextMode: 'rationale-evidence' }]) {
+  for (const [mode, extra] of [
+    ['default', {}], ['default+qual', { includeQualification: true }],
+    ['rationale-evidence', { contextMode: 'rationale-evidence' }],
+  ]) {
     const result = await f.core.recall({ readSet: [namespace], query: 'synthetic', limit: 12, ...extra });
-    // core/runtime.mjs:597,632 refuses evidence when no safe receipt remains;
-    // this also applies after deletion removes a retained receipt's Raw origin.
-    if (evidenceUnavailable && extra.contextMode === 'rationale-evidence')
-      assert.deepEqual(result, { ok: false, error: { code: 'source_unavailable', retryable: false } });
-    else ok(result);
-    noNeedles(result, needles);
+    assertRecorded(result, pin['recall[' + mode + ']'], needles);
   }
-  const openSteps = after.episodes.filter(row => !row.deleted && JSON.parse(row.record).nextStep?.status === 'open');
-  for (const groups of [{ nextSteps: true, procedural: false }, { nextSteps: true, procedural: true, background: true }]) {
+  // Session start is the public next-step reader. Pin both complete envelopes;
+  // a successful call need not select any particular retained step.
+  for (const [mode, groups] of [
+    ['nextSteps', { nextSteps: true, procedural: false }],
+    ['nextSteps+procedural+background', { nextSteps: true, procedural: true, background: true }],
+  ]) {
     const result = await f.core.sessionStartContext({ namespace, groups, maxChars: 8000, maxTokens: 2000 });
-    if (safety && fencedSources(f, openSteps)) assert.deepEqual(result, { ok: false, error: { code: 'conversation_deleted', retryable: false } });
-    else {
-      ok(result);
-      const independent = openSteps.find(row => !named.includes(row.id) && !consumers.includes(row.id));
-      if (independent) assert.ok(JSON.stringify(result).includes(JSON.parse(independent.record).nextStep.text), 'a retained next step still delivers');
-    }
-    noNeedles(result, needles);
+    assertRecorded(result, pin['sessionStartContext[' + mode + ']'], needles);
   }
 }

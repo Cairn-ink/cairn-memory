@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createRawSourceRoots } from '../../../core/raw-source-roots.mjs';
 import { layouts, label, snapshot, assertStored, assertReads } from './fixtures/forget-episode-assertions.mjs';
+import { recorded, assertRecorded } from './fixtures/forget-episode-recording.mjs';
 import { setup, sql, ok, forgottenText, stepText, otherStep } from './fixtures/forget-episode.mjs';
 
 // Older keeps stamp the consumer's receipt identity while recording exact
@@ -38,11 +39,12 @@ for (const options of layouts)
         db.exec('COMMIT');
       } catch (error) { if (db.isTransaction) db.exec('ROLLBACK'); throw error; }
     } });
+    const pin = recorded('forget-episode-keeper', t.name);
     const before = snapshot(f), named = before.episodes.filter(row =>
       /forgetneedle|independent/.test(JSON.parse(row.record).gist)).map(row => row.id);
     const needles = [forgottenText, stepText, 'independent episode evidence', otherStep];
     assert.equal(named.length, 2);
-    ok(await f.act(operation));
+    assertRecorded(await f.act(operation), pin.actions[0], needles);
     sql(f.path, db => {
       const origin = before.episodes.find(row => JSON.parse(row.record).gist.includes('forgetneedle'));
       const conversation = db.prepare('SELECT id FROM raw_conversations WHERE client=? AND session_key=?').get(origin.client, origin.session_key);
@@ -50,7 +52,7 @@ for (const options of layouts)
         'exclusion resolved the original source before invalidation removed keep IDs');
     });
     assertStored(f, before, { named });
-    await assertReads(f, before, { named, needles });
+    await assertReads(f, before, { named, needles, pin: pin.p1 });
     await f.reopen();
-    await assertReads(f, before, { named, needles });
+    await assertReads(f, before, { named, needles, pin: pin.p1 });
   });
