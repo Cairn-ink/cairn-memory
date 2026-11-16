@@ -1,8 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DatabaseSync, StatementSync } from 'node:sqlite';
 import test from 'node:test';
 import { openMemoryCore } from '../index.mjs';
@@ -15,7 +12,6 @@ import { model as episodeModel, input } from '../testing/episode-capture-helpers
 import { options } from '../testing/episode-helpers.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 
-const base = '399fc81dad56705ddc8eb98885a115aa8bf35c24';
 const ns = { ownerId: 'synthetic-statement', scope: 'personal', projectId: null };
 const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
 const proofSQL = sql => sql.includes(' AS episode_read_proof');
@@ -50,16 +46,6 @@ async function fixture(t, layout) {
   const core = openMemoryCore({ path, model }); ws.defer(() => core.close());
   return { ws, path, core, model, memories };
 }
-async function reference(f) {
-  const directory = join(f.ws.path, 'base'); mkdirSync(directory);
-  const archive = spawnSync('git', ['archive', base, 'core', 'plugins/cairn-memory/lib'], {
-    cwd: fileURLToPath(new URL('../../', import.meta.url)), maxBuffer: 128 * 1024 * 1024 });
-  assert.equal(archive.status, 0, String(archive.stderr));
-  const unpack = spawnSync('tar', ['-xf', '-', '-C', directory], { input: archive.stdout });
-  assert.equal(unpack.status, 0, String(unpack.stderr));
-  const module = await import(pathToFileURL(join(directory, 'core/index.mjs')));
-  const core = module.openMemoryCore({ path: f.path, model: port() }); f.ws.defer(() => core.close()); return core;
-}
 function measure(call, { prepared, step } = {}) {
   const prepare = DatabaseSync.prototype.prepare, exec = DatabaseSync.prototype.exec;
   const methods = new Map(['get', 'all', 'run', 'iterate'].map(key => [key, StatementSync.prototype[key]]));
@@ -83,22 +69,58 @@ function measure(call, { prepared, step } = {}) {
   }
   return { result, error, statements, inside, trace: JSON.stringify(trace) };
 }
-for (const layout of [48, 53]) test(`layout ${layout}: one pre-BEGIN proof prepare, unchanged executions and byte-equal public grid`, async t => {
-  const f = await fixture(t, layout), before = await reference(f), counts = [];
+for (const layout of [48, 53]) test(`layout ${layout}: one pre-BEGIN proof prepare, unchanged executions and byte-equal warm and cold in-tree assembly and public prepare coverage`, async t => {
+  const f = await fixture(t, layout), runtime = createMemoryRuntime({ path: f.path }), counts = [];
+  f.ws.defer(() => runtime.close());
+  assert.equal(typeof runtime.suppressionFence, 'function');
+  assert.equal(runtime.suppressionFence({ ...ns, projectId: '' }, true), true);
+  // Keep the runtime's safety methods; drop only the operation-local memo.
+  const unmemoized = { ...runtime, sessionContextSnapshot(ns, groups, expected) {
+    return runtime.sessionContextSnapshot(ns, groups, expected);
+  } };
+  // Separate connections give both sides an equally cold receipt-coordinate cache.
+  const coldOld = createMemoryRuntime({ path: f.path }), coldCurrent = createMemoryRuntime({ path: f.path });
+  f.ws.defer(() => coldOld.close()); f.ws.defer(() => coldCurrent.close());
+  const coldUnmemoized = { ...coldOld, sessionContextSnapshot(ns, groups, expected) {
+    return coldOld.sessionContextSnapshot(ns, groups, expected);
+  } };
+  const coldArgs = { model: f.model, ns: { ...ns, projectId: '' }, config: contextInput({ namespace: ns }) };
+  const oldCold = measure(() => ({ ok: true, value: assembleSessionContext({ ...coldArgs, runtime: coldUnmemoized }) }));
+  const currentCold = measure(() => ({ ok: true, value: assembleSessionContext({ ...coldArgs, runtime: coldCurrent }) }));
+  assert.equal(oldCold.error, undefined); assert.equal(currentCold.error, undefined);
+  ok(oldCold.result); ok(currentCold.result);
+  assert.equal(JSON.stringify(currentCold.result), JSON.stringify(oldCold.result), 'cold envelopes');
+  assert.equal(currentCold.trace, oldCold.trace, 'cold: every SQL text, binding, method and execution order');
+  assert.equal(oldCold.statements.length, 2, 'cold unmemoized proof prepare count');
+  assert.equal(currentCold.statements.length, 1, 'cold memoized proof prepare count');
+  assert.equal(currentCold.inside.filter(inside => !inside).length, 1, 'cold pre-BEGIN proof prepare count');
+  assert.deepEqual(oldCold.inside, [true, true]); assert.deepEqual(currentCold.inside, [false]);
+  counts.push({ state: 'ordinary', groups: 'default', warmth: 'cold', unmemoized: 2, memoized: 1 });
   for (const state of ['ordinary', 'correct', 'forget']) {
     if (state === 'correct') f.memories[0] = ok(f.core.correct({ namespace: ns, memoryId: f.memories[0].id,
       expectedRevision: f.memories[0].revision, content: 'Synthetic corrected body', kind: 'instruction', receipt: receipt('correct') })).memory;
     if (state === 'forget') ok(f.core.forget({ namespace: ns, memoryId: f.memories[1].id, expectedRevision: f.memories[1].revision }));
     for (const groups of [undefined, { nextSteps: true, procedural: false }]) {
       const args = { namespace: ns, ...(groups ? { groups } : {}) };
-      const old = measure(() => before.sessionStartContext(args)), current = measure(() => f.core.sessionStartContext(args));
+      // Warm again for every cell: corrections and forgets invalidate this cache.
+      assembleSessionContext({ runtime, model: f.model, ns: { ...ns, projectId: '' }, config: contextInput(args) });
+      const old = measure(() => ({ ok: true, value: assembleSessionContext({ runtime: unmemoized, model: f.model,
+        ns: { ...ns, projectId: '' }, config: contextInput(args) }) })), current = measure(() => ({ ok: true, value: assembleSessionContext({ runtime,
+        model: f.model, ns: { ...ns, projectId: '' }, config: contextInput(args) }) }));
       assert.equal(old.error, undefined); assert.equal(current.error, undefined);
       ok(old.result); ok(current.result);
       assert.equal(JSON.stringify(current.result), JSON.stringify(old.result), state);
       assert.equal(current.trace, old.trace, 'every SQL text, binding, method and execution order');
-      assert.equal(old.statements.length, 2); assert.equal(current.statements.length, 1);
+      assert.equal(old.statements.length, 2, 'unmemoized proof prepare count');
+      assert.equal(current.statements.length, 1, 'memoized proof prepare count');
+      assert.equal(current.inside.filter(inside => !inside).length, 1, 'pre-BEGIN proof prepare count');
       assert.deepEqual(old.inside, [true, true]); assert.deepEqual(current.inside, [false]);
-      counts.push({ state, groups: groups ? 'nextSteps' : 'default', base: 2, change: 1 });
+      const publicCall = measure(() => f.core.sessionStartContext(args));
+      assert.equal(publicCall.error, undefined); ok(publicCall.result);
+      assert.equal(JSON.stringify(publicCall.result), JSON.stringify(current.result), 'public and direct assembly envelopes');
+      assert.equal(publicCall.statements.length, 1, 'public proof prepare count');
+      assert.deepEqual(publicCall.inside, [false]);
+      counts.push({ state, groups: groups ? 'nextSteps' : 'default', unmemoized: 2, memoized: 1, public: 1 });
     }
   }
   t.diagnostic(JSON.stringify(counts));
