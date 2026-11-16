@@ -320,6 +320,12 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // content identities still pass its canonical fail-closed walker unchanged.
   // One budget dispatcher now serves scoped and unbound callers; its single
   // `id: port.id` is provider metadata, never a writer/content identity.
+  // Resume hints add private sessionId projections to an encrypted payload and
+  // its strict decoder, plus an empty sessionId used only to load the existing
+  // installation key before selection. They add no writer acknowledgement.
+  // The added state_invalid literals are closed failure reasons (the textual
+  // census also counts their id suffix). sessionId already belongs to the
+  // native guard's opaque set; its fail-closed walker remains unchanged.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));
   const files=JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json',import.meta.url),'utf8'));
   const actual={};
