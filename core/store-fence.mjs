@@ -47,7 +47,7 @@ export function pinStoreFile(path,expected) {
     noCompanions(path);
     if(current.size<100n)fail('unsupported_database');
     let result;
-    try{result=probeRollbackJournal(path);}catch{fail('unsafe_database_file');}
+    try{result=probeRollbackJournal(path);}catch(error){if(['storage_busy','storage_error'].includes(error?.code))throw error;fail('unsafe_database_file');}
     if(result.code===14||result.mode&&result.mode!=='delete')fail('unsafe_database_file');
     if(result.mode!=='delete')fail('unsupported_database');
     const after=fileIdentity(path);regular(after);
