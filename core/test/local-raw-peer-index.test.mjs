@@ -182,12 +182,16 @@ test('unexpected build errors propagate after rollback',async t=>{
 
 test('reader held across build makes COMMIT busy after 5 seconds; local open succeeds with unchanged v1 bytes',async t=>{
   const f=await store(t);space(t,f.path);
-  const reader=new DatabaseSync(f.path,{readOnly:true});
-  reader.exec('BEGIN');reader.prepare('SELECT * FROM raw_messages').all();
   const before=schema(f.db),bytes=readSqliteFixture(f.path),exec=DatabaseSync.prototype.exec;
+  let reader;
   let built=false,busy=false,rolledBack=false;
   t.mock.method(DatabaseSync.prototype,'exec',function(sql){
-    if(sql===indexDDL)built=true;
+    if(sql===indexDDL) {
+      // Installation has committed; the builder now holds RESERVED.
+      reader=new DatabaseSync(f.path,{readOnly:true});
+      reader.exec('BEGIN');reader.prepare('SELECT * FROM raw_messages').all();
+      built=true;
+    }
     if(built && sql==='ROLLBACK')rolledBack=true;
     try{return exec.call(this,sql);}catch(error){if(built && sql==='COMMIT'){assert.equal(error.errcode&255,5);busy=true;}throw error;}
   });
@@ -197,7 +201,7 @@ test('reader held across build makes COMMIT busy after 5 seconds; local open suc
     assert.ok(performance.now()-started>=5000);
     assert.ok(built && busy && rolledBack);assert.equal(schema(f.db),before);
     assert.deepEqual(readSqliteFixture(f.path),bytes);
-  } finally {reader.exec('ROLLBACK');reader.close();}
+  } finally {if(reader){try{reader.exec('ROLLBACK');}finally{reader.close();}}}
 });
 
 test('daemon build uses the existing synchronous opening scope',async t=>{
