@@ -16,7 +16,7 @@ import { openMemoryCore, openContextProductReader, openContextIndexMaintainer, c
 import { supervisorOwner } from '../context-read-supervisor.mjs';
 import { createProductReaderRuntime } from '../context-product-reader.mjs';
 import { credentialDigest, PRODUCT_PROFILE } from '../context-product-control.mjs';
-import { createProductSqlitePolicy, productSqliteFiles } from '../context-product-sqlite.mjs';
+import { createProductSqlitePolicy, productSqliteFiles, detectProductCanonicalJournal } from '../context-product-sqlite.mjs';
 import { nativeObserver, nativeTelemetry, sealNative, drainNative } from '../context-product-telemetry.mjs';
 import { TOPIC_WAL_WAIT_MS, TOPIC_WAL_REPLY_RESERVE_MS } from '../topic-reader-sqlite.mjs';
 import { productSidecar, PRODUCT_SIDECAR_SUFFIX } from '../context-product-sidecar.mjs';
@@ -91,6 +91,49 @@ function journalControl(t,behavior='journal-switch') {
   return {port:port1,spawnWorker:data=>new Worker(new URL('./fixtures/context-product-wal-worker.mjs',import.meta.url),{
     workerData:{...data,walTestControl:{port:port2,gate,behavior}},transferList:[port2],env:{},execArgv:[]})};
 }
+function openingControl(t,behavior) {
+  const {port1,port2}=new MessageChannel();t.after(()=>port1.close());
+  return {report:once(port1,'message').then(([message])=>message),spawnWorker:data=>new Worker(
+    new URL('./fixtures/context-product-journal-opening-worker.mjs',import.meta.url),{
+      workerData:{...data,journalOpeningControl:{port:port2,behavior}},transferList:[port2],env:{},execArgv:[]})};
+}
+
+for(const wal of [undefined,false])for(const service of [false,true])for(const behavior of ['cold-cache','committed-fingerprint'])
+test(`journal detect DELETE opening uses one legacy preflight: ${behavior}, service=${service}, wal=${String(wal)}`,async t=>{
+  const f=setup(t,'DELETE'),control=openingControl(t,behavior);
+  const c=detected(t,f.path,wal,{service,spawnWorker:control.spawnWorker}),h=await c.open();
+  const report=await control.report;
+  assert.deepEqual(report.beforeNative,{preflights:1,spawns:['sqlite-probe']});
+  assert.deepEqual(report.spawns,['sqlite-probe']);
+  assert.equal(report.committed,behavior==='committed-fingerprint');
+  await h.close();
+});
+
+for(const wal of [undefined,false])for(const service of [false,true])
+test(`journal detect DELETE stray SHM refusal adds no SQLite probe: service=${service}, wal=${String(wal)}`,async t=>{
+  const f=setup(t,'DELETE'),donor=setup(t),w=await writer(t,donor.path);await w.call('write');
+  renameSync(donor.path+'-shm',f.path+'-shm');
+  try {
+    let legacy;
+    assert.throws(()=>openContextProductFacade(f.path,{}),error=>{
+      legacy=error;return error.code==='index_unavailable'&&error.reason==='auxiliary_file';
+    });
+    const control=openingControl(t,'stray-shm'),c=detected(t,f.path,wal,{service,spawnWorker:control.spawnWorker});
+    await assert.rejects(c.open(),{code:legacy.code});
+    const report=await control.report;
+    assert.equal(report.preflights,1);assert.equal(report.beforeNative,null);
+    assert.deepEqual(report.spawns,['header']);
+  } finally {renameSync(f.path+'-shm',donor.path+'-shm');await w.call('close');}
+});
+
+for(const result of ['delete','other','throws'])test(`journal detect refused fallback retains original error identity: ${result}`,t=>{
+  const f=setup(t,'DELETE'),legacy=Object.assign(Error('index_unavailable'),{code:'index_unavailable',reason:'auxiliary_file'});
+  let reads=0;
+  assert.throws(()=>detectProductCanonicalJournal(f.path,{legacyError:legacy,readHeader(){
+    reads++;if(result==='throws')throw Error('header failure');return result;
+  }}),error=>error===legacy);
+  assert.equal(reads,1);
+});
 const journalPumpWindows=new WeakMap();
 function journalPump(t,s,{open}={}) {
   if(!journalPumpWindows.has(t))journalPumpWindows.set(t,{now:0,id:randomUUID()});

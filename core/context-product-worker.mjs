@@ -132,18 +132,24 @@ try {
   phase?.mark('hostCreated');
   const { openContextProductFacade } = await import('./context-read-facade.mjs'); within(opening);
   phase?.mark('facadeImported');
-  let canonical = { sqlite };
-  if (!workerData.wal) {
-    const { assertContextReadCanonicalDelete, contextReadJournalHeader } = await import('./context-read-sidecar.mjs'); within(opening);
-    // Retain the facade opener's identity/protection precedence before its
-    // preflight, including a replacement while the host was being created.
-    observer.identity(contextProductFileIdentity(workerData.path));
-    canonical = detectProductCanonicalJournal(workerData.path, { sqlite: canonicalSqlite, observer, assertDelete: assertContextReadCanonicalDelete, readHeader: contextReadJournalHeader,
+  phase?.mark('facadeOpening');
+  let nativeOpening = false;
+  const openingObserver = workerData.wal ? observer : { ...observer, invoke(stage, statement, work) {
+    if (stage === 'open') nativeOpening = true;
+    return observer.invoke(stage, statement, work);
+  } };
+  try {
+    // The ordinary facade owns the single legacy DELETE opening preflight.
+    facade = openContextProductFacade(workerData.path, { observer: openingObserver, authorize, sqlite });
+  } catch (error) {
+    // Never reinterpret a refusal after attempting a native connection.
+    if (workerData.wal || nativeOpening || error?.code !== 'index_unavailable') throw error;
+    const { contextReadJournalHeader } = await import('./context-read-sidecar.mjs'); within(opening);
+    const canonical = detectProductCanonicalJournal(workerData.path, { sqlite: canonicalSqlite, observer, legacyError: error, readHeader: contextReadJournalHeader,
       expectedIdentity: { device: fileIdentity.split(':')[0], inode: fileIdentity.split(':')[1] } });
     assertCanonicalMode = canonical.assertMode;
+    facade = openContextProductFacade(workerData.path, { observer, authorize, sqlite: canonical.sqlite });
   }
-  phase?.mark('facadeOpening');
-  facade = openContextProductFacade(workerData.path, { observer, authorize, sqlite: canonical.sqlite });
   phase?.mark('facadeOpened');
   const { openProductIndex } = await import('./context-product-index.mjs'); within(opening);
   phase?.mark('indexImported');

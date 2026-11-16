@@ -15,26 +15,19 @@ const walHint = result => result.stage === 'query' && result.code === 14;
 
 /** Default product canonical only. Keep the legacy DELETE admission (including
  * its error precedence and protected-journal BUSY) before considering WAL.
- * assertDelete is supplied by the Worker so this module stays bootstrap-light.
+ * The Worker supplies the original pre-connection facade refusal.
  * The sidecar and explicit wal:true never use this adapter. */
-export function detectProductCanonicalJournal(path, { sqlite, observer, assertDelete, readHeader, expectedIdentity }) {
+export function detectProductCanonicalJournal(path, { sqlite, observer, legacyError, readHeader, expectedIdentity }) {
   const physicalMode = () => readHeader(path, observer, {
     main: sqliteFileStat(path), directory: sqliteFileStat(dirname(path)), expectedIdentity,
   });
-  let mode = 'DELETE';
-  try { assertDelete(path, observer); }
-  catch (error) {
-    if (error?.code !== 'index_unavailable') throw error;
-    let result;
-    try {
-      result = journalProbe(path, observer);
-      if (!walHint(result) || physicalMode() !== 'wal') throw error;
-    } catch { throw error; } // Routing cannot replace the legacy refusal.
-    mode = 'WAL';
-  }
-  // DELETE keeps the legacy per-operation preflight and statement sequence.
-  // Only automatically WAL-routed handles need the metadata mode guard.
-  if (mode === 'DELETE') return { sqlite: null };
+  if (legacyError?.code !== 'index_unavailable') throw legacyError;
+  try {
+    // A refused DELETE core may have stray companions. Only the SQLite-free
+    // header child may add work on that path; preserve the original refusal.
+    if (physicalMode() !== 'wal' || !walHint(journalProbe(path, observer))) throw legacyError;
+  } catch { throw legacyError; }
+  const mode = 'WAL';
   let header, journal, refused = false;
   function assertWalCompanion() {
     try { sqliteFileStat(path + '-journal'); }
