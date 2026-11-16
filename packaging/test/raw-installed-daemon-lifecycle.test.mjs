@@ -44,9 +44,15 @@ for (const client of ['claude-code', 'codex']) test(`installed daemon Raw lifecy
   assert.equal(both.conversations.length, 2);
   for (const session of [a, b]) await raw(session, controlSentinel);
   let offset = f.traceLength();
-  const corrected = (await a.tool('correct_memory', { memoryId: memory.id, expectedRevision: memory.revision, content: 'Synthetic corrected cobalt survey interpretation.' })).memory;
+  const replacement = 'Synthetic corrected cobalt survey interpretation.';
+  const corrected = (await a.tool('correct_memory', { memoryId: memory.id, expectedRevision: memory.revision, content: replacement })).memory;
   f.assertWriteSince(offset, 'correction');
-  assert.equal((await b.tool('inspect_memory', { memoryId: memory.id })).memory.content, corrected.content);
+  assert.ok(f.probe().exclusions.length > 0, 'correction persists Raw exclusions even in the old-content control');
+  assert.ok(corrected.revision > memory.revision, 'correction advances the requested revision');
+  assert.equal(corrected.content, replacement, 'A returns the requested replacement');
+  const observed = (await b.tool('inspect_memory', { memoryId: memory.id })).memory;
+  assert.equal(observed.content, replacement, 'B observes the exact requested content');
+  assert.equal(observed.revision, corrected.revision, 'B observes the exact corrected revision');
   await raw(b, originalSentinel, false); await raw(b, controlSentinel);
   assert.equal(f.probe().parts.some(part => part.text?.includes(originalSentinel)), true, 'retained original rows persist while withheld');
   offset = f.traceLength();

@@ -41,7 +41,7 @@ export function productionBoundary(paths, read) {
   }
 }
 
-export async function daemonLifecycleFixture(t, { client, denyAll = false, candidateInstrument = true, dropDependency = false } = {}) {
+export async function daemonLifecycleFixture(t, { client, denyAll = false, candidateInstrument = true, dropDependency = false, correctionKeepsOldContent = false } = {}) {
   const workspace = createTestWorkspace(t, { prefix: 'installed-raw-daemon-' });
   const runtime = await installedDaemonRuntime({ diagnostic: text => t.diagnostic(text) });
   // Registered before client closers; the workspace is LIFO.
@@ -209,6 +209,12 @@ else throw Error('synthetic probe action invalid');console.log(JSON.stringify(re
     assert.equal((await request('tools/list')).tools.length, 8);
     await accounting.observe();
     return { close, tool: async (name, input = {}) => {
+      // Negative control: perform a real correction (including exclusion
+      // writes and revision advance) while accidentally retaining old content.
+      if (correctionKeepsOldContent && name === 'correct_memory') {
+        const inspected = await request('tools/call', { name: 'inspect_memory', arguments: { memoryId: input.memoryId } });
+        input = { ...input, content: ok(JSON.parse(inspected.content[0].text)).memory.content };
+      }
       const offset = rows(candidateTraces.at(-1)).length;
       const result = await request('tools/call', { name, arguments: input }), value = ok(JSON.parse(result.content[0].text));
       if (['read_memory_context', 'inspect_memory'].includes(name))
