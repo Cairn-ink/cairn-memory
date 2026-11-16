@@ -1,3 +1,5 @@
+// Tripwire against accidental destructive deletes in fixtures, not an adversarial barrier.
+// Reflective or deliberately obfuscated code remains outside this syntactic check.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, readdir, lstat, rm, writeFile } from 'node:fs/promises';
@@ -85,8 +87,11 @@ function unguardedMutations(source, { helper = false } = {}) {
       if (mutations.has(name) && aliases.get(binding.name) !== name) { aliases.set(binding.name, name); changed = true; }
     }
   } while (changed);
-  const recursive = node => node.arguments.slice(1).some(options => options.type === 'ObjectExpression' &&
-    options.properties.some(option => (option.key?.name ?? option.key?.value) === 'recursive' && option.value?.value === true));
+  // Do not evaluate nonliteral options: an identifier, call or spread may
+  // enable recursion. Only a plain inline object can establish otherwise.
+  const recursive = node => node.arguments.slice(1).some(options => options.type !== 'ObjectExpression' ||
+    options.properties.some(option => option.type === 'SpreadElement' ||
+      (option.key?.name ?? option.key?.value) === 'recursive' && option.value?.value === true));
   const ancestor = node => resolvedPaths(node).some(path => path.startsWith('/') &&
     (path === '/' || path === runtimeRoot || runtimeRoot.startsWith(path + '/')));
   return outside.filter(node => node.type === 'CallExpression' && mutations.has(method(node.callee)) &&
@@ -126,6 +131,20 @@ test('static guard detects direct, aliased, namespace and derived-path bypasses'
   assert.deepEqual(unguardedMutations("import {unlink} from 'node:fs/promises'; const path=join(dirname(directory.path),'.installed-daemon-test.lease'); await unlink(path);"), []);
   assert.deepEqual(unguardedMutations("await fs.promises.rm(join(dirname(directory.path),'scratch'), {recursive:true});"), []);
   assert.deepEqual(unguardedMutations("await fs.promises.rm(dirname(directory.path));"), []);
+});
+
+for (const operation of ['rm', 'rmdir', 'rmSync', 'rmdirSync']) test('static guard treats nonliteral options as possibly recursive: ' + operation, () => {
+  const calls = [operation, 'fs.' + operation, ...(operation.endsWith('Sync') ? [] : ['fs.promises.' + operation]), 'erase'];
+  for (const call of calls) for (const options of ['options', '{ ...options }', 'getOptions()', '...options']) {
+    const source = `import {${operation} as erase} from 'node:fs'; const options = { recursive: true }; await ${call}(dirname(directory.path), ${options});`;
+    assert.equal(unguardedMutations(source).length, 1, source);
+    const sibling = `const options = { recursive: true }; await ${call}(join(dirname(directory.path), 'scratch'), ${options});`;
+    assert.deepEqual(unguardedMutations(sibling), [], sibling);
+  }
+  for (const options of ['{ recursive: false }', '{ force: true }']) {
+    const source = `await fs.${operation}(dirname(directory.path), ${options});`;
+    assert.deepEqual(unguardedMutations(source), [], source);
+  }
 });
 
 test('foreign-name control throws before mutation and preserves every file', async t => {
