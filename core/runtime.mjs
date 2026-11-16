@@ -1035,7 +1035,7 @@ export function createMemoryRuntime(input, internal) {
     setProjectCapture(ns, input) { ready(); return episodes.setControl(ns, input, true); },
     setProceduralMemory(ns, input) { ready(); return proceduralStorage.set(ns, input); },
     closeEpisodeNextStep(ns, input) { ready(); return episodes.closeNextStep(ns, input); },
-    sessionContextSnapshot(ns, groups, expected) { ready(); return sessionContextStorage(ns, groups, expected); },
+    sessionContextSnapshot(ns, groups, expected, statements) { ready(); return sessionContextStorage(ns, groups, expected, statements); },
     episodeRange(ns, operation, filter, cursor) { ready(); return episodeReads(ns, operation, filter, cursor); },
     privateCards: privateCards ? cardStorage : undefined,
     methodPackages: methodStorage,

@@ -86,9 +86,22 @@ export function memoryMetadata(row, decisionReview = false) {
 // Two existing SELECTs share only engine-owned data inside one synchronous snapshot.
 // Nothing here opens a file descriptor or survives a caller boundary.
 export function createEpisodeReadProjection({ db, epoch }) {
-  return function begin(ns, query, expectedEpoch) {
+  return function begin(ns, query, expectedEpoch, sqlOnly = false) {
     const layout = cachedContentLayout(db);
-    if (!layout?.suppressionRevision) return { epoch: epoch(ns), query };
+    if (!layout?.suppressionRevision) return sqlOnly ? query.sql : { epoch: epoch(ns), query };
+    // The SQL-only path uses the same candidate text and cached layout as the
+    // read path, without reading a fence or requiring a transaction.
+    const project = (serializedKeys, budget) => ({ query: {
+      sql: `WITH candidates AS MATERIALIZED (${query.sql}), source_keys AS MATERIALIZED (SELECT value FROM json_each(?)),
+        ${episodeSourceEvidenceCTE(layout.rawLineage)}
+        SELECT c.*,${episodeSourceEvidenceSQL()} AS episode_read_proof,
+          (SELECT value FROM proof_incomplete) AS episode_read_incomplete,
+          (SELECT overflow FROM proof_state) AS episode_read_overflow,
+          (SELECT json_object('rows',rows,'memories',memories,'receipts',receipts,'ancestryInput',ancestry_input,
+            'sources',sources,'parents',parents,'ancestry',ancestry,'roots',roots,'maps',maps) FROM proof_state) AS episode_read_stats
+        FROM candidates c`,
+      params: [...query.params, serializedKeys, budget.bytesRemaining] } });
+    if (sqlOnly) return project(undefined, { bytesRemaining: 0 }).query.sql;
     if (!db.isTransaction) fail('storage_error');
     const proof = cachedContentSuppressionRequestInside(db, ns.ownerId);
     const fence = db.prepare(`WITH candidates AS MATERIALIZED (${query.sql}),
@@ -133,16 +146,7 @@ export function createEpisodeReadProjection({ db, epoch }) {
     budget.bytesRemaining -= Buffer.byteLength(serializedKeys, 'utf8') +
       (typeof fence.identity_secret === 'string' ? Buffer.byteLength(fence.identity_secret, 'utf8') : 0);
     if (budget.bytesRemaining < 0) fail('episode_sources_unavailable');
-    return { epoch: current, budget, query: {
-      sql: `WITH candidates AS MATERIALIZED (${query.sql}), source_keys AS MATERIALIZED (SELECT value FROM json_each(?)),
-        ${episodeSourceEvidenceCTE(layout.rawLineage)}
-        SELECT c.*,${episodeSourceEvidenceSQL()} AS episode_read_proof,
-          (SELECT value FROM proof_incomplete) AS episode_read_incomplete,
-          (SELECT overflow FROM proof_state) AS episode_read_overflow,
-          (SELECT json_object('rows',rows,'memories',memories,'receipts',receipts,'ancestryInput',ancestry_input,
-            'sources',sources,'parents',parents,'ancestry',ancestry,'roots',roots,'maps',maps) FROM proof_state) AS episode_read_stats
-        FROM candidates c`,
-      params: [...query.params, serializedKeys, budget.bytesRemaining] } };
+    return { epoch: current, budget, ...project(serializedKeys, budget) };
   };
 }
 export function createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRead, episodeProjection }) {

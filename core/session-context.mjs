@@ -110,18 +110,31 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
     return { memory: { ...memoryMetadata(row, decisionReview), content: row.content }, receipts: evidence.receipts,
       ...(tag ? { procedural: tag } : {}), semanticSupport: 'unassessed' };
   }
-  function nextStepPage(ns, expectedEpoch, after) {
-    const query = contextQuery(ns, 'nextSteps', { after });
-    const physical = db.prepare(query.sql).all(...query.params);
-    const ids = physical.map(row => row.id);
-    const projected = episodeProjection(ns, {
+  function nextStepPage(ns, expectedEpoch, after, sqlOnly = false) {
+    const candidate = ids => ({
       sql: `SELECT e.* FROM json_each(?) wanted CROSS JOIN session_episodes e ON e.id=wanted.value
         WHERE e.owner_id=? AND e.scope=? AND e.project_id=?
         ORDER BY json_extract(e.record,'$.nextStep.receiptOrdinal') DESC,e.id`, params: [JSON.stringify(ids), ns.ownerId, ns.scope, ns.projectId],
-    }, expectedEpoch);
+    });
+    if (sqlOnly) return episodeProjection(ns, candidate([]), expectedEpoch, true);
+    const query = contextQuery(ns, 'nextSteps', { after });
+    const physical = db.prepare(query.sql).all(...query.params);
+    const ids = physical.map(row => row.id);
+    const projected = episodeProjection(ns, candidate(ids), expectedEpoch);
     return { ...projected, physical };
   }
-  return function snapshot(ns, groups, expected) {
+  return function snapshot(ns, groups, expected, statements) {
+    const proofPrepare = sql => {
+      if (!statements) return db.prepare(sql);
+      if (!statements.has(sql)) statements.set(sql, db.prepare(sql));
+      return statements.get(sql);
+    };
+    // Compile without holding SHARED. A changed layout/query remains an exact
+    // SQL miss inside the snapshot; no speculative statement is executed here.
+    const layout = cachedContentLayout(db);
+    if (statements && groups.nextSteps && layout?.suppressionRevision) {
+      proofPrepare(nextStepPage(ns, expected?.indexRevision, undefined, true));
+    }
     return transaction(db, () => {
       const projected = groups.nextSteps ? nextStepPage(ns, expected?.indexRevision) : { epoch: epoch(ns) };
       const current = projected.epoch;
@@ -132,7 +145,7 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
       const layout=cachedContentLayout(db),safety=Boolean(layout?.suppressionRevision);
       for(const group of requestedNames(groups))if(groups[group]){
         const query=group==='nextSteps'?projected.query:contextQuery(ns,group,{rawAncestry:safety&&layout.rawLineage});
-        const rows=db.prepare(query.sql).all(...query.params);selected.set(group,rows);
+        const rows=(group==='nextSteps'?proofPrepare(query.sql):db.prepare(query.sql)).all(...query.params);selected.set(group,rows);
         if(group!=='nextSteps')for(const row of rows)memoryEntries.push({namespace:ns,memoryId:row.id});
       }
       const episodeTokens=episodeReadRowsInside(db,ns,selected.get('nextSteps')??[],[],{memo:sharedMemo,defer:true});
@@ -163,7 +176,7 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
             passes++;
             physical = page.physical;
             const query = page.query;
-            const candidates = db.prepare(query.sql).all(...query.params);
+            const candidates = proofPrepare(query.sql).all(...query.params);
             for (const row of candidates) assertEpisodeRead?.(ns, row, page.budget);
             const visible = episodeReadRowsInside(db,ns,candidates.map(episodeReadRow),[],{memo:sharedMemo}).rows;
             rows.push(...visible.filter(row => JSON.parse(row.record).processing.state === 'ready'));
@@ -187,7 +200,27 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
 }
 
 // Assembly is pure except for the local counter. The authoritative reread is last.
-export function assembleSessionContext({ runtime, model, ns, config }) {
+export function assembleSessionContext(input) {
+  const statements = new Map();
+  let primaryError = false;
+  try {
+    return assembleSessionContextInside(input, statements);
+  } catch (error) {
+    primaryError = true;
+    throw error;
+  } finally {
+    const closeErrors = [];
+    for (const statement of statements.values()) {
+      try {
+        if (typeof statement.close === 'function') statement.close();
+        else if (typeof statement[Symbol.dispose] === 'function') statement[Symbol.dispose]();
+      } catch (error) { closeErrors.push(error); }
+    }
+    statements.clear();
+    if (!primaryError && closeErrors.length) throw closeErrors[0];
+  }
+}
+function assembleSessionContextInside({ runtime, model, ns, config }, statements) {
   const selectedNames = ['nextSteps', 'procedural'];
   const count = text => {
     try { return countTokens(model, text); }
@@ -195,7 +228,7 @@ export function assembleSessionContext({ runtime, model, ns, config }) {
   };
   const safety = runtime.suppressionFence?.(ns, true) === true;
   if (!safety) count('');
-  const snapshot = runtime.sessionContextSnapshot(ns, config.groups);
+  const snapshot = runtime.sessionContextSnapshot(ns, config.groups, undefined, statements);
   if (safety) count(''); // The existing snapshot establishes the request proof before ports.
   const value = { framing: SESSION_FRAMING, namespace: { ...ns, projectId: ns.projectId || null },
     indexRevision: snapshot.indexRevision,
@@ -273,6 +306,6 @@ export function assembleSessionContext({ runtime, model, ns, config }) {
   }
   // Validate the final status envelope too; no callback follows the atomic reread.
   if (!fits()) fail('context_item_too_large');
-  runtime.sessionContextSnapshot(ns, config.groups, snapshot);
+  runtime.sessionContextSnapshot(ns, config.groups, snapshot, statements);
   return value;
 }
