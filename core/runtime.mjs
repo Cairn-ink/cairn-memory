@@ -380,6 +380,7 @@ export function createMemoryRuntime(input, internal) {
       });
       if(result.memory&&contentSuppressionReasonInside(db,ns,{kind:'memory',key:result.memory.id,revision:result.memory.revision,
         version:JSON.stringify(['memory-revision-v1',result.memory.revision])}))fail('memory_suppressed');
+      rawLineage.assertAdmissionReceipts(ns, value.receipts);
       return result;
     });
   }
@@ -445,6 +446,7 @@ export function createMemoryRuntime(input, internal) {
         .get(result.memory.id, receiptKey(receipt)).id))];
       const retired = supersessionStorage.retire(ns, previous, result.memory, receiptIds);
       memoryWriteSafety(ns,activeRow(ns,previous.id));
+      rawLineage.assertAdmissionReceipts(ns, value.receipts);
       return { ...retired, memory: { id: result.memory.id, revision: result.memory.revision },
         deduplicated: result.deduplicated };
     });
@@ -911,6 +913,7 @@ export function createMemoryRuntime(input, internal) {
 
   const resolveHeld = createHeldReviewResolver({ db, activeRow, supersessionStorage, conflictStorage });
   const resolveReview = createConfirmationStorage({ db, enabled: decisionReview, activeRow, attach, forgetMutation, advanceEpoch, resolveHeld,
+    assertAdmissionReceipts: rawLineage.assertAdmissionReceipts,
     assertConfirm(ns,row,boundRevision,result) {
       if(!cachedContentLayout(db)?.suppressionRevision)return;
       if(!row)fail('memory_suppressed');

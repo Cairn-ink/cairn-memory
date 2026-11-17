@@ -175,6 +175,7 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
   }
 
   function finishAdmission(ns, input, hooks, deadline) {
+    const admittedBatches = [];
     const result = transaction(db, () => withSources(ns, input.items.map(item => item.receipts), assertSources => {
       const now = time(ns, input);
       const row = read(ns, input);
@@ -201,6 +202,7 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
         }
         conflictStorage.validateTargets(ns, item.conflictHints);
         activeItems.push({ item, receiptNow });
+        admittedBatches.push(item.receipts);
       }
       const entries = activeItems.map(({ item, receiptNow }) => {
         const result = admitMutation(ns, item, { automatic: true,
@@ -226,7 +228,7 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
       if (!input.keepActionId) stagedEvidence.mark(ns, input, 'admitted');
       if (hooks?.initialClassification && !input.keepActionId) classificationJournal.insert(ns, input, memories);
       return { duplicate: false, memories, suppressedCount, indexRevision: epoch(ns), ...extra };
-    }), deadline?.check);
+    }, admittedBatches), deadline?.check);
     if (result.closed) fail(result.closed);
     return result;
   }

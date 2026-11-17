@@ -455,9 +455,16 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
   // at its original precheck position, before suppression/conflict checks.
   // This capability is private to one synchronous writer callback. Successful
   // batches may be reused by its mutations, and are revoked before it returns.
-  function withReceiptValidation(ns, batches, work) {
+  function withReceiptValidation(ns, batches, work, admittedBatches = batches) {
     if (snapshot || !native.isTransaction) fail('storage_error');
-    if (!(cachedContentLayout(db)??installedContentLayout(db)).suppressionRevision) return work(assertReceipts);
+    // Run the durable denial only after the complete writer has succeeded.
+    // A hit then rolls back attachments without replacing any existing error.
+    const finish = result => {
+      if (result && typeof result.then === 'function') fail('storage_error');
+      assertAdmissionReceipts(ns, admittedBatches.flat());
+      return result;
+    };
+    if (!(cachedContentLayout(db)??installedContentLayout(db)).suppressionRevision) return finish(work(assertReceipts));
     const tuple = receipt => JSON.stringify([receipt.client,receipt.sessionId,receipt.eventId,receipt.role,receipt.excerpt]);
     const namespaceKey = JSON.stringify(boundary(ns));
     const batchKeys = new Map(batches.map(receipts => [receipts,JSON.stringify(receipts.map(tuple))]));
@@ -492,10 +499,21 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
       } catch (error) { live = false; throw error; }
     };
     try {
-      const result = work(validate);
-      if (result && typeof result.then === 'function') fail('storage_error');
-      return result;
+      return finish(work(validate));
     } finally { live = false; }
+  }
+  function assertAdmissionReceipts(ns, receipts) {
+    if (!receipts.length) return;
+    const tokens = receiptDenialTokens(receipts.map(receipt => {
+      const source = { client: receipt.client, sessionId: receipt.sessionId,
+        eventId: receipt.eventId, role: receipt.role, excerpt: receipt.excerpt };
+      return { receipt_key: receiptDigest(source), client: source.client,
+        session_id: source.sessionId, event_id: source.eventId, role: source.role };
+    }));
+    const denied = db.prepare(`SELECT 1 FROM json_each(?) w CROSS JOIN suppressed s
+          WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value LIMIT 1`)
+      .get(JSON.stringify(tokens), ...boundary(ns));
+    if (denied) fail('source_excluded');
   }
   function assertReceipts(ns, receipts, readExisting = false, rawTargets) {
     return validateReceipts(ns,receipts,readExisting,rawTargets);
@@ -746,5 +764,5 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
       catch (error) { if (error.code === 'source_excluded') return []; throw error; }
     });
   }
-  return { sourceSnapshot, withReceiptValidation, assertEpisodeProof: assertEpisodeSourceProof, completeEpisodeProof, register, attach, assertReceipts, assertStoredReceipts, excludeMemory, filter, enabled };
+  return { sourceSnapshot, withReceiptValidation, assertAdmissionReceipts, assertEpisodeProof: assertEpisodeSourceProof, completeEpisodeProof, register, attach, assertReceipts, assertStoredReceipts, excludeMemory, filter, enabled };
 }
