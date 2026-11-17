@@ -39,3 +39,37 @@ export function selectContextProductNamespaces(inventory, selectionRevision) {
     omittedNamespaces: inventory.length - readSet.length }, readSet);
   return deepFreeze({ readSet, ownerCoverage });
 }
+
+// Product-private, per-read narrowing. This never changes the publication's
+// readSet or its stream numbering. Inspect only scope descriptors at admission;
+// derive retrieval keys only after the ordinary query grammar validates types.
+export function contextProductReadSelection(payload, readSet, selectedTypes) {
+  let namespaces;
+  try {
+    if (!payload || types.isProxy(payload)) fail('invalid_read_set');
+    const descriptor = Object.getOwnPropertyDescriptor(payload, 'namespaces');
+    if (!descriptor) return null;
+    if (!Object.hasOwn(descriptor, 'value')) fail('invalid_read_set');
+    namespaces = contextReadSet(descriptor.value, PRODUCT_PROFILE);
+    if (namespaces.length > 2 || namespaces.filter(ns => ns.scope === 'personal').length !== 1 ||
+        namespaces.some(ns => !readSet.some(full => namespaceKey(full) === namespaceKey(ns)))) fail('invalid_read_set');
+  } catch { fail('invalid_read_set'); }
+  if (namespaces.length === readSet.length) return null;
+  if (!selectedTypes) return deepFreeze({ namespaces });
+  let stream = 0;
+  const streams = readSet.flatMap(ns => ['card', 'memory'].filter(type => selectedTypes.includes(type))
+    .flatMap(type => (type === 'card' ? ['draft', 'confirmed', 'cancelled', 'deleted'] : ['memory'])
+      .map(() => ({ ns, stream: stream++ }))))
+    .filter(row => namespaces.some(ns => namespaceKey(ns) === namespaceKey(row.ns))).map(row => row.stream);
+  const ranges = namespaces.map(namespace => {
+    // Same JSON array encoding as document identity / vector item. The ASCII
+    // successor of the boundary comma isolates the exact namespace, including
+    // escaped and non-ASCII identifiers, without LIKE or per-row JSON parsing.
+    const prefix = JSON.stringify([namespace.ownerId, namespace.scope, namespace.projectId ?? '']).slice(0, -1) + ',';
+    return { namespace, lower: prefix, upper: prefix.slice(0, -1) + '-' };
+  });
+  return deepFreeze({ namespaces, streams, ranges });
+}
+export function assertContextProductSelection(selection, ref) {
+  if (selection && !selection.namespaces.some(ns => namespaceKey(ns) === namespaceKey(ref.namespace))) fail('index_unavailable');
+}

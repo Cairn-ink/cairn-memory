@@ -6,6 +6,10 @@ import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentSuppressionMayMatchInside, cachedContentSuppressionRequestInside, contentSuppressionRequestInside, contentSuppressionRequestFenceInside, assertContentSuppressionRequestInside, withContentSuppressionReadInside, withContentSuppressionRequest, inContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { performance } from 'node:perf_hooks';
 import { randomUUID, createHash } from 'node:crypto';
+import { types as nativeTypes } from 'node:util';
+import { contextProductReadSelection, assertContextProductSelection } from './context-product-selection.mjs';
+import { deepFreeze } from './private-card-input.mjs';
+import { contextSnapshot, contextReadSet } from './context-read-input.mjs';
 import { productSidecar } from './context-product-sidecar.mjs';
 import { digest } from './context-product-validation.mjs';
 import { contextInput, assertCompactContextInput, contextRawSearch, namespaceKey, ASSEMBLY_DEFAULTS, ASSEMBLY_POLICIES, ASSEMBLY_REPRESENTATIONS, ASSEMBLY_LIMITS } from './context-read-input.mjs';
@@ -62,6 +66,17 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     }
     // The flag cannot enable a provider. The default product policy always
     // reports disabled semantics and preserves the fully validated lexical list.
+    if (['findCandidates','contextRead'].includes(method) && original && !nativeTypes.isProxy(original) && Object.hasOwn(original,'namespaces')) {
+      // Scope validation precedes copying, but types/intent validation precedes
+      // stream derivation. Authorization receives the whole original payload.
+      const readSet=contextReadSet(Object.getOwnPropertyDescriptor(original,'readSet')?.value,PRODUCT_PROFILE);
+      contextProductReadSelection(original,readSet);
+      const payload=deepFreeze(contextSnapshot(original)),{namespaces,...rest}=payload;
+      const parsed=contextInput(method,rest,types,undefined,PRODUCT_PROFILE);
+      const selection=contextProductReadSelection(payload,parsed.input.readSet,parsed.input.types);
+      if(selection && method==='contextRead' && payload.raw===true)fail('invalid_input');
+      return {payload,input:{...parsed.input,...(selection?{namespaces,selection,...(method==='contextRead'?{raw:false}:{})}:{})}};
+    }
     return contextInput(method,original,types,undefined,PRODUCT_PROFILE);
   }
   function coverage(dto) {
@@ -71,12 +86,25 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       maintenance:{available:maintenance,state:ready?'ready':'rebuilding',buildState:ready?'ready':'rebuilding',reason:dto.lexical.reason,progress:dto.lexical.progress},
       depths:{lexical:ready?24:0,semantic:0},omitted:{lexical:null,semantic:null,horizon:null},stops:{deadline:false,budget:false}};
   }
+  function readDiagnostics(p,detail) {
+    if(!p.selection)return detail;
+    const covered=detail.coverage;
+    return {...detail,coverage:{...covered,
+      namespaces:{policy:'authorized-subset-v1',selectionRevision:digest({selectionRevision:ownerCoverage.selectionRevision,namespaces:p.selection.namespaces}),
+        requestedNamespaces:p.selection.namespaces.length,selectedNamespaces:p.selection.namespaces.length,omittedNamespaces:0},
+      byType:Object.fromEntries(Object.entries(covered.byType).map(([type,c])=>[type,{...c,eligible:null,indexed:null,embedded:null,embeddedFraction:null,scannedFraction:null}])),
+      maintenance:{...covered.maintenance,progress:null},stops:{...covered.stops,budget:null}},
+      trace:Object.fromEntries(Object.entries(detail.trace).filter(([key])=>key!=='namespaceSelection'))};
+  }
+  function assertSelected(p,items) {
+    for(const item of items)assertContextProductSelection(p.selection,item.ref);
+  }
   function unavailable(p,access,dto,assembly=false,semantic=false,decorate) {
     return access.envelope(()=>{
       statusDelivery(p,dto,null);
       const details={channels:channels(false),coverage:coverage(dto),trace:selectionTrace(semantic)};
       decorate?.(details);
-      return {ok:false,error:{code:'index_unavailable',retryable:false,details:assembly?{candidates:details}:details}};
+      return {ok:false,error:{code:'index_unavailable',retryable:false,details:assembly?{candidates:readDiagnostics(p,details)}:readDiagnostics(p,details)}};
     });
   }
   function final(p,access,publication,work,code='index_unavailable',prepare) {
@@ -98,6 +126,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     },p.suppressionEpoch&&p.suppressionEpoch!=='0:0'?p.readSet:undefined));
   }
   function page(r,position,limit) {
+    assertSelected(r,r.items);
     let end=Math.min(r.items.length,position+limit);
     do {
       const value={version:'context-read-v1',items:r.items.slice(position,end),channels:r.channels,coverage:r.coverage,trace:r.trace,
@@ -134,10 +163,12 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       }
     }
     covered.omitted={lexical:Math.max(0,ranked.matched-24),semantic:null,horizon:Math.max(0,fused.unionSize-24)};
+    assertSelected(p,fused.rows);
     return {observed,suppressionEpoch,items:fused.rows.map((row,i)=>({ref:row.ref,rank:i+1,fusionScore:row.fusionScore,channels:row.channels})),
-      channels:channels(true),coverage:covered,trace:detail,...(prepareOnly?{lexical:ranked}:{})};
+      channels:channels(true),...readDiagnostics(p,{coverage:covered,trace:detail}),...(prepareOnly?{lexical:ranked}:{})};
   }
   function assemble(p,access,c,prepareOnly=false,rawChannel={items:[],coverage:'unavailable'}) {
+    if(p.selection){assertSelected(p,c.items);c={...c,...readDiagnostics(p,c)};}
     if (!counter) fail('token_count_unavailable');
     const prepared=read(()=>{
       const generations=canonicalFence(p.readSet,p.types),items=[],dateEntries=[]; let unavailable=0;
@@ -189,6 +220,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     };
     const complete=()=>{
       if(delivered.length && !same(canonicalFence(p.readSet,[...new Set(delivered.map(i=>i.type))]),generationsFor(delivered)))fail('snapshot_stale');
+      if(p.selection)assertSelected(p,delivered);
       for(const item of delivered){
         let current;
         try{current=evidence.itemsInside(item.ref.namespace,[item.ref],p.intent,p.readSet)[0];}
@@ -297,7 +329,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
           } catch(error){attribution?.captureFailure(error);throw error;}finally {if(attribution)attribution.end(preparation);}
         });}finally{if(observation)observation.epochObservationMs=Number(process.hrtime.bigint())/1e6-epochStarted;}
       }
-      const binding=digest({readSet:p.readSet,types:p.types,intent:p.intent,query:p.query,semantic:p.semantic,access:access.accessGenerations});
+      const binding=digest({readSet:p.readSet,types:p.types,intent:p.intent,query:p.query,semantic:p.semantic,access:access.accessGenerations,...(p.selection?{namespaces:p.selection.namespaces}:{})});
       if(p.cursor!==undefined) {
         // decode is an internal bounded HMAC port; never interpret legacy tokens.
         const token=facade.port.decode('cursor',p.cursor,8192,'invalid_cursor');
@@ -322,7 +354,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       }
       for(const [id,r] of rankings)if(r.expires<=Date.now())rankings.delete(id);
       while(rankings.size>=128)rankings.delete(rankings.keys().next().value);
-      const r={...c,id:randomUUID(),binding,publication:c.observed.publication,expires:Date.now()+300000};rankings.set(r.id,r);
+      const r={...c,...(p.selection?{selection:p.selection}:{}),id:randomUUID(),binding,publication:c.observed.publication,expires:Date.now()+300000};rankings.set(r.id,r);
       const result=page(r,0,p.limit);
       return final(p,access,r.publication,()=>{
         for(const candidate of result.value.items)evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet);
@@ -418,6 +450,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       // The request's zero owner epoch proves every retained candidate has no
       // fact to match. Delivery still independently fences facts added during
       // semantic callbacks; a safety layout alone is not a populated fact set.
+      assertSelected(p,ranked);
       if(ranked.some(candidate=>candidate.ref.type==='card'&&isEngineCard(candidate.ref.cardId)) || (hasCardLineage(db) || c.suppressionEpoch && c.suppressionEpoch !== '0:0') && ranked.some(candidate=>hasCardLineage(db)&&candidate.ref.type==='card'||contentSuppressionMayMatchInside(db,candidate.ref.namespace,{kind:candidate.ref.type,key:candidate.ref.memoryId??candidate.ref.cardId}))) ranked=read(()=>ranked.filter(candidate=>{
         try{evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet);return true;}
         catch(error){if(['evidence_unavailable','revision_conflict'].includes(error.code))return false;throw error;}
@@ -431,6 +464,9 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       }));
       detail.effective=fused.mode;c.coverage.depths.semantic=reason===null?24:0;
       c.coverage.omitted={lexical:Math.max(0,lexical.matched-24),semantic:reason===null?Math.max(0,ranked.length-24):null,horizon:Math.max(0,fused.unionSize-24)};
+      assertSelected(p,c.items);
+      if(p.selection)for(const type of p.types)c.coverage.byType[type].scanned=reason===null?ranked.filter(row=>row.ref.type===type).length:null;
+      Object.assign(c,readDiagnostics(p,c));
       const lexicalFallback=source=>({...source,items:lexicalItems,
         trace:{...source.trace,effective:'lexical',semantic:{...diagnostic,degradedReason:'validation_invalid',coverage:'unavailable'}},
         channels:{...source.channels,semantic:{state:'partial_coverage',causes:['partial_coverage']}},
@@ -462,8 +498,8 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         }finally{release();}
       }
       for(const [id,r] of rankings)if(r.expires<=Date.now())rankings.delete(id);while(rankings.size>=128)rankings.delete(rankings.keys().next().value);
-      const binding=digest({readSet:p.readSet,types:p.types,intent:p.intent,query:p.query,semantic:p.semantic,access:access.accessGenerations});
-      const r={...c,id:randomUUID(),binding,publication:c.observed.publication,expires:Date.now()+300000,vectorPublication:p.vectorPublication,semanticSnapshot:snapshot};rankings.set(r.id,r);
+      const binding=digest({readSet:p.readSet,types:p.types,intent:p.intent,query:p.query,semantic:p.semantic,access:access.accessGenerations,...(p.selection?{namespaces:p.selection.namespaces}:{})});
+      const r={...c,...(p.selection?{selection:p.selection}:{}),id:randomUUID(),binding,publication:c.observed.publication,expires:Date.now()+300000,vectorPublication:p.vectorPublication,semanticSnapshot:snapshot};rankings.set(r.id,r);
       return final(p,access,r.publication,valid=>{
         if(!valid){Object.assign(r,lexicalFallback(r));delete r.vectorPublication;}
         const result=page(r,0,p.limit);
@@ -530,7 +566,18 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       return success(maintenanceDelivery(p,{status:isReady?complete?'complete':'partial':'rebuilding',progress:{lexical:dto.lexical.progress,transformed:0,embeddingAttempts:attempts,embedded},coverage:covered,channels:{lexical:channels(isReady).lexical,semantic:{state:complete?'ready':channelFor(isReady?reason??dto.semantic.reason:dto.semantic.reason),causes:complete?[]:[channelFor(isReady?reason??dto.semantic.reason:dto.semantic.reason)]}}},current.publication));
     });
   }
-  const safe=contentSafetyFacade({ run }, { select: args => args[1],
+  const safe=contentSafetyFacade({ run }, { select: args => {
+    const original=args[1];
+    if(['findCandidates','contextRead'].includes(args[0])) {
+      if(nativeTypes.isProxy(original))fail('invalid_read_set');
+      if(original&&Object.getOwnPropertyDescriptor(original,'namespaces')) {
+        const readSet=contextReadSet(Object.getOwnPropertyDescriptor(original,'readSet')?.value,PRODUCT_PROFILE);
+        contextProductReadSelection(original,readSet);
+        assertCompactContextInput(args[0], original, types, undefined, PRODUCT_PROFILE);
+      }
+    }
+    return original;
+  },
     check: (scopes,{delivery}) => { facade.port.ready();
       if (!cachedContentLayout(db)?.suppressionRevision || !scopes.length) return;
       if (delivery) assertContentSuppressionRequestInside(db, scopes);
@@ -548,7 +595,12 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       return failure(code);
     } });
   return {run:(...args)=>{
-    try { assertCompactContextInput(args[0], args[1], types, undefined, PRODUCT_PROFILE); }
+    const [method,original]=args;
+    // The scoped preflight checks namespace descriptors before compact can parse the payload.
+    try {
+      if (method==='contextRead' && !(original&&!nativeTypes.isProxy(original)&&Object.hasOwn(original,'namespaces')))
+        assertCompactContextInput(method, original, types, undefined, PRODUCT_PROFILE);
+    }
     catch (error) { return failure(error.code ?? 'invalid_input'); }
     return storage.measureObservation(()=>safe.run(...args));
   },discard(){storage.discard();},close(){storage.close();rankings.clear();},assembly:{representation:'representation-v2-dated',raw:{default:true,configured:Boolean(rawSearch)},representations:ASSEMBLY_REPRESENTATIONS,defaults:ASSEMBLY_DEFAULTS,policies:ASSEMBLY_POLICIES,

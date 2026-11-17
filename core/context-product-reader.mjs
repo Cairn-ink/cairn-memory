@@ -14,6 +14,7 @@ import { Worker } from 'node:worker_threads';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isAbsolute, resolve } from 'node:path';
 import { ownData } from './local-authority-input.mjs';
+import { contextProductReadSelection } from './context-product-selection.mjs';
 import { contextReadSet } from './context-read-input.mjs';
 import { createReaderWorkerLifecycle } from './reader-worker-lifecycle.mjs';
 import { supervisorOwner } from './context-read-supervisor.mjs';
@@ -455,6 +456,15 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
             if (!descriptor || !Object.hasOwn(descriptor, 'value')) fail('invalid_read_set');
             selected = contextReadSet(descriptor.value, PRODUCT_PROFILE);
           } catch { fail('invalid_read_set'); }
+          if (Object.getOwnPropertyDescriptor(payload, 'namespaces')) {
+            // Preserve credential / opening-selection precedence before the
+            // descriptor-only subset check, and before generic payload copying.
+            token = method === 'getContextReadCapabilities'&&!semantic ? null : boundedData(credential, 16384);
+            if ((method !== 'getContextReadCapabilities'||semantic) && credentialDigest(token) !== issuedBinding.credentialDigest) fail('authority_required');
+            if (JSON.stringify(selected) !== JSON.stringify(readSet)) fail('invalid_read_set');
+            if (!['findCandidates','contextRead'].includes(method)) fail('invalid_input');
+            contextProductReadSelection(payload, selected);
+          }
           input = boundedData(payload); token = method === 'getContextReadCapabilities'&&!semantic ? null : boundedData(credential, 16384);
           if ((method !== 'getContextReadCapabilities'||semantic) && credentialDigest(token) !== issuedBinding.credentialDigest) fail('authority_required');
           if (JSON.stringify(selected) !== JSON.stringify(readSet)) fail('invalid_read_set');
