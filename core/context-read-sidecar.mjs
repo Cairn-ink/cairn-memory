@@ -65,16 +65,22 @@ function walHeader(path, observer) {
 // header in a child with no SQLite connection, so its raw descriptor close
 // cannot release this process's SQLite locks.
 export function contextReadDeleteJournal(path, observer, validated) {
+  return contextReadJournalHeader(path, observer, validated, true) === 'delete';
+}
+
+// Reuse this single SQLite-free descriptor child for canonical routing too.
+export function contextReadJournalHeader(path, observer, validated, checkDirectoryLinks = false) {
   try {
     const before = lstatSync(path, { bigint: true }), directory = lstatSync(dirname(path), { bigint: true });
     const fields = ['dev','ino','mode','uid','gid','nlink'];
-    const matches = (actual, expected) => fields.every(key =>
+    const matches = (actual, expected, directory = false) => fields.every(key =>
+      directory && !checkDirectoryLinks && key === 'nlink' ||
       (typeof expected[key] === 'bigint' || Number.isSafeInteger(expected[key])) && actual[key] === BigInt(expected[key]));
     const baseline = validated ?? { main: before, directory };
     // Retain the caller's protection/identity proof rather than resetting it.
-    if (!matches(before, baseline.main) || !matches(directory, baseline.directory) ||
+    if (!matches(before, baseline.main) || !matches(directory, baseline.directory, true) ||
         baseline.expectedIdentity && (String(before.dev) !== baseline.expectedIdentity.device ||
-          String(before.ino) !== baseline.expectedIdentity.inode)) return false;
+          String(before.ino) !== baseline.expectedIdentity.inode)) return 'other';
     const timeout = Math.min(5000, Math.floor(observer?.journalRemainingMs?.() ?? 5000));
     if (!(timeout >= 1)) fail('read_timeout');
     const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
@@ -85,19 +91,21 @@ export function contextReadDeleteJournal(path, observer, validated) {
         const opened = fstatSync(fd, { bigint: true });
         const header = Buffer.alloc(20), length = readSync(fd, header, 0, 20, 0);
         process.stdout.write(JSON.stringify({ device: String(opened.dev), inode: String(opened.ino),
-          mode: length === 20 && header.subarray(0,16).equals(Buffer.from('SQLite format 3\\0')) &&
-          header[18] === 1 && header[19] === 1 ? 'delete' : 'other' }));
+          mode: length === 20 && header.subarray(0,16).equals(Buffer.from('SQLite format 3\\0')) ?
+          header[18] === 1 && header[19] === 1 ? 'delete' :
+          header[18] === 2 && header[19] === 2 ? 'wal' : 'other' : 'other' }));
       } finally { if (fd !== undefined) closeSync(fd); }
     `, path], { encoding: 'utf8', env: {}, timeout, maxBuffer: 1024 });
     if (child.error?.code === 'ETIMEDOUT') fail('read_timeout');
-    if (child.error || child.status !== 0) return false;
+    if (child.error || child.status !== 0) return 'other';
     const opened = JSON.parse(child.stdout);
     const after = lstatSync(path, { bigint: true }), currentDirectory = lstatSync(dirname(path), { bigint: true });
     // A writer may commit while the child starts. Content timestamps can
     // change; replacement or protection changes must retain the refusal.
-    return opened.mode === 'delete' && opened.device === String(before.dev) && opened.inode === String(before.ino) &&
-      matches(after, baseline.main) && matches(currentDirectory, baseline.directory);
-  } catch (error) { if (error?.code === 'read_timeout') throw error; return false; }
+    return opened.device === String(before.dev) && opened.inode === String(before.ino) &&
+      matches(after, baseline.main) && matches(currentDirectory, baseline.directory, true) &&
+      ['delete','wal'].includes(opened.mode) ? opened.mode : 'other';
+  } catch (error) { if (error?.code === 'read_timeout') throw error; return 'other'; }
 }
 
 function auxiliaries(path, readOnly, observer) {
