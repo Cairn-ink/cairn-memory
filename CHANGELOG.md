@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — Raw search indexes new saves first
+## 0.6.8 — 2026-11-17
 
 - **New saves are searchable within seconds.** Local Raw search now indexes newly
   saved conversations first, so a new save is usually searchable within about 10
@@ -21,17 +21,21 @@
 - **Upgrading from 0.6.7 runs the first full indexing pass once more.** Search
   reports partial coverage for about as long as a first build, and conversations
   the pass hasn't reached yet can be missing from results meanwhile.
-
-## Unreleased — engine Card maintenance
-
+- Share the estimated embedding budget across all connections to a running
+  Cairn server, resetting at UTC midnight. The in-memory allowance also resets
+  on server restart; it is not an account-wide spending cap.
+- Give queries and maintenance separate slots. Maintenance can use at most
+  90% of the configured daily dollar and request caps, reserving 10% for searches.
+- Allow four concurrent OpenAI queries across the shared server by default,
+  or one with the local CPU embedder. Each connection and the unbound path
+  retain one query slot, alongside one server-wide maintenance slot.
+- Skip saving Claude Code runs started by scripts or the Agent SDK (for example
+  `claude -p`), detected from the hook's environment without reading the transcript.
 - Apply the ten-minute wait after a purge to every part of the affected topic.
 - Publish a new Card and retire other Cards whose current lines it marks out of
   date in one transaction, retaining bounded attempt accounting after failed writes.
 - Keep split similarity topics under distinct keys, and count public Card deletion
   toward the topic's wait even when its action name resembles a replacement.
-
-## Unreleased — daily shared embedding budget
-
 - A memory saved from the same message as a forgotten or corrected memory can now be corrected without deleting its conversation.
 - Forgetting or correcting a memory now removes summaries of its receipt-named conversations and clears summaries built from their passages in the same transaction.
 - Known limit: Forgetting a memory saved without a conversation leaves nearby conversations' summaries stored; read-time withholding is separate work.
@@ -43,17 +47,6 @@
 - Known limit: After you forget something, the conversation it came from and any resumed or forked copy of it (for example `claude --resume`) are not saved from then on. Any conversation that tries to save a message dated within 30 minutes of the forgotten message is not saved from then on either, including one you start right after the forget. To resume saving, start a new conversation more than 30 minutes after the forgotten message was written.
 - Known limit: After any local forget, correct, conversation delete or Episode forget, conversations whose message times are unknown are hidden from Raw search, and a conversation that saves a message without a time is not saved from then on, including new conversations. Memories are kept. Claude Code and Codex normally record message times, so this only affects messages whose transcript entry has no timestamp.
 - Known cost: Forgetting a memory now runs about one more database statement per event of each conversation summary it removes (about 20 ms more at 100 events on a slow machine). Follow-up: replace the per-event updates with one set-based update.
-- Skip saving Claude Code runs started by scripts or the Agent SDK (for example
-  `claude -p`), detected from the hook's environment without reading the transcript.
-
-- Share the estimated embedding budget across all connections to a running
-  Cairn server, resetting at UTC midnight. The in-memory allowance also resets
-  on server restart; it is not an account-wide spending cap.
-- Give queries and maintenance separate slots. Maintenance can use at most
-  90% of the configured daily dollar and request caps, reserving 10% for searches.
-- Allow four concurrent OpenAI queries across the shared server by default,
-  or one with the local CPU embedder. Each connection and the unbound path
-  retain one query slot, alongside one server-wide maintenance slot.
 
 ## 0.6.7 — 2026-11-14
 

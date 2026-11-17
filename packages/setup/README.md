@@ -9,7 +9,7 @@ local MCP tools or cloud automatic memory.
 
 Requires Node ≥22.16 and the selected CLI on PATH. The installer itself has no
 runtime dependencies.
-This README describes **installer 0.6.7**, published on 2026-11-14. Claude Code automatic saving now works
+This README describes **installer 0.6.8**, published on 2026-11-17. New saves are usually searchable within about 10 seconds, and Claude Code runs started by scripts or the Agent SDK are no longer saved. Claude Code automatic saving works
 on macOS. Codex automatic saving on macOS isn't supported yet; the memory tools
 work. To set up only Claude Code, run
 `npx @cairn-ink/memory setup --local --client claude`. Codex CLI 0.167.0 and 0.167.2 are qualified
@@ -111,7 +111,7 @@ hide windows or fork fences for capture. Its setup leaves 0.6.6 hooks registered
 with their retained engine; turn capture off with 0.6.6 before downgrading to
 stop them.
 
-本說明對應**安裝器 0.6.7**（2026-11-14 發布）。Claude Code 現在也能在 macOS 自動保存對話。
+本說明對應**安裝器 0.6.8**（2026-11-17 發布）。新存的內容通常約 10 秒內就搜得到，由腳本或 Agent SDK 啟動的 Claude Code 執行也不再被保存。Claude Code 也能在 macOS 自動保存對話。
 Codex 在 macOS 還不支援自動保存，但記憶工具可以正常使用。若只要設定
 Claude Code，請執行 `npx @cairn-ink/memory setup --local --client claude`。
 Codex CLI 0.167.0 與 0.167.2 已通過格式驗證，可以自動擷取；已經在 Cairn 使用
@@ -257,7 +257,7 @@ Restart the tools after setup. If Node moves, rerun `setup --local`.
 兩個工具共用資料庫與 owner，並使用 Node 的絕對路徑。安裝後請重開工具；
 Node 路徑變動時，重跑 `setup --local`。
 
-**0.6.7 local mode captures Raw automatically by default on supported platforms.** Use the explicit MCP tools:
+**0.6.8 local mode captures Raw automatically by default on supported platforms.** Use the explicit MCP tools:
 `remember_memory`, `recall_memory`, `inspect_memory`, `correct_memory`,
 `forget_memory`, alongside the default dated contextRead tools
 `find_memory_candidates`, `fetch_memory_candidate_evidence`, and
@@ -275,7 +275,7 @@ it reads the Claude registration configuration file `~/.claude.json` with a
 `cairn-local` MCP registrations. It does not access credential stores or use
 authentication fields. Unrelated entries and file contents are never printed.
 
-**0.6.7 本機模式在支援的平台預設自動保存 Raw。** 可明確呼叫 `remember_memory`、
+**0.6.8 本機模式在支援的平台預設自動保存 Raw。** 可明確呼叫 `remember_memory`、
 `recall_memory`、`inspect_memory`、`correct_memory`、`forget_memory`，
 也可使用預設開啟、附日期的 contextRead 工具 `find_memory_candidates`、
 `fetch_memory_candidate_evidence`、`read_memory_context`。自動 hooks 不需要模型就能保存 Raw，setup 不會註冊 `capture_memory`。
