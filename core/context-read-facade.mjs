@@ -766,7 +766,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     try {
       ready();
       const { payload, input } = contextInput('contextRead', original, supportedTypes, options.sources);
-      const compact = input.representation === COMPACT_MEMORY_REPRESENTATION;
+      const compact = input.representation === 'memory-compact-v1';
       const deadlineAt = performance.now() + input.deadlineMs;
       const access = authorize('contextRead', input, payload, token);
       if (!options.counter) return failure(new MemoryStoreError('invalid_input'), { counter: 'absent' });
