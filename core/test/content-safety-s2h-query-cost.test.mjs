@@ -63,7 +63,7 @@ for (const [physical,base,family] of bases) test(`R2 v${physical}: zero-fact con
   const slope = series => (series[1].totalExecuted-series[0].totalExecuted)/300;
   assert.ok(Math.abs(slope(five)-slope(zero))<=0.05,'five facts preserve the candidate statement slope');
   assert.equal(absent[0].totalExecuted,absent[1].totalExecuted,'no-hit query never walks the corpus');
-  if (base === 18) assert.deepEqual(legacy.map(row=>row.totalExecuted),[782,1384],'preserve main S1 query baseline');
+  if (base === 18) assert.deepEqual(legacy.map(row=>row.totalExecuted),[774,1376],'preserve main S1 query baseline');
   assertRoleEmbeddedContentCostInventory(observed,t.name);completeQuery(t.name);
 });
 

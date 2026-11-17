@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { readTransaction } from './database.mjs';
+import { createContentReadMemo } from './content-safety.mjs';
 import { roleContextInput } from './role-context-input.mjs';
 import { roleTaskMeteredText as wire, roleTaskByteCounts } from './role-context-wire.mjs';
 import { roleAccess } from './role-profile-facade.mjs';
@@ -173,7 +174,8 @@ export function createRoleContextReader(storage,options,config) {
       if(input.mode==='then')refs=saved.evidence.map((e,i)=>({ref:{namespace:input.readSet[e[0][0]],type:e[0][1]===0?'memory':'card',[e[0][1]===0?'memoryId':'cardId']:e[0][2],revision:e[0][3],...(e[0][1]===1?{bodyRevision:e[0][4]}:{})},rank:i+1,saved:e}));
       const prepared=readTransaction(db,()=>{
         const base=prepare(input,saved,receiptId,access.access),items=[];let unavailable=0;
-        for(const candidate of refs)try{const item=evidence.item(candidate.ref,input.readSet,candidate.rank,input.mode==='then'?'history':'current');if(candidate.saved){if(item.fence!==candidate.saved[1]){unavailable++;continue;}item.sources=item.sources.filter(source=>candidate.saved[2].some(s=>s[0]===source.index&&s[1]===source.ref.receiptId&&s[2]===source.ref.contentIdentity));}items.push(item);}catch(error){if(!['evidence_unavailable','revision_conflict','source_unavailable','source_excluded'].includes(error.code))throw error;unavailable++;}
+        const evidenceOptions={safetyMemo:createContentReadMemo(db),batchRefs:refs.map(candidate=>candidate.ref)};
+        for(const candidate of refs)try{const item=evidence.item(candidate.ref,input.readSet,candidate.rank,input.mode==='then'?'history':'current',evidenceOptions);if(!item){unavailable++;continue;}if(candidate.saved){if(item.fence!==candidate.saved[1]){unavailable++;continue;}item.sources=item.sources.filter(source=>candidate.saved[2].some(s=>s[0]===source.index&&s[1]===source.ref.receiptId&&s[2]===source.ref.contentIdentity));}items.push(item);}catch(error){if(!['evidence_unavailable','revision_conflict','source_unavailable','source_excluded'].includes(error.code))throw error;unavailable++;}
         return {...base,items,unavailable};
       });
       if(searchGenerations&&!same(searchGenerations,prepared.observation.generations))fail('snapshot_stale');
@@ -253,7 +255,8 @@ export function createRoleContextReader(storage,options,config) {
         let final;
         try{final=prepare(input,saved,receiptId,access.access);}catch(error){if(['method_not_found','method_version_unavailable','evidence_unavailable','revision_conflict','cursor_stale'].includes(error.code))fail('snapshot_stale');throw error;}
         if(!same(final.metered,prepared.metered)||!same(final.payload,prepared.payload)||!same(final.observation,prepared.observation))fail('snapshot_stale');
-        for(const item of selected){let current;try{current=evidence.item(item.ref,input.readSet,item.rank,input.mode==='then'?'history':'current');}catch(error){if(['evidence_unavailable','revision_conflict','source_unavailable','source_excluded'].includes(error.code))fail('snapshot_stale');throw error;}if(current.fence!==item.fence)fail('snapshot_stale');}
+        const evidenceOptions={safetyMemo:createContentReadMemo(db),batchRefs:selected.map(item=>item.ref)};
+        for(const item of selected){let current;try{current=evidence.item(item.ref,input.readSet,item.rank,input.mode==='then'?'history':'current',evidenceOptions);}catch(error){if(['evidence_unavailable','revision_conflict','source_unavailable','source_excluded'].includes(error.code))fail('snapshot_stale');throw error;}if(!current||current.fence!==item.fence)fail('snapshot_stale');}
         return result;
       });
     }catch(error){return privateFailure(error);}

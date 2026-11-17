@@ -72,7 +72,7 @@ function selection(output, allowed, maximum, model, stage) {
   } catch { emitDiagnostic(model, stage, 'core_validation', reason); fail('invalid_model_output'); }
 }
 
-export async function recallMemories({ model, readSet, query, limit, map, fetch, finalize, recentReceipts,
+export async function recallMemories({ model, readSet, query, limit, map, fetch, finalize, recentReceipts, prepare,
   validateFresh = () => {}, includeQualification = false, contextMode, selectionMode, diagnostics }) {
   if (typeof model?.select !== 'function' || typeof model?.rank !== 'function') {
     emitDiagnostic(model, typeof model?.select !== 'function' ? 'select' : 'rank', 'core_call', 'model_not_configured');
@@ -132,6 +132,7 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
   const namespaces = readSet.map((namespace, i) => ({ namespace, mapExhausted: maps[i].exhausted,
     fetchExhausted: true }));
   const candidates = [];
+  if (prepare && chosen.size) ({fetch,recentReceipts} = prepare([...chosen.values()]));
   for (const ref of chosen.values()) {
     validateFresh([...chosen.values()]);
     const request = { namespace: readSet[ref.namespaceIndex], tokenBudget: 4000,

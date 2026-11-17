@@ -926,7 +926,7 @@
   "implementations": [
     {
       "file": "core/content-suppression-storage.mjs",
-      "sha256": "9578c16663871f6c8cdf51b09c304483cd4cbe7d0726a5f1a88b7fd44117f878",
+      "sha256": "c4e4fb81349d6588e0172b79c0aa1924e0c5f946cbcb424e039561f8144257ea",
       "reason": "The retry reset clears only this connection’s request-local denial memos. Canonical writers, insertion capabilities and their separately pinned regions retain their exact bytes."
     },
     {
@@ -951,7 +951,7 @@
       "file": "core/runtime.mjs",
       "start": "  function correct(",
       "end": "  function forgetMutation(",
-      "sha256": "92e113f7eabbdad87f5bcaa7ed8384226c6c31e7620c932fa4b89587318d000d",
+      "sha256": "58b2aae0b80fe431efa9336ce013b75a630066e882836c7686a4b0f63cf26ef1",
       "reason": "PR 1 passes each corrected receipt its matching optional receipt time; canonical post-state acknowledgement and terminal fact guards remain in this exact region."
     },
     {
@@ -959,7 +959,7 @@
       "file": "core/runtime.mjs",
       "start": "  function forgetMutationInside(",
       "end": "  function forget(ns,",
-      "sha256": "771259cb3f097d71e10ba96ffb8121d182c55222b5749944c0fb1deba6e48f31"
+      "sha256": "712fe084b04c00541e182d45f586475ebe11bfdb259e00ad90c9ab7f5f861dcf"
     },
     {
       "id": "remove-receipts",
@@ -1002,7 +1002,7 @@
       "file": "core/database.mjs",
       "start": "export function openDatabase(",
       "end": null,
-      "sha256": "6d48893fb40b6a01adb4a5ffc122222ad042b91ef0c28f15345c8ebc8429bb9a"
+      "sha256": "4d9c99fa34fe8b6d1882ce11964f0aedc99e3b1e3027692200bfc8cf0e9a9d11"
     }
   ],
   "imports": [

@@ -110,7 +110,10 @@ test('S2h-1 split rejects inventory removals and unreviewed writer changes', () 
     assert.throws(() => assertSplitInventory(inventory), /public inventory changed/, surface);
   }
   const sources = splitSources();
-  sources.set('core/runtime.mjs', sources.get('core/runtime.mjs').replace('    suppressReceiptsInside(db, ns, id, suppression);', '    void id;'));
+  // The correction writer's receipt suppression call; the mutation keeps the source parseable.
+  const correctWrite = '      suppressReceiptsInside(db, ns, id, suppression, undefined, true,';
+  assert.equal(sources.get('core/runtime.mjs').split(correctWrite).length, 2, 'the mutated call exists exactly once');
+  sources.set('core/runtime.mjs', sources.get('core/runtime.mjs').replace(correctWrite, '      void (db, ns, id, suppression, undefined, true,'));
   assert.throws(() => assertSplitGraph(sources), /review canonical writer: correct/);
 });
 
