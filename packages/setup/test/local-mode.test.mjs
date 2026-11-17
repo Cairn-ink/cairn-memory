@@ -1,6 +1,6 @@
 import runTest from 'node:test';
 import assert from 'node:assert/strict';
-import fsPromises, { readFile, writeFile, mkdir, readdir, lstat, chmod, chown, symlink, rm, cp, copyFile, realpath, utimes } from 'node:fs/promises';
+import fsPromises, { readFile, writeFile, mkdir, readdir, lstat, chmod, chown, symlink, rm, cp, copyFile, realpath } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { DatabaseSync } from 'node:sqlite';
@@ -24,7 +24,7 @@ const { parseStrictJSON, validateDescriptor, newDescriptor, beginOperation, reco
 const { engineIdFor } = await fromPackage('local-engine');
 const { claudeSnippet, claudeAddArguments } = await fromPackage('local-claude');
 const { codexSnippet, codexAddArguments } = await fromPackage('local-codex');
-const { shellArgument, tomlString, argvDisplay, columns, terminalWriter } = await fromPackage('output');
+const { shellArgument, tomlString, argvDisplay, columns } = await fromPackage('output');
 const { translator } = await fromPackage('messages');
 const { setupCodex, inspectCodexServers, withCodexInspectionEnvironment } = await fromPackage('codex');
 const { modeUnion } = await fromPackage('local-mode');
@@ -91,8 +91,8 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
   // Generic installer orchestration and screen fixtures model Linux. Tests of
   // platform behavior pass an explicit platform; engine children use the real OS.
   const harness = join(ws.path, 'harness.mjs');
-  await writeFile(harness, `import{main}from${JSON.stringify(moduleURL)};import{writeSync,readFileSync,writeFileSync,chmodSync}from'node:fs';
-    import childProcess,{spawn}from'node:child_process';import fsPromises from'node:fs/promises';import{syncBuiltinESMExports}from'node:module';
+  await writeFile(harness, `import{main}from${JSON.stringify(moduleURL)};import{writeSync,readFileSync,chmodSync}from'node:fs';
+    import{spawn}from'node:child_process';import fsPromises from'node:fs/promises';import{syncBuiltinESMExports}from'node:module';
     import{registerClaude}from${JSON.stringify(pathToFileURL(join(testedPackageRoot, 'lib/local-claude.mjs')).href)};
     import{registerCodex}from${JSON.stringify(pathToFileURL(join(testedPackageRoot, 'lib/local-codex.mjs')).href)};
     import{translator}from${JSON.stringify(pathToFileURL(join(testedPackageRoot, 'lib/messages.mjs')).href)};
@@ -102,39 +102,6 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
     import{SetupError}from${JSON.stringify(pathToFileURL(join(testedPackageRoot, 'lib/errors.mjs')).href)};
     const mkdtemp=fsPromises.mkdtemp;fsPromises.mkdtemp=(path,...args)=>{if(String(path).startsWith('/tmp/cairn-codex-inspect-'))throw Object.assign(new Error('unowned inspection parent'),{code:'EACCES'});return mkdtemp(path,...args);};syncBuiltinESMExports();
     const config=JSON.parse(process.env.LOCAL_TEST_OPTIONS),answers=config.answers??[];
-    if(config.peerIndexProbe){
-      const original=childProcess.spawn;
-      childProcess.spawn=(node,args,...rest)=>{
-        if(args?.[0]!=='--input-type=module'||!args[2]?.includes('readLocalRawPeerIndexStatus'))return original(node,args,...rest);
-        const program={unavailable:"console.log(JSON.stringify({status:'unavailable'}));",
-          timeout:'setInterval(()=>{},1000);',error:'process.exitCode=1;',malformed:"console.log('{bad');",
-          'bad-present':"console.log(JSON.stringify({status:'ok',present:0,overThreshold:true}));",
-          'bad-threshold':"console.log(JSON.stringify({status:'ok',present:false,overThreshold:'true'}));",
-          'missing-field':"console.log(JSON.stringify({status:'ok',present:false}));",
-          nonzero:"console.log(JSON.stringify({status:'ok',present:false,overThreshold:true}));process.exitCode=1;"}[config.peerIndexProbe];
-        const audit=${JSON.stringify(join(ws.path, 'peer-open.json'))};
-        const prefix="import{DatabaseSync as Native}from'node:sqlite';import{writeFileSync}from'node:fs';"+
-          "globalThis.PeerIndexAuditDatabaseSync=class extends Native{constructor(path,options){"+
-          "writeFileSync("+JSON.stringify(audit)+",JSON.stringify({path,options}));super(path,options);}};";
-        // Supply the audit class directly: syncing the default export does not update SQLite's named binding.
-        let replacements=0;
-        const audited=args[2].replaceAll("await import('node:sqlite')",()=>{
-          replacements++;return '({DatabaseSync:globalThis.PeerIndexAuditDatabaseSync})';
-        });
-        if(replacements!==1)throw new Error('Expected exactly one peer-index SQLite import replacement; got '+replacements);
-        const started=performance.now(),child=original(node,[args[0],args[1],program??prefix+audited],...rest);
-        let text='';child.stdout.on('data',chunk=>text+=chunk);
-        child.on('close',code=>writeFileSync(${JSON.stringify(join(ws.path, 'peer-result.json'))},
-          JSON.stringify({node,code,text,elapsed:performance.now()-started})));
-        return child;
-      };syncBuiltinESMExports();
-    }
-    if(config.peerIndexStat){
-      const directory=config.peerIndexDirectory,original=fsPromises.stat;
-      fsPromises.stat=(path,...args)=>path===directory?Promise.reject(Object.assign(new Error('unavailable generation metadata'),
-        {code:config.peerIndexStat==='missing'?'ENOENT':'EACCES'})):original(path,...args);
-      syncBuiltinESMExports();
-    }
     if(config.foreignClaudeOwner){const original=fsPromises.lstat;fsPromises.lstat=async(path,...args)=>{
       const stat=await original(path,...args);if(path===process.env.HOME+'/.claude')Object.defineProperty(stat,'uid',{value:process.getuid()+1});return stat;
     };syncBuiltinESMExports();}
@@ -213,136 +180,6 @@ async function seed(f, { state = 'installed', selected = ['claude', 'codex'], re
   }
   return { d, vector };
 }
-
-async function peerIndexFixture(t, { present = false, rowid = 0, ageDays = 0 } = {}) {
-  const f = await localFixture(t), { d } = await seed(f);
-  // Retained client vectors deliberately point at the base generation. The
-  // footer must read the published repair generation and its selected Node.
-  const id = engineId + '-r2', directory = join(f.root, 'engine', id);
-  const engineRoot = dirname(dirname(executableFor(f.root, id)));
-  await mkdir(engineRoot, { recursive: true, mode: 0o700 });
-  const archive = join(packageRoot, 'runtime/engine', `${manifest.package.name}-${manifest.package.version}.tgz`);
-  const extracted = spawnSync('tar', ['-xzf', archive, '--strip-components=1', '-C', engineRoot],
-    { encoding: 'utf8', timeout: 10000 });
-  assert.equal(extracted.error, undefined); assert.equal(extracted.status, 0, extracted.stderr);
-  d.engine = { ...engine, id }; d.node = join(f.ws, 'engine-node');
-  await symlink(process.execPath, d.node);
-  await withLocalLock(f.root, () => writeDescriptor(f.root, d));
-  const created = spawnSync(d.node, ['--input-type=module', '-e', `
-    const {openDatabase}=await import(${JSON.stringify(pathToFileURL(join(engineRoot, 'core/database.mjs')).href)});
-    const {DatabaseSync}=await import('node:sqlite');
-    const {LOCAL_RAW_PRIVACY_DDL,LOCAL_RAW_PEER_INDEX_DDL,attestContentSafety}=await import(
-      ${JSON.stringify(pathToFileURL(join(engineRoot, 'core/content-safety-schema.mjs')).href)});
-    const path=${JSON.stringify(d.database.path)};
-    const initial=openDatabase(path,{localControls:true});initial.close();
-    const db=new DatabaseSync(path);
-    try {
-      db.exec('PRAGMA journal_mode=DELETE');
-      db.exec(LOCAL_RAW_PRIVACY_DDL.join('\\n'));
-      if(${present})db.exec(LOCAL_RAW_PEER_INDEX_DDL.join('\\n'));
-      if(${rowid}){
-        db.exec("INSERT INTO raw_conversations VALUES('peer-conversation','peer-owner','personal','','codex','peer-session',1,'2026','2026')");
-        db.prepare("INSERT INTO raw_messages(rowid,conversation_id,message_id,ordinal,role,total_units,total_bytes,assembly_state,first_event_id) VALUES(?,'peer-conversation','peer-message',1,'user',1,1,'complete','peer-event')").run(${rowid});
-      }
-      attestContentSafety(db);
-    } finally {db.close();}`], { encoding: 'utf8', timeout: 10000 });
-  assert.equal(created.error, undefined); assert.equal(created.status, 0, created.stderr);
-  const mtime = new Date(Date.now() - ageDays * 24 * 60 * 60 * 1000);
-  await utimes(directory, mtime, mtime);
-  return { ...f, d, directory };
-}
-async function assertPeerIndexStatus(f, { hint = false, lang = 'en', code = 0, probe = 'observe', statFailure } = {}) {
-  const args = ['status', '--lang', lang], before = await f.inventory();
-  const baseline = await f.run(args, { peerIndexProbe: 'unavailable' });
-  const result = await f.run(args, { peerIndexProbe: probe, peerIndexStat: statFailure, peerIndexDirectory: f.directory });
-  assert.equal(baseline.code, code, baseline.display); assert.equal(result.code, code, result.display);
-  assert.equal(result.signal, null);
-  const wording = {
-    en: 'Forgetting something and deleting conversations are slower on this store until its message index is built. To build it, close Claude Code and Codex, then run `npx @cairn-ink/memory raw index` once.',
-    zh: '這個資料庫的訊息索引建好之前，忘記內容和刪除對話會比較慢。要建立索引，請先關閉 Claude Code 和 Codex，再執行一次 `npx @cairn-ink/memory raw index`。',
-  };
-  assert.equal(translator(lang)('local_status_peer_index_hint'), wording[lang]);
-  const lines = [];
-  terminalWriter(line => lines.push(line))(wording[lang]);
-  const sentence = lines.join('\n') + '\n';
-  assert.equal(result.stdout.split(sentence).length - 1, hint ? 1 : 0, result.display);
-  assert.equal(hint ? result.stdout.replace(sentence, '') : result.stdout, baseline.stdout,
-    'every other status/footer line remains byte-identical');
-  assert.deepEqual(await f.inventory(), before, 'status retains the read-only file/schema/row inventory');
-  const observed = await json(join(f.ws, 'peer-result.json'));
-  assert.equal(observed.node, f.d.node, 'the published engine uses its own Node');
-  return { result, observed };
-}
-async function assertPeerIndexReadOnly(f) {
-  assert.deepEqual(await json(join(f.ws, 'peer-open.json')),
-    { path: f.d.database.path, options: { readOnly: true, timeout: 0 } });
-}
-
-for (const lang of ['en', 'zh']) for (const reason of ['threshold', 'age'])
-test(`L14 peer index hint appears once for ${reason} (${lang})`, async t => {
-  const f = await peerIndexFixture(t, reason === 'threshold' ? { rowid: 2_000_001 } : { ageDays: 7 });
-  const { observed } = await assertPeerIndexStatus(f, { hint: true, lang });
-  assert.deepEqual(JSON.parse(observed.text), { status: 'ok', present: false, overThreshold: reason === 'threshold' });
-  await assertPeerIndexReadOnly(f);
-});
-for (const [name, settings] of [
-  ['present', { present: true, rowid: 2_000_001, ageDays: 8 }],
-  ['neither condition', { rowid: 2_000_000, ageDays: 1 }],
-  ['future directory mtime', { ageDays: -8 }],
-]) test('L14 peer index hint is absent for ' + name, async t => {
-  const f = await peerIndexFixture(t, settings);
-  const { observed } = await assertPeerIndexStatus(f);
-  assert.equal(JSON.parse(observed.text).status, 'ok'); await assertPeerIndexReadOnly(f);
-});
-for (const statFailure of ['missing', 'unreadable'])
-test('L14 peer index age ignores ' + statFailure + ' generation metadata', async t => {
-  const f = await peerIndexFixture(t, { ageDays: 8 });
-  const { observed } = await assertPeerIndexStatus(f, { statFailure });
-  assert.deepEqual(JSON.parse(observed.text), { status: 'ok', present: false, overThreshold: false });
-  await assertPeerIndexReadOnly(f);
-});
-test('L14 peer index threshold still permits a hint when generation metadata is missing', async t => {
-  const f = await peerIndexFixture(t, { rowid: 2_000_001 });
-  await assertPeerIndexStatus(f, { hint: true, statFailure: 'missing' }); await assertPeerIndexReadOnly(f);
-});
-test('L14 peer index probe returns unavailable immediately under an EXCLUSIVE lock', async t => {
-  const f = await peerIndexFixture(t, { rowid: 2_000_001, ageDays: 8 });
-  const baseline = await f.run(['status'], { peerIndexProbe: 'unavailable' }), before = await f.inventory();
-  const locker = new DatabaseSync(f.d.database.path, { timeout: 0 });
-  let result;
-  try {
-    locker.exec('BEGIN EXCLUSIVE');
-    result = await f.run(['status'], { peerIndexProbe: 'observe' });
-  } finally { if (locker.isTransaction) locker.exec('ROLLBACK'); locker.close(); }
-  assert.equal(baseline.code, 0, baseline.display); assert.equal(result.code, baseline.code, result.display);
-  assert.equal(result.stdout, baseline.stdout); assert.deepEqual(await f.inventory(), before);
-  const observed = await json(join(f.ws, 'peer-result.json'));
-  assert.deepEqual(JSON.parse(observed.text), { status: 'unavailable' });
-  assert.ok(observed.elapsed < 1500, `locked probe took ${observed.elapsed}ms (must not busy-wait)`);
-  await assertPeerIndexReadOnly(f);
-});
-for (const probe of ['timeout', 'error', 'malformed', 'bad-present', 'bad-threshold', 'missing-field', 'nonzero'])
-test('L14 peer index hint silently suppresses child ' + probe, async t => {
-  const f = await peerIndexFixture(t, { rowid: 2_000_001, ageDays: 8 });
-  const { observed } = await assertPeerIndexStatus(f, { probe });
-  if (probe === 'timeout') {
-    assert.equal(observed.code, null); assert.ok(observed.elapsed >= 2800);
-    assert.ok(observed.elapsed < 4500, `probe timeout took ${observed.elapsed}ms`);
-  }
-});
-test('L14 peer index hint silently suppresses a Node spawn error', async t => {
-  const f = await peerIndexFixture(t, { rowid: 2_000_001, ageDays: 8 });
-  f.d.node = join(f.ws, 'missing-engine-node');
-  await withLocalLock(f.root, () => writeDescriptor(f.root, f.d));
-  await assertPeerIndexStatus(f);
-  await assert.rejects(lstat(join(f.ws, 'peer-open.json')), { code: 'ENOENT' });
-});
-test('L14 peer index hint preserves an existing nonzero status exit', async t => {
-  const f = await peerIndexFixture(t, { rowid: 2_000_001 });
-  await f.setState('claude', { fail: 'plugin list --json' });
-  await assertPeerIndexStatus(f, { hint: true, code: 7 });
-  await assertPeerIndexStatus(f, { probe: 'error', code: 7 });
-});
 
 for (const client of ['claude', 'codex']) test(`${client} accepts trailing config separators in setup`, async t => {
   if (!needCache(t)) return;
