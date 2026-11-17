@@ -951,7 +951,7 @@
       "file": "core/runtime.mjs",
       "start": "  function correct(",
       "end": "  function forgetMutation(",
-      "sha256": "e74c1ee69ae0261b65e7025666e78069c3386a693104adb9c6b8e88be18bd1d5",
+      "sha256": "58b2aae0b80fe431efa9336ce013b75a630066e882836c7686a4b0f63cf26ef1",
       "reason": "PR 1 passes each corrected receipt its matching optional receipt time; canonical post-state acknowledgement and terminal fact guards remain in this exact region."
     },
     {
