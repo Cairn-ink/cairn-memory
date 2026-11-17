@@ -94,10 +94,13 @@ full canonical ref, metadata, fence and fetch fence prefix `f`. Use that full re
 with the existing evidence fetch; no handle or identity appears in the text.
 Sources still participate in eligibility, dates and omission accounting, but are
 omitted from text and never offered to the packer. All three policies therefore
-visit only whole bodies. Source deduplication counts are zero. Limits remain
-24 items and 6,000 tokens, measured against the exact emitted success text.
-The existing signed v1 snapshot is retained when it fits its limits; otherwise
-compact returns `snapshot:null`. No new snapshot grammar or fetch alias exists.
+visit only whole bodies. Source deduplication counts are zero. The compact
+candidate horizon and the default and maximum `budget.maxItems` are 64. Hybrid
+search considers up to 64 candidates per channel before selecting up to 64
+distinct candidates. Lexical search uses the same 64-candidate horizon. The
+token ceiling is 6,000, measured against the exact emitted success text.
+The existing signed v1 snapshot is returned for up to 24 selected items when
+it fits the snapshot size limit. Larger selections return `snapshot:null`.
 
 Context-enabled CLI startup awaits the local `o200k_base` counter
 `tiktoken-o200k_base` after configuration checks, independently of the legacy
