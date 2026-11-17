@@ -32,7 +32,7 @@ import { receiptEventDate, completeResponseBytes, cardPackSources, receiptSource
 import { readRawChannel, citedRawTurns, assembleThreeLayerContext } from './context-read-three-layer.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
 import { CONTEXT_VERSION, CONTEXT_METHODS, CONTEXT_LIMITS, SOURCE_LIMITS, ASSEMBLY_LIMITS, ASSEMBLY_POLICIES, ASSEMBLY_REPRESENTATIONS, ASSEMBLY_DEFAULTS, DEFAULT_ASSEMBLY_POLICY,
-  contextOptions, contextInput, contextRefs, namespaceKey } from './context-read-input.mjs';
+  contextOptions, contextInput, assertCompactContextInput, contextRefs, namespaceKey } from './context-read-input.mjs';
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const bytes = envelope => Buffer.byteLength(JSON.stringify(envelope));
@@ -782,7 +782,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         }
         const generations = canonicalFence(input.readSet, input.types), items = [], dateEntries = [];
         const safetyMemo=cachedContentLayout(db)?.suppressionRevision&&!options.sources?createContentReadMemo(db):undefined;
-        const dated = input.representation === 'representation-v2-dated';
+        const dated = input.representation === 'representation-v2-dated' || input.representation === 'memory-compact-v1';
         if (safetyMemo && dated) safetyMemo.sourceDates = true;
         if (searched.sourceState) assertSourcesInside(input, searched.sourceState, 'snapshot_stale');
         let unavailable = 0;
@@ -842,6 +842,13 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         refs: items.map(({ ref }) => [input.readSet.findIndex(ns => namespaceKey(ns) === namespaceKey(ref.namespace)), ref.type,
           ref.memoryId ?? ref.cardId, ref.revision, ...(ref.type === 'card' ? [ref.bodyRevision] : [])]),
         generations: generationsFor(items), access: access.accessGenerations, fences: items.map(item => item.fence) });
+      // Compact keeps v1's signed grammar and limits. A snapshot that cannot
+      // fit is absent, just as for a read with no snapshot; refs remain in diagnostics.
+      const snapshotFor = items => {
+        const value = snapshotValue(items);
+        return input.representation === 'memory-compact-v1' &&
+          Math.ceil(4 * Buffer.byteLength(JSON.stringify(value)) / 3) + 44 > CONTEXT_LIMITS.snapshotUnits ? null : value;
+      };
       const dependencyReserve = items => {
         const declared = items.filter(item => item.dependencyCount !== null);
         if (!declared.length) return {};
@@ -853,7 +860,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         trace: options.localStatus ? { ...candidates.trace, localEmbedder: sampleLocalStatus(options.localStatus) } : candidates.trace });
       // Sample host status once. Dated trials and final delivery must use the
       // same candidate trace; the v2 sampling point remains after assembly.
-      const datedCandidates = input.representation === 'representation-v2-dated' ? candidateDetails() : null;
+      const datedCandidates = ['representation-v2-dated', 'memory-compact-v1'].includes(input.representation) ? candidateDetails() : null;
       // Wire-only Card projection retains canonical stored-body fences and bodyRevision.
       const assemble = raw => assembleThreeLayerContext({ prepared: prepared.items, counter: options.counter, policy: input.policy,
         query: input.query, readSet: input.readSet, intent: input.intent,
@@ -861,8 +868,8 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         responseBytes: datedCandidates ? ({ meteredBytes, diagnostics, selected }) => completeResponseBytes(success({ metered: null, snapshot: null,
           diagnostics: { ...diagnostics, omitted: { ...diagnostics.omitted, unavailable: prepared.unavailable },
             trace: { ...diagnostics.trace, ...dependencyReserve(selected) }, candidates: datedCandidates ?? candidateDetails() } }),
-          meteredBytes, selected.length ? snapshotValue(selected) : null) <= CONTEXT_LIMITS.responseBytes : undefined,
-        snapshotOf: items => encode('snapshot', snapshotValue(items), 16384) }, raw);
+          meteredBytes, selected.length ? snapshotFor(selected) : null) <= CONTEXT_LIMITS.responseBytes : undefined,
+        snapshotOf: items => { const value = snapshotFor(items); return value === null ? null : encode('snapshot', value, 16384); } }, raw);
       let { selected: delivered, validateRaw, ...assembled } = assemble(rawChannel);
       const decorate = () => {
         const diagnostics = assembled.diagnostics;
@@ -976,7 +983,11 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         counter: options.counter ? { id: options.counter.id } : null, limits: { ...ASSEMBLY_LIMITS, ...(options.sources ? { candidates: 32, counterCalls: 1634 } : {}) } },
       unsupported: ['role-profiles', ...(!options.sources?.includes('relations-one-hop-v1') ? ['relations'] : []),
         ...(!options.sources?.includes('moc-v1') ? ['moc'] : []), 'partial-semantic-search'] }));
-  }, findCandidates, refreshContextIndex, fetchCandidateEvidence, contextRead }, { check: (scopes,{delivery}) => { ready();
+  }, findCandidates, refreshContextIndex, fetchCandidateEvidence, contextRead }, {
+      select: (args, method) => {
+        assertCompactContextInput(method, args[0], supportedTypes, options.sources);
+        return args[0];
+      }, check: (scopes,{delivery}) => { ready();
         if (!delivery && scopes.length && cachedContentLayout(db)?.suppressionRevision && hasContentSuppressionRequestInside(db) && !db.isTransaction) {
           contentSuppressionRequestInside(db,scopes,{defer:true}); return;
         }

@@ -8,7 +8,7 @@ import { performance } from 'node:perf_hooks';
 import { randomUUID, createHash } from 'node:crypto';
 import { productSidecar } from './context-product-sidecar.mjs';
 import { digest } from './context-product-validation.mjs';
-import { contextInput, contextRawSearch, namespaceKey, ASSEMBLY_DEFAULTS, ASSEMBLY_POLICIES, ASSEMBLY_REPRESENTATIONS, ASSEMBLY_LIMITS } from './context-read-input.mjs';
+import { contextInput, assertCompactContextInput, contextRawSearch, namespaceKey, ASSEMBLY_DEFAULTS, ASSEMBLY_POLICIES, ASSEMBLY_REPRESENTATIONS, ASSEMBLY_LIMITS } from './context-read-input.mjs';
 import { ownData } from './local-authority-input.mjs';
 import { deadline, PRODUCT_PROFILE } from './context-product-control.mjs';
 import { fuseCandidates } from './context-read-fusion.mjs';
@@ -547,6 +547,10 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         : error.code === 'memory_not_found' ? 'evidence_unavailable' : error.code ?? 'storage_error';
       return failure(code);
     } });
-  return {run:(...args)=>storage.measureObservation(()=>safe.run(...args)),discard(){storage.discard();},close(){storage.close();rankings.clear();},assembly:{representation:'representation-v2-dated',raw:{default:true,configured:Boolean(rawSearch)},representations:ASSEMBLY_REPRESENTATIONS,defaults:ASSEMBLY_DEFAULTS,policies:ASSEMBLY_POLICIES,
+  return {run:(...args)=>{
+    try { assertCompactContextInput(args[0], args[1], types, undefined, PRODUCT_PROFILE); }
+    catch (error) { return failure(error.code ?? 'invalid_input'); }
+    return storage.measureObservation(()=>safe.run(...args));
+  },discard(){storage.discard();},close(){storage.close();rankings.clear();},assembly:{representation:'representation-v2-dated',raw:{default:true,configured:Boolean(rawSearch)},representations:ASSEMBLY_REPRESENTATIONS,defaults:ASSEMBLY_DEFAULTS,policies:ASSEMBLY_POLICIES,
     defaultPolicy:'rank-first-whole-v1',counter:counter?{id:counter.id}:null,limits:ASSEMBLY_LIMITS}};
 }

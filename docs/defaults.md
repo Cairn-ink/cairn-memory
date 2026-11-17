@@ -162,6 +162,14 @@ The helper prints failed samples before returning a nonzero exit code.
 | Attested content-safety layout | Enables the separately versioned content-safety schema and suppression facts | Off for new stores unless explicitly selected; installed protections remain enforced | Local schema/fact metadata; no provider call | Core `contentSafety:'s2h-v1'` for supported new stores; existing stores use the explicit offline safety migration. There is no default-on migration CLI flag. |
 | Automatic transcript hooks | Submits selected conversation messages without an explicit MCP capture call | Off in the standalone MCP server | When separately installed: Raw disk plus configured capture model calls | No MCP flag installs hooks. Installer `setup --local` installs Raw-only hooks by default; use `--no-capture` or `config --local-capture off\|on`. Standalone engine setup remains separate. |
 
+Direct engine-API callers of embedded `contextRead` and the read-only path may
+select the unadvertised `representation:'memory-compact-v1'` with
+`types:['memory']`, explicit `raw:false`, and `sources:[]` when extras are
+configured. It emits whole `{date,body}` items addressed by diagnostic position
+within the existing 6,000-token / 24-item limits. Capabilities omit this option;
+the unchanged MCP schema and the product engine refuse it. See
+[local context reads](context-read-local.md) for diagnostics and snapshot behavior.
+
 Card bundles use Memory content only with the Raw opt-in on or off. Without Raw
 spans, the feature is slightly weaker at telling that something is no longer true.
 
