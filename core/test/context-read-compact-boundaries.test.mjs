@@ -11,6 +11,18 @@ import { openProductIndex } from '../context-product-index.mjs';
 const representation = 'memory-compact-v1';
 const request = patch => assemblyQuery({ representation, raw: false, ...patch });
 
+test('embedded and read-only capabilities advertise only legacy representations for both families', t => {
+  const f = assemblyFixture(t);
+  for (const family of ['local', 'hosted']) {
+    const config = { ...f.config, policy: { family } }, embedded = f.reopen(config);
+    const reader = openContextReader({ path: f.path, contextRead: config });
+    try {
+      for (const core of [embedded, reader])
+        assert.deepEqual(ok(core.getContextReadCapabilities()).assembly.representations, ['representation-v2', 'representation-v2-dated']);
+    } finally { reader.close(); }
+  }
+});
+
 for (const readOnly of [false, true]) test(`compact early refusal without SQL/authority/provider, readOnly=${readOnly}`, async t => {
   const f = assemblyFixture(t);
   let calls = 0;

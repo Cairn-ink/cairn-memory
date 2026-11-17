@@ -1,46 +1,65 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { registerContextReadTools } from '../context-read-tools.mjs';
+import { readFileSync } from 'node:fs';
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
+import { buildCairnServer } from '../server.mjs';
+import { registerContextReadTools, CONTEXT_TOOL_NAMES } from '../context-read-tools.mjs';
 import { registerContextReadSourcesTools } from '../context-read-sources-tools.mjs';
-import { contextToolResponse } from '../context-read-transport.mjs';
 import { createContextReadAccess } from '../context-read-access.mjs';
-import { createContextCounter } from '../../openai/context-counter.mjs';
-import { countOpenAITokens } from '../../openai/context-counter.mjs';
-import { assemblyFixture, ns, ok } from '../../../core/testing/context-read-assembly-fixture.mjs';
-import { assembleContext } from '../../../core/context-read-assembly.mjs';
-import { compactAssemblyOptions } from '../../../core/testing/context-read-compact-fixture.mjs';
+import { assemblyFixture, ns } from '../../../core/testing/context-read-assembly-fixture.mjs';
 
-const args = { query: 'assembly', types: ['memory'], intent: 'current', raw: false, representation: 'memory-compact-v1' };
-test('MCP additive selector/raw switch forwards compact on assembly only, also with source narrowing', async t => {
-  const f = assemblyFixture(t, { counter: await createContextCounter() });
-  f.admit('assembly whole canonical memory');
-  const access = createContextReadAccess(ns), core = f.reopen({ ...access.configuration, counter: await createContextCounter() });
-  ok(await access.call(core, 'refreshContextIndex', { readSet: [ns], types: ['memory'], intent: 'current', budget: { maxItems: 1024, maxMs: 5000 } }));
+// Reuse the frozen wire oracle with only the presentation changes already
+// present at be13a6e4. No compact-specific allowance belongs in discovery.
+const historical = JSON.parse(readFileSync(new URL('../../../core/test/fixtures/context-read/u5c2-legacy-wire.json', import.meta.url)));
+const expected = historical.contextHost.tools.tools.filter(tool => CONTEXT_TOOL_NAMES.includes(tool.name));
+for (const tool of expected) {
+  tool.description = tool.description
+    .replace('Search the fixed host read set. Semantic defaults to false; explicit semantic true', 'Preferred memory read: search the fixed host read set. Semantic defaults on with a configured embedding provider; semantic false selects BM25 only. Semantic lookup')
+    .replace('Assemble whole canonical bodies and sources within an exact local token budget. Semantic defaults to false; explicit semantic true', 'Preferred memory read: assemble dated Memory and Raw sources within an exact local token budget. Semantic defaults on with a configured embedding provider; semantic false selects BM25 only. Semantic lookup');
+  if (tool.name === 'read_memory_context') {
+    tool.inputSchema.properties.maxTokens.maximum = 6000;
+    tool.inputSchema.properties = Object.fromEntries(Object.entries(tool.inputSchema.properties).flatMap(entry => entry[0] === 'policy'
+      ? [entry, ['representation', { type: 'string', enum: ['representation-v2', 'representation-v2-dated'] }]] : [entry]));
+  }
+}
+
+test('MCP retains baseline schema/discovery bytes and refuses compact before any engine call', async t => {
+  const f = assemblyFixture(t);
+  let calls = 0;
+  const core = { ...f.context, contextRead() { calls++; assert.fail('schema must refuse before calling the engine'); } };
+  const args = { query: 'assembly', types: ['memory'], intent: 'current' };
   for (const withSources of [false, true]) {
-    const tools = new Map(), register = (name, description, schema, action) => tools.set(name, { description, schema, action });
+    const access = createContextReadAccess(ns);
+    const tools = new Map(), register = (name, description, schema) => tools.set(name, { description, schema });
     if (withSources) registerContextReadSourcesTools(register, core, access, ['relations-one-hop-v1']);
     else registerContextReadTools(register, core, access);
-    assert.equal(tools.size, 3);
-    const tool = tools.get('read_memory_context'), parsed = tool.schema.parse({ ...args, ...(withSources ? { sources: [] } : {}) });
-    const value = ok(await tool.action(parsed)), response = contextToolResponse({ ok: true, value }, { assembly: true });
-    const emitted = response.content[0].text, wire = ok(JSON.parse(emitted));
-    assert.equal(wire.items.length, 1); assert.deepEqual(Object.keys(wire.items[0]), ['date', 'body']);
-    assert.equal(value.diagnostics.budget.used, countOpenAITokens(emitted));
-    assert.deepEqual(response._meta['ink.cairn/context-read-diagnostics'], value.diagnostics);
-    assert.ok(response._meta['ink.cairn/context-read-snapshot']);
-    assert.equal(emitted.includes(value.diagnostics.items[0].ref.memoryId), false);
-    assert.equal(tools.get('find_memory_candidates').schema.safeParse(args).success, false);
-  }
-});
+    assert.deepEqual([...tools.keys()], CONTEXT_TOOL_NAMES);
+    const schema = tools.get('read_memory_context').schema;
+    for (const input of [{ ...args, representation: 'memory-compact-v1' },
+      { ...args, representation: 'memory-compact-v1', raw: false }, { ...args, raw: false }])
+      assert.equal(schema.safeParse(input).success, false);
 
-test('real o200k metering counts exact compact success text at the token boundary', async () => {
-  const options = compactAssemblyOptions({ representation: 'memory-compact-v1', counter: await createContextCounter() });
-  const { selected, ...value } = assembleContext(options);
-  const response = contextToolResponse({ ok: true, value }, { assembly: true });
-  const used = countOpenAITokens(response.content[0].text);
-  assert.equal(value.diagnostics.budget.used, used);
-  const exact = assembleContext({ ...options, budget: { maxTokens: used, maxItems: 24 } });
-  assert.deepEqual(exact.metered, value.metered);
-  const smaller = assembleContext({ ...options, budget: { maxTokens: used - 1, maxItems: 24 } });
-  assert.ok(smaller.metered.items.length < value.metered.items.length);
+    const server = buildCairnServer({ path: f.path, binding: ns, core, context: access, ownsCore: false, maintenance: false,
+      ...(withSources ? { contextReadSources: ['relations-one-hop-v1'] } : {}) });
+    const client = new Client({ name: 'compact-refusal', version: '1' });
+    const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
+    try {
+      await server.connect(serverSide); await client.connect(clientSide);
+      const listed = (await client.listTools()).tools.filter(tool => CONTEXT_TOOL_NAMES.includes(tool.name));
+      if (withSources) for (const tool of listed.filter(tool => tool.name !== 'fetch_memory_candidate_evidence')) {
+        assert.equal(Object.keys(tool.inputSchema.properties).at(-1), 'sources');
+        assert.ok(tool.inputSchema.properties.sources);
+        delete tool.inputSchema.properties.sources;
+      }
+      assert.equal(JSON.stringify(listed), JSON.stringify(expected));
+      for (const input of [{ ...args, representation: 'memory-compact-v1' },
+        { ...args, representation: 'memory-compact-v1', raw: false }, { ...args, raw: false }]) {
+        const response = await client.callTool({ name: 'read_memory_context', arguments: {
+          ...input, ...(withSources ? { sources: [] } : {}),
+        } });
+        assert.equal(response.isError, true);
+      }
+      assert.equal(calls, 0);
+    } finally { await client.close(); await server.close(); }
+  }
 });

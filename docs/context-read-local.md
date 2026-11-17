@@ -77,10 +77,12 @@ receipt per item). Later receipts count as omitted under the first-source policy
 the default remains `rank-first-whole-v1`. Unknown fields and policies refuse. Bodies and sources
 are admitted whole or omitted; sources never appear without their body.
 
-Embedded and read-only callers can opt into `representation:'memory-compact-v1'`
-with exactly `types:['memory']` and explicit `raw:false`. MCP exposes the same
-selector and optional `raw` input on `read_memory_context`. When optional sources
-are configured, select `sources:[]`; Card, Raw (including implicit Raw), and extra
+Direct engine-API callers of embedded `contextRead` and the read-only path can
+opt into the unadvertised `representation:'memory-compact-v1'` with exactly
+`types:['memory']` and explicit `raw:false`. It is absent from advertised
+representations and capabilities. The unchanged MCP `read_memory_context`
+schema rejects this value and has no `raw` input. When optional sources are
+configured, select `sources:[]`; Card, Raw (including implicit Raw), and extra
 source combinations refuse with `invalid_input` before storage or provider work.
 The product engine refuses compact requests and does not advertise this selector.
 

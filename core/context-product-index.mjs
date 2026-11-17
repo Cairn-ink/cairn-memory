@@ -551,6 +551,6 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     try { assertCompactContextInput(args[0], args[1], types, undefined, PRODUCT_PROFILE); }
     catch (error) { return failure(error.code ?? 'invalid_input'); }
     return storage.measureObservation(()=>safe.run(...args));
-  },discard(){storage.discard();},close(){storage.close();rankings.clear();},assembly:{representation:'representation-v2-dated',raw:{default:true,configured:Boolean(rawSearch)},representations:Object.freeze(ASSEMBLY_REPRESENTATIONS.filter(value=>value!=='memory-compact-v1')),defaults:ASSEMBLY_DEFAULTS,policies:ASSEMBLY_POLICIES,
+  },discard(){storage.discard();},close(){storage.close();rankings.clear();},assembly:{representation:'representation-v2-dated',raw:{default:true,configured:Boolean(rawSearch)},representations:ASSEMBLY_REPRESENTATIONS,defaults:ASSEMBLY_DEFAULTS,policies:ASSEMBLY_POLICIES,
     defaultPolicy:'rank-first-whole-v1',counter:counter?{id:counter.id}:null,limits:ASSEMBLY_LIMITS}};
 }

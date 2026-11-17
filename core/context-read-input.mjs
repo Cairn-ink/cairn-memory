@@ -15,7 +15,9 @@ export function contextSources(value, enabled = CONTEXT_SOURCES, allowEmpty = fa
 }
 export const CONTEXT_VERSION = 'context-read-v1';
 export const CONTEXT_METHODS = Object.freeze(['findCandidates', 'refreshContextIndex', 'fetchCandidateEvidence', 'contextRead']);
-export const ASSEMBLY_REPRESENTATIONS = Object.freeze(['representation-v2', 'representation-v2-dated', 'memory-compact-v1']);
+export const ASSEMBLY_REPRESENTATIONS = Object.freeze(['representation-v2', 'representation-v2-dated']);
+// Engine-API opt-in only; never include this in advertised values or tool schemas.
+const COMPACT_MEMORY_REPRESENTATION = 'memory-compact-v1';
 export const ASSEMBLY_POLICIES = Object.freeze(['rank-first-whole-v1', 'coverage-first-v1', 'rank-first-first-source-v1']);
 export const ASSEMBLY_DEFAULTS = deepFreeze({ metadata: {
   memory: { state: 'active', reviewState: 'none', filing: { status: 'unfiled' }, kind: 'fact', origin: 'explicit', confidence: 1 },
@@ -198,8 +200,9 @@ export function contextInput(method, value, supportedTypes, enabledSources, prof
         if (selected.raw !== undefined && typeof selected.raw !== 'boolean') fail('invalid_input');
         result.raw = selected.raw ?? true;
         result.representation = selected.representation === undefined ? 'representation-v2-dated' : selected.representation;
-        if (!ASSEMBLY_REPRESENTATIONS.includes(result.representation)) fail('invalid_input');
-        if (result.representation === 'memory-compact-v1' &&
+        if (!ASSEMBLY_REPRESENTATIONS.includes(result.representation) &&
+            result.representation !== COMPACT_MEMORY_REPRESENTATION) fail('invalid_input');
+        if (result.representation === COMPACT_MEMORY_REPRESENTATION &&
             (profile === 'context-read-product-v1.1' || result.types.length !== 1 || result.types[0] !== 'memory' ||
              selected.raw !== false || result.sources?.length)) fail('invalid_input');
       } else result.limit = integer(selected.limit, 12, 24);
@@ -221,6 +224,6 @@ export function contextInput(method, value, supportedTypes, enabledSources, prof
 export function assertCompactContextInput(method, value, supportedTypes, enabledSources, profile) {
   if (method !== 'contextRead' || !value || typeof value !== 'object' || types.isProxy(value)) return;
   const field = Object.getOwnPropertyDescriptor(value, 'representation');
-  if (field && Object.hasOwn(field, 'value') && field.value === 'memory-compact-v1')
+  if (field && Object.hasOwn(field, 'value') && field.value === COMPACT_MEMORY_REPRESENTATION)
     contextInput(method, value, supportedTypes, enabledSources, profile);
 }

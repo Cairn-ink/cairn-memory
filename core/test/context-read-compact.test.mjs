@@ -3,13 +3,16 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { assembleContext, meteredText, resolveMemorySourceDates } from '../context-read-assembly.mjs';
 import { assembleThreeLayerContext } from '../context-read-three-layer.mjs';
-import { contextInput, ASSEMBLY_LIMITS, ASSEMBLY_POLICIES } from '../context-read-input.mjs';
+import { contextInput, ASSEMBLY_LIMITS, ASSEMBLY_POLICIES, ASSEMBLY_REPRESENTATIONS } from '../context-read-input.mjs';
+import { createContextCounter } from '../../adapters/openai/context-counter.mjs';
 import { compactRepresentation as representation, compactRequest, compactPrepared, compactAssemblyOptions, legacyCases } from '../testing/context-read-compact-fixture.mjs';
 const bytes = JSON.parse(readFileSync(new URL('./fixtures/context-read/compact-s01-bytes.json', import.meta.url)));
 const parse = (patch = {}, sources, profile) => contextInput('contextRead', compactRequest(patch), ['memory', 'card'], sources, profile).input;
 const assemble = patch => assembleContext(compactAssemblyOptions({ representation, ...patch }));
 
 test('compact parser requires Memory only, explicit raw:false and no extra sources; ceiling remains 24', () => {
+  assert.deepEqual(ASSEMBLY_REPRESENTATIONS, ['representation-v2', 'representation-v2-dated']);
+  assert.ok(Object.isFrozen(ASSEMBLY_REPRESENTATIONS));
   assert.equal(parse().representation, representation);
   assert.deepEqual(parse().budget, { maxTokens: 6000, maxItems: 24 });
   assert.equal(ASSEMBLY_LIMITS.counterCalls, 1226);
@@ -26,7 +29,21 @@ test('compact parser requires Memory only, explicit raw:false and no extra sourc
   assert.equal(contextInput('contextRead', defaultRequest, ['memory']).input.representation, 'representation-v2-dated');
   const { raw: _raw, ...implicitRawDefault } = defaultRequest;
   assert.equal(contextInput('contextRead', implicitRawDefault, ['memory']).input.raw, true);
+  for (const representation of ASSEMBLY_REPRESENTATIONS)
+    assert.equal(contextInput('contextRead', { ...implicitRawDefault, representation }, ['memory']).input.representation, representation);
   assert.throws(() => contextInput('findCandidates', compactRequest(), ['memory']), { code: 'invalid_input' });
+});
+
+test('real o200k metering counts exact compact engine success text at the token boundary', async () => {
+  const counter = await createContextCounter(), options = compactAssemblyOptions({ representation, counter });
+  const value = assembleContext(options), text = meteredText(value.metered);
+  assert.equal(counter.id, 'tiktoken-o200k_base');
+  const used = counter.countTokens(text);
+  assert.equal(value.diagnostics.budget.used, used);
+  const exact = assembleContext({ ...options, budget: { maxTokens: used, maxItems: 24 } });
+  assert.deepEqual(exact.metered, value.metered);
+  const smaller = assembleContext({ ...options, budget: { maxTokens: used - 1, maxItems: 24 } });
+  assert.ok(smaller.metered.items.length < value.metered.items.length);
 });
 
 test('exact date/body wire bytes, full bodies and positional diagnostics across every policy', () => {
