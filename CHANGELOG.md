@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.8 — 2026-11-16: wider start-boundary margin
+## 0.3.8 — 2026-11-17: wider start-boundary margin
 
 - The synchronous start hook now has 1 second (was 300 ms), including Node
   startup, to record where a new session starts.
