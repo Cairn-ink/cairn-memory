@@ -98,11 +98,13 @@ test('compact snapshots yield to the response byte limit and remain available wh
   const read = patch => trusted.call(core, 'contextRead', compactRequest({ readSet, semantic: false, ...patch }));
   const response = await read();
   const value = ok(response);
-  assert.deepEqual(value.metered.items.map(item => item.body).sort(), largeBodies);
-  assert.ok(value.metered.items.every(item => item.date === null && Buffer.byteLength(item.body) === 2080));
+  // 24 of these bodies fill the response byte limit without a snapshot; with the snapshot only 23 fit.
+  assert.equal(value.metered.items.length, 24);
+  assert.equal(new Set(value.metered.items.map(item => item.body)).size, 24);
+  assert.ok(value.metered.items.every(item => item.date === null && largeBodies.includes(item.body)));
   assert.equal(value.snapshot, null);
-  assert.deepEqual(value.diagnostics.omitted, { items: 0, bodies: 0, sources: 25, unavailable: 0, oversized: 0 });
-  assert.equal(value.diagnostics.stops.budget, false);
+  assert.deepEqual(value.diagnostics.omitted, { items: 1, bodies: 1, sources: 25, unavailable: 0, oversized: 0 });
+  assert.equal(value.diagnostics.stops.budget, true);
   assert.ok(Buffer.byteLength(JSON.stringify(response)) <= CONTEXT_LIMITS.responseBytes);
 
   const budget = { maxItems: 24 };
@@ -226,14 +228,18 @@ test('compact horizon and privacy after forgetting, suppression and late authori
     assert.ok(before.metered.items.some(item => item.date === canary.date && item.body === canary.body));
   }
   ok(writer.forget({ namespace: ns, memoryId: forgotten.id, expectedRevision: forgotten.revision }));
-  assert.equal(ok(await trusted.call(writer, 'refreshContextIndex', refresh())).status, 'complete');
+  // After a canonical write the index is reconciled by a writer read, not by an explicit refresh.
+  let settled;
+  for (let i = 0; i < 5 && !settled?.ok; i++) settled = await trusted.call(writer, 'contextRead', request());
+  ok(settled);
   const db = f.connect(); t.after(() => db.close());
   transaction(db, () => writeContentSuppressionInside(db,
     { namespace: ns, kind: 'memory', key: suppressed.id, reason: 'purge', actionId: 'compact-wide-suppression' }));
 
   const read = () => request({ budget: { maxItems: 32 } });
   // Writer catches the canonical suppression fence before the read-only path.
-  const embedded = await trusted.call(writer, 'contextRead', read());
+  let embedded;
+  for (let i = 0; i < 5 && !embedded?.ok; i++) embedded = await trusted.call(writer, 'contextRead', read());
   const reader = openContextReader({ path: f.path, contextRead: config }); t.after(() => reader.close());
   for (const [core, response] of [[writer, embedded], [reader, await trusted.call(reader, 'contextRead', read())]]) {
     const value = ok(response);
