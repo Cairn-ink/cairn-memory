@@ -287,6 +287,8 @@ jobs:
       - run: npm run test:local-worker
       # Explicit owner-operated foreground entry; automatic hooks stay unchanged.
       - run: npm run test:local-host
+      # Installed hook entry: headless skip and hook payload handling.
+      - run: npm run test:local-hook
 
   mcp:
     runs-on: ubuntu-latest
