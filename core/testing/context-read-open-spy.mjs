@@ -310,8 +310,9 @@ const headerProbe = `
         const opened = fstatSync(fd, { bigint: true });
         const header = Buffer.alloc(20), length = readSync(fd, header, 0, 20, 0);
         process.stdout.write(JSON.stringify({ device: String(opened.dev), inode: String(opened.ino),
-          mode: length === 20 && header.subarray(0,16).equals(Buffer.from('SQLite format 3\\0')) &&
-          header[18] === 1 && header[19] === 1 ? 'delete' : 'other' }));
+          mode: length === 20 && header.subarray(0,16).equals(Buffer.from('SQLite format 3\\0')) ?
+          header[18] === 1 && header[19] === 1 ? 'delete' :
+          header[18] === 2 && header[19] === 2 ? 'wal' : 'other' : 'other' }));
       } finally { if (fd !== undefined) closeSync(fd); }
     `;
 const options = maxBuffer => ({ encoding: 'utf8', env: {}, timeout: 5000, maxBuffer });

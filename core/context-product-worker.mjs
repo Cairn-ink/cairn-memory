@@ -10,7 +10,7 @@ import { requestAuthority } from './context-product-authority.mjs';
 import { nativeObserver, sealNative } from './context-product-telemetry.mjs';
 import { PRODUCT_PROFILE, verifyRecords, boundedData, mono, issuance, deadline, operationRecord } from './context-product-control.mjs';
 import { productFailure } from './context-product-reader.mjs';
-import { createProductSqlitePolicy } from './context-product-sqlite.mjs';
+import { createProductSqlitePolicy, detectProductCanonicalJournal } from './context-product-sqlite.mjs';
 import { fail } from './validation.mjs';
 import { openDiagnosticClock, validOpenDiagnosticBuffer } from './context-product-open-diagnostic.mjs';
 
@@ -35,7 +35,9 @@ const observer = nativeObserver(workerData.frame);
 observer.journalRemainingMs = () => Number(mono(currentOperation.operationCutoffMonoNs) - process.hrtime.bigint()) / 1e6;
 if (phase) observer.openDiagnostic = phase;
 const sqlite = workerData.wal ? createProductSqlitePolicy({ observer }) : null;
-const startSqlite = op => sqlite?.start(Number(mono(op.operationCutoffMonoNs)) / 1e6);
+const canonicalSqlite = sqlite ?? createProductSqlitePolicy({ observer });
+let assertCanonicalMode;
+const startSqlite = op => canonicalSqlite.start(Number(mono(op.operationCutoffMonoNs)) / 1e6);
 
 // Match the legacy native mapping without linking SQLite into bootstrap.
 // Keep the initiating call and the first disposal failure independent.
@@ -94,7 +96,7 @@ function capabilities() {
     namespaceSelection: 'recent-projects-v1', readyOnly: true, maintenance: Boolean(workerData.maintenance), assembly: index.assembly,
     channels: { lexical: { enabled: true }, semantic: { configured: false, enabled: false } },
     schemas: { memory: [18, ...Array.from({ length: 14 }, (_, i) => i + 20)], card: Array.from({ length: 11 }, (_, i) => i + 23) },
-    ...(workerData.wal ? { journals: ['DELETE','WAL'], sidecarJournals: ['DELETE','WAL'], wal: {available:true} } : { journals: ['DELETE'], sidecarJournals: ['DELETE'], wal: {available:false,reason:'deferred_to_p2d'} }), unsupported: ['semantic', 'relations', 'moc'] } };
+    ...(workerData.wal ? { journals: ['DELETE','WAL'], sidecarJournals: ['DELETE','WAL'], wal: {available:true} } : { journals: ['DELETE','WAL'], sidecarJournals: ['DELETE'], wal: {available:false,reason:'deferred_to_p2d'} }), unsupported: ['semantic', 'relations', 'moc'] } };
 }
 try {
   startSqlite(opening);
@@ -131,7 +133,23 @@ try {
   const { openContextProductFacade } = await import('./context-read-facade.mjs'); within(opening);
   phase?.mark('facadeImported');
   phase?.mark('facadeOpening');
-  facade = openContextProductFacade(workerData.path, { observer, authorize, sqlite });
+  let nativeOpening = false;
+  const openingObserver = workerData.wal ? observer : { ...observer, invoke(stage, statement, work) {
+    if (stage === 'open') nativeOpening = true;
+    return observer.invoke(stage, statement, work);
+  } };
+  try {
+    // The ordinary facade owns the single legacy DELETE opening preflight.
+    facade = openContextProductFacade(workerData.path, { observer: openingObserver, authorize, sqlite });
+  } catch (error) {
+    // Never reinterpret a refusal after attempting a native connection.
+    if (workerData.wal || nativeOpening || error?.code !== 'index_unavailable') throw error;
+    const { contextReadJournalHeader } = await import('./context-read-sidecar.mjs'); within(opening);
+    const canonical = detectProductCanonicalJournal(workerData.path, { sqlite: canonicalSqlite, observer, legacyError: error, readHeader: contextReadJournalHeader,
+      expectedIdentity: { device: fileIdentity.split(':')[0], inode: fileIdentity.split(':')[1] } });
+    assertCanonicalMode = canonical.assertMode;
+    facade = openContextProductFacade(workerData.path, { observer, authorize, sqlite: canonical.sqlite });
+  }
   phase?.mark('facadeOpened');
   const { openProductIndex } = await import('./context-product-index.mjs'); within(opening);
   phase?.mark('indexImported');
@@ -176,6 +194,7 @@ parentPort.on('message', async message => {
     startSqlite(operation);
     within(operation);
     if (frame && (frame.operationId !== operation.operationId || frame.workerEpoch !== operation.workerEpoch)){noteFailure('protocol');fail('reader_failed');}
+    assertCanonicalMode?.(facade.port.db);
     let response;
     const observation = {};
     if (message.method === 'getContextReadCapabilities') {

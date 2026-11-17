@@ -546,13 +546,15 @@ test(`Fix round 4 real Worker ${kind} SQLite ${code} mapping also applies with d
   assert.equal((await config.supervisor.drain(failure.cleanupId)).telemetry, 'disabled');
 });
 
-test('Fix round 4 checkpointed WAL probe retains DELETE-only refusal and native CANTOPEN telemetry', async t => {
+test('Fix round 4 checkpointed WAL is detected by default and retains native CANTOPEN probe telemetry', async t => {
   const f = fixture(t); f.core.close();
   const db = new DatabaseSync(f.path); db.exec('PRAGMA journal_mode=WAL'); db.close();
-  const config = configured(t, f.path); let failure;
-  await config.open().catch(error => { failure = error; });
-  assert.equal(failure?.code, 'index_unavailable');
-  const status = await config.supervisor.drain(failure.cleanupId);
+  const config = configured(t, f.path), reader = await config.open();
+  assert.deepEqual(ok(await reader.getContextReadCapabilities()).journals, ['DELETE','WAL']);
+  await reader.close();
+  const records = await config.supervisor.drain();
+  const status = records.find(record => record.diagnostics?.records.some(entry => entry.statement === 'journal_mode' && entry.sqlite.code === 14));
+  assert.ok(status, 'the successful open retains the isolated nolock WAL signal');
   assert.equal(status.telemetry, 'complete');
   assert.equal(status.diagnostics.records[0].statement, 'journal_mode');
   assert.equal(status.diagnostics.records[0].sqlite.code, 14);
