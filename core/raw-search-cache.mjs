@@ -35,7 +35,9 @@ export function createRawSearchCache({ enabled, checkKey, now = () => performanc
     if (!entry) return;
     try {
       if (now() - entry.usedAt >= RAW_SEARCH_CACHE_IDLE_MS || checkKey() !== entry.key) drop();
-    } catch { drop(); } // Unavailable authority drops private hints silently.
+    } catch (error) {
+      drop();return error; // Timer callers stay silent; admission retains transience.
+    }
   }
   function install(key, rows, vectors, metadata, hintBytes,check=()=>{}) {
     if (!enabled || closed) return null;

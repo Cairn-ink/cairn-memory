@@ -29,9 +29,9 @@ export function installPhaseMeasurement(){
         'return await retry(deadlineAt=>searchAttempt(value,token,deadlineAt),at,emptyPartial);');
       wrap('    async function search(value,token)', '    async function searchAttempt','search');
       replace(`database=openReadDatabase(options.path,{contextRead:true,busyTimeoutMs:0,preflight:openingCheck,
-      nativeObserver:{invoke(_kind,_label,work){openingCheck();return work();},database:native=>rawSearchSqlite(native,openingCheck)}});`,
+          nativeObserver:{invoke(_kind,_label,work){openingCheck();return work();},database:native=>rawSearchSqlite(openingNative=native,openingCheck)}});`,
         `database=measured('canonical-open',()=>openReadDatabase(options.path,{contextRead:true,busyTimeoutMs:0,preflight:openingCheck,
-      nativeObserver:{invoke(_kind,_label,work){openingCheck();return work();},database:native=>rawSearchSqlite(native,openingCheck)}}));`);
+          nativeObserver:{invoke(_kind,_label,work){openingCheck();return work();},database:native=>rawSearchSqlite(openingNative=native,openingCheck)}}));`);
     }else if(url.endsWith('/raw-search-authority.mjs')){
       wrap('  function bindWithin(', '  const sourceIdentity','bounded-hash');
       wrap('  function buildFence(', '  function fence(','commitment');
