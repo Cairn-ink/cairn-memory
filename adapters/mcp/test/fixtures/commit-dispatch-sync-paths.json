@@ -7634,7 +7634,7 @@
     "core/raw-search-maintenance.mjs:<broker callback>:same": 3,
     "core/raw-search-maintenance.mjs:<broker callback>:snapshot": 3,
     "core/raw-search-maintenance.mjs:<broker callback>:stage": 4,
-    "core/raw-search-maintenance.mjs:<broker callback>:tail": 2,
+    "core/raw-search-maintenance.mjs:<broker callback>:tail": 4,
     "core/raw-search-maintenance.mjs:<broker callback>:validate": 2,
     "core/raw-search-maintenance.mjs:<catch callback>:storageTransient": 1,
     "core/raw-search-maintenance.mjs:<filter callback>:same": 1,
