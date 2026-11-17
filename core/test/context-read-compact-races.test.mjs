@@ -21,6 +21,13 @@ test(`compact hides candidate identity, source and date after ${mutation}, readO
     { namespace: ns, kind: 'memory', key: target.id, reason: 'purge', actionId: 'compact-secret' }));
   if (mutation === 'forgotten') ok(writer.forget({ namespace: ns, memoryId: target.id, expectedRevision: target.revision }));
   if (mutation === 'denied') trusted.state.enabled = false;
+  // A read-only reader never reconciles the index itself: after a canonical write a writer read must reconcile first.
+  if (readOnly && mutation !== 'denied') {
+    let warm;
+    for (let i = 0; i < 5 && !warm?.ok; i++) warm = await trusted.call(writer, 'contextRead',
+      { readSet: [ns], types: ['memory'], intent, query: 'telescope', raw: false, deadlineMs: 5000 });
+    assert.equal(warm.ok, true, JSON.stringify(warm));
+  }
   const core = readOnly ? openContextReader({ path: f.path, contextRead: config }) : writer;
   if (readOnly) t.after(() => core.close());
   const result = await trusted.call(core, 'contextRead', { readSet: [ns], types: ['memory'], intent,
