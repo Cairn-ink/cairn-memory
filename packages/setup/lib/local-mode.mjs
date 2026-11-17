@@ -2,6 +2,7 @@ import { constants } from 'node:fs';
 import { readFile, lstat, stat, access, mkdir, open, readdir, rm } from 'node:fs/promises';
 import { dirname, join, sep } from 'node:path';
 import { homedir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 import { availableClient, codexHome, inspectCodexServers, withCodexInspectionEnvironment, codexEnvironmentCause, snapshot } from './codex.mjs';
 import { installEngine, engineIdFor, engineBaseId } from './local-engine.mjs';
 import { localRoot, requestedRoot, canonicalPath, readDescriptor, writeDescriptor, withLocalLock,
@@ -9,7 +10,7 @@ import { localRoot, requestedRoot, canonicalPath, readDescriptor, writeDescripto
 import { readClaudeServers, registerClaude, detachClaude } from './local-claude.mjs';
 import { registerCodex, detachCodex, checkCodexLock, codexCapabilities } from './local-codex.mjs';
 import { shellArgument } from './output.mjs';
-import { configureCapture, captureStatus, captureSettings, retainedCapture, clientConfigDirectory, captureRequested, finishCaptureSetup } from './local-capture.mjs';
+import { configureCapture, captureStatus, captureSettings, retainedCapture, clientConfigDirectory, captureRequested, finishCaptureSetup, engineChild } from './local-capture.mjs';
 import { SetupError } from './errors.mjs';
 import { rawLocal, validateRawOptions } from './local-raw.mjs';
 
@@ -373,6 +374,40 @@ async function setupLocal(options, selection, detection, context) {
     return finishCaptureSetup(capture, context) || (manual ? 1 : 0);
   });
 }
+async function peerIndexHint(root, descriptor, { write, t, env }) {
+  // This observation is optional. Neither storage/child failures nor directory
+  // metadata failures may reach setup's status-unverified fallback.
+  try {
+    if (descriptor.state !== 'installed' || !descriptor.engine || !descriptor.node) return;
+    const directory = join(root, 'engine', descriptor.engine.id);
+    const engineRoot = dirname(dirname(executableFor(root, descriptor.engine.id)));
+    const safety = pathToFileURL(join(engineRoot, 'core/content-safety-schema.mjs')).href;
+    const authority = pathToFileURL(join(engineRoot, 'core/local-authority-schema.mjs')).href;
+    const path = JSON.stringify(descriptor.database.path);
+    const script = `let result={status:'unavailable'};
+      try {
+        const {DatabaseSync}=await import('node:sqlite');
+        const {attestContentSafety}=await import(${JSON.stringify(safety)});
+        const {readLocalRawPeerIndexStatus}=await import(${JSON.stringify(authority)});
+        const db=new DatabaseSync(${path},{readOnly:true,timeout:0});
+        try {
+          attestContentSafety(db);
+          const {present,overThreshold}=readLocalRawPeerIndexStatus(db,${path});
+          result={status:'ok',present,overThreshold};
+        } finally { db.close(); }
+      } catch { result={status:'unavailable'}; }
+      console.log(JSON.stringify(result));`;
+    const result = await engineChild(descriptor.node, ['--input-type=module', '-e', script], { env, timeout: 3000 });
+    if (result.exitCode !== 0 || result.status !== 'ok' || result.present !== false ||
+        typeof result.overThreshold !== 'boolean') return;
+    let old = false;
+    try {
+      const info = await stat(directory), age = Date.now() - info.mtimeMs;
+      old = info.isDirectory() && Number.isFinite(age) && age >= 7 * 24 * 60 * 60 * 1000;
+    } catch { /* Missing/unreadable generation metadata is not evidence of age. */ }
+    if (result.overThreshold || old) write(t('local_status_peer_index_hint'));
+  } catch { /* Optional status hints never change the status output or exit. */ }
+}
 export async function localStatus(detection, { write, t, env = process.env, platform = process.platform, verbose, emittedEnvironmentCauses = new Set() }) {
   if (!detection) return;
   const { descriptor, root, states } = detection;
@@ -407,6 +442,7 @@ export async function localStatus(detection, { write, t, env = process.env, plat
         for (const name of failed.filter(name => /\.failed-\d+$/u.test(name))) write.literal(shellArgument(join(root, 'engine', name)));
       }
     }
+    await peerIndexHint(root, descriptor, { write, t, env });
   } finally {
     const cause = states.codex.environmentCause;
     if (cause && !emittedEnvironmentCauses.has(cause)) {

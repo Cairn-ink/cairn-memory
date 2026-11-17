@@ -27,6 +27,8 @@ jobs:
           done
           npm ci --prefix adapters/mcp
           npm ci --prefix adapters/openai
+      # Setup Raw commands use isolated local fixtures.
+      - run: npm run test:setup-raw
       - name: Prime engine dependency cache (network phase)
         env:
           CAIRN_SETUP_TEST_NETWORK: '1'
