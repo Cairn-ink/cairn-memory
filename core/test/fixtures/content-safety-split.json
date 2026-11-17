@@ -936,7 +936,7 @@
     },
     {
       "file": "core/content-safety-schema.mjs",
-      "sha256": "32afdd3e2be6a1def24070385ebac5d8db293a7caf0ec1f21bf565bdf4907b8b",
+      "sha256": "38f0e96355efbe3c6ab445ab379c7ace15135a33cd2b3309a3a8b1398d2bf79b",
       "reason": "Reviewed Card lineage: exact lineage tuple/DDL attestation and synchronous canonical snapshot registration; feature accessors expose only privately attested revisions and add no fact-only writer."
     },
     {

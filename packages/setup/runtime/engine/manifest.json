@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "f2e95d08119e3599bb8c3867e86d851f3b0758c53b141a0f849e7f5b36bd1a27",
-  "bytes": 1419909,
+  "sha256": "053d7745e59392672416d7c02de1bb189fa9a12eed4e39068ba72eb491aea941",
+  "bytes": 1419947,
   "files": [
     "LICENSE",
     "README.md",
@@ -493,7 +493,7 @@
     "core/context-reader.mjs": "170e534d567e82a5e1249c278e25efcbd367aaef8cfabe3dde6b99a91055f879",
     "core/commit-dispatch.mjs": "1f0511343608e6e19549891720ccf95086851f031cf0ec536a92d581e5c4c6c1",
     "core/contract.mjs": "a4a1192f9778f7e7e348a6915a843debe3bcce492621d35872f1a7e9f7c084de",
-    "core/database.mjs": "b19c4f872ec125f85e9452a817bb649027b7de6538f54c14c0bb119ba93e8fc4",
+    "core/database.mjs": "390c464d3ff424e009c8efaed8f12b196ee4ebda98845b044602c155f129238d",
     "core/existing-store.mjs": "fd86a4af30e54d4caa24dbb3e9cb37d622cdb6d1b358651c9deae9b864b03595",
     "core/store-fence.mjs": "58932e1f52950354e692c0c6c6a726c0273a7a317c0fc69559fe703e2c938957",
     "core/sqlite-journal-probe.mjs": "491ed3d84db91eebe863b2541b8a8bfd37d68eb2b1f948bdf44d5b5501030b0d",
@@ -777,7 +777,7 @@
     "core/content-safety-layout.mjs": "fb9d00957c5a224b1a414c2c5baa5726fa39ea2323331a9f7e325f4a9e3f3655",
     "core/content-safety-migration.mjs": "cfa4de31c06a67b0677faa77287fe5c353c670cbf3320855c6414200892cd0cf",
     "core/layout-base-upgrade.mjs": "fa2f4fc819f9b8e3400e1402ac1231d08f870fbd905001f8e9dbc131ea998938",
-    "core/content-safety-schema.mjs": "32afdd3e2be6a1def24070385ebac5d8db293a7caf0ec1f21bf565bdf4907b8b",
+    "core/content-safety-schema.mjs": "38f0e96355efbe3c6ab445ab379c7ace15135a33cd2b3309a3a8b1398d2bf79b",
     "core/content-suppression-storage.mjs": "656554b29fc837f97a05aa858f913a211117a1df6d337231968d39db8c658bd4",
     "core/content-suppression-input.mjs": "d22fe3b5ca43a0ce44d5e019fe4da9e09b456834281480b1ce1b23ec0b0d29cd",
     "core/content-suppression-evidence.mjs": "d89ab4ee68d6172a4c22587cbf07da965272da92c0e2b57c86ac6045aec7e58a",

@@ -1945,7 +1945,7 @@
     "core/content-safety-schema.mjs:attestContentSafety:set": 1,
     "core/content-safety-schema.mjs:attestContentSafety:verifyCompleteCardSchema": 1,
     "core/content-safety-schema.mjs:attestedContentSafetyControl:contentSafetyConnection": 2,
-    "core/content-safety-schema.mjs:attestedContentSafetyControl:freeze": 1,
+    "core/content-safety-schema.mjs:attestedContentSafetyControl:freeze": 2,
     "core/content-safety-schema.mjs:attestedContentSafetyControl:get": 1,
     "core/content-safety-schema.mjs:attestedContentSafetyControl:has": 1,
     "core/content-safety-schema.mjs:attestedLocalRawPackage:contentSafetyConnection": 2,
