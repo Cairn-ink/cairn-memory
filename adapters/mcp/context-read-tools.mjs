@@ -77,7 +77,7 @@ export function registerContextReadTools(tool, core, access, { semantic = false 
       intent: z.enum(['current', 'history']), semantic: z.boolean().optional(),
       maxTokens: z.number().int().min(64).max(6000).optional(), maxItems: z.number().int().min(1).max(24).optional(),
       policy: z.strictObject({ id: z.enum(ASSEMBLY_POLICIES) }).optional(),
-      representation: z.enum(ASSEMBLY_REPRESENTATIONS).optional(), deadlineMs: z.number().int().min(1).max(5000).optional() }),
+      raw: z.boolean().optional(), representation: z.enum(ASSEMBLY_REPRESENTATIONS).optional(), deadlineMs: z.number().int().min(1).max(5000).optional() }),
     ({ maxTokens, maxItems, ...input }) => access.call(core, 'contextRead', { ...input, semantic: input.semantic ?? semantic,
       budget: { ...(maxTokens !== undefined ? { maxTokens } : {}), ...(maxItems !== undefined ? { maxItems } : {}) }, readSet: access.readSet }), true);
 }

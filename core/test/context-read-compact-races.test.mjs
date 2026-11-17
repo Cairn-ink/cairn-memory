@@ -6,8 +6,8 @@ import { host } from '../testing/context-read-core-fixture.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 import { transaction } from '../database.mjs';
 
-for (const readOnly of [false, true]) for (const mutation of ['suppressed', 'forgotten', 'denied'])
-test(`compact hides candidate identity, source and date after ${mutation}, readOnly=${readOnly}`, async t => {
+for (const readOnly of [false, true]) for (const intent of ['current', 'history']) for (const mutation of ['suppressed', 'forgotten', 'denied'])
+test(`compact hides candidate identity, source and date after ${mutation}, readOnly=${readOnly}, intent=${intent}`, async t => {
   const f = eventTimeSafetyFixture(t, 33); await f.migrate();
   const trusted = host(), db = f.connect(); t.after(() => db.close());
   const config = { version: 'context-read-v1', authority: trusted.authority, counter: { id: 'fit', countTokens: () => 1 } };
@@ -23,7 +23,7 @@ test(`compact hides candidate identity, source and date after ${mutation}, readO
   if (mutation === 'denied') trusted.state.enabled = false;
   const core = readOnly ? openContextReader({ path: f.path, contextRead: config }) : writer;
   if (readOnly) t.after(() => core.close());
-  const result = await trusted.call(core, 'contextRead', { readSet: [ns], types: ['memory'], intent: 'current',
+  const result = await trusted.call(core, 'contextRead', { readSet: [ns], types: ['memory'], intent,
     query: 'telescope', raw: false, representation: 'memory-compact-v1', deadlineMs: 5000 });
   if (mutation === 'denied') assert.equal(result.ok, false);
   else { assert.equal(result.ok, true, JSON.stringify(result)); assert.ok(result.value.metered.items.some(item => item.body === 'telescope allowed')); }

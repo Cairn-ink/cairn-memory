@@ -15,7 +15,7 @@ for (const readOnly of [false, true]) test(`compact early refusal without SQL/au
   const f = assemblyFixture(t);
   let calls = 0;
   const config = { ...f.config, sources: ['relations-one-hop-v1'],
-    embedder: { id: 'forbidden', revision: '1', dimensions: 2, normalization: 'unit', embed() { calls++; assert.fail('provider'); } } };
+    embedder: { id: 'forbidden', revision: '1', dimensions: 2, normalization: 'l2', embed() { calls++; assert.fail('provider'); } } };
   const core = readOnly ? openContextReader({ path: f.path, contextRead: config }) : f.reopen(config);
   if (readOnly) t.after(() => core.close());
   for (const patch of [{ raw: undefined }, { raw: true }, { types: ['card'] }, { types: ['memory', 'card'] },
@@ -86,4 +86,26 @@ test('product rejects compact before SQL, authority, semantic snapshot or counte
     assert.deepEqual(measured.result, { ok: false, error: { code: 'invalid_input', retryable: false } });
     assert.equal(measured.statements, 0);
   }
+});
+
+test('compact snapshot overflow returns null while keeping all selected refs in diagnostics', async t => {
+  const f = assemblyFixture(t, { counter: { id: 'fit', countTokens: () => 1 } });
+  // IDs are valid 200-unit identifiers whose UTF-8 snapshot bytes exceed 16,384.
+  // Fixture-only rename before indexing; no SQLite descriptors escape the engine.
+  for (let i = 0; i < 24; i++) {
+    const memory = f.admit('assembly telescope long-id body ' + i), id = '界'.repeat(195) + String(i).padStart(5, '0');
+    f.writer.exec('BEGIN');
+    try {
+      f.writer.exec('PRAGMA defer_foreign_keys=ON');
+      f.writer.prepare('UPDATE memories SET id=? WHERE id=?').run(id, memory.id);
+      f.writer.prepare('UPDATE receipts SET memory_id=? WHERE memory_id=?').run(id, memory.id);
+      f.writer.exec('COMMIT');
+    } catch (error) { f.writer.exec('ROLLBACK'); throw error; }
+  }
+  ok(await f.call('refreshContextIndex', { readSet: [ns], types: ['memory'], intent: 'current', budget: { maxItems: 1024, maxMs: 5000 } }));
+  const value = ok(await f.call('contextRead', request()));
+  assert.equal(value.metered.items.length, 24);
+  assert.equal(value.diagnostics.items.length, 24);
+  assert.equal(value.snapshot, null);
+  assert.ok(Buffer.byteLength(JSON.stringify({ ok: true, value })) <= 65536);
 });

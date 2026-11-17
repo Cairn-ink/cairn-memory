@@ -24,6 +24,8 @@ test('compact parser requires Memory only, explicit raw:false and no extra sourc
   assert.throws(() => parse({}, undefined, 'context-read-product-v1.1'), { code: 'invalid_input' });
   const { representation: _representation, ...defaultRequest } = compactRequest();
   assert.equal(contextInput('contextRead', defaultRequest, ['memory']).input.representation, 'representation-v2-dated');
+  const { raw: _raw, ...implicitRawDefault } = defaultRequest;
+  assert.equal(contextInput('contextRead', implicitRawDefault, ['memory']).input.raw, true);
   assert.throws(() => contextInput('findCandidates', compactRequest(), ['memory']), { code: 'invalid_input' });
 });
 

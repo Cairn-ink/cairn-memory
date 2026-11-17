@@ -5,16 +5,16 @@ import { registerContextReadSourcesTools } from '../context-read-sources-tools.m
 import { contextToolResponse } from '../context-read-transport.mjs';
 import { createContextReadAccess } from '../context-read-access.mjs';
 import { createContextCounter } from '../../openai/context-counter.mjs';
-import { countOpenAITokens } from '../../openai/index.mjs';
+import { countOpenAITokens } from '../../openai/context-counter.mjs';
 import { assemblyFixture, ns, ok } from '../../../core/testing/context-read-assembly-fixture.mjs';
 import { assembleContext } from '../../../core/context-read-assembly.mjs';
 import { compactAssemblyOptions } from '../../../core/testing/context-read-compact-fixture.mjs';
 
 const args = { query: 'assembly', types: ['memory'], intent: 'current', raw: false, representation: 'memory-compact-v1' };
 test('MCP additive selector/raw switch forwards compact on assembly only, also with source narrowing', async t => {
-  const f = assemblyFixture(t, { counter: createContextCounter() });
+  const f = assemblyFixture(t, { counter: await createContextCounter() });
   f.admit('assembly whole canonical memory');
-  const access = createContextReadAccess(ns), core = f.reopen({ ...access.configuration, counter: createContextCounter() });
+  const access = createContextReadAccess(ns), core = f.reopen({ ...access.configuration, counter: await createContextCounter() });
   ok(await access.call(core, 'refreshContextIndex', { readSet: [ns], types: ['memory'], intent: 'current', budget: { maxItems: 1024, maxMs: 5000 } }));
   for (const withSources of [false, true]) {
     const tools = new Map(), register = (name, description, schema, action) => tools.set(name, { description, schema, action });
@@ -33,8 +33,8 @@ test('MCP additive selector/raw switch forwards compact on assembly only, also w
   }
 });
 
-test('real o200k metering counts exact compact success text at the token boundary', () => {
-  const options = compactAssemblyOptions({ representation: 'memory-compact-v1', counter: createContextCounter() });
+test('real o200k metering counts exact compact success text at the token boundary', async () => {
+  const options = compactAssemblyOptions({ representation: 'memory-compact-v1', counter: await createContextCounter() });
   const { selected, ...value } = assembleContext(options);
   const response = contextToolResponse({ ok: true, value }, { assembly: true });
   const used = countOpenAITokens(response.content[0].text);

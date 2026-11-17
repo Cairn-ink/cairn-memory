@@ -77,6 +77,26 @@ receipt per item). Later receipts count as omitted under the first-source policy
 the default remains `rank-first-whole-v1`. Unknown fields and policies refuse. Bodies and sources
 are admitted whole or omitted; sources never appear without their body.
 
+Embedded and read-only callers can opt into `representation:'memory-compact-v1'`
+with exactly `types:['memory']` and explicit `raw:false`. MCP exposes the same
+selector and optional `raw` input on `read_memory_context`. When optional sources
+are configured, select `sources:[]`; Card, Raw (including implicit Raw), and extra
+source combinations refuse with `invalid_input` before storage or provider work.
+The product engine refuses compact requests and does not advertise this selector.
+
+Each compact item is exactly `{date,body}`, in that key order: `date` is the
+existing authorized event date or `null`, and `body` is the whole canonical Memory
+content. Selection retains relevance order; emission retains dated ordering with
+unknown dates last. `diagnostics.items[i]` describes the i-th emitted item with its
+full canonical ref, metadata, fence and fetch fence prefix `f`. Use that full ref
+with the existing evidence fetch; no handle or identity appears in the text.
+Sources still participate in eligibility, dates and omission accounting, but are
+omitted from text and never offered to the packer. All three policies therefore
+visit only whole bodies. Source deduplication counts are zero. Limits remain
+24 items and 6,000 tokens, measured against the exact emitted success text.
+The existing signed v1 snapshot is retained when it fits its limits; otherwise
+compact returns `snapshot:null`. No new snapshot grammar or fetch alias exists.
+
 Context-enabled CLI startup awaits the local `o200k_base` counter
 `tiktoken-o200k_base` after configuration checks, independently of the legacy
 model. Programmatic startup also loads the counter automatically, without
