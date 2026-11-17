@@ -74,7 +74,7 @@
     "start": "function capabilities() {",
     "end": "\ntry {",
     "purpose": "public Worker capabilities projection",
-    "sha256": "814de9f03bd875a871c5dce50a517e85e02056cc3f9c6018fc2ffdbd56712314"
+    "sha256": "7e566499e43c731be62fd3ae31f185cf1dc9a01d8c72c6f97965838d2ee01d11"
   },
   {
     "file": "core/context-read-facade.mjs",
