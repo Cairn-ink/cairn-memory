@@ -380,8 +380,7 @@ export function createMemoryRuntime(input, internal) {
       });
       if(result.memory&&contentSuppressionReasonInside(db,ns,{kind:'memory',key:result.memory.id,revision:result.memory.revision,
         version:JSON.stringify(['memory-revision-v1',result.memory.revision])}))fail('memory_suppressed');
-      rawLineage.assertAdmissionReceipts(ns, value.receipts);
-      return result;
+      rawLineage.assertAdmissionReceipts(ns, value.receipts); return result;
     });
   }
 
