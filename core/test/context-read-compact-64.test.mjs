@@ -182,6 +182,12 @@ test('compact horizon and privacy after forgetting, suppression and late authori
     '2026-01-01T08:00:00.000Z')).sort(byId);
   const forgotten = seed('telescope telescope PRIVATE_FORGOTTEN', 'forgotten', '1970-01-02T03:04:00.000Z');
   const suppressed = seed('telescope telescope PRIVATE_SUPPRESSED', 'suppressed', '1971-02-03T04:05:00.000Z');
+  assert.equal(ok(await trusted.call(writer, 'refreshContextIndex', refresh())).status, 'complete');
+  const before = ok(await trusted.call(writer, 'contextRead', request()));
+  for (const canary of [forgotten, suppressed]) {
+    assert.ok(before.diagnostics.items.some(item => item.ref.memoryId === canary.id));
+    assert.ok(before.metered.items.some(item => item.date === canary.date && item.body === canary.body));
+  }
   ok(writer.forget({ namespace: ns, memoryId: forgotten.id, expectedRevision: forgotten.revision }));
   assert.equal(ok(await trusted.call(writer, 'refreshContextIndex', refresh())).status, 'complete');
   const db = f.connect(); t.after(() => db.close());
