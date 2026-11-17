@@ -7,7 +7,7 @@ import { dirname, isAbsolute, resolve, join } from "node:path";
 // Arm before loading the client graph or resolving a binding. performance.now()
 // counts Node startup too; an exhausted startup budget exits before local work.
 const action = process.argv[2] ?? "status";
-const START_BOUNDARY_BUDGET_MS = 300;
+const START_BOUNDARY_BUDGET_MS = 1000;
 function checkStartBoundary() {
   if (action === 'start-boundary' && performance.now() >= START_BOUNDARY_BUDGET_MS) process.exit(0);
 }
