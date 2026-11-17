@@ -8,15 +8,15 @@ import { deferred } from '../../../tools/testing/deferred.mjs';
 
 // Accept the previous spelling too so the exact same regression runs against
 // the immutable runtime that shared its allowance across the entire window.
-function requestBudget(source) {
+function requestBudget(source, ms = 1000) {
   const constant = /const HOSTED_CAPTURE_(?:REQUEST|BUDGET)_MS = 25_000;/;
   assert.match(source, constant);
-  return source.replace(constant, match => match.replace('25_000', '1000'));
+  return source.replace(constant, match => match.replace('25_000', String(ms)));
 }
 
 for (const action of ['capture', 'capture-detached']) {
   test(`${action} gives each of three delayed batches its own request deadline`, async t => {
-    const f = await harness(t, { mutateRuntime: requestBudget, holdCapture: () => delay(650) });
+    const f = await harness(t, { mutateRuntime: source => requestBudget(source, 2500), holdCapture: () => delay(1400) });
     await f.write(''); await f.run('start-boundary');
     const transcript = Array.from({ length: 72 }, (_, i) => row(`synthetic-${i}`)).join('');
     await f.write(transcript);
