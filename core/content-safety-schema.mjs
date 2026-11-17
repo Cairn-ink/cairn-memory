@@ -461,11 +461,13 @@ export function attestedLocalRawPackage(db) {
   if (refused.has(contentSafetyConnection(db))) fail('unsupported_database');
   return layouts.get(contentSafetyConnection(db))?.localRawPackage ?? null;
 }
-/** No SQL: frozen value copy of the attested control tuple, or null without a control row. */
+/** No SQL: undefined before attestation; otherwise a frozen value with the control tuple or null. */
 export function attestedContentSafetyControl(db) {
   if (refused.has(contentSafetyConnection(db))) fail('unsupported_database');
-  const control = layouts.get(contentSafetyConnection(db))?.header.control;
-  return control === undefined ? null : Object.freeze(JSON.parse(control));
+  const cached = layouts.get(contentSafetyConnection(db));
+  if (cached === undefined) return undefined;
+  const control = cached.header.control;
+  return Object.freeze({ control: control === undefined ? null : Object.freeze(JSON.parse(control)) });
 }
 /** Trusted adapters can reuse the opener's attestation without any new SQL. */
 export function cachedContentLayout(db) {

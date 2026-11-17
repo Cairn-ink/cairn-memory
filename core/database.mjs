@@ -63,10 +63,12 @@ function validateOrdinaryLocalStore(db) {
 function rememberPeerIndexAdmission(db, location, physical, storeId, features, option) {
   if (!location) return;
   const control = attestedContentSafetyControl(db);
+  if (control === undefined) return;
   peerIndexAdmissions.set(db, Object.freeze({ ...location, storeId, validate(side) {
     const layout = attestContentSafety(side);
-    if (layout.physical !== physical ||
-        JSON.stringify(attestedContentSafetyControl(side)) !== JSON.stringify(control)) fail('unsupported_database');
+    const sideControl = attestedContentSafetyControl(side);
+    if (sideControl === undefined || layout.physical !== physical ||
+        JSON.stringify(sideControl) !== JSON.stringify(control)) fail('unsupported_database');
     if (option) validateExistingStore(side, option, layout);
     else if (layout.suppressionRevision) {
       assertContentFeatures(layout, features);

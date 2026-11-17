@@ -134,21 +134,73 @@ test('attested v2 helper executes zero SQL and no space probe',async t=>{
 test('attested control helper returns frozen value copies without SQL, including the optional receipt field',async t=>{
   const f=await store(t,{l1:true}),ordinary=await store(t);
   const row=f.db.prepare('SELECT * FROM content_safety_control WHERE singleton=1').get();
-  const expected=[row.singleton,row.base_layout,row.suppression_revision,row.card_lineage_revision,
-    row.migration_state,row.suppression_domain,row.migration_id,row.inventory_digest,row.receipt_event_time];
+  const expected={control:[row.singleton,row.base_layout,row.suppression_revision,row.card_lineage_revision,
+    row.migration_state,row.suppression_domain,row.migration_id,row.inventory_digest,row.receipt_event_time]};
   const legacy=safetyFixture(t,33);await legacy.migrate();
   const legacyDB=legacy.connect();t.after(()=>legacyDB.close());attestContentSafety(legacyDB);
   const legacyRow=legacyDB.prepare('SELECT * FROM content_safety_control WHERE singleton=1').get();
+  const unattested=new DatabaseSync(ordinary.path);t.after(()=>unattested.close());
   const statements=trace(t),first=attestedContentSafetyControl(f.db),second=attestedContentSafetyControl(f.db);
   assert.deepEqual(first,expected);assert.deepEqual(second,expected);assert.notEqual(first,second);
+  assert.notEqual(first.control,second.control);
   assert.equal(Object.isFrozen(first),true);assert.equal(Object.isFrozen(second),true);
-  assert.throws(()=>{first[3]=0;},TypeError);
+  assert.equal(Object.isFrozen(first.control),true);assert.equal(Object.isFrozen(second.control),true);
+  assert.throws(()=>{first.control=null;},TypeError);assert.throws(()=>{first.control[3]=0;},TypeError);
   assert.deepEqual(attestedContentSafetyControl(f.db),expected);
-  assert.equal(attestedContentSafetyControl(ordinary.db),null);
-  assert.deepEqual(attestedContentSafetyControl(legacyDB),[legacyRow.singleton,legacyRow.base_layout,
+  const controlFree=attestedContentSafetyControl(ordinary.db);
+  assert.deepEqual(controlFree,{control:null});assert.equal(Object.isFrozen(controlFree),true);
+  assert.equal(attestedContentSafetyControl(unattested),undefined);
+  assert.deepEqual(attestedContentSafetyControl(legacyDB),{control:[legacyRow.singleton,legacyRow.base_layout,
     legacyRow.suppression_revision,legacyRow.card_lineage_revision,legacyRow.migration_state,
-    legacyRow.suppression_domain,legacyRow.migration_id,legacyRow.inventory_digest]);
+    legacyRow.suppression_domain,legacyRow.migration_id,legacyRow.inventory_digest]});
   assert.deepEqual(statements,[]);
+});
+
+for(const l1 of [false,true])for(const stage of ['capture','compare'])
+test(`missing cached attestation at ${stage} defers peer indexing and opens exact v1 (${l1?'L1':'ordinary'})`,async t=>{
+  const f=await store(t,{l1}),before=schema(f.db),bytes=readSqliteFixture(f.path);space(t,f.path);
+  const statements=trace(t),prepare=DatabaseSync.prototype.prepare,exec=DatabaseSync.prototype.exec;
+  const get=WeakMap.prototype.get,remove=WeakMap.prototype.delete;
+  let runtime,side,evictions=0,transactionAtEviction;
+  const sideStatements=[];
+  t.mock.method(DatabaseSync.prototype,'prepare',function(sql){
+    if(sql===identitySQL)runtime=this;
+    return prepare.call(this,sql);
+  });
+  t.mock.method(DatabaseSync.prototype,'exec',function(sql){
+    if(runtime&&this!==runtime&&sql==='BEGIN IMMEDIATE')side=this;
+    if(this===side)sideStatements.push(sql);
+    return exec.call(this,sql);
+  });
+  // Evict the actual private cache entry on its first read at the handoff.
+  // No production cache-mutation seam or historical fixture is needed.
+  const eviction=t.mock.method(WeakMap.prototype,'get',function(key){
+    const value=get.call(this,key);
+    if(!evictions&&key===(stage==='capture'?runtime:side)&&value?.layout&&value?.header){
+      transactionAtEviction=key.isTransaction;
+      assert.equal(remove.call(this,key),true);evictions++;
+      return get.call(this,key);
+    }
+    return value;
+  });
+  const core=openMemoryCore({path:f.path,raw:true,rawSearch:false});
+  try {
+    eviction.mock.restore();
+    assert.equal(evictions,1);assert.equal(transactionAtEviction,stage==='compare');
+    if(stage==='capture'){
+      assert.equal(localRawPeerIndexAdmission(runtime),undefined);assert.equal(side,undefined);
+    } else {
+      assert.ok(localRawPeerIndexAdmission(runtime));assert.ok(side);assert.equal(side.isOpen,false);
+      assert.equal(attestedContentSafetyControl(side),undefined);
+      assert.deepEqual(sideStatements,['BEGIN IMMEDIATE','ROLLBACK']);
+    }
+    assert.equal(statements.filter(sql=>sql===indexDDL).length,0);
+    assert.equal(schema(f.db),before);assert.deepEqual(readSqliteFixture(f.path),bytes);
+    assert.deepEqual(localNames(f.db),packageNames('v1'));
+    const status=readLocalRawPeerIndexStatus(f.db,f.path);
+    assert.equal(status.present,false);assert.equal(status.deferredReason,'error');
+    assert.equal(retry(f.path).reason,'error');assert.equal(core.list({namespace}).ok,true);
+  } finally {await core.close();}
 });
 
 for(const available of [0,167,168]) test(`empty-table space floor is 168 bytes (${available})`,async t=>{
@@ -940,7 +992,7 @@ test(`side compares a copied store's attested control by value (${field??'equal 
     assert.equal(copy.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get().store_id,f.pin.storeId);
     assert.deepEqual(localNames(copy),packageNames('v1'));
     copyControl=attestedContentSafetyControl(copy);copySchema=schema(copy);
-    assert.deepEqual(copyControl.flatMap((value,i)=>value===control[i]?[]:[i]),
+    assert.deepEqual(copyControl.control.flatMap((value,i)=>value===control.control[i]?[]:[i]),
       field?[['singleton','base_layout','suppression_revision','card_lineage_revision','migration_state',
         'suppression_domain','migration_id','inventory_digest','receipt_event_time'].indexOf(field)]:[]);
   } finally {copy.close();}
