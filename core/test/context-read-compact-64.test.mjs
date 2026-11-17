@@ -190,8 +190,15 @@ for (const family of ['local', 'hosted']) test(`compact 64 items from both chann
       if (maxItems === 25) assert.equal(compact.snapshot, null);
       else {
         const dated = ok(await trusted.call(core, 'contextRead', request({ budget, representation: 'representation-v2-dated' })));
-        assert.equal(compact.snapshot, dated.snapshot);
         const signed = JSON.parse(Buffer.from(compact.snapshot.split('.')[0], 'base64url'));
+        // The dated items are larger, so the token budget can stop that read one item short.
+        if (dated.metered.items.length === 24) assert.equal(compact.snapshot, dated.snapshot);
+        else {
+          const other = JSON.parse(Buffer.from(dated.snapshot.split('.')[0], 'base64url'));
+          assert.equal(dated.diagnostics.stops.budget, true);
+          assert.deepEqual(other.refs, signed.refs.slice(0, other.refs.length));
+          assert.deepEqual({ ...other, refs: null, fences: null }, { ...signed, refs: null, fences: null });
+        }
         assert.equal(signed.v, 1);
         assert.equal(signed.refs.length, 24);
         const fetched = ok(await trusted.call(core, 'fetchCandidateEvidence', { readSet: [ns], snapshot: compact.snapshot }));
