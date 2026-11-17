@@ -5,8 +5,10 @@ import { encodeVector } from './context-read-embedder.mjs';
 import { rawSearchChunks, rawSearchPostings } from './raw-search-retrieval.mjs';
 import { same } from './raw-search-input.mjs';
 import { fail } from './validation.mjs';
+import { isStorageBusy } from './database.mjs';
 import { RAW_SEARCH_CADENCE_MS } from './raw-search-cache.mjs';
 
+const storageTransient=error=>isStorageBusy(error)||error?.code==='source_busy';
 const retryable = new Set(['provider_error','rate_limited','timeout']);
 const refusal = error => ['budget_denied','timeout','rate_limited','dimension_mismatch','invalid_vector'].includes(error?.code) ? error.code : 'provider_error';
 const metadata = port => port && ({id:port.id,revision:port.revision,dimensions:port.dimensions,normalization:port.normalization});
@@ -26,7 +28,8 @@ export function createRawSearchMaintenance(storage,authority,options) {
   const identity={key:JSON.stringify(authority.identity),physical:authority.identity.fileIdentity};
   const cadenceKey=JSON.stringify([authority.identity.storeId,identity.physical]);
   let active=null,closed=false,stopped=false,noProgress=0,quantum=0,quotaBlocked=false;
-  let access = () => {};
+  let access = () => {},storageResumeAt=0;
+  const deferStorage=()=>{storageResumeAt=performance.now()+25;};
   const inventoryFence = at => {try{return authority.fence(undefined,at);}catch(error){if(['source_budget_exceeded','search_deadline'].includes(error.code))return null;throw error;}};
   const protect = source => {
     authority.check(source);
@@ -37,7 +40,9 @@ export function createRawSearchMaintenance(storage,authority,options) {
   async function broker(work,maxMs) {
     if (!turns) fail('maintenance_authority_required');
     if (closed||stopped) fail('store_closed');
-    const now=performance.now(),controller=new AbortController();
+    const now=performance.now();
+    if(now<storageResumeAt)return {postponed:true};
+    const controller=new AbortController();
     const grant=await turns.wait({version:1,pumpId:'raw-search',windowId:'raw-search-local',lane:0,
       family:'lexical',kind:'lexical',phase:'work',intent:null,maxMs},{signal:controller.signal,untilMonoMs:now+maxMs,identity});
     if (grant.status!=='admitted') return {postponed:true};
@@ -87,7 +92,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
       // then enter the actual provider. Budget refusal writes no fake attempt.
       const chargedPort={...trackedPort,async embed(texts,controls){
         controls.beforeDispatch();
-        await broker(async commit=>{
+        try { await broker(async commit=>{
           protect(row.source);
           const next={...row,embedder:provider,retry:{attempts:attempts+1,nextAt:Date.now()+(attempts?5000:1000),terminal:attempts+1>=3}};
           delete next.segment;
@@ -98,7 +103,12 @@ export function createRawSearchMaintenance(storage,authority,options) {
           const result=await storage.commitBatch({staged:[{...stage,expected:row.segment}],checkpoint});
           recentAttempts=checkpoint.recent?.streak??0;
           reserved={...next,segment:result.sequence-1};commit();
-        },maxMs);
+        },maxMs); }catch(error){
+          // Preserve storage contention across the provider boundary, which
+          // intentionally transports refusal codes rather than native fields.
+          if(isStorageBusy(error))fail('source_busy');
+          throw error;
+        }
         if(!reserved)fail('budget_denied');
         controls.beforeDispatch();invoked=true;
         return trackedPort.embed(texts,controls);
@@ -108,7 +118,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
       authority.check(row.source);
       if (!Array.isArray(vectors)||vectors.length!==selected.length) fail('invalid_vector');
       vectors=vectors.map(v=>encodeVector(v,port));
-    } catch (failure) { error=refusal(failure); }
+    } catch (failure) { if(storageTransient(failure))throw failure;error=refusal(failure); }
     finally{controllers.delete(controller);}
     if(!reserved)return;
     // Provider waits never retain a broker ticket or either SQLite lock.
@@ -125,7 +135,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
     return {next,expected:reserved.segment,embedded:error?0:selected.length};
   }
   let pending=null,refreshAfter=0,refreshing=null,recentAttempts=null;
-  async function run({maxItems=16,maxMs=1000,embeddings=false}={}, currentAccess) {
+  async function run({maxItems=16,maxMs=1000,embeddings=false}={}, currentAccess,cacheError) {
     if (closed||stopped) fail('store_closed');
     if (!Number.isSafeInteger(maxItems)||maxItems<1||maxItems>128||!Number.isSafeInteger(maxMs)||maxMs<1||maxMs>5000) fail('invalid_input');
     access = currentAccess;
@@ -134,7 +144,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
     progress.phase='reconciling';quantum++;
     let admitted=false,eligibleWork=!!pending,refreshRow;
     try {
-
+      if(cacheError)throw cacheError;
       await broker(async commit=>{
         admitted=true;
         const started=performance.now(),state=storage.head();
@@ -295,14 +305,23 @@ export function createRawSearchMaintenance(storage,authority,options) {
       if(refreshRow){
         const operationAccess=access;
         refreshing=refresh(refreshRow,maxMs,operationAccess).then(result=>{if(!closed)pending=result??null;})
-          .catch(error=>{if(!closed)progress.error=error.code??'index_unavailable';}).finally(()=>{refreshing=null;});
+          .catch(error=>{if(!closed){if(storageTransient(error)){deferStorage();refreshAfter=0;}
+            else progress.error=error.code??'index_unavailable';}}).finally(()=>{refreshing=null;});
         await new Promise(resolve=>setImmediate(resolve));
       }
       const after=progress.removed+progress.indexed+progress.embedded+progress.checkpointAdvances;
-      if(admitted&&eligibleWork&&before===after){if(++noProgress>=3){stopped=true;progress.error='no_progress';}}else if(after>before)noProgress=0;
+      if(after>before)noProgress=0;
+      const finalState=storage.head();
+      if(admitted&&eligibleWork&&before===after){if(++noProgress>=3){stopped=true;progress.error='no_progress';}}
       progress.phase=stopped?'failed':quotaBlocked?'partial':'idle';
-      return {...progress,quantum,noProgress,pending:!!pending,...storage.head()};
+      return {...progress,quantum,noProgress,pending:!!pending,...finalState};
     } catch(error) {
+      if(storageTransient(error)){
+        // Storage has rolled back before this boundary. Discard this quantum
+        // and defer admission; contention is not evidence of no progress.
+        deferStorage();
+        pending=null;progress.phase='idle';return {...progress,quantum,noProgress,pending:false};
+      }
       if(['source_unavailable','source_excluded','raw_crypto_unavailable','source_busy','source_changed','source_budget_exceeded','search_deadline','stale_publication'].includes(error.code)){
         // A writer can also move during the bounded inventory snapshots.
         pending=null;progress.phase='idle';return {...progress,quantum,noProgress,pending:false};
@@ -310,9 +329,9 @@ export function createRawSearchMaintenance(storage,authority,options) {
       progress.error=error.code??'index_unavailable';progress.phase='failed';stopped=true;throw error;
     }
   }
-  return { maintain(input,currentAccess) {
+  return { maintain(input,currentAccess,cacheError) {
     if(active)fail('read_in_progress');
-    active=run(input,currentAccess).finally(()=>{active=null;});return active;
+    active=run(input,currentAccess,cacheError).finally(()=>{active=null;});return active;
   },status:()=>({...progress,quantum,noProgress,pending:!!pending||!!refreshing}),
   async close(){closed=true;for(const controller of controllers)controller.abort();await active?.catch(()=>{});
     // Providers may ignore abort. Their existing observers retain rejection
