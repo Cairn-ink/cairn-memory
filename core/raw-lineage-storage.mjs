@@ -2,7 +2,7 @@ import { bindContentSafetyConnection, cachedContentLayout, installedContentLayou
 import { hasContentSuppressionRequestInside, contentSuppressionTargetMatches, writeContentSuppressionInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { createHash, createHmac } from 'node:crypto';
 import { fail } from './validation.mjs';
-import { createRawSourceRoots, rawSessionKeys } from './raw-source-roots.mjs';
+import { createRawSourceRoots, rawSessionKeys, receiptDenialTokens } from './raw-source-roots.mjs';
 import { createRawCardInvalidation } from './card-raw-sources.mjs';
 
 // The read optimisation has a bounded lease on SHARED. Overflow restarts the
@@ -728,9 +728,21 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
   function filter(ns, receipts) {
     const layout = cachedContentLayout(db);
     if (!layout) fail('unsupported_database');
-    if (!layout.suppressionRevision && !enabled()) return receipts.map((_, index) => index);
+    const legacy = !layout.suppressionRevision && !enabled();
     return receipts.flatMap((receipt, index) => {
-      try { assertReceipts(ns, [receipt]); return [index]; }
+      try {
+        if (!legacy) assertReceipts(ns, [receipt]);
+        // Forget removes receipt rows, but its durable source tokens survive.
+        // Keep every existing refusal ahead of this indexed identity lookup.
+        const source = { client: receipt.client, sessionId: receipt.sessionId,
+          eventId: receipt.eventId, role: receipt.role, excerpt: receipt.excerpt };
+        const tokens = receiptDenialTokens([{ receipt_key: receiptDigest(source), client: source.client,
+          session_id: source.sessionId, event_id: source.eventId, role: source.role }]);
+        const denied = db.prepare(`SELECT 1 FROM json_each(?) w CROSS JOIN suppressed s
+          WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value LIMIT 1`)
+          .get(JSON.stringify(tokens), ...boundary(ns));
+        return denied ? [] : [index];
+      }
       catch (error) { if (error.code === 'source_excluded') return []; throw error; }
     });
   }
