@@ -6,7 +6,9 @@ and its [Traditional Chinese counterpart](../README.zh-TW.md), using the release
 source when the checkout differs. 0.6.6 was published to npm on 2026-11-13.
 The platform rows (C13, C41 and the macOS row under "Platforms") were updated
 on 2026-11-15 for installer 0.6.7, published on 2026-11-14 (tag
-`installer-v0.6.7`, commit `a53f5a5b`); the other rows remain the 0.6.6 audit.
+`installer-v0.6.7`, commit `a53f5a5b`). C22 (embedding budget) and C26 (search
+timing) were updated on 2026-11-17 for installer 0.6.8 (tag `installer-v0.6.8`),
+and their evidence refers to that release. The other rows remain the 0.6.6 audit.
 
 Release tag: [`installer-v0.6.6`](https://github.com/Cairn-ink/cairn-memory/tree/installer-v0.6.6).
 GitHub Release: [@cairn-ink/memory 0.6.6](https://github.com/Cairn-ink/cairn-memory/releases/tag/installer-v0.6.6).
