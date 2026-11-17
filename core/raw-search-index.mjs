@@ -337,14 +337,18 @@ export async function openRawSearch(value) {
           typeof deadlineAt!=='number'||Number.isNaN(deadlineAt)||typeof onPrepared!=='function')fail('invalid_input');
       const at=Math.min(deadlineAt,performance.now()+1000),handles=[];
       if(!candidates.length)return {handles,complete:true};
+      // Successful entries live for one prepareMany invocation, never across calls.
+      const successfulEntries=[];
       const check=()=>{expired(at);if(closed)fail('store_closed');};
       return retry(async()=>{
         check();
         // Authenticate each issuing proof independently. Known unpreparable
         // ranges must not spend the shared snapshot's opening budget.
-        const entries=candidates.map(candidate=>{
+        const entries=candidates.map((candidate,index)=>{
           try {
             check();
+            if(index<handles.length)return null;
+            if(successfulEntries[index])return successfulEntries[index];
             const entry=candidateEntry(candidate,intent);
             const rows=entry.sources.filter(source=>candidate.ranges.some(ref=>same(ref,source.ref)))
               .sort((a,b)=>a.ref.span.start-b.ref.span.start);
@@ -353,7 +357,7 @@ export async function openRawSearch(value) {
             // Preserve the existing host authorization protocol. Authorization
             // is metadata-only; the shared canonical snapshot follows it.
             const access=authority.authorize('rawSearchSource',{candidate,intent},token,check);access();check();
-            return {...entry,rows,access};
+            return successfulEntries[index]={...entry,rows,access};
           }catch(error){if(interrupted(error))throw error;return null;}
         });
         const publication=storage.publication({shape:false,deadlineAt:at});
