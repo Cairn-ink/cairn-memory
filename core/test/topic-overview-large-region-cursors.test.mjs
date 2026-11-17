@@ -116,6 +116,7 @@ for (const [layout, fixture] of [[29, installed29], [53, safety53]]) {
     assertOverview(overview, expected, 1050);
 
     const paged = await collectOverview(reader, { namespace, nodeLimit: 1 });
+    for (const page of paged.pages) assert.ok(page.items.length <= 1, 'nodeLimit 1 bounds every page');
     const firstNodePage = paged.pages.find(page => page.items.length > 0);
     assert.deepEqual(firstNodePage?.items.map(node => node.level), ['L2']);
     assert.equal(firstNodePage.coverage.reason, 'node_limit');
