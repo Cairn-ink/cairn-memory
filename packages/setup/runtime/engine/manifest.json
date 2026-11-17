@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "8603ddc2fd2ffbc865ac280763127334198b28d60c4145e86d274a86c95e892c",
-  "bytes": 1415388,
+  "sha256": "5d17bdf95b41b3161ab89952ed721435d5c5011c33842d690a3daf18a8c59868",
+  "bytes": 1415888,
   "files": [
     "LICENSE",
     "README.md",
@@ -670,7 +670,7 @@
     "docs/raw-local-journal.md": "ef48b35c0ce5403e0e171aa4d5e52a96ccbb16650556630d82f6668a3eca1892",
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
     "docs/context-read-local.md": "f4a851e364a58afefad51472a3fe8a860be224290e962f794f8e16c7b41c8911",
-    "docs/defaults.md": "d1d0e9ef900f7627d9f0f35f1db38cb6f9194b8601ab8ea1880cf7c19c376152",
+    "docs/defaults.md": "16d13693db7009a897b4f31d5f1e0058217af58d8a1742307287d9f8e3282ba3",
     "docs/method-packages-local.md": "3912f7d95956e74be91d031c6eeba1ead4ca194fdb15854d0ded05de196a3815",
     "docs/assets-local.md": "4553ca1854b9d4862ac76ae25ce90e451c6ee875d806b84c51d4c00e6b828c5c",
     "docs/v1-preview-integration.md": "d5e5e95fb971224ff1e6b530f7fbb91b8e523dd200729454ded02eaaa07b03b9",
