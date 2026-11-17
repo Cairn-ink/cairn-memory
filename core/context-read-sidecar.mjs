@@ -22,6 +22,7 @@ import { fail } from './validation.mjs';
 import { rankScores, scoreBM25 } from './context-read-bm25.mjs';
 import { REPRESENTATION_VERSION, TOKENIZER_VERSION, termFrequencies, tokenizeT1 } from './context-read-tokenize.mjs';
 import { cosine, encodeVector, loadVector, semanticCapacity, validateEmbedder, rawVectorResidencySelected, reserveSharedVectors } from './context-read-embedder.mjs';
+import { COMPACT_MEMORY_MAX_ITEMS } from './context-read-input.mjs';
 
 export const SIDECAR_FORMAT = 1;
 const APPLICATION_ID = 0x43525831;
@@ -741,7 +742,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
   }
   function lexicalPage(input, query, limit = 24, { deadlineAt = Infinity } = {}) {
     if (typeof query !== 'string' || !query.trim() || query.length > 4000 || query.includes('\0') || !query.isWellFormed() ||
-        !Number.isSafeInteger(limit) || limit < 1 || limit > 24) fail('invalid_input');
+        !Number.isSafeInteger(limit) || limit < 1 || limit > COMPACT_MEMORY_MAX_ITEMS) fail('invalid_input');
     const p = projection(input), terms = [...new Set(tokenizeT1(query))], suppressionEpoch=safetyEpoch(p);
     const keys=factDocuments(p); let result, pending;
     const work=state=>sideRead(() => {
@@ -1028,15 +1029,16 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     retained=true;
     return { state: 'ready', eligible: count, embedded, scanned: count, byType, sequence: g.sequence, checkpoint: g.checkpoint, fence: g.fence,
       release() { vectors.length = 0; released = true; residency?.release(); },
-      score(queryVector, { deadlineAt: scoreDeadline = deadlineAt } = {}) {
+      score(queryVector, { deadlineAt: scoreDeadline = deadlineAt, limit = 24 } = {}) {
         if (released) unavailable('stale_index');
+        if (!Number.isSafeInteger(limit) || limit < 1 || limit > COMPACT_MEMORY_MAX_ITEMS) fail('invalid_input');
         assertState(input, g);
         const query = loadVector(encodeVector(queryVector, port), port), scores = [];
         for (let i = 0; i < vectors.length; i++) {
           if (i % batchSize === 0 && performance.now() >= scoreDeadline) unavailable('timeout');
           scores.push({ ref: vectors[i].ref, score: cosine(query, vectors[i].vector) });
         }
-        const ranked = rankScores(scores).slice(0, 24);
+        const ranked = rankScores(scores).slice(0, limit);
         if (performance.now() >= scoreDeadline) unavailable('timeout');
         assertState(input, g);
         return ranked;
