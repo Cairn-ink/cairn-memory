@@ -100,7 +100,10 @@ search considers up to 64 candidates per channel before selecting up to 64
 distinct candidates. Lexical search uses the same 64-candidate horizon. The
 token ceiling is 6,000, measured against the exact emitted success text.
 The existing signed v1 snapshot is returned for up to 24 selected items when
-it fits the snapshot size limit. Larger selections return `snapshot:null`.
+it fits the snapshot size limit and the complete response still fits its byte
+limit; an item is never dropped to make room for the snapshot. Otherwise, and
+for larger selections, the read returns `snapshot:null`. Candidate diagnostics
+report the compact horizon (depth 64) at every item budget.
 
 Context-enabled CLI startup awaits the local `o200k_base` counter
 `tiktoken-o200k_base` after configuration checks, independently of the legacy
