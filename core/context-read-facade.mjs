@@ -874,15 +874,28 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       // Sample host status once. Dated trials and final delivery must use the
       // same candidate trace; the v2 sampling point remains after assembly.
       const datedCandidates = input.representation === 'representation-v2-dated' || compact ? candidateDetails() : null;
+      // Compact visits each body once in preparation order, so the tail item
+      // identifies an accepted trial. Minimal probes use the rejected item.
+      const withoutSnapshot = compact ? new WeakSet() : null;
       // Wire-only Card projection retains canonical stored-body fences and bodyRevision.
       const assemble = raw => assembleThreeLayerContext({ prepared: prepared.items, counter: options.counter, policy: input.policy,
         query: input.query, readSet: input.readSet, intent: input.intent,
         budget: input.budget, representation: input.representation, deadlineAt,
-        responseBytes: datedCandidates ? ({ meteredBytes, diagnostics, selected }) => completeResponseBytes(success({ metered: null, snapshot: null,
-          diagnostics: { ...diagnostics, omitted: { ...diagnostics.omitted, unavailable: prepared.unavailable },
-            trace: { ...diagnostics.trace, ...dependencyReserve(selected) }, candidates: datedCandidates ?? candidateDetails() } }),
-          meteredBytes, selected.length ? snapshotFor(selected) : null) <= CONTEXT_LIMITS.responseBytes : undefined,
-        snapshotOf: items => { const value = snapshotFor(items); return value === null ? null : encode('snapshot', value, 16384); } }, raw);
+        responseBytes: datedCandidates ? ({ meteredBytes, diagnostics, selected }) => {
+          const envelope = success({ metered: null, snapshot: null,
+            diagnostics: { ...diagnostics, omitted: { ...diagnostics.omitted, unavailable: prepared.unavailable },
+              trace: { ...diagnostics.trace, ...dependencyReserve(selected) }, candidates: datedCandidates ?? candidateDetails() } });
+          const value = selected.length ? snapshotFor(selected) : null;
+          const fits = completeResponseBytes(envelope, meteredBytes, value) <= CONTEXT_LIMITS.responseBytes;
+          if (fits || !compact || value === null) return fits;
+          if (completeResponseBytes(envelope, meteredBytes, null) > CONTEXT_LIMITS.responseBytes) return false;
+          withoutSnapshot.add(selected.at(-1));
+          return true;
+        } : undefined,
+        snapshotOf: items => {
+          const value = withoutSnapshot?.has(items.at(-1)) ? null : snapshotFor(items);
+          return value === null ? null : encode('snapshot', value, 16384);
+        } }, raw);
       let { selected: delivered, validateRaw, ...assembled } = assemble(rawChannel);
       const decorate = () => {
         const diagnostics = assembled.diagnostics;
