@@ -4,12 +4,13 @@ import { openContextReader, openMemoryCore } from '../index.mjs';
 import { assembleContext, meteredText } from '../context-read-assembly.mjs';
 import { createFakeEmbedder } from '../context-read-embedder.mjs';
 import { fuseCandidates } from '../context-read-fusion.mjs';
-import { ASSEMBLY_REPRESENTATIONS, contextInput } from '../context-read-input.mjs';
+import { ASSEMBLY_REPRESENTATIONS, CONTEXT_LIMITS, contextInput } from '../context-read-input.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 import { transaction } from '../database.mjs';
 import { controlledClock } from '../testing/context-read-assembly-fixture.mjs';
 import { compactAssemblyOptions, compactPrepared, compactRepresentation, compactRequest } from '../testing/context-read-compact-fixture.mjs';
 import { denied, host, policy, refresh } from '../testing/context-read-core-fixture.mjs';
+import { fixture } from '../testing/context-read-fixture.mjs';
 import { eventTimeFixture, ns, ok, receipt } from '../testing/receipt-event-time-fixture.mjs';
 
 test('the compact parser defaults to 64 and bounds the item budget independently of the other representations', () => {
@@ -80,6 +81,42 @@ const corpusSize = 84;
 const suffix = i => String(i).padStart(3, '0');
 const byId = (a, b) => Buffer.compare(Buffer.from(a.id), Buffer.from(b.id));
 const chronological = (a, b) => a.date === b.date ? byId(a, b) : a.date === null ? 1 : b.date === null ? -1 : a.date < b.date ? -1 : 1;
+
+test('compact snapshots yield to the response byte limit and remain available when they fit', async t => {
+  controlledClock(t);
+  const namespace = { ownerId: 'owner', scope: 'personal', projectId: null }, readSet = [namespace];
+  const trusted = host();
+  trusted.state.allowed = readSet;
+  const { core } = fixture(t, { coreOptions: { contextRead: { version: 'context-read-v1',
+    authority: trusted.authority, counter: { id: 'one-token', countTokens: () => 1 } } } });
+  const largeBodies = Array.from({ length: 25 }, (_, i) => `telescope ${String(i).padStart(2, '0')}${'~'.repeat(2068)}`);
+  const smallBodies = Array.from({ length: 24 }, (_, i) => `microscope ${i}`);
+  for (const [i, content] of [...largeBodies, ...smallBodies].entries())
+    ok(core.admit({ namespace, memory: { content, kind: 'fact' }, receipts: [receipt(`compact-bytes-${i}`)] }));
+  assert.equal(ok(await trusted.call(core, 'refreshContextIndex', refresh({ readSet }))).status, 'complete');
+
+  const read = patch => trusted.call(core, 'contextRead', compactRequest({ readSet, semantic: false, ...patch }));
+  const response = await read();
+  const value = ok(response);
+  assert.deepEqual(value.metered.items.map(item => item.body).sort(), largeBodies);
+  assert.ok(value.metered.items.every(item => item.date === null && Buffer.byteLength(item.body) === 2080));
+  assert.equal(value.snapshot, null);
+  assert.deepEqual(value.diagnostics.omitted, { items: 0, bodies: 0, sources: 25, unavailable: 0, oversized: 0 });
+  assert.equal(value.diagnostics.stops.budget, false);
+  assert.ok(Buffer.byteLength(JSON.stringify(response)) <= CONTEXT_LIMITS.responseBytes);
+
+  const budget = { maxItems: 24 };
+  const capped = ok(await read({ budget }));
+  assert.deepEqual(capped.metered.items, value.metered.items.slice(0, 24));
+  assert.equal(capped.snapshot, null);
+
+  const small = ok(await read({ query: 'microscope', budget }));
+  assert.equal(small.metered.items.length, 24);
+  assert.equal(typeof small.snapshot, 'string');
+  const signed = JSON.parse(Buffer.from(small.snapshot.split('.')[0], 'base64url'));
+  assert.equal(signed.v, 1);
+  assert.deepEqual(signed.refs.map(ref => ref[2]), small.diagnostics.items.map(item => item.ref.memoryId));
+});
 
 for (const family of ['local', 'hosted']) test(`compact 64 items from both channels and lexical fallback, ${family}`, async t => {
   controlledClock(t);
