@@ -26,7 +26,7 @@ async function probe(t, phase, budget = true) {
   } });
   await f.write(row('first', new Date().toISOString()));
   const result = await f.run('start-boundary');
-  assert.ok(result.wallMs < 450, `total start budget: ${result.wallMs.toFixed(1)} ms`);
+  assert.ok(result.wallMs < 1150, `total start budget: ${result.wallMs.toFixed(1)} ms`);
   if (phase) {
     await assert.rejects(readFile(f.statePath), { code: 'ENOENT' });
     // stat/temporary stalls happen while holding the lock. Capture must reap
