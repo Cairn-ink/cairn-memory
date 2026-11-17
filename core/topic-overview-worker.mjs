@@ -1,6 +1,6 @@
 import { cachedContentLayout } from './content-safety-schema.mjs';
-import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside } from './content-suppression-storage.mjs';
-import { createTopicSqlitePolicy, unsupportedTopicStorage } from './topic-reader-sqlite.mjs';
+import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside, resetContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { createTopicRetryPolicy, topicReadTransaction, unsupportedTopicStorage } from './topic-reader-sqlite.mjs';
 import { parentPort, workerData } from 'node:worker_threads';
 import { createTopicTokens } from './topic-snapshot.mjs';
 import { createTopicSession } from './topic-members-session.mjs';
@@ -9,17 +9,22 @@ import { randomBytes } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { setImmediate as yieldTurn } from 'node:timers/promises';
 import { openReadDatabase } from './read-database.mjs';
+import { isStorageBusy } from './database.mjs';
 import { createTopicOverviewStorage } from './topic-overview-storage.mjs';
 import { safeReaderFailure, safeLegacyReaderFailure } from './topic-overview-input.mjs';
 import { fail } from './validation.mjs';
 
-const topicPolicy = createTopicSqlitePolicy({ diagnostics: workerData.diagnostics });
+const topicPolicy = createTopicRetryPolicy({
+  diagnostics: workerData.diagnostics,
+  isRetryableBusy: isStorageBusy,
+  onRetry: error => parentPort.postMessage({ retryingStorage: error ? safeReaderFailure(error, workerData.diagnostics) : null }),
+});
 let connection, storage, traversal;
 let tokens, topicSession, memberReader, requestNamespace;
 function prepareTopicReaders() {
   if (memberReader) return;
   const nextTokens = createTopicTokens(), nextSession = createTopicSession(workerData.path, topicPolicy);
-  const nextReader = createTopicMemberReader({ ...nextSession, tokens: nextTokens });
+  const nextReader = createTopicMemberReader({ ...nextSession, prepare: nextSession.prepareRequest, tokens: nextTokens });
   tokens = nextTokens; topicSession = nextSession; memberReader = nextReader;
 }
 function publicSnapshot(state, request) {
@@ -36,32 +41,41 @@ function snapshot(request, expected) {
   return current;
 }
 function transaction(work) {
-  if (!cachedContentLayout(connection.db)?.suppressionRevision) {
-    connection.db.exec('BEGIN');
-    try { const value = work(); connection.db.exec('COMMIT'); return value; }
-    catch (error) { connection.db.exec('ROLLBACK'); throw error; }
-  }
-  return withContentSuppressionRequest(()=>{
-    connection.db.exec('BEGIN');
-    try { const value = inContentSuppressionRequestInside(connection.db,work,[requestNamespace]); connection.db.exec('COMMIT'); return value; }
-    catch (error) { connection.db.exec('ROLLBACK'); throw error; }
+  const { db } = connection, run = callback => topicReadTransaction(db, callback, topicPolicy.isDelete(db) ? isStorageBusy : undefined);
+  if (!cachedContentLayout(db)?.suppressionRevision) return run(work);
+  return withContentSuppressionRequest(() => run(() => inContentSuppressionRequestInside(db, work, [requestNamespace])));
+}
+function retryLegacy(work, restore) {
+  return topicPolicy.retryRead(connection.db, work, restore);
+}
+function retryLegacyTransaction(work, canResume = () => true) {
+  return retryLegacy(() => transaction(work), () => {
+    if (!canResume()) return false;
+    resetContentSuppressionRequestInside(connection.db);
+    return true;
   });
 }
-async function readLegacy(request) {
-  if (!connection) {
-    const opened = openReadDatabase(workerData.path, { topicPolicy });
-    try { storage = createTopicOverviewStorage(opened.db); connection = opened; }
-    catch (error) { opened.db.close(); throw unsupportedTopicStorage(error); }
+function openLegacy() {
+  const opened = openReadDatabase(workerData.path, { topicPolicy });
+  try { storage = createTopicOverviewStorage(opened.db); connection = opened; }
+  catch (error) {
+    opened.db.close();
+    if (topicPolicy.isDelete(opened.db) && isStorageBusy(error)) throw error;
+    throw unsupportedTopicStorage(error);
   }
+}
+async function readLegacy(request) {
+  if (!connection?.db.isOpen) await topicPolicy.retryOpening(workerData.path, openLegacy);
   const { cursor, ...bound } = request, binding = JSON.stringify(bound);
   if (cursor) {
     if (!traversal) fail('cursor_stale');
     if (binding !== traversal.binding) fail('invalid_cursor');
-    transaction(() => snapshot(request, traversal.snapshot));
+    await retryLegacyTransaction(() => snapshot(request, traversal.snapshot));
     if (cursor === traversal.lastInput) return traversal.lastOutput;
     if (cursor !== traversal.nextCursor) fail('cursor_stale');
   } else {
-    const captured = transaction(() => snapshot(request));
+    let captured;
+    await retryLegacyTransaction(() => { captured = snapshot(request, captured); });
     traversal = { binding, snapshot: captured, data: storage.create(request.namespace, request, captured),
       offset: 0, nextCursor: null };
   }
@@ -69,16 +83,19 @@ async function readLegacy(request) {
   let used = 0;
   try {
     while (!state.items && used < request.workLimit) {
-      const done = transaction(() => {
+      let scanStarted = false;
+      const done = await retryLegacyTransaction(() => {
         snapshot(request, state.snapshot);
         const start = performance.now();
         let quantum = 0;
         while (used < request.workLimit && quantum < 64 && performance.now() - start < 5) {
           used++; quantum++;
+          // The overview generator cannot rewind a .next() or a failed commit.
+          scanStarted = true;
           if (state.data.scan.next().done) return true;
         }
         return false;
-      });
+      }, () => !scanStarted);
       if (done) { state.items = state.data.finish(); break; }
       await yieldTurn();
     }
@@ -100,18 +117,26 @@ async function readLegacy(request) {
       }
     }
     if (!value.items.length && state.offset < state.items.length) fail('context_item_too_large');
-    state.offset += value.items.length;
-    if (state.offset === state.items.length) { value.coverage.complete = true; value.coverage.reason = null; value.nextCursor = null; }
+    if (state.offset + value.items.length === state.items.length) { value.coverage.complete = true; value.coverage.reason = null; value.nextCursor = null; }
   }
   if (Buffer.byteLength(JSON.stringify(success(value))) > request.maxBytes) fail('context_item_too_large');
-  transaction(() => snapshot(request, state.snapshot));
+  await retryLegacyTransaction(() => snapshot(request, state.snapshot));
+  state.offset += value.items.length;
   state.lastInput = cursor; state.lastOutput = success(value); state.nextCursor = value.nextCursor;
   return state.lastOutput;
 }
 async function readOptin(request) {
   let used = 0;
   const charge = n => { used += n; if (used > request.workLimit) fail('reader_failed'); };
-  topicSession.prepare({ charge, request });
+  await topicSession.prepareRequest({ charge, request });
+  function retryTransaction(work, restore = () => true) {
+    const before = used;
+    return topicSession.retryTransaction(work, () => {
+      if (!restore()) return false;
+      used = before;
+      return true;
+    });
+  }
   const { cursor, ...bound } = request, binding = JSON.stringify(bound);
   function fence(state) {
     charge(4);
@@ -129,11 +154,13 @@ async function readOptin(request) {
     if (cursor !== traversal.lastInput && cursor !== traversal.nextCursor) fail('cursor_stale');
   }
   const replay = cursor && cursor === traversal.lastInput;
-  let state;
+  let state, attempted;
+  const initialization = cursor && !replay && topicSession.canRetry() && !traversal.data.initialization.done
+    ? structuredClone(traversal.data.initialization) : undefined;
   try {
-    topicSession.transaction(() => {
+    await retryTransaction(() => {
       const start = performance.now(), before = used;
-      const { captured, origin } = fence(cursor ? traversal : undefined);
+      const { captured, origin } = fence(cursor ? traversal : attempted);
       if (replay) return;
       if (!cursor) {
         charge(1);
@@ -144,27 +171,42 @@ async function readOptin(request) {
       while (!state.data.initialization.done && used + state.data.cost() <= request.workLimit - 5 &&
           used - before + state.data.cost() <= 64 && performance.now() - start < 5) {
         charge(state.data.cost());
-        state.data.scan.next();
+        state.data.stepOpening();
       }
+    }, () => {
+      if (initialization) traversal.data.restoreOpening(structuredClone(initialization));
+      if (!cursor && state) attempted = state;
+      return true;
     });
     if (replay) return traversal.lastOutput;
     charge(1);
     while (!state.items && used + 4 + state.data.cost() <= request.workLimit - 4) {
-      const done = topicSession.transaction(() => {
+      let scanStarted = false;
+      const initialization = topicSession.canRetry() && !state.data.initialization.done
+        ? structuredClone(state.data.initialization) : undefined;
+      const done = await retryTransaction(() => {
         fence(state);
         const start = performance.now(); let quantum = 4;
         while (used + state.data.cost() <= request.workLimit - 4 && quantum + state.data.cost() <= 64 && performance.now() - start < 5) {
           const cost = state.data.cost(); charge(cost); quantum += cost;
-          if (state.data.scan.next().done) return true;
+          if (!state.data.initialization.done) state.data.stepOpening();
+          else {
+            scanStarted = true;
+            if (state.data.scan.next().done) return true;
+          }
         }
         return false;
+      }, () => {
+        if (scanStarted) return false;
+        if (initialization) state.data.restoreOpening(structuredClone(initialization));
+        return true;
       });
       if (done) { state.items = state.data.finish(); break; }
       await yieldTurn();
     }
   } catch (error) {
     if (error.code !== 'state_limit' || !state) throw error;
-    topicSession.transaction(() => fence(state)); traversal = undefined;
+    await retryTransaction(() => fence(state)); traversal = undefined;
     return success({ snapshot: publicSnapshot(state, request), items: [], totals: null,
       coverage: { complete: false, countsComplete: false, reason: 'state_limit' }, nextCursor: null });
   }
@@ -179,11 +221,11 @@ async function readOptin(request) {
       }
     }
     if (!value.items.length && state.offset < state.items.length) fail('context_item_too_large');
-    state.offset += value.items.length;
-    if (state.offset === state.items.length) { value.coverage = { complete: true, countsComplete: true, reason: null }; value.nextCursor = null; }
+    if (state.offset + value.items.length === state.items.length) { value.coverage = { complete: true, countsComplete: true, reason: null }; value.nextCursor = null; }
   }
   if (Buffer.byteLength(JSON.stringify(success(value))) > request.maxBytes) fail('context_item_too_large');
-  topicSession.transaction(() => fence(state)); topicSession.accept(state.data);
+  await retryTransaction(() => fence(state)); topicSession.accept(state.data);
+  state.offset += value.items.length;
   state.lastInput = cursor; state.lastOutput = success(value); state.nextCursor = value.nextCursor;
   return state.lastOutput;
 }
@@ -198,9 +240,11 @@ parentPort.on('message', async message => {
         : await (request.snapshotVersion ? readOptin(request) : readLegacy(request));
       // Worker yields are engine work, never E1 ports. One request proof spans
       // their snapshots; a single independent delivery fence follows all work.
-      if (request.method === 'members' || request.snapshotVersion) topicSession.assertDelivery(requestNamespace);
-      else if (cachedContentLayout(connection.db)?.suppressionRevision) try { assertContentSuppressionRequestInside(connection.db,[requestNamespace]); }
-      catch(error) { if(error.code==='evidence_unavailable')fail('cursor_stale');throw error; }
+      if (request.method === 'members' || request.snapshotVersion) await topicSession.assertDelivery(requestNamespace);
+      else if (cachedContentLayout(connection.db)?.suppressionRevision) await retryLegacy(() => {
+        try { assertContentSuppressionRequestInside(connection.db, [requestNamespace]); }
+        catch (error) { if (error.code === 'evidence_unavailable') fail('cursor_stale'); throw error; }
+      });
       parentPort.postMessage(result);
     },{fresh:true});
   }
