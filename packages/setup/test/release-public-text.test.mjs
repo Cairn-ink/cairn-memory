@@ -72,3 +72,17 @@ test('forget known limits are stated where each reader looks, and never as hidde
     for (const value of ['merely nearby in time is no longer hidden','hides only that conversation and its copies',"can't be continued",'Start a new conversation to resume saving','Raw capture of messages without a time is refused']) lacks(path,text,value);
   }
 });
+
+// Embedding budget (0.6.8): the setup notice, the release pages and the defaults page describe the
+// shared daily estimate with the same words, and none keeps the per-server-run wording.
+test('the embedding budget is described the same way in the setup notice and the release pages',() => {
+  const read = path => readFileSync(new URL(path,root),'utf8');
+  const english = 'up to an estimated US$1 per day per running Cairn server';
+  const chinese = '每個執行中的 Cairn server 每天預估上限約 US$1';
+  for (const [path,values] of [['packages/setup/lib/messages.mjs',[english,chinese]],['packages/setup/README.md',[english,chinese]],
+    ['docs/defaults.md',[english]],['README.md',[english]],['README.zh-TW.md',[chinese]]]) {
+    const text = read(path);
+    for (const value of values) assert.match(text,phrase(value),path+' carries: '+value);
+    assert.doesNotMatch(text,/US\$1\s+per\s+server\s+run/,path+' no longer says per server run');
+  }
+});
