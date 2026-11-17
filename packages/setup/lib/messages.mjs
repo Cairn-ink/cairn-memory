@@ -1645,6 +1645,7 @@ Object.assign(messages, {
   "local_status_data": {"zh": "  資料：~/.cairn-memory/data", "en": "  Data: ~/.cairn-memory/data"},
   "local_status_data_private": {"zh": "  資料：自訂目錄（完整路徑請用 --verbose）", "en": "  Data: custom directory (use --verbose for the full path)"},
   "local_status_failed_dirs": {"zh": "  保留的失敗安裝：", "en": "  Retained failed installations:"},
+  "local_status_peer_index_hint": {"zh": "這個資料庫的訊息索引建好之前，忘記內容和刪除對話會比較慢。要建立索引，請先關閉 Claude Code 和 Codex，再執行一次 `npx @cairn-ink/memory raw index`。", "en": "Forgetting something and deleting conversations are slower on this store until its message index is built. To build it, close Claude Code and Codex, then run `npx @cairn-ink/memory raw index` once."},
   "local_dry_run": {"zh": "預覽：將安裝或驗證本機引擎、註冊所選工具，並依偏好設定 Raw 擷取；不會寫入設定。", "en": "Preview: install or verify the local engine, register the selected tools and configure Raw capture according to the saved preference."},
   "local_uninstall_plan": {"zh": "將先關閉擷取並移除 hooks，再解除所選工具的 cairn-local 連接；保留資料、擷取身分與綁定引擎。", "en": "Disable capture and remove its hooks, then detach cairn-local from the selected tools. Keep data, capture identity and its pinned runtime."},
   "local_uninstall_confirm": {"zh": "? 確定移除本機記憶設定嗎？(y/N) ", "en": "? Remove local memory setup? (y/N) "},
