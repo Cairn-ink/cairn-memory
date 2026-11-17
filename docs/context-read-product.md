@@ -542,21 +542,25 @@ storage/authority failures or extend an existing call's deadline. The owned
 pump still stops and reports an error through its completion promise so the
 host can apply that policy.
 
-Without `wal:true`, `sidecarJournalMode:'WAL'` still refuses `index_unavailable`
-before opening. Default capabilities retain `journals:['DELETE']`,
+When `wal` is omitted or false, the canonical core's journal mode is detected
+automatically. The sidecar stays DELETE-only: `sidecarJournalMode:'WAL'` still
+refuses `index_unavailable` before opening. Default capabilities advertise
+`journals:['DELETE','WAL']` and retain
 `sidecarJournals:['DELETE']` and
-`wal:{available:false,reason:'deferred_to_p2d'}` byte-for-byte.
+`wal:{available:false,reason:'deferred_to_p2d'}`.
 
 ### Explicit WAL deployment opt-in
 
 The host sets **`wal:true` on both product reader and maintainer constructors**
-to permit SQLite's coordinated WAL/SHM creation and read marks. It is a boolean
+to permit WAL sidecars as well as canonical cores, with SQLite's coordinated
+WAL/SHM creation and read marks. It is a boolean
 constructor option, separate from authentication and from the maintainer's
 required `sidecarJournalMode:'DELETE'|'WAL'`. The opt-in supports all four
 canonical/sidecar journal combinations, including read-only readers. Opted-in
 capabilities advertise both journal lists as `['DELETE','WAL']` and
 `wal:{available:true}`; this means code support, not platform qualification.
-Omitting the option or setting false preserves P2b refusal and capabilities.
+Explicit `wal:true` behavior is unchanged. Omitting the option or setting false
+detects the canonical mode while retaining the DELETE-only sidecar policy.
 The legacy `openContextReader`/`context-read-v1` defaults do not accept this option.
 
 ```js
