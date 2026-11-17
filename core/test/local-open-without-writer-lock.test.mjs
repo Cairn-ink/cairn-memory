@@ -6,6 +6,7 @@ import { openMemoryCore } from '../index.mjs';
 import { openDatabase, transaction } from '../database.mjs';
 import { createCommitDispatcher, hasCommitDispatcher } from '../commit-dispatch.mjs';
 import { LOCAL_RAW_PRIVACY_DDL } from '../content-safety-schema.mjs';
+import { eventTimeFixture } from '../testing/receipt-event-time-fixture.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 
 import { localOpenFixture, observeOpen, lockChild } from './fixtures/local-open-tools.mjs';
@@ -77,6 +78,18 @@ test('local open fresh path initializes under IMMEDIATE at layout 29', async t =
   const db = new DatabaseSync(path);
   try { assert.equal(db.prepare('PRAGMA user_version').get().user_version, 29); }
   finally { db.close(); }
+});
+test('local open fresh content-safety shape initializes under IMMEDIATE before reaching layout 53', async t => {
+  // The same fresh base-33 initialization and offline migration used by the
+  // ported fixtures. Observe its first canonical connection, before migration.
+  const { value, trace } = observeOpen(() => eventTimeFixture(t, 33));
+  const f = await value, db = new DatabaseSync(f.path);
+  try { assert.equal(db.prepare('PRAGMA user_version').get().user_version, 53); }
+  finally { db.close(); }
+  const creation = trace.findIndex(row => /CREATE TABLE memories/.test(row.sql));
+  assert.ok(creation > 0);
+  assert.equal(trace[creation].transaction, true);
+  assert.equal(trace.slice(0,creation).findLast(row => /^BEGIN/.test(row.sql)).sql, 'BEGIN IMMEDIATE');
 });
 for (const broken of ['raw_deletion_effects','local_capture_binding_insert']) test(`local open invalid layout 29 refuses ${broken}`, async t => {
   const f = await localOpenFixture(t, 29), db = new DatabaseSync(f.path);
