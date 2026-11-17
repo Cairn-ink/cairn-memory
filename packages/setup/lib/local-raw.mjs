@@ -10,6 +10,11 @@ import { SetupError } from './errors.mjs';
 const ENGINE_DELETE_BUDGET_MS = 600000;
 const DELETE_WATCHDOG_MS = ENGINE_DELETE_BUDGET_MS + 30000;
 const INSPECT_WATCHDOG_MS = 120000;
+// Index has a five-second busy wait and an unbounded build. Allow ten minutes
+// for the build plus 30 seconds for that wait, SQLite close and child shutdown.
+const INDEX_WATCHDOG_MS = 630000;
+const indexResults = new Set(['index: present', 'index: built', 'index: insufficient_space',
+  'index: deferred', 'index: busy, close Claude Code and Codex and run again']);
 const CONTINUE = 'rerun the same command to continue';
 const MAX_PROGRESS_LINES = 4096; // More than the engine's 10-minute/250ms loop.
 const MAX_PROGRESS_LENGTH = 96;
@@ -44,14 +49,17 @@ export function createProgressFilter(forward) {
 
 export function validateRawOptions(options, selection) {
   const [, operation, ...ids] = selection.argv;
-  if (!['list', 'delete'].includes(operation) ||
-      (operation === 'list' ? ids.length !== 0 : ids.length !== 1 || selection.client ||
+  if (!['list', 'delete', 'index'].includes(operation) ||
+      (operation !== 'delete' ? ids.length !== 0 : ids.length !== 1 || selection.client ||
         !ids[0] || ids[0].length > 200 || /[\s\x00-\x1f\x7f*?%\[\]]/u.test(ids[0]) || ids[0].startsWith('-')) ||
+      (operation === 'index' && (selection.client || options.yes || options.verbose || options.local || options.cloud ||
+        options.noCapture || options.purgeConfig || options.endpoint !== undefined || options.owner !== undefined ||
+        options.db !== undefined || options.project !== undefined)) ||
       options.localCapture !== undefined || options.dailyCap !== undefined || options.captureExec !== undefined)
     throw new SetupError('local_raw_arguments', 2);
 }
 
-async function invoke(vector, args, client, deleting, { env, write, onChild }) {
+async function invoke(vector, args, client, operation, deleting, { env, write, onChild }) {
   return new Promise(resolve => {
     const child = spawn(vector.node, args, { detached: process.platform !== 'win32',
       env: { HOME: env.HOME, PATH: env.PATH ?? '/usr/bin:/bin', TMPDIR: env.TMPDIR, LANG: 'C.UTF-8' },
@@ -59,7 +67,7 @@ async function invoke(vector, args, client, deleting, { env, write, onChild }) {
     let buffer = '', failed = false, timedOut = false;
     const kill = () => { failed = true; try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); } };
     const timer = setTimeout(() => { timedOut = true; kill(); },
-      deleting ? DELETE_WATCHDOG_MS : INSPECT_WATCHDOG_MS);
+      operation === 'index' ? INDEX_WATCHDOG_MS : deleting ? DELETE_WATCHDOG_MS : INSPECT_WATCHDOG_MS);
     const progress = createProgressFilter(text => process.stderr.write(text));
     child.stderr?.setEncoding('utf8');
     child.stderr?.on('data', chunk => progress.push(chunk));
@@ -67,6 +75,7 @@ async function invoke(vector, args, client, deleting, { env, write, onChild }) {
     const line = text => {
       if (!text || failed) return;
       try {
+        if (operation === 'index' && indexResults.has(text)) { write.literal(text); return; }
         const row = JSON.parse(text);
         // raw list's optional client filter operates on metadata from the
         // engine. Errors are never filtered and JSON lines stay copyable.
@@ -111,8 +120,8 @@ export async function rawLocal(options, selection, detection, context) {
     const receipt = current.clients[selection.client ?? Object.keys(current.clients).find(client => current.clients[client])];
     const vector = receipt.vector;
     const [executable, ...flags] = vectorArguments(detection.root, vector);
-    return invoke(vector, [executable, 'raw', operation, ...flags,
+    return invoke(vector, [executable, 'raw', operation, ...(operation === 'index' ? ['--db', vector.databasePath] : flags),
       ...(operation === 'delete' ? ['--conversation', id, ...(options.yes ? ['--yes'] : [])] : [])],
-    selection.client, operation === 'delete' && options.yes === true, { ...context, onChild });
+    selection.client, operation, operation === 'delete' && options.yes === true, { ...context, onChild });
   });
 }

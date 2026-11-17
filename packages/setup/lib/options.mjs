@@ -82,7 +82,12 @@ export function parseOptions(argv) {
     if (dailyCap !== undefined && !['setup', 'config'].includes(remaining[0])) throw new SetupError('cap_option_scope', 2);
     if (captureExec !== undefined && !['setup', 'config'].includes(remaining[0])) throw new SetupError('invalid_exec_setting', 2);
     return { argv: remaining, lang, endpoint, dailyCap, captureExec, verbose, noCapture, localCapture, local, cloud, yes, purgeConfig, owner, db, project };
-  } catch (error) { error.language = lang; throw error; }
+  } catch (error) {
+    // Raw index has no operator options; keep its argument refusal consistent
+    // even when a global option is rejected before local routing runs.
+    if (remaining[0] === 'raw' && remaining[1] === 'index') error = new SetupError('local_raw_arguments', 2);
+    error.language = lang; throw error;
+  }
 }
 
 export async function selectEndpoint({ endpointOverride, existingEndpoint, prompt, write, t }) {
