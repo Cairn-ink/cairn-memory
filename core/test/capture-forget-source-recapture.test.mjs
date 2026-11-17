@@ -6,7 +6,7 @@ import { eventTimeSafetyFixture } from '../testing/receipt-event-time-fixture.mj
 import { safetyFixture, ns, ok } from '../testing/content-safety-s2h-fixture.mjs';
 import { createHash } from 'node:crypto';
 
-const client = 'cairn-web', sessionId = 'recapture-conversation';
+const client = 'synthetic-client', sessionId = 'recapture-conversation';
 const tea = 'The user prefers green tea in the morning';
 const reworded = 'In the mornings the user likes to drink green tea';
 const bike = 'The user works on a bicycle repair project';

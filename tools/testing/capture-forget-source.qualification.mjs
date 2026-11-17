@@ -17,7 +17,7 @@ const receiptDenialTokens = rows => rows.flatMap(row => [
   'rs1:a:' + digest(['receipt-source-address-v1', row.client, row.session_id, row.event_id, row.role]),
 ]);
 const boundary = value => [value.ownerId, value.scope, value.projectId || ''];
-const identity = i => ({ client: 'cairn-web', sessionId: 'cost-session', eventId: 'm' + i,
+const identity = i => ({ client: 'synthetic-client', sessionId: 'cost-session', eventId: 'm' + i,
   role: 'user', excerpt: 'Synthetic independent message ' + i });
 
 async function meter(call) {
@@ -52,7 +52,7 @@ for (const shape of ['hosted-53', 'legacy-18']) {
     const db = f.connect(); f.workspace.defer(() => db.close());
     const messages = Array.from({ length: 24 }, (_, i) => ({ id: 'm' + i, role: 'user', content: identity(i).excerpt }));
     for (const temperature of ['cold', 'warm']) {
-      const capture = await meter(() => core.capture({ namespace: ns, client: 'cairn-web', sessionId: 'cost-session',
+      const capture = await meter(() => core.capture({ namespace: ns, client: 'synthetic-client', sessionId: 'cost-session',
         eventId: 'cost-' + temperature, messages }));
       ok(capture.value);
       assert.equal(capture.counts.tokenExecuted, phase === 'after' ? 24 : 0);
