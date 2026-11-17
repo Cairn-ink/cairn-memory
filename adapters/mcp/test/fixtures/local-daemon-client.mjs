@@ -5,6 +5,8 @@ import fsPromises from 'node:fs/promises';
 import childProcess from 'node:child_process';
 import { registerHooks, syncBuiltinESMExports } from 'node:module';
 import { once } from 'node:events';
+import { Duplex } from 'node:stream';
+import { frameGuard } from '../../local-daemon-wire.mjs';
 import { runForwarder, connectOrStart } from '../../local-forwarder.mjs';
 import { runCandidate } from '../../local-daemon.mjs';
 import { processStart } from '../../local-daemon-liveness.mjs';
@@ -25,6 +27,15 @@ try {
     } catch (error) { code = error.code; }
     send({ kind: 'connection-probe-result', code, execArgv: process.execArgv });
   } else if (configuration.role === 'candidate') {
+    if (configuration.observeToolExecutions) {
+      const { McpServer } = await import('@modelcontextprotocol/server');
+      const registerTool = McpServer.prototype.registerTool;
+      McpServer.prototype.registerTool = function(name, options, handler) {
+        return registerTool.call(this, name, options, (...args) => {
+          send({ kind: 'tool-executed', name }); return handler(...args);
+        });
+      };
+    }
     let restoreTempClock;
     if (configuration.observeTempScan) {
       const opendir = fsPromises.opendir;
@@ -260,7 +271,62 @@ try {
       while ((await once(process, 'message'))[0].kind !== 'release-takeover-read') {}
       throw Object.assign(Error('synthetic_private_missing'), { code: 'ENOENT' });
     };
-    let result = await runForwarder(configuration.args, { ...configuration.options,
+    const { armWatchdogOnTool, initializationTimeoutRace, ...forwarderOptions } = configuration.options ?? {};
+    if (armWatchdogOnTool || initializationTimeoutRace) {
+      let armed = false, attempts = 0;
+      const shortMs = forwarderOptions.unresponsiveMs;
+      // The existing numeric options seam is coerced at each watchdog check.
+      // Keep the normal setup budget until a complete tool frame has passed
+      // the ledger and reaches socket.write; no production arming option.
+      forwarderOptions.unresponsiveMs = { valueOf: () => armed ? shortMs : 30000 };
+      forwarderOptions.connect = async (args, options) => {
+        const attempt = ++attempts;
+        if (initializationTimeoutRace && attempt === 2) {
+          armed = false;
+          send({ kind: 'recovery-connect-pending' });
+          while ((await once(process, 'message'))[0].kind !== 'release-recovery-connect') {}
+        }
+        // Connection setup keeps its ordinary takeover budget in both cases.
+        const connection = await connectOrStart(args, { ...options, unresponsiveMs: 30000 });
+        if (attempt === 1) {
+          const frames = frameGuard(), push = frames.push.bind(frames);
+          frames.push = (bytes, encoding) => {
+            if (bytes && JSON.parse(bytes.toString('utf8')).result?.protocolVersion) {
+              send({ kind: 'initialization-withheld' });
+              if (initializationTimeoutRace) {
+                // Withhold until this transport times out. The error is
+                // emitted before the gated second connection can proceed.
+                armed = true;
+              } else {
+                const release = message => {
+                  if (message.kind !== 'release-initialization') return;
+                  process.off('message', release); push(bytes, encoding);
+                };
+                process.on('message', release);
+                frames.once('close', () => process.off('message', release));
+              }
+              return true;
+            }
+            return push(bytes, encoding);
+          };
+          connection.socket = Duplex.from({ readable: connection.socket.pipe(frames), writable: connection.socket });
+          // Duplex.from emits ABORT_ERR when the forwarder destroys recovery's
+          // old transport. Own it just as connectOrStart owns socket errors.
+          connection.socket.on('error', () => {});
+        }
+        if (armWatchdogOnTool) {
+          const write = connection.socket.write.bind(connection.socket);
+          connection.socket.write = (bytes, ...rest) => {
+            if (!armed && JSON.parse(bytes.toString('utf8')).method === 'tools/call') {
+              armed = true; send({ kind: 'watchdog-armed' });
+            }
+            return write(bytes, ...rest);
+          };
+        }
+        return connection;
+      };
+    }
+    let result = await runForwarder(configuration.args, { ...forwarderOptions,
       ...((configuration.holdTakeoverLock || configuration.takeoverFault) ? { takeoverOptions: {
         ...configuration.options?.takeoverOptions,
         afterLock: async () => {
