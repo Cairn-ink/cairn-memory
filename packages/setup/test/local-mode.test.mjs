@@ -113,10 +113,16 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
           'missing-field':"console.log(JSON.stringify({status:'ok',present:false}));",
           nonzero:"console.log(JSON.stringify({status:'ok',present:false,overThreshold:true}));process.exitCode=1;"}[config.peerIndexProbe];
         const audit=${JSON.stringify(join(ws.path, 'peer-open.json'))};
-        const prefix="import sqlite from 'node:sqlite';import{syncBuiltinESMExports}from'node:module';import{writeFileSync}from'node:fs';"+
-          "const Native=sqlite.DatabaseSync;sqlite.DatabaseSync=class extends Native{constructor(path,options){"+
-          "writeFileSync("+JSON.stringify(audit)+",JSON.stringify({path,options}));super(path,options);}};syncBuiltinESMExports();";
-        const started=performance.now(),child=original(node,[args[0],args[1],program??prefix+args[2]],...rest);
+        const prefix="import{DatabaseSync as Native}from'node:sqlite';import{writeFileSync}from'node:fs';"+
+          "globalThis.PeerIndexAuditDatabaseSync=class extends Native{constructor(path,options){"+
+          "writeFileSync("+JSON.stringify(audit)+",JSON.stringify({path,options}));super(path,options);}};";
+        // Supply the audit class directly: syncing the default export does not update SQLite's named binding.
+        let replacements=0;
+        const audited=args[2].replaceAll("await import('node:sqlite')",()=>{
+          replacements++;return '({DatabaseSync:globalThis.PeerIndexAuditDatabaseSync})';
+        });
+        if(replacements!==1)throw new Error('Expected exactly one peer-index SQLite import replacement; got '+replacements);
+        const started=performance.now(),child=original(node,[args[0],args[1],program??prefix+audited],...rest);
         let text='';child.stdout.on('data',chunk=>text+=chunk);
         child.on('close',code=>writeFileSync(${JSON.stringify(join(ws.path, 'peer-result.json'))},
           JSON.stringify({node,code,text,elapsed:performance.now()-started})));
