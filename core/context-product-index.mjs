@@ -35,6 +35,8 @@ const channels = ready => ({lexical:{state:ready?'ready':'unavailable',causes:re
 const trace = semantic => ({requested:semantic?'hybrid':'lexical',effective:'lexical',family:'local',preset:'rrf-k60-d12',embedder:null,
   tokenizer:TOKENIZER_VERSION,representation:REPRESENTATION_VERSION,
   timings:{maintenanceMs:0,lexicalMs:0,semanticPreflightMs:0,embeddingMs:0,fusionMs:0}});
+const hasReadScope = value => value && !nativeTypes.isProxy(value) && Object.hasOwn(value,'namespaces');
+const maskTimings = trace => ({...trace,timings:Object.fromEntries(Object.keys(trace.timings).map(key=>[key,null]))});
 export function openProductIndex({ path, facade, authorize, ownerCoverage, observer, sqlite, sidecarJournalMode, maintenance, counter, rawSearch, semantic, operation, now = () => performance.now(), storageOptions = {}, attribution }) {
   rawSearch = contextRawSearch(rawSearch ?? undefined);
   const { db:canonicalDatabase,read:canonicalRead,evidence,bind,encode,identity,features,canonicalFence } = facade.port;
@@ -66,7 +68,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     }
     // The flag cannot enable a provider. The default product policy always
     // reports disabled semantics and preserves the fully validated lexical list.
-    if (['findCandidates','contextRead'].includes(method) && original && !nativeTypes.isProxy(original) && Object.hasOwn(original,'namespaces')) {
+    if (['findCandidates','contextRead'].includes(method) && hasReadScope(original)) {
       // Scope validation precedes copying, but types/intent validation precedes
       // stream derivation. Authorization receives the whole original payload.
       const readSet=contextReadSet(Object.getOwnPropertyDescriptor(original,'readSet')?.value,PRODUCT_PROFILE);
@@ -89,12 +91,14 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
   function readDiagnostics(p,detail) {
     if(!p.selection)return detail;
     const covered=detail.coverage;
+    const {namespaceSelection,...trace}=detail.trace;
+    if(trace.semantic)trace.semantic={...trace.semantic,queryEmbeddingBudgetMs:null,queryEmbeddingMs:null};
     return {...detail,coverage:{...covered,
       namespaces:{policy:'authorized-subset-v1',selectionRevision:digest({selectionRevision:ownerCoverage.selectionRevision,namespaces:p.selection.namespaces}),
         requestedNamespaces:p.selection.namespaces.length,selectedNamespaces:p.selection.namespaces.length,omittedNamespaces:0},
       byType:Object.fromEntries(Object.entries(covered.byType).map(([type,c])=>[type,{...c,eligible:null,indexed:null,embedded:null,embeddedFraction:null,scannedFraction:null}])),
       maintenance:{...covered.maintenance,progress:null},stops:{...covered.stops,budget:null}},
-      trace:Object.fromEntries(Object.entries(detail.trace).filter(([key])=>key!=='namespaceSelection'))};
+      trace:maskTimings(trace)};
   }
   function assertSelected(p,items) {
     for(const item of items)assertContextProductSelection(p.selection,item.ref);
@@ -202,7 +206,8 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       refs:items.map(({ref,ns})=>[ns,ref.type,ref.memoryId??ref.cardId,ref.revision,...(ref.type==='card'?[ref.bodyRevision]:[])]),
       generations:generationsFor(items),access:access.accessGenerations,fences:items.map(i=>i.fence)});
     const candidateDetails={count:c.items.length,channels:c.channels,coverage:c.coverage,trace:c.trace};
-    const decorate=diagnostics=>({...diagnostics,omitted:{...diagnostics.omitted,unavailable:prepared.unavailable},candidates:candidateDetails});
+    const decorate=diagnostics=>({...diagnostics,...(p.selection?{trace:maskTimings(diagnostics.trace)}:{}),
+      omitted:{...diagnostics.omitted,unavailable:prepared.unavailable},candidates:candidateDetails});
     const assembleRead=raw=>assembleThreeLayerContext({query:p.query,readSet:p.readSet,intent:p.intent,prepared:prepared.items,counter,policy:p.policy,budget:p.budget,representation:p.representation,deadlineAt:p.deadlineAt,
       responseBytes:p.representation==='representation-v2-dated'?({meteredBytes,diagnostics,selected})=>
         completeResponseBytes(success({metered:null,snapshot:null,diagnostics:decorate(diagnostics)}),meteredBytes,
@@ -272,7 +277,10 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     return value;
   }
   function run(method,original,credential,cutoff=Infinity,observation) {
-    if(semantic&&(method==='getContextIndexStatus'||method==='refreshContextIndex'&&original.mode==='embeddings'||['findCandidates','contextRead'].includes(method)&&original.semantic===true&&original.cursor===undefined))return runSemantic(method,original,credential,cutoff,observation);
+    if(semantic&&(method==='getContextIndexStatus'||method==='refreshContextIndex'&&original.mode==='embeddings'||
+      ['findCandidates','contextRead'].includes(method)&&(hasReadScope(original)
+        ? Object.getOwnPropertyDescriptor(original,'semantic')?.value===true&&Object.getOwnPropertyDescriptor(original,'cursor')?.value===undefined
+        : original.semantic===true&&original.cursor===undefined)))return runSemantic(method,original,credential,cutoff,observation);
     const admitting=method==='admitMaintenance',pumpWork=method==='refreshMaintenance';
     if(admitting||pumpWork)method='refreshContextIndex';
     let access;
@@ -468,7 +476,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       if(p.selection)for(const type of p.types)c.coverage.byType[type].scanned=reason===null?ranked.filter(row=>row.ref.type===type).length:null;
       Object.assign(c,readDiagnostics(p,c));
       const lexicalFallback=source=>({...source,items:lexicalItems,
-        trace:{...source.trace,effective:'lexical',semantic:{...diagnostic,degradedReason:'validation_invalid',coverage:'unavailable'}},
+        trace:{...source.trace,effective:'lexical',semantic:{...source.trace.semantic,degradedReason:'validation_invalid',coverage:'unavailable'}},
         channels:{...source.channels,semantic:{state:'partial_coverage',causes:['partial_coverage']}},
         coverage:{...source.coverage,depths:{...source.coverage.depths,semantic:0},omitted:{lexical:Math.max(0,lexical.matched-24),semantic:null,horizon:0}}});
       if(method==='contextRead') {
@@ -568,13 +576,12 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
   }
   const safe=contentSafetyFacade({ run }, { select: args => {
     const original=args[1];
-    if(['findCandidates','contextRead'].includes(args[0])) {
-      if(nativeTypes.isProxy(original))fail('invalid_read_set');
-      if(original&&Object.getOwnPropertyDescriptor(original,'namespaces')) {
-        const readSet=contextReadSet(Object.getOwnPropertyDescriptor(original,'readSet')?.value,PRODUCT_PROFILE);
-        contextProductReadSelection(original,readSet);
-        assertCompactContextInput(args[0], original, types, undefined, PRODUCT_PROFILE);
-      }
+    if(hasReadScope(original)) {
+      if(!['findCandidates','contextRead'].includes(args[0]))fail('invalid_input');
+      const readSet=contextReadSet(Object.getOwnPropertyDescriptor(original,'readSet')?.value,PRODUCT_PROFILE);
+      contextProductReadSelection(original,readSet);
+      if(![Object.prototype,null].includes(Object.getPrototypeOf(original)))fail('invalid_input');
+      assertCompactContextInput(args[0], original, types, undefined, PRODUCT_PROFILE);
     }
     return original;
   },
@@ -598,7 +605,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     const [method,original]=args;
     // The scoped preflight checks namespace descriptors before compact can parse the payload.
     try {
-      if (method==='contextRead' && !(original&&!nativeTypes.isProxy(original)&&Object.hasOwn(original,'namespaces')))
+      if (!(method==='contextRead' && hasReadScope(original)))
         assertCompactContextInput(method, original, types, undefined, PRODUCT_PROFILE);
     }
     catch (error) { return failure(error.code ?? 'invalid_input'); }

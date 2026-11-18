@@ -43,7 +43,7 @@ export function selectContextProductNamespaces(inventory, selectionRevision) {
 // Product-private, per-read narrowing. This never changes the publication's
 // readSet or its stream numbering. Inspect only scope descriptors at admission;
 // derive retrieval keys only after the ordinary query grammar validates types.
-export function contextProductReadSelection(payload, readSet, selectedTypes) {
+function readNamespaces(payload, readSet) {
   let namespaces;
   try {
     if (!payload || types.isProxy(payload)) fail('invalid_read_set');
@@ -54,7 +54,22 @@ export function contextProductReadSelection(payload, readSet, selectedTypes) {
     if (namespaces.length > 2 || namespaces.filter(ns => ns.scope === 'personal').length !== 1 ||
         namespaces.some(ns => !readSet.some(full => namespaceKey(full) === namespaceKey(ns)))) fail('invalid_read_set');
   } catch { fail('invalid_read_set'); }
-  if (namespaces.length === readSet.length) return null;
+  return namespaces;
+}
+export function contextProductReadSelection(payload, readSet, selectedTypes) {
+  return deriveReadSelection(readNamespaces(payload,readSet),readSet,selectedTypes);
+}
+// Independent storage callers must pass scope admission before type access.
+export function contextProductStorageSelection(payload, readSet) {
+  if(!Object.hasOwn(payload,'namespaces'))return contextProductReadSelection(payload,readSet,payload.types);
+  const namespaces=readNamespaces(payload,readSet);
+  if(![Object.prototype,null].includes(Object.getPrototypeOf(payload)))fail('invalid_input');
+  const fields=Object.getOwnPropertyDescriptors(payload);
+  if(Reflect.ownKeys(fields).some(key=>!Object.hasOwn(fields[key],'value')))fail('invalid_input');
+  return deriveReadSelection(namespaces,readSet,Object.getOwnPropertyDescriptor(payload,'types')?.value);
+}
+function deriveReadSelection(namespaces, readSet, selectedTypes) {
+  if (!namespaces || namespaces.length === readSet.length) return null;
   if (!selectedTypes) return deepFreeze({ namespaces });
   let stream = 0;
   const streams = readSet.flatMap(ns => ['card', 'memory'].filter(type => selectedTypes.includes(type))

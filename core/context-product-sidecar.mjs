@@ -1,4 +1,4 @@
-import { contextProductReadSelection } from './context-product-selection.mjs';
+import { contextProductStorageSelection } from './context-product-selection.mjs';
 import { sidecarAttestationFile, readAttestedSidecarMetadata, sidecarAttestationDigest, validSidecarAttestation, writeSidecarAttestation } from './context-product-sidecar-attestation.mjs';
 import { reserveSidecarHandle, sidecarHandleGuard } from './context-product-handles.mjs';
 import { hasCardLineage, cardLineageNamespaceInside } from './card-lineage.mjs';
@@ -67,7 +67,7 @@ function projection(p) {
     if (!selected || !Object.hasOwn(selected, 'value')) fail('invalid_read_set');
     readSet = contextReadSet(selected.value, PRODUCT_PROFILE);
   } catch { fail('invalid_read_set'); }
-  const selection = contextProductReadSelection(p,readSet,p.types);
+  const selection = contextProductStorageSelection(p,readSet);
   return { ...p, readSet, selection };
 }
 const ddl = `
@@ -518,8 +518,9 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   const canMerge=()=>canonical.prepare('PRAGMA encoding').get().encoding==='UTF-8' && side.prepare('PRAGMA encoding').get().encoding==='UTF-8';
   function status(p, state, reason = null, progress = null, counts = null) {
     const ready = state === 'ready';
+    const omittedNamespaces = ready && !p.selection ? p.ownerCoverage.omittedNamespaces : 0;
     return { profile: PRODUCT_PROFILE, lexical: { state,reason:reason ?? null,progress:progress ?? null }, semantic: { state:'disabled',reason:'not_enabled' },
-      coverage: { status: ready ? p.ownerCoverage.omittedNamespaces ? 'partial' : 'complete' : 'unavailable',
+      coverage: { status: ready ? omittedNamespaces ? 'partial' : 'complete' : 'unavailable',
         freshness: ready ? 'current' : ['stale','catching_up'].includes(state) ? 'stale' : 'unverified',
         byType: Object.fromEntries(['memory','card'].filter(t => p.types.includes(t)).map(t => [t,
           { eligible: ready ? counts.byType[t].eligible : null, indexed: ready ? counts.byType[t].indexed : null, embedded:null }])),

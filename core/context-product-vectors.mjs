@@ -1,4 +1,4 @@
-import { contextProductReadSelection } from './context-product-selection.mjs';
+import { contextProductStorageSelection } from './context-product-selection.mjs';
 import { contextReadSet } from './context-read-input.mjs';
 import { types } from 'node:util';
 import { randomUUID, createHmac } from 'node:crypto';
@@ -106,7 +106,7 @@ export function productVectors({storage,facade}) {
   function observe(p,lexical,snapshot,{load=false}={}) {
     if(types.isProxy(p))fail('invalid_read_set');
     const readSet=contextReadSet(Object.getOwnPropertyDescriptor(p,'readSet')?.value,PRODUCT_PROFILE);
-    const selection=contextProductReadSelection(p,readSet,p.types);
+    const selection=contextProductStorageSelection(p,readSet);
     const missing={status:'partial',reason:'missing_vectors',record:null,rows:[]};
     if(!lexical)return {...missing,status:'unavailable',reason:'index_not_ready'};
     const capacity=semanticCapacity(Object.values(lexical.counts.byType).reduce((n,c)=>n+c.eligible,0),snapshot.identity);
@@ -150,7 +150,7 @@ export function productVectors({storage,facade}) {
                 const ref=rowRef(row),bytes=Buffer.from(row.bytes,'hex'),expected=streamRefs.get(row.stream);
                 if(row.doc<=0||loaded.has(row.doc)||row.item!==row.expected_item||row.revision!==row.expected_revision||row.body_revision!==row.expected_body||row.representation!==row.expected_representation||
                   !selection.streams.includes(row.stream)||expected?.type!==ref.type||!same(expected.namespace,range.namespace)||!same(ref.namespace,range.namespace))throw Error('invalid');
-                manifestVector(bytes,snapshot.identity);loaded.set(row.doc,{stream:row.stream,item:row.item,revision:row.revision,body_revision:row.body_revision});
+                manifestVector(bytes,snapshot.identity);loaded.set(row.doc,{stream:row.stream,stableKey:ref.memoryId??ref.cardId,item:row.item,revision:row.revision,body_revision:row.body_revision});
                 observed.rows.push({ref,vector:loadVector(bytes,snapshot.identity)});
               }
               if(page.length<128)break;after=page.at(-1).item;
@@ -159,6 +159,7 @@ export function productVectors({storage,facade}) {
           // The existing stream index visits ineligible entries too. Keep this
           // proof exclusive to ready scoped vector loads, never lexical reads.
           for(const stream of selection.streams) {
+            const {namespace,type}=streamRefs.get(stream);
             let after='';
             for(;;) {
               if(performance.now()>=p.deadlineAt)fail('read_timeout');
@@ -168,7 +169,8 @@ export function productVectors({storage,facade}) {
                 .all(lexicalGeneration,stream,after);
               for(const document of page) {
                 const row=loaded.get(document.doc);
-                if(!row||row.stream!==stream||row.item!==document.identity||row.revision!==document.revision||row.body_revision!==document.body_revision)throw Error('invalid');
+                const item=JSON.stringify([namespace.ownerId,namespace.scope,namespace.projectId??'',type,document.id]);
+                if(!row||row.stream!==stream||row.stableKey!==document.id||row.item!==item||row.item!==document.identity||row.revision!==document.revision||row.body_revision!==document.body_revision)throw Error('invalid');
                 loaded.delete(document.doc);
               }
               if(page.length<128)break;after=page.at(-1).id;

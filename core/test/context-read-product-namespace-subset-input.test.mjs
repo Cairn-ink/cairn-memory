@@ -37,7 +37,8 @@ test('closed malformed and unavailable scope refusals before index, counter or u
   const payload={...s.query};Object.defineProperty(payload,'namespaces',{get(){effects.count++;return [personal];}});
   assert.deepEqual(await s.index.run('findCandidates',payload,{}),bare('invalid_read_set'));
   const proxy=new Proxy({...s.query,namespaces:[personal]},{getOwnPropertyDescriptor(){effects.count++;throw Error('proxy payload');}});
-  assert.deepEqual(await s.index.run('findCandidates',proxy,{}),bare('invalid_read_set'));
+  // The direct facade cannot observe whether a Proxy owns the field without a trap.
+  assert.deepEqual(await s.index.run('findCandidates',proxy,{}),bare('invalid_input'));
   assert.throws(()=>s.vectors.observe(proxy,s.lexical,{}, {load:true}),{code:'invalid_read_set'});
   assert.equal(effects.count,0);assert.equal(s.calls.counter.length,0);assert.equal(s.calls.provider,0);
   assert.throws(()=>contextInput('findCandidates',{...s.query,namespaces:[personal]},['memory']),{code:'invalid_input'},'ordinary reader retains its closed grammar');
@@ -78,6 +79,50 @@ test('storage seams revalidate scope membership and ignore forged derived select
     assert.throws(()=>s.storage.lexical(p,s.lexical,'orchard'),{code:'invalid_read_set'});
     assert.throws(()=>s.vectors.observe(p,s.lexical,{}, {load:true}),{code:'invalid_read_set'});
   }
+});
+
+test('direct scoped request checks the scope and prototype before reading inherited semantic',async t=>{
+  const s=subsetFixture(t,{semantic:true});
+  let reads=0;
+  const prototype={get semantic(){reads++;throw Error('inherited semantic');}};
+  const input=Object.assign(Object.create(prototype),{readSet:s.readSet,types:['memory'],intent:'current',query:'orchard'});
+  for(const method of ['findCandidates','contextRead']){
+    input.namespaces=[];
+    assert.deepEqual(await s.index.run(method,input,{}),bare('invalid_read_set'));
+    input.namespaces=[personal];
+    assert.deepEqual(await s.index.run(method,input,{}),bare('invalid_input'));
+  }
+  Object.defineProperty(input,'mode',Object.getOwnPropertyDescriptor(prototype,'semantic'));
+  assert.deepEqual(await s.index.run('refreshContextIndex',input,{}),bare('invalid_input'));
+  assert.equal(reads,0);
+  assert.equal(s.calls.authorize.length,0);
+});
+
+test('scoped storage seams check scope before prototype and types descriptors',t=>{
+  const s=subsetFixture(t);
+  const entries=[
+    p=>s.storage.observe(p,s.access),
+    p=>s.storage.lexical(p,s.lexical,'orchard'),
+    p=>s.storage.vectorFence(p,s.lexical),
+    p=>s.vectors.observe(p,s.lexical,{}, {load:true}),
+  ];
+  let reads=0;
+  const getter={get(){reads++;throw Error('types getter');}};
+  const {types,...input}=s.p;
+  for(const entry of entries){
+    for(const p of [
+      Object.defineProperty({...input},'types',getter),
+      Object.assign(Object.create(Object.defineProperty({},'types',getter)),input),
+    ]){
+      p.namespaces=[];
+      assert.throws(()=>entry(p),{code:'invalid_read_set'});
+      for(const namespaces of [[personal],[personal,project('a')]]){
+        p.namespaces=namespaces;
+        assert.throws(()=>entry(p),{code:'invalid_input'});
+      }
+    }
+  }
+  assert.equal(reads,0);
 });
 
 

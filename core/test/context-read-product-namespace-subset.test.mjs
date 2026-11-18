@@ -52,6 +52,26 @@ test('selected entries survive an excluded multi-page lexical horizon before ran
   assert.equal(selected.items.length,4);assert.equal(selected.coverage.omitted.lexical,0);scoped(selected,[personal]);
 });
 
+test('lexical scan crosses an entirely excluded page and retains its next page boundary hit',async t=>{
+  const s=subsetFixture(t,{seed(f){
+    const first=f.admit('orchard personal',personal);
+    for(let i=0;i<382;i++)f.admit('orchard excluded '+i,project('a'));
+    return [first,f.admit('orchard boundary',project('b')),f.admit('orchard after boundary',project('b'))];
+  }});
+  const db=s.side();
+  try{
+    const raw=db.prepare(`SELECT d.stream,d.id FROM postings p JOIN statistics s ON s.generation=p.generation AND s.term_id=p.term
+      JOIN documents d ON d.generation=p.generation AND d.doc=p.doc WHERE s.term='orchard' ORDER BY p.doc`).all();
+    assert.equal(raw.length,385);
+    assert.ok(raw.slice(128,256).every(row=>row.stream===1));
+    assert.equal(raw[383].stream,2);
+    assert.deepEqual(new Set(raw.slice(383).map(row=>row.id)),new Set(s.rows.slice(1).map(row=>row.id)));
+  }finally{db.close();}
+  const value=ok(await s.run('findCandidates',{namespaces:[personal,project('b')],limit:24}));
+  assert.deepEqual(new Set(value.items.map(item=>item.ref.memoryId)),new Set(s.rows.map(row=>row.id)));
+  assert.equal(value.coverage.omitted.lexical,0);
+});
+
 test('cursor continuation binds personal, either project, full, and semantic mode',async t=>{
   const s=subsetFixture(t,{seed(f){return Array.from({length:8},(_,i)=>f.admit('orchard page '+i,personal));}});
   for(const semantic of [false,true]){
