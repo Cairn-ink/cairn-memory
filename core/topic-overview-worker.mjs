@@ -65,7 +65,7 @@ function openLegacy() {
   }
 }
 async function readLegacy(request) {
-  if (!connection?.db.isOpen) await topicPolicy.retryOpening(workerData.path, openLegacy);
+  if (!connection?.db.isOpen) await topicPolicy.retryOpening(openLegacy);
   const { cursor, ...bound } = request, binding = JSON.stringify(bound);
   if (cursor) {
     if (!traversal) fail('cursor_stale');

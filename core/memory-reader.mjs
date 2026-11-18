@@ -43,7 +43,9 @@ export function openMemoryReader(input) {
     instance.on('message', result => {
       if (lifecycle.worker !== instance || !lifecycle.pending) return;
       if (result && Object.hasOwn(result, 'retryingStorage')) {
-        lifecycle.pending.retryingStorage = result.retryingStorage;
+        const slot = lifecycle.pending;
+        if (result.retryingStorage === null) slot.retryingStorage = undefined;
+        else slot.retryingStorage ??= result.retryingStorage;
         return;
       }
       if ((result?.ok && lifecycle.pending.expiresAt !== undefined && performance.now() >= lifecycle.pending.expiresAt) || result?.error?.code === 'read_timeout') failed(instance, 'read_timeout');

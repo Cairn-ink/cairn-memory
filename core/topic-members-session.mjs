@@ -81,7 +81,7 @@ export function createTopicSession(path, topicPolicy) {
   }
   function prepareRequest({ charge, ...args }) {
     if (!topicPolicy) return prepare({ charge, ...args });
-    return topicPolicy.retryOpening(path, () => {
+    return topicPolicy.retryOpening(() => {
       const charges = [];
       prepare({ ...args, charge: units => charges.push(units) });
       for (const units of charges) charge(units);

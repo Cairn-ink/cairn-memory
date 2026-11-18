@@ -49,7 +49,6 @@ export function topicJournalMode(native, path, policy, { deferQueryErrors = fals
 export const TOPIC_WAL_WAIT_MS = 1000;
 export const TOPIC_WAL_REPLY_RESERVE_MS = 20;
 const DELETE_RETRY_MS = 25;
-const DELETE_REPLY_RESERVE_MS = 20;
 export const SQLITE_STAGES = Object.freeze(['open', 'configure', 'prepare', 'execute', 'begin', 'commit', 'rollback', 'close']);
 export const SQLITE_STATEMENTS = Object.freeze(['connection', 'reader_configuration', 'journal_mode', 'application_id', 'user_version',
   'schema_version', 'encoding', 'schema_metadata', 'snapshot_metadata', 'topic_metadata', 'transaction']);
@@ -176,41 +175,47 @@ export function topicReadTransaction(db, work, isRetryableBusy) {
   }
 }
 
-/** Keep the DELETE backoff private to topic requests that can retry a read step. */
+/** Keep the DELETE retry to confirmed DELETE mode. Use a cancellable async backoff
+ * within the same cutoff as WAL. Exhaustion reports the first native fault.
+ * A read step can retry only before the overview generator advances. */
 export function createTopicRetryPolicy({ diagnostics, isRetryableBusy, now = () => performance.now(), onRetry = () => {} }) {
-  const policy = createTopicSqlitePolicy({ diagnostics, now }), modes = new WeakMap();
-  let retryUntil = -Infinity, openingMode;
+  const budget = { until: -Infinity };
+  const policy = createTopicSqlitePolicy({ diagnostics, now, state: () => budget }), modes = new WeakMap();
+  let openingMode;
   const isDelete = db => modes.get(db) === 'DELETE';
   async function retry(work, canResume) {
-    let busy;
+    let firstBusy;
     while (true) {
-      if (busy && now() >= retryUntil) throw busy;
+      if (firstBusy && now() >= budget.until) throw firstBusy;
       try {
         const value = work();
-        if (busy) onRetry(null);
+        if (firstBusy) onRetry(null);
         return value;
       } catch (error) {
         if (!isRetryableBusy(error)) {
-          if (busy) onRetry(null);
+          if (firstBusy) onRetry(null);
           throw error;
         }
-        if (now() + DELETE_RETRY_MS >= retryUntil || !canResume()) throw error;
-        if (!busy) onRetry(error);
-        busy = error;
+        if (!canResume()) throw error;
+        if (now() + DELETE_RETRY_MS >= budget.until) throw firstBusy ?? error;
+        if (!firstBusy) {
+          firstBusy = error;
+          onRetry(firstBusy);
+        }
         await delay(DELETE_RETRY_MS);
       }
     }
   }
   return {
     ...policy,
-    start(deadlineAt) {
-      policy.start(deadlineAt);
-      retryUntil = deadlineAt - DELETE_REPLY_RESERVE_MS;
-    },
-    noteJournalMode(db, mode) { modes.set(db, mode); openingMode = mode; },
+    noteJournalMode(db, mode) { modes.set(db, mode); },
     database(native, wal) {
       const db = policy.database(native, wal);
-      if (modes.has(native)) modes.set(db, modes.get(native));
+      // The post-probe wrapper is reached only after the timeout reset succeeds.
+      if (modes.has(native)) {
+        openingMode = modes.get(native);
+        modes.set(db, openingMode);
+      }
       return db;
     },
     isDelete,
@@ -218,10 +223,8 @@ export function createTopicRetryPolicy({ diagnostics, isRetryableBusy, now = () 
       if (!isDelete(db)) return work();
       return retry(work, () => db.isOpen && !db.isTransaction && restore());
     },
-    retryOpening(path, work) {
-      return retry(() => { openingMode = undefined; return work(); }, () => openingMode
-        ? openingMode === 'DELETE'
-        : companion(path, '-journal') || !(companion(path, '-wal') || companion(path, '-shm')));
+    retryOpening(work) {
+      return retry(() => { openingMode = undefined; return work(); }, () => openingMode === 'DELETE');
     },
   };
 }

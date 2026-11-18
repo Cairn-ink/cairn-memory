@@ -38,7 +38,6 @@ export function createTopicMemberReader({ storage, snapshot, transaction, tokens
         charges = [];
         return work(retried && started !== undefined ? now() : started);
       }, () => {
-        attempted ??= state?.captured;
         state = checkpoint; used = before; quantum = beforeQuantum; advanced = wasAdvanced;
         charges = undefined;
         retried = true;
@@ -59,6 +58,7 @@ export function createTopicMemberReader({ storage, snapshot, transaction, tokens
               !captured.generation.isWellFormed() || captured.generation.length > 200))) fail('unsupported_database');
         const capturedBefore = state?.captured ?? attempted;
         if (capturedBefore && !equal(captured, capturedBefore)) fail('cursor_stale');
+        if (!state && canRetry()) attempted ??= captured;
         const binding = originBinding(request.namespace, captured);
         const expected = state?.publicSnapshot ?? request.expectedSnapshot;
         if (expected) {
