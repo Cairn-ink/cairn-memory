@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { openMemoryCore } from '../index.mjs';
 import { receiptDenialTokens } from '../raw-source-roots.mjs';
+import { commitPhaseGate } from '../runtime.mjs';
 import { ns, ok, safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
 
 const source = { client: 'synthetic', sessionId: 'synthetic-session', eventId: 'synthetic-message',
@@ -63,5 +64,53 @@ test('a committed forget marker refuses correction and preserves every affected 
   ok(f.core.forget({ namespace: ns, memoryId: forgotten.id, expectedRevision: forgotten.revision }));
   const before = f.state();
   assert.deepEqual(f.correct({ ...source, excerpt: 'Synthetic changed excerpt.' }), error('source_excluded'));
+  assert.deepEqual(f.state(), before);
+});
+
+test('the phase gate runs once inside the transaction', () => {
+  const db = { isTransaction: false };
+  let calls = 0;
+  const check = commitPhaseGate(db, () => { calls++; });
+  check();
+  assert.equal(calls, 0);
+  db.isTransaction = true;
+  check();
+  assert.equal(calls, 1);
+});
+
+for (const [name, precedingPhases, rejectedPhase, calls] of [
+  ['the first check is inside a transaction', [], true, 0],
+  ['the second check is outside a transaction', [false], false, 0],
+  ['the third check is outside a transaction', [false, true], false, 1],
+  ['the third check is inside a transaction', [false, true], true, 1],
+]) {
+  test(`the phase gate fails closed when ${name}`, () => {
+    const db = { isTransaction: false };
+    let gateCalls = 0;
+    const check = commitPhaseGate(db, () => { gateCalls++; });
+    for (const phase of precedingPhases) {
+      db.isTransaction = phase;
+      check();
+    }
+    db.isTransaction = rejectedPhase;
+    assert.throws(check, { code: 'storage_error' });
+    assert.equal(gateCalls, calls);
+  });
+}
+
+test('a correction with the same receipt rolls back after an earlier forget', async t => {
+  const f = await fixture(t), forgotten = f.admit('Synthetic forgotten sibling');
+  ok(f.core.forget({ namespace: ns, memoryId: forgotten.id, expectedRevision: forgotten.revision }));
+  const before = f.state();
+  const boundaries = [];
+  const exec = DatabaseSync.prototype.exec;
+  const trace = t.mock.method(DatabaseSync.prototype, 'exec', function (sql) {
+    if (sql === 'BEGIN IMMEDIATE' || sql === 'COMMIT' || sql === 'ROLLBACK') boundaries.push(sql);
+    return exec.call(this, sql);
+  });
+  let result;
+  try { result = f.correct(source); } finally { trace.mock.restore(); }
+  assert.deepEqual(result, error('source_excluded'));
+  assert.deepEqual(boundaries, ['BEGIN IMMEDIATE', 'ROLLBACK']);
   assert.deepEqual(f.state(), before);
 });

@@ -59,6 +59,20 @@ export function readRecallJournalMode(runtime) {
   } catch { return 'unknown'; }
 }
 
+export function commitPhaseGate(db, gate) {
+  let phase = 'before_begin';
+  return () => {
+    if (phase === 'before_begin' && db.isTransaction === false) {
+      phase = 'before_commit';
+      return;
+    }
+    const atCommit = phase === 'before_commit' && db.isTransaction === true;
+    phase = 'closed';
+    if (!atCommit) fail('storage_error');
+    gate();
+  };
+}
+
 /** Shared persistence runtime used by both the legacy and envelope facades. */
 export function createMemoryRuntime(input, internal) {
   object(input, ["path", "sessionEpisodes", "decisionReview", "privateCards", "methodPackages", "assets", "roleProfiles", "existingStore", "storeFence", "contentSafety", "busyTimeoutMs"]);
@@ -381,7 +395,7 @@ export function createMemoryRuntime(input, internal) {
       if(result.memory&&contentSuppressionReasonInside(db,ns,{kind:'memory',key:result.memory.id,revision:result.memory.revision,
         version:JSON.stringify(['memory-revision-v1',result.memory.revision])}))fail('memory_suppressed');
       return result;
-    }, undefined, { beforeCommit: () => rawLineage.assertAdmissionReceipts(ns, value.receipts) });
+    }, commitPhaseGate(db, () => rawLineage.assertAdmissionReceipts(ns, value.receipts)));
   }
 
   function forgetMutation(ns, id, expectedRevision, reason = 'forgotten', suppressionReason = reason === 'forgotten' ? 'user_forget' : 'purge') {

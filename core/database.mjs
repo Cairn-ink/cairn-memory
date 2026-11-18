@@ -375,7 +375,7 @@ registerContentReadSnapshot((db,work)=>readTransaction(db,()=>{checkInstalledCon
 
 // Reviewed read-only mode: keep transaction fences and statement counts, acquiring
 // SHARED on the first SELECT. Writers must retain BEGIN IMMEDIATE.
-export function transaction(db, work, check, { deferred = false, beforeCommit } = {}) {
+export function transaction(db, work, check, { deferred = false } = {}) {
   if (activeReads.has(db) || discardedConnections.has(db)) fail('storage_error');
   check?.();
   const execute = () => {
@@ -390,7 +390,6 @@ export function transaction(db, work, check, { deferred = false, beforeCommit } 
       contentWrite?.validate(result);
       contentWrite?.close();
       contentWrite = null;
-      beforeCommit?.();
       check?.();
       db.exec("COMMIT");
       return result;
