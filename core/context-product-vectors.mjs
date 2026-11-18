@@ -1,3 +1,6 @@
+import { contextProductStorageSelection } from './context-product-selection.mjs';
+import { contextReadSet } from './context-read-input.mjs';
+import { types } from 'node:util';
 import { randomUUID, createHmac } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { canonicalJson, digest } from './context-product-validation.mjs';
@@ -101,6 +104,9 @@ export function productVectors({storage,facade}) {
     return {g,s};
   }
   function observe(p,lexical,snapshot,{load=false}={}) {
+    if(types.isProxy(p))fail('invalid_read_set');
+    const readSet=contextReadSet(Object.getOwnPropertyDescriptor(p,'readSet')?.value,PRODUCT_PROFILE);
+    const selection=contextProductStorageSelection(p,readSet);
     const missing={status:'partial',reason:'missing_vectors',record:null,rows:[]};
     if(!lexical)return {...missing,status:'unavailable',reason:'index_not_ready'};
     const capacity=semanticCapacity(Object.values(lexical.counts.byType).reduce((n,c)=>n+c.eligible,0),snapshot.identity);
@@ -125,7 +131,56 @@ export function productVectors({storage,facade}) {
         const complete=Object.values(record.counts.byType).every(c=>c.eligible===c.embedded),rows=[];
         return {status:complete?'complete':'partial',reason:complete?null:'missing_vectors',record,rows};
       })??missing;
-      if(load&&observed.status==='complete') {
+      if(load&&observed.status==='complete'&&selection) {
+        // Load and independently prove the selected ranges in one SQLite read
+        // snapshot. The authenticated record remains publication-wide.
+        const verified=storage.vectors(db=>{
+          const lexicalGeneration=lexicalKey(db,lexical),vectorGeneration=vectorKey(db,observed.record.generation.id),loaded=new Map();
+          const streamRefs=new Map(orderedStreams({...p,readSet}).map(row=>[row.stream,row.ref]));
+          for(const range of selection.ranges) {
+            let after=range.lower;
+            for(;;) {
+              if(performance.now()>=p.deadlineAt)fail('read_timeout');
+              const page=db.prepare(`SELECT r.doc,r.item,r.revision,r.body_revision,r.representation,CASE WHEN length(r.vector)=6144 THEN hex(r.vector) ELSE '' END AS bytes,
+                d.stream,d.revision AS expected_revision,d.body_revision AS expected_body,'candidate-text-v1' AS expected_representation,d.identity AS expected_item
+                FROM vector_rows r LEFT JOIN documents d ON d.generation=? AND d.doc=r.doc AND d.eligible=1
+                WHERE r.generation=? AND r.item>? AND r.item<? ORDER BY r.item LIMIT 128`)
+                .all(lexicalGeneration,vectorGeneration,after,range.upper);
+              for(const row of page) {
+                const ref=rowRef(row),bytes=Buffer.from(row.bytes,'hex'),expected=streamRefs.get(row.stream);
+                if(row.doc<=0||loaded.has(row.doc)||row.item!==row.expected_item||row.revision!==row.expected_revision||row.body_revision!==row.expected_body||row.representation!==row.expected_representation||
+                  !selection.streams.includes(row.stream)||expected?.type!==ref.type||!same(expected.namespace,range.namespace)||!same(ref.namespace,range.namespace))throw Error('invalid');
+                manifestVector(bytes,snapshot.identity);loaded.set(row.doc,{stream:row.stream,stableKey:ref.memoryId??ref.cardId,item:row.item,revision:row.revision,body_revision:row.body_revision});
+                observed.rows.push({ref,vector:loadVector(bytes,snapshot.identity)});
+              }
+              if(page.length<128)break;after=page.at(-1).item;
+            }
+          }
+          // The existing stream index visits ineligible entries too. Keep this
+          // proof exclusive to ready scoped vector loads, never lexical reads.
+          for(const stream of selection.streams) {
+            const {namespace,type}=streamRefs.get(stream);
+            let after='';
+            for(;;) {
+              if(performance.now()>=p.deadlineAt)fail('read_timeout');
+              const page=db.prepare(`SELECT selected_document.doc,selected_document.id,selected_document.identity,selected_document.revision,selected_document.body_revision
+                FROM documents selected_document WHERE selected_document.generation=? AND selected_document.stream=?
+                  AND selected_document.id>? AND selected_document.eligible=1 ORDER BY selected_document.id LIMIT 128`)
+                .all(lexicalGeneration,stream,after);
+              for(const document of page) {
+                const row=loaded.get(document.doc);
+                const item=JSON.stringify([namespace.ownerId,namespace.scope,namespace.projectId??'',type,document.id]);
+                if(!row||row.stream!==stream||row.stableKey!==document.id||row.item!==item||row.item!==document.identity||row.revision!==document.revision||row.body_revision!==document.body_revision)throw Error('invalid');
+                loaded.delete(document.doc);
+              }
+              if(page.length<128)break;after=page.at(-1).id;
+            }
+          }
+          if(loaded.size)throw Error('invalid');
+          return true;
+        });
+        if(verified!==true)throw Error('invalid');
+      } else if(load&&observed.status==='complete') {
         let after='';
         for(;;) {
           if(performance.now()>=p.deadlineAt)fail('read_timeout');

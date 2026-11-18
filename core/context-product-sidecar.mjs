@@ -1,3 +1,4 @@
+import { contextProductStorageSelection } from './context-product-selection.mjs';
 import { sidecarAttestationFile, readAttestedSidecarMetadata, sidecarAttestationDigest, validSidecarAttestation, writeSidecarAttestation } from './context-product-sidecar-attestation.mjs';
 import { reserveSidecarHandle, sidecarHandleGuard } from './context-product-handles.mjs';
 import { hasCardLineage, cardLineageNamespaceInside } from './card-lineage.mjs';
@@ -74,7 +75,8 @@ function projection(p) {
     if (!selected || !Object.hasOwn(selected, 'value')) fail('invalid_read_set');
     readSet = contextReadSet(selected.value, PRODUCT_PROFILE);
   } catch { fail('invalid_read_set'); }
-  return { ...p, readSet };
+  const selection = contextProductStorageSelection(p,readSet);
+  return { ...p, readSet, selection };
 }
 const ddl = `
 CREATE TABLE product_attestation(singleton INTEGER PRIMARY KEY CHECK(singleton=1),stamp INTEGER NOT NULL CHECK(stamp>=1),record TEXT NOT NULL CHECK(length(record)<=4096)) STRICT;
@@ -527,8 +529,9 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   const canMerge=()=>canonical.prepare('PRAGMA encoding').get().encoding==='UTF-8' && side.prepare('PRAGMA encoding').get().encoding==='UTF-8';
   function status(p, state, reason = null, progress = null, counts = null) {
     const ready = state === 'ready';
+    const omittedNamespaces = ready && !p.selection ? p.ownerCoverage.omittedNamespaces : 0;
     return { profile: PRODUCT_PROFILE, lexical: { state,reason:reason ?? null,progress:progress ?? null }, semantic: { state:'disabled',reason:'not_enabled' },
-      coverage: { status: ready ? p.ownerCoverage.omittedNamespaces ? 'partial' : 'complete' : 'unavailable',
+      coverage: { status: ready ? omittedNamespaces ? 'partial' : 'complete' : 'unavailable',
         freshness: ready ? 'current' : ['stale','catching_up'].includes(state) ? 'stale' : 'unverified',
         byType: Object.fromEntries(['memory','card'].filter(t => p.types.includes(t)).map(t => [t,
           { eligible: ready ? counts.byType[t].eligible : null, indexed: ready ? counts.byType[t].indexed : null, embedded:null }])),
@@ -1523,6 +1526,17 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     return contextCardEligible(canonical,identity,features,ref.namespace,
       {id:ref.cardId,revision:ref.revision,body_revision:ref.bodyRevision},p.intent,{readSet:p.readSet});
   }
+  function selectedPostingPage(p,generation,term,after) {
+    // The LEFT JOIN retains every posting and its unique document probe cannot
+    // multiply rows. LIMIT therefore bounds raw postings, including excluded
+    // namespaces, without copying the page into a temporary table.
+    return side.prepare(`SELECT p.doc,d.stream,d.id,d.revision,d.body_revision,d.token_length,d.eligible
+      FROM postings p INDEXED BY product_term LEFT JOIN documents d
+        ON d.generation=p.generation AND d.doc=p.doc
+        AND d.eligible=1 AND d.stream IN (${p.selection.streams.map(()=>'?').join(',')})
+      WHERE p.generation=? AND p.term=(SELECT term_id FROM statistics WHERE generation=? AND term=?)
+        AND p.doc>? ORDER BY p.doc LIMIT 128`).all(...p.selection.streams,generation,generation,term,after);
+  }
   function lexicalSuppressed(p,publication,query,limit,visible) {
     const terms=[...new Set(tokenizeT1(query))],generation=storageKey(publication.generation.id),ss=streams(p),documents=[];
     const placeholders=terms.map(()=>'?').join(','),checked=new WeakSet();
@@ -1530,16 +1544,16 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       let after=0;
       while(true){
         if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');
-        const rows=side.prepare(`SELECT p.doc FROM postings p INDEXED BY product_term
+        const rows=p.selection?selectedPostingPage(p,generation,term,after):side.prepare(`SELECT p.doc FROM postings p INDEXED BY product_term
           WHERE p.generation=? AND p.term=(SELECT term_id FROM statistics WHERE generation=? AND term=?) AND p.doc>? ORDER BY p.doc LIMIT 128`)
           .all(generation,generation,term,after);
         for(const row of rows){
-          if(visible.denied.has(row.doc))continue;
+          if(p.selection&&!row.eligible || visible.denied.has(row.doc))continue;
           const frequencies=new Map(side.prepare(`SELECT s.term,p.frequency FROM statistics s INDEXED BY sqlite_autoindex_statistics_2 CROSS JOIN postings p
             ON p.generation=s.generation AND p.term=s.term_id AND p.doc=?
             WHERE s.generation=? AND s.term IN (${placeholders})`).all(row.doc,generation,...terms).map(r=>[r.term,r.frequency]));
           if(terms.find(t=>frequencies.has(t))!==term)continue;
-          const document=side.prepare('SELECT stream,id,revision,body_revision,token_length,eligible FROM documents WHERE generation=? AND doc=?').get(generation,row.doc);
+          const document=p.selection?row:side.prepare('SELECT stream,id,revision,body_revision,token_length,eligible FROM documents WHERE generation=? AND doc=?').get(generation,row.doc);
           if(!document?.eligible)continue;
           const stream=ss[document.stream],ref={type:stream.type,namespace:stream.ns,[stream.type==='memory'?'memoryId':'cardId']:document.id,
             revision:document.revision,...(stream.type==='card'?{bodyRevision:document.body_revision}:{})};
@@ -1589,17 +1603,18 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
           // A native statement visits at most 128 postings from one term's
           // index range. Missing terms never walk the generation's postings;
           // eligibility and scoring happen after the bounded enumeration.
-          const rows=side.prepare(`SELECT p.doc FROM postings p INDEXED BY product_term
+          const rows=p.selection?selectedPostingPage(p,generation,term,after):side.prepare(`SELECT p.doc FROM postings p INDEXED BY product_term
             WHERE p.generation=? AND p.term=(SELECT term_id FROM statistics WHERE generation=? AND term=?) AND p.doc>? ORDER BY p.doc LIMIT 128`).all(generation,generation,term,after);
           for(const row of rows){
             if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');
+            if(p.selection&&!row.eligible)continue;
             const frequencies=new Map(side.prepare(`SELECT s.term,p.frequency FROM statistics s INDEXED BY sqlite_autoindex_statistics_2 CROSS JOIN postings p
               ON p.generation=s.generation AND p.term=s.term_id AND p.doc=?
               WHERE s.generation=? AND s.term IN (${placeholders})`).all(row.doc,generation,...terms).map(r=>[r.term,r.frequency]));
             // Score an identity exactly once, on its first matching query term.
             // Keep the original term order for byte-identical BM25 arithmetic.
             if(terms.find(t=>frequencies.has(t))!==term)continue;
-            const document=side.prepare('SELECT stream,id,revision,body_revision,token_length,eligible FROM documents WHERE generation=? AND doc=?').get(generation,row.doc);
+            const document=p.selection?row:side.prepare('SELECT stream,id,revision,body_revision,token_length,eligible FROM documents WHERE generation=? AND doc=?').get(generation,row.doc);
             if(!document?.eligible)continue;
             const ref={type:ss[document.stream].type,namespace:ss[document.stream].ns,
               [ss[document.stream].type==='memory'?'memoryId':'cardId']:document.id,revision:document.revision,...(ss[document.stream].type==='card'?{bodyRevision:document.body_revision}:{})};
