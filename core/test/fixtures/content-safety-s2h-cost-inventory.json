@@ -966,6 +966,7 @@
       "releaseEpisodeWriter",
       "reserveEpisodeBatch",
       "resolveReview",
+      "retainCaptureSession",
       "sessionContextSnapshot",
       "setCapturePaused",
       "setEpisodePolicy",
@@ -3294,6 +3295,10 @@
     "resolveReview": {
       "kind": "write",
       "reason": "Canonical write, capture, or maintenance mutation; its write-path counters have no retained-read cost comparator."
+    },
+    "retainCaptureSession": {
+      "kind": "exempt",
+      "reason": "Internal capture-scoped session alias retention for source denial; returns only a release callback and serves no retained content; not exported or host-callable."
     },
     "resolveSourceReferences": {
       "kind": "read",

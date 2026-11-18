@@ -1243,6 +1243,30 @@
     "[81,0]": [
       "SELECT c.id AS card_id,r.receipt_key,r.client,r.session_id,r.event_id,r.role FROM json_each(?) wanted CROSS JOIN private_cards c ON c.id=wanted.value CROSS JOIN card_memory_bindings b ON b.card_id=c.id CROSS JOIN receipts r ON r.id=b.receipt_id CROSS JOIN memories m ON m.id=r.memory_id AND m.id=b.memory_id WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND m.owner_id=c.owner_id AND m.scope=c.scope AND m.project_id=c.project_id",
       "all"
+    ],
+    "[135,0]": [
+      "SELECT secret FROM episode_identity WHERE singleton=1",
+      "get"
+    ],
+    "[135,1]": [
+      "SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value",
+      "all"
+    ],
+    "[136,0]": [
+      "SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value",
+      "all"
+    ],
+    "[137,0]": [
+      "SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value",
+      "all"
+    ],
+    "[138,0]": [
+      "SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value",
+      "all"
+    ],
+    "[139,0]": [
+      "SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value",
+      "all"
     ]
   }
 }
