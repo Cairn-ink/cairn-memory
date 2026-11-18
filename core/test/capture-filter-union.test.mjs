@@ -23,9 +23,13 @@ const ok=result=>{assert.equal(result.ok,true,JSON.stringify(result));return res
 function base(storage,db,receipts) {
   const layout=cachedContentLayout(db);
   if(!layout)throw Object.assign(Error('unsupported_database'),{code:'unsupported_database'});
-  if(!layout.suppressionRevision&&!storage.enabled())return receipts.map((_,i)=>i);
+  const legacy=!layout.suppressionRevision&&!storage.enabled();
   return receipts.flatMap((receipt,index)=>{
-    try{storage.assertReceipts(ns,[receipt]);return [index];}
+    try{
+      if(!legacy)storage.assertReceipts(ns,[receipt]);
+      storage.assertAdmissionReceipts(ns,[receipt]);
+      return [index];
+    }
     catch(error){if(error.code==='source_excluded')return [];throw error;}
   });
 }
@@ -195,11 +199,10 @@ for(const snapshot of [false,true])test(`privacy matrix: ${snapshot?'snapshot':'
     ['1a-forgot-middle',[clean,forgot,clean],accepted([0,2],[1])],
     ['1a-forgot-last',[clean,clean,forgot],accepted([0,1],[2])],
     ['1a-forgot-all',[forgot,forgot,forgot],accepted([],[0,1,2])]]:[]),
-    // Becomes a refusal cell after the rebase onto 07's fix.
-    ['1b-no-raw-first',[noRawForgot,clean,clean],accepted([0,1,2])],
-    ['1b-no-raw-middle',[clean,noRawForgot,clean],accepted([0,1,2])],
-    ['1b-no-raw-last',[clean,clean,noRawForgot],accepted([0,1,2])],
-    ['1b-no-raw-all',[noRawForgot,noRawForgot,noRawForgot],accepted([0,1,2])],
+    ['1b-no-raw-first',[noRawForgot,clean,clean],accepted([1,2],[0])],
+    ['1b-no-raw-middle',[clean,noRawForgot,clean],accepted([0,2],[1])],
+    ['1b-no-raw-last',[clean,clean,noRawForgot],accepted([0,1],[2])],
+    ['1b-no-raw-all',[noRawForgot,noRawForgot,noRawForgot],accepted([],[0,1,2])],
     ['2-fenced-first',[fenced,clean],{code:'conversation_deleted',index:0}],
     ['2-fenced-last-excluded-middle',[clean,deleted,fenced],{code:'conversation_deleted',index:2}],
     ['3-history-before-fence',[clean,both,clean],accepted([0,2],[1])],
@@ -214,6 +217,13 @@ for(const snapshot of [false,true])test(`privacy matrix: ${snapshot?'snapshot':'
   ]) {
     const r=compare(t,db,label,batch,expect,opts);
     if(!snapshot&&batch.length&&label!=='empty')assert.equal(r.baseWalks,1,label+' validation must not replay');
+  }
+  if(!snapshot) {
+    const fallback=observe(db,[noRawForgot,clean,noRawForgot],{
+      inject:Object.assign(Error('Synthetic union failure'),{code:'ERR_SQLITE_ERROR'}),fault:'union',
+    });
+    assert.deepEqual(fallback.outcome,accepted([1],[0,2]),'exact fallback applies the same denial tokens');
+    assert.equal(fallback.baseWalks,4,'union followed by the three exact validations');
   }
   let serial=500;
   for(const value of ['\0tail','\uFFFD','\ud800']) {

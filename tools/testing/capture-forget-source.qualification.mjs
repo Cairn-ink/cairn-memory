@@ -97,9 +97,11 @@ if (base) {
       if (lookupError) fail(lookupError);
       return JSON.parse(tokens).some(token => hits.has(token)) ? { denied: 1 } : undefined;
     } }; } };
-    const filter = Function('cachedContentLayout', 'db', 'fail', 'enabled', 'assertReceipts',
+    // This oracle supplies exact per-receipt validation. The native
+    // capture-filter-union test separately exercises union enumeration.
+    const filter = Function('cachedContentLayout', 'db', 'fail', 'enabled', 'snapshot', 'assertReceipts',
       'receiptDenialTokens', 'receiptDigest', 'boundary', 'assertAdmissionReceipts', extract(source) + '\nreturn filter;')(
-      () => layout, db, fail, () => raw, (_, [receipt]) => {
+      () => layout, db, fail, () => raw, true, (_, [receipt]) => {
         events.push('assert:' + receipt.eventId);
         const state = states[Number(receipt.eventId.slice(1))]; if (state) fail(state);
       }, receiptDenialTokens, digest, boundary, (namespace, receipts) => {

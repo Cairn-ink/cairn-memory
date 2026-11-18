@@ -36,11 +36,11 @@ export async function forgottenCaptureOutcome(open) {
     const input = { namespace: ns, client: 'synthetic', sessionId: 'synthetic-session', eventId: 'first',
       messages: [{ id: 'synthetic-message', role: 'user', content: 'Synthetic forgotten source.' }] };
     const first = ok(await core.capture(input)).admission.memories[0];
-    ok(core.forget({ namespace: ns, memoryId: first.id, expectedRevision: first.revision }));
+    const { indexRevision } = ok(core.forget({ namespace: ns, memoryId: first.id, expectedRevision: first.revision }));
     calls = 0;
     const result = await meter(() => core.capture({ ...input, eventId: 'second' }));
     const replay = await meter(() => core.capture({ ...input, eventId: 'second' }));
-    return { result: result.value, replay: replay.value, extractCalls: calls,
+    return { result: result.value, replay: replay.value, extractCalls: calls, indexRevision,
       counts: { capture: result.counts, replay: replay.counts } };
   } finally { while (cleanup.length) await cleanup.pop()(); }
 }
@@ -63,5 +63,18 @@ export async function compareForgottenCapture(base, { observe = false } = {}) {
   } finally { rmSync(root, { recursive: true, force: true }); }
 }
 
-if (process.argv[1] === new URL(import.meta.url).pathname)
-  await compareForgottenCapture(process.argv[2], { observe: process.argv.includes('--observe') });
+if (process.argv[1] === new URL(import.meta.url).pathname) {
+  const phase = process.argv[2];
+  if (phase === 'after' && !process.argv[3]) {
+    const outcome = await forgottenCaptureOutcome(openMemoryCore);
+    assert.deepEqual(outcome.result, { duplicate: false,
+      admission: { memories: [], suppressedCount: 1, indexRevision: outcome.indexRevision },
+      classification: { status: 'skipped', reason: 'empty' } });
+    assert.deepEqual(outcome.replay, { duplicate: true, memoryIds: [], suppressedCount: 1 });
+    assert.equal(outcome.extractCalls, 0, 'no extraction of forgotten text');
+    console.log(JSON.stringify({ kind: 'all-suppressed-capture', currentOutcome: outcome }));
+  } else {
+    await compareForgottenCapture(phase === 'after' ? process.argv[3] : phase,
+      { observe: process.argv.includes('--observe') });
+  }
+}
