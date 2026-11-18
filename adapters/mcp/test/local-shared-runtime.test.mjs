@@ -392,7 +392,7 @@ test('interrupted Raw embedding dispatches stop after three fresh service lifeti
   assert.equal(interrupted.vectorBytes, 0);
 });
 
-test('detach and close preserve observed attempts for a fresh maintenance service', { timeout: 15000 }, async t => {
+test('detach and close retain the interrupted attempt for a fresh maintenance service', { timeout: 15000 }, async t => {
   installRawSearchTestClock(t);
   const upkeep = createLocalRawSearchUpkeepControl(), f = sourceFixture(t), writes = sidecarWrites(t);
   const held = deferred();
@@ -402,8 +402,8 @@ test('detach and close preserve observed attempts for a fresh maintenance servic
   const embedder = { id: 'synthetic-retry-after-close', revision: '1', dimensions: 2, normalization: 'l2',
     async embed(texts) {
       calls++;
-      if (calls <= 2) throw Object.assign(Error('provider_error'), { code: 'provider_error' });
-      if (calls === 3) await held.promise;
+      if (calls === 1) throw Object.assign(Error('provider_error'), { code: 'provider_error' });
+      if (calls === 2) await held.promise;
       return texts.map(() => [1, 0]);
     } };
   await savedSource(f, 'Synthetic copper telescope.');
@@ -416,19 +416,14 @@ test('detach and close preserve observed attempts for a fresh maintenance servic
     return s.tick({ maxMs: 5000, embeddings, upkeepSignal: upkeep.signal });
   };
   upkeep.resume();
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    for (let turn = 0; turn < 20 && calls < attempt; turn++) await tick(true);
-    await nextTurn();
-    for (let turn = 0; turn < 12; turn++) {
-      await tick(false);
-      if (row().retry.attempts === attempt && row().retry.error === 'provider_error') break;
-    }
-    assert.equal(row().retry.attempts, attempt);
-    assert.equal(row().retry.error, 'provider_error');
-  }
+  for (let turn = 0; turn < 20 && calls === 0; turn++) await tick(true);
+  await nextTurn();
+  for (let turn = 0; turn < 12 && row().retry.error !== 'provider_error'; turn++) await tick(false);
   const before = row().retry.attempts;
-  for (let turn = 0; turn < 20 && calls < 3; turn++) await tick(true);
-  assert.equal(calls, 3);
+  assert.equal(before, 1);
+  assert.equal(row().retry.error, 'provider_error');
+  for (let turn = 0; turn < 20 && calls < 2; turn++) await tick(true);
+  assert.equal(calls, 2);
   upkeep.suspend();
   const atDetach = writes.length;
   const closing = s.service.close();
@@ -436,14 +431,15 @@ test('detach and close preserve observed attempts for a fresh maintenance servic
   await closing;
   assert.equal(writes.length, atDetach, 'no sidecar commits from detach through close');
   await s.reopen();
-  assert.equal(row().retry.attempts, before, 'a fresh service sees only the two observed failures');
+  assert.equal(row().retry.attempts, before + 1, 'a fresh service keeps the interrupted attempt');
+  assert.equal(row().retry.terminal, false);
   upkeep.resume();
   for (let turn = 0; turn < 20 && !row().vectorBytes; turn++) await tick(true);
-  assert.equal(calls, 4);
+  assert.equal(calls, 3);
   assert.ok(row().vectorBytes > 0, 'the original key still publishes vectors');
 });
 
-test('unsettled dispatches across maintenance restarts consume the shared provider budget', { timeout: 25000 }, async t => {
+test('interrupted Raw embedding calls charge the shared ledger across service restarts', { timeout: 25000 }, async t => {
   installRawSearchTestClock(t);
   const f = sourceFixture(t);
   let calls = 0, held, providerTime = Date.UTC(2026, 0, 1, 12);
@@ -461,7 +457,7 @@ test('unsettled dispatches across maintenance restarts consume the shared provid
   await s.tick({ maxMs: 5000 });
   const { key } = publishedRawSegment(s);
   const dispatches = [];
-  for (let lifetime = 0; lifetime < 7; lifetime++) {
+  for (let lifetime = 0; lifetime < 4; lifetime++) {
     const upkeep = createLocalRawSearchUpkeepControl();
     const before = calls;
     upkeep.resume();
@@ -476,13 +472,14 @@ test('unsettled dispatches across maintenance restarts consume the shared provid
     // Retire the fake transport so the next service can take the ledger slot.
     held.resolve();
     await nextTurn();
-    if (lifetime < 6) await s.reopen();
+    if (lifetime < 3) await s.reopen();
   }
-  assert.deepEqual(dispatches, [1, 1, 1, 1, 1, 0, 0]);
-  assert.equal(publishedRawSegment(s, key).retry.attempts, 0);
+  assert.deepEqual(dispatches, [1, 1, 1, 0]);
+  assert.equal(publishedRawSegment(s, key).retry.attempts, 3);
   const budget = contextReadBudgetDiagnostic(embedder);
-  assert.equal(budget.maintenance.requests, 5);
-  assert.deepEqual(budget.lastDenial, { class: 'maintenance', reason: 'maintenance_cap' });
+  assert.equal(budget.maintenance.requests, 3, 'the same process retains one charge for each interrupted call');
+  assert.equal(budget.maintenance.active, 0);
+  assert.equal(budget.lastDenial, null);
 });
 
 test('a paused cancelled source does not block lexical upkeep for another namespace', { timeout: 15000 }, async t => {
@@ -519,8 +516,13 @@ test('a paused cancelled source does not block lexical upkeep for another namesp
   assert.equal(s.indexCount(), 2, 'the first admitted turn after reattach indexes the enabled namespace');
   assert.equal((await s.search({ query: 'bronze' })).candidates.length, 1);
   assert.deepEqual(calls, [copper]);
-  assert.equal(publishedRawSegment(s, key).vectorBytes, 0);
+  const paused = publishedRawSegment(s, key);
+  assert.equal(paused.vectorBytes, 0);
+  assert.equal(paused.retry.attempts, retry.attempts + 1, 'a paused source retains the reserved attempt');
   setPause(false);
+  await tick();
+  assert.deepEqual(publishedRawSegment(s, key).retry, retry, 'the first admitted turn after resume restores the prior retry');
+  assert.deepEqual(calls, [copper]);
   for (let turn = 0; turn < 24 && !publishedRawSegment(s, key).vectorBytes; turn++) await tick();
   assert.equal(calls.filter(text => text === copper).length, 2);
   assert.ok(publishedRawSegment(s, key).vectorBytes > 0, 'the paused source publishes on resume');
