@@ -10,14 +10,14 @@ const bytes = JSON.parse(readFileSync(new URL('./fixtures/context-read/compact-s
 const parse = (patch = {}, sources, profile) => contextInput('contextRead', compactRequest(patch), ['memory', 'card'], sources, profile).input;
 const assemble = patch => assembleContext(compactAssemblyOptions({ representation, ...patch }));
 
-test('compact parser requires Memory only, explicit raw:false and no extra sources; ceiling remains 24', () => {
+test('compact parser requires Memory only, explicit raw:false and no extra sources; ceiling is 64', () => {
   assert.deepEqual(ASSEMBLY_REPRESENTATIONS, ['representation-v2', 'representation-v2-dated']);
   assert.ok(Object.isFrozen(ASSEMBLY_REPRESENTATIONS));
   assert.equal(parse().representation, representation);
-  assert.deepEqual(parse().budget, { maxTokens: 6000, maxItems: 24 });
+  assert.deepEqual(parse().budget, { maxTokens: 6000, maxItems: 64 });
   assert.equal(ASSEMBLY_LIMITS.counterCalls, 1226);
   for (const patch of [{ types: ['card'] }, { types: ['card', 'memory'] }, { raw: true }, { raw: undefined },
-    { budget: { maxItems: 0 } }, { budget: { maxItems: 25 } }, { budget: { maxItems: 1.5 } }, { surprise: true }])
+    { budget: { maxItems: 0 } }, { budget: { maxItems: 65 } }, { budget: { maxItems: 1.5 } }, { surprise: true }])
     assert.throws(() => parse(patch), { code: 'invalid_input' });
   for (const sources of [['relations-one-hop-v1'], ['moc-v1'], ['relations-one-hop-v1', 'moc-v1']]) {
     assert.throws(() => parse({}, sources), { code: 'invalid_input' });
