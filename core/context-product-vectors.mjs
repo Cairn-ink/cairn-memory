@@ -30,6 +30,7 @@ export const vectorSchema=VECTOR_DDL.trim().split(';').filter(s=>s.trim()).map(s
   return {type:m[1].toLowerCase(),name:m[2],tbl_name:m[1]==='TABLE'?m[2]:/ ON (\w+)/.exec(sql)[1],sql};
 });
 const same=(a,b)=>canonicalJson(a)===canonicalJson(b);
+const eligibleCount=lexical=>Object.values(lexical.counts.byType).reduce((n,c)=>n+c.eligible,0);
 const lookup=`SELECT generation,doc,CASE WHEN length(vector)=6144 THEN vector ELSE x'' END AS vector FROM semantic_vectors WHERE owner=? AND identity=? AND epoch=? AND item=? AND revision=? AND body_revision=? AND representation=?`;
 const rowRef=r=>{const [ownerId,scope,projectId,type,id]=JSON.parse(r.identity??r.item);return {type,namespace:{ownerId,scope,projectId:projectId||null},[type==='memory'?'memoryId':'cardId']:id,revision:r.revision,...(type==='card'?{bodyRevision:r.body_revision}:{})};};
 const sortKey=item=>Buffer.concat(JSON.parse(item).flatMap(value=>[Buffer.from(value),Buffer.from([0])]));
@@ -109,7 +110,7 @@ export function productVectors({storage,facade}) {
     const selection=contextProductStorageSelection(p,readSet);
     const missing={status:'partial',reason:'missing_vectors',record:null,rows:[]};
     if(!lexical)return {...missing,status:'unavailable',reason:'index_not_ready'};
-    const capacity=semanticCapacity(Object.values(lexical.counts.byType).reduce((n,c)=>n+c.eligible,0),snapshot.identity);
+    const capacity=semanticCapacity(eligibleCount(lexical),snapshot.identity);
     if(!capacity.eligible)return {...missing,reason:'capacity_exceeded'};
     try {
       const observed=storage.vectors(db=>{
@@ -362,5 +363,8 @@ export function productVectors({storage,facade}) {
   function rank(observation,queryVector) {
     const rows=observation.rows.map(row=>({ref:row.ref,score:cosine(queryVector,row.vector)}));rankScores(rows);return rows;
   }
-  return {observe,plan,put,certify,rank};
+  return {observe,plan,put,certify,rank,diskFits:lexical=>storage.embeddingDiskFits(eligibleCount(lexical)),dispatchFits(lexical,identity){
+    const eligible=eligibleCount(lexical);
+    return semanticCapacity(eligible,identity).eligible&&storage.embeddingDiskFits(eligible);
+  }};
 }
