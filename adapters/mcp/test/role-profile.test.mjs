@@ -23,10 +23,10 @@ const opts = { methodPackages: 'local-v1', contextRead: 'context-read-v1', roleP
 const fields = { duties: ['Review records'], requiredOutputs: ['Report decisions'] };
 const write = { roleKey: 'finance', actionId: 'publish', expectedCurrentRelease: null, expectedRegistryRevision: null, fields };
 const ok = r => { assert.equal(r.ok, true, JSON.stringify(r)); return r.value; };
-async function attach(t, server) {
+async function attach(t, server, workspace) {
   const client = new Client({ name: 'synthetic-role', version: '1' });
   const [a, b] = InMemoryTransport.createLinkedPair();
-  t.after(() => server.close()); t.after(() => client.close());
+  workspace.defer(() => server.close()); t.after(() => client.close());
   await server.connect(a); await client.connect(b); return client;
 }
 const call = async (client, name, input) => JSON.parse((await client.callTool({ name, arguments: input })).content[0].text);
@@ -113,7 +113,7 @@ test('C01/C03 programmatic MCP publishes directly, host attribution is frozen an
   const workspace=createTestWorkspace(t,{prefix:'role-mcp-'}),path=join(workspace.path,'store.sqlite'),counter=await createContextCounter();
   const attribution={actorId:'trusted actor',agentId:'trusted agent'};
   const server=createCairnServer({path,namespace:ns,...opts,roleProfileAttribution:attribution,contextCounter:counter});
-  attribution.actorId='changed'; const client=await attach(t,server);
+  attribution.actorId='changed'; const client=await attach(t,server,workspace);
   const tools=(await client.listTools()).tools;
   assert.equal(tools.length,21); // 5 legacy + 9 methods + 3 context + 4 role
   assert.equal(tools.find(t=>t.name==='publish_role_profile_release').annotations.readOnlyHint,false);

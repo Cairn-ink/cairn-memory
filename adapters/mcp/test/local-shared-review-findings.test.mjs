@@ -213,7 +213,7 @@ for (const handoff of ['core', 'mcp']) for (const raw of [false, true]) for (con
     return Reflect.apply(nativeThen, this, [fulfilled, rejected]);
   });
   const core = host.open(() => openMemoryCore({ path: f.path, raw, privateCards: authority.options }));
-  t.after(async () => { if (writer.isTransaction) writer.exec('ROLLBACK'); await core.close(); writer.close(); });
+  f.workspace.defer(async () => { if (writer.isTransaction) writer.exec('ROLLBACK'); await core.close(); writer.close(); });
   const card = ok(await authority.call(core, 'createCardDraft', { namespace: ns, actionId: 'delivery-card', drafting: 'authored',
     input: { title: 'Synthetic retained Card', body: 'Synthetic private body', authoredInput: { text: 'Synthetic source', occurredAt: null } } }));
   target = kind === 'card' ? { kind: 'card', key: card.id }

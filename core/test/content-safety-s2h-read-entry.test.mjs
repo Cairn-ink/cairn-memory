@@ -189,11 +189,11 @@ test('R1 v18 receipts upgraded to v48 retain the legacy fallback after unrelated
   await migrateContentSafety({ path: f.path, backupPath: f.backupPath, expected: { storeId: f.storeId, base: 33 }, quiescence });
   const core = openMemoryCore({ path: f.path, model: rationaleModel(), rawConversations: { mode: 'raw-v1', port: localPlainPort(), capBytes: 1048576,
     readPolicy: () => ({ generation: 'synthetic', reason: null }) } });
-  t.after(() => core.close());
+  f.workspace.defer(() => core.close());
   const first = ok(await core.captureRaw(rawRequest(splitRaw('Synthetic unrelated Raw input')[0],
     { namespace: ns, client: evidence.client, sessionId: evidence.sessionId, eventId: 'after-raw' })));
   assert.equal(first.raw.parts[0].saved,true);
-  const db = f.connect(); t.after(() => db.close());
+  const db = f.connect(); f.workspace.defer(() => db.close());
   const stored = db.prepare('SELECT * FROM receipts WHERE memory_id=?').get(memory.id);
   assert.equal(db.prepare('SELECT 1 FROM raw_receipt_origins WHERE receipt_id=?').get(stored.id), undefined);
   for (const memoized of [false, true]) readTransaction(db, () => {
