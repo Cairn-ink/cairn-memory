@@ -30,7 +30,7 @@ test(`P2c/P2d owner-wide four-namespace ${mode}/${mode} read, evidence and assem
   if(mode==='WAL')request.options.wal=true;
   const reader=await request.open(),readSet=canonicalSet(four),types=['memory','card'];
   const capabilities=ok(await reader.getContextReadCapabilities());
-  assert.deepEqual(capabilities.journals,mode==='WAL'?['DELETE','WAL']:['DELETE']);
+  assert.deepEqual(capabilities.journals,['DELETE','WAL']);
   assert.deepEqual(capabilities.sidecarJournals,mode==='WAL'?['DELETE','WAL']:['DELETE']);
   assert.deepEqual(capabilities.wal,mode==='WAL'?{available:true}:{available:false,reason:'deferred_to_p2d'});
   for(const intent of ['current','history']){

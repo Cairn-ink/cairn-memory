@@ -6,6 +6,7 @@ import { performance } from 'node:perf_hooks';
 import { contextBudget } from './context-read-budget.mjs';
 import { randomUUID } from 'node:crypto';
 import { dirname } from 'node:path';
+import { types } from 'node:util';
 import { createRawSearchCache } from './raw-search-cache.mjs';
 import { rawSearchSqlite, rawSearchDeadline } from './raw-search-sqlite.mjs';
 
@@ -13,7 +14,9 @@ const publicCodes = new Set(['invalid_input','invalid_query','invalid_read_set',
   'stale_publication','store_closed','read_in_progress','maintenance_authority_required','raw_search_backend_unavailable']);
 const pageAllowanceMs=100;
 const expired = at => {if(performance.now()>=at)rawSearchDeadline();};
-const interrupted = error => ['source_busy','search_deadline'].includes(error?.code);
+// Status and purge have no caller clock: cap contention at the normal Raw
+// operation window, with the same fail-fast 25 ms storage backoff.
+const administrativeWaitMs=1000;
 // Opaque handles may cross readers only within the exact same host authority,
 // physical canonical file, owner and read set. Tickets remain reader-local.
 const preparedByAuthority = new WeakMap();
@@ -21,16 +24,51 @@ const emptyPartial = () => immutable({version:RAW_SEARCH_VERSION,publication:nul
   coverage:{status:'partial',scanned:null,expanded:null,causes:['deadline']},semantic:{state:'unknown',reason:null}});
 const safeFailure = error => { fail(publicCodes.has(error?.code) ? error.code : 'raw_search_unavailable'); };
 
+function plainCandidateData(candidate) {
+  const pending = [candidate], seen = new WeakSet();
+  while (pending.length) {
+    const value = pending.pop();
+    // Detect even revoked proxies before doing any reflection on the value.
+    if (types.isProxy(value)) return false;
+    if (value === null || value === undefined) continue;
+    const kind = typeof value;
+    if (kind === 'string' || kind === 'boolean' || kind === 'number') continue;
+    if (kind !== 'object') return false;
+    if (seen.has(value)) continue;
+    seen.add(value);
+    const array = Array.isArray(value), prototype = Object.getPrototypeOf(value);
+    if (array ? prototype !== Array.prototype : prototype !== Object.prototype && prototype !== null) return false;
+    if (types.isModuleNamespaceObject(value) || types.isArgumentsObject(value) ||
+        types.isTypedArray(value) || types.isBoxedPrimitive(value) || types.isExternal(value)) return false;
+    const descriptors = Object.getOwnPropertyDescriptors(value), keys = Reflect.ownKeys(descriptors);
+    const length = array ? descriptors.length.value : 0;
+    // An absent index can read from the prototype. Require dense arrays.
+    if (array && keys.length !== length + 1) return false;
+    for (const key of keys) {
+      if (array && key === 'length') continue;
+      const descriptor = descriptors[key];
+      if (typeof key !== 'string' || !descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) return false;
+      if (array) {
+        const index = Number(key);
+        if (!Number.isInteger(index) || index < 0 || index >= length || String(index) !== key) return false;
+      }
+      pending.push(descriptor.value);
+    }
+  }
+  return true;
+}
+
 /** Open the configured Raw store; enabled:false explicitly disables search. */
 export async function openRawSearch(value) {
   if (value === undefined || value === false || value?.enabled === false) return null;
   const options=rawSearchOptions(value);
   let openingDeadlineAt=performance.now()+1000;
   const openingCheck=()=>expired(openingDeadlineAt);
-  const [{openReadDatabase},{createRawSearchAuthority},{openRawSearchStorage},{createRawSearchMaintenance},retrieval,embedding,{sqliteFileStat}]=await Promise.all([
+  const [{openReadDatabase},{createRawSearchAuthority},{openRawSearchStorage},{createRawSearchMaintenance},retrieval,embedding,{sqliteFileStat},{isStorageBusy}]=await Promise.all([
     import('./read-database.mjs'),import('./raw-search-authority.mjs'),import('./raw-search-storage.mjs'),
-    import('./raw-search-maintenance.mjs'),import('./raw-search-retrieval.mjs'),import('./context-read-embedder.mjs'),import('./sqlite-journal-probe.mjs')]);
-  let database,storage;
+    import('./raw-search-maintenance.mjs'),import('./raw-search-retrieval.mjs'),import('./context-read-embedder.mjs'),import('./sqlite-journal-probe.mjs'),import('./database.mjs')]);
+  const interrupted = error => isStorageBusy(error)||['source_busy','search_deadline'].includes(error?.code);
+  let database,storage,authority;
   try {
     const canonicalFile=()=>{
       if(sqliteFileStat(options.path).nlink!==1n)fail('unsafe_database_file');
@@ -39,13 +77,35 @@ export async function openRawSearch(value) {
         if(dirname(path)===path)break;
       }
     };
-    canonicalFile();
-    database=openReadDatabase(options.path,{contextRead:true,busyTimeoutMs:0,preflight:openingCheck,
-      nativeObserver:{invoke(_kind,_label,work){openingCheck();return work();},database:native=>rawSearchSqlite(native,openingCheck)}});
-    const assertFile=database.assertFile;
-    database.assertFile=()=>{assertFile();canonicalFile();};
-    const authority=createRawSearchAuthority(database,options);
-    storage=await openRawSearchStorage({directory:options.directory,identity:authority.identity,bind:authority.bind,quotaBytes:options.quotaBytes,deadlineAt:openingDeadlineAt});
+    while(true) {
+      let openingNative;
+      try {
+        openingCheck();canonicalFile();
+        database=openReadDatabase(options.path,{contextRead:true,busyTimeoutMs:0,preflight:openingCheck,
+          nativeObserver:{invoke(_kind,_label,work){openingCheck();return work();},database:native=>rawSearchSqlite(openingNative=native,openingCheck)}});
+        const assertFile=database.assertFile;
+        database.assertFile=()=>{assertFile();canonicalFile();};
+        authority=createRawSearchAuthority(database,options);
+        storage=await openRawSearchStorage({directory:options.directory,identity:authority.identity,bind:authority.bind,quotaBytes:options.quotaBytes,deadlineAt:openingDeadlineAt});
+        openingCheck();break;
+      }catch(error){
+        // Dispose both handles before yielding. Every new attempt revalidates
+        // canonical identity and the sidecar schema/header/physical seal.
+        try {
+          // Preflight can throw before openReadDatabase returns its wrapper.
+          // Dispose it synchronously before yielding to sidecar disposal.
+          if(openingNative?.isOpen)openingNative.close();
+          if(openingNative?.isOpen)throw new Error('Open canonical Raw search connection');
+          await storage?.close();
+        }
+        catch(cleanup){throw new Error('Raw search opening disposal failed',{cause:cleanup});}
+        storage=undefined;database=undefined;
+        if(!isStorageBusy(error)&&error.code!=='source_busy')throw error;
+        const wait=Math.max(25,(authority?.resume()??0)-performance.now());
+        if(performance.now()+wait>=openingDeadlineAt)rawSearchDeadline();
+        await new Promise(resolve=>setTimeout(resolve,wait));
+      }
+    }
     openingCheck();openingDeadlineAt=Infinity;
     const metadata=options.embedder&&{id:options.embedder.id,revision:options.embedder.revision,
       dimensions:options.embedder.dimensions,normalization:options.embedder.normalization};
@@ -127,7 +187,7 @@ export async function openRawSearch(value) {
         if(!interrupted(error))throw error;
         cache.drop();authority.reset();
         if(error.code==='search_deadline')return onExhausted();
-        const wait=error.code==='source_busy'?Math.max(0,authority.resume()-performance.now()):0;
+        const wait=isStorageBusy(error)?25:error.code==='source_busy'?Math.max(0,authority.resume()-performance.now()):0;
         if(at-performance.now()<wait+pageAllowanceMs)return onExhausted();
         if(wait)await new Promise(resolve=>setTimeout(resolve,wait));
         try{authority.refresh(at);}catch(next){if(!interrupted(next))throw next;}
@@ -312,15 +372,30 @@ export async function openRawSearch(value) {
           typeof deadlineAt!=='number'||Number.isNaN(deadlineAt)||typeof onPrepared!=='function')fail('invalid_input');
       const at=Math.min(deadlineAt,performance.now()+1000),handles=[];
       if(!candidates.length)return {handles,complete:true};
+      // Successful entries live for one prepareMany invocation, never across calls.
+      const successfulEntries=[];
       const check=()=>{expired(at);if(closed)fail('store_closed');};
-      try {
+      return retry(async()=>{
         check();
         // Authenticate each issuing proof independently. Known unpreparable
         // ranges must not spend the shared snapshot's opening budget.
-        const entries=candidates.map(candidate=>{
+        const entries=candidates.map((candidate,index)=>{
           try {
             check();
+            if(index<handles.length)return null;
+            const memo=successfulEntries[index];
+            successfulEntries[index]=undefined;
+            // Record the shape before proof lookup can read caller properties.
+            const plainData=plainCandidateData(candidate);
             const entry=candidateEntry(candidate,intent);
+            // Capture the full authorization payload and the fields read directly
+            // for proof lookup, range selection, publication and handle output.
+            const candidateBinding=plainData?JSON.stringify([candidate.proof,candidate.id,candidate.ranges,
+              candidate.publication,candidate.classification,candidate]):undefined;
+            if(plainData&&memo?.candidate===candidate&&memo.candidateBinding===candidateBinding){
+              successfulEntries[index]=memo;
+              return memo.entry;
+            }
             const rows=entry.sources.filter(source=>candidate.ranges.some(ref=>same(ref,source.ref)))
               .sort((a,b)=>a.ref.span.start-b.ref.span.start);
             if(!rows.length||rows.length!==candidate.ranges.length||rows.length>1024)fail('source_unavailable');
@@ -328,14 +403,16 @@ export async function openRawSearch(value) {
             // Preserve the existing host authorization protocol. Authorization
             // is metadata-only; the shared canonical snapshot follows it.
             const access=authority.authorize('rawSearchSource',{candidate,intent},token,check);access();check();
-            return {...entry,rows,access};
+            const preparedEntry={...entry,rows,access};
+            if(plainData)successfulEntries[index]={candidate,candidateBinding,entry:preparedEntry};
+            return preparedEntry;
           }catch(error){if(interrupted(error))throw error;return null;}
         });
         const publication=storage.publication({shape:false,deadlineAt:at});
         const binding=authority.bind('raw-search-publication-v1',[authority.identity,publication.sequence]);
         for(let i=0;i<entries.length;i++)if(candidates[i]?.publication!==binding)entries[i]=null;
         const batch=authority.prepareBatch(entries,intent,at);
-        for(let index=0;index<candidates.length;index++){
+        for(let index=handles.length;index<candidates.length;index++){
           check();let handle=null;
           try {
             const candidate=candidates[index],entry=entries[index];
@@ -359,10 +436,7 @@ export async function openRawSearch(value) {
           check();handles.push(handle);onPrepared(handle,index);
         }
         return {handles,complete:true};
-      }catch(error){
-        if(!interrupted(error))throw error;
-        return {handles:handles.slice(),complete:false};
-      }
+      },at,()=>({handles:handles.slice(),complete:false}));
     }
     async function prepareSource(ref,{intent='current'}={},token) {
       if(!['current','history'].includes(intent))fail('invalid_input');
@@ -409,6 +483,18 @@ export async function openRawSearch(value) {
         }
       }catch{fail('raw_search_unavailable');}
     }
+    async function administrativeRetry(work) {
+      const at=performance.now()+administrativeWaitMs;
+      let last;
+      for(let attempt=0;attempt<40;attempt++){
+        if(performance.now()>=at)throw last;
+        try{return await work();}catch(error){
+          if(!isStorageBusy(error)||performance.now()+25>=at)throw error;
+          last=error;await new Promise(resolve=>setTimeout(resolve,25));
+        }
+      }
+      throw last;
+    }
     const status=()=>{
       const progress=maintenance.status();
       return {state:progress.phase==='failed'?'unavailable':'unknown',eligible:null,indexed:null,embedded:null,
@@ -418,10 +504,11 @@ export async function openRawSearch(value) {
     };
     return Object.freeze({search:tracked(search),prepare:tracked(prepare),prepareMany:tracked(prepareMany),prepareSource:tracked(prepareSource),classify:tracked(classify),validate:revalidate,revalidate,
       maintain:tracked((input,token)=>withRawSearchRequestScope(async()=>{const access=authority.authorize('rawSearchMaintenance',{},token);
-        cache.maintain();
-        await maintenance.maintain(input,access);return status();})),
-      status:()=>withContentSuppressionRequest(async()=>{try{ready();await storage.status();return status();}catch{return {state:'unavailable',eligible:null,indexed:null,embedded:null,coverage:'unknown',error:'raw_search_unavailable'};}},{fresh:true}),
-      purge:tracked(async()=>{cache.close();await maintenance.close();await storage.dropOwner();prepared.clear();searches.clear();}),
+        const cacheError=cache.maintain();
+        await maintenance.maintain(input,access,
+          cacheError&&(isStorageBusy(cacheError)||cacheError.code==='source_busy')?cacheError:undefined);return status();})),
+      status:()=>withContentSuppressionRequest(async()=>{try{ready();await administrativeRetry(()=>storage.status());return status();}catch{return {state:'unavailable',eligible:null,indexed:null,embedded:null,coverage:'unknown',error:'raw_search_unavailable'};}},{fresh:true}),
+      purge:tracked(async()=>{cache.close();await maintenance.close();await administrativeRetry(()=>storage.dropOwner());prepared.clear();searches.clear();}),
       close:()=>withContentSuppressionRequest(async()=>{if(closed)return;closed=true;
         try{cache.close();await maintenance.close();await Promise.allSettled([...operations]);prepared.clear();searches.clear();}
         finally{try{await storage.close();}finally{try{database.db.close();}finally{releaseResidency();}}}},{fresh:true})});

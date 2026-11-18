@@ -60,7 +60,12 @@ test('A12 installed keyless and keyed CLI expose assembly, inject the counter, p
       registerHooks({load(url,context,next){
         if(!${key}&&url.endsWith('/adapters/openai/index.mjs'))throw Error('keyless startup constructed legacy model');
         const result=next(url,context);appendFileSync(${JSON.stringify(trace)},JSON.stringify(url)+'\\n');return result;}});
-      globalThis.fetch=()=>{process.exit(91)};`);
+      globalThis.fetch=(url,options)=>{
+        let payload;try{payload=JSON.parse(options?.body);}catch{}
+        if(String(url)==='https://api.openai.com/v1/responses/input_tokens'&&options?.method==='POST'&&
+          payload?.text?.format?.name==='cairn_consolidate')return new Response('{}',{status:403});
+        process.exit(91);
+      };`);
     const { client } = await contextHost(workspace, installed.path, { entry: installed.entry, key, preload });
     const tools = (await client.listTools()).tools, tool = tools.find(tool => tool.name === 'read_memory_context');
     assert.ok(tool); assert.equal(tool.annotations.readOnlyHint, true); assert.equal(tool.annotations.openWorldHint, true);

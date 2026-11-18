@@ -39,6 +39,7 @@ jobs:
       - name: Diagnose native macOS capture transport
         run: node integrations/client/testing/run.mjs --isolated-host integrations/client/test/local-macos-transport-diagnostic.test.mjs
       - run: node integrations/client/testing/run.mjs --isolated-host packages/setup/test/local-capture-interrupted.test.mjs
+      - run: node integrations/client/testing/run.mjs --isolated-host integrations/client/test/local-process.test.mjs
       - run: npm run test:local-host
       - name: Test engine storage on macOS
         shell: bash
@@ -286,6 +287,8 @@ jobs:
       - run: npm run test:local-worker
       # Explicit owner-operated foreground entry; automatic hooks stay unchanged.
       - run: npm run test:local-host
+      # Installed hook entry: headless skip and hook payload handling.
+      - run: npm run test:local-hook
 
   mcp:
     runs-on: ubuntu-latest

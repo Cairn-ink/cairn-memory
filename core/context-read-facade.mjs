@@ -24,7 +24,7 @@ import { MemoryStoreError, fail } from './validation.mjs';
 import { openContextReadSidecar, assertContextReadReadOnlyAuxiliaries, assertContextReadCanonicalDelete, contextSourceFences } from './context-read-sidecar.mjs';
 import { createSourceContext, expandRelations, relationDiagnostic, sourceReader, sourceBudget, sourceStateBytes, validateRelationWitness, SourceStop } from './context-read-relations.mjs';
 import { rankMoc, mocDiagnostic } from './context-read-moc.mjs';
-import { fuseCandidates, RRF_PRESETS } from './context-read-fusion.mjs';
+import { fuseCandidates, RRF_PRESETS, COMPACT_RRF_PRESETS } from './context-read-fusion.mjs';
 import { REPRESENTATION_VERSION, TOKENIZER_VERSION } from './context-read-tokenize.mjs';
 import { validateVector } from './context-read-embedder.mjs';
 import { contextBudget } from './context-read-budget.mjs';
@@ -32,7 +32,13 @@ import { receiptEventDate, completeResponseBytes, cardPackSources, receiptSource
 import { readRawChannel, citedRawTurns, assembleThreeLayerContext } from './context-read-three-layer.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
 import { CONTEXT_VERSION, CONTEXT_METHODS, CONTEXT_LIMITS, SOURCE_LIMITS, ASSEMBLY_LIMITS, ASSEMBLY_POLICIES, ASSEMBLY_REPRESENTATIONS, ASSEMBLY_DEFAULTS, DEFAULT_ASSEMBLY_POLICY,
-  contextOptions, contextInput, contextRefs, namespaceKey } from './context-read-input.mjs';
+  COMPACT_MEMORY_REPRESENTATION, COMPACT_MEMORY_MAX_ITEMS, contextOptions, contextInput, assertCompactContextInput, contextRefs, namespaceKey } from './context-read-input.mjs';
+
+const compactPresets = {
+  'rrf-k60-d12': 'rrf-k60-d64-compact',
+  'rrf-k60-d12-moc-v1': 'rrf-k60-d64-moc-compact',
+  'rrf-k10': 'rrf-k10-d64-compact',
+};
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const bytes = envelope => Buffer.byteLength(JSON.stringify(envelope));
@@ -300,7 +306,8 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     value.stops.budget ||= Boolean(maintenance?.stops?.budget) || maxItems !== undefined && (maintenance?.metrics.transformed ?? 0) >= maxItems;
     return value;
   }
-  function coverage(input, state, preflight, mode, matched, unionSize, maintenance, semanticState) {
+  function coverage(input, state, preflight, mode, matched, unionSize, maintenance, semanticState,
+    { preset = options.preset, horizon = CONTEXT_LIMITS.horizon } = {}) {
     const value = unknownCoverage(input); value.status = 'complete'; value.freshness = 'current';
     value.maintenance.state = 'ready'; value.maintenance.buildState = 'ready'; value.maintenance.progress = state.progress;
     maintenanceCoverage(value, maintenance ?? { ...state, status: 'complete' });
@@ -312,10 +319,10 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         embeddedFraction: semantic ? counts.eligible ? semantic.embedded / counts.eligible : 1 : null,
         scannedFraction: counts.eligible ? scanned / counts.eligible : 1 };
     }
-    const depth = mode === 'hybrid' ? RRF_PRESETS[options.preset].depth : 24;
+    const depth = mode === 'hybrid' ? (COMPACT_RRF_PRESETS[preset] ?? RRF_PRESETS[preset]).depth : horizon;
     value.depths = { lexical: depth, semantic: semanticUsed ? depth : 0 };
     value.omitted = { lexical: matched === null ? null : Math.max(0, matched - depth),
-      semantic: semanticUsed ? Math.max(0, preflight.eligible - depth) : null, horizon: Math.max(0, unionSize - 24) };
+      semantic: semanticUsed ? Math.max(0, preflight.eligible - depth) : null, horizon: Math.max(0, unionSize - horizon) };
     return value;
   }
   function sampleTrace(value) {
@@ -404,8 +411,12 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   async function searchCandidates(input, access, deadlineAt, internal = false) {
     let diagnostics, controller, lease, sourceState;
     try {
+      const compact = input.representation === COMPACT_MEMORY_REPRESENTATION;
+      const horizon = compact ? COMPACT_MEMORY_MAX_ITEMS : CONTEXT_LIMITS.horizon;
+      const preset = compact ? compactPresets[options.preset] : options.preset;
       diagnostics = { channels: { lexical: channel('unavailable'), semantic: channel(input.semantic ? options.embedder ? 'unavailable' : 'absent' : 'disabled',
         !input.semantic && !options.embedder ? ['disabled', 'absent'] : undefined) }, coverage: unknownCoverage(input), trace: trace(input) };
+      diagnostics.trace.preset = preset;
       sampleTrace(diagnostics.trace);
       if (options.sources) diagnostics.trace.sources = Object.fromEntries(options.sources.map(id => {
         const reason = !input.sources.includes(id) ? 'disabled' : id === 'relations-one-hop-v1' && input.intent === 'history' ? 'unsupported_intent' : 'index_unavailable';
@@ -432,9 +443,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       diagnostics.coverage.maintenance.progress = maintenance?.progress ?? current.progress;
       maintenanceCoverage(diagnostics.coverage, maintenance, { deadlineAt, maxItems: readOnly ? undefined : 1024 });
       if (!current.ready) fail('index_unavailable');
-      diagnostics.coverage = coverage(input, current, null, 'lexical', null, 0, maintenance);
+      diagnostics.coverage = coverage(input, current, null, 'lexical', null, 0, maintenance, undefined, { preset, horizon });
       let time = performance.now();
-      const lexical = storage.lexicalPage(projection, input.query, 24, { deadlineAt });
+      const lexical = storage.lexicalPage(projection, input.query, horizon, { deadlineAt });
       diagnostics.trace.timings.lexicalMs = performance.now() - time;
       diagnostics.channels.lexical = channel('ready');
       let moc = [];
@@ -484,7 +495,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
             const scoring = storage.semanticPreflight(projection, options.embedder, { deadlineAt });
             try {
               if (scoring.state !== 'ready') { preflight = scoring; diagnostics.channels.semantic = channel(scoring.state); }
-              else { semantic = scoring.score(query, { deadlineAt }); preflight = scoring; }
+              else { semantic = scoring.score(query, { deadlineAt, limit: horizon }); preflight = scoring; }
             } finally { scoring.release?.(); }
           } catch (error) { diagnostics.channels.semantic = degradation(error); }
           diagnostics.trace.timings.embeddingMs = performance.now() - time;
@@ -493,10 +504,11 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       access.check();
       if (sourceState) read(() => assertSourcesInside(input, sourceState, internal ? 'snapshot_stale' : 'cursor_stale'));
       time = performance.now();
-      const fused = fuseCandidates(lexical.rows, semantic, { preset: options.preset,
+      const fused = fuseCandidates(lexical.rows, semantic, { preset, limit: horizon,
         semanticState: diagnostics.channels.semantic.state, coverageComplete: preflight?.state === 'ready', ...(options.sources ? { moc } : {}) });
       diagnostics.trace.timings.fusionMs = performance.now() - time; diagnostics.trace.effective = fused.mode;
-      diagnostics.coverage = coverage(input, current, preflight, fused.mode, lexical.matched, fused.unionSize, maintenance, diagnostics.channels.semantic.state);
+      diagnostics.coverage = coverage(input, current, preflight, fused.mode, lexical.matched, fused.unionSize, maintenance,
+        diagnostics.channels.semantic.state, { preset, horizon });
       diagnostics.coverage.stops = { deadline: diagnostics.channels.semantic.causes.includes('timeout'),
         budget: diagnostics.channels.semantic.causes.includes('budget_denied') };
       let candidateItems = fused.rows.map((row, i) => ({ ref: row.ref, rank: i + 1, fusionScore: row.fusionScore, channels: row.channels }));
@@ -754,6 +766,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     try {
       ready();
       const { payload, input } = contextInput('contextRead', original, supportedTypes, options.sources);
+      const compact = input.representation === 'memory-compact-v1';
       const deadlineAt = performance.now() + input.deadlineMs;
       const access = authorize('contextRead', input, payload, token);
       if (!options.counter) return failure(new MemoryStoreError('invalid_input'), { counter: 'absent' });
@@ -782,7 +795,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         }
         const generations = canonicalFence(input.readSet, input.types), items = [], dateEntries = [];
         const safetyMemo=cachedContentLayout(db)?.suppressionRevision&&!options.sources?createContentReadMemo(db):undefined;
-        const dated = input.representation === 'representation-v2-dated';
+        const dated = input.representation === 'representation-v2-dated' || compact;
         if (safetyMemo && dated) safetyMemo.sourceDates = true;
         if (searched.sourceState) assertSourcesInside(input, searched.sourceState, 'snapshot_stale');
         let unavailable = 0;
@@ -842,6 +855,13 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         refs: items.map(({ ref }) => [input.readSet.findIndex(ns => namespaceKey(ns) === namespaceKey(ref.namespace)), ref.type,
           ref.memoryId ?? ref.cardId, ref.revision, ...(ref.type === 'card' ? [ref.bodyRevision] : [])]),
         generations: generationsFor(items), access: access.accessGenerations, fences: items.map(item => item.fence) });
+      // Compact keeps v1's 24-ref and size limits. Full refs remain in diagnostics.
+      const snapshotFor = items => {
+        if (compact && items.length > 24) return null;
+        const value = snapshotValue(items);
+        return compact &&
+          Math.ceil(4 * Buffer.byteLength(JSON.stringify(value)) / 3) + 44 > CONTEXT_LIMITS.snapshotUnits ? null : value;
+      };
       const dependencyReserve = items => {
         const declared = items.filter(item => item.dependencyCount !== null);
         if (!declared.length) return {};
@@ -853,15 +873,29 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         trace: options.localStatus ? { ...candidates.trace, localEmbedder: sampleLocalStatus(options.localStatus) } : candidates.trace });
       // Sample host status once. Dated trials and final delivery must use the
       // same candidate trace; the v2 sampling point remains after assembly.
-      const datedCandidates = input.representation === 'representation-v2-dated' ? candidateDetails() : null;
+      const datedCandidates = input.representation === 'representation-v2-dated' || compact ? candidateDetails() : null;
+      // Compact visits each body once in preparation order, so the tail item
+      // identifies an accepted trial. Minimal probes use the rejected item.
+      const withoutSnapshot = compact ? new WeakSet() : null;
+      // Wire-only Card projection retains canonical stored-body fences and bodyRevision.
       const assemble = raw => assembleThreeLayerContext({ prepared: prepared.items, counter: options.counter, policy: input.policy,
-        query: input.query, readSet: input.readSet,
+        query: input.query, readSet: input.readSet, intent: input.intent,
         budget: input.budget, representation: input.representation, deadlineAt,
-        responseBytes: datedCandidates ? ({ meteredBytes, diagnostics, selected }) => completeResponseBytes(success({ metered: null, snapshot: null,
-          diagnostics: { ...diagnostics, omitted: { ...diagnostics.omitted, unavailable: prepared.unavailable },
-            trace: { ...diagnostics.trace, ...dependencyReserve(selected) }, candidates: datedCandidates ?? candidateDetails() } }),
-          meteredBytes, selected.length ? snapshotValue(selected) : null) <= CONTEXT_LIMITS.responseBytes : undefined,
-        snapshotOf: items => encode('snapshot', snapshotValue(items), 16384) }, raw);
+        responseBytes: datedCandidates ? ({ meteredBytes, diagnostics, selected }) => {
+          const envelope = success({ metered: null, snapshot: null,
+            diagnostics: { ...diagnostics, omitted: { ...diagnostics.omitted, unavailable: prepared.unavailable },
+              trace: { ...diagnostics.trace, ...dependencyReserve(selected) }, candidates: datedCandidates ?? candidateDetails() } });
+          const value = selected.length ? snapshotFor(selected) : null;
+          const fits = completeResponseBytes(envelope, meteredBytes, value) <= CONTEXT_LIMITS.responseBytes;
+          if (fits || !compact || value === null) return fits;
+          if (completeResponseBytes(envelope, meteredBytes, null) > CONTEXT_LIMITS.responseBytes) return false;
+          withoutSnapshot.add(selected.at(-1));
+          return true;
+        } : undefined,
+        snapshotOf: items => {
+          const value = withoutSnapshot?.has(items.at(-1)) ? null : snapshotFor(items);
+          return value === null ? null : encode('snapshot', value, 16384);
+        } }, raw);
       let { selected: delivered, validateRaw, ...assembled } = assemble(rawChannel);
       const decorate = () => {
         const diagnostics = assembled.diagnostics;
@@ -975,7 +1009,11 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         counter: options.counter ? { id: options.counter.id } : null, limits: { ...ASSEMBLY_LIMITS, ...(options.sources ? { candidates: 32, counterCalls: 1634 } : {}) } },
       unsupported: ['role-profiles', ...(!options.sources?.includes('relations-one-hop-v1') ? ['relations'] : []),
         ...(!options.sources?.includes('moc-v1') ? ['moc'] : []), 'partial-semantic-search'] }));
-  }, findCandidates, refreshContextIndex, fetchCandidateEvidence, contextRead }, { check: (scopes,{delivery}) => { ready();
+  }, findCandidates, refreshContextIndex, fetchCandidateEvidence, contextRead }, {
+      select: (args, method) => {
+        assertCompactContextInput(method, args[0], supportedTypes, options.sources);
+        return args[0];
+      }, check: (scopes,{delivery}) => { ready();
         if (!delivery && scopes.length && cachedContentLayout(db)?.suppressionRevision && hasContentSuppressionRequestInside(db) && !db.isTransaction) {
           contentSuppressionRequestInside(db,scopes,{defer:true}); return;
         }

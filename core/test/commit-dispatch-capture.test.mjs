@@ -62,7 +62,7 @@ for (const stage of ['extract','classify']) test(`3s external lock after ${stage
   const value = ok(result);
   assert.equal(value.classification.status, 'applied', 'request must succeed after asynchronous commit retry');
   assert.ok(performance.now() - start >= 2900);
-  assert.ok(largestGap < 200, 'timer backoff must keep event loop responsive');
+  assert.ok(largestGap < 200, `timer backoff must keep event loop responsive (largest gap ${Math.round(largestGap)} ms)`);
   assert.equal(ok(await f.core.list({ namespace: ns })).memories.length, 1);
   assert.ok(f.states.some(state => state.point === 'before_timer'));
   assert.ok(f.states.every(state => state.isTransaction === false), 'actual commit dispatcher must never await in a transaction');

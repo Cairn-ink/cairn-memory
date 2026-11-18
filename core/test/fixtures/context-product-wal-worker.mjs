@@ -1,10 +1,45 @@
 // Test-only native and reply rendezvous; never linked by a runtime entry.
 import { registerHooks, syncBuiltinESMExports } from 'node:module';
 import childProcess from 'node:child_process';
+import fs from 'node:fs';
+import { performance } from 'node:perf_hooks';
 import { parentPort, workerData } from 'node:worker_threads';
 const { port, gate, behavior }=workerData.walTestControl;
 const wait=new Int32Array(gate),Native=process.getBuiltinModule('node:sqlite').DatabaseSync;
 let method='open',fired=false;
+let journalNative;
+// Keep public elapsed-time fields deterministic for whole-DTO byte comparison.
+// Native request cutoffs and WAL wait clocks still use the real hrtime domain.
+if(behavior==='journal-fixed-timings')Object.defineProperty(performance,'now',{configurable:true,value:()=>1000});
+// WAL connections normally prevent a live WAL -> DELETE transition themselves.
+// Release only this test's native connection while retaining the product handle
+// so the next operation exercises the mode guard before any stale native call.
+if(behavior.startsWith('journal-switch')){
+  port.on('message',command=>{
+    if(command==='release-canonical'){journalNative.close();port.postMessage('canonical-released');}
+  });
+  port.unref();
+}
+if(behavior==='journal-switch-frozen-stat'){
+  const lstat=fs.lstatSync,baseline=new Map();
+  fs.lstatSync=(path,options)=>{
+    const stat=lstat(path,options);
+    if(String(path)!==workerData.path)return stat;
+    const key=options?.bigint===true;
+    if(!baseline.has(key))baseline.set(key,stat);
+    return new Proxy(stat,{get(target,field){return ['size','mtimeNs','ctimeNs','mtimeMs','ctimeMs'].includes(field)?baseline.get(key)[field]:Reflect.get(target,field,target);}});
+  };
+  syncBuiltinESMExports();
+}
+if(behavior==='journal-uid'){
+  const lstat=fs.lstatSync;
+  fs.lstatSync=(path,options)=>{
+    const stat=lstat(path,options);
+    if(String(path)!==workerData.path)return stat;
+    return new Proxy(stat,{get(target,key){return key==='uid'?typeof target.uid==='bigint'?target.uid+1n:target.uid+1:Reflect.get(target,key,target);}});
+  };
+  syncBuiltinESMExports();
+}
 parentPort.on('message',m=>{if(m.method)method=m.method;});
 const send=parentPort.postMessage.bind(parentPort);
 parentPort.postMessage=function(message,...args){
@@ -41,7 +76,8 @@ if(behavior.startsWith('init-')){
   syncBuiltinESMExports();
 }
 globalThis.productWalTestDatabase=class extends Native {
-  constructor(path,options){super(path,options);this.canonical=String(path)===workerData.path;this.side=String(path).endsWith('.context-read-product-v1.1.sqlite');}
+  constructor(path,options){super(path,options);this.canonical=String(path)===workerData.path;this.side=String(path).endsWith('.context-read-product-v1.1.sqlite');if(this.canonical&&behavior.startsWith('journal-switch'))journalNative=this;}
+  close(){if(behavior.startsWith('journal-switch')&&!this.isOpen)return;return super.close();}
   prepare(sql){
     if(!fired && sql==='PRAGMA journal_mode' && (behavior==='canonical-close' && this.canonical || behavior==='side-close' && this.side)){
       fired=true;port.postMessage('opening-mode-entered');Atomics.wait(wait,0,0);

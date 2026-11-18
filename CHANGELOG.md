@@ -1,7 +1,36 @@
 # Changelog
 
-## Unreleased — daily shared embedding budget
+## 0.3.8 — 2026-11-17: wider start-boundary margin
 
+- The synchronous start hook now has 1 second (was 300 ms), including Node
+  startup, to record where a new session starts.
+- On a very slow or busy computer, the first turn of a new session after a
+  pause can still be skipped: a start hook that runs out of time records
+  nothing, so that turn is not sent. The other known limitations listed for
+  0.3.7 still apply.
+- The protocol and installer are unchanged.
+
+## 0.6.8 — 2026-11-17
+
+- **New saves are searchable within seconds.** Local Raw search now indexes newly
+  saved conversations first, so a new save is usually searchable within about 10
+  seconds (a long turn can take about half a minute, and a turn with very many messages up to about two minutes) while the full index check
+  continues in the background. Before, a conversation saved during a busy session
+  could wait until the next full re-check.
+- **Index cleanup keeps going while you work.** Index entries of deleted or
+  forgotten conversations are now removed in the background even while new
+  conversations keep being saved. Search never returns that text, whether or not
+  cleanup has reached it.
+- **The first full index build can take longer than in 0.6.7.** Allow about 15
+  minutes per 1,000 saved messages on a typical computer and up to about 20 on a
+  slower one; larger stores take less time per message (for 10,000, about 1.5 hours, or about 3 hours on a slower computer).
+  Times depend on how your conversations are shaped. A re-check after each new save
+  still takes about 5 minutes per 1,000 saved messages. While saves keep arriving,
+  the full pass may not finish until saving pauses; new saves are still indexed
+  first.
+- **Upgrading from 0.6.7 runs the first full indexing pass once more.** Search
+  reports partial coverage for about as long as a first build, and conversations
+  the pass hasn't reached yet can be missing from results meanwhile.
 - Share the estimated embedding budget across all connections to a running
   Cairn server, resetting at UTC midnight. The in-memory allowance also resets
   on server restart; it is not an account-wide spending cap.
@@ -10,6 +39,24 @@
 - Allow four concurrent OpenAI queries across the shared server by default,
   or one with the local CPU embedder. Each connection and the unbound path
   retain one query slot, alongside one server-wide maintenance slot.
+- Skip saving Claude Code runs started by scripts or the Agent SDK (for example
+  `claude -p`), detected from the hook's environment without reading the transcript.
+- Apply the ten-minute wait after a purge to every part of the affected topic.
+- Publish a new Card and retire other Cards whose current lines it marks out of
+  date in one transaction, retaining bounded attempt accounting after failed writes.
+- Keep split similarity topics under distinct keys, and count public Card deletion
+  toward the topic's wait even when its action name resembles a replacement.
+- A memory saved from the same message as a forgotten or corrected memory can now be corrected without deleting its conversation.
+- Forgetting or correcting a memory now removes summaries of its receipt-named conversations and clears summaries built from their passages in the same transaction.
+- Known limit: Forgetting a memory saved without a conversation leaves nearby conversations' summaries stored; read-time withholding is separate work.
+- Known limit: Forgetting or correcting can be refused when a summary mixes named and unrelated fenced conversations. Delete the unrelated or source conversation, then retry; narrowing the forget fence to named conversations removes this limit.
+- Known limit (local stores): after you forget or correct a memory, other memories that came from a conversation it hid keep a source that can no longer be read. Until each of them is corrected or forgotten, session start with background context is refused with `revision_conflict` (the default session start too, when one of them is a standing instruction), reading the memory source snapshot is refused with `revision_conflict`, and recall that asks for sources or reasons is refused (`source_unavailable`, or `revision_conflict` on stores upgraded with the offline safety migration). To find the affected memories, inspect each memory that came from a conversation the forget hid: an affected one reports a receipt count but returns no receipts. On stores upgraded with the offline safety migration, a memory from the same message as the forgotten one is not found at all (see the next sentence). On those upgraded stores, after you forget or correct a memory whose message produced other memories, listing memories for that namespace — and the time lists and the source snapshot — is refused with `revision_conflict` until each surviving memory from that message is corrected or forgotten by id. Recall still works and leaves those memories out; no read returns them any more, so this needs their ids from earlier output. Correct or forget those memories to clear it; deleting the conversation with the installed command does not clear it.
+- Known limit (local stores upgraded with the offline safety migration, with session summaries turned on): after a forget or correction, listing conversation summaries, session start and opening a summary can be refused with `conversation_deleted` while a nearby conversation hidden by it still has a summary. `cairn-memory raw list` shows such conversations as `fenced=true hidden=true`; run `cairn-memory raw delete --conversation ID --yes` for each one that still has a summary. Deleting one removes that conversation's saved text and its summaries; the forget has already hidden them permanently, so nothing you can still read is lost. Correct or forget the other memories from that conversation first; otherwise, after forgetting a memory saved without a conversation, its own source conversation must be deleted as well.
+- Known limit: For integrations that call the engine directly or run the MCP server with `--retained-raw-profile`: reading a saved conversation by its id and listing saved conversations are not yet stopped by a forget. On stores that were not upgraded with the offline safety migration they still return a conversation hidden by a forget or correction, with its text. On upgraded stores the hidden conversation is returned without its text, and listing saved conversations and the saved-text usage summary are refused (`evidence_unavailable`, `source_unavailable`) after a forget. Search, recall and memory sources do not return hidden conversations. Fixed in the next installer; until then `cairn-memory raw delete --conversation ID --yes` removes a hidden conversation's saved text. Installed setups do not expose these readers.
+- Known limit: Until cleanup removes a deleted item's index entries, its word counts can still slightly affect other results' ranking scores; its text is never returned.
+- Known limit: After you forget something, the conversation it came from and any resumed or forked copy of it (for example `claude --resume`) are not saved from then on. Any conversation that tries to save a message dated within 30 minutes of the forgotten message is not saved from then on either, including one you start right after the forget. To resume saving, start a new conversation more than 30 minutes after the forgotten message was written.
+- Known limit: After any local forget, correct, conversation delete or Episode forget, conversations whose message times are unknown are hidden from Raw search, and a conversation that saves a message without a time is not saved from then on, including new conversations. Memories are kept. Claude Code and Codex normally record message times, so this only affects messages whose transcript entry has no timestamp.
+- Known cost: Forgetting a memory now runs about one more database statement per event of each conversation summary it removes (about 20 ms more at 100 events on a slow machine). Follow-up: replace the per-event updates with one set-based update.
 
 ## 0.6.7 — 2026-11-14
 
@@ -75,9 +122,9 @@ release.
 
 ## Unreleased — Card consolidation respects the Raw opt-in
 
-- Engine Card consolidation uses memories only by default, including for library
-  callers. Set `rawSpans: true` on `maintainCards` to include saved conversation
-  excerpts. The local MCP server includes those excerpts only with
+- Engine Card bundle requests use Memories only, including for library callers.
+  The existing `rawSpans: true` consent on `maintainCards` permits receipt
+  excerpts in pressure metering. The local MCP server opts in only with
   `rawSemantic: true`, unless `contextSemantic: false` overrides it.
 
 ## Unreleased — forgotten-text read
@@ -116,10 +163,31 @@ release.
 
 ## Unreleased — engine-generated topic Cards
 
+- Past 12 Memories in a topic, new Memories join a Card in groups: a tail becomes
+  a Card at 5 sources; until then they appear as individual Memories.
+
+- Engine Cards bundle dated verbatim Memories within 850 body tokens and divide
+  large topics into event-ordered parts of at most 12 with independent reuse and
+  rebuilds. A Card citing a Memory in the read's item window takes that hit's
+  position and replaces its cited sources when it fits the pack budget; a hit on
+  an out-of-date statement delivers the Card without that statement. The model
+  marks out-of-date IDs only; current reads omit their Timeline and all citation
+  tags while retaining their coverage. Same-namespace Cards carrying an old
+  current line are retired for a later debounced rebuild.
+
+- Five current Memories in a topic part, whatever their conversations, qualify for a
+  Card, alongside the existing recurrence and change-chain conditions, with
+  the same budget pressure requirement. Trigger results include `topic`;
+  status describes the conditions in plain words. The first Card can build on
+  the next eligible maintenance pass without a ten-minute wait; rebuilds keep
+  their existing debounce.
+- Packing an engine Card now replaces only source Memories cited in its body.
+  Sources omitted by whole-line fitting remain available as Memory candidates.
+
 - When a consolidation model is configured, the engine builds topic Cards during
-  maintenance to summarize a topic's current state, history and contradictions.
+  maintenance to bundle a topic's current and out-of-date Memories.
   Cards follow their Memories when a topic is relabeled or refiled, without
-  regenerating the summary when the sources stay the same.
+  regenerating the body when the sources stay the same.
 - A forgotten, suppressed or excluded source hides its Card from reads.
   Maintenance rebuilds the Card from eligible sources when the topic still
   qualifies, or removes its stale body when it no longer does.
