@@ -175,6 +175,7 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
   }
 
   function finishAdmission(ns, input, hooks, deadline) {
+    const admittedBatches = [];
     const result = transaction(db, () => withSources(ns, input.items.map(item => item.receipts), assertSources => {
       const now = time(ns, input);
       const row = read(ns, input);
@@ -186,7 +187,11 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
         .get(...key(ns, input))) fail('stale_admission');
       hooks?.validate?.();
       const ids = new Set();
-      let suppressedCount = 0;
+      // A wholly forgotten capture finishes without extracting candidates. It
+      // records the base's one suppressed result, including on durable replay.
+      // This hook is private to capture; public admission keeps its item count.
+      // With no extraction, 1 marks at least one suppression without counting items.
+      let suppressedCount = hooks?.suppressedCapture ? 1 : 0;
       const activeItems = [];
       for (const item of input.items) {
         // Timed items use this same instant for validation and created_at, even
@@ -201,6 +206,7 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
         }
         conflictStorage.validateTargets(ns, item.conflictHints);
         activeItems.push({ item, receiptNow });
+        admittedBatches.push(item.receipts);
       }
       const entries = activeItems.map(({ item, receiptNow }) => {
         const result = admitMutation(ns, item, { automatic: true,
@@ -226,7 +232,7 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
       if (!input.keepActionId) stagedEvidence.mark(ns, input, 'admitted');
       if (hooks?.initialClassification && !input.keepActionId) classificationJournal.insert(ns, input, memories);
       return { duplicate: false, memories, suppressedCount, indexRevision: epoch(ns), ...extra };
-    }), deadline?.check);
+    }, admittedBatches), deadline?.check);
     if (result.closed) fail(result.closed);
     return result;
   }

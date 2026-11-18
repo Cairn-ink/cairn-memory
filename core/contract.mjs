@@ -643,7 +643,7 @@ export function createMemoryCore(input, internal) {
     });
   }
 
-  function finishAdmissionValidated(input, captureInitial, deadline, qualifiedDuplicates) {
+  function finishAdmissionValidated(input, captureInitial, deadline, qualifiedDuplicates, suppressedCapture) {
     return invoke(() => {
       runtime.ready();
       object(input, ['namespace', 'client', 'eventId', 'payloadDigest', 'token', 'items']);
@@ -651,7 +651,7 @@ export function createMemoryCore(input, internal) {
       const key = admissionKey(input);
       const token = contractId(input.token);
       const items = admissionItems(input.items, captureInitial && Boolean(sessionEpisodes));
-      return captureInitial ? runtime.finishCapturedAdmission(ns, { ...key, token, items }, deadline, qualifiedDuplicates) :
+      return captureInitial ? runtime.finishCapturedAdmission(ns, { ...key, token, items }, deadline, qualifiedDuplicates, suppressedCapture) :
         runtime.finishAdmission(ns, { ...key, token, items });
     });
   }
@@ -1085,7 +1085,7 @@ export function createMemoryCore(input, internal) {
         startAdmission: () => (deadline = captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs)),
         captureRationale, captureEvidence,
         deadline, input: { ...input, namespace },
-        operations: { filterCaptureSources: sources => runtime.filterCaptureSources(ns, sources),
+        operations: { filterCaptureSources: (sources, observeForgotten) => runtime.filterCaptureSources(ns, sources, observeForgotten),
           assertCaptureSources: sources => runtime.assertCaptureSources(ns, sources),
           // Preserve private pre-dispatch busy provenance across this internal
           // operation, including the runtime facade's entry/delivery checks.
@@ -1096,8 +1096,8 @@ export function createMemoryCore(input, internal) {
           claimAdmission: (value, sources) => invoke(() => runtime.claimCapturedAdmission(ns, {
           ...admissionKey(value), leaseMs: ADMISSION_LEASE_MS,
         }, deadline, rawRegistration, sources)),
-          finishAdmission: value => finishAdmissionValidated(captureKey(value), true, deadline,
-            keepInput || sessionEpisodes ? undefined : captureQualifiedDuplicates),
+          finishAdmission: (value, suppressedCapture) => finishAdmissionValidated(captureKey(value), true, deadline,
+            keepInput || sessionEpisodes ? undefined : captureQualifiedDuplicates, suppressedCapture),
           abandonAdmission: (value, retryable) => retryable
             ? invoke(() => runtime.abandonAdmission(ns, { ...admissionKey(captureKey(value)),
               token: contractId(value.token), retryable: true }))

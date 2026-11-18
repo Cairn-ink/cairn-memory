@@ -241,7 +241,9 @@ export async function captureEpisodeMessages(options) {
     snapshot.messages = snapshot.messages.filter(message => registered.messageIds.includes(message.id));
   }
   const writerToken = registered.token;
+  let releaseSession;
   try {
+    releaseSession = runtime.retainCaptureSession(ns, batch.client, registered.sessionKey, batch.sessionId);
     let pendingFailure;
     const state = runtime.episodeCaptureState(ns, {
       episodeId, client: batch.client, eventId: batch.eventId });
@@ -275,7 +277,10 @@ export async function captureEpisodeMessages(options) {
       ...(result.duplicate ? { admission: { status: 'completed',
         memoryIds: result.memoryIds, suppressedCount: result.suppressedCount } }
         : result.processing ? { admission: { status: 'processing' } } : {}) };
-  } finally { if (writerToken) runtime.releaseEpisodeWriter(ns, { episodeId, token: writerToken }); }
+  } finally {
+    releaseSession?.();
+    if (writerToken) runtime.releaseEpisodeWriter(ns, { episodeId, token: writerToken });
+  }
 }
 
 export async function keepEpisodeCapture(options) {
@@ -299,10 +304,10 @@ export async function keepEpisodeCapture(options) {
       runtime.assertEpisodeKeep(ns, kept);
       return options.operations.assertCaptureEvidence(value);
     },
-    finishAdmission: value => {
+    finishAdmission: (value, suppressedCapture) => {
       runtime.assertEpisodeKeep(ns, kept);
       // The runtime completion guard repeats the check inside the admission transaction.
-      return options.operations.finishAdmission(value);
+      return options.operations.finishAdmission(value, suppressedCapture);
     } };
   try {
     const result = await captureMessages({ ...options, operations, deadline,

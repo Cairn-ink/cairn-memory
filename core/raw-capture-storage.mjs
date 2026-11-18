@@ -198,6 +198,8 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       return result;
     }
     return Object.freeze({ input: projection, hasProjection: Boolean(snapshot), replay,
+      retainSessionAlias: retain => projection.sessionId === input.sessionId ? undefined
+        : retain(projection.namespace, input.client, sessionKey, input.sessionId),
       emptyOutcome, commit, observeReplay,
       // A winner can commit even during a failing model preflight. Only an
       // unaccepted attempt may observe that winner; it never acquires work.
