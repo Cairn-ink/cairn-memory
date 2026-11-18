@@ -345,6 +345,53 @@ test('three cancelled attachment generations leave the embedding retry available
 
 const retryPolicy = maxRequests => ({ family: 'local', maxBatchDocuments: 1, maxRequests, maxConcurrent: 1, maxUsd: 0 });
 
+test('interrupted Raw embedding dispatches stop after three fresh service lifetimes', { timeout: 25000 }, async t => {
+  installRawSearchTestClock(t);
+  const f = sourceFixture(t);
+  let calls = 0, held, providerTime = Date.UTC(2026, 0, 1, 12);
+  t.mock.method(Date, 'now', () => providerTime);
+  t.after(() => held?.resolve());
+  const embedder = { id: 'synthetic-interrupted-retry', revision: '1', dimensions: 2, normalization: 'l2',
+    async embed(texts) {
+      calls++;
+      await held.promise;
+      return texts.map(() => [1, 0]);
+    } };
+  await savedSource(f, 'Synthetic copper telescope.');
+  const s = await searchFixture(f, { embedder, policy: retryPolicy(30) });
+  await s.tick({ maxMs: 5000 });
+  const { key, retry } = publishedRawSegment(s);
+  assert.equal(retry.attempts, 0);
+  const dispatches = [];
+  for (let lifetime = 0; lifetime < 5; lifetime++) {
+    // Roll the real budget window over for each new service, giving the same
+    // embedder a fresh ledger as it would have after an OS-process restart.
+    providerTime += 24 * 60 * 60 * 1000;
+    const before = calls;
+    held = deferred();
+    for (let turn = 0; turn < 16 && calls === before; turn++) {
+      providerTime += 6000;
+      await s.tick({ maxMs: 5000, embeddings: true });
+    }
+    dispatches.push(calls - before);
+    if (calls > before) {
+      const budget = contextReadBudgetDiagnostic(embedder);
+      assert.equal(budget.day, new Date(providerTime).toISOString().slice(0, 10));
+      assert.equal(budget.maintenance.maxRequests, 27);
+      assert.equal(budget.maintenance.requests, 1);
+    }
+    await s.service.close();
+    held.resolve();
+    await nextTurn();
+    if (lifetime < 4) await s.reopen();
+  }
+  assert.deepEqual(dispatches, [1, 1, 1, 0, 0]);
+  const interrupted = publishedRawSegment(s, key);
+  assert.equal(interrupted.retry.attempts, 3);
+  assert.equal(interrupted.retry.terminal, true);
+  assert.equal(interrupted.vectorBytes, 0);
+});
+
 test('detach and close preserve observed attempts for a fresh maintenance service', { timeout: 15000 }, async t => {
   installRawSearchTestClock(t);
   const upkeep = createLocalRawSearchUpkeepControl(), f = sourceFixture(t), writes = sidecarWrites(t);
