@@ -32,6 +32,11 @@ if(role === 'pin-journal') {
     db.prepare('SELECT id FROM memories').all(); db.exec('ROLLBACK'); db.close();
   } else if (role === 'mode') {
     db.exec('PRAGMA journal_mode='+mode); db.close();
+  } else if (role === 'checkpoint-delete') {
+    db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    const row=db.prepare('PRAGMA journal_mode=DELETE').get();
+    if(row.journal_mode!=='delete')throw Error('mode_switch_failed');
+    db.close();
   } else if (role === 'hot' || role === 'hot-sidecar') {
     db.exec('PRAGMA journal_mode=DELETE; PRAGMA cache_size=1; BEGIN IMMEDIATE');
     db.exec(role==='hot' ? "UPDATE memories SET content=printf('%.*c',1000000,'x')" :

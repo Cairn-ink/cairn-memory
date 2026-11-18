@@ -95,10 +95,11 @@ export function createOrderedCaptureStorage({ db, admissionStorage, epoch, activ
       return { candidates: safe, reason: null, suppressionEpoch: contentSuppressionFenceInside(db, ns.ownerId) };
     });
   }
-  function finish(ns, s, token, order, snapshot, items, decisions, reason, deadline) {
+  function finish(ns, s, token, order, snapshot, items, decisions, reason, deadline, suppressedCapture) {
     let reconciliation;
     return admissionStorage.finishAdmission(ns, { ...s, token, items }, {
       initialClassification: true,
+      suppressedCapture,
       validate() {
         validate(ns, s, order);
         for (const candidate of snapshot.candidates) {

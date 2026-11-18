@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { join, resolve } from 'node:path';
+import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { statements,effectWitnesses,startTrace,stopTrace } from './card-lineage-off-wide-controls.mjs';
@@ -29,7 +30,11 @@ try {
     suppressionDomain:cell>=52?proof.prepare('SELECT suppression_domain FROM content_safety_control').get().suppression_domain:'00000000-0000-4000-8000-000000000000'};
 } finally {proof.close();}
 startTrace();
-const currentTree=resolve(source)===resolve(fileURLToPath(new URL('../../',import.meta.url)));
+// A tree with the Raw layer of the context read gets the same settings and the same
+// normalisation whether it is the working tree or the archived baseline: the baseline
+// of this line is its own production tree, which has that layer.
+const currentTree=resolve(source)===resolve(fileURLToPath(new URL('../../',import.meta.url)))||
+  existsSync(join(source,'core/context-read-three-layer.mjs'));
 // Compare legacy assembly bytes; verify only the newly added diagnostic separately.
 function legacyResult(method,result) {
   if(currentTree&&method.split('.').at(-1)==='contextRead'&&result?.ok) {

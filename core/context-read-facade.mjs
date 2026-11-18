@@ -301,6 +301,11 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   function assertSourcesInside(input, sourceState, code) {
     if (sourceState && !same(captureSources(input), sourceState.fences)) fail(code);
   }
+  function prepareReadMemo(input, refs) {
+    const memo = createContentReadMemo(db);
+    evidence.prepareInside(refs, memo, Boolean(options.sources));
+    return memo;
+  }
   function witnessInside(input, path, code, budget = sourceBudget(Infinity)) {
     try {
       const reader = sourceReader(db, { storeId: info.storeId, cursorSecret: info.cursorSecret }, info, input, budget);
@@ -310,9 +315,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   function deliverPage(input, ranking, position, limit) {
     return read(() => {
       const result = page(ranking, position, limit);
-      const safetyMemo=cachedContentLayout(db)?.suppressionRevision&&!options.sources?createContentReadMemo(db):undefined;
-      for (const candidate of result.items) evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet,
-        safetyMemo?{safetyMemo,batchRefs:result.items.map(candidate=>candidate.ref)}:options.sources?{legacyEvidence:true}:undefined);
+      const safetyMemo=prepareReadMemo(input,result.items.map(candidate=>candidate.ref));
+      result.items=result.items.filter(candidate=>evidence.itemsInside(candidate.ref.namespace,[candidate.ref],input.intent,input.readSet,
+        {safetyMemo,batchRefs:result.items.map(candidate=>candidate.ref),legacyEvidence:Boolean(options.sources)}).length);
       if (!options.sources) return result;
       assertSourcesInside(input, ranking.sourceState, 'cursor_stale');
       const budget = sourceBudget(Infinity);
@@ -464,7 +469,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           const safetyMemo=createContentReadMemo(db);
           candidateItems=candidateItems.filter(candidate=>{
             if(!contentSuppressionMayMatchInside(db,candidate.ref.namespace,{kind:candidate.ref.type,key:candidate.ref.memoryId??candidate.ref.cardId}))return true;
-            try {evidence.itemsInside(candidate.ref.namespace,[candidate.ref],input.intent,input.readSet,{safetyMemo,batchRefs:candidateItems.map(candidate=>candidate.ref)});return true;}
+            try {return evidence.itemsInside(candidate.ref.namespace,[candidate.ref],input.intent,input.readSet,{safetyMemo,batchRefs:candidateItems.map(candidate=>candidate.ref)}).length>0;}
             catch(error){if(['evidence_unavailable','revision_conflict'].includes(error.code))return false;throw error;}
           });
         }
@@ -487,7 +492,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         sampleTrace(diagnostics.trace);
         access.check(); storage.assertState(projection, current);
         const horizon = deepFreeze({ items: candidateItems, ...diagnostics });
-        return { ok: true, horizon, ...(sourceState ? { sourceState } : {}), check() {
+        return { ok: true, horizon, readMemo:()=>prepareReadMemo(input,horizon.items.map(candidate=>candidate.ref)), ...(sourceState ? { sourceState } : {}), check() {
           access.check();
           if (sourceState) read(() => assertSourcesInside(input, sourceState, 'snapshot_stale'));
           const resumed = acquireSidecar(projection, access);
@@ -637,7 +642,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           return { generations: [], items: [], unavailable: candidates.items.length };
         }
         const generations = canonicalFence(input.readSet, input.types), items = [];
-        const safetyMemo=cachedContentLayout(db)?.suppressionRevision&&!options.sources?createContentReadMemo(db):undefined;
+        const safetyMemo=searched.readMemo?.();
         if (searched.sourceState) assertSourcesInside(input, searched.sourceState, 'snapshot_stale');
         let unavailable = 0;
         const witnessBudget = searched.sourceState ? sourceBudget(dependencyAware ? deadlineAt : Infinity) : null;
@@ -653,17 +658,19 @@ function initializeContextFacade(path, options, { readOnly, database }) {
               catch (error) { if (error.code === 'evidence_unavailable') { unavailable++; continue; } throw error; }
             }
             if (dependencyAware && performance.now() >= deadlineAt) { deadline = true; unavailable++; continue; }
-            item = evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet, { deadlineAt: dependencyAware ? deadlineAt : Infinity, legacyEvidence:Boolean(options.sources), ...(safetyMemo?{safetyMemo,batchRefs:candidates.items.map(candidate=>candidate.ref)}:{}) })[0];
+            item = evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet, { deadlineAt: dependencyAware ? deadlineAt : Infinity, legacyEvidence:Boolean(options.sources), safetyMemo,batchRefs:candidates.items.map(candidate=>candidate.ref) })[0];
             if (dependencyAware && performance.now() >= deadlineAt) { deadline = true; unavailable++; continue; }
           }
           catch (error) {
             if (!['evidence_unavailable', 'revision_conflict'].includes(error.code)) throw error;
             unavailable++; continue;
           }
+          if (!item) { unavailable++; continue; }
           const { type, ref, state, origin } = item;
           const sourceRows = type === 'memory' && item.provenance.sourceAccess === 'available' ?
-            (safetyMemo?.evidenceReceipts?.get(JSON.stringify([[ref.namespace.ownerId,ref.namespace.scope,ref.namespace.projectId??''],ref.memoryId]))?.slice(0,16) ??
-              db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId)).filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)) : [];
+            (safetyMemo?.evidenceReceipts?.get(JSON.stringify([[ref.namespace.ownerId,ref.namespace.scope,ref.namespace.projectId??''],ref.memoryId])) ??
+              db.prepare(`SELECT r.* FROM json_each(?) wanted CROSS JOIN receipts r INDEXED BY sqlite_autoindex_receipts_1 ON r.id=wanted.value WHERE r.memory_id=?`).all(JSON.stringify(item.provenance.receiptMetadata.map(receipt=>receipt.receiptId)),ref.memoryId))
+              .filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)).slice(0,16) : [];
           const date = receiptEventDate(sourceRows);
           const sources = sourceRows.map((row, index) => {
             const { role, excerpt } = validateSourceReceipt(ref.memoryId, row, source =>
@@ -731,6 +738,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       if (bytes(result) > CONTEXT_LIMITS.responseBytes) fail('context_item_too_large');
       // No host callback, count or await follows this authoritative read.
       return read(() => {
+        const safetyMemo=searched.readMemo?.();
         if (searched.sourceState) {
           assertSourcesInside(input, searched.sourceState, 'snapshot_stale');
           const witnessBudget = sourceBudget(Infinity);
@@ -738,15 +746,14 @@ function initializeContextFacade(path, options, { readOnly, database }) {
             witnessInside(input, path, 'snapshot_stale', witnessBudget);
         }
         if (delivered.length && !same(canonicalFence(input.readSet, [...new Set(delivered.map(item => item.type))]), generationsFor(delivered))) fail('snapshot_stale');
-        const safetyMemo=cachedContentLayout(db)?.suppressionRevision&&!options.sources?createContentReadMemo(db):undefined;
         for (const item of delivered) {
           let current;
-          try { current = evidence.itemsInside(item.ref.namespace, [item.ref], input.intent, input.readSet,safetyMemo?{safetyMemo,batchRefs:delivered.map(item=>item.ref)}:options.sources?{legacyEvidence:true}:undefined)[0]; }
+          try { current = evidence.itemsInside(item.ref.namespace, [item.ref], input.intent, input.readSet,{safetyMemo,batchRefs:delivered.map(item=>item.ref),legacyEvidence:Boolean(options.sources)})[0]; }
           catch (error) {
             if (['evidence_unavailable', 'revision_conflict'].includes(error.code)) fail('snapshot_stale');
             throw error;
           }
-          if (bind('snapshot-item', cardLineageItemInside(db,current)) !== item.fence) fail('snapshot_stale');
+          if (!current || bind('snapshot-item', cardLineageItemInside(db,current)) !== item.fence) fail('snapshot_stale');
         }
         return result;
       });
@@ -768,23 +775,26 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         try {
           ownData(previous, ['v', 'scope', 'intent', 'refs', 'generations', 'access', 'fences']);
           if (previous.v !== 1 || previous.scope !== scope || !['current', 'history'].includes(previous.intent) || !Array.isArray(previous.refs)) fail('invalid_snapshot');
-          refs = contextRefs(previous.refs.map(value => {
+          refs = previous.refs.length ? contextRefs(previous.refs.map(value => {
             if (!Array.isArray(value) || value.length !== (value[1] === 'card' ? 5 : 4) || !Number.isInteger(value[0]) || !input.readSet[value[0]]) fail('invalid_snapshot');
             return { namespace: input.readSet[value[0]], type: value[1], [value[1] === 'memory' ? 'memoryId' : 'cardId']: value[2], revision: value[3],
               ...(value[1] === 'card' ? { bodyRevision: value[4] } : {}) };
-          }), input.readSet, supportedTypes); intent = previous.intent;
+          }), input.readSet, supportedTypes) : []; intent = previous.intent;
         } catch { fail('invalid_snapshot'); }
       }
       const types = [...new Set(refs.map(ref => ref.type))];
       function fetchInside() {
         const generations = canonicalFence(input.readSet, types);
         if (previous && (!same(previous.generations, generations) || !same(previous.access, access.accessGenerations))) fail('snapshot_stale');
-        const safetyMemo=cachedContentLayout(db)?.suppressionRevision&&!options.sources?createContentReadMemo(db):undefined;
-        const items = refs.map(ref => evidence.itemsInside(ref.namespace, [ref], intent, input.readSet,safetyMemo?{safetyMemo,batchRefs:refs}:options.sources?{legacyEvidence:true}:undefined)[0]);
+        const safetyMemo=createContentReadMemo(db);
+        const pairs = refs.map((ref, originalIndex) => ({ ref, originalIndex,
+          item: evidence.itemsInside(ref.namespace, [ref], intent, input.readSet,
+            {safetyMemo,batchRefs:refs,legacyEvidence:Boolean(options.sources)})[0] })).filter(pair => pair.item);
+        const items = pairs.map(pair => pair.item), kept = pairs.map(pair => pair.ref);
         const fences = items.map(item => bind('snapshot-item', cardLineageItemInside(db,item)));
-        if (input.fences?.some((prefix, i) => prefix !== null && !fences[i].startsWith(prefix))) fail('snapshot_stale');
-        if (previous && !same(previous.fences, fences)) fail('snapshot_stale');
-        return { items, generations, fences };
+        if (pairs.some((pair, i) => input.fences?.[pair.originalIndex] != null && !fences[i].startsWith(input.fences[pair.originalIndex]))) fail('snapshot_stale');
+        if (previous && !same(pairs.map(pair => previous.fences[pair.originalIndex]), fences)) fail('snapshot_stale');
+        return { items, refs: kept, generations: canonicalFence(input.readSet, [...new Set(kept.map(ref => ref.type))]), fences };
       }
       const prepared = read(fetchInside);
       access.check();
@@ -792,9 +802,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       // callback after this point; snapshots bind the exact delivered items.
       return read(() => {
         const current = fetchInside();
-        if (!same(current.generations, prepared.generations) || !same(current.fences, prepared.fences)) fail('snapshot_stale');
+        if (!same(current.generations, prepared.generations) || !same(current.refs, prepared.refs) || !same(current.fences, prepared.fences)) fail('snapshot_stale');
         const result = { items: current.items, snapshot: encode('snapshot', { v: 1, scope, intent,
-          refs: refs.map(ref => [input.readSet.findIndex(ns => namespaceKey(ns) === namespaceKey(ref.namespace)), ref.type,
+          refs: current.refs.map(ref => [input.readSet.findIndex(ns => namespaceKey(ns) === namespaceKey(ref.namespace)), ref.type,
             ref.memoryId ?? ref.cardId, ref.revision, ...(ref.type === 'card' ? [ref.bodyRevision] : [])]),
           generations: current.generations, access: access.accessGenerations, fences: current.fences }, 16384) };
         if (bytes(success(result)) > input.responseByteLimit) fail('context_item_too_large');

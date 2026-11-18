@@ -156,8 +156,10 @@ export async function captureMessages({ model, input, operations, captureQualifi
   const qualificationReport = {};
   let finished, stagedDispatched = false;
   try {
-    const allowed = operations.filterCaptureSources?.(identities) ?? identities.map((_, index) => index);
-    if (!allowed.length && !episodeRun?.skip) fail('source_excluded');
+    let forgotten = 0;
+    const allowed = operations.filterCaptureSources?.(identities, count => { forgotten = count; }) ?? identities.map((_, index) => index);
+    const suppressedCapture = !allowed.length && forgotten > 0 && !episodeRun?.skip;
+    if (!allowed.length && !suppressedCapture && !episodeRun?.skip) fail('source_excluded');
     const selected = allowed.map(index => identities[index]);
     const assertSources = () => operations.assertCaptureSources?.(selected);
     const sourceView = allowed.length === identities.length ? undefined : allowed.map(index => ({
@@ -173,7 +175,7 @@ export async function captureMessages({ model, input, operations, captureQualifi
     } else request = { ...request, input: { ...request.input,
       messages: allowed.map((index, position) => ({ ...request.input.messages[index], index: position })) } };
     deadline?.check();
-    const output = episodeRun?.skip ? { items: [] } : await callModel(model, 'extract', request.system, request.input,
+    const output = episodeRun?.skip || suppressedCapture ? { items: [] } : await callModel(model, 'extract', request.system, request.input,
       { failureCode: 'extraction_failed', deadline, validateFresh: assertSources,
         beforeDispatch: () => {
           if (isPreDispatchToken(owned.token)) {
@@ -207,13 +209,13 @@ export async function captureMessages({ model, input, operations, captureQualifi
       const prepared = unwrap(operations.ordered.prepare(snapshot, claim.order, items));
       deadline?.check();
       const judged = captureQualification
-        ? { decisions: [], reason: items.length ? 'qualification_requires_identity' : null }
+        ? { decisions: [], reason: items.length || suppressedCapture ? 'qualification_requires_identity' : null }
         : await reconcileCapture({ model, snapshot, items, discovery: prepared.discovery, deadline, validateFresh: () => { assertSources(); unwrap(operations.ordered.assertPrepared(snapshot, claim.order, prepared)); }, sourceView });
       deadline?.check();
-      finished = unwrap(operations.ordered.finish(snapshot, claim.token, claim.order, prepared, judged));
+      finished = unwrap(operations.ordered.finish(snapshot, claim.token, claim.order, prepared, { ...judged, suppressedCapture }));
     } else finished = unwrap(operations.finishAdmission({ ...owned, items: items.map(({ receiptTimes, ...item }) =>
       receiptTimes ? { ...item, receipts: item.receipts.map((receipt, index) =>
-        ({ ...receipt, occurredAt: receiptTimes[index] })) } : item) }));
+        ({ ...receipt, occurredAt: receiptTimes[index] })) } : item) }, suppressedCapture));
   } catch (error) {
     // A failed or stale cleanup cannot replace the original error or release a successor's claim.
     try { operations.abandonAdmission(owned, (isCaptureSourceBusy(error) && !stagedDispatched) || Boolean(episodeRun &&

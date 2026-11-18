@@ -279,7 +279,7 @@ function checklistSchema(input) {
 }
 
 /** Request-scoped identifier constraints; core still validates correlated tuples. */
-export function schemasFor(method, input) {
+export function schemasFor(method, input, allowEmptyRationale = false) {
   if (method === 'selectChecklist') {
     try { return checklistSchema(input); } catch { invalid(); }
   }
@@ -291,7 +291,7 @@ export function schemasFor(method, input) {
     if (!memoryIndices.length) invalid();
     const variants = input.memories.flatMap(memory => {
       const receipts = snapshotIndices(memory.receipts, 100);
-      if (!receipts.length) invalid();
+      if (!receipts.length) return [];
       if (addressed) return memory.receipts.map(receipt => {
         const parts = snapshotIndices(receipt.parts, 24000);
         if (!parts.length || parts.some((value, index) => value !== index)
@@ -310,22 +310,24 @@ export function schemasFor(method, input) {
           ['subject', 'applies', 'scope', 'commitment'].map(field => [field,
             { anyOf: [{ type: 'string', minLength: 1, maxLength: 200 }, { type: 'null' }] }]))) } : {}) });
     });
-    return object({ units: array({ anyOf: variants }, 8),
+    return object({ units: array(variants.length ? { anyOf: variants } : integer, variants.length ? 8 : 0),
       links: array(object({ from: { ...integer, maximum: 7 }, to: { ...integer, maximum: 7 },
-        relation: { type: 'string', enum: ['supports-decision', 'challenges-current-basis'] } }), 10) });
+        relation: { type: 'string', enum: ['supports-decision', 'challenges-current-basis'] } }), variants.length ? 10 : 0) });
   }
   if (method === 'relate') {
     const memoryIndices = snapshotIndices(input?.memories, 6);
     if (!memoryIndices.length) invalid();
     const receiptIndices = input.memories.flatMap(memory => {
       const indices = snapshotIndices(memory.receipts, 100);
-      if (!indices.length) invalid();
+      if (!indices.length && !allowEmptyRationale) invalid();
       return indices;
     });
+    const evidenced = input.memories.filter(memory => memory.receipts.length).map(memory => memory.index);
     // Endpoint/receipt correlation is checked by core after strict parsing.
-    return object({ edges: array(object({ from: constrained(integer, memoryIndices), to: constrained(integer, memoryIndices),
+    return object({ edges: array(object({ from: constrained(integer, evidenced.length ? evidenced : memoryIndices), to: constrained(integer, evidenced.length ? evidenced : memoryIndices),
       relation: { type: 'string', enum: ['supports-decision', 'challenges-premise'] },
-      fromReceipt: constrained(integer, receiptIndices), toReceipt: constrained(integer, receiptIndices) }), 10) });
+      fromReceipt: receiptIndices.length ? constrained(integer, receiptIndices) : integer,
+      toReceipt: receiptIndices.length ? constrained(integer, receiptIndices) : integer }), receiptIndices.length ? 10 : 0) });
   }
   if (method === 'qualifyCandidates') {
     return qualificationEvidencePoolSchema(qualificationCandidatesInlineSchema(input));

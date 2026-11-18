@@ -229,8 +229,9 @@ test('absent port native DTOs, SQL counts, allocations and messages match archiv
   // Cold seal lookups share the existing metadata statement. The cold work
   // frame removes quick_check and foreign_key_check (four native calls). Frames 4 and 6
   // each have four existing write commits, with a stamp read and seal write
-  // (four calls per commit). No transaction or journal-probe count changes.
-  const delta=[0,0,-4,0,16,0,16],expected=structuredClone(baseline.evidence.native);
+  // (four calls per commit). Frames 4 and 6 also add six selected-evidence
+  // collector statements per refresh. No transaction or journal-probe count changes.
+  const delta=[0,0,-4,0,22,0,22],expected=structuredClone(baseline.evidence.native);
   expected.statements=expected.statements.map((row,i)=>({...row,begun:row.begun+delta[i],completed:row.completed+delta[i]}));
   assert.deepEqual(native.statements,expected.statements,'absent-port SQL statement differential from archived main plus exact seal accounting');
   assert.equal(expected.allocations[8],4096,'archived first-reader domain allocation');

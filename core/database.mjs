@@ -1,9 +1,10 @@
+import { clearReceiptCoordinatesInside } from './raw-source-roots.mjs';
 import './content-write-safety.mjs';
 import { inContentSuppressionRequestInside, withoutContentSuppressionReadCacheInside } from './content-suppression-storage.mjs';
 import { beginContentWrite, contentWriteOperation } from './content-write-context.mjs';
 import { contentSafetyInventory, installContentSafetyInside } from './content-safety-migration.mjs';
 import { SAFETY_SCHEMA_VERSIONS, resolveContentLayout, assertContentFeatures } from './content-safety-layout.mjs';
-import { attestContentSafety, checkInstalledContentSafety, registerContentReadSnapshot, bindContentSafetyConnection } from './content-safety-schema.mjs';
+import { attestContentSafety, checkInstalledContentSafety, registerContentReadSnapshot, bindContentSafetyConnection, contentSafetyConnection } from './content-safety-schema.mjs';
 import { validateContextProductLayout } from './context-product-schema.mjs';
 import { installCardCurrentDependencies, validateCardCurrentDependencies, assertNoCardCurrentDependencies } from './card-current-schema.mjs';
 import { installRoleProfiles, validateRoleProfiles, assertNoRoleProfiles } from './role-profile-schema.mjs';
@@ -350,6 +351,7 @@ export function readTransaction(db, work, acquisition) {
     began ||= attempted && db.isTransaction;
   } finally {
     if (began && db.isTransaction) {
+      clearReceiptCoordinatesInside(contentSafetyConnection(db));
       try { db.exec('ROLLBACK'); } catch (failure) { cleanupError = failure; cleanupFailed = true; }
     }
     if (saved !== undefined) {
@@ -392,6 +394,7 @@ export function transaction(db, work, check, { deferred = false } = {}) {
       db.exec("COMMIT");
       return result;
     } catch (error) {
+      clearReceiptCoordinatesInside(contentSafetyConnection(db));
       if(db.isTransaction)db.exec("ROLLBACK");
       if (error?.code === 'ERR_SQLITE_ERROR' && error.message === 'card_dependency_limit_reached') {
         fail('dependency_limit_reached');
@@ -483,6 +486,29 @@ export function openDatabase(path, options = {}) {
     // URI mode=rw is mandatory for fences: no mkdir or creation fallback.
     db = new DatabaseSync(fence ? noncreatingStoreURI(path) : path, { timeout });
     db.exec("PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;");
+    const needsWriter = Symbol('open needs writer');
+    try {
+      transaction(db, () => {
+        if (fence) {
+          pin.check();
+          assertStoreIdentity(db, fence);
+        }
+        if (contentSafety !== undefined && (db.prepare('PRAGMA application_id').get().application_id !== 0 ||
+            db.prepare('PRAGMA user_version').get().user_version !== 0 ||
+            db.prepare('SELECT count(*) n FROM sqlite_schema').get().n !== 0)) fail('unsupported_database');
+        const layout = attestContentSafety(db);
+        // Only suppression-revision layouts have a read-only ordinary open.
+        // Older layouts retain the IMMEDIATE body below, after rolling back
+        // this snapshot; all checks must run again under the writer lock.
+        if (!layout.suppressionRevision) throw needsWriter;
+        if (db.prepare('PRAGMA application_id').get().application_id !== APPLICATION_ID) fail('unsupported_database');
+        assertContentFeatures(layout, { privateCards, rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls, methodPackages, assets, roleProfiles, currentDependencies });
+        validateContextProductLayout(db, layout);
+      }, undefined, { deferred: true });
+      return db;
+    } catch (error) {
+      if (error !== needsWriter) throw error;
+    }
     transaction(db, () => {
       if (fence) {
         // Before initialize() and all migration/schema or application writes.
