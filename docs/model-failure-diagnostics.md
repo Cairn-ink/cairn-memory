@@ -35,7 +35,7 @@ Each event is a frozen object with exactly four fields:
 
 | Layer | Reasons |
 | --- | --- |
-| `adapter` | `response_envelope`, `response_usage`, `response_message`, `response_content`, `output_json`, `output_shape`, `output_bounds`, `request_invalid`, `request_bounds`, `token_count_response`, `transport_failure`, `response_body_bounds`, `response_json`, `model_cancelled` |
+| `adapter` | `response_envelope`, `response_usage`, `response_message`, `response_content`, `output_json`, `output_shape`, `output_bounds`, `output_truncated`, `request_invalid`, `request_bounds`, `token_count_response`, `transport_failure`, `response_body_bounds`, `response_json`, `model_cancelled` |
 | `core_call` | `model_not_configured`, `context_budget_exceeded`, `token_count_unavailable`, `model_timeout`, `model_cancelled`, `provider_failure`, `adapter_output_invalid`, `output_serialization`, `output_bounds` |
 | `core_validation` | `invalid_extraction_output_shape`, `invalid_extraction_item_shape`, `invalid_extraction_text`, `invalid_extraction_value`, `invalid_extraction_source_shape`, `invalid_extraction_source_duplicate`, `invalid_extraction_source_range`, legacy `invalid_extraction`, `invalid_classification`, `invalid_qualification`, `invalid_reconciliation`, `invalid_rationale`, `malformed_refs`, `duplicate_ref`, `non_visible_ref`, `namespace_selection_limit` |
 

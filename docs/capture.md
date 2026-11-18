@@ -58,7 +58,18 @@ and normalized content, never trusted identity fields. Output is exactly:
   sourceIndices: [0] }] }
 ```
 
-Zero to five items are allowed; each content field is at most 600 UTF-16 code
+User statements about their life, work, plans, tasks, commitments, purchases,
+amounts, people, preferences and decisions are the primary extraction material.
+Each distinct item gets its own candidate, preserving stated names, amounts,
+dates and titles. Assistant messages support only work done for or agreed with
+the user; small talk, general knowledge, hypotheticals, offers and closing
+satisfaction remarks are excluded by instruction. These are prompt rules, not
+a deterministic semantic filter.
+
+Zero to `clamp(userMessageCount, 5, 20)` items are allowed per extraction call.
+Only supplied user messages count; several windows from one message count once.
+The same rule applies to plain, retained-source, episode and indexed-window
+extraction. Each content field is at most 600 UTF-16 code
 units after the same NFKC, secret redaction, whitespace collapse and trim.
 Each item selects
 one to four unique valid message indices. Kinds are fact, preference, decision,
@@ -69,9 +80,19 @@ use that same normalization before truncation to 800 UTF-16 code units without
 splitting Unicode code points.
 Indices establish provenance binding, not proof that a model's claim is true.
 
-The model budget is at most 6,000 input and 1,024 output tokens, a 1,024-token
-reserve, minimum 8,192-token context and a 30-second abort deadline per call.
-Fresh work claims a fixed 125-second lease. Extraction and token counting happen
+Extraction allows at most 6,000 input tokens and 1,024 output tokens, the same
+as every other model call; only the item ceiling grows with the user messages
+supplied. An extraction whose output stops at the output cap fails that call as
+invalid model output and the OpenAI adapter reports the content-free diagnostic
+`output_truncated`, so a host can count how often the cap is reached.
+The minimum context remains 8,192 tokens
+and each call retains its 30-second abort deadline. Qualification and placement
+keep their existing five-item requests and 1,024-token output bounds, grouping
+larger extracted sets before admission or atomic placement respectively.
+Fresh work claims a fixed 125-second lease. A larger extracted set makes up to four
+qualification groups before admission, so a provider that answers every call near
+its 30-second deadline can outlast the lease; that capture fails as stale and is
+safe to retry. Extraction and token counting happen
 outside write transactions. Failure attempts fenced abandonment for safe retry;
 an expired worker cannot commit or release its successor's lease.
 
