@@ -48,14 +48,17 @@ if (isMainThread) {
     control.postMessage({ boundary, errcode, transaction: db?.isTransaction ?? false });
   }
   function inject(boundary, db) {
+    let matched;
     for (const fault of faults) {
       if (fault.boundary !== boundary) continue;
       const firstHit = fault.at ?? 1;
-      if (++fault.hits < firstHit || (fault.hits > firstHit && !fault.repeat)) continue;
-      const error = Object.assign(new Error('native-shaped test fault'), { code: 'ERR_SQLITE_ERROR', errcode: fault.errcode });
-      report(error, db, boundary);
-      throw error;
+      const hit = ++fault.hits;
+      if (hit === firstHit || (hit > firstHit && fault.repeat)) matched ??= fault;
     }
+    if (!matched) return;
+    const error = Object.assign(new Error('native-shaped test fault'), { code: 'ERR_SQLITE_ERROR', errcode: matched.errcode });
+    report(error, db, boundary);
+    throw error;
   }
 
   const policy = new URL('../../topic-reader-sqlite.mjs', import.meta.url).href;

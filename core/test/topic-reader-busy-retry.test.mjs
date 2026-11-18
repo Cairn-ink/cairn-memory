@@ -219,16 +219,21 @@ test('deferred journal-mode errors leave subsequent opening BUSY unresolved', as
 });
 
 test('WAL close transition with no companions uses only the original opening probe', async t => {
-  const f = topicOverviewFixture(t), db = new DatabaseSync(f.path);
+  const f = topicOverviewFixture(t);
+  f.core.close();
+  const db = new DatabaseSync(f.path);
   assert.equal(db.prepare('PRAGMA journal_mode=WAL').get().journal_mode, 'wal');
   db.close();
   // Emulate the opening lock after companion removal. The next query would
   // succeed if the reader incorrectly starts another outer attempt.
-  const h = observedReader(f, { faults: [{ boundary: 'PRAGMA journal_mode', errcode: 5 },
+  const h = observedReader(f, { diagnostics: true, faults: [{ boundary: 'PRAGMA journal_mode', errcode: 5 },
     { boundary: 'PRAGMA journal_mode', at: 2, errcode: 261 }] });
-  assert.deepEqual(await h.reader.readTopicOverview(overviewInput), failure('storage_busy'));
+  const result = await h.reader.readTopicOverview(overviewInput);
   await h.sync();
   assert.deepEqual(h.events.map(event => event.errcode), [5, 261]);
+  assert.deepEqual(result, { ok: false, error: { code: 'storage_busy', diagnostics: {
+    stage: 'execute', statement: 'journal_mode', sqlite: { code: 5, extendedCode: 261 },
+  } } });
 });
 
 const changingFaults = [{ boundary: 'BEGIN', errcode: 261 }, { boundary: 'snapshot', errcode: 262, repeat: true }];
