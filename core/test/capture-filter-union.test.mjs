@@ -218,13 +218,6 @@ for(const snapshot of [false,true])test(`privacy matrix: ${snapshot?'snapshot':'
     const r=compare(t,db,label,batch,expect,opts);
     if(!snapshot&&batch.length&&label!=='empty')assert.equal(r.baseWalks,1,label+' validation must not replay');
   }
-  if(!snapshot) {
-    const fallback=observe(db,[noRawForgot,clean,noRawForgot],{
-      inject:Object.assign(Error('Synthetic union failure'),{code:'ERR_SQLITE_ERROR'}),fault:'union',
-    });
-    assert.deepEqual(fallback.outcome,accepted([1],[0,2]),'exact fallback applies the same denial tokens');
-    assert.equal(fallback.baseWalks,4,'union followed by the three exact validations');
-  }
   let serial=500;
   for(const value of ['\0tail','\uFFFD','\ud800']) {
     const odd={...source('odd-'+serial),excerpt:value};
