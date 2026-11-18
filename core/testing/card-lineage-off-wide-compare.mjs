@@ -38,6 +38,8 @@ export const receiptWalkSQL=([sql])=>receiptWalkSQLTexts.has(normalizeSQL(sql));
 
 // Exact per-call additions to the reviewed rows; counts include every execution.
 export const receiptWalkSQLAdditions = [
+  { key: 'workload:52', callIndex: 1, method: 'capture', archivedCount: 0, currentCount: 1,
+    statement: ['SELECT secret FROM episode_identity WHERE singleton=1', 'get', []] },
   { key: 'workload:52', callIndex: 1, method: 'capture', archivedCount: 0, currentCount: 5,
     statement: ["SELECT count(*) AS active FROM ( SELECT id FROM memories INDEXED BY namespace_memories WHERE owner_id=? AND scope=? AND project_id=? AND deleted=? LIMIT 129)", "get", ["synthetic-off-owner", "personal", "", 0]] },
   { key: 'workload:53', callIndex: 1, method: 'capture', archivedCount: 0, currentCount: 5,
