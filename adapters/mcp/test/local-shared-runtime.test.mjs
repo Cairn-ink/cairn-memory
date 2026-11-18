@@ -302,7 +302,7 @@ function publishedRawSegment(s, key) {
 test('three cancelled attachment generations leave the embedding retry available', { timeout: 15000 }, async t => {
   installRawSearchTestClock(t);
   const upkeep = createLocalRawSearchUpkeepControl(), f = sourceFixture(t), writes = sidecarWrites(t);
-  let arrivals = 0, release, providerTime = Date.now();
+  let arrivals = 0, release, providerTime = Date.UTC(2026, 0, 1, 12);
   t.mock.method(Date, 'now', () => providerTime);
   const embedder = { id: 'synthetic-cancelled-reservations', revision: '1', dimensions: 2, normalization: 'l2',
     async embed(texts) {
@@ -399,7 +399,7 @@ test('detach and close preserve observed attempts for a fresh maintenance servic
 test('unsettled dispatches across maintenance restarts consume the shared provider budget', { timeout: 25000 }, async t => {
   installRawSearchTestClock(t);
   const f = sourceFixture(t);
-  let calls = 0, held, providerTime = Date.now();
+  let calls = 0, held, providerTime = Date.UTC(2026, 0, 1, 12);
   t.mock.method(Date, 'now', () => providerTime);
   t.after(() => held?.resolve());
   const embedder = { id: 'synthetic-restart-provider-budget', revision: '1', dimensions: 2, normalization: 'l2',

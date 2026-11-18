@@ -22,7 +22,6 @@ export function createRawSearchMaintenance(storage,authority,options) {
   const dispatch=options.embedder&&contextBudget({budgetConfigured:true,policy:options.policy,embedder:options.embedder});
   const providers=new Set(),controllers=new Set();
   const trackedPort=options.embedder&&{...options.embedder,embed(texts,controls){
-    controls.beforeDispatch();
     const operation=Promise.resolve(options.embedder.embed(texts,controls));providers.add(operation);
     operation.then(()=>providers.delete(operation),()=>providers.delete(operation));return operation;
   }};
