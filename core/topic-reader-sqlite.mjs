@@ -23,9 +23,7 @@ export function topicJournalMode(native, path, policy, { deferQueryErrors = fals
       if (error.code === 'ERR_SQLITE_ERROR' && sqliteFailureDiagnostics(error)?.stage !== 'configure') queryFailure = error;
       throw error;
     }
-    const mode = row.journal_mode.toUpperCase();
-    policy.noteJournalMode?.(native, mode);
-    return mode;
+    return row.journal_mode.toUpperCase();
   };
   try {
     try { return query(hintedWal); }
@@ -196,7 +194,7 @@ export function createTopicRetryPolicy({ diagnostics, isRetryableBusy, now = () 
           if (firstBusy) onRetry(null);
           throw error;
         }
-        if (!canResume()) throw error;
+        if (!canResume()) throw firstBusy ?? error;
         if (now() + DELETE_RETRY_MS >= budget.until) throw firstBusy ?? error;
         if (!firstBusy) {
           firstBusy = error;

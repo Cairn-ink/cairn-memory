@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "873ae197f672ac776eb352f86a8a28345df0a70dea12df29931173cb4d83b095",
-  "bytes": 1422507,
+  "sha256": "38d7372ecf77d314a2faa2ac678f7e623a23a90e1aa41fb2bd7096c91d1b1f12",
+  "bytes": 1422540,
   "files": [
     "LICENSE",
     "README.md",
@@ -525,7 +525,7 @@
     "core/index-storage.mjs": "1d84092cccb3c0d8abd7ce630a383718c036c117abc13c662aad8cd98e480dea",
     "core/index.mjs": "cbb87a08043586c14b915bec5ad0394ddebb4a437942041649a99815c85e9025",
     "core/memory-reader.mjs": "9d36c01b06eca9ba9f1081ffaceda0148fec7846eff9dd1401a3da01af98d4fd",
-    "core/read-database.mjs": "b008703e6f32cf4576bdb1e3aaaeca4508b855e26313c57328eaa664fb801d31",
+    "core/read-database.mjs": "12f0405141e8ee807e2ea02fa4b921393e30736b9d52e5b22c9e508d1d7494bc",
     "core/topic-overview-input.mjs": "7c20bfe7e2e8d6c50f19a7610c046408d9ffd0faff0dd5e12b3188789a149ab2",
     "core/topic-overview-storage.mjs": "aa988ca542b10921776e2e7f5a559fef50097c22bde56afb02d26f6217fd945c",
     "core/topic-overview-worker.mjs": "cce8f887003d73f141a8aff27d3b9e9b923c83bfad25e9ce838ef7fdc3c1a947",
@@ -725,7 +725,7 @@
     "adapters/mcp/model-command.mjs": "0a583b0cee5f30f3fc9fa31b061a32ba746ce0c693fd6c365d86d877baed3dae",
     "core/context-read-local-status.mjs": "7c3dc02fd2ce411f648cc766418b1eadb08228d91e13d5064e90a6bd4ce28a3e",
     "docs/local-embedder-bge-m3.md": "84e0eaa8824cbb4efd772d35129601992b18f541d97ddde90e9456268a5bde7f",
-    "core/topic-reader-sqlite.mjs": "a01a7be7fa749ba68aba3740c2b1e9b607ee0b189b98150a5c3b18f7961e2d5f",
+    "core/topic-reader-sqlite.mjs": "44acfa1c60421510ab2a462a43d2c028327c68d730b66b483f7bf2433afb4b69",
     "docs/plans/topic-reader-wal-fix.md": "c65ed2b304b0ba5f5f1007a4b788067815ec36faf02c255acd15a81058d91a68",
     "core/context-product-authority.mjs": "2f389a61cca4c20cdb52bedb4fd64a05faa618ee7d071184b4d6a0104de35d70",
     "core/context-product-control.mjs": "83f036d20faa2515ba98d270d88a92b641c778f124dd51bbfbee7a931a9c7744",
