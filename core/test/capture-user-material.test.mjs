@@ -78,6 +78,7 @@ test('user material: assistant messages and repeated windows do not inflate the 
   assert.equal(extractionLimit(Array.from({ length: 12 }, (_, index) => ({ role: 'user', messageIndex: index % 3 }))), 5);
   // An indexed window and plain messages never share a key.
   assert.equal(extractionLimit([{ role: 'user', messageIndex: 2 }, ...messages(5)]), 6);
+  assert.equal(extractionLimit(messages(6).map(message => ({ ...message, messageIndex: null }))), 6);
 });
 
 test('user material: every extraction prompt names the user-first and eligible-assistant rules', () => {

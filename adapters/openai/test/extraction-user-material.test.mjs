@@ -48,13 +48,13 @@ test('user material: the item ceiling follows user messages at any stated allowa
 });
 
 test('user material: an extraction stopped at the output cap reports its own content-free diagnostic', async () => {
-  const run = async (method, details) => {
+  const run = async (method, details, model_ = undefined) => {
     const seen = [];
     const model = createOpenAIModel({ apiKey: 'synthetic', onDiagnostic: event => seen.push(event),
       fetchImpl: async (url, options) => {
         const body = JSON.parse(options.body);
         return new Response(JSON.stringify(url.endsWith('/input_tokens') ? { object: 'response.input_tokens', input_tokens: 50 }
-          : { object: 'response', model: body.model, status: 'incomplete', error: null, incomplete_details: details,
+          : { object: 'response', model: model_ ?? body.model, status: 'incomplete', error: null, incomplete_details: details,
             output: [{ type: 'message', role: 'assistant', status: 'incomplete', content: [{ type: 'output_text', text: '{"items":[' }] }],
             usage: { input_tokens: 50, output_tokens: 1024, total_tokens: 1074 } }));
       } });
@@ -64,6 +64,9 @@ test('user material: an extraction stopped at the output cap reports its own con
   };
   assert.deepEqual(await run('extract', { reason: 'max_output_tokens' }),
     [{ version: 1, stage: 'extract', layer: 'adapter', reason: 'output_truncated' }]);
+  // A truncated-looking response from the wrong model is a malformed envelope, not a cap hit.
+  assert.deepEqual(await run('extract', { reason: 'max_output_tokens' }, 'another-model'),
+    [{ version: 1, stage: 'extract', layer: 'adapter', reason: 'response_envelope' }]);
   // Any other incomplete response keeps the existing reason.
   assert.deepEqual(await run('extract', { reason: 'content_filter' }),
     [{ version: 1, stage: 'extract', layer: 'adapter', reason: 'response_envelope' }]);

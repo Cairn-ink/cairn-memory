@@ -194,7 +194,8 @@ async function readJSON(response, maximum, signal, diagnose) {
 function parseOutput(response, contextWindow, model, diagnose, maxOutputTokens = 1024, truncation = false) {
   const reject = (reason) => { diagnose(reason); fail('invalid_model_output'); };
   // An extraction that stopped at the output cap is counted on its own.
-  if (truncation && record(response) && response.status === 'incomplete' &&
+  if (truncation && record(response) && response.object === 'response' && response.model === model &&
+      response.status === 'incomplete' &&
       record(response.incomplete_details) && response.incomplete_details.reason === 'max_output_tokens') reject('output_truncated');
   if (!record(response) || response.object !== 'response' || response.model !== model ||
       response.status !== 'completed' ||
