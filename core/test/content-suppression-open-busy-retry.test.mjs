@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { fork } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
-import { existsSync, mkdirSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { DatabaseSync } from 'node:sqlite';
+import { backup, DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { openDatabase } from '../database.mjs';
@@ -184,3 +184,127 @@ for (const code of ['scope_changed', 'unsupported_database']) {
     assert.ok(!handles[0].isOpen);
   });
 }
+
+test('delegated validation cleanup BUSY survives the closed connection and retries', async t => {
+  const f = await fixture(t), { options } = await f.reader();
+  let queryOnlyWrites = 0;
+  const { handles, identityAttempts } = trackAttempts(t, { inject(sql, attempt, identity) {
+    if (attempt === 1 && !identity && sql === 'PRAGMA query_only=ON') {
+      // The first query_only write sets up the transaction. The second restores it.
+      if (++queryOnlyWrites === 2) throw nativeFault(261);
+    }
+  } });
+  const handle = await openContentSuppressionReader(options);
+  t.after(() => handle.close());
+  assert.equal(queryOnlyWrites, 2);
+  assert.equal(handles.length, 2);
+  assert.ok(!handles[0].isOpen);
+  assert.deepEqual([...identityAttempts], [handles[1]]);
+});
+
+test('the first attempt is refused if the open budget has already expired', async t => {
+  const f = await fixture(t), { options } = await f.reader();
+  let now = 0;
+  t.mock.method(performance, 'now', () => now);
+  const { handles } = trackAttempts(t);
+  const opening = openContentSuppressionReader({ ...options, requestMaxMs: 100 });
+  now = 100; // The opener is still awaiting its imports.
+  await assert.rejects(async () => (await opening).close(), { code: 'read_timeout' });
+  assert.equal(handles.length, 0);
+});
+
+test('a late first success is closed before the timeout is returned', async t => {
+  const f = await fixture(t), { options } = await f.reader();
+  let now = 0;
+  t.mock.method(performance, 'now', () => now);
+  const { handles } = trackAttempts(t, { inject(sql, attempt, identity) {
+    if (attempt === 1 && identity && sql === 'COMMIT') now = 100;
+  } });
+  await assert.rejects(async () => {
+    const handle = await openContentSuppressionReader({ ...options, requestMaxMs: 100 });
+    await handle.close();
+  }, { code: 'read_timeout' });
+  assert.equal(handles.length, 1);
+  assert.ok(!handles[0].isOpen);
+});
+
+test('a rollback BUSY leaves scope_changed terminal on the first attempt', async t => {
+  const f = await fixture(t), { options } = await f.reader();
+  const expected = { ...f.expected, suppressionDomain: randomUUID() };
+  let rollbacks = 0;
+  const { handles } = trackAttempts(t, { inject(sql, attempt, identity) {
+    if (identity && sql === 'ROLLBACK') {
+      rollbacks++;
+      if (attempt === 1) throw nativeFault(5);
+    }
+  } });
+  await assert.rejects(() => openContentSuppressionReader({ ...options, expected, suppression: f.grant({ expected }) }),
+    { code: 'scope_changed' });
+  assert.equal(rollbacks, 1);
+  assert.equal(handles.length, 1);
+  assert.ok(!handles[0].isOpen);
+});
+
+test('a first identity BUSY/261 survives rollback LOCKED/262 and retry exhaustion', async t => {
+  const f = await fixture(t), { options } = await f.reader();
+  const first = nativeFault(261), cleanup = nativeFault(262);
+  const { handles, identityAttempts } = trackAttempts(t, { inject(sql, attempt, identity) {
+    if (attempt === 1 && identity && sql === 'ROLLBACK') throw cleanup;
+    if (attempt > 1 && sql === configuration) throw cleanup;
+  } });
+  const prepare = DatabaseSync.prototype.prepare;
+  t.mock.method(DatabaseSync.prototype, 'prepare', function (sql) {
+    if (this === handles[0] && identityAttempts.has(this) &&
+        sql === 'SELECT store_id,cursor_secret FROM store_metadata WHERE singleton=1') throw first;
+    return prepare.call(this, sql);
+  });
+  await assert.rejects(() => openContentSuppressionReader({ ...options, requestMaxMs: 250 }), error => {
+    assert.equal(error, first);
+    assert.equal(error.errcode, 261);
+    return true;
+  });
+  assert.ok(handles.length > 1);
+  assert.ok(handles.every(db => !db.isOpen));
+});
+
+test('a same-store copy renamed into place during backoff is refused', async t => {
+  const f = await fixture(t), { handle, options } = await f.reader();
+  await handle.close();
+  const target = f.descriptor(f.memory());
+  const replacement = join(f.workspace.path, 'replacement.sqlite');
+  await backup(f.db, replacement);
+  chmodSync(replacement, 0o600);
+  const copy = new DatabaseSync(replacement, { readOnly: true });
+  try {
+    const metadata = 'SELECT store_id,cursor_secret FROM store_metadata WHERE singleton=1';
+    const domain = 'SELECT suppression_domain FROM content_safety_control WHERE singleton=1';
+    assert.deepEqual(copy.prepare(metadata).get(), f.db.prepare(metadata).get());
+    assert.deepEqual(copy.prepare(domain).get(), f.db.prepare(domain).get());
+  } finally { copy.close(); }
+  f.fact(target);
+
+  let swapped = false, swapError;
+  const { handles, identityAttempts } = trackAttempts(t, { inject(sql, attempt) {
+    if (attempt === 1 && sql === zeroWait) {
+      queueMicrotask(() => {
+        try {
+          assert.ok(!handles[0].isOpen);
+          renameSync(replacement, f.path);
+          swapped = true;
+        } catch (error) { swapError = error; }
+      });
+      throw nativeFault(261);
+    }
+    if (attempt === 2 && sql === configuration) {
+      if (swapError) throw swapError;
+      assert.ok(swapped);
+    }
+  } });
+  await assert.rejects(async () => {
+    const reopened = await openContentSuppressionReader(options);
+    await reopened.close();
+  }, { code: 'unsafe_database_file' });
+  assert.equal(handles.length, 2);
+  assert.equal(identityAttempts.size, 0);
+  assert.ok(handles.every(db => !db.isOpen));
+});
