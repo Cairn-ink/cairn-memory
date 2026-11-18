@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
+import fs, { rm } from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
 import { openMemoryCore } from '../../core/index.mjs';
@@ -8,35 +8,50 @@ import { createTestWorkspace } from './workspace.mjs';
 
 const namespace = { ownerId: 'synthetic-close-order', scope: 'personal', projectId: null };
 
-for (const deferred of [false, true]) test(`Raw owner settles ${deferred ? 'before' : 'after'} workspace rm entry with ${deferred ? 'defer' : 'a later after hook'}`, async t => {
-  const events = [];
-  let settled = false, closing;
-  const workspace = createTestWorkspace(t);
-  const core = openMemoryCore({ path: join(workspace.path, 'store.sqlite'), raw: true });
-  const close = () => closing ??= Promise.resolve(core.close()).then(() => {
-    settled = true;
-    events.push('close:settled');
-  });
+for (const [name, deferred, rejectRemoval] of [
+  ['Raw owner settles after workspace rm entry with a later after hook', false, false],
+  ['Raw owner settles before workspace rm entry with defer', true, false],
+  ['Workspace rm rejection restores the named rm export', true, true],
+]) test(name, async t => {
   const nativeRm = fs.rm;
-  const observation = t.mock.method(fs, 'rm', async (path, options) => {
-    if (path === workspace.path) {
-      events.push(settled ? 'rm:closed' : 'rm:open');
-      // Observe entry deterministically, then join the real owner even in the
-      // deliberately wrong pattern so this test never races native removal.
-      await close();
-    }
-    return nativeRm(path, options);
-  });
-  syncBuiltinESMExports();
-  if (deferred) workspace.defer(close);
-  else t.after(close);
-  t.after(() => {
-    observation.mock.restore();
+  const events = [];
+  let workspace, observation, status;
+  try {
+    await t.test('workspace cleanup hooks', { todo: rejectRemoval && 'workspace removal is forced to reject' }, async child => {
+      let settled = false, closing;
+      workspace = createTestWorkspace(child);
+      const core = openMemoryCore({ path: join(workspace.path, 'store.sqlite'), raw: true });
+      const close = () => closing ??= Promise.resolve(core.close()).then(() => {
+        settled = true;
+        events.push('close:settled');
+      });
+      observation = child.mock.method(fs, 'rm', async (path, options) => {
+        if (path === workspace.path) {
+          events.push(settled ? 'rm:closed' : 'rm:open');
+          // Observe entry before joining the real owner, so removal cannot race close.
+          await close();
+          if (rejectRemoval) {
+            events.push('rm:rejected');
+            throw new Error('forced workspace removal failure');
+          }
+        }
+        return nativeRm(path, options);
+      });
+      syncBuiltinESMExports();
+      if (deferred) workspace.defer(close);
+      else child.after(close);
+      status = await core.getRawSearchStatus({ namespace });
+    });
+  } finally {
+    observation?.mock.restore();
     syncBuiltinESMExports();
-    assert.deepEqual(events, deferred ? ['close:settled', 'rm:closed'] : ['rm:open', 'close:settled']);
-  });
-  const status = await core.getRawSearchStatus({ namespace });
-  assert.equal(status.ok, true, JSON.stringify(status));
+    if (rejectRemoval && workspace) await nativeRm(workspace.path, { recursive: true, force: true });
+  }
+  assert.equal(rm, nativeRm, 'named rm export must be restored');
+  assert.equal(status?.ok, true, JSON.stringify(status));
+  const expected = deferred ? ['close:settled', 'rm:closed'] : ['rm:open', 'close:settled'];
+  if (rejectRemoval) expected.push('rm:rejected');
+  assert.deepEqual(events, expected);
 });
 
 // The pattern tests above cannot detect a registration reverting in another
