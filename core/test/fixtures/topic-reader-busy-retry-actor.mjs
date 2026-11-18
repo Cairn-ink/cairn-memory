@@ -26,8 +26,9 @@ if (isMainThread) {
     socket.end();
   });
 } else {
-  const { control, pauseAt, splitScan, closingWal } = workerData;
+  const { control, pauseAt, splitScan, closingWal, exhaustAtScanCommit, holdReply } = workerData;
   let faults, backoffs = 0, finished = false, released = false, faultDb;
+  let scanAdvanced = false, policyElapsed = 0;
   const arm = faultsToArm => { faults = faultsToArm.map(fault => ({ ...fault, hits: 0 })); };
   arm(workerData.faults);
   const gate = Promise.withResolvers();
@@ -81,15 +82,28 @@ if (isMainThread) {
     control.postMessage('backoff');
     return Promise.all([waiting, gate.promise]);
   });
-  if (splitScan) {
+  if (exhaustAtScanCommit) {
+    shim(policy, 'node:perf_hooks', 'performance', { now: () => performance.now() + policyElapsed });
+  }
+  if (holdReply) {
+    const postMessage = parentPort.postMessage.bind(parentPort);
+    parentPort.postMessage = message => {
+      if (message.error?.code !== 'storage_busy') return postMessage(message);
+      assert.ok(!faultDb.isTransaction, 'the scan transaction has rolled back before the reply');
+      control.postMessage('reply held');
+      void gate.promise.then(() => postMessage(message));
+    };
+  }
+  if (splitScan || exhaustAtScanCommit) {
     const { createTopicOverviewStorage } = await import(overview);
     let elapsed = 0;
-    shim(worker, 'node:perf_hooks', 'performance', { now: () => performance.now() + elapsed });
+    if (splitScan) shim(worker, 'node:perf_hooks', 'performance', { now: () => performance.now() + elapsed });
     shim(worker, './topic-overview-storage.mjs', 'createTopicOverviewStorage', (...args) => {
       const storage = createTopicOverviewStorage(...args);
       return { ...storage, create(...inputs) {
         const data = storage.create(...inputs);
         return { ...data, scan: { next() {
+          scanAdvanced = true;
           elapsed += 5;
           return data.scan.next();
         } }, finish() {
@@ -107,7 +121,12 @@ if (isMainThread) {
 
   const exec = DatabaseSync.prototype.exec, prepare = DatabaseSync.prototype.prepare;
   DatabaseSync.prototype.exec = function (sql) {
+    if (sql === 'BEGIN') scanAdvanced = false;
     inject(sql, this);
+    if (sql === 'COMMIT' && exhaustAtScanCommit && scanAdvanced) {
+      policyElapsed += 1000;
+      inject('scan COMMIT', this);
+    }
     if (sql === 'COMMIT' && finished) inject('final COMMIT', this);
     return exec.call(this, sql);
   };

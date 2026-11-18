@@ -9,7 +9,8 @@ import test from 'node:test';
 import threads, { MessageChannel } from 'node:worker_threads';
 import { openMemoryCore } from '../contract.mjs';
 import { isStorageBusy } from '../database.mjs';
-import { createTopicRetryPolicy, TOPIC_WAL_REPLY_RESERVE_MS, TOPIC_WAL_WAIT_MS } from '../topic-reader-sqlite.mjs';
+import { createTopicRetryPolicy, topicJournalMode, TOPIC_WAL_REPLY_RESERVE_MS, TOPIC_WAL_WAIT_MS } from '../topic-reader-sqlite.mjs';
+import { openReadDatabase } from '../read-database.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { openMemoryReader } from '../memory-reader.mjs';
 import { topicOverviewFixture, overviewNamespace as namespace, unwrapOverview as ok } from '../testing/topic-overview-fixture.mjs';
@@ -26,20 +27,21 @@ function readerFor(f, diagnostics = false) {
   return reader;
 }
 
-function observedReader(f, { faults = [], onBusy, pauseAt, diagnostics, splitScan, closingWal } = {}) {
+function observedReader(f, { faults = [], onBusy, pauseAt, diagnostics, splitScan, closingWal, exhaustAtScanCommit, holdReply } = {}) {
   const NativeWorker = threads.Worker, { port1, port2 } = new MessageChannel();
   const events = [], reloadedSuppressions = new Set();
-  const backoff = Promise.withResolvers(), exited = Promise.withResolvers(), retrying = Promise.withResolvers();
+  const backoff = Promise.withResolvers(), exited = Promise.withResolvers(), retrying = Promise.withResolvers(), replyHeld = Promise.withResolvers();
   let synced;
   port1.on('message', info => {
     if (info === 'backoff') backoff.resolve();
+    else if (info === 'reply held') replyHeld.resolve();
     else if (info === 'synced') synced.resolve();
     else if (info.suppressedMemory) reloadedSuppressions.add(info.suppressedMemory);
     else { events.push(info); onBusy?.(info); }
   });
   threads.Worker = class extends NativeWorker {
     constructor(url, options) {
-      super(actor, { ...options, workerData: { ...options.workerData, control: port2, faults, pauseAt, splitScan, closingWal }, transferList: [port2] });
+      super(actor, { ...options, workerData: { ...options.workerData, control: port2, faults, pauseAt, splitScan, closingWal, exhaustAtScanCommit, holdReply }, transferList: [port2] });
       this.once('exit', exited.resolve);
       this.on('message', result => { if (result.retryingStorage) retrying.resolve(result.retryingStorage); });
     }
@@ -58,7 +60,7 @@ function observedReader(f, { faults = [], onBusy, pauseAt, diagnostics, splitSca
       assert.fail('Worker exited before responding on the control port: ' + code);
     })]);
   }
-  return { reader, events, reloadedSuppressions, sync, backoff: backoff.promise, exited: exited.promise, retrying: retrying.promise,
+  return { reader, events, reloadedSuppressions, sync, backoff: backoff.promise, exited: exited.promise, retrying: retrying.promise, replyHeld: replyHeld.promise,
     release: () => port1.postMessage('release') };
 }
 
@@ -149,6 +151,27 @@ test('DELETE retry stops at the shared capped cutoff with room for each backoff'
     }), error => error === busy);
     assert.equal(attempts, 2);
   }
+});
+
+test('the opener records journal mode only after the probe resets the timeout', t => {
+  const f = topicOverviewFixture(t);
+  const events = [];
+  const probe = {
+    prepare() { return { get: () => ({ journal_mode: 'delete' }) }; },
+    exec(sql) { assert.equal(sql, 'PRAGMA busy_timeout=0'); events.push('reset'); },
+  };
+  const policy = {
+    database(db) { events.push('wrap'); return db; },
+    noteJournalMode(db, mode) {
+      if (db !== probe) assert.equal(db.prepare('PRAGMA busy_timeout').get().timeout, 0);
+      events.push(mode);
+    },
+  };
+  assert.equal(topicJournalMode(probe, f.path, policy), 'DELETE');
+  assert.deepEqual(events.splice(0), ['wrap', 'reset']);
+  const { db } = openReadDatabase(f.path, { topicPolicy: policy });
+  try { assert.deepEqual(events, ['wrap', 'DELETE', 'wrap']); }
+  finally { db.close(); }
 });
 
 for (const [name, boundary, errcode, result] of [
@@ -247,6 +270,30 @@ test('DELETE Worker exhaustion reports the first SQLite stage and extended code'
   await h.sync();
   assert.deepEqual(h.events.slice(0, 2).map(event => event.errcode), [261, 262]);
 });
+
+for (const watchdog of [false, true]) {
+  test(`DELETE ${watchdog ? 'watchdog' : 'Worker'} keeps the first fault after a non-resumable scan commit`, { timeout: 8000 }, async t => {
+    const f = topicOverviewFixture(t), h = observedReader(f, {
+      diagnostics: true, exhaustAtScanCommit: true, holdReply: watchdog,
+      faults: [{ ...changingFaults[0], at: 2 }, { boundary: 'scan COMMIT', errcode: 262 }],
+    });
+    if (watchdog) t.mock.timers.enable({ apis: ['setTimeout'] });
+    const pending = h.reader.readTopicOverview(overviewInput);
+    if (watchdog) {
+      await Promise.race([h.replyHeld, pending.then(() => assert.fail('Worker reply was not held'))]);
+      assert.deepEqual(await h.retrying, firstBusy);
+      t.mock.timers.tick(5000);
+    }
+    const result = await pending;
+    if (watchdog) assert.equal(await h.exited, 1);
+    else await h.sync();
+    assert.deepEqual(h.events, [
+      { boundary: 'BEGIN', errcode: 261, transaction: false },
+      { boundary: 'scan COMMIT', errcode: 262, transaction: true },
+    ]);
+    assert.deepEqual(result, firstBusy);
+  });
+}
 
 for (const watchdog of [false, true]) {
   test(`DELETE ${watchdog ? 'watchdog' : 'close'} exits the Worker while the async backoff gate is held`, { timeout: 5000 }, async t => {
