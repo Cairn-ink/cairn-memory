@@ -13,13 +13,12 @@ export const isCoreModelDeadlineSignal = (signal) => coreDeadlineSignals.has(sig
 // Every core call's counted input envelope. Planners measure this exact text.
 export const MODEL_INPUT_TOKENS = 6000;
 export const MODEL_OUTPUT_TOKENS = 1024;
-export const modelRequestText = (system, input, maxOutputTokens = MODEL_OUTPUT_TOKENS) =>
-  JSON.stringify({ system, input, maxOutputTokens });
+export const modelRequestText = (system, input) =>
+  JSON.stringify({ system, input, maxOutputTokens: MODEL_OUTPUT_TOKENS });
 
 /** A bounded adapter call. No database transaction may surround this helper. */
 export async function callModel(model, method, system, input,
-  { validateFresh = () => {}, beforeDispatch = () => {}, failureCode = 'recall_failed', deadline, onHostWait,
-    maxOutputTokens = MODEL_OUTPUT_TOKENS } = {}) {
+  { validateFresh = () => {}, beforeDispatch = () => {}, failureCode = 'recall_failed', deadline, onHostWait } = {}) {
   const legacyFreshness = hasLegacyContentReadBoundary();
   const protectedRead = hasContentPortBoundary();
   const reject = (code, reason = code) => { emitDiagnostic(model, method, 'core_call', reason); fail(code); };
@@ -58,10 +57,8 @@ export async function callModel(model, method, system, input,
     if (typeof model?.[method] !== 'function') reject('model_not_configured');
     if (!Number.isSafeInteger(model.contextWindow) || model.contextWindow < 8192) reject('context_budget_exceeded');
   }
-  const request = { system, input, maxOutputTokens };
-  const inputTokens = tokens(modelRequestText(system, input, maxOutputTokens));
-  if (inputTokens > MODEL_INPUT_TOKENS || (maxOutputTokens > MODEL_OUTPUT_TOKENS &&
-      inputTokens + maxOutputTokens > model.contextWindow)) reject('context_budget_exceeded');
+  const request = { system, input, maxOutputTokens: MODEL_OUTPUT_TOKENS };
+  if (tokens(modelRequestText(system, input)) > MODEL_INPUT_TOKENS) reject('context_budget_exceeded');
   check();
   if (legacyFreshness) { validateFresh(); check(); }
   controller = new AbortController();
@@ -181,7 +178,7 @@ export async function callModel(model, method, system, input,
   catch { check(); if (!legacyFreshness) validateFresh(); reject('invalid_model_output', 'output_serialization'); }
   check();
   if (typeof text !== 'string' || text.length > 40_000) { if (!legacyFreshness) validateFresh(); reject('invalid_model_output', 'output_bounds'); }
-  if (tokens(text) > maxOutputTokens) reject('invalid_model_output', 'output_bounds');
+  if (tokens(text) > 1024) reject('invalid_model_output', 'output_bounds');
   check();
   validateFresh();
   check();

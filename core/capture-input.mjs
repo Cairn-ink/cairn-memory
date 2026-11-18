@@ -5,7 +5,7 @@ import { boundedText, denseArray, fail, identifier, object, receiptEventTime, re
 export function extractionLimit(messages = []) {
   const supplied = Array.isArray(messages) ? messages : [];
   return Math.max(5, Math.min(20, new Set(supplied.filter(message => message?.role === 'user')
-    .map((message, index) => message.messageIndex ?? index)).size));
+    .map((message, index) => Object.hasOwn(message, 'messageIndex') ? `w${message.messageIndex}` : `m${index}`)).size));
 }
 
 export const extractionOutputTokens = (messages) => Math.ceil(1024 * extractionLimit(messages) / 5);

@@ -191,8 +191,11 @@ async function readJSON(response, maximum, signal, diagnose) {
   }
 }
 
-function parseOutput(response, contextWindow, model, diagnose, maxOutputTokens = 1024) {
+function parseOutput(response, contextWindow, model, diagnose, maxOutputTokens = 1024, truncation = false) {
   const reject = (reason) => { diagnose(reason); fail('invalid_model_output'); };
+  // An extraction that stopped at the output cap is counted on its own.
+  if (truncation && record(response) && response.status === 'incomplete' &&
+      record(response.incomplete_details) && response.incomplete_details.reason === 'max_output_tokens') reject('output_truncated');
   if (!record(response) || response.object !== 'response' || response.model !== model ||
       response.status !== 'completed' ||
       response.error !== null || response.incomplete_details !== null ||
@@ -326,11 +329,8 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
         schema = method === 'consolidate' ? consolidationSchema(snapshot) : episodic ? episodeSchemasFor(method, snapshot) : schemasFor(method, snapshot);
         if (method === 'extract') {
           // Count user material only after schema validation has canonicalized it.
-          // A caller may state less than the derived allowance, never more; the
-          // candidate ceiling follows the stated allowance (1024 keeps five).
+          // A caller may state up to the derived allowance, never more. Capture states 1024.
           if (maxOutputTokens > extractionOutputTokens(snapshot.messages)) throw new Error('invalid_openai_request');
-          const items = schema.properties.items;
-          items.maxItems = Math.min(items.maxItems, Math.floor(maxOutputTokens * 5 / 1024));
         }
         instructions = qualificationInstructions(method, system, snapshot);
         localTokens = countTokens(JSON.stringify({ system: instructions, input: snapshot, maxOutputTokens }));
@@ -378,7 +378,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     checkAbort(signal, diagnose);
     const response = await post('/responses', generateBody, 262144, signal, diagnose, method === 'consolidate');
     checkAbort(signal, diagnose);
-    const output = parseOutput(response, selected.contextWindow, selected.model, diagnose, maxOutputTokens);
+    const output = parseOutput(response, selected.contextWindow, selected.model, diagnose, maxOutputTokens, method === 'extract');
     if (method === 'consolidate' && !schemaAccepts(schema, output)) { diagnose('output_shape'); fail('invalid_model_output'); }
     if (episodic) return normalizeEpisodeOutput(method, snapshot, output, qualifier?.schema ?? schema, diagnose);
     return normalizeClassificationWire(method, output, schema, wire, diagnose)

@@ -27,7 +27,7 @@ for (const count of [1, 5, 6, 12, 20, 40]) test(`user material: provider schema 
   }
 });
 
-test('user material: a stated allowance below the derived one keeps its own item ceiling; above it is refused', async () => {
+test('user material: the item ceiling follows user messages at any stated allowance; more than the derived allowance is refused', async () => {
   const bodies = [];
   const model = createOpenAIModel({ apiKey: 'synthetic', fetchImpl: async (_url, options) => {
     bodies.push(JSON.parse(options.body)); throw new Error('synthetic-stop');
@@ -35,16 +35,38 @@ test('user material: a stated allowance below the derived one keeps its own item
   const messages = count => Array.from({ length: count }, (_, index) => ({ index, role: 'user', content: 'I prefer drawing.' }));
   const call = (count, maxOutputTokens) => model.extract({ system: 'Synthetic extraction.', input: { messages: messages(count) },
     maxOutputTokens, signal: new AbortController().signal });
-  // Twelve user messages derive 2458; 1024 and 2048 are accepted with five and ten items.
-  for (const [stated, ceiling] of [[1024, 5], [2048, 10], [2458, 12]]) {
+  // Twelve user messages derive 2458. Capture states 1024.
+  for (const stated of [1024, 2048, 2458]) {
     await assert.rejects(call(12, stated), /openai_request_failed/);
-    assert.equal(bodies.at(-1).text.format.schema.properties.items.maxItems, ceiling);
+    assert.equal(bodies.at(-1).text.format.schema.properties.items.maxItems, 12);
   }
   const sent = bodies.length;
   for (const [count, stated] of [[1, 1025], [12, 2459], [20, 4097], [12, 1023]]) {
     await assert.rejects(call(count, stated), /invalid_openai_request/);
   }
   assert.equal(bodies.length, sent);
+});
+
+test('user material: an extraction stopped at the output cap reports its own content-free diagnostic', async () => {
+  const run = async (method, details) => {
+    const seen = [];
+    const model = createOpenAIModel({ apiKey: 'synthetic', onDiagnostic: event => seen.push(event),
+      fetchImpl: async (url, options) => {
+        const body = JSON.parse(options.body);
+        return new Response(JSON.stringify(url.endsWith('/input_tokens') ? { object: 'response.input_tokens', input_tokens: 50 }
+          : { object: 'response', model: body.model, status: 'incomplete', error: null, incomplete_details: details,
+            output: [{ type: 'message', role: 'assistant', status: 'incomplete', content: [{ type: 'output_text', text: '{"items":[' }] }],
+            usage: { input_tokens: 50, output_tokens: 1024, total_tokens: 1074 } }));
+      } });
+    await assert.rejects(model[method]({ system: 'Synthetic extraction.', maxOutputTokens: 1024, signal: new AbortController().signal,
+      input: { messages: [{ index: 0, role: 'user', content: 'I prefer drawing.' }] } }), error => error.code === 'invalid_model_output');
+    return seen;
+  };
+  assert.deepEqual(await run('extract', { reason: 'max_output_tokens' }),
+    [{ version: 1, stage: 'extract', layer: 'adapter', reason: 'output_truncated' }]);
+  // Any other incomplete response keeps the existing reason.
+  assert.deepEqual(await run('extract', { reason: 'content_filter' }),
+    [{ version: 1, stage: 'extract', layer: 'adapter', reason: 'response_envelope' }]);
 });
 
 test('user material: ordered reconciliation accepts the larger replacement set with its existing transition bound', () => {

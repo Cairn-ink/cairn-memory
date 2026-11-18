@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { capturedSuppressedCount } from '../admission-storage.mjs';
 import { openMemoryCore } from '../contract.mjs';
 import { extractionLimit } from '../capture-input.mjs';
 import { extractionRequest } from '../capture.mjs';
@@ -58,8 +57,8 @@ for (const count of [1, 5, 6, 12, 20, 40]) {
           assert.ok(detail.receipts.every(receipt => all.some(source => source.id === receipt.eventId && source.content === receipt.excerpt)));
         }
       }
-      assert.deepEqual(calls.map(request => request.maxOutputTokens),
-        (count === 40 ? [20, 16] : [Math.max(5, Math.min(20, count))]).map(limit => Math.ceil(1024 * limit / 5)));
+      // The output allowance stays 1024 whatever the item ceiling.
+      assert.ok(calls.every(request => request.maxOutputTokens === 1024));
       for (const request of calls) assert.deepEqual(Object.keys(request.input).sort(), options.captureSourcePolicy
         ? ['inputMode', 'messages'] : ['messages']);
     }
@@ -77,6 +76,8 @@ for (const count of [1, 6, 20]) test(`user material: reject more than the ${Math
 test('user material: assistant messages and repeated windows do not inflate the limit', () => {
   assert.equal(extractionLimit([...messages(6), ...messages(20).map(message => ({ ...message, role: 'assistant' }))]), 6);
   assert.equal(extractionLimit(Array.from({ length: 12 }, (_, index) => ({ role: 'user', messageIndex: index % 3 }))), 5);
+  // An indexed window and plain messages never share a key.
+  assert.equal(extractionLimit([{ role: 'user', messageIndex: 2 }, ...messages(5)]), 6);
 });
 
 test('user material: every extraction prompt names the user-first and eligible-assistant rules', () => {
@@ -95,7 +96,7 @@ test('user material: every extraction prompt names the user-first and eligible-a
 
 
 for (const count of [5, 6, 12, 20]) for (const safety of [false, true])
-  test(`user material: ${count} suppressed candidates keep exact totals without resurrection (safety=${safety})`, async t => {
+  test(`user material: ${count} suppressed candidates report the bounded total without resurrection or extra rows (safety=${safety})`, async t => {
   const f = fixture(t, safety ? { contentSafety: 's2h-v1' } : {});
   const capture = (eventId, sources) => f.core.capture({ namespace, client: 'synthetic', sessionId: 'synthetic-session',
     eventId, messages: sources });
@@ -107,22 +108,20 @@ for (const count of [5, 6, 12, 20]) for (const safety of [false, true])
   }
   const repeated = messages(count).map(message => ({ ...message, id: `repeat-${message.id}` }));
   const result = ok(await capture('repeat', repeated));
-  assert.equal(result.admission.suppressedCount, count);
+  assert.equal(result.admission.suppressedCount, Math.min(5, count));
   assert.deepEqual(result.admission.memories, []);
   const inspected = ok(f.core.inspectAdmission({ namespace, client: 'synthetic', eventId: 'repeat' }));
-  assert.equal(inspected.suppressedCount, count);
+  assert.equal(inspected.suppressedCount, Math.min(5, count));
   assert.deepEqual(inspected.members, []);
   const replay = ok(await capture('repeat', repeated));
   assert.equal(replay.duplicate, true);
-  assert.equal(replay.suppressedCount, count);
+  assert.equal(replay.suppressedCount, Math.min(5, count));
   assert.equal(f.calls.length, 1, 'replay performs no extraction');
   const db = new DatabaseSync(f.path); f.workspace.defer(() => db.close());
   const row = db.prepare("SELECT * FROM admission_claims WHERE client='synthetic' AND event_id='repeat'").get();
-  assert.equal(row.suppressed_count, Math.min(5, count), 'legacy CHECK remains satisfied');
-  assert.equal(capturedSuppressedCount(db, namespace, { client: 'synthetic', eventId: 'repeat' }, row), count,
-    'Raw replay namespace normalization recovers the same exact total');
+  assert.equal(row.suppressed_count, Math.min(5, count));
   assert.equal(db.prepare("SELECT count(*) n FROM admission_claims WHERE client!='synthetic'").get().n,
-    Math.ceil(Math.max(0, count - 5) / 5));
+    0, 'no row besides the capture claim');
 });
 
 

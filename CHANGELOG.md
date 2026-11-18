@@ -155,7 +155,8 @@ release.
   only for requested work or accepted or confirmed agreements; chatter and
   satisfaction closings are excluded by instruction.
 - Each extraction has an item ceiling of five to twenty, based on
-  supplied user messages and a proportional output-token budget. Existing batch
+  supplied user messages. The output-token allowance stays 1,024; an extraction
+  that stops at that cap reports the `output_truncated` diagnostic. Existing batch
   planning and source receipts remain in place. Calls with five or fewer user
   messages keep the existing five-item ceiling and request shape.
 

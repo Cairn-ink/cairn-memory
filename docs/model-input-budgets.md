@@ -5,9 +5,7 @@ Every core model call goes through one guard, `callModel` in
 `JSON.stringify({system, input, maxOutputTokens: 1024})` with the host's
 `countTokens` and refuses anything over 6,000 tokens (`MODEL_INPUT_TOKENS`) with
 `context_budget_exceeded` before the adapter runs. Output is capped at 1,024
-tokens, and the context window must be at least 8,192. One call differs:
-capture's extraction states `ceil(1024 * itemLimit / 5)` output tokens
-(1,024–4,096), counted in that same text; see [capture](capture.md).
+tokens, and the context window must be at least 8,192.
 
 The guard never fails silently. Beyond that, no call's allowed input may exceed
 its budget: each call is either **fixed** (it packs or plans its input to fit),

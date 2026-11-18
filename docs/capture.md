@@ -80,19 +80,19 @@ use that same normalization before truncation to 800 UTF-16 code units without
 splitting Unicode code points.
 Indices establish provenance binding, not proof that a model's claim is true.
 
-Extraction allows at most 6,000 input tokens and
-`ceil(1024 * itemLimit / 5)` output tokens (1,024–4,096). Calls with five or fewer
-user messages retain the existing request shape and 1,024-token output budget.
-Only capture states the larger allowance; every other caller of the guarded model
-call keeps 1,024. The OpenAI adapter accepts a stated extraction allowance from
-1,024 up to the derived value, refuses more, and sets its item ceiling from the
-stated allowance (1,024 keeps five).
-Larger calls must also fit input plus output within the model context window;
-the batch planner uses that same check. The minimum context remains 8,192 tokens
+Extraction allows at most 6,000 input tokens and 1,024 output tokens, the same
+as every other model call; only the item ceiling grows with the user messages
+supplied. An extraction whose output stops at the output cap fails that call as
+invalid model output and the OpenAI adapter reports the content-free diagnostic
+`output_truncated`, so a host can count how often the cap is reached.
+The minimum context remains 8,192 tokens
 and each call retains its 30-second abort deadline. Qualification and placement
 keep their existing five-item requests and 1,024-token output bounds, grouping
 larger extracted sets before admission or atomic placement respectively.
-Fresh work claims a fixed 125-second lease. Extraction and token counting happen
+Fresh work claims a fixed 125-second lease. A larger extracted set makes up to four
+qualification groups before admission, so a provider that answers every call near
+its 30-second deadline can outlast the lease; that capture fails as stale and is
+safe to retry. Extraction and token counting happen
 outside write transactions. Failure attempts fenced abandonment for safe retry;
 an expired worker cannot commit or release its successor's lease.
 
