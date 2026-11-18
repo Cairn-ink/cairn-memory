@@ -237,7 +237,8 @@ export function createLocalCairnRuntime(options = {}, { dispatcher, signal, shar
     close,
     ready: contextCounterReady ?? Promise.resolve(true),
     inspect: () => ({ state: disposed ? 'closed' : closed ? 'closing' : 'active', cores: disposed ? 0 : 1,
-      rawManagers: !disposed && hasRawManager ? 1 : 0, rawMaintenanceTimers: !disposed && hasRawManager && path !== ':memory:' ? 1 : 0,
+      rawManagers: !disposed && hasRawManager ? 1 : 0,
+      rawMaintenanceTimers: !disposed && hasRawManager && path !== ':memory:' && (rawUpkeep?.enabled ?? true) ? 1 : 0,
       refreshers: !disposed && refresh ? 1 : 0 }),
     server({ ownsRuntime = false, key = Object.freeze({}), lifecycle = {} } = {}) {
       if (closed) throw Error('local_runtime_closed');

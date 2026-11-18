@@ -112,7 +112,9 @@ export function createRawSearchMaintenance(storage,authority,options) {
           cancelled(upkeepSignal);
           const result=await storage.commitBatch({staged:[{...stage,expected:row.segment}],checkpoint});
           recentAttempts=checkpoint.recent?.streak??0;
-          reserved={...next,segment:result.sequence-1};commit();
+          reserved={...next,segment:result.sequence-1};
+          if(upkeepSignal)reservation={row,expected:reserved.segment,signal:upkeepSignal};
+          commit();
         },maxMs,upkeepSignal); }catch(error){
           cancelled(upkeepSignal);
           // Preserve storage contention across the provider boundary, which
@@ -133,6 +135,8 @@ export function createRawSearchMaintenance(storage,authority,options) {
     } catch (failure) { cancelled(upkeepSignal);if(storageTransient(failure))throw failure;error=refusal(failure); }
     finally{controllers.delete(controller);}
     if(!reserved)return;
+    // A provider failure observed in this generation consumes its attempt.
+    if(error&&invoked&&reservation?.expected===reserved.segment)reservation=null;
     // Provider waits never retain a broker ticket or either SQLite lock.
     // Result settlement may be deferred by cadence; retain no plaintext work.
     const next={...reserved}; delete next.segment;
@@ -147,7 +151,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
     cancelled(upkeepSignal);
     return {next,expected:reserved.segment,embedded:error?0:selected.length,upkeepSignal};
   }
-  let pending=null,refreshAfter=0,refreshing=null,recentAttempts=null;
+  let pending=null,reservation=null,refreshAfter=0,refreshing=null,recentAttempts=null;
   async function run({maxItems=16,maxMs=1000,embeddings=false,upkeepSignal}={}, currentAccess,cacheError) {
     if (closed||stopped) fail('store_closed');
     if (!Number.isSafeInteger(maxItems)||maxItems<1||maxItems>128||!Number.isSafeInteger(maxMs)||maxMs<1||maxMs>5000) fail('invalid_input');
@@ -165,6 +169,25 @@ export function createRawSearchMaintenance(storage,authority,options) {
         admitted=true;
         const started=performance.now(),state=storage.head();
         let checkpoint=structuredClone(state.checkpoint);
+        // A detached generation cannot undo its reservation. Reconcile only
+        // that exact row in an admitted successor, with no provider payload.
+        if(reservation?.signal.aborted){
+          const {row,expected}=reservation;
+          const [current]=await storage.lookup([row.key]);
+          if(current?.segment===expected&&authority.disposition(current.source)!=='remove'){
+            const restored={...current,embedder:row.embedder,retry:row.retry};
+            delete restored.segment;
+            const stage=await storage.stage(restored);
+            protect(restored.source);
+            authority.validate([{sources:[restored.source],intent:'history',access,value:null}]);
+            cancelled(upkeepSignal);
+            await storage.commitBatch({staged:[{...stage,expected}],checkpoint});commit();
+            progress.checkpointAdvances++;changed();
+            reservation=null;refreshAfter=0;
+            return;
+          }
+          reservation=null;refreshAfter=0;
+        }
         checkpoint.fenceRetry=Math.max(0,(checkpoint.fenceRetry??0)-1);
         const staged=[],remove=[];let settledPending=false;
         recentAttempts??=checkpoint.recent?.streak??0;
@@ -328,7 +351,10 @@ export function createRawSearchMaintenance(storage,authority,options) {
             const result=await storage.commitBatch({staged,remove:[...new Set(remove)],checkpoint});commit();
             progress.removed+=result.removed;
             if(result.removed){quotaBlocked=false;progress.error=null;}
-            if(settledPending){progress.embedded+=pending.embedded;pending=null;}
+            if(settledPending){
+              if(reservation?.expected===pending.expected)reservation=null;
+              progress.embedded+=pending.embedded;pending=null;
+            }
             else progress.indexed+=staged.length;
             progress.checkpointAdvances++;changed();
           }catch(error){

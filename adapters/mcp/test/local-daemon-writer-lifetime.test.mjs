@@ -21,7 +21,7 @@ if (process.argv[2] === 'child') {
   const send = (kind, extra = {}) => process.send({ kind, ...extra });
   const gate = name => new Promise(resolve => { gates.set(name, resolve); send(name); });
   process.on('message', message => gates.get(message.kind)?.());
-  globalThis.a10Gate = gate;
+  globalThis.observeWriterLifetimeBarrier = gate;
   const rawMode = mode.startsWith('raw-');
   let syntheticNow = 100;
   if (rawMode) Object.defineProperty(performance, 'now', { configurable: true, value: () => syntheticNow });
@@ -35,7 +35,7 @@ if (process.argv[2] === 'child') {
     await once(worker, 'message');
   }
   let rawTask, idleTask;
-  globalThis.a10Scheduler = {
+  globalThis.writerLifetimeUpkeepScheduler = {
     setTimer(callback) { rawTask = { callback, unref() {} }; send('raw-scheduled'); return rawTask; },
     clearTimer(task) { if (task && task === rawTask) { rawTask = null; send('raw-cancelled'); } },
   };
@@ -43,7 +43,7 @@ if (process.argv[2] === 'child') {
   globalThis.setTimeout = function(callback, ms, ...args) {
     const stack = new Error().stack;
     if (rawMode && /at arm \([^\n]*\/core\/local-raw-search.mjs:/.test(stack)) {
-      return globalThis.a10Scheduler.setTimer(callback);
+      return globalThis.writerLifetimeUpkeepScheduler.setTimer(callback);
     }
     if (rawMode && /at armIdle \([^\n]*local-daemon.mjs:/.test(stack)) {
       idleTask = { callback }; send('idle-scheduled'); return idleTask;
@@ -69,16 +69,16 @@ if (process.argv[2] === 'child') {
   const hook = registerHooks({ load(url, context, next) {
     const result = next(url, context);
     if (rawMode && ['raw-opening', 'raw-status-opening'].includes(mode) && url.endsWith('/raw-search-index.mjs')) return { ...result,
-      source: String(result.source).replace('const interrupted = error =>', "if (!globalThis.a10OpeningGated) { globalThis.a10OpeningGated = true; await globalThis.a10Gate('raw-pending'); } const interrupted = error =>") };
+      source: String(result.source).replace('const interrupted = error =>', "if (!globalThis.writerLifetimeOpeningObserved) { globalThis.writerLifetimeOpeningObserved = true; await globalThis.observeWriterLifetimeBarrier('raw-pending'); } const interrupted = error =>") };
     if (mode === 'raw-status-opening' && url.endsWith('/local-raw-search.mjs')) return { ...result,
       source: String(result.source)
         .replace('if (entry.service) return entry.service;', "if (entry.opening) process.send({kind:'opening-shared'}); if (entry.service) return entry.service;")
         .replace("entry.error = error?.code ?? 'raw_search_unavailable';", "process.send({kind:'raw-failed'}); entry.error = error?.code ?? 'raw_search_unavailable';") };
     if (rawMode && ['raw-preparation', 'raw-reattach'].includes(mode) && url.endsWith('/raw-search-maintenance.mjs')) return { ...result,
-      source: String(result.source).replace('const started=performance.now(),state=storage.head();', "if (!globalThis.a10PreparationGated) { globalThis.a10PreparationGated = true; await globalThis.a10Gate('raw-pending'); } const started=performance.now(),state=storage.head();") };
+      source: String(result.source).replace('const started=performance.now(),state=storage.head();', "if (!globalThis.writerLifetimePreparationObserved) { globalThis.writerLifetimePreparationObserved = true; await globalThis.observeWriterLifetimeBarrier('raw-pending'); } const started=performance.now(),state=storage.head();") };
     if (!url.endsWith('/local-shared-runtime.mjs')) return result;
     return { ...result, source: String(result.source)
-      .replace('rawUpkeepScheduler } = {})', rawMode ? 'rawUpkeepScheduler = globalThis.a10Scheduler } = {})' : 'rawUpkeepScheduler } = {})')
+      .replace('rawUpkeepScheduler } = {})', rawMode ? 'rawUpkeepScheduler = globalThis.writerLifetimeUpkeepScheduler } = {})' : 'rawUpkeepScheduler } = {})')
       .replace('attach(input, output) {', "attach(input, output) { process.send({kind:'attach'});")
       .replace('connections.delete(handle);', "connections.delete(handle); process.send({kind:'detach-processed'});")
       .replace('then(() => runtime?.close());', "then(() => runtime?.close()).then(() => process.send({kind:'host-closed'}));") };
@@ -123,7 +123,7 @@ if (process.argv[2] === 'child') {
   };
   syncBuiltinESMExports();
   const sidecars = new WeakSet(), prepare = DatabaseSync.prototype.prepare, exec = DatabaseSync.prototype.exec;
-  // The fallback keeps this regression behavioural on the pre-a10 checkout,
+  // The fallback keeps this regression behavioural on checkouts without managed upkeep,
   // before the qualification fixture exposes its shared tracing seam.
   const sharedTrace = rawMode ? idleSidecar.traceSidecar?.(event => {
     if (event.success && event.category === 'write') send('sidecar-write', { afterRelease: released });

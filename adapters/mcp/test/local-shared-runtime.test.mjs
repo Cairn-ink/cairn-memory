@@ -230,7 +230,7 @@ for (const boundary of ['reservation', 'after-reservation', 'busy']) test(`cance
     async snapshot({ after }) { return { rows: row.segment > after ? [row] : [], partial: false }; },
     async stage(next) { if (boundary === 'reservation') { arrived.resolve(); await release.promise; } return next; },
     async commitBatch({ staged, checkpoint: next }) {
-      if (busy) { arrived.resolve(); throw Object.assign(Error('synthetic busy'), { errcode: 5 }); }
+      if (busy) { arrived.resolve(); throw Object.assign(Error('synthetic busy'), { code: 'ERR_SQLITE_ERROR', errcode: 5 }); }
       checkpoint = next;
       if (staged.length) row = { ...staged[0], segment: row.segment + 2 };
       writes++;
@@ -380,7 +380,7 @@ for (const privacy of ['forget', 'hide']) test(`idle ${privacy} is excluded on f
   assert.ok(baseline.includes('Synthetic cobalt telescope.') && baseline.includes(keptText), 'both Raw sources are warm');
   await a.handle.close(); assert.equal(clock.pending.size, 0);
   const memory = f.db.prepare('SELECT * FROM memories WHERE deleted=0').get(); assert.ok(memory);
-  if (privacy === 'forget') ok(f.core.forget({ namespace: rawNs, memoryId: memory.id, expectedRevision: memory.revision }));
+  if (privacy === 'forget') ok(writer.forget({ namespace: rawNs, memoryId: memory.id, expectedRevision: memory.revision }));
   else {
     ok(writer.correct({ namespace: rawNs, memoryId: memory.id, expectedRevision: memory.revision,
       content: 'Synthetic safe replacement.', kind: 'fact', receipt: { client: 'synthetic', sessionId: 'independent',

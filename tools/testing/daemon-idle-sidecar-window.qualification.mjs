@@ -1,7 +1,7 @@
 // Opt-in measurement, excluded from CI's *.test.mjs discovery. No history reads.
 // Run each part separately with tools/testing/run.mjs --script, on Node 24.22.1:
 //   this-file --part A|B|control --output ABSOLUTE_DIRECTORY --state ABSOLUTE_DIRECTORY
-// B is one full natural idle lifetime; invoke it five times. Control is 30 s.
+// B is one full natural idle lifetime. Control is 30 s.
 // Optional CAIRN_SETUP_065_PACKAGE: an offline 0.6.5 setup directory/tarball.
 // Its bundled engine is installed offline. No fallback retrieval is permitted.
 import { spawn, spawnSync } from 'node:child_process';
@@ -79,7 +79,7 @@ async function request(item, method, params = {}) {
 async function session(bin, daemon = false) {
   const item = child([bin, '--db', database, '--owner', namespace.ownerId, ...(daemon ? [] : ['--no-context-semantic'])], daemon ? 'attached_session' : bin === executable ? 'current_reader' : '065_reader');
   item.process.stdin.on('error', () => {});
-  const result = await request(item, 'initialize', { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'synthetic-a9', version: '1' } });
+  const result = await request(item, 'initialize', { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'synthetic-idle-reader', version: '1' } });
   check(result.serverInfo, 'initialize');
   item.process.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
   return item;
@@ -138,7 +138,7 @@ async function oldEngine() {
     check(createHash('sha256').update(readFileSync(archive)).digest('hex') === manifest.sha256, '065_archive_hash');
     // Install only the frozen, supplied engine, offline in this scratch prefix.
     const prefix = join(location, 'install'); mkdirSync(prefix);
-    writeFileSync(join(prefix, 'package.json'), '{"name":"synthetic-a9-old","private":true}');
+    writeFileSync(join(prefix, 'package.json'), '{"name":"synthetic-idle-legacy-reader","private":true}');
     command('npm', ['install', '--prefix', prefix, '--offline', '--ignore-scripts', '--no-audit', '--no-fund', archive], workspace.path, environment, '065_install');
     const name = manifest.package.name;
     const bin = join(prefix, 'node_modules', name, 'bin/cairn-memory.mjs'); check(existsSync(bin), '065_bin');
@@ -210,7 +210,7 @@ async function main() {
   const fresh = !existsSync(statePath);
   if (fresh) mkdirSync(statePath, { mode: 0o700 });
   check(lstatSync(statePath).isDirectory() && !lstatSync(statePath).isSymbolicLink(), 'state_directory');
-  const marker = join(statePath, 'synthetic-a9.json');
+  const marker = join(statePath, 'synthetic-idle-sidecar.json');
   if (!fresh) check(existsSync(marker), 'unmarked_state');
   workspace = { path: resolve(statePath) };
   const home = join(workspace.path, 'home'); if (fresh) mkdirSync(home, { mode: 0o700 });
@@ -225,11 +225,11 @@ async function main() {
     try {
       const artifact = buildArtifact({ ownDirectory: path => { artifactDirectory = path; },
         runCommand: (file, argv, cwd) => command(file, argv, cwd, environment, 'pack_' + file) });
-      writeFileSync(join(workspace.path, 'package.json'), '{"name":"synthetic-a9","private":true}');
+      writeFileSync(join(workspace.path, 'package.json'), '{"name":"synthetic-idle-sidecar","private":true}');
       command('npm', ['install', '--prefix', workspace.path, '--offline', '--ignore-scripts', '--no-audit', '--no-fund', artifact.artifactPath], workspace.path, environment, 'install');
-      stored = { version: 'synthetic-a9-v1', artifactSha256: artifact.sha256 };
+      stored = { version: 'synthetic-idle-sidecar-v1', artifactSha256: artifact.sha256 };
     } finally { if (artifactDirectory) await rm(artifactDirectory, { recursive: true }); }
-  } else { stored = JSON.parse(readFileSync(marker)); check(stored.version === 'synthetic-a9-v1', 'state_marker'); }
+  } else { stored = JSON.parse(readFileSync(marker)); check(stored.version === 'synthetic-idle-sidecar-v1', 'state_marker'); }
   const installed = join(workspace.path, 'node_modules', packageName);
   executable = join(installed, 'bin/cairn-memory.mjs'); database = join(workspace.path, 'memory.sqlite');
   if (fresh) {
@@ -318,7 +318,8 @@ async function main() {
     readers: readers.map(reader => summarize(reader.engine)),
     deterministic: part === 'A' ? samples.filter(row => ['held', 'released', 'stopped'].includes(row.phase)) : null };
   if (part === 'A') result.matchesExpected = result.deterministic.every(row => row.phase === 'held'
-    ? row.ok && row.coverage === 'unavailable' && row.itemCount === 0 && !row.sentinel : row.ok && row.sentinel);
+    ? row.ok && row.coverage === (row.engine === '0.6.5' ? 'unavailable' : 'partial') && row.itemCount === 0 && !row.sentinel
+    : row.ok && row.sentinel);
   let measurementError;
   if (part === 'B') {
     // Preserve the original EOF window even if the separate visibility
@@ -335,7 +336,12 @@ async function main() {
   writeFileSync(join(output, 'result.json'), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result));
   if (measurementError) throw measurementError;
+  if (part === 'A') check(result.matchesExpected, 'held_lock_acceptance');
   if (part === 'B') check(result.idleMatchesExpected, 'idle_acceptance');
+  if (part === 'control') {
+    writeFileSync(join(output, 'measurements.json'), JSON.stringify(samples, null, 2));
+    check(result.readers.every(reader => reader.failures === 0), 'control_reader_failure');
+  }
 }
 
 let cleaning;
@@ -351,12 +357,18 @@ async function cleanup() {
     check(owners.every(owner => !startAwareAlive(owner)), 'owner_alive');
     if (directory && before) {
       const mutate = ownedRuntimeFiles(directory, { prefixes });
+      const baseline = new Set(before.entries.map(entry => entry.name));
+      const preexistingLogs = new Set();
       for (const prefix of prefixes) {
-        await mutate('remove', prefix + '.log', { force: true });
+        const name = prefix + '.log';
+        if (baseline.has(name)) preexistingLogs.add(name);
+        else await mutate('remove', name, { force: true });
       }
       const after = await runtimeSnapshot(directory.path, before.identities);
       writeFileSync(join(output, 'runtime-after.json'), JSON.stringify(after, null, 2));
-      const hygiene = classifyRuntimeHygiene(before, after, { prefixes: [...prefixes], owners });
+      const names = after.entries.map(entry => entry.name).filter(name => !preexistingLogs.has(name) &&
+        [...prefixes].some(prefix => name.startsWith(prefix + '.')));
+      const hygiene = classifyRuntimeHygiene(before, after, { names, owners });
       writeFileSync(join(output, 'hygiene.json'), JSON.stringify(hygiene, null, 2));
       check(hygiene.errors.length === 0, 'runtime_hygiene');
     }

@@ -44,8 +44,10 @@ export function createLocalRawSearchUpkeepControl(scheduler = {}) {
 /** Bounded, non-overlapping maintenance turns, owned by the core. */
 export function createLocalRawSearch(path, crypto, { embedder, policy } = {}, { semanticDisabledReason = 'disabled' } = {}) {
   const upkeep = constructionUpkeep;
-  const setTimer = upkeep?.setTimer ?? ((...args) => setTimeout(...args));
-  const clearTimer = upkeep?.clearTimer ?? (timer => clearTimeout(timer));
+  const nativeSetTimer = (...args) => setTimeout(...args);
+  const nativeClearTimer = timer => clearTimeout(timer);
+  const setTimer = upkeep?.setTimer ?? nativeSetTimer;
+  const clearTimer = upkeep?.clearTimer ?? nativeClearTimer;
   const admitted = signal => !upkeep || upkeep.enabled && signal === upkeep.signal && !signal.aborted;
   const embeddingPolicy = embedder ? rawEmbeddingPolicy(policy) : null;
   const entries = new Map();
@@ -107,16 +109,33 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}, { 
     }
     return entry.opening;
   }
-  function arm(delay = 1000) {
+  function clearScheduledTimer() {
+    timer?.clear(timer.handle);
+    timer = null;
+  }
+  function arm(delay = 1000, recover = false) {
     const signal = upkeep?.signal;
     if (!admitted(signal) || closed || unsupported || timer || running || path === ':memory:' || !entries.size) return;
-    const scheduled = timer = setTimer(() => {
+    const scheduled = { clear: clearTimer };
+    const callback = () => {
       if (timer !== scheduled || !admitted(signal) || closed) return;
       timer = null;
-      running = tick(signal).finally(() => { running = null; arm(signal === upkeep?.signal ? 1000 : 0); });
+      running = tick(signal).finally(() => {
+        running = null;
+        arm(signal === upkeep?.signal ? 1000 : 0, true);
+      });
       return running;
-    }, delay);
-    timer.unref();
+    };
+    try { scheduled.handle = setTimer(callback, delay); }
+    catch (error) {
+      if (!recover) throw error;
+      // This callback has no attach frame left to roll back. A native timer
+      // keeps the attached generation scheduled even if the host timer fails.
+      scheduled.clear = nativeClearTimer;
+      scheduled.handle = nativeSetTimer(callback, delay);
+    }
+    timer = scheduled;
+    scheduled.handle.unref();
   }
   async function tick(signal) {
     if (!admitted(signal) || closed) return;
@@ -189,7 +208,7 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}, { 
     } catch (error) { return failure(error); }
   }
   const manager = {
-    unsupportedStore() { unsupported = true; clearTimer(timer); timer = null; },
+    unsupportedStore() { unsupported = true; clearScheduledTimer(); },
     schedule(namespace) {
       const ns = normalize(namespace);
       const entry=[...entries.values()].find(entry=>entry.readSet.some(value=>same(value,ns)))??entryFor([ns]);
@@ -266,7 +285,7 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}, { 
       getRawSearchStatus: input => call('status', input) },
     close() {
       if (closing) return closing;
-      closed = true; unwatch?.(); clearTimer(timer); timer = null;
+      closed = true; unwatch?.(); clearScheduledTimer();
       return closing = (async () => {
         // Start native cancellation before joining a scheduled provider wait.
         const stopped = [...entries.values()].map(async entry => {
@@ -280,7 +299,7 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}, { 
     },
   };
   const unwatch = upkeep?.watch(() => {
-    clearTimer(timer); timer = null;
+    clearScheduledTimer();
     if (upkeep.enabled) arm(0);
   });
   return manager;

@@ -8,7 +8,7 @@ import { registerHooks } from 'node:module';
 
 export const sentinel = 'zirconaxwindowmarker';
 export const sentinelQuery = sentinel;
-export const namespace = { ownerId: 'synthetic-a9-owner', scope: 'personal', projectId: null };
+export const namespace = { ownerId: 'synthetic-idle-sidecar-owner', scope: 'personal', projectId: null };
 export const monotonic = () => Number(process.hrtime.bigint()) / 1e6;
 const ok = result => {
   if (!result.ok) throw Error('qualification_core_refused');
@@ -87,7 +87,7 @@ async function captureConfiguration({ installed, database, initial = false }) {
   let authority;
   try {
     const current = ok(core.getLocalCaptureControl({ namespace, client: 'claude-code' }));
-    const grant = ok(core.setLocalCaptureControl({ namespace, client: 'claude-code', targetId: 'synthetic-a9',
+    const grant = ok(core.setLocalCaptureControl({ namespace, client: 'claude-code', targetId: 'synthetic-idle-sidecar',
       expectedStoreId: current.storeId, expectedRevision: current.revision, automaticCaptureEnabled: true, rawNoticeVersion: 'local-plain-v1' }));
     authority = { version: 'local-capture-authority-v1', targetId: grant.targetId, storeId: grant.storeId, namespace, client: 'claude-code',
       expectedControlRevision: grant.revision, expectedConsentGeneration: grant.consentGeneration,
@@ -117,7 +117,7 @@ async function seed({ installed, database }) {
   const { captureLocal } = await import(pathToFileURL(join(installed, 'adapters/local/capture.mjs')));
   const config = await captureConfiguration({ installed, database, initial: true });
   for (let conversation = 0; conversation < 125; conversation++) {
-    const session = 'synthetic-a9-' + conversation;
+    const session = 'synthetic-idle-sidecar-' + conversation;
     const messages = Array.from({ length: 20 }, (_, index) => {
       const content = `Synthetic telescope engineering conversation ${conversation}, message ${index}. ` +
         'Synthetic calibration observation and documented engineering discussion. '.repeat(12) +
@@ -169,9 +169,9 @@ async function candidate(settings) {
     const result = next(url, context);
     if (!url.endsWith('/local-shared-runtime.mjs')) return result;
     return { ...result, source: String(result.source).replace('disconnect.abort();',
-      `globalThis.a10DetachTrace(); disconnect.abort();`) };
+      `globalThis.recordProcessedRawUpkeepDetach(); disconnect.abort();`) };
   } });
-  globalThis.a10DetachTrace = () => appendFileSync(settings.trace,
+  globalThis.recordProcessedRawUpkeepDetach = () => appendFileSync(settings.trace,
     JSON.stringify({ at: monotonic(), category: 'detach_processed', success: true }) + '\n', { mode: 0o600 });
   process.on('message', message => {
     if (message.kind === 'arm') { hook.arm(); process.send({ kind: 'armed' }); }
@@ -184,7 +184,7 @@ async function candidate(settings) {
   if (!identity.eligible) throw Error('qualification_candidate_ineligible');
   process.send({ kind: 'identity', prefix: 'd-' + identity.digest.slice(0, 32) });
   try { await (await load('local-daemon')).runCandidate({ args: settings.args, identity: identity.record, environment }); }
-  finally { detachHook.deregister(); delete globalThis.a10DetachTrace; await control?.terminate(); }
+  finally { detachHook.deregister(); delete globalThis.recordProcessedRawUpkeepDetach; await control?.terminate(); }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
