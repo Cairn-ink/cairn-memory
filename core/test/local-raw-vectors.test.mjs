@@ -30,7 +30,7 @@ function fixture(t, provider, model = {contextWindow:8192,extract:async()=>({ite
   const core = openMemoryCore({raw:true,path,model,rawSearch:false});
   const manager = createLocalRawSearch(path,defaultRawOptions().port,provider);
   workspace.defer(async()=>{await manager.close();await core.close();});
-  return {core,path,manager,search:request=>manager.methods.searchRaw({namespace:ns,...request}),
+  return {core,path,manager,workspace,search:request=>manager.methods.searchRaw({namespace:ns,...request}),
     async tick(){await rawSearchTestWait(1010);return ok(await manager.methods.maintainRawSearch({namespace:ns}));}};
 }
 async function ready(f, max = 16) {
@@ -116,7 +116,7 @@ for(const kind of ['requests','dollars'])test(`Raw and Memory share the process 
   const found=ok(await f.search({query:'cobalt'}));assert.equal(found.semantic.state,'bm25-only');assert.equal(found.candidates.length,1);
   await f.manager.close();
   const reopened=createLocalRawSearch(f.path,defaultRawOptions().port,provider);
-  t.after(()=>reopened.close());
+  f.workspace.defer(()=>reopened.close());
   await rawSearchTestWait(1010);ok(await reopened.methods.maintainRawSearch({namespace:ns}));
   assert.equal(provider.calls(),1);
   const again=contextBudget({budgetConfigured:true,...provider});

@@ -27,7 +27,7 @@ function fixture(t, options = {}) {
   const core = openMemoryCore({ raw: true, path, model: { contextWindow:8192, extract: async () => ({ items: [] }), countTokens: () => 1 }, ...options });
   workspace.defer(() => core.close());
   const db = new DatabaseSync(path); workspace.defer(() => db.close());
-  return { core, db, path };
+  return { core, db, path, workspace };
 }
 
 test('raw:true captures retain Raw, derive receive time, preserve explicit event time and replay', async t => {
@@ -134,11 +134,11 @@ for (const contentSafety of [undefined, 's2h-v1']) test(`default Raw search with
 });
 
 test('context Raw port shares maintenance and validates one fixed personal/project read set', async t => {
-  const { core, path } = fixture(t, { rawSearch:false, model:rationaleModel() });
+  const { core, path, workspace } = fixture(t, { rawSearch:false, model:rationaleModel() });
   const project = { ...ns, scope:'project', projectId:'selected-project' };
   const manager = createLocalRawSearch(path, defaultRawOptions().port);
   const port = manager.contextPort([project, ns]);
-  t.after(() => manager.close());
+  workspace.defer(() => manager.close());
   assert.equal(localRawSearchManager(port), manager);
   const captured = ok(await core.capture(request(1)));
   ok(await core.capture({ ...request(2), namespace:project }));

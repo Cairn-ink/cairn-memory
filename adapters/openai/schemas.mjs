@@ -1,3 +1,4 @@
+import { extractionLimit } from '../../core/capture-input.mjs';
 import { denseArray, identifier, revision } from '../../core/validation.mjs';
 import { snapshotQualificationTextCatalog } from '../../core/qualification-text-catalog.mjs';
 
@@ -360,7 +361,7 @@ export function schemasFor(method, input) {
   if (method === 'reconcile') {
     if (!input || typeof input !== 'object' || Array.isArray(input)) invalid();
     const messageIndices = snapshotIndices(input.messages, 24);
-    const replacementIndices = snapshotIndices(input.items, 5);
+    const replacementIndices = snapshotIndices(input.items, 20);
     const predecessorIndices = snapshotIndices(input.candidates, 12);
     const transitionMaximum = replacementIndices.length && messageIndices.length
       ? Math.min(5, predecessorIndices.length) : 0;
@@ -380,6 +381,7 @@ export function schemasFor(method, input) {
     if (Object.hasOwn(input, 'inputMode')) {
       const indexed = snapshotIndexedExtractInput(input);
       const schema = structuredClone(schemas.extract);
+      schema.properties.items.maxItems = extractionLimit(indexed.messages);
       schema.properties.items.items.properties.sourceIndices.items.maximum = indexed.messages.length - 1;
       return schema;
     }
@@ -391,6 +393,7 @@ export function schemasFor(method, input) {
           !['user', 'assistant'].includes(message.role) || typeof message.content !== 'string') invalid();
     }
     const schema = structuredClone(schemas.extract);
+    schema.properties.items.maxItems = extractionLimit(messages);
     if (messages.length) schema.properties.items.items.properties.sourceIndices.items.maximum = messages.length - 1;
     else schema.properties.items.maxItems = 0;
     return schema;

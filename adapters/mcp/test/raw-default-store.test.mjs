@@ -17,8 +17,8 @@ import { fixture as captureFixture } from '../../local/test/fixtures/workspace.m
 import { captureLocal } from '../../local/capture.mjs';
 import { configuration } from '../../local/configuration.mjs';
 
-async function connect(t, server) {
-  t.after(() => server.close());
+async function connect(t, server, workspace) {
+  workspace.defer(() => server.close());
   assert.equal(await server.contextCounterReady, true);
   const client = new Client({ name:'synthetic-default-store', version:'1' });
   t.after(() => client.close());
@@ -35,7 +35,7 @@ for (const action of ['forget_memory','correct_memory']) test(`MCP ${action} fen
     const input = f.request(session); input.session_id = session; input.messages[0].occurred_at = new Date().toISOString();
     assert.equal((await captureLocal(configuration(f.config),input,{env:{},signal:new AbortController().signal})).status,200);
   }
-  const client = await connect(t,createCairnServer({path:f.databasePath,namespace,client:'claude-code',model:rationaleModel(),contextSemantic:false}));
+  const client = await connect(t,createCairnServer({path:f.databasePath,namespace,client:'claude-code',model:rationaleModel(),contextSemantic:false}),f.workspace);
   const remembered = ok(await contextCall(client,'remember_memory',{content:'Synthetic explicit remembered fact',kind:'fact'}));
   const memory = remembered.memory;
   ok(await contextCall(client,action,{memoryId:memory.id,expectedRevision:memory.revision,
@@ -53,7 +53,7 @@ test('MCP defaults retain submitted Raw while --no-raw leaves capture Memory-onl
     const path = join(workspace.path, String(enabled)+'.sqlite');
     const server = createCairnServer({ path, namespace:ns, client:'codex', model:rationaleModel(),
       captureQualification:'source-bound-v2', ...(enabled ? {} : { raw:false }) });
-    const client = await connect(t, server);
+    const client = await connect(t, server, workspace);
     ok(await contextCall(client, 'capture_memory', { batchId:'event', messages:[{ role:'user', content:'Synthetic cobalt telescope' }] }));
     const db = new DatabaseSync(path);
     try {
@@ -99,7 +99,7 @@ for (const base of [18,23]) for (const attested of [false,true]) test(`Raw-incap
   if (base === 18) assert.throws(() => openMemoryCore({ path:f.path, raw:true, privateCards:cardHost().options }), { code:'unsupported_database' });
   assert.deepEqual(readSqliteFixture(f.path), before);
   const server = createCairnServer({ path:f.path, namespace:ns });
-  const client = await connect(t, server);
+  const client = await connect(t, server, f.workspace);
   assert.deepEqual(readSqliteFixture(f.path), before, 'MCP startup must not partially migrate the store');
   const inspected = ok(await contextCall(client, 'inspect_memory', { memoryId:memory.id }));
   assert.match(JSON.stringify(inspected), /Synthetic cobalt telescope/);
