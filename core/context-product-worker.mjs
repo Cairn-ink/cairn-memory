@@ -133,19 +133,37 @@ try {
   const { openContextProductFacade } = await import('./context-read-facade.mjs'); within(opening);
   phase?.mark('facadeImported');
   phase?.mark('facadeOpening');
-  let nativeOpening = false;
-  const openingObserver = workerData.wal ? observer : { ...observer, invoke(stage, statement, work) {
-    if (stage === 'open') nativeOpening = true;
-    return observer.invoke(stage, statement, work);
-  } };
+  let nativeOpening = false, openingProbeFailed = false;
+  const openingObserver = workerData.wal ? observer : {
+    ...observer,
+    invoke(stage, statement, work) {
+      if (stage === 'open') nativeOpening = true;
+      return observer.invoke(stage, statement, work);
+    },
+    journalProbe(work) {
+      try { return observer.journalProbe(work); }
+      catch (error) { openingProbeFailed = true; throw error; }
+    },
+  };
   try {
     // The ordinary facade owns the single legacy DELETE opening preflight.
     facade = openContextProductFacade(workerData.path, { observer: openingObserver, authorize, sqlite });
   } catch (error) {
-    // Never reinterpret a refusal after attempting a native connection.
-    if (workerData.wal || nativeOpening || error?.code !== 'index_unavailable') throw error;
+    // The legacy guard maps a failed probe transport to the same refusal as a policy result.
+    if (workerData.wal || nativeOpening || openingProbeFailed || error?.code !== 'index_unavailable') throw error;
     const { contextReadJournalHeader } = await import('./context-read-sidecar.mjs'); within(opening);
-    const canonical = detectProductCanonicalJournal(workerData.path, { sqlite: canonicalSqlite, observer, legacyError: error, readHeader: contextReadJournalHeader,
+    // Leave time for disposal, the Worker reply and the parent's cutoff checks.
+    const OPENING_REFUSAL_RESERVE_MS = 100;
+    const OPENING_HEADER_MIN_MS = 50;
+    const openingHeaderObserver = {
+      journalRemainingMs() {
+        const available = observer.journalRemainingMs() - OPENING_REFUSAL_RESERVE_MS;
+        // The helper retains its existing bound and skips spawning at zero.
+        return available >= OPENING_HEADER_MIN_MS ? available : 0;
+      },
+    };
+    const readHeader = (path, observer, validated) => contextReadJournalHeader(path, booting ? openingHeaderObserver : observer, validated);
+    const canonical = detectProductCanonicalJournal(workerData.path, { sqlite: canonicalSqlite, observer, legacyError: error, readHeader,
       expectedIdentity: { device: fileIdentity.split(':')[0], inode: fileIdentity.split(':')[1] } });
     assertCanonicalMode = canonical.assertMode;
     facade = openContextProductFacade(workerData.path, { observer, authorize, sqlite: canonical.sqlite });
