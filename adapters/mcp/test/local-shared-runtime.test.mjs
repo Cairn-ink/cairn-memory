@@ -228,7 +228,7 @@ for (const boundary of ['reservation', 'after-reservation', 'busy']) test(`cance
     head: () => ({ checkpoint }), tail: () => row.segment,
     async lookup() { return [row]; },
     async snapshot({ after }) { return { rows: row.segment > after ? [row] : [], partial: false }; },
-    async stage(next) { if (boundary === 'reservation') { arrived.resolve(); await release.promise; } return next; },
+    async stage(next) { return next; },
     async commitBatch({ staged, checkpoint: next }) {
       if (busy) { arrived.resolve(); throw Object.assign(Error('synthetic busy'), { code: 'ERR_SQLITE_ERROR', errcode: 5 }); }
       checkpoint = next;
@@ -239,13 +239,23 @@ for (const boundary of ['reservation', 'after-reservation', 'busy']) test(`cance
     },
   };
   const authority = { identity: { storeId: 'synthetic-' + boundary, fileIdentity: 'synthetic' },
-    check() {}, fence: () => 'fence', open: async () => text, disposition: () => 'keep',
+    check() {}, fence: () => 'fence', open: async () => text, disposition: () => 'allowed',
     recent: () => ({ rows: [], cursor: checkpoint.recent }), validate() {}, inventory: () => ({ rows: [], complete: true }) };
   const embedder = { id: 'synthetic-reserve-' + boundary, revision: '1', dimensions: 2, normalization: 'l2',
     async embed(texts) { dispatches++; return texts.map(() => [1, 0]); } };
   const maintenance = createRawSearchMaintenance(storage, authority, { embedder,
     policy: { family: 'local', maxBatchDocuments: 1, maxRequests: 30, maxConcurrent: 1, maxUsd: 0 },
-    maintenanceTurn: { version: 1, createTurn: () => ({ enter() { admissions++; return 'admitted'; }, release() {} }) } });
+    maintenanceTurn: { version: 1, createTurn: () => ({
+      enter() {
+        admissions++;
+        if (boundary === 'reservation' && admissions === 2) {
+          arrived.resolve();
+          return release.promise.then(() => 'admitted');
+        }
+        return 'admitted';
+      },
+      release() {},
+    }) } });
   t.after(() => maintenance.close());
   await maintenance.maintain({ embeddings: true, maxMs: 5000, upkeepSignal: stop.signal }, () => {});
   if (boundary === 'busy') {
@@ -275,6 +285,19 @@ for (const boundary of ['reservation', 'after-reservation', 'busy']) test(`cance
   }
 });
 
+function publishedRawSegment(s, key) {
+  const sidecar = join(s.directory, readdirSync(s.directory).find(name => name.endsWith('.sqlite')));
+  const db = new DatabaseSync(sidecar, { readOnly: true });
+  try {
+    const row = key === undefined
+      ? db.prepare('SELECT segment_key, data, length(vectors) AS vectorBytes FROM segments WHERE published=1').get()
+      : db.prepare('SELECT segment_key, data, length(vectors) AS vectorBytes FROM segments WHERE published=1 AND segment_key=?').get(key);
+    if (!row) return null;
+    const data = JSON.parse(row.data);
+    return { key: row.segment_key, vectorBytes: row.vectorBytes, retry: Array.isArray(data) ? data.at(-1) : data.retry };
+  } finally { db.close(); }
+}
+
 test('three cancelled attachment generations leave the embedding retry available', { timeout: 15000 }, async t => {
   installRawSearchTestClock(t);
   const upkeep = createLocalRawSearchUpkeepControl(), f = sourceFixture(t), writes = sidecarWrites(t);
@@ -290,15 +313,8 @@ test('three cancelled attachment generations leave the embedding retry available
   await savedSource(f, 'Synthetic copper telescope.');
   const s = await searchFixture(f, { embedder, policy: { family: 'local', maxBatchDocuments: 1, maxRequests: 5, maxConcurrent: 1, maxUsd: 0 } });
   for (let i = 0; i < 8; i++) await s.tick({ maxMs: 5000 });
-  const sidecar = join(s.directory, readdirSync(s.directory).find(name => name.endsWith('.sqlite')));
-  const attempts = () => {
-    const db = new DatabaseSync(sidecar, { readOnly: true });
-    try {
-      const data = JSON.parse(db.prepare('SELECT data FROM segments WHERE published=1').get().data);
-      return (Array.isArray(data) ? data.at(-1) : data.retry).attempts;
-    } finally { db.close(); }
-  };
-  const originalAttempts = attempts();
+  const { key, retry: { attempts: originalAttempts } } = publishedRawSegment(s);
+  const attempts = () => publishedRawSegment(s, key)?.retry.attempts;
   const reconciledAttempts = [];
   const tick = () => { providerTime += 6000; return s.tick({ maxMs: 5000, embeddings: true, upkeepSignal: upkeep.signal }); };
   for (let attempt = 1; attempt <= 3; attempt++) {
@@ -319,10 +335,144 @@ test('three cancelled attachment generations leave the embedding retry available
   for (let i = 0; i < 20 && (await search()).semantic.state !== 'ready'; i++) await tick();
   assert.deepEqual({ reconciledAttempts, arrivals }, { reconciledAttempts: Array(3).fill(originalAttempts), arrivals: 4 },
     'three charged cancellations preserve the persisted retry count and still leave the row eligible');
-  assert.equal((await search()).semantic.state, 'ready', 'fresh generation publishes the vector');
+  assert.ok(publishedRawSegment(s, key)?.vectorBytes > 0, 'fresh generation publishes vector bytes for the original segment key');
+  assert.equal((await search()).semantic.state, 'ready');
   await savedSource(f, 'Synthetic bronze telescope.', { sessionId: 'budget-check' });
   for (let i = 0; i < 12; i++) await tick();
   assert.equal(arrivals, 4, 'spent provider calls still exhaust the maintenance budget');
+});
+
+const retryPolicy = maxRequests => ({ family: 'local', maxBatchDocuments: 1, maxRequests, maxConcurrent: 1, maxUsd: 0 });
+
+test('detach and close preserve observed attempts for a fresh maintenance service', { timeout: 15000 }, async t => {
+  installRawSearchTestClock(t);
+  const upkeep = createLocalRawSearchUpkeepControl(), f = sourceFixture(t), writes = sidecarWrites(t);
+  const held = deferred();
+  t.after(() => held.resolve());
+  let calls = 0, providerTime = Date.now();
+  t.mock.method(Date, 'now', () => providerTime);
+  const embedder = { id: 'synthetic-retry-after-close', revision: '1', dimensions: 2, normalization: 'l2',
+    async embed(texts) {
+      calls++;
+      if (calls <= 2) throw Object.assign(Error('provider_error'), { code: 'provider_error' });
+      if (calls === 3) await held.promise;
+      return texts.map(() => [1, 0]);
+    } };
+  await savedSource(f, 'Synthetic copper telescope.');
+  const s = await searchFixture(f, { embedder, policy: retryPolicy(30) });
+  await s.tick({ maxMs: 5000 });
+  const { key } = publishedRawSegment(s);
+  const row = () => publishedRawSegment(s, key);
+  const tick = embeddings => {
+    providerTime += 6000;
+    return s.tick({ maxMs: 5000, embeddings, upkeepSignal: upkeep.signal });
+  };
+  upkeep.resume();
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    for (let turn = 0; turn < 20 && calls < attempt; turn++) await tick(true);
+    await nextTurn();
+    for (let turn = 0; turn < 12; turn++) {
+      await tick(false);
+      if (row().retry.attempts === attempt && row().retry.error === 'provider_error') break;
+    }
+    assert.equal(row().retry.attempts, attempt);
+    assert.equal(row().retry.error, 'provider_error');
+  }
+  const before = row().retry.attempts;
+  for (let turn = 0; turn < 20 && calls < 3; turn++) await tick(true);
+  assert.equal(calls, 3);
+  upkeep.suspend();
+  const atDetach = writes.length;
+  const closing = s.service.close();
+  held.resolve();
+  await closing;
+  assert.equal(writes.length, atDetach, 'no sidecar commits from detach through close');
+  await s.reopen();
+  assert.equal(row().retry.attempts, before, 'a fresh service sees only the two observed failures');
+  upkeep.resume();
+  for (let turn = 0; turn < 20 && !row().vectorBytes; turn++) await tick(true);
+  assert.equal(calls, 4);
+  assert.ok(row().vectorBytes > 0, 'the original key still publishes vectors');
+});
+
+test('unsettled dispatches across maintenance restarts consume the shared provider budget', { timeout: 15000 }, async t => {
+  installRawSearchTestClock(t);
+  const f = sourceFixture(t);
+  let calls = 0, held, providerTime = Date.now();
+  t.mock.method(Date, 'now', () => providerTime);
+  t.after(() => held?.resolve());
+  const embedder = { id: 'synthetic-restart-provider-budget', revision: '1', dimensions: 2, normalization: 'l2',
+    async embed(texts) {
+      calls++;
+      await held.promise;
+      return texts.map(() => [1, 0]);
+    } };
+  await savedSource(f, 'Synthetic copper telescope.');
+  // Six requests allow five maintenance dispatches under the 90% cap.
+  const s = await searchFixture(f, { embedder, policy: retryPolicy(6) });
+  await s.tick({ maxMs: 5000 });
+  const { key } = publishedRawSegment(s);
+  const dispatches = [];
+  for (let lifetime = 0; lifetime < 7; lifetime++) {
+    const upkeep = createLocalRawSearchUpkeepControl();
+    const before = calls;
+    upkeep.resume();
+    held = deferred();
+    for (let turn = 0; turn < 16 && calls === before; turn++) {
+      providerTime += 6000;
+      await s.tick({ maxMs: 5000, embeddings: true, upkeepSignal: upkeep.signal });
+    }
+    dispatches.push(calls - before);
+    const closing = s.service.close();
+    // Let the transport finish only after close has fenced this generation.
+    held.resolve();
+    await closing;
+    if (lifetime < 6) await s.reopen();
+  }
+  assert.deepEqual(dispatches, [1, 1, 1, 1, 1, 0, 0]);
+  assert.equal(publishedRawSegment(s, key).retry.attempts, 0);
+});
+
+test('a paused cancelled source does not block lexical upkeep for another namespace', { timeout: 15000 }, async t => {
+  installRawSearchTestClock(t);
+  const upkeep = createLocalRawSearchUpkeepControl(), f = sourceFixture(t), held = deferred();
+  t.after(() => held.resolve());
+  const copper = 'Synthetic copper telescope.', bronze = 'Synthetic bronze compass.';
+  const other = { ...rawNs, scope: 'project', projectId: 'synthetic-other' };
+  const calls = [];
+  const embedder = { id: 'synthetic-paused-reservation', revision: '1', dimensions: 2, normalization: 'l2',
+    async embed(texts) {
+      calls.push(...texts);
+      if (calls.length === 1) await held.promise;
+      return texts.map(() => [1, 0]);
+    } };
+  await savedSource(f, copper);
+  const s = await searchFixture(f, { readSet: [rawNs, other], embedder, policy: retryPolicy(30) });
+  for (let turn = 0; turn < 8; turn++) await s.tick({ maxMs: 5000 });
+  const { key, retry } = publishedRawSegment(s);
+  const tick = () => s.tick({ maxMs: 5000, embeddings: true, upkeepSignal: upkeep.signal });
+  upkeep.resume();
+  for (let turn = 0; turn < 16 && !calls.length; turn++) await tick();
+  assert.deepEqual(calls, [copper]);
+  upkeep.suspend();
+  held.resolve();
+  await nextTurn();
+  const setPause = paused => f.db.prepare(`INSERT INTO episode_controls(owner_id,scope,project_id,generation,paused,enabled)
+    VALUES(?,?,?,'synthetic',?,1) ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET paused=excluded.paused`)
+    .run(rawNs.ownerId, rawNs.scope, rawNs.projectId ?? '', Number(paused));
+  setPause(true);
+  await savedSource(f, bronze, { namespace: other, sessionId: 'synthetic-other' });
+  upkeep.resume();
+  await tick();
+  assert.equal(s.indexCount(), 2, 'the first admitted turn after reattach indexes the enabled namespace');
+  assert.equal((await s.search({ query: 'bronze' })).candidates.length, 1);
+  assert.deepEqual(calls, [copper]);
+  assert.equal(publishedRawSegment(s, key).vectorBytes, 0);
+  setPause(false);
+  for (let turn = 0; turn < 24 && !publishedRawSegment(s, key).vectorBytes; turn++) await tick();
+  assert.equal(calls.filter(text => text === copper).length, 2);
+  assert.ok(publishedRawSegment(s, key).vectorBytes > 0, 'the paused source publishes on resume');
+  assert.equal(publishedRawSegment(s, key).retry.attempts, retry.attempts);
 });
 
 test('detach and reattach before the old tick settles keeps exactly one fresh successor', { timeout: 15000 }, async t => {
