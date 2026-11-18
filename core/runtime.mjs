@@ -59,20 +59,6 @@ export function readRecallJournalMode(runtime) {
   } catch { return 'unknown'; }
 }
 
-export function commitPhaseGate(db, gate) {
-  let phase = 'before_begin';
-  return () => {
-    if (phase === 'before_begin' && db.isTransaction === false) {
-      phase = 'before_commit';
-      return;
-    }
-    const atCommit = phase === 'before_commit' && db.isTransaction === true;
-    phase = 'closed';
-    if (!atCommit) fail('storage_error');
-    gate();
-  };
-}
-
 /** Shared persistence runtime used by both the legacy and envelope facades. */
 export function createMemoryRuntime(input, internal) {
   object(input, ["path", "sessionEpisodes", "decisionReview", "privateCards", "methodPackages", "assets", "roleProfiles", "existingStore", "storeFence", "contentSafety", "busyTimeoutMs"]);
@@ -1156,4 +1142,18 @@ export function createMemoryRuntime(input, internal) {
     try { db.close(); } catch { /* Preserve the construction failure. */ }
     throw error;
   }
+}
+
+export function commitPhaseGate(db, gate) {
+  let phase = 'before_begin';
+  return () => {
+    if (phase === 'before_begin' && db.isTransaction === false) {
+      phase = 'before_commit';
+      return;
+    }
+    const atCommit = phase === 'before_commit' && db.isTransaction === true;
+    phase = 'closed';
+    if (!atCommit) fail('storage_error');
+    gate();
+  };
 }
