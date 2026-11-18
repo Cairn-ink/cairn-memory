@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "4096de67d66d6eb56c167a12c2c79cfb75d4ef1f101e697fa91aad4a0ed6948b",
-  "bytes": 1325139,
+  "sha256": "d18db1ad2033192342d96b13cdd4335f655e72cc0a50ace45a93dd9735d54ccd",
+  "bytes": 1325137,
   "files": [
     "LICENSE",
     "README.md",
@@ -533,7 +533,7 @@
     "core/prompts/relate-rationale.md": "b00cc2511e7e01d6507f9d13abf6115b315cca8208866a5e15721b6bee212615",
     "core/prompts/relate-claim-focus.md": "17ba366ce9d34f9cef84ad4fea20ba86a9399ff9a34afcd7b4e900cefca332ec",
     "core/recall.mjs": "12faf9f9700a85790e3f615ecb34798663c878bac7901e5aef3fadfb2d03c8e2",
-    "core/runtime.mjs": "977db6f9f304707cdfc8ee386fc5050a0452920abd6d63a13c8782302ab3883f",
+    "core/runtime.mjs": "525e85af08b7d0abe0154bf0ec637209218e5745090758d4fa0b552bd40a8629",
     "core/supersession-storage.mjs": "b13c88bc377cdb9759481214ab3eefd07aec39d15139978e6c4f09871e41b20d",
     "core/validation.mjs": "fb8fa11ee5951ebd2c6bd0b67e3b528ca7cacfd95cd7ddefc22c242a71e1aa0d",
     "core/suppression-content.mjs": "a3d47ffc353c079ba1b1e35cbb506bd7bbb661f3d2ea89562ce7e6e914aaff98",
