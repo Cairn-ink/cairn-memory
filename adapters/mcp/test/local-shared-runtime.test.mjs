@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/client';
 import { setImmediate as nextTurn } from 'node:timers/promises';
@@ -15,9 +16,9 @@ import { defaultRawOptions } from '../../../core/local-defaults.mjs';
 import { rationaleModel } from '../../../core/testing/rationale-model.mjs';
 import { ns, counter, query, ok, streams, connect, call, context, deferred } from './local-shared-support.mjs';
 import { DatabaseSync } from 'node:sqlite';
-import { createLocalRawSearch } from '../../../core/local-raw-search.mjs';
+import { createLocalRawSearch, createLocalRawSearchUpkeepControl } from '../../../core/local-raw-search.mjs';
 import { openRawSearch } from '../../../core/raw-search-index.mjs';
-import { sourceFixture, savedSource, ns as rawNs } from '../../../core/testing/raw-source-fixtures.mjs';
+import { sourceFixture, savedSource, request, splitRaw, ns as rawNs } from '../../../core/testing/raw-source-fixtures.mjs';
 import { searchFixture } from '../../../core/testing/raw-search-fixtures.mjs';
 import { installRawSearchTestClock, rawSearchTestWait } from '../../../core/testing/raw-search-clock.mjs';
 import { createRawSearchMaintenance } from '../../../core/raw-search-maintenance.mjs';
@@ -30,7 +31,14 @@ import * as idleSidecar from '../../../tools/testing/fixtures/daemon-idle-sideca
 function upkeepClock(t) {
   const pending = new Set(), history = [];
   const scheduler = {
-    setTimer(callback, ms) { if (scheduler.fail) throw Error('synthetic_schedule_failed'); const task = { callback, ms, unref() {} }; pending.add(task); history.push(task); return task; },
+    setTimer(callback, ms) {
+      if (scheduler.fail || scheduler.failNext) {
+        scheduler.failNext = false;
+        scheduler.failures = (scheduler.failures ?? 0) + 1;
+        throw Error('synthetic_schedule_failed');
+      }
+      const task = { callback, ms, unref() {} }; pending.add(task); history.push(task); return task;
+    },
     clearTimer(task) { pending.delete(task); },
     pending, history,
     async fire(task = pending.values().next().value) {
@@ -90,6 +98,7 @@ for (const contextRead of [undefined, false]) test(`attachment-managed Raw upkee
   assert.equal(clock.pending.size, 0);
   const a = await connect(t, host), b = await connect(t, host);
   assert.equal(clock.pending.size, 1, 'one tick for multiple attachments');
+  assert.equal(host.inspect().runtime.rawMaintenanceTimers, 1);
   await a.handle.close(); assert.equal(clock.pending.size, 1);
   const stale = [...clock.pending][0];
   await b.handle.close();
@@ -101,6 +110,7 @@ for (const contextRead of [undefined, false]) test(`attachment-managed Raw upkee
   assert.equal(f.db.prepare('SELECT count(*) n FROM raw_messages').get().n, 2, 'idle capture is canonical');
   assert.equal(clock.pending.size, 0);
   const c = await connect(t, host);
+  assert.equal(host.inspect().runtime.rawMaintenanceTimers, 1);
   for (let i = 0; i < 8; i++) await clock.fire();
   assert.ok(writes.length > atDetach, 'reattach publishes positive sidecar work');
   if (contextRead !== false) {
@@ -110,6 +120,22 @@ for (const contextRead of [undefined, false]) test(`attachment-managed Raw upkee
   const final = [...clock.pending][0]; await host.close(); const atClose = writes.length;
   await clock.fire(final); assert.equal(writes.length, atClose); assert.equal(clock.pending.size, 0);
   assert.throws(() => host.attach(), /local_host_closed/);
+  assert.equal(host.inspect().runtime.rawMaintenanceTimers, 0);
+});
+
+test('the managed timer counter drops while detached and returns on reattach', async t => {
+  const clock = upkeepClock(t), w = createTestWorkspace(t);
+  const host = createSharedRuntime({ path: join(w.path, 'store.sqlite'), namespace: ns, contextCounter: counter },
+    { manageRawUpkeep: true, rawUpkeepScheduler: clock });
+  w.defer(() => host.close());
+  const a = await connect(t, host);
+  assert.equal(host.inspect().runtime.rawMaintenanceTimers, 1);
+  await a.handle.close();
+  assert.equal(host.inspect().runtime.rawManagers, 1);
+  assert.equal(host.inspect().runtime.rawMaintenanceTimers, 0);
+  const b = await connect(t, host);
+  assert.equal(host.inspect().runtime.rawMaintenanceTimers, 1);
+  await b.handle.close();
 });
 
 test('attachment never enables --no-raw-search and an unrelated per-session manager keeps its scheduler', { timeout: 15000 }, async t => {
@@ -195,18 +221,21 @@ for (const boundary of ['reservation', 'after-reservation', 'busy']) test(`cance
   const arrived = deferred(), release = deferred(), stop = new AbortController();
   t.after(() => release.resolve());
   const text = 'Synthetic copper telescope.', source = { ref: { span: { start: 0 } } };
-  const row = { key: 'synthetic', source, segment: 1, chunks: rawSearchChunks(text).map(({ input, ...chunk }) => chunk), embedder: null };
-  let writes = 0, dispatches = 0, busy = boundary === 'busy';
-  const checkpoint = { after: ['', '', -1], recent: { streak: 0 }, coverageComplete: true, sweep: 0, cycles: 1 };
+  let row = { key: 'synthetic', source, segment: 1, chunks: rawSearchChunks(text).map(({ input, ...chunk }) => chunk), embedder: null };
+  let writes = 0, dispatches = 0, admissions = 0, busy = boundary === 'busy';
+  let checkpoint = { after: ['', '', -1], recent: { streak: 0 }, coverageComplete: true, sweep: 0, cycles: 1, fence: 'fence', cycleFence: 'fence' };
   const storage = {
-    head: () => ({ checkpoint }), tail: () => 1,
-    async lookup() { return []; }, async snapshot() { return { rows: [row], partial: false }; },
+    head: () => ({ checkpoint }), tail: () => row.segment,
+    async lookup() { return [row]; },
+    async snapshot({ after }) { return { rows: row.segment > after ? [row] : [], partial: false }; },
     async stage(next) { if (boundary === 'reservation') { arrived.resolve(); await release.promise; } return next; },
-    async commitBatch() {
-      if (busy) throw Object.assign(Error('synthetic busy'), { errcode: 5 });
+    async commitBatch({ staged, checkpoint: next }) {
+      if (busy) { arrived.resolve(); throw Object.assign(Error('synthetic busy'), { errcode: 5 }); }
+      checkpoint = next;
+      if (staged.length) row = { ...staged[0], segment: row.segment + 2 };
       writes++;
       if (boundary === 'after-reservation') { stop.abort(); arrived.resolve(); }
-      return { sequence: 3, removed: 0 };
+      return { sequence: row.segment + 1, removed: 0 };
     },
   };
   const authority = { identity: { storeId: 'synthetic-' + boundary, fileIdentity: 'synthetic' },
@@ -216,11 +245,15 @@ for (const boundary of ['reservation', 'after-reservation', 'busy']) test(`cance
     async embed(texts) { dispatches++; return texts.map(() => [1, 0]); } };
   const maintenance = createRawSearchMaintenance(storage, authority, { embedder,
     policy: { family: 'local', maxBatchDocuments: 1, maxRequests: 30, maxConcurrent: 1, maxUsd: 0 },
-    maintenanceTurn: { version: 1, createTurn: () => ({ enter: () => 'admitted', release() {} }) } });
+    maintenanceTurn: { version: 1, createTurn: () => ({ enter() { admissions++; return 'admitted'; }, release() {} }) } });
   t.after(() => maintenance.close());
   await maintenance.maintain({ embeddings: true, maxMs: 5000, upkeepSignal: stop.signal }, () => {});
   if (boundary === 'busy') {
-    for (let i = 0; i < 8; i++) await nextTurn();
+    await arrived.promise; await nextTurn();
+    const atBusy = admissions;
+    await rawSearchTestWait(24);
+    await maintenance.maintain({ embeddings: true, maxMs: 5000, upkeepSignal: stop.signal }, () => {});
+    assert.equal(admissions, atBusy, 'native BUSY postpones broker admission before detach');
     stop.abort(); busy = false;
     const before = maintenance.status();
     await rawSearchTestWait(26);
@@ -231,6 +264,65 @@ for (const boundary of ['reservation', 'after-reservation', 'busy']) test(`cance
   assert.equal(writes, boundary === 'after-reservation' ? 1 : 0);
   assert.equal(dispatches, 0);
   const status = maintenance.status(); assert.equal(status.error, null); assert.equal(status.noProgress, 0); assert.equal(status.pending, false);
+  if (boundary === 'busy') {
+    const fresh = new AbortController().signal;
+    for (let i = 0; i < 12 && !row.chunks.every(chunk => chunk.vector); i++) {
+      await rawSearchTestWait(1010);
+      await maintenance.maintain({ embeddings: true, maxMs: 5000, upkeepSignal: fresh }, () => {});
+    }
+    assert.equal(dispatches, 1);
+    assert.ok(row.chunks.every(chunk => chunk.vector), 'fresh generation publishes after backoff');
+  }
+});
+
+test('three cancelled attachment generations leave the embedding retry available', { timeout: 15000 }, async t => {
+  installRawSearchTestClock(t);
+  const upkeep = createLocalRawSearchUpkeepControl(), f = sourceFixture(t), writes = sidecarWrites(t);
+  let arrivals = 0, release, providerTime = Date.now();
+  t.mock.method(Date, 'now', () => providerTime);
+  const embedder = { id: 'synthetic-cancelled-reservations', revision: '1', dimensions: 2, normalization: 'l2',
+    async embed(texts) {
+      arrivals++;
+      if (release) await release.promise;
+      return texts.map(() => [1, 0]);
+    } };
+  t.after(() => release?.resolve());
+  await savedSource(f, 'Synthetic copper telescope.');
+  const s = await searchFixture(f, { embedder, policy: { family: 'local', maxBatchDocuments: 1, maxRequests: 5, maxConcurrent: 1, maxUsd: 0 } });
+  for (let i = 0; i < 8; i++) await s.tick({ maxMs: 5000 });
+  const sidecar = join(s.directory, readdirSync(s.directory).find(name => name.endsWith('.sqlite')));
+  const attempts = () => {
+    const db = new DatabaseSync(sidecar, { readOnly: true });
+    try {
+      const data = JSON.parse(db.prepare('SELECT data FROM segments WHERE published=1').get().data);
+      return (Array.isArray(data) ? data.at(-1) : data.retry).attempts;
+    } finally { db.close(); }
+  };
+  const originalAttempts = attempts();
+  const reconciledAttempts = [];
+  const tick = () => { providerTime += 6000; return s.tick({ maxMs: 5000, embeddings: true, upkeepSignal: upkeep.signal }); };
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    release = deferred(); upkeep.resume();
+    if (attempt > 1) { await tick(); reconciledAttempts.push(attempts()); }
+    for (let i = 0; i < 20 && arrivals < attempt; i++) await tick();
+    assert.equal(arrivals, attempt, 'provider dispatched in this attachment generation');
+    upkeep.suspend(); const atDetach = writes.length;
+    release.resolve(); await nextTurn();
+    assert.equal(writes.length, atDetach, 'cancelled provider result never reaches SQLite');
+  }
+  release = null; upkeep.resume();
+  await tick(); reconciledAttempts.push(attempts());
+  const { id, revision, dimensions, normalization } = embedder;
+  const search = () => s.search({ query: 'copper', queryVector: {
+    input: 'copper', embedder: { id, revision, dimensions, normalization }, vector: [1, 0],
+  } });
+  for (let i = 0; i < 20 && (await search()).semantic.state !== 'ready'; i++) await tick();
+  assert.deepEqual({ reconciledAttempts, arrivals }, { reconciledAttempts: Array(3).fill(originalAttempts), arrivals: 4 },
+    'three charged cancellations preserve the persisted retry count and still leave the row eligible');
+  assert.equal((await search()).semantic.state, 'ready', 'fresh generation publishes the vector');
+  await savedSource(f, 'Synthetic bronze telescope.', { sessionId: 'budget-check' });
+  for (let i = 0; i < 12; i++) await tick();
+  assert.equal(arrivals, 4, 'spent provider calls still exhaust the maintenance budget');
 });
 
 test('detach and reattach before the old tick settles keeps exactly one fresh successor', { timeout: 15000 }, async t => {
@@ -238,52 +330,74 @@ test('detach and reattach before the old tick settles keeps exactly one fresh su
   const clock = upkeepClock(t), f = sourceFixture(t), arrived = deferred();
   await savedSource(f, 'Synthetic cobalt telescope.');
   const native = DatabaseSync.prototype.prepare;
-  let armed = true;
-  // A synchronous native observer queues the detach for the next microtask;
-  // the transaction finishes before attachment processing can run.
+  let onOpening;
+  // Process both lifecycle transitions while the opening tick owns the timer
+  // slot. Moving this to an awaited callback can let the tick settle first.
   t.mock.method(DatabaseSync.prototype, 'prepare', function(sql, ...args) {
     const statement = native.call(this, sql, ...args);
-    if (armed && sql.startsWith('SELECT 1 FROM sqlite_master')) { armed = false; arrived.resolve(); }
+    if (onOpening && sql.startsWith('SELECT 1 FROM sqlite_master')) {
+      const observe = onOpening; onOpening = null; observe();
+    }
     return statement;
   });
   const host = createSharedRuntime({ path: f.path, namespace: rawNs, contextCounter: counter },
     { manageRawUpkeep: true, rawUpkeepScheduler: clock });
   f.workspace.defer(() => host.close());
   const a = await connect(t, host);
-  const turn = clock.fire(); await arrived.promise;
-  await a.handle.close(); const b = await connect(t, host); await turn;
+  const [server, peer] = streams(); t.after(() => { server.destroy(); peer.destroy(); });
+  let b, detaching, pendingAtReattach;
+  onOpening = () => {
+    detaching = a.handle.close();
+    b = host.attach(server, server);
+    pendingAtReattach = clock.pending.size;
+    clock.failNext = true;
+    arrived.resolve();
+  };
+  const resumed = assert.doesNotReject(clock.fire(), 'a timer callback must observe and recover its own scheduling exception');
+  await arrived.promise;
+  assert.equal(host.inspect().connections, 1);
+  assert.equal(pendingAtReattach, 0, 'old tick still owns the deferred arm');
+  await resumed;
+  await detaching;
+  assert.equal(clock.failures, 1, 'the successor arm actually failed');
   assert.equal(clock.pending.size, 1); await clock.fire(); assert.equal(clock.pending.size, 1);
-  await b.handle.close(); assert.equal(clock.pending.size, 0);
+  await b.close(); assert.equal(host.inspect().connections, 0); assert.equal(clock.pending.size, 0);
 });
 
 for (const privacy of ['forget', 'hide']) test(`idle ${privacy} is excluded on first reattached and independent reads before resumed upkeep`, { timeout: 15000 }, async t => {
   installRawSearchTestClock(t);
   const clock = upkeepClock(t), f = sourceFixture(t, { model: { extract: () => ({ items: [{ content: 'Synthetic derived engineering fact.', kind: 'fact', confidence: .8, sourceIndices: [0] }] }) } });
-  await savedSource(f, 'Synthetic cobalt telescope.');
+  const denied = await savedSource(f, 'Synthetic cobalt telescope.');
+  const writer = openMemoryCore({ path: f.path, raw: true, rawSearch: false }); f.workspace.defer(() => writer.close());
+  const keptText = 'Independent cobalt telescope remains searchable.';
+  const keptMessage = splitRaw(keptText, { occurredAt: new Date(Date.now() - 7 * 86400000).toISOString() })[0];
+  ok(await writer.captureRaw(request(keptMessage, { client: 'codex', sessionId: 'unaffected', eventId: 'unaffected' })));
   const host = createSharedRuntime({ path: f.path, namespace: rawNs, contextCounter: counter },
     { manageRawUpkeep: true, rawUpkeepScheduler: clock });
   f.workspace.defer(() => host.close());
   const a = await connect(t, host); for (let i = 0; i < 8; i++) await clock.fire();
-  assert.ok((await context(a.client)).value.items.some(item => item.ref.type === 'raw'));
+  const baseline = JSON.stringify((await context(a.client)).value.items.filter(item => item.ref.type === 'raw'));
+  assert.ok(baseline.includes('Synthetic cobalt telescope.') && baseline.includes(keptText), 'both Raw sources are warm');
   await a.handle.close(); assert.equal(clock.pending.size, 0);
   const memory = f.db.prepare('SELECT * FROM memories WHERE deleted=0').get(); assert.ok(memory);
   if (privacy === 'forget') ok(f.core.forget({ namespace: rawNs, memoryId: memory.id, expectedRevision: memory.revision }));
   else {
-    const writer = openMemoryCore({ path: f.path, raw: true, rawSearch: false }); f.workspace.defer(() => writer.close());
     ok(writer.correct({ namespace: rawNs, memoryId: memory.id, expectedRevision: memory.revision,
       content: 'Synthetic safe replacement.', kind: 'fact', receipt: { client: 'synthetic', sessionId: 'independent',
         eventId: 'idle-hide', role: 'user', excerpt: 'Synthetic safe replacement.' } }));
-    assert.ok(f.db.prepare('SELECT count(*) n FROM local_raw_hide_windows').get().n > 0, 'canonical hide window persisted');
-    assert.ok(f.db.prepare('SELECT count(*) n FROM raw_session_fences').get().n > 0, 'canonical session fence persisted');
   }
+  assert.ok(f.db.prepare(`SELECT 1 FROM local_raw_hide_windows WHERE owner_id=? AND scope=? AND project_id=''
+    AND start_ms<=? AND end_ms>=?`).get(rawNs.ownerId, rawNs.scope, Date.now(), Date.now()), 'canonical hide window persisted');
+  assert.ok(f.db.prepare(`SELECT 1 FROM raw_session_fences f JOIN raw_conversations c
+    USING (owner_id, scope, project_id, client, session_key) WHERE c.id=?`).get(denied.conversationId), 'canonical session fence persisted');
   const independent = createLocalRawSearch(f.path, f.port); f.workspace.defer(() => independent.close());
-  assert.equal(ok(await independent.methods.searchRaw({ namespace: rawNs, query: 'cobalt telescope' })).candidates.length, 0);
+  assert.equal(ok(await independent.methods.searchRaw({ namespace: rawNs, query: 'cobalt telescope' })).candidates.length, 1);
   const b = await connect(t, host), callbacks = clock.history.length;
   const first = await context(b.client);
-  assert.equal(first.value.items.some(item => item.ref.type === 'raw'), false);
+  assert.ok(first.value.items.some(item => item.ref.type === 'raw' && JSON.stringify(item).includes(keptText)), 'an unaffected Raw hit is returned immediately');
   assert.equal(JSON.stringify(first.value).includes('Synthetic cobalt telescope.'), false, 'hidden or forgotten content is absent from the first response');
   assert.equal(clock.history.length, callbacks, 'first read does not advance scheduled upkeep');
-  assert.equal(ok(await independent.methods.searchRaw({ namespace: rawNs, query: 'cobalt telescope' })).candidates.length, 0);
+  assert.equal(ok(await independent.methods.searchRaw({ namespace: rawNs, query: 'cobalt telescope' })).candidates.length, 1);
 });
 
 test('first attach builds exactly one core, Raw timer and refresher for eight connections', { timeout: 15000 }, async t => {
