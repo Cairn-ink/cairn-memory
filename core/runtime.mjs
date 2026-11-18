@@ -381,7 +381,7 @@ export function createMemoryRuntime(input, internal) {
       if(result.memory&&contentSuppressionReasonInside(db,ns,{kind:'memory',key:result.memory.id,revision:result.memory.revision,
         version:JSON.stringify(['memory-revision-v1',result.memory.revision])}))fail('memory_suppressed');
       return result;
-    });
+    }, undefined, { beforeCommit: () => rawLineage.assertAdmissionReceipts(ns, value.receipts) });
   }
 
   function forgetMutation(ns, id, expectedRevision, reason = 'forgotten', suppressionReason = reason === 'forgotten' ? 'user_forget' : 'purge') {
@@ -445,6 +445,7 @@ export function createMemoryRuntime(input, internal) {
         .get(result.memory.id, receiptKey(receipt)).id))];
       const retired = supersessionStorage.retire(ns, previous, result.memory, receiptIds);
       memoryWriteSafety(ns,activeRow(ns,previous.id));
+      rawLineage.assertAdmissionReceipts(ns, value.receipts);
       return { ...retired, memory: { id: result.memory.id, revision: result.memory.revision },
         deduplicated: result.deduplicated };
     });
@@ -911,6 +912,7 @@ export function createMemoryRuntime(input, internal) {
 
   const resolveHeld = createHeldReviewResolver({ db, activeRow, supersessionStorage, conflictStorage });
   const resolveReview = createConfirmationStorage({ db, enabled: decisionReview, activeRow, attach, forgetMutation, advanceEpoch, resolveHeld,
+    assertAdmissionReceipts: rawLineage.assertAdmissionReceipts,
     assertConfirm(ns,row,boundRevision,result) {
       if(!cachedContentLayout(db)?.suppressionRevision)return;
       if(!row)fail('memory_suppressed');
@@ -1018,6 +1020,7 @@ export function createMemoryRuntime(input, internal) {
     startEpisodeAttempt(ns, input) { ready(); return episodes.startAttempt(ns, input); },
     settleEpisodeAttempt(ns, input) { ready(); return episodes.settleAttempt(ns, input); },
     episodeSessionKey(ns, client, sessionId) { ready(); return episodes.sessionKey(ns, client, sessionId); },
+    retainCaptureSession(ns, client, session, original) { ready(); return rawLineage.retainSessionAlias(ns, client, session, original); },
     reserveEpisodeBatch(ns, input, registration) { ready(); return episodes.reserveBatch(ns, input, registration); },
     setEpisodePolicy(ns,input) { ready(); return episodes.setPolicy(ns,input); },
     claimEpisodeWriter(ns, input) { ready(); return episodes.claimWriter(ns, input); },
@@ -1059,13 +1062,13 @@ export function createMemoryRuntime(input, internal) {
     },
     finishOrdered(ns, snapshot, token, order, prepared, judged, deadline) {
       ready(); return orderedStorage.finish(ns, snapshot, token, order, prepared.discovery,
-        prepared.items, judged.decisions, judged.reason, deadline);
+        prepared.items, judged.decisions, judged.reason, deadline, judged.suppressedCapture);
     },
     rebuildIndex(ns, input) { ready(); return indexStorage.rebuildIndex(ns, input); },
     inspectAdmission(ns, input) { ready(); return admissionStorage.inspectAdmission(ns, input); },
     claimAdmission(ns, input) { ready(); return admissionStorage.claimAdmission(ns, input); },
-    filterCaptureSources(ns, sources) { ready(); return captureSourceRead(ns, sources, () => rawLineage.filter(ns, sources)); },
-    assertCaptureSources(ns, sources) { ready(); return captureSourceRead(ns, sources, () => rawLineage.assertReceipts(ns, sources)); },
+    filterCaptureSources(ns, sources, observeForgotten) { ready(); return captureSourceRead(ns, sources, () => rawLineage.filter(ns, sources, observeForgotten)); },
+    assertCaptureSources(ns, sources) { ready(); return captureSourceRead(ns, sources, () => rawLineage.assertCaptureReceipts(ns, sources)); },
     captureSnapshot(ns, input, qualification, policy) {
       ready();
       // Old layouts validate new times, then omit them before hashing or staging.
@@ -1085,8 +1088,9 @@ export function createMemoryRuntime(input, internal) {
     assertCaptureEvidence(ns, input, deadline) { ready(); return input[captureDispatch]
       ? admissionStorage.beginCaptureDispatch(ns, input, deadline) : admissionStorage.assertCaptureEvidence(ns, input); },
     finishAdmission(ns, input) { ready(); return admissionStorage.finishAdmission(ns, input); },
-    finishCapturedAdmission(ns, input, deadline, captureQualifiedDuplicates) {
+    finishCapturedAdmission(ns, input, deadline, captureQualifiedDuplicates, suppressedCapture) {
       ready(); return admissionStorage.finishAdmission(ns, input, { initialClassification: true,
+        suppressedCapture,
         ...(captureQualifiedDuplicates ? { captureQualifiedDuplicates } : {}) }, deadline);
     },
     beginInitialClassification(ns, input, admitted, selected, deadline) {
