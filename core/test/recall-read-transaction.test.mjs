@@ -162,6 +162,8 @@ function productionSources() {
 }
 
 const deferredReaders = [
+  ['core/database.mjs', 'openDatabase probe', "    const needsWriter = Symbol('open needs writer');", '\n      return db;\n    } catch (error)',
+    '}, undefined, { deferred: true });'],
   ['core/moc-storage.mjs', 'queryCandidateRows', '  function queryCandidateRows(', '\n  function mapRows',
     'transaction(db, work, undefined, { deferred: true })'],
   ['core/moc-storage.mjs', 'suppressionFence', '    suppressionFence(ns)', '\n    assertEpoch(',
@@ -202,6 +204,7 @@ function assertDeferredAllowlist(sources) {
     const region = source.slice(start, end), index = region.indexOf(option);
     assert.ok(index >= 0 && region.indexOf(option, index + 1) < 0, 'exact deferred call: ' + file + ':' + name);
     assert.match(region, name === 'queryCandidateRows' ? /transaction\(db, work, undefined, \{ deferred: true \}\)/
+      : name === 'openDatabase probe' ? /\btransaction\(db, \(\) => \{/
       : /\breturn transaction\(db,|\? transaction\(db,/, 'read helper directly calls transaction');
     permit(file, start + index + option.indexOf('deferred'));
     sites.push(file + ':' + name);
@@ -215,9 +218,9 @@ function assertDeferredAllowlist(sources) {
   return sites;
 }
 
-test('deferred transaction call-site allowlist covers exactly the fourteen reviewed read sites', t => {
+test('deferred transaction call-site allowlist covers exactly the fifteen reviewed read sites', t => {
   const sources = productionSources(), sites = assertDeferredAllowlist(sources);
-  assert.equal(sites.length, 14);
+  assert.equal(sites.length, 15);
   t.diagnostic(JSON.stringify({ productionModules: sources.size, deferredReaders: sites }));
 });
 
@@ -262,7 +265,9 @@ test('committed forget stays hidden and suppression prevents readmission', async
   const f = fixture(t), memory = admit(f.core);
   assert.equal(ok(await recall(f.core)).memories[0].memory.id, memory.id);
   ok(f.core.forget({ namespace, memoryId: memory.id, expectedRevision: memory.revision }));
-  assert.equal(f.db.prepare('SELECT count(*) AS n FROM suppressed').get().n, 1);
+  assert.equal(f.db.prepare("SELECT count(*) AS n FROM suppressed WHERE fingerprint NOT GLOB 'rs1:*'").get().n, 1);
+  // One forgotten receipt contributes one identity token and one address token.
+  assert.equal(f.db.prepare("SELECT count(*) AS n FROM suppressed WHERE fingerprint GLOB 'rs1:*'").get().n, 2);
   assert.equal(f.db.prepare('SELECT deleted FROM memories WHERE id=?').get(memory.id).deleted, 1);
   const blocked = f.core.admit({ namespace, memory: { content: memory.content, kind: 'fact' }, receipts: [receipt(memory.content)] });
   assert.equal(blocked.error?.code, 'memory_suppressed');

@@ -177,7 +177,9 @@ for (const outcome of ['confirm', 'reject', 'forget']) test(`CF1 episode links h
   if (outcome === 'forget') {
     ok(f.core.forgetEpisode({ namespace: episodeNs, episodeId: row.id, expectedRevision: row.revision }));
     assert.equal(f.db.prepare('SELECT deleted FROM memories').get().deleted, 1);
-    assert.equal(f.db.prepare('SELECT count(*) n FROM suppressed').get().n, 1);
+    assert.equal(f.db.prepare("SELECT count(*) n FROM suppressed WHERE fingerprint NOT LIKE 'rs1:%'").get().n, 1);
+    // One forgotten receipt: 1 identity + 1 address marker = 2.
+    assert.equal(f.db.prepare("SELECT count(*) n FROM suppressed WHERE fingerprint LIKE 'rs1:%'").get().n, 2);
   } else {
     ok(f.core[outcome]({ ...action(memory), namespace: episodeNs, ...(outcome === 'confirm' ? { receipt: receipt() } : {}) }));
     assert.equal(ok(f.core.listEpisodes(request)).items.length, 1);

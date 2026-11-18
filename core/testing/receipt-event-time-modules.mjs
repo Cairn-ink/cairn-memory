@@ -31,7 +31,7 @@ const exceptions = frozenExceptions.map(entry => {
   if (entry.file === 'core/context-product-sqlite.mjs') {
     assert.equal(entry.sha256, '03d69f0bdb2e5e8acd1b6e08e566d3333bfbc9e22fdfac97514aa8023618c207',
       'frozen SQLite policy loader pin');
-    return { ...entry, line: 108, sha256: '5bf348977dea61370a8623b98c80648105c6d788c5e0d1dd428970c5bde19d87' };
+    return { ...entry, line: 172, sha256: 'f4362c6ea2bd831a88ef2c8390a55459d000bc03970a1876f2a3003b7ef6af31' };
   }
   // Parent handle reservation, target preparation and close/exit cleanup keep
   // the host loader and synchronous transmission/final validation unchanged.
@@ -46,7 +46,7 @@ const exceptions = frozenExceptions.map(entry => {
     'frozen pre-rebase Worker loader pin');
   // Passing the optional maintenance phase, and registering/transporting
   // refusal causes plus the trusted Raw host port, add no loader or feature consumer.
-  return { ...entry, line: 120, sha256: '260b9489a7ce615f27ac2d84a8eb80356f0d9f6915636d58fc38e29816330565' };
+  return { ...entry, line: 122, sha256: 'a055a2d60c54c65283c85b30f6f6ff9325b291e1dad1f970ad8bb439187e9958' };
 });
 export const moduleLoadingExceptions = exceptions;
 const cache = new Map();

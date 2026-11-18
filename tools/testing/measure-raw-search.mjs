@@ -57,10 +57,12 @@ export async function measureRawSearch(t,targets) {
     const ws=createTestWorkspace(null,{prefix:'raw-search-measure-'}),path=join(ws.path,'canonical.sqlite'),directory=join(ws.path,'index');
     mkdirSync(directory,{mode:0o700});
     let db,reader,storage,service,retained=false;
-    const originalExec=DatabaseSync.prototype.exec,starts=new WeakMap(),configured=new WeakSet(),sections=[],readWaits=[],sharedIntervals=[],sharedStarts=new WeakMap();
+    const originalExec=DatabaseSync.prototype.exec,originalPrepare=DatabaseSync.prototype.prepare,starts=new WeakMap(),configured=new WeakSet(),sections=[],readWaits=[],sharedIntervals=[],sharedStarts=new WeakMap();
     DatabaseSync.prototype.exec=function(sql){
       const began=performance.now(),value=originalExec.call(this,sql);
-      if(sql==='BEGIN'){
+      // The ordinary opener also probes pristine stores before initialization.
+      // Keep this observer check outside the lineage statement census.
+      if(sql==='BEGIN'&&originalPrepare.call(this,"SELECT 1 FROM sqlite_schema WHERE type='table' AND name='store_metadata'").get()){
         if(!configured.has(this)){
           this.function('raw_search_measure_read',value=>{starts.set(this,performance.now());sharedStarts.set(this,process.hrtime.bigint());return value;});
           configured.add(this);

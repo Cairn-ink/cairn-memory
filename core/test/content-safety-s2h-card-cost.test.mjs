@@ -1,6 +1,8 @@
 import { assertCostGateCases, assertCostGateCell, assertCostGateCells, costGatePopulations, unmigratedCostOnly } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const exactDeltas=JSON.parse(readFileSync(new URL('./fixtures/content-safety-s2h-card-deltas.json',import.meta.url),'utf8'));
 import { openCostMemoryCore as openMemoryCore } from '../testing/content-safety-cost-hosts.mjs';
 import { safetyFixture, ns, ok, receipt } from '../testing/content-safety-s2h-fixture.mjs';
 import { measureContentRead } from '../testing/content-safety-cost-meter.mjs';
@@ -59,6 +61,6 @@ for(const base of [23,33])for(const n of [1,4])test(`R2 Card/evidence v${base} $
  if(assertCostGateCells(records))return;
  const [legacy,zero,five]=records;
  for(const current of [zero,five]){assert.deepEqual(current.records.map(r=>[r.method,r.variant]),legacy.records.map(r=>[r.method,r.variant]));for(const [i,row]of current.records.entries()){
-  const old=legacy.records[i];assert.equal(row.begin,old.begin,row.method);assert.equal(row.statements-old.statements,row.method==='getPrivateCardUsage'?(current.facts?10:6):(current.facts?6:4),row.method+' '+row.variant);
+  const old=legacy.records[i];assert.equal(row.begin,old.begin,row.method);assert.equal(row.statements-old.statements,exactDeltas[JSON.stringify([base,n,current.facts,row.method,row.variant])]??(row.method==='getPrivateCardUsage'?(current.facts?10:6):(current.facts?6:4)),row.method+' '+row.variant);
  }}
 });

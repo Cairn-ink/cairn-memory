@@ -73,13 +73,15 @@ const fingerprint = path => {
   const s = lstatSync(path, { bigint: true });
   return [s.dev, s.ino, s.size, s.mtimeNs, s.ctimeNs].join(':');
 };
-export function probeRollbackJournal(path, { observe } = {}) {
-  if (observe) return observe(() => runProbe(path, true));
-  return runProbe(path, false);
+// Internal canonical detection can bypass timestamp caching. Existing rollback
+// preflights and sidecar callers retain their original cache and policy.
+export function probeRollbackJournal(path, { observe, uncached = false } = {}) {
+  if (observe) return observe(() => runProbe(path, true, uncached));
+  return runProbe(path, false, uncached);
 }
-function runProbe(path, structured) {
+function runProbe(path, structured, uncached) {
   const before = fingerprint(path);
-  if (cache.get(path) === before) return structured ? { value: { mode: 'delete' }, events: [], complete: true, cached: true } : { mode: 'delete' };
+  if (!uncached && cache.get(path) === before) return structured ? { value: { mode: 'delete' }, events: [], complete: true, cached: true } : { mode: 'delete' };
   const uri = pathToFileURL(path);
   uri.searchParams.set('mode', 'ro'); uri.searchParams.set('nolock', '1');
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', structured ? observedProbe : probe, uri.href], {
