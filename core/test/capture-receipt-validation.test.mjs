@@ -43,7 +43,7 @@ for(const layout of [48,53])test(`capture admission shares exactly one union wal
   const capture=await countWalks(()=>f.core.capture({namespace:ns,client:'codex',sessionId:'capture-cuts',eventId:'capture',
     messages:[{id:'user',role:'user',content:'Synthetic capture question'},{id:'assistant',role:'assistant',content:'Synthetic capture response'}]}));
   assert.equal(ok(capture.result).admission.memories.length,3);
-  assert.equal(capture.walks,7,'six source freshness/filter walks plus one admission union');
+  assert.equal(capture.walks,6,'five source freshness/filter walks plus one admission union');
   const admitted=await countWalks(()=>f.core.admit({namespace:ns,memory:{content:'Synthetic manual',kind:'fact'},receipts:[receipt('manual')]}));
   ok(admitted.result);assert.equal(admitted.walks,1);
 });

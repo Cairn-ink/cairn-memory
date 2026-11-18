@@ -102,7 +102,7 @@ test('reviewed receipt rows are bounded per call even with matching replacement 
       assert.throws(()=>compareReceiptRecords('workload:53',receiptRecord([row,added]),archived),/reviewed receipt row multiplicity/);
   }
   const removals=receiptComparison.receiptWalkSQLRemovals;
-  assert.equal(removals.reduce((n,row)=>n+row.removedCount,0),144,'142 removed rows plus two explicit relocations');
+  assert.equal(removals.reduce((n,row)=>n+row.removedCount,0),153,'151 removed rows plus two explicit relocations');
   for(const entry of receiptWalkSQLAdditions) {
     const {key,callIndex,method,statement}=entry;
     const entries=[...removals,...receiptWalkSQLAdditions].filter(row=>row.key===key&&row.callIndex===callIndex&&row.method===method);
