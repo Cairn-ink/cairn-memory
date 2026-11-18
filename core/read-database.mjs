@@ -135,5 +135,9 @@ export function openReadDatabase(path, options = {}) {
       const stat = identity(path);
       if (stat.dev !== initial.dev || stat.ino !== initial.ino) fail('cursor_stale');
     } };
-  } catch (error) { if(!productSqlite || db.isOpen)db.close(); throw error; }
+  } catch (error) {
+    try { if ((productSqlite ? db : native).isOpen) db.close(); }
+    catch { /* Preserve the opening failure. */ }
+    throw error;
+  }
 }

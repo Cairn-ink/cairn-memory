@@ -43,25 +43,42 @@ export async function openContentSuppressionReader(value) {
   const host = exact(o.host,['authorize','isCurrent']);
   if (Object.values(host).some(fn => typeof fn !== 'function' || types.isAsyncFunction(fn))) fail('authority_required');
   const requestMaxMs = deadline(o.requestMaxMs), handleId = randomUUID();
-  const [{ openReadDatabase },{ readTransaction }] = await Promise.all([import('./read-database.mjs'),import('./database.mjs')]);
+  const [{ openReadDatabase,contextProductFileIdentity },{ readTransaction }] = await Promise.all([import('./read-database.mjs'),import('./database.mjs')]);
   const retryUntil = started + requestMaxMs - OPEN_REPLY_RESERVE_MS;
+  const fileIdentity = contextProductFileIdentity(o.path);
   let opened, identity, firstBusy;
+  const checkCutoff = () => {
+    if (performance.now() < retryUntil) return;
+    if (firstBusy) throw firstBusy;
+    fail('read_timeout');
+  };
   while (true) {
-    if (firstBusy && performance.now() >= retryUntil) throw firstBusy;
+    checkCutoff();
     let attempt;
     try {
       attempt = openReadDatabase(o.path,{ contextRead:true });
+      if (attempt.fileIdentity !== fileIdentity) fail('unsafe_database_file');
       const db = attempt.db;
       db.exec('PRAGMA busy_timeout=0');
-      const candidateIdentity = readTransaction(db,() => {
-        const layout = installedContentLayout(db);
-        if (!layout.suppressionRevision) fail('unsupported_database');
-        const row = db.prepare('SELECT store_id,cursor_secret FROM store_metadata WHERE singleton=1').get();
-        const domain = db.prepare('SELECT suppression_domain FROM content_safety_control WHERE singleton=1').get();
-        if (row?.store_id !== expected.storeId || domain?.suppression_domain !== expected.suppressionDomain) fail('scope_changed');
-        return { storeId:row.store_id,cursorSecret:row.cursor_secret };
-      });
-      if (firstBusy && performance.now() >= retryUntil) throw firstBusy;
+      let candidateIdentity, primary;
+      try {
+        candidateIdentity = readTransaction(db,() => {
+          try {
+            const layout = installedContentLayout(db);
+            if (!layout.suppressionRevision) fail('unsupported_database');
+            const row = db.prepare('SELECT store_id,cursor_secret FROM store_metadata WHERE singleton=1').get();
+            const domain = db.prepare('SELECT suppression_domain FROM content_safety_control WHERE singleton=1').get();
+            if (row?.store_id !== expected.storeId || domain?.suppression_domain !== expected.suppressionDomain) fail('scope_changed');
+            return { storeId:row.store_id,cursorSecret:row.cursor_secret };
+          } catch (error) {
+            primary = error;
+            throw error;
+          }
+        });
+      } catch (error) {
+        throw primary ?? error;
+      }
+      checkCutoff();
       identity = candidateIdentity;
       opened = attempt;
       break;
