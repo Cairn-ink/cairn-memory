@@ -1,3 +1,4 @@
+import { extractionOutputTokens } from './capture-input.mjs';
 import { countTokens } from './model-budget.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 import { MODEL_INPUT_TOKENS, modelRequestText } from './model-call.mjs';
@@ -34,7 +35,11 @@ function largest(low, high, fits) {
 /** Whether a whole request fits, counted exactly as the guarded call counts it. */
 export function requestFits(model, stage, deadline) {
   const count = counter(model, stage, deadline);
-  return (system, input) => count(modelRequestText(system, input)) <= MODEL_INPUT_TOKENS;
+  return (system, input) => {
+    const outputTokens = stage === 'extract' ? extractionOutputTokens(input?.messages) : 1024;
+    const inputTokens = count(modelRequestText(system, input, outputTokens));
+    return inputTokens <= MODEL_INPUT_TOKENS && (outputTokens === 1024 || inputTokens + outputTokens <= model.contextWindow);
+  };
 }
 
 /** The longest prefix of whole code points within `units` UTF-16 units. */

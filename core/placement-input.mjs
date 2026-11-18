@@ -26,9 +26,9 @@ export function placementTitle(input) {
   return clean;
 }
 
-export function placementProposal(input, requestedIds) {
+export function placementProposal(input, requestedIds, limit = 5) {
   object(input, ['items']);
-  if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > 5) fail('invalid_input');
+  if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > limit) fail('invalid_input');
   if (Object.keys(input.items).length !== input.items.length) fail('invalid_input');
   const items = input.items.map((item) => {
     object(item, ['memoryId', 'parentIds', 'newL1']);
@@ -40,7 +40,7 @@ export function placementProposal(input, requestedIds) {
     }
     return result;
   });
-  const ids = uniqueIds(items.map((item) => item.memoryId), 5, 1);
+  const ids = uniqueIds(items.map((item) => item.memoryId), limit, 1);
   if (requestedIds && (ids.length !== requestedIds.length || ids.some((id) => !requestedIds.includes(id)))) {
     fail('invalid_input');
   }

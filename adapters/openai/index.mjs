@@ -1,3 +1,4 @@
+import { extractionOutputTokens } from '../../core/capture-input.mjs';
 import { get_encoding } from 'tiktoken';
 import { readFileSync } from 'node:fs';
 import { MemoryStoreError, boundedText } from '../../core/validation.mjs';
@@ -190,7 +191,7 @@ async function readJSON(response, maximum, signal, diagnose) {
   }
 }
 
-function parseOutput(response, contextWindow, model, diagnose) {
+function parseOutput(response, contextWindow, model, diagnose, maxOutputTokens = 1024) {
   const reject = (reason) => { diagnose(reason); fail('invalid_model_output'); };
   if (!record(response) || response.object !== 'response' || response.model !== model ||
       response.status !== 'completed' ||
@@ -198,7 +199,7 @@ function parseOutput(response, contextWindow, model, diagnose) {
       !Array.isArray(response.output) || !response.output.length) reject('response_envelope');
   const usage = response.usage;
   if (!record(usage) || !count(usage.input_tokens) || !count(usage.output_tokens) ||
-      !count(usage.total_tokens) || usage.input_tokens > 7024 || usage.input_tokens + 1024 > contextWindow || usage.output_tokens > 1024 ||
+      !count(usage.total_tokens) || usage.input_tokens > 7024 || usage.input_tokens + maxOutputTokens > contextWindow || usage.output_tokens > maxOutputTokens ||
       usage.total_tokens !== usage.input_tokens + usage.output_tokens) reject('response_usage');
   let text = '';
   for (const message of response.output) {
@@ -215,7 +216,7 @@ function parseOutput(response, contextWindow, model, diagnose) {
     }
   }
   if (!text.length) reject('response_content');
-  if (countTokens(text) > 1024) reject('output_bounds');
+  if (countTokens(text) > maxOutputTokens) reject('output_bounds');
   let output;
   try { output = JSON.parse(text); } catch { reject('output_json'); }
   if (!record(output)) reject('output_shape');
@@ -293,7 +294,9 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
 
   async function invoke(method, { system, input, maxOutputTokens, signal }) {
     const diagnose = (reason) => emitDiagnostic({ onDiagnostic }, method, 'adapter', reason);
-    if (!(signal instanceof AbortSignal) || typeof system !== 'string' || maxOutputTokens !== 1024) {
+    if (!(signal instanceof AbortSignal) || typeof system !== 'string' ||
+        (method === 'extract' ? !Number.isSafeInteger(maxOutputTokens) || maxOutputTokens < 1024 || maxOutputTokens > 4096
+          : maxOutputTokens !== 1024)) {
       diagnose('request_invalid');
       throw new Error('invalid_openai_request');
     }
@@ -321,6 +324,10 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
         const originalSerializedInput = JSON.stringify(prevalidated);
         snapshot = JSON.parse(originalSerializedInput);
         schema = method === 'consolidate' ? consolidationSchema(snapshot) : episodic ? episodeSchemasFor(method, snapshot) : schemasFor(method, snapshot);
+        // Count user material only after schema validation has canonicalized it.
+        if (method === 'extract' && maxOutputTokens !== extractionOutputTokens(snapshot.messages)) {
+          throw new Error('invalid_openai_request');
+        }
         instructions = qualificationInstructions(method, system, snapshot);
         localTokens = countTokens(JSON.stringify({ system: instructions, input: snapshot, maxOutputTokens }));
         if (method === 'classify') {
@@ -347,7 +354,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     // Serialize both requests before the first asynchronous host callback.
     const countBody = qualifier ? qualifier.countBody : JSON.stringify(payload);
     const generateBody = qualifier ? qualifier.generateBody
-      : JSON.stringify({ ...payload, max_output_tokens: 1024, store: false, stream: false });
+      : JSON.stringify({ ...payload, max_output_tokens: maxOutputTokens, store: false, stream: false });
     if (method === 'consolidate' && countTokens(countBody) > 6000) {
       diagnose('request_bounds'); fail('context_budget_exceeded');
     }
@@ -360,14 +367,14 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
       diagnose('token_count_response');
       fail('token_count_unavailable');
     }
-    if (counted.input_tokens > 7024 || counted.input_tokens + 1024 > selected.contextWindow) {
+    if (counted.input_tokens > 7024 || counted.input_tokens + maxOutputTokens > selected.contextWindow) {
       diagnose('request_bounds');
       fail('context_budget_exceeded');
     }
     checkAbort(signal, diagnose);
     const response = await post('/responses', generateBody, 262144, signal, diagnose, method === 'consolidate');
     checkAbort(signal, diagnose);
-    const output = parseOutput(response, selected.contextWindow, selected.model, diagnose);
+    const output = parseOutput(response, selected.contextWindow, selected.model, diagnose, maxOutputTokens);
     if (method === 'consolidate' && !schemaAccepts(schema, output)) { diagnose('output_shape'); fail('invalid_model_output'); }
     if (episodic) return normalizeEpisodeOutput(method, snapshot, output, qualifier?.schema ?? schema, diagnose);
     return normalizeClassificationWire(method, output, schema, wire, diagnose)

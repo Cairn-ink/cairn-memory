@@ -1,6 +1,15 @@
 import { createHash } from 'node:crypto';
 import { boundedText, denseArray, fail, identifier, object, receiptEventTime, revision } from './validation.mjs';
 
+// Count only supplied user material; multiple source windows share one message.
+export function extractionLimit(messages = []) {
+  const supplied = Array.isArray(messages) ? messages : [];
+  return Math.max(5, Math.min(20, new Set(supplied.filter(message => message?.role === 'user')
+    .map((message, index) => message.messageIndex ?? index)).size));
+}
+
+export const extractionOutputTokens = (messages) => Math.ceil(1024 * extractionLimit(messages) / 5);
+
 const kinds = ['fact', 'preference', 'decision', 'instruction', 'context'];
 
 /** Copy trusted identity and normalize every message before claiming or calling a model. */
@@ -68,12 +77,12 @@ export function retainedSourceView(snapshot) {
 }
 
 /** The extractor chooses indices; all receipt identity and text comes from the trusted source view. */
-export function extractedItems(output, snapshot, retainedMessages, onInvalid = () => {}, sourceReceipts) {
+export function extractedItems(output, snapshot, retainedMessages, onInvalid = () => {}, sourceReceipts, limit = extractionLimit(retainedMessages ?? snapshot.messages)) {
   let reason = 'invalid_extraction_output_shape';
   try {
     const sourceMessages = retainedMessages ?? snapshot.messages;
     object(output, ['items']);
-    return denseArray(output.items, 0, 5).map((item) => {
+    return denseArray(output.items, 0, limit).map((item) => {
       reason = 'invalid_extraction_item_shape';
       object(item, ['content', 'kind', 'confidence', 'sourceIndices', ...(snapshot.sessionEpisodes ? ['procedural'] : [])]);
       if (Object.hasOwn(item, 'procedural') && (item.procedural !== true || !['preference','instruction'].includes(item.kind))) fail('invalid_model_output');
