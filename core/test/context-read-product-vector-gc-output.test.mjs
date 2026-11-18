@@ -6,10 +6,10 @@ import { DatabaseSync } from 'node:sqlite';
 import { fixture, ns, ok, receipt, readTransaction } from '../testing/context-read-fixture.mjs';
 import { descriptor } from '../testing/context-product-owner-fixture.mjs';
 import { openContextProductFacade } from '../context-read-facade.mjs';
-import { productSidecar, PRODUCT_SIDECAR_SUFFIX } from '../context-product-sidecar.mjs';
+import { canonicalProductFences, productSidecar, PRODUCT_SIDECAR_SUFFIX } from '../context-product-sidecar.mjs';
 import { createProductSqlitePolicy } from '../context-product-sqlite.mjs';
 import { productVectors } from '../context-product-vectors.mjs';
-import { accessDigest, canonicalJson } from '../context-product-validation.mjs';
+import { accessDigest, canonicalJson, digest } from '../context-product-validation.mjs';
 import { HOSTED_ID } from '../context-semantic-input.mjs';
 import { PRODUCT_PROFILE, credentialDigest } from '../context-product-control.mjs';
 import { provisionSemanticOwner } from '../context-semantic-ledger.mjs';
@@ -41,12 +41,15 @@ function physical(path,projection,retired) {
       retiredCache:db.prepare('SELECT count(*) AS n FROM semantic_vectors WHERE generation=?').get(detached).n};
   });
 }
-function local(path,mode,work) {
+function local(path,mode,work,onPoint=()=>{},observer) {
   let clock=0,stopAt;
-  const sqlite=createProductSqlitePolicy();sqlite.start(Infinity);
+  const sqlite=createProductSqlitePolicy({observer});sqlite.start(Infinity);
   const facade=openContextProductFacade(path,{sqlite});
   const storage=productSidecar({path,db:facade.port.db,identity:facade.port.identity,features:facade.port.features,
-    writable:true,sqlite,sidecarJournalMode:mode,now:()=>clock,rendezvous(point){if(point===stopAt)clock=4800;}});
+    writable:true,sqlite,sidecarJournalMode:mode,now:()=>clock,rendezvous(point){
+      if(point===stopAt)clock=4800;
+      onPoint(point);
+    }});
   try {
     storage.admit(Infinity);
     const vectors=productVectors({storage,facade});
@@ -148,6 +151,93 @@ async function observation(request) {
   }finally{await reader.close();}
 }
 
+for(const mode of ['DELETE','WAL'])test('epoch-only retarget rebinds the sweep before publication in '+mode,async t=>{
+  const {f,memories}=await setup(t,mode,['semantic orchard','semantic garden','semantic trail']);
+  const published=replace(f.path,mode);
+  const item=JSON.stringify([ns.ownerId,ns.scope,ns.projectId,'memory',memories[0].id]);
+  const obsolete=()=>sqlite(f.path,db=>({
+    cache:db.prepare(`SELECT generation,doc,owner,identity,epoch,item,revision,body_revision,representation,
+      hex(vector) AS vector,hex(sort_key) AS sort_key FROM semantic_vectors WHERE item=?`).all(item),
+    vectors:db.prepare('SELECT revision,body_revision FROM vector_rows WHERE item=?').all(item)
+  }));
+  const original=obsolete();
+  assert.ok(original.cache.length>0);
+  assert.ok(original.vectors.length>0);
+  const writer=openMemoryCore({path:f.path});
+  try{ok(writer.forget(target(memories[0])));}finally{writer.close();}
+
+  const work=()=>sqlite(f.path,db=>{
+    const row=db.prepare(`SELECT g.id,g.storage_id,g.verify,g.fences FROM work w
+      JOIN generations g ON g.id=w.generation WHERE w.projection=?`).get(published.projectionDigest);
+    return {...row,verify:JSON.parse(row.verify),fences:JSON.parse(row.fences)};
+  });
+  const verifiedDf=g=>sqlite(f.path,db=>db.prepare(
+    'SELECT term_id,verified_df FROM statistics WHERE generation=? ORDER BY term_id'
+  ).all(g.storage_id));
+  const pointer=()=>physical(f.path,published.projectionDigest).lexical.publication;
+  const sweep={head:null,epochs:[]};
+  let before,dfs,newFences,pending;
+  local(f.path,mode,({step})=>step(),point=>{
+    if(point!=='precommit')return;
+    before=work();
+    assert.equal(before.verify.phase,3);
+    assert.ok(before.verify.hash.bytes>0 && before.verify.resetDone && before.verify.postings>0);
+    assert.equal(before.verify.sweep.done,true);
+    dfs=verifiedDf(before);
+    assert.deepEqual(obsolete(),{cache:[],vectors:[]});
+
+    // A late cache row from the old publication must be swept under the new fence.
+    const cache=original.cache[0];
+    local(f.path,mode,({storage,step})=>{
+      storage.vectors(db=>db.prepare('INSERT INTO semantic_vectors VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(
+        cache.generation,cache.doc,cache.owner,cache.identity,cache.epoch,cache.item,cache.revision,
+        cache.body_revision,cache.representation,Buffer.from(cache.vector,'hex'),Buffer.from(cache.sort_key,'hex')
+      ),true);
+      assert.equal(obsolete().cache.length,1);
+      const canonical=new DatabaseSync(f.path);
+      try{
+        canonical.exec('UPDATE namespace_epochs SET epoch=epoch+1');
+        newFences=readTransaction(canonical,()=>canonicalProductFences(canonical,p,sweep));
+      }finally{canonical.close();}
+      const metrics=step('sweep-committed');
+      pending=work();
+      assert.equal(pending.id,before.id);
+      assert.notEqual(pending.verify.sweep.binding,before.verify.sweep.binding);
+      assert.equal(pending.verify.sweep.binding,digest([
+        newFences.canonicalFenceDigest,newFences.dependencyFenceDigest,sweep.head
+      ]));
+      assert.equal(metrics.retargets,1);
+      assert.equal(pending.verify.sweep.done,false);
+    });
+  });
+  assert.ok(pending);
+  assert.equal(pointer(),published.publicationId);
+  assert.deepEqual(work(),pending);
+
+  local(f.path,mode,({step,current})=>{
+    const metrics=step('checkpoint');
+    const rebound=work();
+    assert.equal(rebound.id,before.id);
+    assert.equal(metrics.verificationKept,1);
+    assert.equal(metrics.verificationRestarts,0);
+    const {sweep:oldSweep,...oldCheckpoint}=before.verify;
+    const {sweep:newSweep,...newCheckpoint}=rebound.verify;
+    assert.deepEqual(newCheckpoint,oldCheckpoint);
+    assert.deepEqual(verifiedDf(rebound),dfs);
+    assert.deepEqual(newSweep,{binding:pending.verify.sweep.binding,done:true});
+    assert.notEqual(newSweep.binding,oldSweep.binding);
+    assert.equal(pointer(),published.publicationId);
+
+    step('published');
+    const replacement=current();
+    assert.notEqual(replacement.publicationId,published.publicationId);
+    assert.equal(replacement.generation.id,before.id);
+    assert.equal(replacement.canonicalFenceDigest,newFences.canonicalFenceDigest);
+    assert.equal(replacement.dependencyFenceDigest,newFences.dependencyFenceDigest);
+    assert.deepEqual(obsolete(),{cache:[],vectors:[]});
+  });
+});
+
 for(const mode of ['DELETE','WAL'])for(const partial of [false,true])
 test('serving output survives retirement of lexical and vector rows in '+mode+(partial?' with partial coverage':' with complete coverage'),async t=>{
   const s=await setup(t,mode,['semantic orchard','semantic garden','semantic trail']);
@@ -194,6 +284,57 @@ test('warm re-publications request inputs only for a new eligible version in '+m
     await s.refresh('embeddings');
     assert.equal(s.counts[5]-before,expected);
   }
+});
+
+for(const mode of ['DELETE','WAL'])test('collection moves retained cache rows before deleting the retired generation cache in '+mode,async t=>{
+  const {f,memories}=await setup(t,mode,['semantic orchard','semantic garden','semantic trail']);
+  const old=replace(f.path,mode),retired=physical(f.path,old.projectionDigest).lexical.storage_id;
+  const item=JSON.stringify([ns.ownerId,ns.scope,ns.projectId,'memory',memories[1].id]);
+  const cacheRow=`SELECT generation,doc,owner,identity,epoch,item,revision,body_revision,representation,
+    hex(vector) AS vector,hex(sort_key) AS sort_key FROM semantic_vectors WHERE item=?`;
+  const row=()=>sqlite(f.path,db=>db.prepare(cacheRow).get(item));
+  const original=row();
+  assert.equal(original.generation,retired);
+  const writer=openMemoryCore({path:f.path});
+  try{ok(writer.forget(target(memories[0])));}finally{writer.close();}
+  const live=replace(f.path,mode),destination=physical(f.path,live.projectionDigest).lexical.storage_id;
+  assert.notEqual(destination,retired);
+  assert.deepEqual(row(),original);
+  const movedDoc=sqlite(f.path,db=>db.prepare('SELECT doc FROM documents WHERE generation=? AND identity=?').get(destination,item).doc);
+  const moved={...original,generation:destination,doc:movedDoc};
+
+  let deletes=0;
+  const observer={database(native){
+    return new Proxy(native,{get(db,key){
+      if(key==='prepare')return sql=>{
+        const statement=db.prepare(sql);
+        if(!sql.startsWith('DELETE FROM semantic_vectors WHERE owner=? AND generation=?'))return statement;
+        return new Proxy(statement,{get(stmt,method){
+          if(method==='run')return (...args)=>{
+            if(args[1]!==retired)return stmt.run(...args);
+            const cached=db.prepare(cacheRow);
+            assert.ok(db.isTransaction);
+            assert.deepEqual({...cached.get(item)},moved);
+            const result=stmt.run(...args);
+            assert.equal(result.changes,0);
+            assert.deepEqual({...cached.get(item)},moved);
+            deletes++;
+            return result;
+          };
+          const value=Reflect.get(stmt,method,stmt);
+          return typeof value==='function'?value.bind(stmt):value;
+        }});
+      };
+      const value=Reflect.get(db,key,db);
+      return typeof value==='function'?value.bind(db):value;
+    }});
+  }};
+  local(f.path,mode,({step})=>{
+    for(let i=0;i<20&&physical(f.path,live.projectionDigest,retired).retiredLexical;i++)step();
+  },undefined,observer);
+  assert.equal(physical(f.path,live.projectionDigest,retired).retiredLexical,0);
+  assert.ok(deletes>0);
+  assert.deepEqual({...row()},moved);
 });
 
 for(const mode of ['DELETE','WAL'])test('collection expires an orphan and resets the destination cache audit in '+mode,async t=>{
