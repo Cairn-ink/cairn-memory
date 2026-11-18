@@ -1,0 +1,3 @@
+{
+  "expectedStatement": "SELECT r.* FROM json_each(?) wanted CROSS JOIN receipts r INDEXED BY sqlite_autoindex_receipts_1 ON r.id=wanted.value WHERE r.memory_id=?"
+}

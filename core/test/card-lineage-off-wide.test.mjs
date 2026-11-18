@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { mkdirSync,readFileSync,readdirSync } from 'node:fs';
 import { join,relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,30 +8,21 @@ import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { eventTimeSafetyFixture } from '../testing/receipt-event-time-fixture.mjs';
 import { transaction } from '../database.mjs';
 import { createRawLineageStorage } from '../raw-lineage-storage.mjs';
+import { validateOpenerData, assertArchivedOpeners, currentOpenerPins, assertCurrentOpenerCensus } from '../testing/card-lineage-off-wide-opener.mjs';
+import * as receiptComparison from '../testing/card-lineage-off-wide-compare.mjs';
+import { normalizeSQL, summary, currentReceiptWalkSQLTexts, receiptWalkSQLTexts, receiptWalkSQL, receiptWalkSQLAdditions,
+  workloadKeys, validateSqlAdditions, reviseSQL, compareWideTraces, assertWidePins, validateCardStatementTexts, assertArchivedCardStatementTexts, wideArchiveMode } from '../testing/card-lineage-off-wide-compare.mjs';
 
-const revision='fd5c59ef8e67cc58bb855a95f8910c668150bfa3';
+const revision='c02e5135fad9ea449047e5b6325726f55c248864';
 const root=fileURLToPath(new URL('../../',import.meta.url));
 const pins=JSON.parse(readFileSync(new URL('./fixtures/card-lineage-off-wide-baseline.json',import.meta.url),'utf8'));
 const receiptWalkPins=JSON.parse(readFileSync(new URL('./fixtures/card-lineage-off-wide-receipt-walk.json',import.meta.url),'utf8'));
-// Match the whitespace-only normalization used by the SQL trace recorder.
-const normalizeSQL=sql=>sql.replace(/\s+/g,' ').trim();
-// Exact texts observed in the listed cells and the filter-off witness. The
-// archived batch variant occurs only in the archived baseline's trace,
-// which runs only when the baseline revision is in the local history.
-// Seek and overflow pages are not observed here and receive no exemption.
-const currentReceiptWalkSQLTexts=new Set([
-  "SELECT id,revision,deleted,updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id=? AND scope=? AND project_id=? AND deleted=? ORDER BY updated_at DESC,id LIMIT ?",
-  "SELECT r.*,CAST(r.created_at AS BLOB) AS receipt_created_at_bytes,CAST(r.id AS BLOB) AS receipt_id_bytes,wanted.key AS wanted_entry, json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted FROM json_each(?) wanted CROSS JOIN receipts r ON r.rowid IN ( SELECT rowid FROM receipts INDEXED BY memory_receipts WHERE memory_id=json_extract(wanted.value,'$[0]') AND (EXISTS (SELECT 1 FROM json_each(?) source WHERE client=json_extract(source.value,'$[0]') COLLATE BINARY AND session_id=json_extract(source.value,'$[1]') COLLATE BINARY AND event_id=json_extract(source.value,'$[2]') COLLATE BINARY AND role=json_extract(source.value,'$[3]') COLLATE BINARY AND excerpt=json_extract(source.value,'$[4]') COLLATE BINARY) OR instr(CAST(client AS BLOB),x'00')>0 OR instr(CAST(session_id AS BLOB),x'00')>0 OR instr(CAST(event_id AS BLOB),x'00')>0 OR instr(CAST(role AS BLOB),x'00')>0 OR instr(CAST(excerpt AS BLOB),x'00')>0) ORDER BY created_at,id LIMIT 5) ORDER BY wanted.key,r.created_at,r.id",
-  "SELECT id,revision,deleted,updated_at, (SELECT encoding FROM pragma_encoding) AS receipt_encoding FROM memories INDEXED BY namespace_memories WHERE owner_id=? AND scope=? AND project_id=? AND deleted=? ORDER BY updated_at DESC,id LIMIT ?",
-  "SELECT r.*,wanted.key AS wanted_entry, json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted FROM json_each(?) wanted CROSS JOIN receipts r ON r.rowid IN ( SELECT rowid FROM receipts INDEXED BY memory_receipts WHERE memory_id=json_extract(wanted.value,'$[0]') ORDER BY created_at,id LIMIT 5) ORDER BY wanted.key,r.created_at,r.id",
-]);
-const archivedReceiptWalkSQLTexts=new Set([
-  "SELECT r.*, json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted FROM json_each(?) wanted CROSS JOIN receipts r INDEXED BY memory_receipts ON r.memory_id=json_extract(wanted.value,'$[0]') LIMIT 5",
-]);
-const receiptWalkSQLTexts=new Set([...currentReceiptWalkSQLTexts,...archivedReceiptWalkSQLTexts]);
-const receiptWalkSQL=([sql])=>receiptWalkSQLTexts.has(normalizeSQL(sql));
+const openerPins=JSON.parse(readFileSync(new URL('./fixtures/card-lineage-off-wide-opener.json',import.meta.url),'utf8'));
 const observedReceiptWalkSQL={current:new Set(),archived:new Set()};
 let archivedReceiptWalkTraces=0;
+const revisedArchives=[];
+let archiveAvailable=true;
+const requireArchive=process.env.CAIRN_REQUIRE_WIDE_ARCHIVE;
 const observeReceiptWalkSQL=(statements,trace)=>{
   for(const row of statements)if(receiptWalkSQL(row)) {
     const sql=normalizeSQL(row[0]);
@@ -40,10 +30,6 @@ const observeReceiptWalkSQL=(statements,trace)=>{
     observedReceiptWalkSQL[trace].add(sql);
   }
 };
-const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
-const summary=record=>({calls:record.calls.map(([method,result,start,end])=>[method,hash(result),start??null,end??null]),
-  statements:record.statements.length,sql:hash(record.statements),tables:record.dump.map(([name,rows])=>[name,rows.length,hash(rows)]),
-  effectWitnesses:hash(record.effectWitnesses)});
 const run=(source,path,mode,cell)=>{
   const child=spawnSync(process.execPath,[fileURLToPath(new URL('../testing/card-lineage-off-wide-worker.mjs',import.meta.url)),source,path,mode,String(cell)],
     {encoding:'utf8',timeout:120000,maxBuffer:64*1024*1024});
@@ -54,12 +40,20 @@ function archive(workspace) {
   const baseline=join(workspace,'baseline');mkdirSync(baseline,{mode:0o700});
   const listed=spawnSync('git',['ls-tree','-r','--name-only',revision,'--','core','plugins/cairn-memory/lib'],{cwd:root,encoding:'utf8',timeout:30000});
   assert.equal(listed.status,0,listed.stderr);
-  const paths=listed.stdout.trim().split('\n').filter(path=>!/^core\/(test|testing)\//.test(path));
+  const paths=listed.stdout.trim().split('\n').filter(path=>path&&!/^core\/(test|testing)\//.test(path));
+  assert.ok(paths.length,'archive contains source files');
   const packed=spawnSync('git',['archive',revision,'--',...paths],{cwd:root,maxBuffer:64*1024*1024,timeout:30000});assert.equal(packed.status,0,String(packed.stderr));
   const unpack=spawnSync('tar',['-xC',baseline],{input:packed.stdout,timeout:30000});assert.equal(unpack.status,0,String(unpack.stderr));
   const actual=[];function walk(path){for(const entry of readdirSync(path,{withFileTypes:true})){const next=join(path,entry.name);if(entry.isDirectory())walk(next);else actual.push(relative(baseline,next));}}walk(baseline);
   assert.deepEqual(actual.sort(),paths.sort(),'git tree versus independent archive walk');
   return {path:baseline,count:actual.length};
+}
+function availableArchive(workspace,t) {
+  try { return archive(workspace); }
+  catch(error) {
+    t.diagnostic('Archive could not be read: '+error.message);
+    return null;
+  }
 }
 const extendedOnly=new Set(['importMethodVersion','checkMethodReasonRefs','getMethodVersion','adoptMethodVersion','resolveMethod','readMethodFile',
   'publishRoleProfileRelease','readRoleTaskContext','declareCardCurrentDependencies','revalidateCardCurrentDependencies',
@@ -71,47 +65,94 @@ const added=['inspectCardOperation','revalidateEvidence','fetchCandidateEvidence
   'listMethodEffects','getMethodPackageUsage','disableMethodBinding','resolveMethodsForRole','listMethodBindingEvents','readMethodAttachmentBytes'];
 // Each sqlRevisions entry is an intended, reviewed SQL text change against the archived revision. It replaces only the
 // SQL text of one archived statement; method and bound arguments are never substituted. Delete the list when `revision` advances.
-const sqlRevisions=pins.sqlRevisions??[],workloadKeys=[23,33,52,53].map(cell=>'workload:'+cell);
-test('archived SQL revisions name only workload keys and revise each statement once',()=>{
-  for(const entry of sqlRevisions)assert.ok(workloadKeys.includes(entry.key)&&Number.isInteger(entry.index)&&
+const sqlRevisions=[...(pins.sqlRevisions??[]),...openerPins.sqlRevisions],sqlAdditions=pins.sqlAdditions??[],sqlAdditionMethods=pins.sqlAdditionMethods??[],cardStatementTexts=pins.cardStatementTexts??{};
+const sqlAdditionPolicy={...(pins.sqlAdditionPolicy??{sqlTexts:[],familyMethods:[],anchorSQLTexts:[],anchorAfterSQLTexts:[]}),openerProbes:openerPins.openerProbes};
+const receiptRecord=(rows,index=0,method='capture')=>({statements:rows,dump:[],effectWitnesses:[],
+  calls:[...Array.from({length:index},()=>['synthetic',{ok:true}]),[method,{ok:true},0,rows.length]]});
+const compareReceiptRecords=(key,current,archived)=>{
+  assertWidePins(key,current,[],summary(current),[],{},sqlAdditionPolicy);
+  compareWideTraces({key,current,archived,receiptWalk:true,checkArchivedCardTexts:false,sqlAdditionPolicy});
+};
+test('wide gate literal policy rejects the synthetic ledger receipt reduction',()=>{
+  const row=[[...currentReceiptWalkSQLTexts][0],'all',['synthetic-owner','personal','',0,10]];
+  assert.throws(()=>compareReceiptRecords('workload:52',receiptRecord([row],2,'read'),
+    receiptRecord([row,row],2,'read')), {code:'ERR_ASSERTION',message:/reviewed receipt row multiplicity: .* archive 2, current 1/});
+});
+for(const mutation of ['deletion','reordering'])
+test(`unrelated receipt rows reject ${mutation} with replacement pins`,()=>{
+  const schema=[...receiptWalkSQLTexts].find(sql=>sql.startsWith('SELECT schema_version AS cookie'));
+  const attestation=[schema,'get',[]],select=['SELECT 1','get',[]];
+  const archived=receiptRecord([attestation,select],0,'getCard');
+  const rows=mutation==='deletion'?[select]:[select,attestation];
+  assert.throws(()=>compareReceiptRecords('workload:53',receiptRecord(rows,0,'getCard'),archived));
+});
+test('a listed receipt removal with the wrong multiplicity rejects replacement pins',()=>{
+  const entry={"key":"workload:52","callIndex":1,"method":"capture","archivedCount":135,"currentCount":132,"removedCount":3,"statement":["SELECT schema_version AS cookie,(SELECT user_version FROM pragma_user_version) AS physical, (SELECT application_id FROM pragma_application_id) AS applicationId,(SELECT json_array(singleton,base_layout,suppression_revision,card_lineage_revision,migration_state,suppression_domain,migration_id,inventory_digest,receipt_event_time) FROM content_safety_control WHERE singleton=1) AS control FROM pragma_schema_version","get",[]]};
+  const {key,callIndex,method,statement,archivedCount,currentCount}=entry;
+  const make=count=>Array.from({length:count},()=>statement);
+  assert.throws(()=>compareReceiptRecords(key,receiptRecord(make(currentCount+1),callIndex,method),
+    receiptRecord(make(archivedCount),callIndex,method)));
+});
+test('reviewed receipt rows are bounded per call even with matching replacement pins',()=>{
+  const spare=[...receiptWalkSQLTexts][0];
+  for(const sql of receiptWalkSQLTexts) {
+    const row=[sql,'all',['synthetic','original']];
+    const archived=receiptRecord([row,...Array.from({length:3},()=>[spare,'get',['spare']])]);
+    for(const added of [row,[sql,'all',['synthetic','changed']],[sql,'get',row[2]]])
+      assert.throws(()=>compareReceiptRecords('workload:53',receiptRecord([row,added]),archived),/reviewed receipt row multiplicity/);
+  }
+  const removals=receiptComparison.receiptWalkSQLRemovals;
+  assert.equal(removals.reduce((n,row)=>n+row.removedCount,0),153,'151 removed rows plus two explicit relocations');
+  for(const entry of receiptWalkSQLAdditions) {
+    const {key,callIndex,method,statement}=entry;
+    const entries=[...removals,...receiptWalkSQLAdditions].filter(row=>row.key===key&&row.callIndex===callIndex&&row.method===method);
+    const make=field=>entries.flatMap(row=>Array.from({length:row[field]},()=>row.statement));
+    const archived=receiptRecord(make('archivedCount'),callIndex,method),current=make('currentCount');
+    compareReceiptRecords(key,receiptRecord(current,callIndex,method),archived);
+    for(const added of [statement,[statement[0],statement[1],[...statement[2],'changed']]])
+      assert.throws(()=>compareReceiptRecords(key,receiptRecord([...current,added],callIndex,method),archived),/reviewed receipt row multiplicity/);
+  }
+});
+test('reviewed SQL additions have explicit workload, allowed call method, ordinal, anchor and full statement rows',()=>{
+  validateOpenerData(openerPins);
+  validateSqlAdditions(sqlAdditions,sqlAdditionMethods,sqlAdditionPolicy);validateCardStatementTexts(cardStatementTexts,sqlAdditions,sqlAdditionPolicy);
+});
+test('archived SQL revisions name workload keys or exactly the reviewed open:52/open:53 BEGIN and revise each statement once',()=>{
+  for(const entry of sqlRevisions)assert.ok((workloadKeys.includes(entry.key)||
+    ['open:52','open:53'].includes(entry.key)&&entry.index===1&&entry.old==='BEGIN IMMEDIATE'&&entry.new==='BEGIN')&&Number.isInteger(entry.index)&&
     typeof entry.old==='string'&&typeof entry.new==='string'&&entry.old!==entry.new,JSON.stringify(entry.key)+' revision entry');
   assert.equal(new Set(sqlRevisions.map(({key,index})=>key+'#'+index)).size,sqlRevisions.length,'no statement revised twice');
 });
-const revise=(key,statements)=>{
-  for(const entry of sqlRevisions.filter(entry=>entry.key===key)) {
-    assert.equal(statements[entry.index]?.[0],entry.old,`archived SQL revision ${key}#${entry.index} matches the archive`);
-    statements[entry.index]=[entry.new,...statements[entry.index].slice(1)];
-  }
-};
 for(const base of [23,33])for(const mode of ['open','workload'])for(const eventTime of [false,true]) {
   const cell=eventTime?(base===23?52:53):base,key=mode+':'+cell;
   test(`lineage-zero ${key}: opening, SQL, serialized results/errors and every table match the archived baseline`,async t=>{
     const workspace=createTestWorkspace(t,{prefix:'lineage-off-wide-'});
     const oldPath=join(workspace.path,'old.sqlite'),newPath=join(workspace.path,'new.sqlite');
-    const baseline=archive(workspace.path),current=run(root,newPath,mode,cell),actual=summary(current);
+    const baseline=availableArchive(workspace.path,t),current=run(root,newPath,mode,cell);
+    archiveAvailable &&= Boolean(baseline);
     if(receiptWalkPins.records[key])observeReceiptWalkSQL(current.statements,'current');
-    if(baseline) {
-      const old=run(baseline.path,oldPath,mode,cell);revise(key,old.statements);
-      assert.deepEqual(current.effectWitnesses,old.effectWitnesses,'complete observed effect rows, including rolled-back writes');
+    await t.test('archived baseline comparison',t=>{
+      if(wideArchiveMode(Boolean(baseline),requireArchive)==='pins') {
+        t.skip('archive revision not available');return;
+      }
+      const old=run(baseline.path,oldPath,mode,cell);
+      assertArchivedOpeners(key,old,openerPins);
+      // Frozen summaries describe the untouched archive, before revisions or additions.
       if(receiptWalkPins.records[key]) {
         observeReceiptWalkSQL(old.statements,'archived');archivedReceiptWalkTraces++;
-        assert.equal(JSON.stringify(current.calls.map(([method,result])=>[method,result])),
-          JSON.stringify(old.calls.map(([method,result])=>[method,result])),'exact serialized calls and errors');
-        assert.ok(current.statements.length<=old.statements.length,'receipt batching only reduces SQL');
-        for(const [i,call] of current.calls.entries())if(call.length===4) {
-          const previous=old.calls[i];
-          assert.ok(call[3]-call[2]<=previous[3]-previous[2],call[0]+' statement count cannot rise');
-        }
-        assert.deepEqual(current.statements.filter(row=>!receiptWalkSQL(row)),old.statements.filter(row=>!receiptWalkSQL(row)),
-          'every SQL execution and binding outside receipt enumeration, including all transactions');
+        assert.deepEqual(summary(old),pins.records[key],'receipt cells retain their frozen archived pins');
+      } else if(workloadKeys.includes(key)) {
+        assertWidePins(key,old,sqlAdditions,pins.records[key],sqlAdditionMethods,cardStatementTexts,sqlAdditionPolicy);
       } else {
-        assert.equal(JSON.stringify(current.calls),JSON.stringify(old.calls),'exact serialized calls and errors');
-        assert.deepEqual(current.statements,old.statements,'executed SQL sequence, including opening');
+        assert.deepEqual(summary(old),pins.records[key],'frozen opening pins come only from the archived baseline');
       }
-      assert.deepEqual(current.dump,old.dump,'every table population');
-      assert.deepEqual(summary(old),pins.records[key],'frozen pins come only from the archived baseline');
-    }
-    assert.equal(pins.revision,revision);assert.deepEqual(actual,receiptWalkPins.records[key]??pins.records[key]);
+      reviseSQL(key,old.statements,sqlRevisions);
+      if(workloadKeys.includes(key))revisedArchives.push(old);
+      const reconstructed=compareWideTraces({key,current,archived:old,sqlAdditions,sqlAdditionMethods,cardStatementTexts,sqlAdditionPolicy,checkArchivedCardTexts:false,receiptWalk:Boolean(receiptWalkPins.records[key])});
+      if(!receiptWalkPins.records[key])assertWidePins(key,reconstructed,sqlAdditions,currentOpenerPins(key,pins.records[key],openerPins),sqlAdditionMethods,cardStatementTexts,sqlAdditionPolicy);
+    });
+    assert.equal(pins.revision,revision);assertWidePins(key,current,sqlAdditions,receiptWalkPins.records[key]??currentOpenerPins(key,pins.records[key],openerPins),sqlAdditionMethods,cardStatementTexts,sqlAdditionPolicy);
+    assertCurrentOpenerCensus(key,current,openerPins);
     assert.ok(current.statements.every(entry=>entry.length===3&&Array.isArray(entry[2])),'SQL execution includes bound arguments');
     assert.equal(current.statements.some(([sql])=>/card_body_|card_operations_owner_action/.test(sql)),false,'no extended lineage scan');
     if(mode==='workload') {
@@ -177,4 +218,12 @@ test('receipt enumeration exemptions are a closed set over the listed traces',t=
   }
   t.diagnostic(JSON.stringify({exactReceiptEnumerationTexts:receiptWalkSQLTexts.size,archivedReceiptWalkTraces,
     observedCurrentTexts:observedReceiptWalkSQL.current.size,observedArchivedTexts:observedReceiptWalkSQL.archived.size}));
+});
+
+test('reviewed card statement texts equal the union of revised archived forgetting calls',t=>{
+  if(wideArchiveMode(archiveAvailable,requireArchive)==='pins') {
+    t.skip('archive revision not available');return;
+  }
+  assert.equal(revisedArchives.length,workloadKeys.length,'all four archived workloads were read');
+  assertArchivedCardStatementTexts(revisedArchives,cardStatementTexts,sqlAdditions,sqlAdditionPolicy);
 });
