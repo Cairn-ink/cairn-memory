@@ -160,7 +160,7 @@ test('malformed reconciliation snapshots fail before fake HTTP', async () => {
   const mutations = [
     (value) => value.messages.push({ ...value.messages[0] }),
     (value) => { value.messages = Array.from({ length: 25 }, (_, index) => ({ index })); },
-    (value) => { value.items = Array.from({ length: 6 }, (_, index) => ({ index })); },
+    (value) => { value.items = Array.from({ length: 21 }, (_, index) => ({ index })); },
     (value) => { value.candidates = Array.from({ length: 13 }, (_, index) => ({ index })); },
   ];
   for (const mutate of mutations) {
