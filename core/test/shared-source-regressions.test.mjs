@@ -1473,9 +1473,12 @@ test(`prior forget denials survive ${correction} correction: ${label(layout)}`, 
   const denied = f.db.prepare('SELECT id FROM receipts WHERE memory_id IN (?,?)').all(a.id, b.id).map(row => row.id);
   ok(f.core.forget({ namespace: ns, memoryId: a.id, expectedRevision: a.revision }));
   const before = markers(f);
-  const acknowledgement = ok(f.core.correct({ namespace: ns, memoryId: b.id, expectedRevision: b.revision, content: corrected, kind: 'fact',
-    receipt: correction === 'identical' ? shared : { ...shared, excerpt: newExcerpt } }));
-  const current = acknowledgement.memory;
+  const stateBefore = databaseState(f.db);
+  const acknowledgement = f.core.correct({ namespace: ns, memoryId: b.id, expectedRevision: b.revision, content: corrected, kind: 'fact',
+    receipt: correction === 'identical' ? shared : { ...shared, excerpt: newExcerpt } });
+  error(acknowledgement, 'source_excluded');
+  assert.deepEqual(databaseState(f.db), stateBefore, 'the refused correction leaves every persisted row unchanged');
+  const current = b;
   assert.deepEqual(markers(f), before, 'correction never removes a prior forget marker');
   const values = {
     acknowledgement,

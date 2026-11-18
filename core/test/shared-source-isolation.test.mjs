@@ -20,9 +20,10 @@ for (const kind of ordinaryKinds) test(`denial is durable before a sibling exist
   const captured = ok(await reopened.capture({ namespace: ns, client: 'synthetic', sessionId: 'synthetic-session',
     eventId: 'synthetic-later-batch', messages: [{ id: 'synthetic-message', role: 'user', content: forgotten + '. Another window.' }] }));
   noLeak(captured, 'reopened capture result');
-  const b = captured.admission.memories[0];
-  assert.equal(f.db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(b.id).n, 1);
-  assert.deepEqual(ok(reopened.get({ namespace: ns, memoryId: b.id })).receipts, []);
+  const indexRevision = 3; // The initial capture and forget set this revision before reopening.
+  assert.deepEqual(captured, { duplicate: false, admission: { memories: [], suppressedCount: 1, indexRevision },
+    classification: { status: 'skipped', reason: 'empty' } });
+  assert.equal(ok(reopened.map({ namespace: ns })).indexRevision, indexRevision);
   for (const patch of [{ client: 'synthetic-other-client' }, { role: 'assistant' }, { sessionId: 'synthetic-other-session' }, { eventId: 'synthetic-other-message' }]) {
     const memory = ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic independent ' + Object.keys(patch)[0], kind: 'fact' },
       receipts: [{ ...source(), ...patch }] })).memory;
@@ -87,8 +88,8 @@ for (const kind of ordinaryKinds) test(`owner re-key preserves source denial ${k
   const oldList = f.core.list({ namespace: ns, limit: 20 });
   noLeak(oldList, 'old owner after re-key');
   assert.equal(hasId(oldList, b.id), false, 'old owner cannot list the moved Memory');
-  const moved = ok(f.core.admit({ namespace: otherOwner, memory: { content: 'Synthetic moved signal', kind: 'fact' }, receipts: [source('Different window')] })).memory;
-  assert.deepEqual(ok(f.core.get({ namespace: otherOwner, memoryId: moved.id })).receipts, []);
+  assert.deepEqual(f.core.admit({ namespace: otherOwner, memory: { content: 'Synthetic moved signal', kind: 'fact' }, receipts: [source('Different window')] }),
+    { ok: false, error: { code: 'source_excluded', retryable: false } });
   const old = ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic new account signal', kind: 'fact' }, receipts: [source()] })).memory;
   assert.equal(ok(f.core.get({ namespace: ns, memoryId: old.id })).receipts[0].excerpt, message);
 });

@@ -38,12 +38,17 @@ test(`shared source replay and isolation ${kind} ${operation}`, async t => {
   ok(await act(f, operation, a));
   const tokens = markers(f);
   f.model.items = [{ content: 'Synthetic newly extracted signal', kind: 'fact', confidence: .8, sourceIndices: [0] }];
-  const [newMemory] = await capture(f, 'synthetic-new-batch', forgotten + '. Different excerpt window.');
-  assert.equal(f.db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(newMemory.id).n, 1, 'capture stores the denied attachment');
-  assert.deepEqual(ok(f.core.get({ namespace: ns, memoryId: newMemory.id })).receipts, [], 'address denies a changed window');
+  const expectEmptyCapture = async (eventId, content) => {
+    const indexRevision = ok(f.core.map({ namespace: ns })).indexRevision;
+    const captured = ok(await f.core.capture({ namespace: ns, client: 'synthetic', sessionId: 'synthetic-session', eventId,
+      messages: [{ id: 'synthetic-message', role: 'user', content }] }));
+    noLeak(captured, 'capture result with denied source');
+    assert.deepEqual(captured, { duplicate: false, admission: { memories: [], suppressedCount: 1, indexRevision },
+      classification: { status: 'skipped', reason: 'empty' } });
+  };
+  await expectEmptyCapture('synthetic-new-batch', forgotten + '. Different excerpt window.');
   f.model.items = [{ content: survivor, kind: 'fact', confidence: .8, sourceIndices: [0] }];
-  const [attached] = await capture(f, 'synthetic-attachment', forgotten + '. Another excerpt window.');
-  assert.equal(attached.id, b.id, 'attaching denied evidence succeeds');
+  await expectEmptyCapture('synthetic-attachment', forgotten + '. Another excerpt window.');
   assert.deepEqual(ok(f.core.get({ namespace: ns, memoryId: b.id })).receipts, []);
   assert.deepEqual(markers(f), tokens, 'capture adds no marker/provenance writes');
   for (const { namespace, memory } of others) {
@@ -53,6 +58,6 @@ test(`shared source replay and isolation ${kind} ${operation}`, async t => {
   const unrelated = ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic unrelated fingerprint', kind: 'fact' },
     receipts: [receipt('synthetic-unrelated')] })).memory;
   assert.equal(ok(f.core.get({ namespace: ns, memoryId: unrelated.id })).memory.revision, unrelated.revision);
-  const late = ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic later sibling', kind: 'fact' }, receipts: [source()] })).memory;
-  assert.deepEqual(ok(f.core.get({ namespace: ns, memoryId: late.id })).receipts, [], 'denial predates this sibling');
+  assert.deepEqual(f.core.admit({ namespace: ns, memory: { content: 'Synthetic later sibling', kind: 'fact' }, receipts: [source()] }),
+    { ok: false, error: { code: 'source_excluded', retryable: false } });
 });

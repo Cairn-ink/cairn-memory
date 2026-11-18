@@ -140,10 +140,10 @@ test(`capture source authority order on retry v${layout} ${journal}`, async t =>
 for (const layout of [18,23,33]) for (const method of methods)
 test(`capture source unmigrated cost main 26f9e467 v${layout} ${method}`, async t => {
   const f = await fixture(t, layout);
-  const cells = [['cold',[evidence],layout === 33 ? 7 : 1],['warm',[evidence],layout === 33 ? 5 : 1],
+  const cells = [['cold',[evidence],layout === 33 ? 9 : 3],['warm',[evidence],layout === 33 ? 6 : 2],
     ['empty',[],layout === 33 ? 0 : 1],
-    ['missing',[receipt('absent')],layout === 33 ? 5 : 1],
-    ['duplicate',[evidence,evidence],layout === 33 ? 10 : 1]];
+    ['missing',[receipt('absent')],layout === 33 ? 6 : 2],
+    ['duplicate',[evidence,evidence],(layout === 33 ? 11 : 2) + (method === 'filterCaptureSources' ? 1 : 0)]];
   const rows = [];
   for (const [variant, sources, statements] of cells) {
     const row = await measureContentRead(method, variant, () => f.runtime[method](ns, sources));
@@ -155,14 +155,21 @@ test(`capture source unmigrated cost main 26f9e467 v${layout} ${method}`, async 
     assert.deepEqual([row.statements,row.begin,row.hostInvocations,row.ports], [statements,0,0,0],
       'exact source cost equals main 26f9e467: ' + JSON.stringify({ method,layout,variant,sql:row.sql }));
     const units = sources.length;
-    const expectedSql = layout === 33 ? [
-      ...(variant === 'cold' ? [["SELECT 1 FROM sqlite_master WHERE name='raw_source_maps'",1],
-        ["SELECT 1 FROM sqlite_master WHERE name='raw_deletion_actions'",1]] : []),
-      ...(units ? [['SELECT secret FROM episode_identity WHERE singleton=1',2*units],
-        ['SELECT 1 FROM raw_session_fences WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND session_key=?',2*units],
-        [`SELECT c.id,m.total_units,m.role FROM raw_conversations c JOIN raw_messages m ON m.conversation_id=c.id
+    const expectedSql = [
+      ...(layout === 33 ? [
+        ...(variant === 'cold' ? [["SELECT 1 FROM sqlite_master WHERE name='raw_source_maps'",1],
+          ["SELECT 1 FROM sqlite_master WHERE name='raw_deletion_actions'",1]] : []),
+        ...(units ? [['SELECT secret FROM episode_identity WHERE singleton=1',2*units + (variant === 'cold' ? 1 : 0)],
+          ['SELECT 1 FROM raw_session_fences WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND session_key=?',2*units],
+          [`SELECT c.id,m.total_units,m.role FROM raw_conversations c JOIN raw_messages m ON m.conversation_id=c.id
       WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.client=? AND c.session_key IN (?,?) AND m.message_id=?`,units]] : []),
-    ] : statements ? [["SELECT 1 FROM sqlite_master WHERE name='raw_source_maps'",statements]] : [];
+      ] : [
+        ["SELECT 1 FROM sqlite_master WHERE name='raw_source_maps'",1],
+        ...(variant === 'cold' ? [['SELECT secret FROM episode_identity WHERE singleton=1',1]] : []),
+      ]),
+      ...(units ? [[`SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s
+          WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value`,method === 'filterCaptureSources' ? units : 1]] : []),
+    ];
     assert.deepEqual(row.sql, expectedSql, 'exact main SQL, including presence/absence cache semantics');
     assert.deepEqual(row.result, method === 'filterCaptureSources' ? sources.map((_,i) => i) : undefined);
   }

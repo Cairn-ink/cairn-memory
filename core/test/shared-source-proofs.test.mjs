@@ -22,8 +22,12 @@ test(`denied qualification is omitted before reconstruction ${kind} ${operation}
   const values = await reads(f, b, []);
   if (f.call) assert.equal(values.fetchEvidence.items[0].qualification, null);
   f.model.items = [{ content: survivor, kind: 'fact', confidence: .8, sourceIndices: [0] }];
-  const [recaptured] = await capture(f, 'synthetic-qualified-recapture', forgotten + '. Another excerpt window.');
-  assert.equal(recaptured.id, b.id, 'retained denied anchors do not make attachment fail');
+  const indexRevision = ok(f.core.map({ namespace: ns })).indexRevision;
+  const recaptured = ok(await f.core.capture({ namespace: ns, client: 'synthetic', sessionId: 'synthetic-session',
+    eventId: 'synthetic-qualified-recapture', messages: [{ id: 'synthetic-message', role: 'user', content: forgotten + '. Another excerpt window.' }] }));
+  noLeak(recaptured, 'capture result with denied source');
+  assert.deepEqual(recaptured, { duplicate: false, admission: { memories: [], suppressedCount: 1, indexRevision },
+    classification: { status: 'skipped', reason: 'empty' } });
   const reread = ok(f.core.get({ namespace: ns, memoryId: b.id, includeQualification: true }));
   assert.equal(reread.qualification, null);
   assert.deepEqual(reread.receipts, []);
@@ -53,7 +57,7 @@ for (const kind of ['fresh-default','ordinary-48','ordinary-53']) test(`review A
   const b=ok(f.core.admit(input)).memory;
   const a=ok(f.core.admit({namespace:ns,memory:{content:forgotten,kind:'fact'},receipts:[source()]})).memory;
   ok(act(f,'forget',a));
-  assert.equal(ok(f.core.admit(input)).memory.id,b.id,'immutable qualification comparison is independent of delivery');
+  assert.deepEqual(f.core.admit(input), { ok: false, error: { code: 'source_excluded', retryable: false } });
   const delivered=ok(f.core.get({namespace:ns,memoryId:b.id,includeQualification:true}));
   assert.equal(delivered.qualification,null);assert.deepEqual(delivered.receipts,[]);
 });

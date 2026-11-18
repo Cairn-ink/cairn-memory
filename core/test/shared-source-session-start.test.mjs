@@ -220,10 +220,11 @@ async function exactReproduction(t, layout) {
   const withheldKeys = [first.memories[0], corrected].flatMap(memory => receiptKeys(f, memory));
   forget(f, corrected);
   f.model.items = [{ content: 'Use diagrams.', kind: 'instruction', confidence: .9, sourceIndices: [0] }];
+  const { indexRevision } = revisionState(f);
   const captured = ok(await f.core.capture({ namespace: ns, client: 'synthetic', eventId: 'capture', sessionId: 'session',
-    messages: [{ id: 'source', role: 'user', content: 'Use diagrams.' }] })).admission.memories[0];
-  withheldIds.push(...f.db.prepare('SELECT id FROM receipts WHERE memory_id=?').all(captured.id).map(row => row.id));
-  withheldKeys.push(...receiptKeys(f, captured));
+    messages: [{ id: 'source', role: 'user', content: 'Use diagrams.' }] }));
+  assert.deepEqual(captured, { duplicate: false, admission: { memories: [], suppressedCount: 1, indexRevision },
+    classification: { status: 'skipped', reason: 'empty' } });
   ok(await f.core.recall({ readSet: [ns], query: 'diagrams' }));
   ok(f.core.list({ namespace: ns })); ok(f.core.map({ namespace: ns, purpose: 'recall' }));
   assert.equal(ok(f.core.listEpisodes({ namespace: ns, since: '2025-01-01T00:00:00.000Z',
@@ -278,13 +279,14 @@ function assertReproductionPositions(f, result, captured, needles) {
 }
 
 for (const layout of [53, 18, 33]) test(`exact organized/manual/correction/forget/capture reproduction, layout ${layout}`, async t => {
-  const { f, captured, needles } = await exactReproduction(t, layout);
+  const { f, needles } = await exactReproduction(t, layout);
+  deny(f, source.excerpt);
   const result = read(f, { maxTokens: 1024, maxChars: 4096 }), value = ok(result);
   assertGroups(f, value, {
     nextSteps: { enabled: true, returned: 1, complete: true, budget_exhausted: false, status: 'complete', episodeIds: [f.seed] },
-    procedural: { enabled: true, returned: 1, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [captured.id] },
+    procedural: { enabled: true, returned: 0, complete: true, budget_exhausted: false, status: 'complete', memoryIds: [] },
   });
-  assertReproductionPositions(f, result, captured, needles);
+  forbidden(result, [...needles, source.excerpt]);
 });
 
 async function alongsideSurvivors(t, layout, group, oversized) {

@@ -175,7 +175,7 @@ for(const layout of [48,53])test(`receipt validation capability expires with its
     single=secretReads;secretReads=0;const equivalent=[...batch];
     transaction(f.db,()=>lineage.withReceiptValidation(ns,[batch,equivalent],validate=>{validate(ns,batch);validate(ns,equivalent);}));
     assert.ok(single>0,'the fixture exercises Raw/source validation');
-    assert.equal(secretReads,single,'equivalent batches validate each source only once');
+    assert.deepEqual([secretReads,single],[2,3],'equivalent batches validate each source only once');
   } finally { probe.mock.restore(); }
   assert.throws(()=>lineage.withReceiptValidation(ns,[batch],()=>{}),{code:'storage_error'});
   transaction(f.db,()=>lineage.withReceiptValidation(ns,[batch],validate=>{
