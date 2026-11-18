@@ -218,12 +218,12 @@ export function assertEpisodeSourceProof(ns, sources, facts, budget = { remainin
 // NUL must survive SQL regardless of runtime-specific TEXT truncation.
 // Weak keys keep this connection-local without retaining closed connections.
 const receiptEncoding=new WeakMap();
-function* writerReceiptInputs(db, check, ns, receipts) {
+function* writerReceiptInputs(db, check, ns, receipts, prefilter = false) {
   const tuples=receipts.map(receipt=>[receipt.client,receipt.sessionId,receipt.eventId,receipt.role,receipt.excerpt]);
   // In Unicode mode the surrogate range matches unpaired code units only.
   // NUL, replacement characters and malformed inputs use the original SQL.
   const eligible=!tuples.some(tuple=>tuple.some(value=>/[\u0000\uFFFD\uD800-\uDFFF]/u.test(value)));
-  const predicate=` AND (EXISTS (SELECT 1 FROM json_each(?) source
+  const predicate=` AND (${prefilter ? "event_id IN (SELECT json_extract(value,'$[2]') FROM json_each(?)) AND " : ''}EXISTS (SELECT 1 FROM json_each(?) source
         WHERE client=json_extract(source.value,'$[0]') COLLATE BINARY AND session_id=json_extract(source.value,'$[1]') COLLATE BINARY
           AND event_id=json_extract(source.value,'$[2]') COLLATE BINARY AND role=json_extract(source.value,'$[3]') COLLATE BINARY
           AND excerpt=json_extract(source.value,'$[4]') COLLATE BINARY)
@@ -250,7 +250,7 @@ function* writerReceiptInputs(db, check, ns, receipts) {
       const keys=memories.slice(0,sourcePageSize);
       if(keys.length) {
         check();
-        const filter=eligible&&receiptEncoding.get(db)==='UTF-8'?predicate:'',args=filter?[wanted]:[];
+        const filter=eligible&&receiptEncoding.get(db)==='UTF-8'?predicate:'',args=filter?(prefilter?[wanted,wanted]:[wanted]):[];
         const cursorColumns=filter?',CAST(r.created_at AS BLOB) AS receipt_created_at_bytes,CAST(r.id AS BLOB) AS receipt_id_bytes':'';
         const output=row=>{
           if(!filter)return row;
@@ -500,7 +500,7 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
   function assertReceipts(ns, receipts, readExisting = false, rawTargets) {
     return validateReceipts(ns,receipts,readExisting,rawTargets);
   }
-  function validateReceipts(ns, receipts, readExisting, rawTargets, shared) {
+  function validateReceipts(ns, receipts, readExisting, rawTargets, shared, history) {
     if (!readExisting && (cachedContentLayout(db)??installedContentLayout(db)).suppressionRevision) {
       // An incomplete fact set, or a possible Raw fact join, must not start an
       // unbounded indexed fallback inside SHARED, even for the scope denial.
@@ -515,7 +515,8 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
       }
       // Validate receipt one as the walk streams; retain later receipts' matches.
       // Snapshot enumeration, overflow and validated handling stay unchanged.
-      const matches=snapshot ? undefined : shared?.matches ?? matchingReceiptInputs(db,check,ns,receipts);
+      const matches=snapshot ? undefined : history ? history() : shared?.matches ?? matchingReceiptInputs(db,check,ns,receipts);
+      if (matches === null) return false;
       for (const [index,receipt] of receipts.entries()) {
         check();
         for (const row of snapshot ? snapshotReceiptInputs(ns) : matches(receipt,index)) {
@@ -729,10 +730,51 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
     const layout = cachedContentLayout(db);
     if (!layout) fail('unsupported_database');
     if (!layout.suppressionRevision && !enabled()) return receipts.map((_, index) => index);
-    return receipts.flatMap((receipt, index) => {
-      try { assertReceipts(ns, [receipt]); return [index]; }
-      catch (error) { if (error.code === 'source_excluded') return []; throw error; }
-    });
+    const tuple = receipt => [receipt.client,receipt.sessionId,receipt.eventId,receipt.role,receipt.excerpt];
+    const eligible = receipt => !tuple(receipt).some(value => /[\u0000\uFFFD\uD800-\uDFFF]/u.test(value));
+    const key = receipt => JSON.stringify(tuple(receipt));
+    const union = snapshot || !layout.suppressionRevision ? undefined :
+      [...new Map(receipts.filter(eligible).map(receipt => [key(receipt),receipt])).values()];
+    let retained, walkAborted = false;
+    const history = () => {
+      if (!retained) {
+        const rows = new Map(union.map(receipt => [key(receipt),[]]));
+        // Only enumeration is caught: receipt validation and token denials must
+        // never trigger replay. A partial map never supplies validation rows.
+        try {
+          if (union.length) for (const row of writerReceiptInputs(db,check,ns,union,true)) {
+            const rowKey = JSON.stringify([row.client,row.session_id,row.event_id,row.role,row.excerpt]);
+            rows.get(rowKey)?.push(row);
+          }
+        } catch (error) {
+          // A storage fault can auto-roll back. Fail closed with the original
+          // error, even if the base would have avoided that page; never replay
+          // outside the transaction. Capture can retry later.
+          if (!db.isTransaction) { walkAborted = true; throw error; }
+          return null;
+        }
+        retained = rows;
+      }
+      return receipt => eligible(receipt) ? retained.get(key(receipt)) : writerReceiptInputs(db,check,ns,[receipt]);
+    };
+    const run = materialize => {
+      const allowed = [];
+      for (const [index,receipt] of receipts.entries()) {
+        let complete;
+        try {
+          complete = materialize ? validateReceipts(ns,[receipt],false,undefined,undefined,materialize) :
+            assertReceipts(ns,[receipt]);
+        } catch (error) {
+          if (walkAborted || error.code !== 'source_excluded') throw error;
+          continue;
+        }
+        if (complete === false) return run();
+        // Per-receipt denial checks belong here on both paths, after validation.
+        allowed.push(index);
+      }
+      return allowed;
+    };
+    return run(union ? history : undefined);
   }
   return { sourceSnapshot, withReceiptValidation, assertEpisodeProof: assertEpisodeSourceProof, completeEpisodeProof, register, attach, assertReceipts, assertStoredReceipts, excludeMemory, filter, enabled };
 }
