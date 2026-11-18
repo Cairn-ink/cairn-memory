@@ -13,6 +13,7 @@ const retryable = new Set(['provider_error','rate_limited','timeout']);
 const refusal = error => ['budget_denied','timeout','rate_limited','dimension_mismatch','invalid_vector'].includes(error?.code) ? error.code : 'provider_error';
 const metadata = port => port && ({id:port.id,revision:port.revision,dimensions:port.dimensions,normalization:port.normalization});
 const commitTimes = new Map();
+const cancelled = signal => { if (signal?.aborted) fail('raw_upkeep_cancelled'); };
 
 /** Explicit quanta only: the host owns scheduling, renewal and supervision. */
 export function createRawSearchMaintenance(storage,authority,options) {
@@ -41,17 +42,19 @@ export function createRawSearchMaintenance(storage,authority,options) {
     authority.check(source);
   };
   const progress={scanned:0,removed:0,indexed:0,embedded:0,checkpointAdvances:0,lastActualWork:null,error:null,phase:'idle'};
-  async function broker(work,maxMs) {
+  async function broker(work,maxMs,upkeepSignal) {
+    cancelled(upkeepSignal);
     if (!turns) fail('maintenance_authority_required');
     if (closed||stopped) fail('store_closed');
     const now=performance.now();
     if(now<storageResumeAt)return {postponed:true};
     const controller=new AbortController();
     const grant=await turns.wait({version:1,pumpId:'raw-search',windowId:'raw-search-local',lane:0,
-      family:'lexical',kind:'lexical',phase:'work',intent:null,maxMs},{signal:controller.signal,untilMonoMs:now+maxMs,identity});
+      family:'lexical',kind:'lexical',phase:'work',intent:null,maxMs},{signal:upkeepSignal??controller.signal,untilMonoMs:now+maxMs,identity});
     if (grant.status!=='admitted') return {postponed:true};
     turns.started(grant.ticket);
     try {
+      cancelled(upkeepSignal);
       if (closed) fail('store_closed');
       // This lane joins the host's existing broker. The local guard also
       // prevents repeated explicit calls from defeating the commit cadence.
@@ -63,8 +66,8 @@ export function createRawSearchMaintenance(storage,authority,options) {
     }
   }
   function changed() {progress.lastActualWork=new Date().toISOString();}
-  async function refresh(row,maxMs,operationAccess) {
-    const protect=source=>{authority.check(source);operationAccess(()=>authority.check(source));authority.check(source);};
+  async function refresh(row,maxMs,operationAccess,upkeepSignal) {
+    const protect=source=>{cancelled(upkeepSignal);authority.check(source);operationAccess(()=>authority.check(source));authority.check(source);cancelled(upkeepSignal);};
     const port=options.embedder;
     if (!port) return;
     const provider=metadata(port), chunks=row.chunks;
@@ -73,6 +76,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
     if (same(row.embedder,provider)&&(row.retry?.nextAt??0)>Date.now()) return;
     protect(row.source);
     const text=await authority.open(row.source,'history',()=>protect(row.source));
+    cancelled(upkeepSignal);
     const inputs=rawSearchChunks(text,row.source.ref.span.start);
     if (!same(inputs.map(({input,...c})=>c),chunks.map(({vector,...c})=>c))) fail('source_unavailable');
     const selected=inputs.filter((c,i)=>!same(row.embedder,provider)||!chunks[i].vector)
@@ -95,6 +99,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
       // Persist the possible attempt in an admitted turn, release that turn,
       // then enter the actual provider. Budget refusal writes no fake attempt.
       const chargedPort={...trackedPort,async embed(texts,controls){
+        cancelled(upkeepSignal);
         controls.beforeDispatch();
         try { await broker(async commit=>{
           protect(row.source);
@@ -104,25 +109,28 @@ export function createRawSearchMaintenance(storage,authority,options) {
           const state=storage.head(),checkpoint=structuredClone(state.checkpoint);
           if((checkpoint.recent?.streak??0)>=3)fail('budget_denied');
           if(checkpoint.recent)checkpoint.recent.streak=Math.min(3,Math.max(checkpoint.recent.streak+1,recentAttempts??0));
+          cancelled(upkeepSignal);
           const result=await storage.commitBatch({staged:[{...stage,expected:row.segment}],checkpoint});
           recentAttempts=checkpoint.recent?.streak??0;
           reserved={...next,segment:result.sequence-1};commit();
-        },maxMs); }catch(error){
+        },maxMs,upkeepSignal); }catch(error){
+          cancelled(upkeepSignal);
           // Preserve storage contention across the provider boundary, which
           // intentionally transports refusal codes rather than native fields.
           if(isStorageBusy(error))fail('source_busy');
           throw error;
         }
         if(!reserved)fail('budget_denied');
+        cancelled(upkeepSignal);
         controls.beforeDispatch();invoked=true;
         return trackedPort.embed(texts,controls);
       }};
       vectors=await dispatch(chargedPort,selected.map(c=>c.input),{budgetClass:'maintenance',signal:controller.signal,deadlineAt,
         guard:()=>{if(closed)fail('store_closed');protect(row.source);}});
-      authority.check(row.source);
+      cancelled(upkeepSignal);authority.check(row.source);
       if (!Array.isArray(vectors)||vectors.length!==selected.length) fail('invalid_vector');
       vectors=vectors.map(v=>encodeVector(v,port));
-    } catch (failure) { if(storageTransient(failure))throw failure;error=refusal(failure); }
+    } catch (failure) { cancelled(upkeepSignal);if(storageTransient(failure))throw failure;error=refusal(failure); }
     finally{controllers.delete(controller);}
     if(!reserved)return;
     // Provider waits never retain a broker ticket or either SQLite lock.
@@ -136,13 +144,16 @@ export function createRawSearchMaintenance(storage,authority,options) {
       terminal:invoked&&(!retryable.has(error)||attempts+1>=3),error};
     // The host can admit the next write immediately after a provider wait, but
     // the shared cadence remains authoritative. Pending vectors are ephemeral.
-    return {next,expected:reserved.segment,embedded:error?0:selected.length};
+    cancelled(upkeepSignal);
+    return {next,expected:reserved.segment,embedded:error?0:selected.length,upkeepSignal};
   }
   let pending=null,refreshAfter=0,refreshing=null,recentAttempts=null;
-  async function run({maxItems=16,maxMs=1000,embeddings=false}={}, currentAccess,cacheError) {
+  async function run({maxItems=16,maxMs=1000,embeddings=false,upkeepSignal}={}, currentAccess,cacheError) {
     if (closed||stopped) fail('store_closed');
     if (!Number.isSafeInteger(maxItems)||maxItems<1||maxItems>128||!Number.isSafeInteger(maxMs)||maxMs<1||maxMs>5000) fail('invalid_input');
-    access = currentAccess;
+    if(pending?.upkeepSignal?.aborted)pending=null;
+    if(upkeepSignal?.aborted)return {...progress,quantum,noProgress,pending:!!pending};
+    access = check => {cancelled(upkeepSignal);return currentAccess(check);};
     access();
     const before=progress.removed+progress.indexed+progress.embedded+progress.checkpointAdvances;
     progress.phase='reconciling';quantum++;
@@ -150,6 +161,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
     try {
       if(cacheError)throw cacheError;
       await broker(async commit=>{
+        cancelled(upkeepSignal);
         admitted=true;
         const started=performance.now(),state=storage.head();
         let checkpoint=structuredClone(state.checkpoint);
@@ -181,6 +193,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
             for(const row of staged)protect(row.source);
             authority.validate([{sources:staged.map(row=>row.source),intent:'history',access,value:null}],Infinity,{journal:recent});
             try{
+              cancelled(upkeepSignal);
               const result=await storage.commitBatch({staged,checkpoint});commit();
               progress.indexed+=staged.length;progress.removed+=result.removed;
               progress.checkpointAdvances++;changed();
@@ -311,6 +324,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
         if(staged.length)authority.validate([{sources:staged.map(row=>row.source),intent:'history',access,value:null}]);
         if(staged.length||remove.length||!same(checkpoint,state.checkpoint)) {
           try {
+            cancelled(upkeepSignal);
             const result=await storage.commitBatch({staged,remove:[...new Set(remove)],checkpoint});commit();
             progress.removed+=result.removed;
             if(result.removed){quotaBlocked=false;progress.error=null;}
@@ -321,22 +335,24 @@ export function createRawSearchMaintenance(storage,authority,options) {
             if((error.errcode&255)!==13)throw error;
             // Positive allocation failure never blocks denial-only cleanup.
             quotaBlocked=true;pending=null;eligibleWork=false;
-            if(remove.length){const result=await storage.commitBatch({remove:[...new Set(remove)],checkpoint:cleanupCheckpoint});
+            if(remove.length){cancelled(upkeepSignal);const result=await storage.commitBatch({remove:[...new Set(remove)],checkpoint:cleanupCheckpoint});
               commit();progress.removed+=result.removed;if(result.removed){quotaBlocked=false;changed();}}
             progress.error=quotaBlocked?'quota_exhausted':null;
           }
         }
-      },maxMs);
+      },maxMs,upkeepSignal);
+      cancelled(upkeepSignal);
 
       // Detached, observed provider work owns its original access closure.
       // Its reservation still shares the same broker/cadence as lexical work.
       if(refreshRow){
         const operationAccess=access;
-        refreshing=refresh(refreshRow,maxMs,operationAccess).then(result=>{if(!closed)pending=result??null;})
-          .catch(error=>{if(!closed){if(storageTransient(error)){deferStorage();refreshAfter=0;}
-            else progress.error=error.code??'index_unavailable';}}).finally(()=>{refreshing=null;});
+        refreshing=refresh(refreshRow,maxMs,operationAccess,upkeepSignal).then(result=>{if(!closed&&!upkeepSignal?.aborted)pending=result??null;})
+          .catch(error=>{if(!closed&&!upkeepSignal?.aborted){if(storageTransient(error)){deferStorage();refreshAfter=0;}
+            else progress.error=error.code??'index_unavailable';}}).finally(()=>{refreshing=null;if(upkeepSignal?.aborted)refreshAfter=0;});
         await new Promise(resolve=>setImmediate(resolve));
       }
+      cancelled(upkeepSignal);
       const after=progress.removed+progress.indexed+progress.embedded+progress.checkpointAdvances;
       if(after>before)noProgress=0;
       const finalState=storage.head();
@@ -344,6 +360,12 @@ export function createRawSearchMaintenance(storage,authority,options) {
       progress.phase=stopped?'failed':quotaBlocked?'partial':'idle';
       return {...progress,quantum,noProgress,pending:!!pending,...finalState};
     } catch(error) {
+      if(upkeepSignal?.aborted||error.code==='raw_upkeep_cancelled'){
+        // A cancelled generation postpones uncommitted work. Preserve a
+        // checkpoint already committed before the processed detach boundary.
+        recentAttempts=null;refreshAfter=0;cleanupIdle=false;cleanupFullLap=null;cleanupSkip=false;
+        pending=null;progress.phase='idle';return {...progress,quantum,noProgress,pending:false};
+      }
       if(storageTransient(error)){
         // Storage has rolled back before this boundary. Discard this quantum
         // and defer admission; contention is not evidence of no progress.
@@ -360,7 +382,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
   return { maintain(input,currentAccess,cacheError) {
     if(active)fail('read_in_progress');
     active=run(input,currentAccess,cacheError).finally(()=>{active=null;});return active;
-  },status:()=>({...progress,quantum,noProgress,pending:!!pending||!!refreshing}),
+  },status:()=>({...progress,quantum,noProgress,pending:!!pending&&!pending.upkeepSignal?.aborted||!!refreshing}),
   async close(){closed=true;for(const controller of controllers)controller.abort();await active?.catch(()=>{});
     // Providers may ignore abort. Their existing observers retain rejection
     // handling and budget settlement; closed guards forbid late publication.

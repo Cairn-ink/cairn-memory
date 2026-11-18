@@ -194,7 +194,7 @@ async function serve(directory, paths, identity, bootstrap, owner, { idleMs, gra
       }
     }
     // Synthetic provider/counter injection is programmatic only, never bootstrap data.
-    host = createLocalSharedRuntime({ ...configuration, ...(model ? { model } : {}), ...runtimeOptions });
+    host = createLocalSharedRuntime({ ...configuration, ...(model ? { model } : {}), ...runtimeOptions }, { manageRawUpkeep: true });
     return host;
   })();
   const activity = () => sockets.size || (host?.inspect().inFlight ?? 0);

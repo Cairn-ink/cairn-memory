@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "79a5706318abd6c045a2a6a666d41fed4d6088edaba6efadd74fbdea7f6cfaa3",
-  "bytes": 1455582,
+  "sha256": "316d06fb69588c0966090ee04f8535081eaaa192df7c67004d88942bb60dd2cd",
+  "bytes": 1456986,
   "files": [
     "LICENSE",
     "README.md",
@@ -519,7 +519,7 @@
     "core/raw-options.mjs": "0f6096453772f324e5f171fb86ea5703c0ce17b959231f73448fbde3aacc62b7",
     "core/raw-composition.mjs": "60389139226573dd6e6ef7e9a741492a320373c1c6017092ef1eb511f4b9571f",
     "core/local-defaults.mjs": "4a43fe03077cfe6431a1df9024a479ae10aa47eea25a4ad311dfec34d5e3cbff",
-    "core/local-raw-search.mjs": "e4ff3933126d37016a76ae82617a9e7f59e7097e90a385609b5c83e385824ddd",
+    "core/local-raw-search.mjs": "4f0a34f99816b737b02ce9baa32a3cd4a047c2b40845deb6554fc77e452f2507",
     "core/raw-capture-storage.mjs": "75e342f63574f23b425b36629295aa3968f2a23d12284a82df0cff4a6e143a18",
     "core/raw-journal.mjs": "e7946bd4330dab6646ec01566998f8c9375e4d59313117e689631570a16c0a45",
     "core/raw-reads.mjs": "340c6d48bfaf9bd56554db5cfcca12a8a0e701d32107987d17d0aa50b7ba097d",
@@ -600,14 +600,14 @@
     "adapters/mcp/method-package-access.mjs": "1a9d5f630fad641fc2efe447602c5d79d3392394157186772ca06ba88ba33509",
     "adapters/mcp/local-authority-router.mjs": "ebddbcf382d0d69f199d124a01569d68b11f4a8399834b8411ed45f98ae57a47",
     "adapters/mcp/local-context-continuations.mjs": "ad824cc65a83e60a71b97f9fa1418807fd7acbc429afa731c73edb87fd1d5e38",
-    "adapters/mcp/local-daemon.mjs": "af5740de4a62aa5fb5d7a2a672a0b80d41bc96034d944f989890c2c8d8813320",
+    "adapters/mcp/local-daemon.mjs": "d00a1b3ab1bd23c213f3c9604797f512ae198ec664844bf807c6a809bc1d36cf",
     "adapters/mcp/local-daemon-identity.mjs": "bf1e35cb3480f394803421417d2477a0e311b016763c0d2b864b04581c24da73",
     "adapters/mcp/local-daemon-liveness.mjs": "c3d69b1875215476d8ddc20f02f2b691028ed9f7b0ab53aef540659c245e9dfa",
     "adapters/mcp/local-daemon-state.mjs": "d9825bc4ea7932b0b35564f16654e137d7442a9130a325366267f604107abc4a",
     "adapters/mcp/local-daemon-wire.mjs": "c11f78b561651d2eaf9546d172f5ff53ba08bdda6a620723e4847260e537e7ec",
     "adapters/mcp/local-forwarder.mjs": "efb24e0c8a094698c0f27f827dd87effd51df21e877b91fc9ddfb5e46cd240e1",
-    "adapters/mcp/local-shared-runtime.mjs": "d5a1a4baba2513eade1dcce141bb354dd19bc31a592198583a7ba60ecf613dc8",
-    "adapters/mcp/server.mjs": "06a62756beae3f02517e24344a6295090cb2b0407b1fb836693bc3f84e46c109",
+    "adapters/mcp/local-shared-runtime.mjs": "f85451af9f582121cd73482453a3c36017d0c25d0f661ce2b20e3b024b839037",
+    "adapters/mcp/server.mjs": "fd250c27777dd6606d7ed4a39c914adbd2f0170322fbd28045c4ecda7ddd4b08",
     "adapters/mcp/private-card-access.mjs": "fc95ae394d96a945d6d6ecd2e8ec8f182d36ac8094977a6b6ed42932f2ee7cca",
     "adapters/mcp/review-card.mjs": "a653e0778be9c5351c170e7da3c8555e2fd5da221bd429496ea21ff649936382",
     "adapters/mcp/retained-raw-profile.mjs": "6d43aa5bb72a362299f5ab4cbbd56e2a4e21408765d7c17e46d6a799a65f2c79",
@@ -683,7 +683,7 @@
     "docs/raw-local-journal.md": "ef48b35c0ce5403e0e171aa4d5e52a96ccbb16650556630d82f6668a3eca1892",
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
     "docs/context-read-local.md": "f4a851e364a58afefad51472a3fe8a860be224290e962f794f8e16c7b41c8911",
-    "docs/defaults.md": "16d13693db7009a897b4f31d5f1e0058217af58d8a1742307287d9f8e3282ba3",
+    "docs/defaults.md": "0f83e6cb13b6df79ce8682c361c4b36c78debb88af660a7f5321738ab93045ec",
     "docs/method-packages-local.md": "3912f7d95956e74be91d031c6eeba1ead4ca194fdb15854d0ded05de196a3815",
     "docs/assets-local.md": "4553ca1854b9d4862ac76ae25ce90e451c6ee875d806b84c51d4c00e6b828c5c",
     "docs/v1-preview-integration.md": "d5e5e95fb971224ff1e6b530f7fbb91b8e523dd200729454ded02eaaa07b03b9",
@@ -811,9 +811,9 @@
     "core/raw-search-storage.mjs": "75d90e8dded814b387f4da519689ab7aad632cbc641f133ad5059ec8fb3cc27e",
     "core/raw-search-sqlite.mjs": "b51bd300bec030018b67fb52b32ec354057eda11f870f87305b7e34a9a20fc9a",
     "core/raw-search-authority.mjs": "735a2ebe0e4d10a1d9a8276054cb3797c345c373c313bed3faa749fcdab4e0d4",
-    "core/raw-search-index.mjs": "dbb7087138c7d29913132d0fafb96355bf813e55cb5cff5652bfa84f1c4d4a49",
+    "core/raw-search-index.mjs": "98bd967a290b40a2d40e60eebb9c3e365f874b9883b0cde8338b5b941860c0d6",
     "core/raw-search-retrieval.mjs": "a802a2e138a279907d058eafa46d763a3a5b6bbd749ff49dafd6f1461d568e57",
-    "core/raw-search-maintenance.mjs": "c0d4df01d2a424ff898f32f651edc8fd76b8a12ceaa4b765f46f9a60ed51ba54",
+    "core/raw-search-maintenance.mjs": "c5df98ffea7d3428e763a185018f0fa7c2961d9df758d82fea22ec9afd19bf1c",
     "docs/plans/raw-search-interface.md": "97da386b7acb86a0e2221d005273723b6983f5c7b50bb52324d3f330c319723b",
     "docs/plans/raw-search-predicate-plans.md": "59d174f489a73b134d590763ede78429e0006ff7456c973d305a7e0815c5f4b7",
     "docs/plans/raw-search-seam.md": "ad36ebb037176d6ea7e02c3d57edfc29bf41571be03d6d42db90c6e7ce69701f",
@@ -838,6 +838,6 @@
   "generatedHashes": {
     "package.json": "e255ff4d23e921de9bed8e058c64e57aed3e1bc6a8ed242cee52a716add2d69c",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8",
-    "engine-build.json": "6fb4fc4b9696f3829d555d133946e24eac24be92b47f10a6664bbcab06410529"
+    "engine-build.json": "66e14bbbbc321559e68fcff268585a44e0b6d5e63d43d1a80820478a064fc859"
   }
 }
