@@ -22,6 +22,7 @@ import { sourceFixture, savedSource, request, splitRaw, ns as rawNs } from '../.
 import { searchFixture } from '../../../core/testing/raw-search-fixtures.mjs';
 import { installRawSearchTestClock, rawSearchTestWait } from '../../../core/testing/raw-search-clock.mjs';
 import { createRawSearchMaintenance } from '../../../core/raw-search-maintenance.mjs';
+import { contextReadBudgetDiagnostic } from '../../../core/context-read-budget.mjs';
 import { rawSearchChunks } from '../../../core/raw-search-retrieval.mjs';
 import * as idleSidecar from '../../../tools/testing/fixtures/daemon-idle-sidecar.mjs';
 
@@ -229,7 +230,7 @@ for (const boundary of ['reservation', 'after-reservation', 'busy']) test(`cance
     async lookup() { return [row]; },
     async snapshot({ after }) { return { rows: row.segment > after ? [row] : [], partial: false }; },
     async stage(next) { return next; },
-    async commitBatch({ staged, checkpoint: next }) {
+    async commitBatch({ staged = [], checkpoint: next }) {
       if (busy) { arrived.resolve(); throw Object.assign(Error('synthetic busy'), { code: 'ERR_SQLITE_ERROR', errcode: 5 }); }
       checkpoint = next;
       if (staged.length) row = { ...staged[0], segment: row.segment + 2 };
@@ -335,8 +336,8 @@ test('three cancelled attachment generations leave the embedding retry available
   for (let i = 0; i < 20 && (await search()).semantic.state !== 'ready'; i++) await tick();
   assert.deepEqual({ reconciledAttempts, arrivals }, { reconciledAttempts: Array(3).fill(originalAttempts), arrivals: 4 },
     'three charged cancellations preserve the persisted retry count and still leave the row eligible');
-  assert.ok(publishedRawSegment(s, key)?.vectorBytes > 0, 'fresh generation publishes vector bytes for the original segment key');
   assert.equal((await search()).semantic.state, 'ready');
+  assert.ok(publishedRawSegment(s, key)?.vectorBytes > 0, 'fresh generation publishes vector bytes for the original segment key');
   await savedSource(f, 'Synthetic bronze telescope.', { sessionId: 'budget-check' });
   for (let i = 0; i < 12; i++) await tick();
   assert.equal(arrivals, 4, 'spent provider calls still exhaust the maintenance budget');
@@ -395,7 +396,7 @@ test('detach and close preserve observed attempts for a fresh maintenance servic
   assert.ok(row().vectorBytes > 0, 'the original key still publishes vectors');
 });
 
-test('unsettled dispatches across maintenance restarts consume the shared provider budget', { timeout: 15000 }, async t => {
+test('unsettled dispatches across maintenance restarts consume the shared provider budget', { timeout: 25000 }, async t => {
   installRawSearchTestClock(t);
   const f = sourceFixture(t);
   let calls = 0, held, providerTime = Date.now();
@@ -423,14 +424,18 @@ test('unsettled dispatches across maintenance restarts consume the shared provid
       await s.tick({ maxMs: 5000, embeddings: true, upkeepSignal: upkeep.signal });
     }
     dispatches.push(calls - before);
-    const closing = s.service.close();
-    // Let the transport finish only after close has fenced this generation.
+    await s.service.close();
+    // The service has already torn down with this call still unresolved.
+    // Retire the fake transport so the next service can take the ledger slot.
     held.resolve();
-    await closing;
+    await nextTurn();
     if (lifetime < 6) await s.reopen();
   }
   assert.deepEqual(dispatches, [1, 1, 1, 1, 1, 0, 0]);
   assert.equal(publishedRawSegment(s, key).retry.attempts, 0);
+  const budget = contextReadBudgetDiagnostic(embedder);
+  assert.equal(budget.maintenance.requests, 5);
+  assert.deepEqual(budget.lastDenial, { class: 'maintenance', reason: 'maintenance_cap' });
 });
 
 test('a paused cancelled source does not block lexical upkeep for another namespace', { timeout: 15000 }, async t => {

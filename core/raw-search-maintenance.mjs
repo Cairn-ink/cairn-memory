@@ -88,33 +88,29 @@ export function createRawSearchMaintenance(storage,authority,options) {
       selected.reduce((n,c)=>n+Buffer.byteLength(c.input)+64,0)>300000) fail('index_segment_too_large');
     const attempts=same(row.embedder,provider)?row.retry?.attempts??0:0;
     if (attempts>=3) return;
-    let reserved=null;
     // Provider I/O owns no broker ticket or SQLite lock. Keep its timeout
     // independent of the bounded local-work quantum.
     const controller=new AbortController(),deadlineAt=performance.now()+30000;
     controllers.add(controller);
-    let vectors,error,invoked=false;
+    let vectors,error,settled=false;
     try {
       // The budget wrapper invokes this only after its reservation succeeds.
-      // Persist the possible attempt in an admitted turn, release that turn,
-      // then enter the actual provider. Budget refusal writes no fake attempt.
+      // Commit the dispatch checkpoint in an admitted turn, then release it
+      // before entering the provider. A row changes only during settlement.
       const chargedPort={...trackedPort,async embed(texts,controls){
         cancelled(upkeepSignal);
         controls.beforeDispatch();
-        try { await broker(async commit=>{
+        let reserved;
+        try { reserved=await broker(async commit=>{
           protect(row.source);
-          const next={...row,embedder:provider,retry:{attempts:attempts+1,nextAt:Date.now()+(attempts?5000:1000),terminal:attempts+1>=3}};
-          delete next.segment;
-          const stage=await storage.stage(next);protect(row.source);
           const state=storage.head(),checkpoint=structuredClone(state.checkpoint);
           if((checkpoint.recent?.streak??0)>=3)fail('budget_denied');
           if(checkpoint.recent)checkpoint.recent.streak=Math.min(3,Math.max(checkpoint.recent.streak+1,recentAttempts??0));
           cancelled(upkeepSignal);
-          const result=await storage.commitBatch({staged:[{...stage,expected:row.segment}],checkpoint});
+          await storage.commitBatch({checkpoint});
           recentAttempts=checkpoint.recent?.streak??0;
-          reserved={...next,segment:result.sequence-1};
-          if(upkeepSignal)reservation={row,expected:reserved.segment,signal:upkeepSignal};
           commit();
+          return true;
         },maxMs,upkeepSignal); }catch(error){
           cancelled(upkeepSignal);
           // Preserve storage contention across the provider boundary, which
@@ -122,10 +118,11 @@ export function createRawSearchMaintenance(storage,authority,options) {
           if(isStorageBusy(error))fail('source_busy');
           throw error;
         }
-        if(!reserved)fail('budget_denied');
+        if(reserved!==true)fail('budget_denied');
         cancelled(upkeepSignal);
-        controls.beforeDispatch();invoked=true;
-        return trackedPort.embed(texts,controls);
+        controls.beforeDispatch();
+        try { return await trackedPort.embed(texts,controls); }
+        finally { settled=true; }
       }};
       vectors=await dispatch(chargedPort,selected.map(c=>c.input),{budgetClass:'maintenance',signal:controller.signal,deadlineAt,
         guard:()=>{if(closed)fail('store_closed');protect(row.source);}});
@@ -134,24 +131,22 @@ export function createRawSearchMaintenance(storage,authority,options) {
       vectors=vectors.map(v=>encodeVector(v,port));
     } catch (failure) { cancelled(upkeepSignal);if(storageTransient(failure))throw failure;error=refusal(failure); }
     finally{controllers.delete(controller);}
-    if(!reserved)return;
-    // A provider failure observed in this generation consumes its attempt.
-    if(error&&invoked&&reservation?.expected===reserved.segment)reservation=null;
+    if(!settled)return;
     // Provider waits never retain a broker ticket or either SQLite lock.
     // Result settlement may be deferred by cadence; retain no plaintext work.
-    const next={...reserved}; delete next.segment;
+    const next={...row,embedder:provider}; delete next.segment;
     if (!error) {
       const byInput=new Map(selected.map((c,i)=>[c.inputIdentity,vectors[i]]));
       next.chunks=chunks.map(c=>({...c,...(byInput.has(c.inputIdentity)?{vector:byInput.get(c.inputIdentity)}:{})}));
       next.retry={attempts:0,nextAt:0,terminal:false};
-    } else next.retry={attempts:invoked?attempts+1:attempts,nextAt:Date.now()+(attempts?5000:1000),
-      terminal:invoked&&(!retryable.has(error)||attempts+1>=3),error};
+    } else next.retry={attempts:attempts+1,nextAt:Date.now()+(attempts?5000:1000),
+      terminal:!retryable.has(error)||attempts+1>=3,error};
     // The host can admit the next write immediately after a provider wait, but
     // the shared cadence remains authoritative. Pending vectors are ephemeral.
     cancelled(upkeepSignal);
-    return {next,expected:reserved.segment,embedded:error?0:selected.length,upkeepSignal};
+    return {next,expected:row.segment,embedded:error?0:selected.length,upkeepSignal};
   }
-  let pending=null,reservation=null,refreshAfter=0,refreshing=null,recentAttempts=null;
+  let pending=null,refreshAfter=0,refreshing=null,recentAttempts=null;
   async function run({maxItems=16,maxMs=1000,embeddings=false,upkeepSignal}={}, currentAccess,cacheError) {
     if (closed||stopped) fail('store_closed');
     if (!Number.isSafeInteger(maxItems)||maxItems<1||maxItems>128||!Number.isSafeInteger(maxMs)||maxMs<1||maxMs>5000) fail('invalid_input');
@@ -169,25 +164,6 @@ export function createRawSearchMaintenance(storage,authority,options) {
         admitted=true;
         const started=performance.now(),state=storage.head();
         let checkpoint=structuredClone(state.checkpoint);
-        // A detached generation cannot undo its reservation. Reconcile only
-        // that exact row in an admitted successor, with no provider payload.
-        if(reservation?.signal.aborted){
-          const {row,expected}=reservation;
-          const [current]=await storage.lookup([row.key]);
-          if(current?.segment===expected&&authority.disposition(current.source)!=='remove'){
-            const restored={...current,embedder:row.embedder,retry:row.retry};
-            delete restored.segment;
-            const stage=await storage.stage(restored);
-            protect(restored.source);
-            authority.validate([{sources:[restored.source],intent:'history',access,value:null}]);
-            cancelled(upkeepSignal);
-            await storage.commitBatch({staged:[{...stage,expected}],checkpoint});commit();
-            progress.checkpointAdvances++;changed();
-            reservation=null;refreshAfter=0;
-            return;
-          }
-          reservation=null;refreshAfter=0;
-        }
         checkpoint.fenceRetry=Math.max(0,(checkpoint.fenceRetry??0)-1);
         const staged=[],remove=[];let settledPending=false;
         recentAttempts??=checkpoint.recent?.streak??0;
@@ -229,10 +205,12 @@ export function createRawSearchMaintenance(storage,authority,options) {
         }
         if(embeddings&&options.embedder&&!pending&&!refreshing&&recentAdmitted){
           const snapshot=await storage.snapshot({after:refreshAfter,limit:maxItems});
-          refreshRow=snapshot.rows.find(row=>(!same(row.embedder,metadata(options.embedder))||row.chunks.some(c=>!c.vector))&&
+          const candidate=snapshot.rows.find(row=>(!same(row.embedder,metadata(options.embedder))||row.chunks.some(c=>!c.vector))&&
             (!same(row.embedder,metadata(options.embedder))||!row.retry?.terminal&&(row.retry?.nextAt??0)<=Date.now()));
-          if(refreshRow){refreshAfter=refreshRow.segment;return;}
-          refreshAfter=snapshot.partial?snapshot.rows.at(-1).segment:0;
+          refreshAfter=candidate?.segment??(snapshot.partial?snapshot.rows.at(-1).segment:0);
+          // The saved row remains eligible after resume. Let paused or denied
+          // work pass through to this turn's denial cleanup.
+          if(candidate&&authority.disposition(candidate.source)==='allowed'){refreshRow=candidate;return;}
         }
         // Every fourth busy turn belongs to reconciliation. This ring is
         // independent of the fence-bound proof sweep and of incoming saves.
@@ -348,11 +326,11 @@ export function createRawSearchMaintenance(storage,authority,options) {
         if(staged.length||remove.length||!same(checkpoint,state.checkpoint)) {
           try {
             cancelled(upkeepSignal);
+            if(settledPending)cancelled(pending.upkeepSignal);
             const result=await storage.commitBatch({staged,remove:[...new Set(remove)],checkpoint});commit();
             progress.removed+=result.removed;
             if(result.removed){quotaBlocked=false;progress.error=null;}
             if(settledPending){
-              if(reservation?.expected===pending.expected)reservation=null;
               progress.embedded+=pending.embedded;pending=null;
             }
             else progress.indexed+=staged.length;
