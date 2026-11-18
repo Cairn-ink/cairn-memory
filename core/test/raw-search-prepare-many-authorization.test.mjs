@@ -296,3 +296,89 @@ test('prepareMany retry parity: closing the request scope refuses the suffix bef
     assert.deepEqual(handles.slice(1), [null, null]);
   });
 });
+
+test('prepareMany plain data parity: a ranges accessor can switch to a same-JSON array with its own some', async t => {
+  const { s, candidates, calls, opens } = await fixture(t), pending = [...candidates];
+  const target = { ...candidates[1] };
+  let ranges = target.ranges;
+  const replacement = [...ranges];
+  replacement.some = () => false;
+  assert.notEqual(replacement, ranges);
+  assert.ok(replacement.every((ref, index) => ref === ranges[index]));
+  assert.ok(Object.hasOwn(replacement, 'some'));
+  assert.equal(JSON.stringify(replacement) === JSON.stringify(ranges), true);
+  Object.defineProperty(target, 'ranges', { enumerable: true, get: () => ranges });
+  pending[1] = target;
+
+  const handles = await retryAfterFirstHandle(s, pending, () => { ranges = replacement; });
+  assert.equal(handles[1] === null, true, 'the changed ranges must produce a null slot');
+  assertCandidateRows([handles[0], handles[2]], [pending[0], pending[2]]);
+  assert.deepEqual(pending.map(({ conversationId }) => opens.get(conversationId) ?? 0), [1, 0, 1]);
+  assert.equal(calls.get(target.id), 1, 'the retry refuses the slot before authorization');
+});
+
+test('prepareMany plain data: a frozen plain candidate keeps its memo', async t => {
+  const { s, candidates, calls } = await fixture(t), pending = [...candidates];
+  const target = Object.freeze({ ...candidates[1] });
+  pending[1] = target;
+
+  const handles = await retryAfterFirstHandle(s, pending, () => {});
+  assertCandidateRows(handles, pending);
+  assert.equal(calls.get(target.id), 1, 'the already frozen candidate needs only one authorization');
+});
+
+test('prepareMany plain data parity: a nested accessor at build forces fresh authorization', async t => {
+  const { s, candidates, calls, opens } = await fixture(t), pending = [...candidates];
+  const classification = { ...candidates[1].classification };
+  const { kind } = classification;
+  Object.defineProperty(classification, 'kind', { enumerable: true, configurable: true, get() {
+    // The ordinary proof lookup reads this accessor. The candidate will be
+    // plain by retry time, so the decision made at build time matters.
+    Object.defineProperty(classification, 'kind', { enumerable: true, value: kind });
+    return kind;
+  } });
+  pending[1] = { ...candidates[1], classification };
+
+  const handles = await retryAfterFirstHandle(s, pending, () => {});
+  assertCandidateRows(handles, candidates);
+  assert.equal(Object.getOwnPropertyDescriptor(classification, 'kind').value, kind);
+  assert.equal(calls.get(candidates[1].id), 2);
+  assert.deepEqual(pending.map(({ conversationId }) => opens.get(conversationId) ?? 0), [1, 1, 1]);
+});
+
+function tracedProxy(target, traps) {
+  const handler = Object.fromEntries(Object.keys(Object.getOwnPropertyDescriptors(Reflect)).map(name => [name, (...args) => {
+    traps.push({ name, fromPlainCheck: new Error().stack.includes('at plainCandidateData (') });
+    return Reflect[name](...args);
+  }]));
+  return new Proxy(target, handler);
+}
+
+test('prepareMany plain data parity: proxies on the candidate and ranges trigger no traps in the plain-data check', async t => {
+  const { s, candidates, calls, opens } = await fixture(t), pending = [...candidates];
+  const candidateTraps = [], rangesTraps = [];
+  pending[1] = tracedProxy({ ...candidates[1] }, candidateTraps);
+  pending[2] = { ...candidates[2], ranges: tracedProxy([...candidates[2].ranges], rangesTraps) };
+
+  const handles = await retryAfterFirstHandle(s, pending, () => {});
+  for (const [label, traps] of [['candidate', candidateTraps], ['ranges', rangesTraps]]) {
+    const names = traps.map(({ name }) => name);
+    t.diagnostic(`proxy ${label} traps ${JSON.stringify(names)}`);
+    assert.ok(names.includes('get'), 'the ordinary build must exercise the proxy');
+    assert.deepEqual(traps.filter(({ fromPlainCheck }) => fromPlainCheck), []);
+  }
+  assertCandidateRows(handles, candidates);
+  assert.deepEqual(counts(candidates.slice(1), calls), [2, 2]);
+  assert.deepEqual(candidates.map(({ conversationId }) => opens.get(conversationId) ?? 0), [1, 1, 1]);
+});
+
+test('prepareMany plain data parity: a ranges array with its own method rebuilds', async t => {
+  const { s, candidates, calls } = await fixture(t), pending = [...candidates];
+  const ranges = [...candidates[1].ranges];
+  ranges.some = Array.prototype.some;
+  pending[1] = { ...candidates[1], ranges };
+
+  const handles = await retryAfterFirstHandle(s, pending, () => {});
+  assertCandidateRows(handles, candidates);
+  assert.equal(calls.get(pending[1].id), 2, 'the own array method makes the slot ineligible for reuse');
+});

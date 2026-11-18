@@ -6,6 +6,7 @@ import { performance } from 'node:perf_hooks';
 import { contextBudget } from './context-read-budget.mjs';
 import { randomUUID } from 'node:crypto';
 import { dirname } from 'node:path';
+import { types } from 'node:util';
 import { createRawSearchCache } from './raw-search-cache.mjs';
 import { rawSearchSqlite, rawSearchDeadline } from './raw-search-sqlite.mjs';
 
@@ -22,6 +23,40 @@ const preparedByAuthority = new WeakMap();
 const emptyPartial = () => immutable({version:RAW_SEARCH_VERSION,publication:null,candidates:[],
   coverage:{status:'partial',scanned:null,expanded:null,causes:['deadline']},semantic:{state:'unknown',reason:null}});
 const safeFailure = error => { fail(publicCodes.has(error?.code) ? error.code : 'raw_search_unavailable'); };
+
+function plainCandidateData(candidate) {
+  const pending = [candidate], seen = new WeakSet();
+  while (pending.length) {
+    const value = pending.pop();
+    // Detect even revoked proxies before doing any reflection on the value.
+    if (types.isProxy(value)) return false;
+    if (value === null || value === undefined) continue;
+    const kind = typeof value;
+    if (kind === 'string' || kind === 'boolean' || kind === 'number') continue;
+    if (kind !== 'object') return false;
+    if (seen.has(value)) continue;
+    seen.add(value);
+    const array = Array.isArray(value), prototype = Object.getPrototypeOf(value);
+    if (array ? prototype !== Array.prototype : prototype !== Object.prototype && prototype !== null) return false;
+    if (types.isModuleNamespaceObject(value) || types.isArgumentsObject(value) ||
+        types.isTypedArray(value) || types.isBoxedPrimitive(value) || types.isExternal(value)) return false;
+    const descriptors = Object.getOwnPropertyDescriptors(value), keys = Reflect.ownKeys(descriptors);
+    const length = array ? descriptors.length.value : 0;
+    // An absent index can read from the prototype. Require dense arrays.
+    if (array && keys.length !== length + 1) return false;
+    for (const key of keys) {
+      if (array && key === 'length') continue;
+      const descriptor = descriptors[key];
+      if (typeof key !== 'string' || !descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) return false;
+      if (array) {
+        const index = Number(key);
+        if (!Number.isInteger(index) || index < 0 || index >= length || String(index) !== key) return false;
+      }
+      pending.push(descriptor.value);
+    }
+  }
+  return true;
+}
 
 /** Open the configured Raw store; enabled:false explicitly disables search. */
 export async function openRawSearch(value) {
@@ -350,12 +385,14 @@ export async function openRawSearch(value) {
             if(index<handles.length)return null;
             const memo=successfulEntries[index];
             successfulEntries[index]=undefined;
+            // Record the shape before proof lookup can read caller properties.
+            const plainData=plainCandidateData(candidate);
             const entry=candidateEntry(candidate,intent);
             // Capture the full authorization payload and the fields read directly
             // for proof lookup, range selection, publication and handle output.
-            const candidateBinding=JSON.stringify([candidate.proof,candidate.id,candidate.ranges,
-              candidate.publication,candidate.classification,candidate]);
-            if(memo?.candidate===candidate&&memo.candidateBinding===candidateBinding){
+            const candidateBinding=plainData?JSON.stringify([candidate.proof,candidate.id,candidate.ranges,
+              candidate.publication,candidate.classification,candidate]):undefined;
+            if(plainData&&memo?.candidate===candidate&&memo.candidateBinding===candidateBinding){
               successfulEntries[index]=memo;
               return memo.entry;
             }
@@ -367,7 +404,7 @@ export async function openRawSearch(value) {
             // is metadata-only; the shared canonical snapshot follows it.
             const access=authority.authorize('rawSearchSource',{candidate,intent},token,check);access();check();
             const preparedEntry={...entry,rows,access};
-            successfulEntries[index]={candidate,candidateBinding,entry:preparedEntry};
+            if(plainData)successfulEntries[index]={candidate,candidateBinding,entry:preparedEntry};
             return preparedEntry;
           }catch(error){if(interrupted(error))throw error;return null;}
         });
