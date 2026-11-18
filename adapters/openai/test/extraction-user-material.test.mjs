@@ -27,6 +27,25 @@ for (const count of [1, 5, 6, 12, 20, 40]) test(`user material: provider schema 
   }
 });
 
+test('user material: a stated allowance below the derived one keeps its own item ceiling; above it is refused', async () => {
+  const bodies = [];
+  const model = createOpenAIModel({ apiKey: 'synthetic', fetchImpl: async (_url, options) => {
+    bodies.push(JSON.parse(options.body)); throw new Error('synthetic-stop');
+  } });
+  const messages = count => Array.from({ length: count }, (_, index) => ({ index, role: 'user', content: 'I prefer drawing.' }));
+  const call = (count, maxOutputTokens) => model.extract({ system: 'Synthetic extraction.', input: { messages: messages(count) },
+    maxOutputTokens, signal: new AbortController().signal });
+  // Twelve user messages derive 2458; 1024 and 2048 are accepted with five and ten items.
+  for (const [stated, ceiling] of [[1024, 5], [2048, 10], [2458, 12]]) {
+    await assert.rejects(call(12, stated), /openai_request_failed/);
+    assert.equal(bodies.at(-1).text.format.schema.properties.items.maxItems, ceiling);
+  }
+  const sent = bodies.length;
+  for (const [count, stated] of [[1, 1025], [12, 2459], [20, 4097], [12, 1023]]) {
+    await assert.rejects(call(count, stated), /invalid_openai_request/);
+  }
+  assert.equal(bodies.length, sent);
+});
 
 test('user material: ordered reconciliation accepts the larger replacement set with its existing transition bound', () => {
   const schema = schemasFor('reconcile', {

@@ -83,6 +83,10 @@ Indices establish provenance binding, not proof that a model's claim is true.
 Extraction allows at most 6,000 input tokens and
 `ceil(1024 * itemLimit / 5)` output tokens (1,024–4,096). Calls with five or fewer
 user messages retain the existing request shape and 1,024-token output budget.
+Only capture states the larger allowance; every other caller of the guarded model
+call keeps 1,024. The OpenAI adapter accepts a stated extraction allowance from
+1,024 up to the derived value, refuses more, and sets its item ceiling from the
+stated allowance (1,024 keeps five).
 Larger calls must also fit input plus output within the model context window;
 the batch planner uses that same check. The minimum context remains 8,192 tokens
 and each call retains its 30-second abort deadline. Qualification and placement

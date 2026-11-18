@@ -3,7 +3,7 @@ import { isStorageBusy } from './database.mjs';
 import { releaseStagedCaptureClaim } from './commit-dispatch.mjs';
 import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { isCaptureSourceBusy, isPreDispatchToken } from './capture-source-safety.mjs';
-import { captureSnapshot, extractedItems, retainedSourceView, extractionLimit } from './capture-input.mjs';
+import { captureSnapshot, extractedItems, retainedSourceView, extractionLimit, extractionOutputTokens } from './capture-input.mjs';
 import { callModel } from './model-call.mjs';
 import { fittingCap, prefixUnits, requestFits } from './model-packing.mjs';
 import { boundedText, fail, MemoryStoreError } from './validation.mjs';
@@ -195,6 +195,7 @@ export async function captureMessages({ model, input, operations, captureQualifi
     deadline?.check();
     const output = episodeRun?.skip ? { items: [] } : await callModel(model, 'extract', request.system, request.input,
       { failureCode: 'extraction_failed', deadline, validateFresh: assertSources,
+        maxOutputTokens: extractionOutputTokens(request.input.messages),
         beforeDispatch: () => {
           if (isPreDispatchToken(owned.token)) {
             owned.token = operations.beginCaptureDispatch(owned).token;

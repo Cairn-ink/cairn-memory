@@ -1,4 +1,3 @@
-import { extractionOutputTokens } from './capture-input.mjs';
 import { assertContentPort, inertContentPortValue, hasLegacyContentReadBoundary, hasContentPortBoundary } from './content-safety-boundary.mjs';
 import { countTokens, modelPortValue } from './model-budget.mjs';
 import { fail, MemoryStoreError } from './validation.mjs';
@@ -19,7 +18,8 @@ export const modelRequestText = (system, input, maxOutputTokens = MODEL_OUTPUT_T
 
 /** A bounded adapter call. No database transaction may surround this helper. */
 export async function callModel(model, method, system, input,
-  { validateFresh = () => {}, beforeDispatch = () => {}, failureCode = 'recall_failed', deadline, onHostWait } = {}) {
+  { validateFresh = () => {}, beforeDispatch = () => {}, failureCode = 'recall_failed', deadline, onHostWait,
+    maxOutputTokens = MODEL_OUTPUT_TOKENS } = {}) {
   const legacyFreshness = hasLegacyContentReadBoundary();
   const protectedRead = hasContentPortBoundary();
   const reject = (code, reason = code) => { emitDiagnostic(model, method, 'core_call', reason); fail(code); };
@@ -58,7 +58,6 @@ export async function callModel(model, method, system, input,
     if (typeof model?.[method] !== 'function') reject('model_not_configured');
     if (!Number.isSafeInteger(model.contextWindow) || model.contextWindow < 8192) reject('context_budget_exceeded');
   }
-  const maxOutputTokens = method === 'extract' ? extractionOutputTokens(input?.messages) : MODEL_OUTPUT_TOKENS;
   const request = { system, input, maxOutputTokens };
   const inputTokens = tokens(modelRequestText(system, input, maxOutputTokens));
   if (inputTokens > MODEL_INPUT_TOKENS || (maxOutputTokens > MODEL_OUTPUT_TOKENS &&

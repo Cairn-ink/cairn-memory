@@ -324,9 +324,13 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
         const originalSerializedInput = JSON.stringify(prevalidated);
         snapshot = JSON.parse(originalSerializedInput);
         schema = method === 'consolidate' ? consolidationSchema(snapshot) : episodic ? episodeSchemasFor(method, snapshot) : schemasFor(method, snapshot);
-        // Count user material only after schema validation has canonicalized it.
-        if (method === 'extract' && maxOutputTokens !== extractionOutputTokens(snapshot.messages)) {
-          throw new Error('invalid_openai_request');
+        if (method === 'extract') {
+          // Count user material only after schema validation has canonicalized it.
+          // A caller may state less than the derived allowance, never more; the
+          // candidate ceiling follows the stated allowance (1024 keeps five).
+          if (maxOutputTokens > extractionOutputTokens(snapshot.messages)) throw new Error('invalid_openai_request');
+          const items = schema.properties.items;
+          items.maxItems = Math.min(items.maxItems, Math.floor(maxOutputTokens * 5 / 1024));
         }
         instructions = qualificationInstructions(method, system, snapshot);
         localTokens = countTokens(JSON.stringify({ system: instructions, input: snapshot, maxOutputTokens }));
