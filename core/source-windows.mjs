@@ -1,5 +1,5 @@
 import { boundedText, fail } from './validation.mjs';
-import { extractedItems } from './capture-input.mjs';
+import { extractedItems, extractionLimit } from './capture-input.mjs';
 
 const MAX_WINDOW = 800;
 const MAX_CATALOG = 64;
@@ -38,12 +38,12 @@ export function sourceWindowCatalog(snapshot) {
 }
 
 /** Model indices are never authority for receipt identity or ordered chronology. */
-export function extractedWindowItems(output, snapshot, catalog, onInvalid) {
+export function extractedWindowItems(output, snapshot, catalog, onInvalid, limit = extractionLimit(catalog.input.messages)) {
   const diagnose = reason => { try { onInvalid?.(reason); } catch { /* Diagnostics cannot change validation. */ } };
   let detached;
   try { detached = structuredClone(output); }
   catch { diagnose('invalid_extraction_output_shape'); fail('invalid_model_output'); }
-  const items = extractedItems(detached, snapshot, catalog.messages, onInvalid);
+  const items = extractedItems(detached, snapshot, catalog.messages, onInvalid, undefined, limit);
   try {
     for (const [position, item] of items.entries()) {
       const indices = detached.items[position].sourceIndices;
