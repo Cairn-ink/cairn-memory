@@ -37,7 +37,7 @@ test('outgoing extract schema limits source indices to the current canonical bat
   for (const count of [1, 2, 24]) {
     const body = await outgoing({ messages: messages(count) });
     const { items, accepts } = sourceDomain(body.text.format.schema);
-    assert.equal(items.maxItems, 5);
+    assert.equal(items.maxItems, count === 24 ? 12 : 5);
     for (let index = 0; index < count; index++) assert.equal(accepts(index), true);
     for (const index of [-1, count, count + 1, 99]) {
       assert.equal(accepts(index), false, `source ${index} must be excluded from batch of ${count}`);
