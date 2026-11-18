@@ -194,8 +194,10 @@ test('delegated validation cleanup BUSY survives the closed connection and retri
       if (++queryOnlyWrites === 2) throw nativeFault(261);
     }
   } });
-  const handle = await openContentSuppressionReader(options);
-  t.after(() => handle.close());
+  await assert.doesNotReject(async () => {
+    const handle = await openContentSuppressionReader(options);
+    t.after(() => handle.close());
+  }, 'opening the reader should succeed after retrying the validation cleanup BUSY');
   assert.equal(queryOnlyWrites, 2);
   assert.equal(handles.length, 2);
   assert.ok(!handles[0].isOpen);
