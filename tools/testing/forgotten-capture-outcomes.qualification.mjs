@@ -67,10 +67,10 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
   const phase = process.argv[2];
   if (phase === 'after' && !process.argv[3]) {
     const outcome = await forgottenCaptureOutcome(openMemoryCore);
-    assert.deepEqual(outcome.result, { duplicate: false,
+    assert.deepEqual(outcome.result, { ok: true, value: { duplicate: false,
       admission: { memories: [], suppressedCount: 1, indexRevision: outcome.indexRevision },
-      classification: { status: 'skipped', reason: 'empty' } });
-    assert.deepEqual(outcome.replay, { duplicate: true, memoryIds: [], suppressedCount: 1 });
+      classification: { status: 'skipped', reason: 'empty' } } });
+    assert.deepEqual(outcome.replay, { ok: true, value: { duplicate: true, memoryIds: [], suppressedCount: 1 } });
     assert.equal(outcome.extractCalls, 0, 'no extraction of forgotten text');
     console.log(JSON.stringify({ kind: 'all-suppressed-capture', currentOutcome: outcome }));
   } else {
