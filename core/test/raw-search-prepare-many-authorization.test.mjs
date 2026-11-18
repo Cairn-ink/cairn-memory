@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { sourceFixture, savedSource } from '../testing/raw-source-fixtures.mjs';
+import { sourceFixture, savedSource, localPlainPort } from '../testing/raw-source-fixtures.mjs';
 import { searchFixture } from '../testing/raw-search-fixtures.mjs';
-import { installRawSearchTestClock } from '../testing/raw-search-clock.mjs';
+import { installRawSearchTestClock, rawSearchTestWait } from '../testing/raw-search-clock.mjs';
 import { MemoryStoreError } from '../validation.mjs';
 import { openReadDatabase } from '../read-database.mjs';
 import { createRawSearchAuthority } from '../raw-search-authority.mjs';
+import { withRawSearchRequestScope } from '../raw-search-request-scope.mjs';
 import { openRawSearchStorage } from '../raw-search-storage.mjs';
 
 test.beforeEach(installRawSearchTestClock);
@@ -16,7 +17,13 @@ test.beforeEach(t => {
 });
 
 async function fixture(t, current = (_state, value) => value) {
-  const f = sourceFixture(t), calls = new Map(), live = new Map(), grants = new WeakMap();
+  const port = localPlainPort(), openRaw = port.openRaw, opens = new Map();
+  port.openRaw = input => {
+    const { conversationId } = input.context;
+    opens.set(conversationId, (opens.get(conversationId) ?? 0) + 1);
+    return openRaw(input);
+  };
+  const f = sourceFixture(t, { port }), calls = new Map(), live = new Map(), grants = new WeakMap();
   for (let index = 0; index < 3; index++) {
     await savedSource(f, 'Synthetic telescope source ' + index + '.', { sessionId: 'authorization-' + index });
   }
@@ -46,7 +53,8 @@ async function fixture(t, current = (_state, value) => value) {
   for (let attempt = 0; attempt < 64; attempt++) {
     const found = await s.search({ query: 'telescope' });
     if (found.coverage.status === 'complete' && found.candidates.length === 3) {
-      return { f, s, candidates: found.candidates, calls, live };
+      opens.clear();
+      return { f, s, candidates: found.candidates, calls, live, opens };
     }
     await s.tick({ maxItems: 128, maxMs: 5000 });
   }
@@ -142,7 +150,7 @@ test('prepareMany reevaluates a deterministic initial refusal after a peer inter
 
 test('prepareMany refuses a memoized grant revoked between attempts with the existing access refusal', async t => {
   let targetId, revoke = false, initialFailure = false;
-  const { s, candidates, calls, live } = await fixture(t, (state, value) => {
+  const { s, candidates, calls, live, opens } = await fixture(t, (state, value) => {
     if (state.id === targetId && (revoke || initialFailure && state.reads === 2)) return null;
     return value;
   });
@@ -153,7 +161,7 @@ test('prepareMany refuses a memoized grant revoked between attempts with the exi
   const firstAttempt = await s.service.prepareMany([candidates[1]], {}, s.host.token);
   assert.deepEqual(firstAttempt, { handles: [null], complete: true });
   initialFailure = false;
-  calls.clear(); live.clear();
+  calls.clear(); live.clear(); opens.clear();
   const progress = [];
   const result = await s.service.prepareMany(candidates, { onPrepared(handle, index) {
     progress.push([handle, index]);
@@ -165,6 +173,7 @@ test('prepareMany refuses a memoized grant revoked between attempts with the exi
   assert.ok(result.handles[0]); assert.ok(result.handles[2]);
   assert.deepEqual(counts(candidates, calls), [1, 1, 1]);
   assert.equal(live.get(targetId), 1, 'the retained access must refuse at the first live opening guard');
+  assert.deepEqual(candidates.map(({ conversationId }) => opens.get(conversationId) ?? 0), [1, 0, 1]);
 });
 
 test('prepareMany keeps source-opening access checks live through retries', async t => {
@@ -195,4 +204,95 @@ test('prepareMany authorization memo never crosses invocations', async t => {
     assert.ok(result.handles.every(Boolean));
     assert.deepEqual(counts(candidates, calls), candidates.map(() => invocation + 1));
   }
+});
+
+async function retryAfterFirstHandle(s, candidates, betweenAttempts) {
+  const progress = [];
+  const result = await s.service.prepareMany(candidates, { onPrepared(handle, index) {
+    progress.push([handle, index]);
+    if (index === 0) {
+      assert.ok(handle);
+      betweenAttempts();
+      throw busy();
+    }
+  } }, s.host.token);
+  assert.equal(result.complete, true);
+  assert.deepEqual(progress.map(([, index]) => index), [0, 1, 2]);
+  assert.deepEqual(result.handles, progress.map(([handle]) => handle));
+  return result.handles;
+}
+
+function assertCandidateRows(handles, candidates) {
+  assert.deepEqual(handles.map(handle => handle?.value.conversationId), candidates.map(candidate => candidate.conversationId));
+  for (let index = 0; index < handles.length; index++) {
+    assert.deepEqual(handles[index].value.ranges.map(range => range.source), candidates[index].ranges);
+  }
+}
+
+test('prepareMany retry parity: swapped slots rebuild in the new order', async t => {
+  const { s, candidates, calls } = await fixture(t), pending = [...candidates];
+  const handles = await retryAfterFirstHandle(s, pending, () => {
+    [pending[1], pending[2]] = [pending[2], pending[1]];
+  });
+  assertCandidateRows(handles, pending);
+  assert.deepEqual(counts(pending.slice(1), calls), [2, 2]);
+});
+
+test('prepareMany retry parity: an in-place proof change rebuilds the same object', async t => {
+  const { s, candidates, calls } = await fixture(t), pending = [...candidates];
+  const next = await s.search({ query: 'telescope' });
+  const replacement = next.candidates.find(candidate => candidate.id === candidates[1].id);
+  assert.ok(replacement);
+  assert.notEqual(replacement.proof, candidates[1].proof);
+  assert.deepEqual(replacement, { ...candidates[1], proof: replacement.proof });
+
+  let proof = candidates[1].proof;
+  const target = { ...candidates[1] };
+  // Authorization freezes the object. This accessor lets the caller change
+  // its proof value in place while the slot still holds the same reference.
+  Object.defineProperty(target, 'proof', { enumerable: true, get: () => proof,
+    set: value => { proof = value; } });
+  pending[1] = target;
+  const handles = await retryAfterFirstHandle(s, pending, () => { target.proof = replacement.proof; });
+  assertCandidateRows(handles, pending);
+  assert.equal(calls.get(target.id), 2, 'the changed proof requires fresh authorization');
+});
+
+test('prepareMany retry parity: an expired search proof refuses the suffix', async t => {
+  const { s, candidates, opens } = await fixture(t);
+  await rawSearchTestWait(4999);
+  let advance;
+  const handles = await retryAfterFirstHandle(s, candidates, () => { advance = rawSearchTestWait(2); });
+  await advance;
+  assert.deepEqual(handles.slice(1), [null, null]);
+  assert.deepEqual(candidates.map(({ conversationId }) => opens.get(conversationId) ?? 0), [1, 0, 0]);
+});
+
+test('prepareMany retry parity: an evicted search proof refuses the suffix', async t => {
+  const { s, candidates, opens } = await fixture(t);
+  let searches;
+  const handles = await retryAfterFirstHandle(s, candidates, () => {
+    searches = Promise.all(Array.from({ length: 4 }, () => s.search({ query: 'telescope' })));
+    // Native BUSY yields for the retry backoff so the searches can publish
+    // their proofs in the same request state before the next attempt.
+    throw Object.assign(new Error('synthetic contention'), { code: 'ERR_SQLITE_ERROR', errcode: 5 });
+  });
+  const replacements = await searches;
+  assert.ok(replacements.every(result => result.publication === candidates[0].publication && result.candidates.length === 3));
+  const proofs = new Set(replacements.map(result => result.candidates[0].proof));
+  assert.equal(proofs.size, 4);
+  assert.ok(!proofs.has(candidates[0].proof));
+  assert.deepEqual(handles.slice(1), [null, null]);
+  assert.deepEqual(candidates.map(({ conversationId }) => opens.get(conversationId) ?? 0), [1, 0, 0]);
+});
+
+test('prepareMany retry parity: closing the request scope refuses the suffix before crypto', async t => {
+  const { s, opens } = await fixture(t);
+  await withRawSearchRequestScope(async scope => {
+    const { candidates } = await s.search({ query: 'telescope' });
+    assert.equal(candidates.length, 3);
+    const handles = await retryAfterFirstHandle(s, candidates, () => scope.close());
+    assert.deepEqual(candidates.map(({ conversationId }) => opens.get(conversationId) ?? 0), [1, 0, 0]);
+    assert.deepEqual(handles.slice(1), [null, null]);
+  });
 });

@@ -348,8 +348,17 @@ export async function openRawSearch(value) {
           try {
             check();
             if(index<handles.length)return null;
-            if(successfulEntries[index])return successfulEntries[index];
+            const memo=successfulEntries[index];
+            successfulEntries[index]=undefined;
             const entry=candidateEntry(candidate,intent);
+            // Capture the full authorization payload and the fields read directly
+            // for proof lookup, range selection, publication and handle output.
+            const candidateBinding=JSON.stringify([candidate.proof,candidate.id,candidate.ranges,
+              candidate.publication,candidate.classification,candidate]);
+            if(memo?.candidate===candidate&&memo.candidateBinding===candidateBinding){
+              successfulEntries[index]=memo;
+              return memo.entry;
+            }
             const rows=entry.sources.filter(source=>candidate.ranges.some(ref=>same(ref,source.ref)))
               .sort((a,b)=>a.ref.span.start-b.ref.span.start);
             if(!rows.length||rows.length!==candidate.ranges.length||rows.length>1024)fail('source_unavailable');
@@ -357,7 +366,9 @@ export async function openRawSearch(value) {
             // Preserve the existing host authorization protocol. Authorization
             // is metadata-only; the shared canonical snapshot follows it.
             const access=authority.authorize('rawSearchSource',{candidate,intent},token,check);access();check();
-            return successfulEntries[index]={...entry,rows,access};
+            const preparedEntry={...entry,rows,access};
+            successfulEntries[index]={candidate,candidateBinding,entry:preparedEntry};
+            return preparedEntry;
           }catch(error){if(interrupted(error))throw error;return null;}
         });
         const publication=storage.publication({shape:false,deadlineAt:at});
