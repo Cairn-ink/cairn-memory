@@ -37,7 +37,7 @@ const configuration = workerData.host.configuration;
       if (fault?.kind === 'native' && fault.stage === 'prepare' && sql === 'PRAGMA user_version') throw nativeError();
       const statement = super.prepare(sql);
       const metadata = /sqlite_master|sqlite_schema|pragma_/i.test(sql) ||
-        /^PRAGMA\s+(application_id|user_version|schema_version|encoding|query_only|trusted_schema|busy_timeout)\b/i.test(sql) || /FROM store_metadata\b/i.test(sql);
+        /^PRAGMA\s+(application_id|user_version|schema_version|journal_mode|encoding|query_only|trusted_schema|busy_timeout)\b/i.test(sql) || /FROM store_metadata\b/i.test(sql);
       return new Proxy(statement, { get(target, key) {
         const value = Reflect.get(target, key, target);
         if (!['get', 'all', 'iterate'].includes(key)) return typeof value === 'function' ? value.bind(target) : value;
