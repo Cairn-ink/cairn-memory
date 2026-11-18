@@ -1,6 +1,8 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { types } from 'node:util';
 import { isAbsolute } from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { setTimeout as delay } from 'node:timers/promises';
 import { boundedData, requestRecord, deadline, mono } from './context-product-control.mjs';
 import { requestAuthority } from './context-product-authority.mjs';
 import { suppressionServiceIssuance } from './context-product-service.mjs';
@@ -13,6 +15,7 @@ import { SUPPRESSION_VERSION, SUPPRESSION_REASONS, SUPPRESSION_LIMITS as L, exac
 import { ownData } from './local-authority-input.mjs';
 import { fail, identifier } from './validation.mjs';
 
+const OPEN_RETRY_MS = 25, OPEN_REPLY_RESERVE_MS = 20;
 const codes = new Set(['invalid_input','authority_required','scope_changed','invalid_cursor','cursor_stale',
   'invalid_snapshot','evidence_unavailable','context_item_too_large','read_timeout','read_in_progress',
   'store_closed','unsupported_database','unsafe_database_file','storage_busy','storage_error']);
@@ -31,6 +34,7 @@ const typed = row => [row.scope,row.project_id,row.kind,row.stable_key,row.incar
 /** D-15: a separate reconciliation handle. No product reader lifecycle,
  * sidecar, content facade, or ordinary content-access authority is extended. */
 export async function openContentSuppressionReader(value) {
+  const started = performance.now();
   const o = ownData(value,['version','path','expected','serviceBinding','suppression','host','requestMaxMs']);
   if (o.version !== SUPPRESSION_VERSION) fail('invalid_input');
   if (typeof o.path !== 'string' || !o.path.isWellFormed() || !isAbsolute(o.path) || o.path.includes('\0')) fail('invalid_path');
@@ -40,19 +44,37 @@ export async function openContentSuppressionReader(value) {
   if (Object.values(host).some(fn => typeof fn !== 'function' || types.isAsyncFunction(fn))) fail('authority_required');
   const requestMaxMs = deadline(o.requestMaxMs), handleId = randomUUID();
   const [{ openReadDatabase },{ readTransaction }] = await Promise.all([import('./read-database.mjs'),import('./database.mjs')]);
-  const opened = openReadDatabase(o.path,{ contextRead:true }), db = opened.db;
-  let identity;
-  try {
-    db.exec('PRAGMA busy_timeout=0');
-    readTransaction(db,() => {
-      const layout = installedContentLayout(db);
-      if (!layout.suppressionRevision) fail('unsupported_database');
-      const row = db.prepare('SELECT store_id,cursor_secret FROM store_metadata WHERE singleton=1').get();
-      const domain = db.prepare('SELECT suppression_domain FROM content_safety_control WHERE singleton=1').get();
-      if (row?.store_id !== expected.storeId || domain?.suppression_domain !== expected.suppressionDomain) fail('scope_changed');
-      identity = { storeId:row.store_id,cursorSecret:row.cursor_secret };
-    });
-  } catch (error) { db.close(); throw error; }
+  const retryUntil = started + requestMaxMs - OPEN_REPLY_RESERVE_MS;
+  let opened, identity, firstBusy;
+  while (true) {
+    if (firstBusy && performance.now() >= retryUntil) throw firstBusy;
+    let attempt;
+    try {
+      attempt = openReadDatabase(o.path,{ contextRead:true });
+      const db = attempt.db;
+      db.exec('PRAGMA busy_timeout=0');
+      const candidateIdentity = readTransaction(db,() => {
+        const layout = installedContentLayout(db);
+        if (!layout.suppressionRevision) fail('unsupported_database');
+        const row = db.prepare('SELECT store_id,cursor_secret FROM store_metadata WHERE singleton=1').get();
+        const domain = db.prepare('SELECT suppression_domain FROM content_safety_control WHERE singleton=1').get();
+        if (row?.store_id !== expected.storeId || domain?.suppression_domain !== expected.suppressionDomain) fail('scope_changed');
+        return { storeId:row.store_id,cursorSecret:row.cursor_secret };
+      });
+      if (firstBusy && performance.now() >= retryUntil) throw firstBusy;
+      identity = candidateIdentity;
+      opened = attempt;
+      break;
+    } catch (error) {
+      if (attempt?.db.isOpen) attempt.db.close();
+      if (error?.code !== 'ERR_SQLITE_ERROR' || !Number.isInteger(error.errcode) || ![5,6].includes(error.errcode & 255)) throw error;
+      firstBusy ??= error;
+      // Admit another attempt only when the backoff fits before the reserve.
+      if (performance.now() + OPEN_RETRY_MS >= retryUntil) throw firstBusy;
+      await delay(OPEN_RETRY_MS);
+    }
+  }
+  const { db } = opened;
   const access = digest({ profile:SUPPRESSION_VERSION,binding }), cache = new Map();
   let closed = false, busy = false, invalidated = false, retained = 0, highest = 0n, utc = Date.now();
   const now = () => utc = Math.max(utc,Date.now());
