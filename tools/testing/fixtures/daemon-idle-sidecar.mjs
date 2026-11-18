@@ -4,6 +4,7 @@ import { appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
+import { registerHooks } from 'node:module';
 
 export const sentinel = 'zirconaxwindowmarker';
 export const sentinelQuery = sentinel;
@@ -17,13 +18,15 @@ const ok = result => {
 // Wrap only the application's existing connections and execution methods.
 // Identify the sidecar by its distinctive header probe, never by opening a file.
 // Trace categories and outcomes only: no SQL, arguments, source text or paths.
-function traceSidecar(trace, gate) {
-  const note = value => appendFileSync(trace, JSON.stringify({ at: monotonic(), ...value }) + '\n', { mode: 0o600 });
+export function traceSidecar(trace, gate) {
+  const note = value => typeof trace === 'function' ? trace({ at: monotonic(), ...value })
+    : appendFileSync(trace, JSON.stringify({ at: monotonic(), ...value }) + '\n', { mode: 0o600 });
   const prepare = DatabaseSync.prototype.prepare, exec = DatabaseSync.prototype.exec;
   const sidecars = new WeakSet(), transactions = new WeakMap();
   let armed = false, selected;
   DatabaseSync.prototype.prepare = function(sql, ...args) {
-    if (/^SELECT 1 FROM sqlite_master WHERE name='header'$/.test(sql)) sidecars.add(this);
+    if (/^SELECT 1 FROM sqlite_master WHERE name='header'$/.test(sql) ||
+      typeof trace === 'function' && sql === 'SELECT * FROM header WHERE singleton=1') sidecars.add(this);
     const statement = prepare.call(this, sql, ...args), db = this;
     const write = /^\s*(?:INSERT|UPDATE|DELETE|REPLACE|CREATE|DROP|ALTER)\b/i.test(sql);
     for (const method of ['run', 'get', 'all', 'iterate']) {
@@ -73,14 +76,14 @@ function traceSidecar(trace, gate) {
       throw error;
     }
   };
-  return { arm() { if (!gate) throw Error('qualification_gate_disabled'); armed = true; } };
+  return { arm() { if (!gate) throw Error('qualification_gate_disabled'); armed = true; },
+    close() { DatabaseSync.prototype.prepare = prepare; DatabaseSync.prototype.exec = exec; } };
 }
 
-async function seed({ installed, database }) {
+async function captureConfiguration({ installed, database, initial = false }) {
   const { openMemoryCore } = await import(pathToFileURL(join(installed, 'core/index.mjs')));
-  const { captureLocal } = await import(pathToFileURL(join(installed, 'adapters/local/capture.mjs')));
   // Lineage 0 is readable by the supplied 0.6.5 engine, when available.
-  let core = openMemoryCore({ path: database, contentSafety: 's2h-v1', raw: true, rawSearch: false });
+  const core = openMemoryCore({ path: database, ...(initial ? { contentSafety: 's2h-v1' } : {}), raw: true, rawSearch: false });
   let authority;
   try {
     const current = ok(core.getLocalCaptureControl({ namespace, client: 'claude-code' }));
@@ -91,7 +94,28 @@ async function seed({ installed, database }) {
       expectedNamespaceGeneration: ok(core.getCaptureControl({ namespace })).generation,
       expectedRawRevision: ok(core.getRawCaptureControl({ ownerId: namespace.ownerId, client: 'claude-code' })).revision };
   } finally { await core.close(); }
-  const config = { databasePath: database, authority, interpretation: 'raw-only', raw: { mode: 'local-plain-v1', capBytes: 512 * 1024 * 1024 }, timeouts: { captureMs: 120000 } };
+  return { databasePath: database, authority, interpretation: 'raw-only', raw: { mode: 'local-plain-v1', capBytes: 512 * 1024 * 1024 }, timeouts: { captureMs: 120000 } };
+}
+
+async function sessionEnd(settings) {
+  const { captureLocal } = await import(pathToFileURL(join(settings.installed, 'adapters/local/capture.mjs')));
+  const config = await captureConfiguration(settings), content = 'Synthetic SessionEnd ' + settings.marker;
+  const result = await captureLocal(config, { version: 2, client: 'claude-code', session_id: settings.marker, event_id: settings.marker,
+    messages: [{ id: settings.marker, role: 'user', occurred_at: '2001-01-01T00:00:00.000Z', message_ordinal: 1,
+      content, part: { index: 0, start: 0, totalUnits: content.length, totalBytes: Buffer.byteLength(content) } }] },
+  { env: {}, fetchImpl() { throw Error('qualification_network_forbidden'); } });
+  if (result.status !== 200) {
+    process.send({ kind: 'capture_refused', status: result.status,
+      code: /^[a-z_]+$/.test(result.body?.error ?? '') ? result.body.error : null });
+    throw Error('qualification_capture_failed');
+  }
+  process.send({ kind: 'session_end_captured', at: monotonic() });
+}
+
+async function seed({ installed, database }) {
+  const { openMemoryCore } = await import(pathToFileURL(join(installed, 'core/index.mjs')));
+  const { captureLocal } = await import(pathToFileURL(join(installed, 'adapters/local/capture.mjs')));
+  const config = await captureConfiguration({ installed, database, initial: true });
   for (let conversation = 0; conversation < 125; conversation++) {
     const session = 'synthetic-a9-' + conversation;
     const messages = Array.from({ length: 20 }, (_, index) => {
@@ -109,7 +133,7 @@ async function seed({ installed, database }) {
   // Publish the recent Raw sentinel through normal installed-engine upkeep.
   // A complete inventory pass is unnecessary: the 2,500 captured messages stay
   // present, and natural reconciliation continues throughout the idle runs.
-  core = openMemoryCore({ path: database, raw: true });
+  const core = openMemoryCore({ path: database, raw: true });
   try {
     for (let turn = 0; turn < 60; turn++) {
       const progress = ok(await core.maintainRawSearch({ namespace }));
@@ -141,6 +165,14 @@ async function candidate(settings) {
     await new Promise((resolve, reject) => { control.once('message', resolve); control.once('error', reject); });
   }
   const hook = traceSidecar(settings.trace, barrier);
+  const detachHook = registerHooks({ load(url, context, next) {
+    const result = next(url, context);
+    if (!url.endsWith('/local-shared-runtime.mjs')) return result;
+    return { ...result, source: String(result.source).replace('disconnect.abort();',
+      `globalThis.a10DetachTrace(); disconnect.abort();`) };
+  } });
+  globalThis.a10DetachTrace = () => appendFileSync(settings.trace,
+    JSON.stringify({ at: monotonic(), category: 'detach_processed', success: true }) + '\n', { mode: 0o600 });
   process.on('message', message => {
     if (message.kind === 'arm') { hook.arm(); process.send({ kind: 'armed' }); }
   });
@@ -152,15 +184,20 @@ async function candidate(settings) {
   if (!identity.eligible) throw Error('qualification_candidate_ineligible');
   process.send({ kind: 'identity', prefix: 'd-' + identity.digest.slice(0, 32) });
   try { await (await load('local-daemon')).runCandidate({ args: settings.args, identity: identity.record, environment }); }
-  finally { await control?.terminate(); }
+  finally { detachHook.deregister(); delete globalThis.a10DetachTrace; await control?.terminate(); }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     const settings = JSON.parse(process.argv[3]);
     if (process.argv[2] === 'seed') await seed(settings);
+    else if (process.argv[2] === 'session-end') await sessionEnd(settings);
     else if (process.argv[2] === 'candidate') await candidate(settings);
     else throw Error('qualification_child_role');
-  } catch { console.error('qualification_child_failed'); process.exitCode = 1; }
+  } catch (error) {
+    process.send?.({ kind: 'child_failure', name: error.name,
+      code: /^[a-z_]+$/.test(error.code ?? error.message ?? '') ? error.code ?? error.message : 'exception' });
+    console.error('qualification_child_failed'); process.exitCode = 1;
+  }
   finally { process.disconnect?.(); }
 }
