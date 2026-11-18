@@ -26,7 +26,7 @@ if (isMainThread) {
     socket.end();
   });
 } else {
-  const { control, pauseAt, splitScan } = workerData;
+  const { control, pauseAt, splitScan, closingWal } = workerData;
   let faults, backoffs = 0, finished = false, released = false, faultDb;
   const arm = faultsToArm => { faults = faultsToArm.map(fault => ({ ...fault, hits: 0 })); };
   arm(workerData.faults);
@@ -113,6 +113,13 @@ if (isMainThread) {
   };
   DatabaseSync.prototype.prepare = function (sql) {
     inject('prepare ' + sql, this);
+    if (closingWal && sql === 'PRAGMA journal_mode') {
+      // Preparing the real PRAGMA here can recreate the WAL companions.
+      return { get: () => {
+        inject(sql, this);
+        return { journal_mode: 'wal' };
+      } };
+    }
     let statement;
     try { statement = prepare.call(this, sql); }
     catch (error) { report(error, this, sql); throw error; }

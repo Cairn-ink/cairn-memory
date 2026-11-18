@@ -26,7 +26,7 @@ function readerFor(f, diagnostics = false) {
   return reader;
 }
 
-function observedReader(f, { faults = [], onBusy, pauseAt, diagnostics, splitScan } = {}) {
+function observedReader(f, { faults = [], onBusy, pauseAt, diagnostics, splitScan, closingWal } = {}) {
   const NativeWorker = threads.Worker, { port1, port2 } = new MessageChannel();
   const events = [], reloadedSuppressions = new Set();
   const backoff = Promise.withResolvers(), exited = Promise.withResolvers(), retrying = Promise.withResolvers();
@@ -39,7 +39,7 @@ function observedReader(f, { faults = [], onBusy, pauseAt, diagnostics, splitSca
   });
   threads.Worker = class extends NativeWorker {
     constructor(url, options) {
-      super(actor, { ...options, workerData: { ...options.workerData, control: port2, faults, pauseAt, splitScan }, transferList: [port2] });
+      super(actor, { ...options, workerData: { ...options.workerData, control: port2, faults, pauseAt, splitScan, closingWal }, transferList: [port2] });
       this.once('exit', exited.resolve);
       this.on('message', result => { if (result.retryingStorage) retrying.resolve(result.retryingStorage); });
     }
@@ -226,7 +226,7 @@ test('WAL close transition with no companions uses only the original opening pro
   db.close();
   // Emulate the opening lock after companion removal. The next query would
   // succeed if the reader incorrectly starts another outer attempt.
-  const h = observedReader(f, { diagnostics: true, faults: [{ boundary: 'PRAGMA journal_mode', errcode: 5 },
+  const h = observedReader(f, { diagnostics: true, closingWal: true, faults: [{ boundary: 'PRAGMA journal_mode', errcode: 5 },
     { boundary: 'PRAGMA journal_mode', at: 2, errcode: 261 }] });
   const result = await h.reader.readTopicOverview(overviewInput);
   await h.sync();
