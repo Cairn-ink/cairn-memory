@@ -1,6 +1,7 @@
 // Pure trace comparisons shared by the gate, its mutation tests and derivation.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import legacyReceiptWalkSQLAdditions from '../test/fixtures/card-lineage-off-wide-legacy-receipt-additions.json' with { type: 'json' };
 
 export const workloadKeys = [23, 33, 52, 53].map(cell => 'workload:' + cell);
 export const normalizeSQL = sql => sql.replace(/\s+/g, ' ').trim();
@@ -337,20 +338,23 @@ function receiptWalkCallRows(key, index, method, rows, oldRows, records) {
     return result;
   };
   const previous = counts(oldRows), current = counts(rows), allowed = new Set();
-  for (const triple of new Set([...previous.keys(), ...current.keys()])) {
+  const inCall = entry => entry.key === key && entry.callIndex === index && entry.method === method;
+  const reviewedAdditions = new Map(records.additions.filter(inCall).map(entry => [exact(entry.statement), entry]));
+  let additions = 0;
+  for (const triple of new Set([...previous.keys(), ...current.keys(), ...reviewedAdditions.keys()])) {
     const oldCount = previous.get(triple) ?? 0, count = current.get(triple) ?? 0;
-    if (count === oldCount) continue;
-    const entries = count > oldCount ? records.additions : records.removals;
-    const entry = entries.find(entry => entry.key === key && entry.callIndex === index &&
-      entry.method === method && exact(entry.statement) === triple);
+    const addition = reviewedAdditions.get(triple);
+    if (count === oldCount && !addition) continue;
+    const entry = addition ?? records.removals.find(entry => inCall(entry) && exact(entry.statement) === triple);
     assert.ok(entry && oldCount === entry.archivedCount && count === entry.currentCount &&
-      (count > oldCount || oldCount - count === entry.removedCount),
+      (addition ? count > oldCount : count < oldCount && oldCount - count === entry.removedCount),
       `${key} call ${index} ${method} reviewed receipt row multiplicity: ${JSON.parse(triple)[0]} archive ${oldCount}, current ${count}`);
+    if (addition) additions += count - oldCount;
     allowed.add(triple);
   }
   // Only literal changed triples at this call may be removed/relocated.
   // Unchanged exempt rows still participate in exact sequence comparison.
-  return list => list.filter(row => !allowed.has(exact(row)));
+  return { additions, retain: list => list.filter(row => !allowed.has(exact(row))) };
 }
 function checkCallRanges(record) {
   let end = 0;
@@ -448,7 +452,7 @@ export function reconstructWideTrace(key, archived, entries = [], sqlAdditionMet
 
 // This check needs only the current trace. Select the purge family over the
 // entire trace, compare full rows in their reviewed calls, and reject leftovers.
-// It also returns the precise positions to subtract for receipt count checks.
+// It also returns the precise positions of the reviewed ledger rows.
 export function currentAdditionSummary(key, current, entries = [], sqlAdditionMethods = [], cardStatementTexts = {}, policy = defaultSqlAdditionPolicy) {
   validateSqlAdditions(entries, sqlAdditionMethods, policy); validateCardStatementTexts(cardStatementTexts, entries, policy); checkCallRanges(current);
   const wanted = orderedEntries(key, entries), positions = new Set(), listedPositions = new Set(), calls = [];
@@ -541,11 +545,11 @@ export function compareWideTables(current, archived, removedRows = []) {
 }
 
 export function compareWideTraces({ key, current, archived, sqlAdditions = [], sqlAdditionMethods = [], cardStatementTexts = {}, checkArchivedCardTexts = true, receiptWalk = false, sqlAdditionPolicy = defaultSqlAdditionPolicy,
-  receiptWalkRecords = { additions: receiptWalkSQLAdditions, removals: receiptWalkSQLRemovals } }) {
+  receiptWalkRecords = { additions: [...receiptWalkSQLAdditions, ...legacyReceiptWalkSQLAdditions], removals: receiptWalkSQLRemovals } }) {
   validateCardStatementTexts(cardStatementTexts, sqlAdditions, sqlAdditionPolicy);
   if (checkArchivedCardTexts) assertArchivedCardStatementTexts([archived], cardStatementTexts, sqlAdditions, sqlAdditionPolicy);
   const reconstructed = reconstructWideTrace(key, archived, sqlAdditions, sqlAdditionMethods, sqlAdditionPolicy);
-  const { positions } = currentAdditionSummary(key, current, sqlAdditions, sqlAdditionMethods, cardStatementTexts, sqlAdditionPolicy);
+  currentAdditionSummary(key, current, sqlAdditions, sqlAdditionMethods, cardStatementTexts, sqlAdditionPolicy);
   assert.deepEqual(current.effectWitnesses, archived.effectWitnesses, 'complete effect witnesses, including rolled-back writes');
   compareWideTables(current.dump, archived.dump, []);
   if (!receiptWalk) {
@@ -554,22 +558,26 @@ export function compareWideTraces({ key, current, archived, sqlAdditions = [], s
   } else {
     assert.equal(JSON.stringify(current.calls.map(([method, result]) => [method, result])),
       JSON.stringify(archived.calls.map(([method, result]) => [method, result])), 'exact serialized calls and errors');
-    assert.ok(current.statements.length - positions.size <= archived.statements.length, 'receipt batching only reduces SQL after removing ledger rows');
     const currentOutside = current.statements.map((row,index) => [index,row]);
     const reconstructedOutside = reconstructed.statements.map((row,index) => [index,row]);
     const currentCovered = new Set(), reconstructedCovered = new Set();
+    let receiptAdditions = 0;
     for (const [index, call] of current.calls.entries()) {
       assert.equal(call.length, archived.calls[index]?.length, 'matching trace call shape');
       if (call.length !== 4) continue;
       const previous = archived.calls[index], expected = reconstructed.calls[index];
       const rows = callStatements(current, call), oldRows = callStatements(archived, previous);
-      const additions = [...positions].filter(position => position >= call[2] && position < call[3]).length;
-      assert.ok(rows.length - additions <= oldRows.length, call[0] + ' statement count cannot rise after removing exactly ledger rows');
-      const retain = receiptWalkCallRows(key, index, call[0], rows, oldRows, receiptWalkRecords);
-      assert.deepEqual(retain(rows), retain(callStatements(reconstructed, expected)), call[0] + ' reconstructed SQL and bindings');
+      const expectedRows = callStatements(reconstructed, expected);
+      const { additions, retain } = receiptWalkCallRows(key, index, call[0], rows, oldRows, receiptWalkRecords);
+      receiptAdditions += additions;
+      // Reconstruction already includes the exact general ledger and opener rows.
+      assert.ok(rows.length - additions <= expectedRows.length, call[0] + ' statement count cannot rise after removing exactly ledger rows');
+      assert.deepEqual(retain(rows), retain(expectedRows), call[0] + ' reconstructed SQL and bindings');
       for(let at=call[2];at<call[3];at++)currentCovered.add(at);
       for(let at=expected[2];at<expected[3];at++)reconstructedCovered.add(at);
     }
+    assert.ok(current.statements.length - receiptAdditions <= reconstructed.statements.length,
+      'receipt batching only reduces SQL after removing ledger rows');
     // Also pins opening/closing statements and SQL outside a recorded call.
     assert.deepEqual(currentOutside.filter(([at]) => !currentCovered.has(at)).map(([,row]) => row),
       reconstructedOutside.filter(([at]) => !reconstructedCovered.has(at)).map(([,row]) => row),
