@@ -98,7 +98,17 @@ const token = process.env.CLAUDE_PLUGIN_OPTION_API_TOKEN ?? "";
 const telemetryEnabled = !/^(?:0|false|no|off)$/i.test(
   process.env.CLAUDE_PLUGIN_OPTION_TELEMETRY ?? "true",
 );
-const contextReadEnabled = !/^(?:0|false|no|off)$/i.test(
+function hasOneLibuvWorker(value) {
+  // Only an absent setting uses the default. libuv uses atoi, so an empty
+  // value or one with no leading digits parses as zero and gives one worker.
+  // atoi overflow differs between C libraries (4294967296 gives one worker on
+  // glibc), so any value outside the int range 2..2147483647 counts as one too.
+  if (value === undefined) return false;
+  const digits = /^[\t\n\v\f\r ]*([+-]?[0-9]+)/.exec(value)?.[1];
+  const workers = digits === undefined ? 0 : Number(digits);
+  return !(workers >= 2 && workers <= 2_147_483_647);
+}
+const contextReadEnabled = !hasOneLibuvWorker(process.env.UV_THREADPOOL_SIZE) && !/^(?:0|false|no|off)$/i.test(
   process.env.CLAUDE_PLUGIN_OPTION_CONTEXT_READ ?? "true",
 );
 let dataDir;
@@ -235,7 +245,7 @@ function contextReadLine(memory) {
 }
 
 async function readContextCache(config, targetId) {
-  // Plain recall can send and write its result while a cache read is stalled.
+  // The one-worker guard leaves a worker available for plain recall if this read stalls.
   // The pending read can hold the process open until it returns. Disabling context_read skips it.
   const deadline = performance.now() + CONTEXT_READ_STATE_MAX_MS;
   let timer;

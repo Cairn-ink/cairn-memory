@@ -10,6 +10,23 @@ if (Number.isFinite(time)) {
   };
 }
 
+if (process.env.TEST_REAL_CACHE_RACE !== "1") {
+  const cacheRaceFrame = /\bat readContextCache \([^\n]*[/\\]scripts[/\\]hook\.mjs:\d+:\d+\)/;
+  const stretch = 100;
+  const rawSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = function (callback, milliseconds, ...args) {
+    const cacheRace = milliseconds === 100 && cacheRaceFrame.test(new Error().stack);
+    return rawSetTimeout(callback, cacheRace ? milliseconds * stretch : milliseconds, ...args);
+  };
+  // Keep the monotonic cutoff in the same time scale as its timer. Other hook
+  // budgets continue to see the real clock.
+  const now = performance.now.bind(performance);
+  Object.defineProperty(performance, "now", { value() {
+    const elapsed = now();
+    return cacheRaceFrame.test(new Error().stack?.split("\n")[2]) ? elapsed / stretch : elapsed;
+  } });
+}
+
 const send = (kind, details = {}) => process.send?.({ kind, ms: performance.now(), ...details });
 const fetchOriginal = globalThis.fetch;
 globalThis.fetch = function (url, options) {

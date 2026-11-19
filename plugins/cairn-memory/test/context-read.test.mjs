@@ -14,6 +14,7 @@ import contextRequestSchema from "../../../schemas/context-read-request.schema.j
 import contextResponseSchema from "../../../schemas/context-read-response.schema.json" with { type: "json" };
 import recallRequestSchema from "../../../schemas/recall-request.schema.json" with { type: "json" };
 import recallResponseSchema from "../../../schemas/recall-response.schema.json" with { type: "json" };
+import { deferred } from "../../../integrations/client/testing/deferred.mjs";
 import { createTestWorkspace } from "../../../tools/testing/workspace.mjs";
 import { createJsonPoster, createHostedTransport, hostedTargetId } from "../lib/http.mjs";
 import { prepareRecallQuery } from "../lib/recall-query.mjs";
@@ -94,13 +95,32 @@ function installRecallProbes({ directoryProbe, scryptDelay, firstPauseUntil, con
     return scrypt(...args);
   };
   if (cacheAccess) {
-    modules.registerHooks({
-      resolve(specifier, context, nextResolve) {
-        const result = nextResolve(specifier, context);
-        if (/\/lib\/context-read(?:-state)?\.mjs$/.test(result.url)) event("cache-module");
-        return result;
-      },
-    });
+    function isCacheModule(url) { return /\/lib\/context-read(?:-state)?\.mjs$/.test(url); }
+    if (modules.registerHooks) {
+      modules.registerHooks({
+        resolve(specifier, context, nextResolve) {
+          const result = nextResolve(specifier, context);
+          if (isCacheModule(result.url)) event("cache-module");
+          return result;
+        },
+      });
+    } else {
+      // Node 20 runs module hooks on a separate thread. Share the observation
+      // so an asynchronous message cannot race the child's exit.
+      const observed = new Int32Array(new SharedArrayBuffer(4));
+      const source = `${isCacheModule}
+        let observed;
+        export function initialize(data) { observed = data; }
+        export async function resolve(specifier, context, nextResolve) {
+          const result = await nextResolve(specifier, context);
+          if (isCacheModule(result.url)) Atomics.store(observed, 0, 1);
+          return result;
+        }`;
+      modules.register("data:text/javascript," + encodeURIComponent(source), { data: observed });
+      process.once("beforeExit", () => {
+        if (Atomics.load(observed, 0)) event("cache-module");
+      });
+    }
     const syncFs = process.getBuiltinModule("node:fs");
     for (const name of ["lstat", "stat", "access", "realpath", "open", "readFile", "writeFile",
       "mkdir", "readdir", "unlink", "link", "rename"]) {
@@ -237,7 +257,7 @@ async function fixture(t, { hostname = false } = {}) {
   const disk = async () => JSON.parse(await privateRead(statePath));
   const auth = async () => JSON.parse(await privateRead(join(root, "credential-state.json"))).auth?.outcome;
   async function run({ token = tokenA, prompt = "Synthetic query", time = epoch, startup = 0,
-    contextReadOption, probes, beforeClose } = {}) {
+    contextReadOption, threadPoolSize, realCacheRace = false, probes, beforeClose } = {}) {
     const events = [];
     const probeSource = probes ? `(${installRecallProbes})(${JSON.stringify(probes)})` : "";
     const imports = probes ? ["--import", preload, "--import", "data:text/javascript," + encodeURIComponent(probeSource)] :
@@ -250,12 +270,13 @@ async function fixture(t, { hostname = false } = {}) {
         CLAUDE_PLUGIN_DATA: root, CLAUDE_PLUGIN_OPTION_API_ENDPOINT: endpoint,
         CLAUDE_PLUGIN_OPTION_API_TOKEN: token, CLAUDE_PLUGIN_OPTION_TELEMETRY: "false",
         CLAUDE_PLUGIN_OPTION_CONTEXT_READ: contextReadOption,
-        ...(probes?.fifo ? { UV_THREADPOOL_SIZE: "2" } : {}),
+        UV_THREADPOOL_SIZE: threadPoolSize,
+        TEST_REAL_CACHE_RACE: realCacheRace ? "1" : undefined,
         TEST_WALL_TIME: String(time), TEST_STARTUP_MS: String(startup) },
     });
     child.on("message", event => events.push(event));
     let stdout = "", stderr = "";
-    const { promise: output, resolve: outputReceived } = Promise.withResolvers();
+    const { promise: output, resolve: outputReceived } = deferred();
     child.stdout.setEncoding("utf8").on("data", chunk => {
       stdout += chunk;
       if (beforeClose) {
@@ -287,13 +308,23 @@ async function fixture(t, { hostname = false } = {}) {
   return { root, home, statePath, quotaPath, endpoint, accountA, accountB, requests, replies, routes, run, seed, disk, auth };
 }
 
-for (const contextReadOption of ["false", "off"]) {
-  test(`context_read=${contextReadOption} uses plain recall without touching the cache`, async t => {
+const offSettings = ["false", "off"].map(contextReadOption => ({ contextReadOption }));
+offSettings.push(...["", "1", "0", "abc", " 1x", "-1", "4294967296", "4294967297", "99999999999999999999"]
+  .map(threadPoolSize => ({ threadPoolSize })));
+const onSettings = [{}, { contextReadOption: "true" },
+  ...["2", "4", " +2x", "2147483647"].map(threadPoolSize => ({ threadPoolSize }))];
+function settingLabel({ contextReadOption, threadPoolSize }) {
+  return threadPoolSize === undefined ? `context_read=${contextReadOption ?? "absent"}, pool unset`
+    : `UV_THREADPOOL_SIZE=${JSON.stringify(threadPoolSize)}`;
+}
+
+for (const settings of offSettings) {
+  test(`${settingLabel(settings)} uses plain recall without touching the cache`, async t => {
     const f = await fixture(t);
     await f.seed();
     f.replies[recall] = () => fallbackResponse;
     const before = await privateRead(f.statePath);
-    const { stdout, events } = await f.run({ contextReadOption, probes: { cacheAccess: true } });
+    const { stdout, events } = await f.run({ ...settings, probes: { cacheAccess: true } });
     const key = (await privateRead(join(f.root, "project-key"))).trim();
     const projectId = createHmac("sha256", key).update(f.home).digest("hex");
     assert.deepEqual(f.requests, [
@@ -307,15 +338,50 @@ for (const contextReadOption of ["false", "off"]) {
   });
 }
 
-for (const contextReadOption of [undefined, "true"]) {
-  test(`context_read=${contextReadOption ?? "absent"} keeps context-read enabled`, async t => {
+for (const settings of onSettings) {
+  test(`${settingLabel(settings)} keeps context-read enabled`, async t => {
     const f = await fixture(t);
     await f.seed();
-    const { stdout, events } = await f.run({ contextReadOption, probes: { cacheAccess: true } });
+    const { stdout, events } = await f.run({ ...settings, probes: { cacheAccess: true } });
     assert.deepEqual(f.routes(), [pause, context]);
     assert.equal(stdout, compactOutput());
     for (const kind of ["cache-module", "cache-fs", "scrypt"])
       assert.ok(events.some(event => event.kind === kind), `preload observed ${kind}`);
+  });
+}
+
+for (const threadPoolSize of ["1", ""]) {
+  test(`${settingLabel({ threadPoolSize })} skips the cache FIFO and delivers hostname recall`,
+  { skip: process.platform === "win32", timeout: 7000 }, async t => {
+    const f = await fixture(t, { hostname: true });
+    await f.seed();
+    f.replies[recall] = () => fallbackResponse;
+    const before = await privateRead(f.statePath);
+    const fifo = join(f.root, "stalled-cache-read");
+    execFileSync("mkfifo", [fifo]);
+    const budgetMs = 3500;
+    const { stdout, events } = await f.run({
+      threadPoolSize, realCacheRace: true,
+      probes: { cacheAccess: true, fifo, statePath: f.statePath },
+      async beforeClose({ output, closed, events }) {
+        const received = await Promise.race([
+          output,
+          closed.then(result => assert.fail(`hook closed before recall output: ${JSON.stringify(result)}`)),
+          delay(budgetMs, undefined, { ref: false }).then(() => {
+            const reads = events.filter(event => event.kind === "cache-read-start").length;
+            assert.fail(`no complete stdout within ${budgetMs} ms; cache reads started: ${reads}; requests: ${f.requests.length}`);
+          }),
+        ]);
+        assert.ok(received.elapsed < budgetMs, `complete stdout arrived at ${received.elapsed.toFixed(1)} ms`);
+        t.diagnostic(`complete stdout arrived at ${received.elapsed.toFixed(1)} ms with one worker`);
+      },
+    });
+    assert.equal(stdout, expectedOutput([memory()]));
+    assert.deepEqual(f.requests.map(({ method, route }) => [method, route]), [["GET", pause], ["POST", recall]]);
+    assert.ok(events.some(event => event.kind === "localhost-lookup"));
+    assert.deepEqual(events.filter(event => ["cache-module", "cache-fs", "scrypt", "cache-read-start"].includes(event.kind)), []);
+    assert.equal(await privateRead(f.statePath), before);
+    await unlink(fifo);
   });
 }
 
@@ -330,6 +396,7 @@ test("a pending cache FIFO read leaves a worker available for hostname recall",
     const budgetMs = 3500;
     const expected = expectedOutput([memory()]);
     const { stdout, events } = await f.run({
+      threadPoolSize: "2", realCacheRace: true,
       probes: { fifo, statePath: f.statePath },
       async beforeClose({ output, closed, events }) {
         const received = await Promise.race([
@@ -360,7 +427,7 @@ test("a pending cache FIFO read leaves a worker available for hostname recall",
 test("a stalled optional cache directory probe still delivers plain recall", async t => {
   const f = await fixture(t);
   f.replies[recall] = () => fallbackResponse;
-  const { stdout, events } = await f.run({ probes: { directoryProbe: "stall" } });
+  const { stdout, events } = await f.run({ realCacheRace: true, probes: { directoryProbe: "stall" } });
   assert.ok(events.some(event => event.kind === "cache-probe"));
   assert.deepEqual(f.routes(), [pause, recall]);
   assert.equal(stdout, expectedOutput([memory()]));
@@ -381,7 +448,7 @@ test("a late cache fingerprint match has no effect on recall or state", async t 
   const f = await fixture(t);
   await f.seed();
   const before = await privateRead(f.statePath);
-  const { stdout, events } = await f.run({ probes: { scryptDelay: 750 } });
+  const { stdout, events } = await f.run({ realCacheRace: true, probes: { scryptDelay: 750 } });
   assert.deepEqual(f.routes(), [pause, recall]);
   assert.equal(stdout, expectedOutput([memory()]));
   const recallStart = events.find(event => event.route === recall)?.ms;
