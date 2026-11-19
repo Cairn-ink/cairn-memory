@@ -53,7 +53,7 @@ const recallEnd = recallController ? 3500 : undefined;
 // Stop admitting output 50 ms before abort, without shortening the fetch.
 // This is admission headroom; an admitted pipe write uses its own drain cap.
 const OUTPUT_WRITE_MARGIN_MS = 50;
-const CONTEXT_READ_STATE_MAX_MS = 150;
+const CONTEXT_READ_STATE_MAX_MS = 100;
 const CONTEXT_READ_MIN_MS = 250;
 const RECALL_RESERVE_MS = 1_300;
 const RENDER_MAX_CHARS = 9_000;
@@ -97,6 +97,9 @@ const configuredEndpoint =
 const token = process.env.CLAUDE_PLUGIN_OPTION_API_TOKEN ?? "";
 const telemetryEnabled = !/^(?:0|false|no|off)$/i.test(
   process.env.CLAUDE_PLUGIN_OPTION_TELEMETRY ?? "true",
+);
+const contextReadEnabled = !/^(?:0|false|no|off)$/i.test(
+  process.env.CLAUDE_PLUGIN_OPTION_CONTEXT_READ ?? "true",
 );
 let dataDir;
 let clientOptions;
@@ -232,6 +235,8 @@ function contextReadLine(memory) {
 }
 
 async function readContextCache(config, targetId) {
+  // Plain recall can send and write its result while a cache read is stalled.
+  // The pending read can hold the process open until it returns. Disabling context_read skips it.
   const deadline = performance.now() + CONTEXT_READ_STATE_MAX_MS;
   let timer;
   try {
@@ -283,7 +288,9 @@ async function recall(hookInput) {
   const contextReadDeadline = outputDeadline - RECALL_RESERVE_MS;
   const project = projectId === undefined ? {} : { project_id: projectId };
   const session = sessionId === undefined ? {} : { session_id: sessionId };
-  const cache = hostedConfig && await readContextCache(hostedConfig, quotaTarget.targetId);
+  const cache = contextReadEnabled && hostedConfig
+    ? await readContextCache(hostedConfig, quotaTarget.targetId)
+    : undefined;
   const state = cache?.state;
   const learn = (available, now = Date.now()) => {
     if (!state) return;
@@ -330,7 +337,9 @@ async function recall(hookInput) {
     if (last) last.path = "recall-fallback";
     result = await post(
       "/api/memory/recall", { query, ...project, limit: 6, ...session },
-      2_500, true, start => dispatchActive(control.generation, start, fetchSignal, hosted, { onCapability: learn }),
+      2_500, true, start => dispatchActive(control.generation, start, fetchSignal, hosted, {
+        onCapability: state ? learn : undefined,
+      }),
       fetchSignal,
     );
   }

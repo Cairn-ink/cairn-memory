@@ -80,6 +80,17 @@ The bundled Cairn MCP server also exposes explicit `remember_memory`, `recall_me
   development.
 - Content-free telemetry can be disabled in plugin configuration. Its schema accepts only event
   name, plugin version, platform, and a random installation id.
+- Context-read asks the service for a compact set of memories first when the service supports it
+  and falls back to plain recall when needed. It is on by default. Set `context_read` to `false`
+  in the plugin configuration and the plugin will skip all reads and writes of its context-read
+  state file. Recall then behaves as in earlier versions.
+
+If the filesystem blocks a read of the context-read state file, the hook still sends plain recall
+and writes its result. This can happen on a network home directory when another client holds a lock
+on the file, or in a files-on-demand folder when the file has been evicted. The hook process can
+only exit once the read returns, so Claude Code may stop it at its timeout. Turning `context_read`
+off avoids this stall. A stall of the whole plugin data directory affects every plugin state file
+and behaves as in earlier versions.
 
 Hooks fail open: timeouts, auth errors, and service outages never block normal Claude Code work.
 Explicit pause/resume commands report control failures rather than claiming success. After resume,

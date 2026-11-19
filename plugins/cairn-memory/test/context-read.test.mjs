@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { scrypt } from "node:crypto";
+import { createHmac, scrypt } from "node:crypto";
+import { lookup } from "node:dns/promises";
+import { constants } from "node:fs";
+import { open, unlink } from "node:fs/promises";
 import { createServer } from "node:http";
 import { dirname, join } from "node:path";
 import test from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import contextRequestSchema from "../../../schemas/context-read-request.schema.json" with { type: "json" };
@@ -72,9 +76,11 @@ const specCompactReply = {
 };
 
 // Install in the real hook child before the hook imports its modules.
-function installRecallProbes({ directoryProbe, scryptDelay, firstPauseUntil, contextReplyUntil }) {
+function installRecallProbes({ directoryProbe, scryptDelay, firstPauseUntil, contextReplyUntil, cacheAccess, fifo, statePath }) {
   const event = (kind, details = {}) => process.send?.({ kind, ms: performance.now(), ...details });
   const crypto = process.getBuiltinModule("node:crypto");
+  const fs = process.getBuiltinModule("node:fs/promises");
+  const modules = process.getBuiltinModule("node:module");
   const scrypt = crypto.scrypt;
   crypto.scrypt = (...args) => {
     event("scrypt");
@@ -87,8 +93,31 @@ function installRecallProbes({ directoryProbe, scryptDelay, firstPauseUntil, con
     }
     return scrypt(...args);
   };
+  if (cacheAccess) {
+    modules.registerHooks({
+      resolve(specifier, context, nextResolve) {
+        const result = nextResolve(specifier, context);
+        if (/\/lib\/context-read(?:-state)?\.mjs$/.test(result.url)) event("cache-module");
+        return result;
+      },
+    });
+    const syncFs = process.getBuiltinModule("node:fs");
+    for (const name of ["lstat", "stat", "access", "realpath", "open", "readFile", "writeFile",
+      "mkdir", "readdir", "unlink", "link", "rename"]) {
+      const paths = name === "link" || name === "rename" ? 2 : 1;
+      for (const [io, method] of [[fs, name], [syncFs, name], [syncFs, name + "Sync"]]) {
+        const original = io[method];
+        io[method] = new Proxy(original, {
+          apply(target, receiver, args) {
+            if (args.slice(0, paths).some(path => String(path).includes("hosted-context-read")))
+              event("cache-fs", { method });
+            return Reflect.apply(target, receiver, args);
+          },
+        });
+      }
+    }
+  }
   if (directoryProbe) {
-    const fs = process.getBuiltinModule("node:fs/promises");
     let probed = false;
     fs.lstat = new Proxy(fs.lstat, {
       apply(original, receiver, args) {
@@ -102,7 +131,30 @@ function installRecallProbes({ directoryProbe, scryptDelay, firstPauseUntil, con
       },
     });
   }
-  process.getBuiltinModule("node:module").syncBuiltinESMExports();
+  if (fifo) {
+    const open = fs.open;
+    fs.open = async (...args) => {
+      const file = await open(...args);
+      if (args[0] === statePath) {
+        const readFile = file.readFile.bind(file);
+        file.readFile = async (...args) => {
+          const pending = fs.readFile(fifo);
+          event("cache-read-start");
+          await pending;
+          event("cache-read-released");
+          return readFile(...args);
+        };
+      }
+      return file;
+    };
+    const dns = process.getBuiltinModule("node:dns");
+    const lookup = dns.lookup;
+    dns.lookup = (hostname, options, callback) => {
+      if (hostname === "localhost") event("localhost-lookup");
+      return lookup(hostname, options, callback);
+    };
+  }
+  modules.syncBuiltinESMExports();
   const waitUntil = ms => new Promise(resolve => setTimeout(resolve, Math.max(0, Math.ceil(ms - performance.now()))));
   const fetch = globalThis.fetch;
   let observed = false;
@@ -129,7 +181,7 @@ function installRecallProbes({ directoryProbe, scryptDelay, firstPauseUntil, con
   };
 }
 
-async function fixture(t) {
+async function fixture(t, { hostname = false } = {}) {
   const workspace = createTestWorkspace(t, { prefix: "context-read-" });
   const root = join(workspace.path, "data"), home = join(workspace.path, "home");
   await privateDirectory(root);
@@ -165,12 +217,13 @@ async function fixture(t) {
     res.writeHead(reply.status, { "content-type": "application/json", ...reply.headers });
     res.end(reply.raw ?? JSON.stringify(reply.value));
   });
+  const address = hostname ? (await lookup("localhost")).address : "127.0.0.1";
   await new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(0, "127.0.0.1", resolve);
+    server.listen(0, address, resolve);
   });
   workspace.defer(() => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }));
-  const endpoint = `http://127.0.0.1:${server.address().port}`;
+  const endpoint = `http://${hostname ? "localhost" : address}:${server.address().port}`;
   const [accountA, accountB] = await Promise.all([fingerprint(endpoint, tokenA), fingerprint(endpoint, tokenB)]);
   const target = hostedTargetId({ endpoint });
   const statePath = join(root, "hosted-context-read", target + ".json");
@@ -183,30 +236,45 @@ async function fixture(t) {
   };
   const disk = async () => JSON.parse(await privateRead(statePath));
   const auth = async () => JSON.parse(await privateRead(join(root, "credential-state.json"))).auth?.outcome;
-  async function run({ token = tokenA, prompt = "Synthetic query", time = epoch, startup = 0, probes } = {}) {
+  async function run({ token = tokenA, prompt = "Synthetic query", time = epoch, startup = 0,
+    contextReadOption, probes, beforeClose } = {}) {
     const events = [];
     const probeSource = probes ? `(${installRecallProbes})(${JSON.stringify(probes)})` : "";
     const imports = probes ? ["--import", preload, "--import", "data:text/javascript," + encodeURIComponent(probeSource)] :
       ["--import", preload];
+    const started = performance.now();
     const child = spawn(process.execPath, [...imports, hook, "recall"], {
       stdio: ["pipe", "pipe", "pipe", "ipc"],
       env: { PATH: process.env.PATH, HOME: home, NODE_OPTIONS: process.env.NODE_OPTIONS,
         TMPDIR: process.env.TMPDIR, CAIRN_TEST_REAL_HOME: process.env.CAIRN_TEST_REAL_HOME,
         CLAUDE_PLUGIN_DATA: root, CLAUDE_PLUGIN_OPTION_API_ENDPOINT: endpoint,
         CLAUDE_PLUGIN_OPTION_API_TOKEN: token, CLAUDE_PLUGIN_OPTION_TELEMETRY: "false",
+        CLAUDE_PLUGIN_OPTION_CONTEXT_READ: contextReadOption,
+        ...(probes?.fifo ? { UV_THREADPOOL_SIZE: "2" } : {}),
         TEST_WALL_TIME: String(time), TEST_STARTUP_MS: String(startup) },
     });
     child.on("message", event => events.push(event));
     let stdout = "", stderr = "";
-    child.stdout.setEncoding("utf8").on("data", chunk => stdout += chunk);
+    const { promise: output, resolve: outputReceived } = Promise.withResolvers();
+    child.stdout.setEncoding("utf8").on("data", chunk => {
+      stdout += chunk;
+      if (beforeClose) {
+        try { JSON.parse(stdout); } catch { return; }
+        outputReceived({ stdout, elapsed: performance.now() - started });
+      }
+    });
     child.stderr.setEncoding("utf8").on("data", chunk => stderr += chunk);
     const closed = new Promise((resolve, reject) => {
       child.once("error", reject);
       child.once("close", (code, signal) => resolve({ code, signal }));
     });
-    workspace.defer(async () => { if (child.exitCode === null) child.kill(); await closed; });
+    workspace.defer(async () => {
+      if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+      await closed;
+    });
     child.stdin.on("error", () => {});
     child.stdin.end(JSON.stringify({ prompt, session_id: "test-session", cwd: home }));
+    if (beforeClose) await beforeClose({ output, closed, events });
     assert.deepEqual(await closed, { code: 0, signal: null });
     for (const account of [accountA, accountB]) {
       assert.ok(!stdout.includes(account));
@@ -216,8 +284,78 @@ async function fixture(t) {
     return { stdout, events };
   }
   const routes = () => requests.splice(0).map(entry => entry.route);
-  return { root, statePath, quotaPath, endpoint, accountA, accountB, requests, replies, routes, run, seed, disk, auth };
+  return { root, home, statePath, quotaPath, endpoint, accountA, accountB, requests, replies, routes, run, seed, disk, auth };
 }
+
+for (const contextReadOption of ["false", "off"]) {
+  test(`context_read=${contextReadOption} uses plain recall without touching the cache`, async t => {
+    const f = await fixture(t);
+    await f.seed();
+    f.replies[recall] = () => fallbackResponse;
+    const before = await privateRead(f.statePath);
+    const { stdout, events } = await f.run({ contextReadOption, probes: { cacheAccess: true } });
+    const key = (await privateRead(join(f.root, "project-key"))).trim();
+    const projectId = createHmac("sha256", key).update(f.home).digest("hex");
+    assert.deepEqual(f.requests, [
+      { method: "GET", route: pause, body: null },
+      { method: "POST", route: recall,
+        body: { query: "Synthetic query", project_id: projectId, limit: 6, session_id: "test-session" } },
+    ]);
+    assert.equal(stdout, expectedOutput([memory()]));
+    assert.equal(await privateRead(f.statePath), before);
+    assert.deepEqual(events.filter(event => ["cache-module", "cache-fs", "scrypt"].includes(event.kind)), []);
+  });
+}
+
+for (const contextReadOption of [undefined, "true"]) {
+  test(`context_read=${contextReadOption ?? "absent"} keeps context-read enabled`, async t => {
+    const f = await fixture(t);
+    await f.seed();
+    const { stdout, events } = await f.run({ contextReadOption, probes: { cacheAccess: true } });
+    assert.deepEqual(f.routes(), [pause, context]);
+    assert.equal(stdout, compactOutput());
+    for (const kind of ["cache-module", "cache-fs", "scrypt"])
+      assert.ok(events.some(event => event.kind === kind), `preload observed ${kind}`);
+  });
+}
+
+test("a pending cache FIFO read leaves a worker available for hostname recall",
+  { skip: process.platform === "win32", timeout: 7000 }, async t => {
+    const f = await fixture(t, { hostname: true });
+    await f.seed();
+    f.replies[recall] = () => fallbackResponse;
+    const before = await privateRead(f.statePath);
+    const fifo = join(f.root, "stalled-cache-read");
+    execFileSync("mkfifo", [fifo]);
+    const budgetMs = 3500;
+    const expected = expectedOutput([memory()]);
+    const { stdout, events } = await f.run({
+      probes: { fifo, statePath: f.statePath },
+      async beforeClose({ output, closed, events }) {
+        const received = await Promise.race([
+          output,
+          closed.then(result => assert.fail(`hook closed before recall output: ${JSON.stringify(result)}`)),
+          delay(budgetMs, undefined, { ref: false }).then(() => assert.fail("recall output missed the 3500 ms budget")),
+        ]);
+        assert.equal(received.stdout, expected);
+        assert.ok(received.elapsed < budgetMs, `complete stdout arrived at ${received.elapsed.toFixed(1)} ms`);
+        t.diagnostic(`complete stdout arrived at ${received.elapsed.toFixed(1)} ms with the FIFO still pending`);
+        assert.deepEqual(f.requests.map(({ method, route }) => [method, route]), [["GET", pause], ["POST", recall]]);
+        const reading = events.findIndex(event => event.kind === "cache-read-start");
+        const dns = events.findIndex(event => event.kind === "localhost-lookup");
+        assert.ok(reading >= 0 && dns > reading, "the cache read was pending before hostname lookup");
+        assert.ok(!events.some(event => event.kind === "cache-read-released"));
+        assert.equal(await privateRead(f.statePath), before);
+        const writer = await open(fifo, constants.O_WRONLY | constants.O_NONBLOCK);
+        await writer.close();
+      },
+    });
+    assert.equal(stdout, expected);
+    assert.ok(events.some(event => event.kind === "cache-read-released"));
+    assert.deepEqual(f.routes(), [pause, recall]);
+    assert.equal(await privateRead(f.statePath), before);
+    await unlink(fifo);
+  });
 
 test("a stalled optional cache directory probe still delivers plain recall", async t => {
   const f = await fixture(t);

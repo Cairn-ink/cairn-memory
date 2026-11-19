@@ -32,6 +32,12 @@
       "description": "Send content-free lifecycle events. Never sends text, paths, or repository names.",
       "default": true
     },
+    "context_read": {
+      "type": "boolean",
+      "title": "Compact memory recall",
+      "description": "Ask the service for compact memories before falling back to plain recall.",
+      "default": true
+    },
     "pairing_record": {
       "type": "string",
       "title": "Shared pairing record",
