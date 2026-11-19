@@ -54,7 +54,7 @@ function local(path,mode,work,onPoint=()=>{},observer) {
     storage.admit(Infinity);
     const vectors=productVectors({storage,facade});
     const current=()=>facade.port.read(()=>storage.observe(p,access)).publication;
-    const step=(stop)=>{clock=0;stopAt=stop;return storage.refresh(p,access,budget,true);};
+    const step=(stop,reuseOnly=true)=>{clock=0;stopAt=stop;return storage.refresh(p,access,budget,reuseOnly);};
     return work({storage,vectors,current,step});
   }finally{storage.close();facade.close();}
 }
@@ -335,6 +335,46 @@ for(const mode of ['DELETE','WAL'])test('collection moves retained cache rows be
   assert.equal(physical(f.path,live.projectionDigest,retired).retiredLexical,0);
   assert.ok(deletes>0);
   assert.deepEqual({...row()},moved);
+});
+
+for(const mode of ['DELETE','WAL'])for(const certificate of ['missing','invalid'])
+test('collection expires cached embeddings when the retired certificate is '+certificate+' in '+mode,async t=>{
+  const {f,memories}=await setup(t,mode,['semantic orchard']);
+  const old=replace(f.path,mode),retired=physical(f.path,old.projectionDigest).lexical.storage_id;
+  const item=JSON.stringify([ns.ownerId,ns.scope,ns.projectId,'memory',memories[0].id]);
+  const cached=()=>sqlite(f.path,db=>db.prepare('SELECT generation FROM semantic_vectors WHERE item=?').all(item).map(row=>row.generation));
+  assert.equal(sqlite(f.path,db=>db.prepare('PRAGMA journal_mode').get().journal_mode.toUpperCase()),mode);
+  assert.deepEqual(cached(),[retired]);
+
+  const replacement=local(f.path,mode,({storage,step,current})=>{
+    storage.vectors(db=>{
+      const sql=certificate==='missing'?'DELETE FROM validation_records WHERE publication=?':
+        "UPDATE validation_records SET record='{}' WHERE publication=?";
+      assert.equal(db.prepare(sql).run(old.publicationId).changes,1);
+    },true);
+    assert.equal(current(),null);
+    step('published',false);
+    const live=current();
+    assert.ok(live);
+    assert.notEqual(live.publicationId,old.publicationId);
+    assert.deepEqual(cached(),[retired]);
+    assert.equal(physical(f.path,live.projectionDigest,retired).retiredLexical,1);
+
+    step();
+    assert.deepEqual(cached(),[]);
+    assert.equal(physical(f.path,live.projectionDigest,retired).retiredLexical,0);
+    assert.equal(current().publicationId,live.publicationId);
+    return live;
+  });
+
+  const writer=openMemoryCore({path:f.path});
+  try{ok(writer.admit({namespace:ns,memory:{content:'semantic harbor',kind:'fact'},receipts:[receipt('harbor')]}));}finally{writer.close();}
+  local(f.path,mode,({step,current})=>{
+    step();
+    const next=current();
+    assert.notEqual(next.publicationId,replacement.publicationId);
+    assert.equal(next.counts.documents,2);
+  });
 });
 
 for(const mode of ['DELETE','WAL'])test('collection expires an orphan and resets the destination cache audit in '+mode,async t=>{
