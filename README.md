@@ -92,8 +92,9 @@ later (on Linux and WSL, and for Claude Code on macOS; see [Status](#status)):
 What did we decide about the database migration last week?
 ```
 
-Search over saved conversations catches up in the background, so your most
-recent turns may not show up yet.
+Search over saved conversations catches up in the background: new turns are
+usually searchable within seconds, but older conversations can take a while to
+show up after setup or an upgrade.
 
 ![Illustrated example: save a short-report preference with the text it was saved from, then correct it to detailed reports or forget it.](docs/images/memory-workflow.png)
 
@@ -170,8 +171,7 @@ hosted MCP endpoint, the Codex rules and the plugin's privacy contract.
 - **Model keys.** Saving conversations never calls a model, and keyword search,
   inspecting, correcting and forgetting use no model either. If the memory
   server can see an `OPENAI_API_KEY`, your memories and search text are sent to
-  OpenAI for semantic search, with those embedding requests estimated at most
-  about US$1 per server run. `recall_memory` also sends the text it selects,
+  OpenAI for semantic search, up to an estimated US$1 per day per running Cairn server. `recall_memory` also sends the text it selects,
   and its model calls are not counted in that estimate. Pausing or turning off
   saving does not stop these requests yet. Saved conversations are sent only if
   you opt in with `--raw-semantic` or configure `--context-embedder` yourself.
@@ -212,9 +212,10 @@ workers from loading it:
 
 Your own interactive sessions keep using memory as before.
 
-In 0.6.6 and 0.6.7, Claude Code runs started by scripts or the Agent SDK (for example
-`claude -p`) are saved like interactive sessions. To keep harness runs out of
-the store, turn saving off for Claude Code with
+From 0.6.8, Claude Code runs started by scripts or the Agent SDK (for example
+`claude -p`) are not saved. Interactive sessions keep being saved as before.
+In 0.6.6 and 0.6.7, these runs are saved like interactive sessions. To keep
+harness runs out of the store on those versions, turn saving off for Claude Code with
 `npx @cairn-ink/memory config --local-capture off --client claude`. This also
 stops saving your interactive Claude Code sessions until you run
 `npx @cairn-ink/memory config --local-capture on --client claude`.
@@ -223,14 +224,20 @@ stops saving your interactive Claude Code sessions until you run
 
 This is a developer preview. Know these limits before you rely on it:
 
-- **Search catches up after saving.** Each turn is saved as soon as it ends,
-  and Local mode indexes it in the background while Claude Code or Codex is
-  open: about 15 minutes for 1,000 saved messages, roughly 2 hours for 10,000.
-  Every new save restarts the pass, so a conversation from a busy session may
-  not be searchable until you pause. Until the index catches up, search still
-  returns results, but recent conversations can be missing, so an empty answer
-  does not mean nothing was saved. Histories of about 50,000 messages or more
-  may never finish indexing.
+- **Search catches up after saving.** Each turn is saved as soon as it ends.
+  From 0.6.8, new saves are indexed first, so they are usually searchable
+  within about 10 seconds (a long turn can take about half a minute, and a turn with very many messages up to about two minutes). The full
+  index of your older conversations is built in the background while Claude
+  Code or Codex is open: about 15 minutes per 1,000 saved messages on a typical
+  computer and up to about 20 on a slower one; larger stores take less time per message (10,000 messages: about 1.5 hours, or
+  about 3 hours on a slower computer). After upgrading from 0.6.7, this first
+  full pass runs once more. Each new save starts a re-check of the whole index
+  (about 5 minutes per 1,000 saved messages), so while saves keep arriving the
+  full pass may not finish until saving pauses; new saves are still indexed
+  first. Times depend on your conversations. Until the first full pass
+  finishes, search still returns results, but conversations it hasn't reached
+  yet can be missing, so an empty answer does not mean nothing was saved.
+  Histories of about 50,000 messages or more may never finish indexing.
 - **Local recall is on request.** Local mode does not add memories to your
   prompts by itself. Your agent searches when you ask.
 - **Platforms.** Automatic saving runs on Linux and WSL, and for Claude Code
@@ -247,12 +254,14 @@ This is a developer preview. Know these limits before you rely on it:
 - **Deleted text and search indexes.** Deleting a conversation or forgetting a
   memory removes that text from Cairn's database at once, and it is never shown
   again; conversations a forget only hides stay saved until you delete them.
-  Local search index files can keep word lists (and, with semantic search,
-  vectors) from deleted items until background cleanup reaches them. Cleanup
-  runs only while Cairn is running, may not reach them while new conversations
-  keep being saved, and never covers index files for a search setup you no
+  Search never returns deleted text, but local search index files can keep word
+  lists (and, with semantic search, vectors) from deleted items until background
+  cleanup removes them. Cleanup runs only while Cairn is running, can take a
+  while on a large store, and never covers index files for a search setup you no
   longer use. As with most databases, deleted text can also remain in unused
   file space until it is overwritten.
+- **After a forget.** Recall that asks for sources or reasons can be refused (`source_unavailable`) after you forget or correct a memory, until the other memories that came from a conversation it hid are corrected or forgotten. This needs a model key and is unchanged from 0.6.7; ordinary recall keeps working. After you forget something, the conversation it came from and any resumed or forked copy of it (for example `claude --resume`) are not saved from then on. Any conversation that tries to save a message dated within 30 minutes of the forgotten message is not saved from then on either, including one you start right after the forget. To resume saving, start a new conversation more than 30 minutes after the forgotten message was written. After any local forget, correct, conversation delete or Episode forget, conversations whose message times are unknown are hidden from Raw search, and a conversation that saves a message without a time is not saved from then on, including new conversations. Memories are kept. Claude Code and Codex normally record message times, so this only affects messages whose transcript entry has no timestamp.
+- **Integrations that call the engine directly.** For integrations that call the engine directly or run the MCP server with `--retained-raw-profile`: reading a saved conversation by its id and listing saved conversations are not yet stopped by a forget. On stores that were not upgraded with the offline safety migration they still return a conversation hidden by a forget or correction, with its text. On upgraded stores the hidden conversation is returned without its text, and listing saved conversations and the saved-text usage summary are refused (`evidence_unavailable`, `source_unavailable`) after a forget. Search, recall and memory sources do not return hidden conversations. Fixed in the next installer; until then `cairn-memory raw delete --conversation ID --yes` removes a hidden conversation's saved text. Installed setups do not expose these readers. Other limits that only direct integrations reach (session-start and summary reads after a forget, listing memories on stores upgraded with the offline safety migration, and index word statistics before cleanup) are listed in the [changelog](CHANGELOG.md).
 - **Semantic recall needs a key.** Without an OpenAI key, `recall_memory`
   returns `model_not_configured`, and keyword search still works. A fully local
   model path is not verified yet.

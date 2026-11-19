@@ -1,10 +1,10 @@
-import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside, resetContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { contentReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { attestContentSafety, checkInstalledContentSafety, cachedContentLayout } from './content-safety-schema.mjs';
-import { unsupportedTopicStorage } from './topic-reader-sqlite.mjs';
+import { topicReadTransaction, unsupportedTopicStorage } from './topic-reader-sqlite.mjs';
 import { lstatSync } from 'node:fs';
 import { openReadDatabase } from './read-database.mjs';
-import { APPLICATION_ID, READ_SCHEMA_VERSIONS } from './database.mjs';
+import { APPLICATION_ID, READ_SCHEMA_VERSIONS, isStorageBusy } from './database.mjs';
 import { createTopicOpening, assertPointPlan } from './topic-members-opening.mjs';
 import { createTopicMembersStorage } from './topic-members-storage.mjs';
 import { createTopicOverviewStorage } from './topic-overview-storage.mjs';
@@ -20,7 +20,8 @@ const configuration = db => ({ version: db.prepare('PRAGMA user_version').get().
 export function createTopicSession(path, topicPolicy) {
   let connection, schema, opening, overview, members, readMemo, requestNamespace, dirty = false;
   function dispose() {
-    connection?.db.close(); connection = opening = overview = members = undefined; dirty = false;
+    if (connection?.db.isOpen) connection.db.close();
+    connection = opening = overview = members = undefined; dirty = false;
   }
   function changed() {
     dirty = true;
@@ -28,7 +29,8 @@ export function createTopicSession(path, topicPolicy) {
   }
   function prepare({ charge, request }) {
     requestNamespace = request.namespace;
-    if (connection) {
+    if (connection && !connection.db.isOpen) dirty = true;
+    if (connection && !dirty) {
       try { connection.assertFile(); } catch (error) {
         if (!['cursor_stale', 'database_not_found', 'unsafe_database_file'].includes(error.code)) throw error;
         dirty = true;
@@ -77,17 +79,30 @@ export function createTopicSession(path, topicPolicy) {
       throw error;
     }
   }
-  function transaction(work) {
-    if (!cachedContentLayout(connection.db)?.suppressionRevision) {
-      connection.db.exec('BEGIN');
-      try { const value = work(); connection.db.exec('COMMIT'); return value; }
-      catch (error) { connection.db.exec('ROLLBACK'); throw error; }
-    }
-    return withContentSuppressionRequest(() => {
-      connection.db.exec('BEGIN');
-      try { const value = inContentSuppressionRequestInside(connection.db,work,requestNamespace ? [requestNamespace] : undefined); connection.db.exec('COMMIT'); return value; }
-      catch (error) { connection.db.exec('ROLLBACK'); throw error; }
+  function prepareRequest({ charge, ...args }) {
+    if (!topicPolicy) return prepare({ charge, ...args });
+    return topicPolicy.retryOpening(() => {
+      const charges = [];
+      prepare({ ...args, charge: units => charges.push(units) });
+      for (const units of charges) charge(units);
     });
+  }
+  const canRetry = () => topicPolicy?.isDelete(connection?.db);
+  function retry(work, restore) {
+    return topicPolicy ? topicPolicy.retryRead(connection.db, work, restore) : work();
+  }
+  function retryTransaction(work, restore) {
+    return retry(() => transaction(work), () => {
+      if (restore && !restore()) return false;
+      resetContentSuppressionRequestInside(connection.db);
+      return true;
+    });
+  }
+  function transaction(work) {
+    const { db } = connection, run = callback => topicReadTransaction(db, callback, canRetry() ? isStorageBusy : undefined);
+    if (!cachedContentLayout(db)?.suppressionRevision) return run(work);
+    return withContentSuppressionRequest(() => run(() =>
+      inContentSuppressionRequestInside(db, work, requestNamespace ? [requestNamespace] : undefined)));
   }
   const snapshot = namespace => {
     try { connection.assertFile(); } catch { changed(); }
@@ -107,16 +122,19 @@ export function createTopicSession(path, topicPolicy) {
     try { assertContentSuppressionRequestInside(connection.db,[namespace]); }
     catch(error) { if(error.code==='evidence_unavailable')fail('cursor_stale');throw error; }
   };
-  return { prepare, transaction, snapshot, originBinding, dispose, assertDelivery,
+  return { prepare, prepareRequest, transaction, canRetry, retryTransaction, snapshot, originBinding, dispose,
+    assertDelivery: namespace => retry(() => assertDelivery(namespace)),
     storage: { create: () => members.create(), target: (...args) => members.target(...args),
       cost: state => members.cost(state), step: (...args) => members.step(...args) },
     accept: state => opening.accept(state?.initialization),
     overviewCreate(namespace, bounds, captured) {
       const data = overview.create(namespace, bounds, captured), initialization = opening.create();
-      function* scan() {
-        while (!initialization.done) { opening.step(initialization); yield; }
-        yield* data.scan;
-      }
-      return { ...data, initialization, cost: () => initialization.done ? 1 : opening.cost(initialization), scan: scan() };
+      return { ...data, initialization, cost: () => initialization.done ? 1 : opening.cost(initialization),
+        stepOpening: () => opening.step(initialization),
+        restoreOpening(checkpoint) {
+          // Keep the identity used by cost(), stepOpening() and accept().
+          for (const key of Object.keys(initialization)) delete initialization[key];
+          Object.assign(initialization, checkpoint);
+        } };
     } };
 }

@@ -71,10 +71,19 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
     if (closed) fail('store_closed');
     if (!sameJournal(privateFile(path),initial) || !sameDirectory(privateDirectory(directory),parent)) fail('unsafe_index_file');
   }
+  function discard(cleanup) {
+    closed=true;
+    try{if(db.isOpen)db.close();}catch{/* The connection remains discarded. */}
+    throw new Error('Raw search rollback failed',{cause:cleanup});
+  }
   function transaction(work) {
-    ready(); db.exec('BEGIN IMMEDIATE');
-    try { const result = work(); if (sealing) writeSidecarAttestation(db,sealKey,sealFile,sealFormat); db.exec('COMMIT'); return result; }
-    catch (error) { if(db.isTransaction)db.exec('ROLLBACK'); throw error; }
+    ready();
+    try { db.exec('BEGIN IMMEDIATE');const result = work(); if (sealing) writeSidecarAttestation(db,sealKey,sealFile,sealFormat); db.exec('COMMIT'); return result; }
+    catch (error) {
+      try{if(db.isTransaction)db.exec('ROLLBACK');}catch(cleanup){discard(cleanup);}
+      if(!db.isOpen||db.isTransaction)discard(error);
+      throw error;
+    }
   }
   function header() {
     const row=db.prepare('SELECT * FROM header WHERE singleton=1').get();
@@ -113,7 +122,11 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
     // A crash can leave an unpublished segment; it is never searchable.
     transaction(() => db.prepare('DELETE FROM segments WHERE id IN (SELECT id FROM segments WHERE published=0 LIMIT 4096)').run());
     check();
-  } catch (error) { db.close(); throw error; }
+  } catch (error) {
+    try { if(db.isOpen)db.close();if(db.isOpen)throw new Error('Open Raw search connection'); }
+    catch(cleanup){throw new Error('Raw search opening disposal failed',{cause:cleanup});}
+    throw error;
+  }
   deadlineAt = Infinity;
   const vectorBytes = value => value instanceof Uint8Array ? Buffer.from(value.buffer,value.byteOffset,value.byteLength) : Buffer.from(value,'hex');
   const sign = (data,vectors) => bind('raw-search-segment-v3',[binding,data,
@@ -228,13 +241,18 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
   }
   async function search(options={}) {
     return within(options.deadlineAt??Infinity,()=>{
-      ready();db.exec('BEGIN DEFERRED');
+      ready();
       try {
+        db.exec('BEGIN DEFERRED');
         const current=header(),revision=db.prepare('PRAGMA data_version').get().data_version;
         const slice=searchSlice(options);
         db.exec('COMMIT');
         return {generation,revision,sequence:current.sequence,checkpoint:JSON.parse(current.checkpoint),...slice};
-      }catch(error){if(db.isTransaction)db.exec('ROLLBACK');throw error;}
+      }catch(error){
+        try{if(db.isTransaction)db.exec('ROLLBACK');}catch(cleanup){discard(cleanup);}
+        if(!db.isOpen||db.isTransaction)discard(error);
+        throw error;
+      }
     });
   }
   function head() {
@@ -248,15 +266,19 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
     // Native change detection also invalidates on an out-of-band sidecar write
     // that did not advance the signed publication clock. One sidecar snapshot
     // reads the authenticated header and the uncached coverage shape.
-    db.exec('BEGIN DEFERRED');
     try {
+      db.exec('BEGIN DEFERRED');
       const current=header(),revision=db.prepare('PRAGMA data_version').get().data_version;
       if(!shape){db.exec('COMMIT');return {generation,revision,sequence:current.sequence};}
       const {partial,partialReason,hintBytes,vectorBytes}=searchSlice({decodeRows:false,deadlineAt});
       db.exec('COMMIT');
       return {generation,revision,sequence:current.sequence,checkpoint:JSON.parse(current.checkpoint),
         partial,partialReason,hintBytes,vectorBytes};
-    }catch(error){if(db.isTransaction)db.exec('ROLLBACK');throw error;}
+    }catch(error){
+      try{if(db.isTransaction)db.exec('ROLLBACK');}catch(cleanup){discard(cleanup);}
+      if(!db.isOpen||db.isTransaction)discard(error);
+      throw error;
+    }
   }
   async function stage(segment) {
     ready();
@@ -316,12 +338,17 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
   }
   async function status() {
     ready();
-    header();
-    const row = db.prepare('SELECT sequence,checkpoint,(SELECT count(*) FROM segments WHERE published=1) AS segments FROM header WHERE singleton=1').get();
-    return { sequence:row.sequence,checkpoint:JSON.parse(row.checkpoint),segments:row.segments,
-      allocatedBytes:db.prepare('PRAGMA page_count').get().page_count*db.prepare('PRAGMA page_size').get().page_size,
-      freeBytes:db.prepare('PRAGMA freelist_count').get().freelist_count*db.prepare('PRAGMA page_size').get().page_size,
-      journalBytes:Number(stat(path+'-journal')?.size ?? 0n),quotaBytes };
+    try {
+      header();
+      const row = db.prepare('SELECT sequence,checkpoint,(SELECT count(*) FROM segments WHERE published=1) AS segments FROM header WHERE singleton=1').get();
+      return { sequence:row.sequence,checkpoint:JSON.parse(row.checkpoint),segments:row.segments,
+        allocatedBytes:db.prepare('PRAGMA page_count').get().page_count*db.prepare('PRAGMA page_size').get().page_size,
+        freeBytes:db.prepare('PRAGMA freelist_count').get().freelist_count*db.prepare('PRAGMA page_size').get().page_size,
+        journalBytes:Number(stat(path+'-journal')?.size ?? 0n),quotaBytes };
+    }catch(error){
+      if(!db.isOpen||db.isTransaction)discard(error);
+      throw error;
+    }
   }
   async function dropOwner() {
     let removed;
@@ -329,7 +356,12 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
       const current=header(),result=db.prepare('DELETE FROM segments WHERE id IN (SELECT id FROM segments LIMIT 1024)').run();
       writeHeader(current.sequence+1,emptyCheckpoint());return result.changes;
     });}while(removed);
-    db.exec('VACUUM');
+    try{db.exec('VACUUM');}catch(error){
+      // Finish any transaction left by VACUUM before exposing a retry.
+      try{if(db.isTransaction)db.exec('ROLLBACK');}catch(cleanup){discard(cleanup);}
+      if(!db.isOpen||db.isTransaction)discard(error);
+      throw error;
+    }
   }
   return Object.freeze({ openOwner:async () => binding,snapshot,search,head,tail:()=>db.prepare('SELECT coalesce(max(id),0) AS last FROM segments WHERE published=1').get().last,publication,stage,publish,invalidate,checkpoint,lookup,commitBatch,status,dropOwner,
     async close() { if (!closed) { closed = true; db.close(); } } });

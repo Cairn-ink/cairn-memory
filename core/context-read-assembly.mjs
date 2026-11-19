@@ -143,7 +143,7 @@ function canonical(value) {
 // snapshotOf runs once, after all counts, using only cached preparation state.
 export function assembleContext({ prepared, counter, policy, budget, snapshotOf, deadlineAt, representation = 'representation-v2',
   responseBytes, intent = 'current', now = () => performance.now() }) {
-  const started = now(), selected = new Map();
+  const started = now(), selected = new Map(), compact = representation === 'memory-compact-v1';
   const hasEngineCards = prepared.some(item => item.type === 'card' && item.metadata?.origin === 'engine');
   const hits = hasEngineCards ? engineCardHits(prepared, budget.maxItems) : new Map();
   if (hasEngineCards) {
@@ -171,6 +171,11 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
     });
     const items = included.map((item, itemIndex) => {
       const chosen = selection.get(item), sourceDetails = [];
+      if (compact) {
+        details.push({ ref: item.ref, metadata: item.metadata, body: { tokens: chosen.tokens }, sources: [],
+          sourceAccess: item.sourceAccess, sourcesComplete: item.sourcesComplete, fence: item.fence, f: item.fence.slice(0, 8) });
+        return { date: item.date ?? null, body: item.text };
+      }
       // Dated provenance belongs to the body even when an excerpt cannot fit.
       // Keep a date-only receipt entry; excerpt selection and omission counts
       // retain their existing policy. Every trial meters these entries too.
@@ -211,10 +216,10 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
     });
     return { metered: { framing: ASSEMBLY_FRAMING, items }, details };
   }
-  const dateOrder = representation === 'representation-v2-dated';
+  const dateOrder = representation === 'representation-v2-dated' || compact;
   const totalSources = prepared.reduce((sum, item) => sum + item.sources.length, 0);
   function diagnostics(value, used, bounded = false) {
-    const sources = value.metered.items.flatMap(item => item.sources), bodies = prepared.length - value.metered.items.length;
+    const sources = value.metered.items.flatMap(item => item.sources ?? []), bodies = prepared.length - value.metered.items.length;
     return { version: CONTEXT_VERSION, policy: { id: policy.id }, representation, counter: { id: counter.id },
       items: value.details, budget: { ...budget, used: bounded ? budget.maxTokens : used },
       omitted: { items: bodies, bodies, sources: totalSources - value.details.reduce((n, item) => n + item.sources.length, 0), unavailable: 0,
@@ -268,10 +273,10 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
     const minimum = used > budget.maxTokens ? count(minimumText) : used;
     if (minimum !== null && (minimum > budget.maxTokens || !fitsBytes(minimumValue, minimumText, minimum, minimal))) oversized++;
   }
-  if (policy.id !== 'coverage-first-v1') {
+  if (compact || policy.id !== 'coverage-first-v1') {
     for (const item of prepared) {
       visit(item);
-      if (selected.has(item)) for (const source of policy.id === 'rank-first-first-source-v1' ? item.sources.slice(0, 1) : item.sources) visit(item, source);
+      if (!compact && selected.has(item)) for (const source of policy.id === 'rank-first-first-source-v1' ? item.sources.slice(0, 1) : item.sources) visit(item, source);
       if (stops.deadline) break;
     }
   } else {

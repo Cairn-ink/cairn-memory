@@ -237,8 +237,8 @@ visible revision mismatches return `revision_conflict`, wrong levels `invalid_re
 Default failures contain only `{ok:false,error:{code}}`. The explicit
 `diagnostics:true` reader option adds the storage metadata described below.
 
-Member reads use the existing read-only opener and E1-C lock policy without
-another retry layer. Lock refusal is `storage_busy`; deadline cancellation is
+Member reads use the existing read-only opener with bounded DELETE retries within the request deadline.
+Lock refusal is `storage_busy`; deadline cancellation is
 `read_timeout`. Retry busy explicitly with the same acknowledged cursor.
 Deferred transactions commit between bounded quanta and before emission.
 No writer slot or migration is used, including on physical schema 18.

@@ -49,6 +49,19 @@ function plan(model, items, deadline) {
  * authority. `report` receives how many items were shortened or left unqualified.
  */
 export async function qualifyExtractedItems(model, items, deadline, report = {}, validateFresh) {
+  if (items.length > 5) {
+    denseArray(items, 1, 20);
+    const result = [];
+    report.itemsShortened = 0;
+    report.itemsUnqualified = 0;
+    for (let start = 0; start < items.length; start += 5) {
+      const part = {};
+      result.push(...await qualifyExtractedItems(model, items.slice(start, start + 5), deadline, part, validateFresh));
+      report.itemsShortened += part.itemsShortened;
+      report.itemsUnqualified += part.itemsUnqualified;
+    }
+    return result;
+  }
   deadline?.check();
   const { groups, unqualified } = plan(model, items, deadline);
   const qualifications = new Map();

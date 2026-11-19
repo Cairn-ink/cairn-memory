@@ -23,7 +23,7 @@ async function ready(t, migrated = true, namespace = ns, composition = {}) {
     ...composition.options,
     ...(composition.context ? { contextRead: { version: 'context-read-v1', authority: cardHost().options.authority } } : {}) });
   const db = fixture.connect();
-  t.after(() => { core.close(); db.close(); });
+  fixture.workspace.defer(async () => { await core.close(); db.close(); });
   const memories = Array.from({ length: 8 }, (_, i) => {
     const content = `Orion synthetic milestone ${i}: shared implementation evidence marker${i}.`;
     const memory = ok(core.admit({ namespace, memory: { content, kind: 'fact' },
