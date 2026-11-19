@@ -5,6 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { createRawLineageStorage } from '../raw-lineage-storage.mjs';
 import { installedContentLayout } from '../content-safety-schema.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
+import { transaction } from '../database.mjs';
 import { openMemoryCore } from '../index.mjs';
 import { eventTimeSafetyFixture, ns, ok } from '../testing/receipt-event-time-fixture.mjs';
 
@@ -153,6 +154,55 @@ test('a third tuple read fault refuses the batch and retry reaches the Raw fence
   faultActive = false;
   const retry = observe(t, db, batch, { prepareSQL, lineage });
   assert.equal(retry.caught?.code, 'conversation_deleted');
+  assert.equal(retry.allowed, undefined);
+});
+
+for (const { role, mappedExcerpt, terminal } of [
+  { role: 'assistant', terminal: 'event_payload_conflict' },
+  { role: 'user', mappedExcerpt: 'Synthetic mapped source', terminal: 'raw_lineage_unavailable' },
+]) test(`a third tuple read fault refuses the batch and retry reaches ${terminal}`, async t => {
+  const { db } = await setup(t);
+  const first = source('invalid'), second = { ...source('raw'), client: 'claude-code' }, third = source('third');
+  addMemory(db, 'first-parent');
+  addMemory(db, 'third-parent');
+  addReceipt(db, 'first-parent', first, { bad: true });
+  addReceipt(db, 'third-parent', third);
+  const lineage = createRawLineageStorage(db);
+  const storedExcerpt = mappedExcerpt ?? second.excerpt;
+  transaction(db, () => {
+    db.prepare(`INSERT INTO raw_conversations(id,owner_id,scope,project_id,client,session_key,revision,first_received_at,last_received_at)
+      VALUES('raw-parent',?,?,?,?,?,1,'time','time')`).run(ns.ownerId, ns.scope, ns.projectId, second.client, second.sessionId);
+    db.prepare(`INSERT INTO raw_messages(conversation_id,message_id,ordinal,role,total_units,total_bytes,assembly_state,first_event_id)
+      VALUES('raw-parent',?,1,?,?,?,'closed','raw-first')`).run(second.eventId, role, storedExcerpt.length, Buffer.byteLength(storedExcerpt));
+    if (mappedExcerpt) lineage.register('raw-parent', [{ messageId: second.eventId, role,
+      entries: [{ excerpt: mappedExcerpt, start: 0, end: mappedExcerpt.length, precision: 'exact' }] }]);
+  });
+
+  const batch = [first, second, third];
+  const fault = failure('read_timeout');
+  let faultActive = true, attempts = 0;
+  db.function('inspect_receipt', eventId => {
+    if (faultActive && eventId === third.eventId) {
+      attempts++;
+      throw fault;
+    }
+    return eventId;
+  });
+  const prepareSQL = sql => sql.includes(unionSQL)
+    ? sql.replace('SELECT r.*,', 'SELECT inspect_receipt(r.event_id) AS inspected_event, r.*,') : sql;
+  const baseline = observe(t, db, batch, { exact: true, prepareSQL, lineage });
+  assert.equal(baseline.caught?.code, terminal);
+  assert.equal(baseline.allowed, undefined);
+  assert.equal(attempts, 0);
+
+  const faulted = observe(t, db, batch, { prepareSQL, lineage });
+  assert.equal(attempts, 1);
+  assert.equal(faulted.caught, fault);
+  assert.equal(faulted.allowed, undefined);
+
+  faultActive = false;
+  const retry = observe(t, db, batch, { prepareSQL, lineage });
+  assert.equal(retry.caught?.code, terminal);
   assert.equal(retry.allowed, undefined);
 });
 

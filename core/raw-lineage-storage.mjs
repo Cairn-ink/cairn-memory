@@ -280,7 +280,7 @@ function* writerReceiptPages(db, check, ns, receipts, shared = false) {
         const encoding=eligible&&!receiptEncoding.has(db)?', (SELECT encoding FROM pragma_encoding) AS receipt_encoding':'';
         const rows=db.prepare(`SELECT id,revision,deleted,updated_at${encoding} FROM memories INDEXED BY namespace_memories
         WHERE owner_id=? AND scope=? AND project_id=? AND deleted=? ${clause}
-        ORDER BY updated_at DESC,id LIMIT ?`).all(...boundary(ns),deleted,...args,limit);
+        ORDER BY updated_at DESC,id LIMIT ?`).all(...boundary(ns),deleted,...args,limit); // Plain read. Any safety wrapper that can throw source_excluded here must absorb it per receipt as the direct path does.
         if(encoding&&rows.length)receiptEncoding.set(db,rows[0].receipt_encoding);
         return rows;
       };
