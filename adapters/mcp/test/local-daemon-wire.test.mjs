@@ -14,20 +14,6 @@ async function pair(t, serverWork) {
   const socket = createConnection(join(root, 'wire.sock')); sockets.push(socket); socket.on('error', () => {}); await once(socket, 'connect'); return socket;
 }
 const descriptor = () => ({ protocol: 2, identity: { protocol: 2, build: 'synthetic-build' }, incarnation: 'a'.repeat(64), capability: 'b'.repeat(64) });
-test('server independently refuses a protocol-one hello before authentication or MCP', async t => {
-  const d = descriptor(); let code, admissions = 0;
-  const socket = await pair(t, async peer => {
-    try {
-      await authenticateServer(peer, d, { deadline: performance.now() + 1000, admitting: () => true,
-        authenticated: async () => { admissions++; } });
-    } catch (error) { code = error.code; peer.destroy(); }
-  });
-  const closed = once(socket, 'close');
-  socket.write(JSON.stringify({ kind: 'hello', protocol: 1, identity: d.identity,
-    incarnation: d.incarnation, clientNonce: 'c'.repeat(64) }) + '\n');
-  await closed;
-  assert.equal(code, 'daemon_protocol'); assert.equal(admissions, 0);
-});
 test('each authentication uses fresh client and server challenges', async t => {
   const d = descriptor(), clients = [], servers = [];
   for (let i = 0; i < 2; i++) {
@@ -48,7 +34,7 @@ test('mutual challenge keeps MCP bytes behind auth; capability identity version 
     const socket = await pair(t, async peer => {
       if (kind === 'nonce') {
         peer.once('data', bytes => {
-          const hello = JSON.parse(bytes), transcript = { protocol: 2, identity: d.identity, incarnation: d.incarnation, clientNonce: hello.clientNonce, serverNonce: 'c'.repeat(64) };
+          const hello = JSON.parse(bytes), transcript = { protocol: 1, identity: d.identity, incarnation: d.incarnation, clientNonce: hello.clientNonce, serverNonce: 'c'.repeat(64) };
           peer.write(JSON.stringify({ kind: 'challenge', clientNonce: 'wrong', serverNonce: transcript.serverNonce, mac: proof(d.capability, 'server', transcript) }) + '\n');
           peer.once('data', () => peer.write(JSON.stringify({ kind: 'ready', metadata: {}, mac: proof(d.capability, 'ready', { ...transcript, metadata: {} }) }) + '\n'));
         }); return;

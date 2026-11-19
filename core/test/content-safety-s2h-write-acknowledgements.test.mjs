@@ -320,10 +320,6 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // content identities still pass its canonical fail-closed walker unchanged.
   // One budget dispatcher now serves scoped and unbound callers; its single
   // `id: port.id` is provider metadata, never a writer/content identity.
-  // Daemon crash-temp cleanup adds literal:daemon_temp_invalid (state 1,
-  // daemon 3): a fixed log-only error code that matches only by its `...id`
-  // suffix. It carries no identity, path or content, and is never an
-  // acknowledgement, projection or stored field.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));
   const files=JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json',import.meta.url),'utf8'));
   const actual={};

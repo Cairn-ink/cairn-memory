@@ -1,4 +1,3 @@
-import { daemonStderrTail } from './fixtures/local-daemon-diagnostics.mjs';
 import assert from 'node:assert/strict';
 import { fork } from 'node:child_process';
 import { once } from 'node:events';
@@ -44,8 +43,7 @@ export async function workspace(t) {
       entry.messages.push(message); messages.push(message);
       if (message.kind === 'connected') owners.set(message.owner.pid, message.owner);
     });
-    const stderr = daemonStderrTail();
-    process.stderr.on('data', bytes => { stderr.write(bytes); entry.stderr = stderr.read(); });
+    process.stderr.on('data', bytes => { entry.stderr += bytes; assert.ok(entry.stderr.length < 8192, 'child stderr must remain bounded'); });
     let buffer = '';
     process.stdout.on('data', bytes => {
       buffer += bytes;
