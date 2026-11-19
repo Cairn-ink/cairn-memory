@@ -14,7 +14,7 @@ const outcomes = new Map([
   [429, "rate_limited"],
   [503, "service_unavailable"],
 ]);
-const replyCodes = ["invalid_reply", "timeout", "network", "dispatch_refused"];
+const replyCodes = ["invalid_reply", "timeout", "network", "dispatch_refused", "representation_unavailable"];
 const lastOutcomes = [...outcomes.values(), ...replyCodes, "complete", "empty", "server_error", "http_error"];
 
 export function contextReadOutcome(reply) {

@@ -53,13 +53,13 @@ const recallEnd = recallController ? 3500 : undefined;
 // Stop admitting output 50 ms before abort, without shortening the fetch.
 // This is admission headroom; an admitted pipe write uses its own drain cap.
 const OUTPUT_WRITE_MARGIN_MS = 50;
-const CONTEXT_READ_LIMITS = { max_items: 24, max_tokens: 1_500 };
 const CONTEXT_READ_CAP_MS = 1_500;
 const CONTEXT_READ_MIN_MS = 250;
 const RECALL_RESERVE_MS = 1_300;
 const RENDER_MAX_CHARS = 9_000;
 const AVAILABLE_TTL_MS = 3_600_000;
 const COOLDOWN_MS = 300_000;
+const REPRESENTATION_COOLDOWN_MS = 3_600_000;
 const COOLDOWN_STREAK = 3;
 // The host counts its four seconds from spawn. Reserve 100 ms for the interval
 // before Node's performance origin and 150 ms for exit/reaping. The backstop is
@@ -227,6 +227,10 @@ function recallLine(memory) {
   return `- [${memory.id}] (${memory.origin}, ${memory.scope}, confidence ${Number(memory.confidence).toFixed(2)}${source}) ${memory.content}`;
 }
 
+function contextReadLine(memory) {
+  return `- [${memory.id}] (${memory.scope}, ${memory.date ?? "undated"}) ${memory.text}`;
+}
+
 async function recall(hookInput) {
   checkRecall();
   if (!token) return;
@@ -278,9 +282,9 @@ async function recall(hookInput) {
   if (state && Date.parse(state.available_until) > now &&
       !(Date.parse(state.cooldown_until) > now) && crCap >= CONTEXT_READ_MIN_MS) {
     contextReadPending = cache.save;
-    const { postContextRead } = await import("../lib/context-read.mjs");
+    const { CONTEXT_READ_OPTIONS, postContextRead } = await import("../lib/context-read.mjs");
     const reply = await postContextRead({ endpoint, token }, {
-      version: 1, query, ...project, ...session, ...CONTEXT_READ_LIMITS,
+      version: 1, query, ...project, ...session, ...CONTEXT_READ_OPTIONS,
     },
       Math.floor(crCap), fetchSignal, start => dispatchActive(control.generation, start, fetchSignal, hosted, {
         contextRead: true, onCapability: available => { if (available) learn(true); },
@@ -296,6 +300,10 @@ async function recall(hookInput) {
       contextRead = true;
     } else if (reply.status === 401 || reply.code === "dispatch_refused") return;
     else if (reply.status === 404) learn(false);
+    else if (reply.code === "representation_unavailable") {
+      learn(false, at);
+      state.cooldown_until = new Date(at + REPRESENTATION_COOLDOWN_MS).toISOString();
+    }
     else if (reply.status !== 400) {
       state.failure_streak = Math.min(Number.MAX_SAFE_INTEGER, state.failure_streak + 1);
       if (state.failure_streak >= COOLDOWN_STREAK)
@@ -317,7 +325,7 @@ async function recall(hookInput) {
   const lines = [];
   let renderedChars = recallPreamble.length;
   for (const memory of result.memories) {
-    const line = recallLine(memory);
+    const line = contextRead ? contextReadLine(memory) : recallLine(memory);
     const length = renderedChars + line.length + (lines.length ? 1 : 0);
     if (contextRead && length > RENDER_MAX_CHARS) break;
     lines.push(line);
