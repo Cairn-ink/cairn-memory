@@ -15,12 +15,13 @@ function observeWalks(t) {
   const active = new WeakMap(), turns = [];
   const sql = t.mock.method(DatabaseSync.prototype, 'prepare', function (text) {
     const statement = prepare.call(this, text), turn = active.get(this);
-    if (!turn || !text.startsWith('SELECT id,revision,deleted,updated_at') && !text.includes("event_id IN (SELECT json_extract(value,'$[2]')")) {
+    const unionPage = text.includes('CROSS JOIN json_each(?) source CROSS JOIN receipts');
+    if (!turn || !text.startsWith('SELECT id,revision,deleted,updated_at') && !unionPage) {
       return statement;
     }
     const all = statement.all.bind(statement);
     statement.all = (...args) => {
-      if (text.includes("event_id IN (SELECT json_extract(value,'$[2]')")) turn.unionPages++;
+      if (unionPage) turn.unionPages++;
       else if (args.length === 5 && args[3] === 0) turn.walks++;
       return all(...args);
     };
