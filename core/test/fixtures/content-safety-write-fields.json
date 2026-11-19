@@ -518,11 +518,13 @@
     "key:messageId": 7,
     "key:sessionId": 7,
     "literal:conversation_id": 2,
-    "literal:id": 5,
-    "literal:memory_id": 2,
-    "literal:message_id": 3,
-    "literal:owner_id": 3,
-    "literal:project_id": 3
+    "literal:id": 6,
+    "literal:memory_id": 1,
+    "literal:message_id": 2,
+    "literal:owner_id": 2,
+    "literal:project_id": 2,
+    "literal:receipt_id": 1,
+    "literal:source_id": 1
   },
   "core/raw-source-input.mjs": {
     "key:conversationId": 2,
