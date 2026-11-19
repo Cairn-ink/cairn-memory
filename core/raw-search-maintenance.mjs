@@ -272,27 +272,30 @@ export function createRawSearchMaintenance(storage,authority,options) {
         }
         if(cleanupSkip)cleanupSkip=false;
         else if(!cleanupIdle){
-          // One materialized row bounds small-slice snapshot work. Larger
-          // slices retain the existing maximum page and cursor semantics.
-          const cleanup=await storage.snapshot({after:ring.afterSegment,limit:Math.min(maxItems,maxMs<=25?1:16)});
-          let checked=0;
-          for(const row of cleanup.rows){
-            if(row.segment>ring.throughSegment)break;
-            if(checked&&(performance.now()-ringStarted>=ringBudget||performance.now()-started>=maxMs))break;
-            if(authority.disposition(row.source)==='remove')remove.push(row.segment);
-            ring.afterSegment=row.segment;progress.scanned++;checked++;
+          try {
+            // One materialized row bounds small-slice snapshot work. Larger
+            // slices retain the existing maximum page and cursor semantics.
+            const cleanup=await storage.snapshot({after:ring.afterSegment,limit:Math.min(maxItems,maxMs<=25?1:16)});
+            let checked=0;
+            for(const row of cleanup.rows){
+              if(row.segment>ring.throughSegment)break;
+              if(checked&&(performance.now()-ringStarted>=ringBudget||performance.now()-started>=maxMs))break;
+              if(authority.disposition(row.source)==='remove')remove.push(row.segment);
+              ring.afterSegment=row.segment;progress.scanned++;checked++;
+            }
+            if(checked===cleanup.rows.length&&!cleanup.partial||ring.afterSegment>=ring.throughSegment||cleanup.rows[checked]?.segment>ring.throughSegment){
+              // Read after the final disposition: a denial during that check
+              // can invalidate a source already visited earlier in this lap.
+              const endVersion=authority.version?.();
+              cleanupIdle=versionAvailable&&cleanupFullLap&&endVersion===cleanupVersion;
+              ring.afterSegment=0;ring.throughSegment=storage.tail();
+              cleanupVersion=endVersion;cleanupFullLap=true;
+            }
+          } finally {
+            // One indivisible canonical read can exceed the entire share. Give
+            // the next reconciliation turn to the sweep and inventory.
+            cleanupSkip=performance.now()-ringStarted>ringBudget;
           }
-          if(checked===cleanup.rows.length&&!cleanup.partial||ring.afterSegment>=ring.throughSegment||cleanup.rows[checked]?.segment>ring.throughSegment){
-            // Read after the final disposition: a denial during that check
-            // can invalidate a source already visited earlier in this lap.
-            const endVersion=authority.version?.();
-            cleanupIdle=versionAvailable&&cleanupFullLap&&endVersion===cleanupVersion;
-            ring.afterSegment=0;ring.throughSegment=storage.tail();
-            cleanupVersion=endVersion;cleanupFullLap=true;
-          }
-          // One indivisible canonical read can exceed the entire share. Give
-          // the next reconciliation turn to the sweep and inventory.
-          cleanupSkip=performance.now()-ringStarted>ringBudget;
         }
         checkpoint.cleanup=ring;
         const cleanupCheckpoint=structuredClone(checkpoint);

@@ -1,0 +1,63 @@
+{
+  "base": "1b8118dbd9a5a94f2a1d6b4922ebe281e049e461",
+  "provenance": "Recorded by static derivation from the base RRF, dated and undated assembly, and counter schedule. ID, fence prefix and ID-to-body ordering use fixture placeholders.",
+  "corpusSize": 30,
+  "rows": [
+    {
+      "family": "local",
+      "preset": "rrf-k60-d12",
+      "semantic": false,
+      "depth": 24,
+      "count": 24,
+      "omitted": {
+        "lexical": 6,
+        "semantic": null,
+        "horizon": 0
+      },
+      "textSha256": "37e5727a93a202c1c1cdb2b5f976bd0f131f14c5c7901d518b894f6963f38711",
+      "counterInputsSha256": "bb9bd8f7ce587dfb6432b4b1ce011289509bfe5dba68a5002f25d880aa1e5729"
+    },
+    {
+      "family": "local",
+      "preset": "rrf-k60-d12",
+      "semantic": true,
+      "depth": 12,
+      "count": 12,
+      "omitted": {
+        "lexical": 18,
+        "semantic": 18,
+        "horizon": 0
+      },
+      "textSha256": "e21f7fb458db6c8007ff34f446b660869f0c0943e048932155485e006a6fdc9e",
+      "counterInputsSha256": "752cfa33257113840416459035aaf20ca03eaf3c991e6d53c70f760b6314f8e1"
+    },
+    {
+      "family": "hosted",
+      "preset": "rrf-k10",
+      "semantic": false,
+      "depth": 24,
+      "count": 24,
+      "omitted": {
+        "lexical": 6,
+        "semantic": null,
+        "horizon": 0
+      },
+      "textSha256": "37e5727a93a202c1c1cdb2b5f976bd0f131f14c5c7901d518b894f6963f38711",
+      "counterInputsSha256": "bb9bd8f7ce587dfb6432b4b1ce011289509bfe5dba68a5002f25d880aa1e5729"
+    },
+    {
+      "family": "hosted",
+      "preset": "rrf-k10",
+      "semantic": true,
+      "depth": 24,
+      "count": 24,
+      "omitted": {
+        "lexical": 6,
+        "semantic": 6,
+        "horizon": 0
+      },
+      "textSha256": "37e5727a93a202c1c1cdb2b5f976bd0f131f14c5c7901d518b894f6963f38711",
+      "counterInputsSha256": "bb9bd8f7ce587dfb6432b4b1ce011289509bfe5dba68a5002f25d880aa1e5729"
+    }
+  ]
+}

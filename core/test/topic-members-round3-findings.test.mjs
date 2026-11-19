@@ -125,6 +125,22 @@ test('spec/standards P2: Legacy error classification is only partial — differe
     try {
       const expected = await old.readTopicOverview(input), actual = await current.readTopicOverview(input);
       comparisons++;
+      if (/^construction: (extended )?(busy|locked)$/.test(label)) {
+        assert.equal(JSON.stringify(expected), JSON.stringify(unsupported), label);
+        assert.equal(JSON.stringify(actual), '{"ok":false,"error":{"code":"storage_busy"}}', label);
+        return;
+      }
+      if (/^final fence: (extended )?(busy|locked)$/.test(label)) {
+        assert.equal(JSON.stringify(expected), '{"ok":false,"error":{"code":"storage_busy"}}', label);
+        setFault(undefined);
+        const unfaulted = openMemoryReader(options);
+        try {
+          const result = await unfaulted.readTopicOverview(input);
+          assert.equal(result.ok, true, label);
+          assert.equal(JSON.stringify(actual), JSON.stringify(result), label);
+        } finally { await unfaulted.close(); }
+        return;
+      }
       assert.equal(JSON.stringify(actual), JSON.stringify(expected), label);
     } finally { await old.close(); await current.close(); }
   }
@@ -191,5 +207,5 @@ test('spec/standards P2: Legacy error classification is only partial — differe
   }
   comparisons++;
   t.diagnostic(JSON.stringify({ baseline: 'b2513501', comparisons, differences: differences.length }));
-  assert.deepEqual(differences, [], 'every outcome must be byte-identical to main, including all reviewer cases');
+  assert.deepEqual(differences, [], 'all outcomes must match main or the approved lock classifications');
 });

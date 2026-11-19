@@ -5,10 +5,10 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { randomUUID, createHash } from 'node:crypto';
 import { fork, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, renameSync, symlinkSync, mkdirSync, writeFileSync, unlinkSync, readFileSync } from 'node:fs';
+import { chmodSync, existsSync, renameSync, symlinkSync, mkdirSync, writeFileSync, unlinkSync, readFileSync, linkSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { Worker } from 'node:worker_threads';
+import { Worker, MessageChannel } from 'node:worker_threads';
 import { fixture, ns, ok, readTransaction } from '../testing/context-read-fixture.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { installOverviewLayout } from '../testing/topic-overview-raw29-fixture.mjs';
@@ -16,12 +16,14 @@ import { openMemoryCore, openContextProductReader, openContextIndexMaintainer, c
 import { supervisorOwner } from '../context-read-supervisor.mjs';
 import { createProductReaderRuntime } from '../context-product-reader.mjs';
 import { credentialDigest, PRODUCT_PROFILE } from '../context-product-control.mjs';
-import { createProductSqlitePolicy, productSqliteFiles } from '../context-product-sqlite.mjs';
+import { createProductSqlitePolicy, productSqliteFiles, detectProductCanonicalJournal } from '../context-product-sqlite.mjs';
 import { nativeObserver, nativeTelemetry, sealNative, drainNative } from '../context-product-telemetry.mjs';
 import { TOPIC_WAL_WAIT_MS, TOPIC_WAL_REPLY_RESERVE_MS } from '../topic-reader-sqlite.mjs';
 import { productSidecar, PRODUCT_SIDECAR_SUFFIX } from '../context-product-sidecar.mjs';
 import { openContextProductFacade } from '../context-read-facade.mjs';
 import { accessDigest, verifiedRecord, canonicalJson } from '../context-product-validation.mjs';
+import { createMaintenancePumpRuntime } from '../context-product-pump.mjs';
+import { refreshMaintenance } from '../context-product-admission.mjs';
 
 const processFixture = new URL('./fixtures/context-product-wal-process.mjs',import.meta.url);
 const hostUrl = new URL('../testing/context-product-index-host.mjs',import.meta.url).href;
@@ -39,7 +41,8 @@ async function writer(t,path,mode='WAL') {
   t.after(async()=>{if(!ended){c.kill();await exited;}});
   assert.equal((await once(c,'message'))[0].ready,true,stderr);
   let sequence=0;
-  return {pid:c.pid,async call(command){const id=++sequence,pending=once(c,'message');c.send({id,command});const [r]=await pending;assert.equal(r.id,id);assert.equal(r.ok,true,JSON.stringify(r));if(command==='close'){const [code]=await exited;assert.equal(code,0,stderr);}return r;}};
+  return {pid:c.pid,async kill(){assert.equal(c.kill('SIGKILL'),true);const [code,signal]=await exited;assert.equal(code,null);assert.equal(signal,'SIGKILL');},
+    async call(command){const id=++sequence,pending=once(c,'message');c.send({id,command});const [r]=await pending;assert.equal(r.id,id);assert.equal(r.ok,true,JSON.stringify(r));if(command==='close'){const [code]=await exited;assert.equal(code,0,stderr);}return r;}};
 }
 function setup(t,mode='WAL',version=18) {
   const workspace=createTestWorkspace(t),path=join(workspace.path,'canonical.sqlite');
@@ -74,6 +77,317 @@ function local(t,f,extra={}) {
   t.after(()=>{storage.close();facade.close();});
   return {storage,facade,sqlite,p:{...input,ownerCoverage:coverage},access:accessDigest({ownerId:ns.ownerId,namespaces:{readSet:[ns]}})};
 }
+
+// Explicitly distinguish omission from false even though both select the same
+// canonical detector. All automatic-mode maintenance keeps the sidecar DELETE.
+function detected(t,path,wal,patch={}) {
+  const c=configured(t,path,{...patch,wal:wal===true,sideMode:'DELETE'});
+  if(wal===undefined)delete c.options.wal;
+  return c;
+}
+function journalControl(t,behavior='journal-switch') {
+  const {port1,port2}=new MessageChannel(),gate=new SharedArrayBuffer(4);
+  t.after(()=>port1.close());
+  return {port:port1,spawnWorker:data=>new Worker(new URL('./fixtures/context-product-wal-worker.mjs',import.meta.url),{
+    workerData:{...data,walTestControl:{port:port2,gate,behavior}},transferList:[port2],env:{},execArgv:[]})};
+}
+function openingControl(t,behavior) {
+  const {port1,port2}=new MessageChannel();t.after(()=>port1.close());
+  return {report:once(port1,'message').then(([message])=>message),spawnWorker:data=>new Worker(
+    new URL('./fixtures/context-product-journal-opening-worker.mjs',import.meta.url),{
+      workerData:{...data,journalOpeningControl:{port:port2,behavior}},transferList:[port2],env:{},execArgv:[]})};
+}
+
+for(const wal of [undefined,false])for(const service of [false,true])for(const behavior of ['cold-cache','committed-fingerprint'])
+test(`journal detect DELETE opening uses one legacy preflight: ${behavior}, service=${service}, wal=${String(wal)}`,async t=>{
+  const f=setup(t,'DELETE'),control=openingControl(t,behavior);
+  const c=detected(t,f.path,wal,{service,spawnWorker:control.spawnWorker}),h=await c.open();
+  const report=await control.report;
+  assert.deepEqual(report.beforeNative,{preflights:1,spawns:['sqlite-probe']});
+  assert.deepEqual(report.spawns,['sqlite-probe']);
+  assert.equal(report.committed,behavior==='committed-fingerprint');
+  await h.close();
+});
+
+for(const wal of [undefined,false])for(const service of [false,true])
+test(`journal detect DELETE stray SHM refusal adds no SQLite probe: service=${service}, wal=${String(wal)}`,async t=>{
+  const f=setup(t,'DELETE'),donor=setup(t),w=await writer(t,donor.path);await w.call('write');
+  renameSync(donor.path+'-shm',f.path+'-shm');
+  try {
+    let legacy;
+    assert.throws(()=>openContextProductFacade(f.path,{}),error=>{
+      legacy=error;return error.code==='index_unavailable'&&error.reason==='auxiliary_file';
+    });
+    const control=openingControl(t,'stray-shm'),c=detected(t,f.path,wal,{service,spawnWorker:control.spawnWorker});
+    await assert.rejects(c.open(),{code:legacy.code});
+    const report=await control.report;
+    assert.equal(report.preflights,1);assert.equal(report.beforeNative,null);
+    assert.deepEqual(report.spawns,['header']);
+  } finally {renameSync(f.path+'-shm',donor.path+'-shm');await w.call('close');}
+});
+
+for(const result of ['delete','other','throws'])test(`journal detect refused fallback retains original error identity: ${result}`,t=>{
+  const f=setup(t,'DELETE'),legacy=Object.assign(Error('index_unavailable'),{code:'index_unavailable',reason:'auxiliary_file'});
+  let reads=0;
+  assert.throws(()=>detectProductCanonicalJournal(f.path,{legacyError:legacy,readHeader(){
+    reads++;if(result==='throws')throw Error('header failure');return result;
+  }}),error=>error===legacy);
+  assert.equal(reads,1);
+});
+const journalPumpWindows=new WeakMap();
+function journalPump(t,s,{open}={}) {
+  if(!journalPumpWindows.has(t))journalPumpWindows.set(t,{now:0,id:randomUUID()});
+  const clock=journalPumpWindows.get(t);let serial=0;const timers=new Map(),work=[];
+  const renew=createMaintenancePumpRuntime({now:()=>clock.now,observedAt:()=>clock.now,
+    setTimer:(fn,ms)=>{const id=++serial;timers.set(id,{fn,at:clock.now+ms});return id;},clearTimer:id=>timers.delete(id),
+    ...(open?{open}:{}),work:async(h,p,token,control)=>{const result=await refreshMaintenance(h,p,token,control);work.push({intent:p.intent,result});return result;}});
+  const pump=renew({supervisor:s.supervisor,id:randomUUID(),window:{id:clock.id,endsAtMonoMs:60000,usedItems:0,usedMs:0},
+    budgets:{maxItems:64*1024,maxMs:60000},quantum:{maxItems:1024,maxMs:1000},pollMs:1,renewalMs:60000,
+    serviceCredential:s.token,projections:[{options:s.options,types:['memory']}]});
+  t.after(()=>pump.close());
+  const next=async(success=true)=>{const [id,timer]=[...timers].sort((a,b)=>a[1].at-b[1].at)[0]??[];
+    assert.ok(timer,JSON.stringify(pump.getStatus()));timers.delete(id);clock.now=timer.at;await timer.fn();
+    if(success)assert.equal(pump.getStatus().error,null,JSON.stringify(pump.getStatus()));};
+  return {pump,work,next,async complete(){const start=work.length;
+    for(let i=0;i<10 && !['current','history'].every(intent=>work.slice(start).some(w=>w.intent===intent&&w.result.ok&&w.result.value.status==='complete'));i++)await next();
+    for(const intent of ['current','history'])assert.ok(work.slice(start).some(w=>w.intent===intent&&w.result.ok&&w.result.value.status==='complete'),intent);
+  }};
+}
+
+for(const wal of [undefined,false,true])for(const canonical of ['DELETE','WAL','checkpointed-WAL'])for(const role of ['reader','maintainer','pump'])
+test(`journal detect matrix wal=${String(wal)} canonical=${canonical} role=${role}`,async t=>{
+  const mode=canonical==='DELETE'?'DELETE':'WAL',f=setup(t,mode);
+  const w=canonical==='WAL'?await writer(t,f.path):null;
+  if(w)await w.call('write');
+  if(role==='reader'){
+    const s=detected(t,f.path,wal,{service:true}),m=await s.open();await build(m,s.token);await m.close();
+    if(canonical==='checkpointed-WAL')run('mode',f.path,'WAL');
+  }
+  if(canonical==='checkpointed-WAL')for(const suffix of ['-wal','-shm','-journal'])assert.equal(existsSync(f.path+suffix),false);
+  const s=detected(t,f.path,wal,{service:role!=='reader'});
+  if(role==='pump'){
+    const p=journalPump(t,s);await p.complete();await p.pump.close();
+  }else{
+    const h=await s.open();
+    if(role==='maintainer')await build(h,s.token);
+    assert.equal(ok(await h.getContextIndexStatus(input,s.token)).lexical.state,'ready');
+    const cap=ok(await h.getContextReadCapabilities());assert.deepEqual(cap.journals,['DELETE','WAL']);
+    assert.deepEqual(cap.sidecarJournals,wal===true?['DELETE','WAL']:['DELETE']);
+    assert.deepEqual(cap.wal,wal===true?{available:true}:{available:false,reason:'deferred_to_p2d'});
+    if(role==='reader'){
+      assert.equal(ok(await h.findCandidates({...input,query:'needle'},s.token)).items.length,2);
+      assert.equal(ok(await h.contextRead({...input,query:'needle',budget:{maxTokens:4000,maxItems:12}},s.token)).metered.items.length,2);
+      assert.equal(ok(await h.fetchCandidateEvidence({readSet:[ns],intent:'current',deadlineMs:5000,refs:[{type:'memory',namespace:ns,memoryId:f.memory.id,revision:1}]},s.token)).items[0].content,'wal production needle');
+    }
+    await h.close();
+  }
+  if(w)await w.call('close');
+  assert.equal(run('logical',f.path).journal,mode.toLowerCase());
+  assert.equal(run('logical',f.path+PRODUCT_SIDECAR_SUFFIX).journal,'delete');
+});
+
+test('journal detect DELETE reader, maintainer and pump results retain identical bytes for omitted, false and true',async t=>{
+  const f=setup(t,'DELETE'),s=detected(t,f.path,false,{service:true}),m=await s.open();
+  await build(m,s.token);await build(m,s.token,{intent:'history'});await m.close();
+  const bytes=[],maintenanceBytes=[],pumpBytes=[];
+  for(const wal of [undefined,false,true]){
+    const c=detected(t,f.path,wal,{spawnWorker:journalControl(t,'journal-fixed-timings').spawnWorker}),h=await c.open();
+    const results=[await h.getContextIndexStatus(input,c.token),await h.findCandidates({...input,query:'needle'},c.token),
+      await h.contextRead({...input,query:'needle',budget:{maxTokens:4000,maxItems:12}},c.token),
+      await h.fetchCandidateEvidence({readSet:[ns],intent:'current',deadlineMs:5000,refs:[{type:'memory',namespace:ns,memoryId:f.memory.id,revision:1}]},c.token)];
+    results.forEach(ok);bytes.push(JSON.stringify(results));await h.close();
+    const service=detected(t,f.path,wal,{service:true,spawnWorker:journalControl(t,'journal-fixed-timings').spawnWorker}),maintainer=await service.open();
+    const maintained=[await maintainer.refreshContextIndex(refresh,service.token),await maintainer.getContextIndexStatus(input,service.token)];
+    maintained.forEach(ok);maintenanceBytes.push(JSON.stringify(maintained));await maintainer.close();
+    const p=journalPump(t,detected(t,f.path,wal,{service:true}),{
+      open:createProductReaderRuntime({maintenance:true,spawnWorker:journalControl(t,'journal-fixed-timings').spawnWorker})});await p.complete();
+    pumpBytes.push(JSON.stringify(p.work.map(w=>({intent:w.intent,result:w.result}))));await p.pump.close();
+  }
+  for(const group of [bytes,maintenanceBytes,pumpBytes]){assert.equal(group[0],group[1]);assert.equal(group[0],group[2]);}
+});
+
+for(const wal of [undefined,false])for(const from of ['DELETE','WAL'])for(const role of ['reader','maintainer','pump'])
+for(const live of from==='DELETE'?[false,true]:[false])
+test(`journal detect mid-life ${from} change wal=${String(wal)} role=${role}${live?' with live WAL companions':''}: refusal and reopen`,async t=>{
+  const f=setup(t,from),builder=detected(t,f.path,wal,{service:true}),m=await builder.open();await build(m,builder.token);await m.close();
+  const control=from==='WAL'?journalControl(t):null;
+  const s=detected(t,f.path,wal,{service:role!=='reader',...(control?{spawnWorker:control.spawnWorker}:{})});
+  const p=role==='pump'?journalPump(t,s,control?{open:createProductReaderRuntime({maintenance:true,spawnWorker:control.spawnWorker})}:{}):null;
+  const h=p?null:await s.open();if(p)await p.complete();
+  if(control){const released=once(control.port,'message');control.port.postMessage('release-canonical');assert.equal((await released)[0],'canonical-released');}
+  let switchedWriter;
+  if(from==='WAL')run('checkpoint-delete',f.path);
+  else if(live){switchedWriter=await writer(t,f.path);await switchedWriter.call('reserved');}
+  else run('mode',f.path,'WAL');
+  if(live)for(const suffix of ['-wal','-shm'])assert.equal(existsSync(f.path+suffix),true);
+  else for(const suffix of ['-wal','-shm','-journal'])assert.equal(existsSync(f.path+suffix),false);
+  if(p){for(let i=0;i<4&&p.pump.getStatus().error===null;i++)await p.next(false);
+    assert.equal(p.pump.getStatus().error,'index_unavailable');await p.pump.close();
+  }else{
+    // DELETE configuration keeps legacy behavior; its first read must refuse.
+    if(from==='WAL')assert.deepEqual(await h.getContextReadCapabilities(),{ok:false,error:{code:'index_unavailable',retryable:false}});
+    else ok(await h.getContextReadCapabilities());
+    assert.equal((await h.getContextIndexStatus(input,s.token)).error.code,'index_unavailable');await h.close();
+  }
+  const fresh=detected(t,f.path,wal,{service:role!=='reader'});
+  if(role==='pump'){const reopened=journalPump(t,fresh);await reopened.complete();await reopened.pump.close();}
+  else {const reopened=await fresh.open();assert.equal(ok(await reopened.getContextIndexStatus(input,fresh.token)).lexical.state,'ready');await reopened.close();}
+  if(switchedWriter)await switchedWriter.call('close');
+});
+
+for(const wal of [undefined,false])test(`journal detect WAL checkpoint and switch back reopens DELETE wal=${String(wal)}`,async t=>{
+  const f=setup(t),s=detected(t,f.path,wal,{service:true}),m=await s.open();await build(m,s.token);await m.close();
+  run('checkpoint-delete',f.path);for(const suffix of ['-wal','-shm','-journal'])assert.equal(existsSync(f.path+suffix),false);
+  const c=detected(t,f.path,wal),h=await c.open();assert.equal(ok(await h.findCandidates({...input,query:'needle'},c.token)).items.length,2);await h.close();
+  assert.equal(run('logical',f.path).journal,'delete');
+});
+
+for(const from of ['WAL'])test(`journal detect ${from} change cannot hide behind unchanged timestamp metadata`,async t=>{
+  const f=setup(t,from),control=journalControl(t,'journal-switch-frozen-stat');
+  const c=detected(t,f.path,undefined,{spawnWorker:control.spawnWorker}),h=await c.open();
+  if(from==='WAL'){
+    const released=once(control.port,'message');control.port.postMessage('release-canonical');
+    assert.equal((await released)[0],'canonical-released');run('checkpoint-delete',f.path);
+  }else run('mode',f.path,'WAL');
+  assert.deepEqual(await h.getContextReadCapabilities(),{ok:false,error:{code:'index_unavailable',retryable:false}});await h.close();
+});
+
+for(const wal of [undefined,false])test(`journal detect held WAL reader permits DELETE sidecar catch-up and upkeep wal=${String(wal)}`,async t=>{
+  const f=setup(t),s=detected(t,f.path,wal,{service:true}),h=await s.open();await build(h,s.token);
+  const held=new DatabaseSync(f.path,{readOnly:true});t.after(()=>{if(held.isOpen)held.close();});
+  held.exec('BEGIN');held.prepare('SELECT epoch FROM namespace_epochs').all();
+  const w=await writer(t,f.path);await w.call('write');
+  await build(h,s.token);assert.equal(ok(await h.getContextIndexStatus(input,s.token)).lexical.state,'ready');
+  assert.equal(ok(await h.refreshContextIndex(refresh,s.token)).status,'complete');
+  const p=journalPump(t,detected(t,f.path,wal,{service:true}));await h.close();await p.complete();
+  await w.call('write');await p.complete();await p.pump.close();
+  held.exec('ROLLBACK');held.close();await w.call('close');
+});
+
+for(const wal of [undefined,false])test(`journal detect committed WAL after killed writer supports maintenance and pump wal=${String(wal)}`,async t=>{
+  const f=setup(t),w=await writer(t,f.path);await w.call('write');await w.kill();
+  assert.equal(existsSync(f.path+'-wal'),true);
+  const s=detected(t,f.path,wal,{service:true}),h=await s.open();await build(h,s.token);await h.close();
+  const p=journalPump(t,detected(t,f.path,wal,{service:true}));await p.complete();await p.pump.close();
+  const c=detected(t,f.path,wal),reader=await c.open();assert.equal(ok(await reader.findCandidates({...input,query:'needle'},c.token)).items.length,2);await reader.close();
+});
+
+for(const wal of [undefined,false])for(const metadata of ['directory','hardlink','uid'])
+test(`journal detect DELETE metadata remains admitted: ${metadata}, wal=${String(wal)}`,async t=>{
+  const f=setup(t,'DELETE');
+  if(metadata==='directory'){chmodSync(f.workspace.path,0o755);t.after(()=>{if(existsSync(f.workspace.path))chmodSync(f.workspace.path,0o700);});}
+  if(metadata==='hardlink')linkSync(f.path,join(f.workspace.path,'canonical-alias.sqlite'));
+  const control=metadata==='uid'?journalControl(t,'journal-uid'):null;
+  // This is the exact existing default facade, without the new Worker router.
+  const legacy=openContextProductFacade(f.path,{});legacy.port.ready();legacy.close();
+  const service=detected(t,f.path,wal,{service:true,...(control?{spawnWorker:control.spawnWorker}:{})}),m=await service.open();
+  await build(m,service.token);await m.close();
+  const request=detected(t,f.path,wal,control?{spawnWorker:journalControl(t,'journal-uid').spawnWorker}:{}),h=await request.open();
+  assert.equal(ok(await h.findCandidates({...input,query:'needle'},request.token)).items.length,2);await h.close();
+  const pumpControl=control?journalControl(t,'journal-uid'):null;
+  const pump=journalPump(t,detected(t,f.path,wal,{service:true}),pumpControl?{open:createProductReaderRuntime({maintenance:true,spawnWorker:pumpControl.spawnWorker})}:{});
+  await pump.complete();await pump.pump.close();
+  if(metadata==='directory')chmodSync(f.workspace.path,0o700);
+});
+
+for(const metadata of ['directory','hardlink','uid'])test(`journal detect WAL retains opted-in canonical metadata requirement: ${metadata}`,async t=>{
+  const f=setup(t);
+  if(metadata==='directory'){chmodSync(f.workspace.path,0o755);t.after(()=>{if(existsSync(f.workspace.path))chmodSync(f.workspace.path,0o700);});}
+  if(metadata==='hardlink')linkSync(f.path,join(f.workspace.path,'canonical-alias.sqlite'));
+  const control=metadata==='uid'?journalControl(t,'journal-uid'):null;
+  const request=detected(t,f.path,undefined,control?{spawnWorker:control.spawnWorker}:{});
+  await assert.rejects(request.open(),{code:'index_unavailable'});
+  if(metadata==='directory')chmodSync(f.workspace.path,0o700);
+});
+
+for(const wal of [undefined,false])for(const hot of [false,true])
+test(`journal detect DELETE ${hot?'hot':'active'} journal keeps legacy refusal wal=${String(wal)}`,async t=>{
+  const f=setup(t,'DELETE');let w;
+  if(hot)run('hot',f.path);else {w=await writer(t,f.path,'DELETE');await w.call('journal');}
+  assert.equal(existsSync(f.path+'-journal'),true);
+  let expected;try{const legacy=openContextProductFacade(f.path,{});legacy.close();assert.fail('legacy must refuse');}catch(error){expected=error.code;}
+  assert.equal(expected,'storage_busy');
+  for(const service of [false,true]){
+    const c=detected(t,f.path,wal,{service});await assert.rejects(c.open(),{code:expected});
+  }
+  if(w)await w.call('close');
+});
+
+for(const hot of [false,true])test(`journal detect already-open DELETE keeps ${hot?'hot':'active'} journal operation bytes`,async t=>{
+  const f=setup(t,'DELETE'),s=detected(t,f.path,undefined,{service:true}),m=await s.open();await build(m,s.token);
+  const c=detected(t,f.path,false),h=await c.open();let w;
+  if(hot)run('hot',f.path);else {w=await writer(t,f.path,'DELETE');await w.call('journal');}
+  const busy={ok:false,error:{code:'storage_busy',retryable:true}};
+  for(const result of [await h.getContextIndexStatus(input,c.token),await m.getContextIndexStatus(input,s.token),
+    await m.refreshContextIndex(refresh,s.token),await h.findCandidates({...input,query:'needle'},c.token),
+    await h.contextRead({...input,query:'needle',budget:{maxTokens:4000,maxItems:12}},c.token),
+    await h.fetchCandidateEvidence({readSet:[ns],intent:'current',deadlineMs:5000,refs:[{type:'memory',namespace:ns,memoryId:f.memory.id,revision:1}]},c.token)]){
+    assert.equal(JSON.stringify(result),JSON.stringify(busy));
+  }
+  // Public configuration remains readable in this same-mode refusal state.
+  ok(await h.getContextReadCapabilities());ok(await m.getContextReadCapabilities());
+  await h.close();await m.close();if(w)await w.call('close');
+});
+
+for(const wal of [undefined,false])for(const [mode,suffix] of [['DELETE','-wal'],['DELETE','-shm'],['WAL','-journal']])
+for(const kind of ['protected','unsafe','symlink','hardlink','directory'])
+test(`journal detect mismatch canonical=${mode} companion=${suffix} ${kind} wal=${String(wal)}`,async t=>{
+  const f=setup(t,mode),donor=setup(t,suffix==='-journal'?'DELETE':'WAL');
+  const w=await writer(t,donor.path,suffix==='-journal'?'DELETE':'WAL');await w.call(suffix==='-journal'?'journal':'write');
+  const source=donor.path+suffix,target=f.path+suffix;
+  renameSync(source,target);
+  if(kind==='unsafe')chmodSync(target,0o644);
+  if(kind==='hardlink')linkSync(target,join(f.workspace.path,'companion-alias'));
+  if(kind==='symlink'||kind==='directory'){
+    renameSync(target,target+'.saved');
+    if(kind==='symlink')symlinkSync(target+'.saved',target);else mkdirSync(target,{mode:0o700});
+  }
+  for(const service of [false,true]){
+    const c=detected(t,f.path,wal,{service});await assert.rejects(c.open(),{code:'index_unavailable'});
+  }
+  const p=journalPump(t,detected(t,f.path,wal,{service:true}));await p.next(false);
+  assert.equal(p.pump.getStatus().error,'index_unavailable');await p.pump.close();
+  // Restore the donor's live entry before its SQLite owner closes.
+  if(kind==='symlink')unlinkSync(target);
+  if(kind==='directory')fs.rmdirSync(target);
+  if(kind==='symlink'||kind==='directory')renameSync(target+'.saved',target);
+  if(kind==='unsafe')chmodSync(target,0o600);
+  renameSync(target,source);await w.call('close');
+});
+
+for(const wal of [undefined,false])for(const role of ['reader','maintainer','pump'])
+test(`journal detect live DELETE stray protected WAL refuses next operation wal=${String(wal)} role=${role}`,async t=>{
+  const f=setup(t,'DELETE'),donor=setup(t,'WAL');
+  const s=detected(t,f.path,wal,{service:role!=='reader'});
+  const p=role==='pump'?journalPump(t,s):null,h=p?null:await s.open();
+  if(p)await p.complete();
+  const w=await writer(t,donor.path);await w.call('write');
+  const source=donor.path+'-wal',target=f.path+'-wal';renameSync(source,target);
+  try {
+    if(p){
+      for(let i=0;i<4&&p.pump.getStatus().error===null;i++)await p.next(false);
+      assert.equal(p.pump.getStatus().error,'index_unavailable');
+    }else assert.equal((await h.getContextIndexStatus(input,s.token)).error.code,'index_unavailable');
+  }finally{
+    if(h)await h.close();if(p)await p.pump.close();
+    renameSync(target,source);await w.call('close');
+  }
+});
+
+for(const wal of [undefined,false])for(const suffix of ['-wal','-shm'])
+test(`journal detect live WAL unsafe ${suffix} refuses next operation wal=${String(wal)}`,async t=>{
+  const f=setup(t),w=await writer(t,f.path);await w.call('write');
+  const c=detected(t,f.path,wal),h=await c.open();
+  chmodSync(f.path+suffix,0o644);
+  assert.equal((await h.getContextIndexStatus(input,c.token)).error.code,'index_unavailable');
+  chmodSync(f.path+suffix,0o600);await h.close();await w.call('close');
+});
+
+for(const wal of [undefined,false])test(`journal detect WAL sidecar still requires explicit true wal=${String(wal)}`,async t=>{
+  const f=setup(t),s=detected(t,f.path,wal,{service:true});s.options.sidecarJournalMode='WAL';
+  await assert.rejects(s.open(),{code:'index_unavailable'});
+  s.options.sidecarJournalMode='DELETE';const h=await s.open();await build(h,s.token);await h.close();
+});
 
 for(const canonical of ['DELETE','WAL'])for(const sideMode of ['DELETE','WAL'])
 test(`P2-10/08 canonical ${canonical} × sidecar ${sideMode}: initialization, live companions, ready-only Worker reads`,async t=>{
@@ -303,13 +617,14 @@ test(`P2-21 WAL actual maintainer ${flag} has correct completion and fresh-reade
   assert.equal((await reader.findCandidates({...input,query:'needle'},fresh.token)).error.code,'index_unavailable');await reader.close();
 });
 
-test('P2-01/10 WAL opt-in is strict, default refusal and capability bytes stay identical',async t=>{
+test('P2-01/10 WAL sidecar opt-in is strict; default canonical detection changes only journals capability bytes',async t=>{
   const f=setup(t,'DELETE'),a=configured(t,f.path,{wal:false}),b=configured(t,f.path,{wal:false});delete a.options.wal;
   const first=await a.open(),second=await b.open();
   // Frozen P2b bytes plus P2c's approved 32-namespace maximum, PR 1's
   // disabled receipt-event-time capability and PR 2's representation list.
   // The dated/default-budget/Raw-port changes are explicit amendments.
   // Both WAL default spellings still match; preserve the original P2b fixture.
+  // The canonical journal amendment is pinned for review; the fixture is frozen.
   const golden=readFileSync(new URL('./fixtures/context-product-capabilities-p2b.json',import.meta.url),'utf8').trimEnd()
     .replace('"readSetMaximum":2,','"readSetMaximum":32,')
     .replace('"intents":["current","history"],','"intents":["current","history"],"receiptEventTime":false,')
@@ -317,14 +632,16 @@ test('P2-01/10 WAL opt-in is strict, default refusal and capability bytes stay i
     .replace('"defaultMaxTokens":1500', '"defaultMaxTokens":6000')
     .replace('"maxTokens":4000', '"maxTokens":6000')
     .replace('"defaultMaxItems":12', '"defaultMaxItems":24')
-    .replace(',"raw-search"', '');
+    .replace(',"raw-search"', '')
+    .replace('"journals":["DELETE"],','"journals":["DELETE","WAL"],');
   assert.equal(JSON.parse(golden).value.readSetMaximum,32);
   assert.equal(JSON.parse(golden).value.receiptEventTime,false);
   assert.deepEqual(JSON.parse(golden).value.assembly.representations,['representation-v2','representation-v2-dated']);
   assert.equal(JSON.stringify(await first.getContextReadCapabilities()),golden);
   assert.equal(JSON.stringify(await second.getContextReadCapabilities()),golden);
-  assert.deepEqual(ok(await first.getContextReadCapabilities()).journals,['DELETE']);await first.close();await second.close();
-  run('mode',f.path,'WAL');const refused=configured(t,f.path,{wal:false});await assert.rejects(refused.open(),{code:'index_unavailable'});
+  assert.deepEqual(ok(await first.getContextReadCapabilities()).journals,['DELETE','WAL']);await first.close();await second.close();
+  run('mode',f.path,'WAL');const detected=configured(t,f.path,{wal:false}),reader=await detected.open();
+  assert.equal(ok(await reader.getContextIndexStatus(input,detected.token)).lexical.state,'absent');await reader.close();
   const service=configured(t,f.path,{service:true,wal:false});await assert.rejects(service.open(),{code:'index_unavailable'});
   for(const wal of [null,1,'WAL',{}]){const c=configured(t,f.path);c.options.wal=wal;await assert.rejects(c.open(),{code:'invalid_input'});}
 });

@@ -93,7 +93,7 @@ test('C05/C08 real SDK tools/list narrowing, no extra tools, metadata-only diagn
   const server = createCairnServer({ path: f.path, namespace: ns, contextRead: 'context-read-v1', contextReadSources: sources,
     contextCounter: { id: 'synthetic-unit', countTokens: () => 1 } });
   const [a, b] = InMemoryTransport.createLinkedPair(), client = new Client({ name: 'u5c2-synthetic', version: '1' });
-  t.after(async () => { await client.close(); await server.close(); });
+  f.workspace.defer(async () => { await client.close(); await server.close(); });
   await server.connect(b); await client.connect(a);
   const listed = (await client.listTools()).tools;
   for (const name of ['find_memory_candidates', 'read_memory_context']) assert.ok(listed.find(t => t.name === name).inputSchema.properties.sources);

@@ -1,5 +1,6 @@
 import { lstatSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
+import { setTimeout as delay } from 'node:timers/promises';
 import { MemoryStoreError } from './validation.mjs';
 
 // Never inspect SQLite files through raw descriptors: closing one would release
@@ -45,6 +46,7 @@ export function topicJournalMode(native, path, policy, { deferQueryErrors = fals
 // The ceiling includes reply headroom: at most 980ms native waiting.
 export const TOPIC_WAL_WAIT_MS = 1000;
 export const TOPIC_WAL_REPLY_RESERVE_MS = 20;
+const DELETE_RETRY_MS = 25;
 export const SQLITE_STAGES = Object.freeze(['open', 'configure', 'prepare', 'execute', 'begin', 'commit', 'rollback', 'close']);
 export const SQLITE_STATEMENTS = Object.freeze(['connection', 'reader_configuration', 'journal_mode', 'application_id', 'user_version',
   'schema_version', 'encoding', 'schema_metadata', 'snapshot_metadata', 'topic_metadata', 'transaction']);
@@ -74,9 +76,7 @@ function label(sql) {
   return 'topic_metadata';
 }
 
-/** One request budget, including all opening, cached statements and fences.
- * Native waiting stays inside SQLite. No retry of a traversal or transaction;
- * a native BUSY keeps its original stage/code. */
+/** One WAL wait budget, including opening, cached statements and fences. */
 export function createTopicSqlitePolicy({ diagnostics = false, now = () => performance.now(), state } = {}) {
   let until = -Infinity, checkAdmission, cleaning = false;
   return {
@@ -141,6 +141,88 @@ export function createTopicSqlitePolicy({ diagnostics = false, now = () => perfo
         const value = Reflect.get(object, key, object);
         return typeof value === 'function' ? (...args) => invoke(object, key, args, 'close', 'connection') : value;
       } });
+    },
+  };
+}
+
+export function topicReadTransaction(db, work, isRetryableBusy) {
+  db.exec('BEGIN');
+  try {
+    const value = work();
+    db.exec('COMMIT');
+    return value;
+  } catch (error) {
+    if (!isRetryableBusy || db.isTransaction) {
+      try { db.exec('ROLLBACK'); }
+      catch (rollbackError) {
+        if (!isRetryableBusy) throw rollbackError;
+        // ROLLBACK may already have completed. A failed cleanup must never
+        // let a still-active transaction reach an async retry.
+        if (db.isTransaction) {
+          try {
+            if (!isRetryableBusy(rollbackError)) throw rollbackError;
+            db.exec('ROLLBACK');
+          } catch (cleanupError) {
+            db.close();
+            throw cleanupError;
+          }
+        }
+      }
+    }
+    throw error;
+  }
+}
+
+/** Keep the DELETE retry to confirmed DELETE mode. Use a cancellable async backoff
+ * within the same cutoff as WAL. Exhaustion reports the first native fault.
+ * A read step can retry only before the overview generator advances. */
+export function createTopicRetryPolicy({ diagnostics, isRetryableBusy, now = () => performance.now(), onRetry = () => {} }) {
+  const budget = { until: -Infinity };
+  const policy = createTopicSqlitePolicy({ diagnostics, now, state: () => budget }), modes = new WeakMap();
+  let openingMode;
+  const isDelete = db => modes.get(db) === 'DELETE';
+  async function retry(work, canResume) {
+    let firstBusy;
+    while (true) {
+      if (firstBusy && now() >= budget.until) throw firstBusy;
+      try {
+        const value = work();
+        if (firstBusy) onRetry(null);
+        return value;
+      } catch (error) {
+        if (!isRetryableBusy(error)) {
+          if (firstBusy) onRetry(null);
+          throw error;
+        }
+        if (!canResume()) throw firstBusy ?? error;
+        if (now() + DELETE_RETRY_MS >= budget.until) throw firstBusy ?? error;
+        if (!firstBusy) {
+          firstBusy = error;
+          onRetry(firstBusy);
+        }
+        await delay(DELETE_RETRY_MS);
+      }
+    }
+  }
+  return {
+    ...policy,
+    noteJournalMode(db, mode) { modes.set(db, mode); },
+    database(native, wal) {
+      const db = policy.database(native, wal);
+      // The post-probe wrapper is reached only after the timeout reset succeeds.
+      if (modes.has(native)) {
+        openingMode = modes.get(native);
+        modes.set(db, openingMode);
+      }
+      return db;
+    },
+    isDelete,
+    retryRead(db, work, restore = () => true) {
+      if (!isDelete(db)) return work();
+      return retry(work, () => db.isOpen && !db.isTransaction && restore());
+    },
+    retryOpening(work) {
+      return retry(() => { openingMode = undefined; return work(); }, () => openingMode === 'DELETE');
     },
   };
 }

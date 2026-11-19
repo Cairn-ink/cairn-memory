@@ -126,7 +126,7 @@ for(const mode of ['default','off','raw-v1'])test(`r4 paused capture ${mode} ret
   const raw=mode==='default'?{}:{rawConversations:{mode,readPolicy:()=>({generation:'synthetic',reason:null}),...(mode==='raw-v1'?{port:localPlainPort(),capBytes:1048576}:{})}};
   const started=new Promise(resolve=>{enter=resolve;}),core=openMemoryCore({path:f.path,...raw,model:{contextWindow:8192,countTokens:()=>1,
     extract:()=>({items:[{content:'Synthetic paused retained body',kind:'fact',confidence:.8,sourceIndices:[0]}]}),classify:()=>{enter();return new Promise(resolve=>{release=resolve;});}}});
-  t.after(()=>core.close());
+  f.workspace.defer(()=>core.close());
   const pending=core.capture({namespace:ns,client:'synthetic',sessionId:'paused',eventId:'paused',messages:[{id:'message',role:'user',content:'Synthetic paused input'}]});
   await Promise.race([started,pending.then(value=>{throw Error('capture_settled_before_classifier '+JSON.stringify(value));})]);
   const db=f.connect(),id=db.prepare('SELECT id FROM memories').get().id;db.close();core.close();release({items:[]});

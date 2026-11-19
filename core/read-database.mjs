@@ -6,7 +6,7 @@ import { validateExistingStore } from './existing-store.mjs';
 import { lstatSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { APPLICATION_ID, READ_SCHEMA_VERSIONS, CONTEXT_READ_SCHEMA_VERSIONS, readTransaction, busyTimeoutOption, STORAGE_BUSY_TIMEOUT_MS } from './database.mjs';
-import { topicJournalMode, recordSqliteFailure } from './topic-reader-sqlite.mjs';
+import { topicJournalMode as probeTopicJournalMode, recordSqliteFailure } from './topic-reader-sqlite.mjs';
 import { fail } from './validation.mjs';
 
 function identity(path) {
@@ -23,6 +23,11 @@ function identity(path) {
 // Worker preflight handoff: safe identity before any native connection opens.
 export function contextProductFileIdentity(path) {
   const stat = identity(path); return `${stat.dev}:${stat.ino}`;
+}
+function topicJournalMode(native, path, policy, options) {
+  const mode = probeTopicJournalMode(native, path, policy, options);
+  if (mode !== undefined) policy.noteJournalMode?.(native, mode);
+  return mode;
 }
 export function openReadDatabase(path, options = {}) {
   const busyTimeoutMs = busyTimeoutOption(options);
@@ -130,5 +135,9 @@ export function openReadDatabase(path, options = {}) {
       const stat = identity(path);
       if (stat.dev !== initial.dev || stat.ino !== initial.ino) fail('cursor_stale');
     } };
-  } catch (error) { if(!productSqlite || db.isOpen)db.close(); throw error; }
+  } catch (error) {
+    try { if ((productSqlite ? db : native).isOpen) db.close(); }
+    catch { /* Preserve the opening failure. */ }
+    throw error;
+  }
 }

@@ -22,6 +22,7 @@ import { fail } from './validation.mjs';
 import { rankScores, scoreBM25 } from './context-read-bm25.mjs';
 import { REPRESENTATION_VERSION, TOKENIZER_VERSION, termFrequencies, tokenizeT1 } from './context-read-tokenize.mjs';
 import { cosine, encodeVector, loadVector, semanticCapacity, validateEmbedder, rawVectorResidencySelected, reserveSharedVectors } from './context-read-embedder.mjs';
+import { COMPACT_MEMORY_MAX_ITEMS } from './context-read-input.mjs';
 
 export const SIDECAR_FORMAT = 1;
 const APPLICATION_ID = 0x43525831;
@@ -66,6 +67,11 @@ function walHeader(path, observer) {
 // header in a child with no SQLite connection, so its raw descriptor close
 // cannot release this process's SQLite locks.
 export function contextReadDeleteJournal(path, observer, validated) {
+  return contextReadJournalHeader(path, observer, validated) === 'delete';
+}
+
+// Reuse this single SQLite-free descriptor child for canonical routing too.
+export function contextReadJournalHeader(path, observer, validated) {
   try {
     const before = lstatSync(path, { bigint: true }), directory = lstatSync(dirname(path), { bigint: true });
     const fields = ['dev','ino','mode','uid','gid','nlink'];
@@ -76,7 +82,7 @@ export function contextReadDeleteJournal(path, observer, validated) {
     // Retain the caller's protection/identity proof rather than resetting it.
     if (!matches(before, baseline.main) || !matches(directory, baseline.directory, true) ||
         baseline.expectedIdentity && (String(before.dev) !== baseline.expectedIdentity.device ||
-          String(before.ino) !== baseline.expectedIdentity.inode)) return false;
+          String(before.ino) !== baseline.expectedIdentity.inode)) return 'other';
     const timeout = Math.min(5000, Math.floor(observer?.journalRemainingMs?.() ?? 5000));
     if (!(timeout >= 1)) fail('read_timeout');
     const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
@@ -87,19 +93,21 @@ export function contextReadDeleteJournal(path, observer, validated) {
         const opened = fstatSync(fd, { bigint: true });
         const header = Buffer.alloc(20), length = readSync(fd, header, 0, 20, 0);
         process.stdout.write(JSON.stringify({ device: String(opened.dev), inode: String(opened.ino),
-          mode: length === 20 && header.subarray(0,16).equals(Buffer.from('SQLite format 3\\0')) &&
-          header[18] === 1 && header[19] === 1 ? 'delete' : 'other' }));
+          mode: length === 20 && header.subarray(0,16).equals(Buffer.from('SQLite format 3\\0')) ?
+          header[18] === 1 && header[19] === 1 ? 'delete' :
+          header[18] === 2 && header[19] === 2 ? 'wal' : 'other' : 'other' }));
       } finally { if (fd !== undefined) closeSync(fd); }
     `, path], { encoding: 'utf8', env: {}, timeout, maxBuffer: 1024 });
     if (child.error?.code === 'ETIMEDOUT') fail('read_timeout');
-    if (child.error || child.status !== 0) return false;
+    if (child.error || child.status !== 0) return 'other';
     const opened = JSON.parse(child.stdout);
     const after = lstatSync(path, { bigint: true }), currentDirectory = lstatSync(dirname(path), { bigint: true });
     // A writer may commit while the child starts. Content timestamps can
     // change; replacement or protection changes must retain the refusal.
-    return opened.mode === 'delete' && opened.device === String(before.dev) && opened.inode === String(before.ino) &&
-      matches(after, baseline.main) && matches(currentDirectory, baseline.directory, true);
-  } catch (error) { if (error?.code === 'read_timeout') throw error; return false; }
+    return opened.device === String(before.dev) && opened.inode === String(before.ino) &&
+      matches(after, baseline.main) && matches(currentDirectory, baseline.directory, true) &&
+      ['delete','wal'].includes(opened.mode) ? opened.mode : 'other';
+  } catch (error) { if (error?.code === 'read_timeout') throw error; return 'other'; }
 }
 
 function auxiliaries(path, readOnly, observer) {
@@ -734,7 +742,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
   }
   function lexicalPage(input, query, limit = 24, { deadlineAt = Infinity } = {}) {
     if (typeof query !== 'string' || !query.trim() || query.length > 4000 || query.includes('\0') || !query.isWellFormed() ||
-        !Number.isSafeInteger(limit) || limit < 1 || limit > 24) fail('invalid_input');
+        !Number.isSafeInteger(limit) || limit < 1 || limit > COMPACT_MEMORY_MAX_ITEMS) fail('invalid_input');
     const p = projection(input), terms = [...new Set(tokenizeT1(query))], suppressionEpoch=safetyEpoch(p);
     const keys=factDocuments(p); let result, pending;
     const work=state=>sideRead(() => {
@@ -1021,15 +1029,16 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     retained=true;
     return { state: 'ready', eligible: count, embedded, scanned: count, byType, sequence: g.sequence, checkpoint: g.checkpoint, fence: g.fence,
       release() { vectors.length = 0; released = true; residency?.release(); },
-      score(queryVector, { deadlineAt: scoreDeadline = deadlineAt } = {}) {
+      score(queryVector, { deadlineAt: scoreDeadline = deadlineAt, limit = 24 } = {}) {
         if (released) unavailable('stale_index');
+        if (!Number.isSafeInteger(limit) || limit < 1 || limit > COMPACT_MEMORY_MAX_ITEMS) fail('invalid_input');
         assertState(input, g);
         const query = loadVector(encodeVector(queryVector, port), port), scores = [];
         for (let i = 0; i < vectors.length; i++) {
           if (i % batchSize === 0 && performance.now() >= scoreDeadline) unavailable('timeout');
           scores.push({ ref: vectors[i].ref, score: cosine(query, vectors[i].vector) });
         }
-        const ranked = rankScores(scores).slice(0, 24);
+        const ranked = rankScores(scores).slice(0, limit);
         if (performance.now() >= scoreDeadline) unavailable('timeout');
         assertState(input, g);
         return ranked;
