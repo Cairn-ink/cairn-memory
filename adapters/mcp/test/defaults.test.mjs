@@ -33,7 +33,7 @@ test('keyless server starts with context tools, and explicit off removes them', 
   for (const enabled of [true, false]) {
     const server = createCairnServer({ path: join(workspace.path, String(enabled) + '.sqlite'), namespace,
       ...(enabled ? {} : { contextRead: false }) });
-    t.after(() => server.close());
+    workspace.defer(() => server.close());
     if (enabled) assert.equal(await server.contextCounterReady, true);
     // The pinned SDK stores the registered tool inventory here.
     const names = Object.keys(server._registeredTools);

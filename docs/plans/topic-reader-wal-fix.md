@@ -1213,3 +1213,16 @@ git diff --check and the independent whitespace/local-path scan exited 0. The
 six-file inventory was rechecked after this report update. Temporary evidence
 was removed after recording the verified results; no tests or native Workers
 remain running. No commit was made.
+
+## DELETE-mode retry addendum (2026-11-18)
+
+The earlier “no transaction/traversal retry” rule scoped the WAL cutoff design.
+WAL behavior is unchanged.
+
+The topic reader retries a replayable read step only in confirmed DELETE mode
+after SQLite's journal probe completes. The Worker rolls back failed
+transactions and uses a cancellable async backoff. It shares the same cutoff
+as WAL, `min(requestDeadline, workerStart + TOPIC_WAL_WAIT_MS) - TOPIC_WAL_REPLY_RESERVE_MS`,
+and begins a backoff only if it fits before that cutoff. Exhaustion reports
+the first native fault, including its original stage and SQLite code. A read
+step cannot retry after the overview generator advances.

@@ -1448,7 +1448,7 @@
     "key:publicationId": 2,
     "key:storeId": 1,
     "literal:cardId": 1,
-    "literal:invalid": 8,
+    "literal:invalid": 12,
     "literal:memoryId": 1,
     "literal:validation_invalid": 1
   },

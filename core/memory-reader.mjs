@@ -22,7 +22,9 @@ export function openMemoryReader(input) {
   function cancel(slot, code) {
     if (lifecycle.pending !== slot) return;
     stop();
-    finish(slot, readerFailure(code));
+    // The worker may be delayed while backing off an observed SQLite BUSY.
+    // Preserve that result when the host watchdog has to settle first.
+    finish(slot, code === 'read_timeout' && slot.retryingStorage ? slot.retryingStorage : readerFailure(code));
   }
   function failed(instance, code) {
     if (lifecycle.worker !== instance) return;
@@ -40,6 +42,12 @@ export function openMemoryReader(input) {
     lifecycle.worker = instance;
     instance.on('message', result => {
       if (lifecycle.worker !== instance || !lifecycle.pending) return;
+      if (result && Object.hasOwn(result, 'retryingStorage')) {
+        const slot = lifecycle.pending;
+        if (result.retryingStorage === null) slot.retryingStorage = undefined;
+        else slot.retryingStorage ??= result.retryingStorage;
+        return;
+      }
       if ((result?.ok && lifecycle.pending.expiresAt !== undefined && performance.now() >= lifecycle.pending.expiresAt) || result?.error?.code === 'read_timeout') failed(instance, 'read_timeout');
       else finish(lifecycle.pending, result);
     });
