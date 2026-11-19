@@ -19,7 +19,7 @@ import { readTransaction, isConnectionDiscarded } from './database.mjs';
 import { cardNamespace } from './private-card-input.mjs';
 import { cardApplicabilityInside } from './private-evidence-schema.mjs';
 import { fail } from './validation.mjs';
-import { rankScores, scoreBM25 } from './context-read-bm25.mjs';
+import { compareCanonical, rankScores, scoreBM25 } from './context-read-bm25.mjs';
 import { REPRESENTATION_VERSION, TOKENIZER_VERSION, termFrequencies, tokenizeT1 } from './context-read-tokenize.mjs';
 import { cosine, encodeVector, loadVector, semanticCapacity, validateEmbedder, rawVectorResidencySelected, reserveSharedVectors } from './context-read-embedder.mjs';
 import { COMPACT_MEMORY_MAX_ITEMS } from './context-read-input.mjs';
@@ -774,8 +774,22 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       const rank = () => {
         if(visible)for(const term of terms)df.set(term,[...docs.values()].filter(row=>row.frequencies.has(term)).length);
         if(visible?.unknown){totals.n=docs.size;totals.total_length=[...docs.values()].reduce((n,r)=>n+r.token_length,0);}
-        const ranked = rankScores([...docs.values()].map(row => ({ ref: ref(p.streams[row.stream], row),
-          score: scoreBM25(terms, { frequencies: row.frequencies, length: row.token_length }, { N: totals.n, totalLength: totals.total_length, df }) }))).slice(0, limit);
+        const ranked = [], population = { N: totals.n, totalLength: totals.total_length, df };
+        const compare = (a, b) => b.score - a.score || compareCanonical(a, b);
+        for (const row of docs.values()) {
+          const candidate = { ref: ref(p.streams[row.stream], row),
+            score: scoreBM25(terms, { frequencies: row.frequencies, length: row.token_length }, population) };
+          if (ranked.length === limit && compare(candidate, ranked.at(-1)) >= 0) continue;
+          // Insert after equal entries to preserve the full sort's stable order.
+          let first = 0, last = ranked.length;
+          while (first < last) {
+            const middle = (first + last) >>> 1;
+            if (compare(candidate, ranked[middle]) < 0) last = middle;
+            else first = middle + 1;
+          }
+          if (ranked.length === limit) ranked.pop();
+          ranked.splice(first, 0, candidate);
+        }
         if (performance.now() >= deadlineAt) unavailable('timeout');
         return { rows: ranked, matched: docs.size };
       };
