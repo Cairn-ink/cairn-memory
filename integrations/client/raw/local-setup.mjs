@@ -18,6 +18,8 @@ import { localCodexQualificationStatus } from './local-codex-qualification.mjs';
 import { absolute, exact, setupRequest, consented, locations, runtime, runtimeRoot, sha, fail, result, failure, checkSignal } from './local-setup-input.mjs';
 import { directory, nativeSnapshot, nativeWrite, mergeNative, events, hookCommand } from './local-setup-files.mjs';
 
+const STORE_BUSY_TIMEOUT_MS = 2000;
+
 const phases = ['preparing','prepared','activation_pending','active','disabling','disabled','reenabling','rearm_required'];
 const bytes = value => JSON.stringify(value,null,2)+'\n';
 const ok = outcome => { if (!outcome?.ok) fail('authority_changed'); return outcome.value; };
@@ -62,7 +64,7 @@ async function store(request,expectedStoreId) {
   let db;
   try {
     await directory(dirname(request.databasePath),true); const before = await checkedPath(request.databasePath);
-    const { DatabaseSync } = await import('node:sqlite'); db = new DatabaseSync(request.databasePath,{ readOnly:true });
+    const { DatabaseSync } = await import('node:sqlite'); db = new DatabaseSync(request.databasePath,{ readOnly:true,timeout:STORE_BUSY_TIMEOUT_MS });
     const layout = attestContentSafety(db);
     const after = await checkedPath(request.databasePath);
     if (before.dev !== after.dev || before.ino !== after.ino || db.prepare('PRAGMA application_id').get().application_id !== 0x43414952 ||
