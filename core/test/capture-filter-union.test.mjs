@@ -10,7 +10,7 @@ import { eventTimeSafetyFixture, ns, ok } from '../testing/receipt-event-time-fi
 
 const source = label => ({ client: 'synthetic', sessionId: 'session-' + label, eventId: 'event-' + label,
   role: 'user', excerpt: 'Synthetic ' + label });
-const unionSQL = "event_id IN (SELECT json_extract(value,'$[2]')";
+const unionSQL = 'CROSS JOIN json_each(?) source CROSS JOIN receipts';
 const failure = code => Object.assign(Error(code), { code });
 
 async function setup(t) {
@@ -27,7 +27,7 @@ function addMemory(db, id) {
 }
 
 function addReceipt(db, parent, receipt, { id = receipt.eventId, time = 'time', bad = false } = {}) {
-  const key = bad ? 'invalid-' + receipt.eventId : createHash('sha256').update(JSON.stringify(receipt)).digest('hex');
+  const key = bad ? 'invalid-' + receipt.eventId + '-' + id : createHash('sha256').update(JSON.stringify(receipt)).digest('hex');
   db.prepare(`INSERT INTO receipts(id,memory_id,receipt_key,client,session_id,event_id,role,excerpt,created_at)
     VALUES(CAST(? AS TEXT),?,?,?,?,?,?,?,CAST(? AS TEXT))`).run(id, parent, key, receipt.client, receipt.sessionId,
     receipt.eventId, receipt.role, receipt.excerpt, time);
@@ -73,6 +73,59 @@ const firstPages = trace => trace.filter(({ sql, args }) => sql.startsWith('SELE
   args.length === 5 && args[3] === 0);
 const receiptPages = trace => trace.filter(({ sql }) => sql.includes('ORDER BY created_at,id LIMIT 5'));
 
+for (const size of [1, 2]) for (const kind of ['no fault', 'live I/O', 'timeout', 'read_timeout', 'auto-rollback']) {
+  test(`page-one denial of ${size} receipt(s) avoids later Memory seek: ${kind}`, async t => {
+    const { db } = await setup(t);
+    const batch = Array.from({ length: size }, (_, index) => source('invalid-' + index));
+    db.exec('CREATE TEMP TABLE rollback_witness(id INTEGER PRIMARY KEY); INSERT INTO rollback_witness VALUES(1)');
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      for (let index = 0; index < 129; index++) addMemory(db, 'memory-' + String(index).padStart(3, '0'));
+      for (const receipt of batch) addReceipt(db, 'memory-000', receipt, { bad: true });
+      db.exec('COMMIT');
+    } finally { if (db.isTransaction) db.exec('ROLLBACK'); }
+    let injected = false;
+    const beforeRead = ({ sql }) => {
+      if (injected || kind === 'no fault' || !sql.startsWith('SELECT id,revision,deleted,updated_at') || !sql.includes('AND updated_at=')) return;
+      injected = true;
+      if (kind === 'auto-rollback') db.exec('INSERT OR ROLLBACK INTO rollback_witness VALUES(1)');
+      throw failure(kind === 'live I/O' ? 'ERR_SQLITE_ERROR' : kind);
+    };
+    const baseline = observe(t, db, batch, { exact: true, beforeRead });
+    const current = observe(t, db, batch, { beforeRead });
+    const reads = trace => trace.filter(({ sql }) => sql.startsWith('SELECT id,revision,deleted,updated_at') ||
+      sql.includes('ORDER BY created_at,id LIMIT 5')).length;
+    const counts = [reads(baseline.trace), reads(current.trace)];
+    t.diagnostic('MAIN and filter history reads: ' + counts.join(', '));
+    for (const result of [baseline, current]) {
+      assert.equal(result.caught, undefined);
+      assert.equal(result.threw, false);
+      assert.deepEqual(result.allowed, []);
+      assert.equal(result.inTransaction, true);
+    }
+    assert.equal(injected, false);
+    assert.deepEqual(counts, [size * 2, 2]);
+  });
+}
+
+test('page-one denial avoids a receipt seek caused only by combining keys', async t => {
+  const { db } = await setup(t);
+  const first = source('first'), later = source('later');
+  addMemory(db, 'parent');
+  addReceipt(db, 'parent', first, { id: 'z', bad: true });
+  for (let index = 0; index < 4; index++) addReceipt(db, 'parent', later, { id: 'a' + index, bad: true });
+  const beforeRead = ({ sql }) => {
+    if (sql.includes('AND (created_at,id)>')) throw failure('read_timeout');
+  };
+  for (const exact of [true, false]) {
+    const result = observe(t, db, [first, later], { exact, beforeRead });
+    assert.equal(result.caught, undefined);
+    assert.deepEqual(result.allowed, []);
+    assert.equal(result.inTransaction, true);
+    assert.equal(receiptPages(result.trace).length, exact ? 2 : 1);
+  }
+});
+
 for (const [label, cursor] of [
   ['invalid UTF-8 id', { id: Buffer.from('7a80', 'hex') }],
   ['NUL id', { id: Buffer.from('7a0078', 'hex') }],
@@ -81,24 +134,29 @@ for (const [label, cursor] of [
 ]) test(`capture filter preserves stored cursor bytes for ${label}`, async t => {
   const { db } = await setup(t);
   addMemory(db, 'parent');
-  const receipts = Array.from({ length: 5 }, (_, index) => source(index));
-  for (const [index, receipt] of receipts.entries()) {
+  addMemory(db, 'safe-parent');
+  const receipt = source('paged'), safe = source('safe');
+  for (let index = 0; index < 5; index++) {
     const key = index === 3 ? cursor : {};
     const id = key.id ?? (index === 4 ? 'z\uE000' : 'a' + index);
     let time = 'time';
     if (cursor.time === '' && index < 4) time = '';
     if (cursor.id === '' && index < 3) time = 'a';
     if (cursor.id === '' && index === 4) time = 'v';
-    addReceipt(db, 'parent', receipt, { id, time, bad: index === 4 });
+    const stored = index < 3 ? source('padding-' + index) : receipt;
+    addReceipt(db, 'parent', stored, { id, time, bad: index === 4 });
+    if (index < 3) db.prepare('UPDATE receipts SET excerpt=CAST(? AS TEXT) WHERE id=?')
+      .run(Buffer.from(stored.excerpt + '\0padding'), id);
   }
-  const batch = [...receipts, receipts[0], receipts[4]];
+  addReceipt(db, 'safe-parent', safe);
+  const batch = [receipt, safe, receipt];
   const baseline = observe(t, db, batch, { exact: true });
   const current = observe(t, db, batch);
   assert.equal(current.threw, false);
-  assert.deepEqual(baseline.allowed, [0, 1, 2, 3, 5]);
+  assert.deepEqual(baseline.allowed, [1]);
   assert.deepEqual(current.allowed, baseline.allowed);
   const [page, seek] = receiptPages(current.trace);
-  assert.match(page.sql, /event_id IN/);
+  assert.ok(page.sql.includes(unionSQL));
   assert.match(seek.sql, /\(created_at,id\)>\(CAST\(\? AS TEXT\),CAST\(\? AS TEXT\)\)/);
   for (const [index, value] of [[3, cursor.time], [4, cursor.id]]) {
     if (value === '') assert.equal(seek.args[index], value);
@@ -245,7 +303,7 @@ for (const kind of ['live I/O', 'auto-rollback', 'deadline', 'validator']) test(
     const deniedValidation = ({ sql, args }) =>
       sql.includes('FROM content_suppressions INDEXED BY content_suppression_target') && args.includes('memory-000');
     const faultIndex = run.trace.indexOf(faultEntry);
-    assert.equal(run.trace.slice(0, faultIndex).some(deniedValidation), false, 'partial walk cannot validate retained rows');
+    assert.equal(run.trace.slice(0, faultIndex).some(deniedValidation), true, 'the first receipt is validated before the walk resumes');
     assert.equal(run.trace.slice(faultIndex + 1).some(deniedValidation), true, 'exact replay validates the first receipt');
   } else {
     assert.equal(run.threw, true);
