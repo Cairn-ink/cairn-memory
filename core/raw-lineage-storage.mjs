@@ -748,7 +748,9 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
       } catch (error) {
         // Only iterator errors reach this catch. A validator refusal closes
         // this reader, leaving the shared cursor available to the next source.
-        if (db.isTransaction && !['timeout', 'read_timeout', 'source_budget_exceeded'].includes(error?.code)) throw replayExact;
+        // Match commit retry's native SQLITE_BUSY (5) and SQLITE_LOCKED (6), including extended codes.
+        if (db.isTransaction && error?.code === 'ERR_SQLITE_ERROR' &&
+            Number.isInteger(error.errcode) && [5, 6].includes(error.errcode & 0xff)) throw replayExact;
         walkFailed = true;
         throw error;
       }

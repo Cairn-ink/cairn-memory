@@ -12,6 +12,7 @@ const source = label => ({ client: 'synthetic', sessionId: 'session-' + label, e
   role: 'user', excerpt: 'Synthetic ' + label });
 const unionSQL = 'CROSS JOIN json_each(?) source CROSS JOIN receipts';
 const failure = code => Object.assign(Error(code), { code });
+const sqliteFault = (message, errcode) => Object.assign(Error(message), { code: 'ERR_SQLITE_ERROR', errcode });
 
 async function setup(t) {
   const fixture = eventTimeSafetyFixture(t, 33);
@@ -40,12 +41,12 @@ function exactFilter(storage, batch) {
   });
 }
 
-function observe(t, db, batch, { exact = false, beforeRead } = {}) {
+function observe(t, db, batch, { exact = false, beforeRead, prepareSQL, lineage } = {}) {
   installedContentLayout(db);
-  const storage = createRawLineageStorage(db), prepare = db.prepare.bind(db);
+  const storage = lineage ?? createRawLineageStorage(db), prepare = db.prepare.bind(db);
   const trace = [];
   const hook = t.mock.method(db, 'prepare', sql => {
-    const statement = prepare(sql);
+    const statement = prepare(prepareSQL?.(sql) ?? sql);
     for (const method of ['all', 'get', 'iterate']) {
       const execute = statement[method].bind(statement);
       statement[method] = (...args) => {
@@ -73,7 +74,128 @@ const firstPages = trace => trace.filter(({ sql, args }) => sql.startsWith('SELE
   args.length === 5 && args[3] === 0);
 const receiptPages = trace => trace.filter(({ sql }) => sql.includes('ORDER BY created_at,id LIMIT 5'));
 
-for (const size of [1, 2]) for (const kind of ['no fault', 'live I/O', 'timeout', 'read_timeout', 'auto-rollback']) {
+function addOverflowReceipts(db) {
+  const safe = source('safe'), denied = source('overflow');
+  addMemory(db, 'safe-parent');
+  addMemory(db, 'overflow-parent');
+  addReceipt(db, 'safe-parent', safe);
+  for (let index = 0; index < 4; index++) {
+    const padding = source('padding-' + index);
+    addReceipt(db, 'overflow-parent', padding, { time: 'early' });
+    db.prepare('UPDATE receipts SET excerpt=CAST(? AS TEXT) WHERE id=?')
+      .run(Buffer.from(padding.excerpt + '\0padding'), padding.eventId);
+  }
+  addReceipt(db, 'overflow-parent', denied, { bad: true });
+  return [safe, denied];
+}
+
+const overflowSeek = ({ sql, args }) => sql.includes('AND (created_at,id)>') && args[2] === 'overflow-parent';
+const safeValidation = ({ sql, args }) =>
+  sql.includes('FROM content_suppressions INDEXED BY content_suppression_target') && args.includes('safe-parent');
+
+for (const kind of ['SQLITE_ERROR', 'ERR_INVALID_ARG_TYPE']) test(`non-transient overflow seek propagates ${kind}`, async t => {
+  const { db } = await setup(t);
+  const batch = addOverflowReceipts(db);
+  const malformed = db.prepare('SELECT json(?)');
+  const errors = [];
+  const result = observe(t, db, batch, { beforeRead(entry) {
+    if (!overflowSeek(entry) || (kind === 'ERR_INVALID_ARG_TYPE' && errors.length)) return;
+    try {
+      if (kind === 'SQLITE_ERROR') malformed.get('{');
+      else Buffer.from(1);
+    } catch (error) {
+      errors.push(error);
+      throw error;
+    }
+  } });
+  const validations = result.trace.filter(safeValidation).length;
+  t.diagnostic(`overflow seeks: ${result.trace.filter(overflowSeek).length}, safe validations: ${validations}, original error: ${result.caught === errors[0]}`);
+  assert.equal(errors[0]?.code, kind === 'SQLITE_ERROR' ? 'ERR_SQLITE_ERROR' : kind);
+  if (kind === 'SQLITE_ERROR') assert.equal(errors[0].errcode, 1);
+  assert.equal(result.inTransaction, true);
+  assert.equal(result.threw, true);
+  assert.equal(result.caught, errors[0]);
+  assert.equal(validations, 1);
+  assert.equal(result.trace.filter(overflowSeek).length, 1);
+});
+
+test('a third tuple read fault refuses the batch and retry reaches the Raw fence', async t => {
+  const { db, fixture } = await setup(t);
+  const core = openMemoryCore({ path: fixture.path, raw: true });
+  t.after(() => core.close());
+  const first = source('invalid'), fenced = { ...source('fenced'), client: 'claude-code' }, third = source('third');
+  ok(core.fenceSession({ namespace: ns, client: fenced.client, sessionId: fenced.sessionId }));
+  addMemory(db, 'first-parent');
+  addMemory(db, 'third-parent');
+  addReceipt(db, 'first-parent', first, { bad: true });
+  addReceipt(db, 'third-parent', third);
+  const batch = [first, fenced, third];
+  const fault = failure('read_timeout');
+  let faultActive = true, attempts = 0;
+  db.function('inspect_receipt', eventId => {
+    if (faultActive && eventId === third.eventId) {
+      attempts++;
+      throw fault;
+    }
+    return eventId;
+  });
+  const prepareSQL = sql => sql.includes('wanted.key AS wanted_entry')
+    ? sql.replace('SELECT r.*,', 'SELECT inspect_receipt(r.event_id) AS inspected_event, r.*,') : sql;
+  const baseline = observe(t, db, batch, { exact: true, prepareSQL });
+  assert.equal(baseline.caught?.code, 'conversation_deleted');
+  assert.equal(baseline.allowed, undefined);
+  assert.equal(attempts, 0);
+  const lineage = createRawLineageStorage(db);
+  const faulted = observe(t, db, batch, { prepareSQL, lineage });
+  assert.equal(attempts, 1);
+  assert.ok(faulted.threw || faulted.allowed?.length === 0);
+  if (faulted.threw) assert.equal(faulted.caught, fault);
+  faultActive = false;
+  const retry = observe(t, db, batch, { prepareSQL, lineage });
+  assert.equal(retry.caught?.code, 'conversation_deleted');
+  assert.equal(retry.allowed, undefined);
+});
+
+test('reusing deleted-range history keeps the fault-free allows', async t => {
+  const { db } = await setup(t);
+  const [safe, denied] = addOverflowReceipts(db);
+  const batch = [safe, safe, denied];
+  const baseline = observe(t, db, batch, { exact: true });
+  assert.deepEqual(baseline.allowed, [0, 1]);
+  const fault = failure('read_timeout');
+  let deletedReads = 0;
+  const beforeRead = ({ sql, args }) => {
+    if (sql.startsWith('SELECT id,revision,deleted,updated_at') && args[3] === 1 && ++deletedReads === 2) throw fault;
+  };
+  assert.equal(observe(t, db, batch, { exact: true, beforeRead }).caught, fault);
+  assert.equal(deletedReads, 2);
+  deletedReads = 0;
+  const result = observe(t, db, batch, { beforeRead });
+  assert.equal(result.threw, false);
+  assert.deepEqual(result.allowed, baseline.allowed);
+  assert.equal(deletedReads, 1);
+  assert.equal(result.trace.filter(overflowSeek).length, 1);
+});
+
+test('a transient overflow seek replays the exact pass once', async t => {
+  const { db } = await setup(t);
+  const batch = addOverflowReceipts(db);
+  const baseline = observe(t, db, batch, { exact: true });
+  assert.deepEqual(baseline.allowed, [0]);
+  const busy = sqliteFault('synthetic SQLite busy recovery', 5 | (1 << 8));
+  let attempts = 0;
+  const result = observe(t, db, batch, { beforeRead(entry) {
+    if (overflowSeek(entry) && ++attempts === 1) throw busy;
+  } });
+  assert.equal(result.threw, false);
+  assert.deepEqual(result.allowed, baseline.allowed);
+  assert.equal(result.inTransaction, true);
+  assert.equal(attempts, 2);
+  assert.equal(result.trace.filter(safeValidation).length, 2);
+  assert.equal(result.trace.filter(({ sql }) => sql.includes(unionSQL)).length, 1);
+});
+
+for (const size of [1, 2]) for (const kind of ['no fault', 'live busy', 'timeout', 'read_timeout', 'auto-rollback']) {
   test(`page-one denial of ${size} receipt(s) avoids later Memory seek: ${kind}`, async t => {
     const { db } = await setup(t);
     const batch = Array.from({ length: size }, (_, index) => source('invalid-' + index));
@@ -89,7 +211,7 @@ for (const size of [1, 2]) for (const kind of ['no fault', 'live I/O', 'timeout'
       if (injected || kind === 'no fault' || !sql.startsWith('SELECT id,revision,deleted,updated_at') || !sql.includes('AND updated_at=')) return;
       injected = true;
       if (kind === 'auto-rollback') db.exec('INSERT OR ROLLBACK INTO rollback_witness VALUES(1)');
-      throw failure(kind === 'live I/O' ? 'ERR_SQLITE_ERROR' : kind);
+      throw kind === 'live busy' ? sqliteFault('synthetic SQLite busy', 5) : failure(kind);
     };
     const baseline = observe(t, db, batch, { exact: true, beforeRead });
     const current = observe(t, db, batch, { beforeRead });
@@ -258,7 +380,7 @@ test('scope refusal avoids enumeration and first Raw refusal precedes later vali
   assert.equal(firstPages(scoped.trace).length, 0);
 });
 
-for (const kind of ['live I/O', 'auto-rollback', 'deadline', 'validator']) test(`capture filter fault boundary: ${kind}`, async t => {
+for (const kind of ['live lock', 'auto-rollback', 'deadline', 'validator']) test(`capture filter fault boundary: ${kind}`, async t => {
   const { db } = await setup(t);
   const denied = source('denied'), safe = source('safe');
   db.exec('CREATE TEMP TABLE rollback_witness(id INTEGER PRIMARY KEY); INSERT INTO rollback_witness VALUES(1)');
@@ -281,7 +403,7 @@ for (const kind of ['live I/O', 'auto-rollback', 'deadline', 'validator']) test(
     if (injected || !sawUnion) return;
     if (kind === 'validator') {
       if (!sql.includes('SELECT 1 FROM raw_session_fences')) return;
-      injected = failure('revision_conflict');
+      injected = sqliteFault('synthetic SQLite locked during validation', 6);
     } else {
       if (!sql.startsWith('SELECT id,revision,deleted,updated_at') || !sql.includes('AND updated_at=')) return;
       if (kind === 'auto-rollback') {
@@ -289,14 +411,14 @@ for (const kind of ['live I/O', 'auto-rollback', 'deadline', 'validator']) test(
         catch (error) { injected = error; }
         assert.ok(injected);
         assert.equal(db.isTransaction, false);
-      } else injected = failure(kind === 'deadline' ? 'read_timeout' : 'ERR_SQLITE_ERROR');
+      } else injected = kind === 'deadline' ? failure('read_timeout') : sqliteFault('synthetic SQLite locked during enumeration', 6);
     }
     faultEntry = entry;
     throw injected;
   } });
   assert.ok(injected, 'the injected boundary was reached');
   const walks = firstPages(run.trace);
-  if (kind === 'live I/O') {
+  if (kind === 'live lock') {
     assert.deepEqual(run.allowed, baseline.allowed);
     assert.equal(walks.length, 3);
     assert.ok(run.trace.every(entry => entry.inTransaction));
