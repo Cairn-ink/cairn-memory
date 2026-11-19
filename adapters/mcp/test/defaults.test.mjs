@@ -33,7 +33,7 @@ test('keyless server starts with context tools, and explicit off removes them', 
   for (const enabled of [true, false]) {
     const server = createCairnServer({ path: join(workspace.path, String(enabled) + '.sqlite'), namespace,
       ...(enabled ? {} : { contextRead: false }) });
-    t.after(() => server.close());
+    workspace.defer(() => server.close());
     if (enabled) assert.equal(await server.contextCounterReady, true);
     // The pinned SDK stores the registered tool inventory here.
     const names = Object.keys(server._registeredTools);
@@ -115,5 +115,5 @@ test('automatic embedding refresh supports a Raw-free Memory-only store; semanti
 // Public defaults and setup disclosure must explain both transmission and opt-out.
 test('defaults text discloses semantic sends and explicit Raw opt-in', () => {
   const text = readFileSync(new URL('../../../docs/defaults.md',import.meta.url),'utf8');
-  for (const literal of ['Raw document and query embeddings are both off','raw_semantic_not_enabled','--raw-semantic','--no-context-semantic','memories and search text','estimated US$1 per server run']) assert.ok(text.includes(literal),literal);
+  for (const literal of ['Raw document and query embeddings are both off','raw_semantic_not_enabled','--raw-semantic','--no-context-semantic','memories and search text','estimated US$1 per day per running Cairn server']) assert.ok(text.includes(literal),literal);
 });

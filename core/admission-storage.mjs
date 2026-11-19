@@ -9,6 +9,8 @@ import { transaction, isStorageBusy } from "./database.mjs";
 import { fail, identifier } from "./validation.mjs";
 import { localAuthorityGuard } from './local-authority-guard.mjs';
 
+// The stored and reported suppressed_count saturates at five (the existing bound);
+// five means five or more. No extra rows are written for larger captures.
 const where = "owner_id = ? AND scope = ? AND project_id = ? AND client = ? AND event_id = ?";
 const key = (ns, input) => [ns.ownerId, ns.scope, ns.projectId, input.client, input.eventId];
 
@@ -64,7 +66,7 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
       else {
         let ids;
         try { ids = JSON.parse(row.memory_ids); } catch { fail('storage_error'); }
-        if (!Array.isArray(ids) || ids.length > 5 ||
+        if (!Array.isArray(ids) || ids.length > 20 ||
           !Number.isInteger(row.suppressed_count) || row.suppressed_count < 0 ||
           row.suppressed_count > 5 || new Set(ids).size !== ids.length) fail('storage_error');
         try { ids.forEach(identifier); } catch { fail('storage_error'); }
@@ -199,7 +201,7 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
         assertSources?.(ns, item.receipts);
         // Check before deduplication; one suppressed input contributes one count.
         if (isSuppressed(ns, item.fingerprint)) {
-          suppressedCount++;
+          if (suppressedCount < 5) suppressedCount++;
           continue;
         }
         conflictStorage.validateTargets(ns, item.conflictHints);

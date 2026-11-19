@@ -16,6 +16,9 @@ export function contextSources(value, enabled = CONTEXT_SOURCES, allowEmpty = fa
 export const CONTEXT_VERSION = 'context-read-v1';
 export const CONTEXT_METHODS = Object.freeze(['findCandidates', 'refreshContextIndex', 'fetchCandidateEvidence', 'contextRead']);
 export const ASSEMBLY_REPRESENTATIONS = Object.freeze(['representation-v2', 'representation-v2-dated']);
+// Engine-API opt-in only; never include this in advertised values or tool schemas.
+export const COMPACT_MEMORY_REPRESENTATION = 'memory-compact-v1';
+export const COMPACT_MEMORY_MAX_ITEMS = 64;
 export const ASSEMBLY_POLICIES = Object.freeze(['rank-first-whole-v1', 'coverage-first-v1', 'rank-first-first-source-v1']);
 export const ASSEMBLY_DEFAULTS = deepFreeze({ metadata: {
   memory: { state: 'active', reviewState: 'none', filing: { status: 'unfiled' }, kind: 'fact', origin: 'explicit', confidence: 1 },
@@ -188,17 +191,22 @@ export function contextInput(method, value, supportedTypes, enabledSources, prof
       result.query = selected.query; result.semantic = selected.semantic ?? false;
       result.deadlineMs = integer(selected.deadlineMs, 1000, 5000);
       if (method === 'contextRead') {
+        const representation = selected.representation === undefined ? 'representation-v2-dated' : selected.representation;
+        const compact = representation === COMPACT_MEMORY_REPRESENTATION;
         const budget = selected.budget === undefined ? {} : ownData(selected.budget, ['maxTokens', 'maxItems']);
         result.budget = { maxTokens: integer(budget.maxTokens, ASSEMBLY_LIMITS.defaultMaxTokens, ASSEMBLY_LIMITS.maxTokens),
-          maxItems: integer(budget.maxItems, ASSEMBLY_LIMITS.defaultMaxItems, ASSEMBLY_LIMITS.maxItems) };
+          maxItems: integer(budget.maxItems, compact ? COMPACT_MEMORY_MAX_ITEMS : ASSEMBLY_LIMITS.defaultMaxItems,
+            compact ? COMPACT_MEMORY_MAX_ITEMS : ASSEMBLY_LIMITS.maxItems) };
         if (result.budget.maxTokens < 64) fail('invalid_input');
         const policy = selected.policy === undefined ? { id: DEFAULT_ASSEMBLY_POLICY } : ownData(selected.policy, ['id']);
         if (!ASSEMBLY_POLICIES.includes(policy.id)) fail('invalid_input');
         result.policy = { id: policy.id };
         if (selected.raw !== undefined && typeof selected.raw !== 'boolean') fail('invalid_input');
         result.raw = selected.raw ?? true;
-        result.representation = selected.representation === undefined ? 'representation-v2-dated' : selected.representation;
-        if (!ASSEMBLY_REPRESENTATIONS.includes(result.representation)) fail('invalid_input');
+        result.representation = representation;
+        if (!ASSEMBLY_REPRESENTATIONS.includes(representation) && !compact) fail('invalid_input');
+        if (compact && (profile === 'context-read-product-v1.1' || result.types.length !== 1 || result.types[0] !== 'memory' ||
+             selected.raw !== false || result.sources?.length)) fail('invalid_input');
       } else result.limit = integer(selected.limit, 12, 24);
       if (Object.hasOwn(selected, 'cursor')) {
         if (typeof selected.cursor !== 'string' || selected.cursor.length > 8192) fail('invalid_cursor');
@@ -210,4 +218,14 @@ export function contextInput(method, value, supportedTypes, enabledSources, prof
     }
   }
   return { payload, input: result };
+}
+
+// Run compact-only grammar checks before the facade's storage/safety boundary.
+// Descriptor inspection never invokes a caller accessor; the ordinary parser
+// retains responsibility for every existing representation and hostile input.
+export function assertCompactContextInput(method, value, supportedTypes, enabledSources, profile) {
+  if (method !== 'contextRead' || !value || typeof value !== 'object' || types.isProxy(value)) return;
+  const field = Object.getOwnPropertyDescriptor(value, 'representation');
+  if (field && Object.hasOwn(field, 'value') && field.value === COMPACT_MEMORY_REPRESENTATION)
+    contextInput(method, value, supportedTypes, enabledSources, profile);
 }

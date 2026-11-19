@@ -8,7 +8,8 @@ const success = value => ({ ok: true, value });
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 /** Worker-owned traversal. Dependencies are explicit for deterministic boundary tests. */
 export function createTopicMemberReader({ storage, snapshot, transaction, tokens, originBinding,
-  now = () => performance.now(), yieldQuantum = yieldTurn, observe = () => {}, prepare = () => {}, accept = () => {} }) {
+  now = () => performance.now(), yieldQuantum = yieldTurn, observe = () => {}, prepare = () => {}, accept = () => {},
+  canRetry = () => false, retryTransaction }) {
   let traversal;
   async function read(request, deadlineAt = now() + request.deadlineMs) {
     const { cursor, ...bound } = request, binding = JSON.stringify(bound);
@@ -22,7 +23,30 @@ export function createTopicMemberReader({ storage, snapshot, transaction, tokens
     const prior = traversal;
     let state = cursor ? { ...prior, data: structuredClone(prior.data) } : undefined;
     let used = cursor ? 2 : 0, quantum = 0, advanced = false;
-    const charge = units => { used += units; quantum += units; observe({ used, units }); };
+    let charges, attempted;
+    const charge = units => {
+      used += units; quantum += units;
+      const event = { used, units };
+      if (charges) charges.push(event); else observe(event);
+    };
+    function runTransaction(work, advances = false, started) {
+      if (!canRetry()) return transaction(work);
+      const checkpoint = state, before = used, beforeQuantum = quantum, wasAdvanced = advanced;
+      let retried = false;
+      return retryTransaction(() => {
+        if (advances && checkpoint) state = { ...checkpoint, data: structuredClone(checkpoint.data) };
+        charges = [];
+        return work(retried && started !== undefined ? now() : started);
+      }, () => {
+        state = checkpoint; used = before; quantum = beforeQuantum; advanced = wasAdvanced;
+        charges = undefined;
+        retried = true;
+        return true;
+      }).then(value => {
+        for (const event of charges) observe(event);
+        return value;
+      }).finally(() => { charges = undefined; attempted = undefined; });
+    }
     // Fence metadata/point visits fit three bounded validation units, plus
     // one token step. Reserve all four final units, also at workLimit=16.
     function fence() {
@@ -32,7 +56,9 @@ export function createTopicMemberReader({ storage, snapshot, transaction, tokens
         if (!Number.isSafeInteger(captured.indexRevision) || captured.indexRevision < 1 ||
             (captured.generation !== null && (typeof captured.generation !== 'string' || !captured.generation ||
               !captured.generation.isWellFormed() || captured.generation.length > 200))) fail('unsupported_database');
-        if (state && !equal(captured, state.captured)) fail('cursor_stale');
+        const capturedBefore = state?.captured ?? attempted;
+        if (capturedBefore && !equal(captured, capturedBefore)) fail('cursor_stale');
+        if (!state && canRetry()) attempted ??= captured;
         const binding = originBinding(request.namespace, captured);
         const expected = state?.publicSnapshot ?? request.expectedSnapshot;
         if (expected) {
@@ -43,7 +69,7 @@ export function createTopicMemberReader({ storage, snapshot, transaction, tokens
         storage.target(request, captured);
         return { captured, binding };
       } catch (error) {
-        if ((state || request.expectedSnapshot) && ['index_unavailable', 'unsafe_database_file', 'database_not_found'].includes(error.code)) fail('cursor_stale');
+        if ((state || attempted || request.expectedSnapshot) && ['index_unavailable', 'unsafe_database_file', 'database_not_found'].includes(error.code)) fail('cursor_stale');
         if (state && ['moc_not_found', 'revision_conflict', 'invalid_ref'].includes(error.code)) fail('cursor_stale');
         throw error;
       }
@@ -51,12 +77,12 @@ export function createTopicMemberReader({ storage, snapshot, transaction, tokens
     const inTime = () => { if (now() >= deadlineAt) fail('read_timeout'); };
     try {
       inTime();
-      prepare({ charge, request, deadlineAt });
+      await prepare({ charge, request, deadlineAt });
       inTime();
       const cost = () => storage.cost?.(state.data) ?? 1;
       const advance = () => { charge(cost()); storage.step(state.data, request, state.captured); advanced = true; };
       const replay = cursor && cursor === state.lastInput;
-      transaction(() => {
+      await runTransaction(() => {
         quantum = 0;
         const started = now(), initial = fence();
         if (replay) return;
@@ -73,7 +99,7 @@ export function createTopicMemberReader({ storage, snapshot, transaction, tokens
         // Reserve envelope construction as well as the final four-unit fence.
         while (state.data.initialization && !state.data.initialization.done && used + cost() <= request.workLimit - 5 &&
             quantum + cost() <= 64 && now() - started < 5 && now() < deadlineAt - 5) advance();
-      });
+      }, !replay);
       if (replay) { inTime(); return state.lastOutput; }
       if (Buffer.byteLength(JSON.stringify(state)) > MEMBER_STATE_BYTES) fail('state_limit');
       charge(1);
@@ -121,14 +147,14 @@ export function createTopicMemberReader({ storage, snapshot, transaction, tokens
         if (used + 4 + cost() > request.workLimit - 4) { reason = 'work_limit'; break; }
         if (now() >= deadlineAt - 5) { reason = 'deadline'; break; }
         const started = now();
-        transaction(() => {
+        await runTransaction((attemptStarted = started) => {
           quantum = 0;
           fence();
-          while (used + cost() <= request.workLimit - 4 && quantum + cost() <= 64 && now() - started < 5 && now() < deadlineAt - 5) {
+          while (used + cost() <= request.workLimit - 4 && quantum + cost() <= 64 && now() - attemptStarted < 5 && now() < deadlineAt - 5) {
             advance();
             if (state.data.pending || state.data.done) break;
           }
-        });
+        }, true, started);
         // Logical retention accounting and presentation stay outside SQLite snapshots.
         if (Buffer.byteLength(JSON.stringify(state)) > MEMBER_STATE_BYTES) fail('state_limit');
         await yieldQuantum();
@@ -138,7 +164,7 @@ export function createTopicMemberReader({ storage, snapshot, transaction, tokens
       value.status = reason === null || reason === 'limit' ? 'page' : 'partial';
       if (reason === null) value.nextCursor = null;
       if (!fits()) fail('context_item_too_large');
-      transaction(fence);
+      await runTransaction(fence);
       inTime();
       state.lastInput = cursor; state.lastOutput = success(value); state.nextCursor = value.nextCursor;
       traversal = state; accept(state.data);
@@ -146,7 +172,7 @@ export function createTopicMemberReader({ storage, snapshot, transaction, tokens
     } catch (error) {
       if (error.code === 'ERR_OUT_OF_RANGE') fail('unsupported_database');
       if (error.code === 'state_limit') {
-        inTime(); transaction(fence); inTime();
+        inTime(); await runTransaction(fence); inTime();
         traversal = undefined;
         return success({ version: 'topic-members-v1', status: 'partial',
           namespace: { ...request.namespace, projectId: request.namespace.scope === 'personal' ? null : request.namespace.projectId },

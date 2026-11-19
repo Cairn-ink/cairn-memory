@@ -285,7 +285,7 @@ test('pending start stays content-free through recall and an empty capture until
 
 test('an exhausted SessionStart budget leaves no post-pause start authority', async t => {
   const f = await harness(t, { mutateRuntime: source => {
-    const needle = 'const START_BOUNDARY_BUDGET_MS = 300;';
+    const needle = 'const START_BOUNDARY_BUDGET_MS = 1000;';
     assert.equal(source.split(needle).length, 2);
     return source.replace(needle, 'const START_BOUNDARY_BUDGET_MS = 0;');
   } });
