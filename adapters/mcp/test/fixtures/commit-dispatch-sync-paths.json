@@ -400,7 +400,8 @@
     "core/supersession-storage.mjs:retireMutation:run": 2,
     "core/task-receipt.mjs:preflight:exec": 1,
     "core/topic-reader-sqlite.mjs:invoke:exec": 1,
-    "core/topic-reader-sqlite.mjs:topicJournalMode:exec": 1
+    "core/topic-reader-sqlite.mjs:topicJournalMode:exec": 1,
+    "core/topic-reader-sqlite.mjs:topicReadTransaction:exec": 4
   },
   "entryCalls": {
     "adapters/mcp/asset-access.mjs:<module>:freeze": 1,
@@ -9187,7 +9188,7 @@
     "core/topic-reader-sqlite.mjs:createTopicSqlitePolicy:cleanup": 1,
     "core/topic-reader-sqlite.mjs:createTopicSqlitePolicy:database": 1,
     "core/topic-reader-sqlite.mjs:createTopicSqlitePolicy:start": 1,
-    "core/topic-reader-sqlite.mjs:database:get": 1,
+    "core/topic-reader-sqlite.mjs:database:get": 2,
     "core/topic-reader-sqlite.mjs:get:bind": 1,
     "core/topic-reader-sqlite.mjs:get:get": 3,
     "core/topic-reader-sqlite.mjs:invoke:exec": 1,
@@ -9247,6 +9248,26 @@
     "core/engine-card-output.mjs:render:map": 2,
     "core/engine-card-output.mjs:validateConsolidation:add": 1,
     "core/engine-card-output.mjs:validateConsolidation:filter": 3,
-    "core/engine-card-output.mjs:validateConsolidation:render": 2
+    "core/engine-card-output.mjs:validateConsolidation:render": 2,
+    "core/topic-reader-sqlite.mjs:<retry callback>:restore": 1,
+    "core/topic-reader-sqlite.mjs:<retry callback>:work": 1,
+    "core/topic-reader-sqlite.mjs:createTopicRetryPolicy:createTopicSqlitePolicy": 1,
+    "core/topic-reader-sqlite.mjs:createTopicRetryPolicy:database": 1,
+    "core/topic-reader-sqlite.mjs:createTopicRetryPolicy:noteJournalMode": 1,
+    "core/topic-reader-sqlite.mjs:createTopicRetryPolicy:retryOpening": 1,
+    "core/topic-reader-sqlite.mjs:createTopicRetryPolicy:retryRead": 1,
+    "core/topic-reader-sqlite.mjs:database:database": 1,
+    "core/topic-reader-sqlite.mjs:database:has": 1,
+    "core/topic-reader-sqlite.mjs:database:set": 1,
+    "core/topic-reader-sqlite.mjs:isDelete:get": 1,
+    "core/topic-reader-sqlite.mjs:noteJournalMode:set": 1,
+    "core/topic-reader-sqlite.mjs:retry:work": 1,
+    "core/topic-reader-sqlite.mjs:retryOpening:retry": 1,
+    "core/topic-reader-sqlite.mjs:retryRead:isDelete": 1,
+    "core/topic-reader-sqlite.mjs:retryRead:retry": 1,
+    "core/topic-reader-sqlite.mjs:retryRead:work": 1,
+    "core/topic-reader-sqlite.mjs:topicReadTransaction:close": 1,
+    "core/topic-reader-sqlite.mjs:topicReadTransaction:exec": 4,
+    "core/topic-reader-sqlite.mjs:topicReadTransaction:work": 1
   }
 }

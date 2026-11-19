@@ -98,7 +98,7 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   assert.ok(installed.includes('core/context-product-sqlite.mjs')); // P2d Worker dependency.
 
   const staticFiles = closure(artifact, ['core/context-product-reader.mjs', 'core/context-read-supervisor.mjs'], false);
-  assert.equal(staticFiles.length, 34, 'private admission bridge preserves the SQLite-free parent and engine-only pool');
+  assert.equal(staticFiles.length, 35, 'private admission bridge preserves the SQLite-free parent and engine-only pool');
   t.diagnostic(`runtime/Worker closure cross-check: source=${expected.length}, installed=${installed.length}; static SQLite-free closure=${staticFiles.length}`);
   // Bootstrap code is supplied by the host, copied into the installed tree;
   // it imports no source-checkout module and has no network/provider dependency.
