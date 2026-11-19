@@ -192,10 +192,18 @@ export function createRawSearchMaintenance(storage,authority,options) {
             authority.validate([{sources:restored.map(row=>row.source),intent:'history',access,value:null}]);
             cancelled(upkeepSignal);
             if(closed)fail('store_closed');
-            await storage.commitBatch({staged:restored,checkpoint});commit();
+            let restoredCommitted=false;
+            try{
+              await storage.commitBatch({staged:restored,checkpoint});commit();restoredCommitted=true;
+            }catch(error){
+              if((error.errcode&255)!==13)throw error;
+              quotaBlocked=true;progress.error='quota_exhausted';
+            }
             for(const row of restored)cancelledReservations.delete(row.key);
-            progress.checkpointAdvances++;changed();refreshAfter=0;
-            return;
+            if(restoredCommitted){
+              progress.checkpointAdvances++;changed();refreshAfter=0;
+              return;
+            }
           }
         }
         checkpoint.fenceRetry=Math.max(0,(checkpoint.fenceRetry??0)-1);

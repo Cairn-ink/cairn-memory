@@ -7,8 +7,7 @@ import { assertLocalFilesystem } from '../local-daemon-state.mjs';
 import { workspace, until } from './local-daemon-support.mjs';
 
 test('both store identities probe the canonical parent and reject non-local types', async t => {
-  await mkdir('/tmp/cairn-es-r2', { recursive: true });
-  const root = await mkdtemp('/tmp/cairn-es-r2/f-');
+  const root = await mkdtemp('/tmp/cr3-f-');
   t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(join(root, 'parent')); await symlink(join(root, 'parent'), join(root, 'alias'));
   const path = join(root, 'alias', 'synthetic.sqlite'); await writeFile(path, 'synthetic metadata only');

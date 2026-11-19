@@ -2,13 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, createConnection } from 'node:net';
 import { once } from 'node:events';
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { authenticateClient, authenticateServer, frameGuard, requestLedger, proof, verifyProof, FRAME_BYTES, QUEUE_BYTES } from '../local-daemon-wire.mjs';
 
 async function pair(t, serverWork) {
-  await mkdir('/tmp/cairn-es-r2', { recursive: true });
-  const root = await mkdtemp('/tmp/cairn-es-r2/w-'), sockets = [];
+  const root = await mkdtemp('/tmp/cr3-w-'), sockets = [];
   const server = createServer(socket => { sockets.push(socket); socket.on('error', () => {}); void serverWork(socket).catch(() => socket.destroy()); });
   await new Promise(resolve => server.listen(join(root, 'wire.sock'), resolve));
   t.after(async () => { for (const socket of sockets) socket.destroy(); await new Promise(resolve => server.close(resolve)); await rm(root, { recursive: true, force: true }); });
