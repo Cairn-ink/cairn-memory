@@ -1,4 +1,4 @@
-import { markSessionStart,hasSessionStart } from './local-session-start.mjs';
+import { markSessionStart,hasSessionStart,readSessionStartAttempt } from './local-session-start.mjs';
 import { readConfigurationSnapshot } from '../../../adapters/local/configuration.mjs';
 import { localAuthorityInput } from '../../../core/local-authority-input.mjs';
 import { stateLock } from '../state-lock.mjs';
@@ -37,8 +37,18 @@ export function createLocalRawWorker(value) {
           if (!cursor) await markSessionStart(identity,context);
           return summary('ready','initialized',cursor);
         }
-        const fromStart = !initialize && !cursor && options.authority.client === 'claude-code' && await hasSessionStart(identity,context);
-        if (!initialize && !cursor && !fromStart) fault('state_invalid');
+        let fromStart = false;
+        if (!initialize && !cursor) {
+          if (options.authority.client !== 'claude-code') fault('state_invalid');
+          fromStart = await hasSessionStart(identity,context);
+          if (!fromStart) {
+            const attempt = await readSessionStartAttempt(identity,context);
+            if (attempt === 'fresh') {
+              await markSessionStart(identity,context);
+              fromStart = true;
+            } else if (attempt !== 'present') fault('state_invalid');
+          }
+        }
         bytes = sourceBudget(operation);
         try {
           opened = await openWorkerSource(context,operation,bytes);
