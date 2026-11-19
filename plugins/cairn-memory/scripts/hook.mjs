@@ -53,7 +53,7 @@ const recallEnd = recallController ? 3500 : undefined;
 // Stop admitting output 50 ms before abort, without shortening the fetch.
 // This is admission headroom; an admitted pipe write uses its own drain cap.
 const OUTPUT_WRITE_MARGIN_MS = 50;
-const CONTEXT_READ_CAP_MS = 1_500;
+const CONTEXT_READ_STATE_MAX_MS = 150;
 const CONTEXT_READ_MIN_MS = 250;
 const RECALL_RESERVE_MS = 1_300;
 const RENDER_MAX_CHARS = 9_000;
@@ -231,6 +231,22 @@ function contextReadLine(memory) {
   return `- [${memory.id}] (${memory.scope}, ${memory.date ?? "undated"}) ${memory.text}`;
 }
 
+async function readContextCache(config, targetId) {
+  const deadline = performance.now() + CONTEXT_READ_STATE_MAX_MS;
+  let timer;
+  try {
+    const expiry = new Promise(resolve => { timer = setTimeout(resolve, CONTEXT_READ_STATE_MAX_MS); });
+    const lookup = (async () => {
+      const { openContextReadState, contextReadOutcome } = await import("../lib/context-read-state.mjs");
+      const cache = await openContextReadState(config, targetId, token);
+      return { ...cache, contextReadOutcome };
+    })();
+    const cache = await Promise.race([expiry, lookup]);
+    if (performance.now() < deadline) return cache;
+  } catch { /* Recall can proceed without the optional cache. */ }
+  finally { clearTimeout(timer); }
+}
+
 async function recall(hookInput) {
   checkRecall();
   if (!token) return;
@@ -264,10 +280,10 @@ async function recall(hookInput) {
   const sessionId = optionalHostSessionId(hookInput.session_id);
   const fetchSignal = recallSignal;
   const outputDeadline = recallEnd - OUTPUT_WRITE_MARGIN_MS;
+  const contextReadDeadline = outputDeadline - RECALL_RESERVE_MS;
   const project = projectId === undefined ? {} : { project_id: projectId };
   const session = sessionId === undefined ? {} : { session_id: sessionId };
-  const { openContextReadState, contextReadOutcome } = await import("../lib/context-read-state.mjs");
-  const cache = hostedConfig && await openContextReadState(hostedConfig, quotaTarget.targetId, token).catch(() => {});
+  const cache = hostedConfig && await readContextCache(hostedConfig, quotaTarget.targetId);
   const state = cache?.state;
   const learn = (available, now = Date.now()) => {
     if (!state) return;
@@ -277,20 +293,19 @@ async function recall(hookInput) {
     contextReadPending = cache.save;
   };
   const now = Date.now();
-  const crCap = Math.min(CONTEXT_READ_CAP_MS, outputDeadline - performance.now() - RECALL_RESERVE_MS);
   let result, last, contextRead = false;
   if (state && Date.parse(state.available_until) > now &&
-      !(Date.parse(state.cooldown_until) > now) && crCap >= CONTEXT_READ_MIN_MS) {
+      !(Date.parse(state.cooldown_until) > now) && contextReadDeadline - performance.now() >= CONTEXT_READ_MIN_MS) {
     contextReadPending = cache.save;
     const { CONTEXT_READ_OPTIONS, postContextRead } = await import("../lib/context-read.mjs");
-    const reply = await postContextRead({ endpoint, token }, {
+    const reply = await postContextRead({ endpoint, token, minTimeoutMs: CONTEXT_READ_MIN_MS }, {
       version: 1, query, ...project, ...session, ...CONTEXT_READ_OPTIONS,
     },
-      Math.floor(crCap), fetchSignal, start => dispatchActive(control.generation, start, fetchSignal, hosted, {
+      contextReadDeadline, fetchSignal, start => dispatchActive(control.generation, start, fetchSignal, hosted, {
         contextRead: true, onCapability: available => { if (available) learn(true); },
       }));
     const at = Date.now();
-    last = state.last = { at: new Date(at).toISOString(), path: "context-read", outcome: contextReadOutcome(reply),
+    last = state.last = { at: new Date(at).toISOString(), path: "context-read", outcome: cache.contextReadOutcome(reply),
       returned_items: 0, delivered_items: 0, rendered_chars: 0 };
     if (reply.memories) {
       learn(true, at);
@@ -304,7 +319,7 @@ async function recall(hookInput) {
       learn(false, at);
       state.cooldown_until = new Date(at + REPRESENTATION_COOLDOWN_MS).toISOString();
     }
-    else if (reply.status !== 400) {
+    else if (reply.status !== 400 && reply.code !== "skipped") {
       state.failure_streak = Math.min(Number.MAX_SAFE_INTEGER, state.failure_streak + 1);
       if (state.failure_streak >= COOLDOWN_STREAK)
         state.cooldown_until = new Date(at + COOLDOWN_MS).toISOString();

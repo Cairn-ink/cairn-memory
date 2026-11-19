@@ -17,12 +17,14 @@ import { recallContext } from "../../../integrations/codex/hosted-lifecycle.mjs"
 import {
   CONTEXT_READ_OPTIONS, CONTEXT_READ_REQUEST, CONTEXT_READ_RESPONSE, postContextRead, validContextReadResponse,
 } from "../lib/context-read.mjs";
+import { openContextReadState } from "../lib/context-read-state.mjs";
 import { checkedPath, privateDirectory, privateList, privateRead, privateWrite } from "../lib/private-state.mjs";
 
 const hook = fileURLToPath(new URL("../scripts/hook.mjs", import.meta.url));
 const preload = fileURLToPath(new URL("./fixtures/context-read-preload.mjs", import.meta.url));
 const capture = "/api/memory/capture", pause = "/api/memory/pause-state";
 const recall = "/api/memory/recall", context = "/api/memory/context-read";
+const redirected = "/context-read-redirect";
 const capability = { "x-cairn-context-read": "1" };
 const tokenA = "synthetic-account-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const tokenB = "synthetic-account-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -57,6 +59,76 @@ const compactText = items => expectedPreamble + items.map(item =>
   "- [" + item.id + "] (" + item.scope + ", " + (item.date ?? "undated") + ") " + item.text).join("\n");
 const compactOutput = (items = [compact()]) => hookOutput(compactText(items));
 
+// Spec-derived compact sample (from the route owner, built from the agreed spec; NOT real product output).
+const specCompactReply = {
+  memories: [
+    { id: "mem_01JX9K2Q7V3R8T5W6Y4Z0A1B2C", text: "Prefers pnpm over npm for new TypeScript projects.",
+      date: "2026-10-02", scope: "personal" },
+    { id: "mem_01JX9K3D4F5G6H7J8K9L0M1N2P",
+      text: "The billing service retries webhook delivery three times with exponential backoff.",
+      date: null, scope: "project", project_id: "proj_01JX9JZ0ABCDEF0123456789" },
+  ],
+  mode: "lexical",
+};
+
+// Install in the real hook child before the hook imports its modules.
+function installRecallProbes({ directoryProbe, scryptDelay, firstPauseUntil, contextReplyUntil }) {
+  const event = (kind, details = {}) => process.send?.({ kind, ms: performance.now(), ...details });
+  const crypto = process.getBuiltinModule("node:crypto");
+  const scrypt = crypto.scrypt;
+  crypto.scrypt = (...args) => {
+    event("scrypt");
+    if (scryptDelay) {
+      const callback = args.pop();
+      args.push((...result) => setTimeout(() => {
+        event("scrypt-completed");
+        callback(...result);
+      }, scryptDelay));
+    }
+    return scrypt(...args);
+  };
+  if (directoryProbe) {
+    const fs = process.getBuiltinModule("node:fs/promises");
+    let probed = false;
+    fs.lstat = new Proxy(fs.lstat, {
+      apply(original, receiver, args) {
+        if (!probed && /[/\\]hosted-context-read$/.test(args[0])) {
+          probed = true;
+          event("cache-probe");
+          if (directoryProbe === "stall") return new Promise(() => {});
+          throw new Error("synthetic cache probe error");
+        }
+        return Reflect.apply(original, receiver, args);
+      },
+    });
+  }
+  process.getBuiltinModule("node:module").syncBuiltinESMExports();
+  const waitUntil = ms => new Promise(resolve => setTimeout(resolve, Math.max(0, Math.ceil(ms - performance.now()))));
+  const fetch = globalThis.fetch;
+  let observed = false;
+  globalThis.fetch = async (url, options) => {
+    switch (new URL(url).pathname) {
+      case "/api/memory/pause-state":
+        if (firstPauseUntil && !observed) {
+          observed = true;
+          const response = await fetch(url, options);
+          await waitUntil(firstPauseUntil);
+          return response;
+        }
+        break;
+      case "/api/memory/context-read":
+        options.signal.addEventListener("abort", () => event("context-abort"), { once: true });
+        if (contextReplyUntil) {
+          const response = await fetch(url, options);
+          await waitUntil(contextReplyUntil);
+          return response;
+        }
+        break;
+    }
+    return fetch(url, options);
+  };
+}
+
 async function fixture(t) {
   const workspace = createTestWorkspace(t, { prefix: "context-read-" });
   const root = join(workspace.path, "data"), home = join(workspace.path, "home");
@@ -66,6 +138,7 @@ async function fixture(t) {
     [pause]: () => json({ paused: false, generation: 0, enforced: true }),
     [recall]: () => json({ memories: [memory()] }),
     [context]: () => found(),
+    [redirected]: () => found(),
     [capture]: () => json({ duplicate: false, memoryCount: 1 }),
   };
   // Known routes only, each called through a constant key.
@@ -74,6 +147,7 @@ async function fixture(t) {
       case pause: return replies[pause](entry);
       case recall: return replies[recall](entry);
       case context: return replies[context](entry);
+      case redirected: return replies[redirected](entry);
       case capture: return replies[capture](entry);
       default: return undefined;
     }
@@ -83,7 +157,7 @@ async function fixture(t) {
     let bytes = "";
     for await (const chunk of request) bytes += chunk;
     const route = request.url;
-    const entry = { route, body: bytes ? JSON.parse(bytes) : null };
+    const entry = { route, method: request.method, body: bytes ? JSON.parse(bytes) : null };
     requests.push(entry);
     const reply = handle(route, entry) ?? json({});
     if (reply === "disconnect") return res.destroy();
@@ -109,9 +183,12 @@ async function fixture(t) {
   };
   const disk = async () => JSON.parse(await privateRead(statePath));
   const auth = async () => JSON.parse(await privateRead(join(root, "credential-state.json"))).auth?.outcome;
-  async function run({ token = tokenA, prompt = "Synthetic query", time = epoch, startup = 0 } = {}) {
+  async function run({ token = tokenA, prompt = "Synthetic query", time = epoch, startup = 0, probes } = {}) {
     const events = [];
-    const child = spawn(process.execPath, ["--import", preload, hook, "recall"], {
+    const probeSource = probes ? `(${installRecallProbes})(${JSON.stringify(probes)})` : "";
+    const imports = probes ? ["--import", preload, "--import", "data:text/javascript," + encodeURIComponent(probeSource)] :
+      ["--import", preload];
+    const child = spawn(process.execPath, [...imports, hook, "recall"], {
       stdio: ["pipe", "pipe", "pipe", "ipc"],
       env: { PATH: process.env.PATH, HOME: home, NODE_OPTIONS: process.env.NODE_OPTIONS,
         TMPDIR: process.env.TMPDIR, CAIRN_TEST_REAL_HOME: process.env.CAIRN_TEST_REAL_HOME,
@@ -141,6 +218,50 @@ async function fixture(t) {
   const routes = () => requests.splice(0).map(entry => entry.route);
   return { root, statePath, quotaPath, endpoint, accountA, accountB, requests, replies, routes, run, seed, disk, auth };
 }
+
+test("a stalled optional cache directory probe still delivers plain recall", async t => {
+  const f = await fixture(t);
+  f.replies[recall] = () => fallbackResponse;
+  const { stdout, events } = await f.run({ probes: { directoryProbe: "stall" } });
+  assert.ok(events.some(event => event.kind === "cache-probe"));
+  assert.deepEqual(f.routes(), [pause, recall]);
+  assert.equal(stdout, expectedOutput([memory()]));
+  assert.equal(await checkedPath(dirname(f.statePath), { directory: true, missing: true }), undefined);
+});
+
+test("a cache probe error still delivers recall and disables capability learning for the turn", async t => {
+  const f = await fixture(t);
+  f.replies[recall] = () => fallbackResponse;
+  const { stdout, events } = await f.run({ probes: { directoryProbe: "error" } });
+  assert.ok(events.some(event => event.kind === "cache-probe"));
+  assert.deepEqual(f.routes(), [pause, recall]);
+  assert.equal(stdout, expectedOutput([memory()]));
+  assert.equal(await checkedPath(dirname(f.statePath), { directory: true, missing: true }), undefined);
+});
+
+test("a late cache fingerprint match has no effect on recall or state", async t => {
+  const f = await fixture(t);
+  await f.seed();
+  const before = await privateRead(f.statePath);
+  const { stdout, events } = await f.run({ probes: { scryptDelay: 750 } });
+  assert.deepEqual(f.routes(), [pause, recall]);
+  assert.equal(stdout, expectedOutput([memory()]));
+  const recallStart = events.find(event => event.route === recall)?.ms;
+  const completion = events.find(event => event.kind === "scrypt-completed")?.ms;
+  assert.ok(recallStart < completion, "recall starts while the account comparison is pending");
+  assert.equal(events.filter(event => event.kind === "scrypt").length, 1);
+  assert.equal(await privateRead(f.statePath), before);
+});
+
+test("a plain cache miss performs zero scrypt derivations", async t => {
+  const f = await fixture(t);
+  await privateDirectory(dirname(f.statePath));
+  const { stdout, events } = await f.run({ probes: {} });
+  assert.equal(stdout, expectedOutput([memory()]));
+  assert.deepEqual(f.routes(), [pause, recall]);
+  assert.equal(events.filter(event => event.kind === "scrypt").length, 0);
+  assert.equal(await privateRead(f.statePath, { missing: true }), undefined);
+});
 
 test("recall learns only the exact capability header and delivers the original bytes", async t => {
   const f = await fixture(t);
@@ -187,6 +308,18 @@ test("compact items render in server order with dated and undated scopes and exa
   assert.deepEqual(f.routes(), [pause, context]);
   assert.deepEqual((await f.disk()).last, { at: iso(epoch), path: "context-read", outcome: "complete",
     returned_items: 4, delivered_items: 4, rendered_chars: expected.length });
+});
+
+test("Spec-derived compact sample renders exactly (NOT real product output)", async t => {
+  const f = await fixture(t);
+  await f.seed();
+  f.replies[context] = () => json(specCompactReply);
+  const lines = [
+    "- [mem_01JX9K2Q7V3R8T5W6Y4Z0A1B2C] (personal, 2026-10-02) Prefers pnpm over npm for new TypeScript projects.",
+    "- [mem_01JX9K3D4F5G6H7J8K9L0M1N2P] (project, undated) The billing service retries webhook delivery three times with exponential backoff.",
+  ];
+  assert.equal((await f.run()).stdout, hookOutput(expectedPreamble + lines.join("\n")));
+  assert.deepEqual(f.routes(), [pause, context]);
 });
 
 test("expired availability goes straight to recall and absence clears an existing capability", async t => {
@@ -389,7 +522,8 @@ test("plugin transport rejects invalid requests locally, bounds the reply, and r
   const valid = { version: 1, query: "Synthetic query", representation: "compact", max_items: 24, max_tokens: 1500 };
   let dispatches = 0;
   const dispatch = start => { dispatches++; return start(); };
-  const post = body => postContextRead({ endpoint: f.endpoint, token: tokenA }, body, 1000, undefined, dispatch);
+  const post = body => postContextRead({ endpoint: f.endpoint, token: tokenA, minTimeoutMs: 250 },
+    body, Math.floor(performance.now()) + 1000, undefined, dispatch);
   for (const overrides of [{ version: 2 }, { query: "" }, { query: "x".repeat(4001) }, { project_id: "short" },
     { session_id: "line\n" }, { max_items: 0 }, { max_items: 25 }, { max_tokens: 499 },
     { max_tokens: 6001 }, { max_tokens: 1500.5 }, { limit: 6 }, { representation: "full" },
@@ -500,7 +634,7 @@ test("public wire schemas agree with the plugin contract and classify reply fixt
     assert.equal(checkReplySchema(compactItem, item), false, name);
     assert.equal(validContextReadResponse(found([item]).value), false, name);
   }
-  for (const value of [found(accepted).value, { mode: "semantic", memories: [] }]) {
+  for (const value of [found(accepted).value, specCompactReply, { mode: "semantic", memories: [] }]) {
     assert.equal(validContextReadResponse(value), true);
     assert.equal(checkReplySchema(contextResponseSchema, value), true);
   }
@@ -580,6 +714,46 @@ test("changing the remote pause or generation between dispatches refuses recall"
   }
 });
 
+test("a context-read 307 counts as network failure and only guarded recall follows", async t => {
+  const f = await fixture(t);
+  await f.seed({ failure_streak: 1 });
+  f.replies[context] = () => json({}, 307, { location: redirected });
+  f.replies[recall] = () => fallbackResponse;
+  const { stdout } = await f.run();
+  assert.deepEqual(f.requests.map(({ method, route }) => [method, route]),
+    [["GET", pause], ["POST", context], ["GET", pause], ["POST", recall]]);
+  assert.equal(stdout, expectedOutput([memory()]));
+  const state = await f.disk();
+  assert.equal(state.last.outcome, "network");
+  assert.equal(state.failure_streak, 2);
+});
+
+test("a context-read 307 sends no further POST when the guarded fallback observes a pause", async t => {
+  const f = await fixture(t);
+  await f.seed();
+  f.replies[context] = () => {
+    f.replies[pause] = () => json({ paused: true, generation: 1, enforced: true });
+    return json({}, 307, { location: redirected });
+  };
+  const { stdout } = await f.run();
+  assert.deepEqual(f.requests.map(({ method, route }) => [method, route]),
+    [["GET", pause], ["POST", context], ["GET", pause]]);
+  assert.equal(stdout, "");
+  assert.equal((await f.disk()).last.outcome, "network");
+});
+
+test("a context-read 3xx exposed by fetch is also a network failure", async t => {
+  const f = await fixture(t);
+  await f.seed();
+  f.replies[context] = () => json(null, 304);
+  f.replies[recall] = () => fallbackResponse;
+  assert.equal((await f.run()).stdout, expectedOutput([memory()]));
+  assert.deepEqual(f.routes(), [pause, context, pause, recall]);
+  const state = await f.disk();
+  assert.equal(state.last.outcome, "network");
+  assert.equal(state.failure_streak, 1);
+});
+
 test("pause before the first dispatch refuses both memory routes", async t => {
   const f = await fixture(t);
   await f.seed({ failure_streak: 1 });
@@ -635,6 +809,29 @@ test("state is closed, content-free, and account-bound on the same endpoint", as
   assert.equal(replacement.last, null);
 });
 
+test("a cache hit keeps the account out of hook state and preserves it on write", async t => {
+  const f = await fixture(t);
+  await f.seed();
+  const cache = await openContextReadState({ root: f.root, endpoint: f.endpoint }, hostedTargetId(f), tokenA);
+  assert.equal(cache.state.available_until, iso(epoch + 3_600_000));
+  assert.equal(Object.hasOwn(cache.state, "account"), false);
+  cache.state.failure_streak = 1;
+  await cache.save(undefined, performance.now() + 5_000);
+  const saved = await f.disk();
+  assert.equal(saved.account, f.accountA);
+  assert.equal(saved.failure_streak, 1);
+});
+
+test("an account state copied between endpoints is ignored even with the same token", async t => {
+  const from = await fixture(t), to = await fixture(t);
+  await from.seed();
+  const bytes = await privateRead(from.statePath);
+  await to.seed(bytes);
+  assert.equal((await to.run()).stdout, expectedOutput([memory()]));
+  assert.deepEqual(to.routes(), [pause, recall]);
+  assert.equal(await privateRead(to.statePath), bytes);
+});
+
 test("corrupt, unknown-version, foreign-account and nonclosed states are read as empty", async t => {
   const f = await fixture(t);
   for (const bad of ["{", { version: 2 }, { account: f.accountB },
@@ -648,7 +845,7 @@ test("corrupt, unknown-version, foreign-account and nonclosed states are read as
   }
 });
 
-test("state publication is atomic with concurrent writers and refuses a symlink", async t => {
+test("state publication is atomic with concurrent writers", async t => {
   const f = await fixture(t);
   await f.seed();
   f.replies[recall] = () => fallbackResponse;
@@ -658,16 +855,31 @@ test("state publication is atomic with concurrent writers and refuses a symlink"
   assert.ok([iso(epoch + 1), iso(epoch + 2)].includes(value.last.at));
   assert.equal(value.last.delivered_items, 1);
   assert.deepEqual(await privateList(dirname(f.statePath)), [f.statePath.split(/[/\\]/).at(-1)]);
+});
 
-  if (process.platform === "win32") return;
-  const g = await fixture(t);
+test("state reading refuses a symlink even when the target has the destination fingerprint",
+  { skip: process.platform === "win32" }, async t => {
+    const f = await fixture(t), g = await fixture(t);
+    await f.seed({ account: g.accountA });
+    const external = f.statePath;
+    const bytes = await privateRead(external);
+    await privateDirectory(dirname(g.statePath));
+    execFileSync("ln", ["-s", external, g.statePath]);
+    assert.equal((await g.run()).stdout, expectedOutput([memory()]));
+    assert.deepEqual(g.routes(), [pause, recall]);
+    assert.equal(await privateRead(external), bytes);
+  });
+
+test("state publication independently refuses a symlink",
+  { skip: process.platform === "win32" }, async t => {
+  const f = await fixture(t), g = await fixture(t);
+  const cache = await openContextReadState({ root: g.root, endpoint: g.endpoint }, hostedTargetId(g), tokenA);
+  await f.seed();
   const external = f.statePath;
   const bytes = await privateRead(external);
   await privateDirectory(dirname(g.statePath));
   execFileSync("ln", ["-s", external, g.statePath]);
-  g.replies[recall] = () => fallbackResponse;
-  assert.equal((await g.run()).stdout, expectedOutput([memory()]));
-  assert.deepEqual(g.routes(), [pause, recall]);
+  await assert.rejects(cache.save(undefined, performance.now() + 5_000), { message: "state_symlink" });
   assert.equal(await privateRead(external), bytes);
   await assert.rejects(checkedPath(g.statePath), { message: "state_symlink" });
 });
@@ -689,7 +901,7 @@ test("Codex hosted prompt ignores capability, retains transport surface and reje
   assert.deepEqual(f.routes(), [recall]);
 });
 
-test("real process budgets preserve timely fallback, prohibit late fallback, and skip short attempts", async t => {
+test("real process budgets preserve timely fallback, prohibit late fallback, and skip early", async t => {
   const f = await fixture(t);
   await f.seed();
   f.replies[context] = () => "hang";
@@ -701,16 +913,52 @@ test("real process budgets preserve timely fallback, prohibit late fallback, and
   assert.ok(admitted > 0 && admitted < 3450);
   assert.equal((await f.disk()).last.outcome, "timeout");
 
-  const short = await f.run({ startup: 1400 });
-  assert.equal(short.stdout, "");
+  f.replies[context] = () => json({}, 503);
+  const late = await f.run({ probes: { contextReplyUntil: 2200 } });
+  assert.equal(late.stdout, "");
   assert.deepEqual(f.routes(), [pause, context]);
-  assert.ok(short.events.some(event => event.route === context && event.ms > 1400));
+  assert.ok(late.events.some(event => event.route === context));
   assert.equal((await f.disk()).last.path, "context-read");
 
   const skipped = await f.run({ startup: 2010 });
   assert.equal(skipped.stdout, expectedOutput([memory()]));
   assert.deepEqual(f.routes(), [pause, recall]);
   assert.ok(skipped.events.some(event => event.route === recall && event.ms >= 2010));
+});
+
+test("a pause wait cannot move the context-read timeout into the fallback reserve", async t => {
+  const f = await fixture(t);
+  await f.seed();
+  f.replies[context] = () => "hang";
+  f.replies[recall] = () => fallbackResponse;
+  const { stdout, events } = await f.run({ probes: { firstPauseUntil: 1000 } });
+  assert.deepEqual(f.routes(), [pause, context, pause, recall]);
+  assert.equal(stdout, expectedOutput([memory()]));
+  const start = events.find(event => event.route === context)?.ms;
+  const deadline = 3450 - 1300;
+  const abort = events.find(event => event.kind === "context-abort")?.ms;
+  assert.ok(start >= 1000 && abort >= start && abort <= deadline, JSON.stringify(events));
+  assert.ok(events.find(event => event.kind === "stdout")?.ms < 3450);
+  assert.equal((await f.disk()).last.outcome, "timeout");
+});
+
+test("a pause wait leaving under 250 ms at dispatch records a skip and still delivers recall", async t => {
+  const f = await fixture(t);
+  await f.seed({ failure_streak: 2 });
+  f.replies[recall] = () => fallbackResponse;
+  const { stdout, events } = await f.run({ probes: { firstPauseUntil: 1960 } });
+  assert.deepEqual(f.routes(), [pause, pause, recall]);
+  assert.equal(stdout, expectedOutput([memory()]));
+  assert.ok(events.find(event => event.route === recall)?.ms >= 1960);
+  const state = await f.disk();
+  assert.equal(state.last.path, "recall-fallback");
+  assert.equal(state.last.outcome, "skipped");
+  assert.equal(state.failure_streak, 2);
+  assert.equal(state.cooldown_until, null);
+  assert.equal(state.available_until, iso(epoch + 3_600_000));
+  // Ensure a later turn accepts the recorded outcome on read.
+  assert.equal((await f.run()).stdout, compactOutput());
+  assert.deepEqual(f.routes(), [pause, context]);
 });
 
 test("ten real children measure the recall first-fetch offset from Node process origin", async t => {

@@ -2,6 +2,10 @@ import { conforms } from "./hosted-contract.mjs";
 import { utcInstant } from "./source-time.mjs";
 
 export const CONTEXT_READ_OPTIONS = Object.freeze({ representation: "compact", max_items: 24, max_tokens: 1_500 });
+const CONTEXT_READ_CAP_MS = 1_500;
+// A deadline-limited fetch must settle and be classified before recall checks
+// its reserve.
+const CONTEXT_READ_SETTLE_MS = 50;
 export const CONTEXT_READ_REQUEST = Object.freeze({
   version: 1,
   fields: Object.freeze(["version", "query", "project_id", "session_id", "representation", "max_items", "max_tokens"]),
@@ -86,16 +90,20 @@ async function readBoundedReply(response, maxBytes) {
   }
 }
 
-export async function postContextRead({ endpoint, token }, body, timeoutMs, signal, dispatch) {
+export async function postContextRead({ endpoint, token, minTimeoutMs }, body, contextReadDeadline, signal, dispatch) {
   if (!validContextReadRequest(body)) return { status: 400 };
   const payload = JSON.stringify(body);
+  const skipped = new Error("context_read_skipped");
   let fetchSignal;
   const start = () => {
     signal?.throwIfAborted();
-    const timeout = AbortSignal.timeout(timeoutMs);
-    fetchSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
+    const remaining = contextReadDeadline - performance.now();
+    const timeout = Math.min(CONTEXT_READ_CAP_MS, remaining);
+    if (timeout < minTimeoutMs) return Promise.reject(skipped);
+    const attemptSignal = AbortSignal.timeout(Math.floor(Math.min(timeout, remaining - CONTEXT_READ_SETTLE_MS)));
+    fetchSignal = signal ? AbortSignal.any([signal, attemptSignal]) : attemptSignal;
     return fetch(`${endpoint}/api/memory/context-read`, {
-      method: "POST",
+      method: "POST", redirect: "error",
       headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
       body: payload, signal: fetchSignal,
     });
@@ -111,12 +119,13 @@ export async function postContextRead({ endpoint, token }, body, timeoutMs, sign
     }
     if (status !== 200) {
       void response.body?.cancel().catch(() => {});
-      return { status };
+      return status >= 300 && status < 400 ? { code: "network" } : { status };
     }
     const value = await readBoundedReply(response, MAX_REPLY_BYTES);
     fetchSignal.throwIfAborted();
     return validContextReadResponse(value, body.max_items) ? { status, ...value } : { status, code: "invalid_reply" };
-  } catch {
+  } catch (error) {
+    if (error === skipped) return { code: "skipped" };
     if (!fetchSignal) return { code: "dispatch_refused" };
     return { code: fetchSignal.aborted ? "timeout" : "network" };
   }
