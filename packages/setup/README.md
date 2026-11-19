@@ -9,7 +9,9 @@ local MCP tools or cloud automatic memory.
 
 Requires Node ≥22.16 and the selected CLI on PATH. The installer itself has no
 runtime dependencies.
-This README describes **installer 0.6.8**, published on 2026-11-17. New saves are usually searchable within about 10 seconds, and Claude Code runs started by scripts or the Agent SDK are no longer saved. Claude Code automatic saving works
+Known issue: on Node.js 24.22.3, whose built-in SQLite is 3.54, some searches run slower, so recall can return fewer results when you have a lot of saved memory. Your saved data isn't affected. Node.js 22, or Node.js 24 up to 24.22.2, works as before. Setup uses the Node.js that ran it, so run setup again after you switch versions.
+
+This README describes **installer 0.6.9**, published on 2026-11-19. A Claude Code session that starts while another session is saving is no longer lost. New saves are usually searchable within about 10 seconds, and Claude Code runs started by scripts or the Agent SDK are no longer saved. Claude Code automatic saving works
 on macOS. Codex automatic saving on macOS isn't supported yet; the memory tools
 work. To set up only Claude Code, run
 `npx @cairn-ink/memory setup --local --client claude`. Codex CLI 0.167.0 and 0.167.2 are qualified
@@ -111,7 +113,9 @@ hide windows or fork fences for capture. Its setup leaves 0.6.6 hooks registered
 with their retained engine; turn capture off with 0.6.6 before downgrading to
 stop them.
 
-本說明對應**安裝器 0.6.8**（2026-11-17 發布）。新存的內容通常約 10 秒內就搜得到，由腳本或 Agent SDK 啟動的 Claude Code 執行也不再被保存。Claude Code 也能在 macOS 自動保存對話。
+已知問題：Node.js 24.22.3 內建的 SQLite 是 3.54，部分搜尋會變慢，記憶很多時，回想可能找到比較少的結果。已存的資料不受影響。Node.js 22，或 Node.js 24 的 24.22.2 以前版本，都跟以前一樣。安裝程式會用執行它的那個 Node.js，所以換版本後要重新跑一次安裝。
+
+本說明對應**安裝器 0.6.9**（2026-11-19 發布）。在另一個對話正在保存時開始的 Claude Code 對話，不會再整段沒存到。新存的內容通常約 10 秒內就搜得到，由腳本或 Agent SDK 啟動的 Claude Code 執行也不再被保存。Claude Code 也能在 macOS 自動保存對話。
 Codex 在 macOS 還不支援自動保存，但記憶工具可以正常使用。若只要設定
 Claude Code，請執行 `npx @cairn-ink/memory setup --local --client claude`。
 Codex CLI 0.167.0 與 0.167.2 已通過格式驗證，可以自動擷取；已經在 Cairn 使用
@@ -257,7 +261,7 @@ Restart the tools after setup. If Node moves, rerun `setup --local`.
 兩個工具共用資料庫與 owner，並使用 Node 的絕對路徑。安裝後請重開工具；
 Node 路徑變動時，重跑 `setup --local`。
 
-**0.6.8 local mode captures Raw automatically by default on supported platforms.** Use the explicit MCP tools:
+**0.6.9 local mode captures Raw automatically by default on supported platforms.** Use the explicit MCP tools:
 `remember_memory`, `recall_memory`, `inspect_memory`, `correct_memory`,
 `forget_memory`, alongside the default dated contextRead tools
 `find_memory_candidates`, `fetch_memory_candidate_evidence`, and
@@ -275,7 +279,7 @@ it reads the Claude registration configuration file `~/.claude.json` with a
 `cairn-local` MCP registrations. It does not access credential stores or use
 authentication fields. Unrelated entries and file contents are never printed.
 
-**0.6.8 本機模式在支援的平台預設自動保存 Raw。** 可明確呼叫 `remember_memory`、
+**0.6.9 本機模式在支援的平台預設自動保存 Raw。** 可明確呼叫 `remember_memory`、
 `recall_memory`、`inspect_memory`、`correct_memory`、`forget_memory`，
 也可使用預設開啟、附日期的 contextRead 工具 `find_memory_candidates`、
 `fetch_memory_candidate_evidence`、`read_memory_context`。自動 hooks 不需要模型就能保存 Raw，setup 不會註冊 `capture_memory`。
