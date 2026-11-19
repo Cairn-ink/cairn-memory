@@ -1741,8 +1741,8 @@
   },
   {
     "path": "integrations/client/raw/local-session-start.mjs",
-    "source": "import { readdir, unlink } from 'node:fs/promises'",
-    "reason": "Lists and removes only authority-bound session-start JSON markers under the private starts directory; never database files or sidecars."
+    "source": "import { lstat, readdir, unlink } from 'node:fs/promises'",
+    "reason": "Lists and removes session-start markers and attempts, and uses lstat to verify that matching temporary entries are regular files in the private starts directory."
   },
   {
     "path": "packages/setup/lib/local-capture.mjs",
