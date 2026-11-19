@@ -34,7 +34,7 @@ test('mutual challenge keeps MCP bytes behind auth; capability identity version 
     const socket = await pair(t, async peer => {
       if (kind === 'nonce') {
         peer.once('data', bytes => {
-          const hello = JSON.parse(bytes), transcript = { protocol: 1, identity: d.identity, incarnation: d.incarnation, clientNonce: hello.clientNonce, serverNonce: 'c'.repeat(64) };
+          const hello = JSON.parse(bytes), transcript = { protocol: 2, identity: d.identity, incarnation: d.incarnation, clientNonce: hello.clientNonce, serverNonce: 'c'.repeat(64) };
           peer.write(JSON.stringify({ kind: 'challenge', clientNonce: 'wrong', serverNonce: transcript.serverNonce, mac: proof(d.capability, 'server', transcript) }) + '\n');
           peer.once('data', () => peer.write(JSON.stringify({ kind: 'ready', metadata: {}, mac: proof(d.capability, 'ready', { ...transcript, metadata: {} }) }) + '\n'));
         }); return;
