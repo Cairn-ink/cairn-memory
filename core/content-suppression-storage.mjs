@@ -3,6 +3,7 @@ import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { bindContentSafetyConnection, cachedContentLayout, contentSafetyConnection, contentSafetyBudgetError, installedContentLayout, withContentSafetyLayoutInside } from './content-safety-schema.mjs';
 import { fail, identifier } from './validation.mjs';
 import { purgeEngineCardOperationsInside } from './private-card-schema.mjs';
+import { receiptDenialTokens } from './raw-source-roots.mjs';
 
 // Installed by private-card-storage, which already owns the native database
 // dependency. This module must stay safe to load from SQLite-free commands.
@@ -83,11 +84,18 @@ export function suppressOwnerInside(db, { ownerId, reason, actionId, recordedAt 
   return writeContentSuppressionInside(db, { namespace: { ownerId, scope: 'owner', projectId: '' },
     kind: 'owner', matchMode: 'owner', reason, actionId, recordedAt });
 }
-export function suppressReceiptsInside(db, ns, memoryId, options, ids) {
+export function suppressReceiptsInside(db, ns, memoryId, options, ids, retirement) {
   requireSuppressionTransaction(db);
-  if (!installedContentLayout(db).suppressionRevision) return;
-  const rows = db.prepare('SELECT id FROM receipts WHERE memory_id=?').all(memoryId);
-  for (const row of rows) if (!ids || ids.includes(row.id)) writeContentSuppressionInside(db,
+  const safety = installedContentLayout(db).suppressionRevision;
+  if (!safety && !retirement) return;
+  const rows = retirement ? retirement.rows ?? db.prepare(`SELECT r.id,r.receipt_key,r.client,r.session_id,r.event_id,r.role
+    FROM memories m JOIN receipts r ON r.memory_id=m.id WHERE m.id=? AND (m.owner_id,m.scope,m.project_id)=(?,?,?)`)
+    .all(memoryId, ...boundary(ns)) : db.prepare('SELECT id FROM receipts WHERE memory_id=?').all(memoryId);
+  const selected = ids ? rows.filter(row => ids.includes(row.id)) : rows;
+  if (retirement) db.prepare(`INSERT OR IGNORE INTO suppressed(owner_id,scope,project_id,fingerprint)
+    SELECT ?,?,?,value FROM json_each(?)`).run(...boundary(ns), JSON.stringify(receiptDenialTokens(selected, retirement.replacements)));
+  if (!safety) return;
+  for (const row of selected) writeContentSuppressionInside(db,
     { namespace: ns, kind: 'receipt', key: row.id, ...options });
 }
 

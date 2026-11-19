@@ -1017,7 +1017,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       const row = live(ns, input.episodeId, input.expectedRevision);
       const ids = db.prepare('SELECT memory_id FROM episode_memory_links WHERE episode_id=?').all(row.id);
       invalidateSources(ns, row.id);
-      for (const { memory_id: id } of ids) forgetMutation(ns, id, undefined, undefined, undefined, { cascade: true });
+      for (const { memory_id: id } of ids) forgetMutation(ns, id, undefined, 'forgotten', 'user_forget', { cascade: true });
       const record = blank(null); record.processing.state = 'invalidated';
       db.prepare(`UPDATE session_episodes SET deleted=1,record=?,writer_token=NULL,writer_expires_at=NULL,
         revision=revision+1,source_fence=source_fence+1,updated_at=? WHERE id=?`).run(JSON.stringify(record), iso(), row.id);

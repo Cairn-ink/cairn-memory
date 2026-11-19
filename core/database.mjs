@@ -4,7 +4,7 @@ import { inContentSuppressionRequestInside, withoutContentSuppressionReadCacheIn
 import { beginContentWrite, contentWriteOperation } from './content-write-context.mjs';
 import { contentSafetyInventory, installContentSafetyInside } from './content-safety-migration.mjs';
 import { SAFETY_SCHEMA_VERSIONS, resolveContentLayout, assertContentFeatures } from './content-safety-layout.mjs';
-import { attestContentSafety, checkInstalledContentSafety, registerContentReadSnapshot, bindContentSafetyConnection } from './content-safety-schema.mjs';
+import { attestContentSafety, checkInstalledContentSafety, registerContentReadSnapshot, bindContentSafetyConnection, contentSafetyConnection } from './content-safety-schema.mjs';
 import { validateContextProductLayout } from './context-product-schema.mjs';
 import { installCardCurrentDependencies, validateCardCurrentDependencies, assertNoCardCurrentDependencies } from './card-current-schema.mjs';
 import { installRoleProfiles, validateRoleProfiles, assertNoRoleProfiles } from './role-profile-schema.mjs';
@@ -35,7 +35,7 @@ import { migrateVersion12 } from './staged-evidence-schema.mjs';
 import { migrateVersion13 } from './classification-journal-schema.mjs';
 import { installRawJournal, RAW_SCHEMA_VERSION, installRawCapture, RAW_CAPTURE_SCHEMA_VERSION } from './raw-schema.mjs';
 import { installRawLineage, RAW_LINEAGE_SCHEMA_VERSION } from './raw-lineage-schema.mjs';
-
+import { clearReceiptCoordinatesInside } from './raw-source-roots.mjs';
 import { migrateVersion14, migrateVersion15, migrateVersion16 } from './episode-schema.mjs';
 
 export const STORAGE_BUSY_TIMEOUT_MS = 5_000;
@@ -354,8 +354,8 @@ export function readTransaction(db, work, acquisition) {
     began = false;
   } catch (failure) {
     error = failure; failed = true;
-    // Also covers a BEGIN that took effect before an instrumentation failure.
-    began ||= attempted && db.isTransaction;
+    if (attempted) clearReceiptCoordinatesInside(contentSafetyConnection(db));
+    began ||= attempted && db.isTransaction; // BEGIN may take effect before instrumentation throws.
   } finally {
     if (began && db.isTransaction) {
       try { db.exec('ROLLBACK'); } catch (failure) { cleanupError = failure; cleanupFailed = true; }
@@ -379,8 +379,7 @@ export function readTransaction(db, work, acquisition) {
 }
 registerContentReadSnapshot((db,work)=>readTransaction(db,()=>{checkInstalledContentSafety(db);return work();}));
 
-// Reviewed read-only mode: keep transaction fences and statement counts, acquiring
-// SHARED on the first SELECT. Writers must retain BEGIN IMMEDIATE.
+// Deferred readers acquire SHARED on first SELECT. Writers retain BEGIN IMMEDIATE.
 export function transaction(db, work, check, { deferred = false } = {}) {
   if (hasCommitDispatcher(db) && (types.isAsyncFunction(work) || types.isGeneratorFunction(work))) fail('storage_error');
   if (activeReads.has(db) || discardedConnections.has(db)) fail('storage_error');
@@ -388,9 +387,10 @@ export function transaction(db, work, check, { deferred = false } = {}) {
   const execute = () => {
     if (!deferred) assertCommitWriteRouted(db, 'transaction');
     const before = hasCommitDispatcher(db) ? db.prepare("SELECT total_changes() AS n").get().n : undefined;
-    db.exec(deferred ? "BEGIN" : "BEGIN IMMEDIATE");
-    let contentWrite;
+    const alreadyInTransaction = db.isTransaction;
+    let contentWrite, began = false;
     try {
+      db.exec(deferred ? "BEGIN" : "BEGIN IMMEDIATE"); began = true;
       const result = inContentSuppressionRequestInside(db, () => {
         checkInstalledContentSafety(db);
         contentWrite = beginContentWrite(db);
@@ -398,15 +398,16 @@ export function transaction(db, work, check, { deferred = false } = {}) {
       });
       if (hasCommitDispatcher(db) && result && typeof result.then === 'function') fail('storage_error');
       contentWrite?.validate(result);
-      contentWrite?.close();
-      contentWrite = null;
+      contentWrite?.close(); contentWrite = null;
       check?.();
       db.exec("COMMIT");
       if (before !== undefined && db.prepare("SELECT total_changes() AS n").get().n !== before) recordCommit(db);
       return result;
     } catch (error) {
-      if(db.isTransaction)db.exec("ROLLBACK");
-      if (error?.code === 'ERR_SQLITE_ERROR' && error.message === 'card_dependency_limit_reached') {
+      if (alreadyInTransaction && !began) throw error;
+      clearReceiptCoordinatesInside(contentSafetyConnection(db));
+      if (db.isTransaction) db.exec("ROLLBACK");
+      if (began && error?.code === 'ERR_SQLITE_ERROR' && error.message === 'card_dependency_limit_reached') {
         fail('dependency_limit_reached');
       }
       throw error;
@@ -414,7 +415,6 @@ export function transaction(db, work, check, { deferred = false } = {}) {
   };
   return contentWriteOperation(db) ? withoutContentSuppressionReadCacheInside(db, execute) : execute();
 }
-
 // Presence is significant: explicit undefined and accessors are invalid.
 export function busyTimeoutOption(input) {
   if (!input || typeof input !== 'object') return undefined;

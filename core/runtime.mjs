@@ -373,10 +373,12 @@ export function createMemoryRuntime(input, internal) {
       if (localRawPrivacy) rawLineage.excludeMemory(ns, id, suppression);
       localRawPrivacy?.invalidateMemoryEpisodesInside(ns, current, episodes);
       localRawPrivacy?.hideMemoryInside(ns, current);
-      sourceRoots.touchMemory(ns, id);
+      const retired = sourceRoots.touchMemory(ns, id);
       writeContentSuppressionInside(db, { namespace: ns, kind: 'memory', key: id, matchMode: 'revision-through',
         sourceVersion: JSON.stringify(['memory-revision-through-v1', current.revision]), ...suppression });
-      suppressReceiptsInside(db, ns, id, suppression);
+      suppressReceiptsInside(db, ns, id, suppression, undefined, { rows: retired, replacements: value.receipts.map(receipt => ({
+        receipt_key: receiptKey(receipt), client: receipt.client, session_id: receipt.sessionId, event_id: receipt.eventId, role: receipt.role,
+      })) });
       if (!localRawPrivacy) rawLineage.excludeMemory(ns, id, suppression);
       stagedEvidence.purgeNamespace(ns);
       if (current.fingerprint !== value.fingerprint) suppress(ns, current.fingerprint);
@@ -410,10 +412,11 @@ export function createMemoryRuntime(input, internal) {
       const current = activeRow(ns, id);
       if (!current) return { forgotten: false, indexRevision: epoch(ns) };
       if (expectedRevision !== undefined && current.revision !== expectedRevision) fail("revision_conflict");
+      let retired;
       // Cascades manage their Episodes after all Memories have used the sources.
       if (cascade) {
         localRawPrivacy?.hideMemoryInside(ns, current);
-        sourceRoots.touchMemory(ns, id);
+        retired = sourceRoots.touchMemory(ns, id);
         suppress(ns, current.fingerprint);
       }
       const suppression = { reason: suppressionReason, actionId: 'memory-forget-'+id };
@@ -422,11 +425,12 @@ export function createMemoryRuntime(input, internal) {
         if (localRawPrivacy) rawLineage.excludeMemory(ns, id, suppression);
         localRawPrivacy?.invalidateMemoryEpisodesInside(ns, current, episodes);
         localRawPrivacy?.hideMemoryInside(ns, current);
-        sourceRoots.touchMemory(ns, id);
+        retired = sourceRoots.touchMemory(ns, id);
         suppress(ns, current.fingerprint);
       }
       writeContentSuppressionInside(db, { namespace: ns, kind: 'memory', key: id, ...suppression });
-      suppressReceiptsInside(db, ns, id, suppression);
+      suppressReceiptsInside(db, ns, id, suppression, undefined,
+        suppressionReason === 'user_forget' || reason === 'rejected' ? { rows: retired } : undefined);
       if (cascade && localRawPrivacy) rawLineage.excludeMemory(ns, id, suppression);
       if (!localRawPrivacy) rawLineage.excludeMemory(ns, id, suppression);
       stagedEvidence.purgeNamespace(ns);
