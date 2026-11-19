@@ -278,7 +278,10 @@ async function recall(hookInput) {
   if (state && Date.parse(state.available_until) > now &&
       !(Date.parse(state.cooldown_until) > now) && crCap >= CONTEXT_READ_MIN_MS) {
     contextReadPending = cache.save;
-    const reply = await post.contextRead({ version: 1, query, ...project, ...session, ...CONTEXT_READ_LIMITS },
+    const { postContextRead } = await import("../lib/context-read.mjs");
+    const reply = await postContextRead({ endpoint, token }, {
+      version: 1, query, ...project, ...session, ...CONTEXT_READ_LIMITS,
+    },
       Math.floor(crCap), fetchSignal, start => dispatchActive(control.generation, start, fetchSignal, hosted, {
         contextRead: true, onCapability: available => { if (available) learn(true); },
       }));
@@ -989,7 +992,7 @@ try {
     await publishRecallConfiguration();
   }
   if (contextReadPending && performance.now() < recallEnd - 250)
-    await contextReadPending(recallSignal).catch(() => {});
+    await contextReadPending(recallSignal, recallEnd - 250).catch(() => {});
   clearTimeout(recallTimer);
   clearTimeout(recallHardTimer);
   clearTimeout(startBoundaryTimer);

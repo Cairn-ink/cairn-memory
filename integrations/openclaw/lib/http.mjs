@@ -12,7 +12,6 @@ import { conforms, utcInstant, classifyHostedReply, parseSessionStartRequest, op
 export { classifyHostedReply } from "./hosted-contract.mjs";
 const routes = new Set(["/api/memory/recall", "/api/memory/capture"]);
 const recallPath = "/api/memory/recall";
-const contextReadPath = "/api/memory/context-read";
 const UNUSED_PERMIT_RESTORE_MS = 250;
 // Pre-OB-1 Cairn returns Zod issues. Only this root unknown-key rejection
 // proves the optional field was refused before any recall work ran.
@@ -313,22 +312,9 @@ export function createJsonPoster({ endpoint, token, root, targetId, client = "cl
         ...(client === "codex" ? { redirect: "error" } : {}),
       };
       recallDeadline.started = true;
-      if (recallDeadline.contextRead) recallDeadline.contextSignal = timedSignal;
       return fetch(`${baseUrl}${path}`, options);
     };
     const response = await (dispatch ? dispatch(start) : start());
-    if (recallDeadline.contextRead) {
-      const status = response.status;
-      if (status !== 200) {
-        void response.body?.cancel().catch(() => {});
-        return { status };
-      }
-      let value;
-      try { value = await response.json(); } catch { value = null; }
-      recallDeadline.contextSignal?.throwIfAborted();
-      return conforms("context-read-response", value) ? { status, ...value } :
-        { status, code: "invalid_reply" };
-    }
     if (!routes.has(path) && path !== "/api/memory/session-start") {
       if (!response.ok) throw new Error(`http_${response.status}`);
       if (response.status === 204) return null;
@@ -396,19 +382,6 @@ export function createJsonPoster({ endpoint, token, root, targetId, client = "cl
     return { duplicate: result.status === "duplicate", memoryCount: result.memoryCount };
   };
   post.reply = reply;
-  if (client === "claude") {
-    post.contextRead = async (body, timeoutMs, signal, dispatch) => {
-      if (!conforms("context-read-request", body) ||
-          (Object.hasOwn(body, "session_id") && optionalHostSessionId(body.session_id) === undefined))
-        return { status: 400 };
-      const state = { started: false, contextRead: true };
-      try { return await request(contextReadPath, body, timeoutMs, true, undefined, signal, dispatch, state); }
-      catch {
-        return { code: !state.started ? "dispatch_refused" :
-          state.contextSignal?.aborted ? "timeout" : "network" };
-      }
-    };
-  }
   return post;
 }
 

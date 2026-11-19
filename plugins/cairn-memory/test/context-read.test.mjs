@@ -1,16 +1,23 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
-import { mkdir, readdir, readFile, stat, symlink, writeFile } from "node:fs/promises";
+import { execFileSync, spawn } from "node:child_process";
+import { scrypt } from "node:crypto";
 import { createServer } from "node:http";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+import contextRequestSchema from "../../../schemas/context-read-request.schema.json" with { type: "json" };
+import contextResponseSchema from "../../../schemas/context-read-response.schema.json" with { type: "json" };
+import recallRequestSchema from "../../../schemas/recall-request.schema.json" with { type: "json" };
+import recallResponseSchema from "../../../schemas/recall-response.schema.json" with { type: "json" };
 import { createTestWorkspace } from "../../../tools/testing/workspace.mjs";
 import { createJsonPoster, createHostedTransport, hostedTargetId } from "../lib/http.mjs";
 import { prepareRecallQuery } from "../lib/recall-query.mjs";
 import { recallContext } from "../../../integrations/codex/hosted-lifecycle.mjs";
-import { HOSTED_SCHEMAS } from "../lib/hosted-schemas.mjs";
+import {
+  CONTEXT_READ_REQUEST, CONTEXT_READ_RESPONSE, postContextRead, validContextReadResponse,
+} from "../lib/context-read.mjs";
+import { checkedPath, privateDirectory, privateList, privateRead, privateWrite } from "../lib/private-state.mjs";
 
 const hook = fileURLToPath(new URL("../scripts/hook.mjs", import.meta.url));
 const preload = fileURLToPath(new URL("./fixtures/context-read-preload.mjs", import.meta.url));
@@ -21,9 +28,12 @@ const tokenA = "synthetic-account-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const tokenB = "synthetic-account-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const epoch = Date.parse("2031-01-01T00:00:00.000Z");
 const iso = time => new Date(time).toISOString();
-const fingerprint = (endpoint, token) => createHash("sha256").update(JSON.stringify([
-  "cairn-context-read-account-v1", endpoint, token,
-])).digest("hex");
+const deriveKey = promisify(scrypt);
+async function fingerprint(endpoint, token) {
+  const key = await deriveKey(JSON.stringify([endpoint, token]), "cairn-context-read-account-v1", 32,
+    { N: 4096, r: 8, p: 1 });
+  return key.toString("hex");
+}
 const memory = (index = 0, content = "Synthetic remembered detail.") => ({
   id: `12345678-1234-4234-8234-${String(index).padStart(12, "0")}`, content,
   kind: "fact", scope: "personal", projectId: null, origin: "explicit", confidence: 0.87,
@@ -45,14 +55,20 @@ const expectedOutput = items => JSON.stringify({ hookSpecificOutput: {
 async function fixture(t) {
   const workspace = createTestWorkspace(t, { prefix: "context-read-" });
   const root = join(workspace.path, "data"), home = join(workspace.path, "home");
-  await mkdir(root, { mode: 0o700 });
-  await mkdir(home, { mode: 0o700 });
+  await privateDirectory(root);
+  await privateDirectory(home);
   const replies = {
     [pause]: () => json({ paused: false, generation: 0, enforced: true }),
     [recall]: () => json({ memories: [memory()] }),
     [context]: () => found(),
     [capture]: () => json({ duplicate: false, memoryCount: 1 }),
   };
+  const handlers = new Map([
+    [pause, entry => replies[pause](entry)],
+    [recall, entry => replies[recall](entry)],
+    [context, entry => replies[context](entry)],
+    [capture, entry => replies[capture](entry)],
+  ]);
   const requests = [];
   const server = createServer(async (request, res) => {
     let bytes = "";
@@ -60,7 +76,7 @@ async function fixture(t) {
     const route = request.url;
     const entry = { route, body: bytes ? JSON.parse(bytes) : null };
     requests.push(entry);
-    const reply = replies[route]?.(entry) ?? json({});
+    const reply = handlers.get(route)?.(entry) ?? json({});
     if (reply === "disconnect") return res.destroy();
     if (reply === "hang") return;
     res.writeHead(reply.status, { "content-type": "application/json", ...reply.headers });
@@ -72,18 +88,18 @@ async function fixture(t) {
   });
   workspace.defer(() => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }));
   const endpoint = `http://127.0.0.1:${server.address().port}`;
+  const [accountA, accountB] = await Promise.all([fingerprint(endpoint, tokenA), fingerprint(endpoint, tokenB)]);
   const target = hostedTargetId({ endpoint });
   const statePath = join(root, "hosted-context-read", target + ".json");
   const quotaPath = join(root, "hosted-quota", target + ".json");
   const seed = async (overrides = {}) => {
-    await mkdir(dirname(statePath), { recursive: true, mode: 0o700 });
-    await writeFile(statePath, typeof overrides === "string" ? overrides : JSON.stringify({
-      version: 1, account: fingerprint(endpoint, tokenA), available_until: iso(epoch + 3_600_000),
+    await privateWrite(statePath, typeof overrides === "string" ? overrides : JSON.stringify({
+      version: 1, account: accountA, available_until: iso(epoch + 3_600_000),
       failure_streak: 0, cooldown_until: null, last: null, ...overrides,
-    }), { mode: 0o600 });
+    }));
   };
-  const disk = async () => JSON.parse(await readFile(statePath, "utf8"));
-  const auth = async () => JSON.parse(await readFile(join(root, "credential-state.json"), "utf8")).auth?.outcome;
+  const disk = async () => JSON.parse(await privateRead(statePath));
+  const auth = async () => JSON.parse(await privateRead(join(root, "credential-state.json"))).auth?.outcome;
   async function run({ token = tokenA, prompt = "Synthetic query", time = epoch, startup = 0 } = {}) {
     const events = [];
     const child = spawn(process.execPath, ["--import", preload, hook, "recall"], {
@@ -106,15 +122,15 @@ async function fixture(t) {
     child.stdin.on("error", () => {});
     child.stdin.end(JSON.stringify({ prompt, session_id: "test-session", cwd: home }));
     assert.deepEqual(await closed, { code: 0, signal: null });
-    for (const candidate of [tokenA, tokenB]) {
-      assert.ok(!stdout.includes(fingerprint(endpoint, candidate)));
-      assert.ok(!stderr.includes(fingerprint(endpoint, candidate)));
+    for (const account of [accountA, accountB]) {
+      assert.ok(!stdout.includes(account));
+      assert.ok(!stderr.includes(account));
     }
     assert.equal(stderr, "");
     return { stdout, events };
   }
   const routes = () => requests.splice(0).map(entry => entry.route);
-  return { root, statePath, quotaPath, endpoint, requests, replies, routes, run, seed, disk, auth };
+  return { root, statePath, quotaPath, endpoint, accountA, accountB, requests, replies, routes, run, seed, disk, auth };
 }
 
 test("recall learns only the exact capability header and delivers the original bytes", async t => {
@@ -123,7 +139,7 @@ test("recall learns only the exact capability header and delivers the original b
     f.replies[recall] = () => json({ memories: [memory()] }, 200, header);
     assert.equal((await f.run()).stdout, expectedOutput([memory()]));
     assert.deepEqual(f.routes(), [pause, recall]);
-    await assert.rejects(stat(dirname(f.statePath)), { code: "ENOENT" });
+    assert.equal(await checkedPath(dirname(f.statePath), { directory: true, missing: true }), undefined);
   }
   f.replies[recall] = () => fallbackResponse;
   assert.equal((await f.run()).stdout, expectedOutput([memory()]));
@@ -248,31 +264,105 @@ for (const [name, change] of [
   assert.equal((await f.disk()).last.outcome, "invalid_reply");
 });
 
-test("shared transport rejects invalid requests locally, copies wire schemas, and returns HTTP status", async t => {
+test("plugin transport rejects invalid requests locally, bounds the reply, and returns HTTP status", async t => {
   const f = await fixture(t);
-  const { "context-read-request": request, "context-read-response": response,
-    "recall-request": recallRequest, "recall-response": recallResponse } = HOSTED_SCHEMAS;
-  assert.deepEqual(request.properties.session_id, recallRequest.properties.session_id);
-  assert.deepEqual(request.properties.project_id, recallRequest.properties.project_id);
-  assert.deepEqual(response.$defs, recallResponse.$defs);
-  const poster = createJsonPoster({ endpoint: f.endpoint, token: tokenA });
   const valid = { version: 1, query: "Synthetic query", max_items: 24, max_tokens: 1500 };
   let dispatches = 0;
   const dispatch = start => { dispatches++; return start(); };
+  const post = body => postContextRead({ endpoint: f.endpoint, token: tokenA }, body, 1000, undefined, dispatch);
   for (const overrides of [{ version: 2 }, { query: "" }, { query: "x".repeat(4001) }, { project_id: "short" },
-    { session_id: "line\n" }, { max_items: 25 }, { max_tokens: 499 }, { max_tokens: 6001 }, { limit: 6 }]) {
-    assert.deepEqual(await poster.contextRead({ ...valid, ...overrides }, 1000, undefined, dispatch), { status: 400 });
+    { session_id: "line\n" }, { max_items: 0 }, { max_items: 25 }, { max_tokens: 499 },
+    { max_tokens: 6001 }, { max_tokens: 1500.5 }, { limit: 6 }]) {
+    assert.deepEqual(await post({ ...valid, ...overrides }), { status: 400 });
   }
   assert.equal(dispatches, 0);
   assert.deepEqual(f.routes(), []);
   for (const status of [400, 401, 404, 503, 502]) {
     f.replies[context] = () => json({ code: "ignored" }, status);
-    assert.deepEqual(await poster.contextRead(valid, 1000, undefined, dispatch), { status });
+    assert.deepEqual(await post(valid), { status });
   }
   f.replies[context] = () => found();
-  assert.deepEqual(await poster.contextRead(valid, 1000, undefined, dispatch), { status: 200, ...found().value });
-  assert.equal(dispatches, 6);
-  assert.deepEqual(f.routes(), Array(6).fill(context));
+  assert.deepEqual(await post(valid), { status: 200, ...found().value });
+  f.replies[context] = () => found([memory(0, "😀".repeat(65_536))]);
+  assert.deepEqual(await post(valid), { status: 200, code: "invalid_reply" });
+  assert.equal(dispatches, 7);
+  assert.deepEqual(f.routes(), Array(7).fill(context));
+});
+
+// Check the keywords used by the public success schema without using the
+// plugin's embedded recall schema or its validator.
+function checkReplySchema(schema, value) {
+  if (schema.$ref) {
+    const name = schema.$ref.slice("#/$defs/".length);
+    return checkReplySchema(contextResponseSchema.$defs[name], value);
+  }
+  if (schema.enum && !schema.enum.includes(value)) return false;
+  const type = value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
+  if (schema.type && ![schema.type].flat().includes(type)) return false;
+  if (type === "object") {
+    if (schema.required?.some(key => !Object.hasOwn(value, key))) return false;
+    return Object.entries(value).every(([key, input]) => {
+      if (!schema.properties || !Object.hasOwn(schema.properties, key)) return schema.additionalProperties !== false;
+      return checkReplySchema(schema.properties[key], input);
+    });
+  }
+  if (type === "array") {
+    return value.length >= (schema.minItems ?? 0) && (!schema.items ||
+      value.every(item => checkReplySchema(schema.items, item)));
+  }
+  if (type === "number") {
+    return Number.isFinite(value) && value >= (schema.minimum ?? -Infinity) && value <= (schema.maximum ?? Infinity);
+  }
+  if (schema.format === "date-time") {
+    return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) &&
+      Number.isFinite(Date.parse(value));
+  }
+  if (schema.format === "uuid") return /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(value);
+  return true;
+}
+
+test("public wire schemas agree with the plugin contract and classify reply fixtures alike", () => {
+  assert.deepEqual(contextResponseSchema.$defs, recallResponseSchema.$defs);
+  for (const [schema, contract] of [[contextRequestSchema, CONTEXT_READ_REQUEST],
+    [contextResponseSchema, CONTEXT_READ_RESPONSE]]) {
+    assert.equal(schema.type, "object");
+    assert.equal(schema.additionalProperties, false);
+    assert.deepEqual(Object.keys(schema.properties).sort(), [...contract.fields].sort());
+    assert.deepEqual([...schema.required].sort(), [...contract.required].sort());
+  }
+  for (const key of ["mode", "degraded"]) {
+    assert.deepEqual(contextResponseSchema.properties[key].enum, CONTEXT_READ_RESPONSE[key]);
+  }
+  for (const key of ["query", "project_id", "session_id"]) {
+    assert.deepEqual(contextRequestSchema.properties[key], recallRequestSchema.properties[key]);
+  }
+  assert.equal(contextRequestSchema.properties.version.const, CONTEXT_READ_REQUEST.version);
+  for (const key of ["max_items", "max_tokens"]) {
+    assert.deepEqual(contextRequestSchema.properties[key], { type: "integer", ...CONTEXT_READ_REQUEST[key] });
+  }
+  assert.deepEqual(contextResponseSchema.properties.memories, recallResponseSchema.oneOf[0].properties.memories);
+
+  for (const [accepted, value] of [
+    [true, found().value],
+    [true, { mode: "semantic", memories: [] }],
+    [false, null],
+    [false, []],
+    [false, { memories: [] }],
+    [false, { mode: "hybrid", memories: [] }],
+    [false, { mode: "lexical", memories: [], degraded: "unknown" }],
+    [false, { mode: "lexical", memories: [], extra: true }],
+    [false, { mode: "lexical", memories: { item: memory() } }],
+    [false, found([{ ...memory(), extra: true }]).value],
+    [false, found([{ ...memory(), receipts: [] }]).value],
+    [false, found([{ ...memory(), confidence: 1.5 }]).value],
+    [false, found([{ ...memory(), id: "bad-id" }]).value],
+    [false, found([{ ...memory(), updatedAt: "invalid" }]).value],
+    [false, found([{ ...memory(), receipts: [{ ...memory().receipts[0], role: "system" }] }]).value],
+    [false, found([{ ...memory(), receipts: [{ ...memory().receipts[0], extra: true }] }]).value],
+  ]) {
+    assert.equal(validContextReadResponse(value), accepted);
+    assert.equal(checkReplySchema(contextResponseSchema, value), accepted);
+  }
 });
 
 test("context-read and fallback use the identical prepared query, project and host session", async t => {
@@ -346,12 +436,11 @@ test("pause before the first dispatch refuses both memory routes", async t => {
 });
 
 async function seedQuota(f) {
-  await mkdir(dirname(f.quotaPath), { mode: 0o700 });
   const active = { mode: "open", resetAt: null, until: null, attempt: null };
   const quota = JSON.stringify({ version: 2, operations: {
     recall: { ...active, mode: "cooldown", until: epoch + 9000 }, capture: active,
   } });
-  await writeFile(f.quotaPath, quota, { mode: 0o600 });
+  await privateWrite(f.quotaPath, quota);
   return quota;
 }
 
@@ -360,11 +449,11 @@ test("context-read never creates or changes recall quota state even during a quo
   await f.seed();
   assert.equal((await f.run()).stdout, expectedOutput([memory()]));
   assert.deepEqual(f.routes(), [pause, context]);
-  await assert.rejects(stat(dirname(f.quotaPath)), { code: "ENOENT" });
+  assert.equal(await checkedPath(dirname(f.quotaPath), { directory: true, missing: true }), undefined);
   const quota = await seedQuota(f);
   assert.equal((await f.run()).stdout, expectedOutput([memory()]));
   assert.deepEqual(f.routes(), [pause, context]);
-  assert.equal(await readFile(f.quotaPath, "utf8"), quota);
+  assert.equal(await privateRead(f.quotaPath), quota);
 });
 
 test("state is closed, content-free, and account-bound on the same endpoint", async t => {
@@ -373,13 +462,13 @@ test("state is closed, content-free, and account-bound on the same endpoint", as
   await f.run();
   await f.run();
   assert.deepEqual(f.routes(), [pause, recall, pause, context]);
-  const file = await readFile(f.statePath, "utf8"), saved = JSON.parse(file);
+  const file = await privateRead(f.statePath), saved = JSON.parse(file);
   assert.deepEqual(Object.keys(saved).sort(), ["account", "available_until", "cooldown_until",
     "failure_streak", "last", "version"]);
   assert.deepEqual(Object.keys(saved.last).sort(), ["at", "delivered_items", "outcome",
     "path", "rendered_chars", "returned_items"]);
-  assert.equal(saved.account, fingerprint(f.endpoint, tokenA));
-  if (process.platform !== "win32") assert.equal((await stat(f.statePath)).mode & 0o777, 0o600);
+  assert.equal(saved.account, f.accountA);
+  if (process.platform !== "win32") assert.equal((await checkedPath(f.statePath)).mode & 0o777, 0o600);
   for (let i = 0; i <= tokenA.length - 8; i++) assert.ok(!file.includes(tokenA.slice(i, i + 8)));
   for (const value of [memory().id, memory().content, memory().receipts[0].excerpt, "Synthetic query",
     "source-session", "test-session", "project_id"]) assert.ok(!file.includes(value));
@@ -387,20 +476,20 @@ test("state is closed, content-free, and account-bound on the same endpoint", as
   assert.equal((await f.run({ token: tokenB })).stdout, expectedOutput([memory()]));
   assert.deepEqual(f.routes(), [pause, recall]);
   const replacement = await f.disk();
-  assert.equal(replacement.account, fingerprint(f.endpoint, tokenB));
+  assert.equal(replacement.account, f.accountB);
   assert.equal(replacement.last, null);
 });
 
 test("corrupt, unknown-version, foreign-account and nonclosed states are read as empty", async t => {
   const f = await fixture(t);
-  for (const bad of ["{", { version: 2 }, { account: fingerprint(f.endpoint, tokenB) },
+  for (const bad of ["{", { version: 2 }, { account: f.accountB },
     { extra: "synthetic" }, { last: { at: iso(epoch) } }, { available_until: "tomorrow" },
     { cooldown_until: undefined }, { failure_streak: -1 }]) {
     await f.seed(bad);
-    const before = await readFile(f.statePath, "utf8");
+    const before = await privateRead(f.statePath);
     assert.equal((await f.run()).stdout, expectedOutput([memory()]));
     assert.deepEqual(f.routes(), [pause, recall]);
-    assert.equal(await readFile(f.statePath, "utf8"), before);
+    assert.equal(await privateRead(f.statePath), before);
   }
 });
 
@@ -413,18 +502,19 @@ test("state publication is atomic with concurrent writers and refuses a symlink"
   const value = await f.disk();
   assert.ok([iso(epoch + 1), iso(epoch + 2)].includes(value.last.at));
   assert.equal(value.last.delivered_items, 1);
-  assert.deepEqual(await readdir(dirname(f.statePath)), [f.statePath.split(/[/\\]/).at(-1)]);
+  assert.deepEqual(await privateList(dirname(f.statePath)), [f.statePath.split(/[/\\]/).at(-1)]);
 
   if (process.platform === "win32") return;
   const g = await fixture(t);
   const external = f.statePath;
-  const bytes = await readFile(external, "utf8");
-  await mkdir(dirname(g.statePath), { mode: 0o700 });
-  await symlink(external, g.statePath);
+  const bytes = await privateRead(external);
+  await privateDirectory(dirname(g.statePath));
+  execFileSync("ln", ["-s", external, g.statePath]);
   g.replies[recall] = () => fallbackResponse;
   assert.equal((await g.run()).stdout, expectedOutput([memory()]));
   assert.deepEqual(g.routes(), [pause, recall]);
-  assert.equal(await readFile(external, "utf8"), bytes);
+  assert.equal(await privateRead(external), bytes);
+  await assert.rejects(checkedPath(g.statePath), { message: "state_symlink" });
 });
 
 test("Codex hosted prompt ignores capability, retains transport surface and rejects replies over 64 KiB", async t => {
