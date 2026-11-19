@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
 import { open, readFile, stat, mkdir, rename, unlink, writeFile } from "node:fs/promises";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomUUID, scrypt } from "node:crypto";
 import { platform } from "node:os";
 import { dirname, isAbsolute, resolve, join } from "node:path";
+import { promisify } from "node:util";
 // Arm before loading the client graph or resolving a binding. performance.now()
 // counts Node startup too; an exhausted startup budget exits before local work.
 const action = process.argv[2] ?? "status";
@@ -15,6 +16,31 @@ checkStartBoundary();
 const startBoundaryTimer = action === 'start-boundary' ? setTimeout(() => process.exit(0),
   Math.max(0, START_BOUNDARY_BUDGET_MS - performance.now())) : undefined;
 
+const { normalizeEndpoint } = await import("../lib/config.mjs");
+const { INVALID_ENDPOINT, credentialDescription, readCredentialState, recordCredentialAuth,
+  recordCredentialConfiguration } = await import("../lib/credential-state.mjs");
+const { hasOneLibuvWorker } = await import("../lib/thread-pool.mjs");
+const endpoint = (() => {
+  try { return normalizeEndpoint(process.env.CLAUDE_PLUGIN_OPTION_API_ENDPOINT ?? "https://cairn.ink"); }
+  catch { return INVALID_ENDPOINT; }
+})();
+const token = process.env.CLAUDE_PLUGIN_OPTION_API_TOKEN ?? "";
+const contextReadEnabled = !hasOneLibuvWorker(process.env.UV_THREADPOOL_SIZE) && !/^(?:0|false|no|off)$/i.test(
+  process.env.CLAUDE_PLUGIN_OPTION_CONTEXT_READ ?? "true",
+);
+const prepareContextRead = action === "recall" && token && contextReadEnabled && endpoint.startsWith("http");
+const contextReadStateModule = prepareContextRead
+  ? import("../lib/context-read-state.mjs").catch(() => undefined) : undefined;
+const contextReadFingerprint = prepareContextRead ? accountFingerprint().catch(() => undefined) : undefined;
+
+async function accountFingerprint() {
+  // Use a KDF for this token-derived value. Keep it in the lookup and save
+  // closures, with persistence limited to the 0600 cache file.
+  const key = await promisify(scrypt)(JSON.stringify([endpoint, token]), "cairn-context-read-account-v1", 32,
+    { N: 4096, r: 8, p: 1 });
+  return key.toString("hex");
+}
+
 const { captureEvent } = await import("../lib/capture-event.mjs");
 const { readHookInput } = await import("../lib/hook-input.mjs");
 const {
@@ -24,7 +50,6 @@ const {
 } = await import("../lib/capture-cursor.mjs");
 const { captureEventId, transcriptWindow } = await import("../lib/transcript.mjs");
 const { installId } = await import("../lib/identity.mjs");
-const { normalizeEndpoint } = await import("../lib/config.mjs");
 const {
   readControlState,
   runIfActive,
@@ -41,8 +66,6 @@ const { canonicalHostRoot, privateRead } = await import("../lib/private-state.mj
 const { optionalHostSessionId } = await import("../lib/hosted-contract.mjs");
 const { inspectAutomaticPolicy } = await import("../lib/automatic-policy.mjs");
 const { hostedPauseStatus, completeHostedPauseRotation, observeHostedPause, deferHostedPauseStatus, withHostedPauseGate, hostedPauseMode } = await import("../lib/hosted-pause.mjs");
-const { INVALID_ENDPOINT, credentialDescription, readCredentialState, recordCredentialAuth,
-  recordCredentialConfiguration } = await import("../lib/credential-state.mjs");
 
 // One recall-only cap from the process time origin, including startup/imports.
 // It is established before setup or stdin awaits. The HTTP
@@ -53,7 +76,6 @@ const recallEnd = recallController ? 3500 : undefined;
 // Stop admitting output 50 ms before abort, without shortening the fetch.
 // This is admission headroom; an admitted pipe write uses its own drain cap.
 const OUTPUT_WRITE_MARGIN_MS = 50;
-const CONTEXT_READ_STATE_MAX_MS = 100;
 const CONTEXT_READ_MIN_MS = 250;
 const RECALL_RESERVE_MS = 1_300;
 const RENDER_MAX_CHARS = 9_000;
@@ -92,30 +114,15 @@ function checkRecall() {
   recallSignal?.throwIfAborted();
 }
 const observedAt = new Date().toISOString();
-const configuredEndpoint =
-  process.env.CLAUDE_PLUGIN_OPTION_API_ENDPOINT ?? "https://cairn.ink";
-const token = process.env.CLAUDE_PLUGIN_OPTION_API_TOKEN ?? "";
 const telemetryEnabled = !/^(?:0|false|no|off)$/i.test(
   process.env.CLAUDE_PLUGIN_OPTION_TELEMETRY ?? "true",
-);
-function hasOneLibuvWorker(value) {
-  // Only an absent setting uses the default. libuv uses atoi, so an empty
-  // value or one with no leading digits parses as zero and gives one worker.
-  // atoi overflow differs between C libraries (4294967296 gives one worker on
-  // glibc), so any value outside the int range 2..2147483647 counts as one too.
-  if (value === undefined) return false;
-  const digits = /^[\t\n\v\f\r ]*([+-]?[0-9]+)/.exec(value)?.[1];
-  const workers = digits === undefined ? 0 : Number(digits);
-  return !(workers >= 2 && workers <= 2_147_483_647);
-}
-const contextReadEnabled = !hasOneLibuvWorker(process.env.UV_THREADPOOL_SIZE) && !/^(?:0|false|no|off)$/i.test(
-  process.env.CLAUDE_PLUGIN_OPTION_CONTEXT_READ ?? "true",
 );
 let dataDir;
 let clientOptions;
 let binding;
-let endpoint;
-let post;
+let post = endpoint === INVALID_ENDPOINT
+  ? async () => { throw new Error("invalid_endpoint"); }
+  : createJsonPoster({ endpoint, token });
 let quotaTarget;
 let hostedConfig;
 let recallObservation;
@@ -123,6 +130,7 @@ let credentialDir;
 let recallConfigurationPending = false;
 let recallMarkerInput;
 let recallAuthPending;
+let contextCacheLookup;
 let contextReadPending;
 let recallPromptOffset;
 let recallAuthority;
@@ -133,16 +141,6 @@ async function publishRecallConfiguration() {
     configured: Boolean(token), endpoint, observedAt,
   }, { signal: recallSignal }).catch(() => {});
 }
-try {
-  endpoint = normalizeEndpoint(configuredEndpoint);
-  post = createJsonPoster({ endpoint, token });
-} catch {
-  endpoint = INVALID_ENDPOINT;
-  post = async () => {
-    throw new Error("invalid_endpoint");
-  };
-}
-
 async function input() {
   checkRecall();
   // Recall and the synchronous boundary retain their process-wide hard caps.
@@ -244,22 +242,15 @@ function contextReadLine(memory) {
   return `- [${memory.id}] (${memory.scope}, ${memory.date ?? "undated"}) ${memory.text}`;
 }
 
-async function readContextCache(config, targetId) {
-  // The one-worker guard leaves a worker available for plain recall if this read stalls.
-  // The pending read can hold the process open until it returns. Disabling context_read skips it.
-  const deadline = performance.now() + CONTEXT_READ_STATE_MAX_MS;
-  let timer;
-  try {
-    const expiry = new Promise(resolve => { timer = setTimeout(resolve, CONTEXT_READ_STATE_MAX_MS); });
-    const lookup = (async () => {
-      const { openContextReadState, contextReadOutcome } = await import("../lib/context-read-state.mjs");
-      const cache = await openContextReadState(config, targetId, token);
-      return { ...cache, contextReadOutcome };
-    })();
-    const cache = await Promise.race([expiry, lookup]);
-    if (performance.now() < deadline) return cache;
-  } catch { /* Recall can proceed without the optional cache. */ }
-  finally { clearTimeout(timer); }
+async function readContextCache(root, targetId) {
+  const module = await contextReadStateModule;
+  if (!module) return;
+  const cache = await module.openContextReadState({ root }, targetId, contextReadFingerprint);
+  if (cache) return { ...cache, contextReadOutcome: module.contextReadOutcome };
+}
+
+function contextCacheRouteTick(resolve) {
+  setTimeout(resolve, 0);
 }
 
 async function recall(hookInput) {
@@ -298,9 +289,10 @@ async function recall(hookInput) {
   const contextReadDeadline = outputDeadline - RECALL_RESERVE_MS;
   const project = projectId === undefined ? {} : { project_id: projectId };
   const session = sessionId === undefined ? {} : { session_id: sessionId };
-  const cache = contextReadEnabled && hostedConfig
-    ? await readContextCache(hostedConfig, quotaTarget.targetId)
-    : undefined;
+  // Let queued completions run once. A stalled cache read must never delay
+  // plain recall, and a completion after this decision cannot change the route.
+  if (contextCacheLookup && !contextCacheLookup.settled) await new Promise(contextCacheRouteTick);
+  const cache = contextCacheLookup?.value;
   const state = cache?.state;
   const learn = (available, now = Date.now()) => {
     if (!state) return;
@@ -972,6 +964,13 @@ try {
       }
       quotaTarget = { root: dataDir, targetId: hostedTargetId({ endpoint, token }) };
       post = createJsonPoster({ endpoint, token, ...quotaTarget });
+      if (prepareContextRead) {
+        const lookup = contextCacheLookup = { settled: false, value: undefined };
+        readContextCache(hostedConfig.root, quotaTarget.targetId).then(value => {
+          lookup.value = value;
+          lookup.settled = true;
+        }, () => { lookup.settled = true; });
+      }
     }
     credentialDir = process.env.CLAUDE_PLUGIN_DATA ?? dataDir;
     if (["status", "pause", "resume"].includes(action)) {

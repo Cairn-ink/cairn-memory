@@ -87,12 +87,13 @@ The bundled Cairn MCP server also exposes explicit `remember_memory`, `recall_me
 
 The optional context-read state file introduces a new way for the hook to stall. A read of that
 file can block on a network home directory when another client holds a lock, or in a files-on-demand
-folder when the file has been evicted. With the default thread pool, the hook still sends plain
-recall and writes its result, but it can only exit once the read returns, so Claude Code may stop
-it at its timeout. Turning `context_read` off avoids this stall. When `UV_THREADPOOL_SIZE` is set
-but does not start with a number from 2 to 2147483647 (for example an empty value, `0` or `1`, which
-give a single worker thread), the hook behaves as if `context_read` were off. A stall of the whole plugin data directory affects every plugin state file
-and behaves as in earlier versions.
+folder when the file has been evicted. The hook does not wait for that read, so it sends plain recall
+and writes its result on the same schedule as with `context_read` off. The process can only exit once
+the read returns, so Claude Code may stop it at its timeout. Turning `context_read` off avoids this
+stall. When `UV_THREADPOOL_SIZE` is set and its leading signed decimal integer is not between 2 and
+2147483647 (for example empty, `0` or `1`), the hook behaves as if `context_read` were off. A stall
+of the whole plugin data directory affects every plugin state file and behaves as in earlier
+versions.
 
 Hooks fail open: timeouts, auth errors, and service outages never block normal Claude Code work.
 Explicit pause/resume commands report control failures rather than claiming success. After resume,

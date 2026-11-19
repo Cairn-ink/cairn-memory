@@ -3,7 +3,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { createHmac, scrypt } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import { constants } from "node:fs";
-import { open, unlink } from "node:fs/promises";
+import { lstat, open, rename, unlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -24,6 +24,7 @@ import {
 } from "../lib/context-read.mjs";
 import { openContextReadState } from "../lib/context-read-state.mjs";
 import { checkedPath, privateDirectory, privateList, privateRead, privateWrite } from "../lib/private-state.mjs";
+import { hasOneLibuvWorker } from "../lib/thread-pool.mjs";
 
 const hook = fileURLToPath(new URL("../scripts/hook.mjs", import.meta.url));
 const preload = fileURLToPath(new URL("./fixtures/context-read-preload.mjs", import.meta.url));
@@ -77,7 +78,7 @@ const specCompactReply = {
 };
 
 // Install in the real hook child before the hook imports its modules.
-function installRecallProbes({ directoryProbe, scryptDelay, firstPauseUntil, contextReplyUntil, cacheAccess, fifo, statePath }) {
+function installRecallProbes({ directoryProbe, holdScrypt, failScrypt, firstPauseUntil, contextReplyUntil, cacheAccess, fifo, statePath }) {
   const event = (kind, details = {}) => process.send?.({ kind, ms: performance.now(), ...details });
   const crypto = process.getBuiltinModule("node:crypto");
   const fs = process.getBuiltinModule("node:fs/promises");
@@ -85,12 +86,17 @@ function installRecallProbes({ directoryProbe, scryptDelay, firstPauseUntil, con
   const scrypt = crypto.scrypt;
   crypto.scrypt = (...args) => {
     event("scrypt");
-    if (scryptDelay) {
+    if (failScrypt) throw new Error("synthetic fingerprint error");
+    if (holdScrypt) {
       const callback = args.pop();
-      args.push((...result) => setTimeout(() => {
+      process.channel.ref();
+      const release = new Promise(resolve => process.once("message", resolve));
+      args.push(async (...result) => {
+        await release;
+        process.channel.unref();
         event("scrypt-completed");
         callback(...result);
-      }, scryptDelay));
+      });
     }
     return scrypt(...args);
   };
@@ -145,27 +151,27 @@ function installRecallProbes({ directoryProbe, scryptDelay, firstPauseUntil, con
           probed = true;
           event("cache-probe");
           if (directoryProbe === "stall") return new Promise(() => {});
-          throw new Error("synthetic cache probe error");
+          if (directoryProbe === "error") throw new Error("synthetic cache probe error");
         }
         return Reflect.apply(original, receiver, args);
       },
     });
   }
   if (fifo) {
+    const lstat = fs.lstat;
+    fs.lstat = (path, ...args) => lstat(path === statePath ? fifo.seed : path, ...args);
     const open = fs.open;
     fs.open = async (...args) => {
-      const file = await open(...args);
       if (args[0] === statePath) {
-        const readFile = file.readFile.bind(file);
-        file.readFile = async (...args) => {
-          const pending = fs.readFile(fifo);
-          event("cache-read-start");
-          await pending;
-          event("cache-read-released");
-          return readFile(...args);
-        };
+        // Expose the saved file's metadata, stall the real open at the cache
+        // path, then return the saved file so the late lookup can succeed.
+        const pending = open(...args);
+        event("cache-read-start");
+        await (await pending).close();
+        event("cache-read-released");
+        return open(fifo.seed, ...args.slice(1));
       }
-      return file;
+      return open(...args);
     };
     const dns = process.getBuiltinModule("node:dns");
     const lookup = dns.lookup;
@@ -231,7 +237,7 @@ async function fixture(t, { hostname = false } = {}) {
     const route = request.url;
     const entry = { route, method: request.method, body: bytes ? JSON.parse(bytes) : null };
     requests.push(entry);
-    const reply = handle(route, entry) ?? json({});
+    const reply = await handle(route, entry) ?? json({});
     if (reply === "disconnect") return res.destroy();
     if (reply === "hang") return;
     res.writeHead(reply.status, { "content-type": "application/json", ...reply.headers });
@@ -256,25 +262,31 @@ async function fixture(t, { hostname = false } = {}) {
   };
   const disk = async () => JSON.parse(await privateRead(statePath));
   const auth = async () => JSON.parse(await privateRead(join(root, "credential-state.json"))).auth?.outcome;
-  async function run({ token = tokenA, prompt = "Synthetic query", time = epoch, startup = 0,
-    contextReadOption, threadPoolSize, realCacheRace = false, probes, beforeClose } = {}) {
+  async function run({ action = "recall", prompt = "Synthetic query", transcriptPath, token = tokenA,
+    apiEndpoint = endpoint,
+    time = epoch, startup = 0, contextReadOption, threadPoolSize, realRouteTick = false, probes,
+    holdInputUntil, beforeClose } = {}) {
     const events = [];
     const probeSource = probes ? `(${installRecallProbes})(${JSON.stringify(probes)})` : "";
     const imports = probes ? ["--import", preload, "--import", "data:text/javascript," + encodeURIComponent(probeSource)] :
       ["--import", preload];
     const started = performance.now();
-    const child = spawn(process.execPath, [...imports, hook, "recall"], {
+    const child = spawn(process.execPath, [...imports, hook, action], {
       stdio: ["pipe", "pipe", "pipe", "ipc"],
       env: { PATH: process.env.PATH, HOME: home, NODE_OPTIONS: process.env.NODE_OPTIONS,
         TMPDIR: process.env.TMPDIR, CAIRN_TEST_REAL_HOME: process.env.CAIRN_TEST_REAL_HOME,
-        CLAUDE_PLUGIN_DATA: root, CLAUDE_PLUGIN_OPTION_API_ENDPOINT: endpoint,
+        CLAUDE_PLUGIN_DATA: root, CLAUDE_PLUGIN_OPTION_API_ENDPOINT: apiEndpoint,
         CLAUDE_PLUGIN_OPTION_API_TOKEN: token, CLAUDE_PLUGIN_OPTION_TELEMETRY: "false",
         CLAUDE_PLUGIN_OPTION_CONTEXT_READ: contextReadOption,
         UV_THREADPOOL_SIZE: threadPoolSize,
-        TEST_REAL_CACHE_RACE: realCacheRace ? "1" : undefined,
+        TEST_REAL_CACHE_ROUTE_TICK: realRouteTick ? "1" : undefined,
         TEST_WALL_TIME: String(time), TEST_STARTUP_MS: String(startup) },
     });
-    child.on("message", event => events.push(event));
+    const { promise: inputReady, resolve: releaseInput } = deferred();
+    child.on("message", event => {
+      events.push(event);
+      if (event.kind === holdInputUntil) releaseInput();
+    });
     let stdout = "", stderr = "";
     const { promise: output, resolve: outputReceived } = deferred();
     child.stdout.setEncoding("utf8").on("data", chunk => {
@@ -294,8 +306,11 @@ async function fixture(t, { hostname = false } = {}) {
       await closed;
     });
     child.stdin.on("error", () => {});
-    child.stdin.end(JSON.stringify({ prompt, session_id: "test-session", cwd: home }));
-    if (beforeClose) await beforeClose({ output, closed, events });
+    if (holdInputUntil) {
+      await Promise.race([inputReady, closed.then(() => assert.fail(`hook closed before ${holdInputUntil}`))]);
+    }
+    child.stdin.end(JSON.stringify({ prompt, session_id: "test-session", cwd: home, transcript_path: transcriptPath }));
+    if (beforeClose) await beforeClose({ output, closed, events, releaseScrypt: () => child.send("release-scrypt") });
     assert.deepEqual(await closed, { code: 0, signal: null });
     for (const account of [accountA, accountB]) {
       assert.ok(!stdout.includes(account));
@@ -308,14 +323,29 @@ async function fixture(t, { hostname = false } = {}) {
   return { root, home, statePath, quotaPath, endpoint, accountA, accountB, requests, replies, routes, run, seed, disk, auth };
 }
 
+test("thread-pool guard parses libuv's leading signed decimal integer", () => {
+  assert.equal(hasOneLibuvWorker(undefined), false);
+  for (const value of ["", "0", "1", "abc", " 1x", "\t+1tail", "-1", "4294967296", "4294967297",
+    "2147483648", "99999999999999999999"]) {
+    assert.equal(hasOneLibuvWorker(value), true, JSON.stringify(value));
+  }
+  for (const value of ["2", "4", " +2x", "0002", "2147483647"]) {
+    assert.equal(hasOneLibuvWorker(value), false, JSON.stringify(value));
+  }
+});
+
 const offSettings = ["false", "off"].map(contextReadOption => ({ contextReadOption }));
-offSettings.push(...["", "1", "0", "abc", " 1x", "-1", "4294967296", "4294967297", "99999999999999999999"]
-  .map(threadPoolSize => ({ threadPoolSize })));
+offSettings.push(...["", "1", "0", "abc", " 1x", "4294967296"].map(threadPoolSize => ({ threadPoolSize })));
 const onSettings = [{}, { contextReadOption: "true" },
-  ...["2", "4", " +2x", "2147483647"].map(threadPoolSize => ({ threadPoolSize }))];
+  ...["2", "4", " +2x"].map(threadPoolSize => ({ threadPoolSize }))];
 function settingLabel({ contextReadOption, threadPoolSize }) {
   return threadPoolSize === undefined ? `context_read=${contextReadOption ?? "absent"}, pool unset`
     : `UV_THREADPOOL_SIZE=${JSON.stringify(threadPoolSize)}`;
+}
+
+function assertNoContextRead(events) {
+  for (const kind of ["cache-module", "cache-fs", "scrypt", "cache-timer"])
+    assert.equal(events.filter(event => event.kind === kind).length, 0, kind);
 }
 
 for (const settings of offSettings) {
@@ -334,7 +364,7 @@ for (const settings of offSettings) {
     ]);
     assert.equal(stdout, expectedOutput([memory()]));
     assert.equal(await privateRead(f.statePath), before);
-    assert.deepEqual(events.filter(event => ["cache-module", "cache-fs", "scrypt"].includes(event.kind)), []);
+    assertNoContextRead(events);
   });
 }
 
@@ -350,6 +380,64 @@ for (const settings of onSettings) {
   });
 }
 
+for (const [label, settings] of [
+  ["empty token", { token: "" }],
+  ["unsupported non-HTTP endpoint", { apiEndpoint: "file:///synthetic" }],
+  ["start", { action: "start" }],
+]) {
+  test(`enabled ${label} never starts the context-read lookup`, async t => {
+    const f = await fixture(t);
+    await f.seed();
+    const before = await privateRead(f.statePath);
+    const { stdout, events } = await f.run({ ...settings, contextReadOption: "true", probes: { cacheAccess: true } });
+    assert.equal(stdout, "");
+    assert.deepEqual(f.routes(), []);
+    assertNoContextRead(events);
+    assert.equal(await privateRead(f.statePath), before);
+  });
+}
+
+test("enabled capture sends its batch without loading or accessing the seeded cache", async t => {
+  const f = await fixture(t);
+  const transcriptPath = join(f.home, "transcript.jsonl");
+  await writeFile(transcriptPath, "");
+  await f.run({ action: "start-boundary", transcriptPath });
+  await f.run({ contextReadOption: "false", transcriptPath });
+  assert.deepEqual(f.routes(), [pause, recall]);
+  await writeFile(transcriptPath, JSON.stringify({
+    type: "user", uuid: "synthetic-event", timestamp: iso(epoch),
+    message: { content: "Synthetic captured detail." },
+  }) + "\n");
+  await f.seed();
+  const before = await privateRead(f.statePath);
+  const { stdout, events } = await f.run({
+    action: "capture", contextReadOption: "true", transcriptPath, probes: { cacheAccess: true },
+  });
+  assert.equal(stdout, "");
+  assert.ok(f.requests.some(({ method, route }) => method === "POST" && route === capture));
+  assertNoContextRead(events);
+  assert.equal(await privateRead(f.statePath), before);
+});
+
+test("recall starts fingerprinting before the read-only cache probe and stdin", { timeout: 7000 }, async t => {
+  const f = await fixture(t);
+  await f.seed();
+  const { stdout, events } = await f.run({
+    probes: { directoryProbe: "observe" }, holdInputUntil: "cache-probe",
+  });
+  const scryptStart = events.findIndex(event => event.kind === "scrypt");
+  assert.ok(scryptStart >= 0 && scryptStart < events.findIndex(event => event.kind === "cache-probe"));
+  assert.equal(stdout, compactOutput());
+  assert.deepEqual(f.routes(), [pause, context]);
+});
+
+async function stallCachePath(statePath) {
+  const seed = statePath + ".seed";
+  await rename(statePath, seed);
+  execFileSync("mkfifo", [statePath]);
+  return { seed };
+}
+
 for (const threadPoolSize of ["1", ""]) {
   test(`${settingLabel({ threadPoolSize })} skips the cache FIFO and delivers hostname recall`,
   { skip: process.platform === "win32", timeout: 7000 }, async t => {
@@ -357,11 +445,10 @@ for (const threadPoolSize of ["1", ""]) {
     await f.seed();
     f.replies[recall] = () => fallbackResponse;
     const before = await privateRead(f.statePath);
-    const fifo = join(f.root, "stalled-cache-read");
-    execFileSync("mkfifo", [fifo]);
+    const fifo = await stallCachePath(f.statePath);
     const budgetMs = 3500;
     const { stdout, events } = await f.run({
-      threadPoolSize, realCacheRace: true,
+      threadPoolSize, realRouteTick: true,
       probes: { cacheAccess: true, fifo, statePath: f.statePath },
       async beforeClose({ output, closed, events }) {
         const received = await Promise.race([
@@ -379,55 +466,65 @@ for (const threadPoolSize of ["1", ""]) {
     assert.equal(stdout, expectedOutput([memory()]));
     assert.deepEqual(f.requests.map(({ method, route }) => [method, route]), [["GET", pause], ["POST", recall]]);
     assert.ok(events.some(event => event.kind === "localhost-lookup"));
-    assert.deepEqual(events.filter(event => ["cache-module", "cache-fs", "scrypt", "cache-read-start"].includes(event.kind)), []);
+    assertNoContextRead(events);
+    assert.ok(!events.some(event => event.kind === "cache-read-start"));
+    assert.ok((await lstat(f.statePath)).isFIFO());
+    await unlink(f.statePath);
+    await rename(fifo.seed, f.statePath);
     assert.equal(await privateRead(f.statePath), before);
-    await unlink(fifo);
   });
 }
 
-test("a pending cache FIFO read leaves a worker available for hostname recall",
-  { skip: process.platform === "win32", timeout: 7000 }, async t => {
-    const f = await fixture(t, { hostname: true });
-    await f.seed();
-    f.replies[recall] = () => fallbackResponse;
-    const before = await privateRead(f.statePath);
-    const fifo = join(f.root, "stalled-cache-read");
-    execFileSync("mkfifo", [fifo]);
-    const budgetMs = 3500;
-    const expected = expectedOutput([memory()]);
-    const { stdout, events } = await f.run({
-      threadPoolSize: "2", realCacheRace: true,
-      probes: { fifo, statePath: f.statePath },
-      async beforeClose({ output, closed, events }) {
-        const received = await Promise.race([
-          output,
-          closed.then(result => assert.fail(`hook closed before recall output: ${JSON.stringify(result)}`)),
-          delay(budgetMs, undefined, { ref: false }).then(() => assert.fail("recall output missed the 3500 ms budget")),
-        ]);
-        assert.equal(received.stdout, expected);
-        assert.ok(received.elapsed < budgetMs, `complete stdout arrived at ${received.elapsed.toFixed(1)} ms`);
-        t.diagnostic(`complete stdout arrived at ${received.elapsed.toFixed(1)} ms with the FIFO still pending`);
-        assert.deepEqual(f.requests.map(({ method, route }) => [method, route]), [["GET", pause], ["POST", recall]]);
-        const reading = events.findIndex(event => event.kind === "cache-read-start");
-        const dns = events.findIndex(event => event.kind === "localhost-lookup");
-        assert.ok(reading >= 0 && dns > reading, "the cache read was pending before hostname lookup");
-        assert.ok(!events.some(event => event.kind === "cache-read-released"));
-        assert.equal(await privateRead(f.statePath), before);
-        const writer = await open(fifo, constants.O_WRONLY | constants.O_NONBLOCK);
-        await writer.close();
-      },
+for (const threadPoolSize of ["2", undefined]) {
+  test(`a pending cache FIFO never adds a wait before late hostname recall (pool ${threadPoolSize ?? "default"})`,
+    { skip: process.platform === "win32", timeout: 7000 }, async t => {
+      const f = await fixture(t, { hostname: true });
+      await f.seed();
+      const pauseReply = f.replies[pause];
+      f.replies[pause] = async () => { await delay(1100); return pauseReply(); };
+      f.replies[recall] = () => fallbackResponse;
+      const before = await privateRead(f.statePath);
+      const fifo = await stallCachePath(f.statePath);
+      const expected = expectedOutput([memory()]);
+      const { stdout, events } = await f.run({
+        threadPoolSize, realRouteTick: true, time: epoch + 60_000,
+        probes: { fifo, statePath: f.statePath },
+        async beforeClose({ output, closed, events }) {
+          const received = await Promise.race([
+            output,
+            closed.then(result => assert.fail(`hook closed before recall output: ${JSON.stringify(result)}`)),
+          ]);
+          assert.equal(received.stdout, expected);
+          t.diagnostic(`complete stdout arrived at ${received.elapsed.toFixed(1)} ms with the FIFO still pending`);
+          assert.deepEqual(f.requests.map(({ method, route }) => [method, route]), [["GET", pause], ["POST", recall]]);
+          const pauseFetch = events.findIndex(event => event.kind === "fetch" && event.route === pause);
+          const waits = events.slice(0, pauseFetch).filter(event => event.kind === "cache-timer");
+          assert.ok(pauseFetch >= 0, "observed pause fetch before recall dispatch");
+          assert.deepEqual(waits.map(event => event.milliseconds), [0], "only one zero-delay cache route tick");
+          const scryptStart = events.findIndex(event => event.kind === "scrypt");
+          assert.ok(scryptStart >= 0 && scryptStart < events.findIndex(event => event.kind === "cache-read-start"));
+          assert.ok(events.some(event => event.kind === "localhost-lookup"));
+          assert.ok(!events.some(event => event.kind === "cache-read-released"));
+          const writer = await open(f.statePath, constants.O_WRONLY | constants.O_NONBLOCK);
+          await writer.close();
+        },
+      });
+      assert.equal(stdout, expected);
+      assert.ok(events.some(event => event.kind === "cache-read-released"));
+      assert.equal(events.filter(event => event.kind === "scrypt").length, 1);
+      assert.deepEqual(f.routes(), [pause, recall]);
+      assert.ok((await lstat(f.statePath)).isFIFO());
+      await unlink(f.statePath);
+      await rename(fifo.seed, f.statePath);
+      assert.equal(await privateRead(f.statePath), before);
+      assert.equal((await f.disk()).last, null);
     });
-    assert.equal(stdout, expected);
-    assert.ok(events.some(event => event.kind === "cache-read-released"));
-    assert.deepEqual(f.routes(), [pause, recall]);
-    assert.equal(await privateRead(f.statePath), before);
-    await unlink(fifo);
-  });
+}
 
 test("a stalled optional cache directory probe still delivers plain recall", async t => {
   const f = await fixture(t);
   f.replies[recall] = () => fallbackResponse;
-  const { stdout, events } = await f.run({ realCacheRace: true, probes: { directoryProbe: "stall" } });
+  const { stdout, events } = await f.run({ realRouteTick: true, probes: { directoryProbe: "stall" } });
   assert.ok(events.some(event => event.kind === "cache-probe"));
   assert.deepEqual(f.routes(), [pause, recall]);
   assert.equal(stdout, expectedOutput([memory()]));
@@ -444,11 +541,24 @@ test("a cache probe error still delivers recall and disables capability learning
   assert.equal(await checkedPath(dirname(f.statePath), { directory: true, missing: true }), undefined);
 });
 
-test("a late cache fingerprint match has no effect on recall or state", async t => {
+test("a pending fingerprint does not delay recall and its late match has no effect", { timeout: 7000 }, async t => {
   const f = await fixture(t);
   await f.seed();
   const before = await privateRead(f.statePath);
-  const { stdout, events } = await f.run({ realCacheRace: true, probes: { scryptDelay: 750 } });
+  f.replies[recall] = () => fallbackResponse;
+  const { stdout, events } = await f.run({
+    realRouteTick: true, time: epoch + 60_000, probes: { holdScrypt: true, cacheAccess: true },
+    async beforeClose({ output, closed, events, releaseScrypt }) {
+      const received = await Promise.race([
+        output,
+        closed.then(result => assert.fail(`hook closed before recall output: ${JSON.stringify(result)}`)),
+      ]);
+      assert.equal(received.stdout, expectedOutput([memory()]));
+      assert.ok(events.some(event => event.kind === "cache-fs"), "state read was attempted with the fingerprint pending");
+      assert.ok(!events.some(event => event.kind === "scrypt-completed"));
+      releaseScrypt();
+    },
+  });
   assert.deepEqual(f.routes(), [pause, recall]);
   assert.equal(stdout, expectedOutput([memory()]));
   const recallStart = events.find(event => event.route === recall)?.ms;
@@ -456,15 +566,28 @@ test("a late cache fingerprint match has no effect on recall or state", async t 
   assert.ok(recallStart < completion, "recall starts while the account comparison is pending");
   assert.equal(events.filter(event => event.kind === "scrypt").length, 1);
   assert.equal(await privateRead(f.statePath), before);
+  assert.equal((await f.disk()).last, null);
 });
 
-test("a plain cache miss performs zero scrypt derivations", async t => {
+test("an early fingerprint error still delivers recall without learning", async t => {
+  const f = await fixture(t);
+  await f.seed();
+  const before = await privateRead(f.statePath);
+  f.replies[recall] = () => fallbackResponse;
+  const { stdout, events } = await f.run({ probes: { failScrypt: true } });
+  assert.equal(stdout, expectedOutput([memory()]));
+  assert.deepEqual(f.routes(), [pause, recall]);
+  assert.equal(events.filter(event => event.kind === "scrypt").length, 1);
+  assert.equal(await privateRead(f.statePath), before);
+});
+
+test("an eligible cache miss still derives exactly one fingerprint", async t => {
   const f = await fixture(t);
   await privateDirectory(dirname(f.statePath));
   const { stdout, events } = await f.run({ probes: {} });
   assert.equal(stdout, expectedOutput([memory()]));
   assert.deepEqual(f.routes(), [pause, recall]);
-  assert.equal(events.filter(event => event.kind === "scrypt").length, 0);
+  assert.equal(events.filter(event => event.kind === "scrypt").length, 1);
   assert.equal(await privateRead(f.statePath, { missing: true }), undefined);
 });
 
@@ -1017,7 +1140,7 @@ test("state is closed, content-free, and account-bound on the same endpoint", as
 test("a cache hit keeps the account out of hook state and preserves it on write", async t => {
   const f = await fixture(t);
   await f.seed();
-  const cache = await openContextReadState({ root: f.root, endpoint: f.endpoint }, hostedTargetId(f), tokenA);
+  const cache = await openContextReadState({ root: f.root }, hostedTargetId(f), f.accountA);
   assert.equal(cache.state.available_until, iso(epoch + 3_600_000));
   assert.equal(Object.hasOwn(cache.state, "account"), false);
   cache.state.failure_streak = 1;
@@ -1078,7 +1201,7 @@ test("state reading refuses a symlink even when the target has the destination f
 test("state publication independently refuses a symlink",
   { skip: process.platform === "win32" }, async t => {
   const f = await fixture(t), g = await fixture(t);
-  const cache = await openContextReadState({ root: g.root, endpoint: g.endpoint }, hostedTargetId(g), tokenA);
+  const cache = await openContextReadState({ root: g.root }, hostedTargetId(g), g.accountA);
   await f.seed();
   const external = f.statePath;
   const bytes = await privateRead(external);

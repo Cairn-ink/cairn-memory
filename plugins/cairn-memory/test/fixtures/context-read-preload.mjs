@@ -10,24 +10,18 @@ if (Number.isFinite(time)) {
   };
 }
 
-if (process.env.TEST_REAL_CACHE_RACE !== "1") {
-  const cacheRaceFrame = /\bat readContextCache \([^\n]*[/\\]scripts[/\\]hook\.mjs:\d+:\d+\)/;
-  const stretch = 100;
-  const rawSetTimeout = globalThis.setTimeout;
-  globalThis.setTimeout = function (callback, milliseconds, ...args) {
-    const cacheRace = milliseconds === 100 && cacheRaceFrame.test(new Error().stack);
-    return rawSetTimeout(callback, cacheRace ? milliseconds * stretch : milliseconds, ...args);
-  };
-  // Keep the monotonic cutoff in the same time scale as its timer. Other hook
-  // budgets continue to see the real clock.
-  const now = performance.now.bind(performance);
-  Object.defineProperty(performance, "now", { value() {
-    const elapsed = now();
-    return cacheRaceFrame.test(new Error().stack?.split("\n")[2]) ? elapsed / stretch : elapsed;
-  } });
-}
-
 const send = (kind, details = {}) => process.send?.({ kind, ms: performance.now(), ...details });
+const routeTickFrame = /\bat contextCacheRouteTick \([^\n]*[/\\]scripts[/\\]hook\.mjs:\d+:\d+\)/;
+const cacheLookupFrame = /\bat readContextCache \([^\n]*[/\\]scripts[/\\]hook\.mjs:\d+:\d+\)/;
+const realRouteTick = process.env.TEST_REAL_CACHE_ROUTE_TICK === "1";
+const rawSetTimeout = globalThis.setTimeout;
+globalThis.setTimeout = function (callback, milliseconds, ...args) {
+  const stack = new Error().stack;
+  const routeTick = routeTickFrame.test(stack);
+  if (routeTick || cacheLookupFrame.test(stack)) send("cache-timer", { milliseconds });
+  return rawSetTimeout(callback, routeTick && milliseconds === 0 && !realRouteTick ? 100 : milliseconds, ...args);
+};
+
 const fetchOriginal = globalThis.fetch;
 globalThis.fetch = function (url, options) {
   const route = new URL(url).pathname;

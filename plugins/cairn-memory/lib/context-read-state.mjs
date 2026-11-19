@@ -1,6 +1,4 @@
-import { scrypt } from "node:crypto";
 import { join } from "node:path";
-import { promisify } from "node:util";
 import { checkedPath, privateRead, privateWrite } from "./private-state.mjs";
 import { dateTime } from "./source-time.mjs";
 
@@ -34,39 +32,27 @@ const validLast = value => hasKeys(value, [
   count(value.delivered_items) && value.delivered_items <= value.returned_items && count(value.rendered_chars);
 const privateOptions = { missing: true, portable: true };
 const checkDirectory = path => checkedPath(path, { ...privateOptions, directory: true });
-const deriveKey = promisify(scrypt);
 
-async function accountFingerprint(endpoint, token) {
-  // This is a token-derived value, a non-reversible fingerprint of a
-  // high-entropy token. A KDF avoids applying a fast hash to a credential.
-  // It is kept in the cache closure and persisted only in the 0600 state file.
-  // It never appears in logs, last, status, stdout, stderr, errors or crash text.
-  const key = await deriveKey(JSON.stringify([endpoint, token]), "cairn-context-read-account-v1", 32,
-    { N: 4096, r: 8, p: 1 });
-  return key.toString("hex");
-}
-
-export async function openContextReadState({ root, endpoint }, targetId, token) {
+export async function openContextReadState({ root }, targetId, fingerprint) {
   const empty = { version: 1, available_until: null, failure_streak: 0, cooldown_until: null, last: null };
   const directory = join(root, "hosted-context-read");
   const path = join(directory, targetId + ".json");
-  let state = empty, account;
+  let value;
   if (await checkDirectory(directory)) {
     const bytes = await privateRead(path, privateOptions);
-    const value = bytes === undefined ? null : JSON.parse(bytes);
-    if (hasKeys(value, ["account", ...Object.keys(empty)]) && value.version === 1 &&
-        typeof value.account === "string" && /^[0-9a-f]{64}$/.test(value.account) &&
-        nullableInstant(value.available_until) && count(value.failure_streak) &&
-        nullableInstant(value.cooldown_until) && (value.last === null || validLast(value.last))) {
-      account = await accountFingerprint(endpoint, token);
-      const { account: storedAccount, ...storedState } = value;
-      if (storedAccount === account) state = storedState;
-    }
+    if (bytes !== undefined) value = JSON.parse(bytes);
+  }
+  const account = await fingerprint;
+  if (account === undefined) return;
+  let state = empty;
+  if (value !== undefined && hasKeys(value, ["account", ...Object.keys(empty)]) && value.version === 1 &&
+      value.account === account && nullableInstant(value.available_until) && count(value.failure_streak) &&
+      nullableInstant(value.cooldown_until) && (value.last === null || validLast(value.last))) {
+    const { account: storedAccount, ...storedState } = value;
+    state = storedState;
   }
 
   async function save(signal, deadline) {
-    signal?.throwIfAborted();
-    account ??= await accountFingerprint(endpoint, token);
     signal?.throwIfAborted();
     if (performance.now() >= deadline) return;
     await privateWrite(path, JSON.stringify({ ...state, account }), {
