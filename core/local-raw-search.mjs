@@ -13,8 +13,42 @@ const failure = error => ({ ok: false, error: { code: error?.code ?? 'raw_search
 const owners = new WeakMap();
 export const localRawSearchManager = port => owners.get(port) ?? null;
 
+let constructionUpkeep;
+/** Internal synchronous construction scope; never inherited by another host. */
+export function withLocalRawSearchUpkeep(control, build) {
+  const previous = constructionUpkeep;
+  constructionUpkeep = control;
+  try {
+    const result = build();
+    if (result?.then) throw Error('raw_upkeep_async_construction');
+    return result;
+  } finally { constructionUpkeep = previous; }
+}
+
+/** Attachment policy is owned by the adapter; managers enforce its generation. */
+export function createLocalRawSearchUpkeepControl(scheduler = {}) {
+  let enabled = false, sealed = false, generation = new AbortController();
+  generation.abort();
+  const listeners = new Set(), notify = () => { for (const listener of listeners) listener(); };
+  return {
+    get enabled() { return enabled; }, get signal() { return generation.signal; },
+    setTimer: scheduler.setTimer ?? ((...args) => setTimeout(...args)),
+    clearTimer: scheduler.clearTimer ?? (timer => clearTimeout(timer)),
+    watch(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+    resume() { if (enabled || sealed) return; generation = new AbortController(); enabled = true; notify(); },
+    suspend() { if (!enabled) return; enabled = false; generation.abort(); notify(); },
+    close() { sealed = true; enabled = false; generation.abort(); notify(); },
+  };
+}
+
 /** Bounded, non-overlapping maintenance turns, owned by the core. */
 export function createLocalRawSearch(path, crypto, { embedder, policy } = {}, { semanticDisabledReason = 'disabled' } = {}) {
+  const upkeep = constructionUpkeep;
+  const nativeSetTimer = (...args) => setTimeout(...args);
+  const nativeClearTimer = timer => clearTimeout(timer);
+  const setTimer = upkeep?.setTimer ?? nativeSetTimer;
+  const clearTimer = upkeep?.clearTimer ?? nativeClearTimer;
+  const admitted = signal => !upkeep || upkeep.enabled && signal === upkeep.signal && !signal.aborted;
   const embeddingPolicy = embedder ? rawEmbeddingPolicy(policy) : null;
   const entries = new Map();
   let timer, running, closing, closed = false, unsupported = false, serviced = 0;
@@ -36,7 +70,7 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}, { 
     if (!entries.has(key)) entries.set(key, { key, readSet: namespaces, token: {}, grants: new WeakMap(), readers: new Map(), service: null, opening: null, error: null, lastServed: 0, dirty: false });
     return entries.get(key);
   }
-  async function serviceFor(entry, lexical = false) {
+  async function serviceFor(entry, lexical = false, signal = upkeep?.signal) {
     // Both readers belong to the same host authority and canonical store.
     // Keep that private identity so their handles can share a final snapshot.
     entry.authority ??= {
@@ -49,32 +83,62 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}, { 
     };
     if (lexical && embedder) {
       entry.lexical ??= { ...entry, service: null, opening: null, lexicalOnly: true };
-      return serviceFor(entry.lexical);
+      return serviceFor(entry.lexical, false, signal);
     }
     if (closed) fail('store_closed');
     if (entry.service) return entry.service;
-    if (!entry.opening) entry.opening = (async () => {
+    if (entry.opening && entry.openingSignal?.aborted && signal && !signal.aborted) {
+      // A status/read opening can predate the first active upkeep turn. Its
+      // cancellation belongs to that old generation, not to the new caller.
+      await entry.opening.catch(() => {});
+      return serviceFor(entry, false, signal);
+    }
+    if (!entry.opening) {
+      entry.openingSignal = signal;
+      entry.opening = (async () => {
       if (path === ':memory:') fail('raw_search_backend_unavailable');
       const directory = resolve(path) + '.raw-search/' + entry.key;
       await mkdir(directory, { recursive: true, mode: 0o700 });
       const service = await openRawSearch({ version: 'raw-search-v1', enabled: true, backend: 'local',
         path: resolve(path), directory, ownerId: entry.readSet[0].ownerId, readSet: entry.readSet,
-        authority: entry.authority, crypto, maintenanceTurn, ...(embedder && !entry.lexicalOnly ? { embedder, policy: embeddingPolicy } : {}) });
+        authority: entry.authority, crypto, maintenanceTurn, ...(embedder && !entry.lexicalOnly ? { embedder, policy: embeddingPolicy } : {}) }, { signal });
       if (closed) { await service.close(); fail('store_closed'); }
       entry.error = null;
       return entry.service = service;
-    })().finally(() => { entry.opening = null; });
+      })().finally(() => { entry.opening = null; entry.openingSignal = null; });
+    }
     return entry.opening;
   }
-  function arm(delay = 1000) {
-    if (closed || unsupported || timer || running || path === ':memory:' || !entries.size) return;
-    timer = setTimeout(() => {
-      timer = null;
-      running = tick().finally(() => { running = null; arm(); });
-    }, delay);
-    timer.unref();
+  function clearScheduledTimer() {
+    timer?.clear(timer.handle);
+    timer = null;
   }
-  async function tick() {
+  function arm(delay = 1000, recover = false) {
+    const signal = upkeep?.signal;
+    if (!admitted(signal) || closed || unsupported || timer || running || path === ':memory:' || !entries.size) return;
+    const scheduled = { clear: clearTimer };
+    const callback = () => {
+      if (timer !== scheduled || !admitted(signal) || closed) return;
+      timer = null;
+      running = tick(signal).finally(() => {
+        running = null;
+        arm(signal === upkeep?.signal ? 1000 : 0, true);
+      });
+      return running;
+    };
+    try { scheduled.handle = setTimer(callback, delay); }
+    catch (error) {
+      if (!recover) throw error;
+      // This callback has no attach frame left to roll back. A native timer
+      // keeps the attached generation scheduled even if the host timer fails.
+      scheduled.clear = nativeClearTimer;
+      scheduled.handle = nativeSetTimer(callback, delay);
+    }
+    timer = scheduled;
+    scheduled.handle.unref();
+  }
+  async function tick(signal) {
+    if (!admitted(signal) || closed) return;
     const values = [...entries.values()];
     // Oldest service wins; dirty saves break ties without starving polling of
     // other-process writers. A finite namespace population remains required.
@@ -82,8 +146,14 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}, { 
     const entry=values[0];
     if(entry){entry.lastServed=++serviced;entry.dirty=false;}
     if (!entry || closed) return;
-    try { await maintain(entry, await serviceFor(entry)); }
+    try {
+      const service = await serviceFor(entry, false, signal);
+      if (!admitted(signal) || closed) { entry.dirty = true; return; }
+      await maintain(entry, service, signal);
+      if (!admitted(signal)) entry.dirty = true;
+    }
     catch (error) {
+      if (signal?.aborted || error?.code === 'raw_upkeep_cancelled') { entry.dirty = true; return; }
       entry.error = error?.code ?? 'raw_search_unavailable';
       // Optional indexing cannot fail capture. A fresh next turn recovers from
       // deadline or lock contention without permanently refusing the connection.
@@ -91,11 +161,12 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}, { 
       await service?.close().catch(() => {});
     }
   }
-  async function maintain(entry, service) {
+  async function maintain(entry, service, signal = upkeep?.signal) {
+    if (!admitted(signal) || closed) return;
     // Explicit and scheduled maintenance share the same in-flight operation.
     // Capture only schedules a timer and never joins this provider work.
     if (!entry.maintaining) entry.maintaining = service.maintain({ maxItems: 16, maxMs: 25,
-      embeddings: Boolean(embedder) }, entry.token).finally(() => { entry.maintaining = null; });
+      embeddings: Boolean(embedder), upkeepSignal: signal }, entry.token).finally(() => { entry.maintaining = null; });
     return entry.maintaining;
   }
   function readerRoutes(entry) {
@@ -137,7 +208,7 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}, { 
     } catch (error) { return failure(error); }
   }
   const manager = {
-    unsupportedStore() { unsupported = true; clearTimeout(timer); timer = null; },
+    unsupportedStore() { unsupported = true; clearScheduledTimer(); },
     schedule(namespace) {
       const ns = normalize(namespace);
       const entry=[...entries.values()].find(entry=>entry.readSet.some(value=>same(value,ns)))??entryFor([ns]);
@@ -214,7 +285,7 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}, { 
       getRawSearchStatus: input => call('status', input) },
     close() {
       if (closing) return closing;
-      closed = true; clearTimeout(timer); timer = null;
+      closed = true; unwatch?.(); clearScheduledTimer();
       return closing = (async () => {
         // Start native cancellation before joining a scheduled provider wait.
         const stopped = [...entries.values()].map(async entry => {
@@ -227,6 +298,10 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}, { 
       })();
     },
   };
+  const unwatch = upkeep?.watch(() => {
+    clearScheduledTimer();
+    if (upkeep.enabled) arm(0);
+  });
   return manager;
 }
 

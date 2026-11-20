@@ -32,9 +32,14 @@ export async function call(client,name,input = {}) {
 }
 function closure() {
   const graph = installedImportClosure(root, ["adapters/local/cli.mjs","integrations/client/raw/local-host-cli.mjs","adapters/mcp/cli.mjs"]);
+  // The retained-Raw operator vector is ineligible for the shared daemon by design;
+  // on Linux the bin loads only the eligibility check.
+  const eligibility = process.platform === 'linux'
+    ? installedImportClosure(root, ["adapters/mcp/local-daemon-identity.mjs"])
+    : { required: [], eager: [] };
   // The generated bin wrapper keeps its independently checked archive mapping.
-  return { ...graph, required: ['bin/cairn-memory.mjs', ...graph.required].sort(),
-    eager: ['bin/cairn-memory.mjs', ...graph.eager].sort() };
+  return { ...graph, required: [...new Set(['bin/cairn-memory.mjs', ...graph.required, ...eligibility.required])].sort(),
+    eager: [...new Set(['bin/cairn-memory.mjs', ...graph.eager, ...eligibility.eager])].sort() };
 }
 function guard(installed,trace) {
   return 'data:text/javascript,'+encodeURIComponent(`

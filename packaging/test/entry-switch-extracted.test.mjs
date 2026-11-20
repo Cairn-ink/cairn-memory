@@ -1,0 +1,5 @@
+import test from 'node:test';
+import { installedAssertions } from './fixtures/entry-switch-installed.mjs';
+test('extracted packed engine attaches and reconnects installed sessions after SIGKILL', { timeout: 120000 }, async t => {
+  await installedAssertions(t);
+});

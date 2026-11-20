@@ -59,11 +59,12 @@ function plainCandidateData(candidate) {
 }
 
 /** Open the configured Raw store; enabled:false explicitly disables search. */
-export async function openRawSearch(value) {
+export async function openRawSearch(value, { signal } = {}) {
   if (value === undefined || value === false || value?.enabled === false) return null;
   const options=rawSearchOptions(value);
   let openingDeadlineAt=performance.now()+1000;
-  const openingCheck=()=>expired(openingDeadlineAt);
+  let opening=true;
+  const openingCheck=()=>{if(opening&&signal?.aborted)fail('raw_upkeep_cancelled');expired(openingDeadlineAt);};
   const [{openReadDatabase},{createRawSearchAuthority},{openRawSearchStorage},{createRawSearchMaintenance},retrieval,embedding,{sqliteFileStat},{isStorageBusy}]=await Promise.all([
     import('./read-database.mjs'),import('./raw-search-authority.mjs'),import('./raw-search-storage.mjs'),
     import('./raw-search-maintenance.mjs'),import('./raw-search-retrieval.mjs'),import('./context-read-embedder.mjs'),import('./sqlite-journal-probe.mjs'),import('./database.mjs')]);
@@ -106,7 +107,7 @@ export async function openRawSearch(value) {
         await new Promise(resolve=>setTimeout(resolve,wait));
       }
     }
-    openingCheck();openingDeadlineAt=Infinity;
+    openingCheck();opening=false;openingDeadlineAt=Infinity;
     const metadata=options.embedder&&{id:options.embedder.id,revision:options.embedder.revision,
       dimensions:options.embedder.dimensions,normalization:options.embedder.normalization};
     const cacheEnabled=options.policy?.family==='local'&&!!metadata;

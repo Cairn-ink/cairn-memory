@@ -4,6 +4,10 @@ import { canonical, DAEMON_PROTOCOL } from './local-daemon-identity.mjs';
 import { refuse } from './local-daemon-state.mjs';
 
 export const FRAME_BYTES = 262144, QUEUE_BYTES = 1048576, TOOL_CALLS = 8;
+export const DAEMON_UNRESPONSIVE_MS = 30000, DAEMON_LIVENESS_MS = 5000;
+export const DAEMON_LIVENESS_METHOD = 'notifications/cairn/daemon_liveness';
+export const DAEMON_LIVENESS_FRAME = JSON.stringify({ jsonrpc: '2.0', method: DAEMON_LIVENESS_METHOD,
+  params: { protocol: DAEMON_PROTOCOL } }) + '\n';
 export const queuedBytes = (...streams) => streams.reduce((sum, stream) => sum +
   (stream?.pendingBytes ?? 0) + (stream?.readableLength ?? 0) + (stream?.writableLength ?? 0), 0);
 const nonce = () => randomBytes(32).toString('hex');
