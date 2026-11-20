@@ -952,21 +952,26 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     return {generation:g.storage_id,projection:g.projection,representation:r.representation};
   }
   function collectCache(g,p,t,owner,encoding) {
+    let source;
+    try {source=cachePublication(g,t);}
+    catch(error) {
+      if(error.code!=='index_unavailable'&&error.code!=='invalid_input'&&!(error instanceof SyntaxError))throw error;
+      attribution?.resetFailure();
+    }
+    // Without an authenticated source, let ordinary retirement expire its cache.
+    if(!source)return false;
     const page=side.prepare(`SELECT doc,owner,${cacheKey},sort_key,CASE WHEN length(vector)=6144 THEN vector ELSE x'' END AS vector
       FROM semantic_vectors INDEXED BY semantic_vector_generation WHERE generation=? ORDER BY doc LIMIT 128`).all(g.storage_id);
-    const source=cachePublication(g,t);
     const successors=[];
-    if(source) {
-      const projections=new Set([g.projection]);
-      for(const types of [['memory'],['card'],['memory','card']])for(const intent of ['current','history'])
-        projections.add(projectionDigest({...p,types,intent}));
-      const published=side.prepare(`SELECT g.*,p.publication,r.publication AS validation_publication,substr(r.record,1,16385) AS record FROM publications p
+    const projections=new Set([g.projection]);
+    for(const types of [['memory'],['card'],['memory','card']])for(const intent of ['current','history'])
+      projections.add(projectionDigest({...p,types,intent}));
+    const published=side.prepare(`SELECT g.*,p.publication,r.publication AS validation_publication,substr(r.record,1,16385) AS record FROM publications p
         JOIN generations g ON g.id=p.generation LEFT JOIN validation_records r ON r.generation=g.id
         WHERE p.projection=? AND g.owner=? AND g.projection=p.projection`);
-      for(const projection of projections) {
-        const next=cachePublication(published.get(projection,owner),t);
-        if(next?.representation===source.representation)successors.push(next);
-      }
+    for(const projection of projections) {
+      const next=cachePublication(published.get(projection,owner),t);
+      if(next?.representation===source.representation)successors.push(next);
     }
     const anchor=side.prepare('SELECT identity,revision,body_revision,eligible FROM documents WHERE generation=? AND doc=?');
     const successor=side.prepare('SELECT doc,revision,body_revision,eligible FROM documents WHERE generation=? AND identity=?');
@@ -1001,6 +1006,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         (SELECT 1 FROM vector_generations v WHERE v.storage_id=vector_work.generation AND v.lexical_generation=? AND v.owner=?)`);
       for(const destination of changed)detach.run(destination.projection,destination.generation,owner);
     }
+    return true;
   }
   function collectVector(owner,lexicalGeneration) {
     if(lexicalGeneration!==undefined) {
@@ -1041,7 +1047,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         if(g.cached) {
           const source=side.prepare(`SELECT g.*,r.publication AS validation_publication,substr(r.record,1,16385) AS record
             FROM generations g LEFT JOIN validation_records r ON r.generation=g.id WHERE g.storage_id=?`).get(g.storage_id);
-          collectCache(source,p,t,owner,encoding);return;
+          if(collectCache(source,p,t,owner,encoding))return;
         }
         for(const [table,key] of [['postings','doc,term'],['documents','doc'],['statistics','term_id']]) {
           const result=gcChanges(side.prepare(`DELETE FROM ${table} WHERE generation=? AND (${key}) IN (SELECT ${key} FROM ${table} WHERE generation=? LIMIT 128)`).run(g.storage_id,g.storage_id));
