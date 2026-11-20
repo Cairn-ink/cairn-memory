@@ -268,8 +268,20 @@ test('recall and all seven helpers proceed under RESERVED without waiting for th
 test('committed forget stays hidden and suppression prevents readmission', async t => {
   const f = fixture(t), memory = admit(f.core);
   assert.equal(ok(await recall(f.core)).memories[0].memory.id, memory.id);
+  const originalFingerprint = f.db.prepare('SELECT fingerprint FROM memories WHERE id=?').get(memory.id).fingerprint;
+  const retired = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(memory.id);
   ok(f.core.forget({ namespace, memoryId: memory.id, expectedRevision: memory.revision }));
-  assert.equal(f.db.prepare('SELECT count(*) AS n FROM suppressed').get().n, 1);
+  assert.equal(retired.length, 1, 'exact retiring receipt population');
+  const addressDigest = value => createHash('sha256').update(value).digest('hex');
+  const suppressed = f.db.prepare(`SELECT fingerprint FROM suppressed
+    WHERE owner_id=? AND scope=? AND project_id=? ORDER BY fingerprint`)
+    .all(namespace.ownerId, namespace.scope, namespace.projectId ?? '').map(row => row.fingerprint);
+  const markers = retired.flatMap(row => ['rs1:i:' + row.receipt_key,
+    'rs1:a:' + addressDigest(JSON.stringify(['receipt-source-address-v1', row.client, row.session_id, row.event_id, row.role]))]);
+  assert.equal(f.db.prepare('SELECT count(*) AS n FROM suppressed').get().n,
+    1 + markers.length, 'the whole table contains only the expected suppression rows');
+  assert.deepEqual(suppressed.filter(value => !value.startsWith('rs1:')), [originalFingerprint]);
+  assert.deepEqual(suppressed.filter(value => value.startsWith('rs1:')), markers.sort());
   assert.equal(f.db.prepare('SELECT deleted FROM memories WHERE id=?').get(memory.id).deleted, 1);
   const blocked = f.core.admit({ namespace, memory: { content: memory.content, kind: 'fact' }, receipts: [receipt(memory.content)] });
   assert.equal(blocked.error?.code, 'memory_suppressed');
