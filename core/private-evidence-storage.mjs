@@ -1,7 +1,7 @@
 import { hasCardLineage, cardLineageItemInside, cardLineageNamespaceInside } from './card-lineage.mjs';
 import { contentSuppressionReasonInside, cachedContentSuppressionRequestInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
-import { contentReadSafety, memoryReadEligible, receiptReadSafety, anchoredReadSafety, createContentReadMemo, isEngineCard, engineCardRevisionsInside } from './content-safety.mjs';
+import { CONTENT_SUPPRESSION_REASONS, contentReadSafety, memoryReadEligible, receiptReadSafety, anchoredReadSafety, createContentReadMemo, isEngineCard, engineCardRevisionsInside } from './content-safety.mjs';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { createQualificationStorage } from './claim-qualification-storage.mjs';
@@ -124,6 +124,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
   const memoryEligible = (ns, row, intent) => Boolean(row && contentReadSafety(db, { identity, namespace: ns, intent,
     ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed);
   function item(ns, ref, intent, readSet, options, memo = createContentReadMemo(db)) {
+    const withhold = reason => options?.withholdPrivacy && CONTENT_SUPPRESSION_REASONS.includes(reason);
     if (ref.type === 'card') {
       const card = cardDetailInside(ns, ref.cardId, readSet, { ...options, safetyMemo: memo });
       if (!cardEligible(ns, card, intent, memo)) fail('evidence_unavailable');
@@ -139,6 +140,10 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
         bindings: card.bindings, triggerMemoryRefs: card.triggerMemoryRefs };
     }
     const row = memoryRow(ns, ref.memoryId, options?.legacyEvidence?undefined:memo);
+    if (!row && options?.withholdPrivacy && withhold(contentSuppressionReasonInside(db, ns, {
+      kind: 'memory', key: ref.memoryId, revision: ref.revision,
+      version: JSON.stringify(['memory-revision-v1', ref.revision]), ancestryChecked: true,
+    }))) return null;
     const safety = Boolean(!options?.legacyEvidence && row && cachedContentLayout(db)?.suppressionRevision &&
       memo.evidenceMemories?.get(JSON.stringify([boundary(ns),row.id]))===row);
     // The selected canonical row and receipts belong to this synchronous
@@ -146,8 +151,10 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     if (safety ? !memoryReadEligible(row, intent) : !memoryEligible(ns, row, intent)) fail('evidence_unavailable');
     if (safety && row.revision !== ref.revision) {
       // Preserve the original unavailable-before-revision-conflict order.
-      if (!contentReadSafety(db,{identity,namespace:ns,intent,memo,selectedMemory:row,
-        ref:{...ref,revision:row.revision}}).allowed) fail('evidence_unavailable');
+      const decision = contentReadSafety(db,{identity,namespace:ns,intent,memo,selectedMemory:row,
+        ref:{...ref,revision:row.revision}});
+      if (withhold(decision.reason)) return null;
+      if (!decision.allowed) fail('evidence_unavailable');
     }
     if (row.revision !== ref.revision) fail('revision_conflict');
     const projected=safety;
@@ -156,7 +163,9 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     const receiptRows = allReceiptRows.filter(receipt => receiptReadSafety(db, { namespace: ns, receipt, memo,
       rawAncestryEmpty:projected && row.empty_raw_ancestry===1 && !contentSuppressionMayMatchInside(db,ns,{kind:'receipt',key:receipt.id}) }).allowed);
     if(selectedReceipts)(memo.evidenceReceipts??=new Map()).set(JSON.stringify([boundary(ns),row.id]),selectedReceipts);
-    if (!contentReadSafety(db, { identity, namespace: ns, ref, intent, memo, ...(safety ? { selectedMemory: row, selectedReceipts } : {}), receipts: receiptRows.slice(0, 16) }).allowed) fail('evidence_unavailable');
+    const decision = contentReadSafety(db, { identity, namespace: ns, ref, intent, memo, ...(safety ? { selectedMemory: row, selectedReceipts } : {}), receipts: receiptRows.slice(0, 16) });
+    if (withhold(decision.reason)) return null;
+    if (!decision.allowed) fail('evidence_unavailable');
     const sourceAccess = memoryReadEligible(row) ? 'available' : 'unavailable-for-noncurrent-memory';
     const sources = sourceAccess === 'available' ? receiptRows.slice(0, 16).map(receipt => selectedReceipts?selectedReceiptRef(ns,row,receipt):receiptRefInside(ns, row, receipt)) : [];
     const projection = projected && row.has_qualification===0 ? null : qualification.inspect(row);

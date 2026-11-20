@@ -954,7 +954,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         try {
           ownData(previous, ['v', 'scope', 'intent', 'refs', 'generations', 'access', 'fences']);
           if (previous.v !== 1 || previous.scope !== scope || !['current', 'history'].includes(previous.intent) || !Array.isArray(previous.refs)) fail('invalid_snapshot');
-          refs = contextRefs(previous.refs.map(value => {
+          refs = previous.refs.length === 0 && options.product ? [] : contextRefs(previous.refs.map(value => {
             if (!Array.isArray(value) || value.length !== (value[1] === 'card' ? 5 : 4) || !Number.isInteger(value[0]) || !input.readSet[value[0]]) fail('invalid_snapshot');
             return { namespace: input.readSet[value[0]], type: value[1], [value[1] === 'memory' ? 'memoryId' : 'cardId']: value[2], revision: value[3],
               ...(value[1] === 'card' ? { bodyRevision: value[4] } : {}) };
@@ -966,11 +966,19 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         const generations = canonicalFence(input.readSet, types);
         if (previous && (!same(previous.generations, generations) || !same(previous.access, access.accessGenerations))) fail('snapshot_stale');
         const safetyMemo=cachedContentLayout(db)?.suppressionRevision&&!options.sources?createContentReadMemo(db):undefined;
-        const items = refs.map(ref => evidence.itemsInside(ref.namespace, [ref], intent, input.readSet,safetyMemo?{safetyMemo,batchRefs:refs}:options.sources?{legacyEvidence:true}:undefined)[0]);
+        const withholdPrivacy = Boolean(options.product && safetyMemo && !previous && refs.length > 1);
+        const items = [], positions = [];
+        for (const [index, ref] of refs.entries()) {
+          const [item] = evidence.itemsInside(ref.namespace, [ref], intent, input.readSet,
+            safetyMemo ? { safetyMemo, batchRefs: refs, withholdPrivacy } : options.sources ? { legacyEvidence: true } : undefined);
+          if (item === null) continue;
+          items.push(item);
+          positions.push(index);
+        }
         const fences = items.map(item => bind('snapshot-item', cardLineageItemInside(db,item)));
-        if (input.fences?.some((prefix, i) => prefix !== null && !fences[i].startsWith(prefix))) fail('snapshot_stale');
+        if (input.fences && positions.some((index, i) => input.fences[index] !== null && !fences[i].startsWith(input.fences[index]))) fail('snapshot_stale');
         if (previous && !same(previous.fences, fences)) fail('snapshot_stale');
-        return { items, generations, fences };
+        return { items, generations, fences, positions };
       }
       const prepared = read(fetchInside);
       access.check();
@@ -978,9 +986,11 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       // callback after this point; snapshots bind the exact delivered items.
       return read(() => {
         const current = fetchInside();
-        if (!same(current.generations, prepared.generations) || !same(current.fences, prepared.fences)) fail('snapshot_stale');
+        if (!same(current.generations, prepared.generations) || !same(current.fences, prepared.fences) ||
+            !same(current.positions, prepared.positions)) fail('snapshot_stale');
+        const visible = current.positions.map(index => refs[index]);
         const result = { items: current.items, snapshot: encode('snapshot', { v: 1, scope, intent,
-          refs: refs.map(ref => [input.readSet.findIndex(ns => namespaceKey(ns) === namespaceKey(ref.namespace)), ref.type,
+          refs: visible.map(ref => [input.readSet.findIndex(ns => namespaceKey(ns) === namespaceKey(ref.namespace)), ref.type,
             ref.memoryId ?? ref.cardId, ref.revision, ...(ref.type === 'card' ? [ref.bodyRevision] : [])]),
           generations: current.generations, access: access.accessGenerations, fences: current.fences }, 16384) };
         if (bytes(success(result)) > input.responseByteLimit) fail('context_item_too_large');
