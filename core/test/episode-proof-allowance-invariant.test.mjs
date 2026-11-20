@@ -57,10 +57,11 @@ function proofSourcesPrefix(sql) {
 
 function captureProofs(call) {
   const prepare = DatabaseSync.prototype.prepare;
-  const proofs = [];
+  const proofs = [], wrapped = [];
   DatabaseSync.prototype.prepare = function (sql) {
     const statement = prepare.call(this, sql);
     if (!sql.startsWith('WITH candidates AS MATERIALIZED (') || sql.includes('headers AS MATERIALIZED (')) return statement;
+    wrapped.push(statement);
     for (const method of ['get', 'all']) {
       const execute = statement[method];
       statement[method] = (...params) => {
@@ -82,7 +83,11 @@ function captureProofs(call) {
     return statement;
   };
   try { return { proofs, result: call() }; }
-  finally { DatabaseSync.prototype.prepare = prepare; }
+  finally {
+    DatabaseSync.prototype.prepare = prepare;
+    // Drop the per-statement wrappers so a retained statement never records into this capture again.
+    for (const statement of wrapped) { delete statement.get; delete statement.all; }
+  }
 }
 
 test('Episode proof allowance fixtures cover the suppression layouts', () => {
@@ -107,7 +112,7 @@ for (const physical of layouts) {
 
     const calls = {
       getEpisode: () => core.getEpisode({ namespace: ns, episodeId }),
-      'listEpisodes (event)': () => core.listEpisodes({ namespace: ns, ...range }),
+      'listEpisodes (event)': () => core.listEpisodes({ namespace: ns, ...range, timeBasis: 'event' }),
       'listEpisodes (receipt)': () => core.listEpisodes({ namespace: ns, ...range, timeBasis: 'receipt' }),
       nextSteps: () => core.sessionStartContext({ namespace: ns, groups: { nextSteps: true, procedural: false } })
     };

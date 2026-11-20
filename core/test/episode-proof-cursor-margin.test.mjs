@@ -48,7 +48,7 @@ for (const physical of layouts) {
     fixture.workspace.defer(() => core.close());
     const calls = {
       getEpisode: () => core.getEpisode({ namespace: ns, episodeId: 'missing-episode' }),
-      'listEpisodes (event)': () => core.listEpisodes({ namespace: ns, ...range }),
+      'listEpisodes (event)': () => core.listEpisodes({ namespace: ns, ...range, timeBasis: 'event' }),
       'listEpisodes (receipt)': () => core.listEpisodes({ namespace: ns, ...range, timeBasis: 'receipt' }),
       nextSteps: () => core.sessionStartContext({ namespace: ns, groups: { nextSteps: true, procedural: false } })
     };
