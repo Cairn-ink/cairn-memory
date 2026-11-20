@@ -1,3 +1,4 @@
+import { installedDaemonRuntime } from './fixtures/installed-daemon-runtime.mjs';
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
@@ -19,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 
 const requireSDK = createRequire(new URL('../../adapters/mcp/package.json', import.meta.url));
 const { Client } = await import(requireSDK.resolve('@modelcontextprotocol/client'));
-const { StdioClientTransport } = await import(requireSDK.resolve('@modelcontextprotocol/client/stdio'));
+const { StdioClientTransport, getDefaultEnvironment } = await import(requireSDK.resolve('@modelcontextprotocol/client/stdio'));
 const readJSON = (path) => JSON.parse(readFileSync(path, 'utf8'));
 const hash = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
 let artifact;
@@ -54,13 +55,29 @@ before(() => {
   installation = install(artifact);
 });
 
+const daemonAccounts = new WeakMap();
+const daemonRuntimes = new WeakMap();
+async function daemonRuntime(t) {
+  const owner = workspace(t);
+  if (!daemonRuntimes.has(owner)) daemonRuntimes.set(owner, installedDaemonRuntime({ diagnostic: text => t.diagnostic(text) }).then(runtime => {
+    owner.defer(() => runtime.finish({ stopDaemons: true }));
+    return runtime;
+  }));
+  return daemonRuntimes.get(owner);
+}
+
 async function connect(t, installed, databasePath, { owner = 'synthetic-installed-owner', project } = {}) {
-  const transport = new StdioClientTransport({ command: process.execPath,
+  const runtime = await daemonRuntime(t);
+  const session = { command: process.execPath,
     args: [installed.executable, '--db', databasePath, '--owner', owner, ...(project ? ['--project', project] : [])],
-    cwd: installed.directory, env: { OPENAI_API_KEY: '', NODE_NO_WARNINGS: '1' }, stderr: 'pipe' });
+    cwd: installed.directory, env: { ...getDefaultEnvironment(), OPENAI_API_KEY: '', NODE_NO_WARNINGS: '1' } };
+  const accounting = runtime.register(session);
+  const transport = new StdioClientTransport({ ...session, stderr: 'pipe' });
   const client = new Client({ name: 'synthetic-installed-client', version: '1.0.0' });
   workspace(t).defer(async () => { await client.close(); });
   await client.connect(transport);
+  await accounting.observe();
+  daemonAccounts.set(client, accounting);
   return client;
 }
 
@@ -821,6 +838,7 @@ test('same-schema version upgrade and local uninstall preserve the separately se
   const content = 'Synthetic upgrade persistence marker.';
   const saved = ok(await call(first, 'remember_memory', { content })).memory;
   await first.close();
+  await daemonAccounts.get(first).stop(); // Close then stop before replacing the installed generation.
   const next = buildArtifact({ version: '0.0.0-preview.2' });
   install(next, upgraded.directory);
   assert.equal(readJSON(join(upgraded.packagePath, 'package.json')).version, '0.0.0-preview.2');
@@ -829,6 +847,7 @@ test('same-schema version upgrade and local uninstall preserve the separately se
   assert.equal(persisted.content, content);
   assert.equal(persisted.revision, saved.revision);
   await second.close();
+  await daemonAccounts.get(second).stop(); // Close then stop while this installed executable still exists.
   const beforeUninstall = hash(path);
   command('npm', ['uninstall', '--prefix', upgraded.directory, '--offline', '--ignore-scripts', '--no-audit', '--no-fund', packageName],
     upgraded.directory, artifact.userconfig);

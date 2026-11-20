@@ -518,11 +518,13 @@
     "key:messageId": 7,
     "key:sessionId": 7,
     "literal:conversation_id": 2,
-    "literal:id": 5,
-    "literal:memory_id": 2,
-    "literal:message_id": 3,
-    "literal:owner_id": 3,
-    "literal:project_id": 3
+    "literal:id": 6,
+    "literal:memory_id": 1,
+    "literal:message_id": 2,
+    "literal:owner_id": 2,
+    "literal:project_id": 2,
+    "literal:receipt_id": 1,
+    "literal:source_id": 1
   },
   "core/raw-source-input.mjs": {
     "key:conversationId": 2,
@@ -1385,7 +1387,7 @@
   "core/context-product-sidecar.mjs": {
     "key:applicationId": 2,
     "key:base_id": 1,
-    "key:id": 9,
+    "key:id": 11,
     "key:invalid": 2,
     "key:storeId": 4,
     "literal:attestation_invalid": 3,
@@ -1394,7 +1396,7 @@
     "literal:id": 1,
     "literal:memoryId": 2,
     "literal:term_id": 1,
-    "literal:validation_invalid": 7
+    "literal:validation_invalid": 8
   },
   "core/context-product-verification-batch.mjs": {
     "literal:term_id": 1
@@ -1688,5 +1690,27 @@
   },
   "integrations/client/raw/local-session-start.mjs": {
     "literal:state_invalid": 1
+  },
+  "adapters/mcp/local-daemon-identity.mjs": {
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "key:sessionId": 1,
+    "key:uid": 1
+  },
+  "adapters/mcp/local-daemon-liveness.mjs": {
+    "key:pid": 1
+  },
+  "adapters/mcp/local-daemon-wire.mjs": {
+    "literal:daemon_request_id": 1,
+    "literal:id": 2
+  },
+  "adapters/mcp/local-forwarder.mjs": {
+    "literal:id": 1
+  },
+  "adapters/mcp/local-daemon-state.mjs": {
+    "literal:daemon_temp_invalid": 1
+  },
+  "adapters/mcp/local-daemon.mjs": {
+    "literal:daemon_temp_invalid": 3
   }
 }

@@ -390,7 +390,10 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
   }
   function scopedStatus(p,observed,snapshot) {
     let reason=semanticReason(snapshot,observed.dto.lexical.state==='ready'),v=null;
-    if(!reason||reason==='provider_unavailable'){v=vectors.observe(p,observed.publication,snapshot);if(!reason)reason=v.reason;}
+    if(!reason||reason==='provider_unavailable'){
+      v=vectors.observe(p,observed.publication,snapshot);
+      if(!reason)reason=v.status!=='complete'&&v.reason!=='capacity_exceeded'&&!vectors.diskFits(observed.publication)?'capacity_exceeded':v.reason;
+    }
     const enabled=snapshot.policy?.semantic??null;
     const state=reason===null?'ready':reason==='not_enabled'?'disabled':reason==='not_configured'?'absent':reason==='index_not_ready'?'stale_index':['missing_vectors','identity_changed'].includes(reason)?'partial_coverage':'unavailable';
     const byType=Object.fromEntries(p.types.map(t=>[t,{eligible:v?.record?.counts.byType[t].eligible??null,embedded:v?.record?.counts.byType[t].embedded??null}]));
@@ -533,6 +536,8 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     const providerCutoff=localProviderCutoff<parentProviderCutoff?localProviderCutoff:parentProviderCutoff;
     const observed=read(()=>storage.observe(p,access.accessGenerations));bindSemanticFence(p);const snapshot=await semantic.snapshot();
     const ready=observed.dto.lexical.state==='ready';let reason=semanticReason(snapshot,ready),attempts=0,embedded=0,spent=0n;
+    const fits=publication=>vectors.dispatchFits(publication,snapshot.identity);
+    if(!reason&&!fits(observed.publication))reason='capacity_exceeded';
     const physical=read(()=>canonicalProductIdentity(path,db));
     if(ready&&!reason) {
       const sidecarIdentity=productFile(path+PRODUCT_SIDECAR_SUFFIX);
@@ -540,6 +545,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       try{await semantic.call('catalog',catalog);}catch(error){attribution?.captureFailure(error);if(!['not_enabled','purge_pending','ledger_unavailable','timeout'].includes(error.code))throw error;reason=error.code;}
       let maximum=Math.min(p.budget.maxItems,semantic.configuration.selection.maxBatchDocuments,64);
       while(!reason&&attempts<p.budget.maxItems&&quantum.admit('embedding-item')&&quantum.admit('vector-scan')) {
+        if(!fits(observed.publication)){reason='capacity_exceeded';break;}
         let rows=vectors.plan(p,observed.publication,snapshot,Math.min(maximum,p.budget.maxItems-attempts),quantum);if(!rows.length||!quantum.admit('embedding-item'))break;
         try {
           await quantum.measureAsync(async()=>{
@@ -558,17 +564,22 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         }catch(error) {
           if(error.safetyFence)throw error;
           error=storage.embeddingError(p.readSet,p.deadlineAt,error);
-          if(error.code==='budget_denied'&&!error.attempts&&rows.length>1){maximum=Math.max(1,Math.floor(rows.length/2));continue;}
+          if(error.code==='budget_denied'&&!error.attempts){
+            const current=read(()=>storage.observe(p,access.accessGenerations));
+            if(current.dto.lexical.state==='ready'&&!fits(current.publication)){reason='capacity_exceeded';break;}
+            if(rows.length>1){maximum=Math.max(1,Math.floor(rows.length/2));continue;}
+          }
           attempts+=(error.attempts??0)?rows.length:0;reason=error.code;break;
         }
       }
-      if(reason!=='namespace_paused'&&(!reason||attempts>0)&&quantum.admit('vector-scan')&&quantum.admit('vector-verification')) {
+      if(!['namespace_paused','capacity_exceeded'].includes(reason)&&(!reason||attempts>0)&&quantum.admit('vector-scan')&&quantum.admit('vector-verification')) {
         let release;
-        try{release=semantic.gate.enter(snapshot.policy);vectors.certify(p,observed.publication,snapshot,quantum);}catch(error){attribution?.captureFailure(error);reason=error.reason==='validation_invalid'||error.code==='index_unavailable'?'validation_invalid':error.code==='read_timeout'?'timeout':error.code;}finally{release?.();}
+        if(!fits(observed.publication))reason='capacity_exceeded';
+        else try{release=semantic.gate.enter(snapshot.policy);vectors.certify(p,observed.publication,snapshot,quantum);}catch(error){attribution?.captureFailure(error);reason=error.reason==='validation_invalid'||error.code==='index_unavailable'?'validation_invalid':error.code==='read_timeout'?'timeout':error.code;}finally{release?.();}
       }
     }
     if(!snapshot.unavailable) {
-      const vector=ready&&snapshot.identity&&snapshot.policy.semantic?vectors.observe(p,observed.publication,snapshot):null;
+      const vector=reason!=='capacity_exceeded'&&ready&&snapshot.identity&&snapshot.policy.semantic?vectors.observe(p,observed.publication,snapshot):null;
       const target={storeId:identity.storeId,canonicalIdentity:physical,readSet:p.readSet,types:p.types,intent:p.intent};
       await semantic.call('hint',{targetDigest:digest(target),purgeEpoch:snapshot.policy?.purgeEpoch??0,complete:vector?.status==='complete',certificate:vector?.record?digest(vector.record):null});
     }

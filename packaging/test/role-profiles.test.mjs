@@ -51,7 +51,7 @@ test('C06 actual tgz source/import closure, independent tar enumeration, install
   assert.equal(manifest.filter(p=>p==='docs/role-profiles-local.md').length,1);
   // Derive archive closure from runtime imports plus the explicit shipped assets,
   // package metadata and transformed packaging files; enumerate tar independently.
-  const derived=[...new Set([...source.required,...manifest,'bin/cairn-memory.mjs','README.md','THIRD_PARTY_NOTICES.md','licenses/tiktoken-LICENSE','package.json','npm-shrinkwrap.json'])].sort();
+  const derived=[...new Set([...source.required,...manifest,'bin/cairn-memory.mjs','README.md','THIRD_PARTY_NOTICES.md','licenses/tiktoken-LICENSE','package.json','npm-shrinkwrap.json','engine-build.json'])].sort();
   const archive=fileCommand(workspace,'tar',['-tzf',installed.artifact.artifactPath],workspace.path,installed.artifact.userconfig).trim().split('\n').map(p=>p.replace(/^package\//,'')).sort();
   assert.deepEqual(archive,derived);assert.deepEqual(walk(installed.root),derived);
   assert.deepEqual(JSON.parse(readFileSync(join(installed.root,'package.json'))).files.sort(),derived);

@@ -43,8 +43,11 @@ This is a developer preview. See the [current limits](#status) and the full
 npx @cairn-ink/memory setup
 ```
 
-You need Node 22.16 or later, and Claude Code or Codex on your `PATH`. Setup
-first asks: where should your memory live?
+You need Node 22.16 or later, and Claude Code or Codex on your `PATH`.
+
+> **Known issue:** on Node.js 24.22.3, whose built-in SQLite is 3.54, some searches run slower, so recall can return fewer results when you have a lot of saved memory. Your saved data isn't affected. Node.js 22, or Node.js 24 up to 24.22.2, works as before. Setup uses the Node.js that ran it, so run setup again after you switch versions.
+
+Setup first asks: where should your memory live?
 
 | | **Local** | **Cloud** |
 | --- | --- | --- |

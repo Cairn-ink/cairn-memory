@@ -298,8 +298,8 @@ function assertWorkflow(ci, reusable) {
   assert.match(core, /^    if: always\(\)$/m);
   assert.match(core, /^    needs: \[core-shard-22-16-0, core-shard-24, core-shard-24-22-1\]$/m);
   const entries = [...core.matchAll(/- \{node-version: ('.*?'|\d+), key: '(.*?)'\}/g)].map(match => ({ version: match[1].replaceAll("'", ''), key: match[2] }));
-  assert.deepEqual(entries, [{ version: '22.16.0', key: '22-16-0' }, { version: '24', key: '24' }, { version: '24.22.1', key: '24-22-1' }]);
-  assert.deepEqual(entries.map(entry => `core (${entry.version})`), ['core (22.16.0)', 'core (24)', 'core (24.22.1)']);
+  assert.deepEqual(entries, [{ version: '22.16.0', key: '22-16-0' }, { version: '24.22.2', key: '24' }, { version: '24.22.1', key: '24-22-1' }]);
+  assert.deepEqual(entries.map(entry => `core (${entry.version})`), ['core (22.16.0)', 'core (24.22.2)', 'core (24.22.1)']);
   assert.match(core, /^    permissions: \{ contents: read, actions: read \}$/m);
   assert.match(core, /^          CORE_SHARD_NEEDS_RESULT: \$\{\{ needs\[format\('core-shard-\{0\}', matrix.key\)\]\.result \}\}$/m);
   assert.match(core, /run: node tools\/testing\/core-gate.mjs --node-key '\$\{\{ matrix.key \}\}' --shards 6/);

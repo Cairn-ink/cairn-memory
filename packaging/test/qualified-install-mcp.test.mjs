@@ -1,3 +1,4 @@
+import { installedDaemonRuntime } from './fixtures/installed-daemon-runtime.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -11,7 +12,7 @@ import { qualificationPoolWire } from '../../adapters/openai/test/qualification-
 
 const sdk = createRequire(new URL('../../adapters/mcp/package.json', import.meta.url));
 const { Client } = await import(sdk.resolve('@modelcontextprotocol/client'));
-const { StdioClientTransport } = await import(sdk.resolve('@modelcontextprotocol/client/stdio'));
+const { StdioClientTransport, getDefaultEnvironment } = await import(sdk.resolve('@modelcontextprotocol/client/stdio'));
 const workspaces = new WeakMap();
 function workspace(t) {
   if (!workspaces.has(t)) workspaces.set(t, createTestWorkspace(t, { prefix: 'cairn-qualified-receipt-' }));
@@ -27,12 +28,25 @@ function install(t, mode) {
   const receipt = JSON.parse(readFileSync(report.receiptPath, 'utf8'));
   assert.deepEqual(receipt.stdio, report.stdio); return receipt;
 }
+const daemonRuntimes = new WeakMap();
+async function daemonRuntime(t) {
+  const owner = workspace(t);
+  if (!daemonRuntimes.has(owner)) daemonRuntimes.set(owner, installedDaemonRuntime({ diagnostic: text => t.diagnostic(text) }).then(runtime => {
+    owner.defer(() => runtime.finish({ stopDaemons: true }));
+    return runtime;
+  }));
+  return daemonRuntimes.get(owner);
+}
+
 async function start(t, receipt, env) {
+  const runtime = await daemonRuntime(t);
+  const session = { command: receipt.stdio.command, args: receipt.stdio.args, cwd: workspace(t).path, env: { ...getDefaultEnvironment(), ...env } };
+  const accounting = runtime.register(session, { expected: receipt.stdio.args.includes('--capture-qualification') ? 0 : 1 });
   const client = new Client({ name: 'synthetic-install-receipt', version: '1.0.0' });
   workspace(t).defer(() => client.close());
   // Consume the generated command and args unchanged, including its mode flag.
-  await client.connect(new StdioClientTransport({ command: receipt.stdio.command,
-    args: receipt.stdio.args, env, stderr: 'ignore' }));
+  await client.connect(new StdioClientTransport({ ...session, stderr: 'ignore' }));
+  await accounting.observe();
   return client;
 }
 async function call(client, name, args) {
