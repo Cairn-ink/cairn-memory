@@ -129,6 +129,11 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       return work(true);
     },p.suppressionEpoch&&p.suppressionEpoch!=='0:0'?p.readSet:undefined));
   }
+  function retainRanking(ranking) {
+    for (const [id, retained] of rankings) if (retained.expires <= Date.now()) rankings.delete(id);
+    while (rankings.size >= 128) rankings.delete(rankings.keys().next().value);
+    rankings.set(ranking.id, ranking);
+  }
   function page(r,position,limit) {
     assertSelected(r,r.items);
     let end=Math.min(r.items.length,position+limit);
@@ -360,14 +365,14 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         return readRawChannel(rawSearch,p,credential,p.deadlineAt).then(raw=>assemble(p,access,c,false,raw))
           .catch(error=>failure(error.code??'storage_error'));
       }
-      for(const [id,r] of rankings)if(r.expires<=Date.now())rankings.delete(id);
-      while(rankings.size>=128)rankings.delete(rankings.keys().next().value);
-      const r={...c,...(p.selection?{selection:p.selection}:{}),id:randomUUID(),binding,publication:c.observed.publication,expires:Date.now()+300000};rankings.set(r.id,r);
+      const r={...c,...(p.selection?{selection:p.selection}:{}),id:randomUUID(),binding,publication:c.observed.publication,expires:Date.now()+300000};
       const result=page(r,0,p.limit);
-      return final(p,access,r.publication,()=>{
+      const validated=final(p,access,r.publication,()=>{
         for(const candidate of result.value.items)evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet);
         return result;
       });
+      retainRanking(r);
+      return validated;
     } catch(e) {
       if((pumpWork||admitting)&&e===admissionRequired) {
         return access.envelope(()=>{if(observation)observation.admission='required';return success(null);});
@@ -508,15 +513,16 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
           },'snapshot_stale',delivery.prepare);
         }finally{release();}
       }
-      for(const [id,r] of rankings)if(r.expires<=Date.now())rankings.delete(id);while(rankings.size>=128)rankings.delete(rankings.keys().next().value);
       const binding=digest({readSet:p.readSet,types:p.types,intent:p.intent,query:p.query,semantic:p.semantic,access:access.accessGenerations,...(p.selection?{namespaces:p.selection.namespaces}:{})});
-      const r={...c,...(p.selection?{selection:p.selection}:{}),id:randomUUID(),binding,publication:c.observed.publication,expires:Date.now()+300000,vectorPublication:p.vectorPublication,semanticSnapshot:snapshot};rankings.set(r.id,r);
-      return final(p,access,r.publication,valid=>{
+      const r={...c,...(p.selection?{selection:p.selection}:{}),id:randomUUID(),binding,publication:c.observed.publication,expires:Date.now()+300000,vectorPublication:p.vectorPublication,semanticSnapshot:snapshot};
+      const validated=final(p,access,r.publication,valid=>{
         if(!valid){Object.assign(r,lexicalFallback(r));delete r.vectorPublication;}
         const result=page(r,0,p.limit);
         for(const candidate of result.value.items)evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet);
         return result;
       });
+      retainRanking(r);
+      return validated;
     }catch(error){attribution?.captureFailure(error);attribution?.selectFailure(error);return failure(error.code==='ERR_SQLITE_ERROR'?[5,6].includes(error.errcode&255)?'storage_busy':'storage_error':error.code??'storage_error');}
   }
   async function embeddingRefresh(p,access,cutoff,observation) {
