@@ -9,11 +9,12 @@ import { eventTimeSafetyFixture } from '../testing/receipt-event-time-fixture.mj
 import { transaction } from '../database.mjs';
 import { createRawLineageStorage } from '../raw-lineage-storage.mjs';
 import { normalizeSQL, summary, currentReceiptWalkSQLTexts, receiptWalkSQLTexts, receiptWalkSQL,
-  workloadKeys, validateSqlAdditions, reviseSQL, reconstructWideTrace, compareWideTraces, assertWidePins, validateCardStatementTexts, assertArchivedCardStatementTexts, wideArchiveMode } from '../testing/card-lineage-off-wide-compare.mjs';
+  workloadKeys, withoutDeliveryLookups, validateSqlAdditions, reviseSQL, reconstructWideTrace, compareWideTraces, assertWidePins, validateCardStatementTexts, assertArchivedCardStatementTexts, wideArchiveMode } from '../testing/card-lineage-off-wide-compare.mjs';
 
 const revision='fd5c59ef8e67cc58bb855a95f8910c668150bfa3';
 const root=fileURLToPath(new URL('../../',import.meta.url));
 const pins=JSON.parse(readFileSync(new URL('./fixtures/card-lineage-off-wide-baseline.json',import.meta.url),'utf8'));
+const deliveryLookups=JSON.parse(readFileSync(new URL('./fixtures/card-lineage-off-delivery-lookups.json',import.meta.url),'utf8'));
 const receiptWalkPins=JSON.parse(readFileSync(new URL('./fixtures/card-lineage-off-wide-receipt-walk.json',import.meta.url),'utf8'));
 const observedReceiptWalkSQL={current:new Set(),archived:new Set()};
 let archivedReceiptWalkTraces=0;
@@ -193,7 +194,8 @@ for(const base of [23,33])for(const mode of ['open','workload'])for(const eventT
       }
       const old=run(baseline.path,oldPath,mode,cell);reviseSQL(key,old.statements,sqlRevisions);
       if(workloadKeys.includes(key))revisedArchives.push(old);
-      const comparison = review ? projectRetirementMarkers(current, review) : current;
+      const originalStatements = withoutDeliveryLookups(current, deliveryLookups[key] ?? []);
+      const comparison = review ? projectRetirementMarkers(originalStatements, review) : originalStatements;
       const aligned = review ? alignArchivedReceiptReads(key, old, review.reads) : { record: old, additions: sqlAdditions };
       compareWideTraces({key,current:comparison,archived:aligned.record,sqlAdditions:aligned.additions,
         sqlAdditionMethods,cardStatementTexts,cardStatementExecutions,checkArchivedCardTexts:false,
@@ -208,6 +210,7 @@ for(const base of [23,33])for(const mode of ['open','workload'])for(const eventT
         assert.deepEqual(summary(old),pins.records[key],'frozen opening pins come only from the archived baseline');
       }
     });
+    if (!baseline) withoutDeliveryLookups(current, deliveryLookups[key] ?? []);
     assert.equal(pins.revision,revision);assertWidePins(key,current,sqlAdditions,currentPin,sqlAdditionMethods,cardStatementTexts,cardStatementExecutions);
     assert.ok(current.statements.every(entry=>entry.length===3&&Array.isArray(entry[2])),'SQL execution includes bound arguments');
     assert.equal(current.statements.some(([sql])=>/card_body_|card_operations_owner_action/.test(sql)),false,'no extended lineage scan');

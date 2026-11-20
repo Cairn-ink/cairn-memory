@@ -427,3 +427,25 @@ export function compareWideTraces({ key, current, archived, sqlAdditions = [], s
   }
   return reconstructed;
 }
+
+// Validate a closed list of new statements before comparing the inherited
+// archival projection. The current pins still attest the full traced stream.
+export function withoutDeliveryLookups(record, entries) {
+  const expected = new Map(entries.map(([position, ...statement]) => [position,statement]));
+  assert.equal(expected.size,entries.length,'unique delivery lookup positions');
+  const offsets=[], statements=[];
+  for (const [index, statement] of record.statements.entries()) {
+    offsets.push(statements.length);
+    if (expected.has(index)) {
+      assert.deepEqual(statement,expected.get(index),'exact delivery lookup at its reviewed position');
+      expected.delete(index);
+    } else {
+      assert.ok(!statement[0].includes('CROSS JOIN suppressed s'),'unreviewed delivery lookup');
+      statements.push(statement);
+    }
+  }
+  assert.equal(expected.size,0,'each delivery lookup was executed');
+  offsets.push(statements.length);
+  const calls=record.calls.map(call=>call.map((value,index)=>index<2?value:offsets[value]));
+  return {...record,statements,calls};
+}

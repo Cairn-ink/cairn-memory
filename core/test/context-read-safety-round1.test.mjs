@@ -169,17 +169,21 @@ for (const mutation of ['correct', 'forget']) test(`S1 round1 canonical ${mutati
 test('S1 round1 excluded receipt pages advance to independent surviving receipts without exposing an excluded cursor id', async t => {
   const { f, b } = await shared(t);
   const memory = ok(f.core.admit({ namespace: ns, memory: { content: b.content, kind: 'fact' }, receipts: [
-    { client: 'synthetic', sessionId: 'independent', eventId: 'independent', role: 'user', excerpt: 'Synthetic independent surviving receipt' } ] })).memory;
+    { client: 'synthetic', sessionId: 'independent', eventId: 'independent', role: 'user', excerpt: 'Synthetic independent surviving receipt' },
+    { client: 'synthetic', sessionId: 'independent', eventId: 'another', role: 'user', excerpt: 'Synthetic later independent receipt' } ] })).memory;
   f.db.prepare("UPDATE receipts SET created_at='2000-01-01T00:00:00.000Z' WHERE excerpt=?").run(excerpt);
+  f.db.prepare("UPDATE receipts SET created_at='2000-01-02T00:00:00.000Z' WHERE event_id='independent'").run();
+  f.db.prepare("UPDATE receipts SET created_at='2000-01-03T00:00:00.000Z' WHERE event_id='another'").run();
   const excluded = f.db.prepare('SELECT id FROM receipts WHERE excerpt=?').get(excerpt).id;
   const first = ok(f.core.get({ namespace: ns, memoryId: memory.id, receiptLimit: 1 }));
-  assert.deepEqual(first.receipts, []); assert.equal(first.exhausted, false); assert.ok(first.nextReceiptCursor);
+  assert.deepEqual(first.receipts.map(receipt => receipt.excerpt), ['Synthetic independent surviving receipt']); assert.equal(first.exhausted, false); assert.ok(first.nextReceiptCursor);
   assert.equal(Buffer.from(first.nextReceiptCursor.split('.')[0], 'base64url').toString().includes(excluded), false);
   const second = ok(f.core.get({ namespace: ns, memoryId: memory.id, receiptLimit: 1, receiptCursor: first.nextReceiptCursor }));
-  assert.equal(second.receipts[0].excerpt, 'Synthetic independent surviving receipt'); assert.equal(second.exhausted, true);
+  assert.equal(second.receipts[0].excerpt, 'Synthetic later independent receipt'); assert.equal(second.exhausted, true);
   const fetched = ok(f.core.fetch({ namespace: ns, refs: [{ memoryId: memory.id, revision: memory.revision }] }));
-  assert.equal(fetched.exhausted, true); assert.equal(fetched.items[0].receipts.length, 1);
+  assert.equal(fetched.exhausted, true); assert.equal(fetched.items[0].receipts.length, 2);
   assert.equal(JSON.stringify([first, second, fetched]).includes(excerpt), false);
+  assert.equal(JSON.stringify([first, second, fetched]).includes(excluded), false);
 });
 test('S1 round1 excluded Raw receipt anchors cannot reappear in qualification metadata', async t => {
   const f = sourceFixture(t, { model: { countTokens: () => 1 } }), raw = await savedSource(f, excerpt);
