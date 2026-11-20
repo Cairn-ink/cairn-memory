@@ -37,9 +37,9 @@ const tokenB = "synthetic-account-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const epoch = Date.parse("2031-01-01T00:00:00.000Z");
 const iso = time => new Date(time).toISOString();
 const deriveKey = promisify(scrypt);
-async function fingerprint(endpoint, token) {
+async function fingerprint(endpoint, token, N = 4096) {
   const key = await deriveKey(JSON.stringify([endpoint, token]), "cairn-context-read-account-v1", 32,
-    { N: 4096, r: 8, p: 1 });
+    { N, r: 8, p: 1, maxmem: 256 * 1024 * 1024 });
   return key.toString("hex");
 }
 const memory = (index = 0, content = "Synthetic remembered detail.") => ({
@@ -78,7 +78,7 @@ const specCompactReply = {
 };
 
 // Install in the real hook child before the hook imports its modules.
-function installRecallProbes({ directoryProbe, holdScrypt, failScrypt, firstPauseUntil, contextReplyUntil, cacheAccess, fifo, statePath }) {
+function installRecallProbes({ directoryProbe, failScrypt, firstPauseUntil, contextReplyUntil, cacheAccess, fifo, statePath }) {
   const event = (kind, details = {}) => process.send?.({ kind, ms: performance.now(), ...details });
   const crypto = process.getBuiltinModule("node:crypto");
   const fs = process.getBuiltinModule("node:fs/promises");
@@ -87,17 +87,6 @@ function installRecallProbes({ directoryProbe, holdScrypt, failScrypt, firstPaus
   crypto.scrypt = (...args) => {
     event("scrypt");
     if (failScrypt) throw new Error("synthetic fingerprint error");
-    if (holdScrypt) {
-      const callback = args.pop();
-      process.channel.ref();
-      const release = new Promise(resolve => process.once("message", resolve));
-      args.push(async (...result) => {
-        await release;
-        process.channel.unref();
-        event("scrypt-completed");
-        callback(...result);
-      });
-    }
     return scrypt(...args);
   };
   if (cacheAccess) {
@@ -265,7 +254,7 @@ async function fixture(t, { hostname = false } = {}) {
   async function run({ action = "recall", prompt = "Synthetic query", transcriptPath, token = tokenA,
     apiEndpoint = endpoint,
     time = epoch, startup = 0, contextReadOption, threadPoolSize, realRouteTick = false, probes,
-    holdInputUntil, beforeClose } = {}) {
+    slowFingerprint = false, holdInputUntil, beforeClose } = {}) {
     const events = [];
     const probeSource = probes ? `(${installRecallProbes})(${JSON.stringify(probes)})` : "";
     const imports = probes ? ["--import", preload, "--import", "data:text/javascript," + encodeURIComponent(probeSource)] :
@@ -280,12 +269,15 @@ async function fixture(t, { hostname = false } = {}) {
         CLAUDE_PLUGIN_OPTION_CONTEXT_READ: contextReadOption,
         UV_THREADPOOL_SIZE: threadPoolSize,
         TEST_REAL_CACHE_ROUTE_TICK: realRouteTick ? "1" : undefined,
+        TEST_SLOW_ACCOUNT_FINGERPRINT: slowFingerprint ? "1" : undefined,
         TEST_WALL_TIME: String(time), TEST_STARTUP_MS: String(startup) },
     });
     const { promise: inputReady, resolve: releaseInput } = deferred();
+    const { promise: cacheReadStarted, resolve: signalCacheRead } = deferred();
     child.on("message", event => {
       events.push(event);
       if (event.kind === holdInputUntil) releaseInput();
+      if (event.kind === "cache-read-start") signalCacheRead();
     });
     let stdout = "", stderr = "";
     const { promise: output, resolve: outputReceived } = deferred();
@@ -310,7 +302,7 @@ async function fixture(t, { hostname = false } = {}) {
       await Promise.race([inputReady, closed.then(() => assert.fail(`hook closed before ${holdInputUntil}`))]);
     }
     child.stdin.end(JSON.stringify({ prompt, session_id: "test-session", cwd: home, transcript_path: transcriptPath }));
-    if (beforeClose) await beforeClose({ output, closed, events, releaseScrypt: () => child.send("release-scrypt") });
+    if (beforeClose) await beforeClose({ output, closed, events, started, cacheReadStarted });
     assert.deepEqual(await closed, { code: 0, signal: null });
     for (const account of [accountA, accountB]) {
       assert.ok(!stdout.includes(account));
@@ -541,33 +533,74 @@ test("a cache probe error still delivers recall and disables capability learning
   assert.equal(await checkedPath(dirname(f.statePath), { directory: true, missing: true }), undefined);
 });
 
-test("a pending fingerprint does not delay recall and its late match has no effect", { timeout: 7000 }, async t => {
-  const f = await fixture(t);
-  await f.seed();
-  const before = await privateRead(f.statePath);
-  f.replies[recall] = () => fallbackResponse;
-  const { stdout, events } = await f.run({
-    realRouteTick: true, time: epoch + 60_000, probes: { holdScrypt: true, cacheAccess: true },
-    async beforeClose({ output, closed, events, releaseScrypt }) {
-      const received = await Promise.race([
-        output,
-        closed.then(result => assert.fail(`hook closed before recall output: ${JSON.stringify(result)}`)),
-      ]);
-      assert.equal(received.stdout, expectedOutput([memory()]));
-      assert.ok(events.some(event => event.kind === "cache-fs"), "state read was attempted with the fingerprint pending");
-      assert.ok(!events.some(event => event.kind === "scrypt-completed"));
-      releaseScrypt();
-    },
+test("a slow native fingerprint finishes before state I/O without delaying plain recall (pool 2)",
+  { skip: process.platform === "win32", timeout: 7000 }, async t => {
+    const f = await fixture(t, { hostname: true });
+    await f.seed({ account: await fingerprint(f.endpoint, tokenA, 131072) });
+    const before = await privateRead(f.statePath);
+    const fifo = await stallCachePath(f.statePath);
+    let postAt;
+    f.replies[recall] = () => {
+      postAt = performance.now();
+      return fallbackResponse;
+    };
+    const settings = {
+      threadPoolSize: "2", realRouteTick: true, time: epoch + 60_000, slowFingerprint: true,
+      probes: { cacheAccess: true, fifo, statePath: f.statePath },
+    };
+    // Establish local project state before either timed child.
+    await f.run({ ...settings, contextReadOption: "false" });
+    assert.deepEqual(f.routes(), [pause, recall]);
+
+    const expected = expectedOutput([memory()]);
+    const timings = [];
+    for (const enabled of [false, true]) {
+      postAt = undefined;
+      const { stdout, events } = await f.run({
+        ...settings, contextReadOption: enabled ? undefined : "false",
+        async beforeClose({ output, closed, events, started, cacheReadStarted }) {
+          const prematureClose = closed.then(result => assert.fail(
+            `hook closed before recall output or FIFO open: ${JSON.stringify(result)}`));
+          const received = await Promise.race([output, prematureClose]);
+          assert.equal(received.stdout, expected);
+          assert.ok(postAt >= started, "plain-recall POST arrived before FIFO release");
+          assert.ok(!events.some(event => event.kind === "cache-read-released"));
+          timings.push({ post: postAt - started, stdout: received.elapsed });
+          if (enabled) {
+            await Promise.race([cacheReadStarted, prematureClose]);
+            // Keep a writer available even if the observed open is still queued.
+            const writer = await open(f.statePath, constants.O_RDWR | constants.O_NONBLOCK);
+            try { await closed; } finally { await writer.close(); }
+          }
+        },
+      });
+      assert.equal(stdout, expected);
+      assert.deepEqual(f.routes(), [pause, recall]);
+      if (!enabled) {
+        assertNoContextRead(events);
+        assert.ok(!events.some(event => event.kind.startsWith("fingerprint-native-")));
+        continue;
+      }
+      const nativeStart = events.findIndex(event => event.kind === "fingerprint-native-start");
+      const nativeComplete = events.findIndex(event => event.kind === "fingerprint-native-complete");
+      const firstStateIO = events.findIndex(event => event.kind === "cache-fs");
+      assert.ok(nativeStart >= 0 && nativeStart < nativeComplete && nativeComplete < firstStateIO,
+        "native fingerprint must complete before the first state-path filesystem call");
+      assert.equal(events.filter(event => event.kind === "scrypt").length, 1);
+      assert.ok(events.some(event => event.kind === "cache-read-released"));
+      const nativeMs = events[nativeComplete].ms - events[nativeStart].ms;
+      const margin = 4 * Math.max(200, nativeMs);
+      const [off, on] = timings;
+      t.diagnostic(`native scrypt ${nativeMs.toFixed(1)} ms; POST/stdout from spawn ` +
+        `off ${off.post.toFixed(1)}/${off.stdout.toFixed(1)} ms, on ${on.post.toFixed(1)}/${on.stdout.toFixed(1)} ms`);
+      assert.ok(on.post <= off.post + margin && on.stdout <= off.stdout + margin,
+        `plain recall exceeded its explicit-off control by more than ${margin.toFixed(1)} ms`);
+    }
+    await unlink(f.statePath);
+    await rename(fifo.seed, f.statePath);
+    assert.equal(await privateRead(f.statePath), before);
+    assert.equal((await f.disk()).last, null);
   });
-  assert.deepEqual(f.routes(), [pause, recall]);
-  assert.equal(stdout, expectedOutput([memory()]));
-  const recallStart = events.find(event => event.route === recall)?.ms;
-  const completion = events.find(event => event.kind === "scrypt-completed")?.ms;
-  assert.ok(recallStart < completion, "recall starts while the account comparison is pending");
-  assert.equal(events.filter(event => event.kind === "scrypt").length, 1);
-  assert.equal(await privateRead(f.statePath), before);
-  assert.equal((await f.disk()).last, null);
-});
 
 test("an early fingerprint error still delivers recall without learning", async t => {
   const f = await fixture(t);

@@ -37,13 +37,13 @@ export async function openContextReadState({ root }, targetId, fingerprint) {
   const empty = { version: 1, available_until: null, failure_streak: 0, cooldown_until: null, last: null };
   const directory = join(root, "hosted-context-read");
   const path = join(directory, targetId + ".json");
+  const account = await fingerprint;
+  if (account === undefined) return;
   let value;
   if (await checkDirectory(directory)) {
     const bytes = await privateRead(path, privateOptions);
     if (bytes !== undefined) value = JSON.parse(bytes);
   }
-  const account = await fingerprint;
-  if (account === undefined) return;
   let state = empty;
   if (value !== undefined && hasKeys(value, ["account", ...Object.keys(empty)]) && value.version === 1 &&
       value.account === account && nullableInstant(value.available_until) && count(value.failure_streak) &&

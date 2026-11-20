@@ -11,6 +11,21 @@ if (Number.isFinite(time)) {
 }
 
 const send = (kind, details = {}) => process.send?.({ kind, ms: performance.now(), ...details });
+if (process.env.TEST_SLOW_ACCOUNT_FINGERPRINT === "1") {
+  const crypto = process.getBuiltinModule("node:crypto");
+  const scrypt = crypto.scrypt;
+  crypto.scrypt = function (password, salt, length, options, callback) {
+    if (salt !== "cairn-context-read-account-v1") return scrypt(...arguments);
+    send("fingerprint-native-start");
+    // Increase the native work and give OpenSSL enough memory for that cost.
+    return scrypt(password, salt, length, { ...options, N: 131072, maxmem: 256 * 1024 * 1024 }, (...result) => {
+      send("fingerprint-native-complete");
+      callback(...result);
+    });
+  };
+  process.getBuiltinModule("node:module").syncBuiltinESMExports();
+}
+
 const routeTickFrame = /\bat contextCacheRouteTick \([^\n]*[/\\]scripts[/\\]hook\.mjs:\d+:\d+\)/;
 const cacheLookupFrame = /\bat readContextCache \([^\n]*[/\\]scripts[/\\]hook\.mjs:\d+:\d+\)/;
 const realRouteTick = process.env.TEST_REAL_CACHE_ROUTE_TICK === "1";
