@@ -5,7 +5,7 @@ import { dirname, isAbsolute, relative, resolve } from 'node:path';
 // Test-only literal graph, not a runtime loader. Every reachable import/URL
 // stays required; native Worker and spawned Node entry edges are lazy because
 // their modules load in a separate execution context.
-export function installedImportClosure(root, entries) {
+export function installedImportClosure(root, entries, { lazyEdge = () => false } = {}) {
   root = realpathSync(root);
   const graph = new Map(), workerEntries = new Set(), childEntries = new Set();
   function contained(absolute) {
@@ -62,7 +62,7 @@ export function installedImportClosure(root, entries) {
       const next = target(path, match[1]); if (next === null) continue;
       const worker = workerOffsets.has(match.index), child = childOffsets.has(match.index);
       const dynamic = /^import\s*\(/.test(match[0]);
-      const lazy = worker || child || dynamic && deferredImports.get(path)?.has(next) === true;
+      const lazy = worker || child || dynamic && (deferredImports.get(path)?.has(next) === true || lazyEdge(path, next));
       edges.push({ path: next, lazy }); queue.push(next);
       if (worker) workerEntries.add(next);
       if (child) childEntries.add(next);

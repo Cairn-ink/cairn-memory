@@ -120,9 +120,9 @@ function files(directory) {
     return entry.isDirectory() ? files(path) : /\.(?:[cm]?js|ts)$/.test(entry.name) ? [path] : [];
   });
 }
-function violations(path, source) {
+function violations(path, source, allowPath = path) {
   const counts = new Map();
-  for (const entry of allow.filter(entry => entry.path === path)) {
+  for (const entry of allow.filter(entry => entry.path === allowPath)) {
     assert.equal(typeof entry.reason, 'string'); assert.ok(entry.reason.length > 15);
     counts.set(entry.source, (counts.get(entry.source) ?? 0) + 1);
   }
@@ -132,8 +132,11 @@ function violations(path, source) {
     counts.set(site.source, remaining - 1); return false;
   }).map(site => `${path}:${site.line}: ${site.source}`);
 }
-function audit(base, paths) {
-  return paths.flatMap(path => violations(relative(base, path).replaceAll('\\', '/'), readFileSync(path, 'utf8')));
+function audit(base, paths, allowPath = path => path) {
+  return paths.flatMap(file => {
+    const path = relative(base, file).replaceAll('\\', '/');
+    return violations(path, readFileSync(file, 'utf8'), allowPath(path));
+  });
 }
 function evaluationPaths() {
   return [...files(join(root, 'evaluation/context-read-p2e')),
@@ -141,7 +144,7 @@ function evaluationPaths() {
     ...readdirSync(join(root, 'tools/testing')).filter(name => /^p2e-.*\.mjs$/.test(name) && !name.endsWith('.test.mjs')).map(name => join(root, 'tools/testing', name))];
 }
 test('runtime raw filesystem access has an exact, justified allowlist', () => {
-  const paths = ['core', 'adapters', 'packages/setup/lib', 'integrations', 'plugins']
+  const paths = ['core', 'adapters', 'packages/setup/lib', 'integrations', 'plugins', 'packaging/bin']
     .flatMap(path => files(join(root, path)));
   paths.push(...evaluationPaths());
   paths.push(join(root, 'evaluation/live/diagnostics.mjs')); // Shipped archive diagnostic utility.
@@ -166,7 +169,7 @@ test('generated setup runtime and archived engine obey the same guard', () => {
       const result = spawnSync('tar', ['-xzf', join(engine, name), '-C', directory], { encoding: 'utf8' });
       assert.equal(result.error, undefined); assert.equal(result.status, 0, result.stderr);
       const base = join(directory, 'package');
-      assert.deepEqual(audit(base, files(base)), []);
+      assert.deepEqual(audit(base, files(base), path => path.startsWith('bin/') ? 'packaging/' + path : path), []);
     }
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });

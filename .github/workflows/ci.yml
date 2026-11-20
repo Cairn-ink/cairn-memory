@@ -9,6 +9,28 @@ permissions:
   contents: read
 
 jobs:
+  artifact-runtime-census:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            adapters/mcp/package-lock.json
+            adapters/openai/package-lock.json
+      - name: Inspect dependency directories
+        run: |
+          if [ -e adapters/mcp/node_modules ] || [ -L adapters/mcp/node_modules ]; then ls -ld adapters/mcp/node_modules; fi
+          if [ -e adapters/openai/node_modules ] || [ -L adapters/openai/node_modules ]; then ls -ld adapters/openai/node_modules; fi
+      - run: npm ci --prefix adapters/mcp
+      - run: npm ci --prefix adapters/openai
+      - run: node tools/testing/run.mjs --script packaging/verify-clean-cache.mjs
+      - run: node tools/testing/run.mjs --script packaging/prepare-cache.mjs
+      - name: Attribute artifact runtime residue per test
+        run: node tools/testing/run.mjs --script tools/testing/artifact-runtime-census.mjs
+
   macos-capture:
     runs-on: macos-latest
     strategy:

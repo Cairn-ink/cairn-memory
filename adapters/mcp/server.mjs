@@ -20,7 +20,7 @@ import { createContextReadAccess } from './context-read-access.mjs';
 // U5c-2 source registration composes the unchanged legacy tools.
 import { contextReadSources } from './context-read-sources-configuration.mjs';
 import { registerContextReadSourcesTools, contextSourcesToolResponse } from './context-read-sources-tools.mjs';
-import { createLocalRawSearch } from '../../core/local-raw-search.mjs';
+import { createLocalRawSearch, withLocalRawSearchUpkeep } from '../../core/local-raw-search.mjs';
 import { defaultRawOptions } from '../../core/local-defaults.mjs';
 import { registerContextReadTools, CONTEXT_TOOL_NAMES } from './context-read-tools.mjs';
 import { contextToolResponse } from './context-read-transport.mjs';
@@ -82,7 +82,7 @@ export function createCairnServer(options = {}) {
 }
 
 /** Adapter-owned runtime. Connection factories never own its resources. */
-export function createLocalCairnRuntime(options = {}, { dispatcher, signal, shared = true } = {}) {
+export function createLocalCairnRuntime(options = {}, { dispatcher, signal, shared = true, rawUpkeep } = {}) {
   const router = createLocalAuthorityRouter(), maintenanceKey = Object.freeze({});
   const contextDemand = dispatcher || shared ? createContextMaintenanceDemand() : undefined;
   object(options, ['path', 'namespace', 'model', 'captureQualification', 'captureRationale',
@@ -187,6 +187,7 @@ export function createLocalCairnRuntime(options = {}, { dispatcher, signal, shar
   const routed = (kind, configuration) => ({ ...configuration, authority: router.authority(kind) });
   const scopedBudget = Boolean(dispatcher || shared);
   const inMaintenance = work => withContextReadBudgetScope(maintenanceKey, () => maintenance.route.run(work), scopedBudget);
+  const inRawConstruction = work => inMaintenance(() => withLocalRawSearchUpkeep(rawUpkeep, work));
   const maintenanceRun = dispatcher ? (work, maxMs) => dispatcher.run(work, {
     signal: AbortSignal.any([signal, maintenance.route.signal].filter(Boolean)),
     check: maintenance.route.check, deadlineAt: performance.now() + maxMs,
@@ -206,11 +207,11 @@ export function createLocalCairnRuntime(options = {}, { dispatcher, signal, shar
   // The dated reader's optional Raw port is supplied by this owner boundary.
   // Older readers retain their existing grammar until that reader is installed.
   const rawSearch = context && options.raw !== false && options.rawSearch !== false && supportsRawContext()
-    ? inMaintenance(() => createLocalRawSearch(path, defaultRawOptions().port,
+    ? inRawConstruction(() => createLocalRawSearch(path, defaultRawOptions().port,
       options.rawSemantic === true && options.contextSemantic !== false ? embedding : undefined,
       { semanticDisabledReason: options.contextSemantic === false ? 'disabled' : options.rawSemantic === true ? 'disabled' : 'raw_semantic_not_enabled' })) : null;
   const rawPort = rawSearch?.contextPort(context.readSet);
-  const core = inMaintenance(() => openMemoryCore({ path, model, raw: options.raw !== false, ...(options.rawSearch === false ? { rawSearch: false } : {}), ...(context?{contextRead:{...routed('context', context.configuration),...(options.contextSemantic === false ? {} : embedding),counter:contextCounter,...(rawPort ? {rawSearch:rawPort} : {}),...(sources ? { sources } : {})}}:{}),
+  const core = inRawConstruction(() => openMemoryCore({ path, model, raw: options.raw !== false, ...(options.rawSearch === false ? { rawSearch: false } : {}), ...(context?{contextRead:{...routed('context', context.configuration),...(options.contextSemantic === false ? {} : embedding),counter:contextCounter,...(rawPort ? {rawSearch:rawPort} : {}),...(sources ? { sources } : {})}}:{}),
     ...(roles ? { roleProfiles: routed('roles', roles.configuration) } : {}),
     ...(assets?{assets:routed('assets', roles ? roleProfileAssetConfiguration(assets, roles) : assets.configuration)}:{}),
     ...(methods?{methodPackages:routed('methods', methods.configuration)}:{}), ...(cards ? { privateCards: routed('cards', cards.configuration) } : {}),
@@ -236,7 +237,8 @@ export function createLocalCairnRuntime(options = {}, { dispatcher, signal, shar
     close,
     ready: contextCounterReady ?? Promise.resolve(true),
     inspect: () => ({ state: disposed ? 'closed' : closed ? 'closing' : 'active', cores: disposed ? 0 : 1,
-      rawManagers: !disposed && hasRawManager ? 1 : 0, rawMaintenanceTimers: !disposed && hasRawManager && path !== ':memory:' ? 1 : 0,
+      rawManagers: !disposed && hasRawManager ? 1 : 0,
+      rawMaintenanceTimers: !disposed && hasRawManager && path !== ':memory:' && (rawUpkeep?.enabled ?? true) ? 1 : 0,
       refreshers: !disposed && refresh ? 1 : 0 }),
     server({ ownsRuntime = false, key = Object.freeze({}), lifecycle = {} } = {}) {
       if (closed) throw Error('local_runtime_closed');

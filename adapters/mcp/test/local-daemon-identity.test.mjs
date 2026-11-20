@@ -30,7 +30,7 @@ test('every managed identity input splits; safe aliases share and hardlinks refu
   await changed(f.args, { node: { ...f.options.node, execArgv: ['--no-warnings'] } });
   const executable = join(f.root, 'synthetic-node'); await writeFile(executable, 'synthetic executable identity');
   await changed(f.args, { node: { ...f.options.node, executable } });
-  await changed(f.args, { protocol: 2 });
+  await changed(f.args, { protocol: 1 });
   for (const environment of [{ OPENAI_API_KEY: '' }, { OPENAI_API_KEY: 'synthetic-A' }, { OPENAI_API_KEY: 'synthetic-B' }, { TZ: 'UTC' }]) await changed(f.args, { environment });
   const a = await f.identity({ environment: { OPENAI_API_KEY: 'synthetic-A' } }), b = await f.identity({ environment: { OPENAI_API_KEY: 'synthetic-B' } });
   assert.notEqual(a.digest, b.digest, 'credential values must split via keyed digest');
@@ -108,5 +108,5 @@ test('logs accept only fixed codes and cap file size', async t => {
   await writeFile(path, 'daemon_ready\n'.repeat(20164) + 'daemon_exit\n', { mode: 0o600 });
   await logCode(f.directory, path, 'daemon_exit');
   assert.ok((await lstat(path)).size <= 262144, 'log cap must bound disk bytes');
-  assert.ok(Buffer.byteLength(await readPrivate(f.directory, path, { maxBytes: 262144 })) <= 262144, 'log cap must bound disk bytes');
+  assert.ok(Buffer.byteLength(await readPrivate(f.directory, path, { fileClass: 'log', maxBytes: 262144 })) <= 262144, 'log cap must bound disk bytes');
 });

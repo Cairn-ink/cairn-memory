@@ -1741,8 +1741,8 @@
   },
   {
     "path": "integrations/client/raw/local-session-start.mjs",
-    "source": "import { readdir, unlink } from 'node:fs/promises'",
-    "reason": "Lists and removes only authority-bound session-start JSON markers under the private starts directory; never database files or sidecars."
+    "source": "import { lstat, readdir, unlink } from 'node:fs/promises'",
+    "reason": "Lists and removes session-start markers and attempts, and uses lstat to verify that matching temporary entries are regular files in the private starts directory."
   },
   {
     "path": "packages/setup/lib/local-capture.mjs",
@@ -1766,8 +1766,8 @@
   },
   {
     "path": "adapters/mcp/local-daemon-identity.mjs",
-    "source": "import { lstat, stat, realpath, readFile } from 'node:fs/promises'",
-    "reason": "Read immutable shipped source artifacts and dependency manifests to bind engine identity. Store paths use metadata stat/realpath only, never readFile/open on DB, WAL or SHM."
+    "source": "import { lstat, stat, realpath, readFile, statfs } from 'node:fs/promises'",
+    "reason": "Private runtime directory and store-directory metadata only: statfs checks the canonical parent directory, never the store; readFile reads immutable shipped artifacts only. No DB, WAL or SHM path is opened."
   },
   {
     "path": "adapters/mcp/local-daemon-identity.mjs",
@@ -1785,9 +1785,19 @@
     "reason": "Read immutable shipped source artifacts and dependency manifests to bind engine identity. Store paths use metadata stat/realpath only, never readFile/open on DB, WAL or SHM."
   },
   {
+    "path": "adapters/mcp/local-daemon-identity.mjs",
+    "source": "const build = JSON.parse(await readFile(metadata, 'utf8'));",
+    "reason": "Immutable shipped artifact only: reads the package's engine-build.json. No DB, WAL or SHM path is opened."
+  },
+  {
+    "path": "adapters/mcp/local-daemon-identity.mjs",
+    "source": "if (!(await lstat(path)).isFile() || createHash('sha256').update(await readFile(path)).digest('hex') !== build.sourceHashes[name])",
+    "reason": "Immutable shipped artifacts only: verifies installed source files against their recorded hashes. No DB, WAL or SHM path is opened."
+  },
+  {
     "path": "adapters/mcp/local-daemon-liveness.mjs",
-    "source": "import { readFileSync, readlinkSync } from 'node:fs'",
-    "reason": "Read only Linux /proc PID stat and kernel boot-id metadata for start-time-aware process ownership. No database, WAL or SHM descriptor is opened."
+    "source": "import { readFileSync, readlinkSync, statSync } from 'node:fs'",
+    "reason": "Linux /proc only: reads PID stat and boot id, and statSync('/proc/<pid>').uid checks ownership. No DB, WAL or SHM path is opened."
   },
   {
     "path": "adapters/mcp/local-daemon-liveness.mjs",
@@ -1798,6 +1808,11 @@
     "path": "adapters/mcp/local-daemon-liveness.mjs",
     "source": "boot: readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim(),",
     "reason": "Read only Linux /proc PID stat and kernel boot-id metadata for start-time-aware process ownership. No database, WAL or SHM descriptor is opened."
+  },
+  {
+    "path": "adapters/mcp/local-daemon-liveness.mjs",
+    "source": "import { readdir } from 'node:fs/promises'",
+    "reason": "Private runtime directory only: lists d-*.sock and d-*.json names for daemon status. No DB, WAL or SHM path is opened."
   },
   {
     "path": "adapters/mcp/local-daemon-state.mjs",
@@ -1811,8 +1826,8 @@
   },
   {
     "path": "adapters/mcp/local-daemon-state.mjs",
-    "source": "const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);",
-    "reason": "Private daemon coordination metadata, capability, identity-key, fixed-code log, or source-artifact/OS metadata only; generated endpoint names never designate a DB, WAL or SHM. No raw store descriptor is opened."
+    "source": "try { file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }",
+    "reason": "Private runtime directory only: Addendum 7 typed reader of runtime JSON and lock metadata. No DB, WAL or SHM path is opened."
   },
   {
     "path": "adapters/mcp/local-daemon-state.mjs",
@@ -1821,8 +1836,8 @@
   },
   {
     "path": "adapters/mcp/local-daemon.mjs",
-    "source": "import { chmod } from 'node:fs/promises'",
-    "reason": "Private daemon coordination metadata, capability, identity-key, fixed-code log, or source-artifact/OS metadata only; generated endpoint names never designate a DB, WAL or SHM. No raw store descriptor is opened."
+    "source": "import { chmod, opendir, unlink } from 'node:fs/promises'",
+    "reason": "Private runtime directory only: opendir lists that one directory for crash-temp cleanup, and unlink removes only this identity's matched endpoint temps. No DB, WAL or SHM path is opened."
   },
   {
     "path": "integrations/client/raw/local-source-open.mjs",
@@ -2018,5 +2033,10 @@
     "path": "integrations/client/bundle.mjs",
     "source": "const code = await readFile(join(source, name), 'utf8');",
     "reason": "Build-time read of a fixed shared client module for the independent plugin dependency closure; never a database path."
+  },
+  {
+    "path": "packaging/bin/cairn-memory.mjs",
+    "source": "import { realpathSync } from 'node:fs'",
+    "reason": "Immutable shipped artifact metadata only: the bin resolves its own invocation path to recognize a symlinked npm .bin entry; never a store path. No DB, WAL or SHM path is opened."
   }
 ]

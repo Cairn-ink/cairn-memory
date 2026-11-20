@@ -518,11 +518,13 @@
     "key:messageId": 7,
     "key:sessionId": 7,
     "literal:conversation_id": 2,
-    "literal:id": 5,
-    "literal:memory_id": 2,
-    "literal:message_id": 3,
-    "literal:owner_id": 3,
-    "literal:project_id": 3
+    "literal:id": 6,
+    "literal:memory_id": 1,
+    "literal:message_id": 2,
+    "literal:owner_id": 2,
+    "literal:project_id": 2,
+    "literal:receipt_id": 1,
+    "literal:source_id": 1
   },
   "core/raw-source-input.mjs": {
     "key:conversationId": 2,
@@ -931,7 +933,7 @@
   "integrations/client/raw/local-worker.mjs": {
     "key:wireSessionId": 1,
     "literal:config_invalid": 2,
-    "literal:state_invalid": 3,
+    "literal:state_invalid": 4,
     "literal:store_invalid": 1
   },
   "integrations/client/raw/local-worker-input.mjs": {
@@ -985,7 +987,9 @@
   },
   "integrations/client/raw/local-hook.mjs": {
     "key:sessionId": 1,
-    "literal:session_id": 1
+    "literal:config_invalid": 1,
+    "literal:session_id": 1,
+    "literal:store_invalid": 1
   },
   "integrations/client/raw/local-host-profile.mjs": {
     "key:sessionId": 1,
@@ -1686,5 +1690,27 @@
   },
   "integrations/client/raw/local-session-start.mjs": {
     "literal:state_invalid": 1
+  },
+  "adapters/mcp/local-daemon-identity.mjs": {
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "key:sessionId": 1,
+    "key:uid": 1
+  },
+  "adapters/mcp/local-daemon-liveness.mjs": {
+    "key:pid": 1
+  },
+  "adapters/mcp/local-daemon-wire.mjs": {
+    "literal:daemon_request_id": 1,
+    "literal:id": 2
+  },
+  "adapters/mcp/local-forwarder.mjs": {
+    "literal:id": 1
+  },
+  "adapters/mcp/local-daemon-state.mjs": {
+    "literal:daemon_temp_invalid": 1
+  },
+  "adapters/mcp/local-daemon.mjs": {
+    "literal:daemon_temp_invalid": 3
   }
 }

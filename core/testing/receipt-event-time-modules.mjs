@@ -32,7 +32,7 @@ const exceptions = frozenExceptions.map(entry => {
   if (entry.file === 'core/topic-reader-sqlite.mjs') {
     assert.equal(entry.sha256, '78547baf2b9eea0572ad69e8be2ef0bb2e8dcc8314aa4e58fc0b4dda87ce679f',
       'frozen journal-mode probe loader pin');
-    return { ...entry, line: 127, sha256: 'cc8d7218e8772d7f7a2866a12e3ea92d767d2590f8c18230d7105ddafa1a635f' };
+    return { ...entry, line: 127, sha256: '44acfa1c60421510ab2a462a43d2c028327c68d730b66b483f7bf2433afb4b69' };
   }
   // The SQLite policy forwards synchronous admission and cleanup scopes.
   // These changes add no loader and no feature consumer.

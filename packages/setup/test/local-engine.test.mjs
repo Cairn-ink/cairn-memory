@@ -59,13 +59,13 @@ test('E02 engine inventory: archive/manifest and source allowlist/extracted tree
     ['licenses/tiktoken-LICENSE', 'packaging/licenses/tiktoken-LICENSE'],
   ]);
   countMatch(t, 'source allowlist plus generated vs extracted disk',
-    [...mapped.keys(), 'package.json', 'npm-shrinkwrap.json'], diskFiles(join(directory, 'package')));
+    [...mapped.keys(), 'package.json', 'npm-shrinkwrap.json', 'engine-build.json'], diskFiles(join(directory, 'package')));
   countMatch(t, 'source hashes vs source allowlist', Object.keys(manifest.sourceHashes), [...mapped.keys()]);
   for (const [target, source] of mapped) {
     assert.equal(manifest.sourceHashes[target], hash(readFileSync(join(repo, source))), target);
     assert.equal(hash(readFileSync(join(directory, 'package', target))), manifest.sourceHashes[target], target);
   }
-  assert.deepEqual(Object.keys(manifest.generatedHashes).sort(), ['npm-shrinkwrap.json', 'package.json']);
+  assert.deepEqual(Object.keys(manifest.generatedHashes).sort(), ['engine-build.json', 'npm-shrinkwrap.json', 'package.json']);
   for (const [name, expected] of Object.entries(manifest.generatedHashes)) {
     assert.equal(hash(readFileSync(join(directory, 'package', name))), expected, name);
   }
@@ -335,6 +335,15 @@ function extractedApp(app) {
   }
   return engine;
 }
+
+test('E02 engine-build is rejected as a source hash', async t => {
+  const app = join(workspace(t), 'app'); extractedApp(app);
+  assert.equal(await verifyInstalledTree(app, manifest), true);
+  const legacy = structuredClone(manifest);
+  legacy.sourceHashes['engine-build.json'] = legacy.generatedHashes['engine-build.json'];
+  delete legacy.generatedHashes['engine-build.json'];
+  await assert.rejects(verifyInstalledTree(app, legacy), { key: 'local_engine_verification_failed' });
+});
 
 test('installed-tree verification rejects missing, changed, extra files and dependency drift', async t => {
   const directory = workspace(t), app = join(directory, 'app');
