@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.9 — 2026-11-19
+## 0.6.9 — 2026-11-21
 
 - **A session that starts while another one is saving is no longer lost.**
   Before, Claude Code could start a session while another session was saving.
