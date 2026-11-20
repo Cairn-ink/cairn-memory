@@ -714,7 +714,8 @@ The engine cannot see which Memories derive from host Raw. The host's fencing
 obligation covers every session it has ever archived through `captureRaw` in host
 mode, whatever kind or reason a later search reports. Before acknowledging any
 forget or correct of a Memory, the host must call `fenceSession` for every source
-session of that Memory, on every forget path. Host Raw search must not be enabled
+session of that Memory, on every forget path. If the receipt's `session_id` is a
+stored key, the host passes it as `sessionKey`. Host Raw search must not be enabled
 for an owner before that fencing is live. Session fences, source exclusions, suppression and deleted
 conversations still deny search, including at final validation. Host ancestry
 does not establish an absence of derived Memories or their currentness.
