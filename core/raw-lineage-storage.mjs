@@ -254,18 +254,21 @@ export function assertEpisodeSourceProof(ns, sources, facts, budget = { remainin
 // NUL must survive SQL regardless of runtime-specific TEXT truncation.
 // Weak keys keep this connection-local without retaining closed connections.
 const receiptEncoding=new WeakMap();
-function* writerReceiptInputs(db, check, ns, receipts) {
-  const tuples=receipts.map(receipt=>[receipt.client,receipt.sessionId,receipt.eventId,receipt.role,receipt.excerpt]);
+function* writerReceiptPages(db, check, ns, receipts, shared = false) {
+  const tuples=receipts.map(captureReceiptTuple);
   // In Unicode mode the surrogate range matches unpaired code units only.
   // NUL, replacement characters and malformed inputs use the original SQL.
   const eligible=!tuples.some(tuple=>tuple.some(value=>/[\u0000\uFFFD\uD800-\uDFFF]/u.test(value)));
-  const predicate=` AND (EXISTS (SELECT 1 FROM json_each(?) source
-        WHERE client=json_extract(source.value,'$[0]') COLLATE BINARY AND session_id=json_extract(source.value,'$[1]') COLLATE BINARY
+  const tupleMatch=`client=json_extract(source.value,'$[0]') COLLATE BINARY AND session_id=json_extract(source.value,'$[1]') COLLATE BINARY
           AND event_id=json_extract(source.value,'$[2]') COLLATE BINARY AND role=json_extract(source.value,'$[3]') COLLATE BINARY
-          AND excerpt=json_extract(source.value,'$[4]') COLLATE BINARY)
-        OR instr(CAST(client AS BLOB),x'00')>0 OR instr(CAST(session_id AS BLOB),x'00')>0
-        OR instr(CAST(event_id AS BLOB),x'00')>0 OR instr(CAST(role AS BLOB),x'00')>0 OR instr(CAST(excerpt AS BLOB),x'00')>0)`;
+          AND excerpt=json_extract(source.value,'$[4]') COLLATE BINARY`;
+  const storedNul=`instr(CAST(client AS BLOB),x'00')>0 OR instr(CAST(session_id AS BLOB),x'00')>0
+        OR instr(CAST(event_id AS BLOB),x'00')>0 OR instr(CAST(role AS BLOB),x'00')>0 OR instr(CAST(excerpt AS BLOB),x'00')>0`;
+  const predicate=` AND (EXISTS (SELECT 1 FROM json_each(?) source
+        WHERE ${tupleMatch})
+        OR ${storedNul})`;
   const wanted=eligible?JSON.stringify(tuples):undefined;
+  const single=shared && tuples.map(tuple => JSON.stringify([tuple]));
   for (const deleted of [0,1]) {
     let after;
     while (true) {
@@ -277,7 +280,7 @@ function* writerReceiptInputs(db, check, ns, receipts) {
         const encoding=eligible&&!receiptEncoding.has(db)?', (SELECT encoding FROM pragma_encoding) AS receipt_encoding':'';
         const rows=db.prepare(`SELECT id,revision,deleted,updated_at${encoding} FROM memories INDEXED BY namespace_memories
         WHERE owner_id=? AND scope=? AND project_id=? AND deleted=? ${clause}
-        ORDER BY updated_at DESC,id LIMIT ?`).all(...boundary(ns),deleted,...args,limit);
+        ORDER BY updated_at DESC,id LIMIT ?`).all(...boundary(ns),deleted,...args,limit); // Plain read. Any safety wrapper that can throw source_excluded here must absorb it per receipt as the direct path does.
         if(encoding&&rows.length)receiptEncoding.set(db,rows[0].receipt_encoding);
         return rows;
       };
@@ -286,52 +289,78 @@ function* writerReceiptInputs(db, check, ns, receipts) {
       const keys=memories.slice(0,sourcePageSize);
       if(keys.length) {
         check();
-        const filter=eligible&&receiptEncoding.get(db)==='UTF-8'?predicate:'',args=filter?[wanted]:[];
+        const filter=eligible&&receiptEncoding.get(db)==='UTF-8'?predicate:'';
+        // Each key needs its own four rows and overflow witness. A limit across
+        // the union would force seeks that the current receipt never needs.
+        const grouped=shared && Boolean(filter);
+        const args=filter?[wanted]:[];
         const cursorColumns=filter?',CAST(r.created_at AS BLOB) AS receipt_created_at_bytes,CAST(r.id AS BLOB) AS receipt_id_bytes':'';
-        const output=row=>{
-          if(!filter)return row;
-          const {receipt_created_at_bytes,receipt_id_bytes,...receipt}=row;
-          return receipt;
-        };
-        const inputs=db.prepare(`SELECT r.*${cursorColumns},wanted.key AS wanted_entry,
+        const inputs=db.prepare(`SELECT r.*${cursorColumns},wanted.key AS wanted_entry${grouped?',source.key AS source_entry':''},
           json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted
-          FROM json_each(?) wanted CROSS JOIN receipts r ON r.rowid IN (
+          FROM json_each(?) wanted${grouped?' CROSS JOIN json_each(?) source':''} CROSS JOIN receipts r ON r.rowid IN (
             SELECT rowid FROM receipts INDEXED BY memory_receipts
-            WHERE memory_id=json_extract(wanted.value,'$[0]')${filter} ORDER BY created_at,id LIMIT 5)
-          ORDER BY wanted.key,r.created_at,r.id`)
+            WHERE memory_id=json_extract(wanted.value,'$[0]')${grouped?` AND (${tupleMatch} OR ${storedNul})`:filter} ORDER BY created_at,id LIMIT 5)
+          ORDER BY wanted.key,${grouped?'source.key,':''}r.created_at,r.id`)
           .all(JSON.stringify(keys.map(memory=>[memory.id,memory.revision,memory.deleted])),...args);
         // Decoded memory ids can collide; preserve each wanted entry's metadata.
         const byMemory=new Map();
         for(const row of inputs) {
-          const rows=byMemory.get(row.wanted_entry)??[];rows.push(row);byMemory.set(row.wanted_entry,rows);
+          const pages=byMemory.get(row.wanted_entry)??new Map();
+          const source=row.source_entry??0;
+          const rows=pages.get(source)??[];
+          rows.push(row); pages.set(source,rows); byMemory.set(row.wanted_entry,pages);
         }
         for(const [entry,memory] of keys.entries()) {
-          const rows=byMemory.get(entry)??[];
-          yield* rows.slice(0,sourceReceiptPageSize).map(output);
-          if(rows.length<=sourceReceiptPageSize)continue;
-          // The witness counts filtered rows; both pages use the same predicate.
-          // Keep the stored UTF-8 bytes: decoded TEXT may replace bytes or truncate NUL.
-          // (created_at,id) is total because id is UNIQUE, including ties.
-          let receiptAfter=rows[sourceReceiptPageSize-1];
-          while(true) {
-            check();
-            const seek=filter?'(CAST(? AS TEXT),CAST(? AS TEXT))':'(?,?)';
-            // Some drivers bind a zero-length BLOB as NULL; empty TEXT keeps the key.
-            const cursor=filter?[receiptAfter.receipt_created_at_bytes,receiptAfter.receipt_id_bytes].map(bytes=>bytes.length?bytes:''):[receiptAfter.created_at,receiptAfter.id];
-            const page=db.prepare(`SELECT r.*${cursorColumns},? AS memory_revision,? AS memory_deleted FROM receipts r INDEXED BY memory_receipts
-              WHERE memory_id=? AND (created_at,id)>${seek}${filter} ORDER BY created_at,id LIMIT 5`)
-              .all(memory.revision,memory.deleted,memory.id,...cursor,...args);
-            const next=page.slice(0,sourceReceiptPageSize);
-            yield* next.map(output);
-            if(page.length<=sourceReceiptPageSize)break;
-            receiptAfter=next.at(-1);
+          const pages=byMemory.get(entry);
+          if(!pages)continue;
+          for(const [source,rows] of pages) {
+            const input=receiptPageRows(db,check,memory,rows,filter,grouped?[single[source]]:args,cursorColumns);
+            pages.set(source,shared ? replayReceiptInputs(input) : input);
           }
+          yield { pages, grouped };
         }
       }
       if(memories.length<=sourcePageSize)break;
       after=memories[sourcePageSize-1];
     }
   }
+}
+function* receiptPageRows(db, check, memory, page, filter, args, cursorColumns) {
+  while(true) {
+    const rows=page.slice(0,sourceReceiptPageSize);
+    for(const row of rows) {
+      if(!filter)yield row;
+      else {
+        const {receipt_created_at_bytes,receipt_id_bytes,...receipt}=row;
+        yield receipt;
+      }
+    }
+    if(page.length<=sourceReceiptPageSize)return;
+    // Seek with the exact stored bytes, even when decoded TEXT loses bytes.
+    check();
+    const after=rows.at(-1);
+    const seek=filter?'(CAST(? AS TEXT),CAST(? AS TEXT))':'(?,?)';
+    // Some drivers bind a zero-length BLOB as NULL; empty TEXT keeps the key.
+    const cursor=filter?[after.receipt_created_at_bytes,after.receipt_id_bytes].map(bytes=>bytes.length?bytes:''):[after.created_at,after.id];
+    page=db.prepare(`SELECT r.*${cursorColumns},? AS memory_revision,? AS memory_deleted FROM receipts r INDEXED BY memory_receipts
+              WHERE memory_id=? AND (created_at,id)>${seek}${filter} ORDER BY created_at,id LIMIT 5`)
+      .all(memory.revision,memory.deleted,memory.id,...cursor,...args);
+  }
+}
+function* writerReceiptInputs(db, check, ns, receipts) {
+  for(const { pages } of writerReceiptPages(db,check,ns,receipts)) yield* pages.get(0);
+}
+function replayReceiptInputs(input) {
+  const retained=[];
+  return function* () {
+    yield* retained;
+    // Advance explicitly so a validator's early return closes this reader
+    // without closing the shared walk underneath it.
+    for(let next=input.next(); !next.done; next=input.next()) {
+      retained.push(next.value);
+      yield next.value;
+    }
+  };
 }
 function matchingReceiptInputs(db, check, ns, receipts) {
   const key=(client,session,event,role,excerpt)=>JSON.stringify([client,session,event,role,excerpt]);
@@ -475,7 +504,7 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
     }
     if(snapshot)snapshot.inputs.set(cacheKey,retained);
   }
-  function assertReceipts(ns, receipts, readExisting = false, rawTargets) {
+  function assertReceipts(ns, receipts, readExisting = false, rawTargets, history) {
     if (!readExisting && (cachedContentLayout(db)??installedContentLayout(db)).suppressionRevision) {
       // An incomplete fact set, or a possible Raw fact join, must not start an
       // unbounded indexed fallback inside SHARED, even for the scope denial.
@@ -489,10 +518,11 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
       // Snapshot enumeration, overflow and validated handling stay unchanged.
       // Leave the row loop only by failing: later receipts see only the rows
       // retained while receipt one drains the walk.
-      const matches=snapshot ? undefined : matchingReceiptInputs(db,check,ns,receipts);
+      const matches=snapshot || history ? undefined : matchingReceiptInputs(db,check,ns,receipts);
       for (const [index,receipt] of receipts.entries()) {
         check();
-        for (const row of snapshot ? snapshotReceiptInputs(ns) : matches(receipt,index)) {
+        const rows = snapshot ? snapshotReceiptInputs(ns) : history ? history(receipt) : matches(receipt,index);
+        for (const row of rows) {
           check();
           if(row.client!==receipt.client || row.session_id!==receipt.sessionId || row.event_id!==receipt.eventId ||
             row.role!==receipt.role || row.excerpt!==receipt.excerpt)continue;
@@ -700,10 +730,51 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
     const layout = cachedContentLayout(db);
     if (!layout) fail('unsupported_database');
     if (!layout.suppressionRevision && !enabled()) return receipts.map((_, index) => index);
-    return receipts.flatMap((receipt, index) => {
-      try { assertReceipts(ns, [receipt]); return [index]; }
-      catch (error) { if (error.code === 'source_excluded') return []; throw error; }
-    });
+    const candidates = layout.suppressionRevision && !snapshot && db.isTransaction
+      ? receipts.filter(receipt => captureReceiptTuple(receipt).every(value => typeof value === 'string' && !/[\u0000\uFFFD\uD800-\uDFFF]/u.test(value)))
+      : [];
+    const union = candidates.length > 1 ? new Map(candidates.map(receipt => [JSON.stringify(captureReceiptTuple(receipt)), receipt])) : undefined;
+    const indexes = union && new Map([...union.keys()].map((key,index) => [key,index]));
+    const replayExact = Symbol('replay exact history');
+    let walk, walkFailed = false;
+    function* history(receipt) {
+      const index = indexes.get(JSON.stringify(captureReceiptTuple(receipt)));
+      walk ??= replayReceiptInputs(writerReceiptPages(db,check,ns,[...union.values()],true));
+      try {
+        for (const { pages, grouped } of walk()) {
+          const read = pages.get(grouped ? index : 0);
+          if (read) yield* read();
+        }
+      } catch (error) {
+        // Only iterator errors reach this catch. A validator refusal closes
+        // this reader, leaving the shared cursor available to the next source.
+        // Match commit retry's native SQLITE_BUSY (5) and SQLITE_LOCKED (6), including extended codes.
+        if (db.isTransaction && error?.code === 'ERR_SQLITE_ERROR' &&
+            Number.isInteger(error.errcode) && [5, 6].includes(error.errcode & 0xff)) throw replayExact;
+        walkFailed = true;
+        throw error;
+      }
+    }
+    function run(shared) {
+      const allowed = [];
+      for (const [index, receipt] of receipts.entries()) {
+        try {
+          const readHistory = shared && union.has(JSON.stringify(captureReceiptTuple(receipt))) ? history : undefined;
+          assertReceipts(ns, [receipt], false, undefined, readHistory);
+        } catch (error) {
+          if (error === replayExact) return run(false);
+          if (walkFailed || error?.code !== 'source_excluded') throw error;
+          continue;
+        }
+        allowed.push(index);
+      }
+      return allowed;
+    }
+    return run(Boolean(union));
   }
   return { sourceSnapshot, assertEpisodeProof: assertEpisodeSourceProof, completeEpisodeProof, register, attach, assertReceipts, assertStoredReceipts, excludeMemory, filter, enabled };
+}
+
+function captureReceiptTuple(receipt) {
+  return [receipt.client, receipt.sessionId, receipt.eventId, receipt.role, receipt.excerpt];
 }

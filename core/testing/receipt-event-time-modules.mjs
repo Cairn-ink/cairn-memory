@@ -55,7 +55,7 @@ const exceptions = frozenExceptions.map(entry => {
     'frozen pre-rebase Worker loader pin');
   // Passing the optional maintenance phase, and registering/transporting
   // refusal causes plus the trusted Raw host port, add no loader or feature consumer.
-  return { ...entry, line: 122, sha256: 'a16e1f26b25e4d0e4afbc280283b88b511d4e6584de06a04e277576a0276a70d' };
+  return { ...entry, line: 122, sha256: '6aed6b6b2870281ba6806cee47d6af32789671b4ea6a0057ab06193b5914b69f' };
 });
 export const moduleLoadingExceptions = exceptions;
 const cache = new Map();

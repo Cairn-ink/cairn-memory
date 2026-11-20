@@ -10,6 +10,7 @@ import { CONTENT_TERMINAL_FIELDS, CONTENT_TERMINAL_ACK_FIELDS, registerContentWr
 import { fail } from './validation.mjs';
 import { hasCardLineage, loadCardBodyContributorsInside, verifyCardLineageCommitmentsInside, lineageHmac } from './card-lineage.mjs';
 import { engineCardMetadataInside, engineCardRevisionsInside, isEngineCard } from './content-safety.mjs';
+import { receiptDenialTokens } from './raw-source-roots.mjs';
 
 const names = {memory:'memories',receipt:'receipts',card:'private_cards','submitted-note':'card_notes',raw:'raw_conversations'};
 const kinds = Object.fromEntries(Object.entries(names).map(([kind,table])=>[table,kind]));
@@ -119,10 +120,19 @@ export function beginContentWriteSafety(db, operation) {
     const newFacts=[];
     for(const [owner,epoch]of ceilings)for(const fact of db.prepare(`SELECT * FROM content_suppressions INDEXED BY content_suppression_window
       WHERE owner_id=? AND (epoch_hi,epoch_lo)>(?,?) ORDER BY epoch_hi,epoch_lo`).all(owner,Number(epoch>>32n),Number(epoch&0xffffffffn)))newFacts.push(fact);
+    const { hasIncarnation, hasReceiptRetirement } = indexIncarnationFacts(newFacts);
     const terminal=new Set();
-    const canonical=[],removed=[];
+    const canonical=[],removed=[],markers=[];
     for(const change of changes) {
       if(tables.get(change.table)==='shadow')continue;
+      if (change.table === 'suppressed' && [change.next?.[3], change.old?.[3]].some(value => typeof value === 'string' && value.startsWith('rs1:'))) {
+        // All four columns are the attested primary key. Native inserts
+        // already contain the complete immutable tuple.
+        if (change.old || !change.next || change.primary.length !== 4 || change.primary.some(value => !value) ||
+            change.next.some(value => typeof value !== 'string')) fail('evidence_unavailable');
+        markers.push(change.next);
+        continue;
+      }
       const columns=info(change.table);if(columns.length!==change.primary.length)fail('evidence_unavailable');
       if(!change.next){removed.push({table:change.table,row:Object.fromEntries(columns.map((c,i)=>[c.name,change.old[i]]))});continue;}
       const pk=columns.filter((_,i)=>change.primary[i]);if(!pk.length)fail('evidence_unavailable');
@@ -131,12 +141,26 @@ export function beginContentWriteSafety(db, operation) {
       if(!row)fail('evidence_unavailable');
       canonical.push({table:change.table,row,old:change.old,columns});
     }
+    // The receipt primary key can survive a delete/reinsert. SQLite reports
+    // that as an UPDATE, even though the old receipt incarnation retired.
+    for (const { table, row, old, columns } of canonical) {
+      if (table !== 'receipts' || !old) continue;
+      const previous = Object.fromEntries(columns.map(({ name }, index) =>
+        [name, old[index] === undefined ? row[name] : old[index]]));
+      if (previous.id !== row.id) removed.push({ table, row: previous });
+    }
+    const removedReceipts = new Map();
+    for (const { table, row } of removed) {
+      if (table !== 'receipts') continue;
+      if (!removedReceipts.has(row.memory_id)) removedReceipts.set(row.memory_id, []);
+      removedReceipts.get(row.memory_id).push(row);
+    }
     // The declaration names a canonical field; arguments never select an
     // exemption. Automatic terminal changes additionally require their own fact.
     for(const {table,row}of canonical) {
       const kind=kinds[table];
       if(kind&&(row.deleted||['deleted','cancelled'].includes(row.state)) &&
-          (newFacts.some(f=>f.match_mode==='incarnation'&&contentSuppressionTargetMatches(f,namespace(row),{kind,key:row.id}))))
+          hasIncarnation(namespace(row), kind, row.id))
         terminal.add(JSON.stringify([...boundary(namespace(row)),kind,row.id]));
     }
     for(const {kind,row}of replayTargets)terminal.add(JSON.stringify([...boundary(namespace(row)),kind,row.id]));
@@ -144,7 +168,7 @@ export function beginContentWriteSafety(db, operation) {
     // same-transaction facts, not acknowledgement arguments, identify targets.
     for(const {table,row}of removed){
       const kind=kinds[table],ns=kind==='receipt'?namespace(get('memories',row.memory_id)):namespace(row);
-      if(kind&&ns&&newFacts.some(f=>f.match_mode==='incarnation'&&contentSuppressionTargetMatches(f,ns,{kind,key:row.id})))
+      if(kind&&ns&&hasIncarnation(ns,kind,row.id))
         terminal.add(JSON.stringify([...boundary(ns),kind,row.id]));
     }
     // A terminal replay has no changed row. Its declared root field comes from
@@ -176,12 +200,10 @@ export function beginContentWriteSafety(db, operation) {
       const change=canonical.find(c=>c.table==='memories'&&c.old&&c.row.id===fact.stable_key&&
         contentSuppressionTargetMatches(fact,namespace(c.row),{kind:'memory',key:c.row.id,revision:oldValue(c,'revision')}));
       if(!change)return false;
-      const previous=oldValue(change,'revision'),receipts=removed.filter(c=>c.table==='receipts'&&c.row.memory_id===change.row.id);
+      const previous=oldValue(change,'revision'),receipts=removedReceipts.get(change.row.id);
       return Number.isSafeInteger(previous)&&previous>0&&change.row.revision===previous+1&&
-        fact.source_version===JSON.stringify(['memory-revision-through-v1',previous])&&receipts.length>0&&
-        receipts.every(({row})=>newFacts.some(f=>f.kind==='receipt'&&f.match_mode==='incarnation'&&
-          f.reason===fact.reason&&f.action_id===fact.action_id&&
-          contentSuppressionTargetMatches(f,namespace(change.row),{kind:'receipt',key:row.id})));
+        fact.source_version===JSON.stringify(['memory-revision-through-v1',previous])&&Boolean(receipts?.length)&&
+        receipts.every(row => hasReceiptRetirement(namespace(change.row), row.id, fact));
     }
     const terminalFacts=newFacts.filter(f=>terminal.has(JSON.stringify([f.owner_id,f.scope,f.project_id,f.kind,f.stable_key]))||
       lineage&&retiredMemory(f)||
@@ -684,7 +706,79 @@ export function beginContentWriteSafety(db, operation) {
       }
       walk(result);
     });
+    assertRetiredReceiptMarkers(db, { operation, scopes, canonical, removed, markers, newFacts, oldValue, retiredMemory, removedReceipts, hasReceiptRetirement });
     function publicNamespaceForAuthority(row){return {ownerId:row.owner_id,scope:row.scope,projectId:row.project_id||null};}
   }};
 }
 registerContentWriteGuard(beginContentWriteSafety);
+
+function assertRetiredReceiptMarkers(db, { operation, scopes, canonical, removed, markers, newFacts, oldValue, retiredMemory, removedReceipts, hasReceiptRetirement }) {
+  const fingerprints = canonical.filter(change => change.table === 'suppressed');
+  const deletedFingerprint = removed.some(change => change.table === 'suppressed');
+  if (!markers.length && !fingerprints.length && !deletedFingerprint) return;
+
+  const methods = new Set();
+  for (let context = operation; context; context = context.parent) methods.add(context.method);
+  const rejection = methods.has('reject') || methods.has('resolveReview');
+  const allowedMarkers = new Set(), allowedFingerprints = new Set();
+  let terminalReview = false;
+  const tuple = (ns, value) => JSON.stringify([...boundary(ns), value]);
+  const scoped = new Set(scopes.map(ns => JSON.stringify(boundary(ns))));
+  for (const change of canonical) {
+    if (change.table !== 'memories' || !change.old) continue;
+    const row = change.row, ns = namespace(row), previous = oldValue(change, 'revision');
+    if (oldValue(change, 'deleted') !== 0 || row.revision !== previous + 1 ||
+        !scoped.has(JSON.stringify(boundary(ns))) ||
+        ['owner_id', 'scope', 'project_id'].some(key => oldValue(change, key) !== row[key])) continue;
+    const correction = methods.has('correct') && row.deleted === 0;
+    const terminal = row.deleted === 1 && row.content === null;
+    const reject = rejection && oldValue(change, 'review_state') === 'awaiting';
+    const cause = newFacts.find(fact => {
+      if (fact.stable_key !== row.id || fact.evidence_origin !== 'writer') return false;
+      if (correction) return retiredMemory(fact);
+      if (!terminal || fact.match_mode !== 'incarnation' || fact.action_id !== 'memory-forget-' + row.id ||
+          !contentSuppressionTargetMatches(fact, ns, { kind: 'memory', key: row.id })) return false;
+      if (fact.reason === 'user_forget') return methods.has('forget') || methods.has('forgetEpisode');
+      return fact.reason === 'purge' && (reject || methods.has('deleteConversation') || methods.has('forgetEpisode'));
+    });
+    if (!cause) continue;
+    terminalReview ||= terminal && reject;
+    const oldFingerprint = oldValue(change, 'fingerprint');
+    if (terminal || oldFingerprint !== row.fingerprint) allowedFingerprints.add(tuple(ns, oldFingerprint));
+    if (!markers.length || cause.reason === 'purge' && !reject) continue;
+    const retired = (removedReceipts.get(row.id) ?? []).filter(receipt => hasReceiptRetirement(ns, receipt.id, cause, true));
+    const replacements = correction ? db.prepare('SELECT receipt_key,client,session_id,event_id,role FROM receipts WHERE memory_id=?')
+      .all(row.id) : [];
+    for (const token of receiptDenialTokens(retired, replacements)) allowedMarkers.add(tuple(ns, token));
+  }
+  if (markers.some(row => !allowedMarkers.has(JSON.stringify(row)))) fail('evidence_unavailable');
+  if (terminalReview || ['forget', 'correct', 'reject', 'forgetEpisode', 'deleteConversation'].some(method => methods.has(method))) {
+    if (deletedFingerprint || fingerprints.some(({ row, old }) =>
+      old || !allowedFingerprints.has(tuple(namespace(row), row.fingerprint)))) fail('evidence_unavailable');
+  }
+}
+
+function indexIncarnationFacts(facts) {
+  const targets = new Set(), retirements = new Map();
+  const incarnationBoundary = (owner, scope, project) => [owner, scope, scope === 'owner' ? '' : project];
+  for (const fact of facts) {
+    if (fact.match_mode !== 'incarnation') continue;
+    const scope = incarnationBoundary(fact.owner_id, fact.scope, fact.project_id);
+    targets.add(JSON.stringify([...scope, fact.kind, fact.stable_key]));
+    if (fact.kind !== 'receipt') continue;
+    const key = JSON.stringify([...scope, fact.stable_key, fact.action_id, fact.reason]);
+    retirements.set(key, fact.evidence_origin === 'writer' || retirements.get(key) === true);
+  }
+  function matches(ns, lookup) {
+    // The canonical target matcher accepts owner-wide facts as well as exact scope.
+    const exact = incarnationBoundary(...boundary(ns));
+    return lookup(exact) || (ns.scope !== 'owner' && lookup([ns.ownerId, 'owner', '']));
+  }
+  return {
+    hasIncarnation: (ns, kind, id) => matches(ns, scope => targets.has(JSON.stringify([...scope, kind, id]))),
+    hasReceiptRetirement: (ns, id, fact, writerOnly = false) => matches(ns, scope => {
+      const writer = retirements.get(JSON.stringify([...scope, id, fact.action_id, fact.reason]));
+      return writerOnly ? writer === true : writer !== undefined;
+    }),
+  };
+}

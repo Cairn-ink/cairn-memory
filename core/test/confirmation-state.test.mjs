@@ -175,9 +175,21 @@ for (const outcome of ['confirm', 'reject', 'forget']) test(`CF1 episode links h
   assert.deepEqual(ok(off.listEpisodes(request)).items, []);
   error(off.getEpisode({ namespace: episodeNs, episodeId: row.id }), 'episode_not_found');
   if (outcome === 'forget') {
+    const originalFingerprint = f.db.prepare('SELECT fingerprint FROM memories WHERE id=?').get(memory.id).fingerprint;
+    const retired = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(memory.id);
     ok(f.core.forgetEpisode({ namespace: episodeNs, episodeId: row.id, expectedRevision: row.revision }));
     assert.equal(f.db.prepare('SELECT deleted FROM memories').get().deleted, 1);
-    assert.equal(f.db.prepare('SELECT count(*) n FROM suppressed').get().n, 1);
+    assert.equal(retired.length, 1, 'exact retiring receipt population');
+    const addressDigest = value => createHash('sha256').update(value).digest('hex');
+    const suppressed = f.db.prepare(`SELECT fingerprint FROM suppressed
+      WHERE owner_id=? AND scope=? AND project_id=? ORDER BY fingerprint`)
+      .all(episodeNs.ownerId, episodeNs.scope, episodeNs.projectId ?? '').map(row => row.fingerprint);
+    const markers = retired.flatMap(row => ['rs1:i:' + row.receipt_key,
+      'rs1:a:' + addressDigest(JSON.stringify(['receipt-source-address-v1', row.client, row.session_id, row.event_id, row.role]))]);
+    assert.equal(f.db.prepare('SELECT count(*) AS n FROM suppressed').get().n,
+      1 + markers.length, 'the whole table contains only the expected suppression rows');
+    assert.deepEqual(suppressed.filter(value => !value.startsWith('rs1:')), [originalFingerprint]);
+    assert.deepEqual(suppressed.filter(value => value.startsWith('rs1:')), markers.sort());
   } else {
     ok(f.core[outcome]({ ...action(memory), namespace: episodeNs, ...(outcome === 'confirm' ? { receipt: receipt() } : {}) }));
     assert.equal(ok(f.core.listEpisodes(request)).items.length, 1);
