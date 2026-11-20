@@ -110,7 +110,14 @@ test('S2h-1 split rejects inventory removals and unreviewed writer changes', () 
     assert.throws(() => assertSplitInventory(inventory), /public inventory changed/, surface);
   }
   const sources = splitSources();
-  sources.set('core/runtime.mjs', sources.get('core/runtime.mjs').replace('    suppressReceiptsInside(db, ns, id, suppression);', '    void id;'));
+  const current = sources.get('core/runtime.mjs');
+  const retirement = [
+    '      suppressReceiptsInside(db, ns, id, suppression, undefined, { rows: retired, replacements: value.receipts.map(receipt => ({',
+    '        receipt_key: receiptKey(receipt), client: receipt.client, session_id: receipt.sessionId, event_id: receipt.eventId, role: receipt.role,',
+    '      })) });',
+  ].join('\n');
+  assert.equal(current.split(retirement).length, 2, 'one exact correction retirement call');
+  sources.set('core/runtime.mjs', current.replace(retirement, '      void id;'));
   assert.throws(() => assertSplitGraph(sources), /review canonical writer: correct/);
 });
 

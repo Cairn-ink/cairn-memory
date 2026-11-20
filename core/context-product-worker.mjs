@@ -133,19 +133,28 @@ try {
   const { openContextProductFacade } = await import('./context-read-facade.mjs'); within(opening);
   phase?.mark('facadeImported');
   phase?.mark('facadeOpening');
-  let nativeOpening = false;
-  const openingObserver = workerData.wal ? observer : { ...observer, invoke(stage, statement, work) {
-    if (stage === 'open') nativeOpening = true;
-    return observer.invoke(stage, statement, work);
-  } };
+  let nativeOpening = false, openingProbeFailed = false;
+  const openingObserver = workerData.wal ? observer : {
+    ...observer,
+    invoke(stage, statement, work) {
+      if (stage === 'open') nativeOpening = true;
+      return observer.invoke(stage, statement, work);
+    },
+    journalProbe(work) {
+      try { return observer.journalProbe(work); }
+      catch (error) { openingProbeFailed = true; throw error; }
+    },
+  };
   try {
     // The ordinary facade owns the single legacy DELETE opening preflight.
     facade = openContextProductFacade(workerData.path, { observer: openingObserver, authorize, sqlite });
   } catch (error) {
-    // Never reinterpret a refusal after attempting a native connection.
-    if (workerData.wal || nativeOpening || error?.code !== 'index_unavailable') throw error;
+    // A failed probe can surface the same legacy refusal as a policy result.
+    if (workerData.wal || nativeOpening || openingProbeFailed || error?.code !== 'index_unavailable') throw error;
     const { contextReadJournalHeader } = await import('./context-read-sidecar.mjs'); within(opening);
-    const canonical = detectProductCanonicalJournal(workerData.path, { sqlite: canonicalSqlite, observer, legacyError: error, readHeader: contextReadJournalHeader,
+    const readHeader = (path, headerObserver, validated) =>
+      contextReadJournalHeader(path, booting ? fallbackHeaderBudget(headerObserver) : headerObserver, validated);
+    const canonical = detectProductCanonicalJournal(workerData.path, { sqlite: canonicalSqlite, observer, legacyError: error, readHeader,
       expectedIdentity: { device: fileIdentity.split(':')[0], inode: fileIdentity.split(':')[1] } });
     assertCanonicalMode = canonical.assertMode;
     facade = openContextProductFacade(workerData.path, { observer, authorize, sqlite: canonical.sqlite });
@@ -242,3 +251,15 @@ parentPort.on('message', async message => {
     sealNative(frame); result(operation, nativeFailure(error)); }
   finally { semanticOutstanding=undefined; active = false; if (closing) await exitWhenIdle(); }
 });
+
+function fallbackHeaderBudget(observer) {
+  // Reserve time to dispose and return the original refusal to the parent.
+  const replyReserveMs = 100;
+  const minimumHeaderMs = 50;
+  return {
+    journalRemainingMs() {
+      const available = observer.journalRemainingMs() - replyReserveMs;
+      return available >= minimumHeaderMs ? available : 0;
+    },
+  };
+}
