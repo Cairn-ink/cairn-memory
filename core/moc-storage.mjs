@@ -671,7 +671,12 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
             (ac.owner_id IS NOT am.owner_id OR ac.scope IS NOT am.scope OR ac.project_id IS NOT am.project_id)
         ) AS invalid_raw_ancestry FROM (${projectSQL(sql)}) page` : projectSQL(sql));
       };
-      let rows;
+      let rows, scan;
+      const readMemoryRows = (sql, params) => {
+        const statement = memoryPage(sql);
+        scan = start => statement.all(...params, count, start);
+        return scan(offset);
+      };
       if (catalogOnly) {
         // Classification needs the complete topic catalog, not every placement or
         // unfiled body. Filter before paging so memory growth cannot crowd it out.
@@ -798,15 +803,15 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
             ELSE NULL END AS content
           FROM (${sharedCandidates}) page
           ORDER BY page.sort_level, page.sort_title, page.sort_id, page.sort_ref`;
-        rows = memoryPage(sql).all(...boundary(ns), ...boundary(ns), recall, ...boundary(ns), recall,
-          ...boundary(ns), ...boundary(ns), count, offset);
+        rows = readMemoryRows(sql, [...boundary(ns), ...boundary(ns), recall, ...boundary(ns), recall,
+          ...boundary(ns), ...boundary(ns)]);
       } else {
         const parent = projectPrepare(`SELECT * FROM mocs WHERE ${namespaceWhere} AND id = ?`)
           .get(...boundary(ns), parentRef.mocId);
         if (!parent) fail("moc_not_found");
         if (parent.revision !== parentRef.revision) fail("revision_conflict");
         if (parent.level === 1) {
-          rows = memoryPage(`SELECT
+          rows = readMemoryRows(`SELECT
             CASE WHEN memory.id IS NULL THEN 'invalid'
               WHEN memory.owner_id != moc.owner_id OR memory.scope != moc.scope
                 OR memory.project_id != moc.project_id THEN 'invalid'
@@ -823,8 +828,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
             memory.content content, NULL moc_id
             FROM moc_memory_refs ref JOIN mocs moc ON moc.id = ref.moc_id
               LEFT JOIN memories memory ON memory.id = ref.memory_id
-            WHERE ref.moc_id = ? ORDER BY sort_id, sort_ref LIMIT ? OFFSET ?`)
-            .all(parent.id, count, offset);
+            WHERE ref.moc_id = ? ORDER BY sort_id, sort_ref LIMIT ? OFFSET ?`, [parent.id]);
         } else {
           rows = projectPrepare(`WITH edges AS (
             SELECT edge.*, child.level child_level, child.owner_id child_owner,
@@ -861,14 +865,17 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
               Number(purpose === "recall"), count, offset);
         }
       }
-      return { rows: rows.map((row) => {
+      const serialize = (row) => {
         if (row.child_type === "memory") {
           if (row.invalid_raw_ancestry) fail('evidence_unavailable');
           // A stale placement still refers to its recorded version. Never
           // replace that binding with the current Memory revision.
           const revision = row.child_revision;
           if (contentSuppressionReasonInside(db, ns, { kind: 'memory', key: row.child_id, revision, ancestryChecked: Object.hasOwn(row, 'invalid_raw_ancestry'),
-            version: Number.isSafeInteger(revision) ? JSON.stringify(['memory-revision-v1', revision]) : undefined })) fail('evidence_unavailable');
+            version: Number.isSafeInteger(revision) ? JSON.stringify(['memory-revision-v1', revision]) : undefined })) {
+            if (!inside) return undefined;
+            fail('evidence_unavailable');
+          }
           // Output validation consumes this same versioned metadata decision.
           const proof = cachedContentSuppressionRequestInside(db, ns.ownerId);
           if (proof) (proof.completed ??= new Set()).add(JSON.stringify([ns.ownerId,ns.scope,ns.projectId ?? '', 'memory',row.child_id,revision]));
@@ -892,7 +899,23 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         return { item: { type: "ref", ref,
           label: row.child_type === "memory" ? memoryLabel(row.content) : visibleTitle(
             db.prepare("SELECT * FROM mocs WHERE id = ?").get(row.child_id)) } };
-      }), epoch: currentEpoch, suppressionEpoch: suppressionEpochInside(ns) };
+      };
+      const visible = [], offsets = [];
+      let scanned = offset;
+      while (true) {
+        for (const row of rows) {
+          scanned++;
+          const result = serialize(row);
+          if (!result) continue;
+          visible.push(result);
+          offsets.push(scanned);
+          if (visible.length === count) break;
+        }
+        if (visible.length === count || rows.length < count || !scan) break;
+        rows = scan(scanned);
+      }
+      return { rows: visible, ...(scanned - offset !== visible.length ? { offsets } : {}),
+        epoch: currentEpoch, suppressionEpoch: suppressionEpochInside(ns) };
     };
     return inside ? work() : transaction(db, work);
   }
