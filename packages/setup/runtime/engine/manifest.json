@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "eed0c8836593470012ecc16cd1dc099c30f3261eb87247cf71ac6d01f13bb217",
-  "bytes": 1479801,
+  "sha256": "c3ec05a6518009265a5d4366dc4349596fe043878dca1c1650d74d5396c87d2a",
+  "bytes": 1480305,
   "files": [
     "LICENSE",
     "README.md",
@@ -500,7 +500,7 @@
     "core/context-reader.mjs": "170e534d567e82a5e1249c278e25efcbd367aaef8cfabe3dde6b99a91055f879",
     "core/commit-dispatch.mjs": "1f0511343608e6e19549891720ccf95086851f031cf0ec536a92d581e5c4c6c1",
     "core/contract.mjs": "53ce6ed929a643367b4cf9bf7ce4c6fd2ad75bd273b3d9c6e4392ced50ad6133",
-    "core/database.mjs": "f9ed5f35e70ef7783efc6e5364e76443f6eea653deedba3c3797acc38d1f5c90",
+    "core/database.mjs": "27d19eacf1cf62c9805b8142bfbc108913061fa46df1e04155907bdc5618d0d2",
     "core/existing-store.mjs": "d01fae6e0f7dbbcabed9ef81fba915e84c454f0c668bfc95e31629394cee733f",
     "core/store-fence.mjs": "3d33fab3946ec3e77ba776a276268251d8eb02223c7ac9e2f81af1137fa2c44e",
     "core/sqlite-journal-probe.mjs": "16831756af69178af3a63795ef939670fe22f80a5fe481e55978afefec1f4964",
@@ -562,7 +562,7 @@
     "core/prompts/relate-rationale.md": "b00cc2511e7e01d6507f9d13abf6115b315cca8208866a5e15721b6bee212615",
     "core/prompts/relate-claim-focus.md": "17ba366ce9d34f9cef84ad4fea20ba86a9399ff9a34afcd7b4e900cefca332ec",
     "core/recall.mjs": "0cd71707502e3f144f2f26b5a358e7aaeb10a663796ef3d31b74ff75422b6174",
-    "core/runtime.mjs": "9c38f5ad16fe95c25d721171391b16d0e1be282221577371c68fff5e8953fac0",
+    "core/runtime.mjs": "672a02cd3de35e55f2af122de83671d0b193b9a2f74a496a13499414ba75692b",
     "core/supersession-storage.mjs": "b13c88bc377cdb9759481214ab3eefd07aec39d15139978e6c4f09871e41b20d",
     "core/validation.mjs": "fb8fa11ee5951ebd2c6bd0b67e3b528ca7cacfd95cd7ddefc22c242a71e1aa0d",
     "core/suppression-content.mjs": "a3d47ffc353c079ba1b1e35cbb506bd7bbb661f3d2ea89562ce7e6e914aaff98",
@@ -790,7 +790,7 @@
     "core/content-safety-layout.mjs": "fb9d00957c5a224b1a414c2c5baa5726fa39ea2323331a9f7e325f4a9e3f3655",
     "core/content-safety-migration.mjs": "cfa4de31c06a67b0677faa77287fe5c353c670cbf3320855c6414200892cd0cf",
     "core/layout-base-upgrade.mjs": "fa2f4fc819f9b8e3400e1402ac1231d08f870fbd905001f8e9dbc131ea998938",
-    "core/content-safety-schema.mjs": "c8f9e0bcf08902576a82510f357528ddfdbfa32365e986771a9a76006582c4b1",
+    "core/content-safety-schema.mjs": "e74c811f5f45ed96669943cb2f0fa845c6c5ca40d100a5839f1232feec9e055d",
     "core/content-suppression-storage.mjs": "40578fd7fddf012340a07c023cd8f6ed977f7e2964c5a52d503c1655e544e340",
     "core/content-suppression-input.mjs": "d22fe3b5ca43a0ce44d5e019fe4da9e09b456834281480b1ce1b23ec0b0d29cd",
     "core/content-suppression-evidence.mjs": "d89ab4ee68d6172a4c22587cbf07da965272da92c0e2b57c86ac6045aec7e58a",
@@ -838,6 +838,6 @@
   "generatedHashes": {
     "package.json": "e255ff4d23e921de9bed8e058c64e57aed3e1bc6a8ed242cee52a716add2d69c",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8",
-    "engine-build.json": "d755ed89384aa85912717f425fba5a60af65c6ddea8791340d0c696575f859c7"
+    "engine-build.json": "5e9c3c7a8f0c4030e84857eead60d251a444a45bfd78274b7be004c0f41200dc"
   }
 }
