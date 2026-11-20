@@ -986,7 +986,7 @@ export function createMemoryCore(input, internal) {
         recentReceipts: (ref, limit) => runtime.recentReceipts(namespaces[ref.namespaceIndex], ref, limit),
         finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
           namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
-          revision: candidate.revision, receiptLimit: candidate.receiptCap ?? candidate.item.receipts.length,
+          revision: candidate.revision, receiptLimit: candidate.receiptCap ?? (candidate.item.receipts.length || Number(runtime.receiptShort(candidate.item.memory))),
           ...(candidate.receiptCap ? { receiptOrder: 'recent' } : {}),
           ...(isSourceContext(contextMode) ? { sourceEvidence: candidate.item } : {}),
         })), selected, namespaces.map((namespace) => ({ namespace,

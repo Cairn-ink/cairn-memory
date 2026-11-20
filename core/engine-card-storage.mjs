@@ -2,7 +2,7 @@ import { contextEmbeddingGuard } from './context-read-sidecar.mjs';
 import { randomUUID, createHmac, createHash } from 'node:crypto';
 import { readTransaction, transaction } from './database.mjs';
 import { withContentSuppressionRequest, inContentSuppressionRequestInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
-import { contentReadSafety, sourceReadSafety, receiptReadSafety, createContentReadMemo } from './content-safety.mjs';
+import { contentReadSafety, sourceReadSafety, receiptReadSafety, createContentReadMemo, withheldCardSourcesInside, withheldEvidenceInside } from './content-safety.mjs';
 import { createPrivateCardStorage } from './private-card-storage.mjs';
 import { createCardRawSources } from './card-raw-sources.mjs';
 import { reviewCardApplicabilityInside } from './private-evidence-schema.mjs';
@@ -21,7 +21,6 @@ import { installPrivateOrganization } from './private-organization-schema.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
-
 /** Shares the runtime's canonical handle, Card bindings, epochs, operation
  * ledger and (when installed) sealed body lineage. No parallel fact store. */
 export function createEngineCardStorage({ db, identity, ready, rawReader, upgrade = false }) {
@@ -52,7 +51,7 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
     const memo = createContentReadMemo(db);
     return refs.every(ref => { check(); return db.prepare(`SELECT revision FROM memories WHERE ${where} AND id=? AND deleted=0`)
       .get(...boundary(ns), ref.memoryId)?.revision === ref.memoryRevision &&
-      sourceReadSafety(db, { identity, namespace: ns, ref, memo }).allowed; });
+      sourceReadSafety(db, { identity, namespace: ns, ref, memo }).allowed; }) && !withheldCardSourcesInside(db, ns, refs, memo).size;
   }
   function relations({ namespace: ns, memoryIds }) {
     if (!has('memory_relations')) return undefined;
@@ -69,7 +68,7 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
   }
   function pressureItems(ns, memories, { rawSpans = false } = {}) {
     return read(ns, () => {
-      const receipts = createCardReceiptSources(db, bind), evidence = createPrivateEvidenceStorage({ db, identity,
+      const receipts = createCardReceiptSources(db, bind), evidence = createPrivateEvidenceStorage({ db, identity, projectSharedSources: true,
         receiptRefInside: receipts.refInside });
       // Canonical evidence validation below still binds receipts locally. The
       // pressure projection itself needs no excerpt without explicit consent.
@@ -97,15 +96,16 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       const epoch = db.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...boundary(ns))?.epoch ?? 1;
       const rows = db.prepare(`SELECT * FROM memories WHERE ${where} AND deleted=0 AND review_state!='awaiting'
         AND id>? ORDER BY id LIMIT ?`).all(...boundary(ns), after, maximum + 1);
-      const complete = rows.length <= maximum, memories = [], memo = createContentReadMemo(db);
+      const complete = rows.length <= maximum, memories = [], memo = createContentReadMemo(db), { receipts: withheld } =
+        withheldEvidenceInside(db, ns, [], [], rows.slice(0, maximum).map(row => row.id), 16);
       let units = 0;
       for (const memory of rows.slice(0, maximum)) {
         check(); units += memory.content.length;
         if (units > 2000000) fail('source_budget_exceeded');
         const ref = memoryReference(ns, memory);
         if (!contentReadSafety(db, { identity, namespace: ns, ref, intent: 'history', memo }).allowed) continue;
-        const receipts = db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(memory.id)
-          .filter(receipt => receiptReadSafety(db, { namespace: ns, receipt, memo }).allowed);
+        const original = db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(memory.id);
+        const receipts = original.filter(receipt => receiptReadSafety(db, { namespace: ns, receipt, memo, withheld }).allowed);
         if (!receipts.length) continue;
         const source = receiptRef(ns, memory, receipts[0]);
         const links = has('raw_receipt_lineage') ? db.prepare(`SELECT l.*,rm.occurred_at FROM raw_receipt_lineage l
@@ -194,13 +194,13 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       // rebuild/retirement. Walk every page under the caller's deadline.
       let after = '';
       for (;;) {
-        check(); const rows = page.all(...boundary(ns), after);
+        check(); const rows = page.all(...boundary(ns), after), { cards: withheld } = withheldEvidenceInside(db, ns, rows.map(row => row.id));
         for (const row of rows) {
           check();
           const metadata = engineCardMetadataInside(db, ns, row);
           if (!metadata) continue;
           const current = engineCardRevisionsInside(db, ns, row) && contentReadSafety(db, { identity, namespace: ns, memo,
-            ref: cardReference(ns, row), intent: 'history', method: 'getCard' }).allowed;
+            ref: cardReference(ns, row), intent: 'history', method: 'getCard' }).allowed && !withheld.has(row.id);
           result.push({ ...metadata, row, status: current ? 'current' : 'stale' });
         }
         if (rows.length < 128) break;
@@ -253,14 +253,14 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
   // the commit snapshot cannot authorize references returned after a host hook.
   function deliver(ns, built) {
     return withContentSuppressionRequest(() => read(ns, () => {
-      const memo = createContentReadMemo(db);
+      const memo = createContentReadMemo(db), { cards: withheld } = withheldEvidenceInside(db, ns, built.map(card => card.id));
       return built.flatMap(card => {
         const sourceRevisions = card.sourceRevisions.filter(ref => contentReadSafety(db, {
           identity, namespace: ns, intent: 'history', memo,
           ref: memoryReference(ns, { id: ref.memoryId, revision: ref.revision }) }).allowed);
         const row = db.prepare(`SELECT * FROM private_cards WHERE ${where} AND id=?`).get(...boundary(ns), card.id);
         if (!row || !contentReadSafety(db, { identity, namespace: ns, intent: 'history', method: 'getCard', memo,
-          ref: { ...cardReference(ns, row), revision: card.revision } }).allowed) return [];
+          ref: { ...cardReference(ns, row), revision: card.revision } }).allowed || withheld.has(row.id)) return [];
         return [{ ...card, sourceRevisions }];
       });
     }), { fresh: true });

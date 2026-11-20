@@ -1,7 +1,7 @@
 import { hasCardLineage, cardLineageItemInside, cardLineageNamespaceInside } from './card-lineage.mjs';
 import { contentSuppressionReasonInside, cachedContentSuppressionRequestInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
-import { contentReadSafety, memoryReadEligible, receiptReadSafety, anchoredReadSafety, createContentReadMemo, isEngineCard, engineCardRevisionsInside } from './content-safety.mjs';
+import { contentReadSafety, memoryReadEligible, receiptReadSafety, anchoredReadSafety, createContentReadMemo, isEngineCard, engineCardRevisionsInside, withheldReceiptIdsInside, withheldEvidenceInside } from './content-safety.mjs';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { createQualificationStorage } from './claim-qualification-storage.mjs';
@@ -18,7 +18,7 @@ const attribution = { status: 'unassessed', commitment: 'unknown' };
 
 /** All methods run synchronously inside the caller's shared SQLite transaction.
  * The only callbacks are internal canonical readers, never host/model ports. */
-export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, receiptRefInside, memoReceiptEventTime = false }) {
+export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, receiptRefInside, memoReceiptEventTime = false, projectSharedSources = false }) {
   const bind = (purpose, value) => keyed(identity.cursorSecret, purpose, [identity.storeId, value]);
   const qualification = createQualificationStorage({ db, receiptKey: receipt =>
     createHash('sha256').update(JSON.stringify(receipt)).digest('hex') });
@@ -125,9 +125,11 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed);
   function item(ns, ref, intent, readSet, options, memo = createContentReadMemo(db)) {
     if (ref.type === 'card') {
-      const card = cardDetailInside(ns, ref.cardId, readSet, { ...options, safetyMemo: memo });
+      const card = cardDetailInside(ns, ref.cardId, readSet, { ...options, safetyMemo: memo,
+        projectSharedSources: projectSharedSources && !options?.withheld });
       if (!cardEligible(ns, card, intent, memo)) fail('evidence_unavailable');
       if (card.revision !== ref.revision || card.bodyRevision !== ref.bodyRevision) fail('revision_conflict');
+      if (options?.withheld?.cards.has(ref.cardId)) return null;
       const sources = card.bindings.map(binding => binding.source);
       return { ...cardMetadata(card), title: card.title, body: card.body,
         qualification: { applicability: card.support.applicability, attribution: 'unassessed', commitment: 'unknown' },
@@ -153,14 +155,15 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     const projected=safety;
     const selectedReceipts=projected?JSON.parse(row.batch_receipts):undefined;
     const allReceiptRows = selectedReceipts ?? db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 17').all(row.id);
-    const receiptRows = allReceiptRows.filter(receipt => receiptReadSafety(db, { namespace: ns, receipt, memo,
+    const withheld = projectSharedSources ? options?.withheld?.receipts ?? withheldReceiptIdsInside(db, ns, allReceiptRows) : undefined;
+    const receiptRows = allReceiptRows.filter(receipt => receiptReadSafety(db, { namespace: ns, receipt, memo, withheld,
       rawAncestryEmpty:projected && row.empty_raw_ancestry===1 && !contentSuppressionMayMatchInside(db,ns,{kind:'receipt',key:receipt.id}) }).allowed);
     if(selectedReceipts)(memo.evidenceReceipts??=new Map()).set(JSON.stringify([boundary(ns),row.id]),selectedReceipts);
     if (!contentReadSafety(db, { identity, namespace: ns, ref, intent, memo, ...(safety ? { selectedMemory: row, selectedReceipts } : {}), receipts: receiptRows.slice(0, 16) }).allowed) fail('evidence_unavailable');
     const sourceAccess = memoryReadEligible(row) ? 'available' : 'unavailable-for-noncurrent-memory';
     const sources = sourceAccess === 'available' ? receiptRows.slice(0, 16).map(receipt => selectedReceipts?selectedReceiptRef(ns,row,receipt):receiptRefInside(ns, row, receipt)) : [];
     const projection = projected && row.has_qualification===0 ? null : qualification.inspect(row);
-    const assessed = projection && anchoredReadSafety(db, { namespace: ns, memoryId: row.id, anchors: projection.anchors, memo }).allowed ? projection : null;
+    const assessed = projection && anchoredReadSafety(db, { namespace: ns, memoryId: row.id, anchors: projection.anchors, memo, project: projectSharedSources }).allowed ? projection : null;
     const qualified = assessed ? { ...assessed, sourceText: 'read-separately',
       anchors: assessed.anchors.map(({ text, ...anchor }) => anchor) } : null;
     return { ...memoryMetadata(ns, row), content: row.content, qualification: qualified,
@@ -179,8 +182,11 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
       fences: items.map(value => bind('evidence-item-v1', cardLineageItemInside(db,value))) }, 16384);
   }
   function fetched(ns, input, accessGeneration) {
-    const memo = createContentReadMemo(db), items = input.refs.map(ref => item(ns, ref, input.intent, undefined, undefined, memo));
-    const result = { items, snapshot: makeSnapshot(ns, input.intent, input.refs, items, accessGeneration) };
+    const memo = createContentReadMemo(db), options = projectionOptions(ns, input.refs);
+    const selected = input.refs.map(ref => item(ns, ref, input.intent, undefined, options, memo));
+    const refs = input.refs.filter((ref, index) => selected[index] !== null);
+    const items = selected.filter(Boolean);
+    const result = { items, snapshot: makeSnapshot(ns, input.intent, refs, items, accessGeneration) };
     if (size(result) > input.responseByteLimit) fail('context_item_too_large');
     return result;
   }
@@ -192,7 +198,9 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
         previous.accessGeneration !== accessGeneration) fail('snapshot_stale');
     // Empty selections also have a meaningful generation fence.
     const refs = previous.refs.length ? evidenceRefs(previous.refs, ns) : [];
-    const memo = createContentReadMemo(db), items = refs.map(ref => item(ns, ref, previous.intent, undefined, undefined, memo));
+    const memo = createContentReadMemo(db), options = projectionOptions(ns, refs);
+    const items = refs.map(ref => item(ns, ref, previous.intent, undefined, options, memo));
+    if (items.some(item => item === null)) fail('snapshot_stale');
     if (JSON.stringify(previous.fences) !== JSON.stringify(items.map(value => bind('evidence-item-v1', cardLineageItemInside(db,value))))) fail('snapshot_stale');
     const result = { items, snapshot: makeSnapshot(ns, previous.intent, refs, items, accessGeneration) };
     if (size(result) > input.responseByteLimit) fail('context_item_too_large');
@@ -233,7 +241,12 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
         AND deleted=0 AND id>? ORDER BY id LIMIT 1`).get(...boundary(ns), candidateAfter) :
           db.prepare(`SELECT ${columns} FROM private_cards WHERE ${where} AND state='confirmed' AND id>? ORDER BY id LIMIT 1`)
             .get(...boundary(ns), candidateAfter);
-        if (!row || type !== 'card' || !isEngineCard(row.id)) return row;
+        if (!row || type !== 'card') return row;
+        if (projectSharedSources && withheldEvidenceInside(db, ns, [row.id]).cards.has(row.id)) {
+          candidateAfter = row.id;
+          continue;
+        }
+        if (!isEngineCard(row.id)) return row;
         // The query guarantees confirmed state, including metadata-only peeks.
         // Legacy peeks select only id; fetch the full candidate only for engines.
         const candidate = row.revision === undefined ?
@@ -278,7 +291,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
       const text = type === 'memory' ? row.content : `${row.title}\n${row.body}`;
       if (scannedBodyUnits + text.length > input.scanBodyUnits) { blocked.add(type); stopped = 'body_budget'; continue; }
       after[type] = row.id; scannedRows++; scannedBodyUnits += text.length; byType[type].scanned++;
-      const card = type === 'card' ? cardDetailInside(ns, row.id, undefined, { safetyMemo: memo }) : null;
+      const card = type === 'card' ? cardDetailInside(ns, row.id, undefined, { safetyMemo: memo, projectSharedSources: false }) : null;
       if (type === 'memory' ? !memoryReadEligible(row, input.intent) : !cardEligible(ns, card, input.intent, memo)) continue;
       const recordWords = words(text);
       const score = [...queryWords].reduce((total, word) => total + Number(recordWords.has(word)), 0);
@@ -296,7 +309,8 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     for (const type of input.types) byType[type].partial = !exhausted.has(type);
     matches.sort((left, right) => right.score - left.score || input.types.indexOf(left.type) - input.types.indexOf(right.type) ||
       ((left.ref.memoryId ?? left.ref.cardId) < (right.ref.memoryId ?? right.ref.cardId) ? -1 : 1));
-    const refs = matches.map(value => value.ref), items = refs.map(ref => item(ns, ref, input.intent, undefined, undefined, memo));
+    const refs = matches.map(value => value.ref), options = projectionOptions(ns, refs.filter(ref => ref.type === 'memory'));
+    const items = refs.map(ref => item(ns, ref, input.intent, undefined, options, memo));
     return { items: matches,
       coverage: { status: complete ? 'complete' : 'budget_exhausted', byType, scannedRows, scannedBodyUnits,
         reason: complete ? null : matches.length === input.limit ? 'item_limit' : stopped,
@@ -305,13 +319,20 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
         accessGeneration, after, turn }, 8192),
       snapshot: makeSnapshot(ns, input.intent, refs, items, accessGeneration) };
   }
+  function projectionOptions(ns, refs, options) {
+    if (!projectSharedSources || options?.withheld) return options;
+    const cards = refs.filter(ref => ref.type === 'card').map(ref => ref.cardId);
+    const memories = refs.filter(ref => ref.type === 'memory').map(ref => ref.memoryId);
+    return { ...options, withheld: withheldEvidenceInside(db, ns, cards, [], memories) };
+  }
   return Object.freeze({
     // Internal U5 read seam: authorization and the deferred transaction belong
     // to the caller. Reuses the exact current/history canonical predicate/DTO.
     itemsInside(ns, refs, intent, readSet, options) {
       const memo = options?.safetyMemo ?? createContentReadMemo(db);
       if(!options?.legacyEvidence)memoryBatchInside(ns,options?.batchRefs??refs,memo);
-      return refs.map(ref => item(ns, ref, intent, readSet, options, memo));
+      const projection = projectionOptions(ns,refs,options);
+      return refs.map(ref => item(ns, ref, intent, readSet, projection, memo));
     },
     call(method, ns, original, accessGeneration) {
     const input = evidenceInput(method, original, ns);

@@ -1,8 +1,8 @@
 import { cachedContentLayout } from './content-safety-schema.mjs';
-import { contentReadSafety } from './content-safety.mjs';
+import { contentReadSafety, withheldStoredReceiptIdsInside } from './content-safety.mjs';
 import { cachedContentSuppressionRequestInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { transaction } from './database.mjs';
-import { episodeClient, episodeMetadata, episodeReadRow, instant } from './episode-storage.mjs';
+import { episodeClient, episodeMetadata, episodeReadRow, instant, withheldEpisodeSourcesInside, projectEpisodeWithheldSources } from './episode-storage.mjs';
 import { episodeSourceEvidenceCTE, episodeSourceEvidenceSQL, episodeSourceKeys } from './raw-lineage-storage.mjs';
 import { fail, object, denseArray, identifier } from './validation.mjs';
 
@@ -151,15 +151,33 @@ export function createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRea
       const projected = operation === 'listEpisodes' ? episodeProjection(ns, original, cursor?.e) : { epoch: epoch(ns), query: original };
       const current = projected.epoch;
       if (cursor && cursor.e !== current) fail('cursor_stale');
-      const query = projected.query, rows = db.prepare(query.sql).all(...query.params);
+      const query = projected.query;
+      let physical = db.prepare(query.sql).all(...query.params);
       if (contentSuppressionReasonInside(db, ns)) fail('revision_conflict');
-      return { epoch: current, rows: rows.map(row => {
-        if (operation === 'listEpisodes') {
-          assertEpisodeRead?.(ns, row, projected.budget);
-          row = episodeReadRow(row);
-          const item = episodeMetadata(ns,row);
-          return { item, key: { time: filter.timeBasis === 'event' ? item.eventEnd : item.firstReceivedAt, id: row.id } };
+      let rows = physical;
+      if (operation === 'listMemoriesByTime' && filter.timeBasis === 'receipt') {
+        rows = [];
+        for (;;) {
+          const withheld = withheldStoredReceiptIdsInside(db, ns, physical.map(row => row.receipt_id));
+          rows.push(...physical.filter(row => !withheld.has(row.receipt_id)));
+          if (rows.length > filter.limit || physical.length <= filter.limit) break;
+          const last = physical.at(-1);
+          const next = rangeQuery(ns, operation, filter, { time: last.receipt_time, id: last.receipt_id, memoryId: last.id });
+          physical = db.prepare(next.sql).all(...next.params);
         }
+        rows = rows.slice(0, filter.limit + 1);
+      }
+      if (operation === 'listEpisodes') {
+        for (const row of rows) assertEpisodeRead?.(ns, row, projected.budget);
+        const withheld = new Set(withheldEpisodeSourcesInside(db, ns, rows.map(row => row.id)).map(row => row.episode_id));
+        const delivered = rows.flatMap(row => {
+          if (withheld.has(row.id) && filter.timeBasis === 'event') return [];
+          const item = episodeMetadata(ns, episodeReadRow(withheld.has(row.id) ? projectEpisodeWithheldSources(row) : row));
+          return [{ item, key: { time: filter.timeBasis === 'event' ? item.eventEnd : item.firstReceivedAt, id: row.id } }];
+        });
+        return { epoch: current, rows: delivered };
+      }
+      return { epoch: current, rows: rows.map(row => {
         const receipt = filter.timeBasis === 'receipt';
         if (cachedContentLayout(db)?.suppressionRevision && (!contentReadSafety(db, { namespace: ns, intent: 'history',
           ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed ||

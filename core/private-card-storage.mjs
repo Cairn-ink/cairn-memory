@@ -2,7 +2,7 @@ import { contentSuppressionRequestInside, hasContentSuppressionRequestInside } f
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { assertContentOutput, assertContentScopes } from './content-safety-boundary.mjs';
 import { writeContentSuppressionInside, allocateContentKey, requireSuppressionTransaction, registerEngineCardPurgeInside } from './content-suppression-storage.mjs';
-import { contentReadSafety, sourceReadSafety, cardContributorsInside, createContentReadMemo } from './content-safety.mjs';
+import { contentReadSafety, sourceReadSafety, cardContributorsInside, createContentReadMemo, withheldCardSourcesInside, withheldEvidenceInside } from './content-safety.mjs';
 import { createCardCurrentStorage, cardDependencyFence } from './card-current-storage.mjs';
 import { CARD_CURRENT_METHODS } from './card-current-input.mjs';
 import { createOperationLedger, createPrivateEffectWriter, createPrivateCursor } from './private-operation-helpers.mjs';
@@ -90,9 +90,10 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
       contentIdentity: binding('submitted-note-content-v1', [ns, row.id, row.revision, row.text]),
       completeness: 'provided-note' };
   }
-  function resolve(ns, ref, memo = createContentReadMemo(db)) {
+  function resolve(ns, ref, memo = createContentReadMemo(db), project = false) {
     sourceRef(ref, ns, rawSources);
     if (!sourceReadSafety(db, { identity, namespace: ns, ref, strict: true, memo }).allowed) fail('source_unavailable');
+    if (project && withheldCardSourcesInside(db, ns, [ref], memo).size) fail('source_unavailable');
     return memo.sources.get(JSON.stringify(ref)).value;
   }
   function validateRefs(ns, values, existing = [], currentCardId = '') {
@@ -172,13 +173,14 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
         ...(currentDependency ? { currentDependency } : {}) },
       createdAt: row.created_at, updatedAt: row.updated_at, confirmedAt: row.confirmed_at };
   }
-  function cardSafe(ns, row, method = 'getCard', memo) {
+  function cardSafe(ns, row, method = 'getCard', memo, project = true) {
     return contentReadSafety(db, { identity, namespace: ns, method, memo, ref: { type: 'card', namespace: ns,
-      cardId: row.id, revision: row.revision, bodyRevision: row.body_revision } }).allowed;
+      cardId: row.id, revision: row.revision, bodyRevision: row.body_revision } }).allowed &&
+      (!project || !memo || !withheldCardSourcesInside(db, ns, memo.cardBodies?.get(row.id)?.refs ?? memo.contributors.get(row.id) ?? [], memo).size);
   }
   function detail(ns, row, readSet, intent) {
     const memo = intent?.safetyMemo ?? createContentReadMemo(db);
-    if (!row || !cardSafe(ns, row, 'getCard', memo)) return null;
+    if (!row || !cardSafe(ns, row, 'getCard', memo, intent?.projectSharedSources !== false)) return null;
     return { ...metadata(ns, row, readSet, intent, memo), title: row.title, body: row.body,
       bindings: getRefs(row.id, memo).map(ref => ({ id: ref.type === 'raw' ? raw.bindingId(ref) : ref.sourceId ?? ref.receiptId, source: ref,
         dependency: ref.type === 'receipt' ? 'memory-interpretation' : 'source-only',
@@ -331,7 +333,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     const { encode: cursorEncode, decode: cursorDecode } = method === 'listCards' ? cardCursor : legacyCursor;
     const cursor = cursorDecode(input.cursor, expected, ns);
     if (method === 'getSource') {
-      const row = resolve(ns, input.source), parts = [];
+      const row = resolve(ns, input.source, undefined, true), parts = [];
       let start = cursor?.after ?? 0;
       if (!Number.isSafeInteger(start) || start < 0 || start >= row.text.length ||
           (start > 0 && /[\uDC00-\uDFFF]/.test(row.text[start]))) fail('invalid_cursor');
@@ -370,9 +372,10 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
           const batchLimit = Math.min(128, 1024 - scanned);
           const rows = input.states.flatMap(state => probe.all(...boundary(ns), state, scanAfter, batchLimit))
             .sort((a,b) => Buffer.compare(Buffer.from(a.id), Buffer.from(b.id))).slice(0, batchLimit);
+          const { cards: withheld } = withheldEvidenceInside(db, ns, rows.map(row => row.id));
           for (const row of rows) {
             scanned++; scanAfter = row.id; cardAfter = row.cursor_row;
-            if (cardSafe(ns, row, 'listCards', memo)) visible.push(row);
+            if (cardSafe(ns, row, 'listCards', memo, false) && !withheld.has(row.id)) visible.push(row);
             if (visible.length > count) break;
           }
           if (rows.length < batchLimit) { cardComplete = true; break; }
@@ -390,7 +393,8 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
           .all(...boundary(ns), ...input.states, after, count + 1);
         cardComplete = rows.length <= count;
         cardAfter = rows.slice(0, count).at(-1)?.cursor_row;
-        cardRows.push(...rows.slice(0, count).filter(row => cardSafe(ns, row, 'listCards', memo)));
+        const { cards: withheld } = withheldEvidenceInside(db, ns, rows.map(row => row.id));
+        cardRows.push(...rows.slice(0, count).filter(row => cardSafe(ns, row, 'listCards', memo, false) && !withheld.has(row.id)));
       }
     }
     let items = isCards ? cardRows.map(row => metadata(ns, row, undefined, undefined, memo)) :
@@ -411,7 +415,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
       if (!items.length) fail('context_item_too_large');
     }
   }
-  const evidence = createPrivateEvidenceStorage({ db, identity,
+  const evidence = createPrivateEvidenceStorage({ db, identity, projectSharedSources: true,
     cardDetailInside: (ns, id, readSet, options) => detail(ns, card(ns, id), readSet, options),
     receiptRefInside: (ns, memory, receipt) => receiptSources.refInside(ns, memory, receipt) });
   const organization = createPrivateOrganizationStorage({ db, identity, memoryMapInside, memoryTopicInside,

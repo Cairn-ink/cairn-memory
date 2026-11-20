@@ -1,8 +1,8 @@
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { hasCommitDispatcher } from './commit-dispatch.mjs';
-import { contentReadSafety } from './content-safety.mjs';
+import { contentReadSafety, bindReceiptMarkerKeys } from './content-safety.mjs';
 import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
-import { createHmac, randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { transaction, isStorageBusy } from './database.mjs';
 import { ADMISSION_LEASE_MS, HEX_DIGEST, advanceEpisodeControlGeneration } from './episode-schema.mjs';
 import { boundedText, denseArray, fail, identifier, object, revision } from './validation.mjs';
@@ -1058,10 +1058,9 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       assertEpisodeRead?.(ns, row, projected.budget);
       row = episodeReadRow(row);
       if (db.prepare('SELECT 1 FROM review_hidden_episodes WHERE id=?').get(row.id)) fail('episode_not_found');
-      const sources = db.prepare('SELECT * FROM episode_sources WHERE episode_id=? AND id>? ORDER BY id LIMIT ?')
-        .all(row.id, pages.source.after ?? '', pages.source.limit+1).map(source => ({ id: source.id, digest: source.digest,
-          originEpisodeId: source.origin_episode_id, eventId: source.event_id, messageId: source.message_id,
-          role: source.role, text: source.text, truncated: !!source.truncated, receiptOrdinal: source.ordinal }));
+      const sourceSql = 'SELECT * FROM episode_sources WHERE episode_id=? AND id>? ORDER BY id LIMIT ?';
+      const sourceLimit = pages.source.limit + 1;
+      let sourceRows = db.prepare(sourceSql).all(row.id, pages.source.after ?? '', sourceLimit);
       const memories = db.prepare(`SELECT l.* FROM episode_memory_links l JOIN memories m ON m.id=l.memory_id
         WHERE l.episode_id=? AND l.id>? AND m.deleted=0 AND m.review_state!='awaiting'
           AND m.owner_id=? AND m.scope=? AND m.project_id=? ORDER BY l.id LIMIT ?`)
@@ -1070,6 +1069,22 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
           return memory && contentReadSafety(db, { namespace: ns, intent: 'history', ref: { type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision } }).allowed;
         }).map(link => ({ id: link.id, memoryId: link.memory_id,
           admissionRevision: link.admission_revision, receiptIds: JSON.parse(link.receipt_ids).filter(id => !contentSuppressionReasonInside(db, ns, { kind: 'receipt', key: id }) && db.prepare('SELECT 1 FROM receipts WHERE id=? AND memory_id=?').get(id, link.memory_id)) }));
+      const withheld = withheldEpisodeSourcesInside(db, ns, [row.id], memories.flatMap(link => link.receiptIds));
+      const withheldSources = new Set(withheld.filter(source => source.kind === 'source').map(source => source.id));
+      if (withheldSources.size) {
+        row = projectEpisodeWithheldSources(row);
+        let batch = sourceRows;
+        sourceRows = sourceRows.filter(source => !withheldSources.has(source.id));
+        while (batch.length === sourceLimit && sourceRows.length < sourceLimit) {
+          batch = db.prepare(sourceSql).all(row.id, batch.at(-1).id, sourceLimit);
+          sourceRows.push(...batch.filter(source => !withheldSources.has(source.id)));
+        }
+      }
+      const sources = sourceRows.slice(0, sourceLimit).map(source => ({ id: source.id, digest: source.digest,
+        originEpisodeId: source.origin_episode_id, eventId: source.event_id, messageId: source.message_id,
+        role: source.role, text: source.text, truncated: !!source.truncated, receiptOrdinal: source.ordinal }));
+      const withheldReceipts = new Set(withheld.filter(source => source.kind === 'receipt').map(source => source.id));
+      for (const link of memories) link.receiptIds = link.receiptIds.filter(id => !withheldReceipts.has(id));
       const policies = db.prepare(`SELECT e.*,s.state,s.release_reason FROM episode_events e LEFT JOIN staged_capture_evidence s
         ON e.owner_id=s.owner_id AND e.scope=s.scope AND e.project_id=s.project_id AND e.client=s.client AND e.event_id=s.event_id
         WHERE e.episode_id=? AND e.position>? ORDER BY e.position LIMIT ?`)
@@ -1088,4 +1103,39 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
   }
   return { invalidateSources, deleteSourceEpisode, draftOutcome, prepareKeep, failKeep, assertKeep, validateBatch, draftSnapshot, captureState, pendingSession, settleAttempt, startAttempt, sessionKey, setPolicy, reserveBatch, event, guard, admissionStarted, mergeGap, gap, admitted, invalidateMemory, getControl, setControl,
     closeNextStep, claimWriter, releaseWriter, claimDraft, failDraft, commitDraft, correct, releaseCorrection, forget, inspect };
+}
+
+const episodeMarkerFunctions = new WeakSet();
+export function withheldEpisodeSourcesInside(db, ns, ids, receiptIds = []) {
+  if (!ids.length) return [];
+  if (!db.isTransaction) fail('storage_error');
+  bindReceiptMarkerKeys(db);
+  if (!episodeMarkerFunctions.has(db)) {
+    db.function('episode_receipt_key', { deterministic: true }, (client, sessionId, eventId, role, excerpt) =>
+      createHash('sha256').update(JSON.stringify({ client, sessionId, eventId, role, excerpt })).digest('hex'));
+    episodeMarkerFunctions.add(db);
+  }
+  return db.prepare(`WITH candidates(kind,id,episode_id,receipt_key,client,session_id,event_id,role) AS (
+SELECT 'source',src.id,src.episode_id,episode_receipt_key(origin.client,origin.session_key,src.message_id,src.role,src.text),
+  origin.client,origin.session_key,src.message_id,src.role
+FROM json_each(?) wanted
+CROSS JOIN episode_sources src INDEXED BY episode_source_page ON src.episode_id=wanted.value
+CROSS JOIN session_episodes origin ON origin.id=src.origin_episode_id
+WHERE origin.owner_id=? AND origin.scope=? AND origin.project_id=?
+UNION ALL
+SELECT 'receipt',r.id,NULL,r.receipt_key,r.client,r.session_id,r.event_id,r.role
+FROM json_each(?) wanted
+CROSS JOIN receipts r ON r.id=wanted.value
+CROSS JOIN memories m ON m.id=r.memory_id
+WHERE m.owner_id=? AND m.scope=? AND m.project_id=?)
+SELECT r.kind,r.id,r.episode_id FROM candidates r
+CROSS JOIN json_each(receipt_marker_keys(r.receipt_key,r.client,r.session_id,r.event_id,r.role)) k
+CROSS JOIN suppressed s ON s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=k.value`)
+    .all(JSON.stringify(ids), ...boundary(ns), JSON.stringify(receiptIds), ...boundary(ns), ...boundary(ns));
+}
+
+export function projectEpisodeWithheldSources(row) {
+  const record = blank(null);
+  record.processing.state = 'invalidated';
+  return { ...row, record: JSON.stringify(record) };
 }
