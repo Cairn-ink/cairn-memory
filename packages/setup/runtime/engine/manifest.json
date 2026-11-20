@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "25b268121bdfffe0d6f4d2d983ae99c28f185667f72f65ef4fe9c65d706ddc8f",
-  "bytes": 1475850,
+  "sha256": "53a2cb27d16f6e738d54225acd74080a660b123abda3f6d3cb146aa8a87559bd",
+  "bytes": 1476129,
   "files": [
     "LICENSE",
     "README.md",
@@ -495,7 +495,7 @@
     "core/context-read-facade.mjs": "87ce5f3bd98fc0e1426ba58f4066534befd0d0d3036822864cca4e44207f5580",
     "core/context-read-fusion.mjs": "6a9fe68c31a55b0b3081733ddf55407cda8ad6542317e5ba5c9b2ca495c871bd",
     "core/context-read-input.mjs": "1c13efdabbe9a84a79a905e1483b10aaa422d16db12207dfae20397385703b4f",
-    "core/context-read-sidecar.mjs": "16fdd05c13be62e49a17bc7817d50a3d6dfee26664b01393ed9a8a06d652ed5c",
+    "core/context-read-sidecar.mjs": "ebcb37891b562edeaa180c0c6ad60000107a0ccc24813d1dc05770576c398773",
     "core/context-read-tokenize.mjs": "0afed3c529f50cd22f449328e637ad1d0f4e5dc5e08aed7dce3c15a257cccd5a",
     "core/context-reader.mjs": "170e534d567e82a5e1249c278e25efcbd367aaef8cfabe3dde6b99a91055f879",
     "core/commit-dispatch.mjs": "1f0511343608e6e19549891720ccf95086851f031cf0ec536a92d581e5c4c6c1",
@@ -765,7 +765,7 @@
     "core/context-product-quantum.mjs": "b43d2c3386e4a9704831b6aa6667378a3148593bc09ff5848914ef3c706d2659",
     "core/context-product-sqlite.mjs": "f4362c6ea2bd831a88ef2c8390a55459d000bc03970a1876f2a3003b7ef6af31",
     "core/content-safety.mjs": "e71e8c7f4c6f6c8d7ff3f4a453ebfcc9a8b897b0328c5c731ba878ed93e41947",
-    "core/context-product-index.mjs": "48e1446f9113fd30f071ba5a43a756499e79819128774c51fbed33bb309931bc",
+    "core/context-product-index.mjs": "351c6ecbbce4be736757c67b8e32563fb9f4cca45c65615c53130a2a7883ffe8",
     "core/context-product-pump.mjs": "2f7c56e7ce56e6dfb03d3fd0fb85b12f74e5079d3cdba891612ca17352714a63",
     "core/context-maintenance-turn.mjs": "50552d945ef5a87feb94a042cd5a0b8260bbdea8119e0aaf34ff4f991297a23b",
     "docs/plans/context-read-p2b-impl.md": "aa8aa4820502d8b4002ae33ef8b734658a683ed0edd527ef3d183ddb39e9f737",
@@ -838,6 +838,6 @@
   "generatedHashes": {
     "package.json": "e255ff4d23e921de9bed8e058c64e57aed3e1bc6a8ed242cee52a716add2d69c",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8",
-    "engine-build.json": "60c305c54f9894746a0d15932db2d5bbfccf81d44e10897f2242015d9a8d360e"
+    "engine-build.json": "1f0702aed9691112e590e6ebc4e17d5102096d835f91801546c80ab04075bd64"
   }
 }
