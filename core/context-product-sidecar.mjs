@@ -40,6 +40,10 @@ export function memoryCandidatesAllowedInside(db, refs, p, identity) {
 export const PRODUCT_SIDECAR_FORMAT = 3;
 export { PRODUCT_SIDECAR_SUFFIX };
 const APPLICATION_ID = 0x43525032;
+// Per eligible item: measured rebuild high-water (1,017,741,312 bytes / 30,000)
+// plus one abandoned staging generation ((263,323,648 + 9,334,784) bytes / 30,000).
+// The rounded contributions are 33,925 + 9,089 bytes.
+const EMBEDDING_HIGH_WATER_BYTES = 43_014n;
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
 const cacheKey = 'identity,epoch,item,revision,body_revision,representation';
@@ -105,9 +109,9 @@ function attest(db, objects, legacyWal = false) {
   if (db.prepare('PRAGMA application_id').get().application_id !== APPLICATION_ID ||
       db.prepare('PRAGMA user_version').get().user_version !== PRODUCT_SIDECAR_FORMAT || !same(objects ?? schema(db), legacyWal?expectedSchema.filter(row=>row.name!=='product_attestation'):expectedSchema)) unavailable('incompatible');
 }
-function productStat(path, optional = false) {
+function productStat(path, optional = false, options) {
   let s;
-  try { s = sqliteFileStat(path); } catch (e) { if (optional && e.code === 'ENOENT') return null; unavailable('storage_unavailable'); }
+  try { s = sqliteFileStat(path, options); } catch (e) { if (optional && e.code === 'ENOENT') return null; unavailable('storage_unavailable'); }
   if (!s.isFile() || s.isSymbolicLink() || (s.mode & 0o777n) !== 0o600n) unavailable('storage_unavailable');
   return s;
 }
@@ -999,6 +1003,11 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     }
   }
   function collectVector(owner,lexicalGeneration) {
+    if(lexicalGeneration!==undefined) {
+      const cached=gcChanges(side.prepare(`DELETE FROM semantic_vectors WHERE owner=? AND generation=? AND (doc,identity,epoch) IN
+        (SELECT doc,identity,epoch FROM semantic_vectors WHERE owner=? AND generation=? LIMIT 128)`).run(owner,lexicalGeneration,owner,lexicalGeneration));
+      if(cached.changes)return true;
+    }
     const g=vectorCandidate(owner,lexicalGeneration);
     if(!g)return false;
     const rows=gcChanges(side.prepare('DELETE FROM vector_rows WHERE generation=? AND doc IN (SELECT doc FROM vector_rows WHERE generation=? LIMIT 128)').run(g.storage_id,g.storage_id));
@@ -1022,12 +1031,11 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       rendezvous('gc-candidate');
       let found=false;
       quantum.measure(()=>{write(()=>{
-        const g=side.prepare(`SELECT storage_id,id,EXISTS(SELECT 1 FROM semantic_vectors WHERE generation=g.storage_id) AS cached
-        FROM generations g WHERE g.owner=? AND
+        const g=side.prepare(`SELECT c.storage_id,c.id,EXISTS(SELECT 1 FROM semantic_vectors WHERE generation=c.storage_id) AS cached FROM (SELECT storage_id,id FROM generations g WHERE g.owner=? AND
         NOT EXISTS(SELECT 1 FROM publications WHERE generation=g.id) AND
         NOT EXISTS(SELECT 1 FROM work WHERE generation=g.id) AND
         NOT EXISTS(SELECT 1 FROM generations b JOIN work w ON w.generation=b.id WHERE b.base_id=g.id)
-        ORDER BY storage_id LIMIT 1`).get(owner);
+        ORDER BY storage_id LIMIT 1) c`).get(owner);
         if(!g){found=collectVector(owner);return;}
         found=true;
         if(g.cached) {
@@ -1670,6 +1678,13 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   }
 
   return {
+    embeddingDiskFits(eligible) {
+      try {
+        const walBytes=productStat(sidePath+'-wal',true)?.size??0n;
+        const main=productStat(sidePath,false,{withVolume:true});
+        return BigInt(eligible)*EMBEDDING_HIGH_WATER_BYTES<=main.size+walBytes+main.volumeAvailableBytes;
+      }catch{return false;}
+    },
     visibleCounts,
     vectorFence(p,lexical) {
       return recordBindings(lexical,target(projection(p),lexical.accessDigest))===null&&
