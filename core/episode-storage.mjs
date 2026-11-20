@@ -1055,13 +1055,25 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       for (const page of Object.values(pages)) if (page.epoch !== undefined && page.epoch !== currentEpoch) fail('cursor_stale');
       let row = safety ? db.prepare(projected.query.sql).get(...projected.query.params) : live(ns, input.episodeId);
       if (!row || row.deleted) fail('episode_not_found');
-      assertEpisodeRead?.(ns, row, projected.budget);
+      const deniedSources = assertEpisodeRead?.(ns, row, projected.budget, 'detail');
       row = episodeReadRow(row);
       if (db.prepare('SELECT 1 FROM review_hidden_episodes WHERE id=?').get(row.id)) fail('episode_not_found');
-      const sources = db.prepare('SELECT * FROM episode_sources WHERE episode_id=? AND id>? ORDER BY id LIMIT ?')
-        .all(row.id, pages.source.after ?? '', pages.source.limit+1).map(source => ({ id: source.id, digest: source.digest,
-          originEpisodeId: source.origin_episode_id, eventId: source.event_id, messageId: source.message_id,
-          role: source.role, text: source.text, truncated: !!source.truncated, receiptOrdinal: source.ordinal }));
+      const sourcePage = db.prepare('SELECT * FROM episode_sources WHERE episode_id=? AND id>? ORDER BY id LIMIT ?');
+      const sourceCount = pages.source.limit + 1;
+      const sources = [];
+      let sourceAfter = pages.source.after ?? '';
+      while (true) {
+        const batch = sourcePage.all(row.id, sourceAfter, sourceCount);
+        for (const source of batch) {
+          if (deniedSources?.has(source.id)) continue;
+          sources.push({ id: source.id, digest: source.digest, originEpisodeId: source.origin_episode_id,
+            eventId: source.event_id, messageId: source.message_id, role: source.role, text: source.text,
+            truncated: !!source.truncated, receiptOrdinal: source.ordinal });
+          if (sources.length === sourceCount) break;
+        }
+        if (sources.length === sourceCount || batch.length < sourceCount) break;
+        sourceAfter = batch.at(-1).id;
+      }
       const memories = db.prepare(`SELECT l.* FROM episode_memory_links l JOIN memories m ON m.id=l.memory_id
         WHERE l.episode_id=? AND l.id>? AND m.deleted=0 AND m.review_state!='awaiting'
           AND m.owner_id=? AND m.scope=? AND m.project_id=? ORDER BY l.id LIMIT ?`)
@@ -1078,12 +1090,28 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
           gapReasons: JSON.parse(e.gap_reasons), omittedCount: e.omitted_count, omittedMessageIndices: JSON.parse(e.omitted_indices), staging: e.staging === 'not-staged' ? 'not-staged' : e.state, gap: e.gap, releaseReason: e.release_reason ?? null }));
       return { episode: episodeMetadata(ns, row),
         sources, memoryLinks: memories, policies,
-        keepActions: db.prepare(`SELECT * FROM episode_keep_actions WHERE episode_id=? AND keep_ordinal>?
-          ORDER BY keep_ordinal LIMIT ?`).all(row.id, pages.keep.after ?? 0, pages.keep.limit + 1)
-          .map(action => ({ actionKey: action.admission_key, ordinal: action.keep_ordinal,
-            createdAt: action.keep_created_at, policy: 'explicit-keep', admission: action.keep_state,
-            errorCode: action.keep_error_code, sourceCoverage: { sourceIds: JSON.parse(action.keep_source_ids),
-              revision: action.revision, sourceFence: action.source_fence } })), epoch: currentEpoch };
+        keepActions: keepActions(), epoch: currentEpoch };
+
+      function keepActions() {
+        const statement = db.prepare(`SELECT * FROM episode_keep_actions WHERE episode_id=? AND keep_ordinal>?
+          ORDER BY keep_ordinal LIMIT ?`);
+        const count = pages.keep.limit + 1, result = [];
+        let after = pages.keep.after ?? 0;
+        while (true) {
+          const batch = statement.all(row.id, after, count);
+          for (const action of batch) {
+            const sourceIds = JSON.parse(action.keep_source_ids);
+            if (sourceIds.some(id => deniedSources?.has(id))) continue;
+            result.push({ actionKey: action.admission_key, ordinal: action.keep_ordinal,
+              createdAt: action.keep_created_at, policy: 'explicit-keep', admission: action.keep_state,
+              errorCode: action.keep_error_code, sourceCoverage: { sourceIds,
+                revision: action.revision, sourceFence: action.source_fence } });
+            if (result.length === count) break;
+          }
+          if (result.length === count || batch.length < count) return result;
+          after = batch.at(-1).keep_ordinal;
+        }
+      }
     });
   }
   return { invalidateSources, deleteSourceEpisode, draftOutcome, prepareKeep, failKeep, assertKeep, validateBatch, draftSnapshot, captureState, pendingSession, settleAttempt, startAttempt, sessionKey, setPolicy, reserveBatch, event, guard, admissionStarted, mergeGap, gap, admitted, invalidateMemory, getControl, setControl,

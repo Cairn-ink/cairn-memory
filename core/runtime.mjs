@@ -31,7 +31,7 @@ import { createQualificationStorage } from './claim-qualification-storage.mjs';
 import { sourceEvidence, isSourceContext } from './source-evidence.mjs';
 import { createQualifiedTransitionStorage } from './qualified-transition-storage.mjs';
 import { createRationaleStorage } from './rationale-storage.mjs';
-import { fail, object, receiptEventTime } from "./validation.mjs";
+import { fail, MemoryStoreError, object, receiptEventTime } from "./validation.mjs";
 import { privateCardOptions } from './private-card-input.mjs';
 import { createPrivateCardStorage, purgeEngineCardsInside } from './private-card-storage.mjs';
 import { createRawCardInvalidation } from './card-raw-sources.mjs';
@@ -804,29 +804,61 @@ export function createMemoryRuntime(input, internal) {
   let rawCapture;
   rawCapture = internal?.attachRaw?.(db);
   const episodeProjection = createEpisodeReadProjection({ db, epoch });
-  function assertEpisodeRead(ns, row, budget = { remaining: 4096, bytesRemaining: 4*1024*1024 }) {
+  function assertEpisodeRead(ns, row, budget = { remaining: 4096, bytesRemaining: 4*1024*1024 }, mode) {
     if (!(cachedContentLayout(db) ?? installedContentLayout(db)).suppressionRevision) return;
     if (contentSuppressionReasonInside(db, ns)) fail('episode_not_found');
     const proof = cachedContentSuppressionRequestInside(db, ns.ownerId);
-    if (row.episode_read_overflow) fail('episode_sources_unavailable');
-    if (row.episode_read_proof !== undefined) {
-      budget.bytesRemaining -= Buffer.byteLength(row.episode_read_proof, 'utf8');
-      if (budget.bytesRemaining < 0) fail('episode_sources_unavailable');
-      const evidence = JSON.parse(row.episode_read_proof);
-      const fallback = !proof?.facts || row.episode_read_incomplete;
-      const indexedDenials = fallback ? rawLineage.completeEpisodeProof(ns, evidence, budget, row.episode_read_incomplete) : undefined;
-      rawLineage.assertEpisodeProof(ns, evidence, proof?.facts ?? [], budget, indexedDenials);
-      if (!fallback) return;
+    const deniedSources = new Set();
+    let anchors, metadataDenial;
+    // A denied source may stand alone in the detail page. An anchored source
+    // also denies the published Episode that depends on it.
+    function withholdSource(id, code) {
+      if (!anchors) {
+        const record = JSON.parse(row.record);
+        anchors = new Set([...Object.values(record.anchors ?? {}).flat(), ...(record.nextStep?.anchors ?? [])]
+          .map(anchor => anchor.sourceId));
+      }
+      if (anchors.has(id)) {
+        metadataDenial = new MemoryStoreError(code);
+        throw metadataDenial;
+      }
+      deniedSources.add(id);
     }
-    // Outside the bounded fact/index-input population, finish with the existing
-    // indexed validator. A complete projected hardening check still ran above.
-    const sources = db.prepare(`SELECT s.*,e.client AS origin_client,e.session_key AS origin_session,
-      e.owner_id,e.scope,e.project_id,e.deleted FROM episode_sources s
-      LEFT JOIN session_episodes e ON e.id=s.origin_episode_id WHERE s.episode_id=?`).all(row.id);
-    if (sources.some(source => source.deleted || source.owner_id !== ns.ownerId || source.scope !== ns.scope ||
-        source.project_id !== (ns.projectId ?? ''))) fail('revision_conflict');
-    rawLineage.assertReceipts(ns, sources.map(source => ({ client: source.origin_client, sessionId: source.origin_session,
-      eventId: source.message_id, role: source.role, excerpt: source.text })));
+    function validate() {
+      if (row.episode_read_overflow) fail('episode_sources_unavailable');
+      if (row.episode_read_proof !== undefined) {
+        budget.bytesRemaining -= Buffer.byteLength(row.episode_read_proof, 'utf8');
+        if (budget.bytesRemaining < 0) fail('episode_sources_unavailable');
+        const evidence = JSON.parse(row.episode_read_proof);
+        const fallback = !proof?.facts || row.episode_read_incomplete;
+        const indexedDenials = fallback ? rawLineage.completeEpisodeProof(ns, evidence, budget, row.episode_read_incomplete, Boolean(mode)) : undefined;
+        rawLineage.assertEpisodeProof(ns, evidence, proof?.facts ?? [], budget, indexedDenials, mode ? withholdSource : undefined);
+        if (!fallback) return;
+      }
+      // Outside the bounded fact/index-input population, finish with the existing
+      // indexed validator. A complete projected hardening check still ran above.
+      const sources = db.prepare(`SELECT s.*,e.client AS origin_client,e.session_key AS origin_session,
+        e.owner_id,e.scope,e.project_id,e.deleted FROM episode_sources s
+        LEFT JOIN session_episodes e ON e.id=s.origin_episode_id WHERE s.episode_id=?`).all(row.id);
+      for (const source of sources) {
+        if (source.owner_id !== ns.ownerId || source.scope !== ns.scope ||
+            source.project_id !== (ns.projectId ?? '')) fail('revision_conflict');
+        if (source.deleted && !deniedSources.has(source.id)) {
+          if (!mode) fail('revision_conflict');
+          withholdSource(source.id, 'revision_conflict');
+        }
+      }
+      const eligible = deniedSources.size ? sources.filter(source => !deniedSources.has(source.id)) : sources;
+      rawLineage.assertReceipts(ns, eligible.map(source => ({ client: source.origin_client, sessionId: source.origin_session,
+        eventId: source.message_id, role: source.role, excerpt: source.text })), false, undefined, undefined,
+        mode ? (index, code) => withholdSource(eligible[index].id, code) : undefined);
+    }
+    try { validate(); }
+    catch (error) {
+      if (mode === 'batch' && error === metadataDenial) return false;
+      throw error;
+    }
+    return deniedSources;
   }
   const episodeReads = createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRead, episodeProjection });
   const proceduralStorage = createProceduralStorage({ db, activeRow:(ns,id)=>memoryWriteSafety(ns,visibleRow(ns,id)), advanceEpoch, epoch });
