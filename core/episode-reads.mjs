@@ -132,16 +132,15 @@ export function createEpisodeReadProjection({ db, epoch }) {
     budget.bytesRemaining -= Buffer.byteLength(serializedKeys, 'utf8') +
       (typeof fence.identity_secret === 'string' ? Buffer.byteLength(fence.identity_secret, 'utf8') : 0);
     if (budget.bytesRemaining < 0) fail('episode_sources_unavailable');
+    const [owner, scope, project] = headers.length ? boundary(ns) : [null, null, null];
+    const proofParams = { $proof_budget: budget.bytesRemaining, $proof_sources: keys.length,
+      $proof_candidates: JSON.stringify(headers.map(row => row.episodeId)),
+      $proof_owner: owner, $proof_scope: scope, $proof_project: project };
     return { epoch: current, budget, query: {
       sql: `WITH candidates AS MATERIALIZED (${query.sql}), source_keys AS MATERIALIZED (SELECT value FROM json_each(?)),
         ${episodeSourceEvidenceCTE(layout.rawLineage)}
-        SELECT c.*,${episodeSourceEvidenceSQL()} AS episode_read_proof,
-          (SELECT value FROM proof_incomplete) AS episode_read_incomplete,
-          (SELECT overflow FROM proof_state) AS episode_read_overflow,
-          (SELECT json_object('rows',rows,'memories',memories,'receipts',receipts,'ancestryInput',ancestry_input,
-            'sources',sources,'parents',parents,'ancestry',ancestry,'roots',roots,'maps',maps) FROM proof_state) AS episode_read_stats
-        FROM candidates c`,
-      params: [...query.params, serializedKeys, budget.bytesRemaining] } };
+        SELECT c.*,${episodeSourceEvidenceSQL()} FROM candidates c CROSS JOIN proof_state p ON p.episode_id=c.id`,
+      params: [proofParams, ...query.params, serializedKeys] } };
   };
 }
 export function createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRead, episodeProjection }) {

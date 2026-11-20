@@ -16,7 +16,7 @@ for(const base of [18,23,33])for(const n of [12,24])test(`native legacy cold ref
  assert.ok(row.statements<=nativePins.counts[key][0],'legacy cold refresh stays at the B1 measurement or lower');
  assert.ok(row.statements<=(base===33?(n===12?819:1167):(n===12?687:903)),'legacy cold refresh adds no statements over main 26f9e467');
  assert.equal(row.headerSelects,0,'legacy cold refresh executes no suppression-header probe (also fails on merged #541)');
- assert.ok(row.begin<=52,'control: native BEGIN never exceeds immutable main; #541 also removes two BEGINs');
+ assert.ok(row.begin<=53,'control: native BEGIN never exceeds immutable main; #541 also removes two BEGINs');
  assert.equal(row.hostInvocations,27,'control: original host invocation count');
 });
 

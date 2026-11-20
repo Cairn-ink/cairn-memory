@@ -1,11 +1,11 @@
 import { createHash, createHmac } from 'node:crypto';
-import { lstat, stat, realpath, readFile } from 'node:fs/promises';
+import { lstat, stat, realpath, readFile, statfs } from 'node:fs/promises';
 import { statSync, realpathSync } from 'node:fs';
 import { resolve, join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { refuse } from './local-daemon-state.mjs';
+import { refuse, assertLocalFilesystem } from './local-daemon-state.mjs';
 
-export const DAEMON_PROTOCOL = 1;
+export const DAEMON_PROTOCOL = 2;
 // Runtime location intentionally has no environment input. These are the ONLY
 // inherited values. Include provider/product reads even when the managed vector
 // cannot activate them. Node injection is refused before spawning a candidate.
@@ -51,8 +51,18 @@ export function daemonVector(args) {
     raw: !values.has('--no-raw'), rawSearch: !values.has('--no-raw-search'), contextRead: values.has('--no-context-read') ? false : 'context-read-v1',
   } };
 }
-export async function physicalStore(path, cwd = process.cwd()) {
+// Scope this probe to one connection attempt, never to a daemon's lifetime.
+export function storeFilesystemProbe(probe = statfs) {
+  const parents = new Map();
+  return parent => {
+    if (!parents.has(parent)) parents.set(parent, Promise.resolve().then(() => probe(parent)));
+    return parents.get(parent);
+  };
+}
+export async function physicalStore(path, cwd = process.cwd(), filesystem = statfs) {
   const absolute = resolve(cwd, path), canonicalPath = await realpath(absolute);
+  const parent = dirname(canonicalPath);
+  assertLocalFilesystem(parent, (await filesystem(parent)).type);
   const info = await stat(canonicalPath, { bigint: true });
   if (!info.isFile() || info.nlink !== 1n) throw refuse('daemon_store_alias');
   // Parent canonicalization permits safe symlinks; pin the resulting physical file.
@@ -60,7 +70,7 @@ export async function physicalStore(path, cwd = process.cwd()) {
   if (again.dev !== info.dev || again.ino !== info.ino) throw refuse('daemon_store_changed');
   return { path: canonicalPath, dev: String(info.dev), ino: String(info.ino) };
 }
-export async function creationIdentity(path, cwd = process.cwd()) {
+export async function creationIdentity(path, cwd = process.cwd(), filesystem = statfs) {
   let absolute = resolve(cwd, path);
   try { absolute = await realpath(absolute); }
   catch (error) {
@@ -69,17 +79,18 @@ export async function creationIdentity(path, cwd = process.cwd()) {
     catch (missing) { if (missing.code !== 'ENOENT') throw missing; }
   }
   const parent = await realpath(dirname(absolute)), info = await stat(parent, { bigint: true });
+  assertLocalFilesystem(parent, (await filesystem(parent)).type);
   return { path: join(parent, basename(absolute)), parent: { path: parent, dev: String(info.dev), ino: String(info.ino) } };
 }
 export function creationDigest(record) {
   return createHash('sha256').update(canonical({ uid: process.getuid(), creation: record })).digest('hex');
 }
-export async function assertStoreLocation(path, directory) {
-  const creation = await creationIdentity(path);
+export async function assertStoreLocation(path, directory, filesystem) {
+  const creation = await creationIdentity(path, undefined, filesystem);
   if (creation.path === directory.path || creation.path.startsWith(directory.path + '/')) throw refuse('daemon_store_location');
 }
-export async function assertStore(record) {
-  const current = await physicalStore(record.store.path);
+export async function assertStore(record, filesystem) {
+  const current = await physicalStore(record.store.path, undefined, filesystem);
   if (canonical(current) !== canonical(record.store)) throw refuse('daemon_store_changed');
 }
 export function assertStoreSync(record) {
@@ -88,7 +99,38 @@ export function assertStoreSync(record) {
 }
 const runtimeFiles = ['local-daemon-identity.mjs', 'local-daemon-state.mjs', 'local-daemon-wire.mjs',
   'local-daemon-liveness.mjs', 'local-daemon.mjs', 'local-forwarder.mjs'];
-export async function engineBuild(root = fileURLToPath(new URL('../../', import.meta.url))) {
+const packageRoot = fileURLToPath(new URL('../../', import.meta.url));
+export async function engineBuild(root = packageRoot) {
+  // Only a source checkout has this inventory. A missing installed build record
+  // must refuse, never silently select the source computation.
+  let source = false;
+  try { source = (await lstat(join(root, 'packaging/artifact-files.json'))).isFile(); }
+  catch (error) { if (error.code !== 'ENOENT') throw refuse('daemon_build'); }
+  try { await lstat(join(root, 'engine-build.json')); source = false; }
+  catch (error) { if (error.code !== 'ENOENT') throw refuse('daemon_build'); }
+  if (!source) {
+    try {
+      const metadata = join(root, 'engine-build.json');
+      if (!(await lstat(metadata)).isFile()) throw refuse('daemon_build');
+      const build = JSON.parse(await readFile(metadata, 'utf8'));
+      if (build?.version !== 1 || !build.sourceHashes || Array.isArray(build.sourceHashes) ||
+          typeof build.sourceHashes !== 'object' || typeof build.digest !== 'string' || !/^[a-f0-9]{64}$/.test(build.digest)) throw refuse('daemon_build');
+      const digest = createHash('sha256');
+      for (const name of Object.keys(build.sourceHashes).sort()) {
+        const value = build.sourceHashes[name];
+        if (!name || name.startsWith('/') || name.split('/').some(part => !part || part === '.' || part === '..') ||
+            name.includes('\\') || name === 'engine-build.json' || typeof value !== 'string' || !/^[a-f0-9]{64}$/.test(value)) throw refuse('daemon_build');
+        digest.update(name + '\0' + value + '\0');
+      }
+      if (digest.digest('hex') !== build.digest) throw refuse('daemon_build');
+      for (const name of ['package.json', 'npm-shrinkwrap.json', ...runtimeFiles.map(name => 'adapters/mcp/' + name)]) {
+        const path = join(root, name);
+        if (!(await lstat(path)).isFile() || createHash('sha256').update(await readFile(path)).digest('hex') !== build.sourceHashes[name])
+          throw refuse('daemon_build');
+      }
+      return build.digest;
+    } catch { throw refuse('daemon_build'); }
+  }
   const inventory = JSON.parse(await readFile(join(root, 'packaging/artifact-files.json'), 'utf8'));
   const files = [...new Set([...inventory, 'package.json', 'adapters/mcp/package-lock.json',
     'adapters/openai/package-lock.json', ...runtimeFiles.map(name => 'adapters/mcp/' + name)])].sort();
@@ -102,13 +144,13 @@ export async function engineBuild(root = fileURLToPath(new URL('../../', import.
   return hash.digest('hex');
 }
 export async function createIdentity(args, { key, environment = selectedEnvironment(), cwd,
-  uid = process.getuid?.(), build, node = { executable: process.execPath, version: process.version, execArgv: process.execArgv }, protocol = DAEMON_PROTOCOL } = {}) {
+  uid = process.getuid?.(), build, root = packageRoot, node = { executable: process.execPath, version: process.version, execArgv: process.execArgv }, protocol = DAEMON_PROTOCOL, filesystem } = {}) {
   const vector = daemonVector(args);
   if (!vector.eligible) return vector;
   if (!Buffer.isBuffer(key) || key.length !== 32) throw refuse('daemon_identity_key');
   if (!Array.isArray(node.execArgv) || node.execArgv.some(arg => !['--no-warnings', '--experimental-sqlite'].includes(arg))) throw refuse('daemon_node_injection');
   const selected = selectedEnvironment(environment);
-  const store = await physicalStore(vector.configuration.path, cwd);
+  const store = await physicalStore(vector.configuration.path, cwd, filesystem);
   const configuration = { ...vector.configuration, path: store.path,
     // Explicit effective defaults of the managed vector; advanced flags are ineligible.
     contextSemantic: Boolean(selected.OPENAI_API_KEY), contextReadPersonal: false,
@@ -120,7 +162,10 @@ export async function createIdentity(args, { key, environment = selectedEnvironm
     privateCards: null, privateCardCurrentDependencies: null, methodPackages: null, methodReadPersonal: false,
     assets: null, roleProfiles: null, sessionEpisodes: null, sessionEpisodesAccess: null, contextReadSources: null,
   };
-  const record = { version: 1, protocol, uid, store, configuration, build: build ?? await engineBuild(),
+  const path = await realpath(root), info = await stat(path, { bigint: true });
+  if (!info.isDirectory()) throw refuse('daemon_build');
+  const record = { version: 1, protocol, uid, store, configuration, build: build ?? await engineBuild(root),
+    package: { path, dev: String(info.dev), ino: String(info.ino) },
     node: { ...node, executable: await realpath(node.executable) },
     environment: createHmac('sha256', key).update(canonical(selected)).digest('hex') };
   return { eligible: true, record, digest: createHash('sha256').update(canonical(record)).digest('hex') };

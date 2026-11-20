@@ -128,7 +128,7 @@ for(const changed of [false,true])test(`B1 verification retarget ${changed?'rest
   }
   assert.equal(after.id,before.id);assert.equal(totals.retargets,1);
   if(changed){assert.equal(totals.verificationRestarts,1);assert.equal(totals.verificationKept,0);assert.equal(JSON.parse(after.verify).hash.bytes,0);}
-  else {assert.equal(totals.verificationRestarts,0);assert.equal(totals.verificationKept,1);assert.deepEqual(JSON.parse(after.verify),v);
+  else {assert.equal(totals.verificationRestarts,0);assert.equal(totals.verificationKept,1);assert.deepEqual({...JSON.parse(after.verify),sweep:undefined},{...v,sweep:undefined});
     assert.deepEqual(inspect(f.path,db=>db.prepare('SELECT term_id,verified_df FROM statistics WHERE generation=? ORDER BY term_id').all(before.storage_id)),dfs);}
   await oracle(t,f,a,changed?'verify-restart':'verify-keep');
 });

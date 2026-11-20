@@ -73,7 +73,7 @@ try {
   }
   const rebuilt = await extract(artifact.artifactPath, 'rebuilt');
   const generatedHashes = {};
-  for (const name of ['package.json', 'npm-shrinkwrap.json']) {
+  for (const name of ['package.json', 'npm-shrinkwrap.json', 'engine-build.json']) {
     generatedHashes[name] = hash(await readFile(join(rebuilt, name)));
   }
   const expected = { schemaVersion: 1, package: { name: artifact.name, version: artifact.version },

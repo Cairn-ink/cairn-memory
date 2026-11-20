@@ -33,7 +33,7 @@
     "literal:memoryId": 1,
     "literal:moc_id": 1,
     "literal:mocId": 1,
-    "literal:owner_id": 1,
+    "literal:owner_id": 2,
     "literal:ownerId": 1,
     "literal:parent_id": 1,
     "literal:parentId": 1,
@@ -44,7 +44,7 @@
     "literal:previous_receipt_ids": 1,
     "literal:previousId": 1,
     "literal:previousMemoryId": 1,
-    "literal:project_id": 1,
+    "literal:project_id": 2,
     "literal:reasonRefs": 1,
     "literal:receipt_ids": 1,
     "literal:replacementId": 1,
@@ -87,6 +87,10 @@
   "core/local-authority-storage.mjs": {
     "key:ownerId": 3,
     "key:targetId": 1
+  },
+  "core/local-authority-uuid.mjs": {
+    "key:ownerId": 2,
+    "key:projectId": 2
   },
   "core/local-authority-guard.mjs": {
     "literal:local_store_id": 1,
@@ -501,8 +505,8 @@
     "literal:storeId": 2
   },
   "core/sqlite-journal-probe.mjs": {
-    "literal:applicationId": 1,
     "literal:application_id": 1,
+    "literal:applicationId": 1,
     "literal:gid": 4,
     "literal:storeId": 2,
     "literal:uid": 6
@@ -518,11 +522,13 @@
     "key:messageId": 7,
     "key:sessionId": 7,
     "literal:conversation_id": 2,
-    "literal:id": 5,
-    "literal:memory_id": 2,
-    "literal:message_id": 3,
-    "literal:owner_id": 3,
-    "literal:project_id": 3
+    "literal:id": 6,
+    "literal:memory_id": 1,
+    "literal:message_id": 2,
+    "literal:owner_id": 2,
+    "literal:project_id": 2,
+    "literal:receipt_id": 1,
+    "literal:source_id": 1
   },
   "core/raw-source-input.mjs": {
     "key:conversationId": 2,
@@ -564,6 +570,10 @@
     "literal:ownerId": 1,
     "literal:projectId": 1,
     "literal:sessionId": 1
+  },
+  "core/local-raw-search.mjs": {
+    "key:ownerId": 1,
+    "key:projectId": 1
   },
   "core/raw-capture-storage.mjs": {
     "key:eventId": 3,
@@ -716,6 +726,7 @@
   },
   "core/runtime.mjs": {
     "key:actionId": 3,
+    "key:event_id": 1,
     "key:eventId": 5,
     "key:id": 5,
     "key:invalidRef": 1,
@@ -724,6 +735,7 @@
     "key:projectId": 11,
     "key:receiptId": 1,
     "key:receiptIds": 1,
+    "key:session_id": 1,
     "key:sessionId": 4
   },
   "core/supersession-storage.mjs": {
@@ -752,6 +764,10 @@
     "key:ownerId": 1,
     "key:projectId": 1,
     "key:sessionId": 1
+  },
+  "adapters/mcp/raw-command.mjs": {
+    "key:actionId": 1,
+    "key:conversationId": 3
   },
   "adapters/mcp/asset-command.mjs": {
     "key:actionId": 2,
@@ -803,6 +819,28 @@
   "adapters/mcp/method-package-access.mjs": {
     "key:ownerId": 1,
     "key:projectId": 1
+  },
+  "adapters/mcp/local-daemon.mjs": {
+    "literal:daemon_temp_invalid": 3
+  },
+  "adapters/mcp/local-daemon-identity.mjs": {
+    "key:ownerId": 1,
+    "key:projectId": 1,
+    "key:sessionId": 1,
+    "key:uid": 1
+  },
+  "adapters/mcp/local-daemon-liveness.mjs": {
+    "key:pid": 1
+  },
+  "adapters/mcp/local-daemon-state.mjs": {
+    "literal:daemon_temp_invalid": 1
+  },
+  "adapters/mcp/local-daemon-wire.mjs": {
+    "literal:daemon_request_id": 1,
+    "literal:id": 2
+  },
+  "adapters/mcp/local-forwarder.mjs": {
+    "literal:id": 1
   },
   "adapters/mcp/server.mjs": {
     "key:actionId": 7,
@@ -931,7 +969,7 @@
   "integrations/client/raw/local-worker.mjs": {
     "key:wireSessionId": 1,
     "literal:config_invalid": 2,
-    "literal:state_invalid": 3,
+    "literal:state_invalid": 4,
     "literal:store_invalid": 1
   },
   "integrations/client/raw/local-worker-input.mjs": {
@@ -962,12 +1000,15 @@
     "literal:config_invalid": 1,
     "literal:preparation_invalid": 3,
     "literal:profile_invalid": 1,
-    "literal:store_invalid": 1,
-    "literal:rearm_invalid": 1
+    "literal:rearm_invalid": 1,
+    "literal:store_invalid": 1
   },
   "integrations/client/raw/local-setup-input.mjs": {
     "key:projectId": 1,
     "literal:store_invalid": 1
+  },
+  "integrations/client/raw/local-settings-lock.mjs": {
+    "key:pid": 1
   },
   "integrations/client/raw/local-setup.mjs": {
     "key:expectedStoreId": 1,
@@ -977,15 +1018,21 @@
     "literal:storeId": 2,
     "literal:targetId": 2
   },
-  "integrations/client/raw/local-settings-lock.mjs": {
-    "key:pid": 1
-  },
   "integrations/client/raw/local-setup-init.mjs": {
     "literal:store_invalid": 3
   },
   "integrations/client/raw/local-hook.mjs": {
     "key:sessionId": 1,
-    "literal:session_id": 1
+    "literal:config_invalid": 1,
+    "literal:session_id": 1,
+    "literal:store_invalid": 1
+  },
+  "integrations/client/raw/local-session-start.mjs": {
+    "literal:state_invalid": 1
+  },
+  "integrations/client/raw/local-session-fence.mjs": {
+    "key:sessionId": 1,
+    "literal:preparation_invalid": 1
   },
   "integrations/client/raw/local-host-profile.mjs": {
     "key:sessionId": 1,
@@ -1383,7 +1430,7 @@
   "core/context-product-sidecar.mjs": {
     "key:applicationId": 2,
     "key:base_id": 1,
-    "key:id": 9,
+    "key:id": 11,
     "key:invalid": 2,
     "key:storeId": 4,
     "literal:attestation_invalid": 3,
@@ -1392,7 +1439,7 @@
     "literal:id": 1,
     "literal:memoryId": 2,
     "literal:term_id": 1,
-    "literal:validation_invalid": 7
+    "literal:validation_invalid": 8
   },
   "core/context-product-verification-batch.mjs": {
     "literal:term_id": 1
@@ -1508,6 +1555,9 @@
     "key:ownerId": 4,
     "key:projectId": 4,
     "key:storeId": 2
+  },
+  "core/layout-base-upgrade.mjs": {
+    "literal:storeId": 1
   },
   "core/content-safety-schema.mjs": {
     "key:applicationId": 1,
@@ -1639,13 +1689,6 @@
     "literal:roleId": 2,
     "literal:versionId": 2
   },
-  "core/local-raw-search.mjs": {
-    "key:ownerId": 1,
-    "key:projectId": 1
-  },
-  "core/layout-base-upgrade.mjs": {
-    "literal:storeId": 1
-  },
   "adapters/openai/consolidate-schema.mjs": {
     "key:memoryIds": 1
   },
@@ -1656,13 +1699,13 @@
   "core/engine-card-maintenance.mjs": {
     "key:id": 1,
     "key:ids": 1,
-    "key:memoryIds": 1,
     "key:memoryId": 1,
+    "key:memoryIds": 1,
     "key:sourceMemoryRefs": 1
   },
   "core/engine-card-output.mjs": {
-    "literal:memoryIds": 1,
-    "key:outOfDateIds": 1
+    "key:outOfDateIds": 1,
+    "literal:memoryIds": 1
   },
   "core/engine-card-storage.mjs": {
     "key:cardId": 1,
@@ -1671,20 +1714,5 @@
     "key:memoryId": 2,
     "key:messageId": 1,
     "key:rowid": 1
-  },
-  "adapters/mcp/raw-command.mjs": {
-    "key:actionId": 1,
-    "key:conversationId": 3
-  },
-  "core/local-authority-uuid.mjs": {
-    "key:ownerId": 2,
-    "key:projectId": 2
-  },
-  "integrations/client/raw/local-session-fence.mjs": {
-    "key:sessionId": 1,
-    "literal:preparation_invalid": 1
-  },
-  "integrations/client/raw/local-session-start.mjs": {
-    "literal:state_invalid": 1
   }
 }

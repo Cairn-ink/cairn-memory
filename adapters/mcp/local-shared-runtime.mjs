@@ -3,22 +3,24 @@ import { ContextStdioServerTransport } from './context-read-transport.mjs';
 import { createLocalCairnRuntime } from './server.mjs';
 import { createLocalContextContinuations } from './local-context-continuations.mjs';
 import { createCommitDispatcher } from '../../core/commit-dispatch.mjs';
+import { createLocalRawSearchUpkeepControl } from '../../core/local-raw-search.mjs';
 
 /** One exact configuration, one runtime, independent SDK instances per stream.
  * Authentication and identity selection belong to the caller (R3).
  */
-export function createLocalSharedRuntime(options = {}, { strict = false, onBackoff } = {}) {
+export function createLocalSharedRuntime(options = {}, { strict = false, onBackoff, manageRawUpkeep = false, rawUpkeepScheduler } = {}) {
   const configuration = { ...options, namespace: structuredClone(options.namespace) };
   const closingSignal = new AbortController();
   const dispatcher = createCommitDispatcher({ signal: closingSignal.signal, strict, onBackoff });
   const connections = new Set();
+  const rawUpkeep = manageRawUpkeep ? createLocalRawSearchUpkeepControl(rawUpkeepScheduler) : undefined;
   let runtime, closed = false, closing, inFlight = 0, sdkServers = 0;
   return {
     attach(input, output) {
       if (closed) throw Error('local_host_closed');
       // Activate before discovery, even if this connection never calls a tool.
       runtime ??= dispatcher.open(() => createLocalCairnRuntime(configuration,
-        { dispatcher, signal: closingSignal.signal }));
+        { dispatcher, signal: closingSignal.signal, rawUpkeep }));
       let key = Object.freeze({});
       const instances = new Set();
       const continuations = createLocalContextContinuations();
@@ -29,6 +31,7 @@ export function createLocalSharedRuntime(options = {}, { strict = false, onBacko
         close() {
           if (disconnected) return disconnecting ?? Promise.resolve();
           disconnected = true; key = null; continuations.close(); connections.delete(handle);
+          if (!connections.size) rawUpkeep?.suspend();
           disconnect.abort();
           input.off('end', onEnd); input.off('close', onEnd); output.off('close', onEnd);
           // close() revokes each SDK instance synchronously before awaiting IO.
@@ -51,6 +54,7 @@ export function createLocalSharedRuntime(options = {}, { strict = false, onBacko
       input.once('end', onEnd); input.once('close', onEnd); output.once('close', onEnd);
       connections.add(handle);
       try {
+        rawUpkeep?.resume();
         entry = serveStdio(() => {
           if (disconnected) throw Error('local_connection_closed');
           let server;
@@ -77,6 +81,7 @@ export function createLocalSharedRuntime(options = {}, { strict = false, onBacko
     close() {
       if (closing) return closing;
       closed = true;
+      rawUpkeep?.close();
       closingSignal.abort();
       const stopped = [...connections].map(connection => connection.close());
       return closing = Promise.allSettled(stopped).then(() => runtime?.close());

@@ -1,5 +1,7 @@
 import { stateLock } from '../state-lock.mjs';
-import { fenceLocalSession } from './local-session-fence.mjs';
+import { fenceLocalSession, withSessionIdentity } from './local-session-fence.mjs';
+import { readHostProfile, readHostConfiguration } from './local-host-profile.mjs';
+import { sessionStartSource, writeSessionStartAttempt } from './local-session-start.mjs';
 import { lstat, realpath } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { types } from 'node:util';
@@ -53,6 +55,12 @@ async function source(record,path,allowMissing = false) {
   if (await realpath(path) !== path) fail('source_refused');
   return true;
 }
+async function withStartIdentity(profilePath,selection,work) {
+  try {
+    const profile = await readHostProfile(profilePath), config = await readHostConfiguration(profile);
+    return await withSessionIdentity(profile,config,selection,identity => work(identity,sessionStartSource(identity,selection)));
+  } catch {}
+}
 export async function runLocalRawHook(value,options = {}) {
   try {
     const input = exact(value,['installationDirectory','event','payload']);
@@ -63,23 +71,49 @@ export async function runLocalRawHook(value,options = {}) {
     if (record.phase !== 'active') fail(record.phase === 'rearm_required' ? 'rearm_required':'authority_changed');
     if (record.request.client === 'claude-code' && headless) return hookResult('ready','headless_skipped');
     const {source:nativeSource,...selection} = payload(input.payload,input.event,record.request.client);
+    const claudeStart = record.request.client === 'claude-code' && input.event === 'SessionStart';
+    const before = claudeStart ? await withStartIdentity(paths.profile,selection,
+      ({authorityCommitment},source) => ({authorityCommitment,source})) : undefined;
+    async function recordAttempt(reason,present) {
+      if (!['store_invalid','config_invalid','state_busy'].includes(reason)) return;
+      try {
+        const kind = (present ?? await source(record,selection.sourcePath,true)) ? 'present':'fresh';
+        await withStartIdentity(paths.profile,selection,(identity,startSource) => {
+          if (before.authorityCommitment === identity.authorityCommitment && before.source === startSource)
+            return writeSessionStartAttempt(identity,startSource,kind);
+        });
+      } catch {}
+    }
     const host = createLocalRawHost({ profilePath:paths.profile });
-    // No source contents or transcript metadata are inspected before the real
-    // host has verified the exact preparation, profile and fresh SQL permission.
-    if ((await host.status({ signal:call.signal })).status !== 'ready') fail('authority_changed');
+    // Capture still requires the real host to verify preparation, profile and
+    // fresh SQL permission. A busy start can record transcript presence alone.
+    const status = await host.status({ signal:call.signal });
+    if (status.status !== 'ready') {
+      if (before) await recordAttempt(status.reason);
+      fail('authority_changed');
+    }
     if (record.request.client === 'codex' && input.event === 'SessionStart' && nativeSource === 'fork') {
       await fenceLocalSession(paths.profile,selection); return hookResult('blocked','capture_refused');
     }
     checkSignal(call.signal);
-    const present = await source(record,selection.sourcePath,record.request.client === 'claude-code' && input.event === 'SessionStart');
+    const present = await source(record,selection.sourcePath,claudeStart);
     checkSignal(call.signal);
-    if (!present) return await stateLock(paths.lock,async () => {
-      if ((await readLocalInstallation(paths.root)).phase !== 'active') fail('authority_changed');
-      const outcome = await host.markStart({...selection,start:'eof'},{signal:call.signal});
-      return hookResult(outcome.status,outcome.status === 'ready' ? null:outcome.reason);
-    });
+    if (!present) {
+      try {
+        return await stateLock(paths.lock,async () => {
+          if ((await readLocalInstallation(paths.root)).phase !== 'active') fail('authority_changed');
+          const outcome = await host.markStart({...selection,start:'eof'},{signal:call.signal});
+          if (before) await recordAttempt(outcome.reason,false);
+          return hookResult(outcome.status,outcome.status === 'ready' ? null:outcome.reason);
+        });
+      } catch (error) {
+        if (before && error.message === 'state_busy') await recordAttempt('state_busy',false);
+        throw error;
+      }
+    }
     const outcome = await (input.event === 'SessionStart' || input.event === 'UserPromptSubmit'
       ? host.initialize({ ...selection,start:'eof' },{ signal:call.signal }) : host.run(selection,{ signal:call.signal }));
+    if (before) await recordAttempt(outcome.reason,present);
     return hookResult(outcome.status,['ready','progress'].includes(outcome.status) ? null:outcome.reason);
   } catch (error) {
     const outcome = failure(error); return hookResult(outcome.status,outcome.reason);

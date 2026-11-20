@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.6.9 — 2026-11-19
+
+- **A session that starts while another one is saving is no longer lost.**
+  Before, Claude Code could start a session while another session was saving.
+  The start check then failed at once on the busy local store, and the whole
+  session went unsaved with no visible error. Now the read-only checks wait up
+  to 2 seconds for a short lock to clear.
+- **A session whose start couldn't be recorded is recovered.** If the store
+  stays busy longer than that and the start can't be recorded, Claude Code saves
+  the session from its first message as soon as a later hook succeeds.
+  Recovery uses the same permission and pause checks as an ordinary save.
+  Nothing written before a pause or a consent change is saved later.
+- **Search index cleanup keeps its turn order after a brief read error.**
+  Deleted or forgotten text was never returned in search, and still isn't.
+- **Known limit:** recovery covers a start that failed because the store was busy.
+  If Claude Code cancelled the start hook, or the hook ran out of time, that
+  session still isn't saved. A later release addresses this.
+- **Known issue:** Node.js 24.22.3 has SQLite 3.54 built in. With it, some
+  searches run slower, and recall can return fewer results when you have a lot
+  of saved memory. Your saved data isn't affected. Node.js 22, and Node.js 24
+  up to 24.22.2, work as before. Setup uses the Node.js that ran it, so after
+  you switch versions, run setup again.
+- **Privacy note:** while the store is busy, the start hook now checks whether
+  the session's transcript file exists before it confirms permission. It looks
+  up the path only and doesn't read the file.
+
 ## 0.3.8 — 2026-11-17: wider start-boundary margin
 
 - The synchronous start hook now has 1 second (was 300 ms), including Node

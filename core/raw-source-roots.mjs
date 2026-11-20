@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import { fail } from './validation.mjs';
 
 const where = 'owner_id=? AND scope=? AND project_id=?';
@@ -121,18 +121,20 @@ export function createRawSourceRoots(db, { readMemo } = {}) {
     return { roots: proven ? values : [], independent: false, unknown: !proven,
       legacyKeep: true, possibleRoots: missing ? null : values };
   }
-  function memoryRoots(ns, id) {
+  function memoryRoots(ns, id, receipts = db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(id)) {
     const roots = new Map();
-    for (const row of db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(id)) {
+    for (const row of receipts) {
       for (const root of receipt(ns, row).roots) roots.set(root.client + ':' + root.sessionKey, root);
     }
     return [...roots.values()];
   }
   function touchMemory(ns, id, incoming) {
     if (!enabled()) return;
-    const roots = memoryRoots(ns, id);
+    const receipts = db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(id);
+    const roots = memoryRoots(ns, id, receipts);
     if (incoming) roots.push(...resolve(ns, incoming));
     touchRoots(ns, roots);
+    return receipts;
   }
   function touchRoots(ns, roots, changedEpisodes = new Set()) {
     for (const root of new Map(roots.map(root => [root.client + ':' + root.sessionKey, root])).values()) {
@@ -247,3 +249,29 @@ export function createRawSourceRoots(db, { readMemo } = {}) {
   return { enabled, hashSession, keys, resolve, receipt, memoryRoots, touchMemory, mutateSources,
     mutateEpisodeSources, bindJob, jobGuard, assertSession, emptySession };
 }
+
+// Tokens are stored under the namespace's suppressed primary key. Keep the
+// digest portable across owner re-keying and store merges.
+export function receiptDenialTokens(retired, replacements = []) {
+  const retained = new Set(replacements.flatMap(receiptTokens));
+  return [...new Set(retired.flatMap(receiptTokens).filter(token => !retained.has(token)))];
+}
+
+function receiptTokens(row) {
+  return ['rs1:i:' + row.receipt_key, 'rs1:a:' + createHash('sha256').update(JSON.stringify([
+    'receipt-source-address-v1', row.client, row.session_id, row.event_id, row.role,
+  ])).digest('hex')];
+}
+
+// A total_changes fence alone cannot distinguish rolled-back coordinates
+// from committed ones. The database transaction boundary discards this state.
+const receiptCoordinates = new WeakMap();
+export function receiptCoordinateStateInside(db, version, changes) {
+  let state = receiptCoordinates.get(db);
+  if (!state || state.version !== version || state.changes !== changes) {
+    state = { version, changes, memories: new Map() };
+    receiptCoordinates.set(db, state);
+  }
+  return state;
+}
+export function clearReceiptCoordinatesInside(db) { receiptCoordinates.delete(db); }

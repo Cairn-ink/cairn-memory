@@ -47,16 +47,14 @@ export function episodeSourceKeys(ns, headers, secret) {
 // explicitly ask the conservative validator to finish an incomplete enumeration.
 export function episodeSourceEvidenceCTE(raw) {
   const count = name => `(SELECT count(*) FROM ${name})`;
-  const allowance = names => `max(0,4097-${names.map(count).join('-')})`;
-  const prior = ['proof_sources','proof_parents'];
-  const ancestry = raw ? `SELECT p.source_id,p.id receipt_id,l.conversation_id,l.message_id,l.start,l.end,
+  const allowance = (...names) => `max(0,4097-${['$proof_sources', ...names.map(count)].join('-')})`;
+  const ancestry = raw ? `SELECT p.episode_id,p.source_id,p.id receipt_id,l.conversation_id,l.message_id,l.start,l.end,
       c.owner_id,c.scope,c.project_id FROM proof_parents p
       CROSS JOIN proof_ancestry_input l ON l.memory_id=p.memory_id
-      LEFT JOIN raw_conversations c ON c.id=l.conversation_id LIMIT ${allowance(prior)}`
-    : `SELECT NULL source_id,NULL receipt_id,NULL conversation_id,NULL message_id,NULL start,NULL end,
+      LEFT JOIN raw_conversations c ON c.id=l.conversation_id LIMIT ${allowance('proof_parents')}`
+    : `SELECT NULL episode_id,NULL source_id,NULL receipt_id,NULL conversation_id,NULL message_id,NULL start,NULL end,
         NULL owner_id,NULL scope,NULL project_id WHERE 0`;
-  prior.push('proof_ancestry');
-  const roots = raw ? `SELECT s.id source_id,r.id,m.role,m.total_units,
+  const roots = raw ? `SELECT s.episode_id,s.id source_id,s.message_id,s.source_key,r.id,m.role,m.total_units,
       EXISTS(SELECT 1 FROM raw_source_maps a WHERE a.conversation_id=r.id AND a.message_id=s.message_id) known,
       EXISTS(SELECT 1 FROM raw_source_exclusions x WHERE x.conversation_id=r.id AND x.message_id=s.message_id
         AND x.start<m.total_units AND x.end>0) excluded
@@ -64,49 +62,67 @@ export function episodeSourceEvidenceCTE(raw) {
       CROSS JOIN raw_messages m ON m.conversation_id=r.id AND m.message_id=s.message_id
       WHERE r.owner_id=s.read_owner AND r.scope=s.read_scope AND r.project_id=s.read_project
         AND r.client=s.origin_client AND r.session_key IN (s.session,s.hashed)
-      LIMIT ${allowance(prior)}`
-    : `SELECT NULL source_id,NULL id,NULL role,NULL total_units,NULL known,NULL excluded WHERE 0`;
-  prior.push('proof_raw');
-  const maps = raw ? `SELECT r.source_id,r.id conversation_id,a.start,a.end,a.precision,
+      LIMIT ${allowance('proof_parents','proof_ancestry')}`
+    : `SELECT NULL episode_id,NULL source_id,NULL id,NULL role,NULL total_units,NULL known,NULL excluded WHERE 0`;
+  const maps = raw ? `SELECT r.episode_id,r.source_id,r.id conversation_id,a.start,a.end,a.precision,
       EXISTS(SELECT 1 FROM raw_source_exclusions x WHERE x.conversation_id=a.conversation_id
         AND x.message_id=a.message_id AND x.start<a.end AND x.end>a.start) excluded
-      FROM proof_raw r JOIN proof_sources s ON s.id=r.source_id
-      CROSS JOIN raw_source_maps a ON a.conversation_id=r.id AND a.message_id=s.message_id AND a.source_key=s.source_key
-      LIMIT ${allowance(prior)}`
-    : `SELECT NULL source_id,NULL conversation_id,NULL start,NULL end,NULL precision,NULL excluded WHERE 0`;
-  const scalar = (table, fields) => `SELECT *,json_object(${fields.map(f => `'${f}',${f}`).join(',')}) payload FROM ${table}
-    WHERE (SELECT rows<=4096 AND ancestry_input<=4096 FROM proof_size)
-      AND (SELECT bytes FROM proof_bytes)<=(SELECT bytes FROM proof_budget)`;
-  const sourceFields = ['key_present','identity_available','id','ordinal','digest','text','role','message_id',
-    'origin_client','origin_session','owner_id','scope','project_id','deleted','fenced'];
-  const sizes = { proof_sources: sourceFields,
-    proof_parents: ['id','memory_id','receipt_key','memory_revision','memory_deleted'],
-    proof_ancestry: ['conversation_id','message_id','start','end','owner_id','scope','project_id'],
-    proof_raw: ['id','role','total_units','known','excluded'], proof_maps: ['start','end','precision','excluded'] };
-  return `proof_budget AS MATERIALIZED (SELECT ? bytes),proof_sources AS MATERIALIZED (
-      SELECT s.*,c.owner_id read_owner,c.scope read_scope,c.project_id read_project,
-        o.client origin_client,o.session_key origin_session,o.owner_id,o.scope,o.project_id,o.deleted,
+      FROM proof_raw r
+      CROSS JOIN raw_source_maps a ON a.conversation_id=r.id AND a.message_id=r.message_id AND a.source_key=r.source_key
+      LIMIT ${allowance('proof_parents','proof_ancestry','proof_raw')}`
+    : `SELECT NULL episode_id,NULL source_id,NULL conversation_id,NULL start,NULL end,NULL precision,NULL excluded WHERE 0`;
+  const stages = [
+    { kind: 'sources', table: 'proof_sources', source: 'id',
+      fields: ['key_present','identity_available','id','ordinal','digest','text','role','message_id',
+        'origin_client','origin_session','owner_id','scope','project_id','deleted','fenced'] },
+    { kind: 'parents', table: 'proof_parents', branch: 'id',
+      fields: ['id','memory_id','receipt_key','memory_revision','memory_deleted'] },
+    { kind: 'ancestry', section: 'parents', table: 'proof_ancestry', branch: 'receipt_id',
+      fields: ['conversation_id','message_id','start','end','owner_id','scope','project_id'] },
+    { kind: 'roots', table: 'proof_raw', branch: 'id', fields: ['id','role','total_units','known','excluded'] },
+    { kind: 'maps', section: 'roots', table: 'proof_maps', branch: 'conversation_id',
+      fields: ['start','end','precision','excluded'] }
+  ];
+  const columns = [...new Set(stages.flatMap(({ fields }) => fields))];
+  const emptyColumns = columns.map(() => 'NULL').join(',');
+  const evidence = stages.map(({ kind, section = kind, table, source = 'source_id', branch = 'NULL', fields }) => `
+      SELECT '${kind}','${section}',episode_id,${source},${branch},
+        ${fields.map(f => `coalesce(length(CAST(${f} AS BLOB)),0)`).join('+')},NULL,NULL,NULL,
+        ${columns.map(f => fields.includes(f) ? f : 'NULL').join(',')} FROM ${table}`).join(' UNION ALL ');
+  const payload = stages.map(({ kind, fields }) =>
+    `WHEN '${kind}' THEN json_object(${fields.map(f => `'${f}',${f}`).join(',')})`).join(' ');
+  // The fence already enumerated candidate IDs and their sources in this
+  // snapshot. Reuse those inputs so the evidence stages do not expand the
+  // candidate query again. The indexed scan keeps its order and limit. Joining
+  // the unique fence key for each source does not change the enumeration.
+  // The final aggregates retain the earlier proof array order: sources, receipts
+  // and roots by ID, and ancestry and maps by their indexed payload.
+  return `proof_source_rows AS MATERIALIZED (
+      SELECT s.*,$proof_owner read_owner,$proof_scope read_scope,$proof_project read_project,
+        o.client origin_client,o.session_key origin_session,o.owner_id,o.scope,o.project_id,o.deleted
+      FROM json_each($proof_candidates) c CROSS JOIN episode_sources s INDEXED BY episode_source_page ON s.episode_id=c.value
+      LEFT JOIN session_episodes o ON o.id=s.origin_episode_id LIMIT 817),
+    proof_sources AS MATERIALIZED (
+      SELECT s.*,
         k.value IS NOT NULL key_present,json_extract(k.value,'$.identityAvailable') identity_available,
         json_extract(k.value,'$.session') session,json_extract(k.value,'$.hashed') hashed,
         json_extract(k.value,'$.sourceKey') source_key,
-        ${raw ? `EXISTS(SELECT 1 FROM raw_session_fences f WHERE f.owner_id=c.owner_id AND f.scope=c.scope
-          AND f.project_id=c.project_id AND f.client=o.client AND f.session_key IN
+        ${raw ? `EXISTS(SELECT 1 FROM raw_session_fences f WHERE f.owner_id=$proof_owner AND f.scope=$proof_scope
+          AND f.project_id=$proof_project AND f.client=s.origin_client AND f.session_key IN
           (json_extract(k.value,'$.session'),json_extract(k.value,'$.hashed')))` : '0'} fenced
-      FROM candidates c CROSS JOIN episode_sources s INDEXED BY episode_source_page ON s.episode_id=c.id
-      LEFT JOIN session_episodes o ON o.id=s.origin_episode_id
-      LEFT JOIN source_keys k ON json_extract(k.value,'$.id')=s.id LIMIT 817),
+      FROM proof_source_rows s LEFT JOIN source_keys k ON json_extract(k.value,'$.id')=s.id),
     proof_memories AS MATERIALIZED (
       SELECT m.id,m.revision,m.deleted FROM memories m INDEXED BY namespace_memories
-      WHERE (m.owner_id,m.scope,m.project_id)=(SELECT owner_id,scope,project_id FROM candidates LIMIT 1) LIMIT 4097),
+      WHERE (m.owner_id,m.scope,m.project_id)=($proof_owner,$proof_scope,$proof_project) LIMIT 4097),
     proof_receipt_input AS MATERIALIZED (
       SELECT r.rowid receipt_row,m.id memory_id,m.revision memory_revision,m.deleted memory_deleted
       FROM proof_memories m CROSS JOIN receipts r INDEXED BY memory_receipts ON r.memory_id=m.id LIMIT 4097),
-    proof_incomplete AS MATERIALIZED (SELECT ${count('proof_memories')}>4096 OR ${count('proof_receipt_input')}>4096 value),
+    proof_inputs AS MATERIALIZED (SELECT ${count('proof_memories')} memories,${count('proof_receipt_input')} receipts),
     proof_parents AS MATERIALIZED (
-      SELECT s.id source_id,r.id,r.memory_id,r.receipt_key,p.memory_revision,p.memory_deleted
-      FROM proof_sources s CROSS JOIN proof_receipt_input p CROSS JOIN receipts r ON r.rowid=p.receipt_row
-      WHERE NOT (SELECT value FROM proof_incomplete) AND r.client=s.origin_client AND r.session_id=s.origin_session
-        AND r.event_id=s.message_id AND r.role=s.role AND r.excerpt=s.text LIMIT ${allowance(['proof_sources'])}),
+      SELECT s.episode_id,s.id source_id,r.id,r.memory_id,r.receipt_key,p.memory_revision,p.memory_deleted
+      FROM proof_source_rows s CROSS JOIN proof_receipt_input p CROSS JOIN receipts r ON r.rowid=p.receipt_row
+      WHERE (SELECT memories<=4096 AND receipts<=4096 FROM proof_inputs) AND r.client=s.origin_client AND r.session_id=s.origin_session
+        AND r.event_id=s.message_id AND r.role=s.role AND r.excerpt=s.text LIMIT ${allowance()}),
     proof_ancestry_input AS MATERIALIZED (${raw ? `
       SELECT p.memory_id,l.conversation_id,l.message_id,l.start,l.end
       FROM (SELECT DISTINCT memory_id FROM proof_parents) p
@@ -116,35 +132,55 @@ export function episodeSourceEvidenceCTE(raw) {
     proof_ancestry AS MATERIALIZED (${ancestry}),
     proof_raw AS MATERIALIZED (${roots}),
     proof_maps AS MATERIALIZED (${maps}),
-    proof_size AS MATERIALIZED (SELECT ${['proof_sources','proof_parents','proof_ancestry','proof_raw','proof_maps'].map(count).join('+')} rows,
-      ${count('proof_memories')} memories,${count('proof_receipt_input')} receipts,
-      ${count('proof_ancestry_input')} ancestry_input,
-      ${count('proof_ancestry')} ancestry,${count('proof_parents')} parents,
-      ${count('proof_sources')} sources,${count('proof_raw')} roots,${count('proof_maps')} maps),
-    proof_bytes AS MATERIALIZED (SELECT ${Object.entries(sizes).map(([table,fields]) =>
-      `coalesce((SELECT sum(${fields.map(f => `coalesce(length(CAST(${f} AS BLOB)),0)`).join('+')}) FROM ${table}),0)`).join('+')} bytes),
-    proof_source_json AS MATERIALIZED (${scalar('proof_sources', sourceFields)}),
-    proof_parent_json AS MATERIALIZED (${scalar('proof_parents',['id','memory_id','receipt_key','memory_revision','memory_deleted'])}),
-    proof_ancestry_json AS MATERIALIZED (${scalar('proof_ancestry',['conversation_id','message_id','start','end','owner_id','scope','project_id'])}),
-    proof_raw_json AS MATERIALIZED (${scalar('proof_raw',['id','role','total_units','known','excluded'])}),
-    proof_map_json AS MATERIALIZED (${scalar('proof_maps',['start','end','precision','excluded'])}),
-    proof_state AS MATERIALIZED (SELECT *,rows>4096 OR ancestry_input>4096 OR
-      (SELECT bytes FROM proof_bytes)>(SELECT bytes FROM proof_budget) OR
-      ${['proof_source_json','proof_parent_json','proof_ancestry_json','proof_raw_json','proof_map_json'].map(name =>
-        `coalesce((SELECT sum(length(CAST(payload AS BLOB))+64) FROM ${name}),0)`).join('+')}>(SELECT bytes FROM proof_budget) overflow FROM proof_size)`;
+    proof_evidence(kind,section,episode_id,source_id,branch,raw_bytes,memories,receipts,ancestry_input,${columns.join(',')}) AS (
+      SELECT 'inputs','inputs',NULL,NULL,NULL,NULL,
+        memories,receipts,${count('proof_ancestry_input')},${emptyColumns} FROM proof_inputs
+      UNION ALL SELECT 'candidate','candidate',id,NULL,NULL,NULL,NULL,NULL,NULL,${emptyColumns} FROM candidates
+      UNION ALL ${evidence}),
+    proof_counts AS (
+      SELECT *,$proof_budget budget,coalesce(sum(raw_bytes) OVER (),0) bytes,
+        count(raw_bytes) OVER () rows,max(memories) OVER () memory_count,
+        max(receipts) OVER () receipt_count,max(ancestry_input) OVER () ancestry_input_count,
+        ${stages.map(({ kind }) => `count(*) FILTER (WHERE kind='${kind}') OVER () ${kind}_count`).join(',')}
+      FROM proof_evidence),
+    proof_payload AS MATERIALIZED (
+      SELECT episode_id,source_id,branch,section,kind,budget,
+        rows>4096 OR ancestry_input_count>4096 OR bytes>budget raw_overflow,
+        CASE WHEN rows<=4096 AND ancestry_input_count<=4096 AND bytes<=budget THEN CASE kind ${payload} END END payload,
+        CASE WHEN kind='candidate' THEN memory_count>4096 OR receipt_count>4096 END incomplete,
+        CASE WHEN kind='candidate' THEN json_object('rows',rows,'memories',memory_count,'receipts',receipt_count,
+          'ancestryInput',ancestry_input_count,'sources',sources_count,'parents',parents_count,'ancestry',ancestry_count,
+          'roots',roots_count,'maps',maps_count) END stats
+      FROM proof_counts),
+    proof_charged AS (
+      SELECT *,raw_overflow OR coalesce(sum(length(CAST(payload AS BLOB))+64) OVER (),0)>budget overflow FROM proof_payload),
+    proof_branches AS (
+      SELECT episode_id,source_id,section,branch,
+        CASE section
+          WHEN 'parents' THEN json_patch(max(payload) FILTER (WHERE kind='parents'),json_object('ancestry',
+            json_group_array(json(payload) ORDER BY payload) FILTER (WHERE kind='ancestry')))
+          WHEN 'roots' THEN json_patch(max(payload) FILTER (WHERE kind='roots'),json_object('maps',
+            json_group_array(json(payload) ORDER BY payload) FILTER (WHERE kind='maps')))
+          ELSE max(payload)
+        END payload,max(incomplete) incomplete,max(overflow) overflow,max(stats) stats
+      FROM proof_charged WHERE kind='candidate' OR (kind!='inputs' AND NOT overflow)
+      GROUP BY episode_id,source_id,section,branch),
+    proof_source_objects AS (
+      SELECT episode_id,source_id,
+        json_patch(max(payload) FILTER (WHERE section='sources'),json_object(
+          'receipts',json_group_array(json(payload) ORDER BY branch) FILTER (WHERE section='parents'),
+          'raw',json_group_array(json(payload) ORDER BY branch) FILTER (WHERE section='roots'))) payload,
+        max(incomplete) incomplete,max(overflow) overflow,max(stats) stats
+      FROM proof_branches GROUP BY episode_id,source_id,section='candidate'),
+    proof_state AS MATERIALIZED (
+      SELECT episode_id,
+        json_group_array(json(payload) ORDER BY source_id) FILTER (WHERE payload IS NOT NULL) proof,
+        max(incomplete) incomplete,max(overflow) overflow,max(stats) stats
+      FROM proof_source_objects GROUP BY episode_id)`;
 }
 export function episodeSourceEvidenceSQL() {
-  // No JSON ancestry or maps are built on overflow. Scalar payloads and the
-  // structural allowance above charge the aggregate state before nesting it.
-  return `CASE WHEN (SELECT overflow FROM proof_state) THEN '[]' ELSE
-    (SELECT json_group_array(json_patch(s.payload,json_object(
-      'receipts',json((SELECT json_group_array(json_patch(p.payload,json_object('ancestry',json((
-        SELECT json_group_array(json(a.payload)) FROM proof_ancestry_json a WHERE a.source_id=s.id AND a.receipt_id=p.id)))))
-        FROM proof_parent_json p WHERE p.source_id=s.id)),
-      'raw',json((SELECT json_group_array(json_patch(r.payload,json_object('maps',json((
-        SELECT json_group_array(json(m.payload)) FROM proof_map_json m WHERE m.source_id=s.id AND m.conversation_id=r.id)))))
-        FROM proof_raw_json r WHERE r.source_id=s.id)))))
-      FROM proof_source_json s WHERE s.episode_id=c.id) END`;
+  return `p.proof AS episode_read_proof,p.incomplete AS episode_read_incomplete,
+    p.overflow AS episode_read_overflow,p.stats AS episode_read_stats`;
 }
 /** Data only: no DB, no callback, no serving-predicate re-entry. */
 export function assertEpisodeSourceProof(ns, sources, facts, budget = { remaining: episodeProofLimit }, indexedDenials) {
@@ -218,18 +254,21 @@ export function assertEpisodeSourceProof(ns, sources, facts, budget = { remainin
 // NUL must survive SQL regardless of runtime-specific TEXT truncation.
 // Weak keys keep this connection-local without retaining closed connections.
 const receiptEncoding=new WeakMap();
-function* writerReceiptInputs(db, check, ns, receipts) {
-  const tuples=receipts.map(receipt=>[receipt.client,receipt.sessionId,receipt.eventId,receipt.role,receipt.excerpt]);
+function* writerReceiptPages(db, check, ns, receipts, shared = false) {
+  const tuples=receipts.map(captureReceiptTuple);
   // In Unicode mode the surrogate range matches unpaired code units only.
   // NUL, replacement characters and malformed inputs use the original SQL.
   const eligible=!tuples.some(tuple=>tuple.some(value=>/[\u0000\uFFFD\uD800-\uDFFF]/u.test(value)));
-  const predicate=` AND (EXISTS (SELECT 1 FROM json_each(?) source
-        WHERE client=json_extract(source.value,'$[0]') COLLATE BINARY AND session_id=json_extract(source.value,'$[1]') COLLATE BINARY
+  const tupleMatch=`client=json_extract(source.value,'$[0]') COLLATE BINARY AND session_id=json_extract(source.value,'$[1]') COLLATE BINARY
           AND event_id=json_extract(source.value,'$[2]') COLLATE BINARY AND role=json_extract(source.value,'$[3]') COLLATE BINARY
-          AND excerpt=json_extract(source.value,'$[4]') COLLATE BINARY)
-        OR instr(CAST(client AS BLOB),x'00')>0 OR instr(CAST(session_id AS BLOB),x'00')>0
-        OR instr(CAST(event_id AS BLOB),x'00')>0 OR instr(CAST(role AS BLOB),x'00')>0 OR instr(CAST(excerpt AS BLOB),x'00')>0)`;
+          AND excerpt=json_extract(source.value,'$[4]') COLLATE BINARY`;
+  const storedNul=`instr(CAST(client AS BLOB),x'00')>0 OR instr(CAST(session_id AS BLOB),x'00')>0
+        OR instr(CAST(event_id AS BLOB),x'00')>0 OR instr(CAST(role AS BLOB),x'00')>0 OR instr(CAST(excerpt AS BLOB),x'00')>0`;
+  const predicate=` AND (EXISTS (SELECT 1 FROM json_each(?) source
+        WHERE ${tupleMatch})
+        OR ${storedNul})`;
   const wanted=eligible?JSON.stringify(tuples):undefined;
+  const single=shared && tuples.map(tuple => JSON.stringify([tuple]));
   for (const deleted of [0,1]) {
     let after;
     while (true) {
@@ -241,7 +280,7 @@ function* writerReceiptInputs(db, check, ns, receipts) {
         const encoding=eligible&&!receiptEncoding.has(db)?', (SELECT encoding FROM pragma_encoding) AS receipt_encoding':'';
         const rows=db.prepare(`SELECT id,revision,deleted,updated_at${encoding} FROM memories INDEXED BY namespace_memories
         WHERE owner_id=? AND scope=? AND project_id=? AND deleted=? ${clause}
-        ORDER BY updated_at DESC,id LIMIT ?`).all(...boundary(ns),deleted,...args,limit);
+        ORDER BY updated_at DESC,id LIMIT ?`).all(...boundary(ns),deleted,...args,limit); // Plain read. Any safety wrapper that can throw source_excluded here must absorb it per receipt as the direct path does.
         if(encoding&&rows.length)receiptEncoding.set(db,rows[0].receipt_encoding);
         return rows;
       };
@@ -250,52 +289,78 @@ function* writerReceiptInputs(db, check, ns, receipts) {
       const keys=memories.slice(0,sourcePageSize);
       if(keys.length) {
         check();
-        const filter=eligible&&receiptEncoding.get(db)==='UTF-8'?predicate:'',args=filter?[wanted]:[];
+        const filter=eligible&&receiptEncoding.get(db)==='UTF-8'?predicate:'';
+        // Each key needs its own four rows and overflow witness. A limit across
+        // the union would force seeks that the current receipt never needs.
+        const grouped=shared && Boolean(filter);
+        const args=filter?[wanted]:[];
         const cursorColumns=filter?',CAST(r.created_at AS BLOB) AS receipt_created_at_bytes,CAST(r.id AS BLOB) AS receipt_id_bytes':'';
-        const output=row=>{
-          if(!filter)return row;
-          const {receipt_created_at_bytes,receipt_id_bytes,...receipt}=row;
-          return receipt;
-        };
-        const inputs=db.prepare(`SELECT r.*${cursorColumns},wanted.key AS wanted_entry,
+        const inputs=db.prepare(`SELECT r.*${cursorColumns},wanted.key AS wanted_entry${grouped?',source.key AS source_entry':''},
           json_extract(wanted.value,'$[1]') AS memory_revision,json_extract(wanted.value,'$[2]') AS memory_deleted
-          FROM json_each(?) wanted CROSS JOIN receipts r ON r.rowid IN (
+          FROM json_each(?) wanted${grouped?' CROSS JOIN json_each(?) source':''} CROSS JOIN receipts r ON r.rowid IN (
             SELECT rowid FROM receipts INDEXED BY memory_receipts
-            WHERE memory_id=json_extract(wanted.value,'$[0]')${filter} ORDER BY created_at,id LIMIT 5)
-          ORDER BY wanted.key,r.created_at,r.id`)
+            WHERE memory_id=json_extract(wanted.value,'$[0]')${grouped?` AND (${tupleMatch} OR ${storedNul})`:filter} ORDER BY created_at,id LIMIT 5)
+          ORDER BY wanted.key,${grouped?'source.key,':''}r.created_at,r.id`)
           .all(JSON.stringify(keys.map(memory=>[memory.id,memory.revision,memory.deleted])),...args);
         // Decoded memory ids can collide; preserve each wanted entry's metadata.
         const byMemory=new Map();
         for(const row of inputs) {
-          const rows=byMemory.get(row.wanted_entry)??[];rows.push(row);byMemory.set(row.wanted_entry,rows);
+          const pages=byMemory.get(row.wanted_entry)??new Map();
+          const source=row.source_entry??0;
+          const rows=pages.get(source)??[];
+          rows.push(row); pages.set(source,rows); byMemory.set(row.wanted_entry,pages);
         }
         for(const [entry,memory] of keys.entries()) {
-          const rows=byMemory.get(entry)??[];
-          yield* rows.slice(0,sourceReceiptPageSize).map(output);
-          if(rows.length<=sourceReceiptPageSize)continue;
-          // The witness counts filtered rows; both pages use the same predicate.
-          // Keep the stored UTF-8 bytes: decoded TEXT may replace bytes or truncate NUL.
-          // (created_at,id) is total because id is UNIQUE, including ties.
-          let receiptAfter=rows[sourceReceiptPageSize-1];
-          while(true) {
-            check();
-            const seek=filter?'(CAST(? AS TEXT),CAST(? AS TEXT))':'(?,?)';
-            // Some drivers bind a zero-length BLOB as NULL; empty TEXT keeps the key.
-            const cursor=filter?[receiptAfter.receipt_created_at_bytes,receiptAfter.receipt_id_bytes].map(bytes=>bytes.length?bytes:''):[receiptAfter.created_at,receiptAfter.id];
-            const page=db.prepare(`SELECT r.*${cursorColumns},? AS memory_revision,? AS memory_deleted FROM receipts r INDEXED BY memory_receipts
-              WHERE memory_id=? AND (created_at,id)>${seek}${filter} ORDER BY created_at,id LIMIT 5`)
-              .all(memory.revision,memory.deleted,memory.id,...cursor,...args);
-            const next=page.slice(0,sourceReceiptPageSize);
-            yield* next.map(output);
-            if(page.length<=sourceReceiptPageSize)break;
-            receiptAfter=next.at(-1);
+          const pages=byMemory.get(entry);
+          if(!pages)continue;
+          for(const [source,rows] of pages) {
+            const input=receiptPageRows(db,check,memory,rows,filter,grouped?[single[source]]:args,cursorColumns);
+            pages.set(source,shared ? replayReceiptInputs(input) : input);
           }
+          yield { pages, grouped };
         }
       }
       if(memories.length<=sourcePageSize)break;
       after=memories[sourcePageSize-1];
     }
   }
+}
+function* receiptPageRows(db, check, memory, page, filter, args, cursorColumns) {
+  while(true) {
+    const rows=page.slice(0,sourceReceiptPageSize);
+    for(const row of rows) {
+      if(!filter)yield row;
+      else {
+        const {receipt_created_at_bytes,receipt_id_bytes,...receipt}=row;
+        yield receipt;
+      }
+    }
+    if(page.length<=sourceReceiptPageSize)return;
+    // Seek with the exact stored bytes, even when decoded TEXT loses bytes.
+    check();
+    const after=rows.at(-1);
+    const seek=filter?'(CAST(? AS TEXT),CAST(? AS TEXT))':'(?,?)';
+    // Some drivers bind a zero-length BLOB as NULL; empty TEXT keeps the key.
+    const cursor=filter?[after.receipt_created_at_bytes,after.receipt_id_bytes].map(bytes=>bytes.length?bytes:''):[after.created_at,after.id];
+    page=db.prepare(`SELECT r.*${cursorColumns},? AS memory_revision,? AS memory_deleted FROM receipts r INDEXED BY memory_receipts
+              WHERE memory_id=? AND (created_at,id)>${seek}${filter} ORDER BY created_at,id LIMIT 5`)
+      .all(memory.revision,memory.deleted,memory.id,...cursor,...args);
+  }
+}
+function* writerReceiptInputs(db, check, ns, receipts) {
+  for(const { pages } of writerReceiptPages(db,check,ns,receipts)) yield* pages.get(0);
+}
+function replayReceiptInputs(input) {
+  const retained=[];
+  return function* () {
+    yield* retained;
+    // Advance explicitly so a validator's early return closes this reader
+    // without closing the shared walk underneath it.
+    for(let next=input.next(); !next.done; next=input.next()) {
+      retained.push(next.value);
+      yield next.value;
+    }
+  };
 }
 function matchingReceiptInputs(db, check, ns, receipts) {
   const key=(client,session,event,role,excerpt)=>JSON.stringify([client,session,event,role,excerpt]);
@@ -439,7 +504,7 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
     }
     if(snapshot)snapshot.inputs.set(cacheKey,retained);
   }
-  function assertReceipts(ns, receipts, readExisting = false, rawTargets) {
+  function assertReceipts(ns, receipts, readExisting = false, rawTargets, history) {
     if (!readExisting && (cachedContentLayout(db)??installedContentLayout(db)).suppressionRevision) {
       // An incomplete fact set, or a possible Raw fact join, must not start an
       // unbounded indexed fallback inside SHARED, even for the scope denial.
@@ -453,10 +518,11 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
       // Snapshot enumeration, overflow and validated handling stay unchanged.
       // Leave the row loop only by failing: later receipts see only the rows
       // retained while receipt one drains the walk.
-      const matches=snapshot ? undefined : matchingReceiptInputs(db,check,ns,receipts);
+      const matches=snapshot || history ? undefined : matchingReceiptInputs(db,check,ns,receipts);
       for (const [index,receipt] of receipts.entries()) {
         check();
-        for (const row of snapshot ? snapshotReceiptInputs(ns) : matches(receipt,index)) {
+        const rows = snapshot ? snapshotReceiptInputs(ns) : history ? history(receipt) : matches(receipt,index);
+        for (const row of rows) {
           check();
           if(row.client!==receipt.client || row.session_id!==receipt.sessionId || row.event_id!==receipt.eventId ||
             row.role!==receipt.role || row.excerpt!==receipt.excerpt)continue;
@@ -664,10 +730,51 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
     const layout = cachedContentLayout(db);
     if (!layout) fail('unsupported_database');
     if (!layout.suppressionRevision && !enabled()) return receipts.map((_, index) => index);
-    return receipts.flatMap((receipt, index) => {
-      try { assertReceipts(ns, [receipt]); return [index]; }
-      catch (error) { if (error.code === 'source_excluded') return []; throw error; }
-    });
+    const candidates = layout.suppressionRevision && !snapshot && db.isTransaction
+      ? receipts.filter(receipt => captureReceiptTuple(receipt).every(value => typeof value === 'string' && !/[\u0000\uFFFD\uD800-\uDFFF]/u.test(value)))
+      : [];
+    const union = candidates.length > 1 ? new Map(candidates.map(receipt => [JSON.stringify(captureReceiptTuple(receipt)), receipt])) : undefined;
+    const indexes = union && new Map([...union.keys()].map((key,index) => [key,index]));
+    const replayExact = Symbol('replay exact history');
+    let walk, walkFailed = false;
+    function* history(receipt) {
+      const index = indexes.get(JSON.stringify(captureReceiptTuple(receipt)));
+      walk ??= replayReceiptInputs(writerReceiptPages(db,check,ns,[...union.values()],true));
+      try {
+        for (const { pages, grouped } of walk()) {
+          const read = pages.get(grouped ? index : 0);
+          if (read) yield* read();
+        }
+      } catch (error) {
+        // Only iterator errors reach this catch. A validator refusal closes
+        // this reader, leaving the shared cursor available to the next source.
+        // Match commit retry's native SQLITE_BUSY (5) and SQLITE_LOCKED (6), including extended codes.
+        if (db.isTransaction && error?.code === 'ERR_SQLITE_ERROR' &&
+            Number.isInteger(error.errcode) && [5, 6].includes(error.errcode & 0xff)) throw replayExact;
+        walkFailed = true;
+        throw error;
+      }
+    }
+    function run(shared) {
+      const allowed = [];
+      for (const [index, receipt] of receipts.entries()) {
+        try {
+          const readHistory = shared && union.has(JSON.stringify(captureReceiptTuple(receipt))) ? history : undefined;
+          assertReceipts(ns, [receipt], false, undefined, readHistory);
+        } catch (error) {
+          if (error === replayExact) return run(false);
+          if (walkFailed || error?.code !== 'source_excluded') throw error;
+          continue;
+        }
+        allowed.push(index);
+      }
+      return allowed;
+    }
+    return run(Boolean(union));
   }
   return { sourceSnapshot, assertEpisodeProof: assertEpisodeSourceProof, completeEpisodeProof, register, attach, assertReceipts, assertStoredReceipts, excludeMemory, filter, enabled };
+}
+
+function captureReceiptTuple(receipt) {
+  return [receipt.client, receipt.sessionId, receipt.eventId, receipt.role, receipt.excerpt];
 }
