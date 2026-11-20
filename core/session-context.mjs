@@ -98,12 +98,32 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
           continue;
         }
         const layout = cachedContentLayout(db), safety = Boolean(layout?.suppressionRevision);
-        const query = group === 'nextSteps' ? projected.query : contextQuery(ns, group, { rawAncestry: safety && layout.rawLineage }), rows = db.prepare(query.sql).all(...query.params)
-          .filter(row => !safety || (group === 'nextSteps' ? !contentSuppressionReasonInside(db, ns) : contentReadSafety(db, { namespace: ns, selectedMemory: row,
-            ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed));
-        if (group === 'nextSteps') for (let i=0; i<rows.length; i++) {
-          assertEpisodeRead?.(ns, rows[i], projected.budget);
-          rows[i] = episodeReadRow(rows[i]);
+        const nextSteps = group === 'nextSteps';
+        const original = contextQuery(ns, group, { rawAncestry: safety && layout.rawLineage });
+        let query = nextSteps ? projected.query : original;
+        let budget = projected.budget;
+        const rows = [];
+        const count = original.params.at(-1);
+        let scanned = 0;
+        while (true) {
+          const batch = db.prepare(query.sql).all(...query.params);
+          // Scope and row checks retain their order before Episode proof reads.
+          const eligible = batch.filter(row => !safety || (nextSteps ? !contentSuppressionReasonInside(db, ns)
+            : contentReadSafety(db, { namespace: ns, selectedMemory: row,
+              ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed));
+          for (const row of eligible) {
+            if (nextSteps && assertEpisodeRead?.(ns, row, budget, 'batch') === false) continue;
+            rows.push(nextSteps ? episodeReadRow(row) : row);
+            if (rows.length === count) break;
+          }
+          if (rows.length === count || batch.length < count || nextSteps && !eligible.length) break;
+          scanned += batch.length;
+          const continuation = { sql: original.sql + ' OFFSET ?', params: [...original.params, scanned] };
+          if (nextSteps) {
+            const next = episodeProjection(ns, continuation, current);
+            query = next.query;
+            budget = next.budget;
+          } else query = continuation;
         }
         const identities = rows.map(row => ({ id: row.id, revision: row.revision }));
         if (expected && JSON.stringify(identities) !== JSON.stringify(expected.groups[group].identities)) fail('revision_conflict');
