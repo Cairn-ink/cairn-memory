@@ -960,15 +960,34 @@ export function createMemoryRuntime(input, internal) {
       return transaction(db, () => {
         const current = epoch(ns);
         if (expectedEpoch !== undefined && current !== expectedEpoch) fail('cursor_stale');
-        const rows = db.prepare(`SELECT t.*,p.revision AS predecessor_current_revision,m.revision AS replacement_current_revision
+        const statement = db.prepare(`SELECT t.*,p.revision AS predecessor_current_revision,m.revision AS replacement_current_revision
           FROM confirmation_supersessions t JOIN memories m ON m.id=t.replacement_id JOIN memories p ON p.id=t.previous_id
           WHERE m.owner_id=? AND m.scope=? AND m.project_id=? AND t.result IS NOT NULL AND (?='all' OR t.status=?)
-          AND (t.replacement_id,t.previous_id) > (?,?) ORDER BY t.replacement_id,t.previous_id LIMIT ?`)
-          .all(...boundary(ns), status, status, after?.replacementId ?? '', after?.predecessorId ?? '', count + 1);
-        if (cachedContentLayout(db)?.suppressionRevision) for (const row of rows) assertContentOutput(db,identity,[
-          {type:'memory',namespace:ns,memoryId:row.previous_id,revision:row.previous_revision},
-          {type:'memory',namespace:ns,memoryId:row.replacement_id,revision:row.replacement_revision},
-          {namespace:ns,receiptIds:[...JSON.parse(row.previous_receipt_ids),...JSON.parse(row.receipt_ids)]}], [ns]);
+          AND (t.replacement_id,t.previous_id) > (?,?) ORDER BY t.replacement_id,t.previous_id LIMIT ?`);
+        const rows = [];
+        const size = count + 1;
+        const safety = cachedContentLayout(db)?.suppressionRevision;
+        let anchor = after;
+        while (true) {
+          const batch = statement.all(...boundary(ns), status, status,
+            anchor?.replacementId ?? '', anchor?.predecessorId ?? '', size);
+          for (const row of batch) {
+            try {
+              if (safety) assertContentOutput(db,identity,[
+                {type:'memory',namespace:ns,memoryId:row.previous_id,revision:row.previous_revision},
+                {type:'memory',namespace:ns,memoryId:row.replacement_id,revision:row.replacement_revision},
+                {namespace:ns,receiptIds:[...JSON.parse(row.previous_receipt_ids),...JSON.parse(row.receipt_ids)]}], [ns]);
+            } catch (error) {
+              if (error.code === 'evidence_unavailable') continue;
+              throw error;
+            }
+            rows.push(row);
+            if (rows.length === size) break;
+          }
+          if (rows.length === size || batch.length < size) break;
+          const last = batch.at(-1);
+          anchor = { replacementId: last.replacement_id, predecessorId: last.previous_id };
+        }
         return { rows, epoch: current };
       }, undefined, { deferred: true });
     },
