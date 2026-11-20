@@ -228,6 +228,7 @@ export function productVectors({storage,facade}) {
         if(g.published===1)return true;
         if(s.phase===0) {
           const page=quantum.measure(()=>db.prepare(`SELECT * FROM documents WHERE generation=? AND eligible=1 ${s.after?'AND identity>?':''} ORDER BY identity LIMIT 128`).all(lexicalKey(db,lexical),...(s.after?[s.after]:[])),'vector-scan');
+          if(page.length&&!facade.port.read(()=>storage.vectorFence(p,lexical)))fail('index_unavailable');
           let processed=0;
           for(const row of page) {
             if(processed&&!quantum.admit('vector-verification'))break;
