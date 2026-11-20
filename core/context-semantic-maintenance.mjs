@@ -188,7 +188,7 @@ export function semanticMaintenance({c,sqlite,identity,secretState,reserveHandle
     });
     return {status:result.state.purge.state==='complete'?'complete':'partial',purge:result.state.purge};
   }
-  function transmission(input,metadata,state) {
+  function transmission(input,metadata,state,{denyCapacity=()=>fail('budget_denied')}={}) {
     const p=input.projection;
     if(!p||!same(p.readSet,metadata.readSet)||p.readSet[0].ownerId!==state.ownerId||input.kind==='refresh'&&!metadata.maintenance)fail('authority_required');
     const v=open(metadata.path);
@@ -205,6 +205,7 @@ export function semanticMaintenance({c,sqlite,identity,secretState,reserveHandle
       // canonicalProductFences compares the captured epoch in the existing
       // namespace fence SELECT, for both query and refresh transmissions.
       const observed=v.storage.observe({...p,ownerCoverage:coverage(p.readSet)},p.accessDigest);
+      if(input.kind==='refresh'&&observed.dto.lexical.state==='ready'&&!v.vectors.dispatchFits(observed.publication,identity()))denyCapacity();
       if(observed.dto.lexical.state!=='ready') {
         // A missing sidecar can return before its namespace fence query. Keep
         // the original refresh failure-path check and its denial precedence;
