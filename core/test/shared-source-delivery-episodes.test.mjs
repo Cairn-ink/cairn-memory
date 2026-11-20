@@ -35,6 +35,31 @@ test('Episode detail withholds source text and receipt references while retainin
   assert.deepEqual(value.memoryLinks.items.find(link => link.memoryId === b.id).receiptIds, []);
 });
 
+test('Episode keep history omits references to withdrawn source text', async t => {
+  const port = model({ interpretEpisode(request) {
+    const value = interpretation(request);
+    value.gist.anchors = request.input.sources.map((source, sourceIndex) => ({ sourceIndex, start: 0, end: source.text.length }));
+    return value;
+  } });
+  const f = await lineageFixture(t, { base: 33, eventTime: true, options: { ...options, model: port } });
+  const captured = ok(await f.core.capture(input(1, 'kept-episode', { namespace: ns,
+    messages: [{ id: 'shared-message', role: 'user', content: hidden }, { id: 'independent-message', role: 'user', content: kept }] })));
+  const detail = () => ok(f.core.getEpisode({ namespace: ns, episodeId: captured.episode.id }));
+  const before = detail();
+  const source = before.sources.items.find(item => item.text === hidden);
+  const independent = before.sources.items.find(item => item.text === kept);
+  assert.ok(source && independent);
+  ok(await f.core.keepEpisode({ namespace: ns, episodeId: captured.episode.id,
+    expectedRevision: before.episode.revision, actionId: 'keep-history' }));
+  assert.ok(detail().keepActions.items[0].sourceCoverage.sourceIds.includes(source.id));
+  const session = f.db.prepare('SELECT session_key FROM session_episodes WHERE id=?').get(captured.episode.id).session_key;
+  const donor = ok(f.core.admit({ namespace: ns, memory: { content: 'Synthetic discarded keep Memory', kind: 'fact' },
+    receipts: [{ client: 'synthetic', sessionId: session, eventId: source.messageId, role: source.role, excerpt: hidden }] })).memory;
+  ok(f.core.forget({ namespace: ns, memoryId: donor.id, expectedRevision: donor.revision }));
+  assert.equal(f.db.prepare("SELECT count(*) n FROM suppressed WHERE fingerprint GLOB 'rs1:*'").get().n, 2);
+  assert.deepEqual(detail().keepActions.items[0].sourceCoverage.sourceIds, [independent.id]);
+});
+
 test('rationale separates withheld evidence from the stored graph', async t => {
   const f = await lineageFixture(t, { base: 33, eventTime: true });
   const shared = { ...receipt('shared-rationale'), excerpt: hidden };

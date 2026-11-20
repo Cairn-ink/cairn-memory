@@ -1097,7 +1097,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
           ORDER BY keep_ordinal LIMIT ?`).all(row.id, pages.keep.after ?? 0, pages.keep.limit + 1)
           .map(action => ({ actionKey: action.admission_key, ordinal: action.keep_ordinal,
             createdAt: action.keep_created_at, policy: 'explicit-keep', admission: action.keep_state,
-            errorCode: action.keep_error_code, sourceCoverage: { sourceIds: JSON.parse(action.keep_source_ids),
+            errorCode: action.keep_error_code, sourceCoverage: { sourceIds: JSON.parse(action.keep_source_ids).filter(id => !withheldSources.has(id)),
               revision: action.revision, sourceFence: action.source_fence } })), epoch: currentEpoch };
     });
   }
