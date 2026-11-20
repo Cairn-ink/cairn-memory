@@ -190,7 +190,7 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
     const shown = packed.included.map((index) => rankable[index]);
     if (shown.length || packed.overflow) {
       const rankOutput = await callModel(model, 'rank', prompt, packed.input,
-        { validateFresh: () => validateFresh(candidates),
+        { validateFresh: () => validateFresh(candidates, packed.input.candidates),
           ...(diagnostics ? { onHostWait: ms => { diagnostics.hostWaitMs += ms; } } : {}) });
       ranked = selection(rankOutput, new Map(shown.map((ref) => [key(ref), ref])), limit, model, 'rank');
     }

@@ -2,7 +2,7 @@ import { contextEmbeddingGuard } from './context-read-sidecar.mjs';
 import { randomUUID, createHmac, createHash } from 'node:crypto';
 import { readTransaction, transaction } from './database.mjs';
 import { withContentSuppressionRequest, inContentSuppressionRequestInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
-import { contentReadSafety, sourceReadSafety, receiptReadSafety, createContentReadMemo, withheldCardSourcesInside, withheldEvidenceInside } from './content-safety.mjs';
+import { contentReadSafety, sourceReadSafety, receiptReadSafety, createContentReadMemo, withheldStoredReceiptIdsInside, withheldEvidenceInside, withheldReceiptIdsInside } from './content-safety.mjs';
 import { createPrivateCardStorage } from './private-card-storage.mjs';
 import { createCardRawSources } from './card-raw-sources.mjs';
 import { reviewCardApplicabilityInside } from './private-evidence-schema.mjs';
@@ -18,7 +18,6 @@ import { fail } from './validation.mjs';
 import { installPrivateCards, installCardMemorySources } from './private-card-schema.mjs';
 import { installPrivateEvidence } from './private-evidence-schema.mjs';
 import { installPrivateOrganization } from './private-organization-schema.mjs';
-
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
 /** Shares the runtime's canonical handle, Card bindings, epochs, operation
@@ -44,14 +43,15 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
   }); }
   const raw = createCardRawSources(db, identity);
   const writers = createPrivateCardStorage({ db, identity, ready }).engineCardWriters();
-  const receiptRef = createCardReceiptSources(db, bind).retainedRefInside;
+  const receiptRef = createCardReceiptSources(db, bind).retainedRefInside, receiptIdsBySource = new WeakMap();
   const memoryReference = (ns, memory) => ({ type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision });
   const cardReference = (ns, row) => ({ type: 'card', namespace: ns, cardId: row.id, revision: row.revision, bodyRevision: row.body_revision });
   function sourcesCurrent(ns, refs, check = () => {}) {
     const memo = createContentReadMemo(db);
     return refs.every(ref => { check(); return db.prepare(`SELECT revision FROM memories WHERE ${where} AND id=? AND deleted=0`)
       .get(...boundary(ns), ref.memoryId)?.revision === ref.memoryRevision &&
-      sourceReadSafety(db, { identity, namespace: ns, ref, memo }).allowed; }) && !withheldCardSourcesInside(db, ns, refs, memo).size;
+      sourceReadSafety(db, { identity, namespace: ns, ref, memo }).allowed; }) &&
+      !withheldStoredReceiptIdsInside(db, ns, refs.flatMap(ref => receiptIdsBySource.get(ref) ?? [ref.receiptId])).size;
   }
   function relations({ namespace: ns, memoryIds }) {
     if (!has('memory_relations')) return undefined;
@@ -76,8 +76,8 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
         .filter(column => column.name !== 'excerpt').map(column => '"' + column.name.replaceAll('"', '""') + '"').join(',');
       const refs = memories.map(memory => memoryReference(ns, memory));
       return evidence.itemsInside(ns, refs, 'history', [ns], { legacyEvidence: true }).map((item, index) => {
-        const rows = item.provenance.sourceAccess === 'available' ? db.prepare(`SELECT ${columns} FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16`)
-          .all(item.ref.memoryId).filter(row => item.provenance.receiptMetadata.some(receipt => receipt.receiptId === row.id)) : [];
+        const rows = item.provenance.sourceAccess === 'available' ?
+          pressureReceiptRows(db, columns, item, evidence.receiptsWereProjected(item)) : [];
         return { type: 'memory', ref: item.ref, ns: 0, rank: index + 1, text: item.content,
           metadata: { state: item.state, reviewState: item.reviewState, filing: item.filing, kind: item.kind, origin: item.origin, confidence: item.confidence },
           date: receiptEventDate(rows), sources: rawSpans === true ? rows.map((row, index) => {
@@ -105,9 +105,9 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
         const ref = memoryReference(ns, memory);
         if (!contentReadSafety(db, { identity, namespace: ns, ref, intent: 'history', memo }).allowed) continue;
         const original = db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(memory.id);
-        const receipts = original.filter(receipt => receiptReadSafety(db, { namespace: ns, receipt, memo, withheld }).allowed);
+        const receipts = engineReceiptPage(db, ns, original, memo, withheld);
         if (!receipts.length) continue;
-        const source = receiptRef(ns, memory, receipts[0]);
+        const source = receiptRef(ns, memory, receipts[0]); receiptIdsBySource.set(source, receipts.map(receipt => receipt.id));
         const links = has('raw_receipt_lineage') ? db.prepare(`SELECT l.*,rm.occurred_at FROM raw_receipt_lineage l
           JOIN raw_conversations c ON c.id=l.conversation_id JOIN raw_messages rm
           ON rm.conversation_id=l.conversation_id AND rm.message_id=l.message_id WHERE l.receipt_id=?
@@ -461,4 +461,29 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
     work => { ready(); return readTransaction(db, work); }, [ns], deadlineAt);
   return { pauseGuard, available, snapshot, rawSpans, cards, recentPurges, carry, retire, commit, claim, release, finish, relations, pressureItems, deliver,
     validate(ns, memories, check) { return read(ns, () => { if (!sourcesCurrent(ns, memories.map(m => m.source), check)) fail('source_unavailable'); }); } };
+}
+
+function pressureReceiptRows(db, columns, item, projected) {
+  const ids = item.provenance.receiptMetadata.map(receipt => receipt.receiptId);
+  return projected
+    ? db.prepare(`SELECT ${columns} FROM receipts WHERE memory_id=? AND id IN (SELECT value FROM json_each(?)) ORDER BY created_at,id`)
+      .all(item.ref.memoryId, JSON.stringify(ids))
+    : db.prepare(`SELECT ${columns} FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16`)
+      .all(item.ref.memoryId).filter(row => ids.includes(row.id));
+}
+
+function engineReceiptPage(db, namespace, original, memo, withheld) {
+  const eligible = (rows, denials) => rows.filter(receipt =>
+    receiptReadSafety(db, { namespace, receipt, memo, withheld: denials }).allowed);
+  const receipts = eligible(original, withheld);
+  if (!original.some(receipt => withheld.has(receipt.id))) return receipts;
+  let batch = original;
+  while (batch.length === 16 && receipts.length < 16) {
+    const after = batch.at(-1);
+    batch = db.prepare(`SELECT * FROM receipts WHERE memory_id=?
+      AND (created_at>? OR (created_at=? AND id>?)) ORDER BY created_at,id LIMIT 16`)
+      .all(after.memory_id, after.created_at, after.created_at, after.id);
+    receipts.push(...eligible(batch, withheldReceiptIdsInside(db, namespace, batch)));
+  }
+  return receipts.slice(0, 16);
 }

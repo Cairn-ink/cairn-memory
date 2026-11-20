@@ -11,6 +11,7 @@ import { assembleContext, receiptEventDate } from './context-read-assembly.mjs';
 import { keyed } from './private-card-input.mjs';
 import { fail } from './validation.mjs';
 import { cardLineageItemInside } from './card-lineage.mjs';
+import { withheldEvidenceInside } from './content-safety.mjs';
 
 // Reuses U5b's candidate index, canonical readers, full fence, v2 projection
 // and deduplication. Only admission/metering belongs to the enclosing role call.
@@ -20,12 +21,19 @@ export function roleEvidence(storage,config) {
   const receipts=createCardReceiptSources(db,(purpose,value)=>keyed(identity.cursorSecret,purpose,[identity.storeId,value]));
   const evidence=createPrivateEvidenceStorage({db,identity,projectSharedSources:true,cardDetailInside:cards.cardDetailInside,receiptRefInside:receipts.refInside});
   const fence=item=>createHmac('sha256',identity.cursorSecret).update(JSON.stringify(['context-read-v1','snapshot-item',identity.storeId,cardLineageItemInside(db,item)])).digest('base64url');
-  function item(ref,readSet,rank,intent='current') {
-    const canonical=evidence.itemsInside(ref.namespace,[ref],intent,readSet)[0];
+  function item(ref,readSet,rank,intent='current',options) {
+    const canonical=evidence.itemsInside(ref.namespace,[ref],intent,readSet,options)[0];
     if (!canonical) fail('evidence_unavailable');
     const {type,state,origin}=canonical;
-    const sourceRows=type==='memory'&&canonical.provenance.sourceAccess==='available'?
-      db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId).filter(row=>canonical.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)):[];
+    let sourceRows = [];
+    if (type === 'memory' && canonical.provenance.sourceAccess === 'available') {
+      const ids = canonical.provenance.receiptMetadata.map(receipt => receipt.receiptId);
+      sourceRows = evidence.receiptsWereProjected(canonical)
+        ? db.prepare('SELECT * FROM receipts WHERE memory_id=? AND id IN (SELECT value FROM json_each(?)) ORDER BY created_at,id')
+          .all(ref.memoryId, JSON.stringify(ids))
+        : db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId)
+          .filter(row => ids.includes(row.id));
+    }
     const date=receiptEventDate(sourceRows);
     const sources=sourceRows.map((row,index)=>{
       const {role,excerpt}=validateSourceReceipt(ref.memoryId,row,source=>createHash('sha256').update(JSON.stringify(source)).digest('hex'));
@@ -54,5 +62,14 @@ export function roleEvidence(storage,config) {
     return assembleContext({prepared,counter:engineProjectionCounter(tokenCounts),policy:{id:'rank-first-whole-v1'},
       budget:{maxTokens:Number.MAX_SAFE_INTEGER,maxItems:24},deadlineAt:Infinity,snapshotOf:()=>null});
   }
-  return {item,search,project:items=>assembled(items).metered.items,details:(items,tokens)=>assembled(items,tokens).diagnostics.items};
+  function projectionOptions(refs, readSet) {
+    return readSet.map(namespace => {
+      const selected = refs.filter(ref => ref.namespace.ownerId === namespace.ownerId &&
+        ref.namespace.scope === namespace.scope && (ref.namespace.projectId ?? '') === (namespace.projectId ?? ''));
+      const cards = selected.filter(ref => ref.type === 'card').map(ref => ref.cardId);
+      const memories = selected.filter(ref => ref.type === 'memory').map(ref => ref.memoryId);
+      return { withheld: withheldEvidenceInside(db, namespace, cards, [], memories) };
+    });
+  }
+  return {item,search,projectionOptions,project:items=>assembled(items).metered.items,details:(items,tokens)=>assembled(items,tokens).diagnostics.items};
 }

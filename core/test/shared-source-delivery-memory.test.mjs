@@ -29,9 +29,10 @@ async function fixture(t, physical) {
   if (full) await migrateEventTime(full);
   else openDatabase(path, { localControls: true }).close();
   const ranked = [], selected = [];
+  let count = () => 1, onRank = () => {};
   const model = {
     contextWindow: 8192,
-    countTokens: () => 1,
+    countTokens: text => count(text),
     extract: () => ({ items: [retired, survivor].map(content => ({ content, kind: 'fact', confidence: .8, sourceIndices: [0] })) }),
     select: ({ input }) => {
       selected.push(input);
@@ -44,6 +45,7 @@ async function fixture(t, physical) {
     },
     rank: ({ input }) => {
       ranked.push(input);
+      onRank();
       return { refs: input.candidates.slice(0, input.limit).map(item => ({ namespaceIndex: item.namespaceIndex, ...ref(item.memory) })) };
     },
   };
@@ -65,7 +67,8 @@ async function fixture(t, physical) {
   const forget = () => ok(core.forget({ namespace, memoryId: a.id, expectedRevision: a.revision }));
   const attach = (receipts, target = namespace) => ok(core.admit({ namespace: target,
     memory: { content: survivor, kind: 'fact' }, receipts })).memory;
-  return { core, db, a, b, stored, get, recall, forget, attach, markers, ranked, selected, path };
+  return { core, db, a, b, stored, get, recall, forget, attach, markers, ranked, selected, path,
+    onCount(callback) { count = callback; }, onRank(callback) { onRank = callback; } };
 }
 
 for (const physical of [29, 53]) {
@@ -94,6 +97,18 @@ for (const physical of [29, 53]) {
       assert.equal(JSON.stringify(value).includes(excerpt), false);
       assert.equal(JSON.stringify(value).includes(retired), false);
     }
+  });
+
+  test(`layout ${physical}: the complete Memory snapshot keeps the surviving Memory without its withdrawn source`, async t => {
+    const f = await fixture(t, physical);
+    const snapshot = () => ok(f.core.sourceSnapshot({ readSet: [namespace] }));
+    assert.ok(snapshot().memories.some(item => item.memory.id === f.b.id && item.receipts[0].excerpt === excerpt));
+    f.forget();
+    const value = snapshot();
+    const item = value.memories.find(item => item.memory.id === f.b.id);
+    assert.ok(item);
+    assert.deepEqual(item.receipts, []);
+    assert.equal(JSON.stringify(value).includes(excerpt), false);
   });
 
   test(`layout ${physical}: plain fetch omits withheld receipt metadata`, async t => {
@@ -140,6 +155,31 @@ for (const physical of [29, 53]) {
     assert.equal(JSON.stringify(f.selected.at(-1).maps).includes('violet instrument'), false);
     assert.deepEqual(ok(result).memories, []);
   });
+
+  for (const during of ['packing', 'ranking']) {
+    test(`layout ${physical}: recall rechecks a marker committed during ${during}`, async t => {
+      const f = await fixture(t, physical);
+      let committed = false;
+      const mark = () => {
+        if (committed) return;
+        const receipt = f.stored(f.b)[0];
+        f.db.prepare('INSERT INTO suppressed VALUES(?,?,?,?)')
+          .run(namespace.ownerId, namespace.scope, namespace.projectId, 'rs1:i:' + receipt.receipt_key);
+        committed = true;
+      };
+      if (during === 'packing') f.onCount(text => {
+        if (text.includes('"candidates"') && text.includes(excerpt)) mark();
+        return 1;
+      });
+      else f.onRank(mark);
+      const result = await f.core.recall({ readSet: [namespace], query: survivor, limit: 6 });
+      assert.equal(committed, true);
+      if (during === 'packing') assert.equal(f.ranked.length, 0);
+      assert.equal(result.ok, false);
+      assert.equal(result.error.code, 'revision_conflict');
+      assert.equal(JSON.stringify(result).includes(excerpt), false);
+    });
+  }
 
   test(`layout ${physical}: receipt pages advance through visible evidence in the same session`, async t => {
     const f = await fixture(t, physical);

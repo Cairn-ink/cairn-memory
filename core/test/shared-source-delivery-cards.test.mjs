@@ -102,3 +102,42 @@ test('engine Card source snapshots omit withdrawn receipts before clustering', a
   assert.ok(JSON.stringify(value).includes(kept));
   missing(value);
 });
+
+test('engine Card revalidation fences a withdrawn secondary source', async t => {
+  const f = await fixture(t), storage = createEngineCardStorage({ db: f.db, identity: f.identity, ready() {} });
+  f.db.prepare('UPDATE receipts SET created_at=? WHERE memory_id=? AND excerpt=?')
+    .run('2025-07-01T00:00:00.000Z', f.b.id, kept);
+  const current = storage.snapshot(ns, 20, () => {}, ' ').memories.find(memory => memory.id === f.b.id);
+  assert.ok(current);
+  assert.notEqual(current.source.receiptId, f.stored.id);
+  storage.validate(ns, [current], () => {});
+  f.forget();
+  assert.throws(() => storage.validate(ns, [current], () => {}), { code: 'source_unavailable' });
+});
+
+test('evidence and Card projections traverse a withdrawn receipt prefix', async t => {
+  const f = await fixture(t);
+  const add = (content, receipts) => ok(f.core.admit({ namespace: ns,
+    memory: { content, kind: 'fact' }, receipts })).memory;
+  let a, b;
+  for (let start = 0; start < 20; start += 4) {
+    const receipts = Array.from({ length: 4 }, (_, index) => ({
+      ...receipt('withdrawn-prefix-' + (start + index)), excerpt: hidden,
+    }));
+    a = add('Synthetic discarded prefix', receipts);
+    b = add('Synthetic retained prefix', receipts);
+  }
+  b = add('Synthetic retained prefix', [{ ...receipt('independent-tail'), excerpt: kept }]);
+  f.db.prepare('UPDATE receipts SET created_at=? WHERE memory_id=?').run('2025-07-01T00:00:00.000Z', b.id);
+  f.db.prepare('UPDATE receipts SET created_at=? WHERE memory_id=? AND excerpt=?')
+    .run('2025-07-02T00:00:00.000Z', b.id, kept);
+  const tail = f.db.prepare('SELECT id FROM receipts WHERE memory_id=? AND excerpt=?').get(b.id, kept);
+  const read = () => ok(f.call('fetchEvidence', { intent: 'current', refs: [memoryRef(b)] })).items[0].provenance;
+  assert.equal(read().receiptMetadata.length, 16);
+  assert.ok(!read().receiptMetadata.some(receipt => receipt.receiptId === tail.id));
+  ok(f.core.forget({ namespace: ns, memoryId: a.id, expectedRevision: a.revision }));
+  assert.deepEqual(read().receiptMetadata.map(receipt => receipt.receiptId), [tail.id]);
+  const storage = createEngineCardStorage({ db: f.db, identity: f.identity, ready() {} });
+  assert.equal(storage.snapshot(ns, 20, () => {}, ' ').memories.find(memory => memory.id === b.id)?.source.receiptId, tail.id);
+  assert.deepEqual(storage.pressureItems(ns, [b], { rawSpans: true })[0].sources.map(source => source.excerpt), [kept]);
+});

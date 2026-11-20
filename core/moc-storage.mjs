@@ -454,13 +454,13 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       const scoreBatch = candidates => {
         const withheld = withheldReceiptIdsInside(db, ns, candidates.flatMap(candidate => candidate.sources.map(item => item.receipt)));
         for (const { memory, bodyScore, sources } of candidates) {
-          let candidateScore = bodyScore, winningExcerpt;
+          let candidateScore = bodyScore, winningExcerpt, receiptId;
           for (const source of sources) {
             if (withheld.has(source.receipt.id) || source.score <= candidateScore) continue;
             candidateScore = source.score;
-            winningExcerpt = source.excerpt;
+            winningExcerpt = source.excerpt; receiptId = source.receipt.id;
           }
-          retain({ memory, score: candidateScore, winningExcerpt });
+          retain({ memory, score: candidateScore, winningExcerpt, receiptId });
         }
       };
       const candidateFor = memory => ({ memory, bodyScore: score(memory.content), sources: candidateSources(memory) });
@@ -510,6 +510,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
           : { type: 'unfiled', ref: { memoryId: memory.id, revision: memory.revision }, label: candidateLabel } };
       };
       const result = rows => ({ rows, epoch: currentEpoch, suppressionEpoch: currentSuppressionEpoch,
+        receiptProofs: eligible.flatMap(candidate => candidate.receiptId ? [candidate.receiptId] : []),
         scanExhausted: stop !== 'changed' && !more && !pruned,
         scanBoundary: { rows: visited, last, stop } });
       const scanRows = (limit, tail) => {

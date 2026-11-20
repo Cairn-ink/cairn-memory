@@ -12,7 +12,7 @@ const where = 'owner_id=? AND scope=? AND project_id=?';
 const sameNamespace = (a, b) => a && b && JSON.stringify(boundary(a)) === JSON.stringify(boundary(b));
 export const CONTENT_SAFETY_POLICY_REVISION = 'content-safety-s1-v1';
 export const CONTENT_SUPPRESSION_REASONS = Object.freeze(['user_forget', 'correction_supersession', 'purge', 'privacy_erase', 'account_erasure']);
-/** @typedef {{allowed:true}|{allowed:false,reason:'user_forget'|'correction_supersession'|'purge'|'privacy_erase'|'account_erasure'|'missing'|'identity_mismatch'|'ineligible'}} SafetyResult */
+/** @typedef {{allowed:true}|{allowed:false,reason:'user_forget'|'correction_supersession'|'purge'|'privacy_erase'|'account_erasure'|'missing'|'identity_mismatch'|'ineligible'|'source_withheld'}} SafetyResult */
 export const memoryContentIdentity = row => createHash('sha256').update(JSON.stringify([row.content, row.fingerprint])).digest('hex');
 const allowed = Object.freeze({ allowed: true });
 const denied = reason => ({ allowed: false, reason });
@@ -427,7 +427,8 @@ export function withheldEvidenceInside(db, ns, ids, storedReceiptIds = [], memor
   if (!db.isTransaction) throw Object.assign(new Error('Evidence projection requires a read snapshot'), { code: 'storage_error' });
   bindReceiptMarkerKeys(db);
   const lookups = [], args = [];
-  if (ids.length) {
+  const layout = cachedContentLayout(db);
+  if (ids.length && (!layout || layout.base >= 21)) {
     const lineage = hasCardLineage(db);
     const sources = lineage
       ? `card_body_sources b ON b.owner_id=c.owner_id AND b.scope=c.scope AND b.project_id=c.project_id
@@ -459,6 +460,7 @@ CROSS JOIN receipts r ON r.id IN (
 WHERE m.owner_id=? AND m.scope=? AND m.project_id=?`);
     args.push(JSON.stringify(memoryIds), perMemory, ...boundary(ns));
   }
+  if (!lookups.length) return { cards: new Set(), receipts: new Set() };
   const rows = db.prepare(`WITH candidates(kind,id,receipt_key,client,session_id,event_id,role) AS (
 ${lookups.join(' UNION ALL ')})
 SELECT r.kind,r.id FROM candidates r

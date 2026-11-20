@@ -20,6 +20,7 @@ const attribution = { status: 'unassessed', commitment: 'unknown' };
  * The only callbacks are internal canonical readers, never host/model ports. */
 export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, receiptRefInside, memoReceiptEventTime = false, projectSharedSources = false }) {
   const bind = (purpose, value) => keyed(identity.cursorSecret, purpose, [identity.storeId, value]);
+  const projectedReceipts = new WeakSet();
   const qualification = createQualificationStorage({ db, receiptKey: receipt =>
     createHash('sha256').update(JSON.stringify(receipt)).digest('hex') });
   const generations = ns => ({ memory: db.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`)
@@ -156,8 +157,21 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     const selectedReceipts=projected?JSON.parse(row.batch_receipts):undefined;
     const allReceiptRows = selectedReceipts ?? db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 17').all(row.id);
     const withheld = projectSharedSources ? options?.withheld?.receipts ?? withheldReceiptIdsInside(db, ns, allReceiptRows) : undefined;
-    const receiptRows = allReceiptRows.filter(receipt => receiptReadSafety(db, { namespace: ns, receipt, memo, withheld,
+    const eligibleReceipts = (rows, denials) => rows.filter(receipt => receiptReadSafety(db, { namespace: ns, receipt, memo, withheld: denials,
       rawAncestryEmpty:projected && row.empty_raw_ancestry===1 && !contentSuppressionMayMatchInside(db,ns,{kind:'receipt',key:receipt.id}) }).allowed);
+    const receiptRows = eligibleReceipts(allReceiptRows, withheld);
+    const projectedSharedSources = allReceiptRows.some(receipt => withheld?.has(receipt.id));
+    if (projectedSharedSources) {
+      let batch = allReceiptRows;
+      while (batch.length === 17 && receiptRows.length <= 16) {
+        const after = batch.at(-1);
+        batch = db.prepare(`SELECT * FROM receipts WHERE memory_id=?
+          AND (created_at>? OR (created_at=? AND id>?)) ORDER BY created_at,id LIMIT 17`)
+          .all(row.id, after.created_at, after.created_at, after.id);
+        allReceiptRows.push(...batch);
+        receiptRows.push(...eligibleReceipts(batch, withheldReceiptIdsInside(db, ns, batch)));
+      }
+    }
     if(selectedReceipts)(memo.evidenceReceipts??=new Map()).set(JSON.stringify([boundary(ns),row.id]),selectedReceipts);
     if (!contentReadSafety(db, { identity, namespace: ns, ref, intent, memo, ...(safety ? { selectedMemory: row, selectedReceipts } : {}), receipts: receiptRows.slice(0, 16) }).allowed) fail('evidence_unavailable');
     const sourceAccess = memoryReadEligible(row) ? 'available' : 'unavailable-for-noncurrent-memory';
@@ -166,7 +180,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     const assessed = projection && anchoredReadSafety(db, { namespace: ns, memoryId: row.id, anchors: projection.anchors, memo, project: projectSharedSources }).allowed ? projection : null;
     const qualified = assessed ? { ...assessed, sourceText: 'read-separately',
       anchors: assessed.anchors.map(({ text, ...anchor }) => anchor) } : null;
-    return { ...memoryMetadata(ns, row), content: row.content, qualification: qualified,
+    const value = { ...memoryMetadata(ns, row), content: row.content, qualification: qualified,
       provenance: { sources, sourceAccess,
         receiptMetadata: receiptRows.slice(0, 16).map(receipt => ({ memoryId: row.id,
           memoryRevision: row.revision, receiptId: receipt.id })),
@@ -174,6 +188,8 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
         meaning: 'unassessed', attribution, corroboration: 'not-assessed',
         coverage: { status: allReceiptRows.length > 16 || receiptRows.length !== allReceiptRows.length ? 'budget_exhausted' : 'complete', included: Math.min(receiptRows.length, 16),
           omitted: allReceiptRows.length > 16 ? null : allReceiptRows.length - receiptRows.length } } };
+    if (projectedSharedSources) projectedReceipts.add(value);
+    return value;
   }
   function makeSnapshot(ns, intent, refs, items, accessGeneration) {
     return encode('evidence-snapshot-v1', { version: 1,
@@ -326,6 +342,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     return { ...options, withheld: withheldEvidenceInside(db, ns, cards, [], memories) };
   }
   return Object.freeze({
+    receiptsWereProjected: item => projectedReceipts.has(item),
     // Internal U5 read seam: authorization and the deferred transaction belong
     // to the caller. Reuses the exact current/history canonical predicate/DTO.
     itemsInside(ns, refs, intent, readSet, options) {

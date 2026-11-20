@@ -626,8 +626,16 @@ export function createMemoryRuntime(input, internal) {
         conflicts: conflictStorage.inspect(ns, id),
         ...(includeQualification ? { qualification: safeQualification(ns, memory) } : {}),
         ...(memory.currentness === 'historical'
-          ? { supersession: supersessionStorage.inspect(ns, id) } : {}), epoch: currentEpoch };
+          ? { supersession: safeSupersession(ns, id) } : {}), epoch: currentEpoch };
     }, undefined, { deferred: true });
+  }
+
+  function safeSupersession(ns, id) {
+    const supersession = supersessionStorage.inspect(ns, id);
+    const receiptIds = supersession?.receiptIds ?? [];
+    const withheld = withheldStoredReceiptIdsInside(db, ns, receiptIds);
+    if (!withheld.size) return supersession;
+    return { ...supersession, receiptIds: receiptIds.filter(id => !withheld.has(id)), evidenceAvailable: false };
   }
 
   function safeQualification(ns, row) {
@@ -643,11 +651,12 @@ export function createMemoryRuntime(input, internal) {
   }
   function fillReceiptPage(ns, id, original, withheld, limit, recent = false) {
     const visible = [], offsets = new Map();
-    let batch = original, physical = 0;
+    let batch = original, physical = 0, moreVisible = false;
     const add = (rows, denied) => {
       for (const receipt of rows) {
         physical++;
-        if (denied.has(receipt.id) || visible.length >= limit) continue;
+        if (denied.has(receipt.id)) continue;
+        if (visible.length >= limit) { moreVisible = true; continue; }
         visible.push(receipt);
         offsets.set(receipt.id, physical);
       }
@@ -663,7 +672,7 @@ export function createMemoryRuntime(input, internal) {
       const denied = withheldReceiptIdsInside(db, ns, batch);
       add(batch, denied);
     }
-    return { visible, offsets, physical, complete: batch.length < limit };
+    return { visible, offsets, physical, complete: batch.length < limit && !moreVisible };
   }
   const receiptPageOffsets = new WeakMap();
   function receiptPage(ns, row, offset, count, recent = false) {
@@ -740,7 +749,7 @@ export function createMemoryRuntime(input, internal) {
       if (positions.withheld) receiptShortMemories.add(memory);
       return { memory, receipts, receiptOffsets: positions.offsets, receiptEnd: positions.end, epoch: currentEpoch,
         ...(includeQualification ? { qualification: safeQualification(ns, row) } : {}),
-        ...(view === 'historical' ? { supersession: supersessionStorage.inspect(ns, row.id) } : {}) };
+        ...(view === 'historical' ? { supersession: safeSupersession(ns, row.id) } : {}) };
     }, undefined, { deferred: true });
   }
 
@@ -781,8 +790,12 @@ export function createMemoryRuntime(input, internal) {
         return { namespaceIndex, ...readSourceEvidence(row) };
       });
       for (let index = 0; index < namespaces.length; index++) {
-        const ids = memories.filter(memory => memory.namespaceIndex === index).flatMap(memory => memory.receipts.map(receipt => receipt.id));
-        if (withheldStoredReceiptIdsInside(db, namespaces[index], ids).size) fail('source_unavailable');
+        const selected = memories.filter(memory => memory.namespaceIndex === index);
+        const ids = selected.flatMap(memory => memory.receipts.map(receipt => receipt.id));
+        const withheld = withheldStoredReceiptIdsInside(db, namespaces[index], ids);
+        if (withheld.size) for (const memory of selected) {
+          memory.receipts = memory.receipts.filter(receipt => !withheld.has(receipt.id));
+        }
       }
       const snapshot = { memories, namespaces: boundaries, coverage: 'complete-current-admitted',
         semanticCoverage: 'unassessed', evidenceTrust: 'untrusted-data-not-instructions' };
@@ -801,9 +814,10 @@ export function createMemoryRuntime(input, internal) {
         if (!safeMemory(namespace, row) || row.revision !== revision) fail('revision_conflict');
         return row;
       });
-      for (const { namespace, indexRevision, suppressionEpoch } of namespaces) {
+      for (const { namespace, indexRevision, suppressionEpoch, receiptProofs } of namespaces) {
         indexStorage.assertAvailable(namespace);
         if (epoch(namespace) !== indexRevision || cachedContentLayout(db)?.suppressionRevision && suppressionEpoch !== undefined && suppressionEpoch !== contentSuppressionRequestFenceInside(db, namespace.ownerId)) fail('index_revision_conflict');
+        if (receiptProofs?.length && withheldStoredReceiptIdsInside(db, namespace, receiptProofs).size) fail('revision_conflict');
       }
       if (isSourceContext(contextMode)) {
         const sources = rows.map((row, index) => {

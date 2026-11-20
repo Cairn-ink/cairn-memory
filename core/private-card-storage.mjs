@@ -374,8 +374,11 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
             .sort((a,b) => Buffer.compare(Buffer.from(a.id), Buffer.from(b.id))).slice(0, batchLimit);
           const { cards: withheld } = withheldEvidenceInside(db, ns, rows.map(row => row.id));
           for (const row of rows) {
-            scanned++; scanAfter = row.id; cardAfter = row.cursor_row;
-            if (cardSafe(ns, row, 'listCards', memo, false) && !withheld.has(row.id)) visible.push(row);
+            scanAfter = row.id;
+            const eligible = cardSafe(ns, row, 'listCards', memo, false);
+            if (withheld.has(row.id)) continue;
+            scanned++; cardAfter = row.cursor_row;
+            if (eligible) visible.push(row);
             if (visible.length > count) break;
           }
           if (rows.length < batchLimit) { cardComplete = true; break; }
@@ -388,13 +391,29 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
         // last examined row, including when the page contains no visible IDs.
         cardRows.push(...visible.slice(0, count));
       } else {
-        const rows = db.prepare(`SELECT rowid AS cursor_row,id,revision,state,body_revision,created_at,updated_at,confirmed_at
-        FROM private_cards WHERE ${where} AND state IN (${input.states.map(() => '?').join(',')}) AND id>? ORDER BY id LIMIT ?`)
-          .all(...boundary(ns), ...input.states, after, count + 1);
-        cardComplete = rows.length <= count;
-        cardAfter = rows.slice(0, count).at(-1)?.cursor_row;
-        const { cards: withheld } = withheldEvidenceInside(db, ns, rows.map(row => row.id));
-        cardRows.push(...rows.slice(0, count).filter(row => cardSafe(ns, row, 'listCards', memo, false) && !withheld.has(row.id)));
+        const probe = db.prepare(`SELECT rowid AS cursor_row,id,revision,state,body_revision,created_at,updated_at,confirmed_at
+        FROM private_cards WHERE ${where} AND state IN (${input.states.map(() => '?').join(',')}) AND id>? ORDER BY id LIMIT ?`);
+        let rows = probe.all(...boundary(ns), ...input.states, after, count + 1);
+        let { cards: withheld } = withheldEvidenceInside(db, ns, rows.map(row => row.id));
+        if (!withheld.size) {
+          cardComplete = rows.length <= count;
+          cardAfter = rows.slice(0, count).at(-1)?.cursor_row;
+          cardRows.push(...rows.slice(0, count).filter(row => cardSafe(ns, row, 'listCards', memo, false)));
+        } else {
+          const visible = [];
+          for (;;) {
+            for (const row of rows) {
+              if (cardSafe(ns, row, 'listCards', memo, false) && !withheld.has(row.id)) visible.push(row);
+              if (visible.length > count) break;
+            }
+            if (visible.length > count || rows.length <= count) break;
+            rows = probe.all(...boundary(ns), ...input.states, rows.at(-1).id, count + 1);
+            withheld = withheldEvidenceInside(db, ns, rows.map(row => row.id)).cards;
+          }
+          cardComplete = visible.length <= count;
+          cardRows.push(...visible.slice(0, count));
+          cardAfter = cardRows.at(-1)?.cursor_row;
+        }
       }
     }
     let items = isCards ? cardRows.map(row => metadata(ns, row, undefined, undefined, memo)) :

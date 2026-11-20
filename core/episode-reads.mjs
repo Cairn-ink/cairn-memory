@@ -168,14 +168,26 @@ export function createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRea
         rows = rows.slice(0, filter.limit + 1);
       }
       if (operation === 'listEpisodes') {
-        for (const row of rows) assertEpisodeRead?.(ns, row, projected.budget);
-        const withheld = new Set(withheldEpisodeSourcesInside(db, ns, rows.map(row => row.id)).map(row => row.episode_id));
-        const delivered = rows.flatMap(row => {
-          if (withheld.has(row.id) && filter.timeBasis === 'event') return [];
-          const item = episodeMetadata(ns, episodeReadRow(withheld.has(row.id) ? projectEpisodeWithheldSources(row) : row));
-          return [{ item, key: { time: filter.timeBasis === 'event' ? item.eventEnd : item.firstReceivedAt, id: row.id } }];
-        });
-        return { epoch: current, rows: delivered };
+        const delivered = [];
+        let episodeRows = rows, budget = projected.budget;
+        for (;;) {
+          const validated = episodeRows.map(row => {
+            assertEpisodeRead?.(ns, row, budget);
+            const item = episodeMetadata(ns, episodeReadRow(row));
+            return { row, item, key: { time: filter.timeBasis === 'event' ? item.eventEnd : item.firstReceivedAt, id: row.id } };
+          });
+          const withheld = new Set(withheldEpisodeSourcesInside(db, ns, episodeRows.map(row => row.id)).map(row => row.episode_id));
+          for (const { row, item, key } of validated) {
+            if (!withheld.has(row.id)) delivered.push({ item, key });
+            else if (filter.timeBasis === 'receipt') delivered.push({ item: episodeMetadata(ns,
+              episodeReadRow(projectEpisodeWithheldSources(row))), key });
+          }
+          if (delivered.length > filter.limit || episodeRows.length <= filter.limit) break;
+          const next = episodeProjection(ns, rangeQuery(ns, operation, filter, validated.at(-1).key), current);
+          budget = next.budget;
+          episodeRows = db.prepare(next.query.sql).all(...next.query.params);
+        }
+        return { epoch: current, rows: delivered.slice(0, filter.limit + 1) };
       }
       return { epoch: current, rows: rows.map(row => {
         const receipt = filter.timeBasis === 'receipt';

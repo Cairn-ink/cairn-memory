@@ -973,14 +973,19 @@ export function createMemoryCore(input, internal) {
         ...(isSourceContext(contextMode) ? { sourceMode: contextMode } : {}),
         queryDigest: createHmac('sha256', cursorSecret)
           .update(JSON.stringify([QUERY_EXCERPT_VERSION, query])).digest('base64url') };
-      const validateFresh = (candidates = []) => runtime.recallSnapshot(candidates.map((candidate) => ({
+      const validateFresh = (candidates = [], evidence = []) => runtime.recallSnapshot(candidates.map((candidate) => ({
         namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
         revision: candidate.revision,
         receiptLimit: candidate.receiptCap ?? candidate.item?.receipts?.length ?? 0,
         ...(candidate.receiptCap ? { receiptOrder: 'recent' } : {}),
-      })), [], namespaces.flatMap((namespace) => {
+      })), [], namespaces.flatMap((namespace, namespaceIndex) => {
         const page = navigation.pages.get(namespaceBinding(namespace));
-        return page ? [{ namespace, indexRevision: page.epoch, suppressionEpoch: page.suppressionEpoch }] : [];
+        return page ? [{ namespace, indexRevision: page.epoch, suppressionEpoch: page.suppressionEpoch,
+          receiptProofs: [...(page.receiptProofs ?? []), ...evidence.filter(item => item.namespaceIndex === namespaceIndex).flatMap(item => [
+            ...item.receipts.map(receipt => receipt.id),
+            ...(item.qualification?.anchors.map(anchor => anchor.receiptId) ?? []),
+            ...(item.rationale?.sources.flatMap(source => source.receipts.map(receipt => receipt.id)) ?? []),
+          ])] }] : [];
       }), includeQualification);
       const storage = { map: (request) => mapPage(request, navigation), fetch, validateFresh,
         recentReceipts: (ref, limit) => runtime.recentReceipts(namespaces[ref.namespaceIndex], ref, limit),
