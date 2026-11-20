@@ -269,7 +269,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
     object(input, ['namespace','client','sessionId','sessionKey']);
     const byKey = Object.hasOwn(input, 'sessionKey');
     if (byKey === Object.hasOwn(input, 'sessionId')) fail('invalid_input');
-    const { client, sessionId } = input, namespace = rawNamespace(input.namespace);
+    const { client } = input, namespace = rawNamespace(input.namespace);
     let session;
     if (byKey) {
       rawClient(client);
@@ -278,6 +278,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       if (typeof sessionKey !== 'string' || !/^s1:[0-9a-f]{64}$/.test(sessionKey)) fail('invalid_input');
       session = sessionKey;
     } else {
+      const { sessionId } = input;
       session = journal.sessionKey(namespace, client, sessionId);
     }
     return transaction(db, () => {

@@ -87,6 +87,59 @@ test('stored-key and session-ID fences write the same boundary and release the s
   assert.deepEqual(await effects(true), byId);
 });
 
+test('stored-key and session-ID fences have the same local privacy effects', async t => {
+  const part = splitRaw('Synthetic pending reservation.', { size: 16 })[0];
+  const effects = async byStoredKey => {
+    const workspace = createTestWorkspace(t, { prefix: 'raw-fence-local-' });
+    const path = join(workspace.path, 'store.sqlite');
+    const core = openMemoryCore({ path, raw: true, rawSearch: false });
+    workspace.defer(() => core.close());
+    const db = new DatabaseSync(path);
+    workspace.defer(() => db.close());
+
+    const { raw } = ok(await core.captureRaw(request(part, boundary)));
+    const sessionKey = storedKey(db, raw.conversationId);
+    const pending = db.prepare('SELECT assembly_state,reason,reserved_bytes FROM raw_messages WHERE conversation_id=?');
+    const before = pending.get(raw.conversationId);
+    assert.equal(before.assembly_state, 'pending');
+    assert.ok(before.reserved_bytes > 0);
+
+    const calls = [];
+    const prepare = DatabaseSync.prototype.prepare;
+    // The tombstone trigger also queues a job. Observe the explicit enqueue
+    // from fenceInside so the fallback INSERT alone cannot satisfy this check.
+    const spy = t.mock.method(DatabaseSync.prototype, 'prepare', function (sql) {
+      const statement = prepare.call(this, sql);
+      if (!sql.startsWith('INSERT OR IGNORE INTO local_raw_uuid_jobs(')) return statement;
+      return { run(...args) { calls.push(args); return statement.run(...args); } };
+    });
+    const input = byStoredKey ? { sessionKey } : { sessionId: source.sessionId };
+    let result;
+    try {
+      result = ok(core.fenceSession({ ...boundary, ...input }));
+    } finally {
+      spy.mock.restore();
+    }
+    assert.deepEqual(calls, [[ns.ownerId, ns.scope, ns.projectId ?? '', boundary.client, sessionKey]],
+      'fenceInside must explicitly enqueue the UUID job for the fenced session');
+
+    const fences = fenceRows(db);
+    const jobs = db.prepare('SELECT * FROM local_raw_uuid_jobs').all();
+    assert.deepEqual(fences.map(row => row.session_key), [sessionKey]);
+    assert.deepEqual(jobs.map(row => row.session_key), [sessionKey]);
+    const after = { ...pending.get(raw.conversationId) };
+    assert.deepEqual(after, { assembly_state: 'closed', reason: 'capture_barrier', reserved_bytes: 0 });
+    assert.equal(usage(core).reservedBytes, 0);
+    const refusal = await core.captureRaw(next);
+    assert.deepEqual(refusal, refused('conversation_deleted'));
+    // Each store hashes the same session with its own identity.
+    return { fences: fences.map(row => ({ ...row, session_key: source.sessionId })),
+      jobs: jobs.map(row => ({ ...row, session_key: source.sessionId })), result, after, refusal };
+  };
+  const byId = await effects(false);
+  assert.deepEqual(await effects(true), byId);
+});
+
 test('fence validation requires exactly one session field and an exact stored-key format', t => {
   const { core, db } = hostFixture(t);
   for (const [name, fields] of [
