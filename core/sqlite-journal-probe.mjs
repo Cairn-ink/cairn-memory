@@ -1,6 +1,6 @@
 // Keep this module SQLite-free at link time (store-fence is CLI-reachable).
 import { spawnSync } from 'node:child_process';
-import { lstatSync, readdirSync } from 'node:fs';
+import { lstatSync, readdirSync, statfsSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -86,7 +86,14 @@ const observedProbe = `
 // cache; compare nanosecond stats before AND after probing, never cache errors.
 const cache = new Map();
 // Metadata only: safe while this process (including Workers) holds SQLite locks.
-export const sqliteFileStat = path => lstatSync(path, { bigint: true });
+export function sqliteFileStat(path, { withVolume = false, readVolume = statfsSync } = {}) {
+  const stat = lstatSync(path, { bigint: true });
+  if (withVolume) {
+    const { bavail, bsize } = readVolume(dirname(path), { bigint: true });
+    stat.volumeAvailableBytes = bavail * bsize;
+  }
+  return stat;
+}
 const fingerprint = path => {
   const s = lstatSync(path, { bigint: true });
   return [s.dev, s.ino, s.size, s.mtimeNs, s.ctimeNs].join(':');

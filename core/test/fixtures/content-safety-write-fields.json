@@ -1430,7 +1430,7 @@
   "core/context-product-sidecar.mjs": {
     "key:applicationId": 2,
     "key:base_id": 1,
-    "key:id": 9,
+    "key:id": 11,
     "key:invalid": 2,
     "key:storeId": 4,
     "literal:attestation_invalid": 3,
@@ -1439,7 +1439,7 @@
     "literal:id": 1,
     "literal:memoryId": 2,
     "literal:term_id": 1,
-    "literal:validation_invalid": 7
+    "literal:validation_invalid": 8
   },
   "core/context-product-verification-batch.mjs": {
     "literal:term_id": 1

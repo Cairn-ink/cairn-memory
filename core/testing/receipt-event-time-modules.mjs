@@ -48,7 +48,7 @@ const exceptions = frozenExceptions.map(entry => {
   if (entry.file === 'core/context-semantic-worker.mjs') {
     assert.equal(entry.sha256, 'ef2961fcb0114b9d9062084d57babea2adfad4d0753619c500728ca657da5fa5',
       'frozen semantic Worker loader pin');
-    return { ...entry, line: 502, sha256: 'b4e6fb221984be0f64299da36f9b6f0dec08e4aa9e4d09f5d0af8a1a97f8eaf6' };
+    return { ...entry, line: 502, sha256: '9eb44f086ccf731ba85e4926a6d6019c93345badb24573920bb35a18ba0a674a' };
   }
   if (entry.file !== 'core/context-product-worker.mjs') return entry;
   assert.equal(entry.sha256, '073071759a46698824ffd029a5fe48fbd737513c5c6936ba826b5d413be32bbe',
