@@ -76,10 +76,22 @@ test('E7 conversation deletion forgets deduplicated/historical lineage with supp
   const unrelated=ok(f.core.admit({namespace:ns,memory:{content:'Unrelated',kind:'fact'},receipts:[{...receipt,eventId:'other',excerpt:'Unrelated'}]})).memory;
   const job=draft(f,r,input);f.runtime.commitEpisodeDraft(ns,job.commit);
   const revision=inspect(f,r.episodeId).episode.revision;
+  const originalFingerprint = f.db.prepare('SELECT fingerprint FROM memories WHERE id=?').get(memory.id).fingerprint;
+  const retired = f.db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(memory.id);
   ok(f.core.forgetEpisode({namespace:ns,episodeId:r.episodeId,expectedRevision:revision}));
   assert.equal(f.core.get({namespace:ns,memoryId:memory.id}).error.code,'memory_not_found');
   assert.equal(f.core.get({namespace:ns,memoryId:unrelated.id}).ok,true);
-  assert.equal(f.db.prepare('SELECT count(*) n FROM suppressed').get().n,1);
+  assert.equal(retired.length, 2, 'exact retiring receipt population');
+  const addressDigest = digest;
+  const suppressed = f.db.prepare(`SELECT fingerprint FROM suppressed
+    WHERE owner_id=? AND scope=? AND project_id=? ORDER BY fingerprint`)
+    .all(ns.ownerId, ns.scope, ns.projectId ?? '').map(row => row.fingerprint);
+  const markers = retired.flatMap(row => ['rs1:i:' + row.receipt_key,
+    'rs1:a:' + addressDigest(JSON.stringify(['receipt-source-address-v1', row.client, row.session_id, row.event_id, row.role]))]);
+  assert.equal(f.db.prepare('SELECT count(*) AS n FROM suppressed').get().n,
+    1 + markers.length, 'the whole table contains only the expected suppression rows');
+  assert.deepEqual(suppressed.filter(value => !value.startsWith('rs1:')), [originalFingerprint]);
+  assert.deepEqual(suppressed.filter(value => value.startsWith('rs1:')), markers.sort());
   assert.equal(f.db.prepare('SELECT count(*) n FROM episode_sources').get().n,0);
   assert.throws(()=>register(f,input),/capture_evidence_closed/);
   assert.equal(f.core.getEpisode({namespace:ns,episodeId:r.episodeId}).error.code,'episode_not_found');
