@@ -7,7 +7,7 @@ import { join, relative } from 'node:path';
 import { types } from 'node:util';
 import { ownData } from '../../../core/local-authority-input.mjs';
 import { readLocalInstallation } from './local-setup.mjs';
-import { createLocalRawHost, localHostResult } from './local-host.mjs';
+import { createLocalRawHost, localHostResult, trackHostStartChecks } from './local-host.mjs';
 import { directory, events } from './local-setup-files.mjs';
 import { absolute, exact, locations, runtime, checkSignal, fail, failure, reasons as setupReasons } from './local-setup-input.mjs';
 
@@ -74,8 +74,11 @@ export async function runLocalRawHook(value,options = {}) {
     const claudeStart = record.request.client === 'claude-code' && input.event === 'SessionStart';
     const before = claudeStart ? await withStartIdentity(paths.profile,selection,
       ({authorityCommitment},source) => ({authorityCommitment,source})) : undefined;
+    const hostOptions = { signal:call.signal };
+    const startCheck = before && trackHostStartChecks(hostOptions);
     async function recordAttempt(reason,present) {
-      if (!['store_invalid','config_invalid','state_busy'].includes(reason)) return;
+      if (!['store_invalid','config_invalid','state_busy'].includes(reason) &&
+          !(startCheck?.stage && ['cancelled','work_limit'].includes(reason))) return;
       try {
         const kind = (present ?? await source(record,selection.sourcePath,true)) ? 'present':'fresh';
         await withStartIdentity(paths.profile,selection,(identity,startSource) => {
@@ -87,7 +90,7 @@ export async function runLocalRawHook(value,options = {}) {
     const host = createLocalRawHost({ profilePath:paths.profile });
     // Capture still requires the real host to verify preparation, profile and
     // fresh SQL permission. A busy start can record transcript presence alone.
-    const status = await host.status({ signal:call.signal });
+    const status = await host.status(hostOptions);
     if (status.status !== 'ready') {
       if (before) await recordAttempt(status.reason);
       fail('authority_changed');
@@ -102,7 +105,7 @@ export async function runLocalRawHook(value,options = {}) {
       try {
         return await stateLock(paths.lock,async () => {
           if ((await readLocalInstallation(paths.root)).phase !== 'active') fail('authority_changed');
-          const outcome = await host.markStart({...selection,start:'eof'},{signal:call.signal});
+          const outcome = await host.markStart({...selection,start:'eof'},hostOptions);
           if (before) await recordAttempt(outcome.reason,false);
           return hookResult(outcome.status,outcome.status === 'ready' ? null:outcome.reason);
         });
@@ -112,7 +115,7 @@ export async function runLocalRawHook(value,options = {}) {
       }
     }
     const outcome = await (input.event === 'SessionStart' || input.event === 'UserPromptSubmit'
-      ? host.initialize({ ...selection,start:'eof' },{ signal:call.signal }) : host.run(selection,{ signal:call.signal }));
+      ? host.initialize({ ...selection,start:'eof' },hostOptions) : host.run(selection,hostOptions));
     if (before) await recordAttempt(outcome.reason,present);
     return hookResult(outcome.status,['ready','progress'].includes(outcome.status) ? null:outcome.reason);
   } catch (error) {
