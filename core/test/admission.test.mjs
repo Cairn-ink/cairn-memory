@@ -192,9 +192,12 @@ test('completed outcomes survive restart, correction and forget without persisti
   const corrected = ok(restarted.correct({ namespace, memoryId: id, expectedRevision: result.memories[0].revision,
     content: 'Prefer full worked examples.', kind: 'instruction', receipt: receipt('correction') }));
   assert.deepEqual(claim(restarted), { duplicate: true, memoryIds: [id], suppressedCount: 0 });
-  const suppressed = ok(finish(restarted, claim(restarted, 'suppressed').token,
-    [item(), item(), item('Unsuppressed novel note')], 'suppressed'));
-  assert.equal(suppressed.suppressedCount, 2);
+  const { token } = claim(restarted, 'suppressed');
+  const before = snapshot(db);
+  error(finish(restarted, token, [item(), item(), item('Unsuppressed novel note')], 'suppressed'), 'source_excluded');
+  const after = snapshot(db);
+  assert.deepEqual(after, before);
+  const suppressed = { memories: after[0] };
   assert.equal(suppressed.memories.length, 1);
   ok(restarted.forget({ namespace, memoryId: id, expectedRevision: corrected.memory.revision }));
   assert.deepEqual(claim(restarted), { duplicate: true, memoryIds: [id], suppressedCount: 0 });

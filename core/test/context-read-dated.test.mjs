@@ -31,6 +31,7 @@ import { deepFreeze } from '../private-card-input.mjs';
 import { createContentReadMemo } from '../content-safety.mjs';
 import { cardLineageItemInside } from '../card-lineage.mjs';
 
+const datedSQL = JSON.parse(readFileSync(new URL('./fixtures/context-read-dated-sql.json', import.meta.url), 'utf8'));
 const fixtureBase = Number(process.env.CAIRN_DATED_TEST_BASE ?? 18);
 assert.ok([18, 23, 33].includes(fixtureBase), 'known dated fixture base');
 const dated = 'representation-v2-dated';
@@ -288,7 +289,11 @@ function enclosingReader(kind, definitions, port, { unavailable = 0, localStatus
     performance: { now: () => 0 }, ready() {}, contextInput, authorize: () => access,
     searchCandidates: async () => ({ ok: true, horizon: candidates, check() {} }), read: work => work(),
     canonicalFence: () => [{ memory: 1 }], cardDependencyFence: () => ({}),
-    db: { prepare(sql) { assert.match(sql, /^SELECT \* FROM receipts/); return { all: id => rows.get(id) }; } },
+    db: { prepare(sql) {
+      assert.equal(sql, datedSQL.expectedStatement);
+      return { all: (idsJSON, memoryId) => JSON.parse(idsJSON).flatMap(id =>
+        (rows.get(memoryId) ?? []).filter(row => row.id === id)) };
+    } },
     evidence: { itemsInside: (_ns, refs) => refs.map(ref => { const item = canonical.get(ref.memoryId); if (!item) fail('evidence_unavailable'); return item; }) },
     cachedContentLayout: () => safety ? { suppressionRevision: 1 } : null, createContentReadMemo, cardLineageItemInside,
     namespaceKey, receiptEventDate, validateSourceReceipt, createHash, bind, encode, ASSEMBLY_LIMITS, CONTEXT_LIMITS,

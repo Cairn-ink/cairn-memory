@@ -1,5 +1,5 @@
 {
-  "revision": "fd5c59ef8e67cc58bb855a95f8910c668150bfa3",
+  "revision": "c02e5135fad9ea449047e5b6325726f55c248864",
   "coverage": [
     "capture",
     "recall",
@@ -377,475 +377,475 @@
           "capture",
           "bf35dcb6a51413eceba6883150363d70f6bb14f8878a52cd5b709df8236dbce6",
           72,
-          182
+          198
         ],
         [
           "capture",
           "7c772d1e206229e84e1441f7c92b0cc649d6e9d495388443af3a6597fa9b1934",
-          182,
-          194
+          198,
+          210
         ],
         [
           "list",
           "c75f2de7d1bec7f4c4b9f46f1de3db2a647baa32508ce79cda92394e3d726213",
-          194,
-          198
+          210,
+          214
         ],
         [
           "recall",
           "6b854b8122309b563530bb209d9708449ecd008f4321f99765df7b4e9f95ea51",
-          198,
-          357
-        ],
-        [
-          "submitSourceNote",
-          "739386208991255daa179450a851a183ad71d537dc829c8d2508c0e1f14fa78b",
-          357,
-          368
-        ],
-        [
-          "submitSourceNote",
-          "739386208991255daa179450a851a183ad71d537dc829c8d2508c0e1f14fa78b",
-          368,
+          214,
           371
         ],
         [
           "submitSourceNote",
-          "65e5ace67336f4b8a6f8c70dea1cb66da0d2d0ecb1db1e8ef918453f6cd54886",
+          "739386208991255daa179450a851a183ad71d537dc829c8d2508c0e1f14fa78b",
           371,
-          374
+          382
+        ],
+        [
+          "submitSourceNote",
+          "739386208991255daa179450a851a183ad71d537dc829c8d2508c0e1f14fa78b",
+          382,
+          385
+        ],
+        [
+          "submitSourceNote",
+          "65e5ace67336f4b8a6f8c70dea1cb66da0d2d0ecb1db1e8ef918453f6cd54886",
+          385,
+          388
         ],
         [
           "createCardDraft",
           "2065f2d077a8f01bf4baec4bdbb17fc3697ba1a7b7403e75633d65f153a39d46",
-          374,
-          389
+          388,
+          403
         ],
         [
           "editCardDraft",
           "b6f7718a770eaccd9354fdc74e4c97721a72779cc5444f49995522fe0e7f6b48",
-          389,
-          410
+          403,
+          424
         ],
         [
           "editCardDraft",
           "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
-          410,
-          414
+          424,
+          428
         ],
         [
           "confirmCardDraft",
           "0db3db3760a776a9e78c1621102173a6e311a3fdce4b02a07a1c008332db0bad",
-          414,
-          442
+          428,
+          456
         ],
         [
           "editKnowledgeCard",
           "49bcf96fb2127f2e551b29913c33cbecddc88f6db8f6e46fa5b32a2960f14054",
-          442,
-          469
+          456,
+          483
         ],
         [
           "getCard",
           "71559a38e33736f6faed8de84d69c369c5bb64929dd5af6822f272b68804e557",
-          469,
-          481
+          483,
+          496
         ],
         [
           "inspectCardOperation",
           "6cc21ce33d4bb0ccb04e473838e3817616cf9d94f85aad9eecd1c688cef951c6",
-          481,
-          484
+          496,
+          499
         ],
         [
           "inspectCardOperation",
           "3b5f5e21c5b580819e6ca26dbaa09479ee2d902d53add0bbd66ff6e4f71b9e90",
-          484,
-          487
+          499,
+          502
         ],
         [
           "getSource",
           "a6a0793d4f660797a58212316ea829dc8fdd03a135a16f702528a332799a0cde",
-          487,
-          490
+          502,
+          505
         ],
         [
           "fetchEvidence",
           "54a52ae7525a96fd4a6227906fa70e03ddee790960f0e29ff698fb13db3c9aff",
-          490,
-          505
+          505,
+          521
         ],
         [
           "revalidateEvidence",
           "54a52ae7525a96fd4a6227906fa70e03ddee790960f0e29ff698fb13db3c9aff",
-          505,
-          522
+          521,
+          539
         ],
         [
           "createCardDraft",
           "09c76bb8612fe2f6c1bf000e626f4d6a44647aaf3c015c176f7c2dbea41af73f",
-          522,
-          543
+          539,
+          560
         ],
         [
           "createCardDraft",
           "0d78aa53646b6d8bd43d69f7a6cd7c2ac109864cc73cec9d9b8ca26f115a2244",
-          543,
-          562
+          560,
+          579
         ],
         [
           "confirmCardDraft",
           "13ecc363c6d85511c4639778249d9c4c229df841c5c79e55fc0119530de71b36",
-          562,
-          594
+          579,
+          611
         ],
         [
           "listCards",
           "ffb03d5918c1b8efa13ec2bf6457188de617b2dcbe2d9f0c8a6de6ba9ea07548",
-          594,
-          608
+          611,
+          628
         ],
         [
           "listCards",
           "6a7480f9a267bb5b3cbf77c4fc81f152918e13a246cce48b1bd40dcd4ebea72e",
-          608,
-          625
+          628,
+          649
         ],
         [
           "listCards",
           "046eaf624dd3fb3acbdc2fecd3b97c0e9eb35698e7f9ba3f9eb769c701b967c4",
-          625,
-          642
+          649,
+          670
         ],
         [
           "mapEvidence",
           "ad871ac1a7ecafdf688da4a6ad649dda8a4ec1b21a9e42575e2caefd34aeff21",
-          642,
-          686
+          670,
+          714
         ],
         [
           "applyCardPlacement",
           "7daa1768b880146bb97af5a7967e22fc48e6225fc8461ee65b6cf76ced0a1406",
-          686,
-          722
+          714,
+          750
         ],
         [
           "applyCardPlacement",
           "7daa1768b880146bb97af5a7967e22fc48e6225fc8461ee65b6cf76ced0a1406",
-          722,
-          725
+          750,
+          753
         ],
         [
           "mapEvidence",
           "0d4ab685cae8974556ea5d233f664d4dc2a72f4463ef7156bdd02e0829f27710",
-          725,
-          829
+          753,
+          857
         ],
         [
           "refreshCardTopic",
           "3be1c6dfc79aadfa2ea2bca25a216906385f6abb28b801dcbc99b9e804d17480",
-          829,
-          862
+          857,
+          890
         ],
         [
           "map",
           "82ec8576fcc473a7c47fa74504c90261103a08a5c3f06933be1753f394fe2615",
-          862,
-          870
+          890,
+          898
         ],
         [
           "applyPlacement",
           "9a5e6bb510abf0d938f5aafbc5d4fab1d84d4b2bcab9decbeae8192f2f0bfd25",
-          870,
-          900
+          898,
+          930
         ],
         [
           "mapEvidence",
           "cbb5703a6c98fe0bdc221dc0e5f41a3bfd8faa4d865a950af8c0b99ad00a46b5",
-          900,
-          911
+          930,
+          941
         ],
         [
           "mapEvidence",
           "6ee2ad16ac866a186da4f6a25a696ca70f9b73a27b64b462d8cdad84ec1e34d8",
-          911,
-          1015
+          941,
+          1045
         ],
         [
           "proposeEvidenceMapping",
           "854e9e19e5c8f95618f40e5aa281865c9c731979ca2af78b6d0d34c40809d706",
-          1015,
-          1046
+          1045,
+          1076
         ],
         [
           "reviewEvidenceMapping",
           "b690b818c35be47b2d9e31211b2d2245e45a3c62e0abbf9ac86a2900c4639138",
-          1046,
-          1080
+          1076,
+          1110
         ],
         [
           "listEvidenceMappings",
           "9ef3887e904d86b7ff5d937c881a72be34ed7139cf7e8f600f3d5e22c7dd2179",
-          1080,
-          1109
+          1110,
+          1139
         ],
         [
           "mapEvidence",
           "6ee2ad16ac866a186da4f6a25a696ca70f9b73a27b64b462d8cdad84ec1e34d8",
-          1109,
-          1213
+          1139,
+          1243
         ],
         [
           "selectEvidence",
           "2478fd9f380811bdb921a36f18771791ea4168048e2217781353632d439af18c",
-          1213,
-          1252
+          1243,
+          1285
         ],
         [
           "refreshContextIndex",
           "24b52cdd311839d9c8e4ba0c5f9b923ecfcfc570ef712cb6677a623927daf77d",
-          1252,
-          1645
+          1285,
+          1678
         ],
         [
           "findCandidates",
           "6d7060f372f7ed2ebac62757f693787b519370f5dadf6ef9d5258897d088dae8",
-          1645,
-          1811
+          1678,
+          1850
         ],
         [
           "contextRead",
           "4f2d03fab389d23765a68453fc747b139544d2b9d433df1baa866f6cad75e201",
-          1811,
-          2046
+          1850,
+          2088
         ],
         [
           "fetchCandidateEvidence",
           "125d54f21c1329b55e421e8921237ed6961c104b398b426785357b3a90aafb67",
-          2046,
-          2086
+          2088,
+          2136
         ],
         [
           "fetchCandidateEvidence",
           "4420852df2c275051c3a9dca99d0fcdf42311c9696e549d6e4813bbc7edb5f6f",
-          2086,
-          2184
+          2136,
+          2236
         ],
         [
           "openMemoryReader",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          2184,
-          2184
+          2236,
+          2236
         ],
         [
           "openMemoryReader.readTopicOverview",
           "f050913ccbd942d756026a542ae27dce5bd42492701e96cb3dfb903dc0bd04e6",
-          2184,
-          2261
+          2236,
+          2313
         ],
         [
           "openMemoryReader.readTopicOverview",
           "0894e538cd5be17677a0fb89daadeac62ed1042b3667b6fc7a45ec299a900ade",
-          2261,
-          2271
+          2313,
+          2323
         ],
         [
           "openContextReader",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          2271,
-          2329
+          2323,
+          2381
         ],
         [
           "openContextReader.findCandidates",
           "580bc80844f068be555e3863abcc936d1ccbb07596d296e37da0c6e4615b20a6",
-          2329,
-          2507
+          2381,
+          2565
         ],
         [
           "openContextReader.contextRead",
           "7e2788f155fb189542a1d1345b9df78b114b7dbc1f3304b8034afca1dd8b7e46",
-          2507,
-          2712
+          2565,
+          2773
         ],
         [
           "openContextReader.fetchCandidateEvidence",
           "4420852df2c275051c3a9dca99d0fcdf42311c9696e549d6e4813bbc7edb5f6f",
-          2712,
-          2810
+          2773,
+          2873
         ],
         [
           "openContextReader.fetchCandidateEvidence",
           "125d54f21c1329b55e421e8921237ed6961c104b398b426785357b3a90aafb67",
-          2810,
-          2850
+          2873,
+          2921
         ],
         [
           "openContextIndexMaintainer",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          2850,
-          3082
+          2921,
+          3153
         ],
         [
           "openContextIndexMaintainer.getContextIndexStatus",
           "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
-          3082,
-          3088
+          3153,
+          3159
         ],
         [
           "openContextProductReader",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          3088,
-          3320
+          3159,
+          3391
         ],
         [
           "openContextProductReader.getContextIndexStatus",
           "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
-          3320,
-          3326
+          3391,
+          3397
         ],
         [
           "openContextProductReader.fetchCandidateEvidence",
           "9122d2f9a732cc619f857704014b264288c74005d9c30bc5d8a6542e0151e420",
-          3326,
-          3366
+          3397,
+          3445
         ],
         [
           "openContentSuppressionReader",
           "64f55618b13d9afeebded345a4e67fa85c54d913cfc2658456aed99684cba951",
-          3366,
-          3421
+          3445,
+          3500
         ],
         [
           "correct",
           "85f6fb4faeb31f011e1c7d7f8bbeb8825e078ad41dfcb1f935f14bfff116b5a5",
-          3421,
-          3460
+          3500,
+          3543
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          3460,
-          3473
+          3543,
+          3556
         ],
         [
           "get",
           "2b5ca6f58052e5cde3d834a08499c495f84f5a008824bc9fa24cd1aec692f2bb",
-          3473,
-          3483
+          3556,
+          3574
         ],
         [
           "supersede",
           "b629cf9658c5d818d8f176dfebfc2ec7d3a130d8168b6b3dee8ebfc99e03ff68",
-          3483,
-          3524
+          3574,
+          3615
         ],
         [
           "forget",
           "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
-          3524,
-          3528
+          3615,
+          3619
         ],
         [
           "get",
           "db2260c63a3b7d05840e014d0c60bd734c5598233edfeaf0e71ae85c2da2c2cf",
-          3528,
-          3537
+          3619,
+          3636
         ],
         [
           "forget",
           "b0937277a5a2824a9219e78d9a027e6583e12fc7c188d861db912ff17124fefb",
-          3537,
-          3563
+          3636,
+          3664
         ],
         [
           "admit",
           "f501774841453b6aa07e74470cf2eb1e72bd6511edfbf2c5195f249085e4ac2f",
-          3563,
-          3587
+          3664,
+          3688
         ],
         [
           "forget",
           "837e5753f92d579c1b6f8adf8f718e8c634d622dfb027c4230c52773ddc6c2e8",
-          3587,
-          3613
+          3688,
+          3716
         ],
         [
           "submitSourceNote",
           "2a44dacc85af984c07680dd4888e96bc05aee0b0532ba88ced1e8a2e0924d648",
-          3613,
-          3624
+          3716,
+          3727
         ],
         [
           "createCardDraft",
           "cd2a5b757129d43fe2d19ee688f18ee2112e58327f3c12a05496dae18e09da90",
-          3624,
-          3639
+          3727,
+          3742
         ],
         [
           "createCardDraft",
           "3e74a22726d77c1c76a00bd997d676a0cb762047b49ac063650b1b760876ea9e",
-          3639,
-          3654
+          3742,
+          3757
         ],
         [
           "confirmCardDraft",
           "3e20dd54a19f149424d37537911fcdcde843fbb449d212cdb9a04bdc980258d3",
-          3654,
-          3682
+          3757,
+          3785
         ],
         [
           "deleteSourceNote",
           "b31d216492e3dbdc8266f0314810528f7c075d834268f9af18dd0dc65b8495a7",
-          3682,
-          3707
+          3785,
+          3810
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          3707,
-          3711
+          3810,
+          3814
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          3711,
-          3721
+          3814,
+          3824
         ],
         [
           "cancelCardDraft",
           "59dead7c3040409d4f3fd3aa9cafbf5cce64f1a966946ed0db6fafb8ad84f5a9",
-          3721,
-          3735
+          3824,
+          3838
         ],
         [
           "deleteKnowledgeCard",
           "5a66832abd3dd64e57fa8bc8d328405ec1c03fc01344829e7518aeb37b185c3c",
-          3735,
-          3749
+          3838,
+          3852
         ],
         [
           "deleteSourceNote",
           "e599d7cbeb4a1fcd8d3e316241113a6157e4e522c6a80ae0d8dfde8c54f39f50",
-          3749,
-          3761
+          3852,
+          3864
         ],
         [
           "listCardEffects",
           "21ece43ee72d29507d70e449663ea224ca3c4d9b845824ff11448d24c674665d",
-          3761,
-          3764
+          3864,
+          3867
         ],
         [
           "getPrivateCardUsage",
           "69c7335d36b31ad5f695501c82725d4359230e9816b6d38e2b85ee3a652ad2cc",
-          3764,
-          3768
+          3867,
+          3871
         ],
         [
           "recall",
           "8893101c7945b3853b74b9efa10374a1c6c0c4da58ef9e5ea60d2a050b10cc89",
-          3768,
-          3867
+          3871,
+          3976
         ],
         [
           "modelCalls",
@@ -854,8 +854,8 @@
           null
         ]
       ],
-      "statements": 3867,
-      "sql": "759e80015e98ac80447ace505ab5dc526e05183c38a529677aeaa1af73fe0325",
+      "statements": 3976,
+      "sql": "e925687efd47d28e8826b6ff0114b3b0c1962784acf016e6bc88c39c8b0b0f87",
       "tables": [
         [
           "admission_claims",
@@ -1144,8 +1144,8 @@
         ],
         [
           "suppressed",
-          4,
-          "3de05550f3b2f82414bc204f298f6089d04887b0d39bced47df04ab693c8fbef"
+          10,
+          "c950529a90d0751321d20f4fc59f159fe1dda49f009d120a7f544a40e55cc118"
         ]
       ],
       "effectWitnesses": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
@@ -1487,505 +1487,505 @@
           "capture",
           "1b8c8ecc147c632d0d3075d223988dd8091e554d7b49e3b9d8be596819f00c7b",
           241,
-          783
+          791
         ],
         [
           "capture",
           "8555abcb6d471d698d60f0e3e8a269990e22c8a9bb6353bd814f236f275612cd",
-          783,
-          842
+          791,
+          850
         ],
         [
           "list",
           "af34431f748c09902f6e529cd40e1b72ca33b697183d6a0e26251025dd40b28f",
-          842,
-          850
+          850,
+          858
         ],
         [
           "recall",
           "9b9dd270cadb14415cc37c792fae35150768053635cc27974324adcd6dea22ad",
-          850,
-          1027
+          858,
+          1033
         ],
         [
           "submitSourceNote",
           "c3bc92d801b29d7299ffefc4229a6779e21045ea9e0d96d9c5b52f439b810d59",
-          1027,
-          1121
+          1033,
+          1127
         ],
         [
           "submitSourceNote",
           "c3bc92d801b29d7299ffefc4229a6779e21045ea9e0d96d9c5b52f439b810d59",
-          1121,
-          1159
+          1127,
+          1165
         ],
         [
           "submitSourceNote",
           "65e5ace67336f4b8a6f8c70dea1cb66da0d2d0ecb1db1e8ef918453f6cd54886",
-          1159,
-          1182
+          1165,
+          1188
         ],
         [
           "createCardDraft",
           "d683157e519d9a7521fbeb025c0129f1d37fdd1092113341791297324b726a8e",
-          1182,
-          1343
+          1188,
+          1349
         ],
         [
           "editCardDraft",
           "f127482dc6a3e33385125636cedaee814341ff43aac4d75ee8f3251429e1e33c",
-          1343,
-          1477
+          1349,
+          1483
         ],
         [
           "editCardDraft",
           "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
-          1477,
-          1501
+          1483,
+          1507
         ],
         [
           "confirmCardDraft",
           "204fdc39b575e77f54017032e403ec7668388a0cd04b4b9c53f697f4f94f4a50",
-          1501,
-          1658
+          1507,
+          1664
         ],
         [
           "editKnowledgeCard",
           "2dda1653dfd23113761d11998b63fd2b40637cabcd225f91ab856c0261568b7d",
-          1658,
-          1818
+          1664,
+          1824
         ],
         [
           "getCard",
           "3c3154b515394ed43822d9be67502fff2033c0aebcc469de30ef49340b3c9e85",
-          1818,
-          1834
-        ],
-        [
-          "inspectCardOperation",
-          "75e0093ae780626fe6e383cb8a6d5a549a0c2e1f58a8be0cd3f3aea15afe9d89",
-          1834,
+          1824,
           1841
         ],
         [
           "inspectCardOperation",
-          "3b5f5e21c5b580819e6ca26dbaa09479ee2d902d53add0bbd66ff6e4f71b9e90",
+          "75e0093ae780626fe6e383cb8a6d5a549a0c2e1f58a8be0cd3f3aea15afe9d89",
           1841,
           1848
         ],
         [
-          "getSource",
-          "88294972fac7801ae02fbcd1d4f7d47e55ec3e850743d94f75153155915ab03b",
+          "inspectCardOperation",
+          "3b5f5e21c5b580819e6ca26dbaa09479ee2d902d53add0bbd66ff6e4f71b9e90",
           1848,
           1855
         ],
         [
+          "getSource",
+          "88294972fac7801ae02fbcd1d4f7d47e55ec3e850743d94f75153155915ab03b",
+          1855,
+          1862
+        ],
+        [
           "fetchEvidence",
           "8d6d3e5780285750d1987e100ce02c30fb0e7609ed85d44597c31ea733f6bd77",
-          1855,
-          1874
+          1862,
+          1882
         ],
         [
           "revalidateEvidence",
           "8d6d3e5780285750d1987e100ce02c30fb0e7609ed85d44597c31ea733f6bd77",
-          1874,
-          1895
+          1882,
+          1904
         ],
         [
           "createCardDraft",
           "f25b765d12f82d69d18544a1e47da40e90c08fca90964be3c36bad9a5ac0e4a4",
-          1895,
-          2079
+          1904,
+          2088
         ],
         [
           "createCardDraft",
           "b2a46f9aa771f6828dd3965fbdebf3afca50e7945c92f13426113068a04a0471",
-          2079,
-          2297
+          2088,
+          2306
         ],
         [
           "confirmCardDraft",
           "f5c0424b3e118fc841fd968466d0adebd34641da7df8173395dd04b037fbb97d",
-          2297,
-          2478
+          2306,
+          2487
         ],
         [
           "listCards",
           "dfe364701567a8070231e867cd7b3c225a822a30e371d4a304a94d1580616a29",
-          2478,
-          2496
+          2487,
+          2508
         ],
         [
           "listCards",
           "bd858d6aea77925b0597fcd6a05dc317a787b4feeb6975f84b1393adcf7fc237",
-          2496,
-          2517
+          2508,
+          2533
         ],
         [
           "listCards",
           "9d1d11a85eb65f92d2f6808bfc7ee17c4c1f889fd19690bcc1545d306962b162",
-          2517,
-          2538
+          2533,
+          2558
         ],
         [
           "mapEvidence",
           "c46c382816fbcb00644428e7ec7e4b046e53c7ba122215b38fe5d5ef4cbfd877",
-          2538,
-          2586
+          2558,
+          2606
         ],
         [
           "applyCardPlacement",
           "3af6803023678ba25236f78f7adf406a068a4720c9b83bf1e99ebfe29d86e0b1",
-          2586,
-          2828
+          2606,
+          2848
         ],
         [
           "applyCardPlacement",
           "3af6803023678ba25236f78f7adf406a068a4720c9b83bf1e99ebfe29d86e0b1",
-          2828,
-          2913
+          2848,
+          2933
         ],
         [
           "mapEvidence",
           "10d54d51590e2c749718d6ca85ad73ac7806757d9d17cd75f1180b2ace858f97",
-          2913,
-          3021
+          2933,
+          3041
         ],
         [
           "refreshCardTopic",
           "807e45455402ae3f2a3395543c7459fcd71eca71bb5e3dc6da13c6e937f0d385",
-          3021,
-          3247
+          3041,
+          3267
         ],
         [
           "map",
           "9460f02d57f334bad1f9512856bfa28db079abafc6df3358d0b54f72af1a0cbc",
-          3247,
-          3261
+          3267,
+          3281
         ],
         [
           "applyPlacement",
           "7055c921865f30f7911f8708d997354b4e9c075554f28327e085469e7ea2d900",
-          3261,
-          3469
+          3281,
+          3491
         ],
         [
           "mapEvidence",
           "6f0b9c2b4b37349c7f46b2e9916d2d2239ebd876f3d35e6852954714eb1dfadf",
-          3469,
-          3484
+          3491,
+          3506
         ],
         [
           "mapEvidence",
           "5acb38b04b2078af25ddaa880162dff3f8a5df9437e7b0d32a2eaf8074081de8",
-          3484,
-          3592
+          3506,
+          3614
         ],
         [
           "proposeEvidenceMapping",
           "aea97711e1d33da29f5c86daaef7920fd5b1e5775370cab081eb6ac1fac38bfc",
-          3592,
-          3742
+          3614,
+          3764
         ],
         [
           "reviewEvidenceMapping",
           "f750a3979c5dde979f2f2007a638c034ac03b3e31f60a70365ab0c014dfe95b6",
-          3742,
-          3895
+          3764,
+          3917
         ],
         [
           "listEvidenceMappings",
           "f5234b08ce811f3bd18ed4731299419a7c9adee044c9c9593f5b5efa52609a8e",
-          3895,
-          3928
+          3917,
+          3950
         ],
         [
           "mapEvidence",
           "5acb38b04b2078af25ddaa880162dff3f8a5df9437e7b0d32a2eaf8074081de8",
-          3928,
-          4036
+          3950,
+          4058
         ],
         [
           "selectEvidence",
           "06de59b603b6e35d33819c3e1dc082399184190cc002a8f8483e95e9f433a501",
-          4036,
-          4079
+          4058,
+          4104
         ],
         [
           "refreshContextIndex",
           "24b52cdd311839d9c8e4ba0c5f9b923ecfcfc570ef712cb6677a623927daf77d",
-          4079,
-          4476
+          4104,
+          4501
         ],
         [
           "findCandidates",
           "aac88178ba69d2b0dd38aae7914bcbd8926773d0c8c52aca67e40c8ae2424312",
-          4476,
-          4626
+          4501,
+          4662
         ],
         [
           "contextRead",
           "dbf54b18ad86dcd507a538c9bd2dd29c7b834c47470c0768b15d5e3c534579d9",
-          4626,
-          4837
+          4662,
+          4888
         ],
         [
           "fetchCandidateEvidence",
           "0a47f85b11dd7adda92f4b09775687c909c8204c8bd7f72627f5f98699dacfad",
-          4837,
-          4881
+          4888,
+          4940
         ],
         [
           "fetchCandidateEvidence",
           "c7b1a6bf77d0f7835d0291fb21ba14706d1a1e7b830ea2c03111b81aaba708f2",
-          4881,
-          4943
+          4940,
+          5014
         ],
         [
           "openMemoryReader",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          4943,
-          4943
+          5014,
+          5014
         ],
         [
           "openMemoryReader.readTopicOverview",
           "d03c5b0e37c34f0a879ea65e89024eb52c43241fb7ece8b977f63d06e610b858",
-          4943,
-          5024
+          5014,
+          5095
         ],
         [
           "openMemoryReader.readTopicOverview",
           "0fdd479278f2ac03b9f474c94bdebe80d53938625a965820f9b70c7a6349b2d1",
-          5024,
-          5038
+          5095,
+          5109
         ],
         [
           "openContextReader",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          5038,
-          5096
+          5109,
+          5167
         ],
         [
           "openContextReader.findCandidates",
           "200a18d015df9d2fcba3b3f10080acfb5fbe6dfdf99490a441064f66d8f10a5d",
-          5096,
-          5258
+          5167,
+          5340
         ],
         [
           "openContextReader.contextRead",
           "cb72ce4696c59f1e2a29945ac6a8e509593ecf36a444fb33d433a703cee6307a",
-          5258,
-          5439
+          5340,
+          5536
         ],
         [
           "openContextReader.fetchCandidateEvidence",
           "c7b1a6bf77d0f7835d0291fb21ba14706d1a1e7b830ea2c03111b81aaba708f2",
-          5439,
-          5501
+          5536,
+          5610
         ],
         [
           "openContextReader.fetchCandidateEvidence",
           "0a47f85b11dd7adda92f4b09775687c909c8204c8bd7f72627f5f98699dacfad",
-          5501,
-          5545
+          5610,
+          5662
         ],
         [
           "openContextIndexMaintainer",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          5545,
-          5777
+          5662,
+          5894
         ],
         [
           "openContextIndexMaintainer.getContextIndexStatus",
           "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
-          5777,
-          5787
+          5894,
+          5904
         ],
         [
           "openContextProductReader",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          5787,
-          6019
+          5904,
+          6136
         ],
         [
           "openContextProductReader.getContextIndexStatus",
           "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
-          6019,
-          6029
+          6136,
+          6146
         ],
         [
           "openContextProductReader.fetchCandidateEvidence",
           "5c5d56fc7cffe0e386011d8fb8dd5ef57358b53899ec1f994ec0cde5393ddcd5",
-          6029,
-          6073
+          6146,
+          6198
         ],
         [
           "openContentSuppressionReader",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          6073,
-          6130
+          6198,
+          6255
         ],
         [
           "admit",
           "74ffd1f925b43380dece1387d60602afef808a8c7c80ba3ff704f6f8df8e9ca1",
-          6130,
-          6246
+          6255,
+          6371
         ],
         [
           "admit",
           "f4d553f54b703fc9154e36346e793a1be47d31e3b05012520719ff8d23de1976",
-          6246,
-          6362
+          6371,
+          6487
         ],
         [
           "isSuppressed",
           "71940e8adf4746729f2c6baa93c954413cc24ed227d710cac6e2e10a403af872",
-          6362,
-          6388
+          6487,
+          6513
         ],
         [
           "isSuppressed",
           "29f32fb7905d749051233e41242dd0adde76852352e4567ad785fd484c7a221b",
-          6388,
-          6410
+          6513,
+          6535
         ],
         [
           "isSuppressed",
           "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
-          6410,
-          6423
+          6535,
+          6548
         ],
         [
           "correct",
           "abadc37995cd74714f355c26854cf3068165dea8da863fbbafe612823912db71",
-          6423,
-          6633
+          6548,
+          6761
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          6633,
-          6652
+          6761,
+          6780
         ],
         [
           "get",
           "b6ba495a951487aebf576a116bd21724627ed3af6a564c36e356d68033572ac5",
-          6652,
-          6669
+          6780,
+          6805
         ],
         [
           "supersede",
           "b544e3ca5f63f9a724ec303dde396332d0b832e20a32dd47e49d71b31501cace",
-          6669,
-          6883
+          6805,
+          7019
         ],
         [
           "forget",
           "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
-          6883,
-          6906
+          7019,
+          7042
         ],
         [
           "get",
           "bea8097c7a130babda6e39b36a7d3ed49942a1a26d7a02f011edb7fc8abb2b31",
-          6906,
-          6922
+          7042,
+          7066
         ],
         [
           "forget",
           "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
-          6922,
-          7028
+          7066,
+          7173
         ],
         [
           "admit",
           "9edf9d731e70145b9c331ead3249ce79a3d2c11baf8fab0a0fc90cabd72dc179",
-          7028,
-          7146
+          7173,
+          7289
         ],
         [
           "forget",
           "b6d3bcb1ec2b6efd2283a4f5430cba3ef5fe152cacf08e437150507d50fca739",
-          7146,
-          7236
+          7289,
+          7380
         ],
         [
           "submitSourceNote",
           "1049feee923a5d81404baf6ca59a5945269db8a588dcfc5ca004a3513e0f2de6",
-          7236,
-          7330
+          7380,
+          7474
         ],
         [
           "createCardDraft",
           "3f0f46f15e676f8541adcbe3f970906e2a31e7064c6cec3ebe80c270e267a633",
-          7330,
-          7493
+          7474,
+          7637
         ],
         [
           "createCardDraft",
           "8148851483e4fbb0107253489e9e2fd17e2caf81c0dce55c33532d64e4ac667f",
-          7493,
-          7656
+          7637,
+          7800
         ],
         [
           "confirmCardDraft",
           "dba5d6774fb920225f2ce65857f843f4e884cb5a45f284b6d2ad2849d3ec354f",
-          7656,
-          7815
+          7800,
+          7959
         ],
         [
           "deleteSourceNote",
           "2be84a758e627d377a7bca04dbc187b1e96578df9158b88566538f65b4cb28e2",
-          7815,
-          7975
+          7959,
+          8119
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          7975,
-          7985
+          8119,
+          8129
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          7985,
-          8001
+          8129,
+          8145
         ],
         [
           "cancelCardDraft",
           "8786ce3708574795b5c7a0bda0d37df2ba69ba05933a9c9bdb253abb3f29f886",
-          8001,
-          8101
+          8145,
+          8245
         ],
         [
           "deleteKnowledgeCard",
           "399e67e51366104aa635520d179c22ba846ed031b3f5e049150a7fc0d4021a78",
-          8101,
-          8201
+          8245,
+          8345
         ],
         [
           "deleteSourceNote",
           "842a8943dd8257f41c9296debcc7631e9f70f230642087fb4f396a81d8cb36e2",
-          8201,
-          8298
+          8345,
+          8442
         ],
         [
           "listCardEffects",
           "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
-          8298,
-          8307
+          8442,
+          8451
         ],
         [
           "getPrivateCardUsage",
           "69c7335d36b31ad5f695501c82725d4359230e9816b6d38e2b85ee3a652ad2cc",
-          8307,
-          8321
+          8451,
+          8465
         ],
         [
           "recall",
           "f2a0114df4337fe822695966a75394fc08f92ee5223e16f80bf775f9f5e16596",
-          8321,
-          8660
+          8465,
+          8782
         ],
         [
           "modelCalls",
@@ -1994,8 +1994,8 @@
           null
         ]
       ],
-      "statements": 8660,
-      "sql": "e0703338b0bd207dd606510ea15fe258d30a33428bdd06f339a64fe08384e3f8",
+      "statements": 8782,
+      "sql": "a8e5f94ae70d37aaff65f75006711f6f0f7d52266ffc5062273462026f62d26d",
       "tables": [
         [
           "admission_claims",
@@ -2304,8 +2304,8 @@
         ],
         [
           "suppressed",
-          3,
-          "a382d435ec58bc551d153a7329c634848f1554f4dd9a8841cd07cd2e242803cd"
+          7,
+          "39a32f5bcc66981c8c5e68c56d3bd87caed2c332e6ede81a52e26344a49c7c90"
         ]
       ],
       "effectWitnesses": "f14bd452717a1ba81c2ff028ac540cbc723823d2359e840a6bf303bfe8b31476"
@@ -2887,883 +2887,883 @@
           "capture",
           "bf35dcb6a51413eceba6883150363d70f6bb14f8878a52cd5b709df8236dbce6",
           552,
-          853
+          869
         ],
         [
           "capture",
           "7c772d1e206229e84e1441f7c92b0cc649d6e9d495388443af3a6597fa9b1934",
-          853,
-          877
+          869,
+          893
         ],
         [
           "list",
           "c75f2de7d1bec7f4c4b9f46f1de3db2a647baa32508ce79cda92394e3d726213",
-          877,
-          881
+          893,
+          897
         ],
         [
           "recall",
           "6b854b8122309b563530bb209d9708449ecd008f4321f99765df7b4e9f95ea51",
-          881,
-          1166
+          897,
+          1122
         ],
         [
           "submitSourceNote",
           "739386208991255daa179450a851a183ad71d537dc829c8d2508c0e1f14fa78b",
-          1166,
-          1177
+          1122,
+          1133
         ],
         [
           "submitSourceNote",
           "739386208991255daa179450a851a183ad71d537dc829c8d2508c0e1f14fa78b",
-          1177,
-          1180
+          1133,
+          1136
         ],
         [
           "submitSourceNote",
           "65e5ace67336f4b8a6f8c70dea1cb66da0d2d0ecb1db1e8ef918453f6cd54886",
-          1180,
-          1183
+          1136,
+          1139
         ],
         [
           "createCardDraft",
           "2065f2d077a8f01bf4baec4bdbb17fc3697ba1a7b7403e75633d65f153a39d46",
-          1183,
-          1199
+          1139,
+          1155
         ],
         [
           "editCardDraft",
           "b6f7718a770eaccd9354fdc74e4c97721a72779cc5444f49995522fe0e7f6b48",
-          1199,
-          1221
+          1155,
+          1177
         ],
         [
           "editCardDraft",
           "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
-          1221,
-          1225
+          1177,
+          1181
         ],
         [
           "confirmCardDraft",
           "0db3db3760a776a9e78c1621102173a6e311a3fdce4b02a07a1c008332db0bad",
-          1225,
-          1256
+          1181,
+          1212
         ],
         [
           "editKnowledgeCard",
           "49bcf96fb2127f2e551b29913c33cbecddc88f6db8f6e46fa5b32a2960f14054",
-          1256,
-          1285
+          1212,
+          1241
         ],
         [
           "getCard",
           "71559a38e33736f6faed8de84d69c369c5bb64929dd5af6822f272b68804e557",
-          1285,
-          1299
+          1241,
+          1256
         ],
         [
           "inspectCardOperation",
           "6cc21ce33d4bb0ccb04e473838e3817616cf9d94f85aad9eecd1c688cef951c6",
-          1299,
-          1302
+          1256,
+          1259
         ],
         [
           "inspectCardOperation",
           "3b5f5e21c5b580819e6ca26dbaa09479ee2d902d53add0bbd66ff6e4f71b9e90",
-          1302,
-          1305
+          1259,
+          1262
         ],
         [
           "getSource",
           "a6a0793d4f660797a58212316ea829dc8fdd03a135a16f702528a332799a0cde",
-          1305,
-          1308
+          1262,
+          1265
         ],
         [
           "fetchEvidence",
           "54a52ae7525a96fd4a6227906fa70e03ddee790960f0e29ff698fb13db3c9aff",
-          1308,
-          1325
+          1265,
+          1283
         ],
         [
           "revalidateEvidence",
           "54a52ae7525a96fd4a6227906fa70e03ddee790960f0e29ff698fb13db3c9aff",
-          1325,
-          1344
+          1283,
+          1303
         ],
         [
           "createCardDraft",
           "09c76bb8612fe2f6c1bf000e626f4d6a44647aaf3c015c176f7c2dbea41af73f",
-          1344,
-          1365
+          1303,
+          1324
         ],
         [
           "createCardDraft",
           "0d78aa53646b6d8bd43d69f7a6cd7c2ac109864cc73cec9d9b8ca26f115a2244",
-          1365,
-          1405
+          1324,
+          1364
         ],
         [
           "confirmCardDraft",
           "13ecc363c6d85511c4639778249d9c4c229df841c5c79e55fc0119530de71b36",
-          1405,
-          1479
+          1364,
+          1438
         ],
         [
           "listCards",
           "ffb03d5918c1b8efa13ec2bf6457188de617b2dcbe2d9f0c8a6de6ba9ea07548",
-          1479,
-          1496
+          1438,
+          1458
         ],
         [
           "listCards",
           "6a7480f9a267bb5b3cbf77c4fc81f152918e13a246cce48b1bd40dcd4ebea72e",
-          1496,
-          1517
+          1458,
+          1483
         ],
         [
           "listCards",
           "046eaf624dd3fb3acbdc2fecd3b97c0e9eb35698e7f9ba3f9eb769c701b967c4",
-          1517,
-          1558
+          1483,
+          1528
         ],
         [
           "mapEvidence",
           "ad871ac1a7ecafdf688da4a6ad649dda8a4ec1b21a9e42575e2caefd34aeff21",
-          1558,
-          1647
+          1528,
+          1617
         ],
         [
           "applyCardPlacement",
           "7daa1768b880146bb97af5a7967e22fc48e6225fc8461ee65b6cf76ced0a1406",
-          1647,
-          1686
+          1617,
+          1656
         ],
         [
           "applyCardPlacement",
           "7daa1768b880146bb97af5a7967e22fc48e6225fc8461ee65b6cf76ced0a1406",
-          1686,
-          1689
+          1656,
+          1659
         ],
         [
           "mapEvidence",
           "0d4ab685cae8974556ea5d233f664d4dc2a72f4463ef7156bdd02e0829f27710",
-          1689,
-          1847
+          1659,
+          1817
         ],
         [
           "refreshCardTopic",
           "3be1c6dfc79aadfa2ea2bca25a216906385f6abb28b801dcbc99b9e804d17480",
-          1847,
-          1883
+          1817,
+          1853
         ],
         [
           "map",
           "82ec8576fcc473a7c47fa74504c90261103a08a5c3f06933be1753f394fe2615",
-          1883,
-          1891
+          1853,
+          1861
         ],
         [
           "applyPlacement",
           "9a5e6bb510abf0d938f5aafbc5d4fab1d84d4b2bcab9decbeae8192f2f0bfd25",
-          1891,
-          1921
+          1861,
+          1893
         ],
         [
           "mapEvidence",
           "cbb5703a6c98fe0bdc221dc0e5f41a3bfd8faa4d865a950af8c0b99ad00a46b5",
-          1921,
-          1932
+          1893,
+          1904
         ],
         [
           "mapEvidence",
           "6ee2ad16ac866a186da4f6a25a696ca70f9b73a27b64b462d8cdad84ec1e34d8",
-          1932,
-          2090
+          1904,
+          2062
         ],
         [
           "proposeEvidenceMapping",
           "854e9e19e5c8f95618f40e5aa281865c9c731979ca2af78b6d0d34c40809d706",
-          2090,
-          2124
+          2062,
+          2096
         ],
         [
           "reviewEvidenceMapping",
           "b690b818c35be47b2d9e31211b2d2245e45a3c62e0abbf9ac86a2900c4639138",
-          2124,
-          2161
+          2096,
+          2133
         ],
         [
           "listEvidenceMappings",
           "9ef3887e904d86b7ff5d937c881a72be34ed7139cf7e8f600f3d5e22c7dd2179",
-          2161,
-          2193
+          2133,
+          2165
         ],
         [
           "mapEvidence",
           "6ee2ad16ac866a186da4f6a25a696ca70f9b73a27b64b462d8cdad84ec1e34d8",
-          2193,
-          2351
+          2165,
+          2323
         ],
         [
           "selectEvidence",
           "2478fd9f380811bdb921a36f18771791ea4168048e2217781353632d439af18c",
-          2351,
-          2417
+          2323,
+          2392
         ],
         [
           "importMethodVersion",
           "b31af757b4bc08ff12416ee108caf05c38879fea54afbdc98365d0dbfdbf4a94",
-          2417,
-          2466
+          2392,
+          2441
         ],
         [
           "checkMethodReasonRefs",
           "fc4e7b14ca14317f6130ef67a422b5c3841266bb37e8374014db8e464fa69b85",
-          2466,
-          2481
+          2441,
+          2456
         ],
         [
           "getMethodVersion",
           "94f96f0d80b751dd5e44337362e66592143005b0d4641c1b9e7e17163b4a227f",
-          2481,
-          2492
+          2456,
+          2467
         ],
         [
           "adoptMethodVersion",
           "c31d42e4a8ebb75cf6808cce9a42398749cc339d1a850d02d9687c2de397fbdc",
-          2492,
-          2512
+          2467,
+          2487
         ],
         [
           "resolveMethod",
           "73e9367e3cd5cd3ef27172e0ba65eaf0ff1d1908e47489adb52a73bba14adde3",
-          2512,
-          2526
+          2487,
+          2501
         ],
         [
           "readMethodFile",
           "4de4c47fafa9a7ae1ed3f93e3cc08eb406eae8fcb6975f48256378b44e2a9e94",
-          2526,
-          2536
+          2501,
+          2511
         ],
         [
           "declareCardCurrentDependencies",
           "edecb1918291d00a6fba49e72c01c28ab80134a2ed45305192fb0e997089f433",
-          2536,
-          2563
+          2511,
+          2538
         ],
         [
           "declareCardCurrentDependencies",
           "edecb1918291d00a6fba49e72c01c28ab80134a2ed45305192fb0e997089f433",
-          2563,
-          2566
+          2538,
+          2541
         ],
         [
           "revalidateCardCurrentDependencies",
           "af433845eba18c415338ebb8c438ec33530bb2040451ce2c08b0dd00dd240acf",
-          2566,
-          2592
+          2541,
+          2567
         ],
         [
           "publishRoleProfileRelease",
           "bfe59e6a11e0ae4cd55ced3b292be8f50b215fd3a6e82c8d8ebc26c84138f56c",
-          2592,
-          2610
+          2567,
+          2585
         ],
         [
           "refreshContextIndex",
           "24b52cdd311839d9c8e4ba0c5f9b923ecfcfc570ef712cb6677a623927daf77d",
-          2610,
-          3061
+          2585,
+          3036
         ],
         [
           "findCandidates",
           "6d7060f372f7ed2ebac62757f693787b519370f5dadf6ef9d5258897d088dae8",
-          3061,
-          3318
+          3036,
+          3270
         ],
         [
           "contextRead",
           "8394cd56e337a8cbb5dcdcc69655e1deb7bdbbc5e23d2dfa2adc65c89178f95b",
-          3318,
-          3723
+          3270,
+          3620
         ],
         [
           "fetchCandidateEvidence",
           "d7f952dd543f7438eb205443ae32cba1f9d5bc991fdd8d2365448746726fe9e0",
-          3723,
-          3809
+          3620,
+          3714
         ],
         [
           "fetchCandidateEvidence",
           "031f7b0b497657574cd161c7d62c69f318e6786b0ae69a30cea04c1c4c2c9b14",
-          3809,
-          4059
+          3714,
+          3908
         ],
         [
           "readRoleTaskContext",
           "5d931d24065e27f7c6dab23590f1962765122b8c1ece2c157a8516af5f3084c9",
-          4059,
-          4590
+          3908,
+          4386
         ],
         [
           "readRoleTaskContext",
           "97beb1a2a20b0b844a4b87989054f33ea002fb5f10e216688e782cda1f401889",
-          4590,
-          4958
+          4386,
+          4694
         ],
         [
           "readRoleTaskContext",
           "e535c7ad854b981766c9afa676d6d5bfb8b6deed6b9f4d7f0bfe6e384b27a89c",
-          4958,
-          5116
+          4694,
+          4852
         ],
         [
           "importMethodVersion",
           "a4b0189ed839c26d455b1dbaef9bd2bdfe03b661844f1793ecba08ff151f65e6",
-          5116,
-          5187
+          4852,
+          4923
         ],
         [
           "importMethodVersion",
           "58171c01d4561a94034fc7278d6a2d95b1f18f13c932987371d0f3c57cfc8d2a",
-          5187,
-          5263
+          4923,
+          4999
         ],
         [
           "importMethodVersion",
           "5d6d9c9634bccc8fc8bd64f2c6457a49e1335b4ae4df1c0f66b34eae49798282",
-          5263,
-          5325
+          4999,
+          5061
         ],
         [
           "listMethodManifest",
           "af43c379f5bda6811566e71f9ae3ee9c0ba11e1ae0d6c897bdfb4f434fbe2158",
-          5325,
-          5339
+          5061,
+          5075
         ],
         [
           "listMethodManifest",
           "664e9c379f524f4749bb94142811ceb2a9489c0e19a622678ce842ee748dcf10",
-          5339,
-          5357
+          5075,
+          5093
         ],
         [
           "listMethodPackages",
           "d89a39a590cd3ffed77fc9028b43a61755b25888132074bc1acdd3f5ca15e22c",
-          5357,
-          5367
+          5093,
+          5103
         ],
         [
           "listMethodPackages",
           "b409fd9d21d5362165885fd144da06da7845305a555ef8221a160169ef4b591f",
-          5367,
-          5385
+          5103,
+          5121
         ],
         [
           "listMethodPackages",
           "0cff484cea45bc3c9e7edf6a72afa12476747d61c9160638f94ff5aef9d95e15",
-          5385,
-          5399
+          5121,
+          5135
         ],
         [
           "listMethodVersions",
           "18c260557d6ec4f0a13973af44258ce1e1ff032b1100c23f2926f8e0555d7f8a",
-          5399,
-          5412
+          5135,
+          5148
         ],
         [
           "listMethodVersions",
           "27028fb3688130a063a4a4317f781fed14a3f29f88057778eada1ebb3bf433ed",
-          5412,
-          5429
+          5148,
+          5165
         ],
         [
           "compareMethodVersions",
           "35e4fd9e367faed339ec98fd79e654d12ae88b5cbc65e05745fdafaadbc0a2b3",
-          5429,
-          5483
+          5165,
+          5219
         ],
         [
           "compareMethodVersions",
           "ddb50543e2089dd9353748555e77d52753fc30e1ab7dcd8050333df7a335fcf9",
-          5483,
-          5541
+          5219,
+          5277
         ],
         [
           "adoptMethodVersion",
           "245ce680e3dbde222ab3a27a92bc384e2334868386bcea3b5aa9f7bcf1cbfc3b",
-          5541,
-          5561
+          5277,
+          5297
         ],
         [
           "adoptMethodVersion",
           "e5f9dbd40ab147638782b67910a29c45cb7b2e9ece7225adf45243d5689d050f",
-          5561,
-          5582
+          5297,
+          5318
         ],
         [
           "resolveMethodsForRole",
           "7aefdef33f44ab5fcccd23ffdbb7456062ebba19bceb64a62fe0159ffef0e0b1",
-          5582,
-          5624
+          5318,
+          5360
         ],
         [
           "resolveMethodsForRole",
           "17dce2f2dab86cc60b50268b84bad57be970983f94a4e10296b7c40e7a00046b",
-          5624,
-          5674
+          5360,
+          5410
         ],
         [
           "resolveMethodsForRole",
           "76e7906012f825707a1f93662dd4a8eb054e43464e900784bd36e621a725c386",
-          5674,
-          5720
+          5410,
+          5456
         ],
         [
           "disableMethodBinding",
           "5d8ffb15b33fc6274d283fcb65ff143ba79c3b9e6a569e89b048200d601f9a7e",
-          5720,
-          5734
+          5456,
+          5470
         ],
         [
           "disableMethodBinding",
           "5d8ffb15b33fc6274d283fcb65ff143ba79c3b9e6a569e89b048200d601f9a7e",
-          5734,
-          5737
+          5470,
+          5473
         ],
         [
           "listMethodBindingEvents",
           "f8b2468f3290fb7a74dc8211679a0fcf488229e8c74d81d273dd427fd23324a0",
-          5737,
-          5749
+          5473,
+          5485
         ],
         [
           "listMethodBindingEvents",
           "66f85125ae641351cf02f005f966207f746f53afdeb6db19b8c4f882be998f19",
-          5749,
-          5765
+          5485,
+          5501
         ],
         [
           "readMethodAttachmentBytes",
           "0301c4bdebd4db83f9a633811b2aedb24efa8cfe1c58f6fca6eeacc57acc5e00",
-          5765,
-          5778
+          5501,
+          5514
         ],
         [
           "readMethodAttachmentBytes",
           "218998e7dfac6d3d47c8786c170a5494adc7d0f31150682382ccaa40a99ea3bc",
-          5778,
-          5791
+          5514,
+          5527
         ],
         [
           "deleteMethodVersion",
           "62fae707c1f0a4f0ef83f27e7670fb4a0e151b38c222435e23b61dd53e1286af",
-          5791,
-          5805
+          5527,
+          5541
         ],
         [
           "deleteMethodVersion",
           "62fae707c1f0a4f0ef83f27e7670fb4a0e151b38c222435e23b61dd53e1286af",
-          5805,
-          5808
+          5541,
+          5544
         ],
         [
           "deleteMethodPackage",
           "ad452c742ad9458beea71d055a186f10d0404807d38cd49c262c7cdbc084bb71",
-          5808,
-          5822
+          5544,
+          5558
         ],
         [
           "deleteMethodPackage",
           "ad452c742ad9458beea71d055a186f10d0404807d38cd49c262c7cdbc084bb71",
-          5822,
-          5825
+          5558,
+          5561
         ],
         [
           "listMethodEffects",
           "03584cb62b2a63500681b2c397df9ad9e864103f3e464afbe21e79bbef1aa6bb",
-          5825,
-          5835
+          5561,
+          5571
         ],
         [
           "listMethodEffects",
           "64f6a6e034b08a4befe974f5d99881d562328397f75c7747e19fe32c1c0a83d6",
-          5835,
-          5853
+          5571,
+          5589
         ],
         [
           "listMethodEffects",
           "2bf3e68ec7abe8a56f8bc659ebaf8878e92215308e5693b3ba9cdff172621ef8",
-          5853,
-          5871
+          5589,
+          5607
         ],
         [
           "listMethodEffects",
           "0eaa7085d0bc2a51a0b2cc57b1399097c38ea1a444b437b75229ae09db600d77",
-          5871,
-          5889
+          5607,
+          5625
         ],
         [
           "listMethodEffects",
           "64fb17b544dbbcb768be92d0008517a5e52c5028e30f3748329dd94657b06383",
-          5889,
-          5907
+          5625,
+          5643
         ],
         [
           "listMethodEffects",
           "b0bae3ea6dc9137daa1f453237823aaf01a55a897d2f12386e15a3a14a9585c0",
-          5907,
-          5921
+          5643,
+          5657
         ],
         [
           "getMethodPackageUsage",
           "dfbefc1de191b4dd741adb91582885d2e51ff02f580eb49d8c6a0d9f594dbfeb",
-          5921,
-          5927
+          5657,
+          5663
         ],
         [
           "listMethodManifest",
           "d1f84f46d28118ff5a27cb06af017f0fd139bafe816faf860f197e7491b81f75",
-          5927,
-          5934
+          5663,
+          5670
         ],
         [
           "captureRaw",
           "3c2532f8b014ee3ec621c4b0a15c0d60cd378515a245db953e221fda302cd8db",
-          5934,
-          6174
+          5670,
+          5918
         ],
         [
           "getConversation",
           "97e4fb50a8fd8dbe3aa4543e4ec3b9d6c2acc42734e19a0b6f052e2ce2bcb1e9",
-          6174,
-          6188
+          5918,
+          5932
         ],
         [
           "resolveSourceReferences",
           "e00c53a6c221627a63266ae1ce53a6a0b0bd7b26594e9bb1baf93f54a4959d96",
-          6188,
-          6213
+          5932,
+          5957
         ],
         [
           "createCardDraft",
           "b36bc8bf37de1440c280b22300418a02d82c2ea26d06136932568516c9366889",
-          6213,
-          6232
+          5957,
+          5976
         ],
         [
           "confirmCardDraft",
           "3a6b07fd5695076ea7410af4ef5debaecd8e7f5708abeccf4dab5111ab9d4cd8",
-          6232,
-          6274
+          5976,
+          6018
         ],
         [
           "getSource",
           "bc59e3bb56ef7b34a1d1c6327d947549a38917954f4d668aba8f0b84a46d9e1e",
-          6274,
-          6298
+          6018,
+          6042
         ],
         [
           "setRawCaptureControl",
           "3653110e79aa84b356285089adbb6cb1f6b056ba465b72ba1fe4f24561d78032",
-          6298,
-          6304
+          6042,
+          6048
         ],
         [
           "setRawCaptureControl",
           "9234c78fe0ef0056a5b34f634681a6fe7c7e9e5adc29e6b88a5e0b268c7be69d",
-          6304,
-          6309
+          6048,
+          6053
         ],
         [
           "refreshContextIndex",
           "ac891be91cd86b6a4b6d2cb16cd2ee70ac93485fa3fa224d7af6ed6ae687d7f6",
-          6309,
-          6717
+          6053,
+          6461
         ],
         [
           "openMemoryReader",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          6717,
-          6717
+          6461,
+          6461
         ],
         [
           "openMemoryReader.readTopicOverview",
           "0ae33fcf0f7e7a795f6312641aac14a4b97d686b37fec5e383255b741096183f",
-          6717,
-          7087
+          6461,
+          6831
         ],
         [
           "openMemoryReader.readTopicOverview",
           "d8d35ab0c86e3faa4607f1c2ed678cacf51f723fb70e5c700900f077ac3adef4",
-          7087,
-          7097
+          6831,
+          6841
         ],
         [
           "openContextReader",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          7097,
-          7389
+          6841,
+          7133
         ],
         [
           "openContextReader.findCandidates",
           "8ccb86713bf3ba5a309e21d256cc2c1b81fa8a9a9253e5489f23d6fa1d57a22c",
-          7389,
-          7691
+          7133,
+          7406
         ],
         [
           "openContextReader.contextRead",
           "0245593b1244bf2a98e28881eb52f58dc19c435e9b243893c40e664e86dcafc4",
-          7691,
-          8137
+          7406,
+          7784
         ],
         [
           "openContextReader.fetchCandidateEvidence",
           "451b94f61c263d38d89ec1fe33fc17a0c41a8b53ae3ce9c27b510be1e26fab58",
-          8137,
-          8461
+          7784,
+          8040
         ],
         [
           "openContextReader.fetchCandidateEvidence",
           "6dfc841403a9bfba144ceb91fc800e0b388227d84e016549d182787b6e6c0578",
-          8461,
-          8547
+          8040,
+          8134
         ],
         [
           "openContextIndexMaintainer",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          8547,
-          8914
+          8134,
+          8501
         ],
         [
           "openContextIndexMaintainer.getContextIndexStatus",
           "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
-          8914,
-          8920
+          8501,
+          8507
         ],
         [
           "openContextProductReader",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          8920,
-          9287
+          8507,
+          8874
         ],
         [
           "openContextProductReader.getContextIndexStatus",
           "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
-          9287,
-          9293
+          8874,
+          8880
         ],
         [
           "openContextProductReader.fetchCandidateEvidence",
           "ab49640ef7ea32336a288af9ff810e0c079d7ca3a831f974f1994d8d7efb38d0",
-          9293,
-          9379
+          8880,
+          8974
         ],
         [
           "openContentSuppressionReader",
           "64f55618b13d9afeebded345a4e67fa85c54d913cfc2658456aed99684cba951",
-          9379,
-          9668
+          8974,
+          9263
         ],
         [
           "openRawCaptureCore",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          9668,
-          9934
+          9263,
+          9529
         ],
         [
           "openRawCaptureCore.getConversation",
           "97e4fb50a8fd8dbe3aa4543e4ec3b9d6c2acc42734e19a0b6f052e2ce2bcb1e9",
-          9934,
-          9948
+          9529,
+          9543
         ],
         [
           "openRawCaptureCore.captureRaw",
           "872e1551bbceff794151f6541924c86ad73abf0e8c61d46d4a2178029a43bb4d",
-          9948,
-          10339
+          9543,
+          9942
         ],
         [
           "openRawCaptureCore.getConversation",
           "6d17fa294e6a986af82b8c961c6dfe96e0e73371907c5bc0f71915721eeb6ff2",
-          10339,
-          10355
+          9942,
+          9958
         ],
         [
           "openRawCaptureCore.getConversation",
           "2d5a18bf112f6f26a5119b7a6922ae6e8902bf2c85442784a4210e6b30c03916",
-          10355,
-          10369
+          9958,
+          9972
         ],
         [
           "openRawCaptureCore.listRawConversations",
           "571ee60b6ff0c4c63fb45c0c1f86e6424d94cbaa0283aff6f2895d23cc8d45bb",
-          10369,
-          10373
+          9972,
+          9976
         ],
         [
           "openRawCaptureCore.listRawConversations",
           "7e3dc1f41a5f45d789c3ffc77fd42e9cb4857cf25d740e5d2a9eb34fa3d602b1",
-          10373,
-          10377
+          9976,
+          9980
         ],
         [
           "deleteConversation",
           "7c7ab2d9136d6c49f1d0a70939b301a8307200184574f4a8322b5b7a4c1cf8fa",
-          10377,
-          10477
+          9980,
+          10080
         ],
         [
           "deleteConversation",
           "7c7ab2d9136d6c49f1d0a70939b301a8307200184574f4a8322b5b7a4c1cf8fa",
-          10477,
-          10480
+          10080,
+          10083
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          10480,
-          10494
+          10083,
+          10097
         ],
         [
           "correct",
           "70c4e925846dcd32d8b26c480ae91cc34e2d42e27e0b3ad9c6487c711cdae920",
-          10494,
-          10583
+          10097,
+          10189
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          10583,
-          10597
+          10189,
+          10203
         ],
         [
           "get",
           "2b5ca6f58052e5cde3d834a08499c495f84f5a008824bc9fa24cd1aec692f2bb",
-          10597,
-          10628
+          10203,
+          10242
         ],
         [
           "supersede",
           "85a132991b83f00e80c42000aceac0019e48ee517011857e8f74e73f36e051be",
-          10628,
-          10696
+          10242,
+          10310
         ],
         [
           "forget",
           "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
-          10696,
-          10702
+          10310,
+          10316
         ],
         [
           "get",
           "0c1761396a0caa357777c813104e85734df24166e734f4ea4e6c4b8f4e8b8ed9",
-          10702,
-          10733
+          10316,
+          10355
         ],
         [
           "forget",
           "842bca929001887de46060ceb41958218fe160f882674e064a4c266993ce8c36",
-          10733,
-          10790
+          10355,
+          10413
         ],
         [
           "admit",
           "8c0069625defe656be7efa5842f2c611f0de14604360d73e3719a603b208ca21",
-          10790,
-          10845
+          10413,
+          10468
         ],
         [
           "forget",
           "9af50378e5cef59c000dfe2ad8b41f4e441cb9aad7b0e4964ac3db8dfa0161b3",
-          10845,
-          10902
+          10468,
+          10526
         ],
         [
           "submitSourceNote",
           "b128a9849ab6ad8f6eac48b1f07c728136d208ff99239d69e7737191a883c05c",
-          10902,
-          10913
+          10526,
+          10537
         ],
         [
           "createCardDraft",
           "212a257dc881f37ac626cd89471b43631c7b3fec0651570cd25a83e0f2710bbf",
-          10913,
-          10928
+          10537,
+          10552
         ],
         [
           "createCardDraft",
           "c35def3828dac4fed01ed93ace309724438fa4cb83b5c328dc706b437a5bf100",
-          10928,
-          10943
+          10552,
+          10567
         ],
         [
           "confirmCardDraft",
           "f9c972af890c6b29e26caea918edd9de0b83fde25dcb599d49b19be7353990e9",
-          10943,
-          10974
+          10567,
+          10598
         ],
         [
           "deleteSourceNote",
           "130faba56067cb2cfcb212249b417add4ff5642ee12be7dd85384e38bf055923",
-          10974,
-          10999
+          10598,
+          10623
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          10999,
-          11003
+          10623,
+          10627
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          11003,
-          11014
+          10627,
+          10638
         ],
         [
           "cancelCardDraft",
           "59dead7c3040409d4f3fd3aa9cafbf5cce64f1a966946ed0db6fafb8ad84f5a9",
-          11014,
-          11028
+          10638,
+          10652
         ],
         [
           "deleteKnowledgeCard",
           "5a66832abd3dd64e57fa8bc8d328405ec1c03fc01344829e7518aeb37b185c3c",
-          11028,
-          11042
+          10652,
+          10666
         ],
         [
           "checkMethodReasonRefs",
           "a59808dac96996843c9c766296bf1aaf8abadfe59a67e89b216de944a6e952a0",
-          11042,
-          11049
+          10666,
+          10673
         ],
         [
           "deleteSourceNote",
           "e599d7cbeb4a1fcd8d3e316241113a6157e4e522c6a80ae0d8dfde8c54f39f50",
-          11049,
-          11061
+          10673,
+          10685
         ],
         [
           "listCardEffects",
           "a2dbe844a3a2e064af92095d1480365111c5f5a62fd7d8dcf2f0b43bd48c4341",
-          11061,
-          11064
+          10685,
+          10688
         ],
         [
           "getPrivateCardUsage",
           "69c7335d36b31ad5f695501c82725d4359230e9816b6d38e2b85ee3a652ad2cc",
-          11064,
-          11068
+          10688,
+          10692
         ],
         [
           "recall",
           "5f1ed616c1b4fc4a9ab0ae19f343358a8ad9f88ecc207b06ac9d9bce40b87058",
-          11068,
-          11326
+          10692,
+          10911
         ],
         [
           "modelCalls",
@@ -3772,8 +3772,8 @@
           null
         ]
       ],
-      "statements": 11326,
-      "sql": "874363e7acd3731365c106b1f03712ffb60c721b6b0370019ed8109d42d66c3d",
+      "statements": 10911,
+      "sql": "db499de5d99e6f66003310de61c8ea800500ba6930168cadedd133207933e7be",
       "tables": [
         [
           "admission_claims",
@@ -4322,8 +4322,8 @@
         ],
         [
           "suppressed",
-          5,
-          "1b4c0cc31ca400b7c68bd9a268720b9ccaf6d993f0ae9ec74a87ec4f9572bfea"
+          11,
+          "a486af879b6740c0483deb451c554f6f58c4806977d56105b46ec5889b234818"
         ]
       ],
       "effectWitnesses": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
@@ -4925,913 +4925,913 @@
           "capture",
           "1b8c8ecc147c632d0d3075d223988dd8091e554d7b49e3b9d8be596819f00c7b",
           701,
-          1507
+          1515
         ],
         [
           "capture",
           "8555abcb6d471d698d60f0e3e8a269990e22c8a9bb6353bd814f236f275612cd",
-          1507,
-          1586
+          1515,
+          1594
         ],
         [
           "list",
           "af34431f748c09902f6e529cd40e1b72ca33b697183d6a0e26251025dd40b28f",
-          1586,
-          1594
+          1594,
+          1602
         ],
         [
           "recall",
           "9b9dd270cadb14415cc37c792fae35150768053635cc27974324adcd6dea22ad",
-          1594,
-          1897
+          1602,
+          1845
         ],
         [
           "submitSourceNote",
           "c3bc92d801b29d7299ffefc4229a6779e21045ea9e0d96d9c5b52f439b810d59",
-          1897,
-          2000
+          1845,
+          1948
         ],
         [
           "submitSourceNote",
           "c3bc92d801b29d7299ffefc4229a6779e21045ea9e0d96d9c5b52f439b810d59",
-          2000,
-          2046
+          1948,
+          1994
         ],
         [
           "submitSourceNote",
           "65e5ace67336f4b8a6f8c70dea1cb66da0d2d0ecb1db1e8ef918453f6cd54886",
-          2046,
-          2077
+          1994,
+          2025
         ],
         [
           "createCardDraft",
           "d683157e519d9a7521fbeb025c0129f1d37fdd1092113341791297324b726a8e",
-          2077,
-          2254
+          2025,
+          2202
         ],
         [
           "editCardDraft",
           "f127482dc6a3e33385125636cedaee814341ff43aac4d75ee8f3251429e1e33c",
-          2254,
-          2403
+          2202,
+          2351
         ],
         [
           "editCardDraft",
           "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
-          2403,
-          2435
+          2351,
+          2383
         ],
         [
           "confirmCardDraft",
           "204fdc39b575e77f54017032e403ec7668388a0cd04b4b9c53f697f4f94f4a50",
-          2435,
-          2610
+          2383,
+          2558
         ],
         [
           "editKnowledgeCard",
           "2dda1653dfd23113761d11998b63fd2b40637cabcd225f91ab856c0261568b7d",
-          2610,
-          2787
+          2558,
+          2735
         ],
         [
           "getCard",
           "3c3154b515394ed43822d9be67502fff2033c0aebcc469de30ef49340b3c9e85",
-          2787,
-          2805
+          2735,
+          2754
         ],
         [
           "inspectCardOperation",
           "75e0093ae780626fe6e383cb8a6d5a549a0c2e1f58a8be0cd3f3aea15afe9d89",
-          2805,
-          2812
+          2754,
+          2761
         ],
         [
           "inspectCardOperation",
           "3b5f5e21c5b580819e6ca26dbaa09479ee2d902d53add0bbd66ff6e4f71b9e90",
-          2812,
-          2819
+          2761,
+          2768
         ],
         [
           "getSource",
           "88294972fac7801ae02fbcd1d4f7d47e55ec3e850743d94f75153155915ab03b",
-          2819,
-          2826
+          2768,
+          2775
         ],
         [
           "fetchEvidence",
           "8d6d3e5780285750d1987e100ce02c30fb0e7609ed85d44597c31ea733f6bd77",
-          2826,
-          2847
+          2775,
+          2797
         ],
         [
           "revalidateEvidence",
           "8d6d3e5780285750d1987e100ce02c30fb0e7609ed85d44597c31ea733f6bd77",
-          2847,
-          2870
+          2797,
+          2821
         ],
         [
           "createCardDraft",
           "f25b765d12f82d69d18544a1e47da40e90c08fca90964be3c36bad9a5ac0e4a4",
-          2870,
-          3069
+          2821,
+          3020
         ],
         [
           "createCardDraft",
           "b2a46f9aa771f6828dd3965fbdebf3afca50e7945c92f13426113068a04a0471",
-          3069,
-          3449
+          3020,
+          3400
         ],
         [
           "confirmCardDraft",
           "f5c0424b3e118fc841fd968466d0adebd34641da7df8173395dd04b037fbb97d",
-          3449,
-          3759
+          3400,
+          3710
         ],
         [
           "listCards",
           "dfe364701567a8070231e867cd7b3c225a822a30e371d4a304a94d1580616a29",
-          3759,
-          3780
+          3710,
+          3734
         ],
         [
           "listCards",
           "bd858d6aea77925b0597fcd6a05dc317a787b4feeb6975f84b1393adcf7fc237",
-          3780,
-          3805
+          3734,
+          3763
         ],
         [
           "listCards",
           "9d1d11a85eb65f92d2f6808bfc7ee17c4c1f889fd19690bcc1545d306962b162",
-          3805,
-          3850
+          3763,
+          3812
         ],
         [
           "mapEvidence",
           "c46c382816fbcb00644428e7ec7e4b046e53c7ba122215b38fe5d5ef4cbfd877",
-          3850,
-          3943
+          3812,
+          3905
         ],
         [
           "applyCardPlacement",
           "3af6803023678ba25236f78f7adf406a068a4720c9b83bf1e99ebfe29d86e0b1",
-          3943,
-          4204
+          3905,
+          4166
         ],
         [
           "applyCardPlacement",
           "3af6803023678ba25236f78f7adf406a068a4720c9b83bf1e99ebfe29d86e0b1",
-          4204,
-          4301
+          4166,
+          4263
         ],
         [
           "mapEvidence",
           "10d54d51590e2c749718d6ca85ad73ac7806757d9d17cd75f1180b2ace858f97",
-          4301,
-          4463
+          4263,
+          4425
         ],
         [
           "refreshCardTopic",
           "807e45455402ae3f2a3395543c7459fcd71eca71bb5e3dc6da13c6e937f0d385",
-          4463,
-          4711
+          4425,
+          4673
         ],
         [
           "map",
           "9460f02d57f334bad1f9512856bfa28db079abafc6df3358d0b54f72af1a0cbc",
-          4711,
-          4725
+          4673,
+          4687
         ],
         [
           "applyPlacement",
           "7055c921865f30f7911f8708d997354b4e9c075554f28327e085469e7ea2d900",
-          4725,
-          4943
+          4687,
+          4907
         ],
         [
           "mapEvidence",
           "6f0b9c2b4b37349c7f46b2e9916d2d2239ebd876f3d35e6852954714eb1dfadf",
-          4943,
-          4958
+          4907,
+          4922
         ],
         [
           "mapEvidence",
           "5acb38b04b2078af25ddaa880162dff3f8a5df9437e7b0d32a2eaf8074081de8",
-          4958,
-          5120
+          4922,
+          5084
         ],
         [
           "proposeEvidenceMapping",
           "aea97711e1d33da29f5c86daaef7920fd5b1e5775370cab081eb6ac1fac38bfc",
-          5120,
-          5307
+          5084,
+          5271
         ],
         [
           "reviewEvidenceMapping",
           "f750a3979c5dde979f2f2007a638c034ac03b3e31f60a70365ab0c014dfe95b6",
-          5307,
-          5497
+          5271,
+          5461
         ],
         [
           "listEvidenceMappings",
           "f5234b08ce811f3bd18ed4731299419a7c9adee044c9c9593f5b5efa52609a8e",
-          5497,
-          5533
+          5461,
+          5497
         ],
         [
           "mapEvidence",
           "5acb38b04b2078af25ddaa880162dff3f8a5df9437e7b0d32a2eaf8074081de8",
-          5533,
-          5695
+          5497,
+          5659
         ],
         [
           "selectEvidence",
           "06de59b603b6e35d33819c3e1dc082399184190cc002a8f8483e95e9f433a501",
-          5695,
-          5765
+          5659,
+          5732
         ],
         [
           "importMethodVersion",
           "14edd013e4e7360405573e5481e45a7b454f500aaddc806790dc7243f586bd69",
-          5765,
-          5969
+          5732,
+          5936
         ],
         [
           "checkMethodReasonRefs",
           "16469c89046ba72cb943b8ccda9156cbfbfe85bbfc9c1ffe0676c3e95f22c0cc",
-          5969,
-          5996
+          5936,
+          5963
         ],
         [
           "getMethodVersion",
           "fd9b4dda310182d3d3d5128a2e2c2f675dcf478d4c2a19176c33ce8702d80ac2",
-          5996,
-          6011
+          5963,
+          5978
         ],
         [
           "adoptMethodVersion",
           "504f290fe2ca7b4b284bedb22beb7c51582ee15db875e5a94778cc6f093d4503",
-          6011,
-          6104
+          5978,
+          6071
         ],
         [
           "resolveMethod",
           "831cd3e0100059908d9ba21d7ca1522efb16e92518f464bf06043be4c3210a19",
-          6104,
-          6122
+          6071,
+          6089
         ],
         [
           "readMethodFile",
           "4de4c47fafa9a7ae1ed3f93e3cc08eb406eae8fcb6975f48256378b44e2a9e94",
-          6122,
-          6136
+          6089,
+          6103
         ],
         [
           "declareCardCurrentDependencies",
           "c7e890b5d6650247d9e6d556b53fed5ea3bfd7c4d891807d9a74d4fbe68802e7",
-          6136,
-          6330
+          6103,
+          6297
         ],
         [
           "declareCardCurrentDependencies",
           "c7e890b5d6650247d9e6d556b53fed5ea3bfd7c4d891807d9a74d4fbe68802e7",
-          6330,
-          6393
+          6297,
+          6360
         ],
         [
           "revalidateCardCurrentDependencies",
           "ca9404d7c0a53a88aaf8376ee9b9f7bb94e785f182e93092384bde75e14a6d0a",
-          6393,
-          6586
+          6360,
+          6553
         ],
         [
           "publishRoleProfileRelease",
           "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
-          6586,
-          6670
+          6553,
+          6637
         ],
         [
           "refreshContextIndex",
           "24b52cdd311839d9c8e4ba0c5f9b923ecfcfc570ef712cb6677a623927daf77d",
-          6670,
-          7125
+          6637,
+          7092
         ],
         [
           "findCandidates",
           "aac88178ba69d2b0dd38aae7914bcbd8926773d0c8c52aca67e40c8ae2424312",
-          7125,
-          7337
+          7092,
+          7315
         ],
         [
           "contextRead",
           "8f56bc81c86413599daeee19556884cb77c4e51f0bf9f60294c01f947f75cdc5",
-          7337,
-          7660
+          7315,
+          7653
         ],
         [
           "fetchCandidateEvidence",
           "5f2ba0aba7cd0dbe814afcabdc25822ecfffae6c50a52f2822706ad486e0ea89",
-          7660,
-          7750
+          7653,
+          7751
         ],
         [
           "fetchCandidateEvidence",
           "2aa19c535fcf4fa82b16507c28f5eca4f8e62aafbeb7e94e96956b0540119e41",
-          7750,
-          7906
+          7751,
+          7919
         ],
         [
           "readRoleTaskContext",
           "c2e2a042bd7c5dc20e6c65b6260648ea99d5dbb2f2d5826c1dcf99c6c9b5a888",
-          7906,
-          8327
+          7919,
+          8309
         ],
         [
           "readRoleTaskContext",
           "0535751003daea2694a356110b0260a49472d98b0e486b5ff1da90ab46233bd0",
-          8327,
-          8579
+          8309,
+          8523
         ],
         [
           "readRoleTaskContext",
           "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
-          8579,
-          8594
+          8523,
+          8538
         ],
         [
           "importMethodVersion",
           "d1470368f0dca3e58aff26b2963dbb768147b295a4e030c5e2b993dafebcb302",
-          8594,
-          8864
+          8538,
+          8808
         ],
         [
           "importMethodVersion",
           "3169b4d13d30b8346f739e7176183be62ff93da1c0f1b76c4a8c66bae0ed5064",
-          8864,
-          9141
+          8808,
+          9085
         ],
         [
           "importMethodVersion",
           "2c72a4848f50413495191379fa3466407960b7ca0ef6ab0ace432054795e73df",
-          9141,
-          9381
+          9085,
+          9325
         ],
         [
           "listMethodManifest",
           "26db8a9c598984385b4bd90bbae00d823f7f9a905cf5d794451375ad01f4bd2d",
-          9381,
-          9399
+          9325,
+          9343
         ],
         [
           "listMethodManifest",
           "664e9c379f524f4749bb94142811ceb2a9489c0e19a622678ce842ee748dcf10",
-          9399,
-          9421
+          9343,
+          9365
         ],
         [
           "listMethodPackages",
           "84c4328442f7ff3b443a589fb11236c1d516f0bdf79eb021ffefa39e71d44eb3",
-          9421,
-          9435
+          9365,
+          9379
         ],
         [
           "listMethodPackages",
           "f0e1845e0d1551f6304c9eea279b8dbb2827d0f4f44f453bed36cae9cf14b89f",
-          9435,
-          9457
+          9379,
+          9401
         ],
         [
           "listMethodPackages",
           "dad3422f85263293f78cf3bb62daed53eb0b68976a5535f549793cce7fce1d16",
-          9457,
-          9475
+          9401,
+          9419
         ],
         [
           "listMethodVersions",
           "8cabeb7c90afe17854c26f2f6aa526dc86d7a8e3b09e937eb08b87648e9be5c6",
-          9475,
-          9492
+          9419,
+          9436
         ],
         [
           "listMethodVersions",
           "add8ebd136d8596c3daf3c2d2735ece07c5d67e40487d44f853a92bcf5764371",
-          9492,
-          9513
+          9436,
+          9457
         ],
         [
           "compareMethodVersions",
           "0ed804bf85381167fab8474e923d14c61c4830ddb84597c98354ebbdcc9db49f",
-          9513,
-          9599
+          9457,
+          9543
         ],
         [
           "compareMethodVersions",
           "869ca467f400cc3c94e158eae381dac9d80c14f55a948b3ca83e42cd53f649f2",
-          9599,
-          9689
+          9543,
+          9633
         ],
         [
           "adoptMethodVersion",
           "f515fa29bedc6441bd34227c2aed8349bda010d1b2b3ef3e9bebaffaa9245ae7",
-          9689,
-          9782
+          9633,
+          9726
         ],
         [
           "adoptMethodVersion",
           "3838c88d32be1027e92a3684970cbf5387f35491d788f4496200713051741a81",
-          9782,
-          9876
+          9726,
+          9820
         ],
         [
           "resolveMethodsForRole",
           "b41db58681c73627894a96b921919073d476f9689c3b43496df0ac4de1a2dd2f",
-          9876,
-          9922
+          9820,
+          9866
         ],
         [
           "resolveMethodsForRole",
           "4c28aea90c73a19dafece234435b1d57d2bdf25bfc71d7e9ed68ed8ce6de7bef",
-          9922,
-          9976
+          9866,
+          9920
         ],
         [
           "resolveMethodsForRole",
           "02936ebccac75804ad95542b9aaed6f8561709e7f1a69b385604eb8a370a541f",
-          9976,
-          10026
+          9920,
+          9970
         ],
         [
           "disableMethodBinding",
           "7938905de53b0a73ae5a1da961bcee940fffc84d585ff83ee6ca4d268c10213a",
-          10026,
-          10109
+          9970,
+          10053
         ],
         [
           "disableMethodBinding",
           "7938905de53b0a73ae5a1da961bcee940fffc84d585ff83ee6ca4d268c10213a",
-          10109,
-          10148
+          10053,
+          10092
         ],
         [
           "listMethodBindingEvents",
           "98ae8eab9afa3379deb234d52f131a524e15903bceb4aa0a611ae9a0eef1a4fc",
-          10148,
-          10164
+          10092,
+          10108
         ],
         [
           "listMethodBindingEvents",
           "c27e1f9e2c8e957dd11c81b1f7dcfff1678f145ccb252d52684e8cf75031c672",
-          10164,
-          10184
+          10108,
+          10128
         ],
         [
           "readMethodAttachmentBytes",
           "f4fc1dba2331be25b5f4412775c62ba5189b1bda14c41988fb8e8849e8375b10",
-          10184,
-          10201
+          10128,
+          10145
         ],
         [
           "readMethodAttachmentBytes",
           "3b593796b734e381e921915e5ac413a66c55e79f04728263350d7120178f6bae",
-          10201,
-          10218
+          10145,
+          10162
         ],
         [
           "deleteMethodVersion",
           "f8803401b7258e12a514ee62c131e7a7be4b6cf430c387dc9ae7c4328f6d8b5a",
-          10218,
-          10317
+          10162,
+          10261
         ],
         [
           "deleteMethodVersion",
           "f8803401b7258e12a514ee62c131e7a7be4b6cf430c387dc9ae7c4328f6d8b5a",
-          10317,
-          10364
+          10261,
+          10308
         ],
         [
           "deleteMethodPackage",
           "6ea3ec699dc15d089604b9fb2a72cbd321a70573c5d0ef97a2de2f3c59b69e45",
-          10364,
-          10462
+          10308,
+          10406
         ],
         [
           "deleteMethodPackage",
           "6ea3ec699dc15d089604b9fb2a72cbd321a70573c5d0ef97a2de2f3c59b69e45",
-          10462,
-          10510
+          10406,
+          10454
         ],
         [
           "listMethodEffects",
           "3717ac5ceb55d4eb5b5c553679dff881fdf1bbe1f40fc9542794bf84fa0d5e05",
-          10510,
-          10524
+          10454,
+          10468
         ],
         [
           "listMethodEffects",
           "5bacec7afe75fdc6b06eba7efa08bc5a3e51fae8ca3b1a1b0423075117ed47c2",
-          10524,
-          10546
+          10468,
+          10490
         ],
         [
           "listMethodEffects",
           "bcb18c6cab0782ead6098c01237d5676b36123f1354c312743ed7c40f601ba8c",
-          10546,
-          10568
+          10490,
+          10512
         ],
         [
           "listMethodEffects",
           "a0dc2f7a89a6ef720bca41ad8e9f273f4fd573f2ece83c8d9f87f19e81c42d4b",
-          10568,
-          10590
+          10512,
+          10534
         ],
         [
           "listMethodEffects",
           "aaa8a43fd24d87cc922a84604138a88b98df216b78fe80d3a182f02adec4b325",
-          10590,
-          10612
+          10534,
+          10556
         ],
         [
           "listMethodEffects",
           "9f2c768000f22be468504e4fc7466811962f5eebf20f0fa3855dc314c25924b7",
-          10612,
-          10630
+          10556,
+          10574
         ],
         [
           "getMethodPackageUsage",
           "dfbefc1de191b4dd741adb91582885d2e51ff02f580eb49d8c6a0d9f594dbfeb",
-          10630,
-          10640
+          10574,
+          10584
         ],
         [
           "listMethodManifest",
           "d1f84f46d28118ff5a27cb06af017f0fd139bafe816faf860f197e7491b81f75",
-          10640,
-          10651
+          10584,
+          10595
         ],
         [
           "captureRaw",
           "340ff266cfd9db465d24d844007178841bf9282a8be4b367d150ee987bd1e50f",
-          10651,
-          11370
+          10595,
+          11322
         ],
         [
           "getConversation",
           "0889df3a2f44f6361c03b53c75ccc8f158992a5dbf4276446b3576329d46880c",
-          11370,
-          11391
+          11322,
+          11343
         ],
         [
           "resolveSourceReferences",
           "537de7a68f9e17ba4830de4f5e935e3f6ab4cb0ab30df40f3f2c4eddfbcdbed7",
-          11391,
-          11421
+          11343,
+          11373
         ],
         [
           "createCardDraft",
           "2d808124afb6cbf470043edece67e0aa73184ff788351f1d2d2e97b5e1c82ac9",
-          11421,
-          11644
+          11373,
+          11596
         ],
         [
           "confirmCardDraft",
           "cdc6982d26b1e19e94d434936fff35615131b786f69baaf317639089cfbbec75",
-          11644,
-          11856
+          11596,
+          11808
         ],
         [
           "getSource",
           "b9b5a876b14967879489dea4aea99429e44b7f208faa3fd78572ca7d9b993518",
-          11856,
-          11885
+          11808,
+          11837
         ],
         [
           "setRawCaptureControl",
           "3653110e79aa84b356285089adbb6cb1f6b056ba465b72ba1fe4f24561d78032",
-          11885,
-          11915
+          11837,
+          11867
         ],
         [
           "setRawCaptureControl",
           "9234c78fe0ef0056a5b34f634681a6fe7c7e9e5adc29e6b88a5e0b268c7be69d",
-          11915,
-          11944
+          11867,
+          11896
         ],
         [
           "refreshContextIndex",
           "ac891be91cd86b6a4b6d2cb16cd2ee70ac93485fa3fa224d7af6ed6ae687d7f6",
-          11944,
-          12356
+          11896,
+          12308
         ],
         [
           "openMemoryReader",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          12356,
-          12356
+          12308,
+          12308
         ],
         [
           "openMemoryReader.readTopicOverview",
           "ee99514cf7165d5846fb966a5de18fd99674f2d62e2ec40df79f24c860f97abf",
-          12356,
-          12751
+          12308,
+          12703
         ],
         [
           "openMemoryReader.readTopicOverview",
           "9bb97f27f3b3794a4b97a9bdef627d12d98c5dbdd86b810e8f2d12057cfcd278",
-          12751,
-          12765
+          12703,
+          12717
         ],
         [
           "openContextReader",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          12765,
-          13135
+          12717,
+          13087
         ],
         [
           "openContextReader.findCandidates",
           "4dc172f9bd1997f9ad500642287df1df35ba10291835103fedae78b716301d9c",
-          13135,
-          13378
+          13087,
+          13341
         ],
         [
           "openContextReader.contextRead",
           "78f299e24f8b6284ec13a086d9ea3b8938661f915aa198c05012d455822bc63a",
-          13378,
-          13719
+          13341,
+          13697
         ],
         [
           "openContextReader.fetchCandidateEvidence",
           "96126a0a09f1b7fbc0b0acb1dd0021311c7a72f5ddd3ed052a0135f5a71bb2f3",
-          13719,
-          13921
+          13697,
+          13911
         ],
         [
           "openContextReader.fetchCandidateEvidence",
           "2cca6b19e8b21821b228d88c50dc7927badd7469f42cec60b25050d604d1b3f7",
-          13921,
-          14011
+          13911,
+          14009
         ],
         [
           "openContextIndexMaintainer",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          14011,
-          14378
+          14009,
+          14376
         ],
         [
           "openContextIndexMaintainer.getContextIndexStatus",
           "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
-          14378,
-          14388
+          14376,
+          14386
         ],
         [
           "openContextProductReader",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          14388,
-          14755
+          14386,
+          14753
         ],
         [
           "openContextProductReader.getContextIndexStatus",
           "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
-          14755,
-          14765
+          14753,
+          14763
         ],
         [
           "openContextProductReader.fetchCandidateEvidence",
           "8ee2591f0baa77ee3e3241afeb6fd896a02f90072fc9fee0eaa69fc62487eb98",
-          14765,
-          14855
+          14763,
+          14861
         ],
         [
           "openContentSuppressionReader",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          14855,
-          15224
+          14861,
+          15230
         ],
         [
           "admit",
           "1afd187087b802e588d17913a81b72a794598e7cd72f68fc6f80d8620946f19d",
-          15224,
-          15409
+          15230,
+          15415
         ],
         [
           "admit",
           "60ce7c8b569aee6153089eeb056b05e401a997e9668cff86541ba9cd7fcb15d7",
-          15409,
-          15594
+          15415,
+          15600
         ],
         [
           "isSuppressed",
           "a996475046b1c48ddc20fa7c8d16711b7a90d6e18000ee73b3ead7b7b3347592",
-          15594,
-          15626
+          15600,
+          15632
         ],
         [
           "isSuppressed",
           "29f32fb7905d749051233e41242dd0adde76852352e4567ad785fd484c7a221b",
-          15626,
-          15648
+          15632,
+          15654
         ],
         [
           "isSuppressed",
           "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
-          15648,
-          15661
+          15654,
+          15667
         ],
         [
           "openRawCaptureCore",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          15661,
-          15992
+          15667,
+          15998
         ],
         [
           "openRawCaptureCore.getConversation",
           "0889df3a2f44f6361c03b53c75ccc8f158992a5dbf4276446b3576329d46880c",
-          15992,
-          16013
+          15998,
+          16019
         ],
         [
           "openRawCaptureCore.captureRaw",
           "90cb15caaf3e506f3a282bfbf049236c51bf6ac41b544603a94e390bfa7ae1fe",
-          16013,
-          17045
+          16019,
+          17033
         ],
         [
           "openRawCaptureCore.getConversation",
           "e31de347cc0b238e767454a92f9d73a7213c7bc25e9cda6afcf708fb1ef1e110",
-          17045,
-          17068
+          17033,
+          17056
         ],
         [
           "openRawCaptureCore.getConversation",
           "8c645415490e80efd696f7925c5e5c6e59520480bcd2eb401d89740718970e44",
-          17068,
-          17089
+          17056,
+          17077
         ],
         [
           "openRawCaptureCore.listRawConversations",
           "10c28dfc5a6da689b814588d30b6c2c3a9c840fc592e4508d2365255052e3065",
-          17089,
-          17097
+          17077,
+          17085
         ],
         [
           "openRawCaptureCore.listRawConversations",
           "5d3841c87ace91cb7023c8d45c17d2f3d0c98cc6e86313bac516c4684ad3e492",
-          17097,
-          17105
+          17085,
+          17093
         ],
         [
           "deleteConversation",
           "9d63a1cfe2fc7ede2c6051839af8b718df0abfdc2de1efe779a9a0ceff8a2cee",
-          17105,
-          17403
+          17093,
+          17391
         ],
         [
           "deleteConversation",
           "9d63a1cfe2fc7ede2c6051839af8b718df0abfdc2de1efe779a9a0ceff8a2cee",
-          17403,
-          17433
+          17391,
+          17421
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          17433,
-          17453
+          17421,
+          17441
         ],
         [
           "correct",
           "a12e644eb852003803643079f7944bf1b43c7ce131e2ee15bd96f09682029768",
-          17453,
-          17753
+          17441,
+          17744
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          17753,
-          17773
+          17744,
+          17764
         ],
         [
           "get",
           "b6ba495a951487aebf576a116bd21724627ed3af6a564c36e356d68033572ac5",
-          17773,
-          17814
+          17764,
+          17813
         ],
         [
           "supersede",
           "12e30216ddc17cc2caa15a30d3625b08efa0ad2df9d0a31bde8991ecd2e084aa",
-          17814,
-          18096
+          17813,
+          18094
         ],
         [
           "forget",
           "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
-          18096,
-          18129
+          18094,
+          18127
         ],
         [
           "get",
           "25c6755f3e407823ce16323b95cc7cc68ca3d9be6740abfa41808fe859e00fef",
-          18129,
-          18169
+          18127,
+          18175
         ],
         [
           "forget",
           "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
-          18169,
-          18316
+          18175,
+          18323
         ],
         [
           "admit",
           "4b705af427f0e26ad140af672be31aefc695be698055a943dc8e422232f5b041",
-          18316,
-          18505
+          18323,
+          18510
         ],
         [
           "forget",
           "176118e5b6311059400a89f6ec160ca53dd1ff1b709940a0f415dd1a04124c62",
-          18505,
-          18635
+          18510,
+          18641
         ],
         [
           "submitSourceNote",
           "840865933d6fc57a1dfdce3cef7129bd2c2b982e1a5e49b723c4b1587d37bbec",
-          18635,
-          18738
+          18641,
+          18744
         ],
         [
           "createCardDraft",
           "a6fedd70f7d0e615dcc5abaabbedf32bb763a467d80529bfd8a25940bebd8089",
-          18738,
-          18916
+          18744,
+          18922
         ],
         [
           "createCardDraft",
           "e13ccdbc58b56eb7b1d15dc28259eb04e58f9505029cfed9ece704a28c5f857c",
-          18916,
-          19094
+          18922,
+          19100
         ],
         [
           "confirmCardDraft",
           "31865010fde95a6fc16c0762438951aae4ad233b7471c5e187e03c49b63e1401",
-          19094,
-          19271
+          19100,
+          19277
         ],
         [
           "deleteSourceNote",
           "56bab4654f0200addb24ccd1220428617ff3c7235b30dbca3d17cd6a53a65543",
-          19271,
-          19446
+          19277,
+          19452
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          19446,
-          19456
+          19452,
+          19462
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          19456,
-          19473
+          19462,
+          19479
         ],
         [
           "cancelCardDraft",
           "8786ce3708574795b5c7a0bda0d37df2ba69ba05933a9c9bdb253abb3f29f886",
-          19473,
-          19586
+          19479,
+          19592
         ],
         [
           "deleteKnowledgeCard",
           "399e67e51366104aa635520d179c22ba846ed031b3f5e049150a7fc0d4021a78",
-          19586,
-          19700
+          19592,
+          19706
         ],
         [
           "checkMethodReasonRefs",
           "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
-          19700,
-          19712
+          19706,
+          19718
         ],
         [
           "deleteSourceNote",
           "842a8943dd8257f41c9296debcc7631e9f70f230642087fb4f396a81d8cb36e2",
-          19712,
-          19822
+          19718,
+          19828
         ],
         [
           "listCardEffects",
           "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
-          19822,
-          19831
+          19828,
+          19837
         ],
         [
           "getPrivateCardUsage",
           "69c7335d36b31ad5f695501c82725d4359230e9816b6d38e2b85ee3a652ad2cc",
-          19831,
-          19845
+          19837,
+          19851
         ],
         [
           "recall",
           "d99e80a99a5ed9562a6a3e91f11344ff9e3215d35d4b0b0d9c5c637f55fdc944",
-          19845,
-          20693
+          19851,
+          20501
         ],
         [
           "modelCalls",
@@ -5840,8 +5840,8 @@
           null
         ]
       ],
-      "statements": 20693,
-      "sql": "d65e80fb0a6d8cbf631a668ae13d286284feb7e0aa4379be372f80fd3ea95927",
+      "statements": 20501,
+      "sql": "a10275fd4136316bbf41ca417639c710269426de2652e144d3fe12337b0d14e3",
       "tables": [
         [
           "admission_claims",
@@ -6410,8 +6410,8 @@
         ],
         [
           "suppressed",
-          4,
-          "a12121cadedd5afed4eb697466effc22d3db9270ea13b0734974ab31b3376f64"
+          8,
+          "fea185c899616e66eb75e7a784cf319d010698aec366244efbaba3d7b45f782d"
         ]
       ],
       "effectWitnesses": "e1ee63894d6de92f6aa373707f4049d50405e613ffe3e29206935ef09f3f4908"
@@ -6425,54 +6425,6 @@
     "openContentSuppressionReader",
     "openRawCaptureCore"
   ],
-  "sqlRevisions": [
-    {
-      "key": "workload:23",
-      "index": 201,
-      "old": "SELECT id, revision, content, deleted, currentness FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
-      "new": "SELECT id, revision, content, deleted, currentness, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
-    },
-    {
-      "key": "workload:23",
-      "index": 3771,
-      "old": "SELECT id, revision, content, deleted, currentness FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
-      "new": "SELECT id, revision, content, deleted, currentness, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
-    },
-    {
-      "key": "workload:33",
-      "index": 884,
-      "old": "SELECT id, revision, content, deleted, currentness FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
-      "new": "SELECT id, revision, content, deleted, currentness, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
-    },
-    {
-      "key": "workload:33",
-      "index": 11071,
-      "old": "SELECT id, revision, content, deleted, currentness FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
-      "new": "SELECT id, revision, content, deleted, currentness, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
-    },
-    {
-      "key": "workload:52",
-      "index": 855,
-      "old": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
-      "new": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
-    },
-    {
-      "key": "workload:52",
-      "index": 8328,
-      "old": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
-      "new": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
-    },
-    {
-      "key": "workload:53",
-      "index": 1599,
-      "old": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state,EXISTS( SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=memories.id AND (ac.owner_id IS NOT memories.owner_id OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
-      "new": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state,EXISTS( SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=memories.id AND (ac.owner_id IS NOT memories.owner_id OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
-    },
-    {
-      "key": "workload:53",
-      "index": 19852,
-      "old": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state,EXISTS( SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=memories.id AND (ac.owner_id IS NOT memories.owner_id OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry FROM memories INDEXED BY capture_current_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?",
-      "new": "SELECT id, revision, content, deleted, currentness,owner_id,scope,project_id,review_state,EXISTS( SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=memories.id AND (ac.owner_id IS NOT memories.owner_id OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry, updated_at FROM memories INDEXED BY namespace_memories WHERE owner_id = ? AND scope = ? AND project_id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id ASC LIMIT ?"
-    }
-  ]
+  "sqlRevisions": [],
+  "reviewNote": "reviewed re-baseline: behaviour identical to fd5c59ef, proven at c02e5135fad9ea449047e5b6325726f55c248864"
 }

@@ -199,3 +199,13 @@ export function createStagedEvidenceStorage({ db }) {
     setEpisodes(value) { episodes = value; }, episodeCapacity, releaseCompleted, serializeView, touch, admissionTime, claimGuard, finishGuard, capacityGuard, insert, mark,
     purgeNamespace, inspect, discard };
 }
+
+/** Called under the same transaction as any subsequent expiry. */
+export function stagedEvidenceDueInside(db, ns, wallTime = Date.now()) {
+  const params = boundary(ns);
+  const prior = db.prepare(`SELECT watermark FROM staged_capture_clocks WHERE ${where}`).get(...params);
+  if (!prior) return false;
+  const now = Math.max(wallTime, prior.watermark);
+  return Boolean(db.prepare(`SELECT 1 FROM staged_capture_evidence
+    WHERE ${where} AND payload IS NOT NULL AND expires_at <= ? LIMIT 1`).get(...params, now));
+}

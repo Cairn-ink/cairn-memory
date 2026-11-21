@@ -12,505 +12,505 @@
           "capture",
           "1b8c8ecc147c632d0d3075d223988dd8091e554d7b49e3b9d8be596819f00c7b",
           241,
-          775
+          782
         ],
         [
           "capture",
           "8555abcb6d471d698d60f0e3e8a269990e22c8a9bb6353bd814f236f275612cd",
-          775,
-          834
+          782,
+          841
         ],
         [
           "list",
           "af34431f748c09902f6e529cd40e1b72ca33b697183d6a0e26251025dd40b28f",
-          834,
-          842
+          841,
+          849
         ],
         [
           "recall",
           "9b9dd270cadb14415cc37c792fae35150768053635cc27974324adcd6dea22ad",
-          842,
-          1019
+          849,
+          1024
         ],
         [
           "submitSourceNote",
           "c3bc92d801b29d7299ffefc4229a6779e21045ea9e0d96d9c5b52f439b810d59",
-          1019,
-          1113
+          1024,
+          1118
         ],
         [
           "submitSourceNote",
           "c3bc92d801b29d7299ffefc4229a6779e21045ea9e0d96d9c5b52f439b810d59",
-          1113,
-          1151
+          1118,
+          1156
         ],
         [
           "submitSourceNote",
           "65e5ace67336f4b8a6f8c70dea1cb66da0d2d0ecb1db1e8ef918453f6cd54886",
-          1151,
-          1174
+          1156,
+          1179
         ],
         [
           "createCardDraft",
           "d683157e519d9a7521fbeb025c0129f1d37fdd1092113341791297324b726a8e",
-          1174,
-          1335
+          1179,
+          1340
         ],
         [
           "editCardDraft",
           "f127482dc6a3e33385125636cedaee814341ff43aac4d75ee8f3251429e1e33c",
-          1335,
-          1469
+          1340,
+          1474
         ],
         [
           "editCardDraft",
           "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
-          1469,
-          1493
+          1474,
+          1498
         ],
         [
           "confirmCardDraft",
           "204fdc39b575e77f54017032e403ec7668388a0cd04b4b9c53f697f4f94f4a50",
-          1493,
-          1650
+          1498,
+          1655
         ],
         [
           "editKnowledgeCard",
           "2dda1653dfd23113761d11998b63fd2b40637cabcd225f91ab856c0261568b7d",
-          1650,
-          1810
+          1655,
+          1815
         ],
         [
           "getCard",
           "3c3154b515394ed43822d9be67502fff2033c0aebcc469de30ef49340b3c9e85",
-          1810,
-          1826
+          1815,
+          1832
         ],
         [
           "inspectCardOperation",
           "75e0093ae780626fe6e383cb8a6d5a549a0c2e1f58a8be0cd3f3aea15afe9d89",
-          1826,
-          1833
+          1832,
+          1839
         ],
         [
           "inspectCardOperation",
           "3b5f5e21c5b580819e6ca26dbaa09479ee2d902d53add0bbd66ff6e4f71b9e90",
-          1833,
-          1840
+          1839,
+          1846
         ],
         [
           "getSource",
           "88294972fac7801ae02fbcd1d4f7d47e55ec3e850743d94f75153155915ab03b",
-          1840,
-          1847
+          1846,
+          1853
         ],
         [
           "fetchEvidence",
           "8d6d3e5780285750d1987e100ce02c30fb0e7609ed85d44597c31ea733f6bd77",
-          1847,
-          1866
+          1853,
+          1873
         ],
         [
           "revalidateEvidence",
           "8d6d3e5780285750d1987e100ce02c30fb0e7609ed85d44597c31ea733f6bd77",
-          1866,
-          1887
+          1873,
+          1895
         ],
         [
           "createCardDraft",
           "f25b765d12f82d69d18544a1e47da40e90c08fca90964be3c36bad9a5ac0e4a4",
-          1887,
-          2071
+          1895,
+          2079
         ],
         [
           "createCardDraft",
           "b2a46f9aa771f6828dd3965fbdebf3afca50e7945c92f13426113068a04a0471",
-          2071,
-          2289
+          2079,
+          2297
         ],
         [
           "confirmCardDraft",
           "f5c0424b3e118fc841fd968466d0adebd34641da7df8173395dd04b037fbb97d",
-          2289,
-          2470
+          2297,
+          2478
         ],
         [
           "listCards",
           "dfe364701567a8070231e867cd7b3c225a822a30e371d4a304a94d1580616a29",
-          2470,
-          2488
+          2478,
+          2499
         ],
         [
           "listCards",
           "bd858d6aea77925b0597fcd6a05dc317a787b4feeb6975f84b1393adcf7fc237",
-          2488,
-          2509
+          2499,
+          2524
         ],
         [
           "listCards",
           "9d1d11a85eb65f92d2f6808bfc7ee17c4c1f889fd19690bcc1545d306962b162",
-          2509,
-          2530
+          2524,
+          2549
         ],
         [
           "mapEvidence",
           "c46c382816fbcb00644428e7ec7e4b046e53c7ba122215b38fe5d5ef4cbfd877",
-          2530,
-          2578
+          2549,
+          2597
         ],
         [
           "applyCardPlacement",
           "3af6803023678ba25236f78f7adf406a068a4720c9b83bf1e99ebfe29d86e0b1",
-          2578,
-          2820
+          2597,
+          2839
         ],
         [
           "applyCardPlacement",
           "3af6803023678ba25236f78f7adf406a068a4720c9b83bf1e99ebfe29d86e0b1",
-          2820,
-          2905
+          2839,
+          2924
         ],
         [
           "mapEvidence",
           "10d54d51590e2c749718d6ca85ad73ac7806757d9d17cd75f1180b2ace858f97",
-          2905,
-          3013
+          2924,
+          3032
         ],
         [
           "refreshCardTopic",
           "807e45455402ae3f2a3395543c7459fcd71eca71bb5e3dc6da13c6e937f0d385",
-          3013,
-          3239
+          3032,
+          3258
         ],
         [
           "map",
           "9460f02d57f334bad1f9512856bfa28db079abafc6df3358d0b54f72af1a0cbc",
-          3239,
-          3253
+          3258,
+          3272
         ],
         [
           "applyPlacement",
           "7055c921865f30f7911f8708d997354b4e9c075554f28327e085469e7ea2d900",
-          3253,
-          3461
+          3272,
+          3482
         ],
         [
           "mapEvidence",
           "6f0b9c2b4b37349c7f46b2e9916d2d2239ebd876f3d35e6852954714eb1dfadf",
-          3461,
-          3476
+          3482,
+          3497
         ],
         [
           "mapEvidence",
           "5acb38b04b2078af25ddaa880162dff3f8a5df9437e7b0d32a2eaf8074081de8",
-          3476,
-          3584
+          3497,
+          3605
         ],
         [
           "proposeEvidenceMapping",
           "aea97711e1d33da29f5c86daaef7920fd5b1e5775370cab081eb6ac1fac38bfc",
-          3584,
-          3734
+          3605,
+          3755
         ],
         [
           "reviewEvidenceMapping",
           "f750a3979c5dde979f2f2007a638c034ac03b3e31f60a70365ab0c014dfe95b6",
-          3734,
-          3887
+          3755,
+          3908
         ],
         [
           "listEvidenceMappings",
           "f5234b08ce811f3bd18ed4731299419a7c9adee044c9c9593f5b5efa52609a8e",
-          3887,
-          3920
+          3908,
+          3941
         ],
         [
           "mapEvidence",
           "5acb38b04b2078af25ddaa880162dff3f8a5df9437e7b0d32a2eaf8074081de8",
-          3920,
-          4028
+          3941,
+          4049
         ],
         [
           "selectEvidence",
           "06de59b603b6e35d33819c3e1dc082399184190cc002a8f8483e95e9f433a501",
-          4028,
-          4071
+          4049,
+          4095
         ],
         [
           "refreshContextIndex",
           "24b52cdd311839d9c8e4ba0c5f9b923ecfcfc570ef712cb6677a623927daf77d",
-          4071,
-          4468
+          4095,
+          4492
         ],
         [
           "findCandidates",
           "aac88178ba69d2b0dd38aae7914bcbd8926773d0c8c52aca67e40c8ae2424312",
-          4468,
-          4618
+          4492,
+          4653
         ],
         [
           "contextRead",
           "dbf54b18ad86dcd507a538c9bd2dd29c7b834c47470c0768b15d5e3c534579d9",
-          4618,
-          4829
+          4653,
+          4879
         ],
         [
           "fetchCandidateEvidence",
           "0a47f85b11dd7adda92f4b09775687c909c8204c8bd7f72627f5f98699dacfad",
-          4829,
-          4873
+          4879,
+          4931
         ],
         [
           "fetchCandidateEvidence",
           "c7b1a6bf77d0f7835d0291fb21ba14706d1a1e7b830ea2c03111b81aaba708f2",
-          4873,
-          4935
+          4931,
+          5005
         ],
         [
           "openMemoryReader",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          4935,
-          4935
+          5005,
+          5005
         ],
         [
           "openMemoryReader.readTopicOverview",
           "d03c5b0e37c34f0a879ea65e89024eb52c43241fb7ece8b977f63d06e610b858",
-          4935,
-          5016
+          5005,
+          5086
         ],
         [
           "openMemoryReader.readTopicOverview",
           "0fdd479278f2ac03b9f474c94bdebe80d53938625a965820f9b70c7a6349b2d1",
-          5016,
-          5030
+          5086,
+          5100
         ],
         [
           "openContextReader",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          5030,
-          5088
+          5100,
+          5158
         ],
         [
           "openContextReader.findCandidates",
           "200a18d015df9d2fcba3b3f10080acfb5fbe6dfdf99490a441064f66d8f10a5d",
-          5088,
-          5250
+          5158,
+          5331
         ],
         [
           "openContextReader.contextRead",
           "cb72ce4696c59f1e2a29945ac6a8e509593ecf36a444fb33d433a703cee6307a",
-          5250,
-          5431
+          5331,
+          5527
         ],
         [
           "openContextReader.fetchCandidateEvidence",
           "c7b1a6bf77d0f7835d0291fb21ba14706d1a1e7b830ea2c03111b81aaba708f2",
-          5431,
-          5493
+          5527,
+          5601
         ],
         [
           "openContextReader.fetchCandidateEvidence",
           "0a47f85b11dd7adda92f4b09775687c909c8204c8bd7f72627f5f98699dacfad",
-          5493,
-          5537
+          5601,
+          5653
         ],
         [
           "openContextIndexMaintainer",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          5537,
-          5769
+          5653,
+          5885
         ],
         [
           "openContextIndexMaintainer.getContextIndexStatus",
           "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
-          5769,
-          5779
+          5885,
+          5895
         ],
         [
           "openContextProductReader",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          5779,
-          6011
+          5895,
+          6127
         ],
         [
           "openContextProductReader.getContextIndexStatus",
           "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
-          6011,
-          6021
+          6127,
+          6137
         ],
         [
           "openContextProductReader.fetchCandidateEvidence",
           "5c5d56fc7cffe0e386011d8fb8dd5ef57358b53899ec1f994ec0cde5393ddcd5",
-          6021,
-          6065
+          6137,
+          6189
         ],
         [
           "openContentSuppressionReader",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          6065,
-          6122
+          6189,
+          6246
         ],
         [
           "admit",
           "74ffd1f925b43380dece1387d60602afef808a8c7c80ba3ff704f6f8df8e9ca1",
-          6122,
-          6238
+          6246,
+          6357
         ],
         [
           "admit",
           "f4d553f54b703fc9154e36346e793a1be47d31e3b05012520719ff8d23de1976",
-          6238,
-          6354
+          6357,
+          6468
         ],
         [
           "isSuppressed",
           "71940e8adf4746729f2c6baa93c954413cc24ed227d710cac6e2e10a403af872",
-          6354,
-          6380
+          6468,
+          6494
         ],
         [
           "isSuppressed",
           "29f32fb7905d749051233e41242dd0adde76852352e4567ad785fd484c7a221b",
-          6380,
-          6402
+          6494,
+          6516
         ],
         [
           "isSuppressed",
           "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
-          6402,
-          6415
+          6516,
+          6529
         ],
         [
           "correct",
           "abadc37995cd74714f355c26854cf3068165dea8da863fbbafe612823912db71",
-          6415,
-          6625
+          6529,
+          6743
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          6625,
-          6644
+          6743,
+          6762
         ],
         [
           "get",
           "b6ba495a951487aebf576a116bd21724627ed3af6a564c36e356d68033572ac5",
-          6644,
-          6661
+          6762,
+          6787
         ],
         [
           "supersede",
           "b544e3ca5f63f9a724ec303dde396332d0b832e20a32dd47e49d71b31501cace",
-          6661,
-          6875
+          6787,
+          7002
         ],
         [
           "forget",
           "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
-          6875,
-          6898
+          7002,
+          7025
         ],
         [
           "get",
           "bea8097c7a130babda6e39b36a7d3ed49942a1a26d7a02f011edb7fc8abb2b31",
-          6898,
-          6914
+          7025,
+          7049
         ],
         [
           "forget",
           "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
-          6914,
-          7020
+          7049,
+          7156
         ],
         [
           "admit",
           "9edf9d731e70145b9c331ead3249ce79a3d2c11baf8fab0a0fc90cabd72dc179",
-          7020,
-          7136
+          7156,
+          7267
         ],
         [
           "forget",
           "b6d3bcb1ec2b6efd2283a4f5430cba3ef5fe152cacf08e437150507d50fca739",
-          7136,
-          7226
+          7267,
+          7358
         ],
         [
           "submitSourceNote",
           "1049feee923a5d81404baf6ca59a5945269db8a588dcfc5ca004a3513e0f2de6",
-          7226,
-          7320
+          7358,
+          7452
         ],
         [
           "createCardDraft",
           "3f0f46f15e676f8541adcbe3f970906e2a31e7064c6cec3ebe80c270e267a633",
-          7320,
-          7483
+          7452,
+          7615
         ],
         [
           "createCardDraft",
           "8148851483e4fbb0107253489e9e2fd17e2caf81c0dce55c33532d64e4ac667f",
-          7483,
-          7646
+          7615,
+          7778
         ],
         [
           "confirmCardDraft",
           "dba5d6774fb920225f2ce65857f843f4e884cb5a45f284b6d2ad2849d3ec354f",
-          7646,
-          7805
+          7778,
+          7937
         ],
         [
           "deleteSourceNote",
           "2be84a758e627d377a7bca04dbc187b1e96578df9158b88566538f65b4cb28e2",
-          7805,
-          7965
+          7937,
+          8097
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          7965,
-          7975
+          8097,
+          8107
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          7975,
-          7991
+          8107,
+          8123
         ],
         [
           "cancelCardDraft",
           "8786ce3708574795b5c7a0bda0d37df2ba69ba05933a9c9bdb253abb3f29f886",
-          7991,
-          8091
+          8123,
+          8223
         ],
         [
           "deleteKnowledgeCard",
           "399e67e51366104aa635520d179c22ba846ed031b3f5e049150a7fc0d4021a78",
-          8091,
-          8191
+          8223,
+          8323
         ],
         [
           "deleteSourceNote",
           "842a8943dd8257f41c9296debcc7631e9f70f230642087fb4f396a81d8cb36e2",
-          8191,
-          8288
+          8323,
+          8420
         ],
         [
           "listCardEffects",
           "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
-          8288,
-          8297
+          8420,
+          8429
         ],
         [
           "getPrivateCardUsage",
           "69c7335d36b31ad5f695501c82725d4359230e9816b6d38e2b85ee3a652ad2cc",
-          8297,
-          8311
+          8429,
+          8443
         ],
         [
           "recall",
           "f2a0114df4337fe822695966a75394fc08f92ee5223e16f80bf775f9f5e16596",
-          8311,
-          8650
+          8443,
+          8760
         ],
         [
           "modelCalls",
@@ -519,8 +519,8 @@
           null
         ]
       ],
-      "statements": 8650,
-      "sql": "22ea61159123e0a1e260f47dc44eb1cdab8f8c17f78e8ea09b1c5553e83e3f94",
+      "statements": 8760,
+      "sql": "ba9fa10534e8f575ac12e9315401de34e52c917bfada721c86941566d8c18162",
       "tables": [
         [
           "admission_claims",
@@ -829,8 +829,8 @@
         ],
         [
           "suppressed",
-          3,
-          "a382d435ec58bc551d153a7329c634848f1554f4dd9a8841cd07cd2e242803cd"
+          7,
+          "39a32f5bcc66981c8c5e68c56d3bd87caed2c332e6ede81a52e26344a49c7c90"
         ]
       ],
       "effectWitnesses": "f14bd452717a1ba81c2ff028ac540cbc723823d2359e840a6bf303bfe8b31476"
@@ -865,895 +865,895 @@
           "recall",
           "9b9dd270cadb14415cc37c792fae35150768053635cc27974324adcd6dea22ad",
           1586,
-          1889
+          1829
         ],
         [
           "submitSourceNote",
           "c3bc92d801b29d7299ffefc4229a6779e21045ea9e0d96d9c5b52f439b810d59",
-          1889,
-          1992
+          1829,
+          1932
         ],
         [
           "submitSourceNote",
           "c3bc92d801b29d7299ffefc4229a6779e21045ea9e0d96d9c5b52f439b810d59",
-          1992,
-          2038
+          1932,
+          1978
         ],
         [
           "submitSourceNote",
           "65e5ace67336f4b8a6f8c70dea1cb66da0d2d0ecb1db1e8ef918453f6cd54886",
-          2038,
-          2069
+          1978,
+          2009
         ],
         [
           "createCardDraft",
           "d683157e519d9a7521fbeb025c0129f1d37fdd1092113341791297324b726a8e",
-          2069,
-          2246
+          2009,
+          2186
         ],
         [
           "editCardDraft",
           "f127482dc6a3e33385125636cedaee814341ff43aac4d75ee8f3251429e1e33c",
-          2246,
-          2395
+          2186,
+          2335
         ],
         [
           "editCardDraft",
           "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
-          2395,
-          2427
+          2335,
+          2367
         ],
         [
           "confirmCardDraft",
           "204fdc39b575e77f54017032e403ec7668388a0cd04b4b9c53f697f4f94f4a50",
-          2427,
-          2602
+          2367,
+          2542
         ],
         [
           "editKnowledgeCard",
           "2dda1653dfd23113761d11998b63fd2b40637cabcd225f91ab856c0261568b7d",
-          2602,
-          2779
+          2542,
+          2719
         ],
         [
           "getCard",
           "3c3154b515394ed43822d9be67502fff2033c0aebcc469de30ef49340b3c9e85",
-          2779,
-          2797
+          2719,
+          2738
         ],
         [
           "inspectCardOperation",
           "75e0093ae780626fe6e383cb8a6d5a549a0c2e1f58a8be0cd3f3aea15afe9d89",
-          2797,
-          2804
+          2738,
+          2745
         ],
         [
           "inspectCardOperation",
           "3b5f5e21c5b580819e6ca26dbaa09479ee2d902d53add0bbd66ff6e4f71b9e90",
-          2804,
-          2811
+          2745,
+          2752
         ],
         [
           "getSource",
           "88294972fac7801ae02fbcd1d4f7d47e55ec3e850743d94f75153155915ab03b",
-          2811,
-          2818
+          2752,
+          2759
         ],
         [
           "fetchEvidence",
           "8d6d3e5780285750d1987e100ce02c30fb0e7609ed85d44597c31ea733f6bd77",
-          2818,
-          2839
+          2759,
+          2781
         ],
         [
           "revalidateEvidence",
           "8d6d3e5780285750d1987e100ce02c30fb0e7609ed85d44597c31ea733f6bd77",
-          2839,
-          2862
+          2781,
+          2805
         ],
         [
           "createCardDraft",
           "f25b765d12f82d69d18544a1e47da40e90c08fca90964be3c36bad9a5ac0e4a4",
-          2862,
-          3061
+          2805,
+          3004
         ],
         [
           "createCardDraft",
           "b2a46f9aa771f6828dd3965fbdebf3afca50e7945c92f13426113068a04a0471",
-          3061,
-          3441
+          3004,
+          3384
         ],
         [
           "confirmCardDraft",
           "f5c0424b3e118fc841fd968466d0adebd34641da7df8173395dd04b037fbb97d",
-          3441,
-          3751
+          3384,
+          3694
         ],
         [
           "listCards",
           "dfe364701567a8070231e867cd7b3c225a822a30e371d4a304a94d1580616a29",
-          3751,
-          3772
+          3694,
+          3718
         ],
         [
           "listCards",
           "bd858d6aea77925b0597fcd6a05dc317a787b4feeb6975f84b1393adcf7fc237",
-          3772,
-          3797
+          3718,
+          3747
         ],
         [
           "listCards",
           "9d1d11a85eb65f92d2f6808bfc7ee17c4c1f889fd19690bcc1545d306962b162",
-          3797,
-          3842
+          3747,
+          3796
         ],
         [
           "mapEvidence",
           "c46c382816fbcb00644428e7ec7e4b046e53c7ba122215b38fe5d5ef4cbfd877",
-          3842,
-          3935
+          3796,
+          3889
         ],
         [
           "applyCardPlacement",
           "3af6803023678ba25236f78f7adf406a068a4720c9b83bf1e99ebfe29d86e0b1",
-          3935,
-          4196
+          3889,
+          4150
         ],
         [
           "applyCardPlacement",
           "3af6803023678ba25236f78f7adf406a068a4720c9b83bf1e99ebfe29d86e0b1",
-          4196,
-          4293
+          4150,
+          4247
         ],
         [
           "mapEvidence",
           "10d54d51590e2c749718d6ca85ad73ac7806757d9d17cd75f1180b2ace858f97",
-          4293,
-          4455
+          4247,
+          4409
         ],
         [
           "refreshCardTopic",
           "807e45455402ae3f2a3395543c7459fcd71eca71bb5e3dc6da13c6e937f0d385",
-          4455,
-          4703
+          4409,
+          4657
         ],
         [
           "map",
           "9460f02d57f334bad1f9512856bfa28db079abafc6df3358d0b54f72af1a0cbc",
-          4703,
-          4717
+          4657,
+          4671
         ],
         [
           "applyPlacement",
           "7055c921865f30f7911f8708d997354b4e9c075554f28327e085469e7ea2d900",
-          4717,
-          4935
+          4671,
+          4891
         ],
         [
           "mapEvidence",
           "6f0b9c2b4b37349c7f46b2e9916d2d2239ebd876f3d35e6852954714eb1dfadf",
-          4935,
-          4950
+          4891,
+          4906
         ],
         [
           "mapEvidence",
           "5acb38b04b2078af25ddaa880162dff3f8a5df9437e7b0d32a2eaf8074081de8",
-          4950,
-          5112
+          4906,
+          5068
         ],
         [
           "proposeEvidenceMapping",
           "aea97711e1d33da29f5c86daaef7920fd5b1e5775370cab081eb6ac1fac38bfc",
-          5112,
-          5299
+          5068,
+          5255
         ],
         [
           "reviewEvidenceMapping",
           "f750a3979c5dde979f2f2007a638c034ac03b3e31f60a70365ab0c014dfe95b6",
-          5299,
-          5489
+          5255,
+          5445
         ],
         [
           "listEvidenceMappings",
           "f5234b08ce811f3bd18ed4731299419a7c9adee044c9c9593f5b5efa52609a8e",
-          5489,
-          5525
+          5445,
+          5481
         ],
         [
           "mapEvidence",
           "5acb38b04b2078af25ddaa880162dff3f8a5df9437e7b0d32a2eaf8074081de8",
-          5525,
-          5687
+          5481,
+          5643
         ],
         [
           "selectEvidence",
           "06de59b603b6e35d33819c3e1dc082399184190cc002a8f8483e95e9f433a501",
-          5687,
-          5757
+          5643,
+          5716
         ],
         [
           "importMethodVersion",
           "14edd013e4e7360405573e5481e45a7b454f500aaddc806790dc7243f586bd69",
-          5757,
-          5961
+          5716,
+          5920
         ],
         [
           "checkMethodReasonRefs",
           "16469c89046ba72cb943b8ccda9156cbfbfe85bbfc9c1ffe0676c3e95f22c0cc",
-          5961,
-          5988
+          5920,
+          5947
         ],
         [
           "getMethodVersion",
           "fd9b4dda310182d3d3d5128a2e2c2f675dcf478d4c2a19176c33ce8702d80ac2",
-          5988,
-          6003
+          5947,
+          5962
         ],
         [
           "adoptMethodVersion",
           "504f290fe2ca7b4b284bedb22beb7c51582ee15db875e5a94778cc6f093d4503",
-          6003,
-          6096
+          5962,
+          6055
         ],
         [
           "resolveMethod",
           "831cd3e0100059908d9ba21d7ca1522efb16e92518f464bf06043be4c3210a19",
-          6096,
-          6114
+          6055,
+          6073
         ],
         [
           "readMethodFile",
           "4de4c47fafa9a7ae1ed3f93e3cc08eb406eae8fcb6975f48256378b44e2a9e94",
-          6114,
-          6128
+          6073,
+          6087
         ],
         [
           "declareCardCurrentDependencies",
           "c7e890b5d6650247d9e6d556b53fed5ea3bfd7c4d891807d9a74d4fbe68802e7",
-          6128,
-          6322
+          6087,
+          6281
         ],
         [
           "declareCardCurrentDependencies",
           "c7e890b5d6650247d9e6d556b53fed5ea3bfd7c4d891807d9a74d4fbe68802e7",
-          6322,
-          6385
+          6281,
+          6344
         ],
         [
           "revalidateCardCurrentDependencies",
           "ca9404d7c0a53a88aaf8376ee9b9f7bb94e785f182e93092384bde75e14a6d0a",
-          6385,
-          6578
+          6344,
+          6537
         ],
         [
           "publishRoleProfileRelease",
           "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
-          6578,
-          6662
+          6537,
+          6621
         ],
         [
           "refreshContextIndex",
           "24b52cdd311839d9c8e4ba0c5f9b923ecfcfc570ef712cb6677a623927daf77d",
-          6662,
-          7117
+          6621,
+          7076
         ],
         [
           "findCandidates",
           "aac88178ba69d2b0dd38aae7914bcbd8926773d0c8c52aca67e40c8ae2424312",
-          7117,
-          7329
+          7076,
+          7299
         ],
         [
           "contextRead",
           "8f56bc81c86413599daeee19556884cb77c4e51f0bf9f60294c01f947f75cdc5",
-          7329,
-          7652
+          7299,
+          7637
         ],
         [
           "fetchCandidateEvidence",
           "5f2ba0aba7cd0dbe814afcabdc25822ecfffae6c50a52f2822706ad486e0ea89",
-          7652,
-          7742
+          7637,
+          7735
         ],
         [
           "fetchCandidateEvidence",
           "2aa19c535fcf4fa82b16507c28f5eca4f8e62aafbeb7e94e96956b0540119e41",
-          7742,
-          7898
+          7735,
+          7903
         ],
         [
           "readRoleTaskContext",
           "c2e2a042bd7c5dc20e6c65b6260648ea99d5dbb2f2d5826c1dcf99c6c9b5a888",
-          7898,
-          8319
+          7903,
+          8293
         ],
         [
           "readRoleTaskContext",
           "0535751003daea2694a356110b0260a49472d98b0e486b5ff1da90ab46233bd0",
-          8319,
-          8571
+          8293,
+          8507
         ],
         [
           "readRoleTaskContext",
           "531556bc62d13339c359ff858a53b815acfb5cb4b58f0609e87f90ba32ae9b4a",
-          8571,
-          8586
+          8507,
+          8522
         ],
         [
           "importMethodVersion",
           "d1470368f0dca3e58aff26b2963dbb768147b295a4e030c5e2b993dafebcb302",
-          8586,
-          8856
+          8522,
+          8792
         ],
         [
           "importMethodVersion",
           "3169b4d13d30b8346f739e7176183be62ff93da1c0f1b76c4a8c66bae0ed5064",
-          8856,
-          9133
+          8792,
+          9069
         ],
         [
           "importMethodVersion",
           "2c72a4848f50413495191379fa3466407960b7ca0ef6ab0ace432054795e73df",
-          9133,
-          9373
+          9069,
+          9309
         ],
         [
           "listMethodManifest",
           "26db8a9c598984385b4bd90bbae00d823f7f9a905cf5d794451375ad01f4bd2d",
-          9373,
-          9391
+          9309,
+          9327
         ],
         [
           "listMethodManifest",
           "664e9c379f524f4749bb94142811ceb2a9489c0e19a622678ce842ee748dcf10",
-          9391,
-          9413
+          9327,
+          9349
         ],
         [
           "listMethodPackages",
           "84c4328442f7ff3b443a589fb11236c1d516f0bdf79eb021ffefa39e71d44eb3",
-          9413,
-          9427
+          9349,
+          9363
         ],
         [
           "listMethodPackages",
           "f0e1845e0d1551f6304c9eea279b8dbb2827d0f4f44f453bed36cae9cf14b89f",
-          9427,
-          9449
+          9363,
+          9385
         ],
         [
           "listMethodPackages",
           "dad3422f85263293f78cf3bb62daed53eb0b68976a5535f549793cce7fce1d16",
-          9449,
-          9467
+          9385,
+          9403
         ],
         [
           "listMethodVersions",
           "8cabeb7c90afe17854c26f2f6aa526dc86d7a8e3b09e937eb08b87648e9be5c6",
-          9467,
-          9484
+          9403,
+          9420
         ],
         [
           "listMethodVersions",
           "add8ebd136d8596c3daf3c2d2735ece07c5d67e40487d44f853a92bcf5764371",
-          9484,
-          9505
+          9420,
+          9441
         ],
         [
           "compareMethodVersions",
           "0ed804bf85381167fab8474e923d14c61c4830ddb84597c98354ebbdcc9db49f",
-          9505,
-          9591
+          9441,
+          9527
         ],
         [
           "compareMethodVersions",
           "869ca467f400cc3c94e158eae381dac9d80c14f55a948b3ca83e42cd53f649f2",
-          9591,
-          9681
+          9527,
+          9617
         ],
         [
           "adoptMethodVersion",
           "f515fa29bedc6441bd34227c2aed8349bda010d1b2b3ef3e9bebaffaa9245ae7",
-          9681,
-          9774
+          9617,
+          9710
         ],
         [
           "adoptMethodVersion",
           "3838c88d32be1027e92a3684970cbf5387f35491d788f4496200713051741a81",
-          9774,
-          9868
+          9710,
+          9804
         ],
         [
           "resolveMethodsForRole",
           "b41db58681c73627894a96b921919073d476f9689c3b43496df0ac4de1a2dd2f",
-          9868,
-          9914
+          9804,
+          9850
         ],
         [
           "resolveMethodsForRole",
           "4c28aea90c73a19dafece234435b1d57d2bdf25bfc71d7e9ed68ed8ce6de7bef",
-          9914,
-          9968
+          9850,
+          9904
         ],
         [
           "resolveMethodsForRole",
           "02936ebccac75804ad95542b9aaed6f8561709e7f1a69b385604eb8a370a541f",
-          9968,
-          10018
+          9904,
+          9954
         ],
         [
           "disableMethodBinding",
           "7938905de53b0a73ae5a1da961bcee940fffc84d585ff83ee6ca4d268c10213a",
-          10018,
-          10101
+          9954,
+          10037
         ],
         [
           "disableMethodBinding",
           "7938905de53b0a73ae5a1da961bcee940fffc84d585ff83ee6ca4d268c10213a",
-          10101,
-          10140
+          10037,
+          10076
         ],
         [
           "listMethodBindingEvents",
           "98ae8eab9afa3379deb234d52f131a524e15903bceb4aa0a611ae9a0eef1a4fc",
-          10140,
-          10156
+          10076,
+          10092
         ],
         [
           "listMethodBindingEvents",
           "c27e1f9e2c8e957dd11c81b1f7dcfff1678f145ccb252d52684e8cf75031c672",
-          10156,
-          10176
+          10092,
+          10112
         ],
         [
           "readMethodAttachmentBytes",
           "f4fc1dba2331be25b5f4412775c62ba5189b1bda14c41988fb8e8849e8375b10",
-          10176,
-          10193
+          10112,
+          10129
         ],
         [
           "readMethodAttachmentBytes",
           "3b593796b734e381e921915e5ac413a66c55e79f04728263350d7120178f6bae",
-          10193,
-          10210
+          10129,
+          10146
         ],
         [
           "deleteMethodVersion",
           "f8803401b7258e12a514ee62c131e7a7be4b6cf430c387dc9ae7c4328f6d8b5a",
-          10210,
-          10309
+          10146,
+          10245
         ],
         [
           "deleteMethodVersion",
           "f8803401b7258e12a514ee62c131e7a7be4b6cf430c387dc9ae7c4328f6d8b5a",
-          10309,
-          10356
+          10245,
+          10292
         ],
         [
           "deleteMethodPackage",
           "6ea3ec699dc15d089604b9fb2a72cbd321a70573c5d0ef97a2de2f3c59b69e45",
-          10356,
-          10454
+          10292,
+          10390
         ],
         [
           "deleteMethodPackage",
           "6ea3ec699dc15d089604b9fb2a72cbd321a70573c5d0ef97a2de2f3c59b69e45",
-          10454,
-          10502
+          10390,
+          10438
         ],
         [
           "listMethodEffects",
           "3717ac5ceb55d4eb5b5c553679dff881fdf1bbe1f40fc9542794bf84fa0d5e05",
-          10502,
-          10516
+          10438,
+          10452
         ],
         [
           "listMethodEffects",
           "5bacec7afe75fdc6b06eba7efa08bc5a3e51fae8ca3b1a1b0423075117ed47c2",
-          10516,
-          10538
+          10452,
+          10474
         ],
         [
           "listMethodEffects",
           "bcb18c6cab0782ead6098c01237d5676b36123f1354c312743ed7c40f601ba8c",
-          10538,
-          10560
+          10474,
+          10496
         ],
         [
           "listMethodEffects",
           "a0dc2f7a89a6ef720bca41ad8e9f273f4fd573f2ece83c8d9f87f19e81c42d4b",
-          10560,
-          10582
+          10496,
+          10518
         ],
         [
           "listMethodEffects",
           "aaa8a43fd24d87cc922a84604138a88b98df216b78fe80d3a182f02adec4b325",
-          10582,
-          10604
+          10518,
+          10540
         ],
         [
           "listMethodEffects",
           "9f2c768000f22be468504e4fc7466811962f5eebf20f0fa3855dc314c25924b7",
-          10604,
-          10622
+          10540,
+          10558
         ],
         [
           "getMethodPackageUsage",
           "dfbefc1de191b4dd741adb91582885d2e51ff02f580eb49d8c6a0d9f594dbfeb",
-          10622,
-          10632
+          10558,
+          10568
         ],
         [
           "listMethodManifest",
           "d1f84f46d28118ff5a27cb06af017f0fd139bafe816faf860f197e7491b81f75",
-          10632,
-          10643
+          10568,
+          10579
         ],
         [
           "captureRaw",
           "340ff266cfd9db465d24d844007178841bf9282a8be4b367d150ee987bd1e50f",
-          10643,
-          11362
+          10579,
+          11303
         ],
         [
           "getConversation",
           "0889df3a2f44f6361c03b53c75ccc8f158992a5dbf4276446b3576329d46880c",
-          11362,
-          11383
+          11303,
+          11324
         ],
         [
           "resolveSourceReferences",
           "537de7a68f9e17ba4830de4f5e935e3f6ab4cb0ab30df40f3f2c4eddfbcdbed7",
-          11383,
-          11413
+          11324,
+          11354
         ],
         [
           "createCardDraft",
           "2d808124afb6cbf470043edece67e0aa73184ff788351f1d2d2e97b5e1c82ac9",
-          11413,
-          11636
+          11354,
+          11577
         ],
         [
           "confirmCardDraft",
           "cdc6982d26b1e19e94d434936fff35615131b786f69baaf317639089cfbbec75",
-          11636,
-          11848
+          11577,
+          11789
         ],
         [
           "getSource",
           "b9b5a876b14967879489dea4aea99429e44b7f208faa3fd78572ca7d9b993518",
-          11848,
-          11877
+          11789,
+          11818
         ],
         [
           "setRawCaptureControl",
           "3653110e79aa84b356285089adbb6cb1f6b056ba465b72ba1fe4f24561d78032",
-          11877,
-          11907
+          11818,
+          11848
         ],
         [
           "setRawCaptureControl",
           "9234c78fe0ef0056a5b34f634681a6fe7c7e9e5adc29e6b88a5e0b268c7be69d",
-          11907,
-          11936
+          11848,
+          11877
         ],
         [
           "refreshContextIndex",
           "ac891be91cd86b6a4b6d2cb16cd2ee70ac93485fa3fa224d7af6ed6ae687d7f6",
-          11936,
-          12348
+          11877,
+          12289
         ],
         [
           "openMemoryReader",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          12348,
-          12348
+          12289,
+          12289
         ],
         [
           "openMemoryReader.readTopicOverview",
           "ee99514cf7165d5846fb966a5de18fd99674f2d62e2ec40df79f24c860f97abf",
-          12348,
-          12743
+          12289,
+          12684
         ],
         [
           "openMemoryReader.readTopicOverview",
           "9bb97f27f3b3794a4b97a9bdef627d12d98c5dbdd86b810e8f2d12057cfcd278",
-          12743,
-          12757
+          12684,
+          12698
         ],
         [
           "openContextReader",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          12757,
-          13127
+          12698,
+          13068
         ],
         [
           "openContextReader.findCandidates",
           "4dc172f9bd1997f9ad500642287df1df35ba10291835103fedae78b716301d9c",
-          13127,
-          13370
+          13068,
+          13322
         ],
         [
           "openContextReader.contextRead",
           "78f299e24f8b6284ec13a086d9ea3b8938661f915aa198c05012d455822bc63a",
-          13370,
-          13711
+          13322,
+          13678
         ],
         [
           "openContextReader.fetchCandidateEvidence",
           "96126a0a09f1b7fbc0b0acb1dd0021311c7a72f5ddd3ed052a0135f5a71bb2f3",
-          13711,
-          13913
+          13678,
+          13892
         ],
         [
           "openContextReader.fetchCandidateEvidence",
           "2cca6b19e8b21821b228d88c50dc7927badd7469f42cec60b25050d604d1b3f7",
-          13913,
-          14003
+          13892,
+          13990
         ],
         [
           "openContextIndexMaintainer",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          14003,
-          14370
+          13990,
+          14357
         ],
         [
           "openContextIndexMaintainer.getContextIndexStatus",
           "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
-          14370,
-          14380
+          14357,
+          14367
         ],
         [
           "openContextProductReader",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          14380,
-          14747
+          14367,
+          14734
         ],
         [
           "openContextProductReader.getContextIndexStatus",
           "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
-          14747,
-          14757
+          14734,
+          14744
         ],
         [
           "openContextProductReader.fetchCandidateEvidence",
           "8ee2591f0baa77ee3e3241afeb6fd896a02f90072fc9fee0eaa69fc62487eb98",
-          14757,
-          14847
+          14744,
+          14842
         ],
         [
           "openContentSuppressionReader",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          14847,
-          15216
+          14842,
+          15211
         ],
         [
           "admit",
           "1afd187087b802e588d17913a81b72a794598e7cd72f68fc6f80d8620946f19d",
-          15216,
-          15401
+          15211,
+          15387
         ],
         [
           "admit",
           "60ce7c8b569aee6153089eeb056b05e401a997e9668cff86541ba9cd7fcb15d7",
-          15401,
-          15586
+          15387,
+          15563
         ],
         [
           "isSuppressed",
           "a996475046b1c48ddc20fa7c8d16711b7a90d6e18000ee73b3ead7b7b3347592",
-          15586,
-          15618
+          15563,
+          15595
         ],
         [
           "isSuppressed",
           "29f32fb7905d749051233e41242dd0adde76852352e4567ad785fd484c7a221b",
-          15618,
-          15640
+          15595,
+          15617
         ],
         [
           "isSuppressed",
           "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
-          15640,
-          15653
+          15617,
+          15630
         ],
         [
           "openRawCaptureCore",
           "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
-          15653,
-          15984
+          15630,
+          15961
         ],
         [
           "openRawCaptureCore.getConversation",
           "0889df3a2f44f6361c03b53c75ccc8f158992a5dbf4276446b3576329d46880c",
-          15984,
-          16005
+          15961,
+          15982
         ],
         [
           "openRawCaptureCore.captureRaw",
           "90cb15caaf3e506f3a282bfbf049236c51bf6ac41b544603a94e390bfa7ae1fe",
-          16005,
-          17011
+          15982,
+          16971
         ],
         [
           "openRawCaptureCore.getConversation",
           "e31de347cc0b238e767454a92f9d73a7213c7bc25e9cda6afcf708fb1ef1e110",
-          17011,
-          17034
+          16971,
+          16994
         ],
         [
           "openRawCaptureCore.getConversation",
           "8c645415490e80efd696f7925c5e5c6e59520480bcd2eb401d89740718970e44",
-          17034,
-          17055
+          16994,
+          17015
         ],
         [
           "openRawCaptureCore.listRawConversations",
           "10c28dfc5a6da689b814588d30b6c2c3a9c840fc592e4508d2365255052e3065",
-          17055,
-          17063
+          17015,
+          17023
         ],
         [
           "openRawCaptureCore.listRawConversations",
           "5d3841c87ace91cb7023c8d45c17d2f3d0c98cc6e86313bac516c4684ad3e492",
-          17063,
-          17071
+          17023,
+          17031
         ],
         [
           "deleteConversation",
           "9d63a1cfe2fc7ede2c6051839af8b718df0abfdc2de1efe779a9a0ceff8a2cee",
-          17071,
-          17369
+          17031,
+          17329
         ],
         [
           "deleteConversation",
           "9d63a1cfe2fc7ede2c6051839af8b718df0abfdc2de1efe779a9a0ceff8a2cee",
-          17369,
-          17399
+          17329,
+          17359
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          17399,
-          17419
+          17359,
+          17379
         ],
         [
           "correct",
           "a12e644eb852003803643079f7944bf1b43c7ce131e2ee15bd96f09682029768",
-          17419,
-          17719
+          17379,
+          17683
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          17719,
-          17739
+          17683,
+          17703
         ],
         [
           "get",
           "b6ba495a951487aebf576a116bd21724627ed3af6a564c36e356d68033572ac5",
-          17739,
-          17780
+          17703,
+          17752
         ],
         [
           "supersede",
           "12e30216ddc17cc2caa15a30d3625b08efa0ad2df9d0a31bde8991ecd2e084aa",
-          17780,
-          18061
+          17752,
+          18034
         ],
         [
           "forget",
           "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
-          18061,
-          18094
+          18034,
+          18067
         ],
         [
           "get",
           "25c6755f3e407823ce16323b95cc7cc68ca3d9be6740abfa41808fe859e00fef",
-          18094,
-          18134
+          18067,
+          18115
         ],
         [
           "forget",
           "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
-          18134,
-          18281
+          18115,
+          18263
         ],
         [
           "admit",
           "4b705af427f0e26ad140af672be31aefc695be698055a943dc8e422232f5b041",
-          18281,
-          18468
+          18263,
+          18440
         ],
         [
           "forget",
           "176118e5b6311059400a89f6ec160ca53dd1ff1b709940a0f415dd1a04124c62",
-          18468,
-          18598
+          18440,
+          18571
         ],
         [
           "submitSourceNote",
           "840865933d6fc57a1dfdce3cef7129bd2c2b982e1a5e49b723c4b1587d37bbec",
-          18598,
-          18701
+          18571,
+          18674
         ],
         [
           "createCardDraft",
           "a6fedd70f7d0e615dcc5abaabbedf32bb763a467d80529bfd8a25940bebd8089",
-          18701,
-          18879
+          18674,
+          18852
         ],
         [
           "createCardDraft",
           "e13ccdbc58b56eb7b1d15dc28259eb04e58f9505029cfed9ece704a28c5f857c",
-          18879,
-          19057
+          18852,
+          19030
         ],
         [
           "confirmCardDraft",
           "31865010fde95a6fc16c0762438951aae4ad233b7471c5e187e03c49b63e1401",
-          19057,
-          19234
+          19030,
+          19207
         ],
         [
           "deleteSourceNote",
           "56bab4654f0200addb24ccd1220428617ff3c7235b30dbca3d17cd6a53a65543",
-          19234,
+          19207,
+          19382
+        ],
+        [
+          "getCard",
+          "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
+          19382,
+          19392
+        ],
+        [
+          "getCard",
+          "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
+          19392,
           19409
-        ],
-        [
-          "getCard",
-          "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          19409,
-          19419
-        ],
-        [
-          "getCard",
-          "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          19419,
-          19436
         ],
         [
           "cancelCardDraft",
           "8786ce3708574795b5c7a0bda0d37df2ba69ba05933a9c9bdb253abb3f29f886",
-          19436,
-          19549
+          19409,
+          19522
         ],
         [
           "deleteKnowledgeCard",
           "399e67e51366104aa635520d179c22ba846ed031b3f5e049150a7fc0d4021a78",
-          19549,
-          19663
+          19522,
+          19636
         ],
         [
           "checkMethodReasonRefs",
           "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
-          19663,
-          19675
+          19636,
+          19648
         ],
         [
           "deleteSourceNote",
           "842a8943dd8257f41c9296debcc7631e9f70f230642087fb4f396a81d8cb36e2",
-          19675,
-          19785
+          19648,
+          19758
         ],
         [
           "listCardEffects",
           "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
-          19785,
-          19794
+          19758,
+          19767
         ],
         [
           "getPrivateCardUsage",
           "69c7335d36b31ad5f695501c82725d4359230e9816b6d38e2b85ee3a652ad2cc",
-          19794,
-          19808
+          19767,
+          19781
         ],
         [
           "recall",
           "d99e80a99a5ed9562a6a3e91f11344ff9e3215d35d4b0b0d9c5c637f55fdc944",
-          19808,
-          20656
+          19781,
+          20431
         ],
         [
           "modelCalls",
@@ -1762,8 +1762,8 @@
           null
         ]
       ],
-      "statements": 20656,
-      "sql": "943fc57fa194d552ff8f241e4e95e276bd948f1ac7a05fbc1c9da5de619a9090",
+      "statements": 20431,
+      "sql": "91ecead89d9f2492af13ca749b1360b4016b6e2bdfbe401cc09786a98e897390",
       "tables": [
         [
           "admission_claims",
@@ -2332,11 +2332,2249 @@
         ],
         [
           "suppressed",
-          4,
-          "a12121cadedd5afed4eb697466effc22d3db9270ea13b0734974ab31b3376f64"
+          8,
+          "fea185c899616e66eb75e7a784cf319d010698aec366244efbaba3d7b45f782d"
         ]
       ],
       "effectWitnesses": "e1ee63894d6de92f6aa373707f4049d50405e613ffe3e29206935ef09f3f4908"
+    },
+    "workload:23": {
+      "calls": [
+        [
+          "open",
+          "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+          77,
+          null
+        ],
+        [
+          "capture",
+          "bf35dcb6a51413eceba6883150363d70f6bb14f8878a52cd5b709df8236dbce6",
+          77,
+          211
+        ],
+        [
+          "capture",
+          "7c772d1e206229e84e1441f7c92b0cc649d6e9d495388443af3a6597fa9b1934",
+          211,
+          223
+        ],
+        [
+          "list",
+          "c75f2de7d1bec7f4c4b9f46f1de3db2a647baa32508ce79cda92394e3d726213",
+          223,
+          227
+        ],
+        [
+          "recall",
+          "6b854b8122309b563530bb209d9708449ecd008f4321f99765df7b4e9f95ea51",
+          227,
+          384
+        ],
+        [
+          "submitSourceNote",
+          "739386208991255daa179450a851a183ad71d537dc829c8d2508c0e1f14fa78b",
+          384,
+          395
+        ],
+        [
+          "submitSourceNote",
+          "739386208991255daa179450a851a183ad71d537dc829c8d2508c0e1f14fa78b",
+          395,
+          398
+        ],
+        [
+          "submitSourceNote",
+          "65e5ace67336f4b8a6f8c70dea1cb66da0d2d0ecb1db1e8ef918453f6cd54886",
+          398,
+          401
+        ],
+        [
+          "createCardDraft",
+          "2065f2d077a8f01bf4baec4bdbb17fc3697ba1a7b7403e75633d65f153a39d46",
+          401,
+          416
+        ],
+        [
+          "editCardDraft",
+          "b6f7718a770eaccd9354fdc74e4c97721a72779cc5444f49995522fe0e7f6b48",
+          416,
+          437
+        ],
+        [
+          "editCardDraft",
+          "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
+          437,
+          441
+        ],
+        [
+          "confirmCardDraft",
+          "0db3db3760a776a9e78c1621102173a6e311a3fdce4b02a07a1c008332db0bad",
+          441,
+          469
+        ],
+        [
+          "editKnowledgeCard",
+          "49bcf96fb2127f2e551b29913c33cbecddc88f6db8f6e46fa5b32a2960f14054",
+          469,
+          496
+        ],
+        [
+          "getCard",
+          "71559a38e33736f6faed8de84d69c369c5bb64929dd5af6822f272b68804e557",
+          496,
+          509
+        ],
+        [
+          "inspectCardOperation",
+          "6cc21ce33d4bb0ccb04e473838e3817616cf9d94f85aad9eecd1c688cef951c6",
+          509,
+          512
+        ],
+        [
+          "inspectCardOperation",
+          "3b5f5e21c5b580819e6ca26dbaa09479ee2d902d53add0bbd66ff6e4f71b9e90",
+          512,
+          515
+        ],
+        [
+          "getSource",
+          "a6a0793d4f660797a58212316ea829dc8fdd03a135a16f702528a332799a0cde",
+          515,
+          518
+        ],
+        [
+          "fetchEvidence",
+          "54a52ae7525a96fd4a6227906fa70e03ddee790960f0e29ff698fb13db3c9aff",
+          518,
+          534
+        ],
+        [
+          "revalidateEvidence",
+          "54a52ae7525a96fd4a6227906fa70e03ddee790960f0e29ff698fb13db3c9aff",
+          534,
+          552
+        ],
+        [
+          "createCardDraft",
+          "09c76bb8612fe2f6c1bf000e626f4d6a44647aaf3c015c176f7c2dbea41af73f",
+          552,
+          573
+        ],
+        [
+          "createCardDraft",
+          "0d78aa53646b6d8bd43d69f7a6cd7c2ac109864cc73cec9d9b8ca26f115a2244",
+          573,
+          592
+        ],
+        [
+          "confirmCardDraft",
+          "13ecc363c6d85511c4639778249d9c4c229df841c5c79e55fc0119530de71b36",
+          592,
+          624
+        ],
+        [
+          "listCards",
+          "ffb03d5918c1b8efa13ec2bf6457188de617b2dcbe2d9f0c8a6de6ba9ea07548",
+          624,
+          641
+        ],
+        [
+          "listCards",
+          "6a7480f9a267bb5b3cbf77c4fc81f152918e13a246cce48b1bd40dcd4ebea72e",
+          641,
+          662
+        ],
+        [
+          "listCards",
+          "046eaf624dd3fb3acbdc2fecd3b97c0e9eb35698e7f9ba3f9eb769c701b967c4",
+          662,
+          683
+        ],
+        [
+          "mapEvidence",
+          "ad871ac1a7ecafdf688da4a6ad649dda8a4ec1b21a9e42575e2caefd34aeff21",
+          683,
+          727
+        ],
+        [
+          "applyCardPlacement",
+          "7daa1768b880146bb97af5a7967e22fc48e6225fc8461ee65b6cf76ced0a1406",
+          727,
+          763
+        ],
+        [
+          "applyCardPlacement",
+          "7daa1768b880146bb97af5a7967e22fc48e6225fc8461ee65b6cf76ced0a1406",
+          763,
+          766
+        ],
+        [
+          "mapEvidence",
+          "0d4ab685cae8974556ea5d233f664d4dc2a72f4463ef7156bdd02e0829f27710",
+          766,
+          870
+        ],
+        [
+          "refreshCardTopic",
+          "3be1c6dfc79aadfa2ea2bca25a216906385f6abb28b801dcbc99b9e804d17480",
+          870,
+          903
+        ],
+        [
+          "map",
+          "82ec8576fcc473a7c47fa74504c90261103a08a5c3f06933be1753f394fe2615",
+          903,
+          911
+        ],
+        [
+          "applyPlacement",
+          "9a5e6bb510abf0d938f5aafbc5d4fab1d84d4b2bcab9decbeae8192f2f0bfd25",
+          911,
+          943
+        ],
+        [
+          "mapEvidence",
+          "cbb5703a6c98fe0bdc221dc0e5f41a3bfd8faa4d865a950af8c0b99ad00a46b5",
+          943,
+          954
+        ],
+        [
+          "mapEvidence",
+          "6ee2ad16ac866a186da4f6a25a696ca70f9b73a27b64b462d8cdad84ec1e34d8",
+          954,
+          1058
+        ],
+        [
+          "proposeEvidenceMapping",
+          "854e9e19e5c8f95618f40e5aa281865c9c731979ca2af78b6d0d34c40809d706",
+          1058,
+          1089
+        ],
+        [
+          "reviewEvidenceMapping",
+          "b690b818c35be47b2d9e31211b2d2245e45a3c62e0abbf9ac86a2900c4639138",
+          1089,
+          1123
+        ],
+        [
+          "listEvidenceMappings",
+          "9ef3887e904d86b7ff5d937c881a72be34ed7139cf7e8f600f3d5e22c7dd2179",
+          1123,
+          1152
+        ],
+        [
+          "mapEvidence",
+          "6ee2ad16ac866a186da4f6a25a696ca70f9b73a27b64b462d8cdad84ec1e34d8",
+          1152,
+          1256
+        ],
+        [
+          "selectEvidence",
+          "2478fd9f380811bdb921a36f18771791ea4168048e2217781353632d439af18c",
+          1256,
+          1298
+        ],
+        [
+          "refreshContextIndex",
+          "24b52cdd311839d9c8e4ba0c5f9b923ecfcfc570ef712cb6677a623927daf77d",
+          1298,
+          1691
+        ],
+        [
+          "findCandidates",
+          "6d7060f372f7ed2ebac62757f693787b519370f5dadf6ef9d5258897d088dae8",
+          1691,
+          1863
+        ],
+        [
+          "contextRead",
+          "4f2d03fab389d23765a68453fc747b139544d2b9d433df1baa866f6cad75e201",
+          1863,
+          2101
+        ],
+        [
+          "fetchCandidateEvidence",
+          "125d54f21c1329b55e421e8921237ed6961c104b398b426785357b3a90aafb67",
+          2101,
+          2149
+        ],
+        [
+          "fetchCandidateEvidence",
+          "4420852df2c275051c3a9dca99d0fcdf42311c9696e549d6e4813bbc7edb5f6f",
+          2149,
+          2249
+        ],
+        [
+          "openMemoryReader",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          2249,
+          2249
+        ],
+        [
+          "openMemoryReader.readTopicOverview",
+          "f050913ccbd942d756026a542ae27dce5bd42492701e96cb3dfb903dc0bd04e6",
+          2249,
+          2326
+        ],
+        [
+          "openMemoryReader.readTopicOverview",
+          "0894e538cd5be17677a0fb89daadeac62ed1042b3667b6fc7a45ec299a900ade",
+          2326,
+          2336
+        ],
+        [
+          "openContextReader",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          2336,
+          2394
+        ],
+        [
+          "openContextReader.findCandidates",
+          "580bc80844f068be555e3863abcc936d1ccbb07596d296e37da0c6e4615b20a6",
+          2394,
+          2578
+        ],
+        [
+          "openContextReader.contextRead",
+          "7e2788f155fb189542a1d1345b9df78b114b7dbc1f3304b8034afca1dd8b7e46",
+          2578,
+          2786
+        ],
+        [
+          "openContextReader.fetchCandidateEvidence",
+          "4420852df2c275051c3a9dca99d0fcdf42311c9696e549d6e4813bbc7edb5f6f",
+          2786,
+          2886
+        ],
+        [
+          "openContextReader.fetchCandidateEvidence",
+          "125d54f21c1329b55e421e8921237ed6961c104b398b426785357b3a90aafb67",
+          2886,
+          2934
+        ],
+        [
+          "openContextIndexMaintainer",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          2934,
+          3166
+        ],
+        [
+          "openContextIndexMaintainer.getContextIndexStatus",
+          "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
+          3166,
+          3172
+        ],
+        [
+          "openContextProductReader",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          3172,
+          3404
+        ],
+        [
+          "openContextProductReader.getContextIndexStatus",
+          "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
+          3404,
+          3410
+        ],
+        [
+          "openContextProductReader.fetchCandidateEvidence",
+          "9122d2f9a732cc619f857704014b264288c74005d9c30bc5d8a6542e0151e420",
+          3410,
+          3458
+        ],
+        [
+          "openContentSuppressionReader",
+          "64f55618b13d9afeebded345a4e67fa85c54d913cfc2658456aed99684cba951",
+          3458,
+          3513
+        ],
+        [
+          "correct",
+          "85f6fb4faeb31f011e1c7d7f8bbeb8825e078ad41dfcb1f935f14bfff116b5a5",
+          3513,
+          3557
+        ],
+        [
+          "getCard",
+          "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
+          3557,
+          3570
+        ],
+        [
+          "get",
+          "2b5ca6f58052e5cde3d834a08499c495f84f5a008824bc9fa24cd1aec692f2bb",
+          3570,
+          3588
+        ],
+        [
+          "supersede",
+          "b629cf9658c5d818d8f176dfebfc2ec7d3a130d8168b6b3dee8ebfc99e03ff68",
+          3588,
+          3630
+        ],
+        [
+          "forget",
+          "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
+          3630,
+          3634
+        ],
+        [
+          "get",
+          "db2260c63a3b7d05840e014d0c60bd734c5598233edfeaf0e71ae85c2da2c2cf",
+          3634,
+          3651
+        ],
+        [
+          "forget",
+          "b0937277a5a2824a9219e78d9a027e6583e12fc7c188d861db912ff17124fefb",
+          3651,
+          3679
+        ],
+        [
+          "admit",
+          "f501774841453b6aa07e74470cf2eb1e72bd6511edfbf2c5195f249085e4ac2f",
+          3679,
+          3704
+        ],
+        [
+          "forget",
+          "837e5753f92d579c1b6f8adf8f718e8c634d622dfb027c4230c52773ddc6c2e8",
+          3704,
+          3732
+        ],
+        [
+          "submitSourceNote",
+          "2a44dacc85af984c07680dd4888e96bc05aee0b0532ba88ced1e8a2e0924d648",
+          3732,
+          3743
+        ],
+        [
+          "createCardDraft",
+          "cd2a5b757129d43fe2d19ee688f18ee2112e58327f3c12a05496dae18e09da90",
+          3743,
+          3758
+        ],
+        [
+          "createCardDraft",
+          "3e74a22726d77c1c76a00bd997d676a0cb762047b49ac063650b1b760876ea9e",
+          3758,
+          3773
+        ],
+        [
+          "confirmCardDraft",
+          "3e20dd54a19f149424d37537911fcdcde843fbb449d212cdb9a04bdc980258d3",
+          3773,
+          3801
+        ],
+        [
+          "deleteSourceNote",
+          "b31d216492e3dbdc8266f0314810528f7c075d834268f9af18dd0dc65b8495a7",
+          3801,
+          3826
+        ],
+        [
+          "getCard",
+          "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
+          3826,
+          3830
+        ],
+        [
+          "getCard",
+          "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
+          3830,
+          3840
+        ],
+        [
+          "cancelCardDraft",
+          "59dead7c3040409d4f3fd3aa9cafbf5cce64f1a966946ed0db6fafb8ad84f5a9",
+          3840,
+          3854
+        ],
+        [
+          "deleteKnowledgeCard",
+          "5a66832abd3dd64e57fa8bc8d328405ec1c03fc01344829e7518aeb37b185c3c",
+          3854,
+          3868
+        ],
+        [
+          "deleteSourceNote",
+          "e599d7cbeb4a1fcd8d3e316241113a6157e4e522c6a80ae0d8dfde8c54f39f50",
+          3868,
+          3880
+        ],
+        [
+          "listCardEffects",
+          "21ece43ee72d29507d70e449663ea224ca3c4d9b845824ff11448d24c674665d",
+          3880,
+          3883
+        ],
+        [
+          "getPrivateCardUsage",
+          "69c7335d36b31ad5f695501c82725d4359230e9816b6d38e2b85ee3a652ad2cc",
+          3883,
+          3887
+        ],
+        [
+          "recall",
+          "8893101c7945b3853b74b9efa10374a1c6c0c4da58ef9e5ea60d2a050b10cc89",
+          3887,
+          3992
+        ],
+        [
+          "modelCalls",
+          "9da9259c5745452da84b389580d67b47830abd7d58beb15eb63cdbb2562e9d35",
+          null,
+          null
+        ]
+      ],
+      "statements": 3992,
+      "sql": "59708eb422e947b21833096c9029d176a4691d3ef0a226ce792f0e6941f72194",
+      "tables": [
+        [
+          "admission_claims",
+          1,
+          "2e13c600e384547bcebe835c65b24dba7cd116d1ce51661aef61c153a681bb1f"
+        ],
+        [
+          "capture_events",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "capture_initial_classification",
+          1,
+          "da975f10f2b4946e20b9239b6f93081b6d17474683a4d5077a80b8ac95278bb0"
+        ],
+        [
+          "capture_streams",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_applicability_reviews",
+          3,
+          "fe4f6ee2032d9a17a5cd96176a4d2e5308153947b567d76b54f64e6c4b05f397"
+        ],
+        [
+          "card_bindings",
+          1,
+          "88bffd4b6de9eb090b75a1361d4af24d2938074026afc25f637dac96d5c37dc0"
+        ],
+        [
+          "card_effects",
+          10,
+          "40dd041412d64f9199cb97412a70d7b1f76c589b4a6545c1f347b61ed4680e79"
+        ],
+        [
+          "card_epochs",
+          1,
+          "b7835936e53cd622d9735bc25a75fe34ce892b15dbd88d8a916b2aac0d295414"
+        ],
+        [
+          "card_memory_bindings",
+          1,
+          "2fa50838d787b442f1e8fec2600ddc8cde7205a22f86af77ac33754948ab6ec4"
+        ],
+        [
+          "card_moc_edges",
+          1,
+          "9da70a9cdd0adc04e0a8ac3422a36ce3d5add3f946b58de90e3d873cf04be65b"
+        ],
+        [
+          "card_moc_epochs",
+          1,
+          "9d980a13ad69351d4215b662d417428cc9d7e7e8fedbc07aae2dcf7d13336d79"
+        ],
+        [
+          "card_moc_refs",
+          1,
+          "2e3649fb6c116e976ec2b21abe646e1c9187c8a928d77e8fa8970f4976c0f3e0"
+        ],
+        [
+          "card_moc_title_sources",
+          2,
+          "60753537c1b98f27e2db91e8dff8ff5fdfd8af4126e04d7a6a740d8f1a5758e4"
+        ],
+        [
+          "card_mocs",
+          2,
+          "0aa0bba3e46a55f3e7f829c6741ef60b76ceda37daec417b55d5f8601b8eca74"
+        ],
+        [
+          "card_note_usage",
+          1,
+          "8d8ce7abe7b55d603358e3b4dc907e03dad304d388db7d0ee8525e46d6985a06"
+        ],
+        [
+          "card_notes",
+          3,
+          "6a6d6bafa2550c66c500b94c18c2518cbf50f19f8d1f432447b9f12a3ce5a222"
+        ],
+        [
+          "card_operations",
+          20,
+          "0c09363a6f4e5542ee0a53c9e1e33ce99891a36e9b9d00170ad82e8548dd3ed1"
+        ],
+        [
+          "confirmation_actions",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "confirmation_conflicts",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "confirmation_supersessions",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_attempts",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_controls",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_events",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_identity",
+          1,
+          "fb778bffdad50f6b8cdb0a6fac2dddafb67182a06a9425f94e5a96dd724d811c"
+        ],
+        [
+          "episode_keep_actions",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_memory_links",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_messages",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_sources",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "evidence_mappings",
+          1,
+          "64687fde4add0753c1145dd8724227963f89bf61bfdabcf470bec022ac0e1741"
+        ],
+        [
+          "index_edges",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_generations",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_memories",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_memory_refs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_mocs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_title_sources",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "memories",
+          4,
+          "86c388f131b4da2bd03d8d218c50c6990755590ebed189df070c2b3eb983bead"
+        ],
+        [
+          "memory_conflicts",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "memory_qualifications",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "memory_supersessions",
+          1,
+          "3b3d8822d0cb6524282278e4c93f5140c22b4cf99115c9cd86be289fcabbd85e"
+        ],
+        [
+          "moc_edges",
+          1,
+          "d69a92f517699f71f9674e8ed69ffcbafdd17ed0f60bd1b52790ad7cd25c4ea5"
+        ],
+        [
+          "moc_memory_refs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "moc_title_sources",
+          2,
+          "5ba5d9bc3b912862ce36928750a81bed9ab55591d030833737797315cb42360c"
+        ],
+        [
+          "mocs",
+          2,
+          "7e9765fe717e739e87536deea1500bd5a6fa781a0fe76cf560e084de031dc76a"
+        ],
+        [
+          "namespace_epochs",
+          1,
+          "205489a59d6a07c164ec24b07d8d80da1cec8cc52d8976ae38f4aa903eb00c59"
+        ],
+        [
+          "namespace_index_state",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "private_cards",
+          5,
+          "f239733356a0de264bb16ee3d8de56db25afff41a1db17a7588aca84dc5c267d"
+        ],
+        [
+          "procedural_tags",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "qualification_anchors",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "qualified_claim_bindings",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "qualified_slots",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "rationale_edges",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "receipt_causality",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "receipts",
+          2,
+          "a4656c0debde6a7961d65ca95314a6a5972a766f04382e0b72a9afd52f0920f9"
+        ],
+        [
+          "session_episodes",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "staged_capture_clocks",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "staged_capture_evidence",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "store_metadata",
+          1,
+          "53626d8205bd18ad9da3a25f2eadde26c87809f4b28d84d40491ad20e3b410a6"
+        ],
+        [
+          "suppressed",
+          10,
+          "c950529a90d0751321d20f4fc59f159fe1dda49f009d120a7f544a40e55cc118"
+        ]
+      ],
+      "effectWitnesses": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "workload:33": {
+      "calls": [
+        [
+          "open",
+          "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+          557,
+          null
+        ],
+        [
+          "capture",
+          "bf35dcb6a51413eceba6883150363d70f6bb14f8878a52cd5b709df8236dbce6",
+          557,
+          882
+        ],
+        [
+          "capture",
+          "7c772d1e206229e84e1441f7c92b0cc649d6e9d495388443af3a6597fa9b1934",
+          882,
+          906
+        ],
+        [
+          "list",
+          "c75f2de7d1bec7f4c4b9f46f1de3db2a647baa32508ce79cda92394e3d726213",
+          906,
+          910
+        ],
+        [
+          "recall",
+          "6b854b8122309b563530bb209d9708449ecd008f4321f99765df7b4e9f95ea51",
+          910,
+          1135
+        ],
+        [
+          "submitSourceNote",
+          "739386208991255daa179450a851a183ad71d537dc829c8d2508c0e1f14fa78b",
+          1135,
+          1146
+        ],
+        [
+          "submitSourceNote",
+          "739386208991255daa179450a851a183ad71d537dc829c8d2508c0e1f14fa78b",
+          1146,
+          1149
+        ],
+        [
+          "submitSourceNote",
+          "65e5ace67336f4b8a6f8c70dea1cb66da0d2d0ecb1db1e8ef918453f6cd54886",
+          1149,
+          1152
+        ],
+        [
+          "createCardDraft",
+          "2065f2d077a8f01bf4baec4bdbb17fc3697ba1a7b7403e75633d65f153a39d46",
+          1152,
+          1168
+        ],
+        [
+          "editCardDraft",
+          "b6f7718a770eaccd9354fdc74e4c97721a72779cc5444f49995522fe0e7f6b48",
+          1168,
+          1190
+        ],
+        [
+          "editCardDraft",
+          "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
+          1190,
+          1194
+        ],
+        [
+          "confirmCardDraft",
+          "0db3db3760a776a9e78c1621102173a6e311a3fdce4b02a07a1c008332db0bad",
+          1194,
+          1225
+        ],
+        [
+          "editKnowledgeCard",
+          "49bcf96fb2127f2e551b29913c33cbecddc88f6db8f6e46fa5b32a2960f14054",
+          1225,
+          1254
+        ],
+        [
+          "getCard",
+          "71559a38e33736f6faed8de84d69c369c5bb64929dd5af6822f272b68804e557",
+          1254,
+          1269
+        ],
+        [
+          "inspectCardOperation",
+          "6cc21ce33d4bb0ccb04e473838e3817616cf9d94f85aad9eecd1c688cef951c6",
+          1269,
+          1272
+        ],
+        [
+          "inspectCardOperation",
+          "3b5f5e21c5b580819e6ca26dbaa09479ee2d902d53add0bbd66ff6e4f71b9e90",
+          1272,
+          1275
+        ],
+        [
+          "getSource",
+          "a6a0793d4f660797a58212316ea829dc8fdd03a135a16f702528a332799a0cde",
+          1275,
+          1278
+        ],
+        [
+          "fetchEvidence",
+          "54a52ae7525a96fd4a6227906fa70e03ddee790960f0e29ff698fb13db3c9aff",
+          1278,
+          1296
+        ],
+        [
+          "revalidateEvidence",
+          "54a52ae7525a96fd4a6227906fa70e03ddee790960f0e29ff698fb13db3c9aff",
+          1296,
+          1316
+        ],
+        [
+          "createCardDraft",
+          "09c76bb8612fe2f6c1bf000e626f4d6a44647aaf3c015c176f7c2dbea41af73f",
+          1316,
+          1337
+        ],
+        [
+          "createCardDraft",
+          "0d78aa53646b6d8bd43d69f7a6cd7c2ac109864cc73cec9d9b8ca26f115a2244",
+          1337,
+          1377
+        ],
+        [
+          "confirmCardDraft",
+          "13ecc363c6d85511c4639778249d9c4c229df841c5c79e55fc0119530de71b36",
+          1377,
+          1451
+        ],
+        [
+          "listCards",
+          "ffb03d5918c1b8efa13ec2bf6457188de617b2dcbe2d9f0c8a6de6ba9ea07548",
+          1451,
+          1471
+        ],
+        [
+          "listCards",
+          "6a7480f9a267bb5b3cbf77c4fc81f152918e13a246cce48b1bd40dcd4ebea72e",
+          1471,
+          1496
+        ],
+        [
+          "listCards",
+          "046eaf624dd3fb3acbdc2fecd3b97c0e9eb35698e7f9ba3f9eb769c701b967c4",
+          1496,
+          1541
+        ],
+        [
+          "mapEvidence",
+          "ad871ac1a7ecafdf688da4a6ad649dda8a4ec1b21a9e42575e2caefd34aeff21",
+          1541,
+          1630
+        ],
+        [
+          "applyCardPlacement",
+          "7daa1768b880146bb97af5a7967e22fc48e6225fc8461ee65b6cf76ced0a1406",
+          1630,
+          1669
+        ],
+        [
+          "applyCardPlacement",
+          "7daa1768b880146bb97af5a7967e22fc48e6225fc8461ee65b6cf76ced0a1406",
+          1669,
+          1672
+        ],
+        [
+          "mapEvidence",
+          "0d4ab685cae8974556ea5d233f664d4dc2a72f4463ef7156bdd02e0829f27710",
+          1672,
+          1830
+        ],
+        [
+          "refreshCardTopic",
+          "3be1c6dfc79aadfa2ea2bca25a216906385f6abb28b801dcbc99b9e804d17480",
+          1830,
+          1866
+        ],
+        [
+          "map",
+          "82ec8576fcc473a7c47fa74504c90261103a08a5c3f06933be1753f394fe2615",
+          1866,
+          1874
+        ],
+        [
+          "applyPlacement",
+          "9a5e6bb510abf0d938f5aafbc5d4fab1d84d4b2bcab9decbeae8192f2f0bfd25",
+          1874,
+          1906
+        ],
+        [
+          "mapEvidence",
+          "cbb5703a6c98fe0bdc221dc0e5f41a3bfd8faa4d865a950af8c0b99ad00a46b5",
+          1906,
+          1917
+        ],
+        [
+          "mapEvidence",
+          "6ee2ad16ac866a186da4f6a25a696ca70f9b73a27b64b462d8cdad84ec1e34d8",
+          1917,
+          2075
+        ],
+        [
+          "proposeEvidenceMapping",
+          "854e9e19e5c8f95618f40e5aa281865c9c731979ca2af78b6d0d34c40809d706",
+          2075,
+          2109
+        ],
+        [
+          "reviewEvidenceMapping",
+          "b690b818c35be47b2d9e31211b2d2245e45a3c62e0abbf9ac86a2900c4639138",
+          2109,
+          2146
+        ],
+        [
+          "listEvidenceMappings",
+          "9ef3887e904d86b7ff5d937c881a72be34ed7139cf7e8f600f3d5e22c7dd2179",
+          2146,
+          2178
+        ],
+        [
+          "mapEvidence",
+          "6ee2ad16ac866a186da4f6a25a696ca70f9b73a27b64b462d8cdad84ec1e34d8",
+          2178,
+          2336
+        ],
+        [
+          "selectEvidence",
+          "2478fd9f380811bdb921a36f18771791ea4168048e2217781353632d439af18c",
+          2336,
+          2405
+        ],
+        [
+          "importMethodVersion",
+          "b31af757b4bc08ff12416ee108caf05c38879fea54afbdc98365d0dbfdbf4a94",
+          2405,
+          2454
+        ],
+        [
+          "checkMethodReasonRefs",
+          "fc4e7b14ca14317f6130ef67a422b5c3841266bb37e8374014db8e464fa69b85",
+          2454,
+          2469
+        ],
+        [
+          "getMethodVersion",
+          "94f96f0d80b751dd5e44337362e66592143005b0d4641c1b9e7e17163b4a227f",
+          2469,
+          2480
+        ],
+        [
+          "adoptMethodVersion",
+          "c31d42e4a8ebb75cf6808cce9a42398749cc339d1a850d02d9687c2de397fbdc",
+          2480,
+          2500
+        ],
+        [
+          "resolveMethod",
+          "73e9367e3cd5cd3ef27172e0ba65eaf0ff1d1908e47489adb52a73bba14adde3",
+          2500,
+          2514
+        ],
+        [
+          "readMethodFile",
+          "4de4c47fafa9a7ae1ed3f93e3cc08eb406eae8fcb6975f48256378b44e2a9e94",
+          2514,
+          2524
+        ],
+        [
+          "declareCardCurrentDependencies",
+          "edecb1918291d00a6fba49e72c01c28ab80134a2ed45305192fb0e997089f433",
+          2524,
+          2551
+        ],
+        [
+          "declareCardCurrentDependencies",
+          "edecb1918291d00a6fba49e72c01c28ab80134a2ed45305192fb0e997089f433",
+          2551,
+          2554
+        ],
+        [
+          "revalidateCardCurrentDependencies",
+          "af433845eba18c415338ebb8c438ec33530bb2040451ce2c08b0dd00dd240acf",
+          2554,
+          2580
+        ],
+        [
+          "publishRoleProfileRelease",
+          "bfe59e6a11e0ae4cd55ced3b292be8f50b215fd3a6e82c8d8ebc26c84138f56c",
+          2580,
+          2598
+        ],
+        [
+          "refreshContextIndex",
+          "24b52cdd311839d9c8e4ba0c5f9b923ecfcfc570ef712cb6677a623927daf77d",
+          2598,
+          3049
+        ],
+        [
+          "findCandidates",
+          "6d7060f372f7ed2ebac62757f693787b519370f5dadf6ef9d5258897d088dae8",
+          3049,
+          3283
+        ],
+        [
+          "contextRead",
+          "8394cd56e337a8cbb5dcdcc69655e1deb7bdbbc5e23d2dfa2adc65c89178f95b",
+          3283,
+          3633
+        ],
+        [
+          "fetchCandidateEvidence",
+          "d7f952dd543f7438eb205443ae32cba1f9d5bc991fdd8d2365448746726fe9e0",
+          3633,
+          3727
+        ],
+        [
+          "fetchCandidateEvidence",
+          "031f7b0b497657574cd161c7d62c69f318e6786b0ae69a30cea04c1c4c2c9b14",
+          3727,
+          3921
+        ],
+        [
+          "readRoleTaskContext",
+          "5d931d24065e27f7c6dab23590f1962765122b8c1ece2c157a8516af5f3084c9",
+          3921,
+          4399
+        ],
+        [
+          "readRoleTaskContext",
+          "97beb1a2a20b0b844a4b87989054f33ea002fb5f10e216688e782cda1f401889",
+          4399,
+          4707
+        ],
+        [
+          "readRoleTaskContext",
+          "e535c7ad854b981766c9afa676d6d5bfb8b6deed6b9f4d7f0bfe6e384b27a89c",
+          4707,
+          4865
+        ],
+        [
+          "importMethodVersion",
+          "a4b0189ed839c26d455b1dbaef9bd2bdfe03b661844f1793ecba08ff151f65e6",
+          4865,
+          4936
+        ],
+        [
+          "importMethodVersion",
+          "58171c01d4561a94034fc7278d6a2d95b1f18f13c932987371d0f3c57cfc8d2a",
+          4936,
+          5012
+        ],
+        [
+          "importMethodVersion",
+          "5d6d9c9634bccc8fc8bd64f2c6457a49e1335b4ae4df1c0f66b34eae49798282",
+          5012,
+          5074
+        ],
+        [
+          "listMethodManifest",
+          "af43c379f5bda6811566e71f9ae3ee9c0ba11e1ae0d6c897bdfb4f434fbe2158",
+          5074,
+          5088
+        ],
+        [
+          "listMethodManifest",
+          "664e9c379f524f4749bb94142811ceb2a9489c0e19a622678ce842ee748dcf10",
+          5088,
+          5106
+        ],
+        [
+          "listMethodPackages",
+          "d89a39a590cd3ffed77fc9028b43a61755b25888132074bc1acdd3f5ca15e22c",
+          5106,
+          5116
+        ],
+        [
+          "listMethodPackages",
+          "b409fd9d21d5362165885fd144da06da7845305a555ef8221a160169ef4b591f",
+          5116,
+          5134
+        ],
+        [
+          "listMethodPackages",
+          "0cff484cea45bc3c9e7edf6a72afa12476747d61c9160638f94ff5aef9d95e15",
+          5134,
+          5148
+        ],
+        [
+          "listMethodVersions",
+          "18c260557d6ec4f0a13973af44258ce1e1ff032b1100c23f2926f8e0555d7f8a",
+          5148,
+          5161
+        ],
+        [
+          "listMethodVersions",
+          "27028fb3688130a063a4a4317f781fed14a3f29f88057778eada1ebb3bf433ed",
+          5161,
+          5178
+        ],
+        [
+          "compareMethodVersions",
+          "35e4fd9e367faed339ec98fd79e654d12ae88b5cbc65e05745fdafaadbc0a2b3",
+          5178,
+          5232
+        ],
+        [
+          "compareMethodVersions",
+          "ddb50543e2089dd9353748555e77d52753fc30e1ab7dcd8050333df7a335fcf9",
+          5232,
+          5290
+        ],
+        [
+          "adoptMethodVersion",
+          "245ce680e3dbde222ab3a27a92bc384e2334868386bcea3b5aa9f7bcf1cbfc3b",
+          5290,
+          5310
+        ],
+        [
+          "adoptMethodVersion",
+          "e5f9dbd40ab147638782b67910a29c45cb7b2e9ece7225adf45243d5689d050f",
+          5310,
+          5331
+        ],
+        [
+          "resolveMethodsForRole",
+          "7aefdef33f44ab5fcccd23ffdbb7456062ebba19bceb64a62fe0159ffef0e0b1",
+          5331,
+          5373
+        ],
+        [
+          "resolveMethodsForRole",
+          "17dce2f2dab86cc60b50268b84bad57be970983f94a4e10296b7c40e7a00046b",
+          5373,
+          5423
+        ],
+        [
+          "resolveMethodsForRole",
+          "76e7906012f825707a1f93662dd4a8eb054e43464e900784bd36e621a725c386",
+          5423,
+          5469
+        ],
+        [
+          "disableMethodBinding",
+          "5d8ffb15b33fc6274d283fcb65ff143ba79c3b9e6a569e89b048200d601f9a7e",
+          5469,
+          5483
+        ],
+        [
+          "disableMethodBinding",
+          "5d8ffb15b33fc6274d283fcb65ff143ba79c3b9e6a569e89b048200d601f9a7e",
+          5483,
+          5486
+        ],
+        [
+          "listMethodBindingEvents",
+          "f8b2468f3290fb7a74dc8211679a0fcf488229e8c74d81d273dd427fd23324a0",
+          5486,
+          5498
+        ],
+        [
+          "listMethodBindingEvents",
+          "66f85125ae641351cf02f005f966207f746f53afdeb6db19b8c4f882be998f19",
+          5498,
+          5514
+        ],
+        [
+          "readMethodAttachmentBytes",
+          "0301c4bdebd4db83f9a633811b2aedb24efa8cfe1c58f6fca6eeacc57acc5e00",
+          5514,
+          5527
+        ],
+        [
+          "readMethodAttachmentBytes",
+          "218998e7dfac6d3d47c8786c170a5494adc7d0f31150682382ccaa40a99ea3bc",
+          5527,
+          5540
+        ],
+        [
+          "deleteMethodVersion",
+          "62fae707c1f0a4f0ef83f27e7670fb4a0e151b38c222435e23b61dd53e1286af",
+          5540,
+          5554
+        ],
+        [
+          "deleteMethodVersion",
+          "62fae707c1f0a4f0ef83f27e7670fb4a0e151b38c222435e23b61dd53e1286af",
+          5554,
+          5557
+        ],
+        [
+          "deleteMethodPackage",
+          "ad452c742ad9458beea71d055a186f10d0404807d38cd49c262c7cdbc084bb71",
+          5557,
+          5571
+        ],
+        [
+          "deleteMethodPackage",
+          "ad452c742ad9458beea71d055a186f10d0404807d38cd49c262c7cdbc084bb71",
+          5571,
+          5574
+        ],
+        [
+          "listMethodEffects",
+          "03584cb62b2a63500681b2c397df9ad9e864103f3e464afbe21e79bbef1aa6bb",
+          5574,
+          5584
+        ],
+        [
+          "listMethodEffects",
+          "64f6a6e034b08a4befe974f5d99881d562328397f75c7747e19fe32c1c0a83d6",
+          5584,
+          5602
+        ],
+        [
+          "listMethodEffects",
+          "2bf3e68ec7abe8a56f8bc659ebaf8878e92215308e5693b3ba9cdff172621ef8",
+          5602,
+          5620
+        ],
+        [
+          "listMethodEffects",
+          "0eaa7085d0bc2a51a0b2cc57b1399097c38ea1a444b437b75229ae09db600d77",
+          5620,
+          5638
+        ],
+        [
+          "listMethodEffects",
+          "64fb17b544dbbcb768be92d0008517a5e52c5028e30f3748329dd94657b06383",
+          5638,
+          5656
+        ],
+        [
+          "listMethodEffects",
+          "b0bae3ea6dc9137daa1f453237823aaf01a55a897d2f12386e15a3a14a9585c0",
+          5656,
+          5670
+        ],
+        [
+          "getMethodPackageUsage",
+          "dfbefc1de191b4dd741adb91582885d2e51ff02f580eb49d8c6a0d9f594dbfeb",
+          5670,
+          5676
+        ],
+        [
+          "listMethodManifest",
+          "d1f84f46d28118ff5a27cb06af017f0fd139bafe816faf860f197e7491b81f75",
+          5676,
+          5683
+        ],
+        [
+          "captureRaw",
+          "3c2532f8b014ee3ec621c4b0a15c0d60cd378515a245db953e221fda302cd8db",
+          5683,
+          5937
+        ],
+        [
+          "getConversation",
+          "97e4fb50a8fd8dbe3aa4543e4ec3b9d6c2acc42734e19a0b6f052e2ce2bcb1e9",
+          5937,
+          5951
+        ],
+        [
+          "resolveSourceReferences",
+          "e00c53a6c221627a63266ae1ce53a6a0b0bd7b26594e9bb1baf93f54a4959d96",
+          5951,
+          5976
+        ],
+        [
+          "createCardDraft",
+          "b36bc8bf37de1440c280b22300418a02d82c2ea26d06136932568516c9366889",
+          5976,
+          5995
+        ],
+        [
+          "confirmCardDraft",
+          "3a6b07fd5695076ea7410af4ef5debaecd8e7f5708abeccf4dab5111ab9d4cd8",
+          5995,
+          6037
+        ],
+        [
+          "getSource",
+          "bc59e3bb56ef7b34a1d1c6327d947549a38917954f4d668aba8f0b84a46d9e1e",
+          6037,
+          6061
+        ],
+        [
+          "setRawCaptureControl",
+          "3653110e79aa84b356285089adbb6cb1f6b056ba465b72ba1fe4f24561d78032",
+          6061,
+          6067
+        ],
+        [
+          "setRawCaptureControl",
+          "9234c78fe0ef0056a5b34f634681a6fe7c7e9e5adc29e6b88a5e0b268c7be69d",
+          6067,
+          6072
+        ],
+        [
+          "refreshContextIndex",
+          "ac891be91cd86b6a4b6d2cb16cd2ee70ac93485fa3fa224d7af6ed6ae687d7f6",
+          6072,
+          6480
+        ],
+        [
+          "openMemoryReader",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          6480,
+          6480
+        ],
+        [
+          "openMemoryReader.readTopicOverview",
+          "0ae33fcf0f7e7a795f6312641aac14a4b97d686b37fec5e383255b741096183f",
+          6480,
+          6850
+        ],
+        [
+          "openMemoryReader.readTopicOverview",
+          "d8d35ab0c86e3faa4607f1c2ed678cacf51f723fb70e5c700900f077ac3adef4",
+          6850,
+          6860
+        ],
+        [
+          "openContextReader",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          6860,
+          7152
+        ],
+        [
+          "openContextReader.findCandidates",
+          "8ccb86713bf3ba5a309e21d256cc2c1b81fa8a9a9253e5489f23d6fa1d57a22c",
+          7152,
+          7425
+        ],
+        [
+          "openContextReader.contextRead",
+          "0245593b1244bf2a98e28881eb52f58dc19c435e9b243893c40e664e86dcafc4",
+          7425,
+          7803
+        ],
+        [
+          "openContextReader.fetchCandidateEvidence",
+          "451b94f61c263d38d89ec1fe33fc17a0c41a8b53ae3ce9c27b510be1e26fab58",
+          7803,
+          8059
+        ],
+        [
+          "openContextReader.fetchCandidateEvidence",
+          "6dfc841403a9bfba144ceb91fc800e0b388227d84e016549d182787b6e6c0578",
+          8059,
+          8153
+        ],
+        [
+          "openContextIndexMaintainer",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          8153,
+          8520
+        ],
+        [
+          "openContextIndexMaintainer.getContextIndexStatus",
+          "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
+          8520,
+          8526
+        ],
+        [
+          "openContextProductReader",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          8526,
+          8893
+        ],
+        [
+          "openContextProductReader.getContextIndexStatus",
+          "fb7c7cbd1ca56e2c67ae6126b050a5e0cbd4a0603b3cad07afedfb4c19745e0f",
+          8893,
+          8899
+        ],
+        [
+          "openContextProductReader.fetchCandidateEvidence",
+          "ab49640ef7ea32336a288af9ff810e0c079d7ca3a831f974f1994d8d7efb38d0",
+          8899,
+          8993
+        ],
+        [
+          "openContentSuppressionReader",
+          "64f55618b13d9afeebded345a4e67fa85c54d913cfc2658456aed99684cba951",
+          8993,
+          9282
+        ],
+        [
+          "openRawCaptureCore",
+          "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+          9282,
+          9553
+        ],
+        [
+          "openRawCaptureCore.getConversation",
+          "97e4fb50a8fd8dbe3aa4543e4ec3b9d6c2acc42734e19a0b6f052e2ce2bcb1e9",
+          9553,
+          9567
+        ],
+        [
+          "openRawCaptureCore.captureRaw",
+          "872e1551bbceff794151f6541924c86ad73abf0e8c61d46d4a2178029a43bb4d",
+          9567,
+          9974
+        ],
+        [
+          "openRawCaptureCore.getConversation",
+          "6d17fa294e6a986af82b8c961c6dfe96e0e73371907c5bc0f71915721eeb6ff2",
+          9974,
+          9990
+        ],
+        [
+          "openRawCaptureCore.getConversation",
+          "2d5a18bf112f6f26a5119b7a6922ae6e8902bf2c85442784a4210e6b30c03916",
+          9990,
+          10004
+        ],
+        [
+          "openRawCaptureCore.listRawConversations",
+          "571ee60b6ff0c4c63fb45c0c1f86e6424d94cbaa0283aff6f2895d23cc8d45bb",
+          10004,
+          10008
+        ],
+        [
+          "openRawCaptureCore.listRawConversations",
+          "7e3dc1f41a5f45d789c3ffc77fd42e9cb4857cf25d740e5d2a9eb34fa3d602b1",
+          10008,
+          10012
+        ],
+        [
+          "deleteConversation",
+          "7c7ab2d9136d6c49f1d0a70939b301a8307200184574f4a8322b5b7a4c1cf8fa",
+          10012,
+          10112
+        ],
+        [
+          "deleteConversation",
+          "7c7ab2d9136d6c49f1d0a70939b301a8307200184574f4a8322b5b7a4c1cf8fa",
+          10112,
+          10115
+        ],
+        [
+          "getCard",
+          "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
+          10115,
+          10129
+        ],
+        [
+          "correct",
+          "70c4e925846dcd32d8b26c480ae91cc34e2d42e27e0b3ad9c6487c711cdae920",
+          10129,
+          10222
+        ],
+        [
+          "getCard",
+          "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
+          10222,
+          10236
+        ],
+        [
+          "get",
+          "2b5ca6f58052e5cde3d834a08499c495f84f5a008824bc9fa24cd1aec692f2bb",
+          10236,
+          10275
+        ],
+        [
+          "supersede",
+          "85a132991b83f00e80c42000aceac0019e48ee517011857e8f74e73f36e051be",
+          10275,
+          10344
+        ],
+        [
+          "forget",
+          "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
+          10344,
+          10350
+        ],
+        [
+          "get",
+          "0c1761396a0caa357777c813104e85734df24166e734f4ea4e6c4b8f4e8b8ed9",
+          10350,
+          10389
+        ],
+        [
+          "forget",
+          "842bca929001887de46060ceb41958218fe160f882674e064a4c266993ce8c36",
+          10389,
+          10447
+        ],
+        [
+          "admit",
+          "8c0069625defe656be7efa5842f2c611f0de14604360d73e3719a603b208ca21",
+          10447,
+          10503
+        ],
+        [
+          "forget",
+          "9af50378e5cef59c000dfe2ad8b41f4e441cb9aad7b0e4964ac3db8dfa0161b3",
+          10503,
+          10561
+        ],
+        [
+          "submitSourceNote",
+          "b128a9849ab6ad8f6eac48b1f07c728136d208ff99239d69e7737191a883c05c",
+          10561,
+          10572
+        ],
+        [
+          "createCardDraft",
+          "212a257dc881f37ac626cd89471b43631c7b3fec0651570cd25a83e0f2710bbf",
+          10572,
+          10587
+        ],
+        [
+          "createCardDraft",
+          "c35def3828dac4fed01ed93ace309724438fa4cb83b5c328dc706b437a5bf100",
+          10587,
+          10602
+        ],
+        [
+          "confirmCardDraft",
+          "f9c972af890c6b29e26caea918edd9de0b83fde25dcb599d49b19be7353990e9",
+          10602,
+          10633
+        ],
+        [
+          "deleteSourceNote",
+          "130faba56067cb2cfcb212249b417add4ff5642ee12be7dd85384e38bf055923",
+          10633,
+          10658
+        ],
+        [
+          "getCard",
+          "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
+          10658,
+          10662
+        ],
+        [
+          "getCard",
+          "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
+          10662,
+          10673
+        ],
+        [
+          "cancelCardDraft",
+          "59dead7c3040409d4f3fd3aa9cafbf5cce64f1a966946ed0db6fafb8ad84f5a9",
+          10673,
+          10687
+        ],
+        [
+          "deleteKnowledgeCard",
+          "5a66832abd3dd64e57fa8bc8d328405ec1c03fc01344829e7518aeb37b185c3c",
+          10687,
+          10701
+        ],
+        [
+          "checkMethodReasonRefs",
+          "a59808dac96996843c9c766296bf1aaf8abadfe59a67e89b216de944a6e952a0",
+          10701,
+          10708
+        ],
+        [
+          "deleteSourceNote",
+          "e599d7cbeb4a1fcd8d3e316241113a6157e4e522c6a80ae0d8dfde8c54f39f50",
+          10708,
+          10720
+        ],
+        [
+          "listCardEffects",
+          "a2dbe844a3a2e064af92095d1480365111c5f5a62fd7d8dcf2f0b43bd48c4341",
+          10720,
+          10723
+        ],
+        [
+          "getPrivateCardUsage",
+          "69c7335d36b31ad5f695501c82725d4359230e9816b6d38e2b85ee3a652ad2cc",
+          10723,
+          10727
+        ],
+        [
+          "recall",
+          "5f1ed616c1b4fc4a9ab0ae19f343358a8ad9f88ecc207b06ac9d9bce40b87058",
+          10727,
+          10946
+        ],
+        [
+          "modelCalls",
+          "3728d557896d57e2cc2cc6efad56bfbe83aca7fbd9da9351d20d1a1f5aece8bc",
+          null,
+          null
+        ]
+      ],
+      "statements": 10946,
+      "sql": "272de3b80a9729094161a829ddd7322b1a13facc4b29ab5d379c302719271871",
+      "tables": [
+        [
+          "admission_claims",
+          3,
+          "abc65a6fc2f799a80ce7544f1f0d99287ec3676a35a76e2205d55ecc32a2fdfb"
+        ],
+        [
+          "asset_derivatives",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "asset_effects",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "asset_epochs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "asset_operations",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "asset_versions",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "assets",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "binary_chunks",
+          2,
+          "64bb41ce50ed2061df0925ef48798cc23ac8b371a9bb51f22334ac06f8d15091"
+        ],
+        [
+          "binary_objects",
+          1,
+          "70ccd1a8eee0c871ec10db783c85ab61628d3b719ef12cd0b915b4b48ed05ed9"
+        ],
+        [
+          "binary_owner_usage",
+          1,
+          "5d03b3e010850a9acf15caf63045e0e53e91f20108cedc4b9e2c2788e030ef69"
+        ],
+        [
+          "capture_events",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "capture_initial_classification",
+          3,
+          "197ca83085dc5426604cfbf606e6de8fefc5cccf0dd0e4b12641ecb7a47d76b1"
+        ],
+        [
+          "capture_streams",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_applicability_reviews",
+          4,
+          "07421457eae3e78eda968bb00abd0f16b7b6fa772afe073d44745049faf9c970"
+        ],
+        [
+          "card_bindings",
+          1,
+          "2f213963d73f6c12f7358c390bd832706e36080088758c1e83e685c093e7a015"
+        ],
+        [
+          "card_current_dependencies",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_effects",
+          11,
+          "6e278781ab4ffbf103880ec817faecaebe8c5e3a05a2ce8f1a6491c98b01afd9"
+        ],
+        [
+          "card_epochs",
+          1,
+          "af69bc5299579b90b0470a5fd91405f4b47cc60b41bd08388b2834ca974b64cf"
+        ],
+        [
+          "card_memory_bindings",
+          1,
+          "2fa50838d787b442f1e8fec2600ddc8cde7205a22f86af77ac33754948ab6ec4"
+        ],
+        [
+          "card_moc_edges",
+          1,
+          "9da70a9cdd0adc04e0a8ac3422a36ce3d5add3f946b58de90e3d873cf04be65b"
+        ],
+        [
+          "card_moc_epochs",
+          1,
+          "c09d3f0e1e8aea5245b76218786830d89ead9b2e892def99c90466bd68639292"
+        ],
+        [
+          "card_moc_refs",
+          1,
+          "2e3649fb6c116e976ec2b21abe646e1c9187c8a928d77e8fa8970f4976c0f3e0"
+        ],
+        [
+          "card_moc_title_sources",
+          2,
+          "60753537c1b98f27e2db91e8dff8ff5fdfd8af4126e04d7a6a740d8f1a5758e4"
+        ],
+        [
+          "card_mocs",
+          2,
+          "0aa0bba3e46a55f3e7f829c6741ef60b76ceda37daec417b55d5f8601b8eca74"
+        ],
+        [
+          "card_note_usage",
+          1,
+          "8d8ce7abe7b55d603358e3b4dc907e03dad304d388db7d0ee8525e46d6985a06"
+        ],
+        [
+          "card_notes",
+          3,
+          "5252c8d1613580d932e8ee4db22bec652d08de14d4ea89f84c82a60cedb763b0"
+        ],
+        [
+          "card_operations",
+          24,
+          "7f806097a1be88a3f67646b3a2b4fc20f9d1b9d96d1c97a6cdfdfad983c18804"
+        ],
+        [
+          "card_raw_bindings",
+          1,
+          "dda98cca1f3b1aa1983f375b7e78c86f7ada6cbb6505e345a107a551f8ea2cf1"
+        ],
+        [
+          "card_raw_mutation_context",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "card_raw_pending_invalidations",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "confirmation_actions",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "confirmation_conflicts",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "confirmation_supersessions",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_attempts",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_controls",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_events",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_identity",
+          1,
+          "fb778bffdad50f6b8cdb0a6fac2dddafb67182a06a9425f94e5a96dd724d811c"
+        ],
+        [
+          "episode_keep_actions",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_memory_links",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_messages",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "episode_sources",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "evidence_mappings",
+          1,
+          "64687fde4add0753c1145dd8724227963f89bf61bfdabcf470bec022ac0e1741"
+        ],
+        [
+          "index_edges",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_generations",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_memories",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_memory_refs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_mocs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "index_title_sources",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "local_capture_controls",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "memories",
+          6,
+          "3339452f382d4747e154a86d50f509c99bf8ab730756979fff78b0d870408c88"
+        ],
+        [
+          "memory_conflicts",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "memory_qualifications",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "memory_supersessions",
+          1,
+          "4fe85a537e692e882f63da8a8cf00f20849ef89a862a9879c4a19fe2f1a27a86"
+        ],
+        [
+          "method_binding_events",
+          4,
+          "e4a5b0b62bb31a51af28065f7c7d5e8878fe3ab489a5473c653ec530308c0fcf"
+        ],
+        [
+          "method_binding_generations",
+          3,
+          "c0072a1eef978b4666a9fe6dab6241bf426473e92deddb72171e8b6883fb18e2"
+        ],
+        [
+          "method_bindings",
+          3,
+          "e992718d1e6c42060c924504dbe724cf83c24b8fb2d71513c0276d5afece7fd4"
+        ],
+        [
+          "method_changes",
+          2,
+          "be006540683175abe674efc488021b300a838ce9326275c9006c3762de4d4532"
+        ],
+        [
+          "method_effects",
+          6,
+          "f0cad28133dc55ce599cb9e63d8dda62f2b0be8aad30fa196fc0303d3250cd6f"
+        ],
+        [
+          "method_epochs",
+          1,
+          "c0f91d5cd897d1f928767fc3c7f31648e742e995dff97e1766223f7a8f2799f1"
+        ],
+        [
+          "method_files",
+          2,
+          "53caaec8203d045325707447cab479d6cc586a273439df46cd57b426cba4757c"
+        ],
+        [
+          "method_manifest_formats",
+          1,
+          "5cc4a87dec72dc01ecff385feb2823f7dbc3f0862d9ab9cabee6992315dbae49"
+        ],
+        [
+          "method_mixed_entries",
+          2,
+          "78df57de3e18128e0b5134acde3993db07a0b3915de80c101f322e4d6e120acb"
+        ],
+        [
+          "method_operations",
+          10,
+          "17248979be30ccb300ac5f162eda136c84c2b1b1c3c64481f096ea3a6438b379"
+        ],
+        [
+          "method_owner_usage",
+          1,
+          "5bcbff5c3b8ab2e820e27a1f7924a8e0aa9365469f06239e18427b10fab58129"
+        ],
+        [
+          "method_packages",
+          3,
+          "06afa6c54b4761ac21052cab35a32d2150b8441503eeaedd596c19a9ec1a25c8"
+        ],
+        [
+          "method_versions",
+          4,
+          "188e40188736ff8ab4ab72deb17c06d16f062f2f9d9c0a608fb3b1a8b45ff658"
+        ],
+        [
+          "moc_edges",
+          1,
+          "d69a92f517699f71f9674e8ed69ffcbafdd17ed0f60bd1b52790ad7cd25c4ea5"
+        ],
+        [
+          "moc_memory_refs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "moc_title_sources",
+          2,
+          "5ba5d9bc3b912862ce36928750a81bed9ab55591d030833737797315cb42360c"
+        ],
+        [
+          "mocs",
+          2,
+          "7e9765fe717e739e87536deea1500bd5a6fa781a0fe76cf560e084de031dc76a"
+        ],
+        [
+          "namespace_epochs",
+          1,
+          "dbd6050a60a510435171e1e51d2f78adde8995ea11f16a206f88d88cddbade80"
+        ],
+        [
+          "namespace_index_state",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "private_cards",
+          6,
+          "86d6fe1265cc24d360891a309a692be90e62e347d637677eaac734698a1de9ce"
+        ],
+        [
+          "procedural_tags",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "qualification_anchors",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "qualified_claim_bindings",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "qualified_slots",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "rationale_edges",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "raw_capture_controls",
+          1,
+          "84593f0bb5a77190a96673358a1a5b56ea37a90c826417208bf04e678583dc6a"
+        ],
+        [
+          "raw_capture_events",
+          1,
+          "c87659bce8ede613d985317aa956c5ca35ee83a602aae20c38cab6bf6441ae6a"
+        ],
+        [
+          "raw_closed_jobs",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "raw_conversations",
+          1,
+          "f706a15c488b165462b01904a6d47ec14129f86cd5fcc4c4f6f1ca2888159af3"
+        ],
+        [
+          "raw_deletion_actions",
+          1,
+          "513b5d35cca4fadbae402b7d5074fc3147cd6a2914a33909827b0cd888aefe2d"
+        ],
+        [
+          "raw_deletion_effects",
+          2,
+          "3ccc569dfffe97610ca60b5686537076af92def24455fe8f84412f052da3c85d"
+        ],
+        [
+          "raw_events",
+          1,
+          "00ad073eacf5ce382f8505692772e4a27afbf51c49c88acb4acc7bd1ec19c608"
+        ],
+        [
+          "raw_exclusion_clocks",
+          1,
+          "47c362375bb98e57872c417182708d8618c007606620c642943f9bb8862c7f4d"
+        ],
+        [
+          "raw_job_sources",
+          4,
+          "0448db4d0856e680efaa82ea3526681f6f2852eefa4afb089c26bc811bfe34a6"
+        ],
+        [
+          "raw_messages",
+          2,
+          "964d6c5bd82cfa2ef10f664b383fdc4c95f750c677da7b4bebf57528738b5678"
+        ],
+        [
+          "raw_owner_usage",
+          1,
+          "b35f5584b35e44477a57d6eea74122e74a51b9c881ff0b2a6d454c591ebd1e94"
+        ],
+        [
+          "raw_parts",
+          2,
+          "9ea2d8ac019f4ae333d2f9ca9e5047a3cff87075b5ac1f7e945f7bd086cf772c"
+        ],
+        [
+          "raw_receipt_lineage",
+          2,
+          "2959df2d3d299572d16bce2cfeeeb59b55bfbc78f640530b5a5ed4dc40e384d1"
+        ],
+        [
+          "raw_receipt_origins",
+          4,
+          "7a1626725b76f7a7729d8ad3e01f8d07c6a820998304ed491aea061d23135ef8"
+        ],
+        [
+          "raw_session_fences",
+          1,
+          "3a1b243fc5e2d0393a29de2b4f7f15b951f8fa512b48f1b1a9f6d2e47cd81afa"
+        ],
+        [
+          "raw_source_exclusions",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "raw_source_maps",
+          2,
+          "b3a93a40d68fde979a2ed6da25abc74804001a7438bf03bd0963640feb0082f1"
+        ],
+        [
+          "receipt_causality",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "receipts",
+          4,
+          "d1cd28686bdc65a3716025aeb7173358c9ea9f9542346d69578054ad392609b1"
+        ],
+        [
+          "role_profile_changes",
+          1,
+          "475cec95dad1a29a64c5238f8e99cd77a0019b6b66b3154c0ee11f30cb54c1ff"
+        ],
+        [
+          "role_profile_epochs",
+          1,
+          "47c362375bb98e57872c417182708d8618c007606620c642943f9bb8862c7f4d"
+        ],
+        [
+          "role_profile_events",
+          1,
+          "0c48b8e80e8b0b66c4df0aa937d8ca8eea444cb27c50df0eddc0d61db4fcd34b"
+        ],
+        [
+          "role_profile_operations",
+          1,
+          "7afcb01d2a08ef39c3d548a27d3458c43371283595d0d05e33d1219ec2d9f9c3"
+        ],
+        [
+          "role_profile_owner_usage",
+          1,
+          "681a2480460824bde9876f7e0d67df2508f850c84b063ae02794ad74d15d11c3"
+        ],
+        [
+          "role_profile_releases",
+          1,
+          "565ad8b19fcce8110523a119240dbb87ed7dea390619a68a3d7ce4167fda90d8"
+        ],
+        [
+          "role_profiles",
+          1,
+          "44f7e2ac558981943528a9cd74f2f0846f9f60749ccca7269507d4334af66866"
+        ],
+        [
+          "session_episodes",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "sqlite_sequence",
+          1,
+          "9d37bb15137ff465a22c9ec192408e727bb7375c71b75bc3d7cec8b707b3eacc"
+        ],
+        [
+          "staged_capture_clocks",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "staged_capture_evidence",
+          0,
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ],
+        [
+          "store_metadata",
+          1,
+          "53626d8205bd18ad9da3a25f2eadde26c87809f4b28d84d40491ad20e3b410a6"
+        ],
+        [
+          "suppressed",
+          11,
+          "a486af879b6740c0483deb451c554f6f58c4806977d56105b46ec5889b234818"
+        ]
+      ],
+      "effectWitnesses": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
     }
   }
 }

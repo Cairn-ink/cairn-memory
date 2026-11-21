@@ -74,7 +74,7 @@
     "start": "function capabilities() {",
     "end": "\ntry {",
     "purpose": "public Worker capabilities projection",
-    "sha256": "814de9f03bd875a871c5dce50a517e85e02056cc3f9c6018fc2ffdbd56712314"
+    "sha256": "7e566499e43c731be62fd3ae31f185cf1dc9a01d8c72c6f97965838d2ee01d11"
   },
   {
     "file": "core/context-read-facade.mjs",
@@ -88,7 +88,7 @@
     "start": "export function createPrivateEvidenceStorage(",
     "end": "  function selectedReceiptRef(",
     "purpose": "private evidence storage: memo receipt projection sink",
-    "sha256": "866203b0a2ec5885a575988e9da3199572e5fce077068961819e4a1d028042f6"
+    "sha256": "b4f1a1a7e206e17dd337995d95430d155275595308a334dd3f3bc2bd7d67cc25"
   },
   {
     "file": "core/layout-base-upgrade.mjs",

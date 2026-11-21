@@ -1,6 +1,7 @@
 // Keep this module SQLite-free at link time (store-fence is CLI-reachable).
 import { spawnSync } from 'node:child_process';
-import { lstatSync } from 'node:fs';
+import { lstatSync, statfsSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 // Pure metadata predicates shared by the number-stat and bigint-stat guards.
@@ -68,18 +69,27 @@ const observedProbe = `
 // cache; compare nanosecond stats before AND after probing, never cache errors.
 const cache = new Map();
 // Metadata only: safe while this process (including Workers) holds SQLite locks.
-export const sqliteFileStat = path => lstatSync(path, { bigint: true });
+export function sqliteFileStat(path, { withVolume = false, readVolume = statfsSync } = {}) {
+  const stat = lstatSync(path, { bigint: true });
+  if (withVolume) {
+    const { bavail, bsize } = readVolume(dirname(path), { bigint: true });
+    stat.volumeAvailableBytes = bavail * bsize;
+  }
+  return stat;
+}
 const fingerprint = path => {
   const s = lstatSync(path, { bigint: true });
   return [s.dev, s.ino, s.size, s.mtimeNs, s.ctimeNs].join(':');
 };
-export function probeRollbackJournal(path, { observe } = {}) {
-  if (observe) return observe(() => runProbe(path, true));
-  return runProbe(path, false);
+// Internal canonical detection can bypass timestamp caching. Existing rollback
+// preflights and sidecar callers retain their original cache and policy.
+export function probeRollbackJournal(path, { observe, uncached = false } = {}) {
+  if (observe) return observe(() => runProbe(path, true, uncached));
+  return runProbe(path, false, uncached);
 }
-function runProbe(path, structured) {
+function runProbe(path, structured, uncached) {
   const before = fingerprint(path);
-  if (cache.get(path) === before) return structured ? { value: { mode: 'delete' }, events: [], complete: true, cached: true } : { mode: 'delete' };
+  if (!uncached && cache.get(path) === before) return structured ? { value: { mode: 'delete' }, events: [], complete: true, cached: true } : { mode: 'delete' };
   const uri = pathToFileURL(path);
   uri.searchParams.set('mode', 'ro'); uri.searchParams.set('nolock', '1');
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', structured ? observedProbe : probe, uri.href], {

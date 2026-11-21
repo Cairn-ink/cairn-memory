@@ -231,12 +231,12 @@ test('static gate rejects restoring a public flag on the layout authority', () =
 // Their full source is pinned, including the namespace uses and resolution fence.
 test('static gate pins the exact unresolved-loader allowlist and its reviewed source', () => {
   assert.deepEqual(moduleLoadingExceptions.map(({ file, line, expression }) => ({ file, line, expression })), [
-    { file: 'core/context-product-worker.mjs', line: 120, expression: 'import(workerData.host.moduleUrl)' },
+    { file: 'core/context-product-worker.mjs', line: 122, expression: 'import(workerData.host.moduleUrl)' },
     { file: 'core/context-semantic-worker.mjs', line: 502, expression: 'import(c.host.moduleUrl)' },
     { file: 'adapters/local-embedder/runtime.mjs', line: 53, expression: "import(pathToFileURL(join(pack.packPath, 'runtime/node_modules/@huggingface/transformers/dist/transformers.node.mjs')).href)" },
     { file: 'integrations/codex/qualification.mjs', line: 83, expression: "createRequire(launcher).resolve(packageName+'/package.json')" },
     { file: 'core/context-product-telemetry.mjs', line: 195, expression: 'Reflect.construct(object.constructor, args)' },
-    { file: 'core/context-product-sqlite.mjs', line: 108, expression: "if (key === 'constructor') return object.constructor;" },
+    { file: 'core/context-product-sqlite.mjs', line: 172, expression: "if (key === 'constructor') return object.constructor;" },
     { file: 'core/topic-reader-sqlite.mjs', line: 127, expression: "if (key === 'constructor') return object.constructor;" },
   ]);
   const sources = featureSources();

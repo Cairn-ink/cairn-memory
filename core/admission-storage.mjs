@@ -13,7 +13,7 @@ const key = (ns, input) => [ns.ownerId, ns.scope, ns.projectId, input.client, in
 
 /** Content-free job state around the shared admission mutation transaction. */
 export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes, isSuppressed, activeRow, epoch,
-  conflictStorage, stagedEvidence, classificationJournal, episodes, proceduralStorage, assertSources, sourceRoots, memoryAncestry = () => '', privacyMemoryDenied = row => {
+  conflictStorage, stagedEvidence, classificationJournal, episodes, proceduralStorage, withSources, sourceRoots, memoryAncestry = () => '', privacyMemoryDenied = row => {
     if(!cachedContentLayout(db)?.suppressionRevision)return false;
     const namespace={ownerId:row.owner_id,scope:row.scope,projectId:row.project_id};
     return !contentReadSafety(db,{namespace,selectedMemory:row,intent:'history',ref:{type:'memory',namespace,memoryId:row.id,revision:row.revision}}).allowed;
@@ -175,7 +175,8 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
   }
 
   function finishAdmission(ns, input, hooks, deadline) {
-    const result = transaction(db, () => {
+    const admittedBatches = [];
+    const result = transaction(db, () => withSources(ns, input.items.map(item => item.receipts), assertSources => {
       const now = time(ns, input);
       const row = read(ns, input);
       const closed = guard('finishGuard', ns, input, row, now);
@@ -186,7 +187,11 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
         .get(...key(ns, input))) fail('stale_admission');
       hooks?.validate?.();
       const ids = new Set();
-      let suppressedCount = 0;
+      // A wholly forgotten capture finishes without extracting candidates. It
+      // records the base's one suppressed result, including on durable replay.
+      // This hook is private to capture; public admission keeps its item count.
+      // With no extraction, 1 marks at least one suppression without counting items.
+      let suppressedCount = hooks?.suppressedCapture ? 1 : 0;
       const activeItems = [];
       for (const item of input.items) {
         // Timed items use this same instant for validation and created_at, even
@@ -201,9 +206,11 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
         }
         conflictStorage.validateTargets(ns, item.conflictHints);
         activeItems.push({ item, receiptNow });
+        admittedBatches.push(item.receipts);
       }
       const entries = activeItems.map(({ item, receiptNow }) => {
         const result = admitMutation(ns, item, { automatic: true,
+          assertSources,
           ...(hooks?.captureQualifiedDuplicates ? { captureQualifiedDuplicates: hooks.captureQualifiedDuplicates } : {}) }, receiptNow);
         const memoryId = result.memory.id;
         if (item.procedural !== undefined) proceduralStorage.write(result.memory, item.procedural, 'model', item.receipts);
@@ -225,7 +232,7 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
       if (!input.keepActionId) stagedEvidence.mark(ns, input, 'admitted');
       if (hooks?.initialClassification && !input.keepActionId) classificationJournal.insert(ns, input, memories);
       return { duplicate: false, memories, suppressedCount, indexRevision: epoch(ns), ...extra };
-    }, deadline?.check);
+    }, admittedBatches), deadline?.check);
     if (result.closed) fail(result.closed);
     return result;
   }

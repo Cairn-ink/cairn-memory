@@ -79,7 +79,9 @@ test('E7 conversation deletion forgets deduplicated/historical lineage with supp
   ok(f.core.forgetEpisode({namespace:ns,episodeId:r.episodeId,expectedRevision:revision}));
   assert.equal(f.core.get({namespace:ns,memoryId:memory.id}).error.code,'memory_not_found');
   assert.equal(f.core.get({namespace:ns,memoryId:unrelated.id}).ok,true);
-  assert.equal(f.db.prepare('SELECT count(*) n FROM suppressed').get().n,1);
+  assert.equal(f.db.prepare("SELECT count(*) n FROM suppressed WHERE fingerprint NOT LIKE 'rs1:%'").get().n,1);
+  // Two forgotten receipts: 2 identity + 2 distinct address markers = 4.
+  assert.equal(f.db.prepare("SELECT count(*) n FROM suppressed WHERE fingerprint LIKE 'rs1:%'").get().n,4);
   assert.equal(f.db.prepare('SELECT count(*) n FROM episode_sources').get().n,0);
   assert.throws(()=>register(f,input),/capture_evidence_closed/);
   assert.equal(f.core.getEpisode({namespace:ns,episodeId:r.episodeId}).error.code,'episode_not_found');
