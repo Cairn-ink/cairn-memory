@@ -65,9 +65,10 @@ const localDeclaration = sql => {
 };
 // Mirror exactly the objects skipped by this package's IF NOT EXISTS DDL.
 // Keep this list independent of any union of locally supported packages.
-export function hasLocalRawPrivacy(db) {
-  return LOCAL_RAW_PRIVACY_DDL.map(localDeclaration).every(([name, { type }]) =>
-    Boolean(db.prepare('SELECT 1 FROM sqlite_master WHERE type=? AND name=?').get(type, name)));
+export function hasLocalRawPrivacy(db) { // One statement: the whole set is read from a single schema snapshot.
+  const declarations = LOCAL_RAW_PRIVACY_DDL.map(localDeclaration), pairs = declarations.map(() => '(?,?)').join(',');
+  return db.prepare(`SELECT count(*) AS n FROM sqlite_master WHERE (type,name) IN (VALUES ${pairs})`)
+    .get(...declarations.flatMap(([name, { type }]) => [type, name])).n === declarations.length;
 }
 
 // A future unsupported declaration must fail at module load, never destructure null.

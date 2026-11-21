@@ -536,7 +536,8 @@ export function openDatabase(path, options = {}) {
           if (db.prepare('PRAGMA application_id').get().application_id === APPLICATION_ID &&
               db.prepare('PRAGMA user_version').get().user_version === LOCAL_AUTHORITY_SCHEMA_VERSION &&
               !methodPackages && !assets && !roleProfiles && !currentDependencies && contentSafety === undefined) {
-            validateOrdinaryLocalStore(db);
+            // A failed check may be a repair in flight: re-run it under the writer lock.
+            try { validateOrdinaryLocalStore(db); } catch { throw needsWriter; }
             return;
           }
           throw needsWriter;
