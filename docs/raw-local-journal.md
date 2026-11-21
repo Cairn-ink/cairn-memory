@@ -1169,8 +1169,10 @@ session deletion are checked again inside admission publication, including
 unstaged and ordered capture. Raw-off after registration permits Memory work to
 finish. Episode prose publication is also fenced for the new path.
 
-`fenceSession({namespace,client,sessionId})` is a trusted tombstone seam, shared
-by the internal factory and explicit public selection. Existing episode deletion tombstones also
+`fenceSession` is a trusted tombstone seam shared by the internal factory and
+explicit public selection. It accepts `{namespace,client,sessionId}` or
+`{namespace,client,sessionKey}`. A host whose receipt `session_id` is a stored key
+passes it as `sessionKey`. Existing episode deletion tombstones also
 fence registration and publication. This is not `deleteConversation`: full D5
 source cascades and host withdrawal effects remain P3b; P3a's separately selected
 D6 mechanics are described below. The factory must remain unavailable to real capture clients until those

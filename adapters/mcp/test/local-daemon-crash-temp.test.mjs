@@ -51,7 +51,9 @@ for (const mode of ['deterministic', 'real-watch']) test('stamp crash recovery a
   assert.ok(before.length > 0, 'SIGKILL actually left an endpoint temp');
   await serve(w, bootstrap);
   await until(async () => !(await fs.readdir(directory)).some(name => pattern.test(name)), 'new holder finishes its own queued stamp');
-  assert.deepEqual((await fs.readdir(directory)).filter(name => pattern.test(name)), [], 'next acquisition removes every matching crash temp');
+  // The live holder may begin its next stamp write after the wait above; only
+  // the temps the killed holder left must be gone.
+  assert.deepEqual((await fs.readdir(directory)).filter(name => before.includes(name)), [], 'next acquisition removes every matching crash temp');
   t.diagnostic(JSON.stringify({ mode, crashTemps: before.length, exit: candidate.exit }));
 });
 

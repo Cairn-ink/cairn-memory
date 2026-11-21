@@ -583,7 +583,7 @@
     "key:sessionId": 3,
     "key:streamId": 1,
     "literal:eventId": 2,
-    "literal:sessionId": 3,
+    "literal:sessionId": 4,
     "literal:streamId": 1
   },
   "core/raw-journal.mjs": {
@@ -728,7 +728,7 @@
     "key:actionId": 3,
     "key:event_id": 1,
     "key:eventId": 5,
-    "key:id": 5,
+    "key:id": 6,
     "key:invalidRef": 1,
     "key:memoryId": 18,
     "key:ownerId": 9,
