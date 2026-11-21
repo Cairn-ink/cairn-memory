@@ -899,7 +899,6 @@ export function createMemoryCore(input, internal) {
     });
   }
 
-  const fetchedWithheldReceipts = new WeakSet();
   function fetch(input) {
     return invoke(() => {
       runtime.ready();
@@ -926,6 +925,8 @@ export function createMemoryCore(input, internal) {
         includeQualification, contextMode, fetchedWithheldReceipts });
     });
   }
+
+  const fetchedWithheldReceipts = new WeakSet();
 
   function sourceSnapshot(input) {
     return invoke(() => {

@@ -5,7 +5,7 @@ import { registerContentWriteBoundary } from './content-write-context.mjs';
 import { contentScopeEpochGuard, assertContentOutput, contentReceiptCount, assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
 import { receiptEventTimeEnabled, cachedContentLayout, installedContentLayout, checkInstalledContentSafety } from './content-safety-schema.mjs';
 import { writeContentSuppressionInside, suppressReceiptsInside, withContentSuppressionReadInside, requireSuppressionTransaction, allocateContentKey, contentSuppressionReasonInside, memoryCorrectionDenialsInside, contentSuppressionRequestFenceInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, hasContentSuppressionRequestInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
-import { contentReadSafety, memoryContentIdentity, receiptReadSafety, anchoredReadSafety, createContentReadMemo, withheldReceiptIdsInside, withheldStoredReceiptIdsInside } from './content-safety.mjs';
+import { contentReadSafety, memoryContentIdentity, receiptReadSafety, anchoredReadSafety, createContentReadMemo, withheldReceiptIdsInside, withheldStoredReceiptIdsInside, withheldReceiptPageInside } from './content-safety.mjs';
 import { roleProfileOptions } from './role-profile-input.mjs';
 import { createRoleProfileStorage } from './role-profile-storage.mjs';
 import { assetOptions } from './asset-input.mjs';
@@ -707,21 +707,26 @@ export function createMemoryRuntime(input, internal) {
     }, undefined, { deferred: true });
   }
 
-  function readSourceEvidence(row, complete = true) {
-    const original = db.prepare('SELECT * FROM receipts WHERE memory_id = ? ORDER BY created_at, id LIMIT 101').all(row.id);
+  function prepareSourceEvidence(row, complete) {
+    const original = db.prepare('SELECT * FROM receipts WHERE memory_id = ? ORDER BY created_at, id LIMIT CAST(? AS INTEGER)').all(row.id, 101);
     const ns = { ownerId: row.owner_id, scope: row.scope, projectId: row.project_id || null };
     qualificationStorage.inspect(row);
     const full = sourceEvidence(row, original, detailDto(row).receiptCount, receiptKey);
     const memo = createContentReadMemo(db);
     const retained = complete ? original : safeReceipts(ns, original, memo, new Set());
     if (!complete && !retained.length) fail('source_unavailable');
-    const withheld = complete ? new Set() : withheldReceiptIdsInside(db, ns, retained);
-    const receipts = retained.filter(receipt => !withheld.has(receipt.id));
-    const ids = new Set(receipts.map(receipt => receipt.id));
-    const evidence = complete ? full : { ...full, receipts: full.receipts.filter(receipt => ids.has(receipt.id)), receiptCount: retained.length };
-    if (!contentReadSafety(db, { identity, namespace: ns, intent: 'history', memo, ref: { type: 'memory', namespace: ns,
-      memoryId: row.id, revision: row.revision }, receipts }).allowed) fail('revision_conflict');
-    return evidence;
+    return { receiptIds: retained.map(receipt => receipt.id), project(withheld) {
+      const receipts = retained.filter(receipt => !withheld?.has(receipt.id));
+      const ids = new Set(receipts.map(receipt => receipt.id));
+      const evidence = complete ? full : { ...full, receipts: full.receipts.filter(receipt => ids.has(receipt.id)), receiptCount: retained.length };
+      if (!contentReadSafety(db, { identity, namespace: ns, intent: 'history', memo, ref: { type: 'memory', namespace: ns,
+        memoryId: row.id, revision: row.revision }, receipts }).allowed) fail('revision_conflict');
+      return evidence;
+    } };
+  }
+
+  function readSourceEvidence(row) {
+    return prepareSourceEvidence(row, true).project();
   }
 
   function safeMemory(ns, row, intent = 'current', expectedMemoryIdentity, method = 'retrieval') {
@@ -740,7 +745,8 @@ export function createMemoryRuntime(input, internal) {
       const reason = !safeMemory(ns, row, view === 'historical' ? 'history' : 'current', expectedPage && fetchPageIdentities.get(expectedPage), 'fetch') ? 'not_found' : row.revision !== ref.revision ? 'stale' : null;
       if (reason) return { invalidRef: { memoryId: ref.memoryId, reason }, epoch: currentEpoch };
       if (isSourceContext(contextMode)) {
-        const page = { source: readUsageEvidence(ns, row, contextMode), epoch: currentEpoch };
+        const [source] = readUsageEvidencePage([row], [{ namespace: ns }], contextMode);
+        const page = { source, epoch: currentEpoch };
         fetchPageIdentities.set(page, memoryContentIdentity(row));
         return page;
       }
@@ -755,9 +761,37 @@ export function createMemoryRuntime(input, internal) {
     }, undefined, { deferred: true });
   }
 
-  function readUsageEvidence(ns, row, mode) {
-    return { ...readSourceEvidence(row, false), ...(mode === 'rationale-evidence'
-      ? { rationale: rationaleStorage.inspectInside(ns, { memoryId: row.id, revision: row.revision }) } : {}) };
+  function readUsageEvidencePage(rows, candidates, mode, revalidate = false) {
+    const rationaleMode = mode === 'rationale-evidence';
+    const pending = [], markerPages = [];
+    let preparationFailure;
+    // Stage at most the successful prefix. Project it in the original order so
+    // a failed comparison or source safety check still takes precedence.
+    try {
+      for (const [index, row] of rows.entries()) {
+        const { namespace } = candidates[index];
+        const source = prepareSourceEvidence(row, false);
+        const entry = { source };
+        pending.push(entry);
+        markerPages.push([namespace, source.receiptIds]);
+        if (rationaleMode) {
+          entry.rationale = rationaleStorage.prepareInspectionInside(namespace, { memoryId: row.id, revision: row.revision });
+          markerPages.push([namespace, entry.rationale.receiptIds]);
+        }
+      }
+    } catch (error) { preparationFailure = { error }; }
+    const withheld = withheldReceiptPageInside(db, markerPages);
+    const sources = pending.map(({ source, rationale }, index) => {
+      const evidence = source.project(withheld);
+      if (rationaleMode) {
+        if (!rationale) throw preparationFailure.error;
+        evidence.rationale = rationale.project(withheld);
+      }
+      if (revalidate && JSON.stringify(evidence) !== JSON.stringify(candidates[index].sourceEvidence)) fail('revision_conflict');
+      return evidence;
+    });
+    if (preparationFailure) throw preparationFailure.error;
+    return sources;
   }
 
   const sourceSnapshotIdentities = new WeakMap();
@@ -816,17 +850,19 @@ export function createMemoryRuntime(input, internal) {
         if (!safeMemory(namespace, row) || row.revision !== revision) fail('revision_conflict');
         return row;
       });
-      for (const { namespace, indexRevision, suppressionEpoch, receiptProofs } of namespaces) {
-        indexStorage.assertAvailable(namespace);
-        if (epoch(namespace) !== indexRevision || cachedContentLayout(db)?.suppressionRevision && suppressionEpoch !== undefined && suppressionEpoch !== contentSuppressionRequestFenceInside(db, namespace.ownerId)) fail('index_revision_conflict');
-        if (receiptProofs?.length && withheldStoredReceiptIdsInside(db, namespace, receiptProofs).size) fail('revision_conflict');
-      }
+      const markerPages = [];
+      let indexFailure;
+      try {
+        for (const { namespace, indexRevision, suppressionEpoch, receiptProofs } of namespaces) {
+          indexStorage.assertAvailable(namespace);
+          if (epoch(namespace) !== indexRevision || cachedContentLayout(db)?.suppressionRevision && suppressionEpoch !== undefined && suppressionEpoch !== contentSuppressionRequestFenceInside(db, namespace.ownerId)) fail('index_revision_conflict');
+          if (receiptProofs?.length) markerPages.push([namespace, receiptProofs]);
+        }
+      } catch (error) { indexFailure = { error }; }
+      if (withheldReceiptPageInside(db, markerPages).size) fail('revision_conflict');
+      if (indexFailure) throw indexFailure.error;
       if (isSourceContext(contextMode)) {
-        const sources = rows.map((row, index) => {
-          const source = readUsageEvidence(candidates[index].namespace, row, contextMode);
-          if (JSON.stringify(source) !== JSON.stringify(candidates[index].sourceEvidence)) fail('revision_conflict');
-          return source;
-        });
+        const sources = readUsageEvidencePage(rows, candidates, contextMode, true);
         return selected.map(index => sources[index]);
       }
       const qualifications = includeQualification ? rows.map((row, index) => safeQualification(candidates[index].namespace, row)) : null;

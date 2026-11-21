@@ -6,6 +6,7 @@ import { createRawLineageStorage } from './raw-lineage-storage.mjs';
 import { sourceRef } from './private-card-input.mjs';
 import { hasCardLineage, loadCardBodyContributorsInside } from './card-lineage.mjs';
 import { receiptDenialTokens } from './raw-source-roots.mjs';
+import { QUERY_CANDIDATES } from './query-candidates.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
@@ -420,6 +421,33 @@ CROSS JOIN memories m ON m.id=r.memory_id
 CROSS JOIN json_each(receipt_marker_keys(r.receipt_key,r.client,r.session_id,r.event_id,r.role)) k
 CROSS JOIN suppressed s ON s.owner_id=m.owner_id AND s.scope=m.scope AND s.project_id=m.project_id AND s.fingerprint=k.value
 WHERE m.owner_id=? AND m.scope=? AND m.project_id=?`).all(JSON.stringify(ids), ...boundary(ns)).map(row => row.id));
+}
+
+export function withheldReceiptPageInside(db, pages) {
+  const scoped = new Map();
+  for (const [ns, ids] of pages) {
+    const key = JSON.stringify(boundary(ns));
+    if (!scoped.has(key)) scoped.set(key, new Set());
+    for (const id of ids) scoped.get(key).add(id);
+  }
+  const chunks = [];
+  for (const [key, unique] of scoped) {
+    const ns = JSON.parse(key), ids = [...unique];
+    for (let i = 0; i < ids.length; i += QUERY_CANDIDATES.page) {
+      chunks.push([...ns, ids.slice(i, i + QUERY_CANDIDATES.page)]);
+    }
+  }
+  if (!chunks.length) return new Set();
+  if (!db.isTransaction) throw Object.assign(new Error('Receipt projection requires a read snapshot'), { code: 'storage_error' });
+  bindReceiptMarkerKeys(db);
+  return new Set(db.prepare(`SELECT r.id FROM json_each(?) page
+CROSS JOIN json_each(page.value,'$[3]') wanted
+CROSS JOIN receipts r ON r.id=wanted.value
+CROSS JOIN memories m ON m.id=r.memory_id
+CROSS JOIN json_each(receipt_marker_keys(r.receipt_key,r.client,r.session_id,r.event_id,r.role)) k
+CROSS JOIN suppressed s ON s.owner_id=m.owner_id AND s.scope=m.scope AND s.project_id=m.project_id AND s.fingerprint=k.value
+WHERE m.owner_id=json_extract(page.value,'$[0]') AND m.scope=json_extract(page.value,'$[1]')
+  AND m.project_id=json_extract(page.value,'$[2]')`).all(JSON.stringify(chunks)).map(row => row.id));
 }
 
 export function withheldEvidenceInside(db, ns, ids, storedReceiptIds = [], memoryIds = [], perMemory = 17) {

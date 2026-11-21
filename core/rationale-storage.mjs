@@ -4,6 +4,7 @@ import { fail } from './validation.mjs';
 import { withheldStoredReceiptIdsInside } from './content-safety.mjs';
 
 const digest = receipt => createHash('sha256').update(JSON.stringify(receipt)).digest('hex');
+const receiptIds = value => value.sources.flatMap(source => source.receipts.map(receipt => receipt.id));
 const bounded = value => {
   if (JSON.stringify(value).length > 24000) fail('context_item_too_large');
   return value;
@@ -114,7 +115,7 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
     }, deadline?.check);
   }
 
-  function inspectInside(ns, ref, view = 'decision-context') {
+  function prepareInspectionInside(ns, ref, view = 'decision-context') {
       if (!['decision-context', 'incident-proposals'].includes(view)) fail('invalid_input');
       const incident = view === 'incident-proposals';
       const sources = new Map([[ref.memoryId, source(ns, ref)]]);
@@ -146,14 +147,19 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
         edges.push({ from: row.from_id, to: row.to_id, relation: row.relation,
           fromReceipt: row.from_receipt, toReceipt: row.to_receipt, interpretationStatus: 'model-proposed' });
       }
-      return bounded(project(ns, { root: { memoryId: ref.memoryId, revision: ref.revision },
+      const evidence = { root: { memoryId: ref.memoryId, revision: ref.revision },
         status: !incident && edges.some(edge => edge.relation === 'challenges-premise') ? 'reconfirmation-suggested' : 'unassessed',
         sources: [...sources.values()], edges, coverage: incident ? 'root-incident-only' : 'linked-evidence-only',
-        ...(incident ? { view: 'incident-proposals' } : {}), indexRevision: epoch(ns) }));
+        ...(incident ? { view: 'incident-proposals' } : {}), indexRevision: epoch(ns) };
+      return { receiptIds: receiptIds(evidence), project: withheld => bounded(project(ns, evidence, withheld)) };
   }
 
-  function project(ns, value) {
-    const withheld = withheldStoredReceiptIdsInside(db, ns, value.sources.flatMap(source => source.receipts.map(receipt => receipt.id)));
+  function inspectInside(ns, ref, view) {
+    const inspection = prepareInspectionInside(ns, ref, view);
+    return inspection.project(withheldStoredReceiptIdsInside(db, ns, inspection.receiptIds));
+  }
+
+  function project(ns, value, withheld = withheldStoredReceiptIdsInside(db, ns, receiptIds(value))) {
     if (!withheld.size) return value;
     const sources = value.sources.map(source => {
       const receipts = source.receipts.filter(receipt => !withheld.has(receipt.id));
@@ -166,5 +172,5 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
   }
 
   return { snapshot, commit, snapshotFilingEdges, restoreFilingEdges,
-    inspectInside, inspect: (ns, ref, view) => transaction(db, () => inspectInside(ns, ref, view)) };
+    prepareInspectionInside, inspectInside, inspect: (ns, ref, view) => transaction(db, () => inspectInside(ns, ref, view)) };
 }
