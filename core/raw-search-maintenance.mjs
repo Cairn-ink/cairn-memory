@@ -303,7 +303,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
             cleanupSkip=performance.now()-ringStarted>ringBudget;
           }
         }
-        cleanupIdle=nextIdle;cleanupVersion=nextVersion;cleanupFullLap=nextFullLap;
+        // The live ring state is published below, only after this turn's write commits.
         checkpoint.cleanup=ring;
         const cleanupCheckpoint=structuredClone(checkpoint);
         if(!fence&&!checkpoint.fenceRetry)checkpoint.fenceRetry=64;
@@ -397,6 +397,8 @@ export function createRawSearchMaintenance(storage,authority,options) {
             progress.error=quotaBlocked?'quota_exhausted':null;
           }
         }
+        // A failed commit throws above and leaves the live ring state, so the next turn retries the same removal.
+        cleanupIdle=nextIdle;cleanupVersion=nextVersion;cleanupFullLap=nextFullLap;
       },maxMs,upkeepSignal);
       cancelled(upkeepSignal);
 

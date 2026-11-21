@@ -21,6 +21,10 @@ function exclude(f, { conversationId, messageId }, start, end) {
   f.db.prepare('INSERT INTO raw_source_exclusions VALUES(?,?,?,?,1)').run(conversationId, messageId, start, end);
 }
 
+function openSidecar(directory) {
+  return new DatabaseSync(join(directory, readdirSync(directory).find(name => name.endsWith('.sqlite'))), { readOnly: true });
+}
+
 async function ringFixture(t) {
   installRawSearchTestClock(t);
   const f = sourceFixture(t);
@@ -76,7 +80,7 @@ async function ringFixture(t) {
   const word = row => captures.find(capture => capture.conversationId === row.source.ref.conversationId).text;
   for (const row of rows) assert.equal((await search.search({ query: word(row) })).candidates.length, 1);
 
-  return { events, rows, reopen, get storage() { return storage; },
+  return { events, rows, reopen, directory: search.directory, get storage() { return storage; },
     stop: () => maintenance.close(),
     onTail(hook) { beforeTail = hook; },
     deny(row) { const { span, ...ref } = row.source.ref; exclude(f, ref, span.start, span.end); },
@@ -93,9 +97,11 @@ async function ringFixture(t) {
       assert.equal(result.noProgress, 0);
       return result;
     },
-    async busyOnce(stop = () => {}) {
+    async busyOnce(stop = () => {}, successfulTails = 0) {
+      let calls = 0;
       let faults = 0;
       beforeTail = () => {
+        if (calls++ < successfulTails) return;
         faults++;
         beforeTail = () => {};
         stop();
@@ -144,6 +150,37 @@ test('lap end retries a re-queued denial on the next tick after tail BUSY', asyn
   assert.equal(await ring.erased(denied, 100), 1);
 });
 
+test('lap end retries the rolled-back denial after native COMMIT BUSY', async t => {
+  const ring = await ringFixture(t);
+  const denied = await denyMidLap(ring);
+  const before = ring.storage.head();
+  const reader = openSidecar(ring.directory);
+  const exec = DatabaseSync.prototype.exec;
+  const failures = [];
+  try {
+    reader.exec('BEGIN');
+    reader.prepare('SELECT sequence FROM header').get();
+    const observed = t.mock.method(DatabaseSync.prototype, 'exec', function (sql) {
+      try { return exec.call(this, sql); }
+      catch (error) {
+        failures.push([sql, error.errcode]);
+        throw error;
+      }
+    });
+    try {
+      const result = await ring.tick(100);
+      assert.equal(Object.hasOwn(result, 'checkpoint'), false, 'BUSY discards the turn');
+    } finally { observed.mock.restore(); }
+  } finally { reader.close(); }
+  assert.deepEqual(failures, [['COMMIT', 5]]);
+  assert.equal(ring.events.at(-1), 'tail');
+  assert.ok(ring.events.some(event => event[0] === 'disposition' && event[2] === 'remove'));
+  assert.deepEqual(ring.storage.head(), before, 'rollback preserves the signed cursor');
+  assert.equal((await ring.storage.lookup([denied.key])).length, 1);
+  await ring.hidden(denied);
+  assert.equal(await ring.erased(denied, 100), 1);
+});
+
 for (const boundary of ['start', 're-arm']) test(`${boundary} retries tail before scanning a stale lap boundary`, async t => {
   const ring = await ringFixture(t);
   const [first, last] = ring.rows;
@@ -170,6 +207,29 @@ for (const boundary of ['start', 're-arm']) test(`${boundary} retries tail befor
   assert.deepEqual(ring.events.slice(0, 2), ['tail', ['snapshot', 0, 16]]);
 });
 
+test('re-arm retries the refreshed horizon when the same turn fails at lap end', async t => {
+  const ring = await ringFixture(t);
+  const [first, last] = ring.rows;
+  await ring.storage.invalidate([last.segment]);
+  await ring.tick();
+  await ring.tick();
+  assert.deepEqual(ring.events, [], 'the stable completed ring is idle');
+  const before = ring.storage.head();
+  assert.equal(before.checkpoint.cleanup.throughSegment, first.segment);
+  const segment = await ring.storage.publish(await ring.storage.stage(last), null);
+  assert.ok(segment > before.checkpoint.cleanup.throughSegment);
+  ring.deny(last);
+  const published = ring.storage.head();
+  await ring.busyOnce(undefined, 1);
+  assert.deepEqual(ring.events, ['tail', ['snapshot', 0, 16],
+    ['disposition', first.source.ref.conversationId, 'allowed'],
+    ['disposition', last.source.ref.conversationId, 'remove'], 'tail']);
+  assert.deepEqual(ring.storage.head(), published);
+  assert.equal((await ring.storage.lookup([last.key])).length, 1);
+  await ring.hidden(last);
+  assert.equal(await ring.erased(last, 100), 1, 'the retry must scan beyond the old horizon');
+});
+
 test('reopening the owner re-derives the denial queued before the failed tail', async t => {
   const ring = await ringFixture(t);
   const denied = await denyMidLap(ring);
@@ -187,11 +247,9 @@ test('reopening the owner re-derives the denial queued before the failed tail', 
   await ring.erased(denied);
 });
 
-test('detach and reattach with pending removal erases it on scheduled upkeep alone', async t => {
+function scheduledFixture(t) {
   installRawSearchTestClock(t);
   const f = sourceFixture(t);
-  const [word] = words;
-  const source = await savedSource(f, word);
   let pending;
   const upkeep = createLocalRawSearchUpkeepControl({
     setTimer(callback, delay) {
@@ -210,34 +268,93 @@ test('detach and reattach with pending removal erases it on scheduled upkeep alo
     await rawSearchTestWait(tickMs);
     await callback();
   }
+  function openIndex() {
+    const root = f.path + '.raw-search';
+    const [owner] = readdirSync(root);
+    const db = openSidecar(join(root, owner));
+    f.workspace.defer(() => db.close());
+    return db;
+  }
+  return { f, upkeep, search, tick, openIndex, get pending() { return pending; } };
+}
+
+test('detach and reattach with pending removal erases it on scheduled upkeep alone', async t => {
+  const scheduled = scheduledFixture(t);
+  const { f, upkeep, search, tick, openIndex } = scheduled;
+  const [word] = words;
+  const source = await savedSource(f, word);
   upkeep.resume();
   await tick(0);
   assert.equal((await search.search({ query: word })).candidates.length, 1);
   // Drain the recent lane and let the ring settle before detaching.
   for (let i = 0; i < 4; i++) await tick(tickMs);
 
-  const root = f.path + '.raw-search';
-  const [owner] = readdirSync(root);
-  const directory = join(root, owner);
-  const file = join(directory, readdirSync(directory).find(name => name.endsWith('.sqlite')));
-  const db = new DatabaseSync(file, { readOnly: true });
-  f.workspace.defer(() => db.close());
+  const db = openIndex();
   const count = () => db.prepare('SELECT count(*) AS n FROM segments WHERE published=1').get().n;
   assert.equal(count(), 1);
 
   exclude(f, source, 0, word.length);
-  const stale = pending;
+  const stale = scheduled.pending;
   upkeep.suspend();
-  assert.equal(pending, undefined);
+  assert.equal(scheduled.pending, undefined);
   await rawSearchTestWait(tickMs * cleanupTicks);
   await stale.callback();
-  assert.equal(pending, undefined);
+  assert.equal(scheduled.pending, undefined);
   assert.equal(count(), 1, 'detached upkeep leaves the index row on disk');
   assert.deepEqual((await search.search({ query: word })).candidates, []);
   upkeep.resume();
   for (let i = 0; i < cleanupTicks && count(); i++) await tick(i === 0 ? 0 : tickMs);
   assert.equal(count(), 0, `reattachment erases the row within ${cleanupTicks} scheduled ticks`);
   assert.deepEqual((await search.search({ query: word })).candidates, []);
+});
+
+test('reattachment erases a denial on the last published row within the per-size bound', async t => {
+  const { f, upkeep, search, tick, openIndex } = scheduledFixture(t);
+  const publishedRows = 128;
+  const sources = new Map();
+  for (let i = 0; i < publishedRows; i++) {
+    const word = 'ringtailbatch' + String(i).padStart(3, '0');
+    const source = await savedSource(f, word, { sessionId: word });
+    sources.set(JSON.stringify([source.conversationId, source.messageId]), source);
+  }
+  upkeep.resume();
+  await tick(0);
+  const db = openIndex();
+  const head = () => db.prepare('SELECT sequence, checkpoint FROM header').get();
+  const count = () => db.prepare('SELECT count(*) AS n FROM segments WHERE published=1').get().n;
+  for (let turn = 0; turn < 4 * publishedRows && !JSON.parse(head().checkpoint).coverageComplete; turn++) await tick(tickMs);
+  assert.equal(JSON.parse(head().checkpoint).coverageComplete, true);
+  assert.equal(count(), publishedRows);
+  // Let the one-row ring finish any in-flight lap and verify the owner is idle.
+  for (let turn = 0; turn < publishedRows; turn++) await tick(tickMs);
+  const idle = head();
+  for (let turn = 0; turn < 4; turn++) await tick(tickMs);
+  assert.deepEqual(head(), idle);
+
+  const last = db.prepare('SELECT id, segment_key FROM segments WHERE published=1 ORDER BY id DESC LIMIT 1').get();
+  // The index key is [conversationId, messageId, partIndex].
+  const source = sources.get(JSON.stringify(JSON.parse(last.segment_key).slice(0, 2)));
+  assert.ok(source);
+  const present = () => Boolean(db.prepare('SELECT 1 FROM segments WHERE id=?').get(last.id));
+  const hidden = async () => {
+    for (const intent of ['current', 'history'])
+      assert.deepEqual((await search.search({ query: source.text, intent })).candidates, []);
+  };
+  assert.equal((await search.search({ query: source.text })).candidates.length, 1);
+  exclude(f, source, 0, source.text.length);
+  upkeep.suspend();
+  await hidden();
+  assert.equal(present(), true, 'the last row remains pending at detach');
+  upkeep.resume();
+  const bound = Math.ceil(publishedRows / 16) + cleanupTicks;
+  let turns = 0;
+  while (turns < bound && present()) {
+    await tick(turns++ === 0 ? 0 : tickMs);
+    await hidden();
+  }
+  assert.equal(present(), false, `last of ${publishedRows} rows must be erased within ${bound} upkeep turns`);
+  assert.equal(count(), publishedRows - 1);
+  t.diagnostic(`Erased the last of ${publishedRows} rows after ${turns} upkeep turns, bound ${bound}`);
 });
 
 test('ordinary two-row lap makes the same steps and then idles', async t => {
