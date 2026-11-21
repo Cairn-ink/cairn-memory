@@ -375,6 +375,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
         // Also close callback races when a full inventory fence is unavailable
         // at the work ceiling. No callback follows this exact batch snapshot.
         if(staged.length)authority.validate([{sources:staged.map(row=>row.source),intent:'history',access,value:null}]);
+        let ringSaved=true;
         if(staged.length||remove.length||!same(checkpoint,state.checkpoint)) {
           try {
             cancelled(upkeepSignal);
@@ -394,11 +395,12 @@ export function createRawSearchMaintenance(storage,authority,options) {
             quotaBlocked=true;pending=null;eligibleWork=false;
             if(remove.length){cancelled(upkeepSignal);const result=await storage.commitBatch({remove:[...new Set(remove)],checkpoint:cleanupCheckpoint});
               commit();progress.removed+=result.removed;if(result.removed){quotaBlocked=false;changed();}}
+            else ringSaved=false; // Nothing was written: the ring cursor stays at its saved position.
             progress.error=quotaBlocked?'quota_exhausted':null;
           }
         }
-        // A failed commit throws above and leaves the live ring state, so the next turn retries the same removal.
-        cleanupIdle=nextIdle;cleanupVersion=nextVersion;cleanupFullLap=nextFullLap;
+        // A failed commit throws above or clears ringSaved and leaves the live ring state, so the next turn retries.
+        if(ringSaved){cleanupIdle=nextIdle;cleanupVersion=nextVersion;cleanupFullLap=nextFullLap;}
       },maxMs,upkeepSignal);
       cancelled(upkeepSignal);
 

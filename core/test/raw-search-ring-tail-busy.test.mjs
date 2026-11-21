@@ -81,6 +81,7 @@ async function ringFixture(t) {
   for (const row of rows) assert.equal((await search.search({ query: word(row) })).candidates.length, 1);
 
   return { events, rows, reopen, directory: search.directory, get storage() { return storage; },
+    get maintenance() { return maintenance; },
     stop: () => maintenance.close(),
     onTail(hook) { beforeTail = hook; },
     deny(row) { const { span, ...ref } = row.source.ref; exclude(f, ref, span.start, span.end); },
@@ -148,6 +149,38 @@ test('lap end retries a re-queued denial on the next tick after tail BUSY', asyn
   assert.equal((await ring.storage.lookup([denied.key])).length, 1);
   await ring.hidden(denied);
   assert.equal(await ring.erased(denied, 100), 1);
+});
+
+test('a quota failure on the lap-end cursor reset keeps the ring armed', async t => {
+  const ring = await ringFixture(t);
+  const [first, last] = ring.rows;
+  await ring.tick();
+  assert.deepEqual(ring.events, ['tail', ['snapshot', 0, 1], ['disposition', first.source.ref.conversationId, 'allowed']]);
+  const saved = ring.storage.head();
+  assert.equal(saved.checkpoint.cleanup.afterSegment, first.segment);
+  const exec = DatabaseSync.prototype.exec;
+  let full = 0;
+  const writing = new WeakSet();
+  const observed = t.mock.method(DatabaseSync.prototype, 'exec', function (sql) {
+    // Only the sidecar write transaction fails; canonical reads use deferred BEGIN.
+    if (sql === 'BEGIN IMMEDIATE') writing.add(this);
+    if (sql === 'COMMIT' && writing.has(this) && !full++) throw Object.assign(new Error('database or disk is full'), { code: 'ERR_SQLITE_ERROR', errcode: 13 });
+    return exec.call(this, sql);
+  });
+  try {
+    ring.events.length = 0;
+    await rawSearchTestWait(tickMs);
+    const result = await ring.maintenance.maintain({ maxItems: 16, maxMs: 25 }, guard => guard?.());
+    assert.equal(result.error, 'quota_exhausted');
+  } finally { observed.mock.restore(); }
+  assert.equal(full, 1, 'the lap-end write hit the quota failure');
+  assert.deepEqual(ring.events, [['snapshot', first.segment, 1], ['disposition', last.source.ref.conversationId, 'allowed'], 'tail']);
+  assert.deepEqual(ring.storage.head(), saved, 'the cursor reset was not written');
+  ring.events.length = 0;
+  await rawSearchTestWait(tickMs);
+  await ring.maintenance.maintain({ maxItems: 16, maxMs: 25 }, guard => guard?.());
+  assert.ok(ring.events.some(event => Array.isArray(event) && event[0] === 'snapshot'), 'the ring was not left idle');
+  assert.equal(ring.storage.head().checkpoint.cleanup.afterSegment, 0, 'the next turn completes the lap and writes the reset');
 });
 
 test('lap end retries the rolled-back denial after native COMMIT BUSY', async t => {
