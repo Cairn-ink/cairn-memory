@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { join, resolve } from 'node:path';
 import { ownData } from '../../../core/local-authority-input.mjs';
 import { normalizedPath } from '../../../adapters/local/configuration.mjs';
-import { createLocalRawWorker } from './local-worker.mjs';
+import { createLocalRawWorker, trackWorkerStartPermission } from './local-worker.mjs';
 import { reasons as workerReasons } from './local-worker-input.mjs';
 import { readHostProfile, readHostConfiguration, hostRuntime, hostSelection, exact, overlaps, canonicalHostPath, fail } from './local-host-profile.mjs';
 import { checkHostPermission } from './local-host-permission.mjs';
@@ -24,12 +24,21 @@ const dependencies = new AsyncLocalStorage();
 // Trusted-code-only dependency scope, absent from every profile and CLI DTO.
 // Installed evidence uses real worker/transport/core and synthetic ancestry.
 export const withLocalHostDependencies = (value, work) => dependencies.run(value,work);
+const startChecks = new WeakMap();
+// Only the hook's own options object carries this observation. Keep it out of
+// the validated call options, host result and CLI.
+export function trackHostStartChecks(options) {
+  const observation = { stage:null };
+  startChecks.set(options,observation);
+  return observation;
+}
 const runtimeRoot = resolve(fileURLToPath(new URL('../../../',import.meta.url)));
 const hostReasons = ['prepared','preparation_required','preparation_invalid','profile_invalid','config_invalid','store_invalid',
   'authority_changed','capture_disabled','runtime_unavailable','host_unavailable','host_unqualified','source_unqualified',
   'invalid_input','cancelled','work_limit','unexpected_failure','rearm_refused','rearm_invalid'];
 const aborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype,'aborted').get;
 const add = EventTarget.prototype.addEventListener, remove = EventTarget.prototype.removeEventListener;
+const stoppedReason = reason => reason === 'work_limit' || reason === 'cancelled';
 export function localHostResult(status, reason = null, worker = null) {
   if (!['ready','progress','waiting','blocked','busy'].includes(status) ||
       reason !== null && !hostReasons.includes(reason) && !workerReasons.includes(reason)) fail('unexpected_failure');
@@ -48,8 +57,10 @@ function operation(value, deps) {
   if (signal !== undefined) add.call(signal,'abort',cancel,{ once:true });
   if (cancelled) controller.abort();
   const timer = setTimeout(() => controller.abort(),Math.max(0,end-performance.now()-2000));
-  return { signal:controller.signal,remaining:() => Math.max(0,Math.floor(end-performance.now())),check() {
-    if (controller.signal.aborted || performance.now() >= end-2000) fail(cancelled ? 'cancelled' : 'work_limit');
+  const stopReason = () => controller.signal.aborted || performance.now() >= end-2000 ? (cancelled ? 'cancelled' : 'work_limit') : null;
+  return { signal:controller.signal,remaining:() => Math.max(0,Math.floor(end-performance.now())),stopReason,check() {
+    const reason = stopReason();
+    if (reason) fail(reason);
   }, close() { clearTimeout(timer); if (signal !== undefined) remove.call(signal,'abort',cancel); } };
 }
 
@@ -66,7 +77,9 @@ export function createLocalRawHost(value) {
   catch { fail('invalid_input'); }
   const profilePath = input.profilePath;
   async function execute(action, selection, callOptions = {}) {
-    let op;
+    let op, stage = null;
+    const startCheck = startChecks.get(callOptions);
+    if (startCheck) startCheck.stage = null;
     const deps = dependencies.getStore() ?? {};
     try {
       op = operation(callOptions,deps); op.check();
@@ -77,7 +90,9 @@ export function createLocalRawHost(value) {
       const profile = await readHostProfile(profilePath), config = await readHostConfiguration(profile); op.check();
       if (profile.installation.client === 'codex' && selected?.start === 'beginning') fail('invalid_input');
       await checkHostRearm(profile,config); op.check();
+      stage = action === 'status' ? 'status_permission' : 'host_permission';
       await checkHostPermission(config); op.check();
+      stage = null;
       if (action === 'prepare') {
         await prepareHost(profile,config,() => op.check()); op.check();
         return localHostResult('ready','prepared');
@@ -94,12 +109,14 @@ export function createLocalRawHost(value) {
       if (action === 'markStart') { privatePaths.unshift(selectedPath); selectedPath = selected.sourcePath; }
       if (privatePaths.some(path => overlaps(selectedPath,path))) fail('invalid_input');
       async function freshPermission() {
+        stage = 'fresh_permission';
         const finalProfile = await readHostProfile(profilePath);
         if (finalProfile.profileDigest !== profile.profileDigest) fail('preparation_invalid');
         const finalConfig = await readHostConfiguration(finalProfile);
         await checkHostRearm(finalProfile,finalConfig);
         if (await inspectPreparation(finalProfile,finalConfig) !== 'ready') fail('preparation_invalid');
         await checkHostPermission(finalConfig); op.check();
+        stage = null;
       }
       await checkLocalSession(profile,config,selected); op.check();
       let formatAuthority = null;
@@ -131,20 +148,28 @@ export function createLocalRawHost(value) {
       }
       const worker = createLocalRawWorker({ stateRoot:profile.stateRoot,identityKeyPath:profile.identityKeyPath,
         nodeExecutable:process.execPath,runtimeRoot,configPath:profile.configPath,expectedAuthority:config.authority,home:profile.home });
+      const workerOptions = { signal:op.signal };
+      const workerCheck = startCheck && trackWorkerStartPermission(workerOptions,op.stopReason);
       const result = await worker[action]({ ...selected,pluginRoot:profile.installation.client === 'claude-code' ? profile.installation.pluginRoot : null,
-        formatAuthority },{ signal:op.signal });
+        formatAuthority },workerOptions);
       // The outer deadline includes preflight. Preserve the worker's exact
       // acknowledgement/progress even when cancellation won the host budget.
+      const beforeCheckpoint = workerCheck?.stopped ? op.stopReason() : null;
       await deps.checkpoint?.('after_dispatch');
       if (!['ready','progress'].includes(result.status)) {
         try { op.check(); }
-        catch (stopped) { return localHostResult('blocked',stopped.reason,result); }
+        catch (stopped) {
+          if (workerCheck?.stopped && stopped.reason === beforeCheckpoint) startCheck.stage = 'worker_permission';
+          return localHostResult('blocked',stopped.reason,result);
+        }
       }
+      if (workerCheck?.stopped && stoppedReason(result.reason)) startCheck.stage = 'worker_permission';
       return localHostResult(result.status,result.reason,result);
     } catch (error) {
       let reason = error.message === 'state_busy' ? 'state_busy'
         : hostReasons.includes(error.reason) || workerReasons.includes(error.reason) ? error.reason : 'unexpected_failure';
       try { op?.check(); } catch (stopped) { reason = stopped.reason; }
+      if (startCheck && stoppedReason(reason)) startCheck.stage = stage;
       if (action === 'rearm' || action === 'rearmStatus') return rearmResult(action === 'rearmStatus',reason === 'state_busy' ? 'busy':'blocked',reason);
       return localHostResult(reason === 'state_busy' ? 'busy' : 'blocked',reason);
     } finally { op?.close(); }

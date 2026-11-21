@@ -32,6 +32,15 @@ export async function readSessionStartAttempt(identity,context) {
       attempt.source !== sessionStartSource(identity,context) || !['fresh','present'].includes(attempt.kind)) return undefined;
   return attempt.kind;
 }
+export async function sweepSessionStartAttempt(identity,context) {
+  // Cursor validation and the session lock belong to the caller. A concurrent
+  // start attempt uses exclusive creation and cannot replace a record we read.
+  try {
+    if (await readSessionStartAttempt(identity,context)) await unlink(location(identity));
+  } catch {
+    // Optional cleanup must not change the hook outcome or cursor.
+  }
+}
 export async function clearSessionStarts(stateRoot) {
   const directory=join(stateRoot,'starts');
   if (!await checkedPath(directory,{directory:true,missing:true})) return;

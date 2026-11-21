@@ -1,4 +1,4 @@
-import { markSessionStart,hasSessionStart,readSessionStartAttempt } from './local-session-start.mjs';
+import { markSessionStart,hasSessionStart,readSessionStartAttempt,sweepSessionStartAttempt } from './local-session-start.mjs';
 import { readConfigurationSnapshot } from '../../../adapters/local/configuration.mjs';
 import { localAuthorityInput } from '../../../core/local-authority-input.mjs';
 import { stateLock } from '../state-lock.mjs';
@@ -7,6 +7,13 @@ import { loadIdentity, bindRoot, readSession, initializeSession } from './local-
 import { runProgress } from './local-worker-progress.mjs';
 import { sourceBudget, openWorkerSource, qualifySource, sourceSize, completeBoundary, cursorSource, verifyCursorSource, sourceReason } from './local-worker-source.mjs';
 import { checkHostPermission } from './local-host-permission.mjs';
+
+const startPermissions = new WeakMap();
+export function trackWorkerStartPermission(options,hostStopReason) {
+  const observation = { hostStopReason,stopped:false };
+  startPermissions.set(options,observation);
+  return observation;
+}
 
 export function createLocalRawWorker(value) {
   const options = workerOptions(value);
@@ -22,16 +29,31 @@ export function createLocalRawWorker(value) {
       if (JSON.stringify(localAuthorityInput(config.authority)) !== JSON.stringify(options.authority)) fault('authority_changed');
       identity = await loadIdentity(options,context,operation);
       await bindRoot(options,identity,initialize,operation);
+      const startPermission = startPermissions.get(callOptions);
+      const stopped = () => {
+        if (startPermission.hostStopReason()) return true;
+        try { operation.check(); return false; } catch { return true; }
+      };
       return await stateLock(identity.lockPath,async () => {
+        let observePermission = false;
         try {
           config = (await readConfigurationSnapshot(options.transport.configPath)).config;
           if (JSON.stringify(localAuthorityInput(config.authority)) !== JSON.stringify(options.authority)) fault('authority_changed');
+          // A stop that happened while acquiring the lock or rereading config
+          // belongs to that earlier work, even if the next check sees it.
+          observePermission = startPermission && !stopped();
           await checkHostPermission(config);
         } catch (error) {
+          if (observePermission) startPermission.stopped = ['cancelled','work_limit'].includes(error.reason) || stopped();
           if (['cancelled','work_limit','authority_changed'].includes(error.reason)) throw error;
           fault(error.reason === 'capture_disabled' ? 'authority_changed':error.reason === 'store_invalid' || error.code === 'invalid_local_capture_configuration' ? 'config_invalid':'state_invalid');
         }
-        operation.check(); cursor = await readSession(identity,options.authority.client);
+        try { operation.check(); }
+        catch (error) {
+          if (observePermission) startPermission.stopped = true;
+          throw error;
+        }
+        cursor = await readSession(identity,options.authority.client);
         if (mark) {
           if (options.authority.client !== 'claude-code') fault('invalid_input');
           if (!cursor) await markSessionStart(identity,context);
@@ -57,7 +79,10 @@ export function createLocalRawWorker(value) {
             await verifyCursorSource(identity,opened,cursor); operation.check();
             if (initialize) return cursor.blockedReason ? summary('blocked',cursor.blockedReason,cursor)
               : summary('ready',cursor.selection.awaitingUserBoundary ? 'awaiting_user_boundary' : null,cursor);
-            return await runProgress({ options,identity,context,opened,cursor,operation,bytes });
+            try { return await runProgress({ options,identity,context,opened,cursor,operation,bytes }); }
+            finally {
+              if (options.authority.client === 'claude-code') await sweepSessionStartAttempt(identity,context);
+            }
           }
           const size = await sourceSize(opened);
           if (context.start === 'eof' && !(await completeBoundary(opened,size))) return summary('waiting','partial_record');
