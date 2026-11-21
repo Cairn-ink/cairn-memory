@@ -222,15 +222,12 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
     if (input.parentRef) cardTopicInside(ns, input.parentRef, true);
     const parent = input.parentRef && topic(ns, input.parentRef.mocId);
     const marks = boundary(ns);
-    const eligibleMember = cachedContentLayout(db)?.suppressionRevision ? `AND NOT EXISTS (
-      SELECT 1 FROM private_cards c WHERE c.id=r.card_id AND c.owner_id=t.owner_id AND c.scope=t.scope
-        AND c.project_id=t.project_id AND c.state IN ('deleted','cancelled'))` : '';
     // Physical rows are paged before canonical validation, so stale records also
     // consume work. Every candidate kind has a stable key and no copied body.
     const rows = db.prepare(`SELECT * FROM (
       SELECT 'topic' kind,id a,'' b,NULL card_revision,NULL body_revision FROM card_mocs WHERE ${where}
       UNION ALL SELECT 'edge',e.parent_id,e.child_id,NULL,NULL FROM card_moc_edges e JOIN card_mocs t ON t.id=e.parent_id WHERE t.owner_id=? AND t.scope=? AND t.project_id=?
-      UNION ALL SELECT 'member',r.moc_id,r.card_id,r.card_revision,r.body_revision FROM card_moc_refs r JOIN card_mocs t ON t.id=r.moc_id WHERE t.owner_id=? AND t.scope=? AND t.project_id=? ${eligibleMember}
+      UNION ALL SELECT 'member',r.moc_id,r.card_id,r.card_revision,r.body_revision FROM card_moc_refs r JOIN card_mocs t ON t.id=r.moc_id WHERE t.owner_id=? AND t.scope=? AND t.project_id=?
       UNION ALL SELECT 'unfiled',id,'',revision,body_revision FROM private_cards WHERE ${where} AND state='confirmed'
     ) ORDER BY CASE kind WHEN 'topic' THEN 0 WHEN 'edge' THEN 1 WHEN 'member' THEN 2 ELSE 3 END,a,b
       LIMIT 257 OFFSET ?`).all(...marks, ...marks, ...marks, ...marks, offset);
@@ -255,7 +252,12 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
       if (cachedContentLayout(db)?.suppressionRevision && ['member','unfiled'].includes(row.kind)) {
         const id=row.kind==='member'?row.b:row.a;
         if(!contentReadSafety(db,{identity,namespace:ns,method:'getCard',memo:safetyMemo,
-          ref:{type:'card',namespace:ns,cardId:id,revision:row.card_revision,bodyRevision:row.body_revision}}).allowed)fail('evidence_unavailable');
+          ref:{type:'card',namespace:ns,cardId:id,revision:row.card_revision,bodyRevision:row.body_revision}}).allowed) {
+          // Retained membership rows still consume their physical page offset.
+          if (row.kind === 'member' && db.prepare(`SELECT 1 FROM private_cards WHERE ${where} AND id=?
+            AND state IN ('deleted','cancelled')`).get(...marks, id)) continue;
+          fail('evidence_unavailable');
+        }
       }
       scanned++;
       if (row.kind === 'topic') {
