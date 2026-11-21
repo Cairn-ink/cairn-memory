@@ -18,20 +18,9 @@ export async function hasSessionStart(identity,context) {
   const text = await privateRead(location(identity),{missing:true});
   return text !== undefined && text === binding(identity,context);
 }
-const isAttempt = text => {
-  try {
-    const attempt = json(text);
-    return Object.keys(attempt).length === 4 && attempt.version === attemptVersion &&
-      typeof attempt.authority === 'string' && typeof attempt.source === 'string' && ['fresh','present'].includes(attempt.kind);
-  } catch { return false; }
-};
 export async function writeSessionStartAttempt(identity,source,kind) {
-  // A newer attempt atomically replaces an earlier attempt for this session
-  // (temporary file + rename). A start marker or an unrecognized file stays.
-  const path = location(identity), existing = await privateRead(path,{missing:true});
-  if (existing !== undefined && !isAttempt(existing)) return;
-  await privateWrite(path,JSON.stringify({ version:attemptVersion,authority:identity.authorityCommitment,source,kind }),
-    { exclusive:existing === undefined });
+  await privateWrite(location(identity),JSON.stringify({ version:attemptVersion,authority:identity.authorityCommitment,source,kind }),
+    { exclusive:true });
 }
 export async function readSessionStartAttempt(identity,context) {
   const text = await privateRead(location(identity),{missing:true});

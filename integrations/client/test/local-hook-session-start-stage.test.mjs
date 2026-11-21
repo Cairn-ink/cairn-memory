@@ -524,32 +524,8 @@ async function busyStart(f,count = 1) {
     stateLock(identity.lockPath,() => Promise.all(Array.from({ length:count },() => runLocalRawHook(hookInput(f))))));
 }
 
-test('8. a new SessionStart attempt replaces a stale attempt from an earlier authority',async t => {
+test('9. concurrent SessionStarts leave one complete attempt',async t => {
   const f = await lazyFixture(t,'claude-code');
-  unlinkSync(f.sourcePath);
-  assert.deepEqual(await stopStart(t,f,{ check:5,reason:'cancelled' }),hookOutcome('blocked','cancelled'));
-  const path = startFile(f), stale = readFileSync(path,'utf8');
-  assert.equal(JSON.parse(stale).kind,'fresh');
-  setPause(f,true); setPause(f,false);
-  await activateHostAuthority(profilePath(f),() => {});
-  createTranscript(f);
-  assert.deepEqual(await busyStart(f),[hookOutcome('busy','state_busy')]);
-  assert.deepEqual(startFiles(f),[path],'no temporary file is left');
-  const replaced = JSON.parse(readFileSync(path));
-  assert.equal(replaced.version,attemptVersion);
-  assert.notEqual(replaced.authority,JSON.parse(stale).authority,'the new SessionStart attempt was recorded');
-  assert.equal(replaced.kind,'present');
-  f.append('Synthetic after the replaced attempt');
-  assert.notDeepEqual(await f.hook('Stop'),stateInvalid,'Stop recovers the session from the new attempt');
-});
-
-for (const earlier of [false,true]) test(`9. concurrent SessionStarts leave one complete attempt (earlier attempt = ${earlier})`,async t => {
-  const f = await lazyFixture(t,'claude-code');
-  if (earlier) {
-    unlinkSync(f.sourcePath);
-    assert.deepEqual(await stopStart(t,f,{ check:5,reason:'cancelled' }),hookOutcome('blocked','cancelled'));
-    createTranscript(f);
-  }
   const outcomes = await busyStart(f,4);
   assert.deepEqual(outcomes,Array(4).fill(hookOutcome('busy','state_busy')));
   const files = startFiles(f);
