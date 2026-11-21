@@ -168,26 +168,26 @@ export function createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRea
         rows = rows.slice(0, filter.limit + 1);
       }
       if (operation === 'listEpisodes') {
-        const delivered = [];
-        let episodeRows = rows, budget = projected.budget;
-        for (;;) {
-          const validated = episodeRows.map(row => {
-            assertEpisodeRead?.(ns, row, budget);
-            const item = episodeMetadata(ns, episodeReadRow(row));
-            return { row, item, key: { time: filter.timeBasis === 'event' ? item.eventEnd : item.firstReceivedAt, id: row.id } };
-          });
-          const withheld = new Set(withheldEpisodeSourcesInside(db, ns, episodeRows.map(row => row.id)).map(row => row.episode_id));
-          for (const { row, item, key } of validated) {
-            if (!withheld.has(row.id)) delivered.push({ item, key });
-            else if (filter.timeBasis === 'receipt') delivered.push({ item: episodeMetadata(ns,
-              episodeReadRow(projectEpisodeWithheldSources(row))), key });
+        const event = filter.timeBasis === 'event';
+        const visible = [], count = filter.limit + 1;
+        let batch = rows, budget = projected.budget;
+        while (true) {
+          const withheld = new Set(withheldEpisodeSourcesInside(db, ns, batch.map(row => row.id)).map(row => row.episode_id));
+          for (const row of batch) {
+            if (assertEpisodeRead?.(ns, row, budget, 'batch') === false) continue;
+            if (event && withheld.has(row.id)) continue;
+            const item = episodeMetadata(ns, episodeReadRow(withheld.has(row.id) ? projectEpisodeWithheldSources(row) : row));
+            visible.push({ item, key: { time: event ? item.eventEnd : item.firstReceivedAt, id: row.id } });
+            if (visible.length === count) break;
           }
-          if (delivered.length > filter.limit || episodeRows.length <= filter.limit) break;
-          const next = episodeProjection(ns, rangeQuery(ns, operation, filter, validated.at(-1).key), current);
+          if (visible.length === count || batch.length < count) break;
+          const last = batch.at(-1);
+          const after = { time: event ? JSON.parse(last.record).eventEnd : last.first_received_at, id: last.id };
+          const next = episodeProjection(ns, rangeQuery(ns, operation, filter, after), current);
           budget = next.budget;
-          episodeRows = db.prepare(next.query.sql).all(...next.query.params);
+          batch = db.prepare(next.query.sql).all(...next.query.params);
         }
-        return { epoch: current, rows: delivered.slice(0, filter.limit + 1) };
+        return { epoch: current, rows: visible };
       }
       return { epoch: current, rows: rows.map(row => {
         const receipt = filter.timeBasis === 'receipt';

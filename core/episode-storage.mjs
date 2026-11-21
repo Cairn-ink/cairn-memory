@@ -1,7 +1,7 @@
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { hasCommitDispatcher } from './commit-dispatch.mjs';
 import { contentReadSafety, bindReceiptMarkerKeys } from './content-safety.mjs';
-import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
+import { cachedContentSuppressionRequestInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { transaction, isStorageBusy } from './database.mjs';
 import { ADMISSION_LEASE_MS, HEX_DIGEST, advanceEpisodeControlGeneration } from './episode-schema.mjs';
@@ -1055,32 +1055,65 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       for (const page of Object.values(pages)) if (page.epoch !== undefined && page.epoch !== currentEpoch) fail('cursor_stale');
       let row = safety ? db.prepare(projected.query.sql).get(...projected.query.params) : live(ns, input.episodeId);
       if (!row || row.deleted) fail('episode_not_found');
-      assertEpisodeRead?.(ns, row, projected.budget);
+      const sourceVisibility = assertEpisodeRead?.(ns, row, projected.budget, 'detail');
+      const { deniedSources, checkedSources } = sourceVisibility ?? {};
       row = episodeReadRow(row);
       if (db.prepare('SELECT 1 FROM review_hidden_episodes WHERE id=?').get(row.id)) fail('episode_not_found');
-      const sourceSql = 'SELECT * FROM episode_sources WHERE episode_id=? AND id>? ORDER BY id LIMIT ?';
-      const sourceLimit = pages.source.limit + 1;
-      let sourceRows = db.prepare(sourceSql).all(row.id, pages.source.after ?? '', sourceLimit);
-      const memories = db.prepare(`SELECT l.* FROM episode_memory_links l JOIN memories m ON m.id=l.memory_id
+      const sourcePage = db.prepare('SELECT * FROM episode_sources WHERE episode_id=? AND id>? ORDER BY id LIMIT ?');
+      const sourceCount = pages.source.limit + 1;
+      const sources = [];
+      let sourceAfter = pages.source.after ?? '';
+      while (true) {
+        const batch = sourcePage.all(row.id, sourceAfter, sourceCount);
+        for (const source of batch) {
+          if (deniedSources?.has(source.id)) continue;
+          sources.push(source);
+          if (sources.length === sourceCount) break;
+        }
+        if (sources.length === sourceCount || batch.length < sourceCount) break;
+        sourceAfter = batch.at(-1).id;
+      }
+      const memoryPage = db.prepare(`SELECT l.* FROM episode_memory_links l JOIN memories m ON m.id=l.memory_id
         WHERE l.episode_id=? AND l.id>? AND m.deleted=0 AND m.review_state!='awaiting'
-          AND m.owner_id=? AND m.scope=? AND m.project_id=? ORDER BY l.id LIMIT ?`)
-        .all(row.id, pages.memory.after ?? '', ...boundary(ns), pages.memory.limit+1).filter(link => {
+          AND m.owner_id=? AND m.scope=? AND m.project_id=? ORDER BY l.id LIMIT ?`);
+      const memories = [], memoryCount = pages.memory.limit + 1;
+      let memoryAfter = pages.memory.after ?? '';
+      while (true) {
+        const batch = memoryPage.all(row.id, memoryAfter, ...boundary(ns), memoryCount);
+        const eligible = [];
+        for (const link of batch) {
           const memory = db.prepare('SELECT * FROM memories WHERE id=?').get(link.memory_id);
-          return memory && contentReadSafety(db, { namespace: ns, intent: 'history', ref: { type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision } }).allowed;
-        }).map(link => ({ id: link.id, memoryId: link.memory_id,
-          admissionRevision: link.admission_revision, receiptIds: JSON.parse(link.receipt_ids).filter(id => !contentSuppressionReasonInside(db, ns, { kind: 'receipt', key: id }) && db.prepare('SELECT 1 FROM receipts WHERE id=? AND memory_id=?').get(id, link.memory_id)) }));
+          if (!memory || !contentReadSafety(db, { namespace: ns, intent: 'history', ref: { type: 'memory',
+            namespace: ns, memoryId: memory.id, revision: memory.revision } }).allowed) continue;
+          eligible.push(link);
+          if (memories.length + eligible.length === memoryCount) break;
+        }
+        for (const link of eligible) memories.push({ id: link.id, memoryId: link.memory_id,
+          admissionRevision: link.admission_revision, receiptIds: JSON.parse(link.receipt_ids).filter(id => !contentSuppressionReasonInside(db, ns, { kind: 'receipt', key: id }) && db.prepare('SELECT 1 FROM receipts WHERE id=? AND memory_id=?').get(id, link.memory_id)) });
+        if (memories.length === memoryCount || batch.length < memoryCount) break;
+        memoryAfter = batch.at(-1).id;
+      }
       const withheld = withheldEpisodeSourcesInside(db, ns, [row.id], memories.flatMap(link => link.receiptIds));
       const withheldSources = new Set(withheld.filter(source => source.kind === 'source').map(source => source.id));
+      let visibleSources = sources;
       if (withheldSources.size) {
         row = projectEpisodeWithheldSources(row);
-        let batch = sourceRows;
-        sourceRows = sourceRows.filter(source => !withheldSources.has(source.id));
-        while (batch.length === sourceLimit && sourceRows.length < sourceLimit) {
-          batch = db.prepare(sourceSql).all(row.id, batch.at(-1).id, sourceLimit);
-          sourceRows.push(...batch.filter(source => !withheldSources.has(source.id)));
+        visibleSources = sources.filter(source => !withheldSources.has(source.id));
+        if (sources.length === sourceCount) {
+          let after = sources.at(-1).id;
+          while (visibleSources.length < sourceCount) {
+            const batch = sourcePage.all(row.id, after, sourceCount);
+            for (const source of batch) {
+              if (deniedSources?.has(source.id) || withheldSources.has(source.id)) continue;
+              visibleSources.push(source);
+              if (visibleSources.length === sourceCount) break;
+            }
+            if (batch.length < sourceCount) break;
+            after = batch.at(-1).id;
+          }
         }
       }
-      const sources = sourceRows.slice(0, sourceLimit).map(source => ({ id: source.id, digest: source.digest,
+      const sourceItems = visibleSources.map(source => ({ id: source.id, digest: source.digest,
         originEpisodeId: source.origin_episode_id, eventId: source.event_id, messageId: source.message_id,
         role: source.role, text: source.text, truncated: !!source.truncated, receiptOrdinal: source.ordinal }));
       const withheldReceipts = new Set(withheld.filter(source => source.kind === 'receipt').map(source => source.id));
@@ -1092,13 +1125,59 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
           policy: e.policy, basisRevision: e.policy_revision, type: e.policy_type, decidedAt: e.policy_at, receivedAt: e.created_at, admission: e.admission,
           gapReasons: JSON.parse(e.gap_reasons), omittedCount: e.omitted_count, omittedMessageIndices: JSON.parse(e.omitted_indices), staging: e.staging === 'not-staged' ? 'not-staged' : e.state, gap: e.gap, releaseReason: e.release_reason ?? null }));
       return { episode: episodeMetadata(ns, row),
-        sources, memoryLinks: memories, policies,
-        keepActions: db.prepare(`SELECT * FROM episode_keep_actions WHERE episode_id=? AND keep_ordinal>?
-          ORDER BY keep_ordinal LIMIT ?`).all(row.id, pages.keep.after ?? 0, pages.keep.limit + 1)
-          .map(action => ({ actionKey: action.admission_key, ordinal: action.keep_ordinal,
-            createdAt: action.keep_created_at, policy: 'explicit-keep', admission: action.keep_state,
-            errorCode: action.keep_error_code, sourceCoverage: { sourceIds: JSON.parse(action.keep_source_ids).filter(id => !withheldSources.has(id)),
-              revision: action.revision, sourceFence: action.source_fence } })), epoch: currentEpoch };
+        sources: sourceItems, memoryLinks: memories, policies,
+        keepActions: keepActions(), epoch: currentEpoch };
+
+      function keepActions() {
+        const statement = db.prepare(`SELECT * FROM episode_keep_actions WHERE episode_id=? AND keep_ordinal>?
+          ORDER BY keep_ordinal LIMIT ?`);
+        const count = pages.keep.limit + 1, result = [];
+        const reviewRetainedSources = safety &&
+          (deniedSources?.size || cachedContentSuppressionRequestInside(db, ns.ownerId)?.facts?.length !== 0);
+        const retainedDecisions = new Map();
+        let lookup;
+        let after = pages.keep.after ?? 0;
+        while (true) {
+          const batch = statement.all(row.id, after, count);
+          for (const action of batch) {
+            const sourceIds = JSON.parse(action.keep_source_ids);
+            if (sourceIds.some(keepSourceDenied)) continue;
+            result.push({ actionKey: action.admission_key, ordinal: action.keep_ordinal,
+              createdAt: action.keep_created_at, policy: 'explicit-keep', admission: action.keep_state,
+              errorCode: action.keep_error_code, sourceCoverage: { sourceIds: sourceIds.filter(id => !withheldSources.has(id)),
+                revision: action.revision, sourceFence: action.source_fence } });
+            if (result.length === count) break;
+          }
+          if (result.length === count || batch.length < count) return result;
+          after = batch.at(-1).keep_ordinal;
+        }
+
+        function keepSourceDenied(id) {
+          if (deniedSources?.has(id)) return true;
+          if (!reviewRetainedSources || checkedSources?.has(id)) return false;
+          if (retainedDecisions.has(id)) return retainedDecisions.get(id);
+          lookup ??= db.prepare(`SELECT s.*,o.client,o.session_key,o.owner_id,o.scope,o.project_id,o.deleted
+            FROM episode_sources s LEFT JOIN session_episodes o ON o.id=s.origin_episode_id WHERE s.id=?`);
+          const source = lookup.get(id);
+          let denied = false;
+          if (source) {
+            denied = Boolean(source.deleted || source.owner_id !== ns.ownerId || source.scope !== ns.scope ||
+              source.project_id !== (ns.projectId ?? ''));
+            if (!denied) {
+              try {
+                sourceAuthority.assertReceipts(ns, [{ client: source.client, sessionId: source.session_key,
+                  eventId: source.message_id, role: source.role, excerpt: source.text }]);
+              } catch (error) {
+                if (!['source_excluded', 'conversation_deleted'].includes(error.code)) throw error;
+                denied = true;
+              }
+            }
+          }
+          // Historical coverage survives ordinary draft replacement.
+          retainedDecisions.set(id, denied);
+          return denied;
+        }
+      }
     });
   }
   return { invalidateSources, deleteSourceEpisode, draftOutcome, prepareKeep, failKeep, assertKeep, validateBatch, draftSnapshot, captureState, pendingSession, settleAttempt, startAttempt, sessionKey, setPolicy, reserveBatch, event, guard, admissionStarted, mergeGap, gap, admitted, invalidateMemory, getControl, setControl,

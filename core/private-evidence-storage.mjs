@@ -1,7 +1,7 @@
 import { hasCardLineage, cardLineageItemInside, cardLineageNamespaceInside } from './card-lineage.mjs';
 import { contentSuppressionReasonInside, cachedContentSuppressionRequestInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
-import { contentReadSafety, memoryReadEligible, receiptReadSafety, anchoredReadSafety, createContentReadMemo, isEngineCard, engineCardRevisionsInside, withheldReceiptIdsInside, withheldEvidenceInside } from './content-safety.mjs';
+import { CONTENT_SUPPRESSION_REASONS, contentReadSafety, memoryReadEligible, receiptReadSafety, anchoredReadSafety, createContentReadMemo, isEngineCard, engineCardRevisionsInside, withheldReceiptIdsInside, withheldEvidenceInside } from './content-safety.mjs';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { createQualificationStorage } from './claim-qualification-storage.mjs';
@@ -125,6 +125,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
   const memoryEligible = (ns, row, intent) => Boolean(row && contentReadSafety(db, { identity, namespace: ns, intent,
     ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed);
   function item(ns, ref, intent, readSet, options, memo = createContentReadMemo(db)) {
+    const withhold = reason => options?.withholdPrivacy && CONTENT_SUPPRESSION_REASONS.includes(reason);
     if (ref.type === 'card') {
       const card = cardDetailInside(ns, ref.cardId, readSet, { ...options, safetyMemo: memo,
         projectSharedSources: projectSharedSources && !options?.withheld });
@@ -142,6 +143,10 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
         bindings: card.bindings, triggerMemoryRefs: card.triggerMemoryRefs };
     }
     const row = memoryRow(ns, ref.memoryId, options?.legacyEvidence?undefined:memo);
+    if (!row && options?.withholdPrivacy && withhold(contentSuppressionReasonInside(db, ns, {
+      kind: 'memory', key: ref.memoryId, revision: ref.revision,
+      version: JSON.stringify(['memory-revision-v1', ref.revision]), ancestryChecked: true,
+    }))) return null;
     const safety = Boolean(!options?.legacyEvidence && row && cachedContentLayout(db)?.suppressionRevision &&
       memo.evidenceMemories?.get(JSON.stringify([boundary(ns),row.id]))===row);
     // The selected canonical row and receipts belong to this synchronous
@@ -149,48 +154,88 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     if (safety ? !memoryReadEligible(row, intent) : !memoryEligible(ns, row, intent)) fail('evidence_unavailable');
     if (safety && row.revision !== ref.revision) {
       // Preserve the original unavailable-before-revision-conflict order.
-      if (!contentReadSafety(db,{identity,namespace:ns,intent,memo,selectedMemory:row,
-        ref:{...ref,revision:row.revision}}).allowed) fail('evidence_unavailable');
+      const decision = contentReadSafety(db,{identity,namespace:ns,intent,memo,selectedMemory:row,
+        ref:{...ref,revision:row.revision}});
+      if (withhold(decision.reason)) return null;
+      if (!decision.allowed) fail('evidence_unavailable');
     }
     if (row.revision !== ref.revision) fail('revision_conflict');
     const projected=safety;
     const selectedReceipts=projected?JSON.parse(row.batch_receipts):undefined;
     const allReceiptRows = selectedReceipts ?? db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 17').all(row.id);
     const withheld = projectSharedSources ? options?.withheld?.receipts ?? withheldReceiptIdsInside(db, ns, allReceiptRows) : undefined;
-    const eligibleReceipts = (rows, denials) => rows.filter(receipt => receiptReadSafety(db, { namespace: ns, receipt, memo, withheld: denials,
-      rawAncestryEmpty:projected && row.empty_raw_ancestry===1 && !contentSuppressionMayMatchInside(db,ns,{kind:'receipt',key:receipt.id}) }).allowed);
-    const receiptRows = eligibleReceipts(allReceiptRows, withheld);
-    const projectedSharedSources = allReceiptRows.some(receipt => withheld?.has(receipt.id));
-    if (projectedSharedSources) {
+    const visibleReceipt = (receipt, denials) => receiptReadSafety(db, { namespace: ns, receipt, memo, withheld: denials,
+      rawAncestryEmpty:projected && row.empty_raw_ancestry===1 && !contentSuppressionMayMatchInside(db,ns,{kind:'receipt',key:receipt.id}) }).allowed;
+    const receiptRows = allReceiptRows.filter(receipt => visibleReceipt(receipt, withheld));
+    const scannedCount = allReceiptRows.length, visiblePrefix = receiptRows.length;
+    let projectedSharedSources = allReceiptRows.some(receipt => withheld?.has(receipt.id));
+    if (options?.visibleReceiptCoverage && scannedCount === 17 && visiblePrefix < 17) {
+      const page = db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 17 OFFSET ?');
+      let offset = 17;
+      while (receiptRows.length < 17) {
+        const batch = page.all(row.id, offset);
+        const denials = projectSharedSources ? withheldReceiptIdsInside(db, ns, batch) : undefined;
+        projectedSharedSources ||= Boolean(denials?.size);
+        for (const receipt of batch) {
+          if (!visibleReceipt(receipt, denials)) continue;
+          receiptRows.push(receipt);
+          selectedReceipts?.push(receipt);
+          if (receiptRows.length === 17) break;
+        }
+        if (batch.length < 17) break;
+        offset += batch.length;
+      }
+    } else if (projectedSharedSources) {
       let batch = allReceiptRows;
       while (batch.length === 17 && receiptRows.length <= 16) {
         const after = batch.at(-1);
         batch = db.prepare(`SELECT * FROM receipts WHERE memory_id=?
           AND (created_at>? OR (created_at=? AND id>?)) ORDER BY created_at,id LIMIT 17`)
           .all(row.id, after.created_at, after.created_at, after.id);
+        const denials = withheldReceiptIdsInside(db, ns, batch);
         allReceiptRows.push(...batch);
-        receiptRows.push(...eligibleReceipts(batch, withheldReceiptIdsInside(db, ns, batch)));
+        receiptRows.push(...batch.filter(receipt => visibleReceipt(receipt, denials)));
       }
     }
     if(selectedReceipts)(memo.evidenceReceipts??=new Map()).set(JSON.stringify([boundary(ns),row.id]),selectedReceipts);
-    if (!contentReadSafety(db, { identity, namespace: ns, ref, intent, memo, ...(safety ? { selectedMemory: row, selectedReceipts } : {}), receipts: receiptRows.slice(0, 16) }).allowed) fail('evidence_unavailable');
+    const decision = contentReadSafety(db, { identity, namespace: ns, ref, intent, memo, ...(safety ? { selectedMemory: row, selectedReceipts } : {}), receipts: receiptRows.slice(0, 16) });
+    if (withhold(decision.reason)) return null;
+    if (!decision.allowed) fail('evidence_unavailable');
     const sourceAccess = memoryReadEligible(row) ? 'available' : 'unavailable-for-noncurrent-memory';
     const sources = sourceAccess === 'available' ? receiptRows.slice(0, 16).map(receipt => selectedReceipts?selectedReceiptRef(ns,row,receipt):receiptRefInside(ns, row, receipt)) : [];
-    const projection = projected && row.has_qualification===0 ? null : qualification.inspect(row);
+    const projection = projected && row.has_qualification===0 ? null : qualification.inspect(row,
+      { withholdDenied: options?.withholdPrivacy });
+    if (projection === false) return null;
     const assessed = projection && anchoredReadSafety(db, { namespace: ns, memoryId: row.id, anchors: projection.anchors, memo, project: projectSharedSources }).allowed ? projection : null;
     const qualified = assessed ? { ...assessed, sourceText: 'read-separately',
       anchors: assessed.anchors.map(({ text, ...anchor }) => anchor) } : null;
+    const originalCoverage = { status: scannedCount > 16 || visiblePrefix !== scannedCount ? 'budget_exhausted' : 'complete',
+      included: Math.min(visiblePrefix, 16), omitted: scannedCount > 16 ? null : scannedCount - visiblePrefix };
     const value = { ...memoryMetadata(ns, row), content: row.content, qualification: qualified,
       provenance: { sources, sourceAccess,
         receiptMetadata: receiptRows.slice(0, 16).map(receipt => ({ memoryId: row.id,
           memoryRevision: row.revision, receiptId: receipt.id })),
         completeness: 'excerpt-only', conversationCoverage: 'unknown',
         meaning: 'unassessed', attribution, corroboration: 'not-assessed',
-        coverage: { status: allReceiptRows.length > 16 || receiptRows.length !== allReceiptRows.length ? 'budget_exhausted' : 'complete', included: Math.min(receiptRows.length, 16),
-          omitted: allReceiptRows.length > 16 ? null : allReceiptRows.length - receiptRows.length } } };
+        coverage: options?.visibleReceiptCoverage
+          ? { status: receiptRows.length > 16 ? 'budget_exhausted' : 'complete', included: Math.min(receiptRows.length, 16),
+            omitted: receiptRows.length > 16 ? null : 0 }
+          : projectedSharedSources
+            ? { status: allReceiptRows.length > 16 || receiptRows.length !== allReceiptRows.length ? 'budget_exhausted' : 'complete',
+              included: Math.min(receiptRows.length, 16), omitted: allReceiptRows.length > 16 ? null : allReceiptRows.length - receiptRows.length }
+            : originalCoverage } };
     if (projectedSharedSources) projectedReceipts.add(value);
+    if (options?.checkExistingFence && visiblePrefix !== scannedCount) {
+      // Context assembly can issue a fence over the earlier receipt projection.
+      // Keep that witness in this read pass only. New evidence always uses the
+      // visible receipt set and its coverage when it issues a snapshot.
+      (memo.originalEvidence ??= new WeakMap()).set(value, { ...value, provenance: { ...value.provenance,
+        sources: sources.slice(0, originalCoverage.included),
+        receiptMetadata: value.provenance.receiptMetadata.slice(0, originalCoverage.included), coverage: originalCoverage } });
+    }
     return value;
   }
+
   function makeSnapshot(ns, intent, refs, items, accessGeneration) {
     return encode('evidence-snapshot-v1', { version: 1,
       binding: bind('evidence-scope-v1', ns), intent, refs,
