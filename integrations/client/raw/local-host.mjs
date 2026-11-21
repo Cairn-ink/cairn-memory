@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { join, resolve } from 'node:path';
 import { ownData } from '../../../core/local-authority-input.mjs';
 import { normalizedPath } from '../../../adapters/local/configuration.mjs';
-import { createLocalRawWorker, trackWorkerStartPermission } from './local-worker.mjs';
+import { createLocalRawWorker, trackWorkerHostOperation } from './local-worker.mjs';
 import { reasons as workerReasons } from './local-worker-input.mjs';
 import { readHostProfile, readHostConfiguration, hostRuntime, hostSelection, exact, overlaps, canonicalHostPath, fail } from './local-host-profile.mjs';
 import { checkHostPermission } from './local-host-permission.mjs';
@@ -56,9 +56,10 @@ function operation(value, deps) {
   const cancel = () => { cancelled = true; controller.abort(); };
   if (signal !== undefined) add.call(signal,'abort',cancel,{ once:true });
   if (cancelled) controller.abort();
+  const untilCutoff = () => end-2000-performance.now();
   const timer = setTimeout(() => controller.abort(),Math.max(0,end-performance.now()-2000));
   const stopReason = () => controller.signal.aborted || performance.now() >= end-2000 ? (cancelled ? 'cancelled' : 'work_limit') : null;
-  return { signal:controller.signal,remaining:() => Math.max(0,Math.floor(end-performance.now())),stopReason,check() {
+  return { signal:controller.signal,remaining:() => Math.max(0,Math.floor(end-performance.now())),untilCutoff,stopReason,check() {
     const reason = stopReason();
     if (reason) fail(reason);
   }, close() { clearTimeout(timer); if (signal !== undefined) remove.call(signal,'abort',cancel); } };
@@ -149,21 +150,21 @@ export function createLocalRawHost(value) {
       const worker = createLocalRawWorker({ stateRoot:profile.stateRoot,identityKeyPath:profile.identityKeyPath,
         nodeExecutable:process.execPath,runtimeRoot,configPath:profile.configPath,expectedAuthority:config.authority,home:profile.home });
       const workerOptions = { signal:op.signal };
-      const workerCheck = startCheck && trackWorkerStartPermission(workerOptions,op.stopReason);
+      const tracked = (startCheck || action === 'run' && profile.installation.client === 'claude-code') &&
+        trackWorkerHostOperation(workerOptions,op,Boolean(startCheck));
       const result = await worker[action]({ ...selected,pluginRoot:profile.installation.client === 'claude-code' ? profile.installation.pluginRoot : null,
         formatAuthority },workerOptions);
       // The outer deadline includes preflight. Preserve the worker's exact
       // acknowledgement/progress even when cancellation won the host budget.
-      const beforeCheckpoint = workerCheck?.stopped ? op.stopReason() : null;
       await deps.checkpoint?.('after_dispatch');
       if (!['ready','progress'].includes(result.status)) {
         try { op.check(); }
         catch (stopped) {
-          if (workerCheck?.stopped && stopped.reason === beforeCheckpoint) startCheck.stage = 'worker_permission';
+          if (startCheck && stopped.reason === tracked.permissionReason) startCheck.stage = 'worker_permission';
           return localHostResult('blocked',stopped.reason,result);
         }
       }
-      if (workerCheck?.stopped && stoppedReason(result.reason)) startCheck.stage = 'worker_permission';
+      if (startCheck && stoppedReason(result.reason) && result.reason === tracked.permissionReason) startCheck.stage = 'worker_permission';
       return localHostResult(result.status,result.reason,result);
     } catch (error) {
       let reason = error.message === 'state_busy' ? 'state_busy'

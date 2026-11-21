@@ -1,5 +1,6 @@
-import { join } from 'node:path';
-import { lstat, readdir, unlink } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
+import { lstat, open, readdir, realpath, unlink } from 'node:fs/promises';
 import { privateDirectory, privateRead, privateWrite, checkedPath, syncDirectory } from '../private-state.mjs';
 import { keyed } from './local-worker-state.mjs';
 import { fault } from './local-worker-input.mjs';
@@ -22,8 +23,7 @@ export async function writeSessionStartAttempt(identity,source,kind) {
   await privateWrite(location(identity),JSON.stringify({ version:attemptVersion,authority:identity.authorityCommitment,source,kind }),
     { exclusive:true });
 }
-export async function readSessionStartAttempt(identity,context) {
-  const text = await privateRead(location(identity),{missing:true});
+function parseAttempt(text,identity,context) {
   if (text === undefined) return undefined;
   let attempt;
   try { attempt = json(text); } catch { return undefined; }
@@ -32,14 +32,52 @@ export async function readSessionStartAttempt(identity,context) {
       attempt.source !== sessionStartSource(identity,context) || !['fresh','present'].includes(attempt.kind)) return undefined;
   return attempt.kind;
 }
-export async function sweepSessionStartAttempt(identity,context) {
-  // Cursor validation and the session lock belong to the caller. A concurrent
-  // start attempt uses exclusive creation and cannot replace a record we read.
+export async function readSessionStartAttempt(identity,context) {
+  return parseAttempt(await privateRead(location(identity),{missing:true}),identity,context);
+}
+
+const sameEntry = (left,right) => left.dev === right.dev && left.ino === right.ino;
+const sameSnapshot = (left,right) => sameEntry(left,right) && left.size === right.size &&
+  left.mtimeNs === right.mtimeNs && left.ctimeNs === right.ctimeNs;
+const readFlags = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
+async function attemptSnapshot(file,allowed) {
+  const before = await file.stat({ bigint:true });
+  if (!allowed() || !before.isFile() || before.uid !== BigInt(process.getuid()) ||
+      (before.mode & 0o777n) !== 0o600n || before.size > 65536n) return;
+  const bytes = await file.readFile();
+  const info = await file.stat({ bigint:true });
+  if (BigInt(bytes.length) === info.size && sameSnapshot(before,info)) return { bytes,info };
+}
+export async function sweepSessionStartAttempt(identity,context,allowed) {
+  let directoryHandle, parsedFile, currentFile;
   try {
-    if (await readSessionStartAttempt(identity,context)) await unlink(location(identity));
+    if (!allowed()) return;
+    const path = location(identity), directory = dirname(path);
+    const initial = await checkedPath(directory,{ directory:true,missing:true });
+    if (!initial || !allowed()) return;
+    const canonical = join(await realpath(identity.stateRoot),'starts');
+    if (!allowed()) return;
+    directoryHandle = await open(canonical,readFlags | constants.O_DIRECTORY);
+    if (!sameEntry(initial,await directoryHandle.stat()) || !allowed()) return;
+    // Use the pinned directory for Linux lookups. On macOS use its canonical
+    // path and revalidate the directory before the final entry check.
+    const target = join(process.platform === 'linux' ? `/proc/self/fd/${directoryHandle.fd}` : canonical,basename(path));
+    parsedFile = await open(target,readFlags);
+    const parsed = await attemptSnapshot(parsedFile,allowed);
+    if (!parsed || !allowed() || !parseAttempt(parsed.bytes.toString('utf8'),identity,context)) return;
+
+    // Disable can remove the parsed file even while the caller owns the
+    // session lock. Keep that inode open until the new lookup is verified.
+    currentFile = await open(target,readFlags);
+    const current = await attemptSnapshot(currentFile,allowed);
+    if (!current || !sameEntry(parsed.info,current.info) || !parsed.bytes.equals(current.bytes) || !allowed()) return;
+    const parent = await checkedPath(directory,{ directory:true,missing:true });
+    if (!parent || !sameEntry(initial,parent) || await realpath(directory) !== canonical || !allowed()) return;
+    const final = await lstat(target,{ bigint:true });
+    if (sameSnapshot(current.info,final) && allowed()) await unlink(target);
   } catch {
     // Optional cleanup must not change the hook outcome or cursor.
-  }
+  } finally { await Promise.allSettled([parsedFile?.close(),currentFile?.close(),directoryHandle?.close()]); }
 }
 export async function clearSessionStarts(stateRoot) {
   const directory=join(stateRoot,'starts');

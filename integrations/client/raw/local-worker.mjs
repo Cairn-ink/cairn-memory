@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises';
 import { markSessionStart,hasSessionStart,readSessionStartAttempt,sweepSessionStartAttempt } from './local-session-start.mjs';
 import { readConfigurationSnapshot } from '../../../adapters/local/configuration.mjs';
 import { localAuthorityInput } from '../../../core/local-authority-input.mjs';
@@ -8,11 +9,26 @@ import { runProgress } from './local-worker-progress.mjs';
 import { sourceBudget, openWorkerSource, qualifySource, sourceSize, completeBoundary, cursorSource, verifyCursorSource, sourceReason } from './local-worker-source.mjs';
 import { checkHostPermission } from './local-host-permission.mjs';
 
-const startPermissions = new WeakMap();
-export function trackWorkerStartPermission(options,hostStopReason) {
-  const observation = { hostStopReason,stopped:false };
-  startPermissions.set(options,observation);
+const hostOperations = new WeakMap();
+export function trackWorkerHostOperation(options,operation,observeStart) {
+  const observation = { operation,observeStart,permissionReason:null };
+  hostOperations.set(options,observation);
   return observation;
+}
+
+async function sweepWithinBudget(identity,context,operation,host) {
+  const margin = 3000;
+  const spare = () => Math.min(operation.remaining()-2000,host?.untilCutoff() ?? Infinity)-margin;
+  if (operation.signal.aborted || spare() <= 0) return;
+  const controller = new AbortController();
+  const signal = AbortSignal.any([operation.signal,controller.signal]);
+  const allowed = () => !signal.aborted && spare() > 0;
+  try {
+    // Leave time for the ordinary source close, lock release and host result.
+    // A read still pending when the wait ends cannot proceed to unlink.
+    const limit = delay(Math.min(margin,spare()),undefined,{ signal }).catch(() => {});
+    await Promise.race([limit,sweepSessionStartAttempt(identity,context,allowed)]);
+  } finally { controller.abort(); }
 }
 
 export function createLocalRawWorker(value) {
@@ -29,10 +45,9 @@ export function createLocalRawWorker(value) {
       if (JSON.stringify(localAuthorityInput(config.authority)) !== JSON.stringify(options.authority)) fault('authority_changed');
       identity = await loadIdentity(options,context,operation);
       await bindRoot(options,identity,initialize,operation);
-      const startPermission = startPermissions.get(callOptions);
-      const stopped = () => {
-        if (startPermission.hostStopReason()) return true;
-        try { operation.check(); return false; } catch { return true; }
+      const tracked = hostOperations.get(callOptions);
+      const workerStopReason = () => {
+        try { operation.check(); return null; } catch (error) { return error.reason; }
       };
       return await stateLock(identity.lockPath,async () => {
         let observePermission = false;
@@ -41,16 +56,18 @@ export function createLocalRawWorker(value) {
           if (JSON.stringify(localAuthorityInput(config.authority)) !== JSON.stringify(options.authority)) fault('authority_changed');
           // A stop that happened while acquiring the lock or rereading config
           // belongs to that earlier work, even if the next check sees it.
-          observePermission = startPermission && !stopped();
+          observePermission = tracked?.observeStart && !tracked.operation.stopReason() && !workerStopReason();
           await checkHostPermission(config);
         } catch (error) {
-          if (observePermission) startPermission.stopped = ['cancelled','work_limit'].includes(error.reason) || stopped();
+          if (observePermission) tracked.permissionReason = tracked.operation.stopReason() ??
+            (['cancelled','work_limit'].includes(error.reason) ? error.reason : workerStopReason());
           if (['cancelled','work_limit','authority_changed'].includes(error.reason)) throw error;
           fault(error.reason === 'capture_disabled' ? 'authority_changed':error.reason === 'store_invalid' || error.code === 'invalid_local_capture_configuration' ? 'config_invalid':'state_invalid');
         }
+        if (observePermission) tracked.permissionReason = tracked.operation.stopReason();
         try { operation.check(); }
         catch (error) {
-          if (observePermission) startPermission.stopped = true;
+          if (observePermission) tracked.permissionReason ??= error.reason;
           throw error;
         }
         cursor = await readSession(identity,options.authority.client);
@@ -79,10 +96,9 @@ export function createLocalRawWorker(value) {
             await verifyCursorSource(identity,opened,cursor); operation.check();
             if (initialize) return cursor.blockedReason ? summary('blocked',cursor.blockedReason,cursor)
               : summary('ready',cursor.selection.awaitingUserBoundary ? 'awaiting_user_boundary' : null,cursor);
-            try { return await runProgress({ options,identity,context,opened,cursor,operation,bytes }); }
-            finally {
-              if (options.authority.client === 'claude-code') await sweepSessionStartAttempt(identity,context);
-            }
+            const result = await runProgress({ options,identity,context,opened,cursor,operation,bytes });
+            if (options.authority.client === 'claude-code') await sweepWithinBudget(identity,context,operation,tracked?.operation);
+            return result;
           }
           const size = await sourceSize(opened);
           if (context.start === 'eof' && !(await completeBoundary(opened,size))) return summary('waiting','partial_record');

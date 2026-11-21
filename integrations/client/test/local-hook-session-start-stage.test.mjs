@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import childProcess, { fork } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
+import childProcess, { fork, spawnSync } from 'node:child_process';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { DatabaseSync, StatementSync } from 'node:sqlite';
 import { Readable } from 'node:stream';
@@ -15,7 +15,7 @@ import { sessionId } from './fixtures/raw-fixtures.mjs';
 import { stateLock } from '../state-lock.mjs';
 import { withSessionIdentity } from '../raw/local-session-fence.mjs';
 import { activateHostAuthority } from '../raw/local-host-rearm.mjs';
-import { withLocalHostDependencies } from '../raw/local-host.mjs';
+import { createLocalRawHost, withLocalHostDependencies } from '../raw/local-host.mjs';
 import { runLocalRawHook } from '../raw/local-hook.mjs';
 import { readHostProfile, readHostConfiguration } from '../raw/local-host-profile.mjs';
 import { runLocalSetupCli } from '../raw/local-setup-cli.mjs';
@@ -25,6 +25,7 @@ const markerVersion = 'local-raw-start-v1';
 const ready = hookOutcome('ready',null);
 const stateInvalid = hookOutcome('blocked','state_invalid');
 const silent = { stdout:'',stderr:'',exitCode:0 };
+const permissionQuery = 'SELECT 1 FROM raw_owner_usage WHERE owner_id=? AND cap_bytes!=?';
 
 function hookOutcome(status,reason) {
   return { version:'local-raw-hook-v1',status,reason };
@@ -41,9 +42,9 @@ function startFile(f) {
   assert.equal(files.length,1,'one SessionStart record');
   return files[0];
 }
-function hookInput(f) {
-  return { installationDirectory:f.request.installationDirectory,event:'SessionStart',
-    payload:{ hook_event_name:'SessionStart',session_id:sessionId,transcript_path:f.sourcePath } };
+function hookInput(f,event = 'SessionStart') {
+  return { installationDirectory:f.request.installationDirectory,event,
+    payload:{ hook_event_name:event,session_id:sessionId,transcript_path:f.sourcePath } };
 }
 function savedRows(f) {
   const db = new DatabaseSync(f.request.databasePath,{ readOnly:true });
@@ -55,12 +56,12 @@ function savedRows(f) {
   } finally { db.close(); }
 }
 
-async function cli(f) {
+async function cli(f,event = 'SessionStart') {
   const stdout = [], stderr = [], write = process.stderr.write;
   process.stderr.write = bytes => { stderr.push(Buffer.from(bytes)); return true; };
   try {
-    const exitCode = await runLocalSetupCli(['hook','--installation',f.request.installationDirectory,'--event','SessionStart'],{
-      stdin:Readable.from([JSON.stringify(hookInput(f).payload)]),
+    const exitCode = await runLocalSetupCli(['hook','--installation',f.request.installationDirectory,'--event',event],{
+      stdin:Readable.from([JSON.stringify(hookInput(f,event).payload)]),
       stdout:{ write:bytes => stdout.push(Buffer.from(bytes)) },
     });
     return { stdout:Buffer.concat(stdout).toString('base64'),stderr:Buffer.concat(stderr).toString('base64'),exitCode };
@@ -69,7 +70,6 @@ async function cli(f) {
 
 async function stopStart(t,f,{ check,reason,run = null,busy = false }) {
   const controller = new AbortController(), now = performance.now.bind(performance);
-  const permissionQuery = 'SELECT 1 FROM raw_owner_usage WHERE owner_id=? AND cap_bytes!=?';
   let shift = 0, permissionCalls = 0, fired = false, nativeBusy = false;
   const stop = () => {
     assert.equal(fired,false);
@@ -365,6 +365,230 @@ for (const [name,field,change] of [
   f.append('Synthetic after new boundary');
   assert.deepEqual(await f.hook('Stop'),hookOutcome('progress',null));
   assert.deepEqual(savedRows(f).map(row => row.text),['Synthetic after new boundary']);
+});
+
+function onPermission(t,check,observe) {
+  let calls = 0, reached = false;
+  const prepare = DatabaseSync.prototype.prepare;
+  t.mock.method(DatabaseSync.prototype,'prepare',function(sql) {
+    if (sql === permissionQuery && ++calls === check) {
+      reached = true;
+      observe();
+    }
+    return prepare.call(this,sql);
+  });
+  return () => assert.equal(reached,true,'reached the in-lock permission query');
+}
+
+test('R1 records a host-only cutoff inside a successful worker permission check',async t => {
+  const f = await lazyFixture(t,'claude-code');
+  writeFileSync(f.sourcePath,'{"type"');
+  let elapsed = 0;
+  const clock = t.mock.method(performance,'now',() => elapsed);
+  const reached = onPermission(t,5,() => { elapsed = 14000; });
+  try {
+    const outcome = await withLocalHostDependencies({ deadlineMs:15000 },() => runLocalRawHook(hookInput(f)));
+    assert.deepEqual(outcome,hookOutcome('blocked','work_limit'));
+    reached();
+  } finally { clock.mock.restore(); }
+  assert.equal(startFiles(f).length,1,'the host-only cutoff recorded an attempt');
+  assert.equal(JSON.parse(readFileSync(startFile(f))).kind,'present');
+  writeFileSync(f.sourcePath,'');
+  f.append('Synthetic history already present at recovery');
+  assert.deepEqual(await f.hook('Stop'),ready);
+  assert.equal(f.cursor().offset,readFileSync(f.sourcePath).length);
+  assert.deepEqual(savedRows(f),[]);
+});
+
+test('R2 does not stage a cancellation first seen during session-lock release',async t => {
+  const f = await lazyFixture(t,'claude-code');
+  const profile = await readHostProfile(profilePath(f)), config = await readHostConfiguration(profile);
+  const lockPath = await withSessionIdentity(profile,config,{ sessionId,sourcePath:f.sourcePath },identity => identity.lockPath);
+  const controller = new AbortController();
+  let elapsed = 0, released = false;
+  t.mock.method(performance,'now',() => elapsed);
+  const reached = onPermission(t,5,() => { elapsed = 14000; throw Error('synthetic snapshot failure'); });
+  const unlink = fs.unlink;
+  fs.unlink = async path => {
+    if (path === lockPath) {
+      released = true;
+      controller.abort();
+    }
+    return unlink(path);
+  };
+  syncBuiltinESMExports();
+  try {
+    const outcome = await withLocalHostDependencies({ deadlineMs:15000 },
+      () => runLocalRawHook(hookInput(f),{ signal:controller.signal }));
+    assert.deepEqual(outcome,hookOutcome('blocked','cancelled'));
+    reached();
+    assert.equal(released,true,'reached session-lock release');
+  } finally { fs.unlink = unlink; syncBuiltinESMExports(); }
+  assert.deepEqual(startFiles(f),[],'the cancellation during unlock did not record an attempt');
+});
+
+function standaloneHost(f) {
+  const url = new URL('../raw/local-host-cli.mjs',import.meta.url);
+  const attempt = startFiles(f)[0] ?? '';
+  const inject = `data:text/javascript,${encodeURIComponent(`
+    import fs from 'node:fs/promises';
+    import { syncBuiltinESMExports } from 'node:module';
+    import { performance } from 'node:perf_hooks';
+    import { DatabaseSync } from 'node:sqlite';
+    let elapsed = 0, checks = 0;
+    Object.defineProperty(performance,'now',{ value:() => elapsed });
+    const prepare = DatabaseSync.prototype.prepare, unlink = fs.unlink;
+    DatabaseSync.prototype.prepare = function(sql) {
+      if (sql === ${JSON.stringify(permissionQuery)} && ++checks === 4) elapsed = 152900;
+      return prepare.call(this,sql);
+    };
+    fs.unlink = path => {
+      if (path === ${JSON.stringify(attempt)} ||
+          path.startsWith('/proc/self/fd/') && path.endsWith(${JSON.stringify('/'+basename(attempt))})) {
+        elapsed += 200;
+        throw Error('synthetic delayed sweep');
+      }
+      return unlink(path);
+    };
+    syncBuiltinESMExports();
+  `)}`;
+  const { status,signal,stdout,stderr,error } = spawnSync(process.execPath,
+    ['--no-warnings','--import',inject,fileURLToPath(url),'--profile',profilePath(f),
+      'run','--session',sessionId,'--source',f.sourcePath],{ timeout:10000 });
+  assert.equal(error,undefined);
+  return { status,signal,stdout,stderr };
+}
+
+test('R3 preserves the partial-record hook and CLI outcomes near the host cutoff',async t => {
+  const f = await lazyFixture(t,'claude-code');
+  assert.deepEqual(await f.hook(),ready);
+  appendFileSync(f.sourcePath,'{"type"');
+  const host = createLocalRawHost({ profilePath:profilePath(f) });
+  const selection = { sessionId,sourcePath:f.sourcePath };
+  const now = performance.now.bind(performance);
+  let elapsed = 0, attempt;
+  t.mock.method(performance,'now',() => now()+elapsed);
+  const nearCutoff = work => {
+    elapsed = 0;
+    return withLocalHostDependencies({ deadlineMs:15000,checkpoint(stage) {
+      if (stage === 'before_dispatch') elapsed = 11500;
+    } },work);
+  };
+  const unlink = fs.unlink;
+  fs.unlink = async path => {
+    if (isAttemptPath(path,attempt)) {
+      elapsed += 2000;
+      throw Error('synthetic delayed sweep');
+    }
+    return unlink(path);
+  };
+  syncBuiltinESMExports();
+  try {
+    const expectedHost = await nearCutoff(() => host.run(selection));
+    const expectedHook = await nearCutoff(() => runLocalRawHook(hookInput(f,'Stop')));
+    const expectedCli = await nearCutoff(() => cli(f,'Stop'));
+    const expectedStandalone = standaloneHost(f);
+    assert.deepEqual(expectedHook,hookOutcome('waiting','partial_record'));
+    assert.deepEqual(expectedCli,silent);
+    assert.equal(expectedStandalone.status,3);
+    assert.deepEqual(expectedStandalone.stdout,Buffer.from(JSON.stringify(expectedHost)+'\n'));
+    assert.deepEqual(expectedStandalone.stderr,Buffer.alloc(0));
+    ({ path:attempt } = await staleAttempt(f));
+    const actualHost = await nearCutoff(() => host.run(selection));
+    const actualHook = await nearCutoff(() => runLocalRawHook(hookInput(f,'Stop')));
+    const actualCli = await nearCutoff(() => cli(f,'Stop'));
+    const actualStandalone = standaloneHost(f);
+    assert.deepEqual({
+      host:JSON.stringify(actualHost),hook:JSON.stringify(actualHook),native:actualCli,standalone:actualStandalone,
+    },{
+      host:JSON.stringify(expectedHost),hook:JSON.stringify(expectedHook),native:expectedCli,standalone:expectedStandalone,
+    },'the optional sweep preserved the waiting result and CLI bytes');
+    assert.ok(existsSync(attempt),'the sweep was skipped near the cutoff');
+    t.diagnostic(JSON.stringify({ host:actualHost,hook:actualHook,native:actualCli,
+      standalone:{ status:actualStandalone.status,signal:actualStandalone.signal,
+        stdout:actualStandalone.stdout.toString('base64'),stderr:actualStandalone.stderr.toString('base64') } }));
+  } finally { fs.unlink = unlink; syncBuiltinESMExports(); }
+});
+
+function isAttemptPath(path,attempt) {
+  return attempt && (path === attempt || path.startsWith('/proc/self/fd/') && basename(path) === basename(attempt));
+}
+
+async function afterAttemptRead(path,change,work) {
+  const open = fs.open;
+  let changed = false;
+  fs.open = async (name,...args) => {
+    const handle = await open(name,...args);
+    if (isAttemptPath(name,path)) {
+      let read = false;
+      const readFile = handle.readFile.bind(handle), stat = handle.stat.bind(handle), close = handle.close.bind(handle);
+      const afterRead = async () => {
+        if (read && !changed) { changed = true; await change(); }
+      };
+      handle.readFile = async (...options) => {
+        const bytes = await readFile(...options);
+        read = true;
+        return bytes;
+      };
+      handle.stat = async (...options) => {
+        const info = await stat(...options);
+        await afterRead();
+        return info;
+      };
+      handle.close = async () => { await afterRead(); await close(); };
+    }
+    return handle;
+  };
+  syncBuiltinESMExports();
+  try {
+    assert.deepEqual(await work(),ready);
+    assert.ok(changed,'read the original attempt before changing its path');
+  } finally { fs.open = open; syncBuiltinESMExports(); }
+}
+
+test('R4 leaves a replacement inode and changed bytes at the parsed attempt path',async t => {
+  const survivors = [];
+  for (const change of ['replacement','identical replacement','changed bytes']) {
+    const f = await lazyFixture(t,'claude-code');
+    assert.deepEqual(await f.hook(),ready);
+    const { path,attempt } = await staleAttempt(f);
+    const newer = change === 'identical replacement' ? readFileSync(path,'utf8') :
+      JSON.stringify({ ...attempt,source:'0'.repeat(64) });
+    await afterAttemptRead(path,() => {
+      if (change !== 'changed bytes') {
+        renameSync(path,join(f.root,'removed-attempt'));
+        writeFileSync(path,newer,{ mode:0o600,flag:'wx' });
+      } else writeFileSync(path,newer);
+    },() => f.hook('Stop'));
+    survivors.push(existsSync(path) && readFileSync(path,'utf8') === newer);
+  }
+  assert.deepEqual(survivors,[true,true,true],'only the inode and bytes that were parsed may be removed');
+});
+
+test('R5 leaves attempts behind a symlinked or retargeted starts directory',async t => {
+  const survivors = [];
+  for (const retarget of [false,true]) {
+    const f = await lazyFixture(t,'claude-code');
+    assert.deepEqual(await f.hook(),ready);
+    const { path } = await staleAttempt(f);
+    const starts = dirname(path), backup = join(f.root,'starts-backup');
+    const backupAttempt = join(backup,basename(path));
+    const text = readFileSync(path);
+    if (retarget) {
+      mkdirSync(backup,{ mode:0o700 });
+      writeFileSync(backupAttempt,text,{ mode:0o600 });
+      await afterAttemptRead(path,() => {
+        renameSync(starts,join(f.root,'old-starts'));
+        symlinkSync(backup,starts);
+      },() => f.hook('Stop'));
+    } else {
+      renameSync(starts,backup);
+      symlinkSync(backup,starts);
+      assert.deepEqual(await f.hook('Stop'),ready);
+    }
+    survivors.push(existsSync(backupAttempt) && readFileSync(backupAttempt).equals(text));
+  }
+  assert.deepEqual(survivors,[true,true],'a symlinked or retargeted parent kept its attempt');
 });
 
 }
