@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "eebe73a7dbfa43b5d05638ad0d12d23789b30b564adaa765c39c369a9ee40c7d",
-  "bytes": 1479992,
+  "sha256": "059a3cc631ec9ff3399035904434278af3810fed8099fa1a54978914d1d29981",
+  "bytes": 1485577,
   "files": [
     "LICENSE",
     "README.md",
@@ -765,7 +765,7 @@
     "core/context-product-quantum.mjs": "b43d2c3386e4a9704831b6aa6667378a3148593bc09ff5848914ef3c706d2659",
     "core/context-product-sqlite.mjs": "f4362c6ea2bd831a88ef2c8390a55459d000bc03970a1876f2a3003b7ef6af31",
     "core/content-safety.mjs": "e71e8c7f4c6f6c8d7ff3f4a453ebfcc9a8b897b0328c5c731ba878ed93e41947",
-    "core/context-product-index.mjs": "351c6ecbbce4be736757c67b8e32563fb9f4cca45c65615c53130a2a7883ffe8",
+    "core/context-product-index.mjs": "1fff455dfc9f0f5fdc50fe2eb92cda47c45b9d7694a2716bbaf0423ca23fd014",
     "core/context-product-pump.mjs": "2f7c56e7ce56e6dfb03d3fd0fb85b12f74e5079d3cdba891612ca17352714a63",
     "core/context-maintenance-turn.mjs": "50552d945ef5a87feb94a042cd5a0b8260bbdea8119e0aaf34ff4f991297a23b",
     "docs/plans/context-read-p2b-impl.md": "aa8aa4820502d8b4002ae33ef8b734658a683ed0edd527ef3d183ddb39e9f737",
@@ -775,15 +775,15 @@
     "adapters/openai/product-embedding.mjs": "d5f8164d80a1ede95469140c070e38e46e69ab7c66a5460120ca40161515eba6",
     "core/context-product-vectors.mjs": "f5832ade83f9ef487abc7348b8aa7c7b96e858bebddb0d54a10091e5a809e8a7",
     "core/context-semantic-client.mjs": "dcc5c00c97d8491dad2ab0d5ae44602e91465fcfd4948cfab9e62f113a1e2f80",
-    "core/context-semantic-coordinator.mjs": "ba294bd12a4685cd8812e44be3f8da2bdccfbbda23a27ed83b6357d4bd1a4e21",
+    "core/context-semantic-coordinator.mjs": "d8a0d3023321c30068ca4bd54d8b2249d77e8e3898c40fbe6cb0fb4238236bd4",
     "core/context-semantic-gate.mjs": "d1d137618579ef6cec5325d4122161ebb705da619984b345fc17cf34fda08287",
     "core/context-semantic-gates.mjs": "ba4f2e192b67b644272e92105e8774f3210c607bc8fac35b1e44ee4fb0818043",
-    "core/context-semantic-input.mjs": "638d1adeff5be6aa882ddaaebe97fc523be5133b71eb114cf837a340862879bc",
+    "core/context-semantic-input.mjs": "77c309b4de1ca064f6cdd0d8f6da8e3df0a8b323668226d8633290864142271c",
     "core/context-semantic-accounting.mjs": "96a47a11ecc6078ea8590cd921d43c43e07208af9fa08e84cb6d437600fc2d3a",
-    "core/context-semantic-ledger.mjs": "bdcb674b5248bbaf459c0f0db96411436eaa4636bd4f3b2423c382d30e56228b",
-    "core/context-semantic-maintenance.mjs": "a1cf108cd2903ac22a4db43417fa249bb172b7c5cf9012659435de3ea2015531",
-    "core/context-semantic-pump.mjs": "4d69be42d96db7ead7cd25434c176549cf85faa0eeb36f37dfc11a6b8be86761",
-    "core/context-semantic-worker.mjs": "9eb44f086ccf731ba85e4926a6d6019c93345badb24573920bb35a18ba0a674a",
+    "core/context-semantic-ledger.mjs": "7327f1f41d397e8a6cef09084a773821af28bd8083039e83239f134b75352e3e",
+    "core/context-semantic-maintenance.mjs": "fbbc959660981cb77b351edf30ea5f6264809d2fd98962c864753c90f8f77c99",
+    "core/context-semantic-pump.mjs": "bb6fc7ac1ede941cca8c375e10ea034677d12eeb3f2fd490644250e06725aa4b",
+    "core/context-semantic-worker.mjs": "b0598d84d45ec60d251f2357b1fc3911976687af5f86138227991e013a21be95",
     "core/context-vector-validation.mjs": "6c41a7eb081eeb61ce09c82cfd27682454e9cdcbdd54e538435d5796b29f0d6e",
     "docs/plans/context-read-p2e-impl.md": "daf884b2995458d7d0d61832bbd163e51066cfc4e00f66e3f01c144eaeb89028",
     "adapters/mcp/safety-migrate-command.mjs": "e63ed654f3c052f3bc026faeee5b7d0868786feaf94bb93c2fccc311d793a38f",
@@ -838,6 +838,6 @@
   "generatedHashes": {
     "package.json": "e255ff4d23e921de9bed8e058c64e57aed3e1bc6a8ed242cee52a716add2d69c",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8",
-    "engine-build.json": "736484148144554bddbf581f514115aaaedf86e57391a08a3dfd0b836d7689c1"
+    "engine-build.json": "4df67f97dc7bb79e1b86a3fe8a1b978169f4a82a64577a575d45d06ae7cc59e4"
   }
 }
