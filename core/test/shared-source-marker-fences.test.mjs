@@ -543,7 +543,7 @@ function assertMarkerFences(sources){
   assert.match(fences,/else memory=db\.prepare\(`SELECT epoch FROM namespace_epochs WHERE \$\{where\}`\)\.get\(\.\.\.boundary\(ns\)\)\?\.epoch\?\?1/);
   assert.match(fences,/canonical\.push\(\{ memory,/);
   assert.match(fences,/canonicalFenceDigest: digest\(canonical\)/);
-  assert.match(side.text(functionSite(sources,'context-product-sidecar.mjs','target').node),/canonicalProductFences\(reader,p\)/);
+  assert.match(side.text(functionSite(sources,'context-product-sidecar.mjs','target').node),/canonicalProductFences\(reader,p,sweep\)/);
   assert.match(side.text(functionSite(sources,'context-product-sidecar.mjs','recordBindings').node),
     /r\.canonicalFenceDigest !== t\.canonicalFenceDigest\) return 'fence_changed'/);
   const observe=side.text(functionSite(sources,'context-product-sidecar.mjs','observe').node);
