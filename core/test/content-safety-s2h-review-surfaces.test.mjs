@@ -122,7 +122,10 @@ test('surface episode summaries and next steps revalidate retained Raw origins u
   assert.match(JSON.stringify(ok(core.getEpisode({namespace:ns,episodeId:row.id}))),/ProtectedSyntheticEpisode/);
   assert.match(JSON.stringify(ok(core.sessionStartContext({namespace:ns,groups:{procedural:false}}))),/ProtectedSyntheticEpisode/);
   transaction(db,()=>writeContentSuppressionInside(db,{namespace:ns,kind:'raw',key:raw.raw.conversationId,matchMode:'span',messageId:source.message_id,start:0,end:source.text.length,reason:'privacy_erase',actionId:'episode-origin'}));
-  for(const result of [core.getEpisode({namespace:ns,episodeId:row.id}),core.listEpisodes(range),core.sessionStartContext({namespace:ns,groups:{procedural:false}})]){
-    assert.equal(result.ok,false);assert.doesNotMatch(JSON.stringify(result),/ProtectedSyntheticEpisode/);
-  }
+  const [denied,list,session]=[core.getEpisode({namespace:ns,episodeId:row.id}),core.listEpisodes(range),
+    core.sessionStartContext({namespace:ns,groups:{procedural:false}})];
+  assert.equal(denied.ok,false);
+  assert.deepEqual(ok(list).items,[]);
+  assert.deepEqual(ok(session).groups.nextSteps.items,[]);
+  for(const result of [denied,list,session])assert.doesNotMatch(JSON.stringify(result),/ProtectedSyntheticEpisode/);
 });

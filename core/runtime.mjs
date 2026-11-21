@@ -31,7 +31,7 @@ import { createQualificationStorage } from './claim-qualification-storage.mjs';
 import { sourceEvidence, isSourceContext } from './source-evidence.mjs';
 import { createQualifiedTransitionStorage } from './qualified-transition-storage.mjs';
 import { createRationaleStorage } from './rationale-storage.mjs';
-import { fail, object, receiptEventTime } from "./validation.mjs";
+import { fail, MemoryStoreError, object, receiptEventTime } from "./validation.mjs";
 import { privateCardOptions } from './private-card-input.mjs';
 import { createPrivateCardStorage, purgeEngineCardsInside } from './private-card-storage.mjs';
 import { createRawCardInvalidation } from './card-raw-sources.mjs';
@@ -244,9 +244,12 @@ export function createMemoryRuntime(input, internal) {
     };
   }
 
+  function storedReceiptCount(id) {
+    return db.prepare("SELECT count(*) AS n FROM receipts WHERE memory_id = ?").get(id).n;
+  }
+
   function detailDto(memory) {
-    const withCount = { ...memory, receipt_count: db.prepare(
-      "SELECT count(*) AS n FROM receipts WHERE memory_id = ?").get(memory.id).n };
+    const withCount = { ...memory, receipt_count: storedReceiptCount(memory.id) };
     return { ...metadataDto(withCount), content: memory.content };
   }
 
@@ -664,10 +667,13 @@ export function createMemoryRuntime(input, internal) {
     }, undefined, { deferred: true });
   }
 
-  function readSourceEvidence(row, complete = true) {
+  function readSourceEvidence(row, complete = true, qualificationOptions) {
     const original = db.prepare('SELECT * FROM receipts WHERE memory_id = ? ORDER BY created_at, id LIMIT 101').all(row.id);
     const ns = { ownerId: row.owner_id, scope: row.scope, projectId: row.project_id || null };
-    qualificationStorage.inspect(row);
+    if (qualificationStorage.inspect(row, qualificationOptions) === false) return null;
+    if (qualificationOptions?.withholdDenied && cachedContentLayout(db)?.suppressionRevision) {
+      return sessionSourceEvidence(ns, row, original);
+    }
     const full = sourceEvidence(row, original, detailDto(row).receiptCount, receiptKey);
     const memo = createContentReadMemo(db), receipts = complete ? original : safeReceipts(ns, original, memo);
     if (!complete && !receipts.length) fail('source_unavailable');
@@ -676,6 +682,34 @@ export function createMemoryRuntime(input, internal) {
     if (!contentReadSafety(db, { identity, namespace: ns, intent: 'history', memo, ref: { type: 'memory', namespace: ns,
       memoryId: row.id, revision: row.revision }, receipts }).allowed) fail('revision_conflict');
     return evidence;
+  }
+
+  function sessionSourceEvidence(ns, row, original) {
+    const total = storedReceiptCount(row.id), memo = createContentReadMemo(db);
+    const ref = { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision };
+    const readable = receipts => contentReadSafety(db, { identity, namespace: ns, intent: 'history', memo, ref, receipts }).allowed;
+    if (total <= 100) {
+      const full = sourceEvidence(row, original, total, receiptKey);
+      if (readable(original)) return full;
+    } else if (cachedContentSuppressionRequestInside(db, ns.ownerId)?.facts?.length === 0) {
+      fail('context_item_too_large');
+    }
+
+    const receipts = [], withheldReceiptIds = new Set();
+    let batch = original, scanned = original.length;
+    while (true) {
+      for (const receipt of batch) {
+        if (receiptReadSafety(db, { namespace: ns, receipt, memo }).allowed) receipts.push(receipt);
+        else withheldReceiptIds.add(receipt.id);
+      }
+      if (receipts.length > 100) fail('context_item_too_large');
+      if (scanned >= total) break;
+      batch = db.prepare('SELECT * FROM receipts WHERE memory_id = ? ORDER BY created_at, id LIMIT 101 OFFSET ?').all(row.id, scanned);
+      if (!batch.length) fail('storage_error');
+      scanned += batch.length;
+    }
+    if (!readable(receipts)) fail('revision_conflict');
+    return { ...sourceEvidence(row, receipts, receipts.length, receiptKey, { allowEmpty: true }), withheldReceiptIds };
   }
 
   function safeMemory(ns, row, intent = 'current', expectedMemoryIdentity, method = 'retrieval') {
@@ -804,33 +838,74 @@ export function createMemoryRuntime(input, internal) {
   let rawCapture;
   rawCapture = internal?.attachRaw?.(db);
   const episodeProjection = createEpisodeReadProjection({ db, epoch });
-  function assertEpisodeRead(ns, row, budget = { remaining: 4096, bytesRemaining: 4*1024*1024 }) {
+  function assertEpisodeRead(ns, row, budget = { remaining: 4096, bytesRemaining: 4*1024*1024 }, mode) {
     if (!(cachedContentLayout(db) ?? installedContentLayout(db)).suppressionRevision) return;
     if (contentSuppressionReasonInside(db, ns)) fail('episode_not_found');
     const proof = cachedContentSuppressionRequestInside(db, ns.ownerId);
-    if (row.episode_read_overflow) fail('episode_sources_unavailable');
-    if (row.episode_read_proof !== undefined) {
-      budget.bytesRemaining -= Buffer.byteLength(row.episode_read_proof, 'utf8');
-      if (budget.bytesRemaining < 0) fail('episode_sources_unavailable');
-      const evidence = JSON.parse(row.episode_read_proof);
-      const fallback = !proof?.facts || row.episode_read_incomplete;
-      const indexedDenials = fallback ? rawLineage.completeEpisodeProof(ns, evidence, budget, row.episode_read_incomplete) : undefined;
-      rawLineage.assertEpisodeProof(ns, evidence, proof?.facts ?? [], budget, indexedDenials);
-      if (!fallback) return;
+    const deniedSources = new Set();
+    let anchors, metadataDenial, firstSourceDenial;
+    const checkedSources = new Set();
+    // A denied source may stand alone in the detail page. An anchored source
+    // also denies the published Episode that depends on it.
+    function withholdSource(id, code) {
+      firstSourceDenial ??= code;
+      if (!anchors) {
+        const record = JSON.parse(row.record);
+        anchors = new Set([...Object.values(record.anchors ?? {}).flat(), ...(record.nextStep?.anchors ?? [])]
+          .map(anchor => anchor.sourceId));
+      }
+      if (anchors.has(id)) {
+        metadataDenial = new MemoryStoreError(code);
+        throw metadataDenial;
+      }
+      deniedSources.add(id);
     }
-    // Outside the bounded fact/index-input population, finish with the existing
-    // indexed validator. A complete projected hardening check still ran above.
-    const sources = db.prepare(`SELECT s.*,e.client AS origin_client,e.session_key AS origin_session,
-      e.owner_id,e.scope,e.project_id,e.deleted FROM episode_sources s
-      LEFT JOIN session_episodes e ON e.id=s.origin_episode_id WHERE s.episode_id=?`).all(row.id);
-    if (sources.some(source => source.deleted || source.owner_id !== ns.ownerId || source.scope !== ns.scope ||
-        source.project_id !== (ns.projectId ?? ''))) fail('revision_conflict');
-    rawLineage.assertReceipts(ns, sources.map(source => ({ client: source.origin_client, sessionId: source.origin_session,
-      eventId: source.message_id, role: source.role, excerpt: source.text })));
+    function validate() {
+      if (row.episode_read_overflow) fail('episode_sources_unavailable');
+      if (row.episode_read_proof !== undefined) {
+        budget.bytesRemaining -= Buffer.byteLength(row.episode_read_proof, 'utf8');
+        if (budget.bytesRemaining < 0) fail('episode_sources_unavailable');
+        const evidence = JSON.parse(row.episode_read_proof);
+        if (mode === 'detail') {
+          for (const source of evidence) checkedSources.add(source.id);
+          if (evidence.some(source => source.deleted)) firstSourceDenial = 'revision_conflict';
+        }
+        const fallback = !proof?.facts || row.episode_read_incomplete;
+        const indexedDenials = fallback ? rawLineage.completeEpisodeProof(ns, evidence, budget, row.episode_read_incomplete, Boolean(mode)) : undefined;
+        rawLineage.assertEpisodeProof(ns, evidence, proof?.facts ?? [], budget, indexedDenials, mode ? withholdSource : undefined);
+        if (!fallback) return;
+      }
+      // Outside the bounded fact/index-input population, finish with the existing
+      // indexed validator. A complete projected hardening check still ran above.
+      const sources = db.prepare(`SELECT s.*,e.client AS origin_client,e.session_key AS origin_session,
+        e.owner_id,e.scope,e.project_id,e.deleted FROM episode_sources s
+        LEFT JOIN session_episodes e ON e.id=s.origin_episode_id WHERE s.episode_id=?`).all(row.id);
+      for (const source of sources) {
+        if (mode === 'detail') checkedSources.add(source.id);
+        if (source.owner_id !== ns.ownerId || source.scope !== ns.scope ||
+            source.project_id !== (ns.projectId ?? '')) fail('revision_conflict');
+        if (source.deleted && !deniedSources.has(source.id)) {
+          if (!mode) fail('revision_conflict');
+          withholdSource(source.id, 'revision_conflict');
+        }
+      }
+      const eligible = deniedSources.size ? sources.filter(source => !deniedSources.has(source.id)) : sources;
+      rawLineage.assertReceipts(ns, eligible.map(source => ({ client: source.origin_client, sessionId: source.origin_session,
+        eventId: source.message_id, role: source.role, excerpt: source.text })), false, undefined, undefined,
+        mode ? (index, code) => withholdSource(eligible[index].id, code) : undefined);
+    }
+    try { validate(); }
+    catch (error) {
+      if (mode === 'batch' && error === metadataDenial) return false;
+      if (mode === 'detail' && firstSourceDenial && error instanceof MemoryStoreError) fail(firstSourceDenial);
+      throw error;
+    }
+    return { deniedSources, checkedSources };
   }
   const episodeReads = createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRead, episodeProjection });
   const proceduralStorage = createProceduralStorage({ db, activeRow:(ns,id)=>memoryWriteSafety(ns,visibleRow(ns,id)), advanceEpoch, epoch });
-  const sessionContextStorage = createSessionContextStorage({ db, epoch, indexStorage, readSourceEvidence, proceduralStorage, decisionReview, assertEpisodeRead, episodeProjection });
+  const sessionContextStorage = createSessionContextStorage({ db, epoch, indexStorage, proceduralStorage, decisionReview, assertEpisodeRead, episodeProjection,
+    readSourceEvidence: row => readSourceEvidence(row, true, { withholdDenied: true }) });
   let episodes;
   episodes = createEpisodeStorage({ db, options: sessionEpisodes, stagedEvidence, advanceEpoch, epoch,
     forgetMutation, rawCapture, sourceAuthority: rawLineage, sourceRoots, assertEpisodeRead, episodeProjection,
@@ -928,15 +1003,44 @@ export function createMemoryRuntime(input, internal) {
       return transaction(db, () => {
         const current = epoch(ns);
         if (expectedEpoch !== undefined && current !== expectedEpoch) fail('cursor_stale');
-        const rows = db.prepare(`SELECT t.*,p.revision AS predecessor_current_revision,m.revision AS replacement_current_revision
+        const statement = db.prepare(`SELECT t.*,p.revision AS predecessor_current_revision,m.revision AS replacement_current_revision
           FROM confirmation_supersessions t JOIN memories m ON m.id=t.replacement_id JOIN memories p ON p.id=t.previous_id
           WHERE m.owner_id=? AND m.scope=? AND m.project_id=? AND t.result IS NOT NULL AND (?='all' OR t.status=?)
-          AND (t.replacement_id,t.previous_id) > (?,?) ORDER BY t.replacement_id,t.previous_id LIMIT ?`)
-          .all(...boundary(ns), status, status, after?.replacementId ?? '', after?.predecessorId ?? '', count + 1);
-        if (cachedContentLayout(db)?.suppressionRevision) for (const row of rows) assertContentOutput(db,identity,[
-          {type:'memory',namespace:ns,memoryId:row.previous_id,revision:row.previous_revision},
-          {type:'memory',namespace:ns,memoryId:row.replacement_id,revision:row.replacement_revision},
-          {namespace:ns,receiptIds:[...JSON.parse(row.previous_receipt_ids),...JSON.parse(row.receipt_ids)]}], [ns]);
+          AND (t.replacement_id,t.previous_id) > (?,?) ORDER BY t.replacement_id,t.previous_id LIMIT ?`);
+        const rows = [];
+        const size = count + 1;
+        const safety = cachedContentLayout(db)?.suppressionRevision;
+        let anchor = after;
+        while (true) {
+          const batch = statement.all(...boundary(ns), status, status,
+            anchor?.replacementId ?? '', anchor?.predecessorId ?? '', size);
+          for (const row of batch) {
+            try {
+              if (safety) {
+                const predecessor = {type:'memory',namespace:ns,memoryId:row.previous_id,revision:row.previous_revision};
+                const replacement = {type:'memory',namespace:ns,memoryId:row.replacement_id,revision:row.replacement_revision};
+                assertContentOutput(db, identity, [predecessor, replacement,
+                  {namespace:ns,receiptIds:[...JSON.parse(row.previous_receipt_ids),...JSON.parse(row.receipt_ids)]}], [ns]);
+                // The contract emits the current revisions as well as retaining
+                // the transition's bound evidence for authorization.
+                if (cachedContentSuppressionRequestInside(db, ns.ownerId)?.facts?.length !== 0) {
+                  const emitted = [[predecessor, row.predecessor_current_revision], [replacement, row.replacement_current_revision]];
+                  for (const [ref, revision] of emitted) {
+                    if (revision !== ref.revision) assertContentOutput(db, identity, { ...ref, revision }, [ns]);
+                  }
+                }
+              }
+            } catch (error) {
+              if (error.code === 'evidence_unavailable') continue;
+              throw error;
+            }
+            rows.push(row);
+            if (rows.length === size) break;
+          }
+          if (rows.length === size || batch.length < size) break;
+          const last = batch.at(-1);
+          anchor = { replacementId: last.replacement_id, predecessorId: last.previous_id };
+        }
         return { rows, epoch: current };
       }, undefined, { deferred: true });
     },
