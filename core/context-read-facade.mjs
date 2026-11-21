@@ -970,14 +970,29 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         const items = [], positions = [];
         for (const [index, ref] of refs.entries()) {
           const [item] = evidence.itemsInside(ref.namespace, [ref], intent, input.readSet,
-            safetyMemo ? { safetyMemo, batchRefs: refs, withholdPrivacy } : options.sources ? { legacyEvidence: true } : undefined);
+            safetyMemo ? { safetyMemo, batchRefs: refs, visibleReceiptCoverage: options.product,
+              withholdPrivacy: withholdPrivacy && input.fences?.[index] == null,
+              checkExistingFence: Boolean(previous || input.fences) }
+              : options.sources ? { legacyEvidence: true } : undefined);
           if (item === null) continue;
           items.push(item);
           positions.push(index);
         }
-        const fences = items.map(item => bind('snapshot-item', cardLineageItemInside(db,item)));
-        if (input.fences && positions.some((index, i) => input.fences[index] !== null && !fences[i].startsWith(input.fences[index]))) fail('snapshot_stale');
-        if (previous && !same(previous.fences, fences)) fail('snapshot_stale');
+        const fenceFor = item => bind('snapshot-item', cardLineageItemInside(db, item));
+        const fences = items.map(fenceFor);
+        const originalFence = index => {
+          const item = safetyMemo?.originalEvidence?.get(items[index]);
+          return item && fenceFor(item);
+        };
+        if (input.fences && positions.some((index, i) => {
+          const prefix = input.fences[index];
+          return prefix !== null && !fences[i].startsWith(prefix) && !originalFence(i)?.startsWith(prefix);
+        })) fail('snapshot_stale');
+        if (previous && !same(previous.fences, fences) &&
+            (!Array.isArray(previous.fences) || previous.fences.length !== fences.length ||
+              fences.some((fence, index) => fence !== previous.fences[index] && originalFence(index) !== previous.fences[index]))) {
+          fail('snapshot_stale');
+        }
         return { items, generations, fences, positions };
       }
       const prepared = read(fetchInside);

@@ -76,7 +76,8 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
       throw error;
     }
     if (evidence === null) return null;
-    const tag = group === 'procedural' ? proceduralStorage.inspect(row.id) : null;
+    let tag = group === 'procedural' ? proceduralStorage.inspect(row.id) : null;
+    if (tag?.anchors.some(anchor => evidence.withheldReceiptIds?.has(anchor.receiptId))) tag = null;
     if (tag?.procedural) for (const anchor of tag.anchors) {
       const receipt = evidence.receipts.find(r => r.id === anchor.receiptId);
       if (!receipt || sourceDigest(receipt.excerpt) !== anchor.digest) fail('storage_error');

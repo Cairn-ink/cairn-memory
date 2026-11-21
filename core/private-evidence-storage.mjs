@@ -160,27 +160,60 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     const projected=safety;
     const selectedReceipts=projected?JSON.parse(row.batch_receipts):undefined;
     const allReceiptRows = selectedReceipts ?? db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 17').all(row.id);
-    const receiptRows = allReceiptRows.filter(receipt => receiptReadSafety(db, { namespace: ns, receipt, memo,
-      rawAncestryEmpty:projected && row.empty_raw_ancestry===1 && !contentSuppressionMayMatchInside(db,ns,{kind:'receipt',key:receipt.id}) }).allowed);
+    const visibleReceipt = receipt => receiptReadSafety(db, { namespace: ns, receipt, memo,
+      rawAncestryEmpty:projected && row.empty_raw_ancestry===1 && !contentSuppressionMayMatchInside(db,ns,{kind:'receipt',key:receipt.id}) }).allowed;
+    const receiptRows = allReceiptRows.filter(visibleReceipt);
+    const scannedCount = allReceiptRows.length, visiblePrefix = receiptRows.length;
+    if (options?.visibleReceiptCoverage && scannedCount === 17 && visiblePrefix < 17) {
+      const page = db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 17 OFFSET ?');
+      let offset = 17;
+      while (receiptRows.length < 17) {
+        const batch = page.all(row.id, offset);
+        for (const receipt of batch) {
+          if (!visibleReceipt(receipt)) continue;
+          receiptRows.push(receipt);
+          selectedReceipts?.push(receipt);
+          if (receiptRows.length === 17) break;
+        }
+        if (batch.length < 17) break;
+        offset += batch.length;
+      }
+    }
     if(selectedReceipts)(memo.evidenceReceipts??=new Map()).set(JSON.stringify([boundary(ns),row.id]),selectedReceipts);
     const decision = contentReadSafety(db, { identity, namespace: ns, ref, intent, memo, ...(safety ? { selectedMemory: row, selectedReceipts } : {}), receipts: receiptRows.slice(0, 16) });
     if (withhold(decision.reason)) return null;
     if (!decision.allowed) fail('evidence_unavailable');
     const sourceAccess = memoryReadEligible(row) ? 'available' : 'unavailable-for-noncurrent-memory';
     const sources = sourceAccess === 'available' ? receiptRows.slice(0, 16).map(receipt => selectedReceipts?selectedReceiptRef(ns,row,receipt):receiptRefInside(ns, row, receipt)) : [];
-    const projection = projected && row.has_qualification===0 ? null : qualification.inspect(row);
+    const projection = projected && row.has_qualification===0 ? null : qualification.inspect(row,
+      { withholdDenied: options?.withholdPrivacy });
+    if (projection === false) return null;
     const assessed = projection && anchoredReadSafety(db, { namespace: ns, memoryId: row.id, anchors: projection.anchors, memo }).allowed ? projection : null;
     const qualified = assessed ? { ...assessed, sourceText: 'read-separately',
       anchors: assessed.anchors.map(({ text, ...anchor }) => anchor) } : null;
-    return { ...memoryMetadata(ns, row), content: row.content, qualification: qualified,
+    const originalCoverage = { status: scannedCount > 16 || visiblePrefix !== scannedCount ? 'budget_exhausted' : 'complete',
+      included: Math.min(visiblePrefix, 16), omitted: scannedCount > 16 ? null : scannedCount - visiblePrefix };
+    const value = { ...memoryMetadata(ns, row), content: row.content, qualification: qualified,
       provenance: { sources, sourceAccess,
         receiptMetadata: receiptRows.slice(0, 16).map(receipt => ({ memoryId: row.id,
           memoryRevision: row.revision, receiptId: receipt.id })),
         completeness: 'excerpt-only', conversationCoverage: 'unknown',
         meaning: 'unassessed', attribution, corroboration: 'not-assessed',
-        coverage: { status: allReceiptRows.length > 16 || receiptRows.length !== allReceiptRows.length ? 'budget_exhausted' : 'complete', included: Math.min(receiptRows.length, 16),
-          omitted: allReceiptRows.length > 16 ? null : allReceiptRows.length - receiptRows.length } } };
+        coverage: options?.visibleReceiptCoverage
+          ? { status: receiptRows.length > 16 ? 'budget_exhausted' : 'complete', included: Math.min(receiptRows.length, 16),
+            omitted: receiptRows.length > 16 ? null : 0 }
+          : originalCoverage } };
+    if (options?.checkExistingFence && visiblePrefix !== scannedCount) {
+      // Context assembly can issue a fence over the earlier receipt projection.
+      // Keep that witness in this read pass only. New evidence always uses the
+      // visible receipt set and its coverage when it issues a snapshot.
+      (memo.originalEvidence ??= new WeakMap()).set(value, { ...value, provenance: { ...value.provenance,
+        sources: sources.slice(0, originalCoverage.included),
+        receiptMetadata: value.provenance.receiptMetadata.slice(0, originalCoverage.included), coverage: originalCoverage } });
+    }
+    return value;
   }
+
   function makeSnapshot(ns, intent, refs, items, accessGeneration) {
     return encode('evidence-snapshot-v1', { version: 1,
       binding: bind('evidence-scope-v1', ns), intent, refs,

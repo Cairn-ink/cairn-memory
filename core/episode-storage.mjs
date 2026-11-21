@@ -1,7 +1,7 @@
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { hasCommitDispatcher } from './commit-dispatch.mjs';
 import { contentReadSafety } from './content-safety.mjs';
-import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
+import { cachedContentSuppressionRequestInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { createHmac, randomUUID } from 'node:crypto';
 import { transaction, isStorageBusy } from './database.mjs';
 import { ADMISSION_LEASE_MS, HEX_DIGEST, advanceEpisodeControlGeneration } from './episode-schema.mjs';
@@ -1055,7 +1055,8 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       for (const page of Object.values(pages)) if (page.epoch !== undefined && page.epoch !== currentEpoch) fail('cursor_stale');
       let row = safety ? db.prepare(projected.query.sql).get(...projected.query.params) : live(ns, input.episodeId);
       if (!row || row.deleted) fail('episode_not_found');
-      const deniedSources = assertEpisodeRead?.(ns, row, projected.budget, 'detail');
+      const sourceVisibility = assertEpisodeRead?.(ns, row, projected.budget, 'detail');
+      const { deniedSources, checkedSources } = sourceVisibility ?? {};
       row = episodeReadRow(row);
       if (db.prepare('SELECT 1 FROM review_hidden_episodes WHERE id=?').get(row.id)) fail('episode_not_found');
       const sourcePage = db.prepare('SELECT * FROM episode_sources WHERE episode_id=? AND id>? ORDER BY id LIMIT ?');
@@ -1074,14 +1075,26 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
         if (sources.length === sourceCount || batch.length < sourceCount) break;
         sourceAfter = batch.at(-1).id;
       }
-      const memories = db.prepare(`SELECT l.* FROM episode_memory_links l JOIN memories m ON m.id=l.memory_id
+      const memoryPage = db.prepare(`SELECT l.* FROM episode_memory_links l JOIN memories m ON m.id=l.memory_id
         WHERE l.episode_id=? AND l.id>? AND m.deleted=0 AND m.review_state!='awaiting'
-          AND m.owner_id=? AND m.scope=? AND m.project_id=? ORDER BY l.id LIMIT ?`)
-        .all(row.id, pages.memory.after ?? '', ...boundary(ns), pages.memory.limit+1).filter(link => {
+          AND m.owner_id=? AND m.scope=? AND m.project_id=? ORDER BY l.id LIMIT ?`);
+      const memories = [], memoryCount = pages.memory.limit + 1;
+      let memoryAfter = pages.memory.after ?? '';
+      while (true) {
+        const batch = memoryPage.all(row.id, memoryAfter, ...boundary(ns), memoryCount);
+        const eligible = [];
+        for (const link of batch) {
           const memory = db.prepare('SELECT * FROM memories WHERE id=?').get(link.memory_id);
-          return memory && contentReadSafety(db, { namespace: ns, intent: 'history', ref: { type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision } }).allowed;
-        }).map(link => ({ id: link.id, memoryId: link.memory_id,
-          admissionRevision: link.admission_revision, receiptIds: JSON.parse(link.receipt_ids).filter(id => !contentSuppressionReasonInside(db, ns, { kind: 'receipt', key: id }) && db.prepare('SELECT 1 FROM receipts WHERE id=? AND memory_id=?').get(id, link.memory_id)) }));
+          if (!memory || !contentReadSafety(db, { namespace: ns, intent: 'history', ref: { type: 'memory',
+            namespace: ns, memoryId: memory.id, revision: memory.revision } }).allowed) continue;
+          eligible.push(link);
+          if (memories.length + eligible.length === memoryCount) break;
+        }
+        for (const link of eligible) memories.push({ id: link.id, memoryId: link.memory_id,
+          admissionRevision: link.admission_revision, receiptIds: JSON.parse(link.receipt_ids).filter(id => !contentSuppressionReasonInside(db, ns, { kind: 'receipt', key: id }) && db.prepare('SELECT 1 FROM receipts WHERE id=? AND memory_id=?').get(id, link.memory_id)) });
+        if (memories.length === memoryCount || batch.length < memoryCount) break;
+        memoryAfter = batch.at(-1).id;
+      }
       const policies = db.prepare(`SELECT e.*,s.state,s.release_reason FROM episode_events e LEFT JOIN staged_capture_evidence s
         ON e.owner_id=s.owner_id AND e.scope=s.scope AND e.project_id=s.project_id AND e.client=s.client AND e.event_id=s.event_id
         WHERE e.episode_id=? AND e.position>? ORDER BY e.position LIMIT ?`)
@@ -1096,12 +1109,16 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
         const statement = db.prepare(`SELECT * FROM episode_keep_actions WHERE episode_id=? AND keep_ordinal>?
           ORDER BY keep_ordinal LIMIT ?`);
         const count = pages.keep.limit + 1, result = [];
+        const reviewRetainedSources = safety &&
+          (deniedSources?.size || cachedContentSuppressionRequestInside(db, ns.ownerId)?.facts?.length !== 0);
+        const retainedDecisions = new Map();
+        let lookup;
         let after = pages.keep.after ?? 0;
         while (true) {
           const batch = statement.all(row.id, after, count);
           for (const action of batch) {
             const sourceIds = JSON.parse(action.keep_source_ids);
-            if (sourceIds.some(id => deniedSources?.has(id))) continue;
+            if (sourceIds.some(keepSourceDenied)) continue;
             result.push({ actionKey: action.admission_key, ordinal: action.keep_ordinal,
               createdAt: action.keep_created_at, policy: 'explicit-keep', admission: action.keep_state,
               errorCode: action.keep_error_code, sourceCoverage: { sourceIds,
@@ -1110,6 +1127,32 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
           }
           if (result.length === count || batch.length < count) return result;
           after = batch.at(-1).keep_ordinal;
+        }
+
+        function keepSourceDenied(id) {
+          if (deniedSources?.has(id)) return true;
+          if (!reviewRetainedSources || checkedSources?.has(id)) return false;
+          if (retainedDecisions.has(id)) return retainedDecisions.get(id);
+          lookup ??= db.prepare(`SELECT s.*,o.client,o.session_key,o.owner_id,o.scope,o.project_id,o.deleted
+            FROM episode_sources s LEFT JOIN session_episodes o ON o.id=s.origin_episode_id WHERE s.id=?`);
+          const source = lookup.get(id);
+          let denied = false;
+          if (source) {
+            denied = Boolean(source.deleted || source.owner_id !== ns.ownerId || source.scope !== ns.scope ||
+              source.project_id !== (ns.projectId ?? ''));
+            if (!denied) {
+              try {
+                sourceAuthority.assertReceipts(ns, [{ client: source.client, sessionId: source.session_key,
+                  eventId: source.message_id, role: source.role, excerpt: source.text }]);
+              } catch (error) {
+                if (!['source_excluded', 'conversation_deleted'].includes(error.code)) throw error;
+                denied = true;
+              }
+            }
+          }
+          // Historical coverage survives ordinary draft replacement.
+          retainedDecisions.set(id, denied);
+          return denied;
         }
       }
     });

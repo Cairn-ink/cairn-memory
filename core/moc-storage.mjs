@@ -659,6 +659,49 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       const currentEpoch = epoch(ns);
       if (expectedEpoch !== undefined && expectedEpoch !== currentEpoch) fail("cursor_stale");
       const count = limit + 1;
+      const layout = cachedContentLayout(db);
+      const facts = layout?.suppressionRevision ? cachedContentSuppressionRequestInside(db, ns.ownerId)?.facts : [];
+      const hideDeniedTopics = !inside && purpose === 'recall' && !catalogOnly &&
+        (!facts || facts.some(fact => ['memory', 'raw', 'owner', 'namespace'].includes(fact.kind)));
+      const deniedTopics = new Map();
+      let topicMembers;
+
+      function deniedTopic(id) {
+        if (deniedTopics.has(id)) return deniedTopics.get(id);
+        topicMembers ??= projectPrepare(`WITH topic AS (
+          SELECT * FROM mocs WHERE id=? AND ${namespaceWhere}
+        ), leaves AS (
+          SELECT * FROM topic WHERE level=1
+          UNION ALL
+          SELECT child.* FROM topic parent JOIN moc_edges edge ON edge.parent_id=parent.id
+            JOIN mocs child ON child.id=edge.child_id AND child.owner_id=parent.owner_id
+              AND child.scope=parent.scope AND child.project_id=parent.project_id
+          WHERE parent.level=2 AND child.level=1 AND edge.parent_revision=parent.revision
+            AND edge.child_revision=child.revision
+        )
+        SELECT memory.id,memory.revision${readAncestry('memory')}
+        FROM leaves JOIN moc_memory_refs ref ON ref.moc_id=leaves.id AND ref.moc_revision=leaves.revision
+          JOIN memories memory ON memory.id=ref.memory_id AND memory.revision=ref.memory_revision
+            AND memory.owner_id=leaves.owner_id AND memory.scope=leaves.scope AND memory.project_id=leaves.project_id
+        WHERE memory.deleted=0`);
+        let deniedOnly = false;
+        for (const member of topicMembers.iterate(id, ...boundary(ns))) {
+          if (member.invalid_raw_ancestry) fail('evidence_unavailable');
+          if (!memoryDenial(member.id, member.revision, Object.hasOwn(member, 'invalid_raw_ancestry'))) {
+            deniedOnly = false;
+            break;
+          }
+          deniedOnly = true;
+        }
+        deniedTopics.set(id, deniedOnly);
+        return deniedOnly;
+      }
+
+      function memoryDenial(id, revision, ancestryChecked) {
+        return contentSuppressionReasonInside(db, ns, { kind: 'memory', key: id, revision, ancestryChecked,
+          version: Number.isSafeInteger(revision) ? JSON.stringify(['memory-revision-v1', revision]) : undefined });
+      }
+
       // Carry a canonical ancestry proof in the existing page statement. The
       // direct check below still binds stale placements to their stored version.
       const memoryPage = sql => {
@@ -672,11 +715,11 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         ) AS invalid_raw_ancestry FROM (${projectSQL(sql)}) page` : projectSQL(sql));
       };
       let rows, scan;
-      const readMemoryRows = (sql, params) => {
-        const statement = memoryPage(sql);
+      const readRows = (statement, params) => {
         scan = start => statement.all(...params, count, start);
         return scan(offset);
       };
+      const readMemoryRows = (sql, params) => readRows(memoryPage(sql), params);
       if (catalogOnly) {
         // Classification needs the complete topic catalog, not every placement or
         // unfiled body. Filter before paging so memory growth cannot crowd it out.
@@ -830,7 +873,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
               LEFT JOIN memories memory ON memory.id = ref.memory_id
             WHERE ref.moc_id = ? ORDER BY sort_id, sort_ref LIMIT ? OFFSET ?`, [parent.id]);
         } else {
-          rows = projectPrepare(`WITH edges AS (
+          const statement = projectPrepare(`WITH edges AS (
             SELECT edge.*, child.level child_level, child.owner_id child_owner,
               child.scope child_scope, child.project_id child_project, child.revision current_child_revision,
               ${titleExpression.replaceAll("moc.", "child.").replaceAll("moc ", "child ")} visible_title,
@@ -861,18 +904,20 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
               child_id, child_revision, 'moc', reason, NULL FROM edges
               WHERE reason IS NOT NULL OR ? = 0 OR child_visible
           ) SELECT * FROM candidates ORDER BY sort_level, sort_title, sort_id, sort_ref
-            LIMIT ? OFFSET ?`).all(parent.id, Number(purpose === "recall"),
-              Number(purpose === "recall"), count, offset);
+            LIMIT ? OFFSET ?`);
+          const recall = Number(purpose === "recall");
+          rows = readRows(statement, [parent.id, recall, recall]);
         }
       }
       const serialize = (row) => {
+        if (hideDeniedTopics && (row.moc_id && deniedTopic(row.moc_id) || row.parent_id && deniedTopic(row.parent_id) ||
+          row.child_type === 'moc' && row.child_id && deniedTopic(row.child_id))) return undefined;
         if (row.child_type === "memory") {
           if (row.invalid_raw_ancestry) fail('evidence_unavailable');
           // A stale placement still refers to its recorded version. Never
           // replace that binding with the current Memory revision.
           const revision = row.child_revision;
-          if (contentSuppressionReasonInside(db, ns, { kind: 'memory', key: row.child_id, revision, ancestryChecked: Object.hasOwn(row, 'invalid_raw_ancestry'),
-            version: Number.isSafeInteger(revision) ? JSON.stringify(['memory-revision-v1', revision]) : undefined })) {
+          if (memoryDenial(row.child_id, revision, Object.hasOwn(row, 'invalid_raw_ancestry'))) {
             if (!inside) return undefined;
             fail('evidence_unavailable');
           }
