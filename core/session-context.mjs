@@ -75,6 +75,7 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
       if (error.code === 'context_item_too_large') return { memory: memoryMetadata(row, decisionReview), tooLarge: true };
       throw error;
     }
+    if (evidence === null) return null;
     const tag = group === 'procedural' ? proceduralStorage.inspect(row.id) : null;
     if (tag?.procedural) for (const anchor of tag.anchors) {
       const receipt = evidence.receipts.find(r => r.id === anchor.receiptId);
@@ -103,6 +104,8 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
         let query = nextSteps ? projected.query : original;
         let budget = projected.budget;
         const rows = [];
+        const memoryItems = safety && !nextSteps ? [] : null;
+        let sourceError;
         const count = original.params.at(-1);
         let scanned = 0;
         while (true) {
@@ -113,6 +116,16 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
               ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed));
           for (const row of eligible) {
             if (nextSteps && assertEpisodeRead?.(ns, row, budget, 'batch') === false) continue;
+            if (memoryItems && rows.length < count - 1 && !sourceError) {
+              try {
+                const item = sourcedMemory(ns, row, group);
+                if (item === null) continue;
+                memoryItems.push(item);
+              } catch (error) {
+                // Keep the identity comparison ahead of unrelated source errors.
+                sourceError = error;
+              }
+            }
             rows.push(nextSteps ? episodeReadRow(row) : row);
             if (rows.length === count) break;
           }
@@ -128,7 +141,10 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
         const identities = rows.map(row => ({ id: row.id, revision: row.revision }));
         if (expected && JSON.stringify(identities) !== JSON.stringify(expected.groups[group].identities)) fail('revision_conflict');
         let items;
-        try { items = rows.slice(0, 12).map(row => group === 'nextSteps' ? step(row) : sourcedMemory(ns, row, group)); }
+        try {
+          if (sourceError) throw sourceError;
+          items = memoryItems ?? rows.slice(0, 12).map(row => group === 'nextSteps' ? step(row) : sourcedMemory(ns, row, group));
+        }
         catch (error) {
           if (expected && error.code !== 'index_revision_conflict') fail('revision_conflict');
           throw error;

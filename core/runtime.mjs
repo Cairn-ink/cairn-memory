@@ -664,10 +664,10 @@ export function createMemoryRuntime(input, internal) {
     }, undefined, { deferred: true });
   }
 
-  function readSourceEvidence(row, complete = true) {
+  function readSourceEvidence(row, complete = true, qualificationOptions) {
     const original = db.prepare('SELECT * FROM receipts WHERE memory_id = ? ORDER BY created_at, id LIMIT 101').all(row.id);
     const ns = { ownerId: row.owner_id, scope: row.scope, projectId: row.project_id || null };
-    qualificationStorage.inspect(row);
+    if (qualificationStorage.inspect(row, qualificationOptions) === false) return null;
     const full = sourceEvidence(row, original, detailDto(row).receiptCount, receiptKey);
     const memo = createContentReadMemo(db), receipts = complete ? original : safeReceipts(ns, original, memo);
     if (!complete && !receipts.length) fail('source_unavailable');
@@ -862,7 +862,8 @@ export function createMemoryRuntime(input, internal) {
   }
   const episodeReads = createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRead, episodeProjection });
   const proceduralStorage = createProceduralStorage({ db, activeRow:(ns,id)=>memoryWriteSafety(ns,visibleRow(ns,id)), advanceEpoch, epoch });
-  const sessionContextStorage = createSessionContextStorage({ db, epoch, indexStorage, readSourceEvidence, proceduralStorage, decisionReview, assertEpisodeRead, episodeProjection });
+  const sessionContextStorage = createSessionContextStorage({ db, epoch, indexStorage, proceduralStorage, decisionReview, assertEpisodeRead, episodeProjection,
+    readSourceEvidence: row => readSourceEvidence(row, true, { withholdDenied: true }) });
   let episodes;
   episodes = createEpisodeStorage({ db, options: sessionEpisodes, stagedEvidence, advanceEpoch, epoch,
     forgetMutation, rawCapture, sourceAuthority: rawLineage, sourceRoots, assertEpisodeRead, episodeProjection,
