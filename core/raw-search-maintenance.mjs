@@ -261,17 +261,22 @@ export function createRawSearchMaintenance(storage,authority,options) {
         const ringStarted=performance.now(),ringBudget=maxMs/4;
         const ring=checkpoint.cleanup??{afterSegment:0,throughSegment:storage.tail()};
         const currentVersion=authority.version?.();
-        if(cleanupFullLap===null){
-          cleanupFullLap=ring.afterSegment===0;cleanupVersion=currentVersion;
-          if(cleanupFullLap)ring.throughSegment=storage.tail();
+        // A tail read can fail again at lap end on the same turn that starts
+        // or re-arms the ring. Keep the live state until all reads succeed.
+        let nextFullLap=cleanupFullLap,nextVersion=cleanupVersion,nextIdle=cleanupIdle;
+        if(nextFullLap===null){
+          const fullLap=ring.afterSegment===0;
+          if(fullLap)ring.throughSegment=storage.tail();
+          nextFullLap=fullLap;nextVersion=currentVersion;
         }
-        if(cleanupIdle&&(currentVersion!==cleanupVersion||!fence)){
-          cleanupIdle=false;cleanupVersion=currentVersion;cleanupFullLap=ring.afterSegment===0;
+        if(nextIdle&&(currentVersion!==nextVersion||!fence)){
+          const fullLap=ring.afterSegment===0;
           // Inventory may have published new rows while cleanup was idle.
-          if(cleanupFullLap)ring.throughSegment=storage.tail();
+          if(fullLap)ring.throughSegment=storage.tail();
+          nextIdle=false;nextVersion=currentVersion;nextFullLap=fullLap;
         }
         if(cleanupSkip)cleanupSkip=false;
-        else if(!cleanupIdle){
+        else if(!nextIdle){
           try {
             // One materialized row bounds small-slice snapshot work. Larger
             // slices retain the existing maximum page and cursor semantics.
@@ -287,9 +292,10 @@ export function createRawSearchMaintenance(storage,authority,options) {
               // Read after the final disposition: a denial during that check
               // can invalidate a source already visited earlier in this lap.
               const endVersion=authority.version?.();
-              cleanupIdle=versionAvailable&&cleanupFullLap&&endVersion===cleanupVersion;
-              ring.afterSegment=0;ring.throughSegment=storage.tail();
-              cleanupVersion=endVersion;cleanupFullLap=true;
+              const throughSegment=storage.tail();
+              nextIdle=versionAvailable&&nextFullLap&&endVersion===nextVersion;
+              ring.afterSegment=0;ring.throughSegment=throughSegment;
+              nextVersion=endVersion;nextFullLap=true;
             }
           } finally {
             // One indivisible canonical read can exceed the entire share. Give
@@ -297,6 +303,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
             cleanupSkip=performance.now()-ringStarted>ringBudget;
           }
         }
+        // The live ring state is published below, only after this turn's write commits.
         checkpoint.cleanup=ring;
         const cleanupCheckpoint=structuredClone(checkpoint);
         if(!fence&&!checkpoint.fenceRetry)checkpoint.fenceRetry=64;
@@ -368,6 +375,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
         // Also close callback races when a full inventory fence is unavailable
         // at the work ceiling. No callback follows this exact batch snapshot.
         if(staged.length)authority.validate([{sources:staged.map(row=>row.source),intent:'history',access,value:null}]);
+        let ringSaved=true;
         if(staged.length||remove.length||!same(checkpoint,state.checkpoint)) {
           try {
             cancelled(upkeepSignal);
@@ -387,9 +395,12 @@ export function createRawSearchMaintenance(storage,authority,options) {
             quotaBlocked=true;pending=null;eligibleWork=false;
             if(remove.length){cancelled(upkeepSignal);const result=await storage.commitBatch({remove:[...new Set(remove)],checkpoint:cleanupCheckpoint});
               commit();progress.removed+=result.removed;if(result.removed){quotaBlocked=false;changed();}}
+            else ringSaved=false; // Nothing was written: the ring cursor stays at its saved position.
             progress.error=quotaBlocked?'quota_exhausted':null;
           }
         }
+        // A failed commit throws above or clears ringSaved and leaves the live ring state, so the next turn retries.
+        if(ringSaved){cleanupIdle=nextIdle;cleanupVersion=nextVersion;cleanupFullLap=nextFullLap;}
       },maxMs,upkeepSignal);
       cancelled(upkeepSignal);
 
