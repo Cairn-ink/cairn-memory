@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "eebe73a7dbfa43b5d05638ad0d12d23789b30b564adaa765c39c369a9ee40c7d",
-  "bytes": 1479992,
+  "sha256": "4c37179a1456dbfb80a5335626e619821c5ffa7da162e1d3727fdec1b5ae1329",
+  "bytes": 1480817,
   "files": [
     "LICENSE",
     "README.md",
@@ -637,22 +637,22 @@
     "integrations/client/raw/local-process.mjs": "644e65560c883018244c4fee126cb92a399128c1c62116ad68bb79574abcb764",
     "integrations/client/raw/local-reply.mjs": "ec1cd9df94a594e2a31adc4ab7e00abd92697fab5f6f6ccf34a15e65e1b10a91",
     "integrations/client/raw/local-transport.mjs": "4667b69cc9a8cf4ae84aee3fe837be8cf6c5f5a3199bbfdae7caf38369a01b16",
-    "integrations/client/raw/local-worker.mjs": "179d6023d2034a67a86c3c86fea22cbe54a73a842a4a003e0103a25fae7919f1",
+    "integrations/client/raw/local-worker.mjs": "e29b931539c0247b6d8aaa7839a01a4d71478e8febd49a4dadef7f8ca29b06e9",
     "integrations/client/raw/local-worker-input.mjs": "4bed6dd911c34a1feb6a7cd3678b3c631256bee1dc013ddefb3847aa4d1c5649",
     "integrations/client/raw/local-worker-progress.mjs": "81f264adf0349919fed015b9fd4c3c8effd9af1b160119c33e954828955445e2",
     "integrations/client/raw/local-worker-source.mjs": "8fa56d11c8db15b2397f5e60648725dc69285310169e4e189fa36da76746934e",
     "integrations/client/raw/local-source-open.mjs": "bde22948154be589230b49507e73c9a7a279a22667bd105092953d268c9f0fec",
     "integrations/client/raw/local-worker-state.mjs": "40f4e6ddea49395c033bda9cf27f58367607cad901366538f98cb6658bb5c5a1",
-    "integrations/client/raw/local-host.mjs": "a1d73e94f0384618c3c26a9d520ee3eddf63c268e48c6d3841dea99685f82907",
+    "integrations/client/raw/local-host.mjs": "271c2c08bd9e4d319ffd6bd9c108f8ba74022fd914c8f3a7493c51508bd3f457",
     "integrations/client/raw/local-setup-input.mjs": "e4f2cf1031897b25d3e16f6f65696bfab62afee758e82fe8e8d148785029cb6a",
     "integrations/client/raw/local-setup-files.mjs": "f54b51f466531ad76798de6982146e7080bd60d2004c259bcf7e0fc59cf2055a",
     "integrations/client/raw/local-settings-lock.mjs": "0e3a1973363798d9cf037b972743b1c53f154a1ffda6729b5e0f4660826ecbbc",
     "integrations/client/raw/local-setup.mjs": "d606a181d89d6c059414dbed4570fb7b395e536b977ff3ff7ee0fdfa24a4be2b",
     "integrations/client/raw/local-setup-cli.mjs": "544e623c9ad2829038dd94b5f159bc623451b9b9bc6569732cbaf51648b7af15",
     "integrations/client/raw/local-setup-init.mjs": "30c3b1b5d996ad5ef443dc596964d9979d1e0177092fd9934795fdc00a8bd67c",
-    "integrations/client/raw/local-hook.mjs": "1a1d343cc8adefdc74464c94e76156f6abf37d603d20813b18a5eebaa3aeae9b",
+    "integrations/client/raw/local-hook.mjs": "a2db2f3b3f019bff48c7052805fd8d1dc419823748af0a22b4dd9a26a2a6ae79",
     "integrations/client/raw/local-codex-qualification.mjs": "96fae8a0e3821d08a7d2347c5e4e42570a5e15378f74aa25120d93dfe404bdac",
-    "integrations/client/raw/local-session-start.mjs": "65d071ce9a430b47f7a9a5797dc3564a82a652bf2ff66e6d9fbfb4a5f2419aba",
+    "integrations/client/raw/local-session-start.mjs": "9f02d277c5fb4d8d17d7f6f940dddfbf72dc04d24b5ffe72883671743701f527",
     "integrations/client/raw/local-session-fence.mjs": "ec0a9ea5e45158423f70fdb1a8cf0df1a8b1b4424df452b8cde671436bbbea39",
     "integrations/client/raw/local-host-profile.mjs": "4dd9e8cd5a022c1802e5a62470b8584ab93ebb399b59f4993b6eca99e64413c6",
     "integrations/client/raw/local-host-permission.mjs": "7ab595da6af438cd33a9ff063c7085bdc53c47d9775386a4eeb8ef523e4e6de6",
@@ -838,6 +838,6 @@
   "generatedHashes": {
     "package.json": "e255ff4d23e921de9bed8e058c64e57aed3e1bc6a8ed242cee52a716add2d69c",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8",
-    "engine-build.json": "736484148144554bddbf581f514115aaaedf86e57391a08a3dfd0b836d7689c1"
+    "engine-build.json": "183af85ffe6794686bea5c3a5f193de71d96414e1977f6af2db0331464ba9e81"
   }
 }
