@@ -583,7 +583,7 @@
     "key:sessionId": 3,
     "key:streamId": 1,
     "literal:eventId": 2,
-    "literal:sessionId": 3,
+    "literal:sessionId": 4,
     "literal:streamId": 1
   },
   "core/raw-journal.mjs": {
