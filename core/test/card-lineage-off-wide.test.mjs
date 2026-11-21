@@ -8,6 +8,7 @@ import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { eventTimeSafetyFixture } from '../testing/receipt-event-time-fixture.mjs';
 import { transaction } from '../database.mjs';
 import { createRawLineageStorage } from '../raw-lineage-storage.mjs';
+import { filterOpenerTrace } from '../testing/card-lineage-off-wide-opener.mjs';
 import { normalizeSQL, summary, currentReceiptWalkSQLTexts, receiptWalkSQLTexts, receiptWalkSQL,
   workloadKeys, validateSqlAdditions, reviseSQL, reconstructWideTrace, compareWideTraces, assertWidePins, validateCardStatementTexts, assertArchivedCardStatementTexts, wideArchiveMode } from '../testing/card-lineage-off-wide-compare.mjs';
 
@@ -182,7 +183,7 @@ for(const base of [23,33])for(const mode of ['open','workload'])for(const eventT
   test(`lineage-zero ${key}: opening, SQL, serialized results/errors and every table match the archived baseline`,async t=>{
     const workspace=createTestWorkspace(t,{prefix:'lineage-off-wide-'});
     const oldPath=join(workspace.path,'old.sqlite'),newPath=join(workspace.path,'new.sqlite');
-    const baseline=availableArchive(workspace.path,t),current=run(root,newPath,mode,cell);
+    const baseline=availableArchive(workspace.path,t),current=filterOpenerTrace(key,run(root,newPath,mode,cell));
     archiveAvailable &&= Boolean(baseline);
     const review = retirementReviews[key];
     const currentPin = pins.currentRecords?.[key] ?? receiptWalkPins.records[key] ?? pins.records[key];
