@@ -18,6 +18,7 @@ continues. Namespace pause temporarily refuses search, source opening and final
 delivery; resume restores retained eligible publications without waiting for the
 full walk. Permanent denials still take effect while paused. Disabling future
 automatic capture alone leaves the saved prefix readable.
+If the last client disconnects with a removal still pending, the removed message's search entry stays on disk until cleanup reaches it, and search never returns it. Once a client connects again, cleanup resumes: an entry already queued for removal is erased within seconds, and others within about a minute per 1,000 search entries while a client stays connected.
 
 Recent visibility uses the newest 256 publications within a 4 MiB hint slice,
 merged with ordinary rows under the shared search limits. A result can age out or
