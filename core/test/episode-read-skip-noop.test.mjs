@@ -214,6 +214,50 @@ test('Episode detail expires and withholds evidence that becomes due between rea
   assertNoWrites(first);
 });
 
+test('Episode detail uses one wall-clock sample for staged expiry', async t => {
+  const f = await fixture(t, 53);
+  t.mock.timers.enable({ apis: ['Date'], now: start });
+  const input = batch('episode');
+  const { episodeId } = f.runtime.reserveEpisodeBatch(ns, input);
+  const { eventId, payloadDigest, view } = batch('plain');
+  assert.ok(f.runtime.claimCaptureEvidence(ns, {
+    client: 'other-client', eventId, payloadDigest, view, leaseMs: 125_000,
+  }).token);
+  f.db.prepare('UPDATE staged_capture_evidence SET expires_at=? WHERE event_id=?')
+    .run(expiry + 1, input.eventId);
+  const staged = f.db.prepare('SELECT state,payload,expires_at FROM staged_capture_evidence WHERE event_id=?');
+  assert.equal(staged.get(eventId).expires_at, expiry);
+  const initial = episodeState(f, episodeId);
+  const initialPayload = staged.get(input.eventId).payload;
+  assert.ok(initialPayload);
+
+  // A second sample during this read would hit the Episode row's expiry.
+  let samples = 0;
+  const clock = t.mock.method(Date, 'now', () => expiry + Number(samples++ > 0));
+  let detail;
+  try {
+    detail = read(f, 'contract', episodeId);
+  } finally {
+    clock.mock.restore();
+  }
+
+  const [policy] = detail.policies.items;
+  assert.deepEqual([policy.staging, policy.gap, policy.gapReasons], ['pending', null, []]);
+  assert.equal(samples, 1);
+  assert.equal(watermark(f), expiry);
+  assert.equal(detail.episode.revision, initial.revision);
+  assert.equal(detail.episode.updatedAt, initial.updated_at);
+  const state = episodeState(f, episodeId);
+  assert.equal(state.epoch, initial.epoch);
+  assert.equal(state.revision, initial.revision);
+  assert.equal(state.updated_at, initial.updated_at);
+  assert.deepEqual(state.staged.map(row => [row.event_id, row.state]), [
+    [input.eventId, 'pending'], [eventId, 'expired'],
+  ]);
+  assert.equal(staged.get(eventId).payload, null);
+  assert.equal(staged.get(input.eventId).payload, initialPayload);
+});
+
 test('Episode detail does not revive expired evidence or write after a clock rollback', async t => {
   const f = await fixture(t, 53);
   t.mock.timers.enable({ apis: ['Date'], now: start });
