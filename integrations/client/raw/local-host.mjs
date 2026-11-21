@@ -56,10 +56,9 @@ function operation(value, deps) {
   const cancel = () => { cancelled = true; controller.abort(); };
   if (signal !== undefined) add.call(signal,'abort',cancel,{ once:true });
   if (cancelled) controller.abort();
-  const untilCutoff = () => end-2000-performance.now();
   const timer = setTimeout(() => controller.abort(),Math.max(0,end-performance.now()-2000));
   const stopReason = () => controller.signal.aborted || performance.now() >= end-2000 ? (cancelled ? 'cancelled' : 'work_limit') : null;
-  return { signal:controller.signal,remaining:() => Math.max(0,Math.floor(end-performance.now())),untilCutoff,stopReason,check() {
+  return { signal:controller.signal,remaining:() => Math.max(0,Math.floor(end-performance.now())),stopReason,check() {
     const reason = stopReason();
     if (reason) fail(reason);
   }, close() { clearTimeout(timer); if (signal !== undefined) remove.call(signal,'abort',cancel); } };
@@ -150,8 +149,7 @@ export function createLocalRawHost(value) {
       const worker = createLocalRawWorker({ stateRoot:profile.stateRoot,identityKeyPath:profile.identityKeyPath,
         nodeExecutable:process.execPath,runtimeRoot,configPath:profile.configPath,expectedAuthority:config.authority,home:profile.home });
       const workerOptions = { signal:op.signal };
-      const tracked = (startCheck || action === 'run' && profile.installation.client === 'claude-code') &&
-        trackWorkerHostOperation(workerOptions,op,Boolean(startCheck));
+      const tracked = startCheck && trackWorkerHostOperation(workerOptions,op,true);
       const result = await worker[action]({ ...selected,pluginRoot:profile.installation.client === 'claude-code' ? profile.installation.pluginRoot : null,
         formatAuthority },workerOptions);
       // The outer deadline includes preflight. Preserve the worker's exact

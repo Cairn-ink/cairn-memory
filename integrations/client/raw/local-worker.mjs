@@ -1,5 +1,4 @@
-import { setTimeout as delay } from 'node:timers/promises';
-import { markSessionStart,hasSessionStart,readSessionStartAttempt,sweepSessionStartAttempt } from './local-session-start.mjs';
+import { markSessionStart,hasSessionStart,readSessionStartAttempt } from './local-session-start.mjs';
 import { readConfigurationSnapshot } from '../../../adapters/local/configuration.mjs';
 import { localAuthorityInput } from '../../../core/local-authority-input.mjs';
 import { stateLock } from '../state-lock.mjs';
@@ -14,21 +13,6 @@ export function trackWorkerHostOperation(options,operation,observeStart) {
   const observation = { operation,observeStart,permissionReason:null };
   hostOperations.set(options,observation);
   return observation;
-}
-
-async function sweepWithinBudget(identity,context,operation,host) {
-  const margin = 3000;
-  const spare = () => Math.min(operation.remaining()-2000,host?.untilCutoff() ?? Infinity)-margin;
-  if (operation.signal.aborted || spare() <= 0) return;
-  const controller = new AbortController();
-  const signal = AbortSignal.any([operation.signal,controller.signal]);
-  const allowed = () => !signal.aborted && spare() > 0;
-  try {
-    // Leave time for the ordinary source close, lock release and host result.
-    // A read still pending when the wait ends cannot proceed to unlink.
-    const limit = delay(Math.min(margin,spare()),undefined,{ signal }).catch(() => {});
-    await Promise.race([limit,sweepSessionStartAttempt(identity,context,allowed)]);
-  } finally { controller.abort(); }
 }
 
 export function createLocalRawWorker(value) {
@@ -96,9 +80,7 @@ export function createLocalRawWorker(value) {
             await verifyCursorSource(identity,opened,cursor); operation.check();
             if (initialize) return cursor.blockedReason ? summary('blocked',cursor.blockedReason,cursor)
               : summary('ready',cursor.selection.awaitingUserBoundary ? 'awaiting_user_boundary' : null,cursor);
-            const result = await runProgress({ options,identity,context,opened,cursor,operation,bytes });
-            if (options.authority.client === 'claude-code') await sweepWithinBudget(identity,context,operation,tracked?.operation);
-            return result;
+            return await runProgress({ options,identity,context,opened,cursor,operation,bytes });
           }
           const size = await sourceSize(opened);
           if (context.start === 'eof' && !(await completeBoundary(opened,size))) return summary('waiting','partial_record');

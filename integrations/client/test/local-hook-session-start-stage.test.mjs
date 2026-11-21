@@ -258,7 +258,7 @@ async function staleAttempt(f) {
   return { path,attempt };
 }
 
-test('5. Stop removes only the matching stale attempt once a cursor exists',async t => {
+test('5. Stop leaves an earlier attempt in place once a cursor exists',async t => {
   const f = await lazyFixture(t,'claude-code'), control = await lazyFixture(t,'claude-code');
   assert.deepEqual(await f.hook(),ready);
   assert.deepEqual(await control.hook(),ready);
@@ -275,10 +275,10 @@ test('5. Stop removes only the matching stale attempt once a cursor exists',asyn
   assert.deepEqual(readFileSync(control.cursorPath()),controlCursor);
   assert.deepEqual(savedRows(f),rows);
   assert.deepEqual(savedRows(control),rows);
-  assert.equal(existsSync(path),false,'the valid stale attempt was swept');
+  assert.equal(existsSync(path),true,'Stop never deletes start files');
 });
 
-test('5. a legitimate start marker and existing cursor survive the worker sweep',async t => {
+test('5. a legitimate start marker and existing cursor survive Stop',async t => {
   const f = workerFixture(t,{ rows:[] });
   const run = async (action,options) => {
     const result = await f.runWorker(action,options).done;
@@ -502,8 +502,8 @@ test('R3 preserves the partial-record hook and CLI outcomes near the host cutoff
       host:JSON.stringify(actualHost),hook:JSON.stringify(actualHook),native:actualCli,standalone:actualStandalone,
     },{
       host:JSON.stringify(expectedHost),hook:JSON.stringify(expectedHook),native:expectedCli,standalone:expectedStandalone,
-    },'the optional sweep preserved the waiting result and CLI bytes');
-    assert.ok(existsSync(attempt),'the sweep was skipped near the cutoff');
+    },'an earlier attempt leaves the waiting result and CLI bytes unchanged');
+    assert.ok(existsSync(attempt),'Stop left the attempt in place');
     t.diagnostic(JSON.stringify({ host:actualHost,hook:actualHook,native:actualCli,
       standalone:{ status:actualStandalone.status,signal:actualStandalone.signal,
         stdout:actualStandalone.stdout.toString('base64'),stderr:actualStandalone.stderr.toString('base64') } }));
@@ -514,81 +514,50 @@ function isAttemptPath(path,attempt) {
   return attempt && (path === attempt || path.startsWith('/proc/self/fd/') && basename(path) === basename(attempt));
 }
 
-async function afterAttemptRead(path,change,work) {
-  const open = fs.open;
-  let changed = false;
-  fs.open = async (name,...args) => {
-    const handle = await open(name,...args);
-    if (isAttemptPath(name,path)) {
-      let read = false;
-      const readFile = handle.readFile.bind(handle), stat = handle.stat.bind(handle), close = handle.close.bind(handle);
-      const afterRead = async () => {
-        if (read && !changed) { changed = true; await change(); }
-      };
-      handle.readFile = async (...options) => {
-        const bytes = await readFile(...options);
-        read = true;
-        return bytes;
-      };
-      handle.stat = async (...options) => {
-        const info = await stat(...options);
-        await afterRead();
-        return info;
-      };
-      handle.close = async () => { await afterRead(); await close(); };
-    }
-    return handle;
-  };
-  syncBuiltinESMExports();
-  try {
-    assert.deepEqual(await work(),ready);
-    assert.ok(changed,'read the original attempt before changing its path');
-  } finally { fs.open = open; syncBuiltinESMExports(); }
+
+
+async function busyStart(f,count = 1) {
+  const profile = await readHostProfile(profilePath(f));
+  const config = await readHostConfiguration(profile);
+  const selection = { sessionId,sourcePath:f.sourcePath };
+  return withSessionIdentity(profile,config,selection,identity =>
+    stateLock(identity.lockPath,() => Promise.all(Array.from({ length:count },() => runLocalRawHook(hookInput(f))))));
 }
 
-test('R4 leaves a replacement inode and changed bytes at the parsed attempt path',async t => {
-  const survivors = [];
-  for (const change of ['replacement','identical replacement','changed bytes']) {
-    const f = await lazyFixture(t,'claude-code');
-    assert.deepEqual(await f.hook(),ready);
-    const { path,attempt } = await staleAttempt(f);
-    const newer = change === 'identical replacement' ? readFileSync(path,'utf8') :
-      JSON.stringify({ ...attempt,source:'0'.repeat(64) });
-    await afterAttemptRead(path,() => {
-      if (change !== 'changed bytes') {
-        renameSync(path,join(f.root,'removed-attempt'));
-        writeFileSync(path,newer,{ mode:0o600,flag:'wx' });
-      } else writeFileSync(path,newer);
-    },() => f.hook('Stop'));
-    survivors.push(existsSync(path) && readFileSync(path,'utf8') === newer);
-  }
-  assert.deepEqual(survivors,[true,true,true],'only the inode and bytes that were parsed may be removed');
+test('8. a new SessionStart attempt replaces a stale attempt from an earlier authority',async t => {
+  const f = await lazyFixture(t,'claude-code');
+  unlinkSync(f.sourcePath);
+  assert.deepEqual(await stopStart(t,f,{ check:5,reason:'cancelled' }),hookOutcome('blocked','cancelled'));
+  const path = startFile(f), stale = readFileSync(path,'utf8');
+  assert.equal(JSON.parse(stale).kind,'fresh');
+  setPause(f,true); setPause(f,false);
+  await activateHostAuthority(profilePath(f),() => {});
+  createTranscript(f);
+  assert.deepEqual(await busyStart(f),[hookOutcome('busy','state_busy')]);
+  assert.deepEqual(startFiles(f),[path],'no temporary file is left');
+  const replaced = JSON.parse(readFileSync(path));
+  assert.equal(replaced.version,attemptVersion);
+  assert.notEqual(replaced.authority,JSON.parse(stale).authority,'the new SessionStart attempt was recorded');
+  assert.equal(replaced.kind,'present');
+  f.append('Synthetic after the replaced attempt');
+  assert.notDeepEqual(await f.hook('Stop'),stateInvalid,'Stop recovers the session from the new attempt');
 });
 
-test('R5 leaves attempts behind a symlinked or retargeted starts directory',async t => {
-  const survivors = [];
-  for (const retarget of [false,true]) {
-    const f = await lazyFixture(t,'claude-code');
-    assert.deepEqual(await f.hook(),ready);
-    const { path } = await staleAttempt(f);
-    const starts = dirname(path), backup = join(f.root,'starts-backup');
-    const backupAttempt = join(backup,basename(path));
-    const text = readFileSync(path);
-    if (retarget) {
-      mkdirSync(backup,{ mode:0o700 });
-      writeFileSync(backupAttempt,text,{ mode:0o600 });
-      await afterAttemptRead(path,() => {
-        renameSync(starts,join(f.root,'old-starts'));
-        symlinkSync(backup,starts);
-      },() => f.hook('Stop'));
-    } else {
-      renameSync(starts,backup);
-      symlinkSync(backup,starts);
-      assert.deepEqual(await f.hook('Stop'),ready);
-    }
-    survivors.push(existsSync(backupAttempt) && readFileSync(backupAttempt).equals(text));
+for (const earlier of [false,true]) test(`9. concurrent SessionStarts leave one complete attempt (earlier attempt = ${earlier})`,async t => {
+  const f = await lazyFixture(t,'claude-code');
+  if (earlier) {
+    unlinkSync(f.sourcePath);
+    assert.deepEqual(await stopStart(t,f,{ check:5,reason:'cancelled' }),hookOutcome('blocked','cancelled'));
+    createTranscript(f);
   }
-  assert.deepEqual(survivors,[true,true],'a symlinked or retargeted parent kept its attempt');
+  const outcomes = await busyStart(f,4);
+  assert.deepEqual(outcomes,Array(4).fill(hookOutcome('busy','state_busy')));
+  const files = startFiles(f);
+  assert.equal(files.length,1,'one attempt file and no temporary files');
+  const attempt = JSON.parse(readFileSync(files[0]));
+  assert.deepEqual(Object.keys(attempt).sort(),['authority','kind','source','version']);
+  assert.equal(attempt.version,attemptVersion);
+  assert.equal(attempt.kind,'present');
 });
 
 }
