@@ -19,12 +19,12 @@ export function validateSourceReceipt(memoryId, receipt, receiptKey) {
 
 // Called only inside the authoritative runtime transaction. Interpretation
 // fields and source identity metadata never enter this closed usage projection.
-export function sourceEvidence(memory, receipts, receiptCount, receiptKey) {
+export function sourceEvidence(memory, receipts, receiptCount, receiptKey, { allowEmpty = false } = {}) {
   if (receiptCount > 100 || receipts.length > 100) fail('context_item_too_large');
   try {
     identifier(memory.id); revision(memory.revision);
     if (!['current', 'historical'].includes(memory.currentness) ||
-        !Number.isSafeInteger(receiptCount) || receiptCount < 1 || receipts.length !== receiptCount) fail('storage_error');
+        !Number.isSafeInteger(receiptCount) || receiptCount < (allowEmpty ? 0 : 1) || receipts.length !== receiptCount) fail('storage_error');
     const seen = new Set();
     const sources = receipts.map(receipt => {
       const source = validateSourceReceipt(memory.id, receipt, receiptKey);

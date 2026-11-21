@@ -864,7 +864,7 @@ export function createMemoryCore(input, internal) {
         const pageEnded = take === page.rows.length;
         const exhausted = pageEnded && page.scanExhausted !== false;
         const value = { items: selected.filter((row) => row.item).map((row) => row.item),
-          nextCursor: pageEnded ? null : encodeCursor({ ...binding, e: page.epoch, a: { offset: offset + take,
+          nextCursor: pageEnded ? null : encodeCursor({ ...binding, e: page.epoch, a: { offset: page.offsets?.[take - 1] ?? offset + take,
             ...(navigation ? { scanBoundary: page.scanBoundary } : {}) } }),
           exhausted, truncatedBy: exhausted ? null : take < capacity ? 'token_budget' : 'page_limit',
           indexRevision: page.epoch,
