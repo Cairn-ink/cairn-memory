@@ -1,0 +1,88 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { scenario, balance, checkpoint, until, ns, ok } from './fixtures/context-semantic-backfill-recovery-host.mjs';
+import { openMemoryCore } from '../index.mjs';
+import { receipt } from '../testing/context-read-fixture.mjs';
+
+test('exact equality drains only the paid batch and certifies both targets after restart without dispatch',async t=>{
+  const s=await scenario(t,{base:balance,enabled:false});
+  const refresh=ok(await s.refresh());
+  assert.equal(refresh.progress.embedded,2,'the exact-balance settled batch reaches the writer');
+  assert.equal((await s.status()).refresh.phase,'blocked');
+  assert.equal((await s.status()).refresh.backfillUsdCharged,balance);
+  const sent=s.state[6];
+  assert.equal(ok(await s.validate()).status,'partial');
+  await s.restart({enabled:true});
+  assert.equal(ok(await s.refresh('history')).progress.embeddingAttempts,0);
+  assert.equal(ok(await s.validate()).status,'complete');
+  assert.equal((await s.status()).refresh.phase,'steady');
+  assert.equal(s.state[6],sent);
+  assert.equal(s.read().blocked,false);
+});
+
+test('in-flight work refuses grants, and unknown work stays charged without reaching the vector writer',async t=>{
+  const s=await scenario(t,{base:balance});s.state[7]=7;
+  const refresh=s.refresh();
+  try {
+    await until(()=>s.state[10]===1);
+    const status=await s.status();
+    assert.equal(status.refresh.backfillUsdReserved,balance);
+    const input=s.intent();s.approve(input);
+    assert.equal((await s.grant(input)).error.code,'read_in_progress');
+    s.state[7]=3;
+  }finally{s.unpause();}
+  assert.equal(ok(await refresh).progress.embedded,0);
+  assert.equal(Object.values(s.read().reservations)[0].status,'unknown');
+  assert.equal((await s.status()).refresh.backfillUsdCharged,balance);
+  assert.equal(ok(await s.validate()).status,'partial');
+  const input=s.intent();s.approve(input);assert.equal(ok(await s.grant(input)).status,'granted');
+});
+
+test('disposal releases a definite reserve and charges an ambiguous send without replay',async t=>{
+  const s=await scenario(t);
+  s.seed(row=>{
+    row.blocked=true;
+    row.reservations.release={kind:'refresh',phase:'backfill',status:'reserved',day:0,items:1,cost:'2000'};
+    row.reservations.ambiguous={kind:'refresh',phase:'backfill',status:'may_transmit',day:0,items:1,cost:'3000'};
+  });
+  await assert.rejects(s.restart(),{code:'read_in_progress'});
+  s.settings('disposed',1);await s.restart();
+  const {release,ambiguous}=s.read().reservations;
+  assert.equal(release.status,'released');assert.equal(ambiguous.status,'unknown');
+  assert.equal((await s.status()).refresh.backfillUsdCharged,'0.000000003');
+  assert.equal((await s.status()).refresh.phase,'blocked');assert.equal(s.state[6],0);
+});
+
+for(const race of ['correction','revoked access'])test('a paid result cannot cross '+race,async t=>{
+  const s=await scenario(t,{base:balance});s.state[7]=7;
+  const refresh=s.refresh();
+  try {
+    await until(()=>s.state[10]===1);
+    if(race==='correction'){
+      const writer=openMemoryCore({path:s.f.path}), memory=s.memories[0],content='updated synthetic revision';
+      try{ok(writer.correct({namespace:ns,memoryId:memory.id,expectedRevision:memory.revision,content,kind:'fact',receipt:receipt(content)}));}
+      finally{writer.close();}
+    }else s.state[0]=0;
+  }finally{s.unpause();}
+  const result=await refresh;s.state[0]=1;
+  if(race==='correction')assert.equal(ok(result).progress.embedded,0);
+  else assert.equal(result.error.code,'scope_changed');
+  assert.equal(s.sidecar(db=>db.prepare('SELECT count(*) n FROM semantic_vectors').get().n,true),0);
+  assert.equal((await s.status()).refresh.backfillUsdCharged,balance);
+  assert.equal(s.state[6],1);
+});
+
+test('the final coverage pass detects same-version certificate removal after prepare',async t=>{
+  const s=await scenario(t,{base:balance});
+  ok(await s.refresh());ok(await s.refresh('history'));
+  const sent=s.state[6], intent=s.intent();intent.expected.sequence++;
+  s.arm(checkpoint.holdPrepare,intent);
+  const validating=s.validate();
+  try {
+    await Promise.race([until(()=>s.settings('reached')===1),validating.then(()=>assert.fail('validation returned before final prepare'))]);
+    s.sidecar(db=>db.prepare('DELETE FROM vector_publications').run());
+  }finally{s.unpause();}
+  assert.equal(ok(await validating).status,'partial');
+  assert.equal((await s.status()).refresh.phase,'blocked');
+  assert.equal(s.anchor().pending,null);assert.equal(s.state[6],sent);
+});

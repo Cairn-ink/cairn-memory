@@ -6,7 +6,7 @@ import { productSidecar, canonicalProductIdentity, productFile, PRODUCT_SIDECAR_
 import { productVectors } from './context-product-vectors.mjs';
 import { canonicalJson, digest, accessDigest } from './context-product-validation.mjs';
 import { mono } from './context-product-control.mjs';
-import { safePath } from './context-semantic-input.mjs';
+import { safePath, targetSetDigest } from './context-semantic-input.mjs';
 import { fail } from './validation.mjs';
 
 const same=(a,b)=>canonicalJson(a)===canonicalJson(b);
@@ -67,25 +67,57 @@ export function semanticMaintenance({c,sqlite,identity,secretState,reserveHandle
     if(!paths.has(digest(target)))targets(c.backfillTargets);
     const path=paths.get(digest(target));if(!path)fail('revision_conflict');return open(path);
   }
-  function probe(target,state) {
+  function observeTarget(target,state) {
     const v=resolve(target),p={readSet:target.readSet,types:target.types,intent:target.intent,ownerCoverage:coverage(target.readSet)};
     const currentIdentity=canonicalProductIdentity(v.path,v.facade.port.db);
     if(!same(currentIdentity,target.canonicalIdentity)||v.facade.port.identity.storeId!==target.storeId)return null;
     const access=accessDigest({ownerId:state.ownerId,namespaces:{readSet:target.readSet},...(c.host.configuration.ownerGeneration===undefined?{}:{ownerGeneration:c.host.configuration.ownerGeneration})});
     const observed=v.storage.observe(p,access);
     if(observed.dto.lexical.state!=='ready')return null;
+    return {v,p,observed,currentIdentity};
+  }
+  function probe(target,state) {
+    const sample=observeTarget(target,state);
+    if(!sample)return null;
+    const {v,p,observed,currentIdentity}=sample;
     const vector=v.vectors.observe(p,observed.publication,{identity:identity(),policy:state.policy});
     if(vector.status!=='complete')return null;
     const receipt={targetDigest:digest(target),lexicalValidationDigest:digest(observed.publication),vectorValidationDigest:digest(vector.record),identity:identity(),purgeEpoch:state.policy.purgeEpoch,
       canonical:currentIdentity,sidecar:vector.record.sidecar,canonicalFenceDigest:vector.record.canonicalFenceDigest,dependencyFenceDigest:vector.record.dependencyFenceDigest,accessDigest:vector.record.accessDigest};
     if(Buffer.byteLength(canonicalJson(receipt))>4096)fail('context_item_too_large');return receipt;
   }
-  async function validate({input,operation,final,current,change,ledger,coverageStatus,prepare,pending}) {
+  function observeV3RecoveryCapacity(target,state) {
+    const view=resolve(target);
+    return view.facade.port.read(()=>{
+      const sample=observeTarget(target,state);
+      return sample&&sample.v.vectors.dispatchFits(sample.observed.publication,identity())?digest(sample.observed.publication):null;
+    });
+  }
+  function recoveryCapacity(state,guard,observeCapacity=observeV3RecoveryCapacity) {
+    function evidence(sample) {
+      try{return sample();}catch(error){
+        if(error.code==='storage_busy'||error.code==='ERR_SQLITE_ERROR'&&[5,6].includes(error.errcode&255))throw error;
+        fail('index_unavailable');
+      }
+    }
+    guard();
+    if(!state.targets||!identity()||evidence(()=>targetSetDigest(targets(c.backfillTargets)))!==state.targetSetDigest)fail('index_unavailable');
+    const proofs=state.targets.map(target=>{
+      guard();
+      const proof=evidence(()=>observeCapacity(target,state));
+      if(!proof)fail('index_unavailable');
+      return proof;
+    });
+    guard();
+    return digest(proofs);
+  }
+  async function validate({input,operation,final,current,change,ledger,identity:expectedIdentity,coverageStatus,prepare,pending,certificationEligible,finishCertification}) {
     let a=await current(),s=a.state;
     if(input.expectedTargetDigest!==s.targetSetDigest)fail('revision_conflict');
     if(!s.targets)fail('revision_conflict');
     if(s.firstCoverageComplete){const value={status:'complete',firstCoverage:coverageStatus(s)};final();return {ok:true,value};}
-    await prepareTargets(c.backfillTargets);
+    const configured=await prepareTargets(c.backfillTargets);
+    const finishingLatch=certificationEligible(s)&&targetSetDigest(configured)===s.targetSetDigest, prior=s;
     const cutoff=mono(operation.operationCutoffMonoNs),hasTime=()=>process.hrtime.bigint()+20000000n<cutoff;
     let visited=0,invalid=false;
     const receipts=Object.assign(Object.create(null),s.receipts);
@@ -95,10 +127,10 @@ export function semanticMaintenance({c,sqlite,identity,secretState,reserveHandle
       const v=resolve(s.targets[i]),receipt=v.facade.port.read(()=>probe(s.targets[i],s));visited++;
       if(receipt)receipts[i]=receipt;else{delete receipts[i];invalid=true;}
     }
-    const changed=await change(n=>{if(n.targetSetDigest!==s.targetSetDigest||n.policy.purgeEpoch!==s.policy.purgeEpoch)fail('revision_conflict');n.receipts=receipts;n.validationOrdinal=ordinal%s.targets.length;if(invalid)n.validationPending=false;});
+    const changed=await change(n=>{if(n.targetSetDigest!==s.targetSetDigest||n.policy.purgeEpoch!==s.policy.purgeEpoch||finishingLatch&&n.policy.revision!==prior.policy.revision)fail('revision_conflict');n.receipts=receipts;n.validationOrdinal=ordinal%s.targets.length;if(invalid)n.validationPending=false;});
     s=changed.state;
     if(Buffer.byteLength(canonicalJson(s.receipts))>262144)fail('context_item_too_large');
-    if(Object.keys(receipts).length!==s.targets.length||!hasTime()||!s.policy.semantic||s.blocked||['pending','running','failed'].includes(s.purge.state)) {
+    if(Object.keys(receipts).length!==s.targets.length||!hasTime()||!s.policy.semantic||s.blocked&&(!finishingLatch||!certificationEligible(s))||['pending','running','failed'].includes(s.purge.state)) {
       const value={status:'partial',firstCoverage:coverageStatus(s)};final();return {ok:true,value};
     }
     // Prepare all views and the exact anchor before the final sample. The final
@@ -106,20 +138,17 @@ export function semanticMaintenance({c,sqlite,identity,secretState,reserveHandle
     const groups=new Map();
     s.targets.forEach((t,i)=>{const v=resolve(t),key=t.storeId+':'+canonicalJson(t.canonicalIdentity);if(!groups.has(key))groups.set(key,{v,targets:[]});groups.get(key).targets.push({t,i});});
     const next=structuredClone(s);next.firstCoverageComplete=true;next.validationPending=false;
+    if(s.blocked) {
+      const complete=await finishCertification({state:s,operation,identity:expectedIdentity,final,verify});
+      return {ok:true,value:{status:complete?'complete':'partial',firstCoverage:coverageStatus(complete?next:s)}};
+    }
     const prepared=await prepare(next);
     const recovery={prepared:prepared.prepared,sealed:prepared.previous,invalidReceipts:[]};
     // Register before any cutoff, authority sample or native final comparison.
     pending(recovery);
     if(!hasTime()){const value={status:'partial',firstCoverage:coverageStatus(s)};final();return {ok:true,value};}
-    final();let valid=true;
-    for(const [,group] of [...groups].sort(([a],[b])=>Buffer.compare(Buffer.from(a),Buffer.from(b)))) {
-      group.v.facade.port.read(()=>{
-        group.v.facade.port.db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();
-        for(const {t,i} of group.targets)if(!same(probe(t,s),receipts[i])){valid=false;recovery.invalidReceipts.push([i,receipts[i]]);delete s.receipts[i];delete s.hints[i];s.validationPending=false;}
-      });
-    }
-    if(process.hrtime.bigint()>=cutoff)fail('read_timeout');
-    if(!valid) {
+    final();
+    if(!verify(recovery)) {
       return {ok:true,value:{status:'partial',firstCoverage:coverageStatus(s)}};
     }
     const sealed=ledger.commit(prepared,(db,current)=>{
@@ -127,6 +156,17 @@ export function semanticMaintenance({c,sqlite,identity,secretState,reserveHandle
     });
     recovery.sealed=sealed;
     return {ok:true,value:{status:'complete',firstCoverage:coverageStatus(next)}};
+    function verify(recovery) {
+      let valid=true;
+      for(const [,group] of [...groups].sort(([a],[b])=>Buffer.compare(Buffer.from(a),Buffer.from(b)))) {
+        group.v.facade.port.read(()=>{
+          group.v.facade.port.db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();
+          for(const {t,i} of group.targets)if(!same(probe(t,s),receipts[i])){valid=false;recovery.invalidReceipts.push([i,receipts[i]]);delete s.receipts[i];delete s.hints[i];s.validationPending=false;}
+        });
+      }
+      if(process.hrtime.bigint()>=cutoff)fail('read_timeout');
+      return valid;
+    }
   }
   async function catalog(input,metadata) {
     safePath(input.canonicalPath);
@@ -241,7 +281,7 @@ export function semanticMaintenance({c,sqlite,identity,secretState,reserveHandle
       if((row?`${row.epoch_hi}:${row.epoch_lo}`:'0:0')!==f.suppressionEpoch)fail('evidence_unavailable');
     };
   }
-  return {prepare,prepareTargets,targets,validate,catalog,purge,transmission,recheckPause,portGuard,close(){
+  return {prepare,prepareTargets,targets,validate,recoveryCapacity,catalog,purge,transmission,recheckPause,portGuard,close(){
     closed=true;let failure;
     for(const v of views.values())for(const close of [()=>v.storage.close(),()=>v.facade.close()])try{close();}catch(error){failure??=error;}
     views.clear();if(failure)throw failure;

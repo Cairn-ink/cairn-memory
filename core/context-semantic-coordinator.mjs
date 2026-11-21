@@ -8,6 +8,7 @@ import { ownData } from './local-authority-input.mjs';
 import { supervisorOwner } from './context-read-supervisor.mjs';
 import { boundedData, hostConfiguration, credentialDigest, requestRecord, operationRecord, mono } from './context-product-control.mjs';
 import { SEMANTIC_VERSION, hostedSelection, ledgerIdentity, caps, priceTable, backfillTargets, semanticBinding, safePath, semanticOperationInput, exact } from './context-semantic-input.mjs';
+import { BACKFILL_RECOVERY_METHOD, backfillRecoveryInput, recoveryBootstrap } from './context-semantic-input.mjs';
 import { deadline } from './context-product-control.mjs';
 import { productFailure, signalAborted, signalCancelled, DISPOSAL_GRACE_MS } from './context-product-reader.mjs';
 import { fail } from './validation.mjs';
@@ -36,7 +37,7 @@ export function semanticConfiguration(value,{maintenance=false,requestMaxMs=5000
 }
 export async function openContextSemanticCoordinator(original,controls={}) {
   const entered=process.hrtime.bigint(),utc=Date.now();
-  const c=ownData(original,['version','supervisor','ledgerPath','ledgerIdentity','host','provider','refreshCaps','backfillTargets','priceTable','deadlineMs']);
+  const c=ownData(original,['version','supervisor','ledgerPath','ledgerIdentity','host','provider','refreshCaps','backfillTargets','priceTable','deadlineMs','backfillRecovery']);
   // Selection precedes ownership, module loading, file work and registration.
   const provider=hostedSelection(c.provider);
   if(c.version!==SEMANTIC_VERSION)fail('invalid_input');
@@ -45,12 +46,13 @@ export async function openContextSemanticCoordinator(original,controls={}) {
   const host=ownData(c.host,['moduleUrl','configuration']);
   let moduleUrl;try{if(typeof host.moduleUrl!=='string'||fileURLToPath(host.moduleUrl).includes('\0'))fail('invalid_input');moduleUrl=pathToFileURL(resolve(fileURLToPath(host.moduleUrl))).href;}catch{fail('invalid_input');}
   const configuration=hostConfiguration(host.configuration),binding=semanticBinding(configuration.semanticServiceBinding,identity);
+  const recovery=Object.hasOwn(c,'backfillRecovery')?recoveryBootstrap(c.backfillRecovery,binding):null;
   if(targets.some(t=>t.readSet[0].ownerId!==binding.ownerId))fail('authority_required');
   const {signal}=ownData(controls,['signal']);if(signalAborted(signal))fail('read_cancelled');
   const {owner,registry}=supervisorOwner(c.supervisor),all=globalThis[coordinatorsKey]??=new Map();
   const key=JSON.stringify([identity,binding.ownerId]);if(all.has(key))fail('read_in_progress');
-  const request=(at=process.hrtime.bigint())=>requestRecord({requestId:randomUUID(),handleId:randomUUID(),credentialBindingId:binding.credentialBindingId,
-    credentialExpiresUtcMs:binding.credentialExpiresUtcMs,requestMaxMs:5000},at,Date.now());
+  const request=(at=process.hrtime.bigint(),admin=null)=>requestRecord({requestId:randomUUID(),handleId:randomUUID(),credentialBindingId:(admin??binding).credentialBindingId,
+    credentialExpiresUtcMs:admin?admin.expiresUtcMs:binding.credentialExpiresUtcMs,requestMaxMs:5000},at,Date.now());
   const first=requestRecord({requestId:randomUUID(),handleId:randomUUID(),credentialBindingId:binding.credentialBindingId,credentialExpiresUtcMs:binding.credentialExpiresUtcMs,requestMaxMs:5000},entered,utc);
   const firstOperation=operationRecord(first,entered,deadline(c.deadlineMs??5000),1);
   const ownerState=new SharedArrayBuffer(64),policyRegistry=globalThis[Symbol.for('context-read-product-p2e-v1/identity-policy')]??=new Map();
@@ -59,7 +61,7 @@ export async function openContextSemanticCoordinator(original,controls={}) {
   const physicalPolicies=globalThis[Symbol.for('context-read-product-p2e-v1/physical-policy')]??=new Map();
   const policyConflict=policyRegistry.has(policyKey)&&policyRegistry.get(policyKey)!==policyLedger,newPolicyBinding=!policyRegistry.has(policyKey);
   const data={ledgerPath:c.ledgerPath,ledgerIdentity:identity,provider,refreshCaps,priceTable:prices,backfillTargets:targets,ownerState,
-    host:{moduleUrl,configuration},binding,request:first,operation:firstOperation};hostConfiguration(data);
+    host:{moduleUrl,configuration},binding,request:first,operation:firstOperation,...(recovery?{backfillRecovery:recovery}:{})};hostConfiguration(data);
   const resourceDomain=SEMANTIC_VERSION+'/coordinator';
   const resources=new SharedArrayBuffer(16),resource=registry.register(owner,{path:c.ledgerPath,domain:resourceDomain,resources});
   if(policyConflict){registry.finish(resource);throw Object.assign(Error('index_unavailable'),{code:'index_unavailable',cleanupId:resource.id});}
@@ -190,22 +192,26 @@ export async function openContextSemanticCoordinator(original,controls={}) {
     const at=process.hrtime.bigint();
     try {
       if(closed)return Promise.resolve(productFailure('store_closed'));
-      const value=semanticOperationInput(method,input);
-      if(!binding.methods.includes(method)||credential===undefined||credentialDigest(credential)!==binding.credentialDigest)fail('authority_required');
+      const admin=method===BACKFILL_RECOVERY_METHOD?recovery?.binding:null;
+      const value=admin?backfillRecoveryInput(input):semanticOperationInput(method,input);
+      const selected=admin??binding;
+      if(!selected.methods.includes(method)||credential===undefined||credentialDigest(credential)!==selected.credentialDigest)fail('authority_required');
       const token=boundedData(credential,16384),{signal}=ownData(control,['signal']);
       if(signalAborted(signal))return Promise.resolve(productFailure('read_cancelled'));
-      const r=request(at),operation=operationRecord(r,at,deadline(value.budget?.maxMs??value.deadlineMs??5000),1),id=randomUUID();
+      const r=request(at,admin),operation=operationRecord(r,at,deadline(value.budget?.maxMs??value.deadlineMs??5000),1),id=randomUUID();
+      const cancellation=admin?new SharedArrayBuffer(4):null;
       const record=registry.register(owner,{path:c.ledgerPath,domain:resourceDomain,parent:resource});
       return new Promise(resolve=>{
         const p={resolve,record,operation,signal};pending.set(id,p);
-        const cancelled=()=>{resolve(productFailure('read_cancelled'));worker.postMessage({kind:'cancel',id});};
+        const cancelled=()=>{if(cancellation)Atomics.store(new Int32Array(cancellation),0,1);resolve(productFailure('read_cancelled'));worker.postMessage({kind:'cancel',id});};
         signal?.addEventListener('abort',cancelled,{once:true});p.detach=()=>signal?.removeEventListener('abort',cancelled);
         p.timer=setTimeout(()=>{resolve(productFailure('read_timeout'));worker.postMessage({kind:'cancel',id});},Math.max(0,Number(mono(operation.operationCutoffMonoNs)-process.hrtime.bigint())/1e6));
-        worker.postMessage({kind:'call',id,method,input:value,credential:token,request:r,operation});
+        worker.postMessage({kind:'call',id,method,input:value,credential:token,request:r,operation,...(cancellation?{cancellation}:{})});
       });
     }catch(error){return Promise.resolve(productFailure(error.code));}
   }
-  const api=Object.freeze(Object.fromEntries(['setOwnerSemantic','getOwnerSemanticStatus','validateOwnerSemanticCoverage','purgeOwnerVectors'].map(method=>[method,(...args)=>call(method,...args)]).concat([['close',stop]])));
+  const methods=Object.fromEntries(['setOwnerSemantic','getOwnerSemanticStatus','validateOwnerSemanticCoverage','purgeOwnerVectors'].map(method=>[method,(...args)=>call(method,...args)]));
+  const api=Object.freeze({...methods,close:stop,...(recovery?{[BACKFILL_RECOVERY_METHOD]:(...args)=>call(BACKFILL_RECOVERY_METHOD,...args)}:{})});
   let pumpPort,pumpOperation;
   const attachment=metadata=>{if(closed)fail('store_closed');const {port1,port2}=new MessageChannel();worker.postMessage({kind:'attach',port:port1,metadata},[port1]);return port2;};
   handles.set(api,{closed:()=>closed,ownerId:binding.ownerId,selection:provider,ownerState,providerIdentity,configuration:{...identity},targets,
