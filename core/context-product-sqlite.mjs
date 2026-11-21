@@ -1,4 +1,4 @@
-import { sqliteFileStat } from './sqlite-journal-probe.mjs';
+import { sqliteFileStat, probeRollbackJournal } from './sqlite-journal-probe.mjs';
 import { dirname } from 'node:path';
 import { createTopicSqlitePolicy, topicJournalMode } from './topic-reader-sqlite.mjs';
 
@@ -8,6 +8,70 @@ const openingFailure = error => {
   throw error;
 };
 const same = (a, b) => a.dev === b.dev && a.ino === b.ino;
+const journalProbe = (path, observer) => probeRollbackJournal(path, { uncached: true, ...(observer ? { observe: observer.journalProbe } : {}) });
+// The isolated nolock query refuses WAL with CANTOPEN, without creating SHM.
+// This is only a routing hint: policy.open below must confirm WAL using SQLite.
+const walHint = result => result.stage === 'query' && result.code === 14;
+
+/** Default product canonical only. Keep the legacy DELETE admission (including
+ * its error precedence and protected-journal BUSY) before considering WAL.
+ * The Worker supplies the original pre-connection facade refusal.
+ * The sidecar and explicit wal:true never use this adapter. */
+export function detectProductCanonicalJournal(path, { sqlite, observer, legacyError, readHeader, expectedIdentity }) {
+  const physicalMode = () => readHeader(path, observer, {
+    main: sqliteFileStat(path), directory: sqliteFileStat(dirname(path)), expectedIdentity,
+  });
+  if (legacyError?.code !== 'index_unavailable') throw legacyError;
+  try {
+    // A refused DELETE core may have stray companions. Only the SQLite-free
+    // header child may add work on that path; preserve the original refusal.
+    if (physicalMode() !== 'wal' || !walHint(journalProbe(path, observer))) throw legacyError;
+  } catch { throw legacyError; }
+  const mode = 'WAL';
+  let header, journal, refused = false;
+  function assertWalCompanion() {
+    try { sqliteFileStat(path + '-journal'); }
+    catch (error) { if (error.code === 'ENOENT') return; }
+    unavailable();
+  }
+  function assertMode(db) {
+    if (refused) unavailable();
+    // A rollback journal never belongs to a WAL canonical.
+    assertWalCompanion();
+    let current;
+    try {
+      // journal_mode alone can report the pager's cached mode. A header cookie
+      // read first takes a fresh SQLite read transaction and refreshes page 1.
+      // Never gate this on timestamps, companion existence or schema equality.
+      header ??= db.prepare('PRAGMA schema_version');
+      header.get();
+      journal ??= db.prepare('PRAGMA journal_mode');
+      current = journal.get().journal_mode.toUpperCase();
+    } catch (error) {
+      // Only the existing SQLite-free header child may disambiguate a
+      // failed metadata guard. It never runs on the normal operation path.
+      let physical;
+      try { physical = physicalMode(); }
+      catch { throw error; }
+      current = physical === 'delete' ? 'DELETE' : physical === 'wal' ? 'WAL' : null;
+      if (current === null || current === mode) {
+        // Retain the original native BUSY/error instead of retrying work.
+        throw error;
+      }
+    }
+    if (current !== mode) { refused = true; unavailable(); }
+  }
+  // Do not tighten DELETE metadata or replace its zero-wait connection policy.
+  // A WAL hint cannot admit a DELETE header with stray WAL/SHM companions.
+  const canonicalSqlite = { ...sqlite, open(native, file, checkAdmission) {
+    assertWalCompanion();
+    const opened = sqlite.open(native, file, checkAdmission);
+    if (opened.mode !== 'WAL') { opened.db.close(); unavailable(); }
+    return opened;
+  } };
+  return { sqlite: canonicalSqlite, assertMode };
+}
+
 function protectedEntry(path, directory = false, optional = false) {
   let s;
   try { s = sqliteFileStat(path); } catch (e) { if (optional && e.code === 'ENOENT') return null; unavailable(); }

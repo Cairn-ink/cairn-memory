@@ -1,3 +1,4 @@
+import { cardDeliverySnapshot, cardDeliverable } from './content-safety.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { hasCardLineage, cardLineageNamespaceInside } from './card-lineage.mjs';
 import { assertContentPort, inertContentPortValue, hasContentPortBoundary } from './content-safety-boundary.mjs';
@@ -64,16 +65,22 @@ function walHeader(path, observer) {
 // header in a child with no SQLite connection, so its raw descriptor close
 // cannot release this process's SQLite locks.
 export function contextReadDeleteJournal(path, observer, validated) {
+  return contextReadJournalHeader(path, observer, validated, true) === 'delete';
+}
+
+// Reuse this single SQLite-free descriptor child for canonical routing too.
+export function contextReadJournalHeader(path, observer, validated, checkDirectoryLinks = false) {
   try {
     const before = lstatSync(path, { bigint: true }), directory = lstatSync(dirname(path), { bigint: true });
     const fields = ['dev','ino','mode','uid','gid','nlink'];
-    const matches = (actual, expected) => fields.every(key =>
+    const matches = (actual, expected, directory = false) => fields.every(key =>
+      directory && !checkDirectoryLinks && key === 'nlink' ||
       (typeof expected[key] === 'bigint' || Number.isSafeInteger(expected[key])) && actual[key] === BigInt(expected[key]));
     const baseline = validated ?? { main: before, directory };
     // Retain the caller's protection/identity proof rather than resetting it.
-    if (!matches(before, baseline.main) || !matches(directory, baseline.directory) ||
+    if (!matches(before, baseline.main) || !matches(directory, baseline.directory, true) ||
         baseline.expectedIdentity && (String(before.dev) !== baseline.expectedIdentity.device ||
-          String(before.ino) !== baseline.expectedIdentity.inode)) return false;
+          String(before.ino) !== baseline.expectedIdentity.inode)) return 'other';
     const timeout = Math.min(5000, Math.floor(observer?.journalRemainingMs?.() ?? 5000));
     if (!(timeout >= 1)) fail('read_timeout');
     const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
@@ -84,19 +91,21 @@ export function contextReadDeleteJournal(path, observer, validated) {
         const opened = fstatSync(fd, { bigint: true });
         const header = Buffer.alloc(20), length = readSync(fd, header, 0, 20, 0);
         process.stdout.write(JSON.stringify({ device: String(opened.dev), inode: String(opened.ino),
-          mode: length === 20 && header.subarray(0,16).equals(Buffer.from('SQLite format 3\\0')) &&
-          header[18] === 1 && header[19] === 1 ? 'delete' : 'other' }));
+          mode: length === 20 && header.subarray(0,16).equals(Buffer.from('SQLite format 3\\0')) ?
+          header[18] === 1 && header[19] === 1 ? 'delete' :
+          header[18] === 2 && header[19] === 2 ? 'wal' : 'other' : 'other' }));
       } finally { if (fd !== undefined) closeSync(fd); }
     `, path], { encoding: 'utf8', env: {}, timeout, maxBuffer: 1024 });
     if (child.error?.code === 'ETIMEDOUT') fail('read_timeout');
-    if (child.error || child.status !== 0) return false;
+    if (child.error || child.status !== 0) return 'other';
     const opened = JSON.parse(child.stdout);
     const after = lstatSync(path, { bigint: true }), currentDirectory = lstatSync(dirname(path), { bigint: true });
     // A writer may commit while the child starts. Content timestamps can
     // change; replacement or protection changes must retain the refusal.
-    return opened.mode === 'delete' && opened.device === String(before.dev) && opened.inode === String(before.ino) &&
-      matches(after, baseline.main) && matches(currentDirectory, baseline.directory);
-  } catch (error) { if (error?.code === 'read_timeout') throw error; return false; }
+    return opened.device === String(before.dev) && opened.inode === String(before.ino) &&
+      matches(after, baseline.main) && matches(currentDirectory, baseline.directory, true) &&
+      ['delete','wal'].includes(opened.mode) ? opened.mode : 'other';
+  } catch (error) { if (error?.code === 'read_timeout') throw error; return 'other'; }
 }
 
 function auxiliaries(path, readOnly, observer) {
@@ -626,8 +635,8 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     return g;
   }
   function candidateAllowed(item, intent, readSet, memo, selectedMemory) {
-    return item.type === 'card' ? contextCardEligible(canonical,identity,features,item.namespace,
-      {id:item.cardId,revision:item.revision,body_revision:item.bodyRevision},intent,{readSet}) :
+    return item.type === 'card' ? contextCardEligible(memo?.db??canonical,identity,features,item.namespace,
+      {id:item.cardId,revision:item.revision,body_revision:item.bodyRevision},intent,{readSet,safetyMemo:memo}) :
       contentReadSafety(canonical,{identity,namespace:item.namespace,ref:item,intent,memo,selectedMemory}).allowed;
   }
   function safetyEpoch(p) {
@@ -695,6 +704,10 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
   function lexicalPage(input, query, limit = 24, { deadlineAt = Infinity } = {}) {
     if (typeof query !== 'string' || !query.trim() || query.length > 4000 || query.includes('\0') || !query.isWellFormed() ||
         !Number.isSafeInteger(limit) || limit < 1 || limit > 24) fail('invalid_input');
+    // Safety readers recognize read_timeout as a cooperative budget stop;
+    // translate it back to this path's existing timeout at the outer boundary.
+    const check=()=>{if(performance.now()>=deadlineAt)fail('read_timeout');};
+    try {
     const p = projection(input), terms = [...new Set(tokenizeT1(query))], suppressionEpoch=safetyEpoch(p);
     const keys=factDocuments(p); let result, pending;
     const work=state=>sideRead(() => {
@@ -726,8 +739,12 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       const rank = () => {
         if(visible)for(const term of terms)df.set(term,[...docs.values()].filter(row=>row.frequencies.has(term)).length);
         if(visible?.unknown){totals.n=docs.size;totals.total_length=[...docs.values()].reduce((n,r)=>n+r.token_length,0);}
-        const ranked = rankScores([...docs.values()].map(row => ({ ref: ref(p.streams[row.stream], row),
-          score: scoreBM25(terms, { frequencies: row.frequencies, length: row.token_length }, { N: totals.n, totalLength: totals.total_length, df }) }))).slice(0, limit);
+        const ranked=[];
+        for(const row of docs.values()){
+          ranked.push({ref:ref(p.streams[row.stream],row),
+            score:scoreBM25(terms,{frequencies:row.frequencies,length:row.token_length},{N:totals.n,totalLength:totals.total_length,df})});
+          rankScores(ranked);if(ranked.length>limit)ranked.pop();
+        }
         if (performance.now() >= deadlineAt) unavailable('timeout');
         return { rows: ranked, matched: docs.size };
       };
@@ -746,12 +763,16 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
           if(keys.length)yield {refs,keys};
         },
         accept(chunk,selected){
-          const memo=createContentReadMemo(canonical), memories=new Map(selected.map(row=>
+          this.check();
+          const memo=cardDeliverySnapshot(canonical,chunk.keys.map(key=>{
+            const row=docs.get(key);return ref(p.streams[row.stream],row);
+          }),undefined,check);
+          const memories=new Map(selected.map(row=>
             [JSON.stringify([row.owner_id,row.scope,row.project_id,row.id]),row]));
           for(const key of chunk.keys){
             this.check(); const row=docs.get(key);
             const stream=p.streams[row.stream], item=ref(stream,row);
-            if(!candidateAllowed(item,p.intent,p.readSet,memo,memories.get(JSON.stringify([...boundary(stream.ns),row.id]))))docs.delete(key);
+            if(!candidateAllowed(item,p.intent,p.readSet,memo,memories.get(JSON.stringify([...boundary(stream.ns),row.id]))) || item.type==='card'&&!cardDeliverable(canonical,item.namespace,item.cardId,memo))docs.delete(key);
           }
         },finish:rank};
       return {rows:[],matched:0};
@@ -767,12 +788,19 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     if(result.rows.length && (hasCardLineage(canonical)||suppressionEpoch!==undefined && suppressionEpoch!=='0:0' &&
         !cachedContentSuppressionRequestInside(canonical,p.readSet[0].ownerId))) {
       // Direct internal sidecar callers have no facade's final evidence pass.
-      result.rows=canonicalRead(()=>{const memo=createContentReadMemo(canonical);
+      result.rows=canonicalRead(()=>{const memo=cardDeliverySnapshot(canonical,result.rows.map(row=>row.ref),undefined,check);
         const visible=result.rows.filter(({ref:item})=>candidateAllowed(item,p.intent,p.readSet,memo));
         if(hasCardLineage(canonical)&&visible.length!==result.rows.length)unavailable('stale_index');
-        return visible;});
+        return visible.filter(({ref:item})=>item.type!=='card'||cardDeliverable(canonical,item.namespace,item.cardId,memo));});
+    } else if(result.rows.some(({ref:item})=>item.type==='card')) {
+      result.rows=canonicalRead(()=>{const memo=cardDeliverySnapshot(canonical,result.rows.map(row=>row.ref),undefined,check);
+        return result.rows.filter(({ref:item})=>item.type!=='card'||cardDeliverable(canonical,item.namespace,item.cardId,memo));});
     }
     return result;
+    } catch(error) {
+      if(error.code==='read_timeout')unavailable('timeout');
+      throw error;
+    }
   }
 
   // Explicit document embedding is deliberately a separate operation. The
@@ -990,8 +1018,8 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
 // Reconciliation, members and relation endpoints use the canonical current/
 // history predicate. Only organization title-source checks omit applicability,
 // matching private-organization-storage titleInside; support remains required.
-export function contextCardEligible(sourceDb, identity, features, ns, row, intent = 'current', { requireApplicability = true, rawRows, readSet = [ns] } = {}) {
-  return contentReadSafety(sourceDb, { identity, namespace: ns, intent,
+export function contextCardEligible(sourceDb, identity, features, ns, row, intent = 'current', { requireApplicability = true, rawRows, readSet = [ns], safetyMemo } = {}) {
+  return contentReadSafety(sourceDb, { identity, namespace: ns, intent, memo: safetyMemo,
     ref: { type: 'card', namespace: ns, cardId: row.id, revision: row.revision, bodyRevision: row.body_revision || null },
     rawRows,
     currentCardEligible: () => {

@@ -9,7 +9,7 @@ export function decisionReviewOption(input) {
   return input.decisionReview === 'required-v1';
 }
 
-export function createConfirmationStorage({ db, enabled, activeRow, attach, forgetMutation, advanceEpoch, resolveHeld, assertConfirm = () => {} }) {
+export function createConfirmationStorage({ db, enabled, activeRow, attach, forgetMutation, advanceEpoch, resolveHeld, assertAdmissionReceipts, assertConfirm = () => {} }) {
   return function resolve(ns, action, input) {
     if (!enabled) fail('decision_review_required');
     const key = [ns.ownerId, ns.scope, ns.projectId, input.actionId];
@@ -49,6 +49,7 @@ export function createConfirmationStorage({ db, enabled, activeRow, attach, forg
       db.prepare(`INSERT INTO confirmation_actions
         (owner_id,scope,project_id,action_id,payload_digest,result) VALUES(?,?,?,?,?,?)`)
         .run(...key, digest, JSON.stringify(result));
+      if (action === 'confirm') assertAdmissionReceipts(ns, [input.receipt]);
       return result;
     });
   };

@@ -2,7 +2,7 @@ import { bindContentSafetyConnection, cachedContentLayout, installedContentLayou
 import { hasContentSuppressionRequestInside, contentSuppressionTargetMatches, writeContentSuppressionInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { createHash, createHmac } from 'node:crypto';
 import { fail } from './validation.mjs';
-import { createRawSourceRoots, rawSessionKeys } from './raw-source-roots.mjs';
+import { createRawSourceRoots, rawSessionKeys, receiptDenialTokens } from './raw-source-roots.mjs';
 import { createRawCardInvalidation } from './card-raw-sources.mjs';
 
 // The read optimisation has a bounded lease on SHARED. Overflow restarts the
@@ -218,12 +218,12 @@ export function assertEpisodeSourceProof(ns, sources, facts, budget = { remainin
 // NUL must survive SQL regardless of runtime-specific TEXT truncation.
 // Weak keys keep this connection-local without retaining closed connections.
 const receiptEncoding=new WeakMap();
-function* writerReceiptInputs(db, check, ns, receipts) {
+function* writerReceiptInputs(db, check, ns, receipts, prefilter = false) {
   const tuples=receipts.map(receipt=>[receipt.client,receipt.sessionId,receipt.eventId,receipt.role,receipt.excerpt]);
   // In Unicode mode the surrogate range matches unpaired code units only.
   // NUL, replacement characters and malformed inputs use the original SQL.
   const eligible=!tuples.some(tuple=>tuple.some(value=>/[\u0000\uFFFD\uD800-\uDFFF]/u.test(value)));
-  const predicate=` AND (EXISTS (SELECT 1 FROM json_each(?) source
+  const predicate=` AND (${prefilter ? "event_id IN (SELECT json_extract(value,'$[2]') FROM json_each(?)) AND " : ''}EXISTS (SELECT 1 FROM json_each(?) source
         WHERE client=json_extract(source.value,'$[0]') COLLATE BINARY AND session_id=json_extract(source.value,'$[1]') COLLATE BINARY
           AND event_id=json_extract(source.value,'$[2]') COLLATE BINARY AND role=json_extract(source.value,'$[3]') COLLATE BINARY
           AND excerpt=json_extract(source.value,'$[4]') COLLATE BINARY)
@@ -250,7 +250,7 @@ function* writerReceiptInputs(db, check, ns, receipts) {
       const keys=memories.slice(0,sourcePageSize);
       if(keys.length) {
         check();
-        const filter=eligible&&receiptEncoding.get(db)==='UTF-8'?predicate:'',args=filter?[wanted]:[];
+        const filter=eligible&&receiptEncoding.get(db)==='UTF-8'?predicate:'',args=filter?(prefilter?[wanted,wanted]:[wanted]):[];
         const cursorColumns=filter?',CAST(r.created_at AS BLOB) AS receipt_created_at_bytes,CAST(r.id AS BLOB) AS receipt_id_bytes':'';
         const output=row=>{
           if(!filter)return row;
@@ -334,11 +334,23 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
         *iterate(...args) { const rows=execute('iterate',args); for (const row of rows) { check(); yield row; } } };
     },
   }, native);
-  function sourceSnapshot(work, proof, deadline = performance.now()+SOURCE_SNAPSHOT_MS) {
+  function sourceSnapshot(work, proof, deadline = performance.now()+SOURCE_SNAPSHOT_MS, namespace) {
     if (snapshot) fail('storage_error');
     snapshot = { deadline,statements:0,inputs:new Map(),validated:new Set(),proof };
     db=snapshotDb;
-    try { check(); const result=work(); check(); return result; } finally { snapshot=undefined; db=native; }
+    try {
+      check();
+      // Only the active first-page bound precedes every source validator.
+      // Later bounds must retain their place after active receipt validation.
+      if (namespace) {
+        const size=db.prepare(`SELECT count(*) AS active FROM (
+          SELECT id FROM memories INDEXED BY namespace_memories
+          WHERE owner_id=? AND scope=? AND project_id=? AND deleted=? LIMIT 129)`)
+          .get(...boundary(namespace),0);
+        if (size.active>sourcePageSize) sourceSnapshotOverflow();
+      }
+      const result=work(); check(); return result;
+    } finally { snapshot=undefined; db=native; }
   }
   const roots = createRawSourceRoots(snapshotDb, { readMemo });
   const rawCards = createRawCardInvalidation(native);
@@ -439,7 +451,125 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
     }
     if(snapshot)snapshot.inputs.set(cacheKey,retained);
   }
+  // Share enumeration, not refusal order: the caller still checks each batch
+  // at its original precheck position, before suppression/conflict checks.
+  // This capability is private to one synchronous writer callback. Successful
+  // batches may be reused by its mutations, and are revoked before it returns.
+  function withReceiptValidation(ns, batches, work, admittedBatches = batches) {
+    if (snapshot || !native.isTransaction) fail('storage_error');
+    // Run the durable denial only after the complete writer has succeeded.
+    // A hit then rolls back attachments without replacing any existing error.
+    const finish = result => {
+      if (result && typeof result.then === 'function') fail('storage_error');
+      assertAdmissionReceipts(ns, admittedBatches.flat());
+      return result;
+    };
+    if (!(cachedContentLayout(db)??installedContentLayout(db)).suppressionRevision) return finish(work(assertReceipts));
+    const tuple = receipt => JSON.stringify([receipt.client,receipt.sessionId,receipt.eventId,receipt.role,receipt.excerpt]);
+    const namespaceKey = JSON.stringify(boundary(ns));
+    const batchKeys = new Map(batches.map(receipts => [receipts,JSON.stringify(receipts.map(tuple))]));
+    const batchCopies = new Map(batches.map(receipts => [receipts,Object.freeze(receipts.map(receipt =>
+      Object.freeze({client:receipt.client,sessionId:receipt.sessionId,eventId:receipt.eventId,role:receipt.role,excerpt:receipt.excerpt})))]));
+    const registered = [...batchCopies.keys()];
+    let nextBatch = 0;
+    const union = [...new Map([...batchCopies.values()].flat().map(receipt => [tuple(receipt),receipt])).values()];
+    const indices = new Map(union.map((receipt,index) => [tuple(receipt),index]));
+    const matches = matchingReceiptInputs(native,check,ns,union), validated = new Set();
+    const validatedHistory = new Set();
+    function* history(receipt) {
+      const key = tuple(receipt);
+      if (validatedHistory.has(key)) return;
+      yield* matches(receipt,indices.get(key));
+      validatedHistory.add(key);
+    }
+    const shared = { matches: history, key: tuple, raw: new Set(), scopeChecked: false };
+    let live = true;
+    const validate = (namespace,receipts) => {
+      if (!live || db !== native || !native.isTransaction ||
+          JSON.stringify(boundary(namespace)) !== namespaceKey ||
+          batchKeys.get(receipts) !== JSON.stringify(receipts.map(tuple))) fail('storage_error');
+      if (validated.has(receipts)) return;
+      // Enumeration streams the union's first receipt; first uses must follow
+      // registration order. Reusing an already validated batch remains legal.
+      if (receipts !== registered[nextBatch]) fail('storage_error');
+      try {
+        validateReceipts(ns,batchCopies.get(receipts),false,undefined,shared);
+        validated.add(receipts);
+        nextBatch++;
+      } catch (error) { live = false; throw error; }
+    };
+    try {
+      return finish(work(validate));
+    } finally { live = false; }
+  }
+  // Registration knows the external identity before Episode substitutes its HMAC.
+  // Keep that knowledge only while the capture is active, including its final writer.
+  const captureSessionAliases = new Map();
+  const aliasKey = (ns, client, session) => JSON.stringify([...boundary(ns), client, session]);
+  function retainSessionAlias(ns, client, session, original) {
+    const key = aliasKey(ns, client, session);
+    let aliases = captureSessionAliases.get(key);
+    if (!aliases) captureSessionAliases.set(key, aliases = new Map());
+    aliases.set(original, (aliases.get(original) ?? 0) + 1);
+    return () => {
+      const count = aliases.get(original);
+      if (count > 1) aliases.set(original, count - 1);
+      else aliases.delete(original);
+      if (!aliases.size) captureSessionAliases.delete(key);
+    };
+  }
+  let denialSecret;
+  function denialTokens(ns, receipts) {
+    // The store identity is immutable for this open connection. Cache only that
+    // secret, never a token decision; every assertion still reads suppressed.
+    denialSecret ??= db.prepare('SELECT secret FROM episode_identity WHERE singleton=1').get()?.secret;
+    if (typeof denialSecret !== 'string' || !/^[0-9a-f]{64}$/.test(denialSecret)) fail('episode_identity_unavailable');
+    return receipts.map(receipt => {
+      const known = [receipt.sessionId, ...captureSessionAliases.get(aliasKey(ns, receipt.client, receipt.sessionId))?.keys() ?? []];
+      const sessions = new Set(known.flatMap(session => rawSessionKeys(ns, receipt.client, session, denialSecret)));
+      return receiptDenialTokens([...sessions].map(sessionId => {
+        const source = { client: receipt.client, sessionId,
+          eventId: receipt.eventId, role: receipt.role, excerpt: receipt.excerpt };
+        return { receipt_key: receiptDigest(source), client: source.client,
+          session_id: source.sessionId, event_id: source.eventId, role: source.role };
+      }));
+    });
+  }
+  function assertAdmissionReceipts(ns, receipts) {
+    if (!receipts.length) return;
+    const tokens = denialTokens(ns, receipts);
+    const denied = new Set(db.prepare(`SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s
+          WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value`)
+      .all(JSON.stringify([...new Set(tokens.flat())]), ...boundary(ns)).map(row => row.fingerprint));
+    if (!denied.size) return;
+    for (const [index, receiptTokens] of tokens.entries()) {
+      const matches = receiptTokens.filter(token => denied.has(token));
+      if (!matches.length) continue;
+      if (matches.some(token => token.startsWith('rs1:i:')) || !disjointRawSpan(ns, receipts[index])) fail('source_excluded');
+    }
+  }
+  function disjointRawSpan(ns, receipt) {
+    // An address match can represent a partial Raw exclusion. Require mapped
+    // spans and an exclusion on that Raw message before relying on span checks.
+    const spans = anchors(ns, receipt);
+    if (!spans.length || spans.some(span => span.precision !== 'exact')) return false;
+    // Probe only the first span's message; assertAnchors fails closed on overlaps in any message.
+    const [{ conversationId, messageId }] = spans;
+    if (!db.prepare('SELECT 1 FROM raw_source_exclusions WHERE conversation_id=? AND message_id=? LIMIT 1')
+      .get(conversationId, messageId)) return false;
+    assertAnchors(spans);
+    return true;
+  }
+  function assertCaptureReceipts(ns, receipts) {
+    assertReceipts(ns, receipts);
+    // Safety layouts already fence dispatch with suppression-revision authority.
+    // Legacy layouts need a fresh durable-token read after the original validator.
+    if (!(cachedContentLayout(db)??installedContentLayout(db)).suppressionRevision) assertAdmissionReceipts(ns, receipts);
+  }
   function assertReceipts(ns, receipts, readExisting = false, rawTargets) {
+    return validateReceipts(ns,receipts,readExisting,rawTargets);
+  }
+  function validateReceipts(ns, receipts, readExisting, rawTargets, shared, history) {
     if (!readExisting && (cachedContentLayout(db)??installedContentLayout(db)).suppressionRevision) {
       // An incomplete fact set, or a possible Raw fact join, must not start an
       // unbounded indexed fallback inside SHARED, even for the scope denial.
@@ -448,10 +578,14 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
         selected.scope==='owner' || selected.scope===ns.scope && (selected.projectId??'')===(ns.projectId??'')));
       if(snapshot && (!hasContentSuppressionRequestInside(db) || !covered || !facts ||
           facts.some(fact=>fact.kind==='raw')))sourceSnapshotOverflow();
-      if (contentSuppressionReasonInside(db, ns)) fail('source_excluded');
+      if (!shared?.scopeChecked) {
+        if (contentSuppressionReasonInside(db, ns)) fail('source_excluded');
+        if (shared) shared.scopeChecked = true;
+      }
       // Validate receipt one as the walk streams; retain later receipts' matches.
       // Snapshot enumeration, overflow and validated handling stay unchanged.
-      const matches=snapshot ? undefined : matchingReceiptInputs(db,check,ns,receipts);
+      const matches=snapshot ? undefined : history ? history() : shared?.matches ?? matchingReceiptInputs(db,check,ns,receipts);
+      if (matches === null) return false;
       for (const [index,receipt] of receipts.entries()) {
         check();
         for (const row of snapshot ? snapshotReceiptInputs(ns) : matches(receipt,index)) {
@@ -476,14 +610,17 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
         }
       }
     }
-    if (!enabled()) return;
+    if (!(shared ? shared.enabled ??= enabled() : enabled())) return;
     for (const receipt of receipts) {
+      const provenKey = shared?.key(receipt);
+      if (shared?.raw.has(provenKey)) continue;
       roots.assertSession(ns, receipt.client, receipt.sessionId, readExisting);
       const values = anchors(ns, receipt);
       for (const anchor of values) if (!readExisting && contentSuppressionReasonInside(db, ns, { kind: 'raw', key: anchor.conversationId,
         messageId: anchor.messageId, start: anchor.start, end: anchor.end })) fail('source_excluded');
       assertAnchors(values);
       rawTargets?.push(...values);
+      shared?.raw.add(provenKey);
     }
   }
   // Only fallback reads complete missing receipt inputs or seek facts by key.
@@ -658,14 +795,65 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
       }
     });
   }
-  function filter(ns, receipts) {
+  function filter(ns, receipts, observeForgotten) {
     const layout = cachedContentLayout(db);
     if (!layout) fail('unsupported_database');
-    if (!layout.suppressionRevision && !enabled()) return receipts.map((_, index) => index);
-    return receipts.flatMap((receipt, index) => {
-      try { assertReceipts(ns, [receipt]); return [index]; }
-      catch (error) { if (error.code === 'source_excluded') return []; throw error; }
-    });
+    const legacy = !layout.suppressionRevision && !enabled();
+    const tuple = receipt => [receipt.client,receipt.sessionId,receipt.eventId,receipt.role,receipt.excerpt];
+    const eligible = receipt => !tuple(receipt).some(value => /[\u0000\uFFFD\uD800-\uDFFF]/u.test(value));
+    const key = receipt => JSON.stringify(tuple(receipt));
+    const union = snapshot || !layout.suppressionRevision ? undefined :
+      [...new Map(receipts.filter(eligible).map(receipt => [key(receipt),receipt])).values()];
+    let retained, walkAborted = false;
+    const history = () => {
+      if (!retained) {
+        const rows = new Map(union.map(receipt => [key(receipt),[]]));
+        // Only enumeration is caught: receipt validation and token denials must
+        // never trigger replay. A partial map never supplies validation rows.
+        try {
+          if (union.length) for (const row of writerReceiptInputs(db,check,ns,union,true)) {
+            const rowKey = JSON.stringify([row.client,row.session_id,row.event_id,row.role,row.excerpt]);
+            rows.get(rowKey)?.push(row);
+          }
+        } catch (error) {
+          // A storage fault can auto-roll back. Fail closed with the original
+          // error, even if the base would have avoided that page; never replay
+          // outside the transaction. Capture can retry later.
+          if (!db.isTransaction) { walkAborted = true; throw error; }
+          return null;
+        }
+        retained = rows;
+      }
+      return receipt => eligible(receipt) ? retained.get(key(receipt)) : writerReceiptInputs(db,check,ns,[receipt]);
+    };
+    const run = materialize => {
+      const allowed = [];
+      let forgotten = 0;
+      for (const [index,receipt] of receipts.entries()) {
+        let complete;
+        try {
+          if (!legacy) complete = materialize ? validateReceipts(ns,[receipt],false,undefined,undefined,materialize) :
+            assertReceipts(ns,[receipt]);
+        } catch (error) {
+          if (walkAborted || error.code !== 'source_excluded') throw error;
+          continue;
+        }
+        if (complete === false) return run();
+        // Count only token drops after the original source authority has accepted the receipt.
+        try {
+          assertAdmissionReceipts(ns, [receipt]);
+        } catch (error) {
+          if (error.code !== 'source_excluded') throw error;
+          forgotten++;
+          continue;
+        }
+        allowed.push(index);
+      }
+      // Publish only a complete pass; a bounded read may restart under the writer.
+      observeForgotten?.(forgotten);
+      return allowed;
+    };
+    return run(union ? history : undefined);
   }
-  return { sourceSnapshot, assertEpisodeProof: assertEpisodeSourceProof, completeEpisodeProof, register, attach, assertReceipts, assertStoredReceipts, excludeMemory, filter, enabled };
+  return { sourceSnapshot, withReceiptValidation, retainSessionAlias, assertCaptureReceipts, assertAdmissionReceipts, assertEpisodeProof: assertEpisodeSourceProof, completeEpisodeProof, register, attach, assertReceipts, assertStoredReceipts, excludeMemory, filter, enabled };
 }

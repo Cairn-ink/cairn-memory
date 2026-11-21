@@ -922,6 +922,10 @@
       "operation": "write",
       "terminalField": "memories.id"
     },
+    "retainCaptureSession": {
+      "kind": "no-owner-content",
+      "reason": "Internal capture-scoped session alias retention for source denial; returns only a release callback; serves no owner content; not on any exported or host-callable surface."
+    },
     "sessionContextSnapshot": {
       "kind": "gated",
       "operation": "read"

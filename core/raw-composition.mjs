@@ -60,7 +60,11 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
             interpretation = success(registration.emptyOutcome());
           }
           else if (registration.replay) interpretation = success(registration.observeReplay());
-          else interpretation = await capture(registration.input, registration);
+          else {
+            const release = registration.retainSessionAlias(runtime.retainCaptureSession);
+            try { interpretation = await capture(registration.input, registration); }
+            finally { release?.(); }
+          }
         } catch (error) { interpretation = failure(error); }
         if (!interpretation.ok) {
           const observation = registration.observeFailedInterpretation();

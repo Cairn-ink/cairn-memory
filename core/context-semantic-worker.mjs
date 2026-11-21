@@ -281,7 +281,7 @@ async function embed(input,op,metadata) {
     if(controller.signal.aborted||performance.now()>=deadlineAt)fail('timeout');
     const s=ledger.read(ownerId).state;checkState(s,expected);price(s);
     gate.check(expected);
-    try{maintenance.transmission(input,metadata,s);}catch(error){
+    try{maintenance.transmission(input,metadata,s,{denyCapacity:()=>fail('budget_denied')});}catch(error){
       if(request&&error.code==='evidence_unavailable'){throw latchRefusal(request.state);}
       throw error;
     }

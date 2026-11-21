@@ -643,7 +643,7 @@ export function createMemoryCore(input, internal) {
     });
   }
 
-  function finishAdmissionValidated(input, captureInitial, deadline, qualifiedDuplicates) {
+  function finishAdmissionValidated(input, captureInitial, deadline, qualifiedDuplicates, suppressedCapture) {
     return invoke(() => {
       runtime.ready();
       object(input, ['namespace', 'client', 'eventId', 'payloadDigest', 'token', 'items']);
@@ -651,7 +651,7 @@ export function createMemoryCore(input, internal) {
       const key = admissionKey(input);
       const token = contractId(input.token);
       const items = admissionItems(input.items, captureInitial && Boolean(sessionEpisodes));
-      return captureInitial ? runtime.finishCapturedAdmission(ns, { ...key, token, items }, deadline, qualifiedDuplicates) :
+      return captureInitial ? runtime.finishCapturedAdmission(ns, { ...key, token, items }, deadline, qualifiedDuplicates, suppressedCapture) :
         runtime.finishAdmission(ns, { ...key, token, items });
     });
   }
@@ -876,7 +876,8 @@ export function createMemoryCore(input, internal) {
     });
   }
 
-  function fetch(input) {
+  function fetch(input) { return fetchUsing(input, runtime); }
+  function fetchUsing(input, reader) {
     return invoke(() => {
       runtime.ready();
       object(input, ['namespace', 'refs', 'view', 'cursor', 'tokenBudget', 'includeQualification', 'contextMode']);
@@ -898,7 +899,7 @@ export function createMemoryCore(input, internal) {
         ...(includeQualification ? { includeQualification: true } : {}),
         ...(isSourceContext(contextMode) ? { contextMode } : {}) };
       const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
-      return fetchMemories({ runtime, model, ns, refs, view, budget, cursor, binding, encodeCursor, includeQualification, contextMode });
+      return fetchMemories({ runtime: reader, model, ns, refs, view, budget, cursor, binding, encodeCursor, includeQualification, contextMode });
     });
   }
 
@@ -959,8 +960,13 @@ export function createMemoryCore(input, internal) {
         const page = navigation.pages.get(namespaceBinding(namespace));
         return page ? [{ namespace, indexRevision: page.epoch, suppressionEpoch: page.suppressionEpoch }] : [];
       }), includeQualification);
-      const storage = { map: (request) => mapPage(request, navigation), fetch, validateFresh,
-        recentReceipts: (ref, limit) => runtime.recentReceipts(namespaces[ref.namespaceIndex], ref, limit),
+      const storage = { map: (request) => mapPage(request, navigation),
+        fetch: (request, reader) => reader ? fetchUsing(request,reader) : fetch(request), validateFresh,
+        prepare: refs => {
+          const reader=runtime.recallSnapshot(refs.map(ref=>({...ref,namespace:namespaces[ref.namespaceIndex]})),null,[],includeQualification,contextMode);
+          return {fetch:request=>storage.fetch(request,reader),recentReceipts:(ref,count)=>storage.recentReceipts(ref,count,reader)};
+        },
+        recentReceipts: (ref, limit, reader) => (reader ?? runtime).recentReceipts(namespaces[ref.namespaceIndex], ref, limit),
         finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
           namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
           revision: candidate.revision, receiptLimit: candidate.receiptCap ?? candidate.item.receipts.length,
@@ -981,7 +987,7 @@ export function createMemoryCore(input, internal) {
             diagnostics.storageCalls++;
             if (diagnostics.storageCalls === 1 || elapsed > diagnostics.storageMaxMs) {
               diagnostics.storageMaxMs = elapsed;
-              diagnostics.storageMaxCall = name;
+              diagnostics.storageMaxCall = name === 'prepare' ? 'fetch' : name;
             }
           }
         };
@@ -1079,7 +1085,7 @@ export function createMemoryCore(input, internal) {
         startAdmission: () => (deadline = captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs)),
         captureRationale, captureEvidence,
         deadline, input: { ...input, namespace },
-        operations: { filterCaptureSources: sources => runtime.filterCaptureSources(ns, sources),
+        operations: { filterCaptureSources: (sources, observeForgotten) => runtime.filterCaptureSources(ns, sources, observeForgotten),
           assertCaptureSources: sources => runtime.assertCaptureSources(ns, sources),
           // Preserve private pre-dispatch busy provenance across this internal
           // operation, including the runtime facade's entry/delivery checks.
@@ -1090,8 +1096,8 @@ export function createMemoryCore(input, internal) {
           claimAdmission: (value, sources) => invoke(() => runtime.claimCapturedAdmission(ns, {
           ...admissionKey(value), leaseMs: ADMISSION_LEASE_MS,
         }, deadline, rawRegistration, sources)),
-          finishAdmission: value => finishAdmissionValidated(captureKey(value), true, deadline,
-            keepInput || sessionEpisodes ? undefined : captureQualifiedDuplicates),
+          finishAdmission: (value, suppressedCapture) => finishAdmissionValidated(captureKey(value), true, deadline,
+            keepInput || sessionEpisodes ? undefined : captureQualifiedDuplicates, suppressedCapture),
           abandonAdmission: (value, retryable) => retryable
             ? invoke(() => runtime.abandonAdmission(ns, { ...admissionKey(captureKey(value)),
               token: contractId(value.token), retryable: true }))
@@ -1107,7 +1113,7 @@ export function createMemoryCore(input, internal) {
           })),
           reviewRationale: value => reviewRationaleValidated(value, deadline),
           discoverRationale: ({ refs, query }) => invoke(() => {
-            runtime.rationaleSnapshot(ns, refs);
+            runtime.rationaleSnapshot(ns, refs, null);
             const page = runtime.queryCandidateRows(ns, { score: createQueryScore(query), memoryLabel: () => '' });
             const found = [...refs]; const seen = new Set(refs.map(ref => ref.memoryId));
             for (const { item } of page.rows) {

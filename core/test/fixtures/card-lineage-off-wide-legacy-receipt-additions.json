@@ -1,0 +1,310 @@
+[
+  {
+    "key": "workload:23",
+    "callIndex": 1,
+    "method": "capture",
+    "archivedCount": 0,
+    "currentCount": 1,
+    "statement": [
+      "SELECT secret FROM episode_identity WHERE singleton=1",
+      "get",
+      []
+    ]
+  },
+  {
+    "key": "workload:23",
+    "callIndex": 1,
+    "method": "capture",
+    "archivedCount": 0,
+    "currentCount": 1,
+    "statement": [
+      "SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value",
+      "all",
+      [
+        "[\"rs1:i:44f06a5fc679ca4284fcf7f7aaa35474d39c8ce3d7e9d40ef481108c20b7fd22\",\"rs1:a:b7fef572a437c4b32968ab906956ec815c30b6d81b31464eedf95bc2cb198595\",\"rs1:i:f22b0d471b800c282a3dc34ed023ff3909d276f4874672e754c04dcfb63004c2\",\"rs1:a:2b4f3d396dec85c88f7ec7977c711f190960aa71328c4a0e364c5365f9505b68\"]",
+        "synthetic-off-owner",
+        "personal",
+        ""
+      ]
+    ]
+  },
+  {
+    "key": "workload:23",
+    "callIndex": 1,
+    "method": "capture",
+    "archivedCount": 0,
+    "currentCount": 1,
+    "statement": [
+      "SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value",
+      "all",
+      [
+        "[\"rs1:i:ad7b79545223f0f8c1b58a8a919b742819d3af4b41d48ebe90ad7a61fd53b5d3\",\"rs1:a:6d3df72c982c91baded302d704af1840a83b94354e206fd128118037bc03f06a\",\"rs1:i:0db7937eb1a6929839178daab1b9863c1f5eba4a1748792e7dd114d7d22c0ea3\",\"rs1:a:28ee02af825e4ee221736fc7bd53e7d9e65dc01710b06a31b4d9397abd31bb42\"]",
+        "synthetic-off-owner",
+        "personal",
+        ""
+      ]
+    ]
+  },
+  {
+    "key": "workload:23",
+    "callIndex": 1,
+    "method": "capture",
+    "archivedCount": 0,
+    "currentCount": 5,
+    "statement": [
+      "SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value",
+      "all",
+      [
+        "[\"rs1:i:44f06a5fc679ca4284fcf7f7aaa35474d39c8ce3d7e9d40ef481108c20b7fd22\",\"rs1:a:b7fef572a437c4b32968ab906956ec815c30b6d81b31464eedf95bc2cb198595\",\"rs1:i:f22b0d471b800c282a3dc34ed023ff3909d276f4874672e754c04dcfb63004c2\",\"rs1:a:2b4f3d396dec85c88f7ec7977c711f190960aa71328c4a0e364c5365f9505b68\",\"rs1:i:ad7b79545223f0f8c1b58a8a919b742819d3af4b41d48ebe90ad7a61fd53b5d3\",\"rs1:a:6d3df72c982c91baded302d704af1840a83b94354e206fd128118037bc03f06a\",\"rs1:i:0db7937eb1a6929839178daab1b9863c1f5eba4a1748792e7dd114d7d22c0ea3\",\"rs1:a:28ee02af825e4ee221736fc7bd53e7d9e65dc01710b06a31b4d9397abd31bb42\"]",
+        "synthetic-off-owner",
+        "personal",
+        ""
+      ]
+    ]
+  },
+  {
+    "key": "workload:23",
+    "callIndex": 58,
+    "method": "correct",
+    "archivedCount": 0,
+    "currentCount": 1,
+    "statement": [
+      "SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value",
+      "all",
+      [
+        "[\"rs1:i:594db1f8830afffaf6fc3d157c904572980f50afa4e4575e0743396fe747d762\",\"rs1:a:f9875cd62ec0059ae2e85e2b7fd4628ba13e8eb23ad4a10a6ef9564d36422c19\",\"rs1:i:0e52997faf2980288cb37cd67bfc46fd8e3466d18dab007df90a97ee7dbac0b1\",\"rs1:a:b9a263ab6bfc1fc9d6bc3b8d1710c2eac220a9796f2e169c1b80fb51cb069f03\"]",
+        "synthetic-off-owner",
+        "personal",
+        ""
+      ]
+    ]
+  },
+  {
+    "key": "workload:23",
+    "callIndex": 61,
+    "method": "supersede",
+    "archivedCount": 0,
+    "currentCount": 1,
+    "statement": [
+      "SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value",
+      "all",
+      [
+        "[\"rs1:i:8cd02a7a30dff10d22f213c1834d70194dd2bde4d90d579fece30a352fa942d1\",\"rs1:a:f233c7b2e6e5102d18f13744f22275b38992e086e7526d33f021ee4e6c355896\",\"rs1:i:7ba9eaa417c77abf1dd8a65617bf2640c3e1765202e8bc16da210c60a6c8bfeb\",\"rs1:a:21e0689b2dbfe0da3acc3d434796077fee4c4a3f18b7a5a90ff77efece20251c\"]",
+        "synthetic-off-owner",
+        "personal",
+        ""
+      ]
+    ]
+  },
+  {
+    "key": "workload:23",
+    "callIndex": 65,
+    "method": "admit",
+    "archivedCount": 0,
+    "currentCount": 1,
+    "statement": [
+      "SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value",
+      "all",
+      [
+        "[\"rs1:i:706977ea8759e9e9fabed9f91cbc932168ca8e9ac1eaca733c3bc72025a5c54b\",\"rs1:a:fd26e4021854b04ecff25e655d80800ce75f54544196c4cf4bf4176e0c5331d2\",\"rs1:i:4f34e67cde11eb5780cd22942d7bd42c2b64d7521fd6a63df3e9a3fc5eb990d6\",\"rs1:a:e6269f59b8f3f9892da7a77ce18b6cb6bafce9d0ab01175b8556fa752d7239ea\"]",
+        "synthetic-off-owner",
+        "personal",
+        ""
+      ]
+    ]
+  },
+  {
+    "key": "workload:33",
+    "callIndex": 1,
+    "method": "capture",
+    "archivedCount": 54,
+    "currentCount": 55,
+    "statement": [
+      "SELECT secret FROM episode_identity WHERE singleton=1",
+      "get",
+      []
+    ]
+  },
+  {
+    "key": "workload:33",
+    "callIndex": 1,
+    "method": "capture",
+    "archivedCount": 0,
+    "currentCount": 1,
+    "statement": [
+      "SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value",
+      "all",
+      [
+        "[\"rs1:i:44f06a5fc679ca4284fcf7f7aaa35474d39c8ce3d7e9d40ef481108c20b7fd22\",\"rs1:a:b7fef572a437c4b32968ab906956ec815c30b6d81b31464eedf95bc2cb198595\",\"rs1:i:f22b0d471b800c282a3dc34ed023ff3909d276f4874672e754c04dcfb63004c2\",\"rs1:a:2b4f3d396dec85c88f7ec7977c711f190960aa71328c4a0e364c5365f9505b68\"]",
+        "synthetic-off-owner",
+        "personal",
+        ""
+      ]
+    ]
+  },
+  {
+    "key": "workload:33",
+    "callIndex": 1,
+    "method": "capture",
+    "archivedCount": 0,
+    "currentCount": 1,
+    "statement": [
+      "SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value",
+      "all",
+      [
+        "[\"rs1:i:ad7b79545223f0f8c1b58a8a919b742819d3af4b41d48ebe90ad7a61fd53b5d3\",\"rs1:a:6d3df72c982c91baded302d704af1840a83b94354e206fd128118037bc03f06a\",\"rs1:i:0db7937eb1a6929839178daab1b9863c1f5eba4a1748792e7dd114d7d22c0ea3\",\"rs1:a:28ee02af825e4ee221736fc7bd53e7d9e65dc01710b06a31b4d9397abd31bb42\"]",
+        "synthetic-off-owner",
+        "personal",
+        ""
+      ]
+    ]
+  },
+  {
+    "key": "workload:33",
+    "callIndex": 1,
+    "method": "capture",
+    "archivedCount": 0,
+    "currentCount": 5,
+    "statement": [
+      "SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value",
+      "all",
+      [
+        "[\"rs1:i:44f06a5fc679ca4284fcf7f7aaa35474d39c8ce3d7e9d40ef481108c20b7fd22\",\"rs1:a:b7fef572a437c4b32968ab906956ec815c30b6d81b31464eedf95bc2cb198595\",\"rs1:i:f22b0d471b800c282a3dc34ed023ff3909d276f4874672e754c04dcfb63004c2\",\"rs1:a:2b4f3d396dec85c88f7ec7977c711f190960aa71328c4a0e364c5365f9505b68\",\"rs1:i:ad7b79545223f0f8c1b58a8a919b742819d3af4b41d48ebe90ad7a61fd53b5d3\",\"rs1:a:6d3df72c982c91baded302d704af1840a83b94354e206fd128118037bc03f06a\",\"rs1:i:0db7937eb1a6929839178daab1b9863c1f5eba4a1748792e7dd114d7d22c0ea3\",\"rs1:a:28ee02af825e4ee221736fc7bd53e7d9e65dc01710b06a31b4d9397abd31bb42\"]",
+        "synthetic-off-owner",
+        "personal",
+        ""
+      ]
+    ]
+  },
+  {
+    "key": "workload:33",
+    "callIndex": 92,
+    "method": "captureRaw",
+    "archivedCount": 0,
+    "currentCount": 6,
+    "statement": [
+      "SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value",
+      "all",
+      [
+        "[\"rs1:i:4ff94c59e62951e083a5b0c7416e6b80e146f9e6cd65ef3c44bdadaf6beec425\",\"rs1:a:95c0cd2bd3a194a40553ac24cf7ae57c34687817dffb9cdd7383115bde44d651\",\"rs1:i:0dbcd6ed8816e2387216694d01dc55df3bdcea1613e542982c5c299466dde3b5\",\"rs1:a:a7b74e52a63d51a65dc679026ea5775be3717600e9681c3455c05478c5843e89\",\"rs1:i:28845b336cba323d77b14d2d86247f2f3e3c65c880e971c75b0a0d50dc4a5976\",\"rs1:a:0585d48c615d6aea1b9a370d53a5fcd235d3b630c502d03887ab90cfeeb1cbc9\"]",
+        "synthetic-off-owner",
+        "personal",
+        ""
+      ]
+    ]
+  },
+  {
+    "key": "workload:33",
+    "callIndex": 117,
+    "method": "openRawCaptureCore.captureRaw",
+    "archivedCount": 67,
+    "currentCount": 68,
+    "statement": [
+      "SELECT secret FROM episode_identity WHERE singleton=1",
+      "get",
+      []
+    ]
+  },
+  {
+    "key": "workload:33",
+    "callIndex": 117,
+    "method": "openRawCaptureCore.captureRaw",
+    "archivedCount": 0,
+    "currentCount": 1,
+    "statement": [
+      "SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value",
+      "all",
+      [
+        "[\"rs1:i:5b4f73a5ae6fd0939c5abcb6aaf270aded76123f221b6be110a27d6d3567d5f5\",\"rs1:a:fb4c8a11ab6508b2486b0feb08ae399a14681d04dbc8ef22ef2c00f3b2a96c9d\",\"rs1:i:cd6d8e1d2a38763e68232ecabdb3250b3f11aa6cdcc812de7ced30d1e419802c\",\"rs1:a:12f5c64fc276567a0fea09e1f17ea04354f0baf58b05e7ef574179b5c26967fd\",\"rs1:i:3120ade8870fdff85ebccc57934173b9f449618c7dfe3aa34890cb5f9f820a4d\",\"rs1:a:28afe16ae78e87f658aef3c6dada06e61e4321329d0e0a1aa4a2a5e272aaf5c8\"]",
+        "synthetic-off-owner",
+        "personal",
+        ""
+      ]
+    ]
+  },
+  {
+    "key": "workload:33",
+    "callIndex": 117,
+    "method": "openRawCaptureCore.captureRaw",
+    "archivedCount": 0,
+    "currentCount": 1,
+    "statement": [
+      "SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value",
+      "all",
+      [
+        "[\"rs1:i:ee241e2c83384762db248ab57faf27e8d18e9fdb22f6574f7b6f33c9b1305579\",\"rs1:a:92d5850e55b31b256f37abd88f9c90b81ac0602562ccc8296038d9cebbfc06e0\",\"rs1:i:5903b4c1fe1a99f9287ad4fd51070816637275f548aa72c238150b71b26def59\",\"rs1:a:c7ad795228029df9b3dc4adf919234c6f7a82894efb6083d4066d71f3feacefc\",\"rs1:i:d73e8d75e891cf957928a9c25984fe3c5af087b90f245ad5acc0278b5bd17357\",\"rs1:a:2a24fb233c4ff172d92d10b3c8ab354b772e1451c75f013a5bf363e0a7feb2de\"]",
+        "synthetic-off-owner",
+        "personal",
+        ""
+      ]
+    ]
+  },
+  {
+    "key": "workload:33",
+    "callIndex": 117,
+    "method": "openRawCaptureCore.captureRaw",
+    "archivedCount": 0,
+    "currentCount": 5,
+    "statement": [
+      "SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value",
+      "all",
+      [
+        "[\"rs1:i:5b4f73a5ae6fd0939c5abcb6aaf270aded76123f221b6be110a27d6d3567d5f5\",\"rs1:a:fb4c8a11ab6508b2486b0feb08ae399a14681d04dbc8ef22ef2c00f3b2a96c9d\",\"rs1:i:cd6d8e1d2a38763e68232ecabdb3250b3f11aa6cdcc812de7ced30d1e419802c\",\"rs1:a:12f5c64fc276567a0fea09e1f17ea04354f0baf58b05e7ef574179b5c26967fd\",\"rs1:i:3120ade8870fdff85ebccc57934173b9f449618c7dfe3aa34890cb5f9f820a4d\",\"rs1:a:28afe16ae78e87f658aef3c6dada06e61e4321329d0e0a1aa4a2a5e272aaf5c8\",\"rs1:i:ee241e2c83384762db248ab57faf27e8d18e9fdb22f6574f7b6f33c9b1305579\",\"rs1:a:92d5850e55b31b256f37abd88f9c90b81ac0602562ccc8296038d9cebbfc06e0\",\"rs1:i:5903b4c1fe1a99f9287ad4fd51070816637275f548aa72c238150b71b26def59\",\"rs1:a:c7ad795228029df9b3dc4adf919234c6f7a82894efb6083d4066d71f3feacefc\",\"rs1:i:d73e8d75e891cf957928a9c25984fe3c5af087b90f245ad5acc0278b5bd17357\",\"rs1:a:2a24fb233c4ff172d92d10b3c8ab354b772e1451c75f013a5bf363e0a7feb2de\"]",
+        "synthetic-off-owner",
+        "personal",
+        ""
+      ]
+    ]
+  },
+  {
+    "key": "workload:33",
+    "callIndex": 125,
+    "method": "correct",
+    "archivedCount": 0,
+    "currentCount": 1,
+    "statement": [
+      "SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value",
+      "all",
+      [
+        "[\"rs1:i:594db1f8830afffaf6fc3d157c904572980f50afa4e4575e0743396fe747d762\",\"rs1:a:f9875cd62ec0059ae2e85e2b7fd4628ba13e8eb23ad4a10a6ef9564d36422c19\",\"rs1:i:0e52997faf2980288cb37cd67bfc46fd8e3466d18dab007df90a97ee7dbac0b1\",\"rs1:a:b9a263ab6bfc1fc9d6bc3b8d1710c2eac220a9796f2e169c1b80fb51cb069f03\"]",
+        "synthetic-off-owner",
+        "personal",
+        ""
+      ]
+    ]
+  },
+  {
+    "key": "workload:33",
+    "callIndex": 128,
+    "method": "supersede",
+    "archivedCount": 0,
+    "currentCount": 1,
+    "statement": [
+      "SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value",
+      "all",
+      [
+        "[\"rs1:i:8cd02a7a30dff10d22f213c1834d70194dd2bde4d90d579fece30a352fa942d1\",\"rs1:a:f233c7b2e6e5102d18f13744f22275b38992e086e7526d33f021ee4e6c355896\",\"rs1:i:7ba9eaa417c77abf1dd8a65617bf2640c3e1765202e8bc16da210c60a6c8bfeb\",\"rs1:a:21e0689b2dbfe0da3acc3d434796077fee4c4a3f18b7a5a90ff77efece20251c\"]",
+        "synthetic-off-owner",
+        "personal",
+        ""
+      ]
+    ]
+  },
+  {
+    "key": "workload:33",
+    "callIndex": 132,
+    "method": "admit",
+    "archivedCount": 0,
+    "currentCount": 1,
+    "statement": [
+      "SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value",
+      "all",
+      [
+        "[\"rs1:i:706977ea8759e9e9fabed9f91cbc932168ca8e9ac1eaca733c3bc72025a5c54b\",\"rs1:a:fd26e4021854b04ecff25e655d80800ce75f54544196c4cf4bf4176e0c5331d2\",\"rs1:i:4f34e67cde11eb5780cd22942d7bd42c2b64d7521fd6a63df3e9a3fc5eb990d6\",\"rs1:a:e6269f59b8f3f9892da7a77ce18b6cb6bafce9d0ab01175b8556fa752d7239ea\"]",
+        "synthetic-off-owner",
+        "personal",
+        ""
+      ]
+    ]
+  }
+]

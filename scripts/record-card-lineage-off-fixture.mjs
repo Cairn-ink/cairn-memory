@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 const root=fileURLToPath(new URL('../',import.meta.url)),scratch=mkdtempSync(join(tmpdir(),'lineage-baseline-'));
 const run=(command,args,options={})=>{const r=spawnSync(command,args,{cwd:root,timeout:60000,maxBuffer:64*1024*1024,...options});assert.equal(r.status,0,String(r.stderr));return r.stdout;};
 try {
-  const revision=String(run('git',['rev-parse','fd5c59ef'])).trim(),base=join(scratch,'baseline');mkdirSync(base,{mode:0o700});
+  const revision=String(run('git',['rev-parse',process.argv.includes('--wide')?'c02e5135fad9ea449047e5b6325726f55c248864':'fd5c59ef'])).trim(),base=join(scratch,'baseline');mkdirSync(base,{mode:0o700});
   const paths=String(run('git',['ls-tree','-r','--name-only',revision,'--','core','plugins/cairn-memory/lib'])).trim().split('\n').filter(p=>!/^core\/(test|testing)\//.test(p));
   run('tar',['-xC',base],{input:run('git',['archive',revision,'--',...paths])});
   const actual=[];function walk(path){for(const entry of readdirSync(path,{withFileTypes:true})){const next=join(path,entry.name);if(entry.isDirectory())walk(next);else actual.push(relative(base,next));}}walk(base);

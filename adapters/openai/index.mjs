@@ -21,6 +21,8 @@ const standardPoolQualificationPrompt = qualificationCandidatesPrompt(
 const episodeExtractPrompt = readFileSync(new URL('../../core/prompts/extract-episode-sources.md', import.meta.url), 'utf8');
 const episodeQualificationPrompt = qualificationCandidatesPrompt(
   new URL('../../core/prompts/qualify-episode-candidates.md', import.meta.url));
+const rationalePrompt = readFileSync(new URL('../../core/prompts/relate-rationale.md', import.meta.url), 'utf8');
+const focusedRationalePrompt = rationalePrompt + '\n' + readFileSync(new URL('../../core/prompts/relate-claim-focus.md', import.meta.url), 'utf8');
 const episodeMode = (method, system) => method === 'interpretEpisode' ||
   (method === 'extract' && system === episodeExtractPrompt) ||
   (method === 'qualifyCandidates' && system === episodeQualificationPrompt);
@@ -316,7 +318,8 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
           ? snapshotIndexedExtractInput(input) : input;
         const originalSerializedInput = JSON.stringify(prevalidated);
         snapshot = JSON.parse(originalSerializedInput);
-        schema = episodic ? episodeSchemasFor(method, snapshot) : schemasFor(method, snapshot);
+        schema = episodic ? episodeSchemasFor(method, snapshot) : schemasFor(method, snapshot, method === 'relate' &&
+          [rationalePrompt, focusedRationalePrompt].includes(system));
         instructions = qualificationInstructions(method, system, snapshot);
         localTokens = countTokens(JSON.stringify({ system: instructions, input: snapshot, maxOutputTokens }));
         if (method === 'classify') {
@@ -335,6 +338,9 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
       diagnose('request_invalid'); throw new Error('invalid_openai_request');
     }
     if (localTokens > 6000) { diagnose('request_bounds'); fail('context_budget_exceeded'); }
+    if (['reviewBasis', 'relate'].includes(method) && snapshot.memories.every(memory => memory.receipts.length === 0)) {
+      return method === 'reviewBasis' ? { units: [], links: [] } : { edges: [] };
+    }
     const selected = profile[method === 'selectChecklist' ? 'select' : method];
     const payload = qualifier ? null : { model: selected.model, instructions,
       input: [{ role: 'user', content: [{ type: 'input_text', text: serializedInput }] }],
