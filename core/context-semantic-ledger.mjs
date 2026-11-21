@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { createExclusiveSqliteFile, sqliteFileStat } from './sqlite-journal-probe.mjs';
 import { createProductSqlitePolicy } from './context-product-sqlite.mjs';
 import { canonicalJson } from './context-product-validation.mjs';
-import { exact, ascii, hash, integer, LEDGER_VERSION } from './context-semantic-input.mjs';
+import { exact, ascii, hash, integer, opaque, recoveryReason, recoveryTicket, recoveryUnits, BACKFILL_RECOVERY_MAX_EVENTS, LEDGER_VERSION } from './context-semantic-input.mjs';
 import { fail } from './validation.mjs';
 import { validatePumpAccounting } from './context-semantic-accounting.mjs';
 
@@ -54,6 +54,10 @@ function anchor(value) {
 export function openSemanticLedger({path,identity,authority,portCall,isFenceFailure,protectedRequest,policy,observer}) {
   if (!authority || typeof authority.load !== 'function' || typeof authority.compareAndSwap !== 'function' || typeof authority.listOwners !== 'function') fail('invalid_input');
   const call=(name,args)=>portCall?portCall(authority,name,args):Reflect.apply(authority[name],authority,args);
+  async function recoveryCas(previous,next) {
+    try{return await call('compareAndSwap',[previous,next]);}
+    catch(error){if(typeof error?.code==='string')throw error;unavailable();}
+  }
   const sqlite = policy ?? createProductSqlitePolicy({observer});
   const files = sqlite.files(path), physical = sqliteFileStat(path);
   const native = observer ? observer.invoke('open','connection',()=>new DatabaseSync(path)) : new DatabaseSync(path);
@@ -71,18 +75,19 @@ export function openSemanticLedger({path,identity,authority,portCall,isFenceFail
     const row = db.prepare('SELECT sequence,state_digest,state FROM semantic_owners WHERE owner_id=?').get(ownerId);
     if (!row) unavailable();
     let state;
-    try { state=stateRecords(JSON.parse(row.state)); } catch {unavailable();}
+    try { state=stateRecords(JSON.parse(row.state)); attestBackfillRecovery(state,identity); } catch {unavailable();}
     if (row.state!==stateBytes(state) || stateDigest(state)!==row.state_digest || state.ownerId!==ownerId || state.sequence!==row.sequence ||
         !same(state.ledgerFile,{device:String(physical.dev),inode:String(physical.ino)})) unavailable();
     return {...row,state};
   }
   const expected = (ownerId,row) => ({ownerId,...identity,ledgerEpoch:row.state.ledgerEpoch,bindingRevision:row.state.bindingRevision,
     sequence:row.sequence,stateDigest:row.state_digest,pending:null});
-  async function authenticate(ownerId,{recoverPrepared=false}={}) {
+  async function authenticate(ownerId,{recoverPrepared=false,pendingCode}={}) {
     let a;
     try {a=anchor(await call('load',[ownerId]));} catch(error) {if(isFenceFailure?.(error))throw error;unavailable();}
     const row=read(ownerId), e=expected(ownerId,row);
     if (a.pending!==null) {
+      if (!recoverPrepared && pendingCode) fail(pendingCode);
       // Recovery is an explicit host disposal decision, never inferred from a
       // PID, a timed-out operation or a replaced service handle.
       if (!recoverPrepared || typeof (protectedRequest?.()===true?modelPortValue(authority,'confirmDisposed','ledger_unavailable'):authority.confirmDisposed)!=='function' || await call('confirmDisposed',[a])!==true) unavailable();
@@ -111,18 +116,19 @@ export function openSemanticLedger({path,identity,authority,portCall,isFenceFail
     if(!same(owners.map(r=>r.owner_id),rows.map(r=>r.state.ownerId)))unavailable();
     for(const row of rows){const current=read(row.state.ownerId);if(current.sequence!==row.sequence||current.state_digest!==row.state_digest)unavailable();}
   }
-  async function prepare(current,nextState,onPrepare) {
+  async function prepare(current,nextState,onPrepare,trackUncertain=false) {
     if(!Number.isSafeInteger(current.anchor.sequence+1))unavailable();
     nextState.sequence=current.anchor.sequence+1;
+    attestBackfillRecovery(nextState,identity);
     const nextDigest=stateDigest(nextState), a=current.anchor;
     const prepared={...a,pending:{sequence:a.sequence+1,stateDigest:nextDigest}};
     const preparation={prepared,nextState,nextDigest,previous:a};
     // A durable CAS may succeed and then fail its caller-return epoch fence.
     // Protected reads register uncertainty before the await. Other work keeps
     // its original post-await recovery bookkeeping and host-call order.
-    const early=protectedRequest?.()===true;
+    const early=trackUncertain||protectedRequest?.()===true;
     if(early)onPrepare?.(preparation);
-    if (await call('compareAndSwap',[a,prepared])!==true) unavailable();
+    if (await (trackUncertain?recoveryCas(a,prepared):call('compareAndSwap',[a,prepared]))!==true) unavailable();
     return preparation;
   }
   function commit(preparation,check=()=>{}) {
@@ -139,10 +145,10 @@ export function openSemanticLedger({path,identity,authority,portCall,isFenceFail
     } catch(error) {if(db.isTransaction)db.exec('ROLLBACK');throw error;}
     return {...prepared,sequence:prepared.pending.sequence,stateDigest:nextDigest,pending:null};
   }
-  async function mutate(current,change,check,beforeCommit,onPrepare) {
+  async function mutate(current,change,check,beforeCommit,onPrepare,trackUncertain=false) {
     const next=stateRecords(structuredClone(current.state)); change(next);
-    const early=protectedRequest?.()===true;
-    const preparation=await prepare(current,next,early?onPrepare:undefined);
+    const early=trackUncertain||protectedRequest?.()===true;
+    const preparation=await prepare(current,next,early?onPrepare:undefined,trackUncertain);
     if(!early)onPrepare?.(preparation);let sealed;
     try {beforeCommit?.();sealed=commit(preparation,check);}catch(error) {
       // Failed native admission never acquired permission to send. Cancel only
@@ -152,10 +158,39 @@ export function openSemanticLedger({path,identity,authority,portCall,isFenceFail
         await call('compareAndSwap',[preparation.prepared,preparation.previous]);
       throw error;
     }
-    if(await call('compareAndSwap',[preparation.prepared,sealed])!==true)unavailable();
+    if(await (trackUncertain?recoveryCas(preparation.prepared,sealed):call('compareAndSwap',[preparation.prepared,sealed]))!==true)unavailable();
     return {anchor:sealed,sequence:sealed.sequence,state_digest:sealed.stateDigest,state:next};
   }
-  return {read,authenticate,authenticateAll,checkAll,prepare,commit,mutate,close:()=>db.close(),db};
+  async function seal(preparation,sealed) {
+    if(await call('compareAndSwap',[preparation.prepared,sealed])!==true)unavailable();
+  }
+  return {read,authenticate,authenticateAll,checkAll,prepare,commit,seal,mutate,close:()=>db.close(),db};
+}
+
+function attestBackfillRecovery(state,identity) {
+  if (!Object.hasOwn(state,'backfillRecovery')) return;
+  const {version,baseUnits,grants}=exact(state.backfillRecovery,'version,baseUnits,grants');
+  if (version!==1 || !Array.isArray(grants) || !grants.length || grants.length>BACKFILL_RECOVERY_MAX_EVENTS) unavailable();
+  const base=recoveryUnits(baseUnits,1n), keys=new Set(), approvals=new Set(), ids=new Set();
+  let epoch=-1, sequence=0, ceiling=base;
+  for (const grant of grants) {
+    const e=exact(grant,'version,grantId,idempotencyKey,requestDigest,approvalId,principalId,operatorId,reason,ticket,ownerId,accountingDomainId,ledgerId,ledgerEpoch,bindingRevision,policyRevision,recoveryPolicyRevision,targetSetDigest,embedderDigest,purgeEpoch,previousSequence,sequence,recordedUtcMs,baseUnits,oldEffectiveUnits,newEffectiveUnits,additionalUnits,chargedUnits,reservedUnits');
+    if (e.version!==1 || e.ownerId!==state.ownerId || e.accountingDomainId!==identity.accountingDomainId ||
+        e.ledgerId!==identity.ledgerId || e.baseUnits!==baseUnits || e.reservedUnits!=='0' ||
+        typeof e.grantId!=='string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(e.grantId)) unavailable();
+    opaque(e.idempotencyKey);opaque(e.approvalId);opaque(e.principalId);opaque(e.operatorId);
+    recoveryReason(e.reason);recoveryTicket(e.ticket);hash(e.requestDigest);hash(e.targetSetDigest);hash(e.embedderDigest);
+    integer(e.ledgerEpoch,1,state.ledgerEpoch);integer(e.bindingRevision,1,state.bindingRevision);
+    integer(e.policyRevision,1,state.policy.revision);integer(e.recoveryPolicyRevision,1);
+    integer(e.purgeEpoch,Math.max(0,epoch),state.policy.purgeEpoch);
+    integer(e.previousSequence,sequence);integer(e.sequence,e.previousSequence+1,state.sequence);integer(e.recordedUtcMs);
+    if (e.sequence!==e.previousSequence+1 || keys.has(e.idempotencyKey) || approvals.has(e.approvalId) || ids.has(e.grantId)) unavailable();
+    if (e.purgeEpoch!==epoch) ceiling=base;
+    const next=recoveryUnits(e.newEffectiveUnits,1n);
+    if (recoveryUnits(e.oldEffectiveUnits)!==ceiling || next!==ceiling+recoveryUnits(e.additionalUnits,1n) || next<=recoveryUnits(e.chargedUnits)) unavailable();
+    keys.add(e.idempotencyKey);approvals.add(e.approvalId);ids.add(e.grantId);
+    epoch=e.purgeEpoch;sequence=e.sequence;ceiling=next;
+  }
 }
 
 // Explicit control-plane enrollment. The host's independent enrollment service

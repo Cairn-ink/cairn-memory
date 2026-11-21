@@ -131,3 +131,47 @@ export function targetSetDigest(targets) {
   targets.forEach((target,i)=>hash.update((i?',':'')+JSON.stringify(boundedData(target))));
   return hash.update(']').digest('base64url');
 }
+
+export const BACKFILL_RECOVERY_CAPABILITY = 'context-semantic-backfill-recovery-v1';
+export const BACKFILL_RECOVERY_METHOD = 'grantOwnerBackfillRecovery';
+export const BACKFILL_RECOVERY_MAX_EVENTS = 32;
+export function recoveryReason(value) {
+  if (!['lost_cache','settled_latch','capacity_recovered','interrupted_backfill'].includes(value)) fail('invalid_input');
+}
+export function recoveryTicket(value) {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9._/-]{1,120}$/.test(value)) fail('invalid_input');
+}
+export function recoveryUnits(value, min = 0n) {
+  if (typeof value !== 'string' || !/^(0|[1-9][0-9]*)$/.test(value)) fail('invalid_input');
+  const units=BigInt(value);
+  if (units<min) fail('invalid_input');
+  return units;
+}
+export function recoveryBootstrap(value, ordinary) {
+  const config=exact(boundedData(value),'version,binding,policy');
+  const b=exact(config.binding,'kind,version,serviceId,credentialBindingId,credentialDigest,expiresUtcMs,ownerId,accountingDomainId,ledgerId,ledgerEpoch,bindingRevision,methods');
+  const p=exact(config.policy,'revision,maxGrantUnits,maxLifetimeGrantUnits');
+  if (config.version!==1 || b.version!==1 || b.kind!=='backfill-recovery-service' ||
+      !Array.isArray(b.methods) || b.methods.length!==1 || b.methods[0]!==BACKFILL_RECOVERY_METHOD) fail('invalid_input');
+  ascii(b.serviceId);ascii(b.credentialBindingId);hash(b.credentialDigest);integer(b.expiresUtcMs,1);
+  integer(b.ledgerEpoch,1);integer(b.bindingRevision,1);identifier(b.ownerId);
+  ascii(b.accountingDomainId);ascii(b.ledgerId);integer(p.revision,1);
+  if (recoveryUnits(p.maxGrantUnits,1n)>recoveryUnits(p.maxLifetimeGrantUnits,1n)) fail('invalid_input');
+  if (b.expiresUtcMs<=Date.now() || b.credentialBindingId===ordinary.credentialBindingId || b.credentialDigest===ordinary.credentialDigest ||
+      ['ownerId','accountingDomainId','ledgerId','ledgerEpoch','bindingRevision'].some(key=>b[key]!==ordinary[key])) fail('authority_required');
+  return config;
+}
+export function backfillRecoveryInput(value) {
+  const input=boundedData(value),hasDeadline=Object.hasOwn(input,'deadlineMs');
+  exact(input,'ownerId,idempotencyKey,approvalId,ticket,reason,additionalUsd,expected'+(hasDeadline?',deadlineMs':''));
+  try {identifier(input.ownerId);} catch {fail('invalid_input');}
+  opaque(input.idempotencyKey);opaque(input.approvalId);recoveryTicket(input.ticket);recoveryReason(input.reason);
+  const expected=exact(input.expected,'ledgerEpoch,bindingRevision,sequence,policyRevision,purgeEpoch,targetSetDigest,embedderDigest,recoveryPolicyRevision');
+  integer(expected.ledgerEpoch,1);integer(expected.bindingRevision,1);integer(expected.sequence);
+  integer(expected.policyRevision);integer(expected.purgeEpoch);integer(expected.recoveryPolicyRevision,1);
+  hash(expected.targetSetDigest);hash(expected.embedderDigest);
+  if (hasDeadline) deadline(input.deadlineMs);
+  const amount=usd(input.additionalUsd);
+  if (amount===0n || dollars(amount)!==input.additionalUsd) fail('invalid_input');
+  return {...input,additionalUsd:dollars(amount)};
+}

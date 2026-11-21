@@ -419,7 +419,10 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         const snapshot=await semantic.snapshot(),knownFailure=storage.prepareObservation();access.check();
         return read(()=>{metadataRead(p);return success(scopedStatus(p,storage.observe(p,access.accessGenerations,{knownFailure}),snapshot));});
       }
-      if(method==='refreshContextIndex')return await embeddingRefresh(p,access,cutoff,observation);
+      if(method==='refreshContextIndex')return await embeddingRefresh(p,access,cutoff,observation,()=>{
+        // Keep the request's original final sample for delivery after the hint.
+        try{authorize(method,payload,credential);}catch{fail('scope_changed');}
+      });
       const c=candidates(p,access,true);bindSemanticFence(p);
       const preflightStart=performance.now(),snapshot=await semantic.snapshot();
       if(!c.items) {
@@ -525,7 +528,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       return validated;
     }catch(error){attribution?.captureFailure(error);attribution?.selectFailure(error);return failure(error.code==='ERR_SQLITE_ERROR'?[5,6].includes(error.errcode&255)?'storage_busy':'storage_error':error.code??'storage_error');}
   }
-  async function embeddingRefresh(p,access,cutoff,observation) {
+  async function embeddingRefresh(p,access,cutoff,observation,checkWriteAccess) {
     // Start before opening or any authority/provider work; the parent window
     // cannot be reset by dispatch, expensive open or asynchronous settlement.
     const quantum=maintenanceQuantum({now,cutoff:Math.min(p.deadlineAt,now()+p.budget.maxMs),maxMs:p.budget.maxMs});
@@ -537,12 +540,16 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     const observed=read(()=>storage.observe(p,access.accessGenerations));bindSemanticFence(p);const snapshot=await semantic.snapshot();
     const ready=observed.dto.lexical.state==='ready';let reason=semanticReason(snapshot,ready),attempts=0,embedded=0,spent=0n;
     const fits=publication=>vectors.dispatchFits(publication,snapshot.identity);
-    if(!reason&&!fits(observed.publication))reason='capacity_exceeded';
+    const certificationOnly=snapshot.certificationOnly===true;
+    if(ready&&(!reason||certificationOnly)&&!fits(observed.publication))reason='capacity_exceeded';
     const physical=read(()=>canonicalProductIdentity(path,db));
-    if(ready&&!reason) {
+    if(ready&&(!reason||certificationOnly&&reason==='backfill_ceiling')) {
+      // Purge must be able to find any rows written by certification as well.
       const sidecarIdentity=productFile(path+PRODUCT_SIDECAR_SUFFIX);
       const catalog={catalogId:digest({storeId:identity.storeId,canonicalIdentity:physical,sidecarIdentity}),ownerId:p.readSet[0].ownerId,storeId:identity.storeId,canonicalPath:path,canonicalIdentity:physical,sidecarIdentity,sidecarJournalMode:sidecarJournalMode??'DELETE'};
       try{await semantic.call('catalog',catalog);}catch(error){attribution?.captureFailure(error);if(!['not_enabled','purge_pending','ledger_unavailable','timeout'].includes(error.code))throw error;reason=error.code;}
+    }
+    if(ready&&!reason) {
       let maximum=Math.min(p.budget.maxItems,semantic.configuration.selection.maxBatchDocuments,64);
       while(!reason&&attempts<p.budget.maxItems&&quantum.admit('embedding-item')&&quantum.admit('vector-scan')) {
         if(!fits(observed.publication)){reason='capacity_exceeded';break;}
@@ -558,11 +565,12 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
             const guard=await semantic.snapshot();
             if(guard.policy?.purgeEpoch!==snapshot.policy.purgeEpoch||!guard.policy?.semantic){reason='purge_pending';return;}
             read(()=>{const current=storage.observe(p,access.accessGenerations);if(current.dto.lexical.state!=='ready'||current.publication.publicationId!==observed.publication.publicationId)fail('index_unavailable');});
-            const release=semantic.gate.enter(snapshot.policy);
-            try{vectors.put(p,observed.publication,snapshot,rows,result.vectors);}finally{release();}embedded+=rows.length;
+            putRefreshResult(p,access,checkWriteAccess,observed.publication,snapshot,rows,result,cutoff,quantum);
+            embedded+=rows.length;
+            if(result.drainOnly)reason=guard.blocked?'backfill_ceiling':'budget_denied';
           },'embedding-item');
         }catch(error) {
-          if(error.safetyFence)throw error;
+          if(error.safetyFence||error.code==='scope_changed')throw error;
           error=storage.embeddingError(p.readSet,p.deadlineAt,error);
           if(error.code==='budget_denied'&&!error.attempts){
             const current=read(()=>storage.observe(p,access.accessGenerations));
@@ -572,11 +580,10 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
           attempts+=(error.attempts??0)?rows.length:0;reason=error.code;break;
         }
       }
-      if(!['namespace_paused','capacity_exceeded'].includes(reason)&&(!reason||attempts>0)&&quantum.admit('vector-scan')&&quantum.admit('vector-verification')) {
-        let release;
-        if(!fits(observed.publication))reason='capacity_exceeded';
-        else try{release=semantic.gate.enter(snapshot.policy);vectors.certify(p,observed.publication,snapshot,quantum);}catch(error){attribution?.captureFailure(error);reason=error.reason==='validation_invalid'||error.code==='index_unavailable'?'validation_invalid':error.code==='read_timeout'?'timeout':error.code;}finally{release?.();}
-      }
+      if(!['namespace_paused','capacity_exceeded'].includes(reason)&&(!reason||attempts>0))certify();
+    }else if(ready&&certificationOnly&&reason==='backfill_ceiling') {
+      checkWriteAccess();
+      certify();
     }
     if(!snapshot.unavailable) {
       const vector=reason!=='capacity_exceeded'&&ready&&snapshot.identity&&snapshot.policy.semantic?vectors.observe(p,observed.publication,snapshot):null;
@@ -590,6 +597,25 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       covered.stops.budget=attempts>=p.budget.maxItems||reason==='budget_denied';
       return success(maintenanceDelivery(p,{status:isReady?complete?'complete':'partial':'rebuilding',progress:{lexical:dto.lexical.progress,transformed:0,embeddingAttempts:attempts,embedded},coverage:covered,channels:{lexical:channels(isReady).lexical,semantic:{state:complete?'ready':channelFor(isReady?reason??dto.semantic.reason:dto.semantic.reason),causes:complete?[]:[channelFor(isReady?reason??dto.semantic.reason:dto.semantic.reason)]}}},current.publication));
     });
+    function certify() {
+      if(!quantum.admit('vector-scan')||!quantum.admit('vector-verification'))return;
+      let release;
+      if(!fits(observed.publication))reason='capacity_exceeded';
+      else try{release=semantic.gate.enter(snapshot.policy);vectors.certify(p,observed.publication,snapshot,quantum);}catch(error){attribution?.captureFailure(error);reason=error.reason==='validation_invalid'||error.code==='index_unavailable'?'validation_invalid':error.code==='read_timeout'?'timeout':error.code;}finally{release?.();}
+    }
+  }
+  function putRefreshResult(p,access,checkWriteAccess,publication,snapshot,rows,result,cutoff,quantum) {
+    if(result.drainOnly)checkWriteAccess();
+    const release=semantic.gate.enter(snapshot.policy);
+    try {
+      if(result.drainOnly) {
+        if(process.hrtime.bigint()>=cutoff||now()>=quantum.cutoff)fail('read_timeout');
+        storage.assertEmbeddingAllowed(p.readSet,p.deadlineAt);
+        read(()=>{const current=storage.observe(p,access.accessGenerations);if(digest(current.publication)!==digest(publication))fail('index_unavailable');});
+      }
+      // The vector writer repeats the exact lexical bindings inside its write.
+      vectors.put(p,publication,snapshot,rows,result.vectors);
+    }finally{release();}
   }
   const safe=contentSafetyFacade({ run }, { select: args => {
     const original=args[1];

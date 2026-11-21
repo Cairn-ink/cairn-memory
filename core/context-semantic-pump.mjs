@@ -63,7 +63,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,admit=admitM
   if(old){if(old.fingerprint!==fingerprint||old.supervisor!==c.supervisor||old.coordinator!==coordinator||old.semanticCredentialDigest!==credentialDigest(semanticCredential)||JSON.stringify(old.first)!==JSON.stringify(first))fail('read_in_progress');old.renew(c,w,b);return old.api;}
   const turns=turnPort?createMaintenanceTurnController(turnPort,{now,setTimer,clearTimer}):undefined;
   const {owner,registry}=supervisorOwner(c.supervisor),record=registry.register(owner,{path:projections[0].options.path,domain:'context-read-product-p2e-v1/pump/'+c.id});
-  let window=w,budgets=b,usedItems=w.usedItems,usedMs=w.usedMs,usedUsd=w.usedUsd,cursor=0,timer,running,closing,stopped=false,error=null,renewedUntil=now()+c.renewalMs,lastTick=now(),validationPending=false;
+  let window=w,budgets=b,usedItems=w.usedItems,usedMs=w.usedMs,usedUsd=w.usedUsd,cursor=0,timer,running,closing,stopped=false,error=null,renewedUntil=now()+c.renewalMs,lastTick=now(),validationPending=false,certificationPending=false;
   let resolveCompletion,completion,settled=false,completionEpoch=0;
   function cycle(){const epoch=++completionEpoch;settled=false;completion=new Promise(resolve=>{resolveCompletion=value=>{if(epoch===completionEpoch)settled=true;resolve(value);};});}cycle();
   const handles=new Map(),writers=new Map(),completeTargets=new Set();let targetSetDigest=null,firstComplete=false,startupAt=0,residentEpoch=0,parkedUntil;
@@ -93,7 +93,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,admit=admitM
   function plan(lookahead=false){
     return slots.map((_,offset)=>(cursor+offset)%slots.length).filter(index=>{
       const slot=slots[index];return slot.kind==='startup'?slot.index>=startupAt:
-        slot.kind==='validation'?lookahead||validationRequired():usedItems<budgets.maxItems;
+        slot.kind==='validation'?lookahead||validationRequired():usedItems<budgets.maxItems||certificationPending&&slot.p.mode==='embeddings';
     });
   }
   const accountingWindow=w=>{
@@ -119,9 +119,9 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,admit=admitM
   };
   const exhausted=()=>windowExhausted||now()>=window.endsAtMonoMs||usedMs>=budgets.maxMs||usedItems>=budgets.maxItems&&!validationRequired()&&!startup();
   const dutyEnd=()=>Math.min(window.endsAtMonoMs,renewedUntil);
-  const validationRequired=()=>validationPending||completeTargets.size===handle.targets.length*2&&!firstComplete;
+  const validationRequired=()=>certificationPending||validationPending||completeTargets.size===handle.targets.length*2&&!firstComplete;
   const turnMs=()=>slots[plan()[0]]?.kind==='validation'?first.maxMs:q.maxMs;
-  const observeCoverage=observation=>{firstComplete=observation.complete;validationPending=observation.pending;};
+  const observeCoverage=observation=>{firstComplete=observation.complete;validationPending=observation.pending;certificationPending=observation.certificationOnly===true;};
   // Preserve coordinator codes already exposed by the pump. Normalize only
   // transport timeout/unavailability and codes outside the existing vocabularies.
   const controlCodes=Object.freeze({timeout:'timeout',ledger_unavailable:'reader_failed',not_enabled:'not_enabled',purge_pending:'purge_pending',backfill_ceiling:'backfill_ceiling',price_unavailable:'price_unavailable',budget_denied:'budget_denied',provider_error:'provider_error',rate_limited:'rate_limited',dimension_mismatch:'dimension_mismatch',provider_unavailable:'provider_unavailable'});
@@ -454,9 +454,13 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,admit=admitM
     if(!result.ok)return;check(ctx);firstComplete=result.value.status==='complete';const current=await control(ctx,'firstCoverage');check(ctx);observeCoverage(current);
   }
   async function regular(ctx,slot) {
-    if(error||stopped||exhausted()||usedItems>=budgets.maxItems||parkedUntil!==undefined||!fits(q.maxMs))return;
     const p=slot.p,isEmbedding=p.mode==='embeddings';
-    if(isEmbedding){const admission=await control(ctx,'embeddingAdmission');check(ctx);if(!admission.allowed||usd(usedUsd)>=usd(budgets.maxUsd)){cursor=(slots.indexOf(slot)+1)%slots.length;return;}}
+    if(error||stopped||exhausted()||usedItems>=budgets.maxItems&&!(isEmbedding&&certificationPending)||parkedUntil!==undefined||!fits(q.maxMs))return;
+    if(isEmbedding){
+      const admission=await control(ctx,'embeddingAdmission');check(ctx);
+      if(admission.certificationOnly===true){await certifyBlockedRefresh(ctx,slot);return;}
+      if(!admission.allowed||usedItems>=budgets.maxItems||usd(usedUsd)>=usd(budgets.maxUsd)){cursor=(slots.indexOf(slot)+1)%slots.length;return;}
+    }
     check(ctx);if(!fits(q.maxMs))return;
     const maxItems=Math.min(q.maxItems,budgets.maxItems-usedItems),maxMs=Math.min(q.maxMs,budgets.maxMs-usedMs,Math.floor(window.endsAtMonoMs-now()),Math.floor(renewedUntil-now()));
     if(maxItems<1||maxMs<1)return;
@@ -470,6 +474,15 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,admit=admitM
       observations[slot.index]=time;missed[slot.index]=false;checkCadence(finished);
     }
     if(isEmbedding){const current=await control(ctx,'firstCoverage');check(ctx);observeCoverage(current);if(result.value.status==='complete')completeTargets.add(JSON.stringify([p.options.path,p.types,p.intent]));}
+  }
+  async function certifyBlockedRefresh(ctx,slot) {
+    const p=slot.p,maxMs=Math.min(q.maxMs,budgets.maxMs-usedMs,Math.floor(window.endsAtMonoMs-now()),Math.floor(renewedUntil-now()));
+    if(!fits(q.maxMs)||maxMs<1)return;
+    const reservation=await reserve(ctx,'validation',0,maxMs,'0');check(ctx);
+    cursor=(slots.indexOf(slot)+1)%slots.length;
+    const result=await operation(ctx,p,'refreshContextIndex',{readSet:p.options.readSet,types:p.types,intent:p.intent,mode:'embeddings',
+      budget:{maxItems:q.maxItems,maxUsd:'0'}},reservation);check(ctx);
+    if(result?.ok&&!error&&!stopped){const current=await control(ctx,'firstCoverage');check(ctx);observeCoverage(current);}
   }
   async function tick() {
     if(stopped||error||running||pendingAdmission||awaitingProof)return;

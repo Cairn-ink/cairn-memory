@@ -10,7 +10,7 @@ import { createExclusiveSqliteFile, sqliteFileStat } from './sqlite-journal-prob
 import { boundedData, credentialDigest, mono, verifyRecords, operationRecord, deadline } from './context-product-control.mjs';
 import { canonicalJson, digest } from './context-product-validation.mjs';
 import { createProductSqlitePolicy } from './context-product-sqlite.mjs';
-import { exact, integer, opaque, hash, usd, dollars, tokenCost, semanticOperationInput, numericUsd, targetSetDigest } from './context-semantic-input.mjs';
+import { exact, integer, opaque, hash, usd, dollars, tokenCost, semanticOperationInput, numericUsd, targetSetDigest, BACKFILL_RECOVERY_METHOD, BACKFILL_RECOVERY_CAPABILITY, BACKFILL_RECOVERY_MAX_EVENTS, backfillRecoveryInput } from './context-semantic-input.mjs';
 import { vectorIdentity } from './context-vector-validation.mjs';
 import { validateEmbedder, validateVector } from './context-read-embedder.mjs';
 import { productFailure } from './context-product-reader.mjs';
@@ -90,13 +90,13 @@ function ledgerPortCall(authority,name,args) {
     name==='listOwners'?[{accountingDomainId:args[0].accountingDomainId,ledgerId:args[0].ledgerId}]:[args[0]];
   return callerPort(authority,name,args,'index_unavailable');
 }
-const controllers=new Set();
-async function mutate(current,fn,check,beforeCommit,invalidReceipts) {
+const controllers=new Set(),recoveryDisables=new Set(),auditedBackfillEvents=new Set();let recoveryAuthority;
+async function mutate(current,fn,check,beforeCommit,invalidReceipts,trackUncertain) {
   let recovery;
   const result=await ledger.mutate(current,fn,check,beforeCommit,preparation=>{
     recovery={prepared:preparation.prepared,sealed:preparation.previous,invalidReceipts};
     pendingSeal=recovery;
-  });
+  },trackUncertain);
   if(pendingSeal===recovery)pendingSeal=null;
   return result;
 }
@@ -108,7 +108,7 @@ const within=op=>{if(closed)fail('store_closed');if(process.hrtime.bigint()>=mon
 let queued=0;
 const serial=work=>{if(queued>=128)fail('read_in_progress');queued++;const result=queue.then(work).finally(()=>queued--);queue=result.catch(()=>{});return result;};
 const failure=error=>productFailure(error?.code==='ERR_SQLITE_ERROR'?[5,6].includes(error.errcode&255)?'storage_busy':'storage_error':error?.code);
-async function admission() {
+async function admission(options) {
   const request=contentRequest.getStore();
   if(pendingSettlements.size&&!request) {
     // A later control admission has no content fence of its own. Continue
@@ -148,7 +148,7 @@ async function admission() {
     }
     pendingSeal=null;
   }
-  let result=await ledger.authenticate(ownerId);
+  let result=await ledger.authenticate(ownerId,options);
   for(const [key,settlement] of pendingSettlements) {
     if(['reserved','may_transmit'].includes(result.state.reservations[key]?.status))
       result=await mutate(result,s=>settleReservation(s,settlement));
@@ -168,10 +168,10 @@ function refreshExposure(state,day) {
   }
   return {itemsCharged,itemsReserved,charged,reserved,lifetimeCharged,lifetimeReserved};
 }
-function snapshot(state) {
+function snapshot(state,metadata) {
   return {policy:state.policy,identity:identityMetadata(),
     blocked:state.blocked,purgePending:['pending','running','failed'].includes(state.purge.state),validationPending:state.validationPending,
-    firstCoverageComplete:state.firstCoverageComplete,targetSetDigest:state.targetSetDigest,providerUnavailable};
+    firstCoverageComplete:state.firstCoverageComplete,targetSetDigest:state.targetSetDigest,providerUnavailable,...(metadata.maintenance&&certificationEligible(state)?{certificationOnly:true}:{})};
 }
 function identityMetadata() {if(!port)return null;const {id,revision,dimensions,normalization}=port;return {provider:'openai',model:c.provider.model,id,revision,dimensions,normalization};}
 function coverageStatus(s) {
@@ -182,7 +182,7 @@ function status(s) {
   const day=Math.max(Math.floor(utc()/86400000),s.dayHighWater),e=refreshExposure(s,day),limits=c.refreshCaps[s.firstCoverageComplete?'steady':'backfill'];
   return {extension:c.version??'context-read-product-p2e-v1',owner:s.policy,refresh:{phase:s.blocked?'blocked':s.firstCoverageComplete?'steady':'backfill',utcDay:new Date(day*86400000).toISOString().slice(0,10),
     itemsCharged:e.itemsCharged,itemsReserved:e.itemsReserved,itemLimit:limits.maxItemsPerUtcDay,usdCharged:dollars(e.charged),usdReserved:dollars(e.reserved),usdLimit:limits.maxUsdPerUtcDay,
-    backfillUsdCharged:dollars(e.lifetimeCharged),backfillUsdReserved:dollars(e.lifetimeReserved),backfillUsdLimit:c.refreshCaps.backfill.maxUsdTotal,
+    backfillUsdCharged:dollars(e.lifetimeCharged),backfillUsdReserved:dollars(e.lifetimeReserved),backfillUsdLimit:dollars(effectiveBackfill(s)),
     firstCoverageComplete:s.firstCoverageComplete,blockedReason:s.blocked?'backfill_ceiling':null},purge:s.purge,firstCoverage:coverageStatus(s)};
 }
 function price(state) {
@@ -206,11 +206,11 @@ function price(state) {
     return assertion;
   }catch{fail('price_unavailable');}
 }
-function checkState(s,expected) {
+function checkState(s,expected,paidRefresh=false) {
   if(!s.policy.semantic)fail('not_enabled');
   if(s.policy.purgeEpoch!==expected.purgeEpoch||s.policy.revision!==expected.revision||['pending','running','failed'].includes(s.purge.state))fail('purge_pending');
-  if(s.blocked)fail('backfill_ceiling');
-  if(s.validationPending&&!s.firstCoverageComplete)fail('budget_denied');
+  if(s.blocked&&!paidRefresh)fail('backfill_ceiling');
+  if(!paidRefresh&&(!compatibleBackfillBase(s)||s.validationPending&&!s.firstCoverageComplete))fail('budget_denied');
 }
 function inputBound(texts) {
   if(!Array.isArray(texts)||!texts.length||texts.length>c.provider.maxBatchDocuments)fail('invalid_input');
@@ -235,7 +235,7 @@ function settleReservation(s,{reservationId,id,invoked,usage,protocolFailure}) {
   if(usage!==undefined)r.cost=String(tokenCost(usage,r.price.rate));
   if(protocolFailure)s.identities[id]={blocked:true};
   const e=refreshExposure(s,r.day);
-  if(!s.firstCoverageComplete&&e.lifetimeCharged+e.lifetimeReserved>=usd(c.refreshCaps.backfill.maxUsdTotal))s.blocked=true;
+  if(!s.firstCoverageComplete&&e.lifetimeCharged+e.lifetimeReserved>=effectiveBackfill(s))s.blocked=true;
 }
 async function embed(input,op,metadata) {
   const {texts,kind,expected,maxUsd,window}=input;
@@ -259,8 +259,8 @@ async function embed(input,op,metadata) {
     if(s.identities[id]?.blocked)fail('provider_error');
     if(kind==='refresh') {
       if(texts.length+e.itemsCharged+e.itemsReserved>limits.maxItemsPerUtcDay||cost+e.charged+e.reserved>usd(limits.maxUsdPerUtcDay)||cost>usd(maxUsd))fail('budget_denied');
-      if(phase==='backfill'&&cost+e.lifetimeCharged+e.lifetimeReserved>usd(c.refreshCaps.backfill.maxUsdTotal)) {
-        if(e.lifetimeCharged+e.lifetimeReserved>=usd(c.refreshCaps.backfill.maxUsdTotal)){await mutate(admitted,n=>{n.blocked=true;});fail('backfill_ceiling');}
+      if(phase==='backfill'&&cost+e.lifetimeCharged+e.lifetimeReserved>effectiveBackfill(s)) {
+        if(e.lifetimeCharged+e.lifetimeReserved>=effectiveBackfill(s)){await mutate(admitted,n=>{n.blocked=true;});fail('backfill_ceiling');}
         fail('budget_denied');
       }
     }
@@ -333,7 +333,7 @@ async function embed(input,op,metadata) {
   let timer;
   try {
     const values=await Promise.race([settled,new Promise((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(Object.assign(Error('timeout'),{code:'timeout'}));},Math.max(0,deadlineAt-performance.now()));})]);
-    within(op);const s=(await current()).state;checkState(s,expected);return {vectors:values,chargedUsd:dollars(BigInt(s.reservations[reservationId].cost)),attempts:1};
+    within(op);return refreshDelivery(await current(),{kind,expected,id,reservationId,op,values});
   } finally {clearTimeout(timer);}
 }
 function authorize(message,extra={}) {
@@ -342,10 +342,10 @@ function authorize(message,extra={}) {
   const query=boundedData({method,input,ownerId,requestControl:request,credentialBindingId:c.binding.credentialBindingId,...extra});
   let grant;try{grant=host.authorize(query,credential);if(types.isPromise(grant)){grant.catch(()=>{});fail('authority_required');}if(!isDeepStrictEqual(boundedData(grant),boundedData(c.binding)))fail('authority_required');}catch{fail('authority_required');}
   function sample(code) {try{if(host.isCurrent(grant,query)===true)return;}catch{}fail(code);}
-  sample('authority_required');return ()=>sample('scope_changed');
+  sample('authority_required');trackRecoveryDisable(message);return ()=>sample('scope_changed');
 }
 async function dataCall(message) {
-  const {input,method,operation}=message;within(operation);const scopedChange=fn=>change(fn,()=>within(operation));
+  const {input,method,operation}=message;within(operation);if(method===BACKFILL_RECOVERY_METHOD)return grantBackfillRecovery(message);const scopedChange=fn=>change(fn,()=>within(operation));
   semanticOperationInput(method,input);
   // Credential/method/owner checks precede every private ledger observation.
   const final=authorize(message,method==='validateOwnerSemanticCoverage'?{targetSetDigest:lastState?.targetSetDigest,identity:identityMetadata(),purgeEpoch:lastState?.policy.purgeEpoch}:{});
@@ -375,7 +375,7 @@ async function dataCall(message) {
       if(input.semantic&&['pending','running','failed'].includes(s.purge.state))fail('read_in_progress');
       if(input.semantic&&s.targets===null){s.targets=prepared;s.targetSetDigest=targetSetDigest(prepared);}
       s.policy.semantic=input.semantic;s.policy.revision++;
-      if(!input.semantic){s.policy.purgeEpoch++;s.purge={state:'pending',epoch:s.policy.purgeEpoch,deletedVectors:0,checkpoint:null,remainingVectors:null,reason:null};}
+      if(!input.semantic){s.policy.purgeEpoch++;retireBackfillAllowance(s);s.purge={state:'pending',epoch:s.policy.purgeEpoch,deletedVectors:0,checkpoint:null,remainingVectors:null,reason:null};}
     });}finally{release();}
     if(input.semantic)gate.publish(changed.state,true);
     if(!input.semantic)for(const controller of controllers)controller.abort();
@@ -384,7 +384,7 @@ async function dataCall(message) {
     exact(input,'ownerId,expectedTargetDigest,budget');hash(input.expectedTargetDigest);const b=exact(input.budget,'maxTargets,maxMs');integer(b.maxTargets,1,64);integer(b.maxMs,1,5000);
     // The maintenance engine owns the final callback-free canonical pass.
     return maintenance.validate({input,operation,final,current,change:scopedChange,ledger,identity:identityMetadata(),coverageStatus,
-      prepare:async next=>serial(async()=>{const a=await admission();if(next.sequence!==a.state.sequence)fail('read_in_progress');return ledger.prepare(a,next);}),pending:preparation=>{pendingSeal=preparation;}});
+      prepare:async next=>serial(async()=>{const a=await admission();if(next.sequence!==a.state.sequence)fail('read_in_progress');return ledger.prepare(a,next);}),pending:preparation=>{pendingSeal=preparation;},certificationEligible,finishCertification});
   }else if(method==='purgeOwnerVectors') {
     exact(input,'ownerId,budget');const b=exact(input.budget,'maxItems,maxMs');integer(b.maxItems,1,1024);integer(b.maxMs,1,5000);
     if(a.state.policy.semantic)fail('invalid_input');
@@ -398,13 +398,13 @@ async function dataCall(message) {
 async function internalCall(message,metadata) {
   const {method,input,operation}=message;within(operation);
   if(metadata.ownerId!==ownerId)fail('authority_required');
-  if(method==='snapshot') {const s=(await current()).state;return {...snapshot(s),identity:identityMetadata()};}
+  if(method==='snapshot') {const s=(await current()).state;return {...snapshot(s,metadata),identity:identityMetadata()};}
   if(method==='embed')return embed(input,operation,metadata);
   if(metadata.pump&&method==='firstCoverage') {
-    const s=(await current()).state;return {targetSetDigest:s.targetSetDigest,complete:s.firstCoverageComplete,pending:s.validationPending};
+    const s=(await current()).state;return {targetSetDigest:s.targetSetDigest,complete:s.firstCoverageComplete,pending:s.validationPending,...(certificationEligible(s)?{certificationOnly:true}:{})};
   }
   if(metadata.pump&&method==='embeddingAdmission') {
-    const s=(await current()).state;return {allowed:s.policy.semantic&&!s.blocked&&!s.validationPending&&!['pending','running','failed'].includes(s.purge.state)};
+    const s=(await current()).state;return {allowed:s.policy.semantic&&!s.blocked&&!s.validationPending&&compatibleBackfillBase(s)&&!purgePending(s),...(certificationEligible(s)?{certificationOnly:true}:{})};
   }
   if(metadata.pump&&method==='pumpReserve') {
     integer(input.maxItems,0,1024);integer(input.maxMs,1,5000);
@@ -507,6 +507,7 @@ try {
   const embeddingDescriptor=Object.getOwnPropertyDescriptor(host,'contextEmbedding');
   if(embeddingDescriptor&&!Object.hasOwn(embeddingDescriptor,'value'))fail('invalid_input');
   if(typeof host?.authorize!=='function'||typeof host?.isCurrent!=='function'||!host.semanticLedgerAuthority||typeof host.semanticPriceAuthority?.current!=='function')fail('invalid_input');
+  recoveryAuthority=qualifiedRecoveryAuthority(host);
   if(host.contextEmbedding) {
     const e=ownEmbedding(host.contextEmbedding);providerModel=e.embedder;port=validateEmbedder(e.embedder);vectorIdentity({provider:'openai',model:c.provider.model,id:port.id,revision:port.revision,dimensions:port.dimensions,normalization:port.normalization});
     policy=e.policy;
@@ -519,6 +520,7 @@ try {
   // Recovery callbacks and their compare-and-swap run only under ownership.
   lastState=(await ledger.authenticate(ownerId,{recoverPrepared:true})).state;
   if(lastState.ledgerEpoch!==c.binding.ledgerEpoch||lastState.bindingRevision!==c.binding.bindingRevision)fail('authority_required');
+  if(c.backfillRecovery&&!compatibleBackfillBase(lastState))fail('index_unavailable');
   if(Object.values(lastState.reservations).some(r=>['reserved','may_transmit'].includes(r.status))) {
     const a=await admission();
     if(typeof host.semanticLedgerAuthority.confirmDisposed!=='function'||await host.semanticLedgerAuthority.confirmDisposed(a.anchor)!==true)fail('read_in_progress');
@@ -535,6 +537,7 @@ try {
   gate.publish(lastState,true);
   const {semanticMaintenance}=await import('./context-semantic-maintenance.mjs');maintenance=semanticMaintenance({c,sqlite,identity:identityMetadata,secretState:()=>ledger.read(ownerId).state,reserveHandles});
   if(lastState.targets&&!lastState.firstCoverageComplete){const configured=await maintenance.prepareTargets(c.backfillTargets),ids=new Set(configured.map(digest));if(lastState.targets.some(t=>!ids.has(digest(t))))fail('revision_conflict');}
+  if(lastState.backfillRecovery)await reconcileRecoveryAudit(lastState,c.operation);
   within(c.operation);parentPort.postMessage({kind:'ready',result:{ok:true,value:{identity:identityMetadata()}}});
 }catch(error){try{await dispose();}catch{}parentPort.postMessage({kind:'ready',result:failure(error)});}
 function ownEmbedding(value) {
@@ -589,12 +592,223 @@ parentPort.on('message',async message=>{
     let result,outstanding;
     try{
       outstanding=outstandingState(message);
-      if(message.request.clockDomainId!==c.request.clockDomainId||message.request.credentialBindingId!==c.binding.credentialBindingId||message.request.credentialExpiresUtcMs!==c.binding.credentialExpiresUtcMs)fail('authority_required');
-      verifyRecords(message.request,message.operation,message.request,operationRecord(message.request,mono(message.operation.enteredMonoNs),deadline(message.input?.budget?.maxMs??message.input?.deadlineMs??5000),1,message.operation.operationId));
+      checkControlBinding(message);
+      verifyControlOperation(message);
       sqlite.start(Number(mono(message.operation.operationCutoffMonoNs))/1e6);result=await dataCall(message);
     }catch(error){result=failure(error);}
+    recoveryDisables.delete(message.id);
     if(!outstanding){operations.delete(message.id);operations.delete(message.operation.operationId);parentPort.postMessage({id:message.id,result});}
     else try{parentPort.postMessage({id:message.id,result});}
     finally{await settleOutstanding(outstanding,op);operations.delete(message.id);operations.delete(message.operation.operationId);}
   });
 });
+
+function checkControlBinding({method,request}) {
+  const admin=method===BACKFILL_RECOVERY_METHOD, binding=admin?c.backfillRecovery?.binding:c.binding;
+  if(!binding||request.clockDomainId!==c.request.clockDomainId||request.credentialBindingId!==binding.credentialBindingId||
+    request.credentialExpiresUtcMs!==(admin?binding.expiresUtcMs:binding.credentialExpiresUtcMs))fail('authority_required');
+}
+function verifyControlOperation({method,request,operation,input}) {
+  const expected=record=>operationRecord(record,mono(operation.enteredMonoNs),deadline(input?.budget?.maxMs??input?.deadlineMs??5000),1,operation.operationId);
+  if(method!==BACKFILL_RECOVERY_METHOD)return verifyRecords(request,operation,request,expected(request));
+  const bounded=expected(request);
+  verifyRecords(request,bounded,request,bounded);
+  const callerDeadline={...request,credentialExpiresUtcMs:null,credentialCutoffMonoNs:null};
+  verifyRecords(callerDeadline,operation,callerDeadline,expected(callerDeadline));
+}
+function trackRecoveryDisable({method,input,id}) {
+  if(c.backfillRecovery&&method==='setOwnerSemantic'&&!input.semantic&&lastState?.policy.semantic&&
+    input.expectedRevision===lastState.policy.revision)recoveryDisables.add(id);
+}
+function compatibleBackfillBase(state) {
+  return !state.backfillRecovery||BigInt(state.backfillRecovery.baseUnits)===usd(c.refreshCaps.backfill.maxUsdTotal);
+}
+function effectiveBackfill(state) {
+  const recovery=state.backfillRecovery;
+  if(!recovery)return usd(c.refreshCaps.backfill.maxUsdTotal);
+  return recovery.grants.reduce((sum,event)=>event.purgeEpoch===state.policy.purgeEpoch?sum+BigInt(event.additionalUnits):sum,BigInt(recovery.baseUnits));
+}
+function retireBackfillAllowance(state) {
+  if(!state.backfillRecovery||state.firstCoverageComplete)return;
+  const exposure=refreshExposure(state,state.dayHighWater);
+  if(exposure.lifetimeCharged+exposure.lifetimeReserved>=effectiveBackfill(state))state.blocked=true;
+}
+function purgePending(state) {
+  return ['pending','running','failed'].includes(state.purge.state);
+}
+function outstandingBackfillWork(state) {
+  return pendingSettlements.size>0||Object.values(state.reservations).some(r=>r.status==='reserved'||r.status==='may_transmit');
+}
+function certificationEligible(state) {
+  return Boolean(c.backfillRecovery&&state.blocked&&state.policy.semantic&&!state.firstCoverageComplete&&state.targets&&
+    compatibleBackfillBase(state)&&!purgePending(state)&&!outstandingBackfillWork(state)&&identityMetadata());
+}
+function refreshDelivery({state:s},{kind,expected,id,reservationId,op,values}) {
+  const r=s.reservations[reservationId], wantsDrain=c.backfillRecovery&&kind==='refresh'&&(s.blocked||s.validationPending&&!s.firstCoverageComplete);
+  const drain=wantsDrain&&r?.id===reservationId&&r.kind==='refresh'&&r.status==='settled'&&r.usage==='validated'&&
+    r.incarnation===op.operationId&&r.epoch===expected.purgeEpoch&&r.identity===id&&compatibleBackfillBase(s);
+  checkState(s,expected,drain);
+  if(drain){within(op);gate.check(expected);}
+  return {vectors:values,chargedUsd:dollars(BigInt(r.cost)),attempts:1,...(drain?{drainOnly:true}:{})};
+}
+function qualifiedRecoveryAuthority(host) {
+  const field=Object.getOwnPropertyDescriptor(host,'backfillRecoveryAuthority'), target=field?.value;
+  const methods=target&&!types.isProxy(target)&&typeof target==='object'?Object.getOwnPropertyDescriptors(target):null;
+  const names=c.backfillRecovery?['authorize','isCurrent','verifyApproval','appendAudit']:['appendAudit'];
+  if(!methods||names.some(name=>{
+    const method=methods[name]?.value;
+    return typeof method!=='function'||types.isProxy(method)||name!=='appendAudit'&&types.isAsyncFunction(method);
+  })) {
+    if(c.backfillRecovery)fail('authority_required');
+    return null;
+  }
+  return Object.fromEntries(names.map(name=>[name,(...args)=>Reflect.apply(methods[name].value,target,args)]));
+}
+function synchronousRecovery(value) {
+  if(types.isPromise(value)){Reflect.apply(promiseThen,value,[undefined,()=>{}]);fail('authority_required');}
+  return value;
+}
+function backfillAuthority(message,input) {
+  const {binding}=c.backfillRecovery, {accountingDomainId,ledgerId}=binding;
+  const {deadlineMs,...normalized}=input;
+  const requestDigest=digest([BACKFILL_RECOVERY_CAPABILITY,accountingDomainId,ledgerId,normalized]);
+  const query=boundedData({method:BACKFILL_RECOVERY_METHOD,ownerId,input,credentialBindingId:binding.credentialBindingId,requestControl:message.request});
+  const approvalQuery=boundedData({ownerId,accountingDomainId,ledgerId,credentialBindingId:binding.credentialBindingId,requestDigest,approvalId:input.approvalId,ticket:input.ticket});
+  let issued;
+  function scope(code) {
+    try {
+      if(isDeepStrictEqual(boundedData(issued),binding)&&utc()<binding.expiresUtcMs&&
+        synchronousRecovery(recoveryAuthority.isCurrent(issued,query))===true&&
+        isDeepStrictEqual(boundedData(issued),binding)&&utc()<binding.expiresUtcMs&&
+        process.hrtime.bigint()<mono(message.request.credentialCutoffMonoNs))return;
+    }catch{}
+    fail(code);
+  }
+  try {
+    if(input.ownerId!==ownerId||credentialDigest(message.credential)!==binding.credentialDigest)fail('authority_required');
+    issued=synchronousRecovery(recoveryAuthority.authorize(query,boundedData(message.credential,16384)));
+    scope('authority_required');
+  }catch{fail('authority_required');}
+  function approval(code,previous) {
+    try {
+      const value=exact(boundedData(synchronousRecovery(recoveryAuthority.verifyApproval(approvalQuery))),'approvalId,principalId,operatorId,expiresUtcMs,requestDigest');
+      opaque(value.principalId);opaque(value.operatorId);integer(value.expiresUtcMs);
+      if(value.approvalId===input.approvalId&&value.requestDigest===requestDigest&&utc()<value.expiresUtcMs&&
+        (!previous||isDeepStrictEqual(previous,value)))return value;
+    }catch{}
+    fail(code);
+  }
+  return {requestDigest,scope,approval};
+}
+function checkRecoveryEligibility(state,input) {
+  if(outstandingBackfillWork(state)||purgePending(state))fail('read_in_progress');
+  if(!compatibleBackfillBase(state))fail('index_unavailable');
+  const expected={ledgerEpoch:state.ledgerEpoch,bindingRevision:state.bindingRevision,sequence:state.sequence,
+    policyRevision:state.policy.revision,purgeEpoch:state.policy.purgeEpoch,targetSetDigest:state.targetSetDigest,
+    embedderDigest:digest(identityMetadata()),recoveryPolicyRevision:c.backfillRecovery.policy.revision};
+  if(!isDeepStrictEqual(expected,input.expected))fail('revision_conflict');
+  if(!state.policy.semantic||!state.blocked||state.firstCoverageComplete)fail('invalid_input');
+}
+function recoveryEvent(state,input,approval,requestDigest) {
+  const grants=state.backfillRecovery?.grants??[], limits=c.backfillRecovery.policy;
+  const baseUnits=state.backfillRecovery?.baseUnits??String(usd(c.refreshCaps.backfill.maxUsdTotal));
+  const additional=usd(input.additionalUsd), oldEffective=effectiveBackfill(state), next=oldEffective+additional;
+  const aggregate=grants.reduce((sum,event)=>sum+BigInt(event.additionalUnits),additional);
+  const {lifetimeCharged,lifetimeReserved}=refreshExposure(state,state.dayHighWater);
+  if(grants.length>=BACKFILL_RECOVERY_MAX_EVENTS||additional>BigInt(limits.maxGrantUnits)||aggregate>BigInt(limits.maxLifetimeGrantUnits)||
+    next<=lifetimeCharged+lifetimeReserved)fail('invalid_input');
+  const {sequence:previousSequence,...expected}=input.expected;
+  return {version:1,grantId:randomUUID(),idempotencyKey:input.idempotencyKey,requestDigest,approvalId:approval.approvalId,
+    principalId:approval.principalId,operatorId:approval.operatorId,reason:input.reason,ticket:input.ticket,
+    ownerId,...c.ledgerIdentity,...expected,previousSequence,sequence:previousSequence+1,recordedUtcMs:utc(),baseUnits,
+    oldEffectiveUnits:String(oldEffective),newEffectiveUnits:String(next),additionalUnits:String(additional),
+    chargedUnits:String(lifetimeCharged),reservedUnits:String(lifetimeReserved)};
+}
+async function grantBackfillRecovery(message) {
+  if(!c.backfillRecovery||!types.isSharedArrayBuffer(message.cancellation)||message.cancellation.byteLength!==4)fail('authority_required');
+  const input=backfillRecoveryInput(message.input), auth=backfillAuthority(message,input), operation=message.operation;
+  const guard=()=>{within(operation);if(Atomics.load(new Int32Array(message.cancellation),0))fail('read_cancelled');};
+  const result=await serial(async()=>{
+    guard();auth.scope('scope_changed');
+    if(pendingSettlements.size)fail('read_in_progress');
+    const recovering=Boolean(pendingSeal), a=await admission({pendingCode:'read_in_progress'}), s=a.state, b=c.backfillRecovery.binding;
+    if(s.ledgerEpoch!==b.ledgerEpoch||s.bindingRevision!==b.bindingRevision)fail('authority_required');
+    const replay=s.backfillRecovery?.grants.find(event=>event.idempotencyKey===input.idempotencyKey||event.approvalId===input.approvalId);
+    if(replay) {
+      if(replay.requestDigest!==auth.requestDigest)fail('revision_conflict');
+      return {event:replay,state:s,status:'replayed'};
+    }
+    const approval=auth.approval('authority_required');
+    if(recovering)fail('read_in_progress');
+    checkRecoveryEligibility(s,input);
+    if(Object.values(s.reservations).some(r=>r.status==='unknown')) {
+      let disposed=false;
+      try{disposed=await ledgerPortCall(host.semanticLedgerAuthority,'confirmDisposed',[a.anchor]);}catch{}
+      guard();auth.scope('scope_changed');
+      if(disposed!==true)fail('read_in_progress');
+    }
+    const capacity=maintenance.recoveryCapacity(s,guard);
+    const event=recoveryEvent(s,input,approval,auth.requestDigest);
+    function recheckAuthority() {
+      guard();auth.scope('scope_changed');auth.approval('scope_changed',approval);guard();
+      if(recoveryDisables.size)fail('scope_changed');
+      try{gate.check(s.policy);}catch{fail('scope_changed');}
+    }
+    recheckAuthority();
+    const committed=await mutate(a,n=>{
+      n.backfillRecovery??={version:1,baseUnits:event.baseUnits,grants:[]};
+      n.backfillRecovery.grants.push(event);
+      n.blocked=false;n.receipts=Object.create(null);n.hints=Object.create(null);n.validationOrdinal=0;n.validationPending=false;
+    },()=>{
+      const state=ledger.read(ownerId).state;
+      checkRecoveryEligibility(state,input);
+      if(maintenance.recoveryCapacity(state,guard)!==capacity)fail('index_unavailable');
+      if(utc()>=approval.expiresUtcMs||utc()>=b.expiresUtcMs||
+        process.hrtime.bigint()>=mono(message.request.credentialCutoffMonoNs))fail('scope_changed');
+      guard();
+    },recheckAuthority,undefined,true);
+    lastState=committed.state;gate.publish(lastState);
+    return {event,state:lastState,status:'granted'};
+  });
+  await reconcileRecoveryAudit(result.state,operation,result.event);
+  guard();auth.scope('scope_changed');
+  const {grantId,sequence,newEffectiveUnits}=result.event;
+  return {ok:true,value:{status:result.status,grantId,sequence,effectiveBackfillUsdLimit:dollars(BigInt(newEffectiveUnits)),
+    audit:auditedBackfillEvents.has(grantId)?'recorded':'pending'}};
+}
+async function reconcileRecoveryAudit(state,operation,priority) {
+  if(!recoveryAuthority)return;
+  const events=state.backfillRecovery?.grants??[];
+  for(const event of priority?[priority,...events.filter(e=>e.grantId!==priority.grantId)]:events) {
+    if(auditedBackfillEvents.has(event.grantId))continue;
+    const remaining=Number(mono(operation.operationCutoffMonoNs)-process.hrtime.bigint())/1e6;
+    if(remaining<=25)return;
+    let timer;
+    try {
+      const recorded=await Promise.race([recoveryAuthority.appendAudit(boundedData(event)),new Promise(resolve=>{timer=setTimeout(resolve,Math.max(1,remaining-25),false);})]);
+      if(recorded===true)auditedBackfillEvents.add(event.grantId);
+    }catch{}finally{clearTimeout(timer);}
+  }
+}
+async function finishCertification({state,operation,identity,final,verify}) {
+  return serial(async()=>{
+    const a=await admission(), s=a.state;
+    if(s.sequence!==state.sequence||!certificationEligible(s)||!isDeepStrictEqual(identityMetadata(),identity)||recoveryDisables.size){final();return false;}
+    const next=structuredClone(s);next.firstCoverageComplete=true;next.validationPending=false;next.blocked=false;
+    const recovery={invalidReceipts:[]};
+    const prepared=await ledger.prepare(a,next,p=>{Object.assign(recovery,{prepared:p.prepared,sealed:p.previous});pendingSeal=recovery;},true);
+    within(operation);final();if(recoveryDisables.size)fail('scope_changed');gate.check(s.policy);
+    if(!verify(recovery))return false;
+    within(operation);
+    const sealed=ledger.commit(prepared,()=>{
+      const latest=ledger.read(ownerId).state;
+      if(!certificationEligible(latest)||latest.policy.revision!==s.policy.revision||latest.policy.purgeEpoch!==s.policy.purgeEpoch||
+        latest.targetSetDigest!==s.targetSetDigest||!isDeepStrictEqual(identityMetadata(),identity))fail('revision_conflict');
+      gate.check(s.policy);
+    });
+    recovery.sealed=sealed;
+    await ledger.seal(prepared,sealed);
+    pendingSeal=null;lastState=next;gate.publish(next);
+    return true;
+  });
+}
