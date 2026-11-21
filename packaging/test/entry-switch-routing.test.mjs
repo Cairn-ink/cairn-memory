@@ -7,6 +7,7 @@ import { runtimeDirectory } from '../../adapters/mcp/local-daemon-state.mjs';
 import { runEntry } from '../bin/cairn-memory.mjs';
 import { daemonVector } from '../../adapters/mcp/local-daemon-identity.mjs';
 import { runForwarder } from '../../adapters/mcp/local-forwarder.mjs';
+import { runtimeLease } from './fixtures/installed-daemon-runtime.mjs';
 
 const base = ['--db', '/synthetic/store.sqlite', '--owner', 'synthetic-owner'];
 const rows = [
@@ -111,11 +112,17 @@ test('pre-fallback entry closure has no heavy static import edge', () => {
 });
 test('standalone forwarder preserves its code-only refusal after the return contract change', async () => {
   if (process.platform !== 'linux') return;
-  const directory = await runtimeDirectory(), before = readdirSync(directory.path).sort();
-  const result = spawnSync(process.execPath, [new URL('../../adapters/mcp/local-forwarder.mjs', import.meta.url).pathname, '--help'], {
-    env: {}, encoding: 'utf8', timeout: 15000,
-  });
-  assert.equal(result.error, undefined); assert.equal(result.signal, null); assert.equal(result.status, 1);
-  assert.equal(result.stdout, ''); assert.equal(result.stderr, 'daemon_not_eligible\n');
-  assert.deepEqual(readdirSync(directory.path).sort(), before, 'standalone refusal spawns no daemon and leaves no runtime files');
+  // Hold the shared installed-daemon lease so no fixture daemon starts in the
+  // real runtime folder during the window; other daemons may still finish
+  // their own teardown, so only additions can come from this refusal.
+  const directory = await runtimeDirectory(), release = await runtimeLease(directory);
+  try {
+    const before = new Set(readdirSync(directory.path));
+    const result = spawnSync(process.execPath, [new URL('../../adapters/mcp/local-forwarder.mjs', import.meta.url).pathname, '--help'], {
+      env: {}, encoding: 'utf8', timeout: 15000,
+    });
+    assert.equal(result.error, undefined); assert.equal(result.signal, null); assert.equal(result.status, 1);
+    assert.equal(result.stdout, ''); assert.equal(result.stderr, 'daemon_not_eligible\n');
+    assert.deepEqual(readdirSync(directory.path).filter(name => !before.has(name)).sort(), [], 'standalone refusal spawns no daemon and leaves no runtime files');
+  } finally { await release(); }
 });

@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "c3ec05a6518009265a5d4366dc4349596fe043878dca1c1650d74d5396c87d2a",
-  "bytes": 1480305,
+  "sha256": "eebe73a7dbfa43b5d05638ad0d12d23789b30b564adaa765c39c369a9ee40c7d",
+  "bytes": 1479992,
   "files": [
     "LICENSE",
     "README.md",
@@ -500,7 +500,7 @@
     "core/context-reader.mjs": "170e534d567e82a5e1249c278e25efcbd367aaef8cfabe3dde6b99a91055f879",
     "core/commit-dispatch.mjs": "1f0511343608e6e19549891720ccf95086851f031cf0ec536a92d581e5c4c6c1",
     "core/contract.mjs": "53ce6ed929a643367b4cf9bf7ce4c6fd2ad75bd273b3d9c6e4392ced50ad6133",
-    "core/database.mjs": "27d19eacf1cf62c9805b8142bfbc108913061fa46df1e04155907bdc5618d0d2",
+    "core/database.mjs": "f9ed5f35e70ef7783efc6e5364e76443f6eea653deedba3c3797acc38d1f5c90",
     "core/existing-store.mjs": "d01fae6e0f7dbbcabed9ef81fba915e84c454f0c668bfc95e31629394cee733f",
     "core/store-fence.mjs": "3d33fab3946ec3e77ba776a276268251d8eb02223c7ac9e2f81af1137fa2c44e",
     "core/sqlite-journal-probe.mjs": "16831756af69178af3a63795ef939670fe22f80a5fe481e55978afefec1f4964",
@@ -520,7 +520,7 @@
     "core/raw-composition.mjs": "60389139226573dd6e6ef7e9a741492a320373c1c6017092ef1eb511f4b9571f",
     "core/local-defaults.mjs": "4a43fe03077cfe6431a1df9024a479ae10aa47eea25a4ad311dfec34d5e3cbff",
     "core/local-raw-search.mjs": "28fcf64f6b32d786e32d1c4f0349efd8c0e785495f28bfedf9c95bbc625cfaeb",
-    "core/raw-capture-storage.mjs": "75e342f63574f23b425b36629295aa3968f2a23d12284a82df0cff4a6e143a18",
+    "core/raw-capture-storage.mjs": "f060955e6774e7552aa1c5936db9f72646ce53c805cb2dbd4320368548bf7702",
     "core/raw-journal.mjs": "e7946bd4330dab6646ec01566998f8c9375e4d59313117e689631570a16c0a45",
     "core/raw-reads.mjs": "340c6d48bfaf9bd56554db5cfcca12a8a0e701d32107987d17d0aa50b7ba097d",
     "core/raw-conversation-list.mjs": "f885d81b19d91be4b04100ffd28c7022fc113986cfe5c551ee27aded5c73c0f5",
@@ -562,7 +562,7 @@
     "core/prompts/relate-rationale.md": "b00cc2511e7e01d6507f9d13abf6115b315cca8208866a5e15721b6bee212615",
     "core/prompts/relate-claim-focus.md": "17ba366ce9d34f9cef84ad4fea20ba86a9399ff9a34afcd7b4e900cefca332ec",
     "core/recall.mjs": "0cd71707502e3f144f2f26b5a358e7aaeb10a663796ef3d31b74ff75422b6174",
-    "core/runtime.mjs": "672a02cd3de35e55f2af122de83671d0b193b9a2f74a496a13499414ba75692b",
+    "core/runtime.mjs": "9c38f5ad16fe95c25d721171391b16d0e1be282221577371c68fff5e8953fac0",
     "core/supersession-storage.mjs": "b13c88bc377cdb9759481214ab3eefd07aec39d15139978e6c4f09871e41b20d",
     "core/validation.mjs": "fb8fa11ee5951ebd2c6bd0b67e3b528ca7cacfd95cd7ddefc22c242a71e1aa0d",
     "core/suppression-content.mjs": "a3d47ffc353c079ba1b1e35cbb506bd7bbb661f3d2ea89562ce7e6e914aaff98",
@@ -680,7 +680,7 @@
     "plugins/cairn-memory/lib/transcript.mjs": "a1817bf9b9f484da4fc3eef82fd95ed0a6a320669491dae56e5e29d57523fc75",
     "integrations/client/runtime-usage.mjs": "8bf732bb36664b33aa238a40903986b16c112a44829412c32a11b01dcad08d4d",
     "integrations/client/state-lock.mjs": "a7dbbf6c805fce74039a224f19e720d5740506c1fcd41129bea8ecb6a60c7c84",
-    "docs/raw-local-journal.md": "ef48b35c0ce5403e0e171aa4d5e52a96ccbb16650556630d82f6668a3eca1892",
+    "docs/raw-local-journal.md": "54cacbed7326e0446b3d27effc8e0d7b895dd81ef8dd933a5ffd072fe6e356f2",
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
     "docs/context-read-local.md": "27e575a10ddb2b4c1f694884894223804110028ca894a063d7356875b9af7bae",
     "docs/defaults.md": "188db988d44e4b17efdc37c886e57feceb31ec532a22ce1ff846e894bc91e8eb",
@@ -790,7 +790,7 @@
     "core/content-safety-layout.mjs": "fb9d00957c5a224b1a414c2c5baa5726fa39ea2323331a9f7e325f4a9e3f3655",
     "core/content-safety-migration.mjs": "cfa4de31c06a67b0677faa77287fe5c353c670cbf3320855c6414200892cd0cf",
     "core/layout-base-upgrade.mjs": "fa2f4fc819f9b8e3400e1402ac1231d08f870fbd905001f8e9dbc131ea998938",
-    "core/content-safety-schema.mjs": "e74c811f5f45ed96669943cb2f0fa845c6c5ca40d100a5839f1232feec9e055d",
+    "core/content-safety-schema.mjs": "c8f9e0bcf08902576a82510f357528ddfdbfa32365e986771a9a76006582c4b1",
     "core/content-suppression-storage.mjs": "40578fd7fddf012340a07c023cd8f6ed977f7e2964c5a52d503c1655e544e340",
     "core/content-suppression-input.mjs": "d22fe3b5ca43a0ce44d5e019fe4da9e09b456834281480b1ce1b23ec0b0d29cd",
     "core/content-suppression-evidence.mjs": "d89ab4ee68d6172a4c22587cbf07da965272da92c0e2b57c86ac6045aec7e58a",
@@ -816,7 +816,7 @@
     "core/raw-search-maintenance.mjs": "5b88ca283ebe118a141a9ddbe6a5d27b9b73ca3bb1c04e2ddfca4ab31b8ec935",
     "docs/plans/raw-search-interface.md": "97da386b7acb86a0e2221d005273723b6983f5c7b50bb52324d3f330c319723b",
     "docs/plans/raw-search-predicate-plans.md": "59d174f489a73b134d590763ede78429e0006ff7456c973d305a7e0815c5f4b7",
-    "docs/plans/raw-search-seam.md": "ad36ebb037176d6ea7e02c3d57edfc29bf41571be03d6d42db90c6e7ce69701f",
+    "docs/plans/raw-search-seam.md": "a0a23e4b238c7084136dd7369b0533e1536f0dc86ef816fa6573e53bef18ad28",
     "core/context-product-checkpoint-cost.mjs": "739fee4d102de82ad7b6b496258bbe5ad594ef6ee3a27e252719f79c64c57a70",
     "core/card-lineage.mjs": "e50641b6a7dd91f909b91dbf084ec843304b28059c92490d446690ead49f7c22",
     "core/card-lineage-schema.mjs": "c5e92974b996d2d045d4e794b6e44255a57d301881ca5e7b90c9407bbadfc2f1",
@@ -838,6 +838,6 @@
   "generatedHashes": {
     "package.json": "e255ff4d23e921de9bed8e058c64e57aed3e1bc6a8ed242cee52a716add2d69c",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8",
-    "engine-build.json": "5e9c3c7a8f0c4030e84857eead60d251a444a45bfd78274b7be004c0f41200dc"
+    "engine-build.json": "736484148144554bddbf581f514115aaaedf86e57391a08a3dfd0b836d7689c1"
   }
 }

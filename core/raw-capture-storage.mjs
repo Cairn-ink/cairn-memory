@@ -3,7 +3,7 @@ import { contentReadSafety } from './content-safety.mjs';
 import { createHash } from 'node:crypto';
 import { transaction, isStorageBusy } from './database.mjs';
 import { createRawJournal, isRawEpochConflict } from './raw-journal.mjs';
-import { rawBoundary, rawRegistration, rawNamespace } from './raw-input.mjs';
+import { rawBoundary, rawClient, rawRegistration, rawNamespace } from './raw-input.mjs';
 import { captureSnapshot } from './capture-input.mjs';
 import { dispatchCommit, hasCommitDispatcher } from './commit-dispatch.mjs';
 import { episodeSnapshot } from './episode-input.mjs';
@@ -266,10 +266,21 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
   }
 
   function fenceSession(input) {
-    object(input, ['namespace','client','sessionId']);
-    const { client, sessionId } = input, namespace = rawNamespace(input.namespace);
-    // Reuse the journal's strict namespace/client/session identity validation.
-    const session = journal.sessionKey(namespace, client, sessionId);
+    object(input, ['namespace','client','sessionId','sessionKey']);
+    const byKey = Object.hasOwn(input, 'sessionKey');
+    if (byKey === Object.hasOwn(input, 'sessionId')) fail('invalid_input');
+    const { client } = input, namespace = rawNamespace(input.namespace);
+    let session;
+    if (byKey) {
+      rawClient(client);
+      const { sessionKey } = input;
+      // The journal encodes its 256-bit HMAC digest as 64 lowercase hex digits.
+      if (typeof sessionKey !== 'string' || !/^s1:[0-9a-f]{64}$/.test(sessionKey)) fail('invalid_input');
+      session = sessionKey;
+    } else {
+      const { sessionId } = input;
+      session = journal.sessionKey(namespace, client, sessionId);
+    }
     return transaction(db, () => {
       if (privacy) privacy.fenceInside(namespace,client,session);
       else db.prepare('INSERT OR IGNORE INTO raw_session_fences VALUES(?,?,?,?,?)')
