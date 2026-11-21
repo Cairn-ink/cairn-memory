@@ -565,15 +565,28 @@ export function createMemoryRuntime(input, internal) {
         sql += ' AND currentness = ?';
         params.push(states[0] === 'active' ? 'current' : 'historical');
       }
-      if (anchor) {
-        sql += " AND (updated_at < ? OR (updated_at = ? AND id > ?))";
-        params.push(anchor.updatedAt, anchor.updatedAt, anchor.id);
+      const batchSize = count + 1;
+      const visible = [];
+      let scanAnchor = anchor;
+      while (true) {
+        let pageSql = sql;
+        const pageParams = [...params];
+        if (scanAnchor) {
+          pageSql += " AND (updated_at < ? OR (updated_at = ? AND id > ?))";
+          pageParams.push(scanAnchor.updatedAt, scanAnchor.updatedAt, scanAnchor.id);
+        }
+        pageSql += " ORDER BY updated_at DESC, id ASC LIMIT ?";
+        const batch = db.prepare(pageSql).all(...pageParams, batchSize);
+        for (const row of batch) {
+          if (privacyMemoryDenied(row)) continue;
+          visible.push(row);
+          if (visible.length === batchSize) break;
+        }
+        if (visible.length === batchSize || batch.length < batchSize) break;
+        const last = batch.at(-1);
+        scanAnchor = { updatedAt: last.updated_at, id: last.id };
       }
-      sql += " ORDER BY updated_at DESC, id ASC LIMIT ?";
-      params.push(count + 1);
-      const rows = db.prepare(sql).all(...params);
-      if (rows.some(privacyMemoryDenied)) fail('revision_conflict');
-      return { rows: rows.map(metadataDto), epoch: currentEpoch };
+      return { rows: visible.map(metadataDto), epoch: currentEpoch };
     }, undefined, { deferred: true });
   }
 
