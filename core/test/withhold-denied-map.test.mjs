@@ -1,3 +1,5 @@
+import { transaction } from '../database.mjs';
+import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 import crypto, { createHash } from 'node:crypto';
 import { syncBuiltinESMExports } from 'node:module';
 import { DatabaseSync } from 'node:sqlite';
@@ -123,7 +125,7 @@ function deterministicFixture(t) {
   t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2025-06-01T00:00:00.000Z') });
 }
 
-function trace(t, label, read, expected) {
+function trace(t, label, read, expected, expectedBytes) {
   const statements = [], { prepare, exec } = DatabaseSync.prototype;
   DatabaseSync.prototype.exec = function (sql) {
     statements.push(['exec', sql]);
@@ -140,16 +142,19 @@ function trace(t, label, read, expected) {
       };
     } });
   };
-  let output;
-  try { output = ok(read()); }
+  let envelope;
+  try { envelope = read(); }
   finally {
     DatabaseSync.prototype.prepare = prepare;
     DatabaseSync.prototype.exec = exec;
   }
   const digest = createHash('sha256').update(JSON.stringify(statements)).digest('hex');
   t.diagnostic(label + ': ' + statements.length + ' SQL executions, ' + digest);
+  const response = createHash('sha256').update(JSON.stringify(envelope)).digest('hex');
+  t.diagnostic(label + ' response: ' + response);
   assert.deepEqual([statements.length, digest], expected);
-  return output;
+  assert.equal(response, expectedBytes);
+  return ok(envelope);
 }
 
 const mapTrace = {
@@ -169,8 +174,152 @@ for (const safety of [false, true]) {
     const f = await rawFixture(t, {}, safety);
     await f.capture('visible', ['fact', 'fact']);
     const input = { namespace: ns, limit: 1 };
-    const page = trace(t, 'initial', () => f.core.map(input), mapTrace[safety][0]);
+    const page = trace(t, 'initial', () => f.core.map(input), mapTrace[safety][0], responseTrace[safety].initial);
     assert.ok(page.nextCursor);
-    trace(t, 'continued', () => f.core.map({ ...input, cursor: page.nextCursor }), mapTrace[safety][1]);
+    trace(t, 'continued', () => f.core.map({ ...input, cursor: page.nextCursor }), mapTrace[safety][1], responseTrace[safety].continued);
   });
 }
+
+test('map cursors retain their physical anchor across withheld rows', async t => {
+  deterministicFixture(t);
+  const f = await deniedFixture(t);
+  const denied = f.denied[0];
+  const a = add(f.core, 'first visible');
+  const b = add(f.core, 'second visible');
+  assert.deepEqual(f.db.prepare("SELECT id FROM memories WHERE deleted=0 ORDER BY id").all().map(row => row.id),
+    [denied.id, a.id, b.id]);
+  const input = { namespace: ns, limit: 1 };
+  await twice(t, () => f.core.map(input), result => {
+    const first = ok(result);
+    assert.deepEqual(first.items.map(item => item.ref.memoryId), [a.id]);
+    assert.equal(first.exhausted, false);
+    const [body] = first.nextCursor.split('.');
+    const cursor = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+    assert.deepEqual(Object.keys(cursor).sort(), ['a', 'b', 'e', 'f', 'h', 'l', 'n', 'o', 'p', 's', 'v']);
+    assert.deepEqual(cursor.a, { offset: 2 });
+    const legacyBody = Buffer.from(JSON.stringify({ ...cursor, a: { offset: 2 } })).toString('base64url');
+    const legacyCursor = legacyBody + '.' + crypto.createHmac('sha256', '17'.repeat(32))
+      .update(legacyBody).digest('base64url');
+    const second = ok(f.core.map({ ...input, cursor: first.nextCursor }));
+    assert.deepEqual(ok(f.core.map({ ...input, cursor: legacyCursor })), second);
+    assert.deepEqual(second.items.map(item => item.ref.memoryId), [b.id]);
+    assert.equal(second.exhausted, true);
+    assert.equal(second.nextCursor, null);
+    for (const page of [first, second]) {
+      assert.deepEqual(Object.keys(page).sort(), ['exhausted', 'indexRevision', 'invalidRefs', 'items', 'nextCursor', 'truncatedBy']);
+      assert.deepEqual(page.invalidRefs, []);
+    }
+    assert.ok(!JSON.stringify([result, second, cursor]).includes(denied.id));
+  });
+});
+
+function recallTopics(f, hidden, visible) {
+  const topics = f.db.prepare(`INSERT INTO mocs(id,owner_id,scope,project_id,level,title,canonical_title,revision,created_at,updated_at)
+    VALUES(?,?,?,?,?,?,?,1,?,?)`);
+  const placement = f.db.prepare('INSERT INTO moc_memory_refs(moc_id,memory_id,moc_revision,memory_revision) VALUES(?,?,?,?)');
+  const title = f.db.prepare('INSERT INTO moc_title_sources VALUES(?,?,?)');
+  const edge = f.db.prepare('INSERT INTO moc_edges(parent_id,child_id,parent_revision,child_revision) VALUES(?,?,1,1)');
+  const stamp = '2025-06-01T00:00:00.000Z';
+  f.db.prepare("UPDATE memories SET filing_status='filed' WHERE id IN (?,?)").run(hidden.id, visible.id);
+  const records = [
+    ['hidden-topic', 1, hidden], ['visible-topic', 1, visible],
+    ['empty-ancestor', 2, hidden], ['visible-ancestor', 2, visible],
+  ];
+  for (const [id, level, memory] of records) {
+    topics.run(id, ns.ownerId, ns.scope, ns.projectId, level, 'Synthetic ' + id, id, stamp, stamp);
+    title.run(id, memory.id, memory.revision);
+    if (level === 1) placement.run(id, memory.id, 1, memory.revision);
+  }
+  edge.run('empty-ancestor', 'hidden-topic');
+  edge.run('visible-ancestor', 'hidden-topic');
+  edge.run('visible-ancestor', 'visible-topic');
+}
+
+for (const level of ['root', 'child']) {
+  test('public recall map omits empty topics and ancestors from the ' + level + ' page', async t => {
+    deterministicFixture(t);
+    const f = await rawFixture(t);
+    const hidden = add(f.core, 'protected placement');
+    const visible = add(f.core, 'independent placement');
+    recallTopics(f, hidden, visible);
+    const root = { namespace: ns, purpose: 'recall', limit: 1 };
+    const child = { ...root, parentRef: { mocId: 'visible-ancestor', revision: 1 } };
+    const topic = item => item.moc?.id ?? (item.ref?.childType === 'moc' ? item.ref.childId : null);
+    assert.ok(ok(f.core.map({ ...child, limit: 20 })).items.some(item => topic(item) === 'hidden-topic'));
+    transaction(f.db, () => writeContentSuppressionInside(f.db, { namespace: ns, kind: 'memory', key: hidden.id,
+      reason: 'privacy_erase', actionId: 'suppress-placement' }));
+    const input = level === 'root' ? root : child;
+    const expected = level === 'root' ? ['visible-topic', 'visible-ancestor', 'visible-topic'] : ['visible-topic', 'visible-topic'];
+    await twice(t, () => f.core.map(input), first => {
+      const seen = [];
+      let result = first;
+      for (let i = 0; i < 10; i++) {
+        const page = ok(result);
+        assert.equal(page.items.length, 1);
+        assert.deepEqual(page.invalidRefs, []);
+        const envelope = JSON.stringify(result);
+        for (const needle of ['hidden-topic', 'empty-ancestor', hidden.id]) assert.ok(!envelope.includes(needle), needle);
+        const id = topic(page.items[0]);
+        if (id) seen.push(id);
+        if (page.exhausted) {
+          assert.equal(page.nextCursor, null);
+          assert.deepEqual(seen, expected);
+          return;
+        }
+        assert.ok(page.nextCursor);
+        result = f.core.map({ ...input, cursor: page.nextCursor });
+      }
+      assert.fail('recall map did not exhaust');
+    });
+  });
+}
+
+for (const safety of [false, true]) {
+  test('root and child recall topic parity with safety ' + safety, async t => {
+    deterministicFixture(t);
+    const f = await rawFixture(t, {}, safety);
+    recallTopics(f, add(f.core, 'first placement'), add(f.core, 'second placement'));
+    const input = { namespace: ns, purpose: 'recall', limit: 1 };
+    for (const [label, options] of [['root', input], ['child', { ...input,
+      parentRef: { mocId: 'visible-ancestor', revision: 1 } }]]) {
+      const first = trace(t, label, () => f.core.map(options), topicTrace[safety][label], responseTrace[safety][label]);
+      assert.ok(first.nextCursor);
+      trace(t, label + ' continued', () => f.core.map({ ...options, cursor: first.nextCursor }),
+        topicTrace[safety][label + ' continued'], responseTrace[safety][label + ' continued']);
+    }
+  });
+}
+
+const topicTrace = {
+  false: {
+    'root': [10, 'f545ef6163dbf39e6ce214a0892174933e3f1c843cd8ca9c9736ee4322d3b414'],
+    'root continued': [10, 'fba0cfa242b6d69ead8c1dff28f52eaa616b347a630b29cd908e61904a72eb91'],
+    'child': [13, '3788dabe4d714a9dbc091f6782c8cdee5946ab04da6f9e8b7bbdee634f632e20'],
+    'child continued': [13, '769bfc79e6468aee29edc6aac340f156bd15b7297c798edfa7b26126525def31']
+  },
+  true: {
+    'root': [21, 'c6b8c14bd105a4e2da89a7fd71660802341a09b15d029ab068aa82dc4dacd987'],
+    'root continued': [21, 'f42a59f54340fc7f4a48c441ae79f3ea408320ffbe48c4663b5989682a534a34'],
+    'child': [24, '8a611dca908bc84d379198f4e2efa21a2076ebbe6ce24fbf2dedfae30e2dc67e'],
+    'child continued': [24, '8c621b3fc5c0906392b4e85badabdda4ba535c95c29f84545bd42828b457492d']
+  }
+};
+
+const responseTrace = {
+  false: {
+    'initial': '59b8cd6786ce2257c7b204bbf0fd0705e5f498b81e65fabef2941cc790639bb7',
+    'continued': '3719eb419bdae743d19f6a1dd6f082b1ec4f9c72b3cab8a9526dc2039c7bebff',
+    'root': 'ff6c8cdfebef5fe8e582438a5eebfda2d9afe450e30b7e5423357326bfb2a779',
+    'root continued': '7f26ff60f6598f230f71fbb41970f3d2307daf3c12985aa4025b31a81030996a',
+    'child': 'cf5adc1d8a7f86c05d1b33bf5eb7ea13ce8320b3ae7a1356e13e72c1534c1606',
+    'child continued': '077ed81a6e869c411781bb17bbc536d5d93b121d9660a24ad00413ce8315c0cf'
+  },
+  true: {
+    'initial': 'f61283eca8fcad3b0f90f9de991e7d870635ee763600abe77f503a93bdd88a2a',
+    'continued': '81fef514eefb12dbd47b6403b84d6500ecfac796f123f067dde06d5aec414fae',
+    'root': '6b614b9232fa7a0b8de10a16cd36936e381de4addd8b40c6c1c9b9c00e784acb',
+    'root continued': '1412c364dc7c11272e0f53e81c4403b2ba59bd587af29f00805d397c6bc9cba1',
+    'child': '79b9b034163107e472b94f6d30e07049e23e4f6b590a30b033f85fd94af41c54',
+    'child continued': '838f3a9656160c767a2995005d5ab5c3f84a6fe0ca81236ccc4255eaf7805693'
+  }
+};

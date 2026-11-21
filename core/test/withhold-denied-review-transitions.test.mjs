@@ -1,3 +1,5 @@
+import { transaction } from '../database.mjs';
+import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 import crypto, { createHash } from 'node:crypto';
 import { syncBuiltinESMExports } from 'node:module';
 import { DatabaseSync } from 'node:sqlite';
@@ -97,7 +99,7 @@ async function transitions(t, safety = true) {
       actionId: event, receipt: receipt(event + '-confirmation') }));
     assert.equal(result.reviewEffects.transitions[0]?.predecessor?.memoryId, predecessor.id, JSON.stringify(result.reviewEffects));
   }
-  return { ...f, forgotten, denied, visible: second };
+  return { ...f, forgotten, denied, first, visible: second };
 }
 
 test('review transition pages keep resolved rows with visible provenance', async t => {
@@ -128,7 +130,7 @@ function deterministicFixture(t) {
   t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2025-06-01T00:00:00.000Z') });
 }
 
-function trace(t, label, read, expected) {
+function trace(t, label, read, expected, expectedBytes) {
   const statements = [], { prepare, exec } = DatabaseSync.prototype;
   DatabaseSync.prototype.exec = function (sql) {
     statements.push(['exec', sql]);
@@ -145,16 +147,19 @@ function trace(t, label, read, expected) {
       };
     } });
   };
-  let output;
-  try { output = ok(read()); }
+  let envelope;
+  try { envelope = read(); }
   finally {
     DatabaseSync.prototype.prepare = prepare;
     DatabaseSync.prototype.exec = exec;
   }
   const digest = createHash('sha256').update(JSON.stringify(statements)).digest('hex');
   t.diagnostic(label + ': ' + statements.length + ' SQL executions, ' + digest);
+  const response = createHash('sha256').update(JSON.stringify(envelope)).digest('hex');
+  t.diagnostic(label + ' response: ' + response);
   assert.deepEqual([statements.length, digest], expected);
-  return output;
+  assert.equal(response, expectedBytes);
+  return ok(envelope);
 }
 
 const statementTrace = {
@@ -173,8 +178,72 @@ for (const safety of [false, true]) {
     deterministicFixture(t);
     const f = await transitions(t, safety);
     const input = { namespace: ns, status: 'all', limit: 1 };
-    const page = trace(t, 'initial', () => f.core.listReviewTransitions(input), statementTrace[safety]['initial']);
+    const page = trace(t, 'initial', () => f.core.listReviewTransitions(input), statementTrace[safety]['initial'], responseTrace[safety]['initial']);
     assert.ok(page.nextCursor);
-    trace(t, 'continued', () => f.core.listReviewTransitions({ ...input, cursor: page.nextCursor }), statementTrace[safety]['continued']);
+    trace(t, 'continued', () => f.core.listReviewTransitions({ ...input, cursor: page.nextCursor }), statementTrace[safety]['continued'], responseTrace[safety]['continued']);
   });
 }
+
+test('review transitions withhold the denied emitted revision and retain an unrelated row', async t => {
+  const f = await transitions(t);
+  const input = { namespace: ns, status: 'all', limit: 1 };
+  const stored = f.db.prepare('SELECT replacement_revision FROM confirmation_supersessions WHERE replacement_id=?').get(f.first.id);
+  const revision = stored.replacement_revision + 1;
+  f.db.prepare('UPDATE memories SET revision=? WHERE id=?').run(revision, f.first.id);
+  const clean = ok(f.core.listReviewTransitions({ ...input, limit: 20 }));
+  assert.equal(clean.transitions.find(row => row.replacement.memoryId === f.first.id).replacement.revision, revision);
+  transaction(f.db, () => writeContentSuppressionInside(f.db, { namespace: ns, kind: 'memory', key: f.first.id,
+    matchMode: 'version', sourceVersion: JSON.stringify(['memory-revision-v1', revision]),
+    reason: 'user_forget', actionId: 'suppress-current-version' }));
+  await twice(t, () => f.core.listReviewTransitions(input), result => {
+    const page = ok(result);
+    assert.deepEqual(page.transitions.map(row => row.replacement.memoryId), [f.visible.id]);
+    assert.equal(page.exhausted, true);
+    assert.equal(page.nextCursor, null);
+    assert.ok(!JSON.stringify(result).includes(f.first.id));
+  });
+});
+
+test('review pages advance across repeated withheld batches within one replacement tie', async t => {
+  deterministicFixture(t);
+  const f = await transitions(t);
+  const seed = f.db.prepare('SELECT * FROM confirmation_supersessions WHERE replacement_id=?').get(f.visible.id);
+  const fields = Object.keys(seed);
+  const insert = f.db.prepare(`INSERT INTO confirmation_supersessions(${fields.join(',')}) VALUES(${fields.map(() => '?').join(',')})`);
+  const siblings = Array.from({ length: 8 }, (_, n) => ok(f.core.admit({ namespace: ns,
+    memory: { kind: 'fact', content: 'Synthetic predecessor ' + n }, receipts: [receipt('predecessor-' + n)] })).memory);
+  const members = siblings.sort((a, b) => a.id.localeCompare(b.id));
+  const expected = [members[4].id, members[5].id];
+  const hidden = members.filter(memory => !expected.includes(memory.id));
+  f.db.prepare('DELETE FROM confirmation_supersessions').run();
+  for (const { id, revision } of members) {
+    const row = { ...seed, previous_id: id, previous_revision: revision, previous_receipt_ids: '[]' };
+    insert.run(...fields.map(field => row[field]));
+  }
+  transaction(f.db, () => {
+    for (const { id } of hidden) writeContentSuppressionInside(f.db, { namespace: ns, kind: 'memory', key: id,
+      reason: 'user_forget', actionId: 'suppress-predecessor' });
+  });
+  const input = { namespace: ns, status: 'all', limit: 1 };
+  await twice(t, () => f.core.listReviewTransitions(input), result => {
+    const first = ok(result);
+    assert.deepEqual(first.transitions.map(row => row.predecessor.memoryId), expected.slice(0, 1));
+    assert.equal(first.exhausted, false);
+    const next = f.core.listReviewTransitions({ ...input, cursor: first.nextCursor });
+    assert.deepEqual(ok(next).transitions.map(row => row.predecessor.memoryId), expected.slice(1));
+    assert.equal(ok(next).exhausted, true);
+    assert.equal(ok(next).nextCursor, null);
+    for (const { id } of hidden) assert.ok(!JSON.stringify([result, next]).includes(id));
+  });
+});
+
+const responseTrace = {
+  false: {
+    'initial': '9d386c8b6690e93817134c34ea1304c20e2baa68a9aaad4380f1fe29f97a770d',
+    'continued': 'ae5bbf39fb4a7af0b199fc21b269eef61876bbe8453ea602726c6d943c7e718d'
+  },
+  true: {
+    'initial': 'f31f03d362397aec8c6f779a4179d33bdb541eb4ddc8f59379d8e73e92bb8ed4',
+    'continued': '04b4326a3ae472b12e60b21141dfc9b6778445642baf27d9846113c98e6dca94'
+  }
+};

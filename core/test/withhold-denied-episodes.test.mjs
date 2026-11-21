@@ -1,3 +1,5 @@
+import { transaction } from '../database.mjs';
+import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 import crypto, { createHash } from 'node:crypto';
 import { syncBuiltinESMExports } from 'node:module';
 import { DatabaseSync } from 'node:sqlite';
@@ -6,7 +8,7 @@ import assert from 'node:assert/strict';
 import { openRawCaptureCore } from '../raw-capture.mjs';
 import { migrateCardLineage } from '../content-safety-migration.mjs';
 import { attestContentSafety } from '../content-safety-schema.mjs';
-import { copySqliteFixture, ns, ok, quiescence, safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
+import { copySqliteFixture, ns, ok, quiescence, receipt, safetyFixture } from '../testing/content-safety-s2h-fixture.mjs';
 import { localPlainPort, request, splitRaw } from '../testing/raw-capture-fixtures.mjs';
 import { rationaleModel } from '../testing/rationale-model.mjs';
 
@@ -129,7 +131,7 @@ async function episodeFixture(t, { forget = true, safety = true, correct = true,
     f.db.prepare("UPDATE session_episodes SET record=json_set(?,'$.nextStep.receiptOrdinal',3) WHERE id=?")
       .run(original, mixed);
   }
-  return { ...f, core, mixed, visible, tail, blockedSource, range, get };
+  return { ...f, core, mixed, visible, tail, blockedSource, range, get, denied };
 }
 
 for (const correct of [false, true]) {
@@ -190,7 +192,7 @@ function deterministicFixture(t) {
   t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2025-06-01T00:00:00.000Z') });
 }
 
-function trace(t, label, read, expected) {
+function trace(t, label, read, expected, expectedBytes) {
   const statements = [], { prepare, exec } = DatabaseSync.prototype;
   DatabaseSync.prototype.exec = function (sql) {
     statements.push(['exec', sql]);
@@ -207,16 +209,19 @@ function trace(t, label, read, expected) {
       };
     } });
   };
-  let output;
-  try { output = ok(read()); }
+  let envelope;
+  try { envelope = read(); }
   finally {
     DatabaseSync.prototype.prepare = prepare;
     DatabaseSync.prototype.exec = exec;
   }
   const digest = createHash('sha256').update(JSON.stringify(statements)).digest('hex');
   t.diagnostic(label + ': ' + statements.length + ' SQL executions, ' + digest);
+  const response = createHash('sha256').update(JSON.stringify(envelope)).digest('hex');
+  t.diagnostic(label + ' response: ' + response);
   assert.deepEqual([statements.length, digest], expected);
-  return output;
+  assert.equal(response, expectedBytes);
+  return ok(envelope);
 }
 
 const statementTrace = {
@@ -240,13 +245,181 @@ for (const safety of [false, true]) {
   test('Episode and next-step SQL parity with safety ' + safety, async t => {
     deterministicFixture(t);
     const f = await episodeFixture(t, { forget: false, safety });
-    const initial = trace(t, 'list initial', () => f.core.listEpisodes(f.range), statementTrace[safety]['list initial']);
+    const initial = trace(t, 'list initial', () => f.core.listEpisodes(f.range), statementTrace[safety]['list initial'], responseTrace[safety]['list initial']);
     assert.ok(initial.nextCursor);
-    trace(t, 'list continued', () => f.core.listEpisodes({ ...f.range, cursor: initial.nextCursor }), statementTrace[safety]['list continued']);
+    trace(t, 'list continued', () => f.core.listEpisodes({ ...f.range, cursor: initial.nextCursor }), statementTrace[safety]['list continued'], responseTrace[safety]['list continued']);
     const input = { namespace: ns, episodeId: f.mixed, sourceLimit: 1 };
-    const detail = trace(t, 'get initial', () => f.core.getEpisode(input), statementTrace[safety]['get initial']);
+    const detail = trace(t, 'get initial', () => f.core.getEpisode(input), statementTrace[safety]['get initial'], responseTrace[safety]['get initial']);
     assert.ok(detail.sources.nextCursor);
-    trace(t, 'get continued', () => f.core.getEpisode({ ...input, sourceCursor: detail.sources.nextCursor }), statementTrace[safety]['get continued']);
-    trace(t, 'next step', () => f.core.sessionStartContext({ namespace: ns, groups: { nextSteps: true, procedural: false } }), statementTrace[safety]['next step']);
+    trace(t, 'get continued', () => f.core.getEpisode({ ...input, sourceCursor: detail.sources.nextCursor }), statementTrace[safety]['get continued'], responseTrace[safety]['get continued']);
+    trace(t, 'next step', () => f.core.sessionStartContext({ namespace: ns, groups: { nextSteps: true, procedural: false } }), statementTrace[safety]['next step'], responseTrace[safety]['next step']);
   });
 }
+
+function seedLinks(f) {
+  const insert = f.db.prepare('INSERT INTO episode_memory_links(id,episode_id,event_id,memory_id,admission_revision,receipt_ids) VALUES(?,?,?,?,?,?)');
+  return Array.from({ length: 3 }, (_, index) => {
+    const memory = ok(f.core.admit({ namespace: ns, memory: { kind: 'fact', content: 'Synthetic linked memory ' + index },
+      receipts: [receipt('linked-' + index)] })).memory;
+    const [source] = ok(f.core.get({ namespace: ns, memoryId: memory.id })).receipts;
+    insert.run('link-' + index, f.mixed, 'synthetic-event', memory.id, memory.revision, JSON.stringify([source.id]));
+    return { memory, source };
+  });
+}
+
+function suppressLinked(f, links) {
+  transaction(f.db, () => {
+    for (const { memory } of links) writeContentSuppressionInside(f.db, { namespace: ns, kind: 'memory', key: memory.id,
+      reason: 'privacy_erase', actionId: 'suppress-link' });
+  });
+}
+
+for (const tail of [false, true]) {
+  test('Episode links fill a page across ' + (tail ? 'an all-denied tail' : 'a denied prefix'), async t => {
+    const f = await episodeFixture(t, { forget: false });
+    const links = seedLinks(f);
+    const visible = links[tail ? 0 : 2];
+    const denied = links.filter(link => link !== visible);
+    suppressLinked(f, denied);
+    const input = { namespace: ns, episodeId: f.mixed, memoryLimit: 1 };
+    await twice(t, () => f.core.getEpisode(input), result => {
+      assert.deepEqual(ok(result).memoryLinks, { items: [{ id: tail ? 'link-0' : 'link-2',
+        memoryId: visible.memory.id, admissionRevision: visible.memory.revision, receiptIds: [visible.source.id] }],
+      exhausted: true, nextCursor: null });
+      for (const { memory, source } of denied) {
+        for (const needle of [memory.id, memory.content, source.id, source.excerpt]) {
+          assert.ok(!JSON.stringify(result).includes(needle), needle);
+        }
+      }
+    });
+  });
+}
+
+test('Episode keep history withholds an action citing a denied existing source and preserves ordinals', async t => {
+  const f = await episodeFixture(t, { forget: false });
+  const before = ok(f.get(f.mixed));
+  for (let n = 0; n < 3; n++) ok(await f.core.keepEpisode({ namespace: ns, episodeId: f.mixed,
+    expectedRevision: before.episode.revision, actionId: 'keep-' + n }));
+  const kept = ok(f.get(f.mixed)).keepActions.items;
+  assert.deepEqual(kept.map(action => action.ordinal), [1, 2, 3]);
+  const safeSource = before.sources.items.find(source => source.messageId === 'one');
+  const sources = f.db.prepare('UPDATE episode_keep_actions SET keep_source_ids=? WHERE admission_key=?');
+  // Retained history refers to the original source set even after it changes.
+  // Keep one denied source row reachable by ID outside the current source set.
+  sources.run(JSON.stringify([safeSource.id]), kept[0].actionKey);
+  sources.run(JSON.stringify([f.blockedSource.id]), kept[1].actionKey);
+  sources.run(JSON.stringify([safeSource.id]), kept[2].actionKey);
+  f.db.prepare('UPDATE episode_sources SET episode_id=? WHERE id=?').run(f.visible, f.blockedSource.id);
+  transaction(f.db, () => writeContentSuppressionInside(f.db, { namespace: ns, kind: 'memory', key: f.denied.id,
+    reason: 'user_forget', actionId: 'suppress-keep-parent' }));
+  assert.equal(f.db.prepare('SELECT id FROM episode_sources WHERE id=?').get(f.blockedSource.id).id, f.blockedSource.id);
+  const input = { namespace: ns, episodeId: f.mixed, keepLimit: 1 };
+  await twice(t, () => f.core.getEpisode(input), result => {
+    const first = ok(result).keepActions;
+    assert.deepEqual(first.items.map(action => action.ordinal), [1]);
+    assert.equal(first.exhausted, false);
+    assert.ok(first.nextCursor);
+    const next = f.core.getEpisode({ ...input, keepCursor: first.nextCursor });
+    const last = ok(next).keepActions;
+    assert.deepEqual(last.items.map(action => action.ordinal), [3]);
+    assert.equal(last.exhausted, true);
+    assert.equal(last.nextCursor, null);
+    for (const needle of [f.blockedSource.id, f.blockedSource.text, kept[1].actionKey]) {
+      assert.ok(!JSON.stringify([result, next]).includes(needle), needle);
+    }
+  });
+});
+
+test('direct Episode refusal preserves deleted-origin precedence over anchored suppression', async t => {
+  const f = await episodeFixture(t, { correct: false });
+  assert.equal(f.get(f.mixed).error?.code, 'source_excluded');
+  const source = f.db.prepare('SELECT * FROM episode_sources WHERE episode_id=?').get(f.tail);
+  f.db.prepare('INSERT INTO episode_sources VALUES(?,?,?,?,?,?,?,?,?,?)').run('deleted-origin-passage',
+    f.mixed, source.origin_episode_id, source.event_id, source.message_id, source.digest,
+    source.role, source.text, source.truncated, source.ordinal);
+  f.db.prepare('UPDATE session_episodes SET deleted=1 WHERE id=?').run(f.tail);
+  await twice(t, () => f.get(f.mixed), result => assert.equal(result.error?.code, 'revision_conflict'));
+});
+
+test('Episode list advances through repeated denied batches and retains the order of tied times', async t => {
+  const f = await episodeFixture(t, { correct: false });
+  const seed = f.db.prepare('SELECT * FROM session_episodes WHERE id=?').get(f.mixed);
+  const passage = f.db.prepare('SELECT * FROM episode_sources WHERE id=?').get(f.blockedSource.id);
+  const fields = Object.keys(seed);
+  const episode = f.db.prepare(`INSERT INTO session_episodes(${fields.join(',')}) VALUES(${fields.map(() => '?').join(',')})`);
+  const addSource = f.db.prepare('INSERT INTO episode_sources VALUES(?,?,?,?,?,?,?,?,?,?)');
+  const stamp = '2025-06-09T00:00:00.000Z';
+  const hidden = [];
+  for (const id of ['-hidden-0', '-hidden-1', '-hidden-2', '-hidden-3', 'zz-hidden', 'zzz-hidden']) {
+    const source = { ...passage, id: id + '-passage', episode_id: id };
+    // Only the denied anchor is required to refuse the copied projection.
+    const copy = { ...seed, id, session_key: 's1:' + createHash('sha256').update(id).digest('hex'), first_received_at: stamp,
+      record: seed.record.replaceAll(passage.id, source.id) };
+    episode.run(...fields.map(field => copy[field]));
+    addSource.run(...Object.values(source));
+    hidden.push(id, source.id);
+  }
+  f.db.prepare('UPDATE session_episodes SET first_received_at=? WHERE id IN (?,?)').run(stamp, f.visible, f.tail);
+  f.db.prepare('UPDATE session_episodes SET deleted=1 WHERE id=?').run(f.mixed);
+  const expected = [f.visible, f.tail].sort();
+  await twice(t, () => f.core.listEpisodes(f.range), result => {
+    const page = ok(result);
+    assert.deepEqual(page.items.map(item => item.id), [expected[0]]);
+    assert.equal(page.exhausted, false);
+    const next = f.core.listEpisodes({ ...f.range, cursor: page.nextCursor });
+    assert.deepEqual(ok(next).items.map(item => item.id), [expected[1]]);
+    assert.equal(ok(next).exhausted, true);
+    assert.equal(ok(next).nextCursor, null);
+    for (const needle of hidden) assert.ok(!JSON.stringify([result, next]).includes(needle), needle);
+  });
+});
+
+for (const safety of [false, true]) {
+  test('Episode Memory-link and keep history parity with safety ' + safety, async t => {
+    deterministicFixture(t);
+    const f = await episodeFixture(t, { forget: false, safety });
+    const revision = ok(f.get(f.mixed)).episode.revision;
+    for (let n = 0; n < 2; n++) ok(await f.core.keepEpisode({ namespace: ns, episodeId: f.mixed,
+      expectedRevision: revision, actionId: 'parity-keep-' + n }));
+    seedLinks(f);
+    const input = { namespace: ns, episodeId: f.mixed, memoryLimit: 1, keepLimit: 1 };
+    const first = trace(t, 'links and keeps', () => f.core.getEpisode(input),
+      detailTrace[safety].initial, responseTrace[safety]['links and keeps']);
+    assert.ok(first.memoryLinks.nextCursor && first.keepActions.nextCursor);
+    trace(t, 'links and keeps continued', () => f.core.getEpisode({ ...input,
+      memoryCursor: first.memoryLinks.nextCursor, keepCursor: first.keepActions.nextCursor }),
+    detailTrace[safety].continued, responseTrace[safety]['links and keeps continued']);
+  });
+}
+
+const detailTrace = {
+  false: {
+    'initial': [19, '8769e8dd831013ae741dcc91ef638e64e99f1ed836ad028034756d5cbabecbb2'],
+    'continued': [19, '4f5c4a792de0a2c66c66e872afb6c21ca18c306e9eb8dec1b7697b4ea7de7874']
+  },
+  true: {
+    'initial': [32, 'df9345c426e0ba86a38691cc49e643d569800154c4c81c9242f12ddc5867c12c'],
+    'continued': [32, '2d6abbb031b652601595178acb70eadfe912026b4c94a0087291c78d2fcf54f8']
+  }
+};
+
+const responseTrace = {
+  false: {
+    'list initial': '4ffcf380e987460f1f16fb830532177741e0556275397b915206b75f2188aee3',
+    'list continued': '66555bf0a09b7cee12930a28c086b93946fcddc2ab965928e3a5ade550510dcd',
+    'get initial': '23061b2b80cdc362ca452fddd7786fb1ed3d74c62bba0580b2e76c4f0d948993',
+    'get continued': '3d0968c7df40a783fa07abfddbe0c24fd58a82454fc3b4825dd431eaa889af16',
+    'next step': '69a6d011ee1a30b635823708c16e754020949d603ca94d0524d907d407dfde1c',
+    'links and keeps': '1db2e1dc590e772bc9db3a7538f32fd58bdd8ae08d52b7c81824ee3d89179ba9',
+    'links and keeps continued': 'a106b1a11d26698e0d3df62d1c4e22c42e2ab9343b2108bb5f253c3a993b301b'
+  },
+  true: {
+    'list initial': 'c6ea7622b63da9346d6486ba66377024504d7836383866a4e1bc2d9db2cff9e3',
+    'list continued': 'cf9fd16a2fc8388e63c2aa9ea79b4d6dd7f26e42cf6ed4e29e3aae7bd2baad6e',
+    'get initial': '9a0bd360fe3204fa7ede2c6a4e1c6d6ef9b5ae7645d2ee9271bb28ad12bda32e',
+    'get continued': '69c8e70c4f6aa151584314b3e7284f64d6b0f2edffd0c4ffeae9a0de398d293c',
+    'next step': 'fae8c0162315123c5f803a467302679d67ae38b8a3e63af9d4d5cde13a1c10ce',
+    'links and keeps': 'f9144eceed642dc4141c232f4e8ff35a9df254b00fa3d240c8a09302c8853faf',
+    'links and keeps continued': 'ab7612fd8cdeae78e3933def18b909156960c5fd6b53f084ca36fb7c31c35423'
+  }
+};

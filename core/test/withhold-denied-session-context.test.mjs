@@ -1,3 +1,5 @@
+import { transaction } from '../database.mjs';
+import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 import crypto, { createHash } from 'node:crypto';
 import { syncBuiltinESMExports } from 'node:module';
 import { DatabaseSync } from 'node:sqlite';
@@ -117,7 +119,7 @@ function deterministicFixture(t) {
   t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2025-06-01T00:00:00.000Z') });
 }
 
-function trace(t, label, read, expected) {
+function trace(t, label, read, expected, expectedBytes) {
   const statements = [], { prepare, exec } = DatabaseSync.prototype;
   DatabaseSync.prototype.exec = function (sql) {
     statements.push(['exec', sql]);
@@ -134,16 +136,19 @@ function trace(t, label, read, expected) {
       };
     } });
   };
-  let output;
-  try { output = ok(read()); }
+  let envelope;
+  try { envelope = read(); }
   finally {
     DatabaseSync.prototype.prepare = prepare;
     DatabaseSync.prototype.exec = exec;
   }
   const digest = createHash('sha256').update(JSON.stringify(statements)).digest('hex');
   t.diagnostic(label + ': ' + statements.length + ' SQL executions, ' + digest);
+  const response = createHash('sha256').update(JSON.stringify(envelope)).digest('hex');
+  t.diagnostic(label + ' response: ' + response);
   assert.deepEqual([statements.length, digest], expected);
-  return output;
+  assert.equal(response, expectedBytes);
+  return ok(envelope);
 }
 
 const statementTrace = {
@@ -161,8 +166,67 @@ for (const safety of [false, true]) {
     const f = await rawFixture(t, {}, safety);
     await f.capture('visible', ['instruction', 'fact']);
     const input = { namespace: ns, groups: { nextSteps: false, procedural: true, background: true } };
-    const result = trace(t, 'memory groups', () => f.core.sessionStartContext(input), statementTrace[safety]['memory groups']);
+    const result = trace(t, 'memory groups', () => f.core.sessionStartContext(input), statementTrace[safety]['memory groups'], responseTrace[safety]['memory groups']);
     assert.equal(result.groups.procedural.returned, 1);
     assert.equal(result.groups.background.returned, 1);
   });
 }
+
+for (const [group, kind] of [['procedural', 'instruction'], ['background', 'fact']]) {
+  test('session ' + group + ' retains a memory with one denied receipt', async t => {
+    const f = await rawFixture(t);
+    const memory = ok(f.core.admit({ namespace: ns,
+      memory: { content: 'Synthetic retained evidence', kind },
+      receipts: [receipt('withheld-ordinary'), receipt('kept-ordinary')] })).memory;
+    const other = add(f.core, 'unrelated group member', kind);
+    const before = ok(read(f.core, memory)).receipts;
+    assert.equal(before.length, 2);
+    const hidden = before.find(source => source.eventId === 'withheld-ordinary');
+    const retained = before.find(source => source.eventId === 'kept-ordinary');
+    transaction(f.db, () => writeContentSuppressionInside(f.db, { namespace: ns, kind: 'receipt', key: hidden.id,
+      reason: 'user_forget', actionId: 'suppress-receipt' }));
+    assert.deepEqual(ok(read(f.core, memory)).receipts, [retained]);
+    const input = { namespace: ns, groups: { nextSteps: false, procedural: group === 'procedural',
+      ...(group === 'background' ? { background: true } : {}) } };
+    await twice(t, () => f.core.sessionStartContext(input), result => {
+      const selected = ok(result).groups[group];
+      assert.equal(selected.complete, true);
+      assert.deepEqual(selected.items.map(item => item.memory.id).sort(), [memory.id, other.id].sort());
+      assert.deepEqual(selected.items.find(item => item.memory.id === memory.id).receipts,
+        [{ id: retained.id, role: retained.role, excerpt: retained.excerpt }]);
+      for (const needle of [hidden.id, hidden.excerpt]) assert.ok(!JSON.stringify(result).includes(needle), needle);
+    });
+  });
+}
+
+for (const safety of [false, true]) {
+  test('a full clean session group batch retains base SQL and response bytes with safety ' + safety, async t => {
+    deterministicFixture(t);
+    const f = await rawFixture(t, { countTokens: () => 1 }, safety);
+    for (let i = 0; i < 13; i++) {
+      add(f.core, 'instruction ' + i, 'instruction');
+      add(f.core, 'background ' + i, 'fact');
+    }
+    const input = { namespace: ns, maxChars: 8000, backgroundBudget: { maxChars: 8000 }, groups: { nextSteps: false, procedural: true, background: true } };
+    const result = trace(t, 'full groups', () => f.core.sessionStartContext(input), fullGroupTrace[safety],
+      responseTrace[safety]['full groups']);
+    assert.equal(result.groups.procedural.returned, 6);
+    assert.equal(result.groups.background.returned, 6);
+  });
+}
+
+const fullGroupTrace = {
+  false: [900, '0d910b96d4c5f5351e715433abe421c0b59e7a931839da8c286adf0725125e52'],
+  true: [932, 'cfe4208ffd7e70f59b9ec84ec861966164db0dd61fabfb15df699879b773b1da']
+};
+
+const responseTrace = {
+  false: {
+    'memory groups': 'cee2cf82fcedb2a1c9f391fee703a84d65e39ae2826cfda9dc1c49c8143b7414',
+    'full groups': 'd6b9e573e9e0eca6f614e189d2c33651156fb9005076e3779253b0c7f0a8f578'
+  },
+  true: {
+    'memory groups': 'fe0ec999437b2f7a6b187e0b1d958235a860ff44bbf2a22fd1e72f97d3c251b8',
+    'full groups': '3d134f69a4504a1e333c1584002118d3c0aae32caf90a1720afff918b61aeb59'
+  }
+};

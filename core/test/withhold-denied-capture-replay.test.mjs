@@ -80,10 +80,13 @@ test('a later Raw turn and a fresh replay of it survive forgetting a previous tu
   assert.equal(exactCode, 'evidence_unavailable');
   assert.ok(!JSON.stringify(exact).includes(denied.id));
   const later = f.input('later', ['fact'], { sessionId: shared.sessionId, ordinal: 2 });
+  let admittedId;
   await twice(t, () => f.core.captureRaw(structuredClone(later)), result => {
     const interpretation = ok(ok(result).interpretation);
     const memberIds = interpretation.memoryIds ?? interpretation.admission.memories.map(memory => memory.id);
     assert.equal(memberIds.length, 1);
+    if (admittedId === undefined) admittedId = interpretation.admission.memories[0].id;
+    assert.deepEqual(memberIds, [admittedId]);
     assert.ok(!memberIds.includes(denied.id) && !memberIds.includes(forgotten.id));
     assert.match(ok(read(f.core, { id: memberIds[0] })).memory.content, /synthetic later/);
   });
