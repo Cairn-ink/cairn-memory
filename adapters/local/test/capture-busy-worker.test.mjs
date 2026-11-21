@@ -11,6 +11,7 @@ import { localCaptureReply } from '../../../integrations/client/raw/local-reply.
 import { openMemoryCore } from '../../../core/index.mjs';
 import { captureLocal } from '../capture.mjs';
 import { configuration } from '../configuration.mjs';
+import { lockChild } from '../../../core/test/fixtures/local-open-tools.mjs';
 
 function fixture(t) {
   const f=workerFixture(t);f.config.interpretation='raw-only';f.save();
@@ -47,12 +48,16 @@ function inject(f,stage,code=14) {
   return {worker:createLocalRawWorker({...f.options,nodeExecutable:executable,env:{}}),trace,preload};
 }
 
-test('opener busy timeout is an accepted 409 and the worker resends its identical prepared batch', {timeout:30000},async t=>{
+test('privacy repair opener busy timeout is an accepted 409 and the worker resends its identical prepared batch', {timeout:30000},async t=>{
   const f=fixture(t);await f.worker.initialize({...f.context,start:'beginning'});
-  f.db.exec('BEGIN IMMEDIATE');const before=snapshot(f.db),start=performance.now();let outcome;
+  // An up-to-date open now succeeds under RESERVED. Require a genuine local
+  // privacy repair so this still exercises the opener's native busy reply.
+  f.db.exec('DROP INDEX local_raw_range_overlap');
+  const holder=lockChild('reserved',f.databasePath);assert.equal(await holder.ready,'ready');
+  const before=snapshot(f.db),start=performance.now();let outcome;
   try {
     // Exercise the exact reply through captureLocal too, retaining the native
-    // 5-second timeout and no writes while this separate connection holds WAL.
+    // 5-second timeout and no writes while a child holds RESERVED.
     const reply=await captureLocal(configuration(f.config),f.request(),{env:{}});
     assert.deepEqual(reply,{status:409,body:{error:'storage_busy'}});
     assert.deepEqual(localCaptureReply(Buffer.from(JSON.stringify(reply)+'\n'),f.request()),reply);
@@ -62,7 +67,7 @@ test('opener busy timeout is an accepted 409 and the worker resends its identica
     assert.deepEqual(snapshot(f.db),before);
     const pending=f.cursor().pending;assert.equal(pending.state,'prepared');assert.equal(pending.attempts,0);
     assert.equal(pending.lastAttemptAt,null);assert.equal(pending.nextEligibleAt,null);assert.equal(f.cursor().offset,0);
-  }finally{f.db.exec('ROLLBACK');}
+  }finally{await holder.finish();}
   const prepared=f.cursor().pending;
   // The next child receives the same durable event/ordinal; its capture event
   // provides independent proof beyond the cursor's final empty state.

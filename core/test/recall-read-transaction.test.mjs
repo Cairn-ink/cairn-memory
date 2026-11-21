@@ -168,7 +168,7 @@ function productionSources() {
 }
 
 const deferredReaders = [
-  ['core/database.mjs', 'openDatabase probe', "    const needsWriter = Symbol('open needs writer');", '\n      return db;\n    } catch (error)',
+  ['core/database.mjs', 'openDatabase probe', "    const needsWriter = Symbol('open needs writer');", '\n      upToDate = true;\n    } catch (error)',
     '}, undefined, { deferred: true });'],
   ['core/moc-storage.mjs', 'queryCandidateRows', '  function queryCandidateRows(', '\n  function mapRows',
     'transaction(db, work, undefined, { deferred: true })'],

@@ -27,7 +27,7 @@
     },
     {
       "key": "workload:53",
-      "index": 15668,
+      "index": 15662,
       "old": "BEGIN IMMEDIATE",
       "new": "BEGIN"
     }
@@ -109,6 +109,30 @@
         "after": 0,
         "index": 1,
         "statement": [
+          "PRAGMA application_id",
+          "get",
+          []
+        ]
+      },
+      {
+        "key": "open:23",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "PRAGMA user_version",
+          "get",
+          []
+        ]
+      },
+      {
+        "key": "open:23",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
           "ROLLBACK",
           "exec",
           []
@@ -169,6 +193,30 @@
         "after": 0,
         "index": 1,
         "statement": [
+          "PRAGMA application_id",
+          "get",
+          []
+        ]
+      },
+      {
+        "key": "open:33",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "PRAGMA user_version",
+          "get",
+          []
+        ]
+      },
+      {
+        "key": "open:33",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
           "ROLLBACK",
           "exec",
           []
@@ -229,6 +277,30 @@
         "after": 0,
         "index": 1,
         "statement": [
+          "PRAGMA application_id",
+          "get",
+          []
+        ]
+      },
+      {
+        "key": "workload:23",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "PRAGMA user_version",
+          "get",
+          []
+        ]
+      },
+      {
+        "key": "workload:23",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
           "ROLLBACK",
           "exec",
           []
@@ -289,6 +361,30 @@
         "after": 0,
         "index": 1,
         "statement": [
+          "PRAGMA application_id",
+          "get",
+          []
+        ]
+      },
+      {
+        "key": "workload:33",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
+          "PRAGMA user_version",
+          "get",
+          []
+        ]
+      },
+      {
+        "key": "workload:33",
+        "method": "open",
+        "ordinal": 1,
+        "after": 0,
+        "index": 1,
+        "statement": [
           "ROLLBACK",
           "exec",
           []
@@ -299,7 +395,7 @@
         "method": "openRawCaptureCore",
         "ordinal": 1,
         "after": 0,
-        "index": 9264,
+        "index": 9669,
         "statement": [
           "BEGIN",
           "exec",
@@ -311,7 +407,7 @@
         "method": "openRawCaptureCore",
         "ordinal": 1,
         "after": 0,
-        "index": 9264,
+        "index": 9669,
         "statement": [
           "PRAGMA user_version",
           "get",
@@ -323,7 +419,7 @@
         "method": "openRawCaptureCore",
         "ordinal": 1,
         "after": 0,
-        "index": 9264,
+        "index": 9669,
         "statement": [
           "SELECT schema_version AS cookie,name,type,sql FROM pragma_schema_version LEFT JOIN sqlite_schema ON ( name GLOB 'content_safety_*' OR name GLOB 'content_identity_*' OR name='owner_suppression_epochs' OR name GLOB 'content_suppression*' OR name GLOB 'safety_*') LIMIT 65",
           "iterate",
@@ -335,7 +431,7 @@
         "method": "openRawCaptureCore",
         "ordinal": 1,
         "after": 0,
-        "index": 9264,
+        "index": 9669,
         "statement": [
           "SELECT schema_version AS cookie,(SELECT user_version FROM pragma_user_version) AS physical, (SELECT application_id FROM pragma_application_id) AS applicationId FROM pragma_schema_version",
           "get",
@@ -347,7 +443,31 @@
         "method": "openRawCaptureCore",
         "ordinal": 1,
         "after": 0,
-        "index": 9264,
+        "index": 9669,
+        "statement": [
+          "PRAGMA application_id",
+          "get",
+          []
+        ]
+      },
+      {
+        "key": "workload:33",
+        "method": "openRawCaptureCore",
+        "ordinal": 1,
+        "after": 0,
+        "index": 9669,
+        "statement": [
+          "PRAGMA user_version",
+          "get",
+          []
+        ]
+      },
+      {
+        "key": "workload:33",
+        "method": "openRawCaptureCore",
+        "ordinal": 1,
+        "after": 0,
+        "index": 9669,
         "statement": [
           "ROLLBACK",
           "exec",
@@ -374,25 +494,25 @@
     ],
     "workload:33": [
       1,
-      9264
+      9669
     ],
     "workload:52": [
       1
     ],
     "workload:53": [
       1,
-      15668
+      15662
     ]
   },
   "currentSql": {
-    "open:23": "81bfe05acf80ccfb7fa7156317284816b18da6ddde4a6b3b90f24b3a7a5811da",
-    "open:33": "86a1d6904e1ac1576aef80430c58a8f4b07191c54e402a7529ddb102366a0aa1",
+    "open:23": "1d2ea030d43b3d71ea20295f4cbc42f254ed1f6b5e532b71b96a79a10de36c32",
+    "open:33": "dd5d19a05cc94529e1ccee40dd64496435c1ac707c775e79b5eb21a4dea668c9",
     "open:52": "d5eb8ce3dff9d76c60cddfeedb911b2f62d87907e46f29767328e9cfa0cce973",
     "open:53": "7a647c9fb1a2993f0874fa1c71a5eb079dc98f21317f084ba600445bcd4158a9",
-    "workload:23": "516fcafe8644b19596547847ab40716bf13a78990a03a4761c1073beeaf8f852",
-    "workload:33": "fe5c5d5228818113ec2ccffb044c52963483cc038a91e8b3c2449d31a5d9bf4f",
-    "workload:52": "9c85f823ad4027b11cbcfa95168c8e07aa2ce201b1bb96dfa89448cae111c24a",
-    "workload:53": "aff696703214ed5954b8019021a3b55337760df69789548ed9c970e907c456bb"
+    "workload:23": "d544d6de25bdacf76f03476cc68344fc5db4bfdb90e9e00e155c6fa05d326ced",
+    "workload:33": "da141b5f460fd55026767e3bb6ab77a004573eafe738465bd4638fd7d65dc684",
+    "workload:52": "14a3cb98fb211e6b0d1c862b53504032a78bcb0e81333cabfb9400b9ed227d82",
+    "workload:53": "c8ddd052d908d54266d2612499abcb885dc701d70c00f3b8b048e9ae1decec01"
   },
   "currentCensus": {
     "open:23": {
@@ -426,22 +546,192 @@
       "ROLLBACK": 5
     },
     "workload:33": {
-      "BEGIN": 301,
+      "BEGIN": 302,
       "BEGIN IMMEDIATE": 97,
-      "COMMIT": 392,
+      "COMMIT": 393,
       "ROLLBACK": 6
     },
     "workload:52": {
-      "BEGIN": 205,
+      "BEGIN": 211,
       "BEGIN IMMEDIATE": 72,
-      "COMMIT": 267,
+      "COMMIT": 273,
       "ROLLBACK": 10
     },
     "workload:53": {
-      "BEGIN": 329,
+      "BEGIN": 336,
       "BEGIN IMMEDIATE": 127,
-      "COMMIT": 434,
+      "COMMIT": 441,
       "ROLLBACK": 22
+    }
+  },
+  "filtered": {
+    "open:23": {
+      "statements": 11,
+      "sql": "7bd5fb9d90a54147d76764863d72b504998666bf7ad3273e47880ce673a1e0b5",
+      "callOffsets": "7d3e7de4c8fb0b565a12c9242a51eecc0ffbd93c767d98b3242c9b08d54cc280",
+      "openers": [
+        {
+          "index": 1,
+          "method": "open",
+          "ordinal": 1,
+          "after": 0,
+          "archivedIndex": 1
+        }
+      ]
+    },
+    "open:33": {
+      "statements": 245,
+      "sql": "dd9b20b5f35411c11c1b783d34b0ca58fa238ccd15b732720bdd2ffc238cd996",
+      "callOffsets": "8bb1140955c946aa55f8bcabcb8b4d647268a2dcc142362f75856382bb5534f3",
+      "openers": [
+        {
+          "index": 1,
+          "method": "open",
+          "ordinal": 1,
+          "after": 0,
+          "archivedIndex": 1
+        }
+      ]
+    },
+    "open:52": {
+      "statements": 180,
+      "sql": "169172c8f1ceb755e926bd0e2828f5b09e6b8254df46fe44382bc966f811e56c",
+      "callOffsets": "6ee338b1c6d117707166692d88d52e9b6f0390e8189bc8f2af1147b7b3f83748",
+      "openers": [
+        {
+          "index": 1,
+          "method": "open",
+          "ordinal": 1,
+          "after": 0,
+          "archivedIndex": 1
+        }
+      ]
+    },
+    "open:53": {
+      "statements": 318,
+      "sql": "e8b265763b25dbf6b9e480673d64d74a407b7fa6f2fa395c16b0863280abaadb",
+      "callOffsets": "1a1f4d72c775304451a791d89a4d512e62b630b8e8925c814602eb5276c7c38d",
+      "openers": [
+        {
+          "index": 1,
+          "method": "open",
+          "ordinal": 1,
+          "after": 0,
+          "archivedIndex": 1
+        }
+      ]
+    },
+    "workload:23": {
+      "statements": 3879,
+      "sql": "cb532597332fcecfa0481531c5842d98ce239b133749975e034a2a676d3562f2",
+      "callOffsets": "0c6a44edcd8303b1c8edadc97f1b2975a284fee8244462fa3d89a81849930c30",
+      "openers": [
+        {
+          "index": 1,
+          "method": "open",
+          "ordinal": 1,
+          "after": 0,
+          "archivedIndex": 1
+        }
+      ]
+    },
+    "workload:33": {
+      "statements": 11337,
+      "sql": "c2c6892c23c3ecc43cd6d6c8d745da3c25e80de95375fb0f54405ffc9893801b",
+      "callOffsets": "83309cd906ae2b3def74294a14a27fd9eeef4d667818bf6cee11b713c34bdd2f",
+      "openers": [
+        {
+          "index": 1,
+          "method": "open",
+          "ordinal": 1,
+          "after": 0,
+          "archivedIndex": 1
+        },
+        {
+          "index": 9669,
+          "method": "openRawCaptureCore",
+          "ordinal": 1,
+          "after": 0,
+          "archivedIndex": 9669
+        }
+      ]
+    },
+    "workload:52": {
+      "statements": 8658,
+      "sql": "346011df97482a2162c67dfaacd7961f150471a59cf628456b813e39af4d864b",
+      "callOffsets": "b9c2f6f2d845b376b522b2038fabe13c322fd69644b3731c6c80b43ab1e71297",
+      "openers": [
+        {
+          "index": 1,
+          "method": "open",
+          "ordinal": 1,
+          "after": 0,
+          "archivedIndex": 1
+        }
+      ]
+    },
+    "workload:53": {
+      "statements": 20660,
+      "sql": "087295cac0fe9988a154e05a2675166d3016a00bd907aefb2094fb7eaaa21a96",
+      "callOffsets": "fd74bf8b78cd80f363e88359de8c0d701d0b89f6ac341c2fd6dfbfc464cd9621",
+      "openers": [
+        {
+          "index": 1,
+          "method": "open",
+          "ordinal": 1,
+          "after": 0,
+          "archivedIndex": 1
+        },
+        {
+          "index": 15652,
+          "method": "openRawCaptureCore",
+          "ordinal": 1,
+          "after": 0,
+          "archivedIndex": 15662
+        }
+      ]
+    }
+  },
+  "rawArchive": {
+    "open:23": {
+      "statements": 11,
+      "sql": "7bd5fb9d90a54147d76764863d72b504998666bf7ad3273e47880ce673a1e0b5",
+      "callOffsets": "7d3e7de4c8fb0b565a12c9242a51eecc0ffbd93c767d98b3242c9b08d54cc280"
+    },
+    "open:33": {
+      "statements": 245,
+      "sql": "dd9b20b5f35411c11c1b783d34b0ca58fa238ccd15b732720bdd2ffc238cd996",
+      "callOffsets": "8bb1140955c946aa55f8bcabcb8b4d647268a2dcc142362f75856382bb5534f3"
+    },
+    "open:52": {
+      "statements": 180,
+      "sql": "169172c8f1ceb755e926bd0e2828f5b09e6b8254df46fe44382bc966f811e56c",
+      "callOffsets": "6ee338b1c6d117707166692d88d52e9b6f0390e8189bc8f2af1147b7b3f83748"
+    },
+    "open:53": {
+      "statements": 318,
+      "sql": "e8b265763b25dbf6b9e480673d64d74a407b7fa6f2fa395c16b0863280abaadb",
+      "callOffsets": "1a1f4d72c775304451a791d89a4d512e62b630b8e8925c814602eb5276c7c38d"
+    },
+    "workload:23": {
+      "statements": 3867,
+      "sql": "afcf18099c971d587be29bd56825f2b0340e106300d17f3b8d3c49d76d209f1d",
+      "callOffsets": "3d7d0187b386dd2fafa2db91d8b6ca2ec4bcfbf16f99f79a53944ecd1b356005"
+    },
+    "workload:33": {
+      "statements": 11326,
+      "sql": "e28c5325046d654f15d58984c5ce30e9228872ac1b650233f9cf77f8c2583502",
+      "callOffsets": "137e0437a1ba1283369b051a963a256803cd90e3975f6d7caf5e802811296554"
+    },
+    "workload:52": {
+      "statements": 8660,
+      "sql": "8fd8df620e85f67a17e4f6c6cbac255be5e976ef5f575e95539192e74ac7f7d8",
+      "callOffsets": "6642d0bb61c9b3b21941b4b7bc97a1962c060a15daba0c8bf5a898a9f04d31f0"
+    },
+    "workload:53": {
+      "statements": 20693,
+      "sql": "6d12abc0f89d04883be41216e829200e7603f5922803ccb40eceaaeaf7d0f8aa",
+      "callOffsets": "36d5fbee799ac526591d61eb385a38be5956f0ec2a8108e3a951956dee31d2bd"
     }
   }
 }
