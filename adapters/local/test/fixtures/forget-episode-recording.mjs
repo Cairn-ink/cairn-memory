@@ -36,7 +36,7 @@ const reads2 = {
 
 const reads3 = {
   "get": "ok", // successful post-read; recorded
-  "list": "revision_conflict", // pre-existing refusal now reachable; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "ok", // successful post-read; recorded
   "listEpisodes[receipt]": "ok", // successful post-read; recorded
   "getEpisode:source": "episode_not_found", // item withheld
@@ -50,7 +50,7 @@ const reads3 = {
 
 const reads4 = {
   "get": "memory_not_found", // item withheld
-  "list": "revision_conflict", // pre-existing refusal now reachable; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "ok", // successful post-read; recorded
   "listEpisodes[receipt]": "ok", // successful post-read; recorded
   "getEpisode:source": "episode_not_found", // item withheld
@@ -64,7 +64,7 @@ const reads4 = {
 
 const reads5 = {
   "get": "ok", // main's outcome; reported
-  "list": "revision_conflict", // main's outcome; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "ok", // main's outcome; reported
   "listEpisodes[receipt]": "ok", // main's outcome; reported
   "getEpisode:independent": "ok", // main's outcome; reported
@@ -77,7 +77,7 @@ const reads5 = {
 
 const reads6 = {
   "get": "memory_not_found", // item withheld
-  "list": "revision_conflict", // main's outcome; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "ok", // main's outcome; reported
   "listEpisodes[receipt]": "ok", // main's outcome; reported
   "getEpisode:independent": "ok", // main's outcome; reported
@@ -90,7 +90,7 @@ const reads6 = {
 
 const reads7 = {
   "get": "ok", // main's outcome; reported
-  "list": "revision_conflict", // main's outcome; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "ok", // main's outcome; reported
   "listEpisodes[receipt]": "ok", // main's outcome; reported
   "recall[default]": "ok", // main's outcome; reported
@@ -102,7 +102,7 @@ const reads7 = {
 
 const reads8 = {
   "get": "memory_not_found", // item withheld
-  "list": "revision_conflict", // main's outcome; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "ok", // main's outcome; reported
   "listEpisodes[receipt]": "ok", // main's outcome; reported
   "recall[default]": "ok", // main's outcome; reported
@@ -174,7 +174,7 @@ const reads12 = {
 
 const reads13 = {
   "get": "ok", // successful post-read; recorded
-  "list": "revision_conflict", // pre-existing refusal now reachable; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "conversation_deleted", // pre-existing refusal now reachable; reported
   "listEpisodes[receipt]": "conversation_deleted", // pre-existing refusal now reachable; reported
   "getEpisode:source": "episode_not_found", // item withheld
@@ -190,7 +190,7 @@ const reads13 = {
 
 const reads14 = {
   "get": "memory_not_found", // item withheld
-  "list": "revision_conflict", // pre-existing refusal now reachable; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "conversation_deleted", // pre-existing refusal now reachable; reported
   "listEpisodes[receipt]": "conversation_deleted", // pre-existing refusal now reachable; reported
   "getEpisode:source": "episode_not_found", // item withheld
@@ -236,7 +236,7 @@ const reads16 = {
 
 const reads17 = {
   "get": "ok", // successful post-read; recorded
-  "list": "revision_conflict", // pre-existing refusal now reachable; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "ok", // successful post-read; recorded
   "listEpisodes[receipt]": "ok", // successful post-read; recorded
   "getEpisode:source": "episode_not_found", // item withheld
@@ -251,7 +251,7 @@ const reads17 = {
 
 const reads18 = {
   "get": "memory_not_found", // item withheld
-  "list": "revision_conflict", // pre-existing refusal now reachable; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "ok", // successful post-read; recorded
   "listEpisodes[receipt]": "ok", // successful post-read; recorded
   "getEpisode:source": "episode_not_found", // item withheld
@@ -278,7 +278,7 @@ const reads22 = {
 
 const reads23 = {
   "get": "ok", // successful post-read; recorded
-  "list": "revision_conflict", // pre-existing refusal now reachable; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "ok", // successful post-read; recorded
   "listEpisodes[receipt]": "ok", // successful post-read; recorded
   "getEpisode:source": "episode_not_found", // item withheld
@@ -293,7 +293,7 @@ const reads23 = {
 
 const reads24 = {
   "get": "memory_not_found", // item withheld
-  "list": "revision_conflict", // pre-existing refusal now reachable; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "ok", // successful post-read; recorded
   "listEpisodes[receipt]": "ok", // successful post-read; recorded
   "getEpisode:source": "episode_not_found", // item withheld
@@ -405,7 +405,7 @@ const reads31 = {
 
 const reads32 = {
   "get": "ok", // successful post-read; recorded
-  "list": "revision_conflict", // pre-existing refusal now reachable; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "conversation_deleted", // pre-existing refusal now reachable; reported
   "listEpisodes[receipt]": "conversation_deleted", // pre-existing refusal now reachable; reported
   "getEpisode:source": "episode_not_found", // item withheld
@@ -421,7 +421,7 @@ const reads32 = {
 
 const reads33 = {
   "get": "memory_not_found", // item withheld
-  "list": "revision_conflict", // pre-existing refusal now reachable; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "conversation_deleted", // pre-existing refusal now reachable; reported
   "listEpisodes[receipt]": "conversation_deleted", // pre-existing refusal now reachable; reported
   "getEpisode:source": "episode_not_found", // item withheld
