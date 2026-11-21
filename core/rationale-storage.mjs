@@ -154,9 +154,9 @@ export function createRationaleStorage({ db, currentRow, readSourceEvidence, epo
       return { receiptIds: receiptIds(evidence), project: withheld => bounded(project(ns, evidence, withheld)) };
   }
 
-  function inspectInside(ns, ref, view) {
+  function inspectInside(ns, ref, view, withheld) {
     const inspection = prepareInspectionInside(ns, ref, view);
-    return inspection.project(withheldStoredReceiptIdsInside(db, ns, inspection.receiptIds));
+    return inspection.project(withheld ?? withheldStoredReceiptIdsInside(db, ns, inspection.receiptIds));
   }
 
   function project(ns, value, withheld = withheldStoredReceiptIdsInside(db, ns, receiptIds(value))) {

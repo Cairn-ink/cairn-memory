@@ -5,7 +5,7 @@ import { registerContentWriteBoundary } from './content-write-context.mjs';
 import { contentScopeEpochGuard, assertContentOutput, contentReceiptCount, assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
 import { receiptEventTimeEnabled, cachedContentLayout, installedContentLayout, checkInstalledContentSafety } from './content-safety-schema.mjs';
 import { writeContentSuppressionInside, suppressReceiptsInside, withContentSuppressionReadInside, requireSuppressionTransaction, allocateContentKey, contentSuppressionReasonInside, memoryCorrectionDenialsInside, contentSuppressionRequestFenceInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, hasContentSuppressionRequestInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
-import { contentReadSafety, memoryContentIdentity, receiptReadSafety, anchoredReadSafety, createContentReadMemo, withheldReceiptIdsInside, withheldStoredReceiptIdsInside, withheldReceiptPageInside } from './content-safety.mjs';
+import { contentReadSafety, memoryContentIdentity, receiptReadSafety, anchoredReadSafety, createContentReadMemo, withheldReceiptIdsInside, withheldStoredReceiptIdsInside, withheldReceiptPageInside, withheldMemoryReceiptIdsInside } from './content-safety.mjs';
 import { roleProfileOptions } from './role-profile-input.mjs';
 import { createRoleProfileStorage } from './role-profile-storage.mjs';
 import { assetOptions } from './asset-input.mjs';
@@ -627,9 +627,11 @@ export function createMemoryRuntime(input, internal) {
       sql += " ORDER BY created_at ASC, id ASC LIMIT ?";
       params.push(count + 1);
       const original = db.prepare(sql).all(...params);
-      const withheld = withheldReceiptIdsInside(db, ns, original);
+      const withheld = original.length === count + 1 ? withheldMemoryReceiptIdsInside(db, [[ns, id]])
+        : withheldReceiptIdsInside(db, ns, original);
       const procedural = safeProcedural(ns, id);
-      const visible = withheld.size ? fillReceiptPage(ns, id, original, withheld, count + 1).visible : original;
+      const visible = original.some(receipt => withheld.has(receipt.id))
+        ? fillReceiptPage(id, original, withheld, count + 1).visible : original;
       const scanned = visible.slice(0, count);
       return { receiptComplete: visible.length <= count, receiptScan: scanned.at(-1)?.cursor_row, memory: { ...metadataDto(memory), content: memory.content },
         receipts: safeReceipts(ns, scanned, undefined, new Set()).map(receipt => ({ id: receipt.id, client: receipt.client,
@@ -651,9 +653,9 @@ export function createMemoryRuntime(input, internal) {
     return { ...supersession, receiptIds: receiptIds.filter(id => !withheld.has(id)), evidenceAvailable: false };
   }
 
-  function safeQualification(ns, row) {
+  function safeQualification(ns, row, withheld) {
     const value = qualificationStorage.inspect(row);
-    return value && !anchoredReadSafety(db, { namespace: ns, memoryId: row.id, anchors: value.anchors, project: true }).allowed ? null : value;
+    return value && !anchoredReadSafety(db, { namespace: ns, memoryId: row.id, anchors: value.anchors, project: true, withheld }).allowed ? null : value;
   }
   function safeProcedural(ns, id) {
     const value = proceduralStorage.inspect(id);
@@ -662,19 +664,19 @@ export function createMemoryRuntime(input, internal) {
   function safeReceipts(ns, receipts, memo = createContentReadMemo(db), withheld = withheldReceiptIdsInside(db, ns, receipts)) {
     return receipts.filter(receipt => receiptReadSafety(db, { namespace: ns, receipt, memo, withheld }).allowed);
   }
-  function fillReceiptPage(ns, id, original, withheld, limit, recent = false) {
+  function fillReceiptPage(id, original, withheld, limit, recent = false) {
     const visible = [], offsets = new Map();
     let batch = original, physical = 0, moreVisible = false;
-    const add = (rows, denied) => {
+    const add = rows => {
       for (const receipt of rows) {
         physical++;
-        if (denied.has(receipt.id)) continue;
+        if (withheld.has(receipt.id)) continue;
         if (visible.length >= limit) { moreVisible = true; continue; }
         visible.push(receipt);
         offsets.set(receipt.id, physical);
       }
     };
-    add(batch, withheld);
+    add(batch);
     const direction = recent ? '<' : '>';
     const order = recent ? 'DESC' : 'ASC';
     while (batch.length === limit && visible.length < limit) {
@@ -682,18 +684,21 @@ export function createMemoryRuntime(input, internal) {
       batch = db.prepare(`SELECT rowid AS cursor_row,* FROM receipts WHERE memory_id=?
         AND (created_at ${direction} ? OR (created_at=? AND id>?)) ORDER BY created_at ${order},id ASC LIMIT ?`)
         .all(id, after.created_at, after.created_at, after.id, limit);
-      const denied = withheldReceiptIdsInside(db, ns, batch);
-      add(batch, denied);
+      add(batch);
     }
     return { visible, offsets, physical, complete: batch.length < limit && !moreVisible };
   }
   const receiptPageOffsets = new WeakMap();
-  function receiptPage(ns, row, offset, count, recent = false) {
+  function receiptPage(ns, row, offset, count, recent = false, withheld) {
     const original = db.prepare(`SELECT * FROM receipts WHERE memory_id=?
       ORDER BY created_at ${recent ? 'DESC' : 'ASC'},id LIMIT ? OFFSET ?`).all(row.id, count, offset);
-    const memo = createContentReadMemo(db), withheld = withheldReceiptIdsInside(db, ns, original);
-    const page = withheld.size ? fillReceiptPage(ns, row.id, original, withheld, count, recent) : null;
-    const visible = page?.visible ?? original;
+    const memo = createContentReadMemo(db);
+    withheld ??= original.length > 0 && original.length === count
+      ? withheldMemoryReceiptIdsInside(db, [[ns, row.id]]) : withheldReceiptIdsInside(db, ns, original);
+    const page = original.some(receipt => withheld.has(receipt.id))
+      ? fillReceiptPage(row.id, original, withheld, count, recent) : null;
+    // Refill rows carry a physical cursor column outside the receipt record.
+    const visible = page ? page.visible.map(({ cursor_row, ...receipt }) => receipt) : original;
     const rows = safeReceipts(ns, visible, memo, new Set());
     if (!row || !contentReadSafety(db, { identity, namespace: ns, intent: 'history', memo,
       ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision }, receipts: rows }).allowed) fail('revision_conflict');
@@ -702,13 +707,13 @@ export function createMemoryRuntime(input, internal) {
     const end = offset + (page?.physical ?? original.length);
     const offsets = rows.map(receipt => offset + (page?.offsets.get(receipt.id) ?? original.indexOf(receipt) + 1));
     if (page?.complete && offsets.length) offsets[offsets.length - 1] = end;
-    receiptPageOffsets.set(result, { offsets, end, withheld: withheld.size > 0 });
+    receiptPageOffsets.set(result, { offsets, end, withheld: page !== null });
     return result;
   }
-  function receiptPrefix(ns, row, offset, count) { return receiptPage(ns, row, offset, count); }
+  function receiptPrefix(ns, row, offset, count, withheld) { return receiptPage(ns, row, offset, count, false, withheld); }
 
   // A capped recall receipt list: most recent first, ties broken by ID.
-  function receiptRecent(ns, row, count) { return receiptPage(ns, row, 0, count, true); }
+  function receiptRecent(ns, row, count, withheld) { return receiptPage(ns, row, 0, count, true, withheld); }
 
   // Read before ranking only; the final recall snapshot rereads the same list.
   function recentReceipts(ns, ref, count) {
@@ -720,26 +725,20 @@ export function createMemoryRuntime(input, internal) {
     }, undefined, { deferred: true });
   }
 
-  function prepareSourceEvidence(row, complete) {
-    const original = db.prepare('SELECT * FROM receipts WHERE memory_id = ? ORDER BY created_at, id LIMIT CAST(? AS INTEGER)').all(row.id, 101);
+  function readSourceEvidence(row, withheld) {
+    const original = db.prepare('SELECT * FROM receipts WHERE memory_id = ? ORDER BY created_at, id LIMIT 101').all(row.id);
     const ns = { ownerId: row.owner_id, scope: row.scope, projectId: row.project_id || null };
     qualificationStorage.inspect(row);
     const full = sourceEvidence(row, original, detailDto(row).receiptCount, receiptKey);
     const memo = createContentReadMemo(db);
-    const retained = complete ? original : safeReceipts(ns, original, memo, new Set());
-    if (!complete && !retained.length) fail('source_unavailable');
-    return { receiptIds: retained.map(receipt => receipt.id), project(withheld) {
-      const receipts = retained.filter(receipt => !withheld?.has(receipt.id));
-      const ids = new Set(receipts.map(receipt => receipt.id));
-      const evidence = complete ? full : { ...full, receipts: full.receipts.filter(receipt => ids.has(receipt.id)), receiptCount: retained.length };
-      if (!contentReadSafety(db, { identity, namespace: ns, intent: 'history', memo, ref: { type: 'memory', namespace: ns,
-        memoryId: row.id, revision: row.revision }, receipts }).allowed) fail('revision_conflict');
-      return evidence;
-    } };
-  }
-
-  function readSourceEvidence(row) {
-    return prepareSourceEvidence(row, true).project();
+    const retained = withheld ? safeReceipts(ns, original, memo, new Set()) : original;
+    if (withheld && !retained.length) fail('source_unavailable');
+    const receipts = withheld?.size ? retained.filter(receipt => !withheld.has(receipt.id)) : retained;
+    const ids = new Set(receipts.map(receipt => receipt.id));
+    const evidence = withheld ? { ...full, receipts: full.receipts.filter(receipt => ids.has(receipt.id)), receiptCount: retained.length } : full;
+    if (!contentReadSafety(db, { identity, namespace: ns, intent: 'history', memo, ref: { type: 'memory', namespace: ns,
+      memoryId: row.id, revision: row.revision }, receipts }).allowed) fail('revision_conflict');
+    return evidence;
   }
 
   function safeMemory(ns, row, intent = 'current', expectedMemoryIdentity, method = 'retrieval') {
@@ -775,36 +774,15 @@ export function createMemoryRuntime(input, internal) {
   }
 
   function readUsageEvidencePage(rows, candidates, mode, revalidate = false) {
-    const rationaleMode = mode === 'rationale-evidence';
-    const pending = [], markerPages = [];
-    let preparationFailure;
-    // Stage at most the successful prefix. Project it in the original order so
-    // a failed comparison or source safety check still takes precedence.
-    try {
-      for (const [index, row] of rows.entries()) {
-        const { namespace } = candidates[index];
-        const source = prepareSourceEvidence(row, false);
-        const entry = { source };
-        pending.push(entry);
-        markerPages.push([namespace, source.receiptIds]);
-        if (rationaleMode) {
-          entry.rationale = rationaleStorage.prepareInspectionInside(namespace, { memoryId: row.id, revision: row.revision });
-          markerPages.push([namespace, entry.rationale.receiptIds]);
-        }
-      }
-    } catch (error) { preparationFailure = { error }; }
-    const withheld = withheldReceiptPageInside(db, markerPages);
-    const sources = pending.map(({ source, rationale }, index) => {
-      const evidence = source.project(withheld);
-      if (rationaleMode) {
-        if (!rationale) throw preparationFailure.error;
-        evidence.rationale = rationale.project(withheld);
-      }
+    const rationale = mode === 'rationale-evidence';
+    const withheld = withheldMemoryReceiptIdsInside(db, rows.map(({ id }, index) => [candidates[index].namespace, id]), rationale);
+    return rows.map((row, index) => {
+      const evidence = readSourceEvidence(row, withheld);
+      if (rationale) evidence.rationale = rationaleStorage.inspectInside(candidates[index].namespace,
+        { memoryId: row.id, revision: row.revision }, undefined, withheld);
       if (revalidate && JSON.stringify(evidence) !== JSON.stringify(candidates[index].sourceEvidence)) fail('revision_conflict');
       return evidence;
     });
-    if (preparationFailure) throw preparationFailure.error;
-    return sources;
   }
 
   const sourceSnapshotIdentities = new WeakMap();
@@ -878,12 +856,14 @@ export function createMemoryRuntime(input, internal) {
         const sources = readUsageEvidencePage(rows, candidates, contextMode, true);
         return selected.map(index => sources[index]);
       }
-      const qualifications = includeQualification ? rows.map((row, index) => safeQualification(candidates[index].namespace, row)) : null;
+      const receiptIndexes = includeQualification ? rows.map((_, index) => index) : selected.filter(index => candidates[index].receiptLimit > 0);
+      const withheld = withheldMemoryReceiptIdsInside(db, receiptIndexes.map(index => [candidates[index].namespace, rows[index].id]));
+      const qualifications = includeQualification ? rows.map((row, index) => safeQualification(candidates[index].namespace, row, withheld)) : null;
       return selected.map((index) => {
         const memory = detailDto(rows[index]);
         const capped = candidates[index].receiptOrder === 'recent';
-        const receipts = capped ? receiptRecent(candidates[index].namespace, rows[index], candidates[index].receiptLimit)
-          : receiptPrefix(candidates[index].namespace, rows[index], 0, candidates[index].receiptLimit);
+        const receipts = capped ? receiptRecent(candidates[index].namespace, rows[index], candidates[index].receiptLimit, withheld)
+          : receiptPrefix(candidates[index].namespace, rows[index], 0, candidates[index].receiptLimit, withheld);
         const delivered = receipts.length || !receiptPageOffsets.get(receipts).withheld ? receipts : [{
           id: 'withheld', client: 'withheld', sessionId: 'withheld', eventId: 'withheld',
           role: 'user', excerpt: '[source not available]', createdAt: memory.createdAt }];

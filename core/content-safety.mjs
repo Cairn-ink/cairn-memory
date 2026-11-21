@@ -114,7 +114,7 @@ export function receiptReadSafety(db, options) {
   });
 }
 
-export function anchoredReadSafety(db, { namespace, memoryId, anchors, memo = createContentReadMemo(db), project = false }) {
+export function anchoredReadSafety(db, { namespace, memoryId, anchors, memo = createContentReadMemo(db), project = false, withheld }) {
   const receipts = [];
   for (const anchor of anchors) {
     const receipt = memo.db.prepare('SELECT * FROM receipts WHERE memory_id=? AND id=?').get(memoryId, anchor.receiptId);
@@ -124,7 +124,8 @@ export function anchoredReadSafety(db, { namespace, memoryId, anchors, memo = cr
     if (!result.allowed) return result;
     receipts.push(receipt);
   }
-  return project && withheldReceiptIdsInside(db, namespace, receipts).size ? denied('source_withheld') : allowed;
+  return project && (withheld ? receipts.some(receipt => withheld.has(receipt.id)) :
+    withheldReceiptIdsInside(db, namespace, receipts).size) ? denied('source_withheld') : allowed;
 }
 
 function memorySuppression(db, ns, row, boundRevision) {
@@ -448,6 +449,39 @@ CROSS JOIN json_each(receipt_marker_keys(r.receipt_key,r.client,r.session_id,r.e
 CROSS JOIN suppressed s ON s.owner_id=m.owner_id AND s.scope=m.scope AND s.project_id=m.project_id AND s.fingerprint=k.value
 WHERE m.owner_id=json_extract(page.value,'$[0]') AND m.scope=json_extract(page.value,'$[1]')
   AND m.project_id=json_extract(page.value,'$[2]')`).all(JSON.stringify(chunks)).map(row => row.id));
+}
+
+// Keyset refills and final delivery select receipts in their original order.
+// Resolve marker hits up front for the owning memories in the same snapshot.
+export function withheldMemoryReceiptIdsInside(db, memories, rationale = false) {
+  if (!memories.length) return new Set();
+  if (!db.isTransaction) throw Object.assign(new Error('Receipt projection requires a read snapshot'), { code: 'storage_error' });
+  bindReceiptMarkerKeys(db);
+  const requested = memories.map(([ns, id]) => [...boundary(ns), id]);
+  return new Set(db.prepare(`WITH marker_selection AS MATERIALIZED (
+  SELECT json_extract(value,'$[0]') AS owner_id, json_extract(value,'$[1]') AS scope,
+    json_extract(value,'$[2]') AS project_id, json_extract(value,'$[3]') AS id
+  FROM json_each(?) requested
+  WHERE EXISTS(SELECT 1 FROM suppressed
+    WHERE owner_id=json_extract(requested.value,'$[0]') AND scope=json_extract(requested.value,'$[1]')
+      AND project_id=json_extract(requested.value,'$[2]') AND fingerprint GLOB 'rs1:*')
+), marker_memories AS (
+  SELECT owner_id,scope,project_id,id FROM marker_selection${rationale ? `
+  UNION
+  SELECT root.owner_id,root.scope,root.project_id,edge.from_id
+  FROM marker_selection root JOIN rationale_edges edge ON edge.to_id=root.id
+    AND edge.relation IN ('supports-decision','challenges-premise')
+  UNION
+  SELECT root.owner_id,root.scope,root.project_id,challenge.from_id
+  FROM marker_selection root JOIN rationale_edges support ON support.to_id=root.id AND support.relation='supports-decision'
+  JOIN rationale_edges challenge ON challenge.to_id=support.from_id AND challenge.relation='challenges-premise'` : ''}
+)
+SELECT r.id FROM marker_memories wanted
+CROSS JOIN memories m ON m.id=wanted.id AND m.owner_id=wanted.owner_id AND m.scope=wanted.scope AND m.project_id=wanted.project_id
+CROSS JOIN receipts r ON r.memory_id=m.id
+CROSS JOIN json_each(receipt_marker_keys(r.receipt_key,r.client,r.session_id,r.event_id,r.role)) k
+CROSS JOIN suppressed s ON s.owner_id=m.owner_id AND s.scope=m.scope AND s.project_id=m.project_id AND s.fingerprint=k.value`)
+    .all(JSON.stringify(requested)).map(row => row.id));
 }
 
 export function withheldEvidenceInside(db, ns, ids, storedReceiptIds = [], memoryIds = [], perMemory = 17) {
