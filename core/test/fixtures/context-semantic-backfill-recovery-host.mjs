@@ -17,7 +17,7 @@ import { dollars, usd } from '../../context-semantic-input.mjs';
 
 export { ns, ok };
 export const capability='context-semantic-backfill-recovery-v1', method='grantOwnerBackfillRecovery';
-export const checkpoint={beforePrepare:1,afterPrepare:2,afterNative:3,afterSeal:4,afterAudit:5,holdPrepare:6,holdAudit:7,holdLoad:8};
+export const checkpoint={beforePrepare:1,afterPrepare:2,afterNative:3,afterSeal:4,afterAudit:5,holdPrepare:6,holdAudit:7,holdLoad:8,throwPrepare:9,throwSeal:10};
 const index={checkpoint:0,sequence:1,reached:2,resume:3,revoked:4,approval:5,expiry:6,auditDown:7,disposed:8,disabled:9};
 const corpus=['synthetic alpha','synthetic beta'];
 export const balance='0.00000122';
@@ -54,6 +54,10 @@ export async function createContextReadHost(c) {
       const mode=Atomics.load(control,index.checkpoint);
       if(next.pending&&mode===checkpoint.beforePrepare||!next.pending&&mode===checkpoint.afterNative)process.exit(1);
       const changed=base.compareAndSwap(previous,next);
+      if(changed&&(next.pending&&mode===checkpoint.throwPrepare||!next.pending&&mode===checkpoint.throwSeal)) {
+        Atomics.store(control,index.checkpoint,0);
+        throw Error('synthetic anchor I/O fault');
+      }
       if(changed&&(next.pending&&mode===checkpoint.afterPrepare||!next.pending&&mode===checkpoint.afterSeal))process.exit(1);
       if(changed&&next.pending&&mode===checkpoint.holdPrepare)await hold();
       return changed;
@@ -93,7 +97,7 @@ export async function until(predicate) {
   const cutoff=performance.now()+4000;
   while(!predicate()){assert.ok(performance.now()<cutoff,'synthetic checkpoint was reached');await delay(2);}
 }
-export async function scenario(t,{base='5',enabled=true,journal='DELETE',noPort=false,safety=false}={}) {
+export async function scenario(t,{base='5',enabled=true,journal='DELETE',noPort=false,safety=false,grantMaximum='0.5',lifetimeMaximum='0.75'}={}) {
   const f=fixture(t,safety?{coreOptions:{contentSafety:'s2h-v1'}}:undefined);
   const memories=corpus.map(text=>f.admit(text));f.core.close();
   const state=new Int32Array(new SharedArrayBuffer(64));
@@ -112,7 +116,7 @@ export async function scenario(t,{base='5',enabled=true,journal='DELETE',noPort=
     serviceId:randomUUID(),credentialBindingId:randomUUID(),credentialDigest:credentialDigest(token),credentialExpiresUtcMs:null};
   const admin={kind:'backfill-recovery-service',version:1,...identity,ownerId,ledgerEpoch:1,bindingRevision:1,methods:[method],
     serviceId:randomUUID(),credentialBindingId:randomUUID(),credentialDigest:credentialDigest(adminToken),expiresUtcMs:Date.now()+60000};
-  const policy={revision:1,maxGrantUnits:'500000000000',maxLifetimeGrantUnits:'750000000000'};
+  const policy={revision:1,maxGrantUnits:encoder(grantMaximum),maxLifetimeGrantUnits:encoder(lifetimeMaximum)};
   const now=Date.now(), priceTable={authorityId:'synthetic-price',revision:'one',sequence:1,effectiveFromUtcMs:now-1000,
     effectiveUntilUtcMs:now+600000,usdPerMillionInputTokens:{'text-embedding-3-small':'0.02'}};
   let coordinator, maintainer;
@@ -122,6 +126,7 @@ export async function scenario(t,{base='5',enabled=true,journal='DELETE',noPort=
   const host={moduleUrl:import.meta.url,configuration:{semanticServiceBinding:binding,priceTable,anchorPath,state:state.buffer,
     admin,control:control.buffer,approval:approval.buffer,semanticSidecarJournalMode:journal,noPort}};
   const open=(options={})=>{
+    if(options.credentialTtlMs!==undefined)admin.expiresUtcMs=Date.now()+options.credentialTtlMs;
     const cap=options.base??base, recovery={version:1,binding:admin,policy};
     return openContextSemanticCoordinator({version:'context-read-product-p2e-v1',supervisor,ledgerPath,ledgerIdentity:identity,host,
       provider:{provider:'openai',model:'text-embedding-3-small',dimensions:1536,normalization:'l2',requestTimeoutMs:3000,maxBatchDocuments:64},
@@ -135,8 +140,8 @@ export async function scenario(t,{base='5',enabled=true,journal='DELETE',noPort=
     semanticConfig:{version:'context-read-product-p2e-v1',coordinator},
     host:{moduleUrl:import.meta.url,configuration:{state:state.buffer,serviceBinding:{kind:'service',ownerId,serviceId:randomUUID(),
       credentialBindingId:randomUUID(),credentialExpiresUtcMs:null,credentialDigest:credentialDigest(maintainerCredential),namespaces:{readSet:[ns],ownerCoverage:coverage},issuedAt:0}}}});
-  const refresh=(intent='current',mode='embeddings')=>maintainer.refreshContextIndex({...target,intent,mode,budget:{maxItems:64,maxMs:4500,
-    ...(mode==='embeddings'?{maxUsd:'0.5'}:{})}},maintainerCredential);
+  const refresh=(intent='current',mode='embeddings',maxUsd='0.5')=>maintainer.refreshContextIndex({...target,intent,mode,budget:{maxItems:64,maxMs:4500,
+    ...(mode==='embeddings'?{maxUsd}:{})}},maintainerCredential);
   coordinator=await open();
   const set=(semantic,expectedRevision)=>coordinator.setOwnerSemantic({ownerId,semantic,expectedRevision},token);
   ok(await set(true,0));
@@ -152,7 +157,7 @@ export async function scenario(t,{base='5',enabled=true,journal='DELETE',noPort=
     dbWork(anchorPath,db=>db.prepare('UPDATE anchors SET anchor=?').run(canonicalJson({...anchor(),stateDigest:hash})));
   }
   function latch(amount='5') {
-    seed(s=>{s.blocked=true;s.reservations[randomUUID()]={kind:'refresh',phase:'backfill',status:'unknown',items:1,day:0,cost:encoder(amount)};});
+    seed(s=>{s.blocked=true;s.reservations[randomUUID()]={kind:'refresh',phase:'backfill',status:'settled',items:1,day:0,cost:encoder(amount)};});
   }
   function intent(extra={}) {
     const s=read();
@@ -195,7 +200,8 @@ export async function scenario(t,{base='5',enabled=true,journal='DELETE',noPort=
       db.prepare('UPDATE validation_records SET record=? WHERE generation=?').run(signedRecord(secret,'validation',record),g.id);
     });
   }
-  return {f,memories,state,get coordinator(){return coordinator;},row,read,anchor,audits,seed,latch,intent,approve,arm,restart,refresh,sidecar,overCapacity,set,
+  return {f,memories,state,get coordinator(){return coordinator;},get credentialExpiresUtcMs(){return admin.expiresUtcMs;},
+    row,read,anchor,audits,seed,latch,intent,approve,arm,restart,refresh,sidecar,overCapacity,set,
     settings:(key,value)=>value===undefined?Atomics.load(control,index[key]):Atomics.store(control,index[key],value),unpause,
     grant:async (input,credential=adminToken,options)=>{assert.equal(typeof coordinator[method],'function','the recovery capability is negotiated');return coordinator[method](input,credential,options);},
     ordinary:token,status:async()=>ok(await coordinator.getOwnerSemanticStatus({ownerId},token)),

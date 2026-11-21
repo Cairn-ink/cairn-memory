@@ -80,3 +80,27 @@ test('the journal retains all 32 events and refuses any further allowance',async
   assert.deepEqual(s.row(),row);
   assert.equal(s.audits().length,32);
 });
+
+test('R06 the full approved increment can raise the effective ceiling above one million USD',async t=>{
+  const s=await scenario(t,{grantMaximum:'1000000',lifetimeMaximum:'1000000'});s.latch();
+  const input=s.intent({additionalUsd:'1000000'});s.approve(input);
+  const result=ok(await s.grant(input));
+  assert.equal(result.status,'granted');
+  assert.equal(result.effectiveBackfillUsdLimit,'1000005');
+  await s.restart();
+  assert.equal((await s.status()).refresh.backfillUsdLimit,'1000005');
+});
+
+for(const [stage,committed] of [['Prepare',false],['Seal',true]])test(`R08 uncoded anchor ${stage} faults return index_unavailable and reconcile`,async t=>{
+  const s=await scenario(t);s.latch();
+  const input=s.intent(),before=s.row();s.approve(input);s.arm(checkpoint['throw'+stage],input);
+  assert.equal((await s.grant(input)).error?.code,'index_unavailable');
+  assert.equal(s.row().sequence,before.sequence+(committed?1:0));
+  assert.equal(s.audits().length,0);
+  await s.status();
+  assert.equal(s.anchor().pending,null);
+  const result=ok(await s.grant(input));
+  assert.equal(result.status,committed?'replayed':'granted');
+  assert.equal(result.sequence,before.sequence+1);
+  assert.equal(s.audits().length,1);
+});

@@ -54,6 +54,10 @@ function anchor(value) {
 export function openSemanticLedger({path,identity,authority,portCall,isFenceFailure,protectedRequest,policy,observer}) {
   if (!authority || typeof authority.load !== 'function' || typeof authority.compareAndSwap !== 'function' || typeof authority.listOwners !== 'function') fail('invalid_input');
   const call=(name,args)=>portCall?portCall(authority,name,args):Reflect.apply(authority[name],authority,args);
+  async function recoveryCas(previous,next) {
+    try{return await call('compareAndSwap',[previous,next]);}
+    catch(error){if(typeof error?.code==='string')throw error;unavailable();}
+  }
   const sqlite = policy ?? createProductSqlitePolicy({observer});
   const files = sqlite.files(path), physical = sqliteFileStat(path);
   const native = observer ? observer.invoke('open','connection',()=>new DatabaseSync(path)) : new DatabaseSync(path);
@@ -124,7 +128,7 @@ export function openSemanticLedger({path,identity,authority,portCall,isFenceFail
     // its original post-await recovery bookkeeping and host-call order.
     const early=trackUncertain||protectedRequest?.()===true;
     if(early)onPrepare?.(preparation);
-    if (await call('compareAndSwap',[a,prepared])!==true) unavailable();
+    if (await (trackUncertain?recoveryCas(a,prepared):call('compareAndSwap',[a,prepared]))!==true) unavailable();
     return preparation;
   }
   function commit(preparation,check=()=>{}) {
@@ -154,7 +158,7 @@ export function openSemanticLedger({path,identity,authority,portCall,isFenceFail
         await call('compareAndSwap',[preparation.prepared,preparation.previous]);
       throw error;
     }
-    if(await call('compareAndSwap',[preparation.prepared,sealed])!==true)unavailable();
+    if(await (trackUncertain?recoveryCas(preparation.prepared,sealed):call('compareAndSwap',[preparation.prepared,sealed]))!==true)unavailable();
     return {anchor:sealed,sequence:sealed.sequence,state_digest:sealed.stateDigest,state:next};
   }
   async function seal(preparation,sealed) {

@@ -142,9 +142,9 @@ export function recoveryTicket(value) {
   if (typeof value !== 'string' || !/^[A-Za-z0-9._/-]{1,120}$/.test(value)) fail('invalid_input');
 }
 export function recoveryUnits(value, min = 0n) {
-  if (typeof value !== 'string' || !/^(0|[1-9][0-9]{0,18})$/.test(value)) fail('invalid_input');
+  if (typeof value !== 'string' || !/^(0|[1-9][0-9]*)$/.test(value)) fail('invalid_input');
   const units=BigInt(value);
-  if (units<min || units>usd('1000000')) fail('invalid_input');
+  if (units<min) fail('invalid_input');
   return units;
 }
 export function recoveryBootstrap(value, ordinary) {
@@ -172,6 +172,6 @@ export function backfillRecoveryInput(value) {
   hash(expected.targetSetDigest);hash(expected.embedderDigest);
   if (hasDeadline) deadline(input.deadlineMs);
   const amount=usd(input.additionalUsd);
-  if (amount===0n) fail('invalid_input');
+  if (amount===0n || dollars(amount)!==input.additionalUsd) fail('invalid_input');
   return {...input,additionalUsd:dollars(amount)};
 }

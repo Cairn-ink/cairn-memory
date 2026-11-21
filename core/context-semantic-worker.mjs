@@ -168,10 +168,10 @@ function refreshExposure(state,day) {
   }
   return {itemsCharged,itemsReserved,charged,reserved,lifetimeCharged,lifetimeReserved};
 }
-function snapshot(state) {
+function snapshot(state,metadata) {
   return {policy:state.policy,identity:identityMetadata(),
     blocked:state.blocked,purgePending:['pending','running','failed'].includes(state.purge.state),validationPending:state.validationPending,
-    firstCoverageComplete:state.firstCoverageComplete,targetSetDigest:state.targetSetDigest,providerUnavailable,...(c.backfillRecovery?{backfillCertification:certificationEligible(state)}:{})};
+    firstCoverageComplete:state.firstCoverageComplete,targetSetDigest:state.targetSetDigest,providerUnavailable,...(metadata.maintenance&&certificationEligible(state)?{certificationOnly:true}:{})};
 }
 function identityMetadata() {if(!port)return null;const {id,revision,dimensions,normalization}=port;return {provider:'openai',model:c.provider.model,id,revision,dimensions,normalization};}
 function coverageStatus(s) {
@@ -398,7 +398,7 @@ async function dataCall(message) {
 async function internalCall(message,metadata) {
   const {method,input,operation}=message;within(operation);
   if(metadata.ownerId!==ownerId)fail('authority_required');
-  if(method==='snapshot') {const s=(await current()).state;return {...snapshot(s),identity:identityMetadata()};}
+  if(method==='snapshot') {const s=(await current()).state;return {...snapshot(s,metadata),identity:identityMetadata()};}
   if(method==='embed')return embed(input,operation,metadata);
   if(metadata.pump&&method==='firstCoverage') {
     const s=(await current()).state;return {targetSetDigest:s.targetSetDigest,complete:s.firstCoverageComplete,pending:s.validationPending,...(certificationEligible(s)?{certificationOnly:true}:{})};
@@ -593,7 +593,7 @@ parentPort.on('message',async message=>{
     try{
       outstanding=outstandingState(message);
       checkControlBinding(message);
-      verifyRecords(message.request,message.operation,message.request,operationRecord(message.request,mono(message.operation.enteredMonoNs),deadline(message.input?.budget?.maxMs??message.input?.deadlineMs??5000),1,message.operation.operationId));
+      verifyControlOperation(message);
       sqlite.start(Number(mono(message.operation.operationCutoffMonoNs))/1e6);result=await dataCall(message);
     }catch(error){result=failure(error);}
     recoveryDisables.delete(message.id);
@@ -607,6 +607,14 @@ function checkControlBinding({method,request}) {
   const admin=method===BACKFILL_RECOVERY_METHOD, binding=admin?c.backfillRecovery?.binding:c.binding;
   if(!binding||request.clockDomainId!==c.request.clockDomainId||request.credentialBindingId!==binding.credentialBindingId||
     request.credentialExpiresUtcMs!==(admin?binding.expiresUtcMs:binding.credentialExpiresUtcMs))fail('authority_required');
+}
+function verifyControlOperation({method,request,operation,input}) {
+  const expected=record=>operationRecord(record,mono(operation.enteredMonoNs),deadline(input?.budget?.maxMs??input?.deadlineMs??5000),1,operation.operationId);
+  if(method!==BACKFILL_RECOVERY_METHOD)return verifyRecords(request,operation,request,expected(request));
+  const bounded=expected(request);
+  verifyRecords(request,bounded,request,bounded);
+  const callerDeadline={...request,credentialExpiresUtcMs:null,credentialCutoffMonoNs:null};
+  verifyRecords(callerDeadline,operation,callerDeadline,expected(callerDeadline));
 }
 function trackRecoveryDisable({method,input,id}) {
   if(c.backfillRecovery&&method==='setOwnerSemantic'&&!input.semantic&&lastState?.policy.semantic&&
@@ -636,7 +644,7 @@ function certificationEligible(state) {
     compatibleBackfillBase(state)&&!purgePending(state)&&!outstandingBackfillWork(state)&&identityMetadata());
 }
 function refreshDelivery({state:s},{kind,expected,id,reservationId,op,values}) {
-  const r=s.reservations[reservationId], wantsDrain=kind==='refresh'&&(s.blocked||s.validationPending&&!s.firstCoverageComplete);
+  const r=s.reservations[reservationId], wantsDrain=c.backfillRecovery&&kind==='refresh'&&(s.blocked||s.validationPending&&!s.firstCoverageComplete);
   const drain=wantsDrain&&r?.id===reservationId&&r.kind==='refresh'&&r.status==='settled'&&r.usage==='validated'&&
     r.incarnation===op.operationId&&r.epoch===expected.purgeEpoch&&r.identity===id&&compatibleBackfillBase(s);
   checkState(s,expected,drain);
@@ -671,7 +679,8 @@ function backfillAuthority(message,input) {
     try {
       if(isDeepStrictEqual(boundedData(issued),binding)&&utc()<binding.expiresUtcMs&&
         synchronousRecovery(recoveryAuthority.isCurrent(issued,query))===true&&
-        isDeepStrictEqual(boundedData(issued),binding)&&utc()<binding.expiresUtcMs)return;
+        isDeepStrictEqual(boundedData(issued),binding)&&utc()<binding.expiresUtcMs&&
+        process.hrtime.bigint()<mono(message.request.credentialCutoffMonoNs))return;
     }catch{}
     fail(code);
   }
@@ -707,7 +716,7 @@ function recoveryEvent(state,input,approval,requestDigest) {
   const aggregate=grants.reduce((sum,event)=>sum+BigInt(event.additionalUnits),additional);
   const {lifetimeCharged,lifetimeReserved}=refreshExposure(state,state.dayHighWater);
   if(grants.length>=BACKFILL_RECOVERY_MAX_EVENTS||additional>BigInt(limits.maxGrantUnits)||aggregate>BigInt(limits.maxLifetimeGrantUnits)||
-    next<=lifetimeCharged+lifetimeReserved||next>usd('1000000'))fail('invalid_input');
+    next<=lifetimeCharged+lifetimeReserved)fail('invalid_input');
   const {sequence:previousSequence,...expected}=input.expected;
   return {version:1,grantId:randomUUID(),idempotencyKey:input.idempotencyKey,requestDigest,approvalId:approval.approvalId,
     principalId:approval.principalId,operatorId:approval.operatorId,reason:input.reason,ticket:input.ticket,
@@ -732,6 +741,12 @@ async function grantBackfillRecovery(message) {
     const approval=auth.approval('authority_required');
     if(recovering)fail('read_in_progress');
     checkRecoveryEligibility(s,input);
+    if(Object.values(s.reservations).some(r=>r.status==='unknown')) {
+      let disposed=false;
+      try{disposed=await ledgerPortCall(host.semanticLedgerAuthority,'confirmDisposed',[a.anchor]);}catch{}
+      guard();auth.scope('scope_changed');
+      if(disposed!==true)fail('read_in_progress');
+    }
     const capacity=maintenance.recoveryCapacity(s,guard);
     const event=recoveryEvent(s,input,approval,auth.requestDigest);
     function recheckAuthority() {
@@ -748,7 +763,8 @@ async function grantBackfillRecovery(message) {
       const state=ledger.read(ownerId).state;
       checkRecoveryEligibility(state,input);
       if(maintenance.recoveryCapacity(state,guard)!==capacity)fail('index_unavailable');
-      if(utc()>=approval.expiresUtcMs||utc()>=b.expiresUtcMs)fail('scope_changed');
+      if(utc()>=approval.expiresUtcMs||utc()>=b.expiresUtcMs||
+        process.hrtime.bigint()>=mono(message.request.credentialCutoffMonoNs))fail('scope_changed');
       guard();
     },recheckAuthority,undefined,true);
     lastState=committed.state;gate.publish(lastState);
