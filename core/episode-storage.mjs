@@ -1034,7 +1034,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
   function inspect(ns, input, pages) {
     return transaction(db, () => {
       if (contentSuppressionReasonInside(db, ns)) fail('episode_not_found');
-      if (stagedEvidenceDueInside(db, ns)) stagedEvidence.touch(ns);
+      const wall = Date.now(); if (stagedEvidenceDueInside(db, ns, wall)) stagedEvidence.touch(ns, false, wall);
       const safety = Boolean(cachedContentLayout(db)?.suppressionRevision);
       let projected;
       if (safety) {
