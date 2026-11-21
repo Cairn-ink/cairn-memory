@@ -58,7 +58,7 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
     const safe = sources.filter(source => safeCard(ns, cards.get(source.card_id), { type: 'card', namespace: ns,
       cardId: source.card_id, revision: source.card_revision, bodyRevision: source.body_revision }));
     const valid = sources.length > 0 && sources.length <= 5 && safe.length === sources.length;
-    return { title: valid ? row.title : null, titleSources: safe.slice(0, 5).map(source => ({ type: 'card', namespace: ns,
+    return { title: valid ? row.title || null : null, titleSources: safe.slice(0, 5).map(source => ({ type: 'card', namespace: ns,
       cardId: source.card_id, revision: source.card_revision, bodyRevision: source.body_revision })) };
   }
 
@@ -222,12 +222,15 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
     if (input.parentRef) cardTopicInside(ns, input.parentRef, true);
     const parent = input.parentRef && topic(ns, input.parentRef.mocId);
     const marks = boundary(ns);
+    const eligibleMember = cachedContentLayout(db)?.suppressionRevision ? `AND NOT EXISTS (
+      SELECT 1 FROM private_cards c WHERE c.id=r.card_id AND c.owner_id=t.owner_id AND c.scope=t.scope
+        AND c.project_id=t.project_id AND c.state IN ('deleted','cancelled'))` : '';
     // Physical rows are paged before canonical validation, so stale records also
     // consume work. Every candidate kind has a stable key and no copied body.
     const rows = db.prepare(`SELECT * FROM (
       SELECT 'topic' kind,id a,'' b,NULL card_revision,NULL body_revision FROM card_mocs WHERE ${where}
       UNION ALL SELECT 'edge',e.parent_id,e.child_id,NULL,NULL FROM card_moc_edges e JOIN card_mocs t ON t.id=e.parent_id WHERE t.owner_id=? AND t.scope=? AND t.project_id=?
-      UNION ALL SELECT 'member',r.moc_id,r.card_id,r.card_revision,r.body_revision FROM card_moc_refs r JOIN card_mocs t ON t.id=r.moc_id WHERE t.owner_id=? AND t.scope=? AND t.project_id=?
+      UNION ALL SELECT 'member',r.moc_id,r.card_id,r.card_revision,r.body_revision FROM card_moc_refs r JOIN card_mocs t ON t.id=r.moc_id WHERE t.owner_id=? AND t.scope=? AND t.project_id=? ${eligibleMember}
       UNION ALL SELECT 'unfiled',id,'',revision,body_revision FROM private_cards WHERE ${where} AND state='confirmed'
     ) ORDER BY CASE kind WHEN 'topic' THEN 0 WHEN 'edge' THEN 1 WHEN 'member' THEN 2 ELSE 3 END,a,b
       LIMIT 257 OFFSET ?`).all(...marks, ...marks, ...marks, ...marks, offset);

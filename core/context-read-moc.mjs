@@ -136,7 +136,7 @@ export function rankMoc(db, identity, features, input, deadlineAt, sharedContext
           if (!row) break;
           after = type === 'memory' ? row.id : row.canonical_title;
           reader.remember(ns, type, row, { topic: true });
-          if (!validTitle(partition, row)) continue;
+          if (!validTitle(partition, row) || !row.title) continue;
           scratch = budget.hold(16384 + row.title.length * 1024);
           try {
             const tokens = tokenizeT1(row.title), length = tokens.length, frequencies = new Map();

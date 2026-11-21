@@ -19,6 +19,7 @@ import { cardText, keyed, noteInput, OWNER_NOTE_CAP, pageLimit, refs, sourceRef 
 import { hasCardLineage, collectCardBodySourcesInside, sealCardBodyInside, checkCardActionInside,
   recordCardActionInside, cardBodyDigest } from './card-lineage.mjs';
 import { isEngineCard, engineCardMetadataInside } from './content-safety.mjs';
+import { retireTopicTitleSourceInside } from './topic-title-storage.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
@@ -200,6 +201,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     state: row.state, bodyRevision: row.body_revision ?? null, effectCount });
   function purgeCard(ns, row, state, actionId, timestamp = now()) {
     writeContentSuppressionInside(db, { namespace: ns, kind: 'card', key: row.id, reason: 'purge', actionId });
+    retireTopicTitleSourceInside(db, 'card', row.id);
     db.prepare(`UPDATE private_cards SET state=?,revision=revision+1,title=NULL,body=NULL,
       updated_at=? WHERE id=?`).run(state, timestamp, row.id);
     db.prepare('DELETE FROM card_bindings WHERE card_id=?').run(row.id);

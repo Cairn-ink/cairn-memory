@@ -2,6 +2,7 @@
   "core/content-write-context.mjs",
   "core/content-write-changes.mjs",
   "core/content-write-safety.mjs",
+  "core/topic-title-storage.mjs",
   "core/admission-storage.mjs",
   "core/local-authority-input.mjs",
   "core/local-authority-schema.mjs",
