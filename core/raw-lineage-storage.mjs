@@ -183,7 +183,7 @@ export function episodeSourceEvidenceSQL() {
     p.overflow AS episode_read_overflow,p.stats AS episode_read_stats`;
 }
 /** Data only: no DB, no callback, no serving-predicate re-entry. */
-export function assertEpisodeSourceProof(ns, sources, facts, budget = { remaining: episodeProofLimit }, indexedDenials) {
+export function assertEpisodeSourceProof(ns, sources, facts, budget = { remaining: episodeProofLimit }, indexedDenials, withholdSource) {
   if (!Array.isArray(sources) || sources.length > 16 || !Array.isArray(facts)) fail('episode_sources_unavailable');
   const denied = target => indexedDenials?.has(episodeTargetKey(target)) || facts.some(fact => {
     if (fact.owner_id !== ns.ownerId || fact.scope !== 'owner' && (fact.scope !== ns.scope || fact.project_id !== (ns.projectId || '')) ||
@@ -200,11 +200,21 @@ export function assertEpisodeSourceProof(ns, sources, facts, budget = { remainin
     return contentSuppressionTargetMatches(fact, ns, target);
   });
   if (denied({})) fail('episode_not_found');
-  if (sources.some(s => s.deleted || s.owner_id !== ns.ownerId || s.scope !== ns.scope || s.project_id !== (ns.projectId || ''))) fail('revision_conflict');
+  const withheld = new Set();
+  const withhold = (source, code) => {
+    if (!withholdSource) fail(code);
+    withholdSource(source.id, code);
+    withheld.add(source.id);
+  };
+  for (const source of sources) {
+    if (source.owner_id !== ns.ownerId || source.scope !== ns.scope || source.project_id !== (ns.projectId || '')) fail('revision_conflict');
+    if (source.deleted) withhold(source, 'revision_conflict');
+  }
   const charge = rows => { budget.remaining -= rows.length; if (rows.length > episodeProofLimit || budget.remaining < 0) fail('episode_sources_unavailable'); };
   charge(sources);
   // Match the old decision order: all receipt parents precede Raw checks.
-  for (const source of sources) {
+  receipts: for (const source of sources) {
+    if (withheld.has(source.id)) continue;
     if (!source.key_present || !Number.isSafeInteger(source.ordinal)) fail('episode_sources_unavailable');
     charge(source.receipts);
     // Native SQLite row reads refuse non-representable integers. JSON numbers
@@ -213,19 +223,31 @@ export function assertEpisodeSourceProof(ns, sources, facts, budget = { remainin
     const receipt = { client: source.origin_client, sessionId: source.origin_session,
       eventId: source.message_id, role: source.role, excerpt: source.text };
     for (const row of source.receipts) {
-      if (row.memory_deleted || receiptDigest(receipt) !== row.receipt_key ||
-          denied({ kind: 'memory', key: row.memory_id, revision: row.memory_revision,
-            version: JSON.stringify(['memory-revision-v1', row.memory_revision]) }) ||
-          denied({ kind: 'receipt', key: row.id })) fail('source_excluded');
+      if (row.memory_deleted || receiptDigest(receipt) !== row.receipt_key) fail('source_excluded');
+      if (denied({ kind: 'memory', key: row.memory_id, revision: row.memory_revision,
+        version: JSON.stringify(['memory-revision-v1', row.memory_revision]) }) ||
+        denied({ kind: 'receipt', key: row.id })) {
+        withhold(source, 'source_excluded');
+        continue receipts;
+      }
       charge(row.ancestry);
-      for (const anchor of row.ancestry) if (anchor.owner_id !== ns.ownerId || anchor.scope !== ns.scope || anchor.project_id !== (ns.projectId || '') ||
-          !Number.isSafeInteger(anchor.start) || !Number.isSafeInteger(anchor.end) || anchor.start < 0 || anchor.end <= anchor.start ||
-          denied({ kind: 'raw', key: anchor.conversation_id, messageId: anchor.message_id, start: anchor.start, end: anchor.end })) fail('source_excluded');
+      for (const anchor of row.ancestry) {
+        if (anchor.owner_id !== ns.ownerId || anchor.scope !== ns.scope || anchor.project_id !== (ns.projectId || '') ||
+          !Number.isSafeInteger(anchor.start) || !Number.isSafeInteger(anchor.end) || anchor.start < 0 || anchor.end <= anchor.start) fail('source_excluded');
+        if (denied({ kind: 'raw', key: anchor.conversation_id, messageId: anchor.message_id, start: anchor.start, end: anchor.end })) {
+          withhold(source, 'source_excluded');
+          continue receipts;
+        }
+      }
     }
   }
-  for (const source of sources) {
+  raw: for (const source of sources) {
+    if (withheld.has(source.id)) continue;
     if (source.identity_available === 0) fail('episode_identity_unavailable');
-    if (source.fenced) fail('conversation_deleted');
+    if (source.fenced) {
+      withhold(source, 'conversation_deleted');
+      continue;
+    }
     charge(source.raw);
     if (source.raw.length > 1) fail('raw_lineage_unavailable');
     for (const row of source.raw) {
@@ -237,12 +259,15 @@ export function assertEpisodeSourceProof(ns, sources, facts, budget = { remainin
         if (!Number.isSafeInteger(row.total_units) || !Number.isSafeInteger(span.start) || !Number.isSafeInteger(span.end) ||
             span.start < 0 || span.end <= span.start || span.end > row.total_units || !['exact','whole-message'].includes(span.precision) ||
             span.precision === 'whole-message' && (span.start !== 0 || span.end !== row.total_units)) fail('raw_lineage_unavailable');
-        if (denied({ kind: 'raw', key: row.id, messageId: source.message_id, start: span.start, end: span.end }) || span.excluded) fail('source_excluded');
+        if (denied({ kind: 'raw', key: row.id, messageId: source.message_id, start: span.start, end: span.end }) || span.excluded) {
+          withhold(source, 'source_excluded');
+          continue raw;
+        }
       }
     }
   }
   // Source digest integrity is an added refusal, after the existing denials.
-  for (const source of sources) if (sha(source.text) !== source.digest) fail('revision_conflict');
+  for (const source of sources) if (!withheld.has(source.id) && sha(source.text) !== source.digest) fail('revision_conflict');
 }
 
 /** Schema-presence driven: current option-off writers enforce retained fences. */
@@ -504,7 +529,13 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
     }
     if(snapshot)snapshot.inputs.set(cacheKey,retained);
   }
-  function assertReceipts(ns, receipts, readExisting = false, rawTargets, history) {
+  function assertReceipts(ns, receipts, readExisting = false, rawTargets, history, withholdReceipt) {
+    const withheld = new Set();
+    const withhold = (index, code) => {
+      if (!withholdReceipt) fail(code);
+      withholdReceipt(index, code);
+      withheld.add(index);
+    };
     if (!readExisting && (cachedContentLayout(db)??installedContentLayout(db)).suppressionRevision) {
       // An incomplete fact set, or a possible Raw fact join, must not start an
       // unbounded indexed fallback inside SHARED, even for the scope denial.
@@ -524,6 +555,7 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
         const rows = snapshot ? snapshotReceiptInputs(ns) : history ? history(receipt) : matches(receipt,index);
         for (const row of rows) {
           check();
+          if (withheld.has(index)) continue;
           if(row.client!==receipt.client || row.session_id!==receipt.sessionId || row.event_id!==receipt.eventId ||
             row.role!==receipt.role || row.excerpt!==receipt.excerpt)continue;
           if(snapshot?.validated.has(row.id))continue;
@@ -534,33 +566,50 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
           // Preserve the old history decision's canonical identity checks here,
           // without calling back into a read entry from lineage validation.
           const source = { client: row.client, sessionId: row.session_id, eventId: row.event_id, role: row.role, excerpt: row.excerpt };
-          if (row.memory_deleted || receiptDigest(source) !== row.receipt_key ||
-              contentSuppressionReasonInside(db, ns, { kind: 'memory', key: row.memory_id,
+          if (row.memory_deleted || receiptDigest(source) !== row.receipt_key) fail('source_excluded');
+          if (contentSuppressionReasonInside(db, ns, { kind: 'memory', key: row.memory_id,
                 revision: row.memory_revision, version: JSON.stringify(['memory-revision-v1', row.memory_revision]),
                 ...(snapshot ? {ancestryChecked:true} : {}) }) ||
               contentSuppressionReasonInside(db, ns, { kind: 'receipt', key: row.id,
-                ...(snapshot ? {ancestryChecked:true} : {}) })) fail('source_excluded');
+                ...(snapshot ? {ancestryChecked:true} : {}) })) {
+            withhold(index, 'source_excluded');
+            continue;
+          }
           snapshot?.validated.add(row.id);
         }
       }
     }
     if (!enabled()) return;
-    for (const receipt of receipts) {
-      roots.assertSession(ns, receipt.client, receipt.sessionId, readExisting);
+    rawProof: for (const [index, receipt] of receipts.entries()) {
+      if (withheld.has(index)) continue;
+      try { roots.assertSession(ns, receipt.client, receipt.sessionId, readExisting); }
+      catch (error) {
+        if (!withholdReceipt || error.code !== 'conversation_deleted') throw error;
+        withhold(index, error.code);
+        continue;
+      }
       const values = anchors(ns, receipt);
       for (const anchor of values) if (!readExisting && contentSuppressionReasonInside(db, ns, { kind: 'raw', key: anchor.conversationId,
-        messageId: anchor.messageId, start: anchor.start, end: anchor.end })) fail('source_excluded');
-      assertAnchors(values);
+        messageId: anchor.messageId, start: anchor.start, end: anchor.end })) {
+        withhold(index, 'source_excluded');
+        continue rawProof;
+      }
+      try { assertAnchors(values); }
+      catch (error) {
+        if (!withholdReceipt || error.code !== 'source_excluded') throw error;
+        withhold(index, error.code);
+        continue;
+      }
       rawTargets?.push(...values);
     }
   }
   // Only fallback reads complete missing receipt inputs or seek facts by key.
   // Return data (never a predicate callback) to the same pure validator. Limits
   // are checked while enumerating, before any nested JSON can be constructed.
-  function completeEpisodeProof(ns, sources, budget, incomplete) {
+  function completeEpisodeProof(ns, sources, budget, incomplete, withholdDeleted) {
     const denials = new Set();
     // The pure validator retains origin precedence over later matching errors.
-    if (sources.some(s => s.deleted || s.owner_id !== ns.ownerId || s.scope !== ns.scope || s.project_id !== (ns.projectId || ''))) return denials;
+    if (sources.some(s => !withholdDeleted && s.deleted || s.owner_id !== ns.ownerId || s.scope !== ns.scope || s.project_id !== (ns.projectId || ''))) return denials;
     let remaining = budget.remaining - sources.length - sources.reduce((n,s) => n+s.raw.length+s.raw.reduce((a,r) => a+r.maps.length,0),0);
     const charge = rows => {
       remaining -= rows.length;
@@ -570,6 +619,7 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
     };
     const observe = target => { if (contentSuppressionReasonInside(db, ns, target)) denials.add(episodeTargetKey(target)); };
     for (const source of sources) {
+      if (source.deleted) continue;
       const receipt = { client: source.origin_client, sessionId: source.origin_session,
         eventId: source.message_id, role: source.role, excerpt: source.text };
       if (incomplete) {
@@ -597,9 +647,12 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
           messageId: anchor.message_id, start: anchor.start, end: anchor.end });
       }
     }
-    for (const source of sources) for (const root of source.raw) {
-      const maps = root.maps.length ? root.maps : [{ start: 0, end: root.total_units }];
-      for (const span of maps) observe({ kind: 'raw', key: root.id, messageId: source.message_id, start: span.start, end: span.end });
+    for (const source of sources) {
+      if (source.deleted) continue;
+      for (const root of source.raw) {
+        const maps = root.maps.length ? root.maps : [{ start: 0, end: root.total_units }];
+        for (const span of maps) observe({ kind: 'raw', key: root.id, messageId: source.message_id, start: span.start, end: span.end });
+      }
     }
     return denials;
     function maxAllowance() { if (remaining < 0) fail('episode_sources_unavailable'); return remaining+1; }

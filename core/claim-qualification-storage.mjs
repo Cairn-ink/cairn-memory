@@ -43,12 +43,15 @@ export function createQualificationStorage({ db, receiptKey, assertStoredReceipt
     } catch { fail('storage_error'); }
   }
 
-  function inspect(memory) {
+  function inspect(memory, { withholdDenied = false } = {}) {
     const stored = inspectStored(memory);
     if (!stored) return null;
     const namespace = { ownerId: memory.owner_id, scope: memory.scope, projectId: memory.project_id || null };
     if ((cachedContentLayout(db) ?? installedContentLayout(db)).suppressionRevision && !contentReadSafety(db, { namespace, intent: 'history', ref: { type: 'memory', namespace,
-      memoryId: memory.id, revision: memory.revision }, receipts: stored.receipts }).allowed) fail('revision_conflict');
+      memoryId: memory.id, revision: memory.revision }, receipts: stored.receipts }).allowed) {
+      if (withholdDenied) return false;
+      fail('revision_conflict');
+    }
     return stored.qualification;
   }
 

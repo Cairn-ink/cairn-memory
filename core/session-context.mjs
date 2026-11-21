@@ -75,7 +75,9 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
       if (error.code === 'context_item_too_large') return { memory: memoryMetadata(row, decisionReview), tooLarge: true };
       throw error;
     }
-    const tag = group === 'procedural' ? proceduralStorage.inspect(row.id) : null;
+    if (evidence === null) return null;
+    let tag = group === 'procedural' ? proceduralStorage.inspect(row.id) : null;
+    if (tag?.anchors.some(anchor => evidence.withheldReceiptIds?.has(anchor.receiptId))) tag = null;
     if (tag?.procedural) for (const anchor of tag.anchors) {
       const receipt = evidence.receipts.find(r => r.id === anchor.receiptId);
       if (!receipt || sourceDigest(receipt.excerpt) !== anchor.digest) fail('storage_error');
@@ -98,17 +100,52 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
           continue;
         }
         const layout = cachedContentLayout(db), safety = Boolean(layout?.suppressionRevision);
-        const query = group === 'nextSteps' ? projected.query : contextQuery(ns, group, { rawAncestry: safety && layout.rawLineage }), rows = db.prepare(query.sql).all(...query.params)
-          .filter(row => !safety || (group === 'nextSteps' ? !contentSuppressionReasonInside(db, ns) : contentReadSafety(db, { namespace: ns, selectedMemory: row,
-            ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed));
-        if (group === 'nextSteps') for (let i=0; i<rows.length; i++) {
-          assertEpisodeRead?.(ns, rows[i], projected.budget);
-          rows[i] = episodeReadRow(rows[i]);
+        const nextSteps = group === 'nextSteps';
+        const original = contextQuery(ns, group, { rawAncestry: safety && layout.rawLineage });
+        let query = nextSteps ? projected.query : original;
+        let budget = projected.budget;
+        const rows = [];
+        const memoryItems = safety && !nextSteps ? [] : null;
+        let sourceError;
+        const count = original.params.at(-1);
+        let scanned = 0;
+        while (true) {
+          const batch = db.prepare(query.sql).all(...query.params);
+          // Scope and row checks retain their order before Episode proof reads.
+          const eligible = batch.filter(row => !safety || (nextSteps ? !contentSuppressionReasonInside(db, ns)
+            : contentReadSafety(db, { namespace: ns, selectedMemory: row,
+              ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed));
+          for (const row of eligible) {
+            if (nextSteps && assertEpisodeRead?.(ns, row, budget, 'batch') === false) continue;
+            if (memoryItems && rows.length < count - 1 && !sourceError) {
+              try {
+                const item = sourcedMemory(ns, row, group);
+                if (item === null) continue;
+                memoryItems.push(item);
+              } catch (error) {
+                // Keep the identity comparison ahead of unrelated source errors.
+                sourceError = error;
+              }
+            }
+            rows.push(nextSteps ? episodeReadRow(row) : row);
+            if (rows.length === count) break;
+          }
+          if (rows.length === count || batch.length < count || nextSteps && !eligible.length) break;
+          scanned += batch.length;
+          const continuation = { sql: original.sql + ' OFFSET ?', params: [...original.params, scanned] };
+          if (nextSteps) {
+            const next = episodeProjection(ns, continuation, current);
+            query = next.query;
+            budget = next.budget;
+          } else query = continuation;
         }
         const identities = rows.map(row => ({ id: row.id, revision: row.revision }));
         if (expected && JSON.stringify(identities) !== JSON.stringify(expected.groups[group].identities)) fail('revision_conflict');
         let items;
-        try { items = rows.slice(0, 12).map(row => group === 'nextSteps' ? step(row) : sourcedMemory(ns, row, group)); }
+        try {
+          if (sourceError) throw sourceError;
+          items = memoryItems ?? rows.slice(0, 12).map(row => group === 'nextSteps' ? step(row) : sourcedMemory(ns, row, group));
+        }
         catch (error) {
           if (expected && error.code !== 'index_revision_conflict') fail('revision_conflict');
           throw error;

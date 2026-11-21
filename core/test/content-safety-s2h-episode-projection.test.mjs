@@ -84,9 +84,20 @@ function calls(f,id) {
   ()=>f.core.listEpisodes({namespace:ns,...range}),
   ()=>f.core.sessionStartContext({namespace:ns,groups:{nextSteps:true,procedural:false}})];
 }
-async function refusal(t,mutate,{code,client='synthetic'}={}) {
+function withheldEpisode(list, step, check = () => {}) {
+ const listResult=list(),stepResult=step();
+ for(const result of [listResult,stepResult])check(result);
+ const page=ok(listResult);
+ assert.deepEqual(page.items,[]);assert.equal(page.exhausted,true);assert.equal(page.nextCursor,null);
+ const group=ok(stepResult).groups.nextSteps;
+ assert.deepEqual(group.items,[]);assert.equal(group.complete,true);
+}
+async function refusal(t,mutate,{code,client='synthetic',withheld=false}={}) {
  const f=await setup(t),id=publish(f,'proof',client);await mutate(f,id);
- for(const call of calls(f,id)){const r=call();assert.equal(r.ok,false,JSON.stringify(r));if(code)assert.equal(r.error.code,code);assert.doesNotMatch(JSON.stringify(r),/Synthetic (bounded|Episode)/);}
+ const [get,list,step]=calls(f,id);
+ const check=result=>assert.doesNotMatch(JSON.stringify(result),/Synthetic (bounded|Episode)/);
+ for(const call of withheld?[get]:[get,list,step]){const r=call();assert.equal(r.ok,false,JSON.stringify(r));if(code)assert.equal(r.error.code,code);check(r);}
+ if(withheld)withheldEpisode(list,step,check);
 }
 // Controls: these public denials already held on the base. Count assertions in
 // the cost matrix prove the new implementation supplies them without extra SQL.
@@ -97,7 +108,7 @@ for(const kind of ['deleted','foreign','missing'])test(`Episode projection contr
   if(kind==='deleted')f.db.prepare('UPDATE session_episodes SET deleted=1 WHERE id=?').run(other);
   if(kind==='foreign')f.db.prepare('UPDATE session_episodes SET owner_id=? WHERE id=?').run('foreign',other);
   if(kind==='missing'){f.db.exec('PRAGMA foreign_keys=OFF');f.db.prepare('UPDATE episode_sources SET origin_episode_id=? WHERE episode_id=?').run('missing',id);}
- },{code:'revision_conflict'});
+ },{code:'revision_conflict',withheld:kind==='deleted'});
 });
 for(const reason of ['user_forget','correction_supersession'])for(const malformed of [false,true])test(`Episode projection control: matching receipt parent ${reason}${malformed?' before malformed digest':''}`,async t=>{
  await refusal(t,(f,id)=>{
@@ -106,7 +117,7 @@ for(const reason of ['user_forget','correction_supersession'])for(const malforme
   const m=ok(f.core.admit({namespace:ns,memory:{content:'Synthetic receipt parent',kind:'fact'},receipts:[receipt]})).memory;
   transaction(f.db,()=>writeContentSuppressionInside(f.db,{namespace:ns,kind:'memory',key:m.id,reason,actionId:'deny-parent',...(reason==='correction_supersession'?{matchMode:'revision-through',sourceVersion:JSON.stringify(['memory-revision-through-v1',m.revision])}:{})}));
   if(malformed)f.db.prepare('UPDATE episode_sources SET digest=? WHERE episode_id=?').run('0'.repeat(64),id);
- },{code:'source_excluded'});
+ },{code:'source_excluded',withheld:true});
 });
 // Fail-before: the old Episode reader accepted a corrupt stored source digest.
 test('Episode projection refuses malformed digest',async t=>{await refusal(t,f=>f.db.prepare('UPDATE episode_sources SET digest=?').run('0'.repeat(64)));});
@@ -116,11 +127,25 @@ test('Episode projection refuses the seventeenth source',async t=>{await refusal
  for(let i=0;i<16;i++)f.db.prepare('INSERT INTO episode_sources VALUES(?,?,?,?,?,?,?,?,?,?)').run(randomUUID(),id,s.origin_episode_id,s.event_id,'extra-'+i,s.digest,s.role,s.text,s.truncated,s.ordinal);
 });});
 // Control: proof must cover sources outside get's returned source page.
-test('Episode projection control: whole closure outside the source page',async t=>{await refusal(t,(f,id)=>{
+test('Episode projection control: whole closure outside the source page',async t=>{
+ const f=await setup(t),id=publish(f,'proof');
  const s=f.db.prepare('SELECT * FROM episode_sources WHERE episode_id=?').get(id),other=publish(f,'outside');
  f.db.prepare('INSERT INTO episode_sources VALUES(?,?,?,?,?,?,?,?,?,?)').run('zzzz-outside',id,other,'outside','outside',s.digest,s.role,s.text,0,2);
  f.db.prepare('UPDATE session_episodes SET deleted=1 WHERE id=?').run(other);
-});});
+ const [get,list,step]=calls(f,id),results=[get(),list(),step()];
+ const [detail,page,context]=results.map(ok);
+ assert.deepEqual(detail.sources.items.map(item=>item.id),[s.id]);
+ assert.equal(detail.sources.exhausted,true);assert.equal(detail.sources.nextCursor,null);
+ assert.deepEqual(page.items.map(item=>item.id),[id]);
+ assert.deepEqual(context.groups.nextSteps.items.map(item=>item.episodeId),[id]);
+ for(const result of results){
+  const bytes=JSON.stringify(result);
+  for(const needle of ['zzzz-outside',other,'Synthetic Episode gist outside','Synthetic bounded Episode source outside'])
+   assert.ok(!bytes.includes(needle),needle);
+  // This fixture gives the denied passage the same text as the visible passage.
+  assert.doesNotMatch(bytes.replaceAll(s.text,'').replaceAll('Synthetic Episode gist proof',''),/Synthetic (bounded|Episode)/);
+ }
+});
 
 function rawRoot(f,id,representation='exact') {
  const s=f.db.prepare('SELECT s.*,e.client,e.session_key FROM episode_sources s JOIN session_episodes e ON e.id=s.origin_episode_id WHERE s.episode_id=?').get(id);
@@ -140,7 +165,10 @@ for(const representation of ['exact','hashed'])for(const action of ['allow','fen
  if(['exact','whole'].includes(action))f.db.prepare('INSERT INTO raw_source_exclusions VALUES(?,?,?,?,1)').run(r.conversation,r.s.message_id,0,1);
  if(action==='ambiguous')rawRoot(f,id,representation==='exact'?'hashed':'exact');
  if(action==='raw-fact')transaction(f.db,()=>writeContentSuppressionInside(f.db,{namespace:ns,kind:'raw',key:r.conversation,matchMode:'span',messageId:r.s.message_id,start:0,end:1,reason:'privacy_erase',actionId:'raw-denial'}));
- for(const call of calls(f,id)){const result=call();assert.equal(result.ok,action==='allow',JSON.stringify(result));assert.doesNotMatch(JSON.stringify(result),/episode_read_proof|identity_secret|source_headers|sourceKey|identity_available|identityAvailable|key_present/);assert.ok(!JSON.stringify(result).includes(f.db.prepare('SELECT secret FROM episode_identity').get().secret));}
+ const [get,list,step]=calls(f,id),withheld=['fence','exact','whole','raw-fact'].includes(action);
+ const check=result=>{const bytes=JSON.stringify(result);assert.doesNotMatch(bytes,/episode_read_proof|identity_secret|source_headers|sourceKey|identity_available|identityAvailable|key_present/);assert.ok(!bytes.includes(f.db.prepare('SELECT secret FROM episode_identity').get().secret));};
+ for(const call of withheld?[get]:[get,list,step]){const result=call();assert.equal(result.ok,action==='allow',JSON.stringify(result));check(result);}
+ if(withheld)withheldEpisode(list,step,check);
 });
 // Controls: metadata/output fields stay closed, including successful nextSteps.
 test('Episode projection control: no internal proof or secret in output',async t=>{
@@ -214,7 +242,14 @@ test('Episode projection control: denied source on list lookahead',async t=>{
  for(const [id,time]of [[first,'2026-03-01T00:00:00.000Z'],[second,'2026-02-01T00:00:00.000Z'],[origin,'2026-01-01T00:00:00.000Z']])f.db.prepare('UPDATE session_episodes SET first_received_at=? WHERE id=?').run(time,id);
  f.db.prepare('UPDATE episode_sources SET origin_episode_id=? WHERE episode_id=?').run(origin,second);
  f.db.prepare('UPDATE session_episodes SET deleted=1 WHERE id=?').run(origin);
- const r=f.core.listEpisodes({namespace:ns,...range});assert.equal(r.ok,false);assert.equal(r.error.code,'revision_conflict');assert.doesNotMatch(JSON.stringify(r),/Synthetic/);
+ const result=f.core.listEpisodes({namespace:ns,...range}),page=ok(result);
+ assert.deepEqual(page.items.map(item=>item.id),[first]);assert.equal(page.exhausted,true);assert.equal(page.nextCursor,null);
+ const bytes=JSON.stringify(result);
+ for(const needle of [second,origin,'Synthetic Episode gist lookahead','Synthetic bounded Episode source lookahead'])
+  assert.ok(!bytes.includes(needle),needle);
+ const allowed=bytes.replace('"clientLabel":"Synthetic client"','"clientLabel":""')
+  .replace('"gist":"Synthetic Episode gist visible"','"gist":""');
+ assert.doesNotMatch(allowed,/Synthetic/);
 });
 
 // Control: a missing identity secret is incomplete proof, never an empty Raw set.
@@ -250,7 +285,7 @@ for(const denial of ['origin','receipt'])test(`Episode projection control: ${den
    transaction(f.db,()=>writeContentSuppressionInside(f.db,{namespace:ns,kind:'memory',key:m.id,reason:'user_forget',actionId:'deny-before-identity'}));
   }
   f.db.prepare('DELETE FROM episode_identity WHERE singleton=1').run();
- },{client:'codex',code:denial==='origin'?'revision_conflict':'source_excluded'});
+ },{client:'codex',code:denial==='origin'?'revision_conflict':'source_excluded',withheld:true});
 });
 
 // Controls: native SQLite row materialization already refuses integers outside
@@ -421,5 +456,7 @@ for(const overflow of ['facts','namespace'])test(`Episode fix fallback control: 
   }
   writeContentSuppressionInside(f.db,{namespace:ns,kind:'raw',key:anchor.conversation_id,matchMode:'span',messageId:anchor.message_id,start:0,end:1,reason:'privacy_erase',actionId:'fallback-ancestry-denial'});
  });
- for(const call of calls(f,f.id))assert.equal(call().ok,false,'indexed completion preserves Raw ancestry denial');
+ const [get,list,step]=calls(f,f.id);
+ assert.equal(get().ok,false,'indexed completion preserves Raw ancestry denial');
+ withheldEpisode(list,step);
 });

@@ -153,13 +153,27 @@ export function createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRea
       if (cursor && cursor.e !== current) fail('cursor_stale');
       const query = projected.query, rows = db.prepare(query.sql).all(...query.params);
       if (contentSuppressionReasonInside(db, ns)) fail('revision_conflict');
-      return { epoch: current, rows: rows.map(row => {
-        if (operation === 'listEpisodes') {
-          assertEpisodeRead?.(ns, row, projected.budget);
-          row = episodeReadRow(row);
-          const item = episodeMetadata(ns,row);
-          return { item, key: { time: filter.timeBasis === 'event' ? item.eventEnd : item.firstReceivedAt, id: row.id } };
+      if (operation === 'listEpisodes') {
+        const event = filter.timeBasis === 'event';
+        const visible = [], count = filter.limit + 1;
+        let batch = rows, budget = projected.budget;
+        while (true) {
+          for (const row of batch) {
+            if (assertEpisodeRead?.(ns, row, budget, 'batch') === false) continue;
+            const item = episodeMetadata(ns, episodeReadRow(row));
+            visible.push({ item, key: { time: event ? item.eventEnd : item.firstReceivedAt, id: row.id } });
+            if (visible.length === count) break;
+          }
+          if (visible.length === count || batch.length < count) break;
+          const last = batch.at(-1);
+          const after = { time: event ? JSON.parse(last.record).eventEnd : last.first_received_at, id: last.id };
+          const next = episodeProjection(ns, rangeQuery(ns, operation, filter, after), current);
+          budget = next.budget;
+          batch = db.prepare(next.query.sql).all(...next.query.params);
         }
+        return { epoch: current, rows: visible };
+      }
+      return { epoch: current, rows: rows.map(row => {
         const receipt = filter.timeBasis === 'receipt';
         if (cachedContentLayout(db)?.suppressionRevision && (!contentReadSafety(db, { namespace: ns, intent: 'history',
           ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed ||
