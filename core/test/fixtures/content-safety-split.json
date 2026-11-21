@@ -936,7 +936,7 @@
     },
     {
       "file": "core/content-safety-schema.mjs",
-      "sha256": "e74c811f5f45ed96669943cb2f0fa845c6c5ca40d100a5839f1232feec9e055d",
+      "sha256": "edf44e575b0ccc1a04e195cd613b2b8149d9c8a2e851f109c9632d4c0d1576dd",
       "reason": "Reviewed Card lineage: exact lineage tuple/DDL attestation and synchronous canonical snapshot registration; feature accessors expose only privately attested revisions and add no fact-only writer. Local package completeness reads sqlite_master by the exact privacy DDL declarations; it exports no write capability."
     },
     {
@@ -1003,7 +1003,7 @@
       "file": "core/database.mjs",
       "start": "export function openDatabase(",
       "end": null,
-      "sha256": "00c100d19cb92de375f8f0c0993846fa026507dbfdf24b61498562660bfcb2be",
+      "sha256": "0c131ca01c961b129c56d1fb7a52f9ab855bcce164210cdec68ca6f234a892e6",
       "reason": "Reviewed mechanical option A delta: remove the open-time dispatcher timeout clamp; pristine creation and all safety installation statements remain unchanged; #647: S2H creation timeout stays retryable only while the target is absent (mapping only; open-time checks unchanged). Existing suppression layouts and ordinary local layout 29 validate in a deferred snapshot; all initialization and upgrades retain the writer path and the common binding tail."
     }
   ],
