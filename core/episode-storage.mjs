@@ -2,7 +2,7 @@ import { episodeReadRowsInside } from './episode-reads.mjs';
 import { receiptDenialsInside, anchorsDeliverable, cardDeliverable } from './content-safety.mjs';
 import { contentReadSafety, createContentReadMemo, receiptReadSafety } from './content-safety.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
-
+import { stagedEvidenceDueInside } from './staged-evidence-storage.mjs';
 import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { createHmac, randomUUID } from 'node:crypto';
 import { transaction, isStorageBusy } from './database.mjs';
@@ -1034,7 +1034,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
   function inspect(ns, input, pages) {
     return transaction(db, () => {
       if (contentSuppressionReasonInside(db, ns)) fail('episode_not_found');
-      stagedEvidence.touch(ns);
+      if (stagedEvidenceDueInside(db, ns)) stagedEvidence.touch(ns);
       const safety = Boolean(cachedContentLayout(db)?.suppressionRevision);
       let projected;
       if (safety) {
