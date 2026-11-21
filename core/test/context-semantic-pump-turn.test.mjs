@@ -231,7 +231,8 @@ test('absent port native DTOs, SQL counts, allocations and messages match archiv
   // each have four existing write commits, with a stamp read and seal write
   // (four calls per commit). Frames 4 and 6 also add six selected-evidence
   // collector statements per refresh. No transaction or journal-probe count changes.
-  const delta=[0,0,-4,0,22,0,22],expected=structuredClone(baseline.evidence.native);
+  // Vector certification adds the canonical fence read and its native calls.
+  const delta=[0,0,-4,0,42,0,42],expected=structuredClone(baseline.evidence.native);
   expected.statements=expected.statements.map((row,i)=>({...row,begun:row.begun+delta[i],completed:row.completed+delta[i]}));
   assert.deepEqual(native.statements,expected.statements,'absent-port SQL statement differential from archived main plus exact seal accounting');
   assert.equal(expected.allocations[8],4096,'archived first-reader domain allocation');
