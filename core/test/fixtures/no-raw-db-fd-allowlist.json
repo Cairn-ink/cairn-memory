@@ -1741,8 +1741,28 @@
   },
   {
     "path": "integrations/client/raw/local-session-start.mjs",
-    "source": "import { lstat, readdir, unlink } from 'node:fs/promises'",
-    "reason": "Lists and removes session-start markers and attempts, and uses lstat to verify that matching temporary entries are regular files in the private starts directory."
+    "source": "import { constants } from 'node:fs'",
+    "reason": "Read-only, no-follow and directory flags for the private starts directory and staged-attempt metadata."
+  },
+  {
+    "path": "integrations/client/raw/local-session-start.mjs",
+    "source": "import { lstat, open, readdir, realpath, unlink } from 'node:fs/promises'",
+    "reason": "Validates the private starts directory, verifies the same start-attempt entry and removes matched private metadata."
+  },
+  {
+    "path": "integrations/client/raw/local-session-start.mjs",
+    "source": "directoryHandle = await open(canonical,readFlags | constants.O_DIRECTORY);",
+    "reason": "Pins only the checked starts directory by device and inode using read-only, no-follow directory flags."
+  },
+  {
+    "path": "integrations/client/raw/local-session-start.mjs",
+    "source": "parsedFile = await open(target,readFlags);",
+    "reason": "Opens only the keyed session-start JSON in the pinned directory. The parsed snapshot requires a private regular file."
+  },
+  {
+    "path": "integrations/client/raw/local-session-start.mjs",
+    "source": "currentFile = await open(target,readFlags);",
+    "reason": "Reopens the keyed session-start JSON to compare the inode and exact bytes of the parsed attempt before unlinking."
   },
   {
     "path": "packages/setup/lib/local-capture.mjs",
