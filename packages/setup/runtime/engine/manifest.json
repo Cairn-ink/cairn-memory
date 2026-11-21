@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "acbecb2edd8882a8976391cf74b44281c7a2258b435000bf47d6ed67b760300f",
-  "bytes": 1485210,
+  "sha256": "4d6703beaf82cbcc2319dfeffba4fe46f1bb42e09cc6dcfd963b27aa5fc4eea2",
+  "bytes": 1485258,
   "files": [
     "LICENSE",
     "README.md",
@@ -813,7 +813,7 @@
     "core/raw-search-authority.mjs": "735a2ebe0e4d10a1d9a8276054cb3797c345c373c313bed3faa749fcdab4e0d4",
     "core/raw-search-index.mjs": "aaa8519e366ba366cff4c12641cdf4e59d25836905e8da788ef4d416143bccb8",
     "core/raw-search-retrieval.mjs": "a802a2e138a279907d058eafa46d763a3a5b6bbd749ff49dafd6f1461d568e57",
-    "core/raw-search-maintenance.mjs": "1227b787497a79358bed6c34e74d1609f139dd59aca4ed2326574a7ada48f566",
+    "core/raw-search-maintenance.mjs": "33031c1726f053e336d6b1442283e12873fbf6ce030f83a7a900fa6656c2c635",
     "docs/plans/raw-search-interface.md": "97da386b7acb86a0e2221d005273723b6983f5c7b50bb52324d3f330c319723b",
     "docs/plans/raw-search-predicate-plans.md": "59d174f489a73b134d590763ede78429e0006ff7456c973d305a7e0815c5f4b7",
     "docs/plans/raw-search-seam.md": "a0a23e4b238c7084136dd7369b0533e1536f0dc86ef816fa6573e53bef18ad28",
@@ -838,6 +838,6 @@
   "generatedHashes": {
     "package.json": "e255ff4d23e921de9bed8e058c64e57aed3e1bc6a8ed242cee52a716add2d69c",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8",
-    "engine-build.json": "907ce462eaa4aa8b5497a098a6b727afc7ca6d6e7782dc03d8bb5091bd1dae72"
+    "engine-build.json": "1e8ccc8ce764bd046c6e2315a9a36a2d47af83457df8e3461fc27334d86fc23c"
   }
 }
