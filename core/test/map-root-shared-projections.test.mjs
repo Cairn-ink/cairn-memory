@@ -171,7 +171,8 @@ test('root body hydration retains safety-layout suppression and forget fences', 
   }
   transaction(db, () => writeContentSuppressionInside(db, { namespace: safetyNamespace, kind: 'memory', key: memories[0].id, reason: 'privacy_erase', actionId: 'map-suppression' }));
   for (const purpose of ['recall', 'classification']) {
-    const denied = core.map({ namespace: safetyNamespace, purpose, tokenBudget: 4000 });
-    assert.equal(denied.ok, false); assert.equal(denied.error.code, 'evidence_unavailable');
+    const page = ok(core.map({ namespace: safetyNamespace, purpose, tokenBudget: 4000 }));
+    assert.deepEqual(page.items, []); assert.deepEqual(page.invalidRefs, []);
+    assert.equal(page.exhausted, true); assert.equal(page.nextCursor, null);
   }
 });

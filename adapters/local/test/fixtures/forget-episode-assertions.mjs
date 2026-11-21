@@ -89,7 +89,7 @@ export async function assertReads(f, before, { named = [], needles = [forgottenT
     if (value) {
       const candidates = after.episodes.filter(row => !row.deleted && (timeBasis === 'receipt' || JSON.parse(row.record).eventEnd));
       for (const id of named) assert.equal(value.items.some(item => item.id === id), false, 'named Episode never lists');
-      for (const row of candidates) assert.ok(value.items.some(item => item.id === row.id), 'eligible retained metadata still lists');
+      for (const row of candidates) assert.equal(value.items.some(item => item.id === row.id), (await f.core.getEpisode({ namespace, episodeId: row.id })).ok === true, 'a retained Episode lists exactly when its own read succeeds'); assert.deepEqual(value.items.map(item => item.id).filter(id => !candidates.some(row => row.id === id)), [], 'only eligible retained Episodes list');
     }
   }
   for (const episode of before.episodes) {

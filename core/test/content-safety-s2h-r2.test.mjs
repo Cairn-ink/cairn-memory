@@ -190,7 +190,12 @@ for(const type of ['memory','card'])test(`r2 ${type} map never counts retained s
  const map=()=>type==='memory'?core.map({namespace:ns}):host.call(core,'mapEvidence',{namespace:ns,type:'card'});
  assert.equal(map().ok,true);if(type==='memory')assert.match(JSON.stringify(map()),/ProtectedMapCount/);
  transaction(db,()=>writeContentSuppressionInside(db,{namespace:ns,kind:type,key:id,reason:'purge',actionId:'map-count'}));
- const result=map();assert.equal(result.ok,false,type+'_map_count_gate');assert.doesNotMatch(JSON.stringify(result),new RegExp(id+'|ProtectedMapCount|scanned'));
+ const result=map();
+ if(type==='memory'){
+  const page=ok(result);assert.deepEqual(page.items,[]);assert.deepEqual(page.invalidRefs,[]);
+  assert.equal(page.exhausted,true);assert.equal(page.nextCursor,null);
+ }else assert.equal(result.ok,false,type+'_map_count_gate');
+ assert.doesNotMatch(JSON.stringify(result),new RegExp(id+'|ProtectedMapCount|scanned'));
 });
 
 
@@ -222,7 +227,15 @@ for(const mode of ['conflict endpoint','transition endpoint','transition receipt
  const read=()=>mode==='conflict endpoint'?core.listReviewConflicts({namespace:ns,limit:1}):core.listReviewTransitions({namespace:ns,status:'all',limit:1});
  assert.equal(read().ok,true);
  transaction(db,()=>writeContentSuppressionInside(db,{namespace:ns,kind:mode==='transition receipt'?'receipt':'memory',key:mode==='transition receipt'?receipts(b.id)[0]:b.id,reason:'privacy_erase',actionId:'review'}));
- const result=read();assert.equal(result.ok,false,'review_'+mode+'_gate');assert.doesNotMatch(JSON.stringify(result),new RegExp(a.id+'|'+b.id+'|targetId|exhausted'));
+ const result=read();
+ if(mode==='conflict endpoint'){
+  assert.equal(result.ok,false,'review_'+mode+'_gate');
+  assert.doesNotMatch(JSON.stringify(result),/exhausted/);
+ }else{
+  const page=ok(result);assert.deepEqual(page.transitions,[]);
+  assert.equal(page.exhausted,true);assert.equal(page.nextCursor,null);
+ }
+ assert.doesNotMatch(JSON.stringify(result),new RegExp(a.id+'|'+b.id+'|targetId'));
 });
 
 
@@ -233,7 +246,10 @@ test('r2 stale placement binds its recorded Memory version rather than the curre
  const bound=db.prepare('SELECT memory_revision FROM moc_memory_refs WHERE memory_id=?').get(memory.id).memory_revision;
  transaction(db,()=>{db.prepare('UPDATE memories SET revision=? WHERE id=?').run(bound+3,memory.id);writeContentSuppressionInside(db,{namespace:ns,kind:'memory',key:memory.id,matchMode:'revision-through',sourceVersion:JSON.stringify(['memory-revision-through-v1',bound]),reason:'correction_supersession',actionId:'old-placement'});});
  assert.equal(core.get({namespace:ns,memoryId:memory.id}).ok,true);
- const result=core.map({namespace:ns});assert.equal(result.ok,false,'stale_placement_version_gate');assert.doesNotMatch(JSON.stringify(result),new RegExp(memory.id+'|invalidRefs'));
+ const result=core.map({namespace:ns});const page=ok(result);assert.deepEqual(page.invalidRefs,[]);
+ assert.deepEqual(page.items.map(item=>[item.type,item.ref.memoryId,item.ref.revision]),[['unfiled',memory.id,bound+3]]);
+ assert.equal(page.exhausted,true);assert.equal(page.nextCursor,null);
+ assert.doesNotMatch(JSON.stringify(result),new RegExp('Synthetic placement|"revision":'+bound+'[,}]'));
 });
 
 
