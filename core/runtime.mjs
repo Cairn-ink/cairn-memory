@@ -729,7 +729,7 @@ export function createMemoryRuntime(input, internal) {
       memoryId: row.id, revision: row.revision } }).allowed;
   }
 
-  const fetchPageIdentities = new WeakMap(), receiptShortMemories = new WeakSet();
+  const fetchPageIdentities = new WeakMap();
   function fetchPage(ns, ref, offset, expectedEpoch, view = 'current', includeQualification = false, contextMode, expectedPage) {
     ready();
     return transaction(db, () => {
@@ -746,10 +746,12 @@ export function createMemoryRuntime(input, internal) {
       }
       const memory = detailDto(row);
       const receipts = receiptPrefix(ns, row, offset, 101), positions = receiptPageOffsets.get(receipts);
-      if (positions.withheld) receiptShortMemories.add(memory);
-      return { memory, receipts, receiptOffsets: positions.offsets, receiptEnd: positions.end, epoch: currentEpoch,
+      const page = { memory, receipts, receiptOffsets: positions.offsets, receiptEnd: positions.end, epoch: currentEpoch,
         ...(includeQualification ? { qualification: safeQualification(ns, row) } : {}),
         ...(view === 'historical' ? { supersession: safeSupersession(ns, row.id) } : {}) };
+      // Recall uses this internal fact without changing fetch's serialized page comparison.
+      if (positions.withheld) Object.defineProperty(page, 'receiptsWithheld', { value: true });
+      return page;
     }, undefined, { deferred: true });
   }
 
@@ -1052,7 +1054,6 @@ export function createMemoryRuntime(input, internal) {
     identity, ready, admit, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     legacyGet, legacyList, legacySearch,
     listPage, getPage, fetchPage, recentReceipts, recallSnapshot, sourceSnapshot,
-    receiptShort: memory => receiptShortMemories.has(memory),
     rationaleSnapshot(ns, refs, inputMode) { ready(); return rationaleStorage.snapshot(ns, refs, inputMode); },
     commitRationale(ns, refs, snapshot, proposals, deadline) {
       ready(); return rationaleStorage.commit(ns, refs, snapshot, proposals, deadline);

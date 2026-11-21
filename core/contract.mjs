@@ -899,6 +899,7 @@ export function createMemoryCore(input, internal) {
     });
   }
 
+  const fetchedWithheldReceipts = new WeakSet();
   function fetch(input) {
     return invoke(() => {
       runtime.ready();
@@ -921,7 +922,8 @@ export function createMemoryCore(input, internal) {
         ...(includeQualification ? { includeQualification: true } : {}),
         ...(isSourceContext(contextMode) ? { contextMode } : {}) };
       const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
-      return fetchMemories({ runtime, model, ns, refs, view, budget, cursor, binding, encodeCursor, includeQualification, contextMode });
+      return fetchMemories({ runtime, model, ns, refs, view, budget, cursor, binding, encodeCursor,
+        includeQualification, contextMode, fetchedWithheldReceipts });
     });
   }
 
@@ -991,7 +993,7 @@ export function createMemoryCore(input, internal) {
         recentReceipts: (ref, limit) => runtime.recentReceipts(namespaces[ref.namespaceIndex], ref, limit),
         finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
           namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
-          revision: candidate.revision, receiptLimit: candidate.receiptCap ?? (candidate.item.receipts.length || Number(runtime.receiptShort(candidate.item.memory))),
+          revision: candidate.revision, receiptLimit: candidate.receiptCap ?? (candidate.item.receipts.length || Number(fetchedWithheldReceipts.has(candidate.item.memory))),
           ...(candidate.receiptCap ? { receiptOrder: 'recent' } : {}),
           ...(isSourceContext(contextMode) ? { sourceEvidence: candidate.item } : {}),
         })), selected, namespaces.map((namespace) => ({ namespace,
