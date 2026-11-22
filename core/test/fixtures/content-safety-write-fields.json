@@ -7,7 +7,7 @@
     "key:action_id": 1,
     "key:cardId": 1,
     "key:eventId": 1,
-    "key:memoryId": 2,
+    "key:memoryId": 1,
     "key:messageId": 7,
     "key:ownerId": 3,
     "key:projectId": 8,
@@ -344,9 +344,7 @@
     "key:parentId": 2,
     "key:parentRef": 1,
     "key:topicRef": 1,
-    "literal:card_id": 1,
     "literal:card_moc_id": 2,
-    "literal:memory_id": 1,
     "literal:memory_moc_id": 2
   },
   "core/staged-evidence-storage.mjs": {

@@ -509,10 +509,10 @@
     "open:33": "dd5d19a05cc94529e1ccee40dd64496435c1ac707c775e79b5eb21a4dea668c9",
     "open:52": "d5eb8ce3dff9d76c60cddfeedb911b2f62d87907e46f29767328e9cfa0cce973",
     "open:53": "7a647c9fb1a2993f0874fa1c71a5eb079dc98f21317f084ba600445bcd4158a9",
-    "workload:23": "2219f5d6601e62f456a2dd0cb90110404126c6b9625c16e049fd581f956ff82e",
-    "workload:33": "5c058cba3ddc44308b1a215b500fccad49593f228a9489cb57e70b2f75ccb518",
-    "workload:52": "fafaa6d444e46073afd1aea558430984a862c929d9a3c7eaa00eef012f04e059",
-    "workload:53": "ba53c0cffb7d32bd6ec67083c016e738934effc557cc23c4cfa29dd5789a4ca1"
+    "workload:23": "d544d6de25bdacf76f03476cc68344fc5db4bfdb90e9e00e155c6fa05d326ced",
+    "workload:33": "da141b5f460fd55026767e3bb6ab77a004573eafe738465bd4638fd7d65dc684",
+    "workload:52": "14a3cb98fb211e6b0d1c862b53504032a78bcb0e81333cabfb9400b9ed227d82",
+    "workload:53": "c8ddd052d908d54266d2612499abcb885dc701d70c00f3b8b048e9ae1decec01"
   },
   "currentCensus": {
     "open:23": {
@@ -622,9 +622,9 @@
       ]
     },
     "workload:23": {
-      "statements": 3893,
-      "sql": "7431a040f47a6528df72c84d850a7ef6ffe4732497863aa3cf4f96bb4444a130",
-      "callOffsets": "fcf428f31943d7b3f62e9e982674e5a2df08f5e4ee9b0e93b6c52fb737e06398",
+      "statements": 3879,
+      "sql": "cb532597332fcecfa0481531c5842d98ce239b133749975e034a2a676d3562f2",
+      "callOffsets": "0c6a44edcd8303b1c8edadc97f1b2975a284fee8244462fa3d89a81849930c30",
       "openers": [
         {
           "index": 1,
@@ -636,9 +636,9 @@
       ]
     },
     "workload:33": {
-      "statements": 11352,
-      "sql": "3d2ca74b0f2bf7c26e5f4b90b7d79caa1f82e81960d2104f8875ad4784a7b7e5",
-      "callOffsets": "e68d5cbe79a5c3250c14560c4228a983edbeeb8dd85a9aef051f69fb746182bf",
+      "statements": 11337,
+      "sql": "c2c6892c23c3ecc43cd6d6c8d745da3c25e80de95375fb0f54405ffc9893801b",
+      "callOffsets": "83309cd906ae2b3def74294a14a27fd9eeef4d667818bf6cee11b713c34bdd2f",
       "openers": [
         {
           "index": 1,
@@ -657,9 +657,9 @@
       ]
     },
     "workload:52": {
-      "statements": 8685,
-      "sql": "8c00d69b1dd64f3be5eaebf771aedca8d3489327db44e70a2dfe8c3fc6244066",
-      "callOffsets": "e2d010ade77706daae98994cd27c1be3240856092f20c8d9aacbe9bda35726b9",
+      "statements": 8658,
+      "sql": "346011df97482a2162c67dfaacd7961f150471a59cf628456b813e39af4d864b",
+      "callOffsets": "b9c2f6f2d845b376b522b2038fabe13c322fd69644b3731c6c80b43ab1e71297",
       "openers": [
         {
           "index": 1,
@@ -671,9 +671,9 @@
       ]
     },
     "workload:53": {
-      "statements": 20688,
-      "sql": "60777fe9a521acea810abd49e5bc8266f36d67e43f61ec6d2a62a395f5b22cef",
-      "callOffsets": "e3d464cadd04a2ac3a8e8c46e07621080e7023af16555922bef24b5503713ddb",
+      "statements": 20660,
+      "sql": "087295cac0fe9988a154e05a2675166d3016a00bd907aefb2094fb7eaaa21a96",
+      "callOffsets": "fd74bf8b78cd80f363e88359de8c0d701d0b89f6ac341c2fd6dfbfc464cd9621",
       "openers": [
         {
           "index": 1,
