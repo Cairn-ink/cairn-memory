@@ -1965,7 +1965,7 @@ for the missing-table case; it needs no separate sidecar read transaction.
 A reader opened after a mismatch is detected never serves the untrusted file;
 a reader opened before an out-of-band seal removal keeps serving until its next
 reopen (content safety by delivery revalidation).
-Invalidating serving handles on rejection is a planned follow-up.
+Rejection on open does not invalidate readers that already have the file open.
 
 DELETE-mode caches with a missing or invalid seal use the existing excluded
 replacement protocol, then perform the normal bounded, checkpointed rebuild
