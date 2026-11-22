@@ -30,6 +30,12 @@
     "errorCode": "invalid_extraction_source_range"
   },
   {
+    "name": "duplicate takes precedence over range for a repeated negative index",
+    "output": {"items": [{"content": "I use blue ink.", "kind": "preference", "confidence": 1, "sourceIndices": [-1, -1]}]},
+    "policy": {"sourceCount": 2, "itemLimit": 5},
+    "errorCode": "invalid_extraction_source_duplicate"
+  },
+  {
     "name": "fractional source index",
     "output": {"items": [{"content": "I use blue ink.", "kind": "preference", "confidence": 1, "sourceIndices": [0.5]}]},
     "policy": {"sourceCount": 2, "itemLimit": 5},
@@ -58,6 +64,48 @@
     "output": {"items": [{"content": "Drawing 1.", "kind": "preference", "confidence": 1, "sourceIndices": [0]}, {"content": "Drawing 2.", "kind": "preference", "confidence": 1, "sourceIndices": [0]}, {"content": "Drawing 3.", "kind": "preference", "confidence": 1, "sourceIndices": [0]}, {"content": "Drawing 4.", "kind": "preference", "confidence": 1, "sourceIndices": [0]}, {"content": "Drawing 5.", "kind": "preference", "confidence": 1, "sourceIndices": [0]}, {"content": "Drawing 6.", "kind": "preference", "confidence": 1, "sourceIndices": [0]}]},
     "policy": {"sourceCount": 2, "itemLimit": 5},
     "errorCode": "invalid_extraction_output_shape"
+  },
+  {
+    "name": "redacts a synthetic private key block",
+    "output": {"items": [{"content": "Example: -----BEGIN RSA PRIVATE KEY-----\nNOT A REAL KEY\n-----END RSA PRIVATE KEY-----.", "kind": "fact", "confidence": 1, "sourceIndices": [0]}]},
+    "policy": {"sourceCount": 1, "itemLimit": 5},
+    "expected": [{"content": "Example: [REDACTED].", "kind": "fact", "confidence": 1, "sourceIndices": [0]}]
+  },
+  {
+    "name": "redacts a synthetic dash-prefixed key",
+    "output": {"items": [{"content": "Example: sk-FAKE_TEST_000000.", "kind": "fact", "confidence": 1, "sourceIndices": [0]}]},
+    "policy": {"sourceCount": 1, "itemLimit": 5},
+    "expected": [{"content": "Example: [REDACTED].", "kind": "fact", "confidence": 1, "sourceIndices": [0]}]
+  },
+  {
+    "name": "redacts a synthetic hex personal access token",
+    "output": {"items": [{"content": "Example: crn_pat_00000000000000000000000000000000.", "kind": "fact", "confidence": 1, "sourceIndices": [0]}]},
+    "policy": {"sourceCount": 1, "itemLimit": 5},
+    "expected": [{"content": "Example: [REDACTED].", "kind": "fact", "confidence": 1, "sourceIndices": [0]}]
+  },
+  {
+    "name": "redacts a synthetic underscore-prefixed token",
+    "output": {"items": [{"content": "Example: ghp_FAKE_TEST_0000000000.", "kind": "fact", "confidence": 1, "sourceIndices": [0]}]},
+    "policy": {"sourceCount": 1, "itemLimit": 5},
+    "expected": [{"content": "Example: [REDACTED].", "kind": "fact", "confidence": 1, "sourceIndices": [0]}]
+  },
+  {
+    "name": "redacts a synthetic access key ID",
+    "output": {"items": [{"content": "Example: AKIAFAKETEST00000000.", "kind": "fact", "confidence": 1, "sourceIndices": [0]}]},
+    "policy": {"sourceCount": 1, "itemLimit": 5},
+    "expected": [{"content": "Example: [REDACTED].", "kind": "fact", "confidence": 1, "sourceIndices": [0]}]
+  },
+  {
+    "name": "redacts a synthetic three-part token",
+    "output": {"items": [{"content": "Example: eyJFAKE000000.FAKE000000.FAKE000000.", "kind": "fact", "confidence": 1, "sourceIndices": [0]}]},
+    "policy": {"sourceCount": 1, "itemLimit": 5},
+    "expected": [{"content": "Example: [REDACTED].", "kind": "fact", "confidence": 1, "sourceIndices": [0]}]
+  },
+  {
+    "name": "three-part token redaction precedes bearer redaction",
+    "output": {"items": [{"content": "Example: Bearer eyJFAKE000000.FAKE000000.FAKE000000.", "kind": "fact", "confidence": 1, "sourceIndices": [0]}]},
+    "policy": {"sourceCount": 1, "itemLimit": 5},
+    "expected": [{"content": "Example: Bearer [REDACTED].", "kind": "fact", "confidence": 1, "sourceIndices": [0]}]
   },
   {
     "name": "Unicode and redaction normalization",

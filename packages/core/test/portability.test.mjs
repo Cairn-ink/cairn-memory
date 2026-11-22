@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, realpathSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { isAbsolute, join, relative, sep } from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parse } from '../../../tools/testing/vendor/acorn/acorn.mjs';
 
 const root = realpathSync(fileURLToPath(new URL('../src/', import.meta.url)));
@@ -22,8 +22,8 @@ function* files(directory) {
 function checkSpecifier(specifier, file) {
   assert.equal(typeof specifier, 'string', `Expected a literal module specifier in ${file}`);
   assert.match(specifier, /^\.\.?\//, `Only relative imports are portable: ${specifier} in ${file}`);
-  const path = realpathSync(resolve(dirname(file), specifier));
-  const fromRoot = relative(root, path);
+  const target = fileURLToPath(new URL(specifier, pathToFileURL(file)));
+  const fromRoot = relative(root, realpathSync(target));
   assert.ok(fromRoot !== '..' && !fromRoot.startsWith('..' + sep) && !isAbsolute(fromRoot),
     `Import leaves src: ${specifier} in ${file}`);
 }
@@ -35,6 +35,10 @@ function checkSyntax(node, file) {
     if (node.source) checkSpecifier(node.source.value, file);
   }
   if (node.type === 'Identifier') assert.ok(!nodeGlobals.has(node.name), `Node global ${node.name} in ${file}`);
+  if (node.type === 'MemberExpression' && node.object.name === 'globalThis' && node.computed) {
+    const name = node.property.value;
+    assert.ok(!nodeGlobals.has(name), `Node global ${name} in ${file}`);
+  }
   for (const child of Object.values(node)) {
     if (Array.isArray(child)) for (const entry of child) checkSyntax(entry, file);
     else if (typeof child === 'object') checkSyntax(child, file);
@@ -49,7 +53,8 @@ test('all package sources are portable and dependency-free', () => {
   for (const file of files(root)) {
     const source = readFileSync(file, 'utf8');
     if (file.endsWith('.d.ts')) {
-      const references = /\b(?:from\s*|(?:import|require)\s*\(?\s*)(['"])([^'"]+)\1|^\s*\/\/\/\s*<reference\s+(?:types|path)\s*=\s*(['"])([^'"]+)\3/gm;
+      assert.doesNotMatch(source, /\brequire\s*\(/, `Node global require in ${file}`);
+      const references = /\b(?:from\s*|import\s*\(?\s*)(['"])([^'"]+)\1|^\s*\/\/\/\s*<reference\s+(?:types|path)\s*=\s*(['"])([^'"]+)\3/gm;
       for (const match of source.matchAll(references)) checkSpecifier(match[2] ?? match[4], file);
     } else {
       checkSyntax(parse(source, { sourceType: 'module', ecmaVersion: 'latest' }), file);
