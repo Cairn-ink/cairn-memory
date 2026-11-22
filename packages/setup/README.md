@@ -89,11 +89,10 @@ Known limits in this release:
 - While new turns keep arriving, each local MCP server that is indexing makes about one small index write per second and uses roughly 3% of one CPU core. Sessions on a shared server share that work. A shared server pauses indexing while no session is connected.
 - Histories of about 50,000 messages or more may never finish indexing; search keeps reporting partial coverage for them.
 - Searches served by a reader that doesn't run index maintenance itself, such as keyword-only searches when an embedding model is configured, can keep reporting partial coverage even after indexing has finished. Their results are still returned.
-- With an embedding model configured, semantic search can still send the search text, and background index maintenance can send stored memory text, to that provider while saving is paused or disabled for that store; fixed in the next release.
-- With an OpenAI key configured for the MCP server, recall, classify, relate and review requests can still send the query and stored memory text to OpenAI while saving is paused or disabled; fixed in the next release. Installs without a key, and automatic capture, are not affected.
-- Local setup doesn't support a custom `CLAUDE_CONFIG_DIR` yet: setup stops with "The Claude Code local entry could not be verified." Fixed in the next release.
-- If `~/.claude` or `~/.codex` (or `CLAUDE_CONFIG_DIR` / `CODEX_HOME`) is a symbolic link, local setup stops without connecting that tool. Fixed in the next release.
-- macOS with Node from Homebrew: setup records Node's versioned path, so rerun setup after `brew upgrade` updates Node. Fixed in the next release.
+- With an OpenAI key, a recall request from you or your AI can still use the key while saving is paused. Turning off conversation saving stops saving only: the server keeps indexing your stored memories with the key. Registering the server with `--no-context-semantic` turns off search embeddings. Installs without a key send nothing.
+- If Claude Code writes its MCP entry under a custom `CLAUDE_CONFIG_DIR`, local setup checks `~/.claude.json` and can stop because it can't verify the entry.
+- When setting up automatic saving, local setup stops before connecting a tool if its configuration directory is a symbolic link. This applies to `~/.claude`, `~/.codex` and paths set through `CLAUDE_CONFIG_DIR` or `CODEX_HOME`.
+- macOS with Node from Homebrew: setup records Node's versioned path, so rerun setup after `brew upgrade` updates Node.
 - From 0.6.8, Claude Code runs started by scripts or the Agent SDK (for example `claude -p`) are not saved. Interactive sessions keep being saved as before. In 0.6.6 and 0.6.7, these runs are still saved; to keep them out of the store on those versions, run `npx @cairn-ink/memory config --local-capture off --client claude`. This also stops saving interactive Claude Code sessions until you run `npx @cairn-ink/memory config --local-capture on --client claude`.
 - Deleting a conversation or forgetting a memory removes that text from Cairn's database at once, and it is never shown again; conversations a forget only hides stay saved until you delete them. Search never returns deleted text, but local search index files can keep word lists (and, with semantic search, vectors) from deleted items until background cleanup removes them. Cleanup runs only while Cairn is running, can take a while on a large store, and never covers index files for a search setup you no longer use. As with most databases, deleted text can also remain in unused file space until it is overwritten.
 - Recall that asks for sources or reasons can be refused (`source_unavailable`) after you forget or correct a memory, until the other memories that came from a conversation it hid are corrected or forgotten. This needs a model key and is unchanged from 0.6.7; ordinary recall keeps working.
@@ -183,11 +182,10 @@ Codex 的 hooks 核准提示。執行 `--no-capture` 或 `config --local-capture
 - 新一輪的對話內容持續存進來時，每個正在建索引的本機 MCP 伺服器大約每秒做一次小量寫入，約佔一個 CPU 核心的 3%。連到同一台背景伺服器的對話會共用索引工作。沒有對話連線時，共用伺服器會暫停建索引。
 - 約 50,000 則訊息以上的歷史可能永遠建不完索引，搜尋會一直回報 partial。
 - 由不自行維護索引的讀取端處理的搜尋（例如設定了 embedding 模型時的純關鍵字搜尋），即使索引已建完，也可能持續回報 partial；搜尋結果仍會照常回傳。
-- 若設定了 embedding 模型，在該資料庫暫停或停用保存時，語意搜尋仍可能把搜尋文字、背景索引維護仍可能把已保存的記憶文字送到該模型供應商；下一版修正。
-- 若替 MCP 伺服器設定了 OpenAI 金鑰，在暫停或停用保存期間，回想、分類、關聯與審閱請求仍可能把查詢和已保存的記憶文字送到 OpenAI；下一版修正。沒有設定金鑰的安裝、以及自動保存都不受影響。
-- 本機設定還不支援自訂的 `CLAUDE_CONFIG_DIR`：設定會停在「無法確認 Claude Code 的本機記憶項目」。下一版修正。
-- 若 `~/.claude` 或 `~/.codex`（或 `CLAUDE_CONFIG_DIR`／`CODEX_HOME`）是符號連結，本機設定會停止，不會連接該工具。下一版修正。
-- macOS 上用 Homebrew 安裝的 Node：設定會記下 Node 帶版本號的路徑，所以 `brew upgrade` 更新 Node 之後請重新執行 setup。下一版修正。
+- 有設定 OpenAI 金鑰時，即使暫停保存，你或 AI 主動發出的回想請求仍可能用到金鑰。關閉對話保存只會停止保存，伺服器仍會用金鑰為已保存的記憶建立索引。用 `--no-context-semantic` 註冊伺服器會關閉搜尋用的 embedding。沒有設定金鑰的安裝不會送出任何內容。
+- 如果 Claude Code 把 MCP 項目寫到自訂的 `CLAUDE_CONFIG_DIR`，本機安裝會檢查 `~/.claude.json`，可能因為無法確認該項目而停止。
+- 設定自動保存時，如果工具的設定資料夾是符號連結，本機安裝會在連接工具前停止。這適用於 `~/.claude`、`~/.codex`，以及透過 `CLAUDE_CONFIG_DIR` 或 `CODEX_HOME` 指定的路徑。
+- macOS 上用 Homebrew 安裝的 Node：設定會記下 Node 帶版本號的路徑，所以 `brew upgrade` 更新 Node 之後請重新執行 setup。
 - 從 0.6.8 起，由腳本或 Agent SDK 啟動的 Claude Code 執行（例如 `claude -p`）不會被保存，互動對話仍照常保存。0.6.6 與 0.6.7 仍會保存這些執行；使用這兩個版本時，可以執行 `npx @cairn-ink/memory config --local-capture off --client claude`，避免它們存進來。這也會停止保存互動式 Claude Code 對話，直到你執行 `npx @cairn-ink/memory config --local-capture on --client claude`。
 - 刪除對話或忘記記憶時，那段文字會立刻從 Cairn 的資料庫移除，之後不會再出現；只是因「忘記」而隱藏的對話仍然保存著，要刪除才會移除。搜尋不會回傳被刪除的文字，但本機搜尋索引檔可能還留著被刪內容的詞彙清單（開啟語意搜尋時還有向量），要等背景清理移除。清理只在 Cairn 執行時進行，資料多時可能要一段時間，而不再使用的搜尋設定留下的索引檔不會被清理。和多數資料庫一樣，刪掉的文字也可能留在檔案未使用的空間，直到被覆寫。
 - 忘記或更正記憶之後，要求附上來源或理由的回想可能被拒絕（`source_unavailable`），直到被隱藏對話所產生的其他記憶都被更正或忘記為止。這需要設定模型金鑰，行為和 0.6.7 相同；一般回想照常可用。
