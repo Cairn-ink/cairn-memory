@@ -508,7 +508,7 @@ async function uninstallLocal(options, selection, detection, context) {
         // so an identical setup request can reactivate without rewriting authority.
         if (!await retainedCapture(root)) {
           const engine = await deletionPath(root, 'engine', { databasePath: descriptor.database.path });
-          if (!selection.client && descriptor.engine && descriptor.node) {
+          if (descriptor.engine && descriptor.node) {
             try { runLocalDaemon('stop', root, descriptor, env, 'ignore'); }
             catch { /* Best effort. Engine removal proceeds regardless of the stop outcome. */ }
           }

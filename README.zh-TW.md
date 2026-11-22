@@ -192,7 +192,7 @@ Codex 的規則，以及外掛的隱私約定。
 
 `npx @cairn-ink/memory daemon status --local` 會列出這份安裝的資料庫所用的共用伺服器，
 顯示資料庫短 ID、執行狀態、引擎 build，以及有幾個對話正在使用。`npx @cairn-ink/memory daemon stop --local`
-會請這份安裝的資料庫中仍在執行的共用伺服器結束，不會強制終止，並回報還有幾個在執行。
+會請這份安裝的資料庫所用、仍在執行的共用伺服器結束，不會強制終止，並回報還有幾個在執行。
 請等對話閒置再執行。進行中的呼叫即使已經寫入資料，也可能收到 `daemon_outcome_unknown`。
 這兩個指令只在 Linux 上運作，其他平台會回報 `daemon_platform`。
 
