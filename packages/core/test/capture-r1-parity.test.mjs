@@ -98,7 +98,7 @@ test('sizing diagnostics contain only stage, layer and reason and cannot replace
   ]) {
     const diagnostics = [];
     const report = (...event) => { diagnostics.push(event); throw new Error('synthetic report failure'); };
-    const clock = { time: 0, nowMs() { return this.time; } };
+    const clock = { time: 0, monotonicMs() { return this.time; } };
     const deadline = createCaptureDeadline(10, clock);
     clock.time = start;
     let calls = 0;
