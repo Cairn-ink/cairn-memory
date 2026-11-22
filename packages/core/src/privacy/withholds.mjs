@@ -1,4 +1,3 @@
-import { isProxy } from "#privacy-proxy-check";
 import { CONTAINMENT_THRESHOLD } from "../decisions.mjs";
 import { FACT_ORIGINS, validateSuppressionFact } from "../suppression-fact.mjs";
 
@@ -40,11 +39,11 @@ function snapshotReader() {
   function dataProperty(input, name) {
     let properties = captured.get(input);
     if (!properties) {
-      if (isProxy(input)) invalidSnapshot();
       properties = new Map();
       captured.set(input, properties);
     }
     if (!properties.has(name)) {
+      // Capture the data value in one descriptor read, including for proxies.
       const property = Object.getOwnPropertyDescriptor(input, name);
       if (property && !Object.hasOwn(property, "value")) invalidSnapshot();
       properties.set(name, property);
@@ -63,6 +62,7 @@ function snapshotReader() {
   function array(input, copy) {
     if (!Array.isArray(input)) invalidSnapshot();
     const length = finiteNumber(field(input, "length"));
+    if (!Number.isInteger(length) || length < 0 || length > 0xffff_ffff) invalidSnapshot();
     const values = [];
     for (let index = 0; index < length; index++) {
       const property = dataProperty(input, index);

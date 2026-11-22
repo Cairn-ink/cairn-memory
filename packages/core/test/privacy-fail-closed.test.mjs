@@ -181,7 +181,6 @@ const invalidRecords = [
       },
     };
   }],
-  ["proxy digest record", (record) => new Proxy(record, {})],
   ["throwing digest accessor", (record) => ({
     ...record,
     get value() { throw new Error("digest getter"); },
@@ -201,6 +200,61 @@ for (const [description, makeRecord] of invalidRecords) {
     });
   }
 }
+
+function assertAlternatingProxySnapshot(compare, record, matchingValue) {
+  let coercions = 0;
+  const object = { toString() { coercions++; return record.value; } };
+  for (const [first, later, expected] of [
+    [record.value, object, false],
+    [matchingValue, object, true],
+    [object, record.value, true],
+  ]) {
+    let reads = 0;
+    const proxy = new Proxy(record, {
+      getOwnPropertyDescriptor(target, property) {
+        const descriptor = Reflect.getOwnPropertyDescriptor(target, property);
+        if (property === "value") {
+          return { ...descriptor, value: reads++ % 2 === 0 ? first : later };
+        }
+        return descriptor;
+      },
+    });
+    const snapshotDecision = compare({ ...record, value: first });
+    assert.equal(snapshotDecision, expected);
+    assert.equal(compare(proxy), snapshotDecision);
+    assert.equal(reads, 1);
+  }
+  assert.equal(coercions, 0);
+}
+
+for (const [helper, compare] of comparisons) {
+  test(`${helper} uses the first read of a candidate Proxy digest`, () => {
+    const fact = textFact(reference);
+    assertAlternatingProxySnapshot(
+      (record) => compare({ ...disjoint, digests: [record] }, fact),
+      digest("sha256", "b"), reference.digests[0].value,
+    );
+  });
+
+  test(`${helper} uses the first read of a fact Proxy digest`, () => {
+    assertAlternatingProxySnapshot(
+      (record) => compare(disjoint, textFact({ ...reference, digests: [record] })),
+      digest("sha256", "a"), disjoint.digests[0].value,
+    );
+  });
+}
+
+test("a malformed Proxy shingle length withholds", () => {
+  for (const length of [-1, 0.5, 0x1_0000_0000]) {
+    const shingles = new Proxy(disjoint.shingles, {
+      getOwnPropertyDescriptor(target, property) {
+        const descriptor = Reflect.getOwnPropertyDescriptor(target, property);
+        return property === "length" ? { ...descriptor, value: length } : descriptor;
+      },
+    });
+    assertWithholds({ ...disjoint, shingles }, textFact(reference), keyA);
+  }
+});
 
 test("withholding decisions never coerce a digest value", () => {
   const hex = "1".repeat(64);
