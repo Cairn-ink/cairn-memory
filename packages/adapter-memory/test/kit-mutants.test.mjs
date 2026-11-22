@@ -59,6 +59,20 @@ function takesWriteLockFirst(opened) {
   });
 }
 
+function delaysPausedWriters(opened) {
+  const { uow } = opened.adapter;
+  return withPorts(opened, {
+    uow: {
+      async run(owner, options, fn) {
+        if (options.pauseLock && !options.readOnly) {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+        return uow.run(owner, options, fn);
+      },
+    },
+  });
+}
+
 function dumpsMap(opened) {
   const { harness } = opened;
   return { ...opened, harness: { ...harness, async dump() { return new Map((await harness.dump()).entries()); } } };
@@ -209,6 +223,42 @@ function acceptsEmptyCursor(opened) {
   });
 }
 
+function issuesFreshCursors(opened) {
+  const { memories } = opened.adapter;
+  let sequence = 0;
+  return withPorts(opened, {
+    memories: {
+      ...memories,
+      async exportPage(tx, scope, { cursor, limit }) {
+        const page = await memories.exportPage(tx, scope, { cursor: cursor?.replace(/\.\d+$/, "") ?? null, limit });
+        return { ...page, nextCursor: page.nextCursor === null ? null : `${page.nextCursor}.${++sequence}` };
+      },
+    },
+  });
+}
+
+function returnsRowInstances(opened) {
+  const { memories } = opened.adapter;
+  class Row {
+    constructor(fields) {
+      Object.assign(this, fields);
+    }
+  }
+  return withPorts(opened, {
+    memories: {
+      ...memories,
+      async get(...args) {
+        const row = await memories.get(...args);
+        return row === null ? null : new Row(row);
+      },
+      async exportPage(...args) {
+        const page = await memories.exportPage(...args);
+        return { ...page, items: page.items.map((row) => new Row(row)) };
+      },
+    },
+  });
+}
+
 function losesConcurrentOwnerWrite(opened) {
   const { uow, memories } = opened.adapter;
   let firstWriter;
@@ -240,6 +290,10 @@ function losesConcurrentOwnerWrite(opened) {
 const regressions = [
   ["ignores the pause lock", "K-UOW-3", ignoresPauseLock, /Pause-lock writer entered while the reader held the pause lock/],
   ["takes the write lock first", "K-UOW-3", takesWriteLockFirst, /Concurrent runs exceeded 5 seconds/],
+  ["delays paused writers and ignores the pause lock", "K-UOW-3", (opened) => delaysPausedWriters(ignoresPauseLock(opened)),
+    /Pause-lock writer entered while the reader held the pause lock/],
+  ["delays paused writers and takes the write lock first", "K-UOW-3", (opened) => delaysPausedWriters(takesWriteLockFirst(opened)),
+    /Concurrent runs exceeded 5 seconds/],
   ["returns a Map dump", "K-UOW-1", dumpsMap, /dump\(\) must return JSON-safe data.*Map/],
   ["commits inserts after a callback fails", "K-UOW-1", replaysInsertsAfterFailure, /Callback failure did not roll back/],
   ["bypasses transaction checks for issued ids", "K-UOW-7", bypassesTxChecksForIssuedIds, /Expected operation to reject/],
@@ -267,9 +321,36 @@ test("K-MEM-4 accepts a coarse write clock", async () => {
   assert.equal(await run("K-MEM-4", coarseClock), null);
 });
 
+test("K-MEM-12 accepts fresh cursors for the same position", async () => {
+  assert.equal(await run("K-MEM-12", issuesFreshCursors), null);
+});
+
+test("K-MEM-4 and K-MEM-12 accept row instances", async () => {
+  assert.equal(await run("K-MEM-4", returnsRowInstances), null);
+  assert.equal(await run("K-MEM-12", returnsRowInstances), null);
+});
+
 test("runCase rejects when the adapter never closes", async () => {
   await assert.rejects(() => run("K-ERR-1", (opened) => ({
     ...opened,
     close: () => new Promise(() => {}),
   })), /Adapter close exceeded 5 seconds/);
+});
+
+test("runCase preserves the case error when the adapter never closes", async () => {
+  const failure = new Error("case failed");
+  const testCase = {
+    id: "close-failure",
+    title: "throws a case error",
+    needs: [],
+    async run() { throw failure; },
+  };
+  await assert.rejects(() => runCase(factory((opened) => ({
+    ...opened,
+    close: () => new Promise(() => {}),
+  })), testCase), (error) => {
+    assert.strictEqual(error instanceof AggregateError ? error.errors[0] : error, failure);
+    assert.match(error.cause?.message ?? "", /Adapter close exceeded 5 seconds/);
+    return true;
+  });
 });

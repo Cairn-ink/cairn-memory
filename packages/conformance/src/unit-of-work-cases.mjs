@@ -1,3 +1,5 @@
+// Compare port results by projecting the needed fields into plain tuples or objects.
+// Documented plain shapes may be compared whole when every field is asserted. Dumps are JSON-only.
 import { assertAdapterCapabilities, ERROR_CODES, NEAR_DUPLICATE_DISTANCE, toCoreError } from "@cairn-ink/core";
 import { bounded, caught, check, equal, gate, observe, readDump, rejects, row } from "./support.mjs";
 
@@ -73,7 +75,7 @@ export const unitOfWorkCases = [
   },
   {
     id: "K-UOW-3", title: "takes the pause lock before the write lock", needs: [],
-    async run({ adapter: { uow }, owner, otherOwner }) {
+    async run({ adapter: { uow }, owner, otherOwner, settleMs = 100 }) {
       const readerStarted = gate();
       const releaseReader = gate();
       try {
@@ -84,8 +86,10 @@ export const unitOfWorkCases = [
           }));
           await Promise.race([readerStarted.promise, reader]);
           let pausedEntered = false;
-          // Queue the pause-lock writer first so a reversed order would block the plain writer.
           const paused = observe(uow.run(owner, { pauseLock: true }, async () => { pausedEntered = true; }));
+          // Give the paused writer time to reach its lock waits before starting the plain writer.
+          await new Promise((resolve) => setTimeout(resolve, settleMs));
+          check(!pausedEntered, "Pause-lock writer entered while the reader held the pause lock");
           let writerEntered = false;
           await uow.run(owner, {}, async () => { writerEntered = true; });
           check(writerEntered, "Plain writer did not enter while the reader held the pause lock");
@@ -111,6 +115,7 @@ export const unitOfWorkCases = [
           const second = observe(uow.run(owner, {}, async () => { entered.push("write"); }));
           const third = observe(uow.run(owner, { pauseLock: true }, async () => { entered.push("pause"); }));
           await uow.run(otherOwner, { pauseLock: true }, async () => {});
+          await new Promise((resolve) => setTimeout(resolve, settleMs));
           equal(entered.length, 0, "Another writer entered while the first held both locks");
           release.release(undefined);
           await Promise.all([first, second, third]);
@@ -141,13 +146,13 @@ export const unitOfWorkCases = [
           }));
           const id = await Promise.race([inserted.promise, writer.then(() => inserted.promise)]);
           await uow.run(owner, { readOnly: true }, async (tx) => {
-            equal(await memories.get(tx, scope, id), null, "Reader saw an uncommitted row");
+            check(await memories.get(tx, scope, id) === null, "Reader saw an uncommitted row");
           });
           const reader = observe(uow.run(owner, { readOnly: true }, async (tx) => {
-            equal(await memories.get(tx, scope, id), null, "Snapshot started with an uncommitted row");
+            check(await memories.get(tx, scope, id) === null, "Snapshot started with an uncommitted row");
             snapshotRead.release(undefined);
             await releaseReader.promise;
-            equal(await memories.get(tx, scope, id), null, "Snapshot changed after a concurrent commit");
+            check(await memories.get(tx, scope, id) === null, "Snapshot changed after a concurrent commit");
           }));
           await Promise.race([snapshotRead.promise, reader]);
           releaseWriter.release(undefined);

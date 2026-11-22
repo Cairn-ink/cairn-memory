@@ -1,3 +1,5 @@
+// Compare port results by projecting the needed fields into plain tuples or objects.
+// Documented plain shapes may be compared whole when every field is asserted. Dumps are JSON-only.
 // Cases never assume a store's write time equals nowMs. Fixed write times come only from
 // harness.setWriteTime. Expected orders use those forced times and the actual ids.
 import { compareSortKey, compareUtf8, NEAR_DUPLICATE_DISTANCE } from "@cairn-ink/core";
@@ -228,12 +230,12 @@ export const memoryCases = [
         return id;
       });
       await uow.run(owner, { readOnly: true }, async (tx) => {
-        equal(await memories.get(tx, scope, id), null, "Erased row is still readable");
-        equal(await memories.readRevision(tx, scope, id), null, "Erased row still has a revision");
+        check(await memories.get(tx, scope, id) === null, "Erased row is still readable");
+        check(await memories.readRevision(tx, scope, id) === null, "Erased row still has a revision");
         equal(await memories.findDuplicates(tx, scope, query, near), [[]], "Erased row still duplicates");
         equal((await memories.readWritePolicy(tx, scope, query, source, "full")).matches, [[]], "Erased row still matches policy");
-        equal(await memories.exportPage(tx, scope, { cursor: null, limit: 2 }),
-          { items: [], nextCursor: null }, "Erased row still exports");
+        const page = await memories.exportPage(tx, scope, { cursor: null, limit: 2 });
+        check(Array.isArray(page.items) && page.items.length === 0 && page.nextCursor === null, "Erased row still exports");
       });
     },
   },
@@ -253,8 +255,17 @@ export const memoryCases = [
       });
       const forced = saved.map(({ id }, i) => ({ id, updatedAtUs: times[i] }));
       for (const { id, updatedAtUs } of forced) await harness.setWriteTime(scope, id, updatedAtUs);
-      const expected = forced.sort(newestFirst).map(({ id, updatedAtUs }) => [id, updatedAtUs]);
-      const firstPage = await uow.run(owner, { readOnly: true }, (tx) => memories.exportPage(tx, scope, { cursor: null, limit: 2 }));
+      /** @param {{id: string, updatedAtUs: bigint}} item @returns {[string, bigint]} */
+      const pageKey = ({ id, updatedAtUs }) => [id, updatedAtUs];
+      const expected = forced.sort(newestFirst).map(pageKey);
+      const [originalFirst, originalSecond] = await uow.run(owner, { readOnly: true }, async (tx) => {
+        const first = await memories.exportPage(tx, scope, { cursor: null, limit: 2 });
+        const cursor = first.nextCursor;
+        check(typeof cursor === "string" && cursor.length > 0, "Incorrect cursor termination");
+        const firstItems = first.items.map(pageKey);
+        const second = await memories.exportPage(tx, scope, { cursor, limit: 2 });
+        return [firstItems, second.items.map(pageKey)];
+      });
       await uow.run(owner, { readOnly: true }, async (tx) => {
         const seen = [];
         /** @type {string | null} */
@@ -262,11 +273,10 @@ export const memoryCases = [
         for (let i = 0; i < 4; i++) {
           const page = await memories.exportPage(tx, scope, { cursor, limit: 2 });
           equal(page.items.length, i === 3 ? 1 : 2, "Unexpected page length");
-          if (i === 0) {
-            equal(page.items, firstPage.items, "First page items changed on re-read");
-            equal(page.nextCursor, firstPage.nextCursor, "First page cursor changed on re-read");
-          }
-          seen.push(...page.items.map(({ id, updatedAtUs }) => [id, updatedAtUs]));
+          const items = page.items.map(pageKey);
+          if (i === 0) equal(items, originalFirst, "First page items changed on re-read");
+          if (i === 1) equal(items, originalSecond, "First page cursor reached different items on re-read");
+          seen.push(...items);
           cursor = page.nextCursor;
           check(i === 3 ? cursor === null : typeof cursor === "string" && cursor.length > 0, "Incorrect cursor termination");
         }

@@ -28,7 +28,9 @@ export async function runCase(factory, testCase) {
     ...Object.fromEntries(needsOff.map((flag) => [flag, false])),
   };
   const opened = await factory.open({ capabilities });
-  const { adapter, embeddingDimensions, harness, nativeErrorMap, busyNativeCodes } = opened;
+  const { adapter, embeddingDimensions, harness, nativeErrorMap, busyNativeCodes, settleMs } = opened;
+  /** @type {{ error: unknown } | undefined} */
+  let caseFailure;
   try {
     const missing = testCase.needs.find((flag) => !adapter.capabilities[flag]);
     if (missing) return `needs ${missing}`;
@@ -41,6 +43,7 @@ export async function runCase(factory, testCase) {
       harness,
       nativeErrorMap,
       busyNativeCodes,
+      settleMs,
       owner,
       otherOwner: crypto.randomUUID(),
       scope: (namespace) => ({ owner, namespace }),
@@ -56,7 +59,18 @@ export async function runCase(factory, testCase) {
       },
     });
     return null;
+  } catch (error) {
+    caseFailure = { error };
+    throw error;
   } finally {
-    await bounded(() => opened.close(), "Adapter close exceeded 5 seconds");
+    try {
+      await bounded(() => opened.close(), "Adapter close exceeded 5 seconds");
+    } catch (closeError) {
+      if (caseFailure) {
+        throw new AggregateError([caseFailure.error, closeError], "Conformance case and adapter close both failed",
+          { cause: closeError });
+      }
+      throw closeError;
+    }
   }
 }

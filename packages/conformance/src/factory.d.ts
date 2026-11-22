@@ -13,6 +13,8 @@ export type OpenedAdapter = {
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;
   busyNativeCodes: readonly string[];
   embeddingDimensions: number | null;
+  /** Time in milliseconds for a started run to reach its lock waits (default 100). Raise it for stores with slow transaction start. */
+  settleMs?: number;
   close(): Promise<void>;
 };
 

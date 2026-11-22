@@ -4,6 +4,8 @@
 
 An `AdapterFactory` supplies a `name` and an `open({ capabilities })` method that returns an `OpenedAdapter`. The result exposes `adapter` with its actual capabilities, `uow`, and `memories`, along with `harness`, `nativeErrorMap`, `busyNativeCodes`, `embeddingDimensions` (`null` uses four), and an async `close()` method.
 
+Optional `settleMs` gives a started run time to reach its lock waits. The default is 100 ms. Raise it for stores with slow transaction start.
+
 The `TestHarness` provides four async hooks. Harness hooks belong in test builds only.
 
 - `dump()` returns a JSON-safe snapshot of committed state for equality checks. Use `JsonValue` data: null, booleans, finite numbers, strings, arrays, and plain objects with string keys. Encode bigints as strings.
@@ -26,3 +28,5 @@ defineConformanceTests(factory);
 - `pending` skips with the given reason before opening an adapter.
 
 Cases treat the store as the authority for write times. To create fixed times, including ties, call `harness.setWriteTime` after the write run closes. Derive the expected order from the forced microsecond times and the IDs the adapter returned.
+
+Cases compare port results by projecting the fields they need into plain tuples or objects, such as `[id, updatedAtUs]`. This lets adapters return rows and matches as class instances or with extra fields. Cases can compare documented plain shapes whole when they assert every field, such as `{ outcome, revision }` or `[[]]` for an empty match batch. Snapshots from `dump()` must be JSON-safe.
