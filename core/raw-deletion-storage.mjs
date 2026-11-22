@@ -1,4 +1,5 @@
 import { createLocalUuidFence } from './local-authority-uuid.mjs';
+import { queueRawSearchDenialInside, recordRawSessionFenceInside } from './raw-deletion-schema.mjs';
 import { writeContentSuppressionInside } from './content-suppression-storage.mjs';
 import { createHmac, randomUUID } from 'node:crypto';
 import { transaction } from './database.mjs';
@@ -156,7 +157,8 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
       writeContentSuppressionInside(db, { namespace: ns, kind: 'raw', key: row.id, reason: 'purge', actionId });
       rawCards.collect(ns,[{ conversationId: row.id }]);
     }
-    db.prepare('INSERT OR IGNORE INTO raw_session_fences VALUES(?,?,?,?,?)').run(...rawBoundary(ns), root.client, root.sessionKey);
+    const queued = recordRawSessionFenceInside(db, ns, root.client, root.sessionKey);
+    if (source.type === 'conversation' && !queued) queueRawSearchDenialInside(db, ns, row.id);
     closeJobs(ns, plan.jobs);
     db.prepare(`DELETE FROM raw_job_sources WHERE ${where} AND source_client=? AND session_key=?`)
       .run(...rawBoundary(ns), root.client, root.sessionKey);
@@ -200,8 +202,7 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
         selected = select();
         if (selected) {
           const uuid = createLocalUuidFence(db);
-          db.prepare('INSERT OR IGNORE INTO raw_session_fences VALUES(?,?,?,?,?)')
-            .run(...rawBoundary(ns), selected.client, selected.session_key);
+          recordRawSessionFenceInside(db, ns, selected.client, selected.session_key);
           uuid.enqueueInside(ns, selected.client, selected.session_key);
           do { uuid.advanceInside(); } while (uuid.pending());
         }

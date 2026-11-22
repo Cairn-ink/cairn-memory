@@ -3,6 +3,7 @@ import { resolveContentLayout } from './content-safety-layout.mjs';
 import { fail } from './validation.mjs';
 import { cardLineageDDL, authoredInvalidationDDL } from './card-lineage-schema.mjs';
 import { lineageBaseDeclarations, extendedReceiptDeclarations } from './card-lineage-base-schema.mjs';
+import { RAW_SEARCH_DENIAL_QUEUE_DDL } from './raw-deletion-schema.mjs';
 
 // One exact package, owned by the attestor and reused by the local installer.
 export const LOCAL_RAW_PRIVACY_DDL = Object.freeze([
@@ -264,18 +265,20 @@ function verifyCompleteCardSchema(db,layout,eventTime) {
   if(eventTime)wanted.get('receipts').sql=extendedReceiptDeclarations[layout.base];
   wanted.get('card_memory_revision_invalidation').sql=authoredInvalidationDDL(layout.base);
   for(const [name,row]of expectedSchema(layout.base,eventTime,true,1))wanted.set(name,{name,...row});
-  // Local Raw adds one closed, optional package to the inherited schema. Admit
-  // the entire exact package or none of it; never ignore a name/prefix family.
+  // Admit the exact Local Raw package and the Raw Search outbox independently.
+  // The entire Local Raw package is required when any of its objects is present.
   // Metadata only: read-only openers execute no DDL or repair writes.
   const local = new Map(LOCAL_RAW_PRIVACY_DDL.map(localDeclaration));
+  const [queueName, queueDeclaration] = localDeclaration(RAW_SEARCH_DENIAL_QUEUE_DDL);
   // Main's first inventory reads at most wanted+1 rows. Only a recognized
   // local object in that result authorizes the larger bounded package scan.
   const shippedLimit=wanted.size+1;
   let actual=metadataRows(db.prepare('SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL LIMIT '+shippedLimit));
-  if(layout.base===33 && actual.length===shippedLimit && actual.some(row=>local.has(row.name))) {
-    actual=metadataRows(db.prepare('SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL LIMIT '+(wanted.size+local.size+1)));
+  if(layout.base===33 && actual.length===shippedLimit && actual.some(row=>local.has(row.name)||row.name===queueName)) {
+    actual=metadataRows(db.prepare('SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL LIMIT '+(wanted.size+local.size+2)));
   }
   if(layout.base===33&&actual.some(row=>local.has(row.name)))for(const [name,row]of local)wanted.set(name,row);
+  if(layout.base===33&&actual.some(row=>row.name===queueName))wanted.set(queueName,{name:queueName,...queueDeclaration});
   if(actual.length!==wanted.size||actual.some(row=>!wanted.has(row.name)||row.type!==wanted.get(row.name).type||
     exactDDL(row.sql)!==exactDDL(wanted.get(row.name).sql)))fail('unsupported_database');
 }

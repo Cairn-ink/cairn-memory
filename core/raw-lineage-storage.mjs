@@ -4,6 +4,7 @@ import { createHash, createHmac } from 'node:crypto';
 import { fail } from './validation.mjs';
 import { createRawSourceRoots, rawSessionKeys } from './raw-source-roots.mjs';
 import { createRawCardInvalidation } from './card-raw-sources.mjs';
+import { queueRawSearchDenialInside } from './raw-deletion-schema.mjs';
 
 // The read optimisation has a bounded lease on SHARED. Overflow restarts the
 // complete validator under BEGIN IMMEDIATE; it is never a negative source proof.
@@ -775,7 +776,8 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
       for (const anchor of values) {
         writeContentSuppressionInside(db, { namespace: ns, kind: 'raw', key: anchor.conversationId, matchMode: 'span',
           messageId: anchor.messageId, start: anchor.start, end: anchor.end, ...suppression });
-        insert.run(anchor.conversationId, anchor.messageId, anchor.start, anchor.end, generation);
+        if (insert.run(anchor.conversationId, anchor.messageId, anchor.start, anchor.end, generation).changes)
+          queueRawSearchDenialInside(db, ns, anchor.conversationId, anchor.messageId, anchor.start, anchor.end);
       }
     });
   }

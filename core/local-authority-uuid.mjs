@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { rawBoundary } from './raw-input.mjs';
+import { recordRawSessionFenceInside } from './raw-deletion-schema.mjs';
 import { fail } from './validation.mjs';
 
 export const UUID_HASH_CHUNK = 128, UUID_BACKFILL_CHUNK = 64;
@@ -64,7 +65,7 @@ export function createLocalUuidFence(db) {
   // transaction. A retry cannot discard messages whose hash job is unfinished.
   function beforeDelete(ns,client,session) {
     const ready = transaction(db,()=>{
-      db.prepare('INSERT OR IGNORE INTO raw_session_fences VALUES(?,?,?,?,?)').run(...rawBoundary(ns),client,session);
+      recordRawSessionFenceInside(db, ns, client, session);
       enqueueInside(ns,client,session); return advanceInside(); });
     if (!ready) fail('local_raw_privacy_write_failed');
   }

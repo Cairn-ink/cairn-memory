@@ -1,4 +1,40 @@
+import { rawBoundary } from './raw-input.mjs';
+import { fail } from './validation.mjs';
+
 export const RAW_DELETION_SCHEMA_VERSION = 27;
+
+// This optional outbox can be added to an existing Raw store in the same
+// transaction as its first queued denial. It contains selectors only.
+export const RAW_SEARCH_DENIAL_QUEUE_DDL = `CREATE TABLE IF NOT EXISTS raw_search_denial_queue (
+  owner_id TEXT NOT NULL, scope TEXT NOT NULL, project_id TEXT NOT NULL,
+  ordinal INTEGER NOT NULL CHECK(ordinal>0), conversation_id TEXT NOT NULL,
+  message_id TEXT, start INTEGER, end INTEGER,
+  CHECK((message_id IS NULL AND start IS NULL AND end IS NULL) OR
+    (message_id IS NOT NULL AND start IS NOT NULL AND end IS NOT NULL AND start>=0 AND end>start)),
+  PRIMARY KEY(owner_id,scope,project_id,ordinal)
+) STRICT, WITHOUT ROWID;`;
+
+export function queueRawSearchDenialInside(db, ns, conversationId, messageId = null, start = null, end = null) {
+  if (!db.isTransaction) fail('raw_transaction_required');
+  db.exec(RAW_SEARCH_DENIAL_QUEUE_DDL);
+  const boundary = [ns.ownerId, ns.scope, ns.projectId ?? ''];
+  db.prepare(`INSERT INTO raw_search_denial_queue
+    VALUES(?,?,?,coalesce((SELECT ordinal FROM raw_search_denial_queue
+      WHERE owner_id=? AND scope=? AND project_id=? ORDER BY ordinal DESC LIMIT 1),0)+1,?,?,?,?)`)
+    .run(...boundary, ...boundary, conversationId, messageId, start, end);
+}
+
+export function recordRawSessionFenceInside(db, ns, client, session) {
+  if (!db.isTransaction) fail('raw_transaction_required');
+  const args = [...rawBoundary(ns), client, session];
+  if (!db.prepare('INSERT OR IGNORE INTO raw_session_fences VALUES(?,?,?,?,?)').run(...args).changes) return false;
+  // The canonical session tuple is unique. If it never had a conversation,
+  // there is no published segment key to seek.
+  const conversation = db.prepare(`SELECT id FROM raw_conversations
+    WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND session_key=?`).get(...args);
+  if (conversation) queueRawSearchDenialInside(db, ns, conversation.id);
+  return Boolean(conversation);
+}
 
 /** Only content-free deletion receipts, source ownership and host effects. */
 export function installRawDeletion(db) {

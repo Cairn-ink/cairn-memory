@@ -1,4 +1,5 @@
 import { createLocalUuidFence } from './local-authority-uuid.mjs';
+import { recordRawSessionFenceInside } from './raw-deletion-schema.mjs';
 import { randomUUID, createHmac, createHash } from 'node:crypto';
 import { transaction, isStorageBusy } from './database.mjs';
 import { localControlInput } from './local-authority-input.mjs';
@@ -74,7 +75,7 @@ export function createLocalRawPrivacyStorage(db) {
   }
   function fenceInside(ns, client, session) {
     required();
-    db.prepare('INSERT OR IGNORE INTO raw_session_fences VALUES(?,?,?,?,?)').run(...rawBoundary(ns), client, session);
+    recordRawSessionFenceInside(db, ns, client, session);
     uuid.enqueueInside(ns,client,session);
     raw.closePendingInside({ ownerId: ns.ownerId, namespace: ns, client, sessionKey: session, reason: 'capture_barrier' });
   }

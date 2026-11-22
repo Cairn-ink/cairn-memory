@@ -170,6 +170,24 @@ export function createRawSearchMaintenance(storage,authority,options) {
         admitted=true;
         const started=performance.now(),state=storage.head();
         let checkpoint=structuredClone(state.checkpoint);
+        const queue=checkpoint.denialQueue??{positions:[],next:0};
+        const denial=authority.nextDenial?.(queue.positions,queue.next,started+maxMs);
+        if(denial){
+          const {row,index,next,denied}=denial;
+          const {ordinal=0,key}=queue.positions[index]??{};
+          const {remove,afterKey}=denied?storage.denialPage(row,key,Math.min(maxItems,16)):{remove:[],afterKey:null};
+          queue.positions[index]=afterKey===null?{ordinal:row.ordinal}:{ordinal,key:afterKey};
+          queue.next=next;checkpoint.denialQueue=queue;
+          cancelled(upkeepSignal);
+          if(closed)fail('store_closed');
+          // Receipt of a page and deletion of its rows share the signed
+          // commit. Leave the independent ring's cursor and live state alone.
+          const result=await storage.commitBatch({remove,checkpoint,expectedSequence:state.sequence});
+          commit();progress.removed+=result.removed;
+          if(result.removed){quotaBlocked=false;progress.error=null;}
+          progress.checkpointAdvances++;changed();
+          return;
+        }
         // Only an admitted successor can undo a cancelled attempt. Keep
         // paused reservations while other sources continue through upkeep.
         if(reservation?.signal.aborted){
