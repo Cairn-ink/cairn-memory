@@ -101,6 +101,7 @@ export function assertRecordedEngine(call, fixture, operation) {
   assert.deepEqual(call.args, ['daemon', operation, '--db', fixture.database]);
   assert.equal(call.node, fixture.node);
   assert.equal(call.engineExists, true);
-  assert.deepEqual(call.env, ['HOME', 'LANG', 'PATH', 'TMPDIR']);
+  // macOS adds __CF_USER_TEXT_ENCODING to every process it starts.
+  assert.deepEqual(call.env.filter(key => key !== '__CF_USER_TEXT_ENCODING'), ['HOME', 'LANG', 'PATH', 'TMPDIR']);
   assert.equal(call.lang, 'C.UTF-8');
 }
