@@ -4,8 +4,10 @@ import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
+import { createFakeEmbedder } from '../context-read-embedder.mjs';
 import { createLocalRawSearch, createLocalRawSearchUpkeepControl, withLocalRawSearchUpkeep } from '../local-raw-search.mjs';
 import { installRawSearchTestClock, rawSearchTestWait } from '../testing/raw-search-clock.mjs';
+import { consumeRecentHints, searchFixture } from '../testing/raw-search-fixtures.mjs';
 import { ns, ok, request, savedSource, sourceFixture, splitRaw } from '../testing/raw-source-fixtures.mjs';
 
 const total = 128;
@@ -17,7 +19,7 @@ const replacement = { client: 'synthetic', sessionId: 'independent', eventId: 'r
 
 test.beforeEach(installRawSearchTestClock);
 
-async function indexed(t) {
+async function indexed(t, targetCount = 1) {
   let capture = false, opened = 0;
   const f = sourceFixture(t, { model: { extract: () => ({ items: capture ?
     [{ content: 'Synthetic target fact.', kind: 'fact', confidence: 0.8, sourceIndices: [0] }] : [] }) } });
@@ -66,11 +68,17 @@ async function indexed(t) {
   assert.equal(rows().length, total - 1);
   capture = true;
   const source = await savedSource(f, needle, { sessionId });
+  capture = false;
+  if (targetCount > 1) {
+    const messages = Array.from({ length: targetCount - 1 }, (_, i) =>
+      splitRaw('syntheticdenial' + i, { id: 'denial-' + i, ordinal: i + 2 })[0]);
+    ok(await f.core.captureRaw(request(messages[0], { client: 'codex', sessionId, eventId: 'denial-batch', messages })));
+  }
   await turn();
   for (let n = 0; n < total * 4 && !checkpoint().coverageComplete; n++) await turn();
   assert.equal(checkpoint().coverageComplete, true);
-  assert.equal(rows().length, total);
-  for (let n = 0; n < total + 4; n++) await turn();
+  assert.equal(rows().length, total + targetCount - 1);
+  for (let n = 0; n < total + targetCount + 4; n++) await turn();
   const idle = head();
   await turn();
   assert.deepEqual(head(), idle, 'the ring is idle before recording a denial');
@@ -78,7 +86,8 @@ async function indexed(t) {
   assert.ok(initial.indexOf(target) >= total / 2, 'the target starts far from both cleanup cursors');
   assert.equal(checkpoint().cleanup.afterSegment, 0);
   assert.equal(checkpoint().sweep, 0);
-  assert.equal((await search.search({ query: needle })).candidates.length, 1);
+  assert.ok((await search.search({ query: needle })).candidates.some(row =>
+    row.conversationId === source.conversationId && row.messageId === source.messageId));
   const rawOpens = opened;
   const fence = { namespace: ns, client: 'codex', sessionId };
   async function deny(kind) {
@@ -93,7 +102,7 @@ async function indexed(t) {
     for (const intent of ['current', 'history'])
       assert.deepEqual((await search.search({ query: needle, intent })).candidates, [], intent);
   }
-  return { f, fence, source, deny, hidden, turn, rows, initial, target, checkpoint,
+  return { f, fence, source, deny, hidden, turn, rows, initial, target, checkpoint, search,
     detach() { upkeep.suspend(); assert.equal(pending, undefined); },
     attach() { upkeep.resume(); },
     async restart() { upkeep.suspend(); await manager.close(); connect(); },
@@ -124,6 +133,43 @@ for (const [kind, lifecycle] of [
   s.assertErased();
   assert.equal(s.checkpoint().cycles, cycles);
   assert.ok(s.checkpoint().cleanup.afterSegment < s.target.id, 'the ring never reaches the target');
+});
+
+test('two bounded denial pages erase 17 distant rows while recent captures publish on both turns', async t => {
+  const s = await indexed(t, 17);
+  const deniedRows = () => s.rows().filter(row => JSON.parse(row.segment_key)[0] === s.source.conversationId);
+  await s.deny('fence');
+  assert.equal(deniedRows().length, 17);
+  await s.hidden();
+  for (let turn = 1; turn <= bound; turn++) {
+    const query = 'syntheticfresh' + turn;
+    const fresh = await savedSource(s.f, query, { sessionId: 'live-' + turn });
+    await s.turn();
+    assert.ok((await s.search.search({ query })).candidates.some(row => row.conversationId === fresh.conversationId));
+    assert.equal(deniedRows().length, turn === 1 ? 1 : 0);
+    assert.ok(s.checkpoint().cleanup.afterSegment < s.target.id);
+    await s.hidden();
+  }
+  assert.deepEqual(s.checkpoint().denialQueue.positions[0], { ordinal: 1 });
+});
+
+test('a denial page shares the turn with an eligible embedding refresh', async t => {
+  const f = sourceFixture(t), fake = createFakeEmbedder(), sent = [];
+  const s = await searchFixture(f, {
+    embedder: { ...fake, async embed(texts, controls) { sent.push(...texts); return fake.embed(texts, controls); } },
+    policy: { family: 'local', maxBatchDocuments: 1, maxRequests: 4, maxConcurrent: 1, maxUsd: 0 },
+  });
+  await savedSource(f, 'Synthetic live copper.', { sessionId: 'embedding-live' });
+  await s.maintain();
+  await savedSource(f, 'Synthetic denied quartz.', { sessionId: 'embedding-denied' });
+  await s.tick();
+  await consumeRecentHints(f, s);
+  assert.equal(s.indexCount(), 2);
+  ok(f.core.fenceSession({ namespace: ns, client: 'codex', sessionId: 'embedding-denied' }));
+  await s.tick({ embeddings: true });
+  assert.deepEqual(sent, ['Synthetic live copper.']);
+  assert.equal(s.indexCount(), 1);
+  assert.deepEqual((await s.search({ query: 'quartz' })).candidates, []);
 });
 
 test('an interrupted denial rolls back, and the ring still erases a committed denial with a missing queue entry', async t => {

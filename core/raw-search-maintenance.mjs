@@ -41,7 +41,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
     authority.check(source);
   };
   const progress={scanned:0,removed:0,indexed:0,embedded:0,checkpointAdvances:0,lastActualWork:null,error:null,phase:'idle'};
-  async function broker(work,maxMs,upkeepSignal) {
+  async function broker(work,maxMs,upkeepSignal,pairedDenialCommit) {
     cancelled(upkeepSignal);
     if (!turns) fail('maintenance_authority_required');
     if (closed||stopped) fail('store_closed');
@@ -57,15 +57,45 @@ export function createRawSearchMaintenance(storage,authority,options) {
       if (closed) fail('store_closed');
       // This lane joins the host's existing broker. The local guard also
       // prevents repeated explicit calls from defeating the commit cadence.
-      if (performance.now()-(commitTimes.get(cadenceKey)??-Infinity)<RAW_SEARCH_CADENCE_MS) return {postponed:true};
-      return await work(()=>{commitTimes.set(cadenceKey,performance.now());});
+      const lastCommit=commitTimes.get(cadenceKey);
+      if (lastCommit!==pairedDenialCommit&&performance.now()-(lastCommit?.at??-Infinity)<RAW_SEARCH_CADENCE_MS) return {postponed:true};
+      return await work(()=>{
+        const stamp={at:performance.now()};
+        commitTimes.set(cadenceKey,stamp);
+        return stamp;
+      });
     } finally {
       turns.settling(grant.ticket);
       if (turns.release(grant.ticket,'settled')!=='released') {stopped=true;progress.error='maintenance_release_failed';}
     }
   }
   function changed() {progress.lastActualWork=new Date().toISOString();}
-  async function refresh(row,maxMs,operationAccess,upkeepSignal) {
+  async function drainDenialPage(commit, maxItems, maxMs, upkeepSignal) {
+    if (!authority.nextDenial) return;
+    cancelled(upkeepSignal);
+    if (closed) fail('store_closed');
+    const state = storage.head(), checkpoint = structuredClone(state.checkpoint);
+    const queue = checkpoint.denialQueue ?? { positions: [], next: 0 };
+    const denial = authority.nextDenial(queue.positions, queue.next, performance.now() + maxMs);
+    if (!denial) return;
+    const { row, index, next, denied } = denial;
+    const { ordinal = 0, key } = queue.positions[index] ?? {};
+    const { remove, afterKey } = denied ? storage.denialPage(row, key, Math.min(maxItems, 16)) : { remove: [], afterKey: null };
+    queue.positions[index] = afterKey === null ? { ordinal: row.ordinal } : { ordinal, key: afterKey };
+    queue.next = next;
+    checkpoint.denialQueue = queue;
+    cancelled(upkeepSignal);
+    // Both erasure and acknowledgement belong to this signed commit. Base it
+    // on the latest checkpoint so the earlier work in this turn stays durable.
+    const result = await storage.commitBatch({ remove, checkpoint, expectedSequence: state.sequence });
+    const stamp = commit();
+    progress.removed += result.removed;
+    if (result.removed) { quotaBlocked = false; progress.error = null; }
+    progress.checkpointAdvances++;
+    changed();
+    return stamp;
+  }
+  async function refresh(row,maxMs,operationAccess,upkeepSignal,pairedDenialCommit) {
     const protect=source=>{cancelled(upkeepSignal);authority.check(source);operationAccess(()=>authority.check(source));authority.check(source);cancelled(upkeepSignal);};
     const port=options.embedder;
     if (!port) return;
@@ -115,7 +145,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
           reserved={...next,segment:result.sequence-1};
           if(upkeepSignal&&!closed)reservation={key:row.key,embedder:row.embedder,retry:row.retry,expected:reserved.segment,signal:upkeepSignal};
           commit();
-        },maxMs,upkeepSignal); }catch(error){
+        },maxMs,upkeepSignal,pairedDenialCommit); }catch(error){
           cancelled(upkeepSignal);
           // Preserve storage contention across the provider boundary, which
           // intentionally transports refusal codes rather than native fields.
@@ -162,32 +192,14 @@ export function createRawSearchMaintenance(storage,authority,options) {
     access();
     const before=progress.removed+progress.indexed+progress.embedded+progress.checkpointAdvances;
     progress.phase='reconciling';quantum++;
-    let admitted=false,eligibleWork=!!pending,refreshRow;
+    let admitted=false,eligibleWork=!!pending,refreshRow,denialCommit;
     try {
       if(cacheError)throw cacheError;
-      await broker(async commit=>{
+      async function maintainTurn(commit) {
         cancelled(upkeepSignal);
         admitted=true;
         const started=performance.now(),state=storage.head();
         let checkpoint=structuredClone(state.checkpoint);
-        const queue=checkpoint.denialQueue??{positions:[],next:0};
-        const denial=authority.nextDenial?.(queue.positions,queue.next,started+maxMs);
-        if(denial){
-          const {row,index,next,denied}=denial;
-          const {ordinal=0,key}=queue.positions[index]??{};
-          const {remove,afterKey}=denied?storage.denialPage(row,key,Math.min(maxItems,16)):{remove:[],afterKey:null};
-          queue.positions[index]=afterKey===null?{ordinal:row.ordinal}:{ordinal,key:afterKey};
-          queue.next=next;checkpoint.denialQueue=queue;
-          cancelled(upkeepSignal);
-          if(closed)fail('store_closed');
-          // Receipt of a page and deletion of its rows share the signed
-          // commit. Leave the independent ring's cursor and live state alone.
-          const result=await storage.commitBatch({remove,checkpoint,expectedSequence:state.sequence});
-          commit();progress.removed+=result.removed;
-          if(result.removed){quotaBlocked=false;progress.error=null;}
-          progress.checkpointAdvances++;changed();
-          return;
-        }
         // Only an admitted successor can undo a cancelled attempt. Keep
         // paused reservations while other sources continue through upkeep.
         if(reservation?.signal.aborted){
@@ -419,14 +431,26 @@ export function createRawSearchMaintenance(storage,authority,options) {
         }
         // A failed commit throws above or clears ringSaved and leaves the live ring state, so the next turn retries.
         if(ringSaved){cleanupIdle=nextIdle;cleanupVersion=nextVersion;cleanupFullLap=nextFullLap;}
+      }
+      await broker(async commit => {
+        // Finish the original work with its own deadline and branch order.
+        // An admitted turn also gets one bounded outbox page.
+        await maintainTurn(commit);
+        try {
+          denialCommit=await drainDenialPage(commit, maxItems, maxMs, upkeepSignal);
+        } catch (error) {
+          if (storageTransient(error)) deferStorage();
+          else if (!['source_budget_exceeded', 'search_deadline', 'stale_publication'].includes(error.code)) throw error;
+        }
       },maxMs,upkeepSignal);
       cancelled(upkeepSignal);
 
       // Detached, observed provider work owns its original access closure.
-      // Its reservation still shares the same broker/cadence as lexical work.
+      // The selected refresh can reserve after this turn's denial commit. A
+      // new commit from another turn still applies the shared cadence.
       if(refreshRow){
         const operationAccess=access;
-        refreshing=refresh(refreshRow,maxMs,operationAccess,upkeepSignal).then(result=>{if(!closed&&!upkeepSignal?.aborted)pending=result??null;})
+        refreshing=refresh(refreshRow,maxMs,operationAccess,upkeepSignal,denialCommit).then(result=>{if(!closed&&!upkeepSignal?.aborted)pending=result??null;})
           .catch(error=>{if(!closed&&!upkeepSignal?.aborted){if(storageTransient(error)){deferStorage();refreshAfter=0;}
             else progress.error=error.code??'index_unavailable';}}).finally(()=>{refreshing=null;if(upkeepSignal?.aborted)refreshAfter=0;});
         await new Promise(resolve=>setImmediate(resolve));

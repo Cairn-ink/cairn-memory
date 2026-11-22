@@ -742,6 +742,9 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
         ELSE raw_receipt_origins.kind END`).run(receiptId, kind);
     return changed > 0 || previous === undefined || previous !== kind && kind === 'derived';
   }
+  function queueSearchDenial(ns, { conversationId, messageId, start, end }) {
+    queueRawSearchDenialInside(db, ns, conversationId, messageId, start, end);
+  }
   function excludeMemory(ns, memoryId, suppression = { reason: 'purge', actionId: 'source-exclusion-'+memoryId }) {
     if (!enabled()) return;
     if (!db.isTransaction) fail('raw_transaction_required');
@@ -766,6 +769,7 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
         eventId: receipt.event_id, role: receipt.role, excerpt: receipt.excerpt });
     });
     if (!values.length) return;
+    const { deferredSearchDenials, ...fact } = suppression;
     return rawCards.mutate(ns,'source-exclusion-'+memoryId,() => {
       rawCards.collect(ns,values);
       db.prepare(`INSERT INTO raw_exclusion_clocks VALUES(?,?,?,1) ON CONFLICT(owner_id,scope,project_id)
@@ -775,9 +779,11 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
       const insert = db.prepare('INSERT OR IGNORE INTO raw_source_exclusions VALUES(?,?,?,?,?)');
       for (const anchor of values) {
         writeContentSuppressionInside(db, { namespace: ns, kind: 'raw', key: anchor.conversationId, matchMode: 'span',
-          messageId: anchor.messageId, start: anchor.start, end: anchor.end, ...suppression });
-        if (insert.run(anchor.conversationId, anchor.messageId, anchor.start, anchor.end, generation).changes)
-          queueRawSearchDenialInside(db, ns, anchor.conversationId, anchor.messageId, anchor.start, anchor.end);
+          messageId: anchor.messageId, start: anchor.start, end: anchor.end, ...fact });
+        if (insert.run(anchor.conversationId, anchor.messageId, anchor.start, anchor.end, generation).changes) {
+          if (deferredSearchDenials) deferredSearchDenials.push(anchor);
+          else queueSearchDenial(ns, anchor);
+        }
       }
     });
   }
@@ -827,7 +833,8 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
     }
     return run(Boolean(union));
   }
-  return { sourceSnapshot, assertEpisodeProof: assertEpisodeSourceProof, completeEpisodeProof, register, attach, assertReceipts, assertStoredReceipts, excludeMemory, filter, enabled };
+  return { sourceSnapshot, assertEpisodeProof: assertEpisodeSourceProof, completeEpisodeProof, register, attach, assertReceipts,
+    assertStoredReceipts, excludeMemory, queueSearchDenial, filter, enabled };
 }
 
 function captureReceiptTuple(receipt) {

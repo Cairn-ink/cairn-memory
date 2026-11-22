@@ -344,8 +344,12 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
         .all(JSON.stringify(staged.map(row=>row.key)));
       const ids=new Map(previous.map(row=>[row.segment_key,row.id]));
       if(staged.some(row=>(ids.get(row.key)??null)!==row.expected))fail('stale_publication');
-      const base=header().sequence;
+      const {sequence:base,checkpoint:previousCheckpoint}=header();
       if(expectedSequence!==undefined&&base!==expectedSequence)fail('stale_publication');
+      // Ordinary publication may have read its checkpoint before another
+      // connection advanced the queue. Only the sequenced drain owns that cursor.
+      const denialQueue=expectedSequence===undefined&&JSON.parse(previousCheckpoint).denialQueue;
+      if(denialQueue)next={...next,denialQueue};
       const removed=db.prepare(`DELETE FROM segments WHERE id IN (SELECT value FROM json_each(?))
         OR segment_key IN (SELECT value FROM json_each(?))`).run(JSON.stringify(remove),JSON.stringify(staged.map(row=>row.key))).changes;
       if(staged.length)db.prepare('INSERT INTO segments VALUES '+staged.map(()=>'(?,?,?,?,?,1)').join(','))
