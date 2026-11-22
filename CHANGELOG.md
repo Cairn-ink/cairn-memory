@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.9 — 2026-11-22: compact recall when the service offers it
+
+- When the Cairn service says it supports context-read, recall first asks it
+  for a compact set of memories: whole items, in rank order, within 9,000
+  characters. If that request is slow or fails, the plugin sends the same
+  recall request as 0.3.8.
+- Until the service advertises context-read, recall works exactly as in 0.3.8.
+- New setting `context_read` (on by default). Turn it off and the plugin never
+  reads or writes its context-read state file.
+- Known limit: if the context-read state file sits on a network or
+  files-on-demand folder and a read of it blocks, recall still arrives on time,
+  but Claude Code may stop the hook process at its timeout. Turning
+  `context_read` off avoids this. See the plugin README.
+- Capture, the protocol for other clients, and the installer are unchanged.
+
 ## 0.6.9 — 2026-11-21
 
 - **A session that starts while another one is saving is no longer lost.**
