@@ -1,0 +1,77 @@
+# Phase 0: frozen interfaces
+
+Every team starts from these types. Nobody invents a port: a missing method is a Phase 0
+change request to the core lead, answered on the same day.
+
+## What is frozen
+
+| File | Contents |
+|---|---|
+| `packages/core/src/errors.mjs` | `ErrorKind` (9 kinds), `ErrorCode` → kind table, `CoreError` (message = code only), `toCoreError` |
+| `packages/core/src/capabilities.mjs` | Capability flags; `capabilities()` and `requireCapability()` |
+| `packages/core/src/suppression-fact.mjs` | One `SuppressionFact` union (`identity`, `text`, `session`, `window`), `validateSuppressionFact` |
+| `packages/core/src/decisions.mjs` | Pinned numbers and policies (below) |
+| `packages/core/src/utf8.mjs` | `compareUtf8` (canonical id/namespace order, no Buffer), `compareSortKey` (exact µs keys) |
+| `packages/core/src/ports/*.d.ts` | `UnitOfWork`, capture, memory store, retrieval, privacy, model and host ports; `StorageAdapter` |
+| `packages/core/src/extraction/` | Plain extraction prompt/spec, candidate validation, embedding decode (carried from the engine package), with the engine parity fixtures |
+
+## Pinned decisions
+
+| Decision | Value | Source |
+|---|---|---|
+| Near-duplicate threshold | cosine distance 0.08, both stores | Product decision |
+| Forget rules | Same everywhere. With a fingerprint key: exact, HMAC, shingles, vector, lineage. Without a key: exact + lineage only. The local switch ships only after a measured impact check. | Product decision |
+| Hosted lineage | Session-level, message-MAC fork fences with keyed content proofs until after the cutover; span receipts come later | Product decision |
+| Ranking | Hosted cuts over on the `hosted` preset (k 60, lexical 0.5, vector 1, pool 50; ties `updatedAt` desc then `id` desc on the exact µs key, in both channels and the fused order; offset paging over the fused union ≤ 100). Engine keeps `rrf-k60-d12` (weights 0.45/0.45, union 24, canonical tie). Any change waits for the benchmark. | Product decision |
+| Ordering keys | All ordering uses `updatedAtUs` (bigint µs) and `compareUtf8` for ids/namespaces; ms fields are display only | Interface review |
+| Origin | `explicit` (mcp, web, import) / `inferred` (capture, plugin); duplicate merge `{confidence, kind?, origin?}`; review state parked | Interface review |
+| Hash | The cloud normalizer is the core text hash; the engine's legacy fingerprint is a lookup | Design decision (privacy module confirms the suppression key) |
+| Edits | Identical text → `unchanged`, no revision bump; text colliding with another memory → `memory_conflict` | Design decision |
+| Export / import | `MemoryService` has `exportMemories`, `listRawMessages`, `importMemories`, `importRawMessages`; imports run the full capture suppression and pause check | Design decision |
+| Test hooks | Kit-owned `TestHarness` (in the conformance package, test builds only); production ports stay clean | Design decision |
+| Vector-only floor | 0.45, plugin recall only, applied after fusion; a row in the lexical pool is always kept | Shipped hosted behaviour |
+| Suppression distance / containment | 0.20 / 60% of 4-char shingles | Shipped hosted behaviour |
+| Lineage closure bound | 1,000 sessions / 20,000 vertices; over the bound → `lineage_closure_limit`, full rollback, never partial | New specification (hosted lineage closure); not yet in the shipped hosted service |
+| Extraction slice | 24 messages per model call | Engine and plugin wire today; NEW policy for hosted extraction (it extracts up to 500 messages in one call today); on the shadow-comparison list |
+| Tool response cap | 262,144 bytes, refused not truncated | Engine contract |
+| Parked, not in core | Method packages, assets, role profiles, episodes | Product decision |
+| Cloud launch-only heuristics | May be deleted with the cloud owner's sign-off | Product decision |
+
+## Rules every adapter follows (checked by the conformance kit)
+
+1. **Locks.** `UnitOfWork.run` holds one transaction. Local stores run it on an exclusive writer connection under an async mutex, with synchronous port bodies and a live-Tx check on every call. Lock order is the pause lock, then the owner write lock. No model or network call runs inside it: core embeds and extracts first, then re-checks inside the transaction.
+2. **Errors.** Every failure crossing a port is a `CoreError` with a code from `ERROR_CODES` (own keys only). A message carries no text, hashes, keys, ids or SQL. Each adapter passes an explicit, tested native-code map to `toCoreError`; unmapped failures become `internal_error`.
+3. **Fail closed.** Uncertain suppression state, a missing key where one is needed, or a lineage error refuses or hides. Nothing is ever inferred from absence.
+4. **Visibility.** Candidate ports return rows already filtered by the visibility predicate in the same snapshot. `VisibilityFence` re-checks right before delivery.
+5. **Optional ports.** An optional port is present exactly when its capability flag is true (`assertAdapterCapabilities` at registration, both directions). A missing capability degrades to a defined result: lexical-only, `index_unavailable`, or skipping the step. It is never an unhandled error.
+6. **Facts.** Core passes an `incarnation` (digest of `factBody`). The same incarnation in a fact slot returns the original fact; a different one throws `fact_conflict` and rolls back. A new fact advances the owner epoch by exactly 1. Text facts carry every digest variant (core, hosted-v1, engine-legacy) and match on any of them; passages that held a secret use `hmac` digests, never unkeyed ones. Local stores keep only hashed session keys.
+7. **Erasure.** Raw erasure covers exactly the proven closure or text-withheld rows, the same set forget erases. `eraseSessions` accepts only a `ProvenClosure` from `provenClosure` (type-level guard). Id-only and unknown fences hide but never delete.
+8. **Forget's row step** makes the row permanently invisible and erases its content; adapters may delete or tombstone.
+9. **Read sets.** Retrieval reads take one owner and a list of namespaces fused into one ranking; every `ItemRef` carries its namespace.
+11. **Deterministic candidate order.** Core orders by distance or relevance, then `updatedAtUs` desc, then `id` desc by UTF-8 bytes. SQL candidate queries use the same order before `LIMIT` (`ORDER BY distance|relevance, updated_at DESC, id COLLATE "C" DESC`); boundary ties that differ from the shipped hosted order are expected differences on the shadow-comparison list.
+10. **Embeddings are optional at write.** `InsertRow.embedding` may be null; near matching then skips that row and counts it.
+
+## Team map
+
+| Team | Builds | Ports it implements or consumes |
+|---|---|---|
+| A, capture core | capture orchestration, qualification, reconcile | consumes `CaptureClaim`, `CaptureFinish`, `SourceFilter`, `RawCapture`, `ModelPort`, `ModelGate`, `CausalStream` |
+| B, memory policy | dedupe, correct, supersede, conflict | consumes `MemoryStore`, `SupersessionStore`, `ConflictEdgeStore`, `SuppressionStore.snapshot` |
+| C, retrieval core | tokenizer, BM25, fusion presets, floor, assembly, session start | consumes the retrieval ports; owns `FUSION_PRESETS` math |
+| D, privacy core | fingerprint, redact (frozen v1 + current), withholds, forget order, pause | consumes `SuppressionStore`, `SessionLineageStore`, `SpanLineageStore`, `RawStore`, `PauseStore`, `FingerprintKeyProvider`; owns `privacy/redact.mjs` (frozen v1 + current), which replaces `extraction/redact.mjs` |
+| E, memory adapter + conformance | reference adapter, invariants §5 | implements `StorageAdapter` in memory |
+| F/J, wire + host adapters | hosted contract, MCP/plugin on the facade | consumes `MemoryService` |
+| G/H, Postgres adapter + cloud switch | refactor of the hosted `src/memory` | implements `StorageAdapter` on Postgres |
+| I, SQLite adapter + installer | wraps the engine storages | implements `StorageAdapter` on SQLite |
+
+## Scope calls (core lead)
+
+- Ordered capture (`CausalStream`) ships as the capture module's second slice, after the supersession port.
+- The core capture modules replace `src/extraction/`; its fixtures stay as the old-versus-new extraction oracle.
+- The capture rationale stage is not in core until a keep/drop decision; `ModelStage` reserves its name only.
+- One id order in all of core: UTF-8 bytes (`compareUtf8`). Where the hosted service compares ids differently today (SQL collation, JS UTF-16 string order in in-batch ties), the difference is listed for the shadow comparison.
+
+## Change requests
+
+Send the core lead the port, the method, and the reason. A request is
+accepted only if it keeps every adapter able to implement it, or it adds a capability flag.

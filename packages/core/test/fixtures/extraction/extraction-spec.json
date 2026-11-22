@@ -1,0 +1,118 @@
+[
+  {
+    "name": "normal",
+    "messages": [
+      {"role": "user", "content": "I keep my sketches in a blue folder."},
+      {"role": "assistant", "content": "I will label it Sketches."}
+    ],
+    "itemLimit": 5,
+    "indexMaximum": 1
+  },
+  {
+    "name": "assistant-heavy",
+    "messages": [
+      {"role": "assistant", "content": "Notebook option 1."},
+      {"role": "assistant", "content": "Notebook option 2."},
+      {"role": "assistant", "content": "Notebook option 3."},
+      {"role": "assistant", "content": "Notebook option 4."},
+      {"role": "assistant", "content": "Notebook option 5."},
+      {"role": "assistant", "content": "Notebook option 6."},
+      {"role": "assistant", "content": "Notebook option 7."},
+      {"role": "user", "content": "I keep my sketches in a blue folder."}
+    ],
+    "itemLimit": 5,
+    "indexMaximum": 7
+  },
+  {
+    "name": "distinct user turns",
+    "messages": [
+      {"role": "user", "content": "I bike on Mondays."},
+      {"role": "user", "content": "I prefer paper maps."},
+      {"role": "user", "content": "I collect stamps."},
+      {"role": "user", "content": "I start work at nine."},
+      {"role": "user", "content": "I use green ink."},
+      {"role": "user", "content": "I borrow books on Fridays."},
+      {"role": "user", "content": "I moved the meeting to June."}
+    ],
+    "itemLimit": 7,
+    "indexMaximum": 6
+  },
+  {
+    "name": "CJK",
+    "messages": [
+      {"role": "user", "content": "我偏好繁體中文。"},
+      {"role": "assistant", "content": "了解。"},
+      {"role": "user", "content": "毎週、図書館に行きます。"}
+    ],
+    "itemLimit": 5,
+    "indexMaximum": 2
+  },
+  {
+    "name": "empty",
+    "messages": [],
+    "itemLimit": 0,
+    "indexMaximum": null
+  },
+  {
+    "name": "at the 24-message limit",
+    "messages": [
+      {"role": "user", "content": "I bike on Mondays."},
+      {"role": "user", "content": "I prefer paper maps."},
+      {"role": "user", "content": "I collect stamps."},
+      {"role": "user", "content": "I start work at nine."},
+      {"role": "user", "content": "I use green ink."},
+      {"role": "user", "content": "I borrow books on Fridays."},
+      {"role": "user", "content": "I moved the meeting to June."},
+      {"role": "user", "content": "I filed drawing 8."},
+      {"role": "user", "content": "I filed drawing 9."},
+      {"role": "user", "content": "I filed drawing 10."},
+      {"role": "user", "content": "I filed drawing 11."},
+      {"role": "user", "content": "I filed drawing 12."},
+      {"role": "user", "content": "I filed drawing 13."},
+      {"role": "user", "content": "I filed drawing 14."},
+      {"role": "user", "content": "I filed drawing 15."},
+      {"role": "user", "content": "I filed drawing 16."},
+      {"role": "user", "content": "I filed drawing 17."},
+      {"role": "user", "content": "I filed drawing 18."},
+      {"role": "user", "content": "I filed drawing 19."},
+      {"role": "user", "content": "I filed drawing 20."},
+      {"role": "user", "content": "I filed drawing 21."},
+      {"role": "assistant", "content": "Confirmed drawing 1."},
+      {"role": "assistant", "content": "Confirmed drawing 2."},
+      {"role": "assistant", "content": "Confirmed drawing 3."}
+    ],
+    "itemLimit": 20,
+    "indexMaximum": 23
+  },
+  {
+    "name": "above the 24-message limit",
+    "messages": [
+      {"role": "user", "content": "I bike on Mondays."},
+      {"role": "user", "content": "I prefer paper maps."},
+      {"role": "user", "content": "I collect stamps."},
+      {"role": "user", "content": "I start work at nine."},
+      {"role": "user", "content": "I use green ink."},
+      {"role": "user", "content": "I borrow books on Fridays."},
+      {"role": "user", "content": "I moved the meeting to June."},
+      {"role": "user", "content": "I filed drawing 8."},
+      {"role": "user", "content": "I filed drawing 9."},
+      {"role": "user", "content": "I filed drawing 10."},
+      {"role": "user", "content": "I filed drawing 11."},
+      {"role": "user", "content": "I filed drawing 12."},
+      {"role": "user", "content": "I filed drawing 13."},
+      {"role": "user", "content": "I filed drawing 14."},
+      {"role": "user", "content": "I filed drawing 15."},
+      {"role": "user", "content": "I filed drawing 16."},
+      {"role": "user", "content": "I filed drawing 17."},
+      {"role": "user", "content": "I filed drawing 18."},
+      {"role": "user", "content": "I filed drawing 19."},
+      {"role": "user", "content": "I filed drawing 20."},
+      {"role": "user", "content": "I filed drawing 21."},
+      {"role": "assistant", "content": "Confirmed drawing 1."},
+      {"role": "assistant", "content": "Confirmed drawing 2."},
+      {"role": "assistant", "content": "Confirmed drawing 3."},
+      {"role": "user", "content": "I keep my sketches in a blue folder."}
+    ],
+    "errorMessage": "invalid_openai_request"
+  }
+]

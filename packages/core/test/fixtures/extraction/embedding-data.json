@@ -1,0 +1,107 @@
+{
+  "spec": {"id": "synthetic-embedder", "revision": "fixture", "dimensions": 2, "normalization": "l2"},
+  "cases": [
+    {
+      "name": "shuffled indices",
+      "requestedCount": 2,
+      "data": [{"index": 1, "embedding": [0, -1]}, {"index": 0, "embedding": [0.6, 0.8]}],
+      "expected": [[0.6, 0.8], [0, -1]]
+    },
+    {
+      "name": "missing position",
+      "requestedCount": 2,
+      "data": [{"index": 0, "embedding": [1, 0]}],
+      "errorCode": "provider_error"
+    },
+    {
+      "name": "repeated position with matching length",
+      "requestedCount": 2,
+      "data": [{"index": 0, "embedding": [1, 0]}, {"index": 0, "embedding": [0, 1]}],
+      "errorCode": "provider_error"
+    },
+    {
+      "name": "out-of-range position with matching length",
+      "requestedCount": 1,
+      "data": [{"index": 1, "embedding": [1, 0]}],
+      "errorCode": "provider_error"
+    },
+    {
+      "name": "negative position",
+      "requestedCount": 1,
+      "data": [{"index": -1, "embedding": [1, 0]}],
+      "errorCode": "provider_error"
+    },
+    {
+      "name": "non-integer position",
+      "requestedCount": 1,
+      "data": [{"index": 0.5, "embedding": [1, 0]}],
+      "errorCode": "provider_error"
+    },
+    {
+      "name": "wrong dimension",
+      "requestedCount": 1,
+      "data": [{"index": 0, "embedding": [1]}],
+      "errorCode": "dimension_mismatch"
+    },
+    {
+      "name": "non-array vector",
+      "requestedCount": 1,
+      "data": [{"index": 0, "embedding": "vector"}],
+      "errorCode": "dimension_mismatch"
+    },
+    {
+      "name": "non-finite component",
+      "requestedCount": 1,
+      "dataJson": "[{\"index\":0,\"embedding\":[1e999,0]}]",
+      "errorCode": "provider_error"
+    },
+    {
+      "name": "non-numeric component",
+      "requestedCount": 1,
+      "data": [{"index": 0, "embedding": ["1", 0]}],
+      "errorCode": "provider_error"
+    },
+    {
+      "name": "zero vector",
+      "requestedCount": 1,
+      "data": [{"index": 0, "embedding": [0, 0]}],
+      "errorCode": "provider_error"
+    },
+    {
+      "name": "lower norm boundary",
+      "requestedCount": 1,
+      "data": [{"index": 0, "embedding": [0.9, 0]}],
+      "expected": [[1, 0]]
+    },
+    {
+      "name": "below lower norm boundary",
+      "requestedCount": 1,
+      "data": [{"index": 0, "embedding": [0.8999999999999999, 0]}],
+      "errorCode": "provider_error"
+    },
+    {
+      "name": "upper norm boundary",
+      "requestedCount": 1,
+      "data": [{"index": 0, "embedding": [0, 1.1]}],
+      "expected": [[0, 1]]
+    },
+    {
+      "name": "above upper norm boundary",
+      "requestedCount": 1,
+      "data": [{"index": 0, "embedding": [0, 1.1000000000000003]}],
+      "errorCode": "provider_error"
+    },
+    {
+      "name": "within norm gate and non-unit",
+      "requestedCount": 1,
+      "data": [{"index": 0, "embedding": [0.44, 0.825]}],
+      "expected": [[0.47058823529411764, 0.8823529411764706]]
+    },
+    {
+      "name": "malformed data shape",
+      "requestedCount": 1,
+      "data": {"index": 0, "embedding": [1, 0]},
+      "errorCode": "provider_error"
+    }
+  ]
+}
