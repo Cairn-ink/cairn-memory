@@ -780,8 +780,8 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       if (!options.counter) return failure(new MemoryStoreError('invalid_input'), { counter: 'absent' });
       let queryVector;
       const cardChannel = documentChannel && input.types.includes('memory') ? documentChannel : null;
-      const searched = await searchCandidates(input, access, deadlineAt, true,
-        cardChannel ? vector => { queryVector = vector; } : undefined);
+      const searched = cardChannel ? await searchCandidates(input, access, deadlineAt, true, vector => { queryVector = vector; })
+        : await searchCandidates(input, access, deadlineAt, true);
       access.check();
       if (!searched.ok) {
         return deepFreeze({ ...searched, error: { ...searched.error,
