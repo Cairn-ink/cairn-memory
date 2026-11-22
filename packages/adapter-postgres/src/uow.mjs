@@ -68,6 +68,11 @@ async function releaseConnection(connection, committed) {
  * Production hosts should use a source that opens a fresh client on connect for
  * each run and ends it on release. This prevents session state from carrying
  * across runs at this layer. DISCARD ALL is the backstop for pooled sources.
+ * Pool rules for hosts (DISCARD ALL does not cover these): adapter SQL never reads custom
+ * (dotted) settings, so a placeholder left registered by an earlier session cannot change it;
+ * and the driver contract carries no statement names, so the adapter never creates named
+ * protocol statements. A host must not share a pooled source with code that uses named
+ * statements or custom settings.
  * DISCARD ALL leaves the pseudorandom state set by setseed intact. Owner data
  * and transaction correctness are independent of that state.
  * @param {ConnectionSource} source

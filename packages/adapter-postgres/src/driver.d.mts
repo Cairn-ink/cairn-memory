@@ -9,6 +9,7 @@ export interface ConnectionSource {
   connect(): Promise<Connection>;
 }
 
+/** Unnamed queries only: the contract has no statement-name parameter by design. */
 export interface Connection {
   query(text: string, values?: unknown[]): Promise<QueryResult>;
   release(destroy?: boolean): void | Promise<void>;
