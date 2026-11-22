@@ -2,7 +2,7 @@ import { CoreError } from '../errors.mjs';
 import { snapshotQualificationTextCatalog } from './qualification-text-catalog.mjs';
 
 /** @returns {never} */
-function invalid() { throw new Error('invalid_openai_request'); }
+function invalid() { throw new CoreError('invalid_input'); }
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function record(value) {

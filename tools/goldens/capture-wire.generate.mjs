@@ -81,11 +81,14 @@ async function observe({ name, method, mode, request, output, qualificationInput
     const signal = adapterFailure?.signal ?? new AbortController().signal;
     expected = { result: await model[method]({ ...request, signal }) };
   } catch (error) {
-    expected = { errorCode: error.code ?? error.name };
+    expected = { errorCode: error.code ?? (error.message === 'invalid_openai_request' ? 'request_invalid' : error.name) };
   }
   assert.deepEqual(diagnostics.map(event => event.reason), reasons, name);
   assert.equal(Object.hasOwn(expected, 'errorCode'), reasons.length > 0, name);
-  if (!adapterFailure) {
+  if (expected.errorCode === 'request_invalid') {
+    assert.equal(body, undefined, name);
+    assert.equal(tokenCount, undefined, name);
+  } else if (!adapterFailure) {
     assert.ok(body && tokenCount, name);
     assert.equal(body.store, false, name);
     assert.equal(body.stream, false, name);
@@ -114,7 +117,7 @@ function extraction(mode, count) {
     sourceIndices: input.messages.length === 1 ? [0] : [0, input.messages.length - 1],
   }] };
   return { name: `${mode} ${count} messages`, method: 'extract', mode,
-    request: { system, input, maxOutputTokens: extractionOutputTokens(input.messages) }, output };
+    request: { system, input, maxOutputTokens: 1024 }, output };
 }
 
 let plainExtract;
@@ -194,8 +197,48 @@ for (const mode of ['inline', 'catalog']) {
   }
 }
 await observe(candidateQualification('adaptive-inline', [2]));
-for (const example of [plainExtract, automaticQualification(1), candidateQualification('inline', [1], true)]) {
+const automatic = automaticQualification(1);
+const inline = candidateQualification('inline', [1], true);
+for (const example of [plainExtract, automatic, inline]) {
   await observe({ ...example, name: `${example.mode} output is an array`, output: [], reasons: ['output_shape'] });
+}
+
+// The wire adapter returns these objects for capture to validate after normalization.
+for (const [example, name, change] of [
+  [plainExtract, 'extract extra item property', output => { output.items[0].extra = true; }],
+  [plainExtract, 'extract raw content too long', output => { output.items[0].content = ' '.repeat(600) + 'Trail marker'; }],
+  [plainExtract, 'extract source index out of range', output => { output.items[0].sourceIndices = [1]; }],
+  [automatic, 'qualify extra item property', output => { output.qualifications[0].extra = true; }],
+  [automatic, 'qualify raw subject too long', output => {
+    output.qualifications[0].qualification.slot.subject = ' '.repeat(160) + 'Hiker';
+  }],
+  [automatic, 'qualify receipt index out of range', output => {
+    output.qualifications[0].qualification.anchors[0].receiptIndex = 1;
+  }],
+]) {
+  const output = structuredClone(example.output);
+  change(output);
+  await observe({ ...example, name, request: { ...example.request, system: 'Return a trail memory.' }, output });
+}
+
+const allowanceInput = { messages: Array.from({ length: 6 }, (_, index) => ({
+  index, role: 'user', content: 'Trail marker 石頭',
+})) };
+const allowance = extractionOutputTokens(allowanceInput.messages);
+assert.ok(allowance > 1024 && allowance + 1 <= 4096);
+const allowanceExample = { ...plainExtract, request: {
+  ...plainExtract.request, system: 'Extract trail facts.', input: allowanceInput,
+} };
+for (const [maxOutputTokens, accepted] of [[1023, false], [1024, true], [allowance, true],
+  [allowance + 1, false], [4097, false]]) {
+  await observe({ ...allowanceExample, name: `output allowance ${maxOutputTokens}`,
+    request: { ...allowanceExample.request, maxOutputTokens }, reasons: accepted ? [] : ['request_invalid'] });
+}
+for (const example of [automatic, inline]) {
+  for (const maxOutputTokens of [1023, 1025]) {
+    await observe({ ...example, name: `output allowance ${maxOutputTokens}`,
+      request: { ...example.request, maxOutputTokens }, reasons: ['request_invalid'] });
+  }
 }
 
 // These failures occur before the adapter supplies a parsed model output to core.
@@ -227,8 +270,6 @@ for (const [reason, reasons, count] of [
   await observe({ ...plainExtract, name: reason, reasons, adapterFailure: { count } });
 }
 
-await observe({ ...plainExtract, name: 'request_invalid', reasons: ['request_invalid'],
-  request: { ...plainExtract.request, maxOutputTokens: 0 }, adapterFailure: {} });
 await observe({ ...plainExtract, name: 'model_cancelled', reasons: ['model_cancelled'],
   adapterFailure: { signal: AbortSignal.abort() } });
 

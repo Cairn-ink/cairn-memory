@@ -8,9 +8,8 @@ import { CoreError } from '../src/errors.mjs';
 const fixture = new URL('./fixtures/capture/engine-wire-goldens.json', import.meta.url);
 const { cases, adapterOnlyCases } = JSON.parse(readFileSync(fixture, 'utf8'));
 
-function build(golden) {
-  const { system, input } = golden.request;
-  return buildModelRequest(golden.method, { system, input }, { qualificationInputMode: golden.qualificationInputMode });
+function build(golden, report) {
+  return buildModelRequest(golden.method, golden.request, { qualificationInputMode: golden.qualificationInputMode, report });
 }
 
 function assertWireFields({ instructions, input_text, schema }, built) {
@@ -38,19 +37,32 @@ function assertInvalidOutput(run) {
   assert.throws(run, error => error instanceof CoreError && error.code === 'invalid_model_output');
 }
 
+function assertInvalidInput(run) {
+  assert.throws(run, error => error instanceof CoreError && error.code === 'invalid_input');
+}
+
 assert.ok(cases.length > 0);
 for (const golden of cases) {
   test(golden.method + ' / ' + golden.name, () => {
-    const built = build(golden);
-    assertRequest(golden, built);
     const diagnostics = [];
-    const decode = () => decodeModelOutput(golden.method, built, golden.output,
-      (stage, layer, reason) => diagnostics.push({ stage, layer, reason }));
+    const report = (stage, layer, reason) => diagnostics.push({ stage, layer, reason });
+    if (golden.expected.errorCode === 'request_invalid') {
+      // adapters/openai/index.mjs:346-351 emits request_invalid before throwing a plain Error.
+      // Core preserves the diagnostic and exposes CoreError('invalid_input').
+      assertInvalidInput(() => build(golden, report));
+      assert.deepEqual(diagnostics, golden.diagnostics);
+      return;
+    }
+    const built = build(golden, report);
+    assertRequest(golden, built);
+    const decode = () => decodeModelOutput(golden.method, built, golden.output, report);
     if (Object.hasOwn(golden.expected, 'errorCode')) {
       assert.equal(golden.expected.errorCode, 'invalid_model_output');
       assertInvalidOutput(decode);
     } else {
-      assert.deepEqual(decode(), golden.expected.result);
+      const decoded = decode();
+      assert.deepEqual(decoded, golden.expected.result);
+      if (golden.method !== 'qualifyCandidates') assert.equal(decoded, golden.output);
     }
     assert.deepEqual(diagnostics, golden.diagnostics);
   });
@@ -64,41 +76,27 @@ for (const golden of adapterOnlyCases.filter(golden => golden.tokenCount.happene
   });
 }
 
-test('decode rejects fields outside the extract and automatic qualification schemas', () => {
+test('extract and automatic qualification decode require a plain object', () => {
   for (const method of ['extract', 'qualify']) {
     const golden = cases.find(entry => entry.method === method && entry.expected.result);
-    const output = structuredClone(golden.output);
-    const items = method === 'extract' ? output.items : output.qualifications;
-    items[0].extra = 'synthetic';
-    const events = [];
-    assertInvalidOutput(() => decodeModelOutput(method, build(golden), output, (...event) => events.push(event)));
-    assert.deepEqual(events, [[method, 'adapter', 'output_shape']]);
+    const built = build(golden);
+    for (const output of [null, 'synthetic', Object.create({})]) {
+      const events = [];
+      assertInvalidOutput(() => decodeModelOutput(method, built, output, (...event) => events.push(event)));
+      assert.deepEqual(events, [[method, 'adapter', 'output_shape']]);
+    }
   }
 });
 
-test('decode rejects invalid schema values and required fields', () => {
-  const extract = cases.find(entry => entry.method === 'extract' && entry.expected.result);
-  const qualify = cases.find(entry => entry.method === 'qualify' && entry.expected.result);
-  for (const [golden, change] of [
-    [extract, output => { output.items[0].sourceIndices = []; }],
-    [extract, output => { output.items[0].confidence = 1.1; }],
-    [extract, output => { delete output.items[0].kind; }],
-    [qualify, output => { output.qualifications[0].qualification.slot.subject = ''; }],
-    [qualify, output => { output.qualifications[0].qualification.value = true; }],
-  ]) {
-    const output = structuredClone(golden.output);
-    change(output);
-    assertInvalidOutput(() => decodeModelOutput(golden.method, build(golden), output));
-  }
-});
-
-test('throwing and rejecting observers preserve the candidate decode failure', () => {
-  const golden = cases.find(entry => entry.diagnostics.some(event => event.reason === 'qualification_value_shape'));
+test('throwing and rejecting observers preserve request and candidate decode failures', () => {
+  const requestFailure = cases.find(entry => entry.expected.errorCode === 'request_invalid');
+  const decodeFailure = cases.find(entry => entry.diagnostics.some(event => event.reason === 'qualification_value_shape'));
   for (const report of [
     () => { throw new Error('synthetic observer failure'); },
     async () => { throw new Error('synthetic asynchronous observer failure'); },
   ]) {
-    assertInvalidOutput(() => decodeModelOutput(golden.method, build(golden), golden.output, report));
+    assertInvalidInput(() => build(requestFailure, report));
+    assertInvalidOutput(() => decodeModelOutput(decodeFailure.method, build(decodeFailure), decodeFailure.output, report));
   }
 });
 
@@ -106,15 +104,17 @@ test('candidate mode defaults to inline and rejects unsupported configurations',
   const inline = cases.find(entry => entry.method === 'qualifyCandidates' && entry.mode === 'inline');
   const catalog = cases.find(entry => entry.method === 'qualifyCandidates' && entry.mode === 'catalog');
   assert.deepEqual(buildModelRequest(inline.method, inline.request), build(inline));
-  assert.throws(() => buildModelRequest(catalog.method, catalog.request),
-    { message: 'invalid_openai_request' });
-  assert.throws(() => buildModelRequest(inline.method, inline.request, { qualificationInputMode: 'unknown' }),
-    { message: 'invalid_openai_configuration' });
+  const events = [];
+  const report = (...event) => events.push(event);
+  assertInvalidInput(() => buildModelRequest(inline.method, inline.request, { qualificationInputMode: 'unknown', report }));
+  assertInvalidInput(() => buildModelRequest(inline.method, inline.request, { report: null }));
+  assert.deepEqual(events, []);
+  assertInvalidInput(() => buildModelRequest(catalog.method, catalog.request, { report }));
   const badCatalog = structuredClone(catalog.request);
   badCatalog.input.inputMode = 'unknown';
-  assert.throws(() => buildModelRequest(catalog.method, badCatalog, { qualificationInputMode: catalog.qualificationInputMode }),
-    { message: 'invalid_openai_request' });
-  assert.throws(() => schemasForQualificationInput(badCatalog.input), { message: 'invalid_openai_request' });
+  assertInvalidInput(() => buildModelRequest(catalog.method, badCatalog, { qualificationInputMode: catalog.qualificationInputMode, report }));
+  assert.deepEqual(events, Array.from({ length: 2 }, () => ['qualifyCandidates', 'adapter', 'request_invalid']));
+  assertInvalidInput(() => schemasForQualificationInput(badCatalog.input));
 });
 
 test('indexed input checks data descriptors before JSON serialization and canonicalizes key order', () => {
@@ -134,7 +134,7 @@ test('indexed input checks data descriptors before JSON serialization and canoni
     () => schemasFor('extract', reordered),
     () => buildModelRequest('extract', request),
   ]) {
-    assert.throws(run, { message: 'invalid_openai_request' });
+    assertInvalidInput(run);
   }
   assert.equal(reads, 0);
 });

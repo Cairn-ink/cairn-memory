@@ -12,7 +12,7 @@ import {
 /** @typedef {'inline' | 'adaptive-text-catalog-v1'} QualificationInputMode */
 /** @typedef {'output_shape' | 'qualification_wire_shape' | 'qualification_pool_mapping' |
  *   'qualification_slot_mapping' | 'qualification_value_shape'} DecodeReason */
-/** @typedef {(stage: Method, layer: 'adapter', reason: DecodeReason) => void} Report */
+/** @typedef {(stage: Method, layer: 'adapter', reason: DecodeReason | 'request_invalid') => void} Report */
 /** @typedef {ReturnType<typeof qualificationCandidatesInlineSchema>} InlineSchema */
 /** @typedef {{
  *   stage: ModelStage, request: ModelRequest, schemaName: string,
@@ -77,24 +77,46 @@ function catalogInstructions(system) {
 
 /**
  * @param {Method} method
- * @param {Pick<ModelRequest, 'system' | 'input'>} args
- * @param {{qualificationInputMode?: QualificationInputMode}} [options]
+ * @param {Report | undefined} report
+ * @param {DecodeReason | 'request_invalid'} reason
+ */
+function reportAdapterDiagnostic(method, report, reason) {
+  try { Promise.resolve(report?.(method, 'adapter', reason)).catch(() => {}); }
+  catch { /* Diagnostics never change the result. */ }
+}
+
+/**
+ * @param {Method} method
+ * @param {Pick<ModelRequest, 'system' | 'input' | 'maxOutputTokens'>} args
+ * @param {{qualificationInputMode?: QualificationInputMode, report?: Report}} [options]
  * @returns {BuiltRequest}
  */
-export function buildModelRequest(method, { system, input }, { qualificationInputMode = 'inline' } = {}) {
-  if (qualificationInputMode !== 'inline' && qualificationInputMode !== 'adaptive-text-catalog-v1') {
-    throw new Error('invalid_openai_configuration');
-  }
-  if (typeof system !== 'string') throw new Error('invalid_openai_request');
-
-  let requestInput, schema, validationSchema;
-  let instructions = system;
-  let maxOutputTokens = MODEL_OUTPUT_TOKENS;
+export function buildModelRequest(method, args, options = {}) {
+  let qualificationInputMode, report;
   try {
-    const named = input != null && Object.hasOwn(input, 'inputMode');
+    ({ qualificationInputMode = 'inline', report } = options);
+  } catch {
+    throw new CoreError('invalid_input');
+  }
+  if ((qualificationInputMode !== 'inline' && qualificationInputMode !== 'adaptive-text-catalog-v1') ||
+      (report !== undefined && typeof report !== 'function')) {
+    throw new CoreError('invalid_input');
+  }
+
+  try {
+    const { system, input, maxOutputTokens } = args;
+    if (typeof system !== 'string' || (method === 'extract'
+      ? !Number.isSafeInteger(maxOutputTokens) || maxOutputTokens < MODEL_OUTPUT_TOKENS || maxOutputTokens > 4096
+      : maxOutputTokens !== MODEL_OUTPUT_TOKENS)) {
+      throw new CoreError('invalid_input');
+    }
+
+    let requestInput, schema, validationSchema;
+    let instructions = system;
+    const named = method !== 'qualify' && input != null && Object.hasOwn(input, 'inputMode');
     if (method === 'qualifyCandidates') {
       if (named && qualificationInputMode !== 'adaptive-text-catalog-v1') {
-        throw new Error('invalid_openai_request');
+        throw new CoreError('invalid_input');
       }
       const detached = named ? snapshotQualificationTextCatalog(input) : null;
       requestInput = JSON.parse(JSON.stringify(detached?.catalog ?? input));
@@ -108,15 +130,18 @@ export function buildModelRequest(method, { system, input }, { qualificationInpu
       requestInput = JSON.parse(JSON.stringify(prevalidated));
       schema = schemasFor(method, requestInput);
       validationSchema = schema;
-      if (method === 'extract') maxOutputTokens = extractionOutputTokens(requestInput.messages);
+      if (method === 'extract' && maxOutputTokens > extractionOutputTokens(requestInput.messages)) {
+        throw new CoreError('invalid_input');
+      }
     }
+    const sizingText = JSON.stringify({ system: instructions, input: requestInput, maxOutputTokens });
+    return { stage: method === 'extract' ? 'extract' : 'qualify',
+      request: { system: instructions, input: requestInput, schema, maxOutputTokens },
+      schemaName: `cairn_${method}`, validationSchema, sizingText };
   } catch {
-    throw new Error('invalid_openai_request');
+    reportAdapterDiagnostic(method, report, 'request_invalid');
+    throw new CoreError('invalid_input');
   }
-  const sizingText = JSON.stringify({ system: instructions, input: requestInput, maxOutputTokens });
-  return { stage: method === 'extract' ? 'extract' : 'qualify',
-    request: { system: instructions, input: requestInput, schema, maxOutputTokens },
-    schemaName: `cairn_${method}`, validationSchema, sizingText };
 }
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -221,14 +246,13 @@ function decodeQualificationEvidencePool(inlineSchema, output, reject) {
 export function decodeModelOutput(method, built, rawOutput, report) {
   /** @type {Reject} */
   const reject = (reason) => {
-    try { Promise.resolve(report?.(method, 'adapter', reason)).catch(() => {}); }
-    catch { /* Diagnostics never change the decoding result. */ }
+    reportAdapterDiagnostic(method, report, reason);
     throw new CoreError('invalid_model_output');
   };
 
   if (!record(rawOutput)) reject('output_shape');
   if (method !== 'qualifyCandidates') {
-    if (!schemaAccepts(built.validationSchema, rawOutput)) reject('output_shape');
+    if (![Object.prototype, null].includes(Object.getPrototypeOf(rawOutput))) reject('output_shape');
     return rawOutput;
   }
   const inlineSchema = /** @type {InlineSchema} */ (built.validationSchema);
