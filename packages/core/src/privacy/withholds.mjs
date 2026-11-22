@@ -1,5 +1,5 @@
 import { CONTAINMENT_THRESHOLD } from "../decisions.mjs";
-import { FACT_ORIGINS } from "../suppression-fact.mjs";
+import { FACT_ORIGINS, validateSuppressionFact } from "../suppression-fact.mjs";
 
 /** @typedef {import("../suppression-fact.mjs").TextDigest} TextDigest */
 /** @typedef {import("../suppression-fact.mjs").TextFact} TextFact */
@@ -26,9 +26,18 @@ const isKeyId = (value) => typeof value === "string" && value.length > 0;
 
 /** @param {TextDigest} digest */
 function isValidDigest(digest) {
-  return digest != null && typeof digest === "object" && !Array.isArray(digest) &&
-    (digest.alg === "sha256" || (digest.alg === "hmac" && isKeyId(digest.keyId))) &&
-    isHex(digest.value) && digest.value.length === 64;
+  if (digest == null || typeof digest !== "object" || Array.isArray(digest) ||
+      typeof digest.value !== "string") return false;
+  try {
+    // Validate each record with the same digest rules used when storing a fact.
+    validateSuppressionFact({
+      owner: "validation", actionId: "validation", kind: "text", origin: "forget", mode: "exact",
+      text: { digests: [digest] },
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** @param {readonly TextDigest[]} digests */
@@ -36,11 +45,11 @@ const hasValidDigests = (digests) => isDenseArray(digests, isValidDigest) && dig
 
 /** @param {PassageFingerprint | TextFact["text"]} passage */
 function isValidFingerprint(passage) {
-  return passage != null && typeof passage === "object" &&
-    hasValidDigests(passage.digests) &&
-    (passage.keyId == null || isKeyId(passage.keyId)) &&
-    (passage.shingles == null || (isDenseArray(passage.shingles, isHex) && passage.shingles.length > 0));
+  return passage != null && typeof passage === "object" && hasValidDigests(passage.digests);
 }
+
+/** @param {string[] | null | undefined} shingles */
+const isValidShingleList = (shingles) => shingles == null || isDenseArray(shingles, isHex);
 
 /** @param {{ id: string, createdAtMs: number } | null} source */
 const isValidSource = (source) => source !== null && typeof source === "object" &&
@@ -81,14 +90,18 @@ function hasComparableDigests(a, b) {
  * @param {TextFact} fact
  * @param {number} threshold
  * @param {boolean} checkContainment
+ * @param {boolean} [containmentKeyUnavailable]
  */
-function withholdsValidatedPassage(passage, fact, threshold, checkContainment) {
+function withholdsValidatedPassage(passage, fact, threshold, checkContainment, containmentKeyUnavailable = false) {
   const reference = fact.text;
   if (hasExactDigestMatch(passage.digests, reference.digests) ||
       !hasComparableDigests(passage.digests, reference.digests)) return true;
   if (fact.mode === "exact") return false;
 
-  if (!passage.keyId || reference.keyId !== passage.keyId || !passage.shingles || !reference.shingles) return true;
+  if (!isValidShingleList(passage.shingles) || !isValidShingleList(reference.shingles)) return true;
+  if (passage.shingles?.length === 0 || reference.shingles?.length === 0) return false;
+  if (containmentKeyUnavailable || !isKeyId(passage.keyId) || reference.keyId !== passage.keyId ||
+      !passage.shingles || !reference.shingles) return true;
   if (!checkContainment) return false;
 
   const shingles = new Set(passage.shingles);
@@ -134,8 +147,10 @@ export function blocksMemoryPassage(passages, facts, key, threshold = CONTAINMEN
     const checkContainment = fact.mode === "full" && (fact.origin === "edit"
       ? !edit || !source || source.id !== edit.id || source.createdAtMs !== edit.createdAtMs
       : passages.length > 1);
-    if (checkContainment && (!key || fact.text.keyId !== key.id)) return true;
+    const containmentKeyUnavailable = checkContainment && (!key || fact.text.keyId !== key.id);
+    if (containmentKeyUnavailable && passages.length === 0) return true;
     // The exemption skips containment only after a comparable exact miss.
-    return passages.some((passage) => withholdsValidatedPassage(passage, fact, threshold, checkContainment));
+    return passages.some((passage) =>
+      withholdsValidatedPassage(passage, fact, threshold, checkContainment, containmentKeyUnavailable));
   });
 }

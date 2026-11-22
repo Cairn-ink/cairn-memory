@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  blocksMemoryPassage, exactDigestMatch, PRIVACY_REDACTION_VERSIONS, REDACTION_VERSIONS,
+  blocksMemoryPassage, coreDigest, exactDigestMatch, passageShingles, PRIVACY_REDACTION_VERSIONS,
+  REDACTION_VERSIONS, userFingerprintKey, validateSuppressionFact,
   withholdsAnyPassage, withholdsPassage,
 } from "@cairn-ink/core";
 
@@ -24,6 +25,13 @@ function assertWithholds(passage, fact, key) {
   assert.equal(withholdsAnyPassage([passage], [fact]), true);
   assert.equal(blocksMemoryPassage([passage], [fact], key), true);
   assert.equal(blocksMemoryPassage([passage, passage], [fact], key), true);
+}
+
+function assertMiss(passage, fact, key) {
+  assert.equal(withholdsPassage(passage, fact), false);
+  assert.equal(withholdsAnyPassage([passage], [fact]), false);
+  assert.equal(blocksMemoryPassage([passage], [fact], key), false);
+  assert.equal(blocksMemoryPassage([passage, passage], [fact], key), false);
 }
 
 test("package root exposes both redaction version constants", () => {
@@ -60,7 +68,7 @@ test("full facts require a shared digest algorithm even with matching shingle ke
 });
 
 test("malformed shingles withhold on either side of a comparison", () => {
-  for (const shingles of [["not-hex"], [""], [], Array(1)]) {
+  for (const shingles of [["not-hex"], [""], Array(1)]) {
     assertWithholds({ ...disjoint, shingles }, textFact(reference), keyA);
     assertWithholds(disjoint, textFact({ ...reference, shingles }), keyA);
   }
@@ -80,6 +88,69 @@ test("malformed and missing digest lists withhold on either side of a comparison
     assertWithholds(candidate, textFact(reference), keyA);
     assertWithholds(disjoint, textFact(stored), keyA);
   }
+});
+
+for (const [field, value, description] of [
+  ["keyId", "", "empty SHA key ID"],
+  ["keyId", keyA.id, "nonempty SHA key ID"],
+  ["keyId", undefined, "missing SHA key ID"],
+  ["pipeline", "unknown", "unknown pipeline"],
+  ["pipeline", undefined, "missing pipeline"],
+  ["redactionVersion", 0, "zero redaction version"],
+  ["redactionVersion", undefined, "missing redaction version"],
+]) {
+  test(`invalid digest metadata withholds on either side: ${description}`, () => {
+    const keyless = { shingles: null, keyId: null };
+    const candidate = { ...keyless, digests: disjoint.digests };
+    const fact = textFact({ ...keyless, digests: reference.digests }, "exact");
+    const invalidDigest = { ...digest("sha256", "c"), [field]: value };
+    if (value === undefined) delete invalidDigest[field];
+
+    const invalidFact = textFact({ ...keyless, digests: [invalidDigest] }, "exact");
+    assert.throws(() => validateSuppressionFact(invalidFact), { code: "invalid_input" });
+    assertWithholds({ ...candidate, digests: [invalidDigest] }, fact, null);
+    assertWithholds(candidate, invalidFact, null);
+    assertWithholds({ ...candidate, digests: [...candidate.digests, invalidDigest] }, fact, null);
+    assertWithholds(candidate, { ...fact, text: { ...fact.text, digests: [...fact.text.digests, invalidDigest] } }, null);
+  });
+}
+
+for (const profile of ["SHA-only", "same-key HMAC"]) {
+  test(`exact mode ignores empty shingles on either side: ${profile}`, async () => {
+    const signingKey = await userFingerprintKey("test-secret", "owner");
+    const key = profile === "SHA-only" ? null : signingKey;
+    const short = {
+      digests: [await coreDigest("cat", key)],
+      shingles: await passageShingles("cat", signingKey),
+      keyId: key?.id ?? null,
+    };
+    const long = {
+      digests: [await coreDigest("different wording", key)],
+      shingles: key ? await passageShingles("different wording", key) : null,
+      keyId: key?.id ?? null,
+    };
+    assert.deepEqual(short.shingles, []);
+    assertMiss(short, textFact(long, "exact"), key);
+    assertMiss(long, textFact(short, "exact"), key);
+  });
+}
+
+test("exact mode ignores malformed shingles on either side", () => {
+  assertMiss({ ...disjoint, shingles: ["not-hex"] }, textFact(reference, "exact"), keyA);
+  assertMiss(disjoint, textFact({ ...reference, shingles: Array(1) }, "exact"), keyA);
+});
+
+test("full mode falls back to comparable digests when either shingle list is empty", () => {
+  const short = { ...reference, shingles: [] };
+  const incomparable = { ...disjoint, digests: [digest("hmac", "b", keyA.id)] };
+  assertMiss(disjoint, textFact(short), keyA);
+  assertMiss(short, textFact(disjoint), keyA);
+  assertMiss(disjoint, textFact(short), null);
+  assertMiss(short, textFact(disjoint), keyB);
+  assertWithholds(reference, textFact(short), keyA);
+  assertWithholds(short, textFact(reference), keyA);
+  assertWithholds(incomparable, textFact(short), keyA);
+  assertWithholds(short, textFact(incomparable), keyA);
 });
 
 test("sparse passage and fact lists withhold even without an entry to compare", () => {
