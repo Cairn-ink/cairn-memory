@@ -2,6 +2,7 @@ name: One-command setup package
 
 on:
   pull_request:
+    branches: [main]
   push:
 
 permissions:
