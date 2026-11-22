@@ -1,0 +1,101 @@
+import type { CallOptions, ItemRef, MemoryRow, Namespace, OwnerId, Receipt, SortKeyUs } from "./common.d.ts";
+import type { Tx } from "./unit-of-work.d.ts";
+
+/**
+ * A read set: one owner, one or more namespaces fused into one ranking (engine: personal +
+ * project; hosted: [null]). Canonical ties order by (namespace bytes, type, id bytes).
+ */
+export interface RetrievalScope {
+  owner: OwnerId;
+  namespaces: readonly Namespace[];
+  /** Restrict to these clients (raw), when set. */
+  clients?: readonly string[];
+}
+
+export interface LexicalRow {
+  ref: ItemRef;
+  /** Store-specific relevance; NOT comparable across stores (contract). */
+  score: number;
+  updatedAtUs: SortKeyUs;
+}
+
+export interface VectorRow {
+  ref: ItemRef;
+  /** Cosine distance. */
+  distance: number;
+  updatedAtUs: SortKeyUs;
+}
+
+/** Candidate ports return rows already filtered by the visibility predicate in the same snapshot. */
+export interface LexicalCandidates {
+  lexical(tx: Tx, scope: RetrievalScope, query: string, depth: number, options: CallOptions): Promise<{ rows: LexicalRow[]; matched: boolean }>;
+}
+
+export interface VectorCandidates {
+  /** coverage.complete must be true for core to use semantic ranking; otherwise core falls back to lexical. */
+  vector(tx: Tx, scope: RetrievalScope, query: Float32Array, model: string, depth: number): Promise<{
+    rows: VectorRow[];
+    coverage: { eligible: number; embedded: number; complete: boolean };
+  }>;
+}
+
+export interface RawSegment {
+  ref: ItemRef;
+  client: string;
+  sessionId: string;
+  messageId: string;
+  role: "user" | "assistant";
+  content: string;
+  occurredAtMs: number | null;
+  score: number;
+}
+
+export interface RawCandidates {
+  raw(tx: Tx, scope: RetrievalScope, query: string, intent: "search" | "context", options: CallOptions & { limit: number; queryVector?: Float32Array }): Promise<{
+    segments: RawSegment[];
+    coverage: { complete: boolean };
+  }>;
+}
+
+/** Final fence: re-checks refs in the same snapshot right before delivery; drops anything now hidden. */
+export interface VisibilityFence {
+  assertVisible(tx: Tx, scope: RetrievalScope, refs: readonly ItemRef[]): Promise<ItemRef[]>;
+}
+
+export interface ReadSnapshot {
+  /** A token binding a cursor to (request, scope, index state). */
+  stateToken(tx: Tx, scope: RetrievalScope): Promise<string>;
+  /** Throws cursor_stale when the token no longer matches. */
+  assertUnchanged(tx: Tx, scope: RetrievalScope, token: string): Promise<void>;
+}
+
+export interface HydratedItem {
+  ref: ItemRef;
+  memory?: MemoryRow;
+  receipts?: Receipt[];
+  sourceDates?: { firstMs: number | null; lastMs: number | null };
+}
+
+export interface HydrateItems {
+  hydrate(tx: Tx, scope: RetrievalScope, refs: readonly ItemRef[], intent: "recall" | "read" | "export"): Promise<HydratedItem[]>;
+}
+
+export interface ListRecent {
+  /** (updatedAtUs desc, id desc); the cursor keeps the exact µs key. */
+  recent(tx: Tx, scope: RetrievalScope, page: { cursor: string | null; limit: number }): Promise<{ items: MemoryRow[]; nextCursor: string | null }>;
+}
+
+/** Paged raw export (export, migration). Only visible rows; same predicate as raw reads. */
+export interface ListRawMessages {
+  listRaw(tx: Tx, scope: RetrievalScope, page: { cursor: string | null; limit: number }): Promise<{ items: RawSegment[]; nextCursor: string | null }>;
+}
+
+/** Optional (capability relations). Absent: core reports index_unavailable for relation reads. */
+export interface RelationSource {
+  relations(tx: Tx, scope: RetrievalScope, refs: readonly ItemRef[], depth: number): Promise<Array<{ from: ItemRef; to: ItemRef; kind: string }>>;
+  mocRank(tx: Tx, scope: RetrievalScope, query: string, limit: number): Promise<Array<{ mocId: string; score: number }>>;
+}
+
+export interface EmbedQuery {
+  embedQuery(owner: OwnerId, text: string, options: CallOptions & { budgetClass: "recall" }): Promise<{ vector: Float32Array; model: string }>;
+}

@@ -1,0 +1,31 @@
+{
+  "name": "@cairn-ink/core",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Cairn memory core: storage-independent algorithms and port interfaces.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.mts",
+      "default": "./src/index.mjs"
+    },
+    "./ports": {
+      "types": "./src/ports/index.d.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "check:prompt": "node scripts/generate-prompt.mjs --check"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
+  },
+  "engines": {
+    "node": ">=22.16.0"
+  }
+}
