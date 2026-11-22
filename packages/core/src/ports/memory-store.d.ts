@@ -78,8 +78,8 @@ export interface MemoryStore {
   readWritePolicy(tx: Tx, scope: Scope, batch: readonly DuplicateQuery[], source: SourceRef, mode: "hash" | "full", editId?: string): Promise<WritePolicy>;
   insert(tx: Tx, scope: Scope, row: InsertRow, receipts: readonly Receipt[], nowMs: number): Promise<{ id: string; revision: Revision; createdAtMs: number; updatedAtMs: number; updatedAtUs: SortKeyUs }>;
   /**
-   * Attaches receipts and applies the merge; bumps the revision only when something changed.
-   * A store without the merge columns yet (hosted before G) may report "touched" only.
+   * Attaches receipts and applies the merge verbatim; bumps the revision only when something
+   * changed. No exemption: a store that cannot persist kind/origin/confidence does not conform.
    */
   touchDuplicate(tx: Tx, scope: Scope, id: string, receipts: readonly Receipt[], merge: DuplicateMerge, nowMs: number): Promise<{ outcome: "touched" | "changed"; revision: Revision }>;
   readRevision(tx: Tx, scope: Scope, id: string): Promise<{ revision: Revision; textHash: string } | null>;
