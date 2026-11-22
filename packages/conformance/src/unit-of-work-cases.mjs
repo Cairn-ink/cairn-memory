@@ -1,5 +1,5 @@
-import { assertAdapterCapabilities, ERROR_CODES, toCoreError } from "@cairn-ink/core";
-import { bounded, caught, check, equal, gate, observe, rejects, row } from "./support.mjs";
+import { assertAdapterCapabilities, ERROR_CODES, NEAR_DUPLICATE_DISTANCE, toCoreError } from "@cairn-ink/core";
+import { bounded, caught, check, equal, gate, observe, readDump, rejects, row } from "./support.mjs";
 
 /** @type {import("./index.d.mts").ConformanceCase[]} */
 export const unitOfWorkCases = [
@@ -10,14 +10,14 @@ export const unitOfWorkCases = [
       const scope = ctx.scope(null);
       const first = await row(ctx, "first");
       const second = await row(ctx, "second");
-      const before = await harness.dump();
+      const before = await readDump(harness);
       const failure = new Error("callback failure");
       check(await caught(() => uow.run(owner, {}, async (tx) => {
         await memories.insert(tx, scope, first, [], 1);
         await memories.insert(tx, scope, second, [], 2);
         throw failure;
       })) === failure, "Callback error identity changed");
-      equal(await harness.dump(), before, "Callback failure did not roll back");
+      equal(await readDump(harness), before, "Callback failure did not roll back");
 
       /** @type {unknown} */
       let portError;
@@ -32,7 +32,7 @@ export const unitOfWorkCases = [
       }));
       check(runError === portError, "Port error identity changed");
       await rejects(async () => { throw runError; }, "revision_conflict");
-      equal(await harness.dump(), before, "Port failure did not roll back");
+      equal(await readDump(harness), before, "Port failure did not roll back");
     },
   },
   {
@@ -40,6 +40,7 @@ export const unitOfWorkCases = [
     async run(ctx) {
       const { adapter: { uow, memories }, owner, otherOwner } = ctx;
       const scope = ctx.scope(null);
+      const otherScope = { ...scope, owner: otherOwner };
       const content = await row(ctx, "serialized");
       /** @type {ReturnType<typeof gate<string>>} */
       const inserted = gate();
@@ -57,13 +58,13 @@ export const unitOfWorkCases = [
             entered = true;
             return memories.get(tx, scope, id);
           }));
-          await uow.run(otherOwner, {}, async (tx) => {
-            await memories.insert(tx, { ...scope, owner: otherOwner }, content, [], 1);
-          });
+          const other = await uow.run(otherOwner, {}, (tx) => memories.insert(tx, otherScope, content, [], 1));
           check(!entered, "Second writer entered before the first writer released");
           release.release(undefined);
           await first;
           equal((await second)?.id, id, "Second writer did not see the first commit");
+          const persisted = await uow.run(otherOwner, { readOnly: true }, (tx) => memories.get(tx, otherScope, other.id));
+          equal(persisted?.id, other.id, "Another owner's committed row was lost");
         });
       } finally {
         release.release(undefined);
@@ -71,8 +72,32 @@ export const unitOfWorkCases = [
     },
   },
   {
-    id: "K-UOW-3", title: "serializes writers that take the pause lock", needs: [],
+    id: "K-UOW-3", title: "takes the pause lock before the write lock", needs: [],
     async run({ adapter: { uow }, owner, otherOwner }) {
+      const readerStarted = gate();
+      const releaseReader = gate();
+      try {
+        await bounded(async () => {
+          const reader = observe(uow.run(owner, { pauseLock: true, readOnly: true }, async () => {
+            readerStarted.release(undefined);
+            await releaseReader.promise;
+          }));
+          await Promise.race([readerStarted.promise, reader]);
+          let pausedEntered = false;
+          // Queue the pause-lock writer first so a reversed order would block the plain writer.
+          const paused = observe(uow.run(owner, { pauseLock: true }, async () => { pausedEntered = true; }));
+          let writerEntered = false;
+          await uow.run(owner, {}, async () => { writerEntered = true; });
+          check(writerEntered, "Plain writer did not enter while the reader held the pause lock");
+          check(!pausedEntered, "Pause-lock writer entered while the reader held the pause lock");
+          releaseReader.release(undefined);
+          await Promise.all([reader, paused]);
+          check(pausedEntered, "Pause-lock writer did not enter after the reader released");
+        });
+      } finally {
+        releaseReader.release(undefined);
+      }
+
       const started = gate();
       const release = gate();
       try {
@@ -145,15 +170,19 @@ export const unitOfWorkCases = [
       const { adapter: { uow, memories }, owner, otherOwner } = ctx;
       const scope = ctx.scope(null);
       const content = await row(ctx, "handle");
-      const expired = await uow.run(owner, {}, async (tx) => {
-        await rejects(() => memories.get(Object.freeze({ ...tx }), scope, "missing"), "internal_error");
-        await rejects(() => memories.get(tx, { ...scope, owner: otherOwner }, "missing"), "internal_error");
+      const { id } = await uow.run(owner, {}, (tx) => memories.insert(tx, scope, content, [], 1));
+      const expired = await uow.run(owner, { readOnly: true }, async (tx) => {
+        equal((await memories.get(tx, scope, id))?.id, id, "A live handle could not read the committed row");
+        const forged = Object.freeze({ ...tx });
+        await rejects(() => memories.get(forged, scope, id), "internal_error");
+        await rejects(() => memories.readRevision(forged, scope, id), "internal_error");
+        await rejects(() => memories.findDuplicates(forged, scope, [{ textHash: content.textHash }],
+          { nearDistance: NEAR_DUPLICATE_DISTANCE }), "internal_error");
+        await rejects(() => memories.get(tx, { ...scope, owner: otherOwner }, id), "internal_error");
+        await rejects(() => memories.insert(tx, scope, content, [], 1), "internal_error");
         return tx;
       });
-      await rejects(() => memories.get(expired, scope, "missing"), "internal_error");
-      await uow.run(owner, { readOnly: true }, async (tx) => {
-        await rejects(() => memories.insert(tx, scope, content, [], 1), "internal_error");
-      });
+      await rejects(() => memories.get(expired, scope, id), "internal_error");
     },
   },
   {

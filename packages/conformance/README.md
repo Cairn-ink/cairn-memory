@@ -6,7 +6,7 @@ An `AdapterFactory` supplies a `name` and an `open({ capabilities })` method tha
 
 The `TestHarness` provides four async hooks. Harness hooks belong in test builds only.
 
-- `dump()` returns a snapshot of committed state for equality checks.
+- `dump()` returns a JSON-safe snapshot of committed state for equality checks. Use `JsonValue` data: null, booleans, finite numbers, strings, arrays, and plain objects with string keys. Encode bigints as strings.
 - `seedFact(owner, fact)` inserts a test fact for the owner.
 - `setWriteTime(scope, id, updatedAtUs)` sets only the committed row's write time. It rejects with `invalid_input` for an open run for the owner or a time other than a nonnegative bigint, and with `memory_not_found` if the row is outside the scope or missing.
 - `counters()` returns diagnostic counters. With near matching enabled, `nearSkippedUnembedded` counts non-exact comparisons skipped because a vector is missing or the lengths differ.

@@ -1,7 +1,7 @@
 // Cases never assume a store's write time equals nowMs. Fixed write times come only from
 // harness.setWriteTime. Expected orders use those forced times and the actual ids.
 import { compareSortKey, compareUtf8, NEAR_DUPLICATE_DISTANCE } from "@cairn-ink/core";
-import { check, equal, rejects, row, source } from "./support.mjs";
+import { check, equal, readDump, rejects, row, source } from "./support.mjs";
 
 const near = { nearDistance: NEAR_DUPLICATE_DISTANCE };
 
@@ -104,31 +104,50 @@ export const memoryCases = [
   {
     id: "K-MEM-4", title: "touches duplicates and applies merges verbatim", needs: [],
     async run(ctx) {
-      const { adapter: { uow, memories }, owner } = ctx;
+      const { adapter: { uow, memories }, harness, owner } = ctx;
       const scope = ctx.scope(null);
       const content = { ...await row(ctx, "touch"), origin: /** @type {const} */ ("inferred") };
-      await uow.run(owner, {}, async (tx) => {
-        const { id, revision, updatedAtUs } = await memories.insert(tx, scope, content, [], 1);
-        equal(await memories.touchDuplicate(tx, scope, id, [], { confidence: content.confidence }, 2),
-          { outcome: "touched", revision }, "An identical merge should touch");
-        const touched = await memories.get(tx, scope, id);
-        check(touched && touched.updatedAtUs > updatedAtUs, "Touch time did not advance");
-        equal(await memories.touchDuplicate(tx, scope, id, [], { confidence: 0.8 }, 3),
-          { outcome: "changed", revision: revision + 1 }, "Confidence change should bump revision");
-        const confidenceChanged = await memories.get(tx, scope, id);
-        check(confidenceChanged && confidenceChanged.updatedAtUs > touched.updatedAtUs, "Confidence merge time did not advance");
+      const { id, revision } = await uow.run(owner, {}, (tx) => memories.insert(tx, scope, content, [], 1));
 
-        equal(await memories.touchDuplicate(tx, scope, id, [], { confidence: 0.6, kind: "decision", origin: "explicit" }, 4),
-          { outcome: "changed", revision: revision + 2 }, "Kind and origin change should bump revision");
-        const changed = await memories.get(tx, scope, id);
-        check(changed, "Touched row missing");
-        equal([changed.kind, changed.origin, changed.confidence],
-          ["decision", "explicit", 0.6], "Explicit merge was not applied verbatim");
-        check(changed.updatedAtUs > confidenceChanged.updatedAtUs, "Explicit merge time did not advance");
-        await rejects(() => memories.touchDuplicate(tx, ctx.scope("other"), id, [], { confidence: 0.8 }, 5),
-          "memory_not_found");
-      });
+      /**
+       * @param {bigint} forcedTime @param {number} nowMs
+       * @param {readonly import("@cairn-ink/core/ports").Receipt[]} receipts
+       * @param {import("@cairn-ink/core/ports").DuplicateMerge} merge
+       * @param {Awaited<ReturnType<typeof memories.touchDuplicate>>} expected @param {string} message
+       */
+      async function touch(forcedTime, nowMs, receipts, merge, expected, message) {
+        await harness.setWriteTime(scope, id, forcedTime);
+        const result = await uow.run(owner, {}, (tx) => memories.touchDuplicate(tx, scope, id, receipts, merge, nowMs));
+        equal(result, expected, message);
+        const saved = await uow.run(owner, { readOnly: true }, (tx) => memories.get(tx, scope, id));
+        check(saved, "Touched row missing");
+        check(saved.updatedAtUs > forcedTime, "Touch time did not advance past the forced write time");
+        return saved;
+      }
+
+      await touch(100n, 2, [], { confidence: content.confidence },
+        { outcome: "touched", revision }, "An identical merge should touch");
+      const confidenceChanged = await touch(200n, 3, [], { confidence: 0.8 },
+        { outcome: "changed", revision: revision + 1 }, "Confidence change should bump revision");
+      equal([confidenceChanged.confidence, confidenceChanged.kind, confidenceChanged.origin],
+        [0.8, content.kind, content.origin], "Confidence-only merge was not applied verbatim");
+
+      const changed = await touch(300n, 4, [], { confidence: 0.6, kind: "decision", origin: "explicit" },
+        { outcome: "changed", revision: revision + 2 }, "Kind and origin change should bump revision");
+      equal([changed.kind, changed.origin, changed.confidence],
+        ["decision", "explicit", 0.6], "Explicit merge was not applied verbatim");
+
+      await touch(400n, 5, [{ client: "test-client", sessionId: "test-origin", messageId: "first", role: "user", occurredAtMs: null }],
+        { confidence: 0.6, kind: "decision", origin: "explicit" },
+        { outcome: "touched", revision: revision + 2 }, "Receipts alone should leave the revision unchanged");
+      await rejects(() => uow.run(owner, {}, (tx) => memories.touchDuplicate(tx, ctx.scope("other"), id, [], { confidence: 0.8 }, 6)),
+        "memory_not_found");
     },
+  },
+  {
+    id: "K-MEM-4r", title: "touch attaches receipts, visible through hydrate", needs: [],
+    pending: "awaiting the retrieval suite",
+    async run() {},
   },
   {
     id: "K-MEM-5", title: "replaces content with revision and collision checks", needs: [],
@@ -143,12 +162,12 @@ export const memoryCases = [
         await memories.insert(tx, scope, other, [], 1);
         return id;
       });
-      const before = await harness.dump();
+      const before = await readDump(harness);
       await uow.run(owner, {}, async (tx) => {
         equal(await memories.replaceContent(tx, scope, id, 1, { ...first, kind: "context" }, [], 2),
           { outcome: "unchanged", revision: 1 }, "Identical hash should leave the row unchanged");
       });
-      equal(await harness.dump(), before, "Identical hash wrote state");
+      equal(await readDump(harness), before, "Identical hash wrote state");
       await rejects(() => uow.run(owner, {}, (tx) => memories.replaceContent(tx, scope, id, 2, first, null, 2)),
         "revision_conflict");
       await rejects(() => uow.run(owner, {}, (tx) => memories.replaceContent(tx, scope, id, 1, other, null, 2)),
@@ -235,34 +254,36 @@ export const memoryCases = [
       const forced = saved.map(({ id }, i) => ({ id, updatedAtUs: times[i] }));
       for (const { id, updatedAtUs } of forced) await harness.setWriteTime(scope, id, updatedAtUs);
       const expected = forced.sort(newestFirst).map(({ id, updatedAtUs }) => [id, updatedAtUs]);
+      const firstPage = await uow.run(owner, { readOnly: true }, (tx) => memories.exportPage(tx, scope, { cursor: null, limit: 2 }));
       await uow.run(owner, { readOnly: true }, async (tx) => {
         const seen = [];
         /** @type {string | null} */
         let cursor = null;
-        let firstCursor = null;
         for (let i = 0; i < 4; i++) {
           const page = await memories.exportPage(tx, scope, { cursor, limit: 2 });
           equal(page.items.length, i === 3 ? 1 : 2, "Unexpected page length");
+          if (i === 0) {
+            equal(page.items, firstPage.items, "First page items changed on re-read");
+            equal(page.nextCursor, firstPage.nextCursor, "First page cursor changed on re-read");
+          }
           seen.push(...page.items.map(({ id, updatedAtUs }) => [id, updatedAtUs]));
           cursor = page.nextCursor;
-          if (i === 0) firstCursor = cursor;
           check(i === 3 ? cursor === null : typeof cursor === "string" && cursor.length > 0, "Incorrect cursor termination");
         }
         equal(seen, expected, "Paged rows are missing, repeated, or out of order");
+        await rejects(() => memories.exportPage(tx, scope, { cursor: "", limit: 2 }), "invalid_cursor");
         await rejects(() => memories.exportPage(tx, scope, { cursor: "%%%", limit: 2 }), "invalid_cursor");
-        check(firstCursor, "Expected a cursor after the first page");
-        await rejects(() => memories.exportPage(tx, scope, { cursor: firstCursor.slice(0, -1), limit: 2 }), "invalid_cursor");
         await rejects(() => memories.exportPage(tx, scope, { cursor: null, limit: 0 }), "invalid_input");
       });
     },
   },
   {
     id: "K-MEM-13", title: "applies write policy and visibility facts (provisional)", needs: [],
-    requests: { vectorSuppression: true },
+    requests: { vectorSuppression: true, nearDuplicate: true },
     async run(ctx) {
       const { adapter: { uow, memories, capabilities }, harness, owner } = ctx;
       const scope = ctx.scope(null);
-      const owned = await row(ctx, "identity");
+      const owned = await row(ctx, "identity", capabilities.nearDuplicate ? 0 : null);
       const hashed = await ctx.hash("withheld digest");
       const distantDigest = await ctx.hash("withheld vector");
       const sessionSource = { ...source, client: "test-client", sessionId: "test-origin" };
@@ -290,6 +311,9 @@ export const memoryCases = [
         { textHash: await ctx.hash("near withheld"), embedding: ctx.vec(0.15) },
         { textHash: await ctx.hash("far withheld"), embedding: ctx.vec(0.25) },
       ];
+      const nearIdentity = capabilities.nearDuplicate
+        ? [{ textHash: await ctx.hash("near identity"), embedding: ctx.vec(0.05) }]
+        : null;
       await uow.run(owner, { readOnly: true }, async (tx) => {
         const policy = await memories.readWritePolicy(tx, scope, query, sessionSource, "hash");
         equal(policy.hiddenIds, [id], "Identity fact should report the hidden id");
@@ -298,9 +322,21 @@ export const memoryCases = [
         equal((await memories.findDuplicates(tx, scope, query, near))[0], [], "Hidden row leaked into duplicate matches");
         equal(policy.blockedPositions, [1], "Hash mode should check digests only");
         equal(policy.blockedSession, true, "Matching source was not blocked");
+        const otherSession = { ...sessionSource, sessionId: "other-origin" };
+        const otherClient = { ...sessionSource, client: "other-client" };
+        equal((await memories.readWritePolicy(tx, scope, query, otherSession, "hash")).blockedSession,
+          false, "A different session of the same client was blocked");
+        equal((await memories.readWritePolicy(tx, scope, query, otherClient, "hash")).blockedSession,
+          false, "The same session of a different client was blocked");
         const full = await memories.readWritePolicy(tx, scope, query, source, "full");
         equal(full.blockedPositions, capabilities.vectorSuppression ? [1, 2] : [1], "Full-mode vector suppression differs");
         equal(full.blockedSession, false, "A source without a reference was blocked");
+        if (nearIdentity) {
+          const nearPolicy = await memories.readWritePolicy(tx, scope, nearIdentity, source, "hash");
+          const matches = nearPolicy.matches[0].filter((match) => match.kind === "stored" && match.id === id);
+          equal(matches.map((match) => match.match), ["near"], "Identity-hidden row should appear as a near-only policy match");
+          equal(nearPolicy.hiddenIds, [id], "A hidden near-only match should report its id");
+        }
       });
     },
   },

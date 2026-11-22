@@ -2,7 +2,7 @@ import type { Capabilities, Capability } from "@cairn-ink/core";
 import type { Namespace, Scope } from "@cairn-ink/core/ports";
 import type { AdapterFactory, OpenedAdapter } from "./factory.d.ts";
 
-export type { AdapterFactory, OpenedAdapter, TestHarness } from "./factory.d.ts";
+export type { AdapterFactory, JsonValue, OpenedAdapter, TestHarness } from "./factory.d.ts";
 
 export type CaseContext = Omit<OpenedAdapter, "close" | "embeddingDimensions"> & {
   vec(distance: number): number[];

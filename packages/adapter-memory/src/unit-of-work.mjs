@@ -31,17 +31,19 @@ class Owner {
   open = 0;
 }
 
-/** @param {unknown} value @returns {unknown} */
+/** @param {unknown} value @returns {import("@cairn-ink/conformance/factory").JsonValue} */
 function jsonSafe(value) {
   if (typeof value === "bigint") return value.toString();
+  if (value === null || typeof value === "boolean" || typeof value === "string") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : String(value);
   if (Array.isArray(value)) return value.map(jsonSafe);
-  if (value && typeof value === "object") {
+  if (typeof value === "object") {
     return Object.fromEntries(Object.entries(value)
       .filter(([, item]) => item !== undefined)
       .sort(([a], [b]) => compareUtf8(a, b))
       .map(([key, item]) => [key, jsonSafe(item)]));
   }
-  return value;
+  throw new TypeError("Unsupported value in memory snapshot");
 }
 
 /** @param {Readonly<Record<string, ErrorCode>>} nativeErrorMap */

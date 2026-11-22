@@ -16,8 +16,11 @@ export type OpenedAdapter = {
   close(): Promise<void>;
 };
 
+export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue };
+
 export type TestHarness = {
-  dump(): Promise<unknown>;
+  /** A JSON-safe snapshot. Numbers must be finite. */
+  dump(): Promise<JsonValue>;
   seedFact(owner: string, fact: SuppressionFact): Promise<void>;
   setWriteTime(scope: Scope, id: string, updatedAtUs: bigint): Promise<void>;
   counters(): Promise<Readonly<Record<string, number>>>;

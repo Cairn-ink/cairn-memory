@@ -1,4 +1,5 @@
 import { memoryCases } from "./memory-cases.mjs";
+import { bounded } from "./support.mjs";
 import { unitOfWorkCases } from "./unit-of-work-cases.mjs";
 
 /** @type {readonly import("./index.d.mts").ConformanceCase[]} */
@@ -56,6 +57,6 @@ export async function runCase(factory, testCase) {
     });
     return null;
   } finally {
-    await opened.close();
+    await bounded(() => opened.close(), "Adapter close exceeded 5 seconds");
   }
 }
