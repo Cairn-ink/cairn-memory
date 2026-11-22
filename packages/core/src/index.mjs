@@ -3,3 +3,8 @@ export * from "./capabilities.mjs";
 export * from "./suppression-fact.mjs";
 export * from "./decisions.mjs";
 export * from "./utf8.mjs";
+export * from "./retrieval/tokenize.mjs";
+export * from "./retrieval/bm25.mjs";
+export * from "./retrieval/fusion.mjs";
+export * from "./retrieval/hosted-paging.mjs";
+export * from "./retrieval/session-start.mjs";
