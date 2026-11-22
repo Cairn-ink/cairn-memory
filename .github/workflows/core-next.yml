@@ -25,3 +25,9 @@ jobs:
       - run: npm test
       - run: npm run typecheck
       - run: npm run check:prompt
+      - run: npm ci --ignore-scripts
+        working-directory: packages/adapter-postgres
+      - run: npm test
+        working-directory: packages/adapter-postgres
+      - run: npm run typecheck
+        working-directory: packages/adapter-postgres
