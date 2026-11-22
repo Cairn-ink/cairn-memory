@@ -77,10 +77,20 @@ export interface Receipt {
   occurredAtMs: number | null;
 }
 
-/** An abort deadline passed down from the host. */
+/** A content-free diagnostic event (no text, ids, hashes or keys). */
+export interface DiagnosticEvent {
+  version: 1;
+  stage: string;
+  layer: string;
+  reason: string;
+}
+
+/** An abort deadline and an optional content-free observer, passed down from the host. */
 export interface CallOptions {
   signal?: AbortSignal;
   deadlineAtMs?: number;
+  /** Core passes it to the model adapter and emits its own stages through it. Must not throw. */
+  onDiagnostic?: (event: DiagnosticEvent) => void;
 }
 
 /** Content-free counters every port may return for diagnostics. Never text, ids or hashes. */

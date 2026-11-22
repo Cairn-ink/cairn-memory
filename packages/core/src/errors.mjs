@@ -67,6 +67,7 @@ export const ERROR_CODES = Object.freeze({
   // Retrieval
   context_item_too_large: "limit",
   // Capture (engine envelope: none of these are retryable)
+  invalid_text: "invalid_input",
   extraction_failed: "unavailable",
   source_excluded: "denied",
   context_budget_exceeded: "limit",

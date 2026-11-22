@@ -24,9 +24,11 @@ export interface ModelRequest {
 export type ModelStage = "extract" | "qualify" | "reconcile" | "classify" | "rationale";
 
 /**
- * One model adapter for both stores (cairn-model-openai). Core builds, sizes (countTokens on
- * exactly system + serialized input) and validates; the adapter sends the request verbatim,
- * never logs content, and always uses store:false. The result is untrusted until core validates it.
+ * One model adapter for both stores (packages/model-openai). Core owns the prompts, the per-stage
+ * schemas and any output mapping; it builds, sizes (countTokens(JSON.stringify({system, input,
+ * maxOutputTokens})), the engine's sizing text) and validates. The adapter sends the request
+ * verbatim, returns the raw output, never logs content, and always uses store:false. The result
+ * is untrusted until core validates it.
  */
 export interface ModelPort {
   readonly model: string;
@@ -51,7 +53,10 @@ export interface ModelGate {
 }
 
 export interface ClockAndHash {
+  /** Wall-clock time (epoch ms) for timestamps only. May step; never use it for elapsed time. */
   nowMs(): number;
+  /** Monotonic milliseconds for deadlines and elapsed time only (host: performance.now()). Never steps back. */
+  monotonicMs(): number;
   sha256Hex(bytes: Uint8Array | string): Promise<string>;
   hmacHex(key: CryptoKey | Uint8Array, bytes: Uint8Array | string): Promise<string>;
 }
