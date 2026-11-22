@@ -43,7 +43,7 @@ export interface WritePolicy {
   matches: MemoryMatch[][];
   /** Positions refused by a suppression (they return "suppressed", never "duplicate"). */
   blockedPositions: number[];
-  /** Ids of hidden rows that own a hash in the batch (exact match on a hidden row = suppressed). */
+  /** Ids of hidden rows among matches (exact or near). An exact match on a hidden row = suppressed; a near match on one is skipped. */
   hiddenIds: string[];
   /** The source session is blocked. */
   blockedSession: boolean;
