@@ -39,11 +39,23 @@ export async function migrationDatabase(t, { migrate = true } = {}) {
   const baseline = await readFile(new URL("../schema/baseline.sql", import.meta.url), "utf8");
   const directory = new URL("../migrations/", import.meta.url);
   const names = (await readdir(directory)).filter((name) => name.endsWith(".sql")).sort();
-  const migrations = await Promise.all(names.map(async (name) => ({
-    id: name,
-    sql: await readFile(new URL(name, directory), "utf8"),
-    concurrent: name.endsWith(".concurrent.sql"),
-  })));
+  const migrations = await Promise.all(names.map(async (name) => {
+    const sql = await readFile(new URL(name, directory), "utf8");
+    if (name === "0004_core_recent_index.concurrent.sql") {
+      return {
+        id: name,
+        sql,
+        concurrent: true,
+        index: {
+          name: "memories_user_recent_c",
+          table: "memories",
+          definition: 'CREATE INDEX memories_user_recent_c ON public.memories USING btree (user_id, updated_at DESC, id COLLATE "C" DESC)',
+        },
+      };
+    }
+    if (name.endsWith(".concurrent.sql")) throw new Error(`Missing index definition for ${name}`);
+    return { id: name, sql, concurrent: false };
+  }));
   await pool.query(baseline);
   if (migrate) await applyMigrations(source, migrations);
   return { pool, source, baseline, migrations };

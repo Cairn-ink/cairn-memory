@@ -19,7 +19,8 @@ const CONCURRENT_INDEX = new RegExp(
   + `(${IDENTIFIER})\\s+ON\\s+((?:${IDENTIFIER}\\s*\\.\\s*)?${IDENTIFIER})(?=\\s|\\()`,
   "i",
 );
-const READ_INDEX = `SELECT i.indisvalid AS valid, n.nspname AS schema, idx.relname AS name
+const READ_INDEX = `SELECT i.indisvalid AS valid, n.nspname AS schema, idx.relname AS name,
+    pg_catalog.pg_get_indexdef(i.indexrelid) AS definition
   FROM pg_catalog.pg_index i
   JOIN pg_catalog.pg_class idx ON idx.oid = i.indexrelid
   JOIN pg_catalog.pg_namespace n ON n.oid = idx.relnamespace
@@ -55,8 +56,8 @@ async function applyTransactional(connection, { id, sql }) {
   if (command !== "COMMIT") throw new CoreError("commit_outcome_unknown");
 }
 
-/** @param {Connection} connection @param {Migration} migration @param {string} index @param {string} table */
-async function applyConcurrent(connection, { id, sql }, index, table) {
+/** @param {Connection} connection @param {Extract<Migration, { concurrent: true }>} migration */
+async function applyConcurrent(connection, { id, sql, index }) {
   let failure;
   try {
     await connection.query(sql);
@@ -66,17 +67,19 @@ async function applyConcurrent(connection, { id, sql }, index, table) {
 
   let state;
   try {
-    ({ rows: [state] } = await connection.query(READ_INDEX, [index, table]));
+    ({ rows: [state] } = await connection.query(READ_INDEX, [index.name, index.table]));
   } catch (error) {
     throw failure ?? error;
   }
-  if (state?.valid === false) {
+  if (!state) throw failure ?? new CoreError("index_unavailable");
+  // Compare the canonical SQL verbatim so quoted identifiers and literals keep their meaning.
+  if (state.definition !== index.definition.trim()) throw new CoreError("index_unavailable");
+  if (state.valid === false) {
     const qualifiedName = `${quoteIdentifier(state.schema)}.${quoteIdentifier(state.name)}`;
     await connection.query(`DROP INDEX CONCURRENTLY IF EXISTS ${qualifiedName}`);
     throw new CoreError("index_unavailable");
   }
-  if (failure) throw failure;
-  if (state?.valid !== true) throw new CoreError("index_unavailable");
+  if (state.valid !== true) throw new CoreError("index_unavailable");
   await connection.query(RECORD_MIGRATION, [id]);
 }
 
@@ -89,12 +92,19 @@ async function applyConcurrent(connection, { id, sql }, index, table) {
 export async function applyMigrations(source, migrations) {
   try {
     const ids = new Set();
-    const ordered = migrations.map(({ id, sql, concurrent }) => {
+    const ordered = migrations.map((migration) => {
+      const { id, sql, concurrent } = migration;
       if (!id || ids.has(id)) throw new CoreError("invalid_input");
       ids.add(id);
-      const index = concurrent ? CONCURRENT_INDEX.exec(sql) : null;
-      if (concurrent && !index) throw new CoreError("invalid_input");
-      return { id, sql, concurrent, index };
+      if (!concurrent) return { id, sql, concurrent };
+
+      const target = CONCURRENT_INDEX.exec(sql);
+      const { index } = migration;
+      if (!target || index?.name !== target[1] || index.table !== target[2]
+        || typeof index.definition !== "string" || !index.definition.trim()) {
+        throw new CoreError("invalid_input");
+      }
+      return { id, sql, concurrent, index: { ...index } };
     });
 
     const connection = await source.connect();
@@ -113,9 +123,8 @@ export async function applyMigrations(source, migrations) {
       }
 
       for (const migration of ordered.slice(applied.size)) {
-        if (migration.index) {
-          const [, index, table] = migration.index;
-          await applyConcurrent(connection, migration, index, table);
+        if (migration.concurrent) {
+          await applyConcurrent(connection, migration);
         } else {
           await applyTransactional(connection, migration);
         }

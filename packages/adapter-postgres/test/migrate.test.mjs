@@ -1,13 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { CoreError } from "../../core/src/index.mjs";
-import { applyMigrations, requireEmbedding } from "../src/index.mjs";
+import { applyMigrations, readSourceKind, requireEmbedding, storedSourceKind } from "../src/index.mjs";
 
 const first = { id: "first", sql: "CREATE TABLE first (id int)", concurrent: false };
 const recent = {
   id: "recent",
   sql: "CREATE INDEX CONCURRENTLY IF NOT EXISTS recent_idx ON public.first (id)",
   concurrent: true,
+  index: {
+    name: "recent_idx",
+    table: "public.first",
+    definition: "CREATE INDEX recent_idx ON public.first USING btree (id)",
+  },
 };
 const last = { id: "last", sql: "CREATE TABLE last (id int)", concurrent: false };
 const setup = [
@@ -18,7 +23,12 @@ const setup = [
   "read ledger",
 ];
 
-function stub({ applied = [], locked = true, fail, index = { valid: true, schema: "public" } } = {}) {
+function stub({
+  applied = [],
+  locked = true,
+  fail,
+  index = { valid: true, schema: "public", name: recent.index.name, definition: recent.index.definition },
+} = {}) {
   const statements = [];
   const source = {
     async connect() {
@@ -94,10 +104,15 @@ test("runner refuses downgrade, unknown applied IDs, and a gap in the applied pr
   }
 });
 
-test("runner rejects duplicate IDs or unsupported concurrent SQL before connecting", async () => {
+test("runner rejects duplicate IDs or invalid concurrent entries before connecting", async () => {
   const source = { connect: () => assert.fail("connected with an invalid manifest") };
   await assert.rejects(applyMigrations(source, [first, first]), isCode("invalid_input"));
   await assert.rejects(applyMigrations(source, [{ ...first, concurrent: true }]), isCode("invalid_input"));
+  await assert.rejects(applyMigrations(source, [{ ...recent, index: undefined }]), isCode("invalid_input"));
+  await assert.rejects(
+    applyMigrations(source, [{ ...recent, index: { ...recent.index, table: "other.first" } }]),
+    isCode("invalid_input"),
+  );
 });
 
 test("runner refuses a second migrator while the session lock is held", async () => {
@@ -141,4 +156,13 @@ test("insert and replacement embedding guard rejects null and returns a supplied
   assert.throws(() => requireEmbedding(row), isCode("invalid_input"));
   const embedding = { model: "test", vector: new Float32Array([1]) };
   assert.equal(requireEmbedding({ ...row, embedding }), embedding);
+});
+
+test("capture uses the hosted plugin source kind and stored kinds retain their read labels", () => {
+  assert.equal(storedSourceKind("capture"), "plugin");
+  for (const kind of ["plugin", "mcp", "web", "import"]) {
+    assert.equal(storedSourceKind(kind), kind);
+    assert.equal(readSourceKind(kind), kind);
+  }
+  assert.equal(readSourceKind(storedSourceKind("capture")), "plugin");
 });
