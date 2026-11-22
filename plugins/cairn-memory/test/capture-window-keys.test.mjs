@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { appendFile } from 'node:fs/promises';
+import { appendFile, readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { harness, oldTime, row } from './capture-window-harness.mjs';
 
@@ -145,4 +145,10 @@ test('a second Stop starts a non-initial window at the previous end', async t =>
   assert.equal(next.end, Buffer.byteLength(first + second));
   assert.equal(next.parser, 1);
   assert.equal(next.final, true);
+});
+
+test('the grouped cases lower the real 4096-slice group limit', async () => {
+  // The harness rewrites this exact declaration for groupingLimit; if it drifts, the grouped cases would silently test the default.
+  const source = await readFile(new URL('../scripts/hook.mjs', import.meta.url), 'utf8');
+  assert.equal(source.split('const CAPTURE_WINDOW_SLICES = 4096;').length - 1, 1);
 });
