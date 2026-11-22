@@ -33,10 +33,12 @@ const cases = [
     expected: duplicate("a") },
   { name: "the store's ID order breaks equal-time ties", matches: [stored("z"), stored("a")], expected: duplicate("z") },
   // Lines 186–189 and 201–210: consult progress for exact microsecond and ID tie-breaks.
-  { name: "a more recent prior wins on an exact distance tie", matches: [stored("z"), prior(0)],
+  { name: "a more recent prior wins on an exact distance tie", matches: [stored("z"), { kind: "prior", batchIndex: 0, match: "exact", distance: 0 }],
     progress: progress([["a", recent]], [[0, "a"]]), expected: duplicate("a") },
   { name: "a prior uses the recorded insert time over the match time", matches: [stored("a", "exact", 0, recent), prior(0, "exact", 0, recent + 1n)],
     progress: progress([["z", old]], [[0, "z"]]), expected: duplicate("a") },
+  { name: "a prior wins a near-distance tie when its stale match time is older", matches: [stored("z", "near", 0.02, recent), prior(0, "near", 0.02, old)],
+    progress: progress([["a", recent + 1n]], [[0, "a"]]), expected: duplicate("a") },
   { name: "a prior without an inserted ID is skipped", matches: [prior(0), stored("visible", "near", 0.03)],
     progress: progress([["visible", recent]]), expected: duplicate("visible") },
   { name: "a prior without progress is skipped", matches: [prior(0)], expected: saved },

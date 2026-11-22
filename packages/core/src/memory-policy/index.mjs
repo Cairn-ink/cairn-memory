@@ -37,6 +37,7 @@ export function decideWrite(policy, position, progress) {
     const id = match.kind === "stored" ? match.id : progress?.inserted.get(match.batchIndex);
     if (id === undefined) continue;
     const writtenAt = progress?.writeTimes.get(id);
+    // Only the recorded insert time makes a prior eligible.
     const time = match.kind === "prior" ? writtenAt : writtenAt ?? match.writeTimeUs;
     if (time === undefined) continue;
 
@@ -92,33 +93,24 @@ export function planCorrect(current, expectedRevision, next, collidesWithOther) 
  * @param {MemoryRow | null} previous The visible row, including historical rows.
  * @param {Revision} expectedRevision
  * @param {string} replacementTextHash
- * @param {number} incomingCount Incoming supersessions on the replacement before this write.
+ * @param {number} incomingCount The replacement's current count from SupersessionStore.incomingCount.
  */
 export function planSupersede(previous, expectedRevision, replacementTextHash, incomingCount) {
   requireCurrentRevision(previous, expectedRevision);
-  if (previous.textHash === replacementTextHash) {
-    // CR: invalid_ref
-    throw new CoreError("invalid_input");
-  }
-  if (incomingCount + 1 > RELATION_LIMIT) {
-    // CR: supersession_limit
-    throw new CoreError("invalid_input");
-  }
+  if (previous.textHash === replacementTextHash) throw new CoreError("invalid_ref");
+  if (incomingCount + 1 > RELATION_LIMIT) throw new CoreError("supersession_limit");
 }
 
 /** @param {string} a @param {string} b @returns {[left: string, right: string]} */
 export function canonicalPair(a, b) {
   const order = compareUtf8(a, b);
-  if (order === 0) {
-    // CR: invalid_ref
-    throw new CoreError("invalid_input");
-  }
+  if (order === 0) throw new CoreError("invalid_ref");
   return order < 0 ? [a, b] : [b, a];
 }
 
 /**
  * The caller supplies validated target IDs and projected degrees for both endpoints in one snapshot.
- * The store binds the canonical pairs to the validated revisions when it inserts them.
+ * The caller adds the validated revisions, relation and source to each pair for store insertion.
  * @param {string} memoryId
  * @param {readonly string[]} hints
  * @param {ReadonlyMap<string, number>} degreeAfter
@@ -130,10 +122,7 @@ export function planConflictInsert(memoryId, hints, degreeAfter) {
     for (const id of [left, right]) {
       const degree = degreeAfter.get(id);
       if (degree === undefined) throw new CoreError("invalid_input");
-      if (degree > RELATION_LIMIT) {
-        // CR: conflict_limit
-        throw new CoreError("invalid_input");
-      }
+      if (degree > RELATION_LIMIT) throw new CoreError("conflict_limit");
     }
   }
   return pairs;
