@@ -135,7 +135,7 @@ test("a rolled-back run skips DISCARD ALL and preserves the original error", asy
 
 for (const [label, fail] of [
   ["rejects", () => { throw { code: "08006" }; }],
-  ["returns an unexpected command", () => ({ command: "DISCARD", rows: [] })],
+  ["returns an unexpected command", () => ({ command: "SELECT", rows: [] })],
 ]) {
   test(`a committed run returns its result and destroys the connection if DISCARD ALL ${label}`, async () => {
     const result = {};
@@ -145,6 +145,13 @@ for (const [label, fail] of [
     assert.deepEqual(db.releases, [[true]]);
   });
 }
+
+test("the single-word DISCARD tag some drivers report is accepted and the connection is reused", async () => {
+  const result = {};
+  const db = stub({ onQuery: (sql) => sql === discard[0] ? { command: "DISCARD", rows: [] } : undefined });
+  assert.equal(await db.uow.run(owner, {}, async () => result), result);
+  assert.deepEqual(db.releases, [[]]);
+});
 
 test("a confirmed commit returns the callback result even when both release attempts fail", async () => {
   const result = {};

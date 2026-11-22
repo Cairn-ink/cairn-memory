@@ -47,7 +47,9 @@ async function releaseConnection(connection, committed) {
   // Failed runs already destroy the connection. Reset reusable sessions outside the transaction.
   if (committed) {
     try {
-      if ((await connection.query("DISCARD ALL")).command === "DISCARD ALL") {
+      // The server tag is "DISCARD ALL"; some drivers report only the first word.
+      const { command } = await connection.query("DISCARD ALL");
+      if (command === "DISCARD ALL" || command === "DISCARD") {
         await connection.release();
         return;
       }

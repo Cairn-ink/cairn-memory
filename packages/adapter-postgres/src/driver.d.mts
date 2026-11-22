@@ -1,5 +1,5 @@
 export interface QueryResult {
-  /** Server command tag. Preserve the full multiword tag for DISCARD ALL. */
+  /** Server command tag as the driver reports it (some drivers report "DISCARD" for DISCARD ALL; both are accepted). */
   command: string;
   rows: any[];
   rowCount?: number;

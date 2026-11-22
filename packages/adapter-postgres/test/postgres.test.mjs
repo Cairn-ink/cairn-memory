@@ -20,18 +20,6 @@ function database(t, max) {
       pids.push(client.processID);
       return {
         async query(sql, values) {
-          if (sql === "DISCARD ALL") {
-            // pg truncates multiword tags in Result.command. Read the actual wire tag.
-            let command;
-            const captureCommand = ({ text }) => { command = text; };
-            client.connection.once("commandComplete", captureCommand);
-            try {
-              const { rows, rowCount } = await client.query(sql);
-              return { rows, rowCount: rowCount ?? undefined, command };
-            } finally {
-              client.connection.removeListener("commandComplete", captureCommand);
-            }
-          }
           const { rows, rowCount, command } = await client.query(sql, values);
           return { rows, rowCount: rowCount ?? undefined, command };
         },
