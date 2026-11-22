@@ -442,7 +442,20 @@ export function beginContentWriteSafety(db, operation) {
       if(typeof key!=='string'||!key)fail('evidence_unavailable');
       const found=locate(kind,key);ns=ns??found.ns;
       if(!ns||!ceilings.has(ns.ownerId)||found.ns&&JSON.stringify(boundary(found.ns))!==JSON.stringify(boundary(ns)))fail('evidence_unavailable');
-      if(titleSource&&retiredTopicTitleSource(db,kind,found.row,ns,revision))return;
+      if (!titleSource) return checkLocated(kind,key,ns,revision,extra,audit,found);
+      const checkedBefore = checked.size, seenBefore = seen.size;
+      try {
+        checkLocated(kind,key,ns,revision,extra,audit,found);
+      } catch (error) {
+        if (error?.code !== 'evidence_unavailable' || !retiredTopicTitleSource(db,kind,found.row,ns,revision)) throw error;
+        // Recursive checks mark visits before descending. A failed title
+        // check must leave no marks that could excuse a later reference.
+        discardVisitsAfter(checked, checkedBefore);
+        discardVisitsAfter(seen, seenBefore);
+        dependentMemo = undefined;
+      }
+    }
+    function checkLocated(kind,key,ns,revision,extra,audit,found) {
       if(terminal.has(JSON.stringify([...boundary(ns),kind,key])))return;
       const boundRevision=revision??found.row?.revision;
       const version=Number.isSafeInteger(boundRevision)?kind==='memory'?JSON.stringify(['memory-revision-v1',boundRevision]):kind==='submitted-note'?JSON.stringify(['note-v1',boundRevision]):undefined:undefined;
@@ -784,6 +797,12 @@ function indexIncarnationFacts(facts) {
       return writerOnly ? writer === true : writer !== undefined;
     }),
   };
+}
+
+function discardVisitsAfter(visits, size) {
+  if (visits.size === size) return;
+  let index = 0;
+  for (const visit of visits) if (index++ >= size) visits.delete(visit);
 }
 
 function retiredTopicTitleSource(db, kind, row, ns, revision) {
