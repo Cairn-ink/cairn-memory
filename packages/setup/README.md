@@ -89,8 +89,7 @@ Known limits in this release:
 - While new turns keep arriving, each local MCP server that is indexing makes about one small index write per second and uses roughly 3% of one CPU core. Sessions on a shared server share that work. A shared server pauses indexing while no session is connected.
 - Histories of about 50,000 messages or more may never finish indexing; search keeps reporting partial coverage for them.
 - Searches served by a reader that doesn't run index maintenance itself, such as keyword-only searches when an embedding model is configured, can keep reporting partial coverage even after indexing has finished. Their results are still returned.
-- Turning off automatic saving with `config --local-capture off` leaves semantic search and background index maintenance active. If an embedding provider is configured, those operations can still send search text and stored text, respectively, to the provider.
-- With an OpenAI key configured for the MCP server, recall, classify, relate and review requests can still send the query and stored memory text to OpenAI while saving is paused or disabled. Installs without a key, and automatic capture, are not affected.
+- With an OpenAI key, a recall request from you or your AI can still use the key while saving is paused. Turning off conversation saving stops saving only: the server keeps indexing your stored memories with the key. Registering the server with `--no-context-semantic` turns off search embeddings. Installs without a key send nothing.
 - If Claude Code writes its MCP entry under a custom `CLAUDE_CONFIG_DIR`, local setup checks `~/.claude.json` and can stop because it can't verify the entry.
 - When setting up automatic saving, local setup stops before connecting a tool if its configuration directory is a symbolic link. This applies to `~/.claude`, `~/.codex` and paths set through `CLAUDE_CONFIG_DIR` or `CODEX_HOME`.
 - macOS with Node from Homebrew: setup records Node's versioned path, so rerun setup after `brew upgrade` updates Node.
@@ -183,8 +182,7 @@ Codex 的 hooks 核准提示。執行 `--no-capture` 或 `config --local-capture
 - 新一輪的對話內容持續存進來時，每個正在建索引的本機 MCP 伺服器大約每秒做一次小量寫入，約佔一個 CPU 核心的 3%。連到同一台背景伺服器的對話會共用索引工作。沒有對話連線時，共用伺服器會暫停建索引。
 - 約 50,000 則訊息以上的歷史可能永遠建不完索引，搜尋會一直回報 partial。
 - 由不自行維護索引的讀取端處理的搜尋（例如設定了 embedding 模型時的純關鍵字搜尋），即使索引已建完，也可能持續回報 partial；搜尋結果仍會照常回傳。
-- 用 `config --local-capture off` 關閉自動保存後，語意搜尋和背景索引維護仍會運作。若設定了 embedding 供應商，這兩項功能仍可能分別把搜尋文字和已保存的文字送給該供應商。
-- 若替 MCP 伺服器設定了 OpenAI 金鑰，在暫停或停用保存期間，回想、分類、關聯與審閱請求仍可能把查詢和已保存的記憶文字送到 OpenAI。沒有設定金鑰的安裝、以及自動保存都不受影響。
+- 有設定 OpenAI 金鑰時，即使暫停保存，你或 AI 主動發出的回想請求仍可能用到金鑰。關閉對話保存只會停止保存，伺服器仍會用金鑰為已保存的記憶建立索引。用 `--no-context-semantic` 註冊伺服器會關閉搜尋用的 embedding。沒有設定金鑰的安裝不會送出任何內容。
 - 如果 Claude Code 把 MCP 項目寫到自訂的 `CLAUDE_CONFIG_DIR`，本機安裝會檢查 `~/.claude.json`，可能因為無法確認該項目而停止。
 - 設定自動保存時，如果工具的設定資料夾是符號連結，本機安裝會在連接工具前停止。這適用於 `~/.claude`、`~/.codex`，以及透過 `CLAUDE_CONFIG_DIR` 或 `CODEX_HOME` 指定的路徑。
 - macOS 上用 Homebrew 安裝的 Node：設定會記下 Node 帶版本號的路徑，所以 `brew upgrade` 更新 Node 之後請重新執行 setup。
