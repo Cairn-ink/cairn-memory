@@ -31,19 +31,21 @@ test("hosted ranks by exact microseconds and descending UTF-8 ids", () => {
 
 test("fused score ties use exact microseconds and then descending UTF-8 ids", () => {
   // Lexical/vector ranks (6, 50) and (10, 45) both contribute 1/60.
+  const astralId = "😀";
+  const bmpPrivateId = "";
   const rows = (highUs, lowUs) => {
     const left = Array.from({ length: 10 }, (_, i) =>
-      lexical([i === 5 ? "\\ue000" : i === 9 ? "\\u{1f600}" : "lexical" + i, 10 - i,
+      lexical([i === 5 ? bmpPrivateId : i === 9 ? astralId : "lexical" + i, 10 - i,
         i === 5 ? highUs : lowUs]));
     const right = Array.from({ length: 50 }, (_, i) =>
-      vector([i === 49 ? "\\ue000" : i === 44 ? "\\u{1f600}" : "vector" + i, i / 100,
+      vector([i === 49 ? bmpPrivateId : i === 44 ? astralId : "vector" + i, i / 100,
         i === 49 ? highUs : lowUs]));
     const result = fuseHosted(left, right, { offset: 0, limit: 2 }).rows;
     assert.deepStrictEqual(result.map(row => row.score), [1 / 60, 1 / 60]);
     return ids(result);
   };
-  assert.deepStrictEqual(rows(1002, 1001), ["\\ue000", "\\u{1f600}"]);
-  assert.deepStrictEqual(rows(1001, 1001), ["\\u{1f600}", "\\ue000"]);
+  assert.deepStrictEqual(rows(1002, 1001), [bmpPrivateId, astralId]);
+  assert.deepStrictEqual(rows(1001, 1001), [astralId, bmpPrivateId]);
 });
 
 test("plugin floor keeps .45 and lexical pool matches and leaves retained scores and ranks intact", () => {

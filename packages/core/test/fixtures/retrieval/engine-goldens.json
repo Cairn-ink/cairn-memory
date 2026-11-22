@@ -4357,6 +4357,348 @@
       "memoryId": "same"
     }
   ],
+  "canonicalReadSets": [
+    {
+      "ownerId": "second-owner",
+      "rows": [
+        {
+          "ref": {
+            "namespace": {
+              "ownerId": "second-owner",
+              "scope": "project",
+              "projectId": "😀"
+            },
+            "type": "memory",
+            "memoryId": "same"
+          },
+          "text": "atlas"
+        },
+        {
+          "ref": {
+            "namespace": {
+              "ownerId": "second-owner",
+              "scope": "project",
+              "projectId": ""
+            },
+            "type": "memory",
+            "memoryId": "same"
+          },
+          "text": "atlas"
+        },
+        {
+          "ref": {
+            "namespace": {
+              "ownerId": "second-owner",
+              "scope": "personal",
+              "projectId": null
+            },
+            "type": "memory",
+            "memoryId": "same"
+          },
+          "text": "atlas"
+        },
+        {
+          "ref": {
+            "namespace": {
+              "ownerId": "second-owner",
+              "scope": "project",
+              "projectId": ""
+            },
+            "type": "card",
+            "cardId": "same"
+          },
+          "text": "atlas"
+        }
+      ],
+      "tuples": [
+        [
+          "second-owner",
+          "project",
+          "😀",
+          "memory",
+          "same"
+        ],
+        [
+          "second-owner",
+          "project",
+          "",
+          "memory",
+          "same"
+        ],
+        [
+          "second-owner",
+          "personal",
+          "",
+          "memory",
+          "same"
+        ],
+        [
+          "second-owner",
+          "project",
+          "",
+          "card",
+          "same"
+        ]
+      ],
+      "order": [
+        [
+          "second-owner",
+          "personal",
+          "",
+          "memory",
+          "same"
+        ],
+        [
+          "second-owner",
+          "project",
+          "",
+          "card",
+          "same"
+        ],
+        [
+          "second-owner",
+          "project",
+          "",
+          "memory",
+          "same"
+        ],
+        [
+          "second-owner",
+          "project",
+          "😀",
+          "memory",
+          "same"
+        ]
+      ]
+    },
+    {
+      "ownerId": "owner",
+      "rows": [
+        {
+          "ref": {
+            "namespace": {
+              "ownerId": "owner",
+              "scope": "project",
+              "projectId": "😀"
+            },
+            "type": "memory",
+            "memoryId": "same"
+          },
+          "text": "atlas"
+        },
+        {
+          "ref": {
+            "namespace": {
+              "ownerId": "owner",
+              "scope": "project",
+              "projectId": ""
+            },
+            "type": "memory",
+            "memoryId": "same"
+          },
+          "text": "atlas"
+        },
+        {
+          "ref": {
+            "namespace": {
+              "ownerId": "owner",
+              "scope": "personal",
+              "projectId": null
+            },
+            "type": "memory",
+            "memoryId": "same"
+          },
+          "text": "atlas"
+        },
+        {
+          "ref": {
+            "namespace": {
+              "ownerId": "owner",
+              "scope": "project",
+              "projectId": ""
+            },
+            "type": "card",
+            "cardId": "same"
+          },
+          "text": "atlas"
+        }
+      ],
+      "tuples": [
+        [
+          "owner",
+          "project",
+          "😀",
+          "memory",
+          "same"
+        ],
+        [
+          "owner",
+          "project",
+          "",
+          "memory",
+          "same"
+        ],
+        [
+          "owner",
+          "personal",
+          "",
+          "memory",
+          "same"
+        ],
+        [
+          "owner",
+          "project",
+          "",
+          "card",
+          "same"
+        ]
+      ],
+      "order": [
+        [
+          "owner",
+          "personal",
+          "",
+          "memory",
+          "same"
+        ],
+        [
+          "owner",
+          "project",
+          "",
+          "card",
+          "same"
+        ],
+        [
+          "owner",
+          "project",
+          "",
+          "memory",
+          "same"
+        ],
+        [
+          "owner",
+          "project",
+          "😀",
+          "memory",
+          "same"
+        ]
+      ]
+    },
+    {
+      "ownerId": "",
+      "rows": [
+        {
+          "memoryId": "legacy-memory-id"
+        },
+        {
+          "id": "legacy-id"
+        },
+        {
+          "id": "legacy-card",
+          "type": "card",
+          "namespace": {
+            "scope": "project"
+          }
+        }
+      ],
+      "tuples": [
+        [
+          "",
+          "",
+          "",
+          "memory",
+          "legacy-memory-id"
+        ],
+        [
+          "",
+          "",
+          "",
+          "memory",
+          "legacy-id"
+        ],
+        [
+          "",
+          "project",
+          "",
+          "card",
+          "legacy-card"
+        ]
+      ],
+      "order": [
+        [
+          "",
+          "",
+          "",
+          "memory",
+          "legacy-id"
+        ],
+        [
+          "",
+          "",
+          "",
+          "memory",
+          "legacy-memory-id"
+        ],
+        [
+          "",
+          "project",
+          "",
+          "card",
+          "legacy-card"
+        ]
+      ]
+    }
+  ],
+  "emptyCorpus": {
+    "index": {
+      "N": 0,
+      "totalLength": 0,
+      "avgLength": 0,
+      "df": []
+    },
+    "query": "atlas",
+    "value": []
+  },
+  "directScore": {
+    "terms": [
+      "atlas",
+      "café",
+      "atlas",
+      "missing"
+    ],
+    "posting": {
+      "length": 8,
+      "frequencies": [
+        [
+          "atlas",
+          3
+        ],
+        [
+          "café",
+          1
+        ]
+      ]
+    },
+    "stats": {
+      "N": 10,
+      "totalLength": 54,
+      "df": [
+        [
+          "atlas",
+          5
+        ],
+        [
+          "café",
+          2
+        ],
+        [
+          "missing",
+          1
+        ]
+      ]
+    },
+    "value": 2.225156930767455
+  },
   "presets": {
     "rrf-k60-d12": {
       "k": 60,
@@ -6954,7 +7296,2644 @@
         }
       }
     ],
-    "empty": []
+    "empty": [],
+    "overlapLexical": [
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": ""
+        },
+        "score": 1
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "😀"
+        },
+        "score": 2
+      }
+    ],
+    "overlapSemantic": [
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "😀"
+        },
+        "score": 3
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "same"
+        },
+        "score": 1
+      }
+    ],
+    "overlapMoc": [
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "project",
+            "projectId": "合成"
+          },
+          "type": "memory",
+          "memoryId": "same"
+        },
+        "score": 100
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "😀"
+        },
+        "score": 99
+      }
+    ],
+    "compactLexical": [
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-0"
+        },
+        "score": 64
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-1"
+        },
+        "score": 63
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-2"
+        },
+        "score": 62
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-3"
+        },
+        "score": 61
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-4"
+        },
+        "score": 60
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-5"
+        },
+        "score": 59
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-6"
+        },
+        "score": 58
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-7"
+        },
+        "score": 57
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-8"
+        },
+        "score": 56
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-9"
+        },
+        "score": 55
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-10"
+        },
+        "score": 54
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-11"
+        },
+        "score": 53
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-12"
+        },
+        "score": 52
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-13"
+        },
+        "score": 51
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-14"
+        },
+        "score": 50
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-15"
+        },
+        "score": 49
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-16"
+        },
+        "score": 48
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-17"
+        },
+        "score": 47
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-18"
+        },
+        "score": 46
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-19"
+        },
+        "score": 45
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-20"
+        },
+        "score": 44
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-21"
+        },
+        "score": 43
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-22"
+        },
+        "score": 42
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-23"
+        },
+        "score": 41
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-24"
+        },
+        "score": 40
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-25"
+        },
+        "score": 39
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-26"
+        },
+        "score": 38
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-27"
+        },
+        "score": 37
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-28"
+        },
+        "score": 36
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-29"
+        },
+        "score": 35
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-30"
+        },
+        "score": 34
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-31"
+        },
+        "score": 33
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-32"
+        },
+        "score": 32
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-33"
+        },
+        "score": 31
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-34"
+        },
+        "score": 30
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-35"
+        },
+        "score": 29
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-36"
+        },
+        "score": 28
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-37"
+        },
+        "score": 27
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-38"
+        },
+        "score": 26
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-39"
+        },
+        "score": 25
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-40"
+        },
+        "score": 24
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-41"
+        },
+        "score": 23
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-42"
+        },
+        "score": 22
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-43"
+        },
+        "score": 21
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-44"
+        },
+        "score": 20
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-45"
+        },
+        "score": 19
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-46"
+        },
+        "score": 18
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-47"
+        },
+        "score": 17
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-48"
+        },
+        "score": 16
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-49"
+        },
+        "score": 15
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-50"
+        },
+        "score": 14
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-51"
+        },
+        "score": 13
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-52"
+        },
+        "score": 12
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-53"
+        },
+        "score": 11
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-54"
+        },
+        "score": 10
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-55"
+        },
+        "score": 9
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-56"
+        },
+        "score": 8
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-57"
+        },
+        "score": 7
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-58"
+        },
+        "score": 6
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-59"
+        },
+        "score": 5
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-60"
+        },
+        "score": 4
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-61"
+        },
+        "score": 3
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-62"
+        },
+        "score": 2
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-63"
+        },
+        "score": 1
+      }
+    ],
+    "compactSemantic": [
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-0"
+        },
+        "score": 64
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-1"
+        },
+        "score": 63
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-2"
+        },
+        "score": 62
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-3"
+        },
+        "score": 61
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-4"
+        },
+        "score": 60
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-5"
+        },
+        "score": 59
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-6"
+        },
+        "score": 58
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-7"
+        },
+        "score": 57
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-8"
+        },
+        "score": 56
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-9"
+        },
+        "score": 55
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-10"
+        },
+        "score": 54
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-11"
+        },
+        "score": 53
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-12"
+        },
+        "score": 52
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-13"
+        },
+        "score": 51
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-14"
+        },
+        "score": 50
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-15"
+        },
+        "score": 49
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-16"
+        },
+        "score": 48
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-17"
+        },
+        "score": 47
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-18"
+        },
+        "score": 46
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-19"
+        },
+        "score": 45
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-20"
+        },
+        "score": 44
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-21"
+        },
+        "score": 43
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-22"
+        },
+        "score": 42
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-23"
+        },
+        "score": 41
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-24"
+        },
+        "score": 40
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-25"
+        },
+        "score": 39
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-26"
+        },
+        "score": 38
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-27"
+        },
+        "score": 37
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-28"
+        },
+        "score": 36
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-29"
+        },
+        "score": 35
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-30"
+        },
+        "score": 34
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-31"
+        },
+        "score": 33
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-32"
+        },
+        "score": 32
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-33"
+        },
+        "score": 31
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-34"
+        },
+        "score": 30
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-35"
+        },
+        "score": 29
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-36"
+        },
+        "score": 28
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-37"
+        },
+        "score": 27
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-38"
+        },
+        "score": 26
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-39"
+        },
+        "score": 25
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-40"
+        },
+        "score": 24
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-41"
+        },
+        "score": 23
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-42"
+        },
+        "score": 22
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-43"
+        },
+        "score": 21
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-44"
+        },
+        "score": 20
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-45"
+        },
+        "score": 19
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-46"
+        },
+        "score": 18
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-47"
+        },
+        "score": 17
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-48"
+        },
+        "score": 16
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-49"
+        },
+        "score": 15
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-50"
+        },
+        "score": 14
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-51"
+        },
+        "score": 13
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-52"
+        },
+        "score": 12
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-53"
+        },
+        "score": 11
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-54"
+        },
+        "score": 10
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-55"
+        },
+        "score": 9
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-56"
+        },
+        "score": 8
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-57"
+        },
+        "score": 7
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-58"
+        },
+        "score": 6
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-59"
+        },
+        "score": 5
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-60"
+        },
+        "score": 4
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-61"
+        },
+        "score": 3
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-62"
+        },
+        "score": 2
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-63"
+        },
+        "score": 1
+      }
+    ],
+    "signedScores": [
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "😀"
+        },
+        "score": -2.5
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": ""
+        },
+        "score": "-0"
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "same"
+        },
+        "score": 0
+      }
+    ],
+    "nanScore": [
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "😀"
+        },
+        "score": "NaN"
+      }
+    ],
+    "infiniteScore": [
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "😀"
+        },
+        "score": "Infinity"
+      }
+    ],
+    "negativeInfiniteScore": [
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "😀"
+        },
+        "score": "-Infinity"
+      }
+    ],
+    "missingMocScoreAt13": [
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-0"
+        },
+        "score": 64
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-1"
+        },
+        "score": 63
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-2"
+        },
+        "score": 62
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-3"
+        },
+        "score": 61
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-4"
+        },
+        "score": 60
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-5"
+        },
+        "score": 59
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-6"
+        },
+        "score": 58
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-7"
+        },
+        "score": 57
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-8"
+        },
+        "score": 56
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-9"
+        },
+        "score": 55
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-10"
+        },
+        "score": 54
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "lexical-11"
+        },
+        "score": 53
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "project",
+            "projectId": "合成"
+          },
+          "type": "memory",
+          "memoryId": "same"
+        }
+      }
+    ],
+    "duplicateCompactScoreAt65": [
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-0"
+        },
+        "score": 64
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-1"
+        },
+        "score": 63
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-2"
+        },
+        "score": 62
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-3"
+        },
+        "score": 61
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-4"
+        },
+        "score": 60
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-5"
+        },
+        "score": 59
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-6"
+        },
+        "score": 58
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-7"
+        },
+        "score": 57
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-8"
+        },
+        "score": 56
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-9"
+        },
+        "score": 55
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-10"
+        },
+        "score": 54
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-11"
+        },
+        "score": 53
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-12"
+        },
+        "score": 52
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-13"
+        },
+        "score": 51
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-14"
+        },
+        "score": 50
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-15"
+        },
+        "score": 49
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-16"
+        },
+        "score": 48
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-17"
+        },
+        "score": 47
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-18"
+        },
+        "score": 46
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-19"
+        },
+        "score": 45
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-20"
+        },
+        "score": 44
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-21"
+        },
+        "score": 43
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-22"
+        },
+        "score": 42
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-23"
+        },
+        "score": 41
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-24"
+        },
+        "score": 40
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-25"
+        },
+        "score": 39
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-26"
+        },
+        "score": 38
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-27"
+        },
+        "score": 37
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-28"
+        },
+        "score": 36
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-29"
+        },
+        "score": 35
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-30"
+        },
+        "score": 34
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-31"
+        },
+        "score": 33
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-32"
+        },
+        "score": 32
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-33"
+        },
+        "score": 31
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-34"
+        },
+        "score": 30
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-35"
+        },
+        "score": 29
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-36"
+        },
+        "score": 28
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-37"
+        },
+        "score": 27
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-38"
+        },
+        "score": 26
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-39"
+        },
+        "score": 25
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-40"
+        },
+        "score": 24
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-41"
+        },
+        "score": 23
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-42"
+        },
+        "score": 22
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-43"
+        },
+        "score": 21
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-44"
+        },
+        "score": 20
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-45"
+        },
+        "score": 19
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-46"
+        },
+        "score": 18
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-47"
+        },
+        "score": 17
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-48"
+        },
+        "score": 16
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-49"
+        },
+        "score": 15
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-50"
+        },
+        "score": 14
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-51"
+        },
+        "score": 13
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-52"
+        },
+        "score": 12
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-53"
+        },
+        "score": 11
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-54"
+        },
+        "score": 10
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-55"
+        },
+        "score": 9
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-56"
+        },
+        "score": 8
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-57"
+        },
+        "score": 7
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-58"
+        },
+        "score": 6
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-59"
+        },
+        "score": 5
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-60"
+        },
+        "score": 4
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-61"
+        },
+        "score": 3
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-62"
+        },
+        "score": 2
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-63"
+        },
+        "score": 1
+      },
+      {
+        "ref": {
+          "namespace": {
+            "ownerId": "owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "type": "memory",
+          "memoryId": "semantic-0"
+        },
+        "score": -1
+      }
+    ]
   },
   "fusion": [
     {
@@ -17281,6 +20260,4436 @@
       "semantic": "semantic",
       "moc": "moc",
       "error": "invalid_fusion"
+    },
+    {
+      "name": "returned three-way MOC overlap",
+      "opts": {
+        "semanticState": "ready",
+        "coverageComplete": true,
+        "preset": "rrf-k60-d12-moc-v1"
+      },
+      "lexical": "overlapLexical",
+      "semantic": "overlapSemantic",
+      "moc": "overlapMoc",
+      "value": {
+        "mode": "hybrid",
+        "preset": "rrf-k60-d12-moc-v1",
+        "unionSize": 4,
+        "rows": [
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "😀"
+            },
+            "score": 0.01636700158646219,
+            "channels": {
+              "lexical": {
+                "rank": 1,
+                "rawScore": 2
+              },
+              "semantic": {
+                "rank": 1,
+                "rawScore": 3
+              },
+              "moc": {
+                "rank": 2,
+                "rawScore": 99
+              }
+            },
+            "fusionScore": 0.01636700158646219
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "same"
+            },
+            "score": 0.007258064516129033,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 2,
+                "rawScore": 1
+              },
+              "moc": null
+            },
+            "fusionScore": 0.007258064516129033
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": ""
+            },
+            "score": 0.007258064516129033,
+            "channels": {
+              "lexical": {
+                "rank": 2,
+                "rawScore": 1
+              },
+              "semantic": null,
+              "moc": null
+            },
+            "fusionScore": 0.007258064516129033
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "project",
+                "projectId": "合成"
+              },
+              "type": "memory",
+              "memoryId": "same"
+            },
+            "score": 0.0016393442622950822,
+            "channels": {
+              "lexical": null,
+              "semantic": null,
+              "moc": {
+                "rank": 1,
+                "rawScore": 100
+              }
+            },
+            "fusionScore": 0.0016393442622950822
+          }
+        ]
+      }
+    },
+    {
+      "name": "all channels empty in hybrid mode",
+      "opts": {
+        "semanticState": "ready",
+        "coverageComplete": true,
+        "preset": "rrf-k60-d12-moc-v1"
+      },
+      "lexical": "empty",
+      "semantic": "empty",
+      "moc": "empty",
+      "value": {
+        "mode": "hybrid",
+        "preset": "rrf-k60-d12-moc-v1",
+        "unionSize": 0,
+        "rows": []
+      }
+    },
+    {
+      "name": "all channels empty in lexical mode",
+      "opts": {},
+      "lexical": "empty",
+      "semantic": "empty",
+      "moc": "empty",
+      "value": {
+        "mode": "lexical",
+        "preset": "rrf-k60-d12",
+        "unionSize": 0,
+        "rows": []
+      }
+    },
+    {
+      "name": "rrf-k60-d64-compact disjoint 64+64",
+      "opts": {
+        "semanticState": "ready",
+        "coverageComplete": true,
+        "preset": "rrf-k60-d64-compact",
+        "limit": 64
+      },
+      "lexical": "compactLexical",
+      "semantic": "compactSemantic",
+      "moc": "empty",
+      "value": {
+        "mode": "hybrid",
+        "preset": "rrf-k60-d64-compact",
+        "unionSize": 128,
+        "rows": [
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-0"
+            },
+            "score": 0.007377049180327869,
+            "channels": {
+              "lexical": {
+                "rank": 1,
+                "rawScore": 64
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.007377049180327869
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-0"
+            },
+            "score": 0.007377049180327869,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 1,
+                "rawScore": 64
+              }
+            },
+            "fusionScore": 0.007377049180327869
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-1"
+            },
+            "score": 0.007258064516129033,
+            "channels": {
+              "lexical": {
+                "rank": 2,
+                "rawScore": 63
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.007258064516129033
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-1"
+            },
+            "score": 0.007258064516129033,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 2,
+                "rawScore": 63
+              }
+            },
+            "fusionScore": 0.007258064516129033
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-2"
+            },
+            "score": 0.007142857142857143,
+            "channels": {
+              "lexical": {
+                "rank": 3,
+                "rawScore": 62
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.007142857142857143
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-2"
+            },
+            "score": 0.007142857142857143,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 3,
+                "rawScore": 62
+              }
+            },
+            "fusionScore": 0.007142857142857143
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-3"
+            },
+            "score": 0.00703125,
+            "channels": {
+              "lexical": {
+                "rank": 4,
+                "rawScore": 61
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.00703125
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-3"
+            },
+            "score": 0.00703125,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 4,
+                "rawScore": 61
+              }
+            },
+            "fusionScore": 0.00703125
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-4"
+            },
+            "score": 0.006923076923076923,
+            "channels": {
+              "lexical": {
+                "rank": 5,
+                "rawScore": 60
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.006923076923076923
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-4"
+            },
+            "score": 0.006923076923076923,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 5,
+                "rawScore": 60
+              }
+            },
+            "fusionScore": 0.006923076923076923
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-5"
+            },
+            "score": 0.006818181818181819,
+            "channels": {
+              "lexical": {
+                "rank": 6,
+                "rawScore": 59
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.006818181818181819
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-5"
+            },
+            "score": 0.006818181818181819,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 6,
+                "rawScore": 59
+              }
+            },
+            "fusionScore": 0.006818181818181819
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-6"
+            },
+            "score": 0.006716417910447761,
+            "channels": {
+              "lexical": {
+                "rank": 7,
+                "rawScore": 58
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.006716417910447761
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-6"
+            },
+            "score": 0.006716417910447761,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 7,
+                "rawScore": 58
+              }
+            },
+            "fusionScore": 0.006716417910447761
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-7"
+            },
+            "score": 0.006617647058823529,
+            "channels": {
+              "lexical": {
+                "rank": 8,
+                "rawScore": 57
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.006617647058823529
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-7"
+            },
+            "score": 0.006617647058823529,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 8,
+                "rawScore": 57
+              }
+            },
+            "fusionScore": 0.006617647058823529
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-8"
+            },
+            "score": 0.006521739130434783,
+            "channels": {
+              "lexical": {
+                "rank": 9,
+                "rawScore": 56
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.006521739130434783
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-8"
+            },
+            "score": 0.006521739130434783,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 9,
+                "rawScore": 56
+              }
+            },
+            "fusionScore": 0.006521739130434783
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-9"
+            },
+            "score": 0.0064285714285714285,
+            "channels": {
+              "lexical": {
+                "rank": 10,
+                "rawScore": 55
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.0064285714285714285
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-9"
+            },
+            "score": 0.0064285714285714285,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 10,
+                "rawScore": 55
+              }
+            },
+            "fusionScore": 0.0064285714285714285
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-10"
+            },
+            "score": 0.006338028169014085,
+            "channels": {
+              "lexical": {
+                "rank": 11,
+                "rawScore": 54
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.006338028169014085
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-10"
+            },
+            "score": 0.006338028169014085,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 11,
+                "rawScore": 54
+              }
+            },
+            "fusionScore": 0.006338028169014085
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-11"
+            },
+            "score": 0.0062499999999999995,
+            "channels": {
+              "lexical": {
+                "rank": 12,
+                "rawScore": 53
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.0062499999999999995
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-11"
+            },
+            "score": 0.0062499999999999995,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 12,
+                "rawScore": 53
+              }
+            },
+            "fusionScore": 0.0062499999999999995
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-12"
+            },
+            "score": 0.0061643835616438354,
+            "channels": {
+              "lexical": {
+                "rank": 13,
+                "rawScore": 52
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.0061643835616438354
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-12"
+            },
+            "score": 0.0061643835616438354,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 13,
+                "rawScore": 52
+              }
+            },
+            "fusionScore": 0.0061643835616438354
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-13"
+            },
+            "score": 0.006081081081081081,
+            "channels": {
+              "lexical": {
+                "rank": 14,
+                "rawScore": 51
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.006081081081081081
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-13"
+            },
+            "score": 0.006081081081081081,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 14,
+                "rawScore": 51
+              }
+            },
+            "fusionScore": 0.006081081081081081
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-14"
+            },
+            "score": 0.006,
+            "channels": {
+              "lexical": {
+                "rank": 15,
+                "rawScore": 50
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.006
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-14"
+            },
+            "score": 0.006,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 15,
+                "rawScore": 50
+              }
+            },
+            "fusionScore": 0.006
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-15"
+            },
+            "score": 0.0059210526315789476,
+            "channels": {
+              "lexical": {
+                "rank": 16,
+                "rawScore": 49
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.0059210526315789476
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-15"
+            },
+            "score": 0.0059210526315789476,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 16,
+                "rawScore": 49
+              }
+            },
+            "fusionScore": 0.0059210526315789476
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-16"
+            },
+            "score": 0.005844155844155844,
+            "channels": {
+              "lexical": {
+                "rank": 17,
+                "rawScore": 48
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.005844155844155844
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-16"
+            },
+            "score": 0.005844155844155844,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 17,
+                "rawScore": 48
+              }
+            },
+            "fusionScore": 0.005844155844155844
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-17"
+            },
+            "score": 0.0057692307692307696,
+            "channels": {
+              "lexical": {
+                "rank": 18,
+                "rawScore": 47
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.0057692307692307696
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-17"
+            },
+            "score": 0.0057692307692307696,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 18,
+                "rawScore": 47
+              }
+            },
+            "fusionScore": 0.0057692307692307696
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-18"
+            },
+            "score": 0.00569620253164557,
+            "channels": {
+              "lexical": {
+                "rank": 19,
+                "rawScore": 46
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.00569620253164557
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-18"
+            },
+            "score": 0.00569620253164557,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 19,
+                "rawScore": 46
+              }
+            },
+            "fusionScore": 0.00569620253164557
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-19"
+            },
+            "score": 0.005625000000000001,
+            "channels": {
+              "lexical": {
+                "rank": 20,
+                "rawScore": 45
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.005625000000000001
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-19"
+            },
+            "score": 0.005625000000000001,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 20,
+                "rawScore": 45
+              }
+            },
+            "fusionScore": 0.005625000000000001
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-20"
+            },
+            "score": 0.005555555555555556,
+            "channels": {
+              "lexical": {
+                "rank": 21,
+                "rawScore": 44
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.005555555555555556
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-20"
+            },
+            "score": 0.005555555555555556,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 21,
+                "rawScore": 44
+              }
+            },
+            "fusionScore": 0.005555555555555556
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-21"
+            },
+            "score": 0.005487804878048781,
+            "channels": {
+              "lexical": {
+                "rank": 22,
+                "rawScore": 43
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.005487804878048781
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-21"
+            },
+            "score": 0.005487804878048781,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 22,
+                "rawScore": 43
+              }
+            },
+            "fusionScore": 0.005487804878048781
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-22"
+            },
+            "score": 0.005421686746987953,
+            "channels": {
+              "lexical": {
+                "rank": 23,
+                "rawScore": 42
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.005421686746987953
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-22"
+            },
+            "score": 0.005421686746987953,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 23,
+                "rawScore": 42
+              }
+            },
+            "fusionScore": 0.005421686746987953
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-23"
+            },
+            "score": 0.005357142857142857,
+            "channels": {
+              "lexical": {
+                "rank": 24,
+                "rawScore": 41
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.005357142857142857
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-23"
+            },
+            "score": 0.005357142857142857,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 24,
+                "rawScore": 41
+              }
+            },
+            "fusionScore": 0.005357142857142857
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-24"
+            },
+            "score": 0.005294117647058823,
+            "channels": {
+              "lexical": {
+                "rank": 25,
+                "rawScore": 40
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.005294117647058823
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-24"
+            },
+            "score": 0.005294117647058823,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 25,
+                "rawScore": 40
+              }
+            },
+            "fusionScore": 0.005294117647058823
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-25"
+            },
+            "score": 0.005232558139534884,
+            "channels": {
+              "lexical": {
+                "rank": 26,
+                "rawScore": 39
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.005232558139534884
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-25"
+            },
+            "score": 0.005232558139534884,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 26,
+                "rawScore": 39
+              }
+            },
+            "fusionScore": 0.005232558139534884
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-26"
+            },
+            "score": 0.005172413793103448,
+            "channels": {
+              "lexical": {
+                "rank": 27,
+                "rawScore": 38
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.005172413793103448
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-26"
+            },
+            "score": 0.005172413793103448,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 27,
+                "rawScore": 38
+              }
+            },
+            "fusionScore": 0.005172413793103448
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-27"
+            },
+            "score": 0.005113636363636364,
+            "channels": {
+              "lexical": {
+                "rank": 28,
+                "rawScore": 37
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.005113636363636364
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-27"
+            },
+            "score": 0.005113636363636364,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 28,
+                "rawScore": 37
+              }
+            },
+            "fusionScore": 0.005113636363636364
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-28"
+            },
+            "score": 0.0050561797752808986,
+            "channels": {
+              "lexical": {
+                "rank": 29,
+                "rawScore": 36
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.0050561797752808986
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-28"
+            },
+            "score": 0.0050561797752808986,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 29,
+                "rawScore": 36
+              }
+            },
+            "fusionScore": 0.0050561797752808986
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-29"
+            },
+            "score": 0.005,
+            "channels": {
+              "lexical": {
+                "rank": 30,
+                "rawScore": 35
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.005
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-29"
+            },
+            "score": 0.005,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 30,
+                "rawScore": 35
+              }
+            },
+            "fusionScore": 0.005
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-30"
+            },
+            "score": 0.004945054945054946,
+            "channels": {
+              "lexical": {
+                "rank": 31,
+                "rawScore": 34
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.004945054945054946
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-30"
+            },
+            "score": 0.004945054945054946,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 31,
+                "rawScore": 34
+              }
+            },
+            "fusionScore": 0.004945054945054946
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-31"
+            },
+            "score": 0.004891304347826087,
+            "channels": {
+              "lexical": {
+                "rank": 32,
+                "rawScore": 33
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.004891304347826087
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-31"
+            },
+            "score": 0.004891304347826087,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 32,
+                "rawScore": 33
+              }
+            },
+            "fusionScore": 0.004891304347826087
+          }
+        ]
+      }
+    },
+    {
+      "name": "rrf-k60-d64-moc-compact disjoint 64+64",
+      "opts": {
+        "semanticState": "ready",
+        "coverageComplete": true,
+        "preset": "rrf-k60-d64-moc-compact",
+        "limit": 64
+      },
+      "lexical": "compactLexical",
+      "semantic": "compactSemantic",
+      "moc": "empty",
+      "value": {
+        "mode": "hybrid",
+        "preset": "rrf-k60-d64-moc-compact",
+        "unionSize": 128,
+        "rows": [
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-0"
+            },
+            "score": 0.007377049180327869,
+            "channels": {
+              "lexical": {
+                "rank": 1,
+                "rawScore": 64
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.007377049180327869
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-0"
+            },
+            "score": 0.007377049180327869,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 1,
+                "rawScore": 64
+              }
+            },
+            "fusionScore": 0.007377049180327869
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-1"
+            },
+            "score": 0.007258064516129033,
+            "channels": {
+              "lexical": {
+                "rank": 2,
+                "rawScore": 63
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.007258064516129033
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-1"
+            },
+            "score": 0.007258064516129033,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 2,
+                "rawScore": 63
+              }
+            },
+            "fusionScore": 0.007258064516129033
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-2"
+            },
+            "score": 0.007142857142857143,
+            "channels": {
+              "lexical": {
+                "rank": 3,
+                "rawScore": 62
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.007142857142857143
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-2"
+            },
+            "score": 0.007142857142857143,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 3,
+                "rawScore": 62
+              }
+            },
+            "fusionScore": 0.007142857142857143
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-3"
+            },
+            "score": 0.00703125,
+            "channels": {
+              "lexical": {
+                "rank": 4,
+                "rawScore": 61
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.00703125
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-3"
+            },
+            "score": 0.00703125,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 4,
+                "rawScore": 61
+              }
+            },
+            "fusionScore": 0.00703125
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-4"
+            },
+            "score": 0.006923076923076923,
+            "channels": {
+              "lexical": {
+                "rank": 5,
+                "rawScore": 60
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.006923076923076923
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-4"
+            },
+            "score": 0.006923076923076923,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 5,
+                "rawScore": 60
+              }
+            },
+            "fusionScore": 0.006923076923076923
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-5"
+            },
+            "score": 0.006818181818181819,
+            "channels": {
+              "lexical": {
+                "rank": 6,
+                "rawScore": 59
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.006818181818181819
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-5"
+            },
+            "score": 0.006818181818181819,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 6,
+                "rawScore": 59
+              }
+            },
+            "fusionScore": 0.006818181818181819
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-6"
+            },
+            "score": 0.006716417910447761,
+            "channels": {
+              "lexical": {
+                "rank": 7,
+                "rawScore": 58
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.006716417910447761
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-6"
+            },
+            "score": 0.006716417910447761,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 7,
+                "rawScore": 58
+              }
+            },
+            "fusionScore": 0.006716417910447761
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-7"
+            },
+            "score": 0.006617647058823529,
+            "channels": {
+              "lexical": {
+                "rank": 8,
+                "rawScore": 57
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.006617647058823529
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-7"
+            },
+            "score": 0.006617647058823529,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 8,
+                "rawScore": 57
+              }
+            },
+            "fusionScore": 0.006617647058823529
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-8"
+            },
+            "score": 0.006521739130434783,
+            "channels": {
+              "lexical": {
+                "rank": 9,
+                "rawScore": 56
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.006521739130434783
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-8"
+            },
+            "score": 0.006521739130434783,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 9,
+                "rawScore": 56
+              }
+            },
+            "fusionScore": 0.006521739130434783
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-9"
+            },
+            "score": 0.0064285714285714285,
+            "channels": {
+              "lexical": {
+                "rank": 10,
+                "rawScore": 55
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.0064285714285714285
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-9"
+            },
+            "score": 0.0064285714285714285,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 10,
+                "rawScore": 55
+              }
+            },
+            "fusionScore": 0.0064285714285714285
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-10"
+            },
+            "score": 0.006338028169014085,
+            "channels": {
+              "lexical": {
+                "rank": 11,
+                "rawScore": 54
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.006338028169014085
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-10"
+            },
+            "score": 0.006338028169014085,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 11,
+                "rawScore": 54
+              }
+            },
+            "fusionScore": 0.006338028169014085
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-11"
+            },
+            "score": 0.0062499999999999995,
+            "channels": {
+              "lexical": {
+                "rank": 12,
+                "rawScore": 53
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.0062499999999999995
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-11"
+            },
+            "score": 0.0062499999999999995,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 12,
+                "rawScore": 53
+              }
+            },
+            "fusionScore": 0.0062499999999999995
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-12"
+            },
+            "score": 0.0061643835616438354,
+            "channels": {
+              "lexical": {
+                "rank": 13,
+                "rawScore": 52
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.0061643835616438354
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-12"
+            },
+            "score": 0.0061643835616438354,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 13,
+                "rawScore": 52
+              }
+            },
+            "fusionScore": 0.0061643835616438354
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-13"
+            },
+            "score": 0.006081081081081081,
+            "channels": {
+              "lexical": {
+                "rank": 14,
+                "rawScore": 51
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.006081081081081081
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-13"
+            },
+            "score": 0.006081081081081081,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 14,
+                "rawScore": 51
+              }
+            },
+            "fusionScore": 0.006081081081081081
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-14"
+            },
+            "score": 0.006,
+            "channels": {
+              "lexical": {
+                "rank": 15,
+                "rawScore": 50
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.006
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-14"
+            },
+            "score": 0.006,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 15,
+                "rawScore": 50
+              }
+            },
+            "fusionScore": 0.006
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-15"
+            },
+            "score": 0.0059210526315789476,
+            "channels": {
+              "lexical": {
+                "rank": 16,
+                "rawScore": 49
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.0059210526315789476
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-15"
+            },
+            "score": 0.0059210526315789476,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 16,
+                "rawScore": 49
+              }
+            },
+            "fusionScore": 0.0059210526315789476
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-16"
+            },
+            "score": 0.005844155844155844,
+            "channels": {
+              "lexical": {
+                "rank": 17,
+                "rawScore": 48
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.005844155844155844
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-16"
+            },
+            "score": 0.005844155844155844,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 17,
+                "rawScore": 48
+              }
+            },
+            "fusionScore": 0.005844155844155844
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-17"
+            },
+            "score": 0.0057692307692307696,
+            "channels": {
+              "lexical": {
+                "rank": 18,
+                "rawScore": 47
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.0057692307692307696
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-17"
+            },
+            "score": 0.0057692307692307696,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 18,
+                "rawScore": 47
+              }
+            },
+            "fusionScore": 0.0057692307692307696
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-18"
+            },
+            "score": 0.00569620253164557,
+            "channels": {
+              "lexical": {
+                "rank": 19,
+                "rawScore": 46
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.00569620253164557
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-18"
+            },
+            "score": 0.00569620253164557,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 19,
+                "rawScore": 46
+              }
+            },
+            "fusionScore": 0.00569620253164557
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-19"
+            },
+            "score": 0.005625000000000001,
+            "channels": {
+              "lexical": {
+                "rank": 20,
+                "rawScore": 45
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.005625000000000001
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-19"
+            },
+            "score": 0.005625000000000001,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 20,
+                "rawScore": 45
+              }
+            },
+            "fusionScore": 0.005625000000000001
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-20"
+            },
+            "score": 0.005555555555555556,
+            "channels": {
+              "lexical": {
+                "rank": 21,
+                "rawScore": 44
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.005555555555555556
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-20"
+            },
+            "score": 0.005555555555555556,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 21,
+                "rawScore": 44
+              }
+            },
+            "fusionScore": 0.005555555555555556
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-21"
+            },
+            "score": 0.005487804878048781,
+            "channels": {
+              "lexical": {
+                "rank": 22,
+                "rawScore": 43
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.005487804878048781
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-21"
+            },
+            "score": 0.005487804878048781,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 22,
+                "rawScore": 43
+              }
+            },
+            "fusionScore": 0.005487804878048781
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-22"
+            },
+            "score": 0.005421686746987953,
+            "channels": {
+              "lexical": {
+                "rank": 23,
+                "rawScore": 42
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.005421686746987953
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-22"
+            },
+            "score": 0.005421686746987953,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 23,
+                "rawScore": 42
+              }
+            },
+            "fusionScore": 0.005421686746987953
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-23"
+            },
+            "score": 0.005357142857142857,
+            "channels": {
+              "lexical": {
+                "rank": 24,
+                "rawScore": 41
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.005357142857142857
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-23"
+            },
+            "score": 0.005357142857142857,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 24,
+                "rawScore": 41
+              }
+            },
+            "fusionScore": 0.005357142857142857
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-24"
+            },
+            "score": 0.005294117647058823,
+            "channels": {
+              "lexical": {
+                "rank": 25,
+                "rawScore": 40
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.005294117647058823
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-24"
+            },
+            "score": 0.005294117647058823,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 25,
+                "rawScore": 40
+              }
+            },
+            "fusionScore": 0.005294117647058823
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-25"
+            },
+            "score": 0.005232558139534884,
+            "channels": {
+              "lexical": {
+                "rank": 26,
+                "rawScore": 39
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.005232558139534884
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-25"
+            },
+            "score": 0.005232558139534884,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 26,
+                "rawScore": 39
+              }
+            },
+            "fusionScore": 0.005232558139534884
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-26"
+            },
+            "score": 0.005172413793103448,
+            "channels": {
+              "lexical": {
+                "rank": 27,
+                "rawScore": 38
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.005172413793103448
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-26"
+            },
+            "score": 0.005172413793103448,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 27,
+                "rawScore": 38
+              }
+            },
+            "fusionScore": 0.005172413793103448
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-27"
+            },
+            "score": 0.005113636363636364,
+            "channels": {
+              "lexical": {
+                "rank": 28,
+                "rawScore": 37
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.005113636363636364
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-27"
+            },
+            "score": 0.005113636363636364,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 28,
+                "rawScore": 37
+              }
+            },
+            "fusionScore": 0.005113636363636364
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-28"
+            },
+            "score": 0.0050561797752808986,
+            "channels": {
+              "lexical": {
+                "rank": 29,
+                "rawScore": 36
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.0050561797752808986
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-28"
+            },
+            "score": 0.0050561797752808986,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 29,
+                "rawScore": 36
+              }
+            },
+            "fusionScore": 0.0050561797752808986
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-29"
+            },
+            "score": 0.005,
+            "channels": {
+              "lexical": {
+                "rank": 30,
+                "rawScore": 35
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.005
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-29"
+            },
+            "score": 0.005,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 30,
+                "rawScore": 35
+              }
+            },
+            "fusionScore": 0.005
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-30"
+            },
+            "score": 0.004945054945054946,
+            "channels": {
+              "lexical": {
+                "rank": 31,
+                "rawScore": 34
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.004945054945054946
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-30"
+            },
+            "score": 0.004945054945054946,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 31,
+                "rawScore": 34
+              }
+            },
+            "fusionScore": 0.004945054945054946
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-31"
+            },
+            "score": 0.004891304347826087,
+            "channels": {
+              "lexical": {
+                "rank": 32,
+                "rawScore": 33
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.004891304347826087
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-31"
+            },
+            "score": 0.004891304347826087,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 32,
+                "rawScore": 33
+              }
+            },
+            "fusionScore": 0.004891304347826087
+          }
+        ]
+      }
+    },
+    {
+      "name": "rrf-k10-d64-compact disjoint 64+64",
+      "opts": {
+        "semanticState": "ready",
+        "coverageComplete": true,
+        "preset": "rrf-k10-d64-compact",
+        "limit": 64
+      },
+      "lexical": "compactLexical",
+      "semantic": "compactSemantic",
+      "moc": "empty",
+      "value": {
+        "mode": "hybrid",
+        "preset": "rrf-k10-d64-compact",
+        "unionSize": 128,
+        "rows": [
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-0"
+            },
+            "score": 0.045454545454545456,
+            "channels": {
+              "lexical": {
+                "rank": 1,
+                "rawScore": 64
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.045454545454545456
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-0"
+            },
+            "score": 0.045454545454545456,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 1,
+                "rawScore": 64
+              }
+            },
+            "fusionScore": 0.045454545454545456
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-1"
+            },
+            "score": 0.041666666666666664,
+            "channels": {
+              "lexical": {
+                "rank": 2,
+                "rawScore": 63
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.041666666666666664
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-1"
+            },
+            "score": 0.041666666666666664,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 2,
+                "rawScore": 63
+              }
+            },
+            "fusionScore": 0.041666666666666664
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-2"
+            },
+            "score": 0.038461538461538464,
+            "channels": {
+              "lexical": {
+                "rank": 3,
+                "rawScore": 62
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.038461538461538464
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-2"
+            },
+            "score": 0.038461538461538464,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 3,
+                "rawScore": 62
+              }
+            },
+            "fusionScore": 0.038461538461538464
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-3"
+            },
+            "score": 0.03571428571428571,
+            "channels": {
+              "lexical": {
+                "rank": 4,
+                "rawScore": 61
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.03571428571428571
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-3"
+            },
+            "score": 0.03571428571428571,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 4,
+                "rawScore": 61
+              }
+            },
+            "fusionScore": 0.03571428571428571
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-4"
+            },
+            "score": 0.03333333333333333,
+            "channels": {
+              "lexical": {
+                "rank": 5,
+                "rawScore": 60
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.03333333333333333
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-4"
+            },
+            "score": 0.03333333333333333,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 5,
+                "rawScore": 60
+              }
+            },
+            "fusionScore": 0.03333333333333333
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-5"
+            },
+            "score": 0.03125,
+            "channels": {
+              "lexical": {
+                "rank": 6,
+                "rawScore": 59
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.03125
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-5"
+            },
+            "score": 0.03125,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 6,
+                "rawScore": 59
+              }
+            },
+            "fusionScore": 0.03125
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-6"
+            },
+            "score": 0.029411764705882353,
+            "channels": {
+              "lexical": {
+                "rank": 7,
+                "rawScore": 58
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.029411764705882353
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-6"
+            },
+            "score": 0.029411764705882353,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 7,
+                "rawScore": 58
+              }
+            },
+            "fusionScore": 0.029411764705882353
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-7"
+            },
+            "score": 0.027777777777777776,
+            "channels": {
+              "lexical": {
+                "rank": 8,
+                "rawScore": 57
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.027777777777777776
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-7"
+            },
+            "score": 0.027777777777777776,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 8,
+                "rawScore": 57
+              }
+            },
+            "fusionScore": 0.027777777777777776
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-8"
+            },
+            "score": 0.02631578947368421,
+            "channels": {
+              "lexical": {
+                "rank": 9,
+                "rawScore": 56
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.02631578947368421
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-8"
+            },
+            "score": 0.02631578947368421,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 9,
+                "rawScore": 56
+              }
+            },
+            "fusionScore": 0.02631578947368421
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-9"
+            },
+            "score": 0.025,
+            "channels": {
+              "lexical": {
+                "rank": 10,
+                "rawScore": 55
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.025
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-9"
+            },
+            "score": 0.025,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 10,
+                "rawScore": 55
+              }
+            },
+            "fusionScore": 0.025
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-10"
+            },
+            "score": 0.023809523809523808,
+            "channels": {
+              "lexical": {
+                "rank": 11,
+                "rawScore": 54
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.023809523809523808
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-10"
+            },
+            "score": 0.023809523809523808,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 11,
+                "rawScore": 54
+              }
+            },
+            "fusionScore": 0.023809523809523808
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-11"
+            },
+            "score": 0.022727272727272728,
+            "channels": {
+              "lexical": {
+                "rank": 12,
+                "rawScore": 53
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.022727272727272728
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-11"
+            },
+            "score": 0.022727272727272728,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 12,
+                "rawScore": 53
+              }
+            },
+            "fusionScore": 0.022727272727272728
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-12"
+            },
+            "score": 0.021739130434782608,
+            "channels": {
+              "lexical": {
+                "rank": 13,
+                "rawScore": 52
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.021739130434782608
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-12"
+            },
+            "score": 0.021739130434782608,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 13,
+                "rawScore": 52
+              }
+            },
+            "fusionScore": 0.021739130434782608
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-13"
+            },
+            "score": 0.020833333333333332,
+            "channels": {
+              "lexical": {
+                "rank": 14,
+                "rawScore": 51
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.020833333333333332
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-13"
+            },
+            "score": 0.020833333333333332,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 14,
+                "rawScore": 51
+              }
+            },
+            "fusionScore": 0.020833333333333332
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-14"
+            },
+            "score": 0.02,
+            "channels": {
+              "lexical": {
+                "rank": 15,
+                "rawScore": 50
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.02
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-14"
+            },
+            "score": 0.02,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 15,
+                "rawScore": 50
+              }
+            },
+            "fusionScore": 0.02
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-15"
+            },
+            "score": 0.019230769230769232,
+            "channels": {
+              "lexical": {
+                "rank": 16,
+                "rawScore": 49
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.019230769230769232
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-15"
+            },
+            "score": 0.019230769230769232,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 16,
+                "rawScore": 49
+              }
+            },
+            "fusionScore": 0.019230769230769232
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-16"
+            },
+            "score": 0.018518518518518517,
+            "channels": {
+              "lexical": {
+                "rank": 17,
+                "rawScore": 48
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.018518518518518517
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-16"
+            },
+            "score": 0.018518518518518517,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 17,
+                "rawScore": 48
+              }
+            },
+            "fusionScore": 0.018518518518518517
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-17"
+            },
+            "score": 0.017857142857142856,
+            "channels": {
+              "lexical": {
+                "rank": 18,
+                "rawScore": 47
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.017857142857142856
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-17"
+            },
+            "score": 0.017857142857142856,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 18,
+                "rawScore": 47
+              }
+            },
+            "fusionScore": 0.017857142857142856
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-18"
+            },
+            "score": 0.017241379310344827,
+            "channels": {
+              "lexical": {
+                "rank": 19,
+                "rawScore": 46
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.017241379310344827
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-18"
+            },
+            "score": 0.017241379310344827,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 19,
+                "rawScore": 46
+              }
+            },
+            "fusionScore": 0.017241379310344827
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-19"
+            },
+            "score": 0.016666666666666666,
+            "channels": {
+              "lexical": {
+                "rank": 20,
+                "rawScore": 45
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.016666666666666666
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-19"
+            },
+            "score": 0.016666666666666666,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 20,
+                "rawScore": 45
+              }
+            },
+            "fusionScore": 0.016666666666666666
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-20"
+            },
+            "score": 0.016129032258064516,
+            "channels": {
+              "lexical": {
+                "rank": 21,
+                "rawScore": 44
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.016129032258064516
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-20"
+            },
+            "score": 0.016129032258064516,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 21,
+                "rawScore": 44
+              }
+            },
+            "fusionScore": 0.016129032258064516
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-21"
+            },
+            "score": 0.015625,
+            "channels": {
+              "lexical": {
+                "rank": 22,
+                "rawScore": 43
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.015625
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-21"
+            },
+            "score": 0.015625,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 22,
+                "rawScore": 43
+              }
+            },
+            "fusionScore": 0.015625
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-22"
+            },
+            "score": 0.015151515151515152,
+            "channels": {
+              "lexical": {
+                "rank": 23,
+                "rawScore": 42
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.015151515151515152
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-22"
+            },
+            "score": 0.015151515151515152,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 23,
+                "rawScore": 42
+              }
+            },
+            "fusionScore": 0.015151515151515152
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-23"
+            },
+            "score": 0.014705882352941176,
+            "channels": {
+              "lexical": {
+                "rank": 24,
+                "rawScore": 41
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.014705882352941176
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-23"
+            },
+            "score": 0.014705882352941176,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 24,
+                "rawScore": 41
+              }
+            },
+            "fusionScore": 0.014705882352941176
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-24"
+            },
+            "score": 0.014285714285714285,
+            "channels": {
+              "lexical": {
+                "rank": 25,
+                "rawScore": 40
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.014285714285714285
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-24"
+            },
+            "score": 0.014285714285714285,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 25,
+                "rawScore": 40
+              }
+            },
+            "fusionScore": 0.014285714285714285
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-25"
+            },
+            "score": 0.013888888888888888,
+            "channels": {
+              "lexical": {
+                "rank": 26,
+                "rawScore": 39
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.013888888888888888
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-25"
+            },
+            "score": 0.013888888888888888,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 26,
+                "rawScore": 39
+              }
+            },
+            "fusionScore": 0.013888888888888888
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-26"
+            },
+            "score": 0.013513513513513514,
+            "channels": {
+              "lexical": {
+                "rank": 27,
+                "rawScore": 38
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.013513513513513514
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-26"
+            },
+            "score": 0.013513513513513514,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 27,
+                "rawScore": 38
+              }
+            },
+            "fusionScore": 0.013513513513513514
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-27"
+            },
+            "score": 0.013157894736842105,
+            "channels": {
+              "lexical": {
+                "rank": 28,
+                "rawScore": 37
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.013157894736842105
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-27"
+            },
+            "score": 0.013157894736842105,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 28,
+                "rawScore": 37
+              }
+            },
+            "fusionScore": 0.013157894736842105
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-28"
+            },
+            "score": 0.01282051282051282,
+            "channels": {
+              "lexical": {
+                "rank": 29,
+                "rawScore": 36
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.01282051282051282
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-28"
+            },
+            "score": 0.01282051282051282,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 29,
+                "rawScore": 36
+              }
+            },
+            "fusionScore": 0.01282051282051282
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-29"
+            },
+            "score": 0.0125,
+            "channels": {
+              "lexical": {
+                "rank": 30,
+                "rawScore": 35
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.0125
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-29"
+            },
+            "score": 0.0125,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 30,
+                "rawScore": 35
+              }
+            },
+            "fusionScore": 0.0125
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-30"
+            },
+            "score": 0.012195121951219513,
+            "channels": {
+              "lexical": {
+                "rank": 31,
+                "rawScore": 34
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.012195121951219513
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-30"
+            },
+            "score": 0.012195121951219513,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 31,
+                "rawScore": 34
+              }
+            },
+            "fusionScore": 0.012195121951219513
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "lexical-31"
+            },
+            "score": 0.011904761904761904,
+            "channels": {
+              "lexical": {
+                "rank": 32,
+                "rawScore": 33
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.011904761904761904
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "semantic-31"
+            },
+            "score": 0.011904761904761904,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 32,
+                "rawScore": 33
+              }
+            },
+            "fusionScore": 0.011904761904761904
+          }
+        ]
+      }
+    },
+    {
+      "name": "ready compact MOC with scores",
+      "opts": {
+        "semanticState": "ready",
+        "coverageComplete": true,
+        "preset": "rrf-k60-d64-moc-compact"
+      },
+      "lexical": "overlapLexical",
+      "semantic": "overlapSemantic",
+      "moc": "overlapMoc",
+      "value": {
+        "mode": "hybrid",
+        "preset": "rrf-k60-d64-moc-compact",
+        "unionSize": 3,
+        "rows": [
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "😀"
+            },
+            "score": 0.014754098360655738,
+            "channels": {
+              "lexical": {
+                "rank": 1,
+                "rawScore": 2
+              },
+              "semantic": {
+                "rank": 1,
+                "rawScore": 3
+              }
+            },
+            "fusionScore": 0.014754098360655738
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "same"
+            },
+            "score": 0.007258064516129033,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 2,
+                "rawScore": 1
+              }
+            },
+            "fusionScore": 0.007258064516129033
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": ""
+            },
+            "score": 0.007258064516129033,
+            "channels": {
+              "lexical": {
+                "rank": 2,
+                "rawScore": 1
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.007258064516129033
+          }
+        ]
+      }
+    },
+    {
+      "name": "ready compact MOC without scores",
+      "opts": {
+        "semanticState": "ready",
+        "coverageComplete": true,
+        "preset": "rrf-k60-d64-moc-compact"
+      },
+      "lexical": "overlapLexical",
+      "semantic": "overlapSemantic",
+      "moc": "empty",
+      "value": {
+        "mode": "hybrid",
+        "preset": "rrf-k60-d64-moc-compact",
+        "unionSize": 3,
+        "rows": [
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "😀"
+            },
+            "score": 0.014754098360655738,
+            "channels": {
+              "lexical": {
+                "rank": 1,
+                "rawScore": 2
+              },
+              "semantic": {
+                "rank": 1,
+                "rawScore": 3
+              }
+            },
+            "fusionScore": 0.014754098360655738
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "same"
+            },
+            "score": 0.007258064516129033,
+            "channels": {
+              "lexical": null,
+              "semantic": {
+                "rank": 2,
+                "rawScore": 1
+              }
+            },
+            "fusionScore": 0.007258064516129033
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": ""
+            },
+            "score": 0.007258064516129033,
+            "channels": {
+              "lexical": {
+                "rank": 2,
+                "rawScore": 1
+              },
+              "semantic": null
+            },
+            "fusionScore": 0.007258064516129033
+          }
+        ]
+      }
+    },
+    {
+      "name": "negative and signed-zero lexical scores",
+      "opts": {},
+      "lexical": "signedScores",
+      "semantic": "empty",
+      "moc": "empty",
+      "value": {
+        "mode": "lexical",
+        "preset": "rrf-k60-d12",
+        "unionSize": 3,
+        "rows": [
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "same"
+            },
+            "score": 0,
+            "fusionScore": null,
+            "channels": {
+              "lexical": {
+                "rank": 1,
+                "rawScore": 0
+              },
+              "semantic": null
+            }
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": ""
+            },
+            "score": "-0",
+            "fusionScore": null,
+            "channels": {
+              "lexical": {
+                "rank": 2,
+                "rawScore": "-0"
+              },
+              "semantic": null
+            }
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "😀"
+            },
+            "score": -2.5,
+            "fusionScore": null,
+            "channels": {
+              "lexical": {
+                "rank": 3,
+                "rawScore": -2.5
+              },
+              "semantic": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "negative and signed-zero scores in all active channels",
+      "opts": {
+        "semanticState": "ready",
+        "coverageComplete": true,
+        "preset": "rrf-k60-d12-moc-v1"
+      },
+      "lexical": "signedScores",
+      "semantic": "signedScores",
+      "moc": "signedScores",
+      "value": {
+        "mode": "hybrid",
+        "preset": "rrf-k60-d12-moc-v1",
+        "unionSize": 3,
+        "rows": [
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "same"
+            },
+            "score": 0.01639344262295082,
+            "channels": {
+              "lexical": {
+                "rank": 1,
+                "rawScore": 0
+              },
+              "semantic": {
+                "rank": 1,
+                "rawScore": 0
+              },
+              "moc": {
+                "rank": 1,
+                "rawScore": 0
+              }
+            },
+            "fusionScore": 0.01639344262295082
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": ""
+            },
+            "score": 0.016129032258064516,
+            "channels": {
+              "lexical": {
+                "rank": 2,
+                "rawScore": "-0"
+              },
+              "semantic": {
+                "rank": 2,
+                "rawScore": "-0"
+              },
+              "moc": {
+                "rank": 2,
+                "rawScore": "-0"
+              }
+            },
+            "fusionScore": 0.016129032258064516
+          },
+          {
+            "ref": {
+              "namespace": {
+                "ownerId": "owner",
+                "scope": "personal",
+                "projectId": null
+              },
+              "type": "memory",
+              "memoryId": "😀"
+            },
+            "score": 0.015873015873015872,
+            "channels": {
+              "lexical": {
+                "rank": 3,
+                "rawScore": -2.5
+              },
+              "semantic": {
+                "rank": 3,
+                "rawScore": -2.5
+              },
+              "moc": {
+                "rank": 3,
+                "rawScore": -2.5
+              }
+            },
+            "fusionScore": 0.015873015873015872
+          }
+        ]
+      }
+    },
+    {
+      "name": "NaN lexical score",
+      "opts": {
+        "semanticState": "ready",
+        "coverageComplete": true,
+        "preset": "rrf-k60-d12-moc-v1"
+      },
+      "lexical": "nanScore",
+      "semantic": "empty",
+      "moc": "empty",
+      "error": "invalid_channel"
+    },
+    {
+      "name": "positive infinity semantic score",
+      "opts": {
+        "semanticState": "ready",
+        "coverageComplete": true,
+        "preset": "rrf-k60-d12-moc-v1"
+      },
+      "lexical": "empty",
+      "semantic": "infiniteScore",
+      "moc": "empty",
+      "error": "invalid_channel"
+    },
+    {
+      "name": "negative infinity MOC score",
+      "opts": {
+        "semanticState": "ready",
+        "coverageComplete": true,
+        "preset": "rrf-k60-d12-moc-v1"
+      },
+      "lexical": "empty",
+      "semantic": "empty",
+      "moc": "negativeInfiniteScore",
+      "error": "invalid_channel"
+    },
+    {
+      "name": "missing MOC score beyond depth 12",
+      "opts": {
+        "semanticState": "ready",
+        "coverageComplete": true,
+        "preset": "rrf-k60-d12-moc-v1"
+      },
+      "lexical": "empty",
+      "semantic": "empty",
+      "moc": "missingMocScoreAt13",
+      "error": "invalid_channel"
+    },
+    {
+      "name": "duplicate semantic key beyond depth 64",
+      "opts": {
+        "semanticState": "ready",
+        "coverageComplete": true,
+        "preset": "rrf-k60-d64-moc-compact"
+      },
+      "lexical": "empty",
+      "semantic": "duplicateCompactScoreAt65",
+      "moc": "empty",
+      "error": "invalid_channel"
     }
   ]
 }
