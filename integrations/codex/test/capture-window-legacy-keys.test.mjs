@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { runWorker } from '../../codex/worker.mjs';
-import { fixture, header, item } from '../../codex/test/helpers.mjs';
-import { conforms } from '../hosted-contract.mjs';
+import { runWorker } from '../worker.mjs';
+import { fixture, header, item } from './helpers.mjs';
+import { conforms } from '../../client/hosted-contract.mjs';
 
 test('Codex capture still sends exactly four window keys', async t => {
   const text = header() + Array.from({ length: 25 }, (_, n) => item(`Synthetic ${n}`, n)).join('');
