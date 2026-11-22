@@ -173,7 +173,8 @@ Codex 的規則，以及外掛的隱私約定。
   30 分鐘內有訊息的對話一起隱藏。這可能藏到無關的對話，也可能漏掉相關的對話，
   要刪掉特定一段對話請用 `raw delete`。
 - **解除安裝。** `npx @cairn-ink/memory uninstall --local` 會斷開工具的連接，
-  資料會留在硬碟上。解除雲端模式，你在 cairn.ink 上的記憶也會留著。
+  資料會留在硬碟上。還在執行的背景伺服器會在最後一個對話關閉約 30 秒後結束。
+  解除雲端模式，你在 cairn.ink 上的記憶也會留著。
 
 [本機資料、備份與刪除（英文）](docs/local-from-source.md#local-privacy-and-control) ·
 [隱私與威脅模型（英文）](docs/privacy.md) ·
@@ -181,9 +182,12 @@ Codex 的規則，以及外掛的隱私約定。
 
 ## 如果你在跑 agent harness
 
-安裝器會把記憶 server 註冊給這台電腦上所有的 Claude Code 和 Codex 對話。每個對話
-各自啟動一份，所以 harness 一次開很多 agent，就會同時有那麼多份記憶 server 開著
-同一個資料庫。不想讓 worker 載入它，可以這樣做：
+安裝器會把記憶伺服器註冊給這台電腦上所有的 Claude Code 和 Codex 對話。從安裝器
+0.6.10 起，Linux 上使用同一份安裝且符合條件的對話會共用一個背景伺服器。第一個對話會啟動它，
+最後一個對話關閉約 30 秒後，伺服器就會結束。伺服器使用的環境設定不同（例如
+`PATH` 不同）時，對話會各自連到不同的伺服器。macOS 等其他平台，以及把資料庫放在
+`/mnt/` 底下或網路檔案系統時，每個對話會各自啟動一個伺服器。共用伺服器如果
+無法啟動，對話會自動啟動自己的伺服器。不想讓 worker 載入它，可以這樣做：
 
 - **Claude Code。** 啟動 worker 時加 `--strict-mcp-config`，只載入你用
   `--mcp-config` 指定的 server。

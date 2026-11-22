@@ -11,7 +11,7 @@ Requires Node ≥22.16 and the selected CLI on PATH. The installer itself has no
 runtime dependencies.
 Known issue: on Node.js 24.22.3, whose built-in SQLite is 3.54, some searches run slower, so recall can return fewer results when you have a lot of saved memory. Your saved data isn't affected. Node.js 22, or Node.js 24 up to 24.22.2, works as before. Setup uses the Node.js that ran it, so run setup again after you switch versions.
 
-This README describes **installer 0.6.9**, published on 2026-11-21. A Claude Code session that starts while another session is saving is no longer lost. New saves are usually searchable within about 10 seconds, and Claude Code runs started by scripts or the Agent SDK are no longer saved. Claude Code automatic saving works
+This README describes **installer 0.6.10** (2026-11-22). Claude Code can recover a session if its start hook is cancelled or times out during a permission check. New saves are usually searchable within about 10 seconds, and Claude Code runs started by scripts or the Agent SDK are no longer saved. Claude Code automatic saving works
 on macOS. Codex automatic saving on macOS isn't supported yet; the memory tools
 work. To set up only Claude Code, run
 `npx @cairn-ink/memory setup --local --client claude`. Codex CLI 0.167.0 and 0.167.2 are qualified
@@ -86,7 +86,7 @@ User-owned hardlinked transcript files are accepted, as on Linux.
 Known limits in this release:
 - When capture resumes after being turned off, Cairn reads up to the last 4 KiB of the conversation file, and for Codex up to the first 4 KiB to find its session header; some of those bytes may have been written while capture was off. They are used only to identify the session and check the file wasn't replaced, never saved or sent.
 - On macOS, a process running as the same user or root can still redirect an open through precisely timed directory swaps during verification, without crossing a privilege boundary.
-- While new turns keep arriving, the local MCP server keeps indexing: about one small index write per second and roughly 3% of one CPU core.
+- While new turns keep arriving, indexing uses about one small index write per second and roughly 3% of one CPU core per running local MCP server. Sessions using the shared server share this indexing work.
 - Histories of about 50,000 messages or more may never finish indexing; search keeps reporting partial coverage for them.
 - Searches served by a reader that doesn't run index maintenance itself, such as keyword-only searches when an embedding model is configured, can keep reporting partial coverage even after indexing has finished. Their results are still returned.
 - With an embedding model configured, semantic search can still send the search text, and background index maintenance can send stored memory text, to that provider while saving is paused or disabled for that store; fixed in the next release.
@@ -115,7 +115,7 @@ stop them.
 
 已知問題：Node.js 24.22.3 內建的 SQLite 是 3.54，部分搜尋會變慢，記憶很多時，回想可能找到比較少的結果。已存的資料不受影響。Node.js 22，或 Node.js 24 的 24.22.2 以前版本，都跟以前一樣。安裝程式會用執行它的那個 Node.js，所以換版本後要重新跑一次安裝。
 
-本說明對應**安裝器 0.6.9**（2026-11-21 發布）。在另一個對話正在保存時開始的 Claude Code 對話，不會再整段沒存到。新存的內容通常約 10 秒內就搜得到，由腳本或 Agent SDK 啟動的 Claude Code 執行也不再被保存。Claude Code 也能在 macOS 自動保存對話。
+本說明對應**安裝器 0.6.10**（2026-11-22）。Claude Code 的啟動 hook 如果在檢查權限時被取消或逾時，之後有機會恢復保存該對話。新存的內容通常約 10 秒內就搜得到，由腳本或 Agent SDK 啟動的 Claude Code 執行也不再被保存。Claude Code 也能在 macOS 自動保存對話。
 Codex 在 macOS 還不支援自動保存，但記憶工具可以正常使用。若只要設定
 Claude Code，請執行 `npx @cairn-ink/memory setup --local --client claude`。
 Codex CLI 0.167.0 與 0.167.2 已通過格式驗證，可以自動擷取；已經在 Cairn 使用
@@ -180,7 +180,7 @@ Codex 的 hooks 核准提示。執行 `--no-capture` 或 `config --local-capture
 本版已知限制：
 - 從關閉狀態恢復擷取時，Cairn 會讀取對話檔最後至多 4 KiB，Codex 還會讀取開頭至多 4 KiB 來找出 session 標頭；其中一部分可能是關閉期間寫入的。這些位元組只用來辨識 session、確認檔案沒有被替換，不會保存或送出。
 - 在 macOS，同一使用者或 root 的程式仍可能在驗證期間精準切換目錄來重新導向開啟的檔案，但不會跨越權限邊界。
-- 只要新的對話持續進來，本機 MCP 伺服器就會持續建索引：大約每秒一次小量索引寫入，約佔一個 CPU 核心的 3%。
+- 只要新的對話持續存進來，每個執行中的本機 MCP 伺服器大約每秒做一次小量索引寫入，約佔一個 CPU 核心的 3%。連到同一個背景伺服器的對話共用這份索引工作。
 - 約 50,000 則訊息以上的歷史可能永遠建不完索引，搜尋會一直回報 partial。
 - 由不自行維護索引的讀取端處理的搜尋（例如設定了 embedding 模型時的純關鍵字搜尋），即使索引已建完，也可能持續回報 partial；搜尋結果仍會照常回傳。
 - 若設定了 embedding 模型，在該資料庫暫停或停用保存時，語意搜尋仍可能把搜尋文字、背景索引維護仍可能把已保存的記憶文字送到該模型供應商；下一版修正。
@@ -251,6 +251,13 @@ user scope for Claude Code, and `$CODEX_HOME/config.toml` (default `~/.codex`)
 for Codex. Both use the same database and owner, with an absolute Node path.
 Restart the tools after setup. If Node moves, rerun `setup --local`.
 
+On Linux, eligible sessions from the same installation share a background
+server. The first session starts it, and it exits about 30 seconds after the
+last one closes. Sessions with different server environments, such as a different `PATH`, use separate
+servers. On macOS and other platforms, or for stores under `/mnt/` or on
+network filesystems, each session starts its own server. If the shared server
+can't start, the session automatically starts its own server.
+
 本機模式不需要 Cairn 帳號或登入，共用一個私有目錄，預設為
 `~/.cairn-memory`，也可用絕對路徑的 `CAIRN_MEMORY_HOME` 指定。
 `installation.json` 保存安裝紀錄，`engine/` 放引擎
@@ -261,14 +268,21 @@ Restart the tools after setup. If Node moves, rerun `setup --local`.
 兩個工具共用資料庫與 owner，並使用 Node 的絕對路徑。安裝後請重開工具；
 Node 路徑變動時，重跑 `setup --local`。
 
-**0.6.9 local mode captures Raw automatically by default on supported platforms.** Use the explicit MCP tools:
+Linux 上使用同一份安裝且符合條件的對話會共用一個背景伺服器。第一個對話會啟動它，最後一個對話
+關閉約 30 秒後，伺服器就會結束。伺服器使用的環境設定不同（例如 `PATH` 不同）
+時，對話會各自連到不同的伺服器。macOS 等其他平台，以及把資料庫放在 `/mnt/`
+底下或網路檔案系統時，每個對話會各自啟動一個伺服器。共用伺服器如果無法啟動，
+對話會自動啟動自己的伺服器。
+
+**0.6.10 local mode captures Raw automatically by default on supported platforms.** Use the explicit MCP tools:
 `remember_memory`, `recall_memory`, `inspect_memory`, `correct_memory`,
 `forget_memory`, alongside the default dated contextRead tools
 `find_memory_candidates`, `fetch_memory_candidate_evidence`, and
 `read_memory_context`. Automatic hooks fill Raw without a model; setup does not register `capture_memory`. Saving, inspecting, correcting and forgetting
 need no model key. Semantic recall needs a model key; without one it reports
 `model_not_configured`. With `OPENAI_API_KEY` available to the Cairn MCP server, memories and search text
-go to OpenAI for semantic search, up to an estimated US$1 per day per running Cairn server. Saved
+go to OpenAI for semantic search, up to an estimated US$1 per day per running Cairn server. Sessions
+that use the same background server share its budget. Saved
 conversations are sent only if you opt in with `--raw-semantic` (or explicitly
 configure `--context-embedder`). To keep everything on this computer, don't give
 the server a key. `--no-context-semantic` only turns off embeddings; with a key,
@@ -279,13 +293,14 @@ it reads the Claude registration configuration file `~/.claude.json` with a
 `cairn-local` MCP registrations. It does not access credential stores or use
 authentication fields. Unrelated entries and file contents are never printed.
 
-**0.6.9 本機模式在支援的平台預設自動保存 Raw。** 可明確呼叫 `remember_memory`、
+**0.6.10 本機模式在支援的平台預設自動保存 Raw。** 可明確呼叫 `remember_memory`、
 `recall_memory`、`inspect_memory`、`correct_memory`、`forget_memory`，
 也可使用預設開啟、附日期的 contextRead 工具 `find_memory_candidates`、
 `fetch_memory_candidate_evidence`、`read_memory_context`。自動 hooks 不需要模型就能保存 Raw，setup 不會註冊 `capture_memory`。
 保存、查看、更正與遺忘不需要模型金鑰；語意回想需要模型金鑰，
 沒有時回報 `model_not_configured`。若 Cairn MCP server 的環境有 `OPENAI_API_KEY`，語意搜尋會把記憶與搜尋文字
-傳給 OpenAI，每個執行中的 Cairn server 每天預估上限約 US$1。已保存的對話只有在你用
+傳給 OpenAI，每個執行中的 Cairn server 每天預估上限約 US$1。連到同一個背景伺服器
+的對話共用這份預算。已保存的對話只有在你用
 `--raw-semantic`（或明確設定 `--context-embedder`）啟用後才會傳送。
 要讓所有資料都留在這台電腦，請不要提供金鑰給 server。`--no-context-semantic` 只會關閉
 embeddings；有金鑰時，回想和其他模型功能仍會把記憶文字傳給 OpenAI。
@@ -298,6 +313,7 @@ When both tools share the database, `storage_busy` is a retryable transient
 result: retry the operation; it does not mean memory is empty. `status` reports
 registration, engine, Node and per-client capture on/off/blocked state, reason and Raw cap through read-only engine status; it does not test a live connection. `--verbose` adds private paths, owner, engine ID and retained
 failed installations. Uninstall disables capture, removes hooks and detaches selected registrations, retaining identity and its pinned runtime; **memory data is kept**.
+A running background server exits about 30 seconds after its last session closes.
 `--client claude|codex` limits registration or detachment, not conflict
 detection.
 `uninstall --local --purge-config` also removes the descriptor and `.npmrc`,
@@ -307,7 +323,8 @@ uninstalled without `--client`.
 兩個工具共用資料庫時，`storage_busy` 是暫時忙碌，請重試該操作，不能當成
 沒有記憶。`status` 顯示註冊、引擎與 Node 狀態，也會透過唯讀引擎 status 顯示各工具擷取狀態、原因與 Raw 上限，不測試實際連線；`--verbose` 會多顯示私有路徑、owner、引擎 ID 與保留的失敗安裝。
 解除安裝會移除所選工具的連接，保留擷取身分與綁定引擎，**記憶資料
-會保留**。`--client claude|codex` 只限制註冊或解除的工具，衝突仍檢查兩邊。
+會保留**。還在執行的背景伺服器會在最後一個對話關閉約 30 秒後結束。
+`--client claude|codex` 只限制註冊或解除的工具，衝突仍檢查兩邊。
 `uninstall --local --purge-config` 會加刪安裝紀錄與 `.npmrc`，不刪資料，
 不能搭配 `--client`。尚未完成的安裝若要移除，不能只選單一工具。
 

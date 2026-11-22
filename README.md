@@ -194,8 +194,9 @@ hosted MCP endpoint, the Codex rules and the plugin's privacy contract.
   saved. This can hide an unrelated conversation and miss a related one, so use
   `raw delete` to remove a specific conversation.
 - **Uninstalling.** `npx @cairn-ink/memory uninstall --local` disconnects the
-  tools and keeps your data on disk. Uninstalling Cloud keeps your memories on
-  cairn.ink.
+  tools and keeps your data on disk. A running background server exits about
+  30 seconds after its last session closes. Uninstalling Cloud keeps your
+  memories on cairn.ink.
 
 [Local data, backup and deletion](docs/local-from-source.md#local-privacy-and-control) ·
 [Privacy and threat model](docs/privacy.md) ·
@@ -204,9 +205,13 @@ hosted MCP endpoint, the Codex rules and the plugin's privacy contract.
 ## If you run an agent harness
 
 Setup registers the memory server for every Claude Code and Codex session on
-this computer. Each session starts its own copy, so a harness that launches
-many agents also launches that many memory servers on one database. To keep
-workers from loading it:
+this computer. From installer 0.6.10, eligible sessions from the same installation
+on Linux share a background server. The first session starts it, and it exits
+about 30 seconds after the last one closes. Sessions with different server environments, such
+as a different `PATH`, use separate servers. On macOS and other platforms,
+or for stores under `/mnt/` or on network filesystems, each session starts
+its own server. If the shared server can't start, the session automatically
+starts its own server. To keep workers from loading the memory server:
 
 - **Claude Code.** Start workers with `--strict-mcp-config`, which loads only
   the servers you pass with `--mcp-config`.
