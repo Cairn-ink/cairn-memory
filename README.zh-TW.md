@@ -173,7 +173,8 @@ Codex 的規則，以及外掛的隱私約定。
   30 分鐘內有訊息的對話一起隱藏。這可能藏到無關的對話，也可能漏掉相關的對話，
   要刪掉特定一段對話請用 `raw delete`。
 - **解除安裝。** `npx @cairn-ink/memory uninstall --local` 會斷開工具的連接，
-  資料會留在硬碟上。還在執行的背景伺服器會在最後一個對話關閉約 30 秒後結束。
+  資料會留在硬碟上。在 Linux 上，完整解除安裝若會移除引擎，會先請這個資料庫
+  還在執行的共用伺服器停止。
   解除雲端模式，你在 cairn.ink 上的記憶也會留著。
 
 [本機資料、備份與刪除（英文）](docs/local-from-source.md#local-privacy-and-control) ·
@@ -187,7 +188,15 @@ Codex 的規則，以及外掛的隱私約定。
 最後一個對話關閉約 30 秒後，伺服器就會結束。伺服器使用的環境設定不同（例如
 `PATH` 不同）時，對話會各自連到不同的伺服器。macOS 等其他平台，以及把資料庫放在
 `/mnt/` 底下或網路檔案系統時，每個對話會各自啟動一個伺服器。共用伺服器如果
-無法啟動，對話會自動啟動自己的伺服器。不想讓 worker 載入它，可以這樣做：
+無法啟動，對話會自動啟動自己的伺服器。
+
+`npx @cairn-ink/memory daemon status --local` 會列出這份安裝的資料庫所用的共用伺服器，
+顯示資料庫短 ID、執行狀態、引擎 build，以及有幾個對話正在使用。`npx @cairn-ink/memory daemon stop --local`
+會請這份安裝的資料庫中仍在執行的共用伺服器結束，不會強制終止，並回報還有幾個在執行。
+請等對話閒置再執行。進行中的呼叫即使已經寫入資料，也可能收到 `daemon_outcome_unknown`。
+這兩個指令只在 Linux 上運作，其他平台會回報 `daemon_platform`。
+
+不想讓 worker 載入它，可以這樣做：
 
 - **Claude Code。** 啟動 worker 時加 `--strict-mcp-config`，只載入你用
   `--mcp-config` 指定的 server。

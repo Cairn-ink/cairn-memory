@@ -258,6 +258,14 @@ servers. On macOS and other platforms, or for stores under `/mnt/` or on
 network filesystems, each session starts its own server. If the shared server
 can't start, the session automatically starts its own server.
 
+`npx @cairn-ink/memory daemon status --local` shows each shared server for the
+installed store, with its short store ID, running state, build and session count.
+`npx @cairn-ink/memory daemon stop --local` asks running shared servers for the
+installed store to exit. It never force-kills them and reports how many are still
+running. Run it when sessions are idle. A call in flight can report
+`daemon_outcome_unknown` even if its write was saved. These commands work on
+Linux and report `daemon_platform` elsewhere.
+
 本機模式不需要 Cairn 帳號或登入，共用一個私有目錄，預設為
 `~/.cairn-memory`，也可用絕對路徑的 `CAIRN_MEMORY_HOME` 指定。
 `installation.json` 保存安裝紀錄，`engine/` 放引擎
@@ -273,6 +281,12 @@ Linux 上使用同一份安裝且符合條件的對話會共用一個背景伺�
 時，對話會各自連到不同的伺服器。macOS 等其他平台，以及把資料庫放在 `/mnt/`
 底下或網路檔案系統時，每個對話會各自啟動一個伺服器。共用伺服器如果無法啟動，
 對話會自動啟動自己的伺服器。
+
+`npx @cairn-ink/memory daemon status --local` 會列出這份安裝的資料庫所用的共用伺服器，
+顯示資料庫短 ID、執行狀態、引擎 build，以及有幾個對話正在使用。`npx @cairn-ink/memory daemon stop --local`
+會請這份安裝的資料庫中仍在執行的共用伺服器結束，不會強制終止，並回報還有幾個在執行。
+請等對話閒置再執行。進行中的呼叫即使已經寫入資料，也可能收到 `daemon_outcome_unknown`。
+這兩個指令只在 Linux 上運作，其他平台會回報 `daemon_platform`。
 
 **0.6.10 local mode captures Raw automatically by default on supported platforms.** Use the explicit MCP tools:
 `remember_memory`, `recall_memory`, `inspect_memory`, `correct_memory`,
@@ -312,8 +326,10 @@ embeddings；有金鑰時，回想和其他模型功能仍會把記憶文字傳�
 When both tools share the database, `storage_busy` is a retryable transient
 result: retry the operation; it does not mean memory is empty. `status` reports
 registration, engine, Node and per-client capture on/off/blocked state, reason and Raw cap through read-only engine status; it does not test a live connection. `--verbose` adds private paths, owner, engine ID and retained
-failed installations. Uninstall disables capture, removes hooks and detaches selected registrations, retaining identity and its pinned runtime; **memory data is kept**.
-A running background server exits about 30 seconds after its last session closes.
+failed installations. Uninstall disables capture, removes hooks and detaches
+selected registrations. **Memory data is kept**, along with any retained capture
+identity and its pinned runtime. On Linux, a full uninstall that removes the
+engine first asks any running shared server for that store to stop.
 `--client claude|codex` limits registration or detachment, not conflict
 detection.
 `uninstall --local --purge-config` also removes the descriptor and `.npmrc`,
@@ -322,8 +338,9 @@ uninstalled without `--client`.
 
 兩個工具共用資料庫時，`storage_busy` 是暫時忙碌，請重試該操作，不能當成
 沒有記憶。`status` 顯示註冊、引擎與 Node 狀態，也會透過唯讀引擎 status 顯示各工具擷取狀態、原因與 Raw 上限，不測試實際連線；`--verbose` 會多顯示私有路徑、owner、引擎 ID 與保留的失敗安裝。
-解除安裝會移除所選工具的連接，保留擷取身分與綁定引擎，**記憶資料
-會保留**。還在執行的背景伺服器會在最後一個對話關閉約 30 秒後結束。
+解除安裝會關閉擷取、移除 hooks，並解除所選工具的連接。**記憶資料會保留**，
+留存的擷取身分和綁定引擎也會保留。在 Linux 上，完整解除安裝若會移除引擎，
+會先請這個資料庫還在執行的共用伺服器停止。
 `--client claude|codex` 只限制註冊或解除的工具，衝突仍檢查兩邊。
 `uninstall --local --purge-config` 會加刪安裝紀錄與 `.npmrc`，不刪資料，
 不能搭配 `--client`。尚未完成的安裝若要移除，不能只選單一工具。

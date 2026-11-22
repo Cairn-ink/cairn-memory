@@ -1,4 +1,5 @@
 import { constants } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { readFile, lstat, stat, access, mkdir, open, readdir, rm } from 'node:fs/promises';
 import { dirname, join, sep } from 'node:path';
 import { homedir } from 'node:os';
@@ -9,7 +10,7 @@ import { localRoot, requestedRoot, canonicalPath, readDescriptor, writeDescripto
 import { readClaudeServers, registerClaude, detachClaude } from './local-claude.mjs';
 import { registerCodex, detachCodex, checkCodexLock, codexCapabilities } from './local-codex.mjs';
 import { shellArgument } from './output.mjs';
-import { configureCapture, captureStatus, captureSettings, retainedCapture, clientConfigDirectory, captureRequested, finishCaptureSetup } from './local-capture.mjs';
+import { configureCapture, captureStatus, captureSettings, retainedCapture, clientConfigDirectory, captureRequested, finishCaptureSetup, engineOperatorEnvironment } from './local-capture.mjs';
 import { SetupError } from './errors.mjs';
 import { rawLocal, validateRawOptions } from './local-raw.mjs';
 
@@ -132,6 +133,13 @@ function validateLocalOptions(options, selection, descriptor) {
 }
 export async function routeLocalMode(options, selection, context) {
   const [action, ...flags] = selection.argv;
+  if (action === 'daemon') {
+    context.beforeRouting?.();
+    if (!options.local || selection.client || flags.length !== 1 || !['status', 'stop'].includes(flags[0]))
+      throw new SetupError('unknown_command', 2);
+    if (!context.supportedNode(context.nodeVersion)) throw new SetupError('node_required');
+    return { handled: true, code: await daemonLocal(flags[0], context) };
+  }
   if (!['raw', 'setup', 'status', 'uninstall', ...controls].includes(action)) { context.beforeRouting?.(); return { handled: false }; }
   if (action === 'raw') validateRawOptions(options, selection);
   else if (flags.some(flag => !['--dry-run', '--no-browser', '--no-clipboard', '--manual-token', '--reauthorize'].includes(flag)) ||
@@ -415,6 +423,27 @@ export async function localStatus(detection, { write, t, env = process.env, plat
   }
 }
 
+function runLocalDaemon(action, root, descriptor, env, stdout) {
+  const args = [executableFor(root, descriptor.engine.id), 'daemon', action, '--db', descriptor.database.path];
+  const result = spawnSync(descriptor.node, args, {
+    env: engineOperatorEnvironment(env), stdio: ['ignore', stdout, 'ignore'], windowsHide: true,
+    // Bound only the CLI subprocess. The engine owns the daemon's TERM-only shutdown.
+    timeout: 10000, killSignal: 'SIGKILL',
+  });
+  return result.status ?? 1;
+}
+
+async function daemonLocal(action, { env, write, t }) {
+  const root = await localRoot(env);
+  const notInstalled = () => { write(t('not_installed')); return 2; };
+  if ((await readDescriptor(root))?.state !== 'installed') return notInstalled();
+  return withLocalLock(root, async () => {
+    const descriptor = await readDescriptor(root);
+    if (descriptor?.state !== 'installed') return notInstalled();
+    return runLocalDaemon(action, root, descriptor, env, 'inherit');
+  });
+}
+
 async function uninstallLocal(options, selection, detection, context) {
   const { write, t, prompt, interactive, env, runClaude, inspection, progress = {} } = context;
   const pendingSetup = detection.descriptor?.operation?.kind === 'setup';
@@ -477,7 +506,14 @@ async function uninstallLocal(options, selection, detection, context) {
         }
         // Engine records pin their runtime path. Retain it with disabled identity
         // so an identical setup request can reactivate without rewriting authority.
-        if (!await retainedCapture(root)) await rm(await deletionPath(root, 'engine', { databasePath: descriptor.database.path }), { recursive: true, force: true });
+        if (!await retainedCapture(root)) {
+          const engine = await deletionPath(root, 'engine', { databasePath: descriptor.database.path });
+          if (!selection.client && descriptor.engine && descriptor.node) {
+            try { runLocalDaemon('stop', root, descriptor, env, 'ignore'); }
+            catch { /* Best effort. Engine removal proceeds regardless of the stop outcome. */ }
+          }
+          await rm(engine, { recursive: true, force: true });
+        }
         descriptor.state = 'uninstalled'; descriptor.engine = null; descriptor.node = null; descriptor.operation = null;
         await writeDescriptor(root, descriptor);
       }
