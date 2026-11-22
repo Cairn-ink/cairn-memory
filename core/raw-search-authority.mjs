@@ -213,6 +213,30 @@ export function createRawSearchAuthority(database, options) {
       }
     });
   }
+  function nextDenial(positions, from, at) {
+    return read(() => {
+      if (!db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='raw_search_denial_queue'").get()) return;
+      const next = db.prepare(`SELECT ordinal,conversation_id,message_id,start,end FROM raw_search_denial_queue
+        WHERE ${where} AND ordinal>? ORDER BY ordinal LIMIT 1`);
+      for (let offset = 0; offset < options.readSet.length; offset++) {
+        const index = (from + offset) % options.readSet.length;
+        const args = boundary(options.readSet[index]);
+        const row = next.get(...args, positions[index]?.ordinal ?? 0);
+        if (!row) continue;
+        // Recheck the selector in the same canonical snapshot. An absent
+        // conversation is already denied by the source resolver.
+        const conversation = db.prepare(`SELECT owner_id,scope,project_id,client,session_key
+          FROM raw_conversations WHERE id=?`).get(row.conversation_id);
+        const denied = !conversation || same(args, [conversation.owner_id, conversation.scope, conversation.project_id]) &&
+          Boolean(row.message_id === null
+            ? db.prepare(`SELECT 1 FROM raw_session_fences WHERE ${where} AND client=? AND session_key=?`)
+              .get(...args, conversation.client, conversation.session_key)
+            : db.prepare(`SELECT 1 FROM raw_source_exclusions WHERE conversation_id=? AND message_id=? AND start=? AND end=?`)
+              .get(row.conversation_id, row.message_id, row.start, row.end));
+        return { row, index, next: (index + 1) % options.readSet.length, denied };
+      }
+    }, at);
+  }
   function describe(part,ns) {
     const anchor = { conversationId:part.conversation_id,messageId:part.message_id,
       span:{start:part.start,end:part.end,precision:'exact'} };
@@ -701,6 +725,6 @@ export function createRawSearchAuthority(database, options) {
     deadline(at);resetContentSuppressionRequestInside(db);
   }
   return { reset,refresh,resume:()=>resumeAt,read,identity:{storeId:identity.store_id,fileIdentity:database.fileIdentity,ownerId:options.ownerId,readSet:options.readSet},
-    bind,authorize,inventory,recent,disposition,queryAllowed,check,open,prepareBatch,validate,fingerprint,fence,checkFence,cacheKey,version,
+    bind,authorize,inventory,recent,disposition,nextDenial,queryAllowed,check,open,prepareBatch,validate,fingerprint,fence,checkFence,cacheKey,version,
     inspect:(ref,intent='history')=>read(()=>inspectInside(ref,intent)) };
 }

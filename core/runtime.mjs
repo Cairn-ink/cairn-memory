@@ -371,7 +371,8 @@ export function createMemoryRuntime(input, internal) {
         AND fingerprint = ? AND deleted = 0 AND id != ?`)
         .get(...boundary(ns), value.fingerprint, id);
       if (other) fail("memory_conflict");
-      const suppression = { reason: 'correction_supersession', actionId: 'memory-correct-'+id+'-'+expectedRevision };
+      const deferredSearchDenials = [];
+      const suppression = { reason: 'correction_supersession', actionId: 'memory-correct-'+id+'-'+expectedRevision, deferredSearchDenials };
       // Resolve legacy keep proof before Episode source invalidation removes its IDs.
       if (localRawPrivacy) rawLineage.excludeMemory(ns, id, suppression);
       localRawPrivacy?.invalidateMemoryEpisodesInside(ns, current, episodes);
@@ -383,6 +384,8 @@ export function createMemoryRuntime(input, internal) {
         receipt_key: receiptKey(receipt), client: receipt.client, session_id: receipt.sessionId, event_id: receipt.eventId, role: receipt.role,
       })) });
       if (!localRawPrivacy) rawLineage.excludeMemory(ns, id, suppression);
+      // Append span selectors after the session fences in this transaction.
+      for (const span of deferredSearchDenials) rawLineage.queueSearchDenial(ns, span);
       stagedEvidence.purgeNamespace(ns);
       if (current.fingerprint !== value.fingerprint) suppress(ns, current.fingerprint);
       const now = new Date().toISOString();
@@ -422,7 +425,8 @@ export function createMemoryRuntime(input, internal) {
         retired = sourceRoots.touchMemory(ns, id);
         suppress(ns, current.fingerprint);
       }
-      const suppression = { reason: suppressionReason, actionId: 'memory-forget-'+id };
+      const deferredSearchDenials = [];
+      const suppression = { reason: suppressionReason, actionId: 'memory-forget-'+id, deferredSearchDenials };
       if (!cascade) {
         // Resolve legacy keep proof before Episode source invalidation removes its IDs.
         if (localRawPrivacy) rawLineage.excludeMemory(ns, id, suppression);
@@ -436,6 +440,7 @@ export function createMemoryRuntime(input, internal) {
         suppressionReason === 'user_forget' || reason === 'rejected' ? { rows: retired } : undefined);
       if (cascade && localRawPrivacy) rawLineage.excludeMemory(ns, id, suppression);
       if (!localRawPrivacy) rawLineage.excludeMemory(ns, id, suppression);
+      for (const span of deferredSearchDenials) rawLineage.queueSearchDenial(ns, span);
       stagedEvidence.purgeNamespace(ns);
       const now = new Date().toISOString();
       const effects = conflictStorage.invalidateMemory(id, { reason });

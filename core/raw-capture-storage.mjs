@@ -10,6 +10,7 @@ import { episodeSnapshot } from './episode-input.mjs';
 import { episodeText } from './episode-storage.mjs';
 import { rawSourceMap } from './raw-source-map.mjs';
 import { createRawLineageStorage } from './raw-lineage-storage.mjs';
+import { recordRawSessionFenceInside } from './raw-deletion-schema.mjs';
 import { boundedText, fail, identifier, object, revision } from './validation.mjs';
 import { managedRequest } from './local-authority-input.mjs';
 import { createLocalAuthorityStorage, createLocalRawPrivacyStorage } from './local-authority-storage.mjs';
@@ -283,8 +284,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
     }
     return transaction(db, () => {
       if (privacy) privacy.fenceInside(namespace,client,session);
-      else db.prepare('INSERT OR IGNORE INTO raw_session_fences VALUES(?,?,?,?,?)')
-        .run(...rawBoundary(namespace), client, session);
+      else recordRawSessionFenceInside(db, namespace, client, session);
       return journal.closePending({ ownerId: namespace.ownerId, namespace, client, sessionKey: session, reason: 'capture_barrier' });
     });
   }

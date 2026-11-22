@@ -319,7 +319,24 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
     return db.prepare('SELECT * FROM segments WHERE published=1 AND segment_key IN (SELECT value FROM json_each(?))')
       .all(JSON.stringify(keys)).map(row=>decode(row));
   }
-  async function commitBatch({staged=[],remove=[],checkpoint:next}) {
+  function denialPage(denial, afterKey, limit) {
+    ready();
+    const { conversation_id, message_id, start, end } = denial;
+    const parts = message_id === null ? [conversation_id] : [conversation_id, message_id];
+    const prefix = JSON.stringify(parts).slice(0,-1);
+    // A production key is [conversationId,messageId,partIndex]. The comma
+    // and hyphen bound precisely that tuple prefix in the BINARY key index.
+    const lower = prefix+',';
+    const projection = message_id === null ? '' : ",json_extract(data,'$[2]') AS start,json_extract(data,'$[3]') AS end";
+    const rows = db.prepare(`SELECT id,segment_key${projection} FROM segments INDEXED BY sqlite_autoindex_segments_1
+      WHERE segment_key>? AND segment_key<? AND published=1 ORDER BY segment_key LIMIT ?`)
+      .all(afterKey?.startsWith(lower) ? afterKey : lower, prefix+'-', limit+1);
+    const partial = rows.length > limit;
+    const page = rows.slice(0,limit);
+    const remove = page.filter(row => message_id === null || row.start < end && row.end > start).map(row => row.id);
+    return { remove, afterKey: partial ? page.at(-1).segment_key : null };
+  }
+  async function commitBatch({staged=[],remove=[],checkpoint:next,expectedSequence}) {
     if(staged.length>128||remove.length>1024)fail('invalid_input');
     for(const row of staged)stagedKey(row);
     return transaction(()=>{
@@ -327,7 +344,12 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
         .all(JSON.stringify(staged.map(row=>row.key)));
       const ids=new Map(previous.map(row=>[row.segment_key,row.id]));
       if(staged.some(row=>(ids.get(row.key)??null)!==row.expected))fail('stale_publication');
-      const base=header().sequence;
+      const {sequence:base,checkpoint:previousCheckpoint}=header();
+      if(expectedSequence!==undefined&&base!==expectedSequence)fail('stale_publication');
+      // Ordinary publication may have read its checkpoint before another
+      // connection advanced the queue. Only the sequenced drain owns that cursor.
+      const denialQueue=expectedSequence===undefined&&JSON.parse(previousCheckpoint).denialQueue;
+      if(denialQueue)next={...next,denialQueue};
       const removed=db.prepare(`DELETE FROM segments WHERE id IN (SELECT value FROM json_each(?))
         OR segment_key IN (SELECT value FROM json_each(?))`).run(JSON.stringify(remove),JSON.stringify(staged.map(row=>row.key))).changes;
       if(staged.length)db.prepare('INSERT INTO segments VALUES '+staged.map(()=>'(?,?,?,?,?,1)').join(','))
@@ -363,6 +385,6 @@ export async function openRawSearchStorage({ directory, identity, bind, quotaByt
       throw error;
     }
   }
-  return Object.freeze({ openOwner:async () => binding,snapshot,search,head,tail:()=>db.prepare('SELECT coalesce(max(id),0) AS last FROM segments WHERE published=1').get().last,publication,stage,publish,invalidate,checkpoint,lookup,commitBatch,status,dropOwner,
+  return Object.freeze({ openOwner:async () => binding,snapshot,search,head,tail:()=>db.prepare('SELECT coalesce(max(id),0) AS last FROM segments WHERE published=1').get().last,publication,stage,publish,invalidate,checkpoint,lookup,denialPage,commitBatch,status,dropOwner,
     async close() { if (!closed) { closed = true; db.close(); } } });
 }
