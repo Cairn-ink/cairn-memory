@@ -1,0 +1,104 @@
+[
+  {
+    "name": "valid batch in evidence order",
+    "output": {"items": [{"content": "I use blue ink.", "kind": "preference", "confidence": 1, "sourceIndices": [0]}, {"content": "The meeting is on Tuesday.", "kind": "decision", "confidence": 0, "sourceIndices": [1, 0]}]},
+    "policy": {"sourceCount": 2, "itemLimit": 5},
+    "expected": [{"content": "I use blue ink.", "kind": "preference", "confidence": 1, "sourceIndices": [0]}, {"content": "The meeting is on Tuesday.", "kind": "decision", "confidence": 0, "sourceIndices": [1, 0]}]
+  },
+  {
+    "name": "mixed valid and invalid batch",
+    "output": {"items": [{"content": "I use blue ink.", "kind": "preference", "confidence": 1, "sourceIndices": [0]}, {"content": "I use blue ink.", "kind": "summary", "confidence": 1, "sourceIndices": [0]}]},
+    "policy": {"sourceCount": 2, "itemLimit": 5},
+    "errorCode": "invalid_extraction_value"
+  },
+  {
+    "name": "extra item field",
+    "output": {"items": [{"content": "I use blue ink.", "kind": "preference", "confidence": 1, "sourceIndices": [0], "procedural": true}]},
+    "policy": {"sourceCount": 2, "itemLimit": 5},
+    "errorCode": "invalid_extraction_item_shape"
+  },
+  {
+    "name": "repeated source index",
+    "output": {"items": [{"content": "I use blue ink.", "kind": "preference", "confidence": 1, "sourceIndices": [0, 0]}]},
+    "policy": {"sourceCount": 2, "itemLimit": 5},
+    "errorCode": "invalid_extraction_source_duplicate"
+  },
+  {
+    "name": "out-of-range source index",
+    "output": {"items": [{"content": "I use blue ink.", "kind": "preference", "confidence": 1, "sourceIndices": [2]}]},
+    "policy": {"sourceCount": 2, "itemLimit": 5},
+    "errorCode": "invalid_extraction_source_range"
+  },
+  {
+    "name": "fractional source index",
+    "output": {"items": [{"content": "I use blue ink.", "kind": "preference", "confidence": 1, "sourceIndices": [0.5]}]},
+    "policy": {"sourceCount": 2, "itemLimit": 5},
+    "errorCode": "invalid_extraction_source_range"
+  },
+  {
+    "name": "empty source indices",
+    "output": {"items": [{"content": "I use blue ink.", "kind": "preference", "confidence": 1, "sourceIndices": []}]},
+    "policy": {"sourceCount": 2, "itemLimit": 5},
+    "errorCode": "invalid_extraction_source_shape"
+  },
+  {
+    "name": "out-of-range confidence",
+    "output": {"items": [{"content": "I use blue ink.", "kind": "preference", "confidence": 1.01, "sourceIndices": [0]}]},
+    "policy": {"sourceCount": 2, "itemLimit": 5},
+    "errorCode": "invalid_extraction_value"
+  },
+  {
+    "name": "empty output",
+    "output": {"items": []},
+    "policy": {"sourceCount": 0, "itemLimit": 0},
+    "expected": []
+  },
+  {
+    "name": "over-limit output",
+    "output": {"items": [{"content": "Drawing 1.", "kind": "preference", "confidence": 1, "sourceIndices": [0]}, {"content": "Drawing 2.", "kind": "preference", "confidence": 1, "sourceIndices": [0]}, {"content": "Drawing 3.", "kind": "preference", "confidence": 1, "sourceIndices": [0]}, {"content": "Drawing 4.", "kind": "preference", "confidence": 1, "sourceIndices": [0]}, {"content": "Drawing 5.", "kind": "preference", "confidence": 1, "sourceIndices": [0]}, {"content": "Drawing 6.", "kind": "preference", "confidence": 1, "sourceIndices": [0]}]},
+    "policy": {"sourceCount": 2, "itemLimit": 5},
+    "errorCode": "invalid_extraction_output_shape"
+  },
+  {
+    "name": "Unicode and redaction normalization",
+    "output": {"items": [{"content": "  Ａｌｅｘ　用 é 標記。\n ｐａｓｓｗｏｒｄ＝placeholder  ", "kind": "preference", "confidence": 1, "sourceIndices": [0]}]},
+    "policy": {"sourceCount": 2, "itemLimit": 5},
+    "expected": [{"content": "Alex 用 é 標記。 password=[REDACTED]", "kind": "preference", "confidence": 1, "sourceIndices": [0]}]
+  },
+  {
+    "name": "text consists of a redaction",
+    "output": {"items": [{"content": "Bearer placeholder-example", "kind": "preference", "confidence": 1, "sourceIndices": [0]}]},
+    "policy": {"sourceCount": 2, "itemLimit": 5},
+    "errorCode": "invalid_extraction_text"
+  },
+  {
+    "name": "embedded null",
+    "output": {"items": [{"content": "Blue\u0000ink", "kind": "preference", "confidence": 1, "sourceIndices": [0]}]},
+    "policy": {"sourceCount": 2, "itemLimit": 5},
+    "errorCode": "invalid_extraction_text"
+  },
+  {
+    "name": "plain capture preserves lone surrogate",
+    "output": {"items": [{"content": "Blue \ud800 ink", "kind": "preference", "confidence": 1, "sourceIndices": [0]}]},
+    "policy": {"sourceCount": 2, "itemLimit": 5},
+    "expected": [{"content": "Blue \ud800 ink", "kind": "preference", "confidence": 1, "sourceIndices": [0]}]
+  },
+  {
+    "name": "text at 600 UTF-16 units",
+    "output": {"items": [{"content": "🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂", "kind": "preference", "confidence": 1, "sourceIndices": [0]}]},
+    "policy": {"sourceCount": 2, "itemLimit": 5},
+    "expected": [{"content": "🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂", "kind": "preference", "confidence": 1, "sourceIndices": [0]}]
+  },
+  {
+    "name": "text above 600 UTF-16 units",
+    "output": {"items": [{"content": "🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂!", "kind": "preference", "confidence": 1, "sourceIndices": [0]}]},
+    "policy": {"sourceCount": 2, "itemLimit": 5},
+    "errorCode": "invalid_extraction_text"
+  },
+  {
+    "name": "extra output field",
+    "output": {"items": [], "extra": true},
+    "policy": {"sourceCount": 2, "itemLimit": 5},
+    "errorCode": "invalid_extraction_output_shape"
+  }
+]

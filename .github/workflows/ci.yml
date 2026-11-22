@@ -155,6 +155,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
       - run: npm test
+      - run: npm run test:memory-core
       - run: npm run validate
       - run: npm run test:local-transport-import
       - run: npm run test:local-host-import
