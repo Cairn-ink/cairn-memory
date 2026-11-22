@@ -223,8 +223,8 @@ export async function openRawSearch(value, { signal } = {}) {
         const scopeKeys=new Set(options.readSet.map(ns=>JSON.stringify(ns)));
         const scopedRows=snapshot.rows.filter(row=>{expired(deadlineAt);return scopeKeys.has(JSON.stringify(row.source.ref.namespace));});
         const guard=()=>{ready();expired(deadlineAt);access();};
-        let semantic={state:'bm25-only',reason:options.embedder?'partial_coverage':'disabled'},queryVector=null;
-        const port=options.embedder;let query=input.queryVector;
+        const port=input.semantic===false?null:options.embedder;let query=input.queryVector;
+        let semantic={state:'bm25-only',reason:port?'partial_coverage':'disabled'},queryVector=null;
         let queryAllowed=!port||authority.queryAllowed(deadlineAt);
         const queryGuard=()=>{
           guard();
