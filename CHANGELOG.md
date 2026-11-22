@@ -15,6 +15,15 @@
   `context_read` off avoids this. See the plugin README.
 - Capture, the protocol for other clients, and the installer are unchanged.
 
+## 0.6.10 — 2026-11-22
+
+- **An up-to-date local store opens without taking the writer lock.** Creating, upgrading or repairing a store still takes the lock.
+- **Claude Code can recover a session if its start hook is cancelled or times out during a permission check.** The next save can recover it if permission and the transcript still match. If the transcript already existed at startup, saving resumes from its end at recovery time. A hook killed before any code runs still leaves the session unsaved, and an attempt left by an earlier capture authority is kept as it was.
+- If the last client disconnects with a removal still pending, the removed message's search entry stays on disk until cleanup reaches it, and search never returns it. Once a client connects again, cleanup resumes: an entry already queued for removal is erased within seconds, and others within about a minute per 1,000 search entries while a client stays connected.
+- **On local stores upgraded with the offline safety migration, listing memories skips those withheld after a forget and returns the rest of the page.**
+- **Eligible Claude Code and Codex sessions from the same installation on Linux share a background memory server.** It starts with the first session and exits about 30 seconds after the last one closes. Sessions with different server environments use separate servers. On other platforms, for stores under `/mnt/` or on network filesystems, or if the shared server can't start, each session runs its own server.
+- 0.6.9 also included a fix so Episode reads no longer fail on Node.js 24.22.3 (SQLite 3.54) for stores with content safety turned on. Installed local stores weren't affected.
+
 ## 0.6.9 — 2026-11-21
 
 - **A session that starts while another one is saving is no longer lost.**
