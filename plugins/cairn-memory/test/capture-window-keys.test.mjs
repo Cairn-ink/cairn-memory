@@ -40,7 +40,9 @@ async function captureServer(t, { holdCapture, ...options } = {}) {
       assert.deepEqual(slices.map(window => window.final), slices.map((_, i) => i === slices.length - 1));
       // The receiver's rule per id group: every slice 1..slices arrives, and each group other than the final
       // slice's group is full (slices equals the group limit).
-      const groups = Map.groupBy(slices, window => window.id);
+      // Node 20 has no Map.groupBy.
+      const groups = new Map();
+      for (const window of slices) groups.set(window.id, [...(groups.get(window.id) ?? []), window]);
       const finalId = slices.find(window => window.final)?.id;
       for (const [id, group] of groups) {
         const [{ slices: count }] = group;
