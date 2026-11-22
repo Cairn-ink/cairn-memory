@@ -387,7 +387,7 @@ export function createMemoryRuntime(input, internal) {
       if (current.fingerprint !== value.fingerprint) suppress(ns, current.fingerprint);
       const now = new Date().toISOString();
       conflictStorage.invalidateMemory(id);
-      mocStorage.retireMemory(ns, id, now);
+      mocStorage.invalidateMemory(ns, id, now);
       qualificationStorage.clear(id);
       proceduralStorage.clear(id);
       episodes.invalidateMemory(ns, id);
@@ -439,7 +439,7 @@ export function createMemoryRuntime(input, internal) {
       stagedEvidence.purgeNamespace(ns);
       const now = new Date().toISOString();
       const effects = conflictStorage.invalidateMemory(id, { reason });
-      mocStorage.retireMemory(ns, id, now);
+      mocStorage.invalidateMemory(ns, id, now);
       qualificationStorage.clear(id);
       proceduralStorage.clear(id);
       episodes.invalidateMemory(ns, id, current.review_state === 'awaiting');
@@ -830,7 +830,7 @@ export function createMemoryRuntime(input, internal) {
     invalidateConflicts: conflictStorage.invalidateMemory, assertIndexAvailable: indexStorage.assertAvailable,
     rationaleStorage, receiptKey, classificationJournal });
   const supersessionStorage = createSupersessionStorage({ db, activeRow: visibleRow, suppress, advanceEpoch,
-    invalidateConflicts: conflictStorage.invalidateMemory, invalidateMemory: mocStorage.retireMemory,
+    invalidateConflicts: conflictStorage.invalidateMemory, invalidateMemory: mocStorage.invalidateMemory,
     evaluateQualified: qualifiedTransitionStorage.evaluate,
     evaluateQualifiedSet: qualifiedTransitionStorage.evaluateSet, epoch,
     recordHeldRetirement: (previous, replacement, linked) => recordHeldRetirement(db, previous, replacement, linked) });

@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { transaction } from '../database.mjs';
+import { withContentWriteOperation } from '../content-write-context.mjs';
+import { createEngineCardStorage } from '../engine-card-storage.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 import { openMemoryCore } from '../index.mjs';
 import { lineageFixture, lineageHost, ns, ok, receipt } from '../testing/card-lineage-fixture.mjs';
@@ -33,9 +35,11 @@ async function fixture(t, layout) {
     f = { core, db, call: (method, input) => host.call(core, method, input) };
   }
   assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, layout);
-  return { ...f, async context(type) {
-    const projection = { readSet: [ns], types: [type], intent: 'current' };
-    const value = ok(await trusted.call(f.core, 'contextRead', { ...projection, query: 'dome', deadlineMs: 5000 }));
+  const contextQuery = async (method, type, query) => ok(await trusted.call(f.core, method, {
+    readSet: [ns], types: [type], intent: 'current', query, semantic: false, deadlineMs: 5000,
+  }));
+  return { ...f, contextQuery, async context(type) {
+    const value = await contextQuery('contextRead', type, 'dome');
     return value.metered.items.map(item => item.ref.id);
   } };
 }
@@ -111,45 +115,28 @@ for (const layout of [53, 29]) {
       assert.equal(ok(get(c)).placements[0].title, expectedTitle);
       const map = ok(core.map({ namespace: ns })).items.find(item => item.moc?.id === topic.id);
       assert.equal(map.moc.title, expectedTitle);
-      const sources = db.prepare('SELECT memory_id FROM moc_title_sources WHERE moc_id=? ORDER BY memory_id').all(topic.id);
-      assert.deepEqual(sources.map(row => row.memory_id), action === 'keep' ? [a.id, c.id].sort() : [c.id]);
-      if (layout === 53 && action !== 'keep') {
-        const row = db.prepare('SELECT title,canonical_title FROM mocs WHERE id=?').get(topic.id);
-        assert.equal(row.title, '');
-        assert.notEqual(row.canonical_title, title.toLowerCase());
-      }
     });
   }
 
   test(`delete a Card title source and then another member on layout ${layout}`, async t => {
-    const { call, context, db } = await fixture(t, layout);
+    const { call, context } = await fixture(t, layout);
     const map = () => ok(call('mapEvidence', { type: 'card' }));
-    const card = (name, body) => {
-      const draft = ok(call('createCardDraft', { actionId: `draft-${name}`, drafting: 'authored',
-        input: { title: name, body, authoredInput: { text: body, occurredAt: null } } }));
-      const saved = ok(call('confirmCardDraft', { actionId: `confirm-${name}`, cardId: draft.id,
-        expectedRevision: draft.revision, applicability: 'current' }));
-      return { type: 'card', namespace: ns, cardId: saved.id, revision: saved.revision, bodyRevision: saved.bodyRevision };
-    };
-    const a = card(title, 'Visitors arrive on weekends');
-    const b = card('Closing', 'The caretaker locks the dome');
-    const c = card('Opening', 'The caretaker opens the dome');
-    const place = (actionId, refs, placement) => ok(call('applyCardPlacement', { actionId, refs,
-      expectedIndexRevision: map().indexRevision,
-      proposal: { items: refs.map(ref => ({ cardId: ref.cardId, ...placement })) } }));
-    const { mocId } = place('create-topic', [a, c], { parentIds: [], newL1: { title, parentL2Ids: [] } }).createdMocRefs[0];
-    place('place-member', [b], { parentIds: [mocId] });
+    const a = authoredCard(call, title, 'Visitors arrive on weekends');
+    const b = authoredCard(call, 'Closing', 'The caretaker locks the dome');
+    const c = authoredCard(call, 'Opening', 'The caretaker opens the dome');
+    const { mocId } = placeCards(call, 'create-topic', [a, c], newTopic(title)).createdMocRefs[0];
+    placeCards(call, 'place-member', [b], { parentIds: [mocId] });
     const topic = () => map().items.find(item => item.topic?.id === mocId).topic;
     assert.equal(topic().title, title);
     assert.ok((await context('card')).includes(b.cardId));
-    for (const ref of [a, b]) assert.equal(ok(call('deleteKnowledgeCard', { actionId: `delete-${ref.cardId}`,
-      cardId: ref.cardId, expectedRevision: ref.revision })).state, 'deleted');
+    for (const ref of [a, b]) {
+      assert.equal(ok(call('deleteKnowledgeCard', { actionId: `delete-${ref.cardId}`,
+        cardId: ref.cardId, expectedRevision: ref.revision })).state, 'deleted');
+      assert.equal(topic().title, null);
+    }
     assert.equal(ok(call('getCard', { cardId: b.cardId })).card, null);
     assert.deepEqual(ok(call('listCards', { states: ['confirmed'] })).cards.map(row => row.id), [c.cardId]);
     assert.deepEqual(await context('card'), [c.cardId]);
-    assert.equal(topic().title, null);
-    const sources = db.prepare('SELECT card_id FROM card_moc_title_sources WHERE moc_id=?').all(mocId);
-    assert.deepEqual(sources.map(row => row.card_id), [c.cardId]);
   });
 }
 
@@ -157,7 +144,7 @@ test('a retained binding to an already forgotten source does not block another m
   const { core, db } = await fixture(t, 53);
   const { a, b, c, topic } = memoryTopic(core);
   assert.equal(forget(core, a).forgotten, true);
-  db.prepare('INSERT OR IGNORE INTO moc_title_sources VALUES (?,?,?)').run(topic.id, a.id, a.revision);
+  assert.ok(db.prepare('SELECT 1 FROM moc_title_sources WHERE moc_id=? AND memory_id=?').get(topic.id, a.id));
   assert.equal(forget(core, b).forgotten, true);
   assert.equal(ok(core.get({ namespace: ns, memoryId: c.id })).placements[0].title, null);
 });
@@ -173,3 +160,89 @@ test('a live title source with a read denial still blocks a member write', async
   assert.equal(result.error.code, 'evidence_unavailable');
   assert.equal(ok(core.get({ namespace: ns, memoryId: b.id })).memory.id, b.id);
 });
+
+for (const layout of [29, 53]) {
+  test(`one forget removes a title from BM25 ranking and corpus statistics on layout ${layout}`, async t => {
+    const { core, contextQuery } = await fixture(t, layout);
+    const { a, b } = memoryTopic(core);
+    const [control] = place(core, [[admit(core, 'Record the paper inventory'), newTopic('Glass library archive')]]).memories;
+    const find = async () => {
+      const result = await contextQuery('findCandidates', 'memory', title);
+      assert.equal(result.trace.sources['moc-v1'].status, 'ok');
+      return result.items.flatMap(item => item.channels.moc ? [[item.ref.memoryId, item.channels.moc.rawScore]] : []);
+    };
+    const before = await find();
+    assert.ok(before.some(([id]) => id === b.id));
+    const beforeScore = Math.log(1.2) * 2.2 / (1 + 1.2 * (0.25 + 0.75 * 3 / 2.5));
+    assert.ok(before.some(([id, score]) => id === control.id && Math.abs(score - beforeScore) < 1e-15));
+
+    assert.equal(forget(core, a).forgotten, true);
+
+    assert.deepEqual(await find(), [[control.id, Math.log(4 / 3)]]);
+    const assembled = await contextQuery('contextRead', 'memory', title);
+    assert.deepEqual(assembled.metered.items.map(item => item.ref.id), [control.id]);
+  });
+}
+
+test('forget purges an engine Card even when another title source has lost its note', async t => {
+  const f = await fixture(t, 53);
+  const { core, call, db, identity } = f;
+  const memory = admit(core, 'The photographer arrives at dawn');
+  const storage = createEngineCardStorage({ db, identity, ready() {} });
+  const memories = storage.snapshot(ns, 512, () => {}).memories;
+  assert.deepEqual(memories.map(row => row.id), [memory.id]);
+  const engine = withContentWriteOperation('maintainCards', [ns], () =>
+    storage.commit(ns, { key: 'field-report', memories }, { body: 'A field report.' }, new Date().toISOString(), () => {}));
+  const note = f.note('archive-note');
+  const other = authoredCard(call, 'Archive', 'Record the paper inventory', [note]);
+  const { mocId } = placeCards(call, 'place', [cardRef(engine), other], newTopic(title)).createdMocRefs[0];
+
+  ok(call('deleteSourceNote', { actionId: 'delete-note', sourceId: note.sourceId, expectedRevision: note.revision }));
+  assert.equal(f.row(other.cardId).state, 'confirmed');
+  assert.equal(ok(call('getCard', { cardId: other.cardId })).card, null);
+
+  assert.equal(forget(core, memory).forgotten, true);
+  assert.equal(core.get({ namespace: ns, memoryId: memory.id }).error.code, 'memory_not_found');
+  assert.equal(f.row(engine.id).state, 'deleted');
+  assert.equal(f.row(other.cardId).state, 'confirmed');
+  assert.equal(db.prepare('SELECT revision FROM card_mocs WHERE id=?').get(mocId).revision, 1);
+});
+
+test('refiling a corrected title source advances its former topic revision on layout 29', async t => {
+  const { core } = await fixture(t, 29);
+  const { a, c, topic } = memoryTopic(core);
+  const get = memory => ok(core.get({ namespace: ns, memoryId: memory.id }));
+  const saved = ok(core.correct({ namespace: ns, memoryId: a.id, expectedRevision: a.revision,
+    kind: 'fact', content: 'The photographer arrives at dusk', receipt: receipt('correction') })).memory;
+  const previous = get(c).placements[0];
+  assert.deepEqual(previous, { mocId: topic.id, mocRevision: topic.revision + 2, title: null });
+
+  const placed = place(core, [[saved, newTopic('Glass library')]]);
+  const current = get(c).placements[0];
+  assert.deepEqual(current, { ...previous, mocRevision: previous.mocRevision + 1 });
+  const mapped = ok(core.map({ namespace: ns })).items.filter(item => item.moc).map(item => item.moc);
+  assert.deepEqual(mapped.map(row => [row.id, row.title, row.revision]), [
+    [topic.id, null, current.mocRevision], [placed.createdMocs[0].id, 'Glass library', 1],
+  ]);
+});
+
+function newTopic(title) {
+  return { parentIds: [], newL1: { title, parentL2Ids: [] } };
+}
+
+function cardRef(saved) {
+  return { type: 'card', namespace: ns, cardId: saved.id, revision: saved.revision, bodyRevision: saved.bodyRevision ?? 1 };
+}
+
+function authoredCard(call, name, body, sources) {
+  const draft = ok(call('createCardDraft', { actionId: `draft-${name}`, drafting: 'authored',
+    input: { title: name, body, ...(sources ? { sources } : { authoredInput: { text: body, occurredAt: null } }) } }));
+  return cardRef(ok(call('confirmCardDraft', { actionId: `confirm-${name}`, cardId: draft.id,
+    expectedRevision: draft.revision, applicability: 'current' })));
+}
+
+function placeCards(call, actionId, refs, placement) {
+  return ok(call('applyCardPlacement', { actionId, refs,
+    expectedIndexRevision: ok(call('mapEvidence', { type: 'card' })).indexRevision,
+    proposal: { items: refs.map(ref => ({ cardId: ref.cardId, ...placement })) } }));
+}

@@ -183,7 +183,7 @@ export function createTopicOverviewStorage(db, { exactComparisons = false } = {}
       finish() {
         return [...nodes.values()].sort((a, b) => (a.level === b.level ? binary(a.id, b.id) : a.level === 'L2' ? -1 : 1))
           .map(node => ({ id: node.id, revision: node.revision, level: node.level,
-            title: node.titleValid && node.sourceCount ? node.title || null : null,
+            title: node.titleValid && node.sourceCount ? node.title : null,
             parentIds: node.parentIds.sort(binary), directCounts: node.directCounts,
             descendantCounts: node.descendantCounts, latestMemberCreatedAt: node.latestMemberCreatedAt,
             lastMemberAddedAt: null, addedAtCoverage: 'not_recorded',

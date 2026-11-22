@@ -10,7 +10,6 @@ import { transaction, readTransaction, isStorageBusy } from "./database.mjs";
 import { fail } from "./validation.mjs";
 import { QUERY_SCAN_BUDGET_MS, SOURCE_QUERY_RECEIPT_LIMIT, QUERY_CANDIDATES } from './query-candidates.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
-import { retireTopicTitleSourceInside } from './private-organization-storage.mjs';
 
 const namespaceWhere = "owner_id = ? AND scope = ? AND project_id = ?";
 const qualifiedNamespace = (alias) => `${alias}.owner_id = ? AND ${alias}.scope = ? AND ${alias}.project_id = ?`;
@@ -52,7 +51,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         source.owner_id !== moc.owner_id || source.scope !== moc.scope ||
         source.project_id !== moc.project_id || source.revision !== source.memory_revision ||
         cachedContentLayout(db)?.suppressionRevision && !safeMemory(publicNamespace(moc), source, true))) return null;
-    return moc.title || null;
+    return moc.title;
   }
 
   function titleSources(id) {
@@ -125,8 +124,8 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     return affected;
   }
 
-  function invalidateMemory(ns, memoryId, now, retiredTopics = []) {
-    const affected = new Set(retiredTopics);
+  function invalidateMemory(ns, memoryId, now) {
+    const affected = new Set();
     for (const row of db.prepare("SELECT moc_id FROM moc_memory_refs WHERE memory_id = ?")
       .all(memoryId)) affected.add(row.moc_id);
     for (const row of db.prepare("SELECT moc_id FROM moc_title_sources WHERE memory_id = ?")
@@ -966,12 +965,8 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     return inside ? work() : transaction(db, work);
   }
 
-  function retireMemory(ns, id, now) {
-    invalidateMemory(ns, id, now, retireTopicTitleSourceInside(db, 'memory', id));
-  }
-
   return Object.freeze({ applyPlacement, linkMocs, classificationSnapshot, mapRows, queryCandidateRows,
-    placementRefs, mocDto, invalidateMemory, retireMemory,
+    placementRefs, mocDto, invalidateMemory,
     // Internal callers already hold the shared transaction and read authority.
     mapRowsInside: (ns, input) => mapRows(ns, input, true),
     topicInside(ns, ref) {

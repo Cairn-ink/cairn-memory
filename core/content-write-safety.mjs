@@ -4,7 +4,7 @@ import { createHmac } from 'node:crypto';
 import { cardContributorsInside, contentReadSafety, sourceReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { sourceRef } from './private-card-input.mjs';
 import { bindContentSafetyConnection, cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
-import { contentSuppressionReasonInside, contentSuppressionTargetMatches, memoryCorrectionDenialsInside, suppressionEpoch, withContentSuppressionCeilingsInside } from './content-suppression-storage.mjs';
+import { contentSuppressionReasonInside, contentSuppressionTargetMatches, suppressionEpoch, withContentSuppressionCeilingsInside } from './content-suppression-storage.mjs';
 import { contentWriteChanges } from './content-write-changes.mjs';
 import { CONTENT_TERMINAL_FIELDS, CONTENT_TERMINAL_ACK_FIELDS, registerContentWriteGuard } from './content-write-context.mjs';
 import { fail } from './validation.mjs';
@@ -437,7 +437,7 @@ export function beginContentWriteSafety(db, operation) {
       if(!source||!origin||origin.deleted||!ns||JSON.stringify(boundary(namespace(origin)))!==JSON.stringify(boundary(ns)))fail('evidence_unavailable');
       sourceAuthority.assertReceipts(ns,[{client:origin.client,sessionId:origin.session_key,eventId:source.message_id,role:source.role,excerpt:source.text}]);
     }
-    function check(kind,key,ns,revision,{ titleSource = false, ...extra }={},audit=false) {
+    function check(kind,key,ns,revision,extra={},audit=false,titleSource=false) {
       if(key===null||key===undefined)return;
       if(typeof key!=='string'||!key)fail('evidence_unavailable');
       const found=locate(kind,key);ns=ns??found.ns;
@@ -485,7 +485,7 @@ export function beginContentWriteSafety(db, operation) {
         const card=table==='card_mocs',kind=card?'card':'memory',prefix=card?'card_moc':'moc';
         for(const member of db.prepare('SELECT * FROM '+prefix+'_title_sources WHERE moc_id=?').all(key)) {
           const id=member[card?'card_id':'memory_id'],revision=member[card?'card_revision':'memory_revision'];
-          check(kind,id,bound,revision,{titleSource:true});
+          check(kind,id,bound,revision,{},false,true);
         }
       }
     }
@@ -591,8 +591,6 @@ export function beginContentWriteSafety(db, operation) {
         const row=change.row,ns=namespace(row),key=row.id;
         const keys=new Set([key,before(change)?.id]);keys.delete(undefined);
         const sameNamespace=value=>JSON.stringify(boundary(namespace(value)))===JSON.stringify(boundary(ns));
-        const retiredTitleSources=removed.filter(c=>c.table==='card_moc_title_sources'&&c.row.card_id===key&&
-          c.row.card_revision<=oldValue(change,'revision')&&retiredCardTopic(db,c.row.moc_id,ns));
         const effects=canonical.filter(c=>c.table==='card_effects'&&c.row.entity_type==='card'&&keys.has(c.row.entity_id));
         const facts=canonical.filter(c=>c.table==='content_suppressions'&&c.row.kind==='card'&&keys.has(c.row.stable_key));
         const purged=change.old&&row.state==='deleted'&&row.title===null&&row.body===null&&
@@ -609,7 +607,7 @@ export function beginContentWriteSafety(db, operation) {
           sameNamespace(c.row)&&c.row.kind==='card'&&c.row.stable_key===key&&c.row.incarnation===key&&
           c.row.evidence_origin==='writer'&&facts.length===1&&facts[0].row.evidence_origin==='writer');
         const purgeWrites=()=>({...frozenCardRows,private_cards:[change],card_effects:effects,content_suppressions:facts,
-          content_identity_reservations:reservations,card_moc_title_sources:retiredTitleSources,
+          content_identity_reservations:reservations,
           ...Object.fromEntries([...bindingTables,'card_current_dependencies'].map(table=>[table,
             removed.filter(c=>c.table===table&&keys.has(c.row.card_id))]))});
         const ownAction=purged?effects[0].row.action_id:null;
@@ -631,7 +629,7 @@ export function beginContentWriteSafety(db, operation) {
             writes:()=>({...frozenCardRows,private_cards:[change],card_effects:effects})},
           {accept:operation.method==='maintainCards'&&purged,writes:purgeWrites},
           {accept:row.state!=='deleted'&&engineRetiredCard(key,ns),
-            writes:()=>({...frozenCardRows,private_cards:[change],card_moc_title_sources:retiredTitleSources})},
+            writes:()=>({...frozenCardRows,private_cards:[change]})},
         ].filter(path=>path.accept);
         if(paths.length!==1)fail('evidence_unavailable');
         const allowed=paths[0].writes();
@@ -789,18 +787,10 @@ function indexIncarnationFacts(facts) {
 }
 
 function retiredTopicTitleSource(db, kind, row, ns, revision) {
-  if (!row || !ns || row.owner_id !== ns.ownerId || row.scope !== ns.scope || row.project_id !== ns.projectId) return false;
-  if (kind === 'card') {
-    return ['deleted', 'cancelled'].includes(row.state) ||
-      row.revision > revision && engineCardMetadataInside(db, ns, row)?.revision === revision;
-  }
-  return row.deleted === 1 || row.currentness === 'historical' ||
-    row.revision > revision && memoryCorrectionDenialsInside(db, ns, { memoryId: row.id, revision }).some(denial =>
-      denial.kind === 'memory' && denial.matchPath === 'target' &&
-      denial.matchMode === 'revision-through' && denial.reason === 'correction_supersession');
-}
-
-function retiredCardTopic(db, id, ns) {
-  return Boolean(db.prepare(`SELECT 1 FROM card_mocs WHERE id=? AND owner_id=? AND scope=? AND project_id=?
-    AND title='' AND canonical_title=' ' || id`).get(id, ...boundary(ns)));
+  // A stale title may have several sources. Only a proven retirement excuses
+  // this binding; each remaining live source still needs its usual read proof.
+  if (!row || row.owner_id !== ns.ownerId || row.scope !== ns.scope || row.project_id !== ns.projectId) return false;
+  if (kind === 'memory') return row.deleted === 1 || row.revision > revision;
+  return row.state === 'deleted' || row.state === 'cancelled' ||
+    row.state === 'confirmed' && row.revision > revision && engineCardMetadataInside(db, ns, row)?.revision === revision;
 }

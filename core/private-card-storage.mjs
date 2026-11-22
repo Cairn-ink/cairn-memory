@@ -12,7 +12,7 @@ import { EVIDENCE_METHODS } from './private-evidence-input.mjs';
 import { createPrivateEvidenceStorage } from './private-evidence-storage.mjs';
 import { cardApplicabilityInside, reviewCardApplicabilityInside } from './private-evidence-schema.mjs';
 import { ORGANIZATION_METHODS, ORGANIZATION_READS } from './private-organization-input.mjs';
-import { createPrivateOrganizationStorage, retireTopicTitleSourceInside } from './private-organization-storage.mjs';
+import { createPrivateOrganizationStorage } from './private-organization-storage.mjs';
 import { createCardReceiptSources } from './card-receipt-sources.mjs';
 import { createCardRawSources } from './card-raw-sources.mjs';
 import { cardText, keyed, noteInput, OWNER_NOTE_CAP, pageLimit, refs, sourceRef } from './private-card-input.mjs';
@@ -200,7 +200,6 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     state: row.state, bodyRevision: row.body_revision ?? null, effectCount });
   function purgeCard(ns, row, state, actionId, timestamp = now()) {
     writeContentSuppressionInside(db, { namespace: ns, kind: 'card', key: row.id, reason: 'purge', actionId });
-    retireTopicTitleSourceInside(db, 'card', row.id);
     db.prepare(`UPDATE private_cards SET state=?,revision=revision+1,title=NULL,body=NULL,
       updated_at=? WHERE id=?`).run(state, timestamp, row.id);
     db.prepare('DELETE FROM card_bindings WHERE card_id=?').run(row.id);

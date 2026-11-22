@@ -18,7 +18,6 @@ import { fail } from './validation.mjs';
 import { installPrivateCards, installCardMemorySources } from './private-card-schema.mjs';
 import { installPrivateEvidence } from './private-evidence-schema.mjs';
 import { installPrivateOrganization } from './private-organization-schema.mjs';
-import { retireTopicTitleSourceInside } from './private-organization-storage.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
@@ -318,7 +317,7 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
         const same = JSON.stringify(metadata?.sourceRevisions) === JSON.stringify(cardMemoryRevisions(cluster.memories));
         if (same && contentReadSafety(db, { identity, namespace: ns, intent: 'history', method: 'getCard',
           ref: cardReference(ns, latest) }).allowed) return false;
-        markRetired(latest.id, timestamp);
+        db.prepare('UPDATE private_cards SET revision=revision+1,updated_at=? WHERE id=?').run(timestamp, latest.id);
         advance(ns); return false;
       }
       if (latest && Date.parse(timestamp) - Date.parse(latest.updated_at) < ENGINE_CARD_LIMITS.debounceMs) return false;
@@ -402,7 +401,7 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
     if (row.state === 'deleted' || !deleted && row.revision !== 1) return;
     // Tombstone debounce and claims use the maintenance pass's clock too.
     if (deleted) writers.purge(ns, row, 'engine-retire.' + randomUUID(), timestamp);
-    else markRetired(id, timestamp);
+    else db.prepare('UPDATE private_cards SET revision=revision+1,updated_at=? WHERE id=?').run(timestamp, id);
     advance(ns);
   }
   function commit(ns, cluster, value, timestamp, check, retirements = [], requestSources = cluster.memories) {
@@ -456,11 +455,6 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       check(); return card;
     }, [ns]));
   }
-  function markRetired(id, timestamp) {
-    retireTopicTitleSourceInside(db, 'card', id);
-    db.prepare('UPDATE private_cards SET revision=revision+1,updated_at=? WHERE id=?').run(timestamp, id);
-  }
-
   // Each pass owns a versioned canonical decision. Probes must run outside
   // validation snapshots, including the final synchronous transport fence.
   const pauseGuard = (ns, deadlineAt) => contextEmbeddingGuard(db,

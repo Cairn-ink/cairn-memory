@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "fa1841d1da4a48042c18dcee9132dc94e97f4bdee4f458f052390fbce69feed3",
-  "bytes": 1487524,
+  "sha256": "a7d4c270a21773b6b4e3cda6690ae3e0193c93e1fe2f32ad53df850158864ce1",
+  "bytes": 1486844,
   "files": [
     "LICENSE",
     "README.md",
@@ -425,7 +425,7 @@
   "sourceHashes": {
     "core/content-write-context.mjs": "01ee9d2c14d57ed99069fe026c619d5a8bf0b537de328bf20e2da5f3b19b9999",
     "core/content-write-changes.mjs": "876f6fa7bc67c69031ef8ccc645eab9b321713803b77f9203ac30ca783e88caa",
-    "core/content-write-safety.mjs": "45fb4fcf524bb92c3ebea801742d578a9ac43982b14a7b303e349927b66fff84",
+    "core/content-write-safety.mjs": "9fdafa75f8150c159aa48165f3f9cf269a8cbc9d9c22725baf2874bba325a2a0",
     "core/admission-storage.mjs": "9929ec2af628010762f215a1ba7f8c9c81ee2c076cd9d8bbae8ccb9a84c10b15",
     "core/local-authority-input.mjs": "bfce603a1081956e8d4dd790d09e8e394c0b06b20cca987980217d2e4d85a988",
     "core/local-authority-schema.mjs": "b1ff2de1a829c503dff18f425ac57942b52e3b90e9ef01aa209e06863945a3d3",
@@ -462,7 +462,7 @@
     "core/private-operation-helpers.mjs": "beb8f5a53a7fd9ba74a4a788e49db3d3680c0c57484e58f484c489ec91235dc0",
     "core/private-card-input.mjs": "e317551b4c5c25a3b93bf5d104785cef2c931d48154946cc29c870f1bf7337dd",
     "core/private-card-schema.mjs": "71b0127e728f29768a0ad495b327defe770a993af805cbfb23b8fdb48ef61551",
-    "core/private-card-storage.mjs": "b3923e81a3d7b47bd6b2b7bdd3a02c0eb142d9b15126f6a0cca8d3406e99fb33",
+    "core/private-card-storage.mjs": "3cebe2dba597beeb36d402485f4c54e602a4144ec4f0f67b00c75b0c1862ca5a",
     "core/private-card-facade.mjs": "8e6c084ed12ea185c0ce5979ac763a24f0f85ad9b257eabf8bb7e9929d0fb14d",
     "core/card-receipt-sources.mjs": "4ad576521d539e1bd7b82a88549007c942fa0843b80eec240af9a8e2871d0a3e",
     "core/private-evidence-input.mjs": "07e3569de2ecdfc27aeb4183b1ef98d7c5b402f9dd8c2a4e2e61555af68a1c72",
@@ -470,7 +470,7 @@
     "core/private-evidence-storage.mjs": "e7096f3376b8648e056bb6d3b5917ff2a59c53c1cd9f6917fd33ea9a0041ad16",
     "core/private-organization-input.mjs": "0850ebf916a064bced8966e1510d2476d32a52ac3c2bfd8aa6fb4fc6687ead84",
     "core/private-organization-schema.mjs": "384df00afd9fff4e652a0ef65bd88df36b64c87eac745d7902e5eaa174e916f7",
-    "core/private-organization-storage.mjs": "032fb222336b937d092bcb7fe9a1912e9dadd525852e71e6c57fa7411bc3c32d",
+    "core/private-organization-storage.mjs": "a7fff9aae01ba8c27ec6849b59ecff66196606ebe9ef01c983622a9bb0ba97e0",
     "core/staged-evidence-schema.mjs": "7da2c038d9cc03ece4efbf703937ff8d0093dcf30150fa79a4c73641cf24f2bc",
     "core/staged-evidence-storage.mjs": "188aa8dd6e264381ad932b0f64706b030918a976e18d049f25c06189f4e6f442",
     "core/automatic-qualification.mjs": "7f291382971628750697b5fbfdcced87227f2e53a36cb873b80b8d639e797857",
@@ -534,9 +534,9 @@
     "core/memory-reader.mjs": "9d36c01b06eca9ba9f1081ffaceda0148fec7846eff9dd1401a3da01af98d4fd",
     "core/read-database.mjs": "861f53c44fb5d64af2c490d541782ab7b96c49e58fb72a468f44df0769391d9f",
     "core/topic-overview-input.mjs": "7c20bfe7e2e8d6c50f19a7610c046408d9ffd0faff0dd5e12b3188789a149ab2",
-    "core/topic-overview-storage.mjs": "0fcbdb299b49502eebc0429b55fdc872bbf3b9e0ce513c2fc9313864fd956ee2",
+    "core/topic-overview-storage.mjs": "aa988ca542b10921776e2e7f5a559fef50097c22bde56afb02d26f6217fd945c",
     "core/topic-overview-worker.mjs": "cce8f887003d73f141a8aff27d3b9e9b923c83bfad25e9ce838ef7fdc3c1a947",
-    "core/moc-storage.mjs": "3c28efc6aae33f256ce883db849e15c5512b6a0eda87bfe3986599327acf97c1",
+    "core/moc-storage.mjs": "5133ae2861e8233919c829d33f7ba9630040553d9c02f928de76253be2897ed3",
     "core/model-budget.mjs": "4becaf34eb5e18270de8a0b1df93913eb75859b76d38e1d59f5b8600be42bc9d",
     "core/model-call.mjs": "fa0498d803807db6700d43f9f1beb8b7eeb2ad22b3f246b5e64608d3a135c2b4",
     "core/model-diagnostics.mjs": "5d07ef6c3581901e0469d055cb81058a12809211e09401781c3ee8dbc4584de8",
@@ -562,7 +562,7 @@
     "core/prompts/relate-rationale.md": "b00cc2511e7e01d6507f9d13abf6115b315cca8208866a5e15721b6bee212615",
     "core/prompts/relate-claim-focus.md": "17ba366ce9d34f9cef84ad4fea20ba86a9399ff9a34afcd7b4e900cefca332ec",
     "core/recall.mjs": "0cd71707502e3f144f2f26b5a358e7aaeb10a663796ef3d31b74ff75422b6174",
-    "core/runtime.mjs": "a070c7fcc04225e4ca488f65c5e8739348d54d1aaafa0e40361734bbb5ecd4e7",
+    "core/runtime.mjs": "09526db97a5b503c09ec9f01a131c5f9182e2f13e3e7337af5c492c10b805b62",
     "core/supersession-storage.mjs": "b13c88bc377cdb9759481214ab3eefd07aec39d15139978e6c4f09871e41b20d",
     "core/validation.mjs": "fb8fa11ee5951ebd2c6bd0b67e3b528ca7cacfd95cd7ddefc22c242a71e1aa0d",
     "core/suppression-content.mjs": "a3d47ffc353c079ba1b1e35cbb506bd7bbb661f3d2ea89562ce7e6e914aaff98",
@@ -702,7 +702,7 @@
     "adapters/mcp/role-profile-transport.mjs": "70b8c1cac93cb6830b5d6f7d696c32708877412bbc7a578363237d93fa7cd4fd",
     "docs/role-profiles-local.md": "fef5fdd6d7261009548ea19bd3d876cc93ded1e04946575d50b4245c2af8f3cf",
     "core/context-read-relations.mjs": "fd07e3121aee4a93723b17c0a43d91abb5f6b7b7989513bdde1719be782885da",
-    "core/context-read-moc.mjs": "69df72ecf7f902cb7c37b641c9f7ffeb01a0b039585bdef47dfa8867b3e902e0",
+    "core/context-read-moc.mjs": "2fe6ea129032c8b3ac989f89ea62c1a52a354e8e7bc384e0b7ee97625c092b6b",
     "adapters/mcp/context-read-sources-configuration.mjs": "30ef10d974b11902e974a8d9ed87d2c45d58710e571ee89e7477231c8fd59630",
     "adapters/mcp/context-read-sources-tools.mjs": "66ea8eb368612b205f34530dac4c1db79467760a9cd272246c72acb53c9776cd",
     "docs/limitations.md": "03b6243d4a3f7e112d9e8aa1d7aae27e1bd0c08941f830ed60a82e38dec87d74",
@@ -828,7 +828,7 @@
     "core/engine-card-clusters.mjs": "cbe0311a98661d10b276ab280021674110efe9afdac364113881cc90e03a058b",
     "core/engine-card-maintenance.mjs": "fada5ad72ddff01d6bf47661529352a9015c25ef09f403156dd3ac0d7e9c56aa",
     "core/engine-card-output.mjs": "005f29335402348534e32d638ca991929ea08211a751c68f7e66c7feb9e2c13c",
-    "core/engine-card-storage.mjs": "107cf6a60f374ad69db1657d75b802bfdc01330bd7efea8e2e7e3843f53707db",
+    "core/engine-card-storage.mjs": "fc07b7765528c54c4e9afd55ec041a70d18a5c8b8445200f23e4b41df1f20d62",
     "docs/engine-cards.md": "e43a0545427c7d2b2cffa9d1bbdee2520232ec59201093104fee12c3c7e4be1c",
     "bin/cairn-memory.mjs": "63eebac7c7d2bf792a4d09ce458a04344eb47bc843434f878c33e31c282213ae",
     "README.md": "c69cc385f74cfc658b2e3a00dd842ea84fe595a6ecdf9f9cda9b16049b6dc588",
@@ -838,6 +838,6 @@
   "generatedHashes": {
     "package.json": "e255ff4d23e921de9bed8e058c64e57aed3e1bc6a8ed242cee52a716add2d69c",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8",
-    "engine-build.json": "5db408d604f95db203669aebcae22b9e1af1d671385324f27419dbf55a5df823"
+    "engine-build.json": "b9d4bed04f8218b57840d99416df4a012379db20a816a9c874251f2f59f26e2d"
   }
 }
