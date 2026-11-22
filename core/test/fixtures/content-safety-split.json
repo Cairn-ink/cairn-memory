@@ -936,7 +936,7 @@
     },
     {
       "file": "core/content-safety-schema.mjs",
-      "sha256": "edf44e575b0ccc1a04e195cd613b2b8149d9c8a2e851f109c9632d4c0d1576dd",
+      "sha256": "de261f8f85fac75ee67b36af1654c6d456eebf765f1407f019a5ea73903a7598",
       "reason": "Reviewed Card lineage: exact lineage tuple/DDL attestation and synchronous canonical snapshot registration; feature accessors expose only privately attested revisions and add no fact-only writer. Local package completeness reads sqlite_master by the exact privacy DDL declarations; it exports no write capability."
     },
     {
@@ -951,7 +951,7 @@
       "file": "core/runtime.mjs",
       "start": "  function correct(",
       "end": "  function forgetMutation(",
-      "sha256": "97f3b855849c7440654e809d1aaed4a00985ad313dd60920e551c3fa512ad958",
+      "sha256": "fc14056472a63fde6a0c95c1b8d11d9c12b4f35dc817ff3d6b96efd9202b722c",
       "reason": "PR 1 passes each corrected receipt its matching optional receipt time; canonical post-state acknowledgement and terminal fact guards remain in this exact region."
     },
     {
@@ -959,7 +959,7 @@
       "file": "core/runtime.mjs",
       "start": "  function forgetMutationInside(",
       "end": "  function forget(ns,",
-      "sha256": "541c9ea540c6f1a8d7b85750d38e20f4ee5d51697f2db107779e1b40aed0c768"
+      "sha256": "43acdec036a16dd7c7e064b27fe1125d4c6264a4db76d5bea2eb32ea3c9c1b30"
     },
     {
       "id": "remove-receipts",
@@ -988,7 +988,7 @@
       "file": "core/raw-deletion-storage.mjs",
       "start": "  function cascadeInside(",
       "end": "  function remove(",
-      "sha256": "1bc2e7bb4b661a343881bdb07d7b31804b355ba5d71e5648db64dce50548fdf8",
+      "sha256": "79c6c10a77d8eb4e03b721431ad918248c1b2632b92ef0d8f0e408571455b625",
       "reason": "Local deletion probes before its first fence and final cascade; already fenced middle passes only advance owed UUID jobs."
     },
     {
@@ -996,7 +996,7 @@
       "file": "core/raw-lineage-storage.mjs",
       "start": "  function excludeMemory(",
       "end": "  function filter(",
-      "sha256": "f3a97554af8c1752c981c1acf8dc4eb06689a249dca81d8467ba01c3634fc573"
+      "sha256": "f3764795510d144849fa265ba266e7970b66264f24deb8af5158523daf1e97b8"
     },
     {
       "id": "pristine-creation",

@@ -1650,157 +1650,157 @@
           "deleteConversation",
           "9d63a1cfe2fc7ede2c6051839af8b718df0abfdc2de1efe779a9a0ceff8a2cee",
           17066,
-          17368
+          17386
         ],
         [
           "deleteConversation",
           "9d63a1cfe2fc7ede2c6051839af8b718df0abfdc2de1efe779a9a0ceff8a2cee",
-          17368,
-          17398
+          17386,
+          17416
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          17398,
-          17418
+          17416,
+          17436
         ],
         [
           "correct",
           "a12e644eb852003803643079f7944bf1b43c7ce131e2ee15bd96f09682029768",
-          17418,
-          17719
+          17436,
+          17737
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          17719,
-          17739
+          17737,
+          17757
         ],
         [
           "get",
           "b6ba495a951487aebf576a116bd21724627ed3af6a564c36e356d68033572ac5",
-          17739,
-          17780
+          17757,
+          17798
         ],
         [
           "supersede",
           "12e30216ddc17cc2caa15a30d3625b08efa0ad2df9d0a31bde8991ecd2e084aa",
-          17780,
-          18061
+          17798,
+          18079
         ],
         [
           "forget",
           "48689e71b816bf55242349cf699461c1d0698ae027b47df216c591915c55b358",
-          18061,
-          18094
+          18079,
+          18112
         ],
         [
           "get",
           "25c6755f3e407823ce16323b95cc7cc68ca3d9be6740abfa41808fe859e00fef",
-          18094,
-          18134
+          18112,
+          18152
         ],
         [
           "forget",
           "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
-          18134,
-          18283
+          18152,
+          18301
         ],
         [
           "admit",
           "4b705af427f0e26ad140af672be31aefc695be698055a943dc8e422232f5b041",
-          18283,
-          18470
+          18301,
+          18488
         ],
         [
           "forget",
           "176118e5b6311059400a89f6ec160ca53dd1ff1b709940a0f415dd1a04124c62",
-          18470,
-          18602
+          18488,
+          18620
         ],
         [
           "submitSourceNote",
           "840865933d6fc57a1dfdce3cef7129bd2c2b982e1a5e49b723c4b1587d37bbec",
-          18602,
-          18705
+          18620,
+          18723
         ],
         [
           "createCardDraft",
           "a6fedd70f7d0e615dcc5abaabbedf32bb763a467d80529bfd8a25940bebd8089",
-          18705,
-          18883
+          18723,
+          18901
         ],
         [
           "createCardDraft",
           "e13ccdbc58b56eb7b1d15dc28259eb04e58f9505029cfed9ece704a28c5f857c",
-          18883,
-          19061
+          18901,
+          19079
         ],
         [
           "confirmCardDraft",
           "31865010fde95a6fc16c0762438951aae4ad233b7471c5e187e03c49b63e1401",
-          19061,
-          19238
+          19079,
+          19256
         ],
         [
           "deleteSourceNote",
           "56bab4654f0200addb24ccd1220428617ff3c7235b30dbca3d17cd6a53a65543",
-          19238,
-          19413
+          19256,
+          19431
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          19413,
-          19423
+          19431,
+          19441
         ],
         [
           "getCard",
           "0032454039ad43c9832e0212ff61c6be640d49ca9dd891d7a0a0ff6500fb500a",
-          19423,
-          19440
+          19441,
+          19458
         ],
         [
           "cancelCardDraft",
           "8786ce3708574795b5c7a0bda0d37df2ba69ba05933a9c9bdb253abb3f29f886",
-          19440,
-          19553
+          19458,
+          19571
         ],
         [
           "deleteKnowledgeCard",
           "399e67e51366104aa635520d179c22ba846ed031b3f5e049150a7fc0d4021a78",
-          19553,
-          19667
+          19571,
+          19685
         ],
         [
           "checkMethodReasonRefs",
           "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
-          19667,
-          19679
+          19685,
+          19697
         ],
         [
           "deleteSourceNote",
           "842a8943dd8257f41c9296debcc7631e9f70f230642087fb4f396a81d8cb36e2",
-          19679,
-          19789
+          19697,
+          19807
         ],
         [
           "listCardEffects",
           "6e0e4981e3cfef24587c507cf8637734c1adbe3426f5ab43d6c49a05a4474afd",
-          19789,
-          19798
+          19807,
+          19816
         ],
         [
           "getPrivateCardUsage",
           "69c7335d36b31ad5f695501c82725d4359230e9816b6d38e2b85ee3a652ad2cc",
-          19798,
-          19812
+          19816,
+          19830
         ],
         [
           "recall",
           "d99e80a99a5ed9562a6a3e91f11344ff9e3215d35d4b0b0d9c5c637f55fdc944",
-          19812,
-          20660
+          19830,
+          20678
         ],
         [
           "modelCalls",
@@ -1809,8 +1809,8 @@
           null
         ]
       ],
-      "statements": 20660,
-      "sql": "087295cac0fe9988a154e05a2675166d3016a00bd907aefb2094fb7eaaa21a96",
+      "statements": 20678,
+      "sql": "6ed36ba2fa4c6da25f9d7761ca74ca22130debf683d2a795cbba451cbee95420",
       "tables": [
         [
           "admission_claims",
@@ -2291,6 +2291,11 @@
           "raw_receipt_origins",
           7,
           "4200e86d7e4e23e76aafa398016a71f6de118cba6e5def4317616e601ad49fe8"
+        ],
+        [
+          "raw_search_denial_queue",
+          2,
+          "82da8ff2fa79f96b6789d393c3a81cbf39f0fc3af0c86a66759d4307836e5fec"
         ],
         [
           "raw_session_fences",
