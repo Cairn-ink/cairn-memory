@@ -11,7 +11,7 @@ const serialize = value => JSON.stringify(value, (_, field) => typeof field === 
 const group = (items, enabled = true, exhausted = false) =>
   ({ enabled, returned: items.length, complete: !exhausted, budgetExhausted: exhausted, items });
 const context = (background = group([]), procedural = group([]), namespace = null) => ({
-  framing, namespace, indexRevision: "0",
+  framing, namespace, indexRevision: 0,
   groups: { nextSteps: group([]), procedural, background, commitments: group([], false) },
 });
 function memory(id, kind, text = "short") {
@@ -89,7 +89,7 @@ test("whole-context fitting includes JSON escaping, flags and the UTF-8 byte cei
 });
 
 test("an empty context above either budget throws the available limit code", () => {
-  const isTooLarge = error => error instanceof CoreError && error.code === "response_too_large";
+  const isTooLarge = error => error instanceof CoreError && error.code === "context_item_too_large";
   assert.throws(() => pack([], { ...limits, maxChars: serialize(context()).length - 1 }), isTooLarge);
   assert.throws(() => pack([], { ...limits, maxTokens: 0 }), isTooLarge);
   assert.throws(() => pack([], { ...limits, maxTokens: 0, projectId: "project-1" }), isTooLarge);
