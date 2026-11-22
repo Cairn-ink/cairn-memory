@@ -5,40 +5,62 @@ import { keyed } from './local-worker-state.mjs';
 import { fault } from './local-worker-input.mjs';
 import { json } from './local-setup-files.mjs';
 
-const location = identity => join(identity.stateRoot,'starts',identity.sessionKey+'.json');
+const markerPath = identity => join(identity.stateRoot,'starts',identity.sessionKey+'.json');
+const attemptPath = identity => join(identity.stateRoot,'starts',identity.sessionKey+'.attempt.json');
 export const sessionStartSource = (identity,context) => keyed(identity.key,'start-source',context.sourcePath).digest('hex');
-const binding = (identity,context) => JSON.stringify({ version:'local-raw-start-v1',authority:identity.authorityCommitment,
-  source:sessionStartSource(identity,context) });
+const markerBinding = (identity,source) => JSON.stringify({ version:'local-raw-start-v1',authority:identity.authorityCommitment,source });
+const binding = (identity,context) => markerBinding(identity,sessionStartSource(identity,context));
 const attemptVersion = 'local-raw-start-attempt-v1';
-export async function markSessionStart(identity,context) {
-  await privateDirectory(join(identity.stateRoot,'starts'));
-  await privateWrite(location(identity),binding(identity,context));
-}
-export async function hasSessionStart(identity,context) {
-  const text = await privateRead(location(identity),{missing:true});
-  return text !== undefined && text === binding(identity,context);
-}
-export async function writeSessionStartAttempt(identity,source,kind) {
-  await privateWrite(location(identity),JSON.stringify({ version:attemptVersion,authority:identity.authorityCommitment,source,kind }),
-    { exclusive:true });
-}
-export async function readSessionStartAttempt(identity,context) {
-  const text = await privateRead(location(identity),{missing:true});
+function attemptKind(text,identity,source) {
   if (text === undefined) return undefined;
   let attempt;
   try { attempt = json(text); } catch { return undefined; }
   if (Object.keys(attempt).length !== 4 ||
       attempt.version !== attemptVersion || attempt.authority !== identity.authorityCommitment ||
-      attempt.source !== sessionStartSource(identity,context) || !['fresh','present'].includes(attempt.kind)) return undefined;
+      attempt.source !== source || !['fresh','present'].includes(attempt.kind)) return undefined;
   return attempt.kind;
+}
+export async function markSessionStart(identity,context,{ recovery = false } = {}) {
+  await privateDirectory(join(identity.stateRoot,'starts'));
+  const path = markerPath(identity), source = sessionStartSource(identity,context);
+  const marker = markerBinding(identity,source);
+  if (!recovery) {
+    await privateWrite(path,marker);
+    return;
+  }
+  let previous = await privateRead(path,{missing:true});
+  if (previous === undefined) {
+    await privateWrite(path,marker,{ exclusive:true });
+    previous = await privateRead(path,{missing:true});
+  }
+  if (previous === marker) return;
+  if (!attemptKind(previous,identity,source)) fault('state_invalid');
+  // The worker holds the session lock while converting a validated legacy
+  // attempt. Any late legacy attempt writer can only link into an empty slot.
+  await privateWrite(path,marker);
+  if (!await hasSessionStart(identity,context)) fault('state_invalid');
+}
+export async function hasSessionStart(identity,context) {
+  const text = await privateRead(markerPath(identity),{missing:true});
+  return text !== undefined && text === binding(identity,context);
+}
+export async function writeSessionStartAttempt(identity,source,kind) {
+  const legacy = await privateRead(markerPath(identity),{missing:true});
+  if (legacy === markerBinding(identity,source) || attemptKind(legacy,identity,source)) return;
+  await privateWrite(attemptPath(identity),JSON.stringify({ version:attemptVersion,authority:identity.authorityCommitment,source,kind }),
+    { exclusive:true });
+}
+export async function readSessionStartAttempt(identity,context) {
+  const text = await privateRead(attemptPath(identity),{missing:true}) ?? await privateRead(markerPath(identity),{missing:true});
+  return attemptKind(text,identity,sessionStartSource(identity,context));
 }
 export async function clearSessionStarts(stateRoot) {
   const directory=join(stateRoot,'starts');
   if (!await checkedPath(directory,{directory:true,missing:true})) return;
   for (const name of await readdir(directory)) {
     const path=join(directory,name);
-    if (/^[a-f0-9]{64}\.json$/.test(name)) await checkedPath(path);
-    else if (!/^[a-f0-9]{64}\.json\.tmp-\d+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(name) ||
+    if (/^[a-f0-9]{64}(?:\.attempt)?\.json$/.test(name)) await checkedPath(path);
+    else if (!/^[a-f0-9]{64}(?:\.attempt)?\.json\.tmp-\d+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(name) ||
       !(await lstat(path)).isFile()) fault('state_invalid');
     await unlink(path);
   }
