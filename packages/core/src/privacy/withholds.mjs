@@ -30,7 +30,7 @@ function record(value) {
   return value;
 }
 
-function snapshotReader() {
+export function snapshotReader() {
   // Share captured properties even when a record appears in multiple input slots.
   /** @type {WeakMap<object, Map<PropertyKey, PropertyDescriptor | undefined>>} */
   const captured = new WeakMap();
@@ -58,16 +58,17 @@ function snapshotReader() {
    * @template T
    * @param {unknown} input
    * @param {(value: unknown) => T} copy
+   * @param {boolean} [allowHoles]
    */
-  function array(input, copy) {
+  function array(input, copy, allowHoles = false) {
     if (!Array.isArray(input)) invalidSnapshot();
     const length = finiteNumber(field(input, "length"));
     if (!Number.isInteger(length) || length < 0 || length > 0xffff_ffff) invalidSnapshot();
     const values = [];
     for (let index = 0; index < length; index++) {
       const property = dataProperty(input, index);
-      if (!property) return undefined;
-      values.push(copy(property.value));
+      if (!property && !allowHoles) return undefined;
+      values.push(copy(property?.value));
     }
     return Object.freeze(values);
   }
@@ -131,7 +132,7 @@ function snapshotReader() {
   /** @param {unknown} input */
   const keyId = (input) => input == null ? null : string(field(record(input), "id"));
 
-  return { list, digests, fingerprint, source, fact, keyId };
+  return { dataProperty, field, array, list, digests, fingerprint, source, fact, keyId };
 }
 
 /** @typedef {ReturnType<ReturnType<typeof snapshotReader>["digests"]>[number]} DigestSnapshot */
@@ -149,21 +150,25 @@ function hasValidDigests(digests) {
   if (digests.length === 0) return false;
   for (const digest of digests) {
     // Validate each record with the same digest rules used when storing a fact.
-    validateSuppressionFact({
-      owner: "validation", actionId: "validation", kind: "text", origin: "forget", mode: "exact",
-      text: { digests: [digest] },
-    });
+    try {
+      validateSuppressionFact({
+        owner: "validation", actionId: "validation", kind: "text", origin: "forget", mode: "exact",
+        text: { digests: [digest] },
+      });
+    } catch {
+      return false;
+    }
   }
   return true;
 }
 
-/** @param {FingerprintSnapshot} passage */
-function isValidFingerprint(passage) {
-  return hasValidDigests(passage.digests);
+/** @param {{ digests?: readonly DigestSnapshot[] } | null | undefined} passage */
+export function isValidFingerprint(passage) {
+  return Array.isArray(passage?.digests) && hasValidDigests(passage.digests);
 }
 
 /** @param {FingerprintSnapshot["shingles"]} shingles */
-const isValidShingleList = (shingles) => shingles !== false && (shingles == null || shingles.every(isHex));
+const isValidShingleList = (shingles) => shingles == null || (Array.isArray(shingles) && shingles.every(isHex));
 
 /** @param {{ id: string, createdAtMs: number }} source */
 const isValidSource = (source) => source.id.length > 0 && Number.isSafeInteger(source.createdAtMs);
@@ -175,8 +180,8 @@ function isValidFact(fact) {
     (fact.sourceMemory == null || isValidSource(fact.sourceMemory));
 }
 
-/** @param {number} threshold */
-const isValidThreshold = (threshold) => threshold > 0 && threshold <= 1;
+/** @param {unknown} threshold @returns {threshold is number} */
+export const isValidThreshold = (threshold) => typeof threshold === "number" && threshold > 0 && threshold <= 1;
 
 /** @param {DigestSnapshot} digest */
 const digestIdentity = ({ alg, value }) => `${alg}:${value}`;
@@ -205,6 +210,31 @@ function hasComparableDigests(a, b) {
     (left.alg === "sha256" || left.keyId === right.keyId)));
 }
 
+/** @param {readonly DigestSnapshot[]} a @param {readonly DigestSnapshot[]} b */
+export function compareValidatedDigests(a, b) {
+  if (hasExactDigestMatch(a, b)) return true;
+  return hasComparableDigests(a, b) ? false : "ineligible";
+}
+
+/**
+ * @param {Pick<FingerprintSnapshot, "shingles" | "keyId">} passage
+ * @param {Pick<FingerprintSnapshot, "shingles" | "keyId">} reference
+ * @param {number} threshold
+ * @param {boolean} checkContainment
+ * @param {boolean} [containmentKeyUnavailable]
+ */
+export function shingleContainmentMatch(passage, reference, threshold, checkContainment, containmentKeyUnavailable = false) {
+  if (!isValidShingleList(passage.shingles) || !isValidShingleList(reference.shingles)) return "ineligible";
+  if (passage.shingles?.length === 0 || reference.shingles?.length === 0) return false;
+  if (containmentKeyUnavailable || !isKeyId(passage.keyId) || reference.keyId !== passage.keyId ||
+      !passage.shingles || !reference.shingles) return "ineligible";
+  if (!checkContainment) return false;
+
+  const shingles = new Set(passage.shingles);
+  const shared = reference.shingles.filter((shingle) => shingles.has(shingle)).length;
+  return shared >= threshold * reference.shingles.length;
+}
+
 /**
  * @param {FingerprintSnapshot} passage
  * @param {FactSnapshot} fact
@@ -212,21 +242,10 @@ function hasComparableDigests(a, b) {
  * @param {boolean} checkContainment
  * @param {boolean} [containmentKeyUnavailable]
  */
-function withholdsValidatedPassage(passage, fact, threshold, checkContainment, containmentKeyUnavailable = false) {
-  const reference = fact.text;
-  if (hasExactDigestMatch(passage.digests, reference.digests) ||
-      !hasComparableDigests(passage.digests, reference.digests)) return true;
+function withholdsValidatedPassage(passage, fact, threshold, checkContainment, containmentKeyUnavailable) {
+  if (compareValidatedDigests(passage.digests, fact.text.digests) !== false) return true;
   if (fact.mode === "exact") return false;
-
-  if (!isValidShingleList(passage.shingles) || !isValidShingleList(reference.shingles)) return true;
-  if (passage.shingles?.length === 0 || reference.shingles?.length === 0) return false;
-  if (containmentKeyUnavailable || !isKeyId(passage.keyId) || reference.keyId !== passage.keyId ||
-      !passage.shingles || !reference.shingles) return true;
-  if (!checkContainment) return false;
-
-  const shingles = new Set(passage.shingles);
-  const shared = reference.shingles.filter((shingle) => shingles.has(shingle)).length;
-  return shared >= threshold * reference.shingles.length;
+  return shingleContainmentMatch(passage, fact.text, threshold, checkContainment, containmentKeyUnavailable) !== false;
 }
 
 /**

@@ -11,6 +11,8 @@ export const DIGEST_PIPELINES = Object.freeze(["core", "hosted-v1", "engine-lega
 
 const HEX = /^[0-9a-f]+$/u;
 const HEX64 = /^[0-9a-f]{64}$/u;
+/** @param {unknown} value */
+const isHex64 = (value) => typeof value === "string" && HEX64.test(value);
 
 function fail() {
   throw new CoreError("invalid_input");
@@ -28,7 +30,7 @@ function validateSessionRef(s) {
   const plain = "sessionId" in s;
   const hashed = "sessionKeyHash" in s;
   if (plain === hashed) fail();
-  if (plain ? !str(s.sessionId, 512) : !HEX64.test(s.sessionKeyHash)) fail();
+  if (plain ? !str(s.sessionId, 512) : !isHex64(s.sessionKeyHash)) fail();
 }
 
 /** @param {any} digests */
@@ -37,7 +39,7 @@ function validateDigests(digests) {
   const seen = new Set();
   for (const d of digests) {
     if (!d || typeof d !== "object" || (d.alg !== "sha256" && d.alg !== "hmac")) fail();
-    if (!HEX64.test(d.value) || !DIGEST_PIPELINES.includes(d.pipeline)) fail();
+    if (!isHex64(d.value) || !DIGEST_PIPELINES.includes(d.pipeline)) fail();
     if (!Number.isSafeInteger(d.redactionVersion) || d.redactionVersion < 1) fail();
     if (d.alg === "hmac" ? !str(d.keyId, 64) : d.keyId !== null) fail();
     const key = `${d.alg}:${d.value}`;
@@ -66,9 +68,10 @@ export function validateSuppressionFact(fact) {
       if (!t || typeof t !== "object") fail();
       validateDigests(t.digests);
       if (t.shingles !== undefined && t.shingles !== null &&
-        (!Array.isArray(t.shingles) || t.shingles.some((/** @type {unknown} */ s) => typeof s !== "string" || !HEX.test(s)))) fail();
+        (!Array.isArray(t.shingles) || t.shingles.includes(undefined) ||
+          t.shingles.some((/** @type {unknown} */ s) => typeof s !== "string" || !HEX.test(s)))) fail();
       if (t.embedding !== undefined && t.embedding !== null &&
-        (!Array.isArray(t.embedding) || t.embedding.some((/** @type {unknown} */ x) => !Number.isFinite(x)))) fail();
+        (!Array.isArray(t.embedding) || t.embedding.includes(undefined) || !t.embedding.every(Number.isFinite))) fail();
       if (t.keyId !== undefined && t.keyId !== null && !str(t.keyId, 64)) fail();
       if (f.sourceMemory !== undefined && f.sourceMemory !== null &&
         (!str(f.sourceMemory.id, 128) || !ms(f.sourceMemory.createdAtMs))) fail();
@@ -87,7 +90,7 @@ export function validateSuppressionFact(fact) {
       break;
     }
     case "rawSpan":
-      if (!HEX64.test(f.sessionKeyHash) || !str(f.messageKey, 512) || !HEX64.test(f.contentDigest)) fail();
+      if (!isHex64(f.sessionKeyHash) || !str(f.messageKey, 512) || !isHex64(f.contentDigest)) fail();
       if (!nat(f.startUtf16) || !nat(f.endUtf16) || f.endUtf16 <= f.startUtf16) fail();
       break;
     default:
