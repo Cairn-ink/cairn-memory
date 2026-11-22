@@ -1,5 +1,5 @@
 import { CoreError } from "../errors.mjs";
-import { redactV1, REDACTION_VERSIONS } from "./redact.mjs";
+import { redactV1, PRIVACY_REDACTION_VERSIONS } from "./redact.mjs";
 import { cleanContent, normalizeForHash, prepareCoreText } from "./text.mjs";
 
 /** @typedef {import("./fingerprint.mjs").FingerprintKey} FingerprintKey */
@@ -101,7 +101,7 @@ export async function fingerprintLegacyCapture(text, key) {
 /** @param {string} raw @param {FingerprintKey | null} [key] @returns {Promise<TextDigest>} */
 export async function coreDigest(raw, key) {
   const text = normalizeForHash(prepareCoreText(raw));
-  const version = { pipeline: /** @type {const} */ ("core"), redactionVersion: REDACTION_VERSIONS.core };
+  const version = { pipeline: /** @type {const} */ ("core"), redactionVersion: PRIVACY_REDACTION_VERSIONS.core };
   if (key == null) return { alg: "sha256", value: await sha256(text), ...version, keyId: null };
   try {
     return { alg: "hmac", value: toHex(await sign(key.signingKey, text)), ...version, keyId: key.id };
@@ -113,7 +113,7 @@ export async function coreDigest(raw, key) {
 /** @param {string} raw @returns {Promise<TextDigest>} */
 export async function hostedV1Digest(raw) {
   const text = normalizeForHash(redactV1(cleanContent(raw)));
-  return { alg: "sha256", value: await sha256(text), pipeline: "hosted-v1", redactionVersion: REDACTION_VERSIONS.v1, keyId: null };
+  return { alg: "sha256", value: await sha256(text), pipeline: "hosted-v1", redactionVersion: PRIVACY_REDACTION_VERSIONS.v1, keyId: null };
 }
 
 /** @param {unknown} raw @param {number} max @param {number} rawMax */
@@ -126,7 +126,7 @@ function engineLegacyText(raw, max, rawMax) {
 
 /** @param {string} text @returns {Promise<TextDigest>} */
 async function hashEngineLegacy(text) {
-  return { alg: "sha256", value: await sha256(text), pipeline: "engine-legacy", redactionVersion: REDACTION_VERSIONS.v1, keyId: null };
+  return { alg: "sha256", value: await sha256(text), pipeline: "engine-legacy", redactionVersion: PRIVACY_REDACTION_VERSIONS.v1, keyId: null };
 }
 
 /** @param {unknown} raw @param {number} [max] @param {number} [rawMax] */

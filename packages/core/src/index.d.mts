@@ -3,7 +3,7 @@ export * from "./capabilities.mjs";
 export * from "./suppression-fact.mjs";
 export * from "./decisions.mjs";
 export * from "./utf8.mjs";
-export { redactV1, redactHostedCurrent, redactCore, REDACT_CORE_POLICY, REDACTION_VERSIONS } from "./privacy/redact.mjs";
+export { redactV1, redactHostedCurrent, redactCore, REDACT_CORE_POLICY, PRIVACY_REDACTION_VERSIONS } from "./privacy/redact.mjs";
 export * from "./privacy/text.mjs";
 export * from "./privacy/fingerprint.mjs";
 export * from "./privacy/withholds.mjs";

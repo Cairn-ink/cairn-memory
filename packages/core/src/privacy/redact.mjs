@@ -1,6 +1,6 @@
 import { CoreError } from "../errors.mjs";
 
-export const REDACTION_VERSIONS = Object.freeze({ v1: 1, hostedCurrent: 2, core: 3 });
+export const PRIVACY_REDACTION_VERSIONS = Object.freeze({ v1: 1, hostedCurrent: 2, core: 3 });
 export const REDACT_CORE_POLICY = "union-pending";
 
 const REPLACEMENT = "[REDACTED]";

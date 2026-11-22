@@ -1,7 +1,7 @@
 import type { PassageFingerprint } from "../ports/privacy.d.ts";
 import type { TextDigest, TextFact } from "../suppression-fact.mjs";
 
-/** Matches any shared algorithm and digest value across pipelines. */
+/** Matches any shared algorithm and digest value across pipelines. Invalid lists also withhold. */
 export declare function exactDigestMatch(a: readonly TextDigest[], b: readonly TextDigest[]): boolean;
 export declare function withholdsPassage(passage: PassageFingerprint, fact: TextFact, threshold?: number): boolean;
 export declare function withholdsAnyPassage(

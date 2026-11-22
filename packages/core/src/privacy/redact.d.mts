@@ -1,4 +1,4 @@
-export declare const REDACTION_VERSIONS: Readonly<{ v1: 1; hostedCurrent: 2; core: 3 }>;
+export declare const PRIVACY_REDACTION_VERSIONS: Readonly<{ v1: 1; hostedCurrent: 2; core: 3 }>;
 export declare const REDACT_CORE_POLICY: "union-pending";
 
 /** Frozen v1 rules for historical fingerprints. */
