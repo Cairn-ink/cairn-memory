@@ -53,7 +53,10 @@ export interface ModelGate {
 }
 
 export interface ClockAndHash {
+  /** Wall-clock time (epoch ms) for timestamps only. May step; never use it for elapsed time. */
   nowMs(): number;
+  /** Monotonic milliseconds for deadlines and elapsed time only (host: performance.now()). Never steps back. */
+  monotonicMs(): number;
   sha256Hex(bytes: Uint8Array | string): Promise<string>;
   hmacHex(key: CryptoKey | Uint8Array, bytes: Uint8Array | string): Promise<string>;
 }
