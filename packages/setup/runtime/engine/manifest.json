@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "b7d2453e641d0a07fc8f1384d2fdcbbaaf2f8bc50af4a3d95a597045668faa0c",
-  "bytes": 1486833,
+  "sha256": "83fe8d44a9fcef23741fd1dd49c72b1c5e1523b3013bcdcc8014b8de3cd596ce",
+  "bytes": 1487096,
   "files": [
     "LICENSE",
     "README.md",
@@ -637,7 +637,7 @@
     "integrations/client/raw/local-process.mjs": "644e65560c883018244c4fee126cb92a399128c1c62116ad68bb79574abcb764",
     "integrations/client/raw/local-reply.mjs": "ec1cd9df94a594e2a31adc4ab7e00abd92697fab5f6f6ccf34a15e65e1b10a91",
     "integrations/client/raw/local-transport.mjs": "4667b69cc9a8cf4ae84aee3fe837be8cf6c5f5a3199bbfdae7caf38369a01b16",
-    "integrations/client/raw/local-worker.mjs": "93f6d79668695fb22dc24643abaf6985f05b30caf0c94dddfe9fcdadc986ffe0",
+    "integrations/client/raw/local-worker.mjs": "6e3f1db3e913d579084ff33310f6b5ab55fe5eea1eae4b68ffbb287490609c85",
     "integrations/client/raw/local-worker-input.mjs": "4bed6dd911c34a1feb6a7cd3678b3c631256bee1dc013ddefb3847aa4d1c5649",
     "integrations/client/raw/local-worker-progress.mjs": "81f264adf0349919fed015b9fd4c3c8effd9af1b160119c33e954828955445e2",
     "integrations/client/raw/local-worker-source.mjs": "8fa56d11c8db15b2397f5e60648725dc69285310169e4e189fa36da76746934e",
@@ -652,7 +652,7 @@
     "integrations/client/raw/local-setup-init.mjs": "30c3b1b5d996ad5ef443dc596964d9979d1e0177092fd9934795fdc00a8bd67c",
     "integrations/client/raw/local-hook.mjs": "a2db2f3b3f019bff48c7052805fd8d1dc419823748af0a22b4dd9a26a2a6ae79",
     "integrations/client/raw/local-codex-qualification.mjs": "96fae8a0e3821d08a7d2347c5e4e42570a5e15378f74aa25120d93dfe404bdac",
-    "integrations/client/raw/local-session-start.mjs": "65d071ce9a430b47f7a9a5797dc3564a82a652bf2ff66e6d9fbfb4a5f2419aba",
+    "integrations/client/raw/local-session-start.mjs": "d211165978cd6c8026e4fc52694cb7a3ab287b3e7c52648c310d389ec46e9f78",
     "integrations/client/raw/local-session-fence.mjs": "ec0a9ea5e45158423f70fdb1a8cf0df1a8b1b4424df452b8cde671436bbbea39",
     "integrations/client/raw/local-host-profile.mjs": "4dd9e8cd5a022c1802e5a62470b8584ab93ebb399b59f4993b6eca99e64413c6",
     "integrations/client/raw/local-host-permission.mjs": "7ab595da6af438cd33a9ff063c7085bdc53c47d9775386a4eeb8ef523e4e6de6",
@@ -683,7 +683,7 @@
     "docs/raw-local-journal.md": "db3f26c4e4273628efa44b9cf169e10d979b1eba0b8b7b359ccf36e802f4a7c0",
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
     "docs/context-read-local.md": "27e575a10ddb2b4c1f694884894223804110028ca894a063d7356875b9af7bae",
-    "docs/defaults.md": "680d3e628caf604e38f53818c483e47c3b4d2f8fab1cfdcea8161ed80e4562c4",
+    "docs/defaults.md": "b58e61e9b6c16bb59981a0a460b8235f3055f3c20a5b6579b4074cb0ab6f019c",
     "docs/method-packages-local.md": "3912f7d95956e74be91d031c6eeba1ead4ca194fdb15854d0ded05de196a3815",
     "docs/assets-local.md": "4553ca1854b9d4862ac76ae25ce90e451c6ee875d806b84c51d4c00e6b828c5c",
     "docs/v1-preview-integration.md": "d5e5e95fb971224ff1e6b530f7fbb91b8e523dd200729454ded02eaaa07b03b9",
@@ -838,6 +838,6 @@
   "generatedHashes": {
     "package.json": "e255ff4d23e921de9bed8e058c64e57aed3e1bc6a8ed242cee52a716add2d69c",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8",
-    "engine-build.json": "2a871211923fb556e346b1e7ac38af925191ffa2f0d65c9921fe73315a9c7d47"
+    "engine-build.json": "597b97d2006f6a98f4457d4185104bc100ab26555d910d084ec8616dbede3c2a"
   }
 }
