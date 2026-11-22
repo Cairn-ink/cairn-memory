@@ -16,7 +16,7 @@ npx @cairn-ink/memory setup
 ```
 
 This checkout prepares installer **0.5.3**; publication is a separate step.
-Try it with `node packages/setup/bin/memory.mjs setup`. The plugin is 0.3.8.
+Try it with `node packages/setup/bin/memory.mjs setup`. The plugin is 0.3.9.
 Setup asks about new tools, updates connected tools, and uses one browser sign-in
 when connecting both. The default server is cairn.ink. Conflicting servers or
 memory IDs present a choice; non-interactive conflicts change nothing.
@@ -80,6 +80,20 @@ The bundled Cairn MCP server also exposes explicit `remember_memory`, `recall_me
   development.
 - Content-free telemetry can be disabled in plugin configuration. Its schema accepts only event
   name, plugin version, platform, and a random installation id.
+- Context-read asks the service for a compact set of memories first when the service supports it
+  and falls back to plain recall when needed. It is on by default. Set `context_read` to `false`
+  in the plugin configuration and the plugin will skip all reads and writes of its context-read
+  state file. Recall then behaves as in earlier versions.
+
+The optional context-read state file introduces a new way for the hook to stall. A read of that
+file can block on a network home directory when another client holds a lock, or in a files-on-demand
+folder when the file has been evicted. The hook does not wait for that read, so it sends plain recall
+and writes its result on the same schedule as with `context_read` off. The process can only exit once
+the read returns, so Claude Code may stop it at its timeout. Turning `context_read` off avoids this
+stall. When `UV_THREADPOOL_SIZE` is set and its leading signed decimal integer is not between 2 and
+2147483647 (for example empty, `0` or `1`), the hook behaves as if `context_read` were off. A stall
+of the whole plugin data directory affects every plugin state file and behaves as in earlier
+versions.
 
 Hooks fail open: timeouts, auth errors, and service outages never block normal Claude Code work.
 Explicit pause/resume commands report control failures rather than claiming success. After resume,
