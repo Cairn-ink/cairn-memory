@@ -13,12 +13,16 @@ const ownerLock = ["SELECT pg_advisory_xact_lock(hashtext('w3:' || $1))", [owner
 const write = ["UPDATE example SET value = $1", [1]];
 const read = ["SELECT $1", [1]];
 const commit = ["COMMIT"];
+const unlock = ["SELECT pg_advisory_unlock_all()"];
+const reset = ["RESET ALL"];
+const commitAndReset = [commit, unlock, reset];
 const rollback = ["ROLLBACK"];
 const writeSequence = [begin, lockTimeout, statementTimeout, pauseLock, ownerLock, write, commit];
 
 function stub({ onConnect, onQuery, onRelease, commitResult = () => ({ command: "COMMIT", rows: [] }) } = {}) {
   const statements = [];
   const releases = [];
+  const events = [];
   let checkouts = 0;
   const uow = createPostgresUnitOfWork({
     async connect() {
@@ -27,20 +31,23 @@ function stub({ onConnect, onQuery, onRelease, commitResult = () => ({ command: 
       return {
         async query(...args) {
           statements.push(args);
+          events.push(["query", ...args]);
           const [sql] = args;
-          await onQuery?.(sql, statements.length - 1);
-          return sql === "COMMIT" ? commitResult() : {
+          const result = await onQuery?.(sql, statements.length - 1);
+          if (sql === "COMMIT") return commitResult();
+          return result ?? {
             command: sql.split(" ", 1)[0], rows: [{ value: 1 }], rowCount: 1,
           };
         },
         async release(...args) {
           releases.push(args);
+          events.push(["release", ...args]);
           await onRelease?.(...args);
         },
       };
     },
   });
-  return { uow, statements, releases, get checkouts() { return checkouts; } };
+  return { uow, statements, releases, events, get checkouts() { return checkouts; } };
 }
 
 function hasCode(code) {
@@ -67,8 +74,8 @@ for (const [label, options, statement, expected] of [
     });
     assert.deepEqual(result, { command: statement[0].split(" ", 1)[0], rows: [{ value: 1 }], rowCount: 1 });
     assert.equal(db.checkouts, 1);
-    assert.deepEqual(db.releases, [[]]);
-    assert.deepEqual(db.statements, expected);
+    const expectedQueries = [...expected, unlock, reset].map((args) => ["query", ...args]);
+    assert.deepEqual(db.events, [...expectedQueries, ["release"]]);
   });
 }
 
@@ -112,11 +119,39 @@ test("callback failure survives rollback and release failures", async () => {
   assert.deepEqual(db.releases, [[true]]);
 });
 
+test("a rolled-back run skips the session reset and preserves the original error", async () => {
+  const db = stub();
+  const original = new CoreError("capture_paused");
+  await assert.rejects(
+    db.uow.run(owner, { readOnly: true }, async () => { throw original; }),
+    (error) => error === original,
+  );
+  assert.deepEqual(db.events, [
+    ["query", ...readBegin], ["query", ...lockTimeout], ["query", ...statementTimeout],
+    ["query", ...rollback], ["release", true],
+  ]);
+});
+
+for (const [statement, attempted] of [[unlock, [unlock]], [reset, [unlock, reset]]]) {
+  for (const [label, fail] of [
+    ["rejects", () => { throw { code: "08006" }; }],
+    ["returns an unexpected command", () => ({ command: "SET", rows: [] })],
+  ]) {
+    test(`a committed run returns its result and destroys the connection if ${statement[0]} ${label}`, async () => {
+      const result = {};
+      const db = stub({ onQuery: (sql) => sql === statement[0] ? fail() : undefined });
+      assert.equal(await db.uow.run(owner, {}, async () => result), result);
+      assert.deepEqual(db.statements, [begin, lockTimeout, statementTimeout, ownerLock, commit, ...attempted]);
+      assert.deepEqual(db.releases, [[true]]);
+    });
+  }
+}
+
 test("a confirmed commit returns the callback result even when both release attempts fail", async () => {
   const result = {};
   const db = stub({ onRelease() { throw { code: "08006", message: "private release details" }; } });
   assert.equal(await db.uow.run(owner, {}, async () => result), result);
-  assert.deepEqual(db.statements, [begin, lockTimeout, statementTimeout, ownerLock, commit]);
+  assert.deepEqual(db.statements, [begin, lockTimeout, statementTimeout, ownerLock, ...commitAndReset]);
   assert.deepEqual(db.releases, [[], [true]]);
 });
 
@@ -211,7 +246,7 @@ for (const [label, callbackFails, queryFails] of [
       assert.deepEqual(db.releases, [[true]]);
     } else {
       assert.equal(value, 1);
-      assert.deepEqual(db.statements, [...pendingStatements, commit]);
+      assert.deepEqual(db.statements, [...pendingStatements, ...commitAndReset]);
       assert.deepEqual(db.releases, [[]]);
     }
   });
@@ -233,7 +268,9 @@ for (const endpoint of ["COMMIT", "ROLLBACK"]) {
     if (endpoint === "COMMIT") await run;
     else await assert.rejects(run, hasCode("capture_paused"));
     await assert.rejects(query(issued, ...read), hasCode("internal_error"));
-    assert.deepEqual(db.statements, [begin, lockTimeout, statementTimeout, ownerLock, [endpoint]]);
+    assert.deepEqual(db.statements, [begin, lockTimeout, statementTimeout, ownerLock,
+      ...(endpoint === "COMMIT" ? commitAndReset : [rollback]),
+    ]);
   });
 }
 
@@ -272,6 +309,10 @@ for (const name of [
   "nextval", "setval", "currval", "pg_notify", "lo_create", "lo_import", "lo_unlink",
   "dblink", "dblink_connect", "pg_sleep", "pg_sleep_for", "pg_sleep_until",
   "pg_terminate_backend", "pg_cancel_backend", "pg_reload_conf",
+  "query_to_xml", "query_to_xml_and_xmlschema", "cursor_to_xml",
+  "table_to_xml", "table_to_xmlschema", "table_to_xml_and_xmlschema",
+  "database_to_xml", "database_to_xmlschema", "database_to_xml_and_xmlschema",
+  "schema_to_xml", "schema_to_xmlschema", "schema_to_xml_and_xmlschema", "setseed",
 ]) {
   test(`read-only Tx rejects calls to ${name} before issuing SQL`, async () => {
     const db = stub();
@@ -307,7 +348,7 @@ for (const [label, statement, values] of [
   test(`read-only Tx accepts ${label}`, async () => {
     const db = stub();
     await db.uow.run(owner, { readOnly: true }, (tx) => query(tx, statement, values));
-    assert.deepEqual(db.statements, [readBegin, lockTimeout, statementTimeout, [statement, values], commit]);
+    assert.deepEqual(db.statements, [readBegin, lockTimeout, statementTimeout, [statement, values], ...commitAndReset]);
     assert.deepEqual(db.releases, [[]]);
   });
 }
@@ -322,5 +363,7 @@ test("read-only Tx accepts commented SELECT or WITH SELECT and ignores quoted ke
     await query(tx, sql[0]);
     await query(tx, sql[1], [1]);
   });
-  assert.deepEqual(db.statements, [readBegin, lockTimeout, statementTimeout, [sql[0], undefined], [sql[1], [1]], commit]);
+  assert.deepEqual(db.statements, [
+    readBegin, lockTimeout, statementTimeout, [sql[0], undefined], [sql[1], [1]], ...commitAndReset,
+  ]);
 });

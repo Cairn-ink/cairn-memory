@@ -1,3 +1,5 @@
+// Adapter code supplies all SQL and uses bound values for caller input.
+// This lint catches adapter mistakes. The post-run session reset protects pooled sessions.
 // Keep quoted identifiers distinct from strings and unquoted keywords.
 const TOKEN = new RegExp([
   /(?<trivia>[ \t\r\n\f\v]+|--[^\r\n]*|\/\*(?:(?!\/\*|\*\/)[\s\S])*\*\/)/.source,
@@ -9,7 +11,11 @@ const TOKEN = new RegExp([
   /[\s\S]/.source,
 ].join("|"), "g");
 const WRITE_KEYWORDS = new Set(["INSERT", "UPDATE", "DELETE", "MERGE", "INTO"]);
-const DENIED_CALL = /^(?:pg_(?:try_)?advisory_.*|set_config|nextval|setval|currval|pg_notify|lo_.*|dblink.*|pg_sleep.*|pg_terminate_backend|pg_cancel_backend|pg_reload_conf)$/is;
+const DENIED_CALL = new RegExp("^(?:"
+  + "pg_(?:try_)?advisory_.*|set_config|nextval|setval|currval|pg_notify|lo_.*|dblink.*|pg_sleep.*"
+  + "|pg_terminate_backend|pg_cancel_backend|pg_reload_conf|setseed"
+  + "|query_to_xml|query_to_xml_and_xmlschema|cursor_to_xml|(?:table|database|schema)_to_xml.*"
+  + ")$", "is");
 
 /** @param {string} text */
 export function isReadStatement(text) {

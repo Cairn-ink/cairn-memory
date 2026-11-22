@@ -44,10 +44,14 @@ export function query(tx, text, values) {
 
 /** @param {Connection} connection @param {boolean} committed */
 async function releaseConnection(connection, committed) {
+  // Failed runs already discard the connection. Reset reusable sessions outside the transaction.
   if (committed) {
     try {
-      await connection.release();
-      return;
+      if ((await connection.query("SELECT pg_advisory_unlock_all()")).command === "SELECT"
+        && (await connection.query("RESET ALL")).command === "RESET") {
+        await connection.release();
+        return;
+      }
     } catch {
       // Preserve the committed result and try to discard the connection.
     }

@@ -9,8 +9,8 @@ const url = process.env.CORE_PG_TEST_URL;
 const options = { skip: !url, timeout: 15_000 };
 const owner = "same-owner";
 
-function database(t) {
-  const pool = new Pool({ connectionString: url, connectionTimeoutMillis: 3_000 });
+function database(t, max) {
+  const pool = new Pool({ connectionString: url, connectionTimeoutMillis: 3_000, max });
   t.after(() => pool.end());
   const pids = [];
   const uow = createPostgresUnitOfWork({
@@ -152,4 +152,31 @@ test("Postgres read runs leave no advisory locks on their backends", options, as
   assert.deepEqual((await pool.query(advisoryLocks, [pids[1]])).rows, []);
   assert.ok(error instanceof CoreError);
   assert.equal(error.code, "internal_error");
+});
+
+test("Postgres resets session locks and settings before reusing a read connection", options, async (t) => {
+  const { pool, uow } = database(t, 1);
+  const { rows: [defaults] } = await pool.query("SHOW application_name");
+  const advisoryLocks = "SELECT pid FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid()";
+
+  // Use the driver checkout directly to exercise the reset independently of the SQL lint.
+  let raw;
+  pool.once("acquire", (client) => { raw = client; });
+  await uow.run(owner, { readOnly: true }, async () => {
+    await raw.query("SELECT pg_advisory_lock(hashtextextended(current_database(), 0))");
+    await raw.query("SET application_name = 'adapter_test_changed'");
+    assert.deepEqual((await raw.query(advisoryLocks)).rows, [{ pid: raw.processID }]);
+    assert.deepEqual((await raw.query("SHOW application_name")).rows, [{ application_name: "adapter_test_changed" }]);
+  });
+
+  const reused = await pool.connect();
+  try {
+    assert.equal(reused.processID, raw.processID);
+    assert.deepEqual({
+      locks: (await reused.query(advisoryLocks)).rows,
+      settings: (await reused.query("SHOW application_name")).rows,
+    }, { locks: [], settings: [defaults] });
+  } finally {
+    reused.release();
+  }
 });
