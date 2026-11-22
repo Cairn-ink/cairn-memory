@@ -194,8 +194,9 @@ hosted MCP endpoint, the Codex rules and the plugin's privacy contract.
   saved. This can hide an unrelated conversation and miss a related one, so use
   `raw delete` to remove a specific conversation.
 - **Uninstalling.** `npx @cairn-ink/memory uninstall --local` disconnects the
-  tools and keeps your data on disk. Uninstalling Cloud keeps your memories on
-  cairn.ink.
+  tools and keeps your data on disk. A running background server exits about
+  30 seconds after its last session closes. Uninstalling Cloud keeps your
+  memories on cairn.ink.
 
 [Local data, backup and deletion](docs/local-from-source.md#local-privacy-and-control) ·
 [Privacy and threat model](docs/privacy.md) ·
@@ -204,9 +205,13 @@ hosted MCP endpoint, the Codex rules and the plugin's privacy contract.
 ## If you run an agent harness
 
 Setup registers the memory server for every Claude Code and Codex session on
-this computer. Each session starts its own copy, so a harness that launches
-many agents also launches that many memory servers on one database. To keep
-workers from loading it:
+this computer. From installer 0.6.10, eligible sessions from the same installation
+on Linux share a background server. The first session starts it, and it exits
+about 30 seconds after the last one closes. Sessions with different server environments, such
+as a different `PATH`, use separate servers. On macOS and other platforms,
+or for stores under `/mnt/` or on network filesystems, each session starts
+its own server. If the shared server can't start, the session automatically
+starts its own server. To keep workers from loading the memory server:
 
 - **Claude Code.** Start workers with `--strict-mcp-config`, which loads only
   the servers you pass with `--mcp-config`.
@@ -264,7 +269,7 @@ This is a developer preview. Know these limits before you rely on it:
   longer use. As with most databases, deleted text can also remain in unused
   file space until it is overwritten.
 - **After a forget.** Recall that asks for sources or reasons can be refused (`source_unavailable`) after you forget or correct a memory, until the other memories that came from a conversation it hid are corrected or forgotten. This needs a model key and is unchanged from 0.6.7; ordinary recall keeps working. After you forget something, the conversation it came from and any resumed or forked copy of it (for example `claude --resume`) are not saved from then on. Any conversation that tries to save a message dated within 30 minutes of the forgotten message is not saved from then on either, including one you start right after the forget. To resume saving, start a new conversation more than 30 minutes after the forgotten message was written. After any local forget, correct, conversation delete or Episode forget, conversations whose message times are unknown are hidden from Raw search, and a conversation that saves a message without a time is not saved from then on, including new conversations. Memories are kept. Claude Code and Codex normally record message times, so this only affects messages whose transcript entry has no timestamp.
-- **Integrations that call the engine directly.** For integrations that call the engine directly or run the MCP server with `--retained-raw-profile`: reading a saved conversation by its id and listing saved conversations are not yet stopped by a forget. On stores that were not upgraded with the offline safety migration they still return a conversation hidden by a forget or correction, with its text. On upgraded stores the hidden conversation is returned without its text, and listing saved conversations and the saved-text usage summary are refused (`evidence_unavailable`, `source_unavailable`) after a forget. Search, recall and memory sources do not return hidden conversations. Fixed in the next installer; until then `cairn-memory raw delete --conversation ID --yes` removes a hidden conversation's saved text. Installed setups do not expose these readers. Other limits that only direct integrations reach (session-start and summary reads after a forget, listing memories on stores upgraded with the offline safety migration, and index word statistics before cleanup) are listed in the [changelog](CHANGELOG.md).
+- **Integrations that call the engine directly.** For integrations that call the engine directly or run the MCP server with `--retained-raw-profile`: reading a saved conversation by its id and listing saved conversations are not yet stopped by a forget. On stores that were not upgraded with the offline safety migration they still return a conversation hidden by a forget or correction, with its text. On upgraded stores the hidden conversation is returned without its text, and listing saved conversations and the saved-text usage summary are refused (`evidence_unavailable`, `source_unavailable`) after a forget. Search, recall and memory sources do not return hidden conversations. Fixed in the next installer; until then `cairn-memory raw delete --conversation ID --yes` removes a hidden conversation's saved text. Installed setups do not expose these readers. Other limits that only direct integrations reach (session-start and summary reads after a forget, and index word statistics before cleanup) are listed in the [changelog](CHANGELOG.md).
 - **Semantic recall needs a key.** Without an OpenAI key, `recall_memory`
   returns `model_not_configured`, and keyword search still works. A fully local
   model path is not verified yet.
