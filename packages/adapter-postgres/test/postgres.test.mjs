@@ -130,3 +130,26 @@ test("Postgres lock timeout surfaces as a code-only lock_timeout", options, asyn
     );
   });
 });
+
+test("Postgres read runs leave no advisory locks on their backends", options, async (t) => {
+  const { pool, pids, uow } = database(t);
+  const readOptions = { readOnly: true, pauseLock: true };
+  const { rows: [{ pid }] } = await uow.run(owner, readOptions, (tx) => query(tx, "SELECT pg_backend_pid() AS pid"));
+  assert.equal(pid, pids[0]);
+
+  const advisoryLocks = "SELECT pid FROM pg_locks WHERE locktype = 'advisory' AND pid = $1";
+  const reused = await pool.connect();
+  try {
+    assert.equal(reused.processID, pid);
+    assert.deepEqual((await reused.query(advisoryLocks, [pid])).rows, []);
+  } finally {
+    reused.release();
+  }
+
+  const error = await uow.run(owner, readOptions, (tx) => query(tx,
+    "SELECT pg_advisory_lock(hashtextextended(current_database(), 0))",
+  )).then(() => undefined, (failure) => failure);
+  assert.deepEqual((await pool.query(advisoryLocks, [pids[1]])).rows, []);
+  assert.ok(error instanceof CoreError);
+  assert.equal(error.code, "internal_error");
+});

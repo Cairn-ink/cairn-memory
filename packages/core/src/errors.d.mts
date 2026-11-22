@@ -12,6 +12,7 @@ export type ErrorCode =
   | "suppressed" | "session_blocked" | "lineage_fenced" | "ineligible"
   | "fingerprint_unavailable" | "fingerprint_key_mismatch" | "raw_lineage_unavailable"
   | "local_raw_hide_anchor_missing" | "index_unavailable" | "capability_unavailable" | "model_unavailable"
+  | "commit_outcome_unknown"
   | "storage_busy" | "storage_error" | "provider_error" | "embedding_failed"
   | "lineage_closure_limit" | "response_too_large" | "rate_limited"
   | "internal_error"

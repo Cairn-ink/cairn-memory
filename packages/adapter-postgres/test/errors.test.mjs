@@ -38,3 +38,14 @@ test("preserves a code-only CoreError", () => {
   assert.equal(toPostgresError(error), error);
   assert.equal(error.kind, "internal");
 });
+
+test("a throwing native code getter becomes a code-only internal_error", () => {
+  const native = { get code() { throw new Error("private getter details"); } };
+  const error = toPostgresError(native);
+  assert.ok(error instanceof CoreError);
+  assert.equal(error.code, "internal_error");
+  assert.equal(error.message, "internal_error");
+  assert.equal(error.retryable, false);
+  assert.equal(error.cause, undefined);
+  assert.doesNotMatch(error.stack, /private getter details/);
+});

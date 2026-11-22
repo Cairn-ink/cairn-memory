@@ -1,4 +1,4 @@
-import { toCoreError } from "../../core/src/index.mjs";
+import { CoreError, isCoreError, toCoreError } from "../../core/src/index.mjs";
 
 const NATIVE_ERRORS = Object.freeze({
   "55P03": "lock_timeout",
@@ -13,11 +13,13 @@ const NATIVE_ERRORS = Object.freeze({
 
 /** @param {unknown} error */
 export function toPostgresError(error) {
-  if (error && typeof error === "object" && Object.hasOwn(error, "code")) {
-    const { code } = /** @type {{ code: unknown }} */ (error);
-    if (typeof code === "string" && /^08[0-9A-Z]{3}$/.test(code)) {
-      return toCoreError({ code: "08000" }, NATIVE_ERRORS);
-    }
+  try {
+    const code = error && typeof error === "object" && Object.hasOwn(error, "code")
+      ? /** @type {{ code: unknown }} */ (error).code : undefined;
+    if (isCoreError(error)) return error;
+    const nativeCode = typeof code === "string" && /^08[0-9A-Z]{3}$/.test(code) ? "08000" : code;
+    return toCoreError({ code: nativeCode }, NATIVE_ERRORS);
+  } catch {
+    return new CoreError("internal_error");
   }
-  return toCoreError(error, NATIVE_ERRORS);
 }

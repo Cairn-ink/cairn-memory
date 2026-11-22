@@ -1,4 +1,5 @@
 export interface QueryResult {
+  command: string;
   rows: any[];
   rowCount?: number;
 }
