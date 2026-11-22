@@ -13,6 +13,7 @@ const retryable = new Set(['provider_error','rate_limited','timeout']);
 const refusal = error => ['budget_denied','timeout','rate_limited','dimension_mismatch','invalid_vector'].includes(error?.code) ? error.code : 'provider_error';
 const metadata = port => port && ({id:port.id,revision:port.revision,dimensions:port.dimensions,normalization:port.normalization});
 const commitTimes = new Map();
+const cancelled = signal => { if (signal?.aborted) fail('raw_upkeep_cancelled'); };
 
 /** Explicit quanta only: the host owns scheduling, renewal and supervision. */
 export function createRawSearchMaintenance(storage,authority,options) {
@@ -21,7 +22,6 @@ export function createRawSearchMaintenance(storage,authority,options) {
   const dispatch=options.embedder&&contextBudget({budgetConfigured:true,policy:options.policy,embedder:options.embedder});
   const providers=new Set(),controllers=new Set();
   const trackedPort=options.embedder&&{...options.embedder,embed(texts,controls){
-    controls.beforeDispatch();
     const operation=Promise.resolve(options.embedder.embed(texts,controls));providers.add(operation);
     operation.then(()=>providers.delete(operation),()=>providers.delete(operation));return operation;
   }};
@@ -41,17 +41,19 @@ export function createRawSearchMaintenance(storage,authority,options) {
     authority.check(source);
   };
   const progress={scanned:0,removed:0,indexed:0,embedded:0,checkpointAdvances:0,lastActualWork:null,error:null,phase:'idle'};
-  async function broker(work,maxMs) {
+  async function broker(work,maxMs,upkeepSignal) {
+    cancelled(upkeepSignal);
     if (!turns) fail('maintenance_authority_required');
     if (closed||stopped) fail('store_closed');
     const now=performance.now();
     if(now<storageResumeAt)return {postponed:true};
     const controller=new AbortController();
     const grant=await turns.wait({version:1,pumpId:'raw-search',windowId:'raw-search-local',lane:0,
-      family:'lexical',kind:'lexical',phase:'work',intent:null,maxMs},{signal:controller.signal,untilMonoMs:now+maxMs,identity});
+      family:'lexical',kind:'lexical',phase:'work',intent:null,maxMs},{signal:upkeepSignal??controller.signal,untilMonoMs:now+maxMs,identity});
     if (grant.status!=='admitted') return {postponed:true};
     turns.started(grant.ticket);
     try {
+      cancelled(upkeepSignal);
       if (closed) fail('store_closed');
       // This lane joins the host's existing broker. The local guard also
       // prevents repeated explicit calls from defeating the commit cadence.
@@ -63,8 +65,8 @@ export function createRawSearchMaintenance(storage,authority,options) {
     }
   }
   function changed() {progress.lastActualWork=new Date().toISOString();}
-  async function refresh(row,maxMs,operationAccess) {
-    const protect=source=>{authority.check(source);operationAccess(()=>authority.check(source));authority.check(source);};
+  async function refresh(row,maxMs,operationAccess,upkeepSignal) {
+    const protect=source=>{cancelled(upkeepSignal);authority.check(source);operationAccess(()=>authority.check(source));authority.check(source);cancelled(upkeepSignal);};
     const port=options.embedder;
     if (!port) return;
     const provider=metadata(port), chunks=row.chunks;
@@ -73,6 +75,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
     if (same(row.embedder,provider)&&(row.retry?.nextAt??0)>Date.now()) return;
     protect(row.source);
     const text=await authority.open(row.source,'history',()=>protect(row.source));
+    cancelled(upkeepSignal);
     const inputs=rawSearchChunks(text,row.source.ref.span.start);
     if (!same(inputs.map(({input,...c})=>c),chunks.map(({vector,...c})=>c))) fail('source_unavailable');
     const selected=inputs.filter((c,i)=>!same(row.embedder,provider)||!chunks[i].vector)
@@ -92,9 +95,10 @@ export function createRawSearchMaintenance(storage,authority,options) {
     let vectors,error,invoked=false;
     try {
       // The budget wrapper invokes this only after its reservation succeeds.
-      // Persist the possible attempt in an admitted turn, release that turn,
-      // then enter the actual provider. Budget refusal writes no fake attempt.
+      // Persist the retry attempt and dispatch checkpoint together, then
+      // release the admitted turn before entering the provider.
       const chargedPort={...trackedPort,async embed(texts,controls){
+        cancelled(upkeepSignal);
         controls.beforeDispatch();
         try { await broker(async commit=>{
           protect(row.source);
@@ -104,27 +108,35 @@ export function createRawSearchMaintenance(storage,authority,options) {
           const state=storage.head(),checkpoint=structuredClone(state.checkpoint);
           if((checkpoint.recent?.streak??0)>=3)fail('budget_denied');
           if(checkpoint.recent)checkpoint.recent.streak=Math.min(3,Math.max(checkpoint.recent.streak+1,recentAttempts??0));
+          cancelled(upkeepSignal);
+          if(closed)fail('store_closed');
           const result=await storage.commitBatch({staged:[{...stage,expected:row.segment}],checkpoint});
           recentAttempts=checkpoint.recent?.streak??0;
-          reserved={...next,segment:result.sequence-1};commit();
-        },maxMs); }catch(error){
+          reserved={...next,segment:result.sequence-1};
+          if(upkeepSignal&&!closed)reservation={key:row.key,embedder:row.embedder,retry:row.retry,expected:reserved.segment,signal:upkeepSignal};
+          commit();
+        },maxMs,upkeepSignal); }catch(error){
+          cancelled(upkeepSignal);
           // Preserve storage contention across the provider boundary, which
           // intentionally transports refusal codes rather than native fields.
           if(isStorageBusy(error))fail('source_busy');
           throw error;
         }
         if(!reserved)fail('budget_denied');
+        cancelled(upkeepSignal);
         controls.beforeDispatch();invoked=true;
         return trackedPort.embed(texts,controls);
       }};
       vectors=await dispatch(chargedPort,selected.map(c=>c.input),{budgetClass:'maintenance',signal:controller.signal,deadlineAt,
         guard:()=>{if(closed)fail('store_closed');protect(row.source);}});
-      authority.check(row.source);
+      cancelled(upkeepSignal);authority.check(row.source);
       if (!Array.isArray(vectors)||vectors.length!==selected.length) fail('invalid_vector');
       vectors=vectors.map(v=>encodeVector(v,port));
-    } catch (failure) { if(storageTransient(failure))throw failure;error=refusal(failure); }
+    } catch (failure) { cancelled(upkeepSignal);if(storageTransient(failure))throw failure;error=refusal(failure); }
     finally{controllers.delete(controller);}
     if(!reserved)return;
+    // A provider failure observed in this generation consumes its attempt.
+    if(error&&invoked&&reservation?.expected===reserved.segment)reservation=null;
     // Provider waits never retain a broker ticket or either SQLite lock.
     // Result settlement may be deferred by cadence; retain no plaintext work.
     const next={...reserved}; delete next.segment;
@@ -136,13 +148,17 @@ export function createRawSearchMaintenance(storage,authority,options) {
       terminal:invoked&&(!retryable.has(error)||attempts+1>=3),error};
     // The host can admit the next write immediately after a provider wait, but
     // the shared cadence remains authoritative. Pending vectors are ephemeral.
-    return {next,expected:reserved.segment,embedded:error?0:selected.length};
+    cancelled(upkeepSignal);
+    return {next,expected:reserved.segment,embedded:error?0:selected.length,upkeepSignal};
   }
-  let pending=null,refreshAfter=0,refreshing=null,recentAttempts=null;
-  async function run({maxItems=16,maxMs=1000,embeddings=false}={}, currentAccess,cacheError) {
+  let pending=null,reservation=null,refreshAfter=0,refreshing=null,recentAttempts=null;
+  const cancelledReservations=new Map();
+  async function run({maxItems=16,maxMs=1000,embeddings=false,upkeepSignal}={}, currentAccess,cacheError) {
     if (closed||stopped) fail('store_closed');
     if (!Number.isSafeInteger(maxItems)||maxItems<1||maxItems>128||!Number.isSafeInteger(maxMs)||maxMs<1||maxMs>5000) fail('invalid_input');
-    access = currentAccess;
+    if(pending?.upkeepSignal?.aborted)pending=null;
+    if(upkeepSignal?.aborted)return {...progress,quantum,noProgress,pending:!!pending};
+    access = check => {cancelled(upkeepSignal);return currentAccess(check);};
     access();
     const before=progress.removed+progress.indexed+progress.embedded+progress.checkpointAdvances;
     progress.phase='reconciling';quantum++;
@@ -150,9 +166,46 @@ export function createRawSearchMaintenance(storage,authority,options) {
     try {
       if(cacheError)throw cacheError;
       await broker(async commit=>{
+        cancelled(upkeepSignal);
         admitted=true;
         const started=performance.now(),state=storage.head();
         let checkpoint=structuredClone(state.checkpoint);
+        // Only an admitted successor can undo a cancelled attempt. Keep
+        // paused reservations while other sources continue through upkeep.
+        if(reservation?.signal.aborted){
+          cancelledReservations.set(reservation.key,reservation);
+          reservation=null;
+        }
+        if(cancelledReservations.size){
+          const restored=[];
+          for(const [key,{expected,embedder,retry}] of cancelledReservations){
+            const [current]=await storage.lookup([key]);
+            const disposition=current?.segment===expected?authority.disposition(current.source):'remove';
+            if(disposition==='paused')continue;
+            if(disposition==='remove'){cancelledReservations.delete(key);continue;}
+            const next={...current,embedder,retry};delete next.segment;
+            restored.push({...await storage.stage(next),expected});
+            if(restored.length===maxItems)break;
+          }
+          if(restored.length){
+            for(const row of restored)protect(row.source);
+            authority.validate([{sources:restored.map(row=>row.source),intent:'history',access,value:null}]);
+            cancelled(upkeepSignal);
+            if(closed)fail('store_closed');
+            let restoredCommitted=false;
+            try{
+              await storage.commitBatch({staged:restored,checkpoint});commit();restoredCommitted=true;
+            }catch(error){
+              if((error.errcode&255)!==13)throw error;
+              quotaBlocked=true;progress.error='quota_exhausted';
+            }
+            for(const row of restored)cancelledReservations.delete(row.key);
+            if(restoredCommitted){
+              progress.checkpointAdvances++;changed();refreshAfter=0;
+              return;
+            }
+          }
+        }
         checkpoint.fenceRetry=Math.max(0,(checkpoint.fenceRetry??0)-1);
         const staged=[],remove=[];let settledPending=false;
         recentAttempts??=checkpoint.recent?.streak??0;
@@ -181,6 +234,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
             for(const row of staged)protect(row.source);
             authority.validate([{sources:staged.map(row=>row.source),intent:'history',access,value:null}],Infinity,{journal:recent});
             try{
+              cancelled(upkeepSignal);
               const result=await storage.commitBatch({staged,checkpoint});commit();
               progress.indexed+=staged.length;progress.removed+=result.removed;
               progress.checkpointAdvances++;changed();
@@ -193,10 +247,12 @@ export function createRawSearchMaintenance(storage,authority,options) {
         }
         if(embeddings&&options.embedder&&!pending&&!refreshing&&recentAdmitted){
           const snapshot=await storage.snapshot({after:refreshAfter,limit:maxItems});
-          refreshRow=snapshot.rows.find(row=>(!same(row.embedder,metadata(options.embedder))||row.chunks.some(c=>!c.vector))&&
+          const candidate=snapshot.rows.find(row=>(!same(row.embedder,metadata(options.embedder))||row.chunks.some(c=>!c.vector))&&
             (!same(row.embedder,metadata(options.embedder))||!row.retry?.terminal&&(row.retry?.nextAt??0)<=Date.now()));
-          if(refreshRow){refreshAfter=refreshRow.segment;return;}
-          refreshAfter=snapshot.partial?snapshot.rows.at(-1).segment:0;
+          refreshAfter=candidate?.segment??(snapshot.partial?snapshot.rows.at(-1).segment:0);
+          // The saved row remains eligible after resume. Let paused or denied
+          // work pass through to this turn's denial cleanup.
+          if(candidate&&authority.disposition(candidate.source)==='allowed'){refreshRow=candidate;return;}
         }
         // Every fourth busy turn belongs to reconciliation. This ring is
         // independent of the fence-bound proof sweep and of incoming saves.
@@ -205,17 +261,22 @@ export function createRawSearchMaintenance(storage,authority,options) {
         const ringStarted=performance.now(),ringBudget=maxMs/4;
         const ring=checkpoint.cleanup??{afterSegment:0,throughSegment:storage.tail()};
         const currentVersion=authority.version?.();
-        if(cleanupFullLap===null){
-          cleanupFullLap=ring.afterSegment===0;cleanupVersion=currentVersion;
-          if(cleanupFullLap)ring.throughSegment=storage.tail();
+        // A tail read can fail again at lap end on the same turn that starts
+        // or re-arms the ring. Keep the live state until all reads succeed.
+        let nextFullLap=cleanupFullLap,nextVersion=cleanupVersion,nextIdle=cleanupIdle;
+        if(nextFullLap===null){
+          const fullLap=ring.afterSegment===0;
+          if(fullLap)ring.throughSegment=storage.tail();
+          nextFullLap=fullLap;nextVersion=currentVersion;
         }
-        if(cleanupIdle&&(currentVersion!==cleanupVersion||!fence)){
-          cleanupIdle=false;cleanupVersion=currentVersion;cleanupFullLap=ring.afterSegment===0;
+        if(nextIdle&&(currentVersion!==nextVersion||!fence)){
+          const fullLap=ring.afterSegment===0;
           // Inventory may have published new rows while cleanup was idle.
-          if(cleanupFullLap)ring.throughSegment=storage.tail();
+          if(fullLap)ring.throughSegment=storage.tail();
+          nextIdle=false;nextVersion=currentVersion;nextFullLap=fullLap;
         }
         if(cleanupSkip)cleanupSkip=false;
-        else if(!cleanupIdle){
+        else if(!nextIdle){
           try {
             // One materialized row bounds small-slice snapshot work. Larger
             // slices retain the existing maximum page and cursor semantics.
@@ -231,9 +292,10 @@ export function createRawSearchMaintenance(storage,authority,options) {
               // Read after the final disposition: a denial during that check
               // can invalidate a source already visited earlier in this lap.
               const endVersion=authority.version?.();
-              cleanupIdle=versionAvailable&&cleanupFullLap&&endVersion===cleanupVersion;
-              ring.afterSegment=0;ring.throughSegment=storage.tail();
-              cleanupVersion=endVersion;cleanupFullLap=true;
+              const throughSegment=storage.tail();
+              nextIdle=versionAvailable&&nextFullLap&&endVersion===nextVersion;
+              ring.afterSegment=0;ring.throughSegment=throughSegment;
+              nextVersion=endVersion;nextFullLap=true;
             }
           } finally {
             // One indivisible canonical read can exceed the entire share. Give
@@ -241,6 +303,7 @@ export function createRawSearchMaintenance(storage,authority,options) {
             cleanupSkip=performance.now()-ringStarted>ringBudget;
           }
         }
+        // The live ring state is published below, only after this turn's write commits.
         checkpoint.cleanup=ring;
         const cleanupCheckpoint=structuredClone(checkpoint);
         if(!fence&&!checkpoint.fenceRetry)checkpoint.fenceRetry=64;
@@ -312,34 +375,45 @@ export function createRawSearchMaintenance(storage,authority,options) {
         // Also close callback races when a full inventory fence is unavailable
         // at the work ceiling. No callback follows this exact batch snapshot.
         if(staged.length)authority.validate([{sources:staged.map(row=>row.source),intent:'history',access,value:null}]);
+        let ringSaved=true;
         if(staged.length||remove.length||!same(checkpoint,state.checkpoint)) {
           try {
+            cancelled(upkeepSignal);
+            if(settledPending)cancelled(pending.upkeepSignal);
             const result=await storage.commitBatch({staged,remove:[...new Set(remove)],checkpoint});commit();
             progress.removed+=result.removed;
             if(result.removed){quotaBlocked=false;progress.error=null;}
-            if(settledPending){progress.embedded+=pending.embedded;pending=null;}
+            if(settledPending){
+              if(reservation?.expected===pending.expected)reservation=null;
+              progress.embedded+=pending.embedded;pending=null;
+            }
             else progress.indexed+=staged.length;
             progress.checkpointAdvances++;changed();
           }catch(error){
             if((error.errcode&255)!==13)throw error;
             // Positive allocation failure never blocks denial-only cleanup.
             quotaBlocked=true;pending=null;eligibleWork=false;
-            if(remove.length){const result=await storage.commitBatch({remove:[...new Set(remove)],checkpoint:cleanupCheckpoint});
+            if(remove.length){cancelled(upkeepSignal);const result=await storage.commitBatch({remove:[...new Set(remove)],checkpoint:cleanupCheckpoint});
               commit();progress.removed+=result.removed;if(result.removed){quotaBlocked=false;changed();}}
+            else ringSaved=false; // Nothing was written: the ring cursor stays at its saved position.
             progress.error=quotaBlocked?'quota_exhausted':null;
           }
         }
-      },maxMs);
+        // A failed commit throws above or clears ringSaved and leaves the live ring state, so the next turn retries.
+        if(ringSaved){cleanupIdle=nextIdle;cleanupVersion=nextVersion;cleanupFullLap=nextFullLap;}
+      },maxMs,upkeepSignal);
+      cancelled(upkeepSignal);
 
       // Detached, observed provider work owns its original access closure.
       // Its reservation still shares the same broker/cadence as lexical work.
       if(refreshRow){
         const operationAccess=access;
-        refreshing=refresh(refreshRow,maxMs,operationAccess).then(result=>{if(!closed)pending=result??null;})
-          .catch(error=>{if(!closed){if(storageTransient(error)){deferStorage();refreshAfter=0;}
-            else progress.error=error.code??'index_unavailable';}}).finally(()=>{refreshing=null;});
+        refreshing=refresh(refreshRow,maxMs,operationAccess,upkeepSignal).then(result=>{if(!closed&&!upkeepSignal?.aborted)pending=result??null;})
+          .catch(error=>{if(!closed&&!upkeepSignal?.aborted){if(storageTransient(error)){deferStorage();refreshAfter=0;}
+            else progress.error=error.code??'index_unavailable';}}).finally(()=>{refreshing=null;if(upkeepSignal?.aborted)refreshAfter=0;});
         await new Promise(resolve=>setImmediate(resolve));
       }
+      cancelled(upkeepSignal);
       const after=progress.removed+progress.indexed+progress.embedded+progress.checkpointAdvances;
       if(after>before)noProgress=0;
       const finalState=storage.head();
@@ -347,6 +421,12 @@ export function createRawSearchMaintenance(storage,authority,options) {
       progress.phase=stopped?'failed':quotaBlocked?'partial':'idle';
       return {...progress,quantum,noProgress,pending:!!pending,...finalState};
     } catch(error) {
+      if(upkeepSignal?.aborted||error.code==='raw_upkeep_cancelled'){
+        // A cancelled generation postpones uncommitted work. Preserve a
+        // checkpoint already committed before the processed detach boundary.
+        recentAttempts=null;refreshAfter=0;cleanupIdle=false;cleanupFullLap=null;cleanupSkip=false;
+        pending=null;progress.phase='idle';return {...progress,quantum,noProgress,pending:false};
+      }
       if(storageTransient(error)){
         // Storage has rolled back before this boundary. Discard this quantum
         // and defer admission; contention is not evidence of no progress.
@@ -363,12 +443,12 @@ export function createRawSearchMaintenance(storage,authority,options) {
   return { maintain(input,currentAccess,cacheError) {
     if(active)fail('read_in_progress');
     active=run(input,currentAccess,cacheError).finally(()=>{active=null;});return active;
-  },status:()=>({...progress,quantum,noProgress,pending:!!pending||!!refreshing}),
+  },status:()=>({...progress,quantum,noProgress,pending:!!pending&&!pending.upkeepSignal?.aborted||!!refreshing}),
   async close(){closed=true;for(const controller of controllers)controller.abort();await active?.catch(()=>{});
     // Providers may ignore abort. Their existing observers retain rejection
     // handling and budget settlement; closed guards forbid late publication.
     let timer;
     try { await Promise.race([Promise.allSettled([...providers]),
       new Promise(resolve=>{timer=setTimeout(resolve,2000);})]); }
-    finally {clearTimeout(timer);pending=null;} } };
+    finally {clearTimeout(timer);pending=null;reservation=null;cancelledReservations.clear();} } };
 }

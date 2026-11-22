@@ -132,16 +132,15 @@ export function createEpisodeReadProjection({ db, epoch }) {
     budget.bytesRemaining -= Buffer.byteLength(serializedKeys, 'utf8') +
       (typeof fence.identity_secret === 'string' ? Buffer.byteLength(fence.identity_secret, 'utf8') : 0);
     if (budget.bytesRemaining < 0) fail('episode_sources_unavailable');
+    const [owner, scope, project] = headers.length ? boundary(ns) : [null, null, null];
+    const proofParams = { $proof_budget: budget.bytesRemaining, $proof_sources: keys.length,
+      $proof_candidates: JSON.stringify(headers.map(row => row.episodeId)),
+      $proof_owner: owner, $proof_scope: scope, $proof_project: project };
     return { epoch: current, budget, query: {
       sql: `WITH candidates AS MATERIALIZED (${query.sql}), source_keys AS MATERIALIZED (SELECT value FROM json_each(?)),
         ${episodeSourceEvidenceCTE(layout.rawLineage)}
-        SELECT c.*,${episodeSourceEvidenceSQL()} AS episode_read_proof,
-          (SELECT value FROM proof_incomplete) AS episode_read_incomplete,
-          (SELECT overflow FROM proof_state) AS episode_read_overflow,
-          (SELECT json_object('rows',rows,'memories',memories,'receipts',receipts,'ancestryInput',ancestry_input,
-            'sources',sources,'parents',parents,'ancestry',ancestry,'roots',roots,'maps',maps) FROM proof_state) AS episode_read_stats
-        FROM candidates c`,
-      params: [...query.params, serializedKeys, budget.bytesRemaining] } };
+        SELECT c.*,${episodeSourceEvidenceSQL()} FROM candidates c CROSS JOIN proof_state p ON p.episode_id=c.id`,
+      params: [proofParams, ...query.params, serializedKeys] } };
   };
 }
 export function createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRead, episodeProjection }) {
@@ -154,13 +153,27 @@ export function createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRea
       if (cursor && cursor.e !== current) fail('cursor_stale');
       const query = projected.query, rows = db.prepare(query.sql).all(...query.params);
       if (contentSuppressionReasonInside(db, ns)) fail('revision_conflict');
-      return { epoch: current, rows: rows.map(row => {
-        if (operation === 'listEpisodes') {
-          assertEpisodeRead?.(ns, row, projected.budget);
-          row = episodeReadRow(row);
-          const item = episodeMetadata(ns,row);
-          return { item, key: { time: filter.timeBasis === 'event' ? item.eventEnd : item.firstReceivedAt, id: row.id } };
+      if (operation === 'listEpisodes') {
+        const event = filter.timeBasis === 'event';
+        const visible = [], count = filter.limit + 1;
+        let batch = rows, budget = projected.budget;
+        while (true) {
+          for (const row of batch) {
+            if (assertEpisodeRead?.(ns, row, budget, 'batch') === false) continue;
+            const item = episodeMetadata(ns, episodeReadRow(row));
+            visible.push({ item, key: { time: event ? item.eventEnd : item.firstReceivedAt, id: row.id } });
+            if (visible.length === count) break;
+          }
+          if (visible.length === count || batch.length < count) break;
+          const last = batch.at(-1);
+          const after = { time: event ? JSON.parse(last.record).eventEnd : last.first_received_at, id: last.id };
+          const next = episodeProjection(ns, rangeQuery(ns, operation, filter, after), current);
+          budget = next.budget;
+          batch = db.prepare(next.query.sql).all(...next.query.params);
         }
+        return { epoch: current, rows: visible };
+      }
+      return { epoch: current, rows: rows.map(row => {
         const receipt = filter.timeBasis === 'receipt';
         if (cachedContentLayout(db)?.suppressionRevision && (!contentReadSafety(db, { namespace: ns, intent: 'history',
           ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed ||

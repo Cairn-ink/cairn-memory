@@ -52,7 +52,7 @@ for(const field of ['applicationId','userVersion','storeId'])test(`H03 ${field} 
   const original=DatabaseSync.prototype.exec;
   t.mock.method(DatabaseSync.prototype,'exec',function(sql){statements.push(sql);return original.call(this,sql);});
   assert.throws(()=>openDatabase(f.path,{storeFence:expected,methodPackages:true}),{code:'unsupported_database'});
-  assert.ok(statements.includes('BEGIN IMMEDIATE'));assert.ok(statements.includes('ROLLBACK'));
+  assert.deepEqual(statements.filter(sql=>/^(?:BEGIN|COMMIT|ROLLBACK)\b/.test(sql)),['BEGIN','ROLLBACK']);
   assert.ok(!statements.some(sql=>/\b(?:CREATE|ALTER|INSERT|UPDATE|DELETE)\b/i.test(sql)));
   assert.deepEqual(readFileSync(f.path),bytes);
 });

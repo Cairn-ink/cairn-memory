@@ -1,4 +1,4 @@
-import { markSessionStart,hasSessionStart } from './local-session-start.mjs';
+import { markSessionStart,hasSessionStart,readSessionStartAttempt } from './local-session-start.mjs';
 import { readConfigurationSnapshot } from '../../../adapters/local/configuration.mjs';
 import { localAuthorityInput } from '../../../core/local-authority-input.mjs';
 import { stateLock } from '../state-lock.mjs';
@@ -7,6 +7,13 @@ import { loadIdentity, bindRoot, readSession, initializeSession } from './local-
 import { runProgress } from './local-worker-progress.mjs';
 import { sourceBudget, openWorkerSource, qualifySource, sourceSize, completeBoundary, cursorSource, verifyCursorSource, sourceReason } from './local-worker-source.mjs';
 import { checkHostPermission } from './local-host-permission.mjs';
+
+const hostOperations = new WeakMap();
+export function trackWorkerHostOperation(options,operation,observeStart) {
+  const observation = { operation,observeStart,permissionReason:null };
+  hostOperations.set(options,observation);
+  return observation;
+}
 
 export function createLocalRawWorker(value) {
   const options = workerOptions(value);
@@ -22,23 +29,49 @@ export function createLocalRawWorker(value) {
       if (JSON.stringify(localAuthorityInput(config.authority)) !== JSON.stringify(options.authority)) fault('authority_changed');
       identity = await loadIdentity(options,context,operation);
       await bindRoot(options,identity,initialize,operation);
+      const tracked = hostOperations.get(callOptions);
+      const workerStopReason = () => {
+        try { operation.check(); return null; } catch (error) { return error.reason; }
+      };
       return await stateLock(identity.lockPath,async () => {
+        let observePermission = false;
         try {
           config = (await readConfigurationSnapshot(options.transport.configPath)).config;
           if (JSON.stringify(localAuthorityInput(config.authority)) !== JSON.stringify(options.authority)) fault('authority_changed');
+          // A stop that happened while acquiring the lock or rereading config
+          // belongs to that earlier work, even if the next check sees it.
+          observePermission = tracked?.observeStart && !tracked.operation.stopReason() && !workerStopReason();
           await checkHostPermission(config);
         } catch (error) {
+          if (observePermission) tracked.permissionReason = tracked.operation.stopReason() ??
+            (['cancelled','work_limit'].includes(error.reason) ? error.reason : workerStopReason());
           if (['cancelled','work_limit','authority_changed'].includes(error.reason)) throw error;
           fault(error.reason === 'capture_disabled' ? 'authority_changed':error.reason === 'store_invalid' || error.code === 'invalid_local_capture_configuration' ? 'config_invalid':'state_invalid');
         }
-        operation.check(); cursor = await readSession(identity,options.authority.client);
+        if (observePermission) tracked.permissionReason = tracked.operation.stopReason();
+        try { operation.check(); }
+        catch (error) {
+          if (observePermission) tracked.permissionReason ??= error.reason;
+          throw error;
+        }
+        cursor = await readSession(identity,options.authority.client);
         if (mark) {
           if (options.authority.client !== 'claude-code') fault('invalid_input');
           if (!cursor) await markSessionStart(identity,context);
           return summary('ready','initialized',cursor);
         }
-        const fromStart = !initialize && !cursor && options.authority.client === 'claude-code' && await hasSessionStart(identity,context);
-        if (!initialize && !cursor && !fromStart) fault('state_invalid');
+        let fromStart = false;
+        if (!initialize && !cursor) {
+          if (options.authority.client !== 'claude-code') fault('state_invalid');
+          fromStart = await hasSessionStart(identity,context);
+          if (!fromStart) {
+            const attempt = await readSessionStartAttempt(identity,context);
+            if (attempt === 'fresh') {
+              await markSessionStart(identity,context);
+              fromStart = true;
+            } else if (attempt !== 'present') fault('state_invalid');
+          }
+        }
         bytes = sourceBudget(operation);
         try {
           opened = await openWorkerSource(context,operation,bytes);

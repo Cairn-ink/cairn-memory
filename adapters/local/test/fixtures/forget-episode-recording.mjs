@@ -36,7 +36,7 @@ const reads2 = {
 
 const reads3 = {
   "get": "ok", // successful post-read; recorded
-  "list": "revision_conflict", // pre-existing refusal now reachable; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "ok", // successful post-read; recorded
   "listEpisodes[receipt]": "ok", // successful post-read; recorded
   "getEpisode:source": "episode_not_found", // item withheld
@@ -50,7 +50,7 @@ const reads3 = {
 
 const reads4 = {
   "get": "memory_not_found", // item withheld
-  "list": "revision_conflict", // pre-existing refusal now reachable; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "ok", // successful post-read; recorded
   "listEpisodes[receipt]": "ok", // successful post-read; recorded
   "getEpisode:source": "episode_not_found", // item withheld
@@ -64,7 +64,7 @@ const reads4 = {
 
 const reads5 = {
   "get": "ok", // main's outcome; reported
-  "list": "revision_conflict", // main's outcome; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "ok", // main's outcome; reported
   "listEpisodes[receipt]": "ok", // main's outcome; reported
   "getEpisode:independent": "ok", // main's outcome; reported
@@ -77,7 +77,7 @@ const reads5 = {
 
 const reads6 = {
   "get": "memory_not_found", // item withheld
-  "list": "revision_conflict", // main's outcome; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "ok", // main's outcome; reported
   "listEpisodes[receipt]": "ok", // main's outcome; reported
   "getEpisode:independent": "ok", // main's outcome; reported
@@ -90,7 +90,7 @@ const reads6 = {
 
 const reads7 = {
   "get": "ok", // main's outcome; reported
-  "list": "revision_conflict", // main's outcome; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "ok", // main's outcome; reported
   "listEpisodes[receipt]": "ok", // main's outcome; reported
   "recall[default]": "ok", // main's outcome; reported
@@ -102,7 +102,7 @@ const reads7 = {
 
 const reads8 = {
   "get": "memory_not_found", // item withheld
-  "list": "revision_conflict", // main's outcome; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "ok", // main's outcome; reported
   "listEpisodes[receipt]": "ok", // main's outcome; reported
   "recall[default]": "ok", // main's outcome; reported
@@ -123,7 +123,7 @@ const reads9 = {
   "recall[default+qual]": "revision_conflict", // pre-existing refusal now reachable; reported
   "recall[rationale-evidence]": "revision_conflict", // pre-existing refusal now reachable; reported
   "sessionStartContext[nextSteps]": "ok", // successful post-read; recorded
-  "sessionStartContext[nextSteps+procedural+background]": "revision_conflict", // pre-existing refusal now reachable; reported
+  "sessionStartContext[nextSteps+procedural+background]": "ok", // withheld rows skipped; recorded
 };
 
 const reads10 = {
@@ -137,7 +137,7 @@ const reads10 = {
   "recall[default+qual]": "revision_conflict", // pre-existing refusal now reachable; reported
   "recall[rationale-evidence]": "revision_conflict", // pre-existing refusal now reachable; reported
   "sessionStartContext[nextSteps]": "ok", // successful post-read; recorded
-  "sessionStartContext[nextSteps+procedural+background]": "revision_conflict", // pre-existing refusal now reachable; reported
+  "sessionStartContext[nextSteps+procedural+background]": "ok", // withheld rows skipped; recorded
 };
 
 const reads11 = {
@@ -174,9 +174,9 @@ const reads12 = {
 
 const reads13 = {
   "get": "ok", // successful post-read; recorded
-  "list": "revision_conflict", // pre-existing refusal now reachable; reported
-  "listEpisodes[event]": "conversation_deleted", // pre-existing refusal now reachable; reported
-  "listEpisodes[receipt]": "conversation_deleted", // pre-existing refusal now reachable; reported
+  "list": "ok", // withheld rows skipped; recorded
+  "listEpisodes[event]": "ok", // withheld rows skipped; recorded
+  "listEpisodes[receipt]": "ok", // withheld rows skipped; recorded
   "getEpisode:source": "episode_not_found", // item withheld
   "getEpisode:independent": "episode_not_found", // item withheld
   "getEpisode:neighbour": "conversation_deleted", // pre-existing refusal now reachable; reported
@@ -184,15 +184,15 @@ const reads13 = {
   "recall[default]": "ok", // successful post-read; recorded
   "recall[default+qual]": "ok", // successful post-read; recorded
   "recall[rationale-evidence]": "ok", // successful post-read; recorded
-  "sessionStartContext[nextSteps]": "conversation_deleted", // pre-existing refusal now reachable; reported
-  "sessionStartContext[nextSteps+procedural+background]": "conversation_deleted", // pre-existing refusal now reachable; reported
+  "sessionStartContext[nextSteps]": "ok", // withheld rows skipped; recorded
+  "sessionStartContext[nextSteps+procedural+background]": "ok", // withheld rows skipped; recorded
 };
 
 const reads14 = {
   "get": "memory_not_found", // item withheld
-  "list": "revision_conflict", // pre-existing refusal now reachable; reported
-  "listEpisodes[event]": "conversation_deleted", // pre-existing refusal now reachable; reported
-  "listEpisodes[receipt]": "conversation_deleted", // pre-existing refusal now reachable; reported
+  "list": "ok", // withheld rows skipped; recorded
+  "listEpisodes[event]": "ok", // withheld rows skipped; recorded
+  "listEpisodes[receipt]": "ok", // withheld rows skipped; recorded
   "getEpisode:source": "episode_not_found", // item withheld
   "getEpisode:independent": "episode_not_found", // item withheld
   "getEpisode:neighbour": "conversation_deleted", // pre-existing refusal now reachable; reported
@@ -200,8 +200,8 @@ const reads14 = {
   "recall[default]": "ok", // successful post-read; recorded
   "recall[default+qual]": "ok", // successful post-read; recorded
   "recall[rationale-evidence]": "ok", // successful post-read; recorded
-  "sessionStartContext[nextSteps]": "conversation_deleted", // pre-existing refusal now reachable; reported
-  "sessionStartContext[nextSteps+procedural+background]": "conversation_deleted", // pre-existing refusal now reachable; reported
+  "sessionStartContext[nextSteps]": "ok", // withheld rows skipped; recorded
+  "sessionStartContext[nextSteps+procedural+background]": "ok", // withheld rows skipped; recorded
 };
 
 const reads15 = {
@@ -236,7 +236,7 @@ const reads16 = {
 
 const reads17 = {
   "get": "ok", // successful post-read; recorded
-  "list": "revision_conflict", // pre-existing refusal now reachable; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "ok", // successful post-read; recorded
   "listEpisodes[receipt]": "ok", // successful post-read; recorded
   "getEpisode:source": "episode_not_found", // item withheld
@@ -251,7 +251,7 @@ const reads17 = {
 
 const reads18 = {
   "get": "memory_not_found", // item withheld
-  "list": "revision_conflict", // pre-existing refusal now reachable; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "ok", // successful post-read; recorded
   "listEpisodes[receipt]": "ok", // successful post-read; recorded
   "getEpisode:source": "episode_not_found", // item withheld
@@ -278,7 +278,7 @@ const reads22 = {
 
 const reads23 = {
   "get": "ok", // successful post-read; recorded
-  "list": "revision_conflict", // pre-existing refusal now reachable; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "ok", // successful post-read; recorded
   "listEpisodes[receipt]": "ok", // successful post-read; recorded
   "getEpisode:source": "episode_not_found", // item withheld
@@ -293,7 +293,7 @@ const reads23 = {
 
 const reads24 = {
   "get": "memory_not_found", // item withheld
-  "list": "revision_conflict", // pre-existing refusal now reachable; reported
+  "list": "ok", // withheld rows skipped; recorded
   "listEpisodes[event]": "ok", // successful post-read; recorded
   "listEpisodes[receipt]": "ok", // successful post-read; recorded
   "getEpisode:source": "episode_not_found", // item withheld
@@ -344,31 +344,31 @@ const reads27 = {
 const reads28 = {
   "get": "ok", // main's outcome; reported
   "list": "ok", // main's outcome; reported
-  "listEpisodes[event]": "conversation_deleted", // main's outcome; reported
-  "listEpisodes[receipt]": "conversation_deleted", // main's outcome; reported
+  "listEpisodes[event]": "ok", // withheld rows skipped; recorded
+  "listEpisodes[receipt]": "ok", // withheld rows skipped; recorded
   "getEpisode:source": "episode_not_found", // item withheld
   "getEpisode:independent": "conversation_deleted", // main's outcome; reported
   "getEpisode:consumer": "ok", // main's outcome; reported
   "recall[default]": "ok", // main's outcome; reported
   "recall[default+qual]": "revision_conflict", // main's outcome; reported
   "recall[rationale-evidence]": "revision_conflict", // main's outcome; reported
-  "sessionStartContext[nextSteps]": "conversation_deleted", // main's outcome; reported
-  "sessionStartContext[nextSteps+procedural+background]": "conversation_deleted", // main's outcome; reported
+  "sessionStartContext[nextSteps]": "ok", // withheld rows skipped; recorded
+  "sessionStartContext[nextSteps+procedural+background]": "ok", // withheld rows skipped; recorded
 };
 
 const reads29 = {
   "get": "memory_not_found", // item withheld
   "list": "ok", // main's outcome; reported
-  "listEpisodes[event]": "conversation_deleted", // main's outcome; reported
-  "listEpisodes[receipt]": "conversation_deleted", // main's outcome; reported
+  "listEpisodes[event]": "ok", // withheld rows skipped; recorded
+  "listEpisodes[receipt]": "ok", // withheld rows skipped; recorded
   "getEpisode:source": "episode_not_found", // item withheld
   "getEpisode:independent": "conversation_deleted", // main's outcome; reported
   "getEpisode:consumer": "ok", // main's outcome; reported
   "recall[default]": "ok", // main's outcome; reported
   "recall[default+qual]": "revision_conflict", // main's outcome; reported
   "recall[rationale-evidence]": "revision_conflict", // main's outcome; reported
-  "sessionStartContext[nextSteps]": "conversation_deleted", // main's outcome; reported
-  "sessionStartContext[nextSteps+procedural+background]": "conversation_deleted", // main's outcome; reported
+  "sessionStartContext[nextSteps]": "ok", // withheld rows skipped; recorded
+  "sessionStartContext[nextSteps+procedural+background]": "ok", // withheld rows skipped; recorded
 };
 
 const reads30 = {
@@ -405,9 +405,9 @@ const reads31 = {
 
 const reads32 = {
   "get": "ok", // successful post-read; recorded
-  "list": "revision_conflict", // pre-existing refusal now reachable; reported
-  "listEpisodes[event]": "conversation_deleted", // pre-existing refusal now reachable; reported
-  "listEpisodes[receipt]": "conversation_deleted", // pre-existing refusal now reachable; reported
+  "list": "ok", // withheld rows skipped; recorded
+  "listEpisodes[event]": "ok", // withheld rows skipped; recorded
+  "listEpisodes[receipt]": "ok", // withheld rows skipped; recorded
   "getEpisode:source": "episode_not_found", // item withheld
   "getEpisode:independent": "ok", // successful post-read; recorded
   "getEpisode:neighbour": "conversation_deleted", // pre-existing refusal now reachable; reported
@@ -415,15 +415,15 @@ const reads32 = {
   "recall[default]": "ok", // successful post-read; recorded
   "recall[default+qual]": "ok", // successful post-read; recorded
   "recall[rationale-evidence]": "ok", // successful post-read; recorded
-  "sessionStartContext[nextSteps]": "conversation_deleted", // pre-existing refusal now reachable; reported
-  "sessionStartContext[nextSteps+procedural+background]": "conversation_deleted", // pre-existing refusal now reachable; reported
+  "sessionStartContext[nextSteps]": "ok", // withheld rows skipped; recorded
+  "sessionStartContext[nextSteps+procedural+background]": "ok", // withheld rows skipped; recorded
 };
 
 const reads33 = {
   "get": "memory_not_found", // item withheld
-  "list": "revision_conflict", // pre-existing refusal now reachable; reported
-  "listEpisodes[event]": "conversation_deleted", // pre-existing refusal now reachable; reported
-  "listEpisodes[receipt]": "conversation_deleted", // pre-existing refusal now reachable; reported
+  "list": "ok", // withheld rows skipped; recorded
+  "listEpisodes[event]": "ok", // withheld rows skipped; recorded
+  "listEpisodes[receipt]": "ok", // withheld rows skipped; recorded
   "getEpisode:source": "episode_not_found", // item withheld
   "getEpisode:independent": "ok", // successful post-read; recorded
   "getEpisode:neighbour": "conversation_deleted", // pre-existing refusal now reachable; reported
@@ -431,8 +431,8 @@ const reads33 = {
   "recall[default]": "ok", // successful post-read; recorded
   "recall[default+qual]": "ok", // successful post-read; recorded
   "recall[rationale-evidence]": "ok", // successful post-read; recorded
-  "sessionStartContext[nextSteps]": "conversation_deleted", // pre-existing refusal now reachable; reported
-  "sessionStartContext[nextSteps+procedural+background]": "conversation_deleted", // pre-existing refusal now reachable; reported
+  "sessionStartContext[nextSteps]": "ok", // withheld rows skipped; recorded
+  "sessionStartContext[nextSteps+procedural+background]": "ok", // withheld rows skipped; recorded
 };
 
 const reads34 = {
@@ -470,8 +470,8 @@ const reads35 = {
 const reads36 = {
   "get": "ok", // main's outcome; reported
   "list": "ok", // main's outcome; reported
-  "listEpisodes[event]": "conversation_deleted", // main's outcome; reported
-  "listEpisodes[receipt]": "conversation_deleted", // main's outcome; reported
+  "listEpisodes[event]": "ok", // withheld rows skipped; recorded
+  "listEpisodes[receipt]": "ok", // withheld rows skipped; recorded
   "getEpisode:source": "conversation_deleted", // main's outcome; reported
   "getEpisode:independent": "ok", // main's outcome; reported
   "getEpisode:neighbour": "conversation_deleted", // main's outcome; reported
@@ -479,15 +479,15 @@ const reads36 = {
   "recall[default]": "ok", // main's outcome; reported
   "recall[default+qual]": "revision_conflict", // main's outcome; reported
   "recall[rationale-evidence]": "revision_conflict", // main's outcome; reported
-  "sessionStartContext[nextSteps]": "conversation_deleted", // main's outcome; reported
-  "sessionStartContext[nextSteps+procedural+background]": "conversation_deleted", // main's outcome; reported
+  "sessionStartContext[nextSteps]": "ok", // withheld rows skipped; recorded
+  "sessionStartContext[nextSteps+procedural+background]": "ok", // withheld rows skipped; recorded
 };
 
 const reads37 = {
   "get": "memory_not_found", // item withheld
   "list": "ok", // main's outcome; reported
-  "listEpisodes[event]": "conversation_deleted", // main's outcome; reported
-  "listEpisodes[receipt]": "conversation_deleted", // main's outcome; reported
+  "listEpisodes[event]": "ok", // withheld rows skipped; recorded
+  "listEpisodes[receipt]": "ok", // withheld rows skipped; recorded
   "getEpisode:source": "conversation_deleted", // main's outcome; reported
   "getEpisode:independent": "ok", // main's outcome; reported
   "getEpisode:neighbour": "conversation_deleted", // main's outcome; reported
@@ -495,8 +495,8 @@ const reads37 = {
   "recall[default]": "ok", // main's outcome; reported
   "recall[default+qual]": "revision_conflict", // main's outcome; reported
   "recall[rationale-evidence]": "revision_conflict", // main's outcome; reported
-  "sessionStartContext[nextSteps]": "conversation_deleted", // main's outcome; reported
-  "sessionStartContext[nextSteps+procedural+background]": "conversation_deleted", // main's outcome; reported
+  "sessionStartContext[nextSteps]": "ok", // withheld rows skipped; recorded
+  "sessionStartContext[nextSteps+procedural+background]": "ok", // withheld rows skipped; recorded
 };
 
 const cases = {

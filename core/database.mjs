@@ -4,7 +4,7 @@ import { inContentSuppressionRequestInside, withoutContentSuppressionReadCacheIn
 import { beginContentWrite, contentWriteOperation } from './content-write-context.mjs';
 import { contentSafetyInventory, installContentSafetyInside } from './content-safety-migration.mjs';
 import { SAFETY_SCHEMA_VERSIONS, resolveContentLayout, assertContentFeatures } from './content-safety-layout.mjs';
-import { attestContentSafety, checkInstalledContentSafety, registerContentReadSnapshot, bindContentSafetyConnection } from './content-safety-schema.mjs';
+import { attestContentSafety, checkInstalledContentSafety, registerContentReadSnapshot, bindContentSafetyConnection, contentSafetyConnection } from './content-safety-schema.mjs';
 import { validateContextProductLayout } from './context-product-schema.mjs';
 import { installCardCurrentDependencies, validateCardCurrentDependencies, assertNoCardCurrentDependencies } from './card-current-schema.mjs';
 import { installRoleProfiles, validateRoleProfiles, assertNoRoleProfiles } from './role-profile-schema.mjs';
@@ -35,7 +35,7 @@ import { migrateVersion12 } from './staged-evidence-schema.mjs';
 import { migrateVersion13 } from './classification-journal-schema.mjs';
 import { installRawJournal, RAW_SCHEMA_VERSION, installRawCapture, RAW_CAPTURE_SCHEMA_VERSION } from './raw-schema.mjs';
 import { installRawLineage, RAW_LINEAGE_SCHEMA_VERSION } from './raw-lineage-schema.mjs';
-
+import { clearReceiptCoordinatesInside } from './raw-source-roots.mjs';
 import { migrateVersion14, migrateVersion15, migrateVersion16 } from './episode-schema.mjs';
 
 export const STORAGE_BUSY_TIMEOUT_MS = 5_000;
@@ -354,8 +354,8 @@ export function readTransaction(db, work, acquisition) {
     began = false;
   } catch (failure) {
     error = failure; failed = true;
-    // Also covers a BEGIN that took effect before an instrumentation failure.
-    began ||= attempted && db.isTransaction;
+    if (attempted) clearReceiptCoordinatesInside(contentSafetyConnection(db));
+    began ||= attempted && db.isTransaction; // BEGIN may take effect before instrumentation throws.
   } finally {
     if (began && db.isTransaction) {
       try { db.exec('ROLLBACK'); } catch (failure) { cleanupError = failure; cleanupFailed = true; }
@@ -379,8 +379,7 @@ export function readTransaction(db, work, acquisition) {
 }
 registerContentReadSnapshot((db,work)=>readTransaction(db,()=>{checkInstalledContentSafety(db);return work();}));
 
-// Reviewed read-only mode: keep transaction fences and statement counts, acquiring
-// SHARED on the first SELECT. Writers must retain BEGIN IMMEDIATE.
+// Deferred readers acquire SHARED on first SELECT. Writers retain BEGIN IMMEDIATE.
 export function transaction(db, work, check, { deferred = false } = {}) {
   if (hasCommitDispatcher(db) && (types.isAsyncFunction(work) || types.isGeneratorFunction(work))) fail('storage_error');
   if (activeReads.has(db) || discardedConnections.has(db)) fail('storage_error');
@@ -388,9 +387,10 @@ export function transaction(db, work, check, { deferred = false } = {}) {
   const execute = () => {
     if (!deferred) assertCommitWriteRouted(db, 'transaction');
     const before = hasCommitDispatcher(db) ? db.prepare("SELECT total_changes() AS n").get().n : undefined;
-    db.exec(deferred ? "BEGIN" : "BEGIN IMMEDIATE");
-    let contentWrite;
+    const alreadyInTransaction = db.isTransaction;
+    let contentWrite, began = false;
     try {
+      db.exec(deferred ? "BEGIN" : "BEGIN IMMEDIATE"); began = true;
       const result = inContentSuppressionRequestInside(db, () => {
         checkInstalledContentSafety(db);
         contentWrite = beginContentWrite(db);
@@ -398,15 +398,16 @@ export function transaction(db, work, check, { deferred = false } = {}) {
       });
       if (hasCommitDispatcher(db) && result && typeof result.then === 'function') fail('storage_error');
       contentWrite?.validate(result);
-      contentWrite?.close();
-      contentWrite = null;
+      contentWrite?.close(); contentWrite = null;
       check?.();
       db.exec("COMMIT");
       if (before !== undefined && db.prepare("SELECT total_changes() AS n").get().n !== before) recordCommit(db);
       return result;
     } catch (error) {
-      if(db.isTransaction)db.exec("ROLLBACK");
-      if (error?.code === 'ERR_SQLITE_ERROR' && error.message === 'card_dependency_limit_reached') {
+      if (alreadyInTransaction && !began) throw error;
+      clearReceiptCoordinatesInside(contentSafetyConnection(db));
+      if (db.isTransaction) db.exec("ROLLBACK");
+      if (began && error?.code === 'ERR_SQLITE_ERROR' && error.message === 'card_dependency_limit_reached') {
         fail('dependency_limit_reached');
       }
       throw error;
@@ -414,7 +415,6 @@ export function transaction(db, work, check, { deferred = false } = {}) {
   };
   return contentWriteOperation(db) ? withoutContentSuppressionReadCacheInside(db, execute) : execute();
 }
-
 // Presence is significant: explicit undefined and accessors are invalid.
 export function busyTimeoutOption(input) {
   if (!input || typeof input !== 'object') return undefined;
@@ -429,6 +429,18 @@ export function busyTimeoutOption(input) {
   if (!Object.hasOwn(descriptor, 'value') || !Number.isInteger(descriptor.value) ||
       descriptor.value < 0 || descriptor.value > STORAGE_BUSY_TIMEOUT_MS) fail('invalid_input');
   return descriptor.value;
+}
+
+function validateOrdinaryLocalStore(db) {
+  assertNoCardCurrentDependencies(db);assertNoRoleProfiles(db);assertNoAssets(db);
+  for (const name of ['raw_conversations','raw_messages','raw_parts','raw_events','raw_owner_usage','raw_capture_controls',
+    'private_cards','card_notes','card_applicability_reviews','evidence_mappings','raw_capture_events','raw_session_fences',
+    'raw_source_maps','raw_receipt_lineage','raw_receipt_origins','raw_exclusion_clocks','raw_source_exclusions',
+    'raw_deletion_actions','raw_job_sources','raw_closed_jobs','raw_deletion_effects']) {
+    if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name)) fail('unsupported_database');
+  }
+  validateRawSourcePrerequisites(db);
+  validateLocalAuthority(db);
 }
 
 /** contentSafety:'s2h-v1' creates only a new file, at its base's safety cell.
@@ -505,7 +517,40 @@ export function openDatabase(path, options = {}) {
     // URI mode=rw is mandatory for fences: no mkdir or creation fallback.
     db = new DatabaseSync(fence ? noncreatingStoreURI(path) : path, { timeout });
     db.exec("PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;");
-    transaction(db, () => {
+    const needsWriter = Symbol('open needs writer');
+    let upToDate = false;
+    try {
+      transaction(db, () => {
+        if (fence) {
+          pin.check();
+          assertStoreIdentity(db, fence);
+        }
+        if (contentSafety !== undefined && (db.prepare('PRAGMA application_id').get().application_id !== 0 ||
+            db.prepare('PRAGMA user_version').get().user_version !== 0 ||
+            db.prepare('SELECT count(*) n FROM sqlite_schema').get().n !== 0)) fail('unsupported_database');
+        const layout = attestContentSafety(db);
+        // Installed local stores also have a read-only validation path.
+        // Other older layouts retain the IMMEDIATE body below, after rolling
+        // back this snapshot; all checks run again under the writer lock.
+        if (!layout.suppressionRevision) {
+          if (db.prepare('PRAGMA application_id').get().application_id === APPLICATION_ID &&
+              db.prepare('PRAGMA user_version').get().user_version === LOCAL_AUTHORITY_SCHEMA_VERSION &&
+              !methodPackages && !assets && !roleProfiles && !currentDependencies && contentSafety === undefined) {
+            // A failed check may be a repair in flight: re-run it under the writer lock.
+            try { validateOrdinaryLocalStore(db); } catch { throw needsWriter; }
+            return;
+          }
+          throw needsWriter;
+        }
+        if (db.prepare('PRAGMA application_id').get().application_id !== APPLICATION_ID) fail('unsupported_database');
+        assertContentFeatures(layout, { privateCards, rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls, methodPackages, assets, roleProfiles, currentDependencies });
+        validateContextProductLayout(db, layout);
+      }, undefined, { deferred: true });
+      upToDate = true;
+    } catch (error) {
+      if (error !== needsWriter) throw error;
+    }
+    if (!upToDate) transaction(db, () => {
       if (fence) {
         // Before initialize() and all migration/schema or application writes.
         pin.check();
@@ -526,6 +571,10 @@ export function openDatabase(path, options = {}) {
       const version = db.prepare("PRAGMA user_version").get().user_version;
       if ((methodPackages || assets || roleProfiles || currentDependencies) && !(appId === 0 && version === 0 && db.prepare('SELECT count(*) AS n FROM sqlite_master').get().n === 0) &&
           !(appId === APPLICATION_ID && [18,20,21,22,23,24,25,26,27,28,29,30,31,32,33].includes(version))) fail('unsupported_database');
+      if (appId === APPLICATION_ID && version === LOCAL_AUTHORITY_SCHEMA_VERSION) {
+        validateOrdinaryLocalStore(db);
+        return;
+      }
       if (version < 33) assertNoCardCurrentDependencies(db);
       if (version < 32) assertNoRoleProfiles(db);
       if (version < 31) assertNoAssets(db);

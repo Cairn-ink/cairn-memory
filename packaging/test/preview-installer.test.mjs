@@ -1,3 +1,4 @@
+import { installedDaemonRuntime } from './fixtures/installed-daemon-runtime.mjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -10,7 +11,7 @@ import { installPreview } from '../install-preview.mjs';
 
 const requireSDK = createRequire(new URL('../../adapters/mcp/package.json', import.meta.url));
 const { Client } = await import(requireSDK.resolve('@modelcontextprotocol/client'));
-const { StdioClientTransport } = await import(requireSDK.resolve('@modelcontextprotocol/client/stdio'));
+const { StdioClientTransport, getDefaultEnvironment } = await import(requireSDK.resolve('@modelcontextprotocol/client/stdio'));
 const workspaces = new WeakMap();
 function workspace(t) {
   if (!workspaces.has(t)) workspaces.set(t, createTestWorkspace(t, { prefix: 'cairn-preview-installer-test-' }));
@@ -20,6 +21,16 @@ const temporary = t => workspace(t).path;
 const readJSON = (path) => JSON.parse(readFileSync(path, 'utf8'));
 const hash = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
 const args = (directory) => ['--directory', directory, '--owner', 'synthetic-owner'];
+
+const daemonRuntimes = new WeakMap();
+async function daemonRuntime(t) {
+  const owner = workspace(t);
+  if (!daemonRuntimes.has(owner)) daemonRuntimes.set(owner, installedDaemonRuntime({ diagnostic: text => t.diagnostic(text) }).then(runtime => {
+    owner.defer(() => runtime.finish({ stopDaemons: true }));
+    return runtime;
+  }));
+  return daemonRuntimes.get(owner);
+}
 
 test('installer rejects invalid arguments and unsafe targets before writing', t => {
   const parent = temporary(t);
@@ -120,10 +131,13 @@ test('fresh installation protects ancestor, proves source identity and supports 
   assert.throws(() => installPreview(args(target)), /cairn_preview_install_failed/);
 
   async function connect() {
+    const runtime = await daemonRuntime(t);
+    const session = { ...report.stdio, cwd: join(target, 'app'), env: { ...getDefaultEnvironment(), OPENAI_API_KEY: '', NODE_NO_WARNINGS: '1' } };
+    const accounting = runtime.register(session, { expected: 1 });
     const client = new Client({ name: 'synthetic-preview-installer', version: '1.0.0' });
     workspace(t).defer(async () => { await client.close(); });
-    await client.connect(new StdioClientTransport({ ...report.stdio, cwd: join(target, 'app'),
-      env: { OPENAI_API_KEY: '', NODE_NO_WARNINGS: '1' }, stderr: 'pipe' }));
+    await client.connect(new StdioClientTransport({ ...session, stderr: 'pipe' }));
+    await accounting.observe();
     return client;
   }
   async function call(client, name, arguments_ = {}) {

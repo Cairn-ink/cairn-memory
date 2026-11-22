@@ -47,7 +47,8 @@ the engine cannot see which Memories derive from host Raw.
 The host's fencing obligation covers every session it has ever archived through
 `captureRaw` in host mode, whatever kind or reason a later search reports.
 Before acknowledging any Memory forget or correction, the host must call
-`fenceSession` for every source session, on every forget path. Host Raw search
+`fenceSession` for every source session, on every forget path. If the receipt's
+`session_id` is a stored key, the host passes it as `sessionKey`. Host Raw search
 must remain disabled for an owner until that fencing is live. The existing exclusions, suppression, deletion and final
 session-fence checks still apply. See the
 [host registration contract](raw-layer-contract.md#host-interpreted-registration-addendum).

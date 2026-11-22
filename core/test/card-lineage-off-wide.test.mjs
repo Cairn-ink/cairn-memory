@@ -8,8 +8,9 @@ import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { eventTimeSafetyFixture } from '../testing/receipt-event-time-fixture.mjs';
 import { transaction } from '../database.mjs';
 import { createRawLineageStorage } from '../raw-lineage-storage.mjs';
+import { filterOpenerTrace } from '../testing/card-lineage-off-wide-opener.mjs';
 import { normalizeSQL, summary, currentReceiptWalkSQLTexts, receiptWalkSQLTexts, receiptWalkSQL,
-  workloadKeys, validateSqlAdditions, reviseSQL, compareWideTraces, assertWidePins, validateCardStatementTexts, assertArchivedCardStatementTexts, wideArchiveMode } from '../testing/card-lineage-off-wide-compare.mjs';
+  workloadKeys, validateSqlAdditions, reviseSQL, reconstructWideTrace, compareWideTraces, assertWidePins, validateCardStatementTexts, assertArchivedCardStatementTexts, wideArchiveMode } from '../testing/card-lineage-off-wide-compare.mjs';
 
 const revision='fd5c59ef8e67cc58bb855a95f8910c668150bfa3';
 const root=fileURLToPath(new URL('../../',import.meta.url));
@@ -52,6 +53,111 @@ function availableArchive(workspace,t) {
     return null;
   }
 }
+const retirementNamespace = ['synthetic-off-owner', 'personal', ''];
+const retirementFingerprints = [
+  ['rs1:i:44f06a5fc679ca4284fcf7f7aaa35474d39c8ce3d7e9d40ef481108c20b7fd22',
+    'rs1:a:b7fef572a437c4b32968ab906956ec815c30b6d81b31464eedf95bc2cb198595'],
+  ['rs1:i:594db1f8830afffaf6fc3d157c904572980f50afa4e4575e0743396fe747d762',
+    'rs1:a:f9875cd62ec0059ae2e85e2b7fd4628ba13e8eb23ad4a10a6ef9564d36422c19'],
+  ['rs1:i:706977ea8759e9e9fabed9f91cbc932168ca8e9ac1eaca733c3bc72025a5c54b',
+    'rs1:a:fd26e4021854b04ecff25e655d80800ce75f54544196c4cf4bf4176e0c5331d2'],
+];
+const markerInsert = 'INSERT OR IGNORE INTO suppressed(owner_id,scope,project_id,fingerprint) SELECT ?,?,?,value FROM json_each(?)';
+const archivedReceiptIds = id => ['SELECT id FROM receipts WHERE memory_id=?', 'all', [id]];
+const scopedReceiptSnapshot = id => [
+  'SELECT r.id,r.receipt_key,r.client,r.session_id,r.event_id,r.role FROM memories m JOIN receipts r ON r.memory_id=m.id WHERE m.id=? AND (m.owner_id,m.scope,m.project_id)=(?,?,?)',
+  'all', [id, ...retirementNamespace],
+];
+const receiptSnapshot = id => ['SELECT receipt_key,client,session_id,event_id,role FROM receipts WHERE memory_id=?', 'all', [id]];
+// Indices refer to the current trace for inserts and the revised archive
+// for receipt reads. Only marker writes and their exact persisted rows
+// leave the current trace. Every current receipt read is compared in place.
+const retirementReviews = {
+  'workload:23': {
+    inserts: [3431, 3547, 3603], persisted: [0, 1, 2],
+    reads: [
+      [3430, null, scopedReceiptSnapshot("00000000-0000-4000-8000-000000000003")],
+      [3544, null, scopedReceiptSnapshot("00000000-0000-4000-8000-000000000003")],
+      [3594, null, scopedReceiptSnapshot("00000000-0000-4000-8000-000000000041")],
+    ],
+  },
+  'workload:33': {
+    inserts: [10518, 10757, 10872], persisted: [0, 1, 2],
+    reads: [],
+  },
+  'workload:52': {
+    inserts: [6447, 6941, 7169], persisted: [0, 2],
+    reads: [
+      [6456, archivedReceiptIds("00000000-0000-4000-8000-000000000005"), scopedReceiptSnapshot("00000000-0000-4000-8000-000000000005")],
+      [6626, null, receiptSnapshot("00000000-0000-4000-8000-000000000005")],
+      [6948, archivedReceiptIds("00000000-0000-4000-8000-000000000005"), scopedReceiptSnapshot("00000000-0000-4000-8000-000000000005")],
+      [7173, archivedReceiptIds("00000000-0000-4000-8000-000000000051"), scopedReceiptSnapshot("00000000-0000-4000-8000-000000000051")],
+    ],
+  },
+  'workload:53': {
+    inserts: [17467, 18177, 18514], persisted: [0, 2],
+    reads: [
+      [17502, archivedReceiptIds("00000000-0000-4000-8000-000000000005"), null],
+      [17743, null, receiptSnapshot("00000000-0000-4000-8000-000000000005")],
+      [18212, archivedReceiptIds("00000000-0000-4000-8000-000000000005"), null],
+      [18549, archivedReceiptIds("00000000-0000-4000-8000-000000000087"), null],
+    ],
+  },
+};
+
+function editTraceStatements(record, edits) {
+  const byIndex = new Map(edits.map(([index, before, after]) => [index, { before, after }]));
+  assert.equal(byIndex.size, edits.length, 'reviewed positions are unique');
+  const statements = [], offsets = [];
+  for (const [index, row] of record.statements.entries()) {
+    offsets.push(statements.length);
+    const edit = byIndex.get(index);
+    if (edit) {
+      if (edit.before) assert.deepEqual(row, edit.before, 'exact reviewed retirement statement and bindings');
+      if (edit.after) statements.push(edit.after);
+      if (!edit.before) statements.push(row);
+      byIndex.delete(index);
+    } else {
+      statements.push(row);
+    }
+  }
+  assert.equal(byIndex.size, 0, 'all reviewed retirement statements are accounted for');
+  offsets.push(statements.length);
+  const calls = record.calls.map(call => call.map((value, index) => index < 2 ? value : offsets[value]));
+  return { record: { ...record, statements, calls }, offsets };
+}
+
+function projectRetirementMarkers(current, review) {
+  const edits = review.inserts.map((index, batch) => [
+    index, [markerInsert, 'run', [...retirementNamespace, JSON.stringify(retirementFingerprints[batch])]], null,
+  ]);
+  const [owner_id, scope, project_id] = retirementNamespace;
+  const markerRows = new Set(review.persisted.flatMap(batch => retirementFingerprints[batch].map(fingerprint =>
+    JSON.stringify({ owner_id, scope, project_id, fingerprint }))));
+  const { record } = editTraceStatements(current, edits);
+  const dump = record.dump.map(([table, rows]) => {
+    if (table !== 'suppressed') return [table, rows];
+    const remaining = rows.filter(row => !markerRows.has(row));
+    assert.equal(rows.length - remaining.length, markerRows.size, 'exact persisted retirement markers');
+    return [table, remaining];
+  });
+  return { ...record, dump };
+}
+
+function alignArchivedReceiptReads(key, archived, reads) {
+  if (reads.length === 0) return { record: archived, additions: sqlAdditions };
+  const { record, offsets } = editTraceStatements(archived, reads);
+  const additions = sqlAdditions.map(entry => {
+    if (entry.key !== key) return entry;
+    const call = archived.calls.filter(([method]) => method === entry.method)[entry.ordinal - 1];
+    const anchor = call[2] + entry.after;
+    const moved = offsets[anchor + 1] - 1;
+    assert.deepEqual(record.statements[moved], archived.statements[anchor], 'reviewed purge anchor retains its full row');
+    return { ...entry, after: moved - offsets[call[2]] };
+  });
+  return { record, additions };
+}
+
 const extendedOnly=new Set(['importMethodVersion','checkMethodReasonRefs','getMethodVersion','adoptMethodVersion','resolveMethod','readMethodFile',
   'publishRoleProfileRelease','readRoleTaskContext','declareCardCurrentDependencies','revalidateCardCurrentDependencies',
   'listMethodManifest','listMethodPackages','listMethodVersions','compareMethodVersions','deleteMethodVersion','deleteMethodPackage',
@@ -77,8 +183,10 @@ for(const base of [23,33])for(const mode of ['open','workload'])for(const eventT
   test(`lineage-zero ${key}: opening, SQL, serialized results/errors and every table match the archived baseline`,async t=>{
     const workspace=createTestWorkspace(t,{prefix:'lineage-off-wide-'});
     const oldPath=join(workspace.path,'old.sqlite'),newPath=join(workspace.path,'new.sqlite');
-    const baseline=availableArchive(workspace.path,t),current=run(root,newPath,mode,cell);
+    const baseline=availableArchive(workspace.path,t),current=filterOpenerTrace(key,run(root,newPath,mode,cell));
     archiveAvailable &&= Boolean(baseline);
+    const review = retirementReviews[key];
+    const currentPin = pins.currentRecords?.[key] ?? receiptWalkPins.records[key] ?? pins.records[key];
     if(receiptWalkPins.records[key])observeReceiptWalkSQL(current.statements,'current');
     await t.test('archived baseline comparison',t=>{
       if(wideArchiveMode(Boolean(baseline),requireArchive)==='pins') {
@@ -86,17 +194,22 @@ for(const base of [23,33])for(const mode of ['open','workload'])for(const eventT
       }
       const old=run(baseline.path,oldPath,mode,cell);reviseSQL(key,old.statements,sqlRevisions);
       if(workloadKeys.includes(key))revisedArchives.push(old);
-      const reconstructed=compareWideTraces({key,current,archived:old,sqlAdditions,sqlAdditionMethods,cardStatementTexts,cardStatementExecutions,checkArchivedCardTexts:false,receiptWalk:Boolean(receiptWalkPins.records[key])});
+      const comparison = review ? projectRetirementMarkers(current, review) : current;
+      const aligned = review ? alignArchivedReceiptReads(key, old, review.reads) : { record: old, additions: sqlAdditions };
+      compareWideTraces({key,current:comparison,archived:aligned.record,sqlAdditions:aligned.additions,
+        sqlAdditionMethods,cardStatementTexts,cardStatementExecutions,checkArchivedCardTexts:false,
+        receiptWalk:Boolean(receiptWalkPins.records[key])});
       if(receiptWalkPins.records[key]) {
         observeReceiptWalkSQL(old.statements,'archived');archivedReceiptWalkTraces++;
         assert.deepEqual(summary(old),pins.records[key],'receipt cells retain their frozen archived pins');
       } else if(workloadKeys.includes(key)) {
+        const reconstructed = reconstructWideTrace(key, old, sqlAdditions, sqlAdditionMethods);
         assertWidePins(key,reconstructed,sqlAdditions,pins.records[key],sqlAdditionMethods,cardStatementTexts,cardStatementExecutions);
       } else {
         assert.deepEqual(summary(old),pins.records[key],'frozen opening pins come only from the archived baseline');
       }
     });
-    assert.equal(pins.revision,revision);assertWidePins(key,current,sqlAdditions,receiptWalkPins.records[key]??pins.records[key],sqlAdditionMethods,cardStatementTexts,cardStatementExecutions);
+    assert.equal(pins.revision,revision);assertWidePins(key,current,sqlAdditions,currentPin,sqlAdditionMethods,cardStatementTexts,cardStatementExecutions);
     assert.ok(current.statements.every(entry=>entry.length===3&&Array.isArray(entry[2])),'SQL execution includes bound arguments');
     assert.equal(current.statements.some(([sql])=>/card_body_|card_operations_owner_action/.test(sql)),false,'no extended lineage scan');
     if(mode==='workload') {

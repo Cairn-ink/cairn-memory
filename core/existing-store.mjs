@@ -12,6 +12,8 @@ import { ownData } from './local-authority-input.mjs';
 import { validateLocalAuthorityMetadata } from './local-authority-schema.mjs';
 import { fail, identifier } from './validation.mjs';
 
+const STORE_BUSY_TIMEOUT_MS = 2000;
+
 export function existingStoreOption(value) {
   const input = ownData(value, ['version', 'storeId', 'physical', 'base', 'suppressionRevision', 'cardLineageRevision']);
   if (input.version === 'content-safety-existing-v1') {
@@ -143,7 +145,7 @@ export function validateExistingStore(db, option, layout = attestContentSafety(d
 export async function inspectExistingStorePin(path, storeId, minimumBase = 29) {
   const location = existingStorePath(path);
   const { DatabaseSync } = await import('node:sqlite');
-  const db = new DatabaseSync(path, { readOnly: true });
+  const db = new DatabaseSync(path, { readOnly: true, timeout: STORE_BUSY_TIMEOUT_MS });
   try {
     db.exec('PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; BEGIN');
     const layout = attestContentSafety(db);

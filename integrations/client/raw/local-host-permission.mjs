@@ -10,6 +10,8 @@ import { createHmac, createHash } from 'node:crypto';
 import { rawRegistration } from '../../../core/raw-input.mjs';
 import { captureSnapshot } from '../../../core/capture-input.mjs';
 
+const STORE_BUSY_TIMEOUT_MS = 2000;
+
 // Import SQLite and the storage helper only after the runtime gate. No writable
 // core opener, migration or consent setter participates in this read snapshot.
 async function databaseSnapshot(config,inspect) {
@@ -21,7 +23,7 @@ async function databaseSnapshot(config,inspect) {
     ]);
     await checkedPath(config.usage.root,{ directory:true });
     const before = await checkedPath(config.databasePath);
-    db = new DatabaseSync(config.databasePath,{ readOnly:true });
+    db = new DatabaseSync(config.databasePath,{ readOnly:true,timeout:STORE_BUSY_TIMEOUT_MS });
     const layout = attestContentSafety(db);
     if (layout.base < 33) assertNoCardCurrentDependencies(db);
     if (layout.base < 32) assertNoRoleProfiles(db);
