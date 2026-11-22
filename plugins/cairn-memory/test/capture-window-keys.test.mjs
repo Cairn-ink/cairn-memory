@@ -7,7 +7,7 @@ const keys = ['end', 'final', 'id', 'initial', 'parser', 'slice', 'slices', 'sta
 const rows = count => Array.from({ length: count }, (_, index) => row(`message-${index}`)).join('');
 
 async function captureServer(t, { holdCapture, ...options } = {}) {
-  const windows = new Map(), violations = [];
+  const windows = new Map(), violations = [], limit = options.groupingLimit ?? 4096;
   const f = await harness(t, {
     ...options,
     async holdCapture(body) {
@@ -38,6 +38,16 @@ async function captureServer(t, { holdCapture, ...options } = {}) {
     for (const frozen of windows.values()) {
       const slices = [...frozen.slices.values()];
       assert.deepEqual(slices.map(window => window.final), slices.map((_, i) => i === slices.length - 1));
+      // The receiver's rule per id group: every slice 1..slices arrives, and each group other than the final
+      // slice's group is full (slices equals the group limit).
+      const groups = Map.groupBy(slices, window => window.id);
+      const finalId = slices.find(window => window.final)?.id;
+      for (const [id, group] of groups) {
+        const [{ slices: count }] = group;
+        assert.ok(group.every(window => window.slices === count), `one slice count per id group ${id}`);
+        assert.deepEqual(group.map(window => window.slice).sort((a, b) => a - b), Array.from({ length: count }, (_, i) => i + 1));
+        if (id !== finalId) assert.equal(count, limit, `non-final id group ${id} is full`);
+      }
     }
   });
   return f;

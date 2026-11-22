@@ -27,6 +27,7 @@ test('hosted pause blocks a session window; resumed EOF precedes correctly timed
   assert.deepEqual(body.window, {
     id: createHash('sha256').update(JSON.stringify([f.sessionId, Buffer.byteLength(skipped)])).digest('hex'),
     slice: 1, slices: 1, initial: false,
+    start: Buffer.byteLength(skipped), end: Buffer.byteLength(skipped + row('resumed-window', time)), final: true, parser: 1,
   });
   assert.equal(body.messages[0].occurred_at, time);
   assert.ok(Date.parse(body.sent_at) >= before && Date.parse(body.sent_at) <= after);

@@ -14,7 +14,16 @@ const hash = value => createHash('sha256').update(value).digest('hex');
 export function legacyCaptureBody(body) {
   const { window, sent_at, ...legacy } = body;
   if (window !== undefined || sent_at !== undefined) {
-    assert.deepEqual(Object.keys(window).sort(), ['id', 'initial', 'slice', 'slices']);
+    // 0.3.10 plugin windows add byte bounds, a final flag and the parser version; Codex sends the first four keys.
+    const keys = Object.keys(window).sort();
+    if (keys.length === 4) assert.deepEqual(keys, ['id', 'initial', 'slice', 'slices']);
+    else {
+      assert.deepEqual(keys, ['end', 'final', 'id', 'initial', 'parser', 'slice', 'slices', 'start']);
+      assert.ok(Number.isSafeInteger(window.start) && window.start >= 0 && Number.isSafeInteger(window.end) && window.end > window.start);
+      assert.equal(typeof window.final, 'boolean');
+      assert.equal(window.parser, 1);
+      if (window.final) assert.equal(window.slice, window.slices);
+    }
     assert.match(window.id, /^[a-f0-9]{64}$/);
     assert.equal(typeof window.initial, 'boolean');
     assert.ok(Number.isInteger(window.slice) && window.slice >= 1 && window.slice <= window.slices && window.slices <= 64);
