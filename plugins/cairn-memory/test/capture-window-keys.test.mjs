@@ -105,6 +105,9 @@ test('retry after a middle failure resends identical windows after transcript gr
   const windows = windowsOf(f);
   assert.equal(windows.length, 5);
   assert.deepEqual(windows.slice(2, 4), windows.slice(0, 2));
+  // The server deduplicates a resent slice by event_id; a new id for the same window slice fails the window closed.
+  assert.deepEqual(f.captures.slice(2, 4).map(body => body.event_id), f.captures.slice(0, 2).map(body => body.event_id));
+  assert.equal(new Set(f.captures.map(body => body.event_id)).size, 3);
   assert.ok(windows.every(window => window.end === pendingEnd));
   assert.deepEqual(windows.map(window => window.final), [false, false, false, false, true]);
   assert.equal(windows[4].slice, windows[4].slices);
