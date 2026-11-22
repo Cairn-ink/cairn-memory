@@ -220,6 +220,7 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}, { 
     contextPort(readSet) {
       const entry = entryFor(readSet), handles = new WeakMap();
       const port = Object.freeze({
+        supportsLexicalSearch: true,
         async search(input) {
           if (closed) fail('store_closed');
           if (unsupported) return unsupportedSearch();

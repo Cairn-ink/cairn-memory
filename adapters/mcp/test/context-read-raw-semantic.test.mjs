@@ -24,33 +24,38 @@ const counter = { id: 'synthetic-counter', countTokens: value => Math.ceil(value
 const policy = { family: 'local', maxBatchDocuments: 1, maxRequests: 100, maxConcurrent: 1, maxUsd: 0 };
 
 for (const layout of [29, 53]) {
-  for (const mcp of [true, false]) {
-    test(`Explicit lexical context reads keep Raw evidence without embedding through ${mcp ? 'MCP' : 'the product host'}, layout ${layout}`, async t => {
+  for (const route of ['MCP', 'native product port', 'legacy product host']) {
+    test(`Explicit lexical context reads do not embed Raw queries through the ${route}, layout ${layout}`, async t => {
+      const mcp = route === 'MCP', legacy = route === 'legacy product host';
       installRawSearchTestClock(t);
       const f = await seed(t, layout);
       const calls = [];
       const embedder = { id: 'synthetic-raw-embedder', revision: '1', dimensions: 2, normalization: 'l2',
         async embed(texts, controls) { controls.beforeDispatch(); calls.push([...texts]); return texts.map(() => [1, 0]); } };
-      const { rawSearch, maintain } = mcp ? localHost(f, embedder) : await productHost(f, embedder);
+      const legacyQueries = [];
+      const { rawSearch, maintain, search, token } = mcp ? localHost(f, embedder) : await productHost(f, embedder, legacy ? legacyQueries : null);
       let probe;
       for (let i = 0; i < 24; i++) {
         await rawSearchTestWait(1010);
         await maintain();
-        probe = await rawSearch.search({ query: 'readiness' });
+        probe = await (search ?? rawSearch.search)({ query: 'readiness' });
         if (probe.semantic.state === 'ready') break;
       }
       assert.equal(probe.semantic.state, 'ready', 'Raw vectors must be ready before the read');
-      const read = mcp ? await mcpReader(f, rawSearch, embedder) : await productReader(f, rawSearch);
+      const read = mcp ? await mcpReader(f, rawSearch, embedder) : await productReader(f, rawSearch, token);
       calls.length = 0;
 
       const lexical = await read(false);
       const lexicalCalls = calls.splice(0);
-      assert.ok(lexical.metered.items.some(item => item.ref.type === 'raw' && item.body === text), JSON.stringify(lexical));
+      const lexicalQueries = legacyQueries.splice(0);
       assert.equal((await read(true)).metered.items.some(item => item.ref.type === 'raw'), true);
       assert.deepEqual(calls, [[query]], 'the semantic control still transmits the Raw query');
       assert.equal((await read()).metered.items.some(item => item.ref.type === 'raw'), true);
       assert.deepEqual(calls, [[query], [query]], 'the default still uses the configured Raw provider');
       assert.deepEqual(lexicalCalls, [], 'the lexical read must not transmit the Raw query');
+      assert.deepEqual(lexicalQueries, [], 'the lexical read must not call the legacy search port');
+      assert.equal(lexical.metered.items.some(item => item.ref.type === 'raw' && item.body === text), !legacy, JSON.stringify(lexical));
+      if (legacy) assert.equal(lexical.diagnostics.coverage.raw, 'lexical_unsupported');
     });
   }
 }
@@ -78,12 +83,12 @@ function localHost(f, embedder) {
     maintain: async () => ok(await manager.methods.maintainRawSearch({ namespace: ns })) };
 }
 
-async function productHost(f, embedder) {
+async function productHost(f, embedder, legacyQueries) {
   const s = await searchFixture(f, { embedder, policy });
-  return { rawSearch: { search: input => s.search(input),
-    prepareMany: (candidates, settings) => s.service.prepareMany(candidates, settings, s.host.token),
-    revalidate: handles => s.service.revalidate(handles) },
-  maintain: () => s.maintain({ embeddings: true, maxMs: 5000 }) };
+  const rawSearch = legacyQueries ? { search({ query, intent }) { legacyQueries.push(query); return s.search({ query, intent }); },
+    prepareMany: s.service.prepareMany, revalidate: s.service.revalidate } : s.service;
+  return { rawSearch, token: s.host.token, search: s.search,
+    maintain: () => s.maintain({ embeddings: true, maxMs: 5000 }) };
 }
 
 async function mcpReader(f, rawSearch, embedder) {
@@ -104,11 +109,11 @@ async function mcpReader(f, rawSearch, embedder) {
     const response = await client.callTool({ name: 'read_memory_context',
       arguments: { query, types, intent, deadlineMs: 5000, ...(semantic === undefined ? {} : { semantic }) } });
     assert.equal(response.isError, false, JSON.stringify(response));
-    return { metered: ok(JSON.parse(response.content[0].text)) };
+    return { metered: ok(JSON.parse(response.content[0].text)), diagnostics: response._meta['ink.cairn/context-read-diagnostics'] };
   };
 }
 
-async function productReader(f, rawSearch) {
+async function productReader(f, rawSearch, token) {
   const facade = openContextProductFacade(f.path, {});
   f.workspace.defer(() => facade.close());
   const index = openProductIndex({ path: f.path, facade, rawSearch, counter, maintenance: true,
@@ -118,7 +123,7 @@ async function productReader(f, rawSearch) {
   f.workspace.defer(() => index.close());
   await refresh(input => index.run('refreshContextIndex', { ...input, mode: 'lexical' }));
   return async semantic => ok(await index.run('contextRead', { query, types, intent, readSet: [ns], deadlineMs: 5000,
-    ...(semantic === undefined ? {} : { semantic }) }));
+    ...(semantic === undefined ? {} : { semantic }) }, token));
 }
 
 async function refresh(run) {

@@ -503,7 +503,7 @@ export async function openRawSearch(value, { signal } = {}) {
         maintenance:{phase:progress.phase,quantum:progress.quantum,noProgress:progress.noProgress,pending:progress.pending,
           checkpoint:authority.bind('raw-search-progress-v1',progress.checkpointAdvances),lastActualWork:progress.lastActualWork}};
     };
-    return Object.freeze({search:tracked(search),prepare:tracked(prepare),prepareMany:tracked(prepareMany),prepareSource:tracked(prepareSource),classify:tracked(classify),validate:revalidate,revalidate,
+    return Object.freeze({supportsLexicalSearch:true,search:tracked(search),prepare:tracked(prepare),prepareMany:tracked(prepareMany),prepareSource:tracked(prepareSource),classify:tracked(classify),validate:revalidate,revalidate,
       maintain:tracked((input,token)=>withRawSearchRequestScope(async()=>{const access=authority.authorize('rawSearchMaintenance',{},token);
         const cacheError=cache.maintain();
         await maintenance.maintain(input,access,

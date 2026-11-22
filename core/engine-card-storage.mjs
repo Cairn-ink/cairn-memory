@@ -1,4 +1,4 @@
-import { contextEmbeddingGuard } from './context-read-sidecar.mjs';
+import { assertContextEmbeddingAllowedInside, contextEmbeddingGuard } from './context-read-sidecar.mjs';
 import { randomUUID, createHmac, createHash } from 'node:crypto';
 import { readTransaction, transaction } from './database.mjs';
 import { withContentSuppressionRequest, inContentSuppressionRequestInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
@@ -455,10 +455,30 @@ export function createEngineCardStorage({ db, identity, ready, rawReader, upgrad
       check(); return card;
     }, [ns]));
   }
-  // Each pass owns a versioned canonical decision. Probes must run outside
-  // validation snapshots, including the final synchronous transport fence.
+  // The entry and dispatcher checks share a versioned canonical decision.
+  // Each transport start uses its own transaction instead.
   const pauseGuard = (ns, deadlineAt) => contextEmbeddingGuard(db,
     work => { ready(); return readTransaction(db, work); }, [ns], deadlineAt);
   return { pauseGuard, available, snapshot, rawSpans, cards, recentPurges, carry, retire, commit, claim, release, finish, relations, pressureItems, deliver,
-    validate(ns, memories, check) { return read(ns, () => { if (!sourcesCurrent(ns, memories.map(m => m.source), check)) fail('source_unavailable'); }); } };
+    validate(ns, memories, check) { return read(ns, () => { if (!sourcesCurrent(ns, memories.map(m => m.source), check)) fail('source_unavailable'); }); },
+    startProviderRequest(ns, deadlineAt, start) { ready(); startCardProviderRequest(db, ns, deadlineAt, start); } };
+}
+
+function startCardProviderRequest(db, ns, deadlineAt, start) {
+  const checkPause = () => assertContextEmbeddingAllowedInside(db, [ns], deadlineAt);
+  const started = readTransaction(db, () => {
+    checkPause();
+    // The control read holds SHARED through the synchronous transport start.
+    // Inspect the mode in that snapshot so journal changes cannot race it.
+    if (db.prepare('PRAGMA journal_mode').get().journal_mode === 'wal') return false;
+    start();
+    return true;
+  });
+  if (started) return;
+
+  // WAL readers allow commits. Reserve WAL's writer slot and read the
+  // control again under that reservation. This transaction makes no changes.
+  db.exec('BEGIN IMMEDIATE');
+  try { checkPause(); start(); }
+  finally { db.exec('ROLLBACK'); }
 }

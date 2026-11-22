@@ -17,8 +17,8 @@ const cardLine = 'The garden workshop uses the library meeting room.';
 
 for (const layout of [29, 53]) {
   for (const shared of [false, true]) {
-    for (const pause of [true, false]) {
-      test(`Card provider ${pause ? 'stops after pause' : 'publishes while enabled'} on the ${shared ? 'shared' : 'standalone'} turn, layout ${layout}`,
+    for (const pauseAt of shared ? [countPath, null] : [countPath, generationPath, null]) {
+      test(`Card provider ${pauseAt === countPath ? 'stops after counting' : pauseAt ? 'finishes a started generation' : 'publishes while enabled'} on the ${shared ? 'shared' : 'standalone'} turn, layout ${layout}`,
         { timeout: 15000 }, async t => {
           const { path, workspace } = await seed(t, layout);
           const control = openMemoryCore({ path, raw: true, rawSearch: false });
@@ -32,12 +32,13 @@ for (const layout of [29, 53]) {
             const { memories } = JSON.parse(messages[0].content[0].text);
             assert.match(memories[0].content, /garden workshop/);
             calls.push(endpoint);
+            // Return from fetch initiation before committing the pause. Its
+            // response is still pending when the independent connection writes.
+            if (endpoint === pauseAt) {
+              await Promise.resolve();
+              pauseCommitted = pauseCapture(control).paused;
+            }
             if (endpoint === countPath) {
-              if (pause) {
-                const { generation } = ok(control.getCaptureControl({ namespace: ns }));
-                const updated = ok(control.setCapturePaused({ namespace: ns, expectedGeneration: generation, paused: true }));
-                pauseCommitted = updated.paused;
-              }
               return Response.json({ object: 'response.input_tokens', input_tokens: 100 });
             }
             assert.equal(endpoint, generationPath);
@@ -66,22 +67,88 @@ for (const layout of [29, 53]) {
             const pass = ok(await Promise.race([completed.promise, new Promise((_, reject) => {
               timer = setTimeout(() => reject(Error('maintenance turn did not finish')), 10000);
             })]));
-            assert.equal(pauseCommitted, pause, 'the token-count response commits the pause');
-            assert.deepEqual(calls, pause ? [countPath] : [countPath, generationPath]);
+            const refused = pauseAt === countPath;
+            assert.equal(pauseCommitted, pauseAt !== null, 'the selected response commits the pause');
+            if (pauseAt === generationPath) {
+              await loop.close();
+              assert.equal(ok(await core.maintainCards({ namespace: ns })).state, 'paused');
+            }
+            assert.deepEqual(calls, refused ? [countPath] : [countPath, generationPath]);
             assert.equal(pass.modelCalls, 1);
-            assert.equal(pass.state, pause ? 'paused' : 'ready', JSON.stringify(pass));
-            assert.equal(pass.reason, pause ? 'namespace_paused' : undefined);
-            assert.equal(pass.built.length, pause ? 0 : 1);
+            if (pauseAt !== generationPath) {
+              assert.equal(pass.state, refused ? 'paused' : 'ready', JSON.stringify(pass));
+              assert.equal(pass.reason, refused ? 'namespace_paused' : undefined);
+              assert.equal(pass.built.length, refused ? 0 : 1);
+            }
             const db = new DatabaseSync(path);
             try {
               assert.equal(db.prepare('PRAGMA user_version').get().user_version, layout);
               const cards = db.prepare("SELECT id FROM private_cards WHERE state='confirmed'").all();
               assert.deepEqual(cards.map(card => card.id), pass.built.map(card => card.id));
+              if (refused) assertClaimReleased(db);
             } finally { db.close(); }
           } finally { clearTimeout(timer); await loop.close(); }
         });
     }
   }
+}
+
+for (const journal of ['delete', 'wal']) {
+  for (const endpoint of [countPath, generationPath]) {
+    test(`A concurrent pause before ${endpoint === countPath ? 'counting' : 'generation'} wins in ${journal} mode`, async t => {
+      const { path, workspace } = await seed(t, 29);
+      const db = new DatabaseSync(path);
+      workspace.defer(() => db.close());
+      assert.equal(db.prepare(`PRAGMA journal_mode=${journal}`).get().journal_mode, journal);
+      const control = openMemoryCore({ path, raw: true, rawSearch: false });
+      workspace.defer(() => control.close());
+      const calls = [], afterPause = [];
+      let armed = false, paused = false;
+      const model = createOpenAIModel({ apiKey: 'synthetic-only', async fetchImpl(url) {
+        const resource = new URL(url).pathname;
+        calls.push(resource);
+        if (paused) afterPause.push(resource);
+        return Response.json({ object: 'response.input_tokens', input_tokens: 100 });
+      } });
+      const core = openMemoryCore({ path, model: { ...model, consolidate(request) {
+        armed = true;
+        return model.consolidate(request);
+      } } });
+      workspace.defer(() => core.close());
+      const prepare = DatabaseSync.prototype.prepare;
+      t.mock.method(DatabaseSync.prototype, 'prepare', function (sql, ...args) {
+        const statement = prepare.call(this, sql, ...args);
+        if (!armed || paused || calls.length !== Number(endpoint === generationPath) ||
+            !['PRAGMA data_version', 'PRAGMA query_only'].includes(sql)) return statement;
+        const get = statement.get.bind(statement);
+        statement.get = (...values) => {
+          const result = get(...values);
+          // Commit after the sampled version (legacy path) or just before the
+          // new transaction begins. The old cached decision can miss this commit.
+          armed = false;
+          paused = pauseCapture(control).paused;
+          return result;
+        };
+        return statement;
+      });
+      const pass = ok(await core.maintainCards({ namespace: ns, budget: { maxMs: 5000 } }));
+      assert.equal(paused, true, 'the independent writer must commit');
+      assert.deepEqual(afterPause, [], 'no POST may start after the commit');
+      assert.deepEqual(calls, endpoint === generationPath ? [countPath] : []);
+      assert.equal(pass.state, 'paused');
+      assert.equal(pass.reason, 'namespace_paused');
+      assertClaimReleased(db);
+    });
+  }
+}
+
+function pauseCapture(core) {
+  const { generation } = ok(core.getCaptureControl({ namespace: ns }));
+  return ok(core.setCapturePaused({ namespace: ns, expectedGeneration: generation, paused: true }));
+}
+
+function assertClaimReleased(db) {
+  assert.equal(db.prepare("SELECT count(*) AS n FROM card_operations WHERE method IN ('consolidateAttempt','consolidateOutcome')").get().n, 0);
 }
 
 async function seed(t, layout) {

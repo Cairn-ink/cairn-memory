@@ -3,7 +3,7 @@ import { get_encoding } from 'tiktoken';
 import { readFileSync } from 'node:fs';
 import { MemoryStoreError, boundedText } from '../../core/validation.mjs';
 import { emitDiagnostic } from '../../core/model-diagnostics.mjs';
-import { checkModelDispatch } from '../../core/model-call.mjs';
+import { startModelDispatch } from '../../core/model-call.mjs';
 import { qualificationCandidatesInlineSchema, schemasFor, schemasForQualificationInput,
   snapshotIndexedExtractInput, episodeSchemasFor } from './schemas.mjs';
 import { DEFAULT_MODEL, modelProfile, episodeProfile } from './profiles.mjs';
@@ -275,12 +275,20 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
 
   async function post(path, body, maximum, signal, diagnose, consolidation = false) {
     checkAbort(signal, diagnose);
-    if (consolidation) checkModelDispatch(signal);
+    const url = `https://api.openai.com/v1${path}`;
+    const request = { method: 'POST', redirect: 'error', signal,
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, body };
+    // Keep the response outside the storage fence, including for synchronous
+    // fetch failures. Only the call that starts the request runs inside it.
+    let pending;
+    const start = () => {
+      try { pending = fetchImpl(url, request); }
+      catch (error) { pending = Promise.reject(error); }
+    };
+    if (consolidation) startModelDispatch(signal, start);
+    else start();
     try {
-      const response = await fetchImpl(`https://api.openai.com/v1${path}`, {
-        method: 'POST', redirect: 'error', signal,
-        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, body,
-      });
+      const response = await pending;
       checkAbort(signal);
       if (!response.ok || response.redirected || response.status < 200 || response.status >= 300) {
         response.body?.cancel().catch(() => {});

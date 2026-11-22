@@ -30,9 +30,11 @@ export async function readRawChannel(rawSearch, input, token, deadlineAt) {
   const expired = () => stopped || performance.now() >= cutoff;
   const work = async () => {
     try {
-      // Host Raw ports must honor an explicit lexical-only request.
+      const lexical = (input.rawSemantic ?? input.semantic) === false;
+      if (lexical && port(() => Object.getOwnPropertyDescriptor(rawSearch, 'supportsLexicalSearch')?.value) !== true)
+        return unavailable('lexical_unsupported');
       const result = await port(() => rawSearch.search({ query: input.query, intent: 'current',
-        ...((input.rawSemantic ?? input.semantic) === false ? { semantic: false } : {}) }, token));
+        ...(lexical ? { semantic: false } : {}) }, token));
       if (expired()) return snapshot('partial');
       if (result.coverage?.status === 'unsupported_store') return unavailable('unsupported_store');
       let dropped = result.coverage?.status !== 'complete';

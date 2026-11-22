@@ -19,7 +19,7 @@ export const modelRequestText = (system, input) =>
 
 /** A bounded adapter call. No database transaction may surround this helper. */
 export async function callModel(model, method, system, input,
-  { validateFresh = () => {}, beforeDispatch = () => {}, failureCode = 'recall_failed', deadline, onHostWait } = {}) {
+  { validateFresh = () => {}, beforeDispatch = () => {}, beforeTransport, failureCode = 'recall_failed', deadline, onHostWait } = {}) {
   const legacyFreshness = hasLegacyContentReadBoundary();
   const protectedRead = hasContentPortBoundary();
   const reject = (code, reason = code) => { emitDiagnostic(model, method, 'core_call', reason); fail(code); };
@@ -86,9 +86,9 @@ export async function callModel(model, method, system, input,
         // provider call. Its errors keep their trusted storage provenance.
         try { beforeDispatch(); }
         catch (error) { freshnessError = error; return freshnessFailure; }
-        if (method === 'consolidate') modelDispatchGuards.set(controller.signal, () => {
+        if (beforeTransport) modelDispatchGuards.set(controller.signal, start => {
           if (transportRefusal) throw transportRefusal.error;
-          try { beforeDispatch(); }
+          try { beforeTransport(start); }
           catch (error) { transportRefusal = { error }; throw error; }
         });
         providerInvoked = true;
@@ -192,8 +192,10 @@ export async function callModel(model, method, system, input,
   return output;
 }
 
-// The adapter uses the existing signal to recheck the engine's durable fence
-// at the transport boundary. Provider errors cannot supply a trusted refusal.
-export function checkModelDispatch(signal) {
-  modelDispatchGuards.get(signal)?.();
+// The trusted engine guard encloses only transport initiation. Provider errors
+// cannot supply a trusted refusal.
+export function startModelDispatch(signal, start) {
+  const guard = modelDispatchGuards.get(signal);
+  if (guard) guard(start);
+  else start();
 }
