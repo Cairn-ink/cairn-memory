@@ -12,20 +12,31 @@ export interface ExtractedCandidate {
   sourceIndices: number[];
 }
 
+/** A model request built and sized by core. Prompts live in core; the adapter only sends it. */
+export interface ModelRequest {
+  system: string;
+  input: unknown;
+  /** Strict JSON schema for structured output, when the stage uses one. */
+  schema?: object;
+  maxOutputTokens: number;
+}
+
+export type ModelStage = "extract" | "qualify" | "reconcile" | "classify" | "rationale";
+
 /**
- * One model adapter for both stores (cairn-model-openai). Callers pass already redacted,
- * eligible text; the adapter never logs content and always sends store:false.
- * Optional methods are absent when the host does not use them.
+ * One model adapter for both stores (cairn-model-openai). Core builds, sizes (countTokens on
+ * exactly system + serialized input) and validates; the adapter sends the request verbatim,
+ * never logs content, and always uses store:false. The result is untrusted until core validates it.
  */
 export interface ModelPort {
   readonly model: string;
   readonly contextWindow: number;
-  extract(input: ExtractInput, options: CallOptions): Promise<ExtractedCandidate[]>;
-  qualify?(input: unknown, options: CallOptions): Promise<unknown>;
-  reconcile?(input: unknown, options: CallOptions): Promise<unknown>;
-  classify?(input: unknown, options: CallOptions): Promise<unknown>;
+  call(stage: ModelStage, request: ModelRequest, options: CallOptions): Promise<unknown>;
   countTokens(text: string): number;
 }
+
+/** Core helper over ModelPort.call for the plain extract stage (prompt, spec and validation from core). */
+export type ExtractHelper = (model: ModelPort, input: ExtractInput, options: CallOptions) => Promise<ExtractedCandidate[]>;
 
 export interface EmbedderPort {
   readonly model: string;

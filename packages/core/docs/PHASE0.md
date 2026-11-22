@@ -64,6 +64,13 @@ change request to the core lead, answered on the same day.
 | G/H, Postgres adapter + cloud switch | refactor of the hosted `src/memory` | implements `StorageAdapter` on Postgres |
 | I, SQLite adapter + installer | wraps the engine storages | implements `StorageAdapter` on SQLite |
 
+## Scope calls (core lead)
+
+- Ordered capture (`CausalStream`) ships as the capture module's second slice, after the supersession port.
+- The core capture modules replace `src/extraction/`; its fixtures stay as the old-versus-new extraction oracle.
+- The capture rationale stage is not in core until a keep/drop decision; `ModelStage` reserves its name only.
+- One id order in all of core: UTF-8 bytes (`compareUtf8`). Where the hosted service compares ids differently today (SQL collation, JS UTF-16 string order in in-batch ties), the difference is listed for the shadow comparison.
+
 ## Change requests
 
 Send the core lead the port, the method, and the reason. A request is

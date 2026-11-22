@@ -65,6 +65,17 @@ export const ERROR_CODES = Object.freeze({
   capture_disabled: "denied",
   // Retrieval
   context_item_too_large: "limit",
+  // Capture (engine envelope: none of these are retryable)
+  extraction_failed: "unavailable",
+  source_excluded: "denied",
+  context_budget_exceeded: "limit",
+  evidence_unavailable: "denied",
+  model_not_configured: "unavailable",
+  model_timeout: "unavailable",
+  token_count_unavailable: "unavailable",
+  qualification_failed: "unavailable",
+  reconciliation_failed: "unavailable",
+  classification_failed: "unavailable",
   // Memory policy
   conflict_limit: "limit",
   supersession_limit: "limit",

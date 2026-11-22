@@ -24,15 +24,20 @@ export type ClaimResult =
   | { status: "claimed"; token: string }
   | { status: "duplicate" }
   | { status: "processing" }
-  | { status: "rawReplay"; token: string };
+  /** The capture was already admitted; core returns this stored result unchanged. */
+  | { status: "rawReplay"; result: FinishResult };
 
 /** Admission and lease of one capture. Runs inside UnitOfWork with pauseLock. */
 export interface CaptureClaim {
   claim(tx: Tx, key: CaptureKey, messages: readonly CaptureMessage[], options: { leaseMs: number }): Promise<ClaimResult>;
   /** Releases a claim. retryable=false records a terminal code-only failure. */
   abandon(tx: Tx, token: string, failure: { code: string; retryable: boolean }): Promise<void>;
-  /** Marks the claim as dispatched to the model; fails if the lease was lost. */
-  beginDispatch(tx: Tx, token: string): Promise<void>;
+  /**
+   * Called once per claim, before the first model dispatch. Marks the claim dispatched and
+   * returns the token to use from now on (staged stores rotate it; others return it unchanged).
+   * Fails if the lease was lost.
+   */
+  beginDispatch(tx: Tx, token: string): Promise<{ token: string }>;
 }
 
 export interface FinishItem {
@@ -40,11 +45,14 @@ export interface FinishItem {
   kind: MemoryKind;
   confidence: number;
   textHash: string;
-  embedding: { model: string; vector: Float32Array };
+  /** null when not embedded at write time (rule 10). */
+  embedding: { model: string; vector: Float32Array } | null;
   receipts: Receipt[];
 }
 
 export interface FinishResult {
+  /** Owner index revision after the finish (public capture result key). */
+  indexRevision: number;
   memories: Array<{ id: string; revision: Revision; outcome: "inserted" | "touched" | "changed" }>;
   suppressedCount: number;
   duplicateCount: number;
