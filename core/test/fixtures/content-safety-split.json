@@ -951,7 +951,7 @@
       "file": "core/runtime.mjs",
       "start": "  function correct(",
       "end": "  function forgetMutation(",
-      "sha256": "97f3b855849c7440654e809d1aaed4a00985ad313dd60920e551c3fa512ad958",
+      "sha256": "41d69d7700d194a2d8e26f4bb0f2a2d839e1f86e62385081eadc47af672d5a19",
       "reason": "PR 1 passes each corrected receipt its matching optional receipt time; canonical post-state acknowledgement and terminal fact guards remain in this exact region."
     },
     {
@@ -959,7 +959,7 @@
       "file": "core/runtime.mjs",
       "start": "  function forgetMutationInside(",
       "end": "  function forget(ns,",
-      "sha256": "541c9ea540c6f1a8d7b85750d38e20f4ee5d51697f2db107779e1b40aed0c768"
+      "sha256": "df4518ab5e9266367f3fe24c89a1ddf8d2bd4d99a8df003597f8fd17a3f9743e"
     },
     {
       "id": "remove-receipts",
@@ -973,7 +973,7 @@
       "file": "core/private-card-storage.mjs",
       "start": "  function purgeCard(",
       "end": "  function mutate(",
-      "sha256": "615ee7edf7252864113386a2088e55cdf6638f23756e9aa99ad13b6c1ac71211"
+      "sha256": "91d374261a85c992efc0cfd7e7cc5cbbc70a40aa5f4e6a359a4dfd10463f1815"
     },
     {
       "id": "note-delete",
