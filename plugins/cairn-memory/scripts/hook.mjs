@@ -570,6 +570,7 @@ async function writePortableFirstPrompt(path, state, guard) {
 // Match the server copied-history allowance for prompt timestamp/startup latency.
 const FIRST_PROMPT_MARGIN_MS = 10 * 60 * 1000;
 const START_CLOCK_TOLERANCE_MS = 5 * 1000;
+const CAPTURE_PARSER_VERSION = 1;
 // Internal test copies lower this cap while retaining the legacy batch layout.
 const CAPTURE_WINDOW_SLICES = 4096;
 const HOSTED_CAPTURE_REQUEST_MS = 25_000;
@@ -844,6 +845,10 @@ async function captureLocked(hookInput, statePath, generation, hosted) {
           slice: index - group + 1,
           slices: Math.min(CAPTURE_WINDOW_SLICES, sent.length - group),
           initial,
+          start: offset,
+          end: cursor.pendingEnd ?? pendingEnd,
+          final: index === sent.length - 1,
+          parser: CAPTURE_PARSER_VERSION,
         },
         sent_at: new Date().toISOString(),
       },

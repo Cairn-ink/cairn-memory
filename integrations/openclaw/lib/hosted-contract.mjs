@@ -18,9 +18,12 @@ export function conforms(name, value) {
   if (name === "recall-request" && object(value) && Object.hasOwn(value, "session_id") &&
       optionalHostSessionId(value.session_id) === undefined) return false;
   // JSON Schema cannot compare sibling integers. Apply the capture window's
-  // semantic relation in addition to its independently bounded schema fields.
-  if (name === "capture-request" && object(value) && object(value.window) &&
-      value.window.slice > value.window.slices) return false;
+  // semantic relations in addition to its independently bounded schema fields.
+  if (name === "capture-request" && object(value) && object(value.window)) {
+    if (value.window.slice > value.window.slices) return false;
+    const { window } = value;
+    if (Object.hasOwn(window, "start") && Object.hasOwn(window, "end") && window.end <= window.start) return false;
+  }
   function check(schema, input) {
     if (schema.$ref) return check(root.$defs[schema.$ref.slice("#/$defs/".length)], input);
     if (schema.oneOf && schema.oneOf.filter((s) => check(s, input)).length !== 1) return false;
