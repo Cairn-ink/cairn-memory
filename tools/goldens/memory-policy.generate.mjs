@@ -23,8 +23,9 @@ export function verifyEngineSource(engineDir) {
   const copied = engineMerge.toString().split("\n");
   const start = copied.findIndex(line => line.startsWith("  const explicit = "));
   assert.notEqual(start, -1);
-  assert.deepEqual(source.slice(305, 314).map(line => line.slice(6)),
-    copied.slice(start, start + 9).map(line => line.slice(2)), "engine core/runtime.mjs:306–314 changed");
+  // The engine indents the copied block four spaces deeper.
+  assert.deepEqual(source.slice(305, 314),
+    copied.slice(start, start + 9).map(line => `    ${line}`), "engine core/runtime.mjs:306–314 changed");
 }
 
 export function generateCases() {
