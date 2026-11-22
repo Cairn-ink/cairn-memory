@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { setImmediate } from "node:timers/promises";
 import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
 import { CASES, runCase } from "@cairn-ink/conformance";
 import { CoreError } from "@cairn-ink/core";
@@ -59,13 +60,13 @@ function takesWriteLockFirst(opened) {
   });
 }
 
-function delaysPausedWriters(opened) {
+function delaysPausedWriters(opened, delayMs = 0) {
   const { uow } = opened.adapter;
   return withPorts(opened, {
     uow: {
       async run(owner, options, fn) {
         if (options.pauseLock && !options.readOnly) {
-          await new Promise((resolve) => setTimeout(resolve, 0));
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
         }
         return uow.run(owner, options, fn);
       },
@@ -223,6 +224,22 @@ function acceptsEmptyCursor(opened) {
   });
 }
 
+function changesExportedText(opened) {
+  const { memories } = opened.adapter;
+  let calls = 0;
+  return withPorts(opened, {
+    memories: {
+      ...memories,
+      async exportPage(...args) {
+        const page = await memories.exportPage(...args);
+        if (++calls !== 2) return page;
+        const [first, ...rest] = page.items;
+        return { ...page, items: [{ ...first, text: `${first.text} changed` }, ...rest] };
+      },
+    },
+  });
+}
+
 function issuesFreshCursors(opened) {
   const { memories } = opened.adapter;
   let sequence = 0;
@@ -289,11 +306,11 @@ function losesConcurrentOwnerWrite(opened) {
 
 const regressions = [
   ["ignores the pause lock", "K-UOW-3", ignoresPauseLock, /Pause-lock writer entered while the reader held the pause lock/],
-  ["takes the write lock first", "K-UOW-3", takesWriteLockFirst, /Concurrent runs exceeded 5 seconds/],
+  ["takes the write lock first", "K-UOW-3", takesWriteLockFirst, /Concurrent runs exceeded 5100 ms/],
   ["delays paused writers and ignores the pause lock", "K-UOW-3", (opened) => delaysPausedWriters(ignoresPauseLock(opened)),
     /Pause-lock writer entered while the reader held the pause lock/],
   ["delays paused writers and takes the write lock first", "K-UOW-3", (opened) => delaysPausedWriters(takesWriteLockFirst(opened)),
-    /Concurrent runs exceeded 5 seconds/],
+    /Concurrent runs exceeded 5100 ms/],
   ["returns a Map dump", "K-UOW-1", dumpsMap, /dump\(\) must return JSON-safe data.*Map/],
   ["commits inserts after a callback fails", "K-UOW-1", replaysInsertsAfterFailure, /Callback failure did not roll back/],
   ["bypasses transaction checks for issued ids", "K-UOW-7", bypassesTxChecksForIssuedIds, /Expected operation to reject/],
@@ -321,6 +338,27 @@ test("K-MEM-4 accepts a coarse write clock", async () => {
   assert.equal(await run("K-MEM-4", coarseClock), null);
 });
 
+test("K-MEM-12 rejects changed exported text on re-read", async () => {
+  await assert.rejects(() => run("K-MEM-12", changesExportedText), /First page cursor reached different items on re-read/);
+});
+
+test("K-UOW-3 allows settle waits on top of the concurrency bound", { timeout: 2000 }, async (t) => {
+  const delayMs = 175;
+  const settleMs = 4800;
+  const timeoutMs = 4900;
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const result = run("K-UOW-3", (opened) => delaysPausedWriters({ ...opened, settleMs, timeoutMs }, delayMs));
+  result.catch(() => {});
+
+  // Phase one overlaps the writer delay with settling. Phase two serially waits
+  // for the held writer to enter and for the other owner before settling.
+  for (const step of [delayMs, settleMs - delayMs, delayMs, delayMs, settleMs]) {
+    await setImmediate();
+    t.mock.timers.tick(step);
+  }
+  assert.equal(await result, null);
+});
+
 test("K-MEM-12 accepts fresh cursors for the same position", async () => {
   assert.equal(await run("K-MEM-12", issuesFreshCursors), null);
 });
@@ -334,7 +372,7 @@ test("runCase rejects when the adapter never closes", async () => {
   await assert.rejects(() => run("K-ERR-1", (opened) => ({
     ...opened,
     close: () => new Promise(() => {}),
-  })), /Adapter close exceeded 5 seconds/);
+  })), /Adapter close exceeded 5000 ms/);
 });
 
 test("runCase preserves the case error when the adapter never closes", async () => {
@@ -350,7 +388,7 @@ test("runCase preserves the case error when the adapter never closes", async () 
     close: () => new Promise(() => {}),
   })), testCase), (error) => {
     assert.strictEqual(error instanceof AggregateError ? error.errors[0] : error, failure);
-    assert.match(error.cause?.message ?? "", /Adapter close exceeded 5 seconds/);
+    assert.match(error.cause?.message ?? "", /Adapter close exceeded 5000 ms/);
     return true;
   });
 });

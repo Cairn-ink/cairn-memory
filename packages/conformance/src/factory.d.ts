@@ -15,6 +15,8 @@ export type OpenedAdapter = {
   embeddingDimensions: number | null;
   /** Time in milliseconds for a started run to reach its lock waits (default 100). Raise it for stores with slow transaction start. */
   settleMs?: number;
+  /** Bound in milliseconds for one concurrency phase, excluding settle waits (default 5000). Raise it for slow stores. */
+  timeoutMs?: number;
   close(): Promise<void>;
 };
 

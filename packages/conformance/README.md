@@ -6,6 +6,8 @@ An `AdapterFactory` supplies a `name` and an `open({ capabilities })` method tha
 
 Optional `settleMs` gives a started run time to reach its lock waits. The default is 100 ms. Raise it for stores with slow transaction start.
 
+Optional `timeoutMs` bounds one concurrency phase, excluding settle waits. The default is 5000 ms. Raise it for slow stores. The same bound applies to `close()`. Both timing options must be finite positive numbers when supplied.
+
 The `TestHarness` provides four async hooks. Harness hooks belong in test builds only.
 
 - `dump()` returns a JSON-safe snapshot of committed state for equality checks. Use `JsonValue` data: null, booleans, finite numbers, strings, arrays, and plain objects with string keys. Encode bigints as strings.

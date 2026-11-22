@@ -1,5 +1,5 @@
 import { memoryCases } from "./memory-cases.mjs";
-import { bounded } from "./support.mjs";
+import { bounded, check, DEFAULT_TIMEOUT_MS } from "./support.mjs";
 import { unitOfWorkCases } from "./unit-of-work-cases.mjs";
 
 /** @type {readonly import("./index.d.mts").ConformanceCase[]} */
@@ -28,10 +28,15 @@ export async function runCase(factory, testCase) {
     ...Object.fromEntries(needsOff.map((flag) => [flag, false])),
   };
   const opened = await factory.open({ capabilities });
-  const { adapter, embeddingDimensions, harness, nativeErrorMap, busyNativeCodes, settleMs } = opened;
+  const { adapter, embeddingDimensions, harness, nativeErrorMap, busyNativeCodes, settleMs,
+    timeoutMs = DEFAULT_TIMEOUT_MS } = opened;
+  const validTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0;
   /** @type {{ error: unknown } | undefined} */
   let caseFailure;
   try {
+    check(validTimeout, "timeoutMs must be a finite number greater than 0");
+    check(settleMs === undefined || (Number.isFinite(settleMs) && settleMs > 0),
+      "settleMs must be a finite number greater than 0");
     const missing = testCase.needs.find((flag) => !adapter.capabilities[flag]);
     if (missing) return `needs ${missing}`;
     const enabled = needsOff.find((flag) => adapter.capabilities[flag]);
@@ -44,6 +49,7 @@ export async function runCase(factory, testCase) {
       nativeErrorMap,
       busyNativeCodes,
       settleMs,
+      timeoutMs,
       owner,
       otherOwner: crypto.randomUUID(),
       scope: (namespace) => ({ owner, namespace }),
@@ -64,7 +70,7 @@ export async function runCase(factory, testCase) {
     throw error;
   } finally {
     try {
-      await bounded(() => opened.close(), "Adapter close exceeded 5 seconds");
+      await bounded(() => opened.close(), "Adapter close", validTimeout ? timeoutMs : DEFAULT_TIMEOUT_MS);
     } catch (closeError) {
       if (caseFailure) {
         throw new AggregateError([caseFailure.error, closeError], "Conformance case and adapter close both failed",

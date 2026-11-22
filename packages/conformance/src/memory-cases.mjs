@@ -257,14 +257,30 @@ export const memoryCases = [
       for (const { id, updatedAtUs } of forced) await harness.setWriteTime(scope, id, updatedAtUs);
       /** @param {{id: string, updatedAtUs: bigint}} item @returns {[string, bigint]} */
       const pageKey = ({ id, updatedAtUs }) => [id, updatedAtUs];
+      /** @param {import("@cairn-ink/core/ports").MemoryRow} item */
+      const pageRow = (item) => ({
+        id: item.id,
+        namespace: item.scope.namespace,
+        kind: item.kind,
+        origin: item.origin,
+        text: item.text,
+        textHash: item.textHash,
+        confidence: item.confidence,
+        revision: item.revision,
+        createdAtMs: item.createdAtMs,
+        updatedAtMs: item.updatedAtMs,
+        updatedAtUs: item.updatedAtUs,
+        historical: Boolean(item.historical),
+        source: { kind: item.source.kind, client: item.source.client, sessionId: item.source.sessionId },
+      });
       const expected = forced.sort(newestFirst).map(pageKey);
       const [originalFirst, originalSecond] = await uow.run(owner, { readOnly: true }, async (tx) => {
         const first = await memories.exportPage(tx, scope, { cursor: null, limit: 2 });
         const cursor = first.nextCursor;
         check(typeof cursor === "string" && cursor.length > 0, "Incorrect cursor termination");
-        const firstItems = first.items.map(pageKey);
+        const firstItems = first.items.map(pageRow);
         const second = await memories.exportPage(tx, scope, { cursor, limit: 2 });
-        return [firstItems, second.items.map(pageKey)];
+        return [firstItems, second.items.map(pageRow)];
       });
       await uow.run(owner, { readOnly: true }, async (tx) => {
         const seen = [];
@@ -273,10 +289,9 @@ export const memoryCases = [
         for (let i = 0; i < 4; i++) {
           const page = await memories.exportPage(tx, scope, { cursor, limit: 2 });
           equal(page.items.length, i === 3 ? 1 : 2, "Unexpected page length");
-          const items = page.items.map(pageKey);
-          if (i === 0) equal(items, originalFirst, "First page items changed on re-read");
-          if (i === 1) equal(items, originalSecond, "First page cursor reached different items on re-read");
-          seen.push(...items);
+          if (i === 0) equal(page.items.map(pageRow), originalFirst, "First page items changed on re-read");
+          if (i === 1) equal(page.items.map(pageRow), originalSecond, "First page cursor reached different items on re-read");
+          seen.push(...page.items.map(pageKey));
           cursor = page.nextCursor;
           check(i === 3 ? cursor === null : typeof cursor === "string" && cursor.length > 0, "Incorrect cursor termination");
         }

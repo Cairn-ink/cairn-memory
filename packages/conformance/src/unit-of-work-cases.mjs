@@ -1,7 +1,7 @@
 // Compare port results by projecting the needed fields into plain tuples or objects.
 // Documented plain shapes may be compared whole when every field is asserted. Dumps are JSON-only.
 import { assertAdapterCapabilities, ERROR_CODES, NEAR_DUPLICATE_DISTANCE, toCoreError } from "@cairn-ink/core";
-import { bounded, caught, check, equal, gate, observe, readDump, rejects, row } from "./support.mjs";
+import { bounded, caught, check, DEFAULT_TIMEOUT_MS, equal, gate, observe, readDump, rejects, row, wait } from "./support.mjs";
 
 /** @type {import("./index.d.mts").ConformanceCase[]} */
 export const unitOfWorkCases = [
@@ -40,7 +40,7 @@ export const unitOfWorkCases = [
   {
     id: "K-UOW-2", title: "serializes writers per owner", needs: [],
     async run(ctx) {
-      const { adapter: { uow, memories }, owner, otherOwner } = ctx;
+      const { adapter: { uow, memories }, owner, otherOwner, timeoutMs = DEFAULT_TIMEOUT_MS } = ctx;
       const scope = ctx.scope(null);
       const otherScope = { ...scope, owner: otherOwner };
       const content = await row(ctx, "serialized");
@@ -67,7 +67,7 @@ export const unitOfWorkCases = [
           equal((await second)?.id, id, "Second writer did not see the first commit");
           const persisted = await uow.run(otherOwner, { readOnly: true }, (tx) => memories.get(tx, otherScope, other.id));
           equal(persisted?.id, other.id, "Another owner's committed row was lost");
-        });
+        }, "Concurrent runs", timeoutMs);
       } finally {
         release.release(undefined);
       }
@@ -75,7 +75,8 @@ export const unitOfWorkCases = [
   },
   {
     id: "K-UOW-3", title: "takes the pause lock before the write lock", needs: [],
-    async run({ adapter: { uow }, owner, otherOwner, settleMs = 100 }) {
+    async run({ adapter: { uow }, owner, otherOwner, settleMs = 100, timeoutMs = DEFAULT_TIMEOUT_MS }) {
+      const phaseMs = timeoutMs + settleMs;
       const readerStarted = gate();
       const releaseReader = gate();
       try {
@@ -88,7 +89,7 @@ export const unitOfWorkCases = [
           let pausedEntered = false;
           const paused = observe(uow.run(owner, { pauseLock: true }, async () => { pausedEntered = true; }));
           // Give the paused writer time to reach its lock waits before starting the plain writer.
-          await new Promise((resolve) => setTimeout(resolve, settleMs));
+          await wait(settleMs);
           check(!pausedEntered, "Pause-lock writer entered while the reader held the pause lock");
           let writerEntered = false;
           await uow.run(owner, {}, async () => { writerEntered = true; });
@@ -97,7 +98,7 @@ export const unitOfWorkCases = [
           releaseReader.release(undefined);
           await Promise.all([reader, paused]);
           check(pausedEntered, "Pause-lock writer did not enter after the reader released");
-        });
+        }, "Concurrent runs", phaseMs);
       } finally {
         releaseReader.release(undefined);
       }
@@ -115,12 +116,12 @@ export const unitOfWorkCases = [
           const second = observe(uow.run(owner, {}, async () => { entered.push("write"); }));
           const third = observe(uow.run(owner, { pauseLock: true }, async () => { entered.push("pause"); }));
           await uow.run(otherOwner, { pauseLock: true }, async () => {});
-          await new Promise((resolve) => setTimeout(resolve, settleMs));
+          await wait(settleMs);
           equal(entered.length, 0, "Another writer entered while the first held both locks");
           release.release(undefined);
           await Promise.all([first, second, third]);
           equal(entered.length, 2, "Both waiting writers should finish");
-        });
+        }, "Concurrent runs", phaseMs);
       } finally {
         release.release(undefined);
       }
@@ -129,7 +130,7 @@ export const unitOfWorkCases = [
   {
     id: "K-UOW-4", title: "keeps a read-only snapshot across a concurrent commit", needs: [],
     async run(ctx) {
-      const { adapter: { uow, memories }, owner } = ctx;
+      const { adapter: { uow, memories }, owner, timeoutMs = DEFAULT_TIMEOUT_MS } = ctx;
       const scope = ctx.scope(null);
       const content = await row(ctx, "snapshot");
       /** @type {ReturnType<typeof gate<string>>} */
@@ -162,7 +163,7 @@ export const unitOfWorkCases = [
           await uow.run(owner, { readOnly: true }, async (tx) => {
             equal((await memories.get(tx, scope, id))?.id, id, "A new snapshot missed the commit");
           });
-        });
+        }, "Concurrent runs", timeoutMs);
       } finally {
         releaseWriter.release(undefined);
         releaseReader.release(undefined);

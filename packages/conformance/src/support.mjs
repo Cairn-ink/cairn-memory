@@ -1,5 +1,7 @@
 import { CoreError } from "@cairn-ink/core";
 
+export const DEFAULT_TIMEOUT_MS = 5000;
+
 /** @typedef {import("./index.d.mts").CaseContext} CaseContext */
 
 /** @param {unknown} condition @param {string} message @returns {asserts condition} */
@@ -158,15 +160,37 @@ export function observe(promise) {
   return promise;
 }
 
-/** @param {() => Promise<void>} work @param {string} [message] */
-export async function bounded(work, message = "Concurrent runs exceeded 5 seconds") {
-  /** @type {ReturnType<typeof setTimeout> | undefined} */
-  let timeout;
+/** @param {() => void} callback @param {number} ms */
+function startTimer(callback, ms) {
+  // Timer delays above the signed 32-bit limit can fire immediately.
+  const maxDelayMs = 2_147_483_647;
+  let remaining = ms;
+  let timer = setTimeout(tick, Math.min(Math.ceil(remaining), maxDelayMs));
+  function tick() {
+    if (remaining <= maxDelayMs) {
+      callback();
+      return;
+    }
+    remaining -= maxDelayMs;
+    timer = setTimeout(tick, Math.min(Math.ceil(remaining), maxDelayMs));
+  }
+  return () => clearTimeout(timer);
+}
+
+/** @param {number} ms */
+export function wait(ms) {
+  return new Promise((resolve) => { startTimer(() => resolve(undefined), ms); });
+}
+
+/** @param {() => Promise<void>} work @param {string} message @param {number} ms */
+export async function bounded(work, message, ms) {
+  /** @type {(() => void) | undefined} */
+  let cancel;
   try {
     await Promise.race([work(), new Promise((_, reject) => {
-      timeout = setTimeout(() => reject(new Error(message)), 5000);
+      cancel = startTimer(() => reject(new Error(`${message} exceeded ${ms} ms`)), ms);
     })]);
   } finally {
-    clearTimeout(timeout);
+    cancel?.();
   }
 }
