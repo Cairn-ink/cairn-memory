@@ -1031,7 +1031,7 @@
     "literal:store_invalid": 1
   },
   "integrations/client/raw/local-session-start.mjs": {
-    "literal:state_invalid": 1
+    "literal:state_invalid": 3
   },
   "integrations/client/raw/local-session-fence.mjs": {
     "key:sessionId": 1,
