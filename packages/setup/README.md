@@ -86,7 +86,7 @@ User-owned hardlinked transcript files are accepted, as on Linux.
 Known limits in this release:
 - When capture resumes after being turned off, Cairn reads up to the last 4 KiB of the conversation file, and for Codex up to the first 4 KiB to find its session header; some of those bytes may have been written while capture was off. They are used only to identify the session and check the file wasn't replaced, never saved or sent.
 - On macOS, a process running as the same user or root can still redirect an open through precisely timed directory swaps during verification, without crossing a privilege boundary.
-- While new turns keep arriving, indexing uses about one small index write per second and roughly 3% of one CPU core per running local MCP server. Sessions using the shared server share this indexing work.
+- While new turns keep arriving, each local MCP server that is indexing makes about one small index write per second and uses roughly 3% of one CPU core. Sessions on a shared server share that work. A shared server pauses indexing while no session is connected.
 - Histories of about 50,000 messages or more may never finish indexing; search keeps reporting partial coverage for them.
 - Searches served by a reader that doesn't run index maintenance itself, such as keyword-only searches when an embedding model is configured, can keep reporting partial coverage even after indexing has finished. Their results are still returned.
 - With an embedding model configured, semantic search can still send the search text, and background index maintenance can send stored memory text, to that provider while saving is paused or disabled for that store; fixed in the next release.
@@ -180,7 +180,7 @@ Codex 的 hooks 核准提示。執行 `--no-capture` 或 `config --local-capture
 本版已知限制：
 - 從關閉狀態恢復擷取時，Cairn 會讀取對話檔最後至多 4 KiB，Codex 還會讀取開頭至多 4 KiB 來找出 session 標頭；其中一部分可能是關閉期間寫入的。這些位元組只用來辨識 session、確認檔案沒有被替換，不會保存或送出。
 - 在 macOS，同一使用者或 root 的程式仍可能在驗證期間精準切換目錄來重新導向開啟的檔案，但不會跨越權限邊界。
-- 只要新的對話持續存進來，每個執行中的本機 MCP 伺服器大約每秒做一次小量索引寫入，約佔一個 CPU 核心的 3%。連到同一個背景伺服器的對話共用這份索引工作。
+- 新一輪的對話內容持續存進來時，每個正在建索引的本機 MCP 伺服器大約每秒做一次小量寫入，約佔一個 CPU 核心的 3%。連到同一台背景伺服器的對話會共用索引工作。沒有對話連線時，共用伺服器會暫停建索引。
 - 約 50,000 則訊息以上的歷史可能永遠建不完索引，搜尋會一直回報 partial。
 - 由不自行維護索引的讀取端處理的搜尋（例如設定了 embedding 模型時的純關鍵字搜尋），即使索引已建完，也可能持續回報 partial；搜尋結果仍會照常回傳。
 - 若設定了 embedding 模型，在該資料庫暫停或停用保存時，語意搜尋仍可能把搜尋文字、背景索引維護仍可能把已保存的記憶文字送到該模型供應商；下一版修正。
