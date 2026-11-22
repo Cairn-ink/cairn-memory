@@ -3,7 +3,7 @@ import { bindCommitRuntime, dispatchSynchronousCommit, withSynchronousCommitScop
 import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
 import { registerContentWriteBoundary } from './content-write-context.mjs';
 import { contentScopeEpochGuard, assertContentOutput, contentReceiptCount, assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
-import { receiptEventTimeEnabled, cachedContentLayout, installedContentLayout, checkInstalledContentSafety } from './content-safety-schema.mjs';
+import { hasLocalRawPrivacy, receiptEventTimeEnabled, cachedContentLayout, installedContentLayout, checkInstalledContentSafety } from './content-safety-schema.mjs';
 import { writeContentSuppressionInside, suppressReceiptsInside, withContentSuppressionReadInside, requireSuppressionTransaction, allocateContentKey, contentSuppressionReasonInside, memoryCorrectionDenialsInside, contentSuppressionRequestFenceInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, hasContentSuppressionRequestInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { contentReadSafety, memoryContentIdentity, receiptReadSafety, anchoredReadSafety, createContentReadMemo, withheldReceiptIdsInside, withheldStoredReceiptIdsInside, withheldReceiptPageInside, withheldMemoryReceiptIdsInside } from './content-safety.mjs';
 import { roleProfileOptions } from './role-profile-input.mjs';
@@ -74,7 +74,7 @@ export function createMemoryRuntime(input, internal) {
   const db = openDatabase(input.path, { ...(busyTimeoutMs !== undefined ? { busyTimeoutMs } : {}), privateCards: Boolean(privateCards), currentDependencies: Boolean(privateCards?.currentDependencies) || Boolean(input.contentSafety && internal?.rawCapture), methodPackages: Boolean(methodPackages), assets: Boolean(assets), roleProfiles: Boolean(roleProfiles), rawCapture: Boolean(internal?.rawCapture),
     rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion), rawSources: Boolean(internal?.rawSources), localControls: Boolean(internal?.localControls), existingStore: input.existingStore, storeFence: input.storeFence, contentSafety: input.contentSafety });
   try {
-  if (internal?.localRawPrivacy) transaction(db, () => installLocalRawPrivacy(db));
+  if (internal?.localRawPrivacy && !hasLocalRawPrivacy(db)) transaction(db, () => installLocalRawPrivacy(db));
   const localRawPrivacy = internal?.localRawPrivacy ? createLocalRawPrivacyStorage(db) : null;
   const rawLineage = createRawLineageStorage(db);
   const sourceRoots = createRawSourceRoots(db);

@@ -168,6 +168,8 @@ function productionSources() {
 }
 
 const deferredReaders = [
+  ['core/database.mjs', 'openDatabase probe', "    const needsWriter = Symbol('open needs writer');", '\n      upToDate = true;\n    } catch (error)',
+    '}, undefined, { deferred: true });'],
   ['core/moc-storage.mjs', 'queryCandidateRows', '  function queryCandidateRows(', '\n  function mapRows',
     'transaction(db, work, undefined, { deferred: true })'],
   ['core/moc-storage.mjs', 'suppressionFence', '    suppressionFence(ns)', '\n    assertEpoch(',
@@ -209,6 +211,7 @@ function assertDeferredAllowlist(sources) {
     const region = source.slice(start, end), index = region.indexOf(option);
     assert.ok(index >= 0 && region.indexOf(option, index + 1) < 0, 'exact deferred call: ' + file + ':' + name);
     assert.match(region, name === 'queryCandidateRows' ? /transaction\(db, work, undefined, \{ deferred: true \}\)/
+      : name === 'openDatabase probe' ? /\btransaction\(db, \(\) => \{/
       : /\breturn transaction\(db,|\? transaction\(db,/, 'read helper directly calls transaction');
     permit(file, start + index + option.indexOf('deferred'));
     sites.push(file + ':' + name);
@@ -222,9 +225,9 @@ function assertDeferredAllowlist(sources) {
   return sites;
 }
 
-test('deferred transaction call-site allowlist covers exactly the fourteen reviewed read sites', t => {
+test('deferred transaction call-site allowlist covers exactly the fifteen reviewed read sites', t => {
   const sources = productionSources(), sites = assertDeferredAllowlist(sources);
-  assert.equal(sites.length, 14);
+  assert.equal(sites.length, 15);
   t.diagnostic(JSON.stringify({ productionModules: sources.size, deferredReaders: sites }));
 });
 

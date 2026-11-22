@@ -63,6 +63,14 @@ const localDeclaration = sql => {
   if (!match) fail('unsupported_database');
   return [match[2], { type:match[1].toLowerCase(), sql:sql.trim().replace(' IF NOT EXISTS','') }];
 };
+// Mirror exactly the objects skipped by this package's IF NOT EXISTS DDL.
+// Keep this list independent of any union of locally supported packages.
+export function hasLocalRawPrivacy(db) { // One statement: the whole set is read from a single schema snapshot.
+  const declarations = LOCAL_RAW_PRIVACY_DDL.map(localDeclaration), pairs = declarations.map(() => '(?,?)').join(',');
+  return db.prepare(`SELECT count(*) AS n FROM sqlite_master WHERE (type,name) IN (VALUES ${pairs})`)
+    .get(...declarations.flatMap(([name, { type }]) => [type, name])).n === declarations.length;
+}
+
 // A future unsupported declaration must fail at module load, never destructure null.
 const localRawDeclarations = new Map(LOCAL_RAW_PRIVACY_DDL.map(localDeclaration));
 if (localRawDeclarations.size !== LOCAL_RAW_PRIVACY_DDL.length) throw Error('invalid_local_raw_package');
