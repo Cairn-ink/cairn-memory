@@ -92,12 +92,16 @@ export async function clientConfigDirectory(client, env, { create = false } = {}
     return resolved;
   } catch (error) { throw localFilesystemError(error, 'local_root_invalid'); }
 }
+export const engineOperatorEnvironment = env => ({
+  PATH: env.PATH ?? '/usr/bin:/bin', HOME: env.HOME, TMPDIR: env.TMPDIR, LANG: 'C.UTF-8',
+});
+
 // Output is a bounded content-free engine DTO, never a child diagnostic. Kill
 // the process group so a timed-out format probe cannot leave a schema child.
 export async function engineChild(node, args, { env = process.env, onChild = async () => {}, timeout = 170000 } = {}) {
   return new Promise(resolve => {
     const child = spawn(node, args, { detached: process.platform !== 'win32',
-      env: { PATH: env.PATH ?? '/usr/bin:/bin', HOME: env.HOME, TMPDIR: env.TMPDIR, LANG: 'C.UTF-8' },
+      env: engineOperatorEnvironment(env),
       stdio: ['ignore', 'pipe', 'ignore'] });
     let text = '', stopped = false;
     const kill = () => { stopped = true; try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); } };
