@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "23376fe9da53c57b65d7f6bdcc90cca388cc903bca760076cd79a655e2291226",
-  "bytes": 1486785,
+  "sha256": "e7917b16c4991b1406d2cccf2e183e15829137c223661737f6df7f0706656284",
+  "bytes": 1487080,
   "files": [
     "LICENSE",
     "README.md",
@@ -488,13 +488,13 @@
     "core/classification.mjs": "0f3f90217e3ede407b33fb52f1db309beafd8d65e09c419a96b3e0523de7164d",
     "core/conflict-storage.mjs": "0d29a3b3dd3dd3341e2e3b4667a6487b5d458026d0bd7035590b557eacb10a32",
     "core/context-read-assembly.mjs": "b33470076d62266318171b41f8d1e0f49a8bd0e4095f822c91155caa8d647447",
-    "core/context-read-three-layer.mjs": "7876578067d4ca95f78c3a2f18bf4cb9d9e00a5ce29776081a72665da19ee5b7",
+    "core/context-read-three-layer.mjs": "23ccbd6cee3898262f968601d47a2d37ef8bde098092009d89e5b731c5ac537a",
     "core/context-read-bm25.mjs": "a8174fe0b187063048e386d871caba1c55b65d4d28ea5e408b2abb7eb34ee6e4",
     "core/context-read-budget.mjs": "6cfc74c62834cae31903f18b5a472b23d807f011f8be4b0f979862f9ccaa2781",
     "core/context-read-embedder.mjs": "5852e65bb1b01cae14b94536b6872ef1003707501791d38a5b7d7dbf0aedc1ec",
     "core/context-read-facade.mjs": "fdcaad893cc5d0a044b0a619f11ec37c40094c66b2935a2da214480b6f8d77eb",
     "core/context-read-fusion.mjs": "6a9fe68c31a55b0b3081733ddf55407cda8ad6542317e5ba5c9b2ca495c871bd",
-    "core/context-read-input.mjs": "1c13efdabbe9a84a79a905e1483b10aaa422d16db12207dfae20397385703b4f",
+    "core/context-read-input.mjs": "2df188db9c2598f546dec91fd98154d192e1ddd46872f4b72bc534d4504a2171",
     "core/context-read-sidecar.mjs": "ebcb37891b562edeaa180c0c6ad60000107a0ccc24813d1dc05770576c398773",
     "core/context-read-tokenize.mjs": "0afed3c529f50cd22f449328e637ad1d0f4e5dc5e08aed7dce3c15a257cccd5a",
     "core/context-reader.mjs": "170e534d567e82a5e1249c278e25efcbd367aaef8cfabe3dde6b99a91055f879",
@@ -538,7 +538,7 @@
     "core/topic-overview-worker.mjs": "cce8f887003d73f141a8aff27d3b9e9b923c83bfad25e9ce838ef7fdc3c1a947",
     "core/moc-storage.mjs": "5133ae2861e8233919c829d33f7ba9630040553d9c02f928de76253be2897ed3",
     "core/model-budget.mjs": "4becaf34eb5e18270de8a0b1df93913eb75859b76d38e1d59f5b8600be42bc9d",
-    "core/model-call.mjs": "fa0498d803807db6700d43f9f1beb8b7eeb2ad22b3f246b5e64608d3a135c2b4",
+    "core/model-call.mjs": "3c91ff4ba7e425c5c33d2c41614508a9e52ab96aa573404de649df50bb51c28d",
     "core/model-diagnostics.mjs": "5d07ef6c3581901e0469d055cb81058a12809211e09401781c3ee8dbc4584de8",
     "core/model-packing.mjs": "0209b79d86814ae28db079a432d3d96fd368eb08b37b1639c96ad69d858c0854",
     "core/ordered-capture-schema.mjs": "9c1c93949b0a969e8a1f8008719699fb956c299753428c0dd0d4095175028469",
@@ -619,7 +619,7 @@
     "adapters/openai/classification-wire.mjs": "2c840273a329927ce00401af292a28ba0c5299da0e41752262f887af71dd4669",
     "adapters/openai/context-counter.mjs": "096acf96b9bf73731d496d7643d83b135bca79be1f770ebd862a082a209c617f",
     "adapters/openai/embedding.mjs": "b84e1c99b4d0805247a87aeb104a52c8ff4cc98d5c8aa286c092ae7f4f2d07d3",
-    "adapters/openai/index.mjs": "6728fb56c2cf72c936db2c05a0b5b750eb290756fea3e0725ba383d5a38ad17c",
+    "adapters/openai/index.mjs": "7003ea278afa8f54dceb30cf138c9716973abc9df25600496795cf89f1e7dea0",
     "adapters/openai/prompts/qualify-candidates-pool.md": "06fca44b0b963404592241a51231e2dadc56ef1b75de193d0af5790fbe5d1983",
     "adapters/openai/qualification-evidence-pool.mjs": "10207e775f628584a16cecfbe784dcb6764171123aeca088c4a7d69ee1fcc946",
     "adapters/openai/profiles.mjs": "08d0b47b9d694ec5764e75d6a6d13019a4daa8d196495216da80639d82a592a0",
@@ -807,11 +807,11 @@
     "adapters/mcp/safety-command.mjs": "9aada99bb9663e086307e11a51ac44930642b3b93c905062de9c3ca19d23e145",
     "core/raw-search-cache.mjs": "1b683731472c9105cf6831ded647439b87d581c8c39b4e687448bf4d34f29de6",
     "core/raw-search-request-scope.mjs": "46ca9bf125fec034d62522a2c80fe70a99420077b6fdf963698c787da63ecbd7",
-    "core/raw-search-input.mjs": "7cdbf0ed482d852be08efd4c59980081741c4e1c6e4340a0568dde5f789fdeae",
+    "core/raw-search-input.mjs": "dbb3cc9273d11c75d4de7461acafe2425a1ef1522b1c8afbbd48fe2ec6013507",
     "core/raw-search-storage.mjs": "75d90e8dded814b387f4da519689ab7aad632cbc641f133ad5059ec8fb3cc27e",
     "core/raw-search-sqlite.mjs": "b51bd300bec030018b67fb52b32ec354057eda11f870f87305b7e34a9a20fc9a",
     "core/raw-search-authority.mjs": "735a2ebe0e4d10a1d9a8276054cb3797c345c373c313bed3faa749fcdab4e0d4",
-    "core/raw-search-index.mjs": "aaa8519e366ba366cff4c12641cdf4e59d25836905e8da788ef4d416143bccb8",
+    "core/raw-search-index.mjs": "b7114e8fb5d3156fa0327008b986a8bbdbb9046ad3c4515c229b700721c21035",
     "core/raw-search-retrieval.mjs": "a802a2e138a279907d058eafa46d763a3a5b6bbd749ff49dafd6f1461d568e57",
     "core/raw-search-maintenance.mjs": "33031c1726f053e336d6b1442283e12873fbf6ce030f83a7a900fa6656c2c635",
     "docs/plans/raw-search-interface.md": "97da386b7acb86a0e2221d005273723b6983f5c7b50bb52324d3f330c319723b",
@@ -838,6 +838,6 @@
   "generatedHashes": {
     "package.json": "e255ff4d23e921de9bed8e058c64e57aed3e1bc6a8ed242cee52a716add2d69c",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8",
-    "engine-build.json": "4ff34cf8d7994d2ea97422a33cc415f46159418b2acc71811410d1e76526038e"
+    "engine-build.json": "f7215d0002ddce173dfc4c3999463e4f7394555c7fa5bfad35567f9401b0bf7b"
   }
 }
