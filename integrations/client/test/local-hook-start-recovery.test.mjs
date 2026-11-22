@@ -67,11 +67,14 @@ if (process.argv[2] === 'lock-child') {
 function stateFiles(f, directory) {
   const root = join(f.request.installationDirectory,'state',directory);
   if (!existsSync(root)) return [];
-  return readdirSync(root).filter(name => /^[a-f0-9]{64}\.json$/.test(name)).map(name => join(root,name));
+  const names = readdirSync(root);
+  const records = names.filter(name => /^[a-f0-9]{64}\.json$/.test(name));
+  if (directory === 'starts') records.push(...names.filter(name => /^[a-f0-9]{64}\.attempt\.json$/.test(name)));
+  return records.map(name => join(root,name));
 }
 function startRecord(f) {
   const files = stateFiles(f,'starts');
-  assert.equal(files.length,1);
+  assert.ok(files.length === 1 || (files.length === 2 && files[1] === files[0].replace(/\.json$/,'.attempt.json')),'one start or one marker with its matching attempt');
   return JSON.parse(readFileSync(files[0],'utf8'));
 }
 function savedRows(f) {
