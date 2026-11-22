@@ -5,6 +5,9 @@
   "description": "Cairn memory core: storage-independent algorithms and port interfaces.",
   "type": "module",
   "license": "Apache-2.0",
+  "imports": {
+    "#privacy-proxy-check": "./runtime/is-proxy.mjs"
+  },
   "exports": {
     ".": {
       "types": "./src/index.d.mts",
@@ -15,7 +18,8 @@
     }
   },
   "files": [
-    "src"
+    "src",
+    "runtime"
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs",

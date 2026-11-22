@@ -1,3 +1,4 @@
+import { isProxy } from "#privacy-proxy-check";
 import { CONTAINMENT_THRESHOLD } from "../decisions.mjs";
 import { FACT_ORIGINS, validateSuppressionFact } from "../suppression-fact.mjs";
 
@@ -5,18 +6,137 @@ import { FACT_ORIGINS, validateSuppressionFact } from "../suppression-fact.mjs";
 /** @typedef {import("../suppression-fact.mjs").TextFact} TextFact */
 /** @typedef {import("../ports/privacy.d.ts").PassageFingerprint} PassageFingerprint */
 
-/**
- * @template T
- * @param {readonly T[]} values
- * @param {(value: T) => boolean} valid
- */
-function isDenseArray(values, valid) {
-  if (!Array.isArray(values)) return false;
-  for (let index = 0; index < values.length; index++) {
-    if (!Object.hasOwn(values, index) || !valid(values[index])) return false;
-  }
-  return true;
+function invalidSnapshot() {
+  throw new TypeError("Invalid withholding input");
 }
+
+/** @param {unknown} value */
+function string(value) {
+  if (typeof value !== "string") invalidSnapshot();
+  return value;
+}
+
+/** @param {unknown} value */
+function finiteNumber(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) invalidSnapshot();
+  return value;
+}
+
+/** @param {unknown} value */
+const optionalString = (value) => value == null ? value : string(value);
+
+/** @param {unknown} value */
+function record(value) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) invalidSnapshot();
+  return value;
+}
+
+function snapshotReader() {
+  // Share captured properties even when a record appears in multiple input slots.
+  /** @type {WeakMap<object, Map<PropertyKey, PropertyDescriptor | undefined>>} */
+  const captured = new WeakMap();
+
+  /** @param {object} input @param {PropertyKey} name */
+  function dataProperty(input, name) {
+    let properties = captured.get(input);
+    if (!properties) {
+      if (isProxy(input)) invalidSnapshot();
+      properties = new Map();
+      captured.set(input, properties);
+    }
+    if (!properties.has(name)) {
+      const property = Object.getOwnPropertyDescriptor(input, name);
+      if (property && !Object.hasOwn(property, "value")) invalidSnapshot();
+      properties.set(name, property);
+    }
+    return properties.get(name);
+  }
+
+  /** @param {object} input @param {PropertyKey} name @returns {unknown} */
+  const field = (input, name) => dataProperty(input, name)?.value;
+
+  /**
+   * @template T
+   * @param {unknown} input
+   * @param {(value: unknown) => T} copy
+   */
+  function array(input, copy) {
+    if (!Array.isArray(input)) invalidSnapshot();
+    const length = finiteNumber(field(input, "length"));
+    const values = [];
+    for (let index = 0; index < length; index++) {
+      const property = dataProperty(input, index);
+      if (!property) return undefined;
+      values.push(copy(property.value));
+    }
+    return Object.freeze(values);
+  }
+
+  /**
+   * @template T
+   * @param {unknown} input
+   * @param {(value: unknown) => T} copy
+   */
+  const list = (input, copy) => array(input, copy) ?? invalidSnapshot();
+
+  /** @param {unknown} input */
+  function digest(input) {
+    const data = record(input);
+    return Object.freeze({
+      alg: string(field(data, "alg")),
+      value: string(field(data, "value")),
+      pipeline: string(field(data, "pipeline")),
+      redactionVersion: finiteNumber(field(data, "redactionVersion")),
+      keyId: optionalString(field(data, "keyId")),
+    });
+  }
+
+  /** @param {unknown} input */
+  const digests = (input) => list(input, digest);
+
+  /** @param {unknown} input */
+  function fingerprint(input) {
+    const data = record(input);
+    const shingles = field(data, "shingles");
+    return Object.freeze({
+      digests: digests(field(data, "digests")),
+      // Sparse shingle evidence matters only for full-mode comparisons.
+      shingles: shingles == null ? shingles : array(shingles, string) ?? false,
+      keyId: optionalString(field(data, "keyId")),
+    });
+  }
+
+  /** @param {unknown} input */
+  function source(input) {
+    const data = record(input);
+    return Object.freeze({
+      id: string(field(data, "id")),
+      createdAtMs: finiteNumber(field(data, "createdAtMs")),
+    });
+  }
+
+  /** @param {unknown} input */
+  function fact(input) {
+    const data = record(input);
+    const sourceMemory = field(data, "sourceMemory");
+    return Object.freeze({
+      kind: string(field(data, "kind")),
+      origin: string(field(data, "origin")),
+      mode: string(field(data, "mode")),
+      text: fingerprint(field(data, "text")),
+      sourceMemory: sourceMemory == null ? sourceMemory : source(sourceMemory),
+    });
+  }
+
+  /** @param {unknown} input */
+  const keyId = (input) => input == null ? null : string(field(record(input), "id"));
+
+  return { list, digests, fingerprint, source, fact, keyId };
+}
+
+/** @typedef {ReturnType<ReturnType<typeof snapshotReader>["digests"]>[number]} DigestSnapshot */
+/** @typedef {ReturnType<ReturnType<typeof snapshotReader>["fingerprint"]>} FingerprintSnapshot */
+/** @typedef {ReturnType<ReturnType<typeof snapshotReader>["fact"]>} FactSnapshot */
 
 /** @param {unknown} value */
 const isHex = (value) => typeof value === "string" && /^[0-9a-f]+$/u.test(value);
@@ -24,51 +144,44 @@ const isHex = (value) => typeof value === "string" && /^[0-9a-f]+$/u.test(value)
 /** @param {unknown} value */
 const isKeyId = (value) => typeof value === "string" && value.length > 0;
 
-/** @param {TextDigest} digest */
-function isValidDigest(digest) {
-  if (digest == null || typeof digest !== "object" || Array.isArray(digest) ||
-      typeof digest.value !== "string") return false;
-  try {
+/** @param {readonly DigestSnapshot[]} digests */
+function hasValidDigests(digests) {
+  if (digests.length === 0) return false;
+  for (const digest of digests) {
     // Validate each record with the same digest rules used when storing a fact.
     validateSuppressionFact({
       owner: "validation", actionId: "validation", kind: "text", origin: "forget", mode: "exact",
       text: { digests: [digest] },
     });
-    return true;
-  } catch {
-    return false;
   }
+  return true;
 }
 
-/** @param {readonly TextDigest[]} digests */
-const hasValidDigests = (digests) => isDenseArray(digests, isValidDigest) && digests.length > 0;
-
-/** @param {PassageFingerprint | TextFact["text"]} passage */
+/** @param {FingerprintSnapshot} passage */
 function isValidFingerprint(passage) {
-  return passage != null && typeof passage === "object" && hasValidDigests(passage.digests);
+  return hasValidDigests(passage.digests);
 }
 
-/** @param {string[] | null | undefined} shingles */
-const isValidShingleList = (shingles) => shingles == null || isDenseArray(shingles, isHex);
+/** @param {FingerprintSnapshot["shingles"]} shingles */
+const isValidShingleList = (shingles) => shingles !== false && (shingles == null || shingles.every(isHex));
 
-/** @param {{ id: string, createdAtMs: number } | null} source */
-const isValidSource = (source) => source !== null && typeof source === "object" &&
-  typeof source.id === "string" && source.id.length > 0 && Number.isSafeInteger(source.createdAtMs);
+/** @param {{ id: string, createdAtMs: number }} source */
+const isValidSource = (source) => source.id.length > 0 && Number.isSafeInteger(source.createdAtMs);
 
-/** @param {TextFact} fact */
+/** @param {FactSnapshot} fact */
 function isValidFact(fact) {
-  return fact != null && fact.kind === "text" && FACT_ORIGINS.includes(fact.origin) &&
+  return fact.kind === "text" && FACT_ORIGINS.some((origin) => origin === fact.origin) &&
     (fact.mode === "exact" || fact.mode === "full") && isValidFingerprint(fact.text) &&
     (fact.sourceMemory == null || isValidSource(fact.sourceMemory));
 }
 
 /** @param {number} threshold */
-const isValidThreshold = (threshold) => Number.isFinite(threshold) && threshold > 0 && threshold <= 1;
+const isValidThreshold = (threshold) => threshold > 0 && threshold <= 1;
 
-/** @param {TextDigest} digest */
+/** @param {DigestSnapshot} digest */
 const digestIdentity = ({ alg, value }) => `${alg}:${value}`;
 
-/** @param {readonly TextDigest[]} a @param {readonly TextDigest[]} b */
+/** @param {readonly DigestSnapshot[]} a @param {readonly DigestSnapshot[]} b */
 function hasExactDigestMatch(a, b) {
   const identities = new Set(a.map(digestIdentity));
   return b.some((digest) => identities.has(digestIdentity(digest)));
@@ -76,18 +189,25 @@ function hasExactDigestMatch(a, b) {
 
 /** @param {readonly TextDigest[]} a @param {readonly TextDigest[]} b */
 export function exactDigestMatch(a, b) {
-  return !hasValidDigests(a) || !hasValidDigests(b) || hasExactDigestMatch(a, b);
+  try {
+    const snapshot = snapshotReader();
+    const left = snapshot.digests(a);
+    const right = snapshot.digests(b);
+    return !hasValidDigests(left) || !hasValidDigests(right) || hasExactDigestMatch(left, right);
+  } catch {
+    return true;
+  }
 }
 
-/** @param {readonly TextDigest[]} a @param {readonly TextDigest[]} b */
+/** @param {readonly DigestSnapshot[]} a @param {readonly DigestSnapshot[]} b */
 function hasComparableDigests(a, b) {
   return a.some((left) => b.some((right) => left.alg === right.alg &&
     (left.alg === "sha256" || left.keyId === right.keyId)));
 }
 
 /**
- * @param {PassageFingerprint} passage
- * @param {TextFact} fact
+ * @param {FingerprintSnapshot} passage
+ * @param {FactSnapshot} fact
  * @param {number} threshold
  * @param {boolean} checkContainment
  * @param {boolean} [containmentKeyUnavailable]
@@ -115,8 +235,7 @@ function withholdsValidatedPassage(passage, fact, threshold, checkContainment, c
  * @param {number} [threshold]
  */
 export function withholdsPassage(passage, fact, threshold = CONTAINMENT_THRESHOLD) {
-  if (!isValidFingerprint(passage) || !isValidFact(fact) || !isValidThreshold(threshold)) return true;
-  return withholdsValidatedPassage(passage, fact, threshold, true);
+  return withholdsAnyPassage([passage], [fact], threshold);
 }
 
 /**
@@ -125,9 +244,16 @@ export function withholdsPassage(passage, fact, threshold = CONTAINMENT_THRESHOL
  * @param {number} [threshold]
  */
 export function withholdsAnyPassage(passages, facts, threshold = CONTAINMENT_THRESHOLD) {
-  if (!isDenseArray(passages, isValidFingerprint) || !isDenseArray(facts, isValidFact) ||
-      !isValidThreshold(threshold)) return true;
-  return passages.some((passage) => facts.some((fact) => withholdsValidatedPassage(passage, fact, threshold, true)));
+  try {
+    const snapshot = snapshotReader();
+    const candidates = snapshot.list(passages, snapshot.fingerprint);
+    const stored = snapshot.list(facts, snapshot.fact);
+    const cutoff = finiteNumber(threshold);
+    if (!candidates.every(isValidFingerprint) || !stored.every(isValidFact) || !isValidThreshold(cutoff)) return true;
+    return candidates.some((passage) => stored.some((fact) => withholdsValidatedPassage(passage, fact, cutoff, true)));
+  } catch {
+    return true;
+  }
 }
 
 /**
@@ -138,19 +264,28 @@ export function withholdsAnyPassage(passages, facts, threshold = CONTAINMENT_THR
  * @param {{ id: string, createdAtMs: number }} [edit]
  */
 export function blocksMemoryPassage(passages, facts, key, threshold = CONTAINMENT_THRESHOLD, edit) {
-  if (!isDenseArray(passages, isValidFingerprint) || !isDenseArray(facts, isValidFact) ||
-      !isValidThreshold(threshold) || (key != null && !isKeyId(key.id)) ||
-      (edit !== undefined && !isValidSource(edit))) return true;
+  try {
+    const snapshot = snapshotReader();
+    const candidates = snapshot.list(passages, snapshot.fingerprint);
+    const stored = snapshot.list(facts, snapshot.fact);
+    const activeKeyId = snapshot.keyId(key);
+    const cutoff = finiteNumber(threshold);
+    const edited = edit === undefined ? undefined : snapshot.source(edit);
+    if (!candidates.every(isValidFingerprint) || !stored.every(isValidFact) || !isValidThreshold(cutoff) ||
+        (activeKeyId !== null && !isKeyId(activeKeyId)) || (edited && !isValidSource(edited))) return true;
 
-  return facts.some((fact) => {
-    const source = fact.sourceMemory;
-    const checkContainment = fact.mode === "full" && (fact.origin === "edit"
-      ? !edit || !source || source.id !== edit.id || source.createdAtMs !== edit.createdAtMs
-      : passages.length > 1);
-    const containmentKeyUnavailable = checkContainment && (!key || fact.text.keyId !== key.id);
-    if (containmentKeyUnavailable && passages.length === 0) return true;
-    // The exemption skips containment only after a comparable exact miss.
-    return passages.some((passage) =>
-      withholdsValidatedPassage(passage, fact, threshold, checkContainment, containmentKeyUnavailable));
-  });
+    return stored.some((fact) => {
+      const source = fact.sourceMemory;
+      const checkContainment = fact.mode === "full" && (fact.origin === "edit"
+        ? !edited || !source || source.id !== edited.id || source.createdAtMs !== edited.createdAtMs
+        : candidates.length > 1);
+      const containmentKeyUnavailable = checkContainment && (activeKeyId === null || fact.text.keyId !== activeKeyId);
+      if (containmentKeyUnavailable && candidates.length === 0) return true;
+      // The exemption skips containment only after a comparable exact miss.
+      return candidates.some((passage) =>
+        withholdsValidatedPassage(passage, fact, cutoff, checkContainment, containmentKeyUnavailable));
+    });
+  } catch {
+    return true;
+  }
 }

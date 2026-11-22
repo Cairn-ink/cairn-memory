@@ -159,3 +159,64 @@ test("sparse passage and fact lists withhold even without an entry to compare", 
   assert.equal(blocksMemoryPassage([disjoint, disjoint], Array(1), keyA), true);
   assert.equal(blocksMemoryPassage(Array(1), [], keyA), true);
 });
+
+const comparisons = [
+  ["exactDigestMatch", (candidate, fact) => exactDigestMatch(candidate.digests, fact.text.digests)],
+  ["withholdsPassage", (candidate, fact) => withholdsPassage(candidate, fact)],
+  ["withholdsAnyPassage with one candidate", (candidate, fact) => withholdsAnyPassage([candidate], [fact])],
+  ["withholdsAnyPassage with two candidates", (candidate, fact) => withholdsAnyPassage([candidate, candidate], [fact])],
+  ["blocksMemoryPassage with one candidate", (candidate, fact) => blocksMemoryPassage([candidate], [fact], keyA)],
+  ["blocksMemoryPassage with two candidates", (candidate, fact) => blocksMemoryPassage([candidate, candidate], [fact], keyA)],
+];
+
+const invalidRecords = [
+  ["alternating digest accessor", (record) => {
+    const hex = record.value;
+    let reads = 0;
+    return {
+      ...record,
+      get value() {
+        reads++;
+        return reads === 1 || reads === 4 ? hex : { toString: () => hex };
+      },
+    };
+  }],
+  ["proxy digest record", (record) => new Proxy(record, {})],
+  ["throwing digest accessor", (record) => ({
+    ...record,
+    get value() { throw new Error("digest getter"); },
+  })],
+];
+
+for (const [description, makeRecord] of invalidRecords) {
+  for (const [helper, compare] of comparisons) {
+    test(`${helper} withholds a candidate ${description}`, () => {
+      const candidate = { ...disjoint, digests: [makeRecord(digest("sha256", "b"))] };
+      assert.equal(compare(candidate, textFact(reference)), true);
+    });
+
+    test(`${helper} withholds a fact ${description}`, () => {
+      const fact = textFact({ ...reference, digests: [makeRecord(digest("sha256", "a"))] });
+      assert.equal(compare(disjoint, fact), true);
+    });
+  }
+}
+
+test("withholding decisions never coerce a digest value", () => {
+  const hex = "1".repeat(64);
+  let coercions = 0;
+  const coercible = {
+    [Symbol.toPrimitive]() { coercions++; return hex; },
+    toString() { coercions++; return hex; },
+    valueOf() { coercions++; return hex; },
+  };
+
+  for (const value of [Object(hex), BigInt(hex), coercible]) {
+    const digests = [{ ...digest("sha256", "1"), value }];
+    assert.equal(exactDigestMatch(digests, reference.digests), true);
+    assert.equal(exactDigestMatch(disjoint.digests, digests), true);
+    assertWithholds({ ...disjoint, digests }, textFact(reference), keyA);
+    assertWithholds(disjoint, textFact({ ...reference, digests }), keyA);
+  }
+  assert.equal(coercions, 0);
+});
