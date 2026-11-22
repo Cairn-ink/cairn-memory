@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
-import { access, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { startAwareAlive } from '../../../adapters/mcp/local-daemon-liveness.mjs';
 import { ok, until, workspace } from '../../../adapters/mcp/test/local-daemon-support.mjs';
+import { codexSnippet } from '../lib/local-codex.mjs';
 import { shellArgument, terminalWriter } from '../lib/output.mjs';
 import { assertRecordedEngine, installerFixture, realDaemonEngine, uninstall } from './daemon-installer-fixture.mjs';
+import { fixtureBinaryGuard } from './fixture-clients.mjs';
 
 async function assertEngineRemoved(f) {
   await assert.rejects(access(join(f.root, 'engine')), { code: 'ENOENT' });
@@ -24,6 +26,33 @@ function assertOrdinaryOutput(f, result) {
   write('Memory data is kept. You may delete it when you no longer need it.');
   write.literal(shellArgument(f.database));
   assert.deepEqual(result, { code: 0, stdout, stderr: '' });
+}
+
+async function registerFakeCodex(f) {
+  const scratch = dirname(f.home);
+  const state = join(scratch, 'codex-state.json');
+  const calls = join(scratch, 'codex-calls.jsonl');
+  const descriptor = JSON.parse(await readFile(join(f.root, 'installation.json'), 'utf8'));
+  await mkdir(f.env.CODEX_HOME, { mode: 0o700 });
+  await writeFile(join(f.env.CODEX_HOME, 'config.toml'), codexSnippet(f.root, descriptor.clients.codex.vector), { mode: 0o600 });
+  await writeFile(state, '{}');
+  await writeFile(join(f.env.PATH, 'codex'), `#!${process.execPath}
+${fixtureBinaryGuard(scratch)}
+process.env.FAKE_STATE = ${JSON.stringify(state)};
+process.env.FAKE_CALLS = ${JSON.stringify(calls)};
+${await readFile(new URL('./fake-codex.mjs', import.meta.url), 'utf8')}`, { mode: 0o755 });
+}
+
+async function uninstallBothClients(f, afterClaude = () => {}) {
+  await registerFakeCodex(f);
+  const partial = f.run([...uninstall, '--client', 'claude']);
+  assert.equal(partial.code, 0, partial.stdout);
+  await access(f.engine);
+  assert.deepEqual(await f.calls(), []);
+  afterClaude();
+  const last = f.run([...uninstall, '--client', 'codex']);
+  assert.equal(last.code, 0, last.stdout);
+  await assertEngineRemoved(f);
 }
 
 test('full local uninstall stops the live shared owner before removing its engine and keeps data',
@@ -55,6 +84,44 @@ test('full local uninstall stops the live shared owner before removing its engin
       store.close();
     }
   });
+
+test('uninstalling the last local client stops the live shared owner and keeps data',
+  { timeout: 40000, skip: process.platform !== 'linux' }, async t => {
+    const daemon = await workspace(t);
+    const f = await installerFixture(t, { db: daemon.path, clients: ['claude', 'codex'] });
+    await f.setEngine(realDaemonEngine({ root: join(daemon.root, 'run') }));
+    const forwarder = daemon.forward();
+    forwarder.release();
+    const { owner } = await daemon.connect(forwarder);
+    const content = 'synthetic data kept after last-client uninstall';
+    const saved = ok(await forwarder.tool('remember_memory', { content, kind: 'fact' }));
+    forwarder.process.stdin.end();
+    await until(() => forwarder.messages.some(message => message.kind === 'forwarder-done'), 'synthetic session has closed');
+    assert.equal(startAwareAlive(owner), true, 'shared owner is live before uninstall');
+
+    await uninstallBothClients(f, () => {
+      assert.equal(startAwareAlive(owner), true, 'uninstalling Claude leaves the shared owner live');
+    });
+    const { DatabaseSync } = await import('node:sqlite');
+    const store = new DatabaseSync(f.database, { readOnly: true });
+    try {
+      const row = store.prepare('SELECT content FROM memories WHERE id = ?').get(saved.memory.id);
+      assert.equal(row.content, content);
+    } finally {
+      store.close();
+    }
+    assert.equal(startAwareAlive(owner), false, 'uninstalling Codex as the last client stops the shared owner');
+  });
+
+test('uninstalling the last local client invokes the pinned stop command before removing the engine', async t => {
+  const f = await installerFixture(t, { clients: ['claude', 'codex'] });
+  await f.setEngine(realDaemonEngine({ platform: 'darwin' }));
+  await uninstallBothClients(f);
+  assert.equal(await readFile(f.database, 'utf8'), 'synthetic data kept\n');
+  const calls = await f.calls();
+  assert.equal(calls.length, 1, 'uninstalling the last client invokes stop');
+  assertRecordedEngine(calls[0], f, 'stop');
+});
 
 for (const [behavior, source] of [
   ['non-zero exit', "console.log('{\"stopped\":0,\"still_running\":0}'); console.error('synthetic stop failure'); process.exitCode = 7;"],
