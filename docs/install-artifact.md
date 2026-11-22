@@ -84,8 +84,9 @@ Card, revision-bound deletion and cold invalidation/action replay. They import
 only installed engine bytes and verify those bytes against the archive/source
 hashes, with an independent source graph and actual Node import/asset trace.
 This is programmatic lifecycle evidence, not completed installed-client/MCP
-capture or semantic-quality evidence. The [skipped-tail barrier recovery gap](limitations.md#public-raw-constructor-p4b-b1)
-remains a later correction before full installed-hook acceptance.
+capture or semantic-quality evidence. Pausing namespace capture or disabling
+project capture closes incomplete tails skipped for quota, notice or Raw-off.
+Toggling Raw alone leaves those tails unchanged.
 
 ## Verification and compatibility
 

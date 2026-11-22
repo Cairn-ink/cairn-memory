@@ -92,7 +92,7 @@
 - Known limit: Until cleanup removes a deleted item's index entries, its word counts can still slightly affect other results' ranking scores; its text is never returned.
 - Known limit: After you forget something, the conversation it came from and any resumed or forked copy of it (for example `claude --resume`) are not saved from then on. Any conversation that tries to save a message dated within 30 minutes of the forgotten message is not saved from then on either, including one you start right after the forget. To resume saving, start a new conversation more than 30 minutes after the forgotten message was written.
 - Known limit: After any local forget, correct, conversation delete or Episode forget, conversations whose message times are unknown are hidden from Raw search, and a conversation that saves a message without a time is not saved from then on, including new conversations. Memories are kept. Claude Code and Codex normally record message times, so this only affects messages whose transcript entry has no timestamp.
-- Known cost: Forgetting a memory now runs about one more database statement per event of each conversation summary it removes (about 20 ms more at 100 events on a slow machine). Follow-up: replace the per-event updates with one set-based update.
+- Known cost: Forgetting a memory now runs about one more database statement per event of each conversation summary it removes (about 20 ms more at 100 events on a slow machine).
 
 ## 0.6.7 — 2026-11-14
 
@@ -315,7 +315,7 @@ bumped here. The Codex changes shipped in installer 0.6.8.
   - While new turns keep arriving, the local MCP server keeps indexing: about one small index write per second and roughly 3% of one CPU core.
   - Histories of about 50,000 messages or more may never finish indexing; search keeps reporting partial coverage for them.
   - Searches served by a reader that doesn't run index maintenance itself, such as keyword-only searches when an embedding model is configured, can keep reporting partial coverage even after indexing has finished. Their results are still returned.
-  - With an embedding model configured, semantic search can still send the search text, and background index maintenance can send stored memory text, to that provider while saving is paused or disabled for that store. Fixed in installer 0.6.8.
+  - With an embedding model configured, semantic search can still send the search text, and background index maintenance can send stored memory text, to that provider while saving is paused or disabled for that store. Installer 0.6.8 added an embedding guard for namespace pause and project capture disable. Turning off automatic saving with `config --local-capture off` still leaves embedding requests enabled.
   - With an OpenAI key configured for the MCP server, recall, classify, relate and review requests can still send the query and stored memory text to OpenAI while saving is paused or disabled. Still open as of installer 0.6.10. Installs without a key, and automatic capture, are not affected.
   - Local setup doesn't support a custom `CLAUDE_CONFIG_DIR` yet: setup stops with "The Claude Code local entry could not be verified." Still open as of installer 0.6.10.
   - If `~/.claude` or `~/.codex` (or `CLAUDE_CONFIG_DIR` / `CODEX_HOME`) is a symbolic link, local setup stops without connecting that tool. Still a setup limit as of installer 0.6.10.
@@ -408,8 +408,8 @@ bumped here. The Codex changes shipped in installer 0.6.8.
   `--no-raw-search`, and `--no-context-read` disable the respective defaults;
   see [defaults and off switches](docs/defaults.md).
 - You can go back to 0.6.3; it keeps working with the upgraded store, but conversations captured while on 0.6.3 are not kept as Raw.
-- Prepared and unpublished; after publication, rerun setup to install 0.6.5's
-  engine, Codex notice/status updates and the prompt recall deadline. Existing
+- Installer 0.6.5 shipped on November 9, 2026. Rerun setup to install its
+  engine, Codex notice/status updates and prompt recall deadline. Existing
   installed runtimes stay in use until setup is rerun.
 
 ## 0.3.5 — 2026-11-09: hosted recall pre-fetch durability
@@ -422,7 +422,7 @@ bumped here. The Codex prompt changes shipped in installer 0.6.6.
 ## 0.3.4 — 2026-11-09: hosted recall deadline
 
 Plugin and marketplace 0.3.4. Protocol stays 0.3.0. The installer version is not
-bumped here. The Codex prompt changes shipped in installer 0.6.6.
+bumped here. The Codex prompt recall deadline shipped in installer 0.6.5.
 
 - Allow 2,500 ms from the first recall fetch on both hosts. Codex prompt hooks
   have a 3,000 ms process-clock cap; Claude Code plugin prompt hooks keep their
@@ -446,7 +446,7 @@ bumped here. The Codex prompt changes shipped in installer 0.6.6.
 
 - Optional admission capacity covers cold opens while work retains its normal quantum. Each domain prices exhaustion by its own next turn.
 - WAL-mode hosts pay main's integrity check once on the first open after upgrade; DELETE-mode caches rebuild once. Steady maintenance adds no BEGIN or COMMIT.
-- A reader opened after a mismatch is detected never serves the untrusted file; a reader opened before an out-of-band seal removal keeps serving until its next reopen (content safety by delivery revalidation). Invalidating serving handles on rejection is a planned follow-up.
+- A reader opened after a mismatch is detected never serves the untrusted file; a reader opened before an out-of-band seal removal keeps serving until its next reopen (content safety by delivery revalidation). Rejection on open does not invalidate readers that already have the file open.
 
 ## Unreleased — semantic provider key channel
 
