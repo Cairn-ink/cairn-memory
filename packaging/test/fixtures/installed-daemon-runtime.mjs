@@ -283,7 +283,7 @@ export async function installedDaemonRuntime({ diagnostic = () => {}, recordLaun
           for (const launch of launches.filter(launch => launch.db === db)) {
             const vector = launch.session.args.slice(1), value = flag => vector[vector.indexOf(flag) + 1];
             const config = descriptor.identity.configuration, pkg = descriptor.identity.package;
-            if (pkg.path !== launch.root || pkg.dev !== launch.dev || pkg.ino !== launch.ino ||
+            if (pkg.path !== launch.root || pkg.dev !== launch.dev || pkg.ino !== launch.ino || descriptor.identity.build !== launch.build ||
                 config.namespace.ownerId !== value('--owner') || config.namespace.projectId !== (vector.includes('--project') ? value('--project') : null) ||
                 config.raw !== !vector.includes('--no-raw') || config.rawSearch !== !vector.includes('--no-raw-search') ||
                 config.contextRead !== (vector.includes('--no-context-read') ? false : 'context-read-v1')) continue;
