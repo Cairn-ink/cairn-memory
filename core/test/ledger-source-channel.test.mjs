@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { openMemoryCore } from '../contract.mjs';
+import { openContextReader, openMemoryCore } from '../index.mjs';
 import { meteredText } from '../context-read-assembly.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { counter, ns, ok } from '../testing/context-read-assembly-fixture.mjs';
@@ -20,12 +20,14 @@ test('the source channel meters one digest and follows correction, forgetting an
     items: [{ content, kind: 'fact', confidence: 0.9, sourceIndices: [0] }], quantities: [makeQuantity(value)],
   }), classify: ({ input }) => ({ items: input.memories.map(memory => ({ memoryId: memory.id, parentIds: [],
     newL1: { title: 'Purchases', parentL2Ids: [] } })) }) };
-  const core = openMemoryCore({ path: workspace.path + '/memory.sqlite', ledgerPort, model,
-    contextRead: { version: 'context-read-v1', authority: trusted.authority, policy: policy(), counter } });
+  const path = workspace.path + '/memory.sqlite';
+  const contextRead = { version: 'context-read-v1', authority: trusted.authority, policy: policy(), counter };
+  const core = openMemoryCore({ path, ledgerPort, model, contextRead });
   workspace.defer(() => core.close());
   const capture = async id => ok(await core.capture({ namespace: ns, client: 'test', sessionId: 'session', eventId: id,
     messages: [{ id, role: 'user', occurredAt: now, content }] })).admission.memories[0];
-  const read = async budget => ok(await trusted.call(core, 'contextRead', { readSet: [ns], query: 'Total tea spending today',
+  const read = async (budget, query = 'Total tea spending today', reader = core) =>
+    ok(await trusted.call(reader, 'contextRead', { readSet: [ns], query,
     intent: 'current', types: ['memory'], representation: 'memory-compact-v1', raw: false, deadlineMs: 5000,
     ...(budget ? { budget } : {}) }));
   const ledgerItem = result => result.metered.items.find(item => item.channel === 'ledger-v1');
@@ -38,6 +40,11 @@ test('the source channel meters one digest and follows correction, forgetting an
   assert.match(ledgerItem(pack).body, /\$15\.00/);
   assert.deepEqual([...ledgerItem(pack).sources].sort(), [a.id, b.id].sort());
   assert.equal(pack.diagnostics.budget.used, counter.countTokens(meteredText(pack.metered)));
+  const withoutLedger = openContextReader({ path, contextRead });
+  workspace.defer(() => withoutLedger.close());
+  const plain = await read(undefined, 'tea notes');
+  const baseline = await read(undefined, 'tea notes', withoutLedger);
+  assert.equal(meteredText(plain.metered), meteredText(baseline.metered));
   pack = await read({ maxItems: 1, maxTokens: 300 });
   assert.equal(ledgerItem(pack), undefined);
   assert.ok(pack.diagnostics.budget.used <= 300);
