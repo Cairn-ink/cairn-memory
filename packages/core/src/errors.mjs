@@ -42,6 +42,7 @@ export const ERROR_CODES = Object.freeze({
   index_unavailable: "unavailable",
   capability_unavailable: "unavailable",
   model_unavailable: "unavailable",
+  commit_outcome_unknown: "unavailable",
   storage_busy: "retryable",
   storage_error: "retryable",
   provider_error: "retryable",

@@ -1,0 +1,25 @@
+{
+  "name": "@cairn-ink/adapter-postgres",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.mts",
+      "default": "./src/index.mjs"
+    }
+  },
+  "files": ["src"],
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "pg": "^8.23.1",
+    "typescript": "7.0.2"
+  },
+  "engines": {
+    "node": ">=22.16.0"
+  }
+}
