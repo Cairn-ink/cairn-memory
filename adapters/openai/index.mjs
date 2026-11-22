@@ -3,6 +3,7 @@ import { get_encoding } from 'tiktoken';
 import { readFileSync } from 'node:fs';
 import { MemoryStoreError, boundedText } from '../../core/validation.mjs';
 import { emitDiagnostic } from '../../core/model-diagnostics.mjs';
+import { checkModelDispatch } from '../../core/model-call.mjs';
 import { qualificationCandidatesInlineSchema, schemasFor, schemasForQualificationInput,
   snapshotIndexedExtractInput, episodeSchemasFor } from './schemas.mjs';
 import { DEFAULT_MODEL, modelProfile, episodeProfile } from './profiles.mjs';
@@ -274,6 +275,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
 
   async function post(path, body, maximum, signal, diagnose, consolidation = false) {
     checkAbort(signal, diagnose);
+    if (consolidation) checkModelDispatch(signal);
     try {
       const response = await fetchImpl(`https://api.openai.com/v1${path}`, {
         method: 'POST', redirect: 'error', signal,
