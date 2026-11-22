@@ -1,0 +1,20 @@
+{
+  "name": "@cairn-ink/memory-core",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    "./extraction": {
+      "types": "./src/extraction.d.ts",
+      "default": "./src/extraction.mjs"
+    },
+    "./embedding": {
+      "types": "./src/embedding.d.ts",
+      "default": "./src/embedding.mjs"
+    }
+  },
+  "files": [
+    "src/**/*.mjs",
+    "src/**/*.d.ts"
+  ]
+}
