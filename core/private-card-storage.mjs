@@ -12,14 +12,13 @@ import { EVIDENCE_METHODS } from './private-evidence-input.mjs';
 import { createPrivateEvidenceStorage } from './private-evidence-storage.mjs';
 import { cardApplicabilityInside, reviewCardApplicabilityInside } from './private-evidence-schema.mjs';
 import { ORGANIZATION_METHODS, ORGANIZATION_READS } from './private-organization-input.mjs';
-import { createPrivateOrganizationStorage } from './private-organization-storage.mjs';
+import { createPrivateOrganizationStorage, retireTopicTitleSourceInside } from './private-organization-storage.mjs';
 import { createCardReceiptSources } from './card-receipt-sources.mjs';
 import { createCardRawSources } from './card-raw-sources.mjs';
 import { cardText, keyed, noteInput, OWNER_NOTE_CAP, pageLimit, refs, sourceRef } from './private-card-input.mjs';
 import { hasCardLineage, collectCardBodySourcesInside, sealCardBodyInside, checkCardActionInside,
   recordCardActionInside, cardBodyDigest } from './card-lineage.mjs';
 import { isEngineCard, engineCardMetadataInside } from './content-safety.mjs';
-import { retireTopicTitleSourceInside } from './topic-title-storage.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';

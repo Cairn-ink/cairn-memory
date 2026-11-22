@@ -18,7 +18,7 @@ import { fail } from './validation.mjs';
 import { installPrivateCards, installCardMemorySources } from './private-card-schema.mjs';
 import { installPrivateEvidence } from './private-evidence-schema.mjs';
 import { installPrivateOrganization } from './private-organization-schema.mjs';
-import { retireTopicTitleSourceInside } from './topic-title-storage.mjs';
+import { retireTopicTitleSourceInside } from './private-organization-storage.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';

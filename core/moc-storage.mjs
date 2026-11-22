@@ -10,7 +10,7 @@ import { transaction, readTransaction, isStorageBusy } from "./database.mjs";
 import { fail } from "./validation.mjs";
 import { QUERY_SCAN_BUDGET_MS, SOURCE_QUERY_RECEIPT_LIMIT, QUERY_CANDIDATES } from './query-candidates.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
-import { retireTopicTitleSourceInside } from './topic-title-storage.mjs';
+import { retireTopicTitleSourceInside } from './private-organization-storage.mjs';
 
 const namespaceWhere = "owner_id = ? AND scope = ? AND project_id = ?";
 const qualifiedNamespace = (alias) => `${alias}.owner_id = ? AND ${alias}.scope = ? AND ${alias}.project_id = ?`;
@@ -383,7 +383,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
        source.scope != moc.scope OR source.project_id != moc.project_id OR
        source.revision != missing.memory_revision))
     AND EXISTS (SELECT 1 FROM moc_title_sources present WHERE present.moc_id = moc.id)
-    THEN NULLIF(moc.title, '') ELSE NULL END`;
+    THEN moc.title ELSE NULL END`;
 
   function queryCandidateRows(ns, { score, memoryLabel, sourceReceiptLimit = 0,
     scanBoundary, expectedEpoch, expectedSuppressionEpoch, scanBudgetMs = QUERY_SCAN_BUDGET_MS }) {
