@@ -26,7 +26,7 @@ const hash = value => createHash('sha256').update(JSON.stringify(value)).digest(
 /** Internal only: joins the real admission/episode transaction, never interprets. */
 export function createRawCaptureStorage({ db, profile, ...options }) {
   const hostInterpretation = options.interpretation === 'host';
-  const privacy = options.localRawPrivacy ? createLocalRawPrivacyStorage(db) : null;
+  const privacy = options.localRawPrivacy ? createLocalRawPrivacyStorage(db, options.fenceDocumentSession) : null;
   const arrivalInputs = new WeakMap();
   const journal = createRawJournal({ db, ...options });
   const lineage = createRawLineageStorage(db);
@@ -90,6 +90,11 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
     const projection = freeze({ namespace: { ...input.namespace, projectId: input.namespace.projectId || null },
       client: input.client, eventId: input.eventId,
       sessionId: profile.sessionEpisodes || ordinary ? input.sessionId : sessionKey, messages, ...context });
+    const documentMessages = options.documentCards ? messages.map(({ id }) => {
+      const message = input.messages.find(value => value.id === id);
+      return { id, role: message.role, content: message.content, occurredAt: unknownMessageIds.includes(id) ? null : message.occurredAt,
+        totalUnits: message.part.totalUnits };
+    }) : undefined;
     const snapshot = messages.length ? profile.sessionEpisodes ? episodeSnapshot(projection)
       : captureSnapshot(projection, profile.captureQualification, profile.captureSourcePolicy) : null;
     const projectionDigest = snapshot?.payloadDigest ?? hash([hostInterpretation ? 'raw-capture-host-empty-v1' : 'raw-capture-empty-v1',
@@ -248,6 +253,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
     }
     const commitOnly = () => { const result = transaction(db, commit, checkDeadline); if (result.closed) fail(result.closed); accepted = true; return result; };
     return Object.freeze({ localPrivacy: Boolean(privacy), input: projection, hasProjection: Boolean(snapshot), replay,
+      ...(documentMessages ? { documentMessages } : {}),
       emptyOutcome, commit, observeReplay, assertEpochCurrent, checkDeadline, checkFailureDeadline,
       // A winner can commit even during a failing model preflight. Only an
       // unaccepted attempt may observe that winner; it never acquires work.
@@ -283,8 +289,11 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
     }
     return transaction(db, () => {
       if (privacy) privacy.fenceInside(namespace,client,session);
-      else db.prepare('INSERT OR IGNORE INTO raw_session_fences VALUES(?,?,?,?,?)')
-        .run(...rawBoundary(namespace), client, session);
+      else {
+        db.prepare('INSERT OR IGNORE INTO raw_session_fences VALUES(?,?,?,?,?)')
+          .run(...rawBoundary(namespace), client, session);
+        options.fenceDocumentSession?.(namespace, client, session);
+      }
       return journal.closePending({ ownerId: namespace.ownerId, namespace, client, sessionKey: session, reason: 'capture_barrier' });
     });
   }

@@ -1,3 +1,4 @@
+import { documentCardPort } from './document-card.mjs';
 import { suppressionContent } from './suppression-content.mjs';
 import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
 import { withCommitDelivery, inCommitDelivery, dispatchCommit, hasCommitDispatcher, commitFailure, dispatchSynchronousCommit } from './commit-dispatch.mjs';
@@ -58,7 +59,7 @@ import {
 const CORE_OPTIONS = Object.freeze(['path','model','captureQualification','captureQualifiedDuplicates','captureSourcePolicy',
   'captureRationale','captureEvidence','captureDeadlineMs','sessionEpisodes',
   'decisionReview','privateCards','methodPackages','assets','roleProfiles','existingStore','storeFence','contentSafety','busyTimeoutMs',
-  'cardRelations','cardVectors','ledgerPort']);
+  'cardRelations','cardVectors','ledgerPort','cardPort']);
 const OPEN_OPTIONS = Object.freeze([...CORE_OPTIONS, 'rawConversations', 'raw', 'rawSearch']);
 
 const keepAdmissionKey = Symbol('keepAdmissionKey');
@@ -300,6 +301,7 @@ export function createMemoryCore(input, internal) {
   if (sessionEpisodes && (captureQualification !== 'source-bound-v2' || captureEvidence !== 'staged-v1')) throw new MemoryStoreError('invalid_input');
   const model = input.model;
   const { ledgerPort } = input;
+  const cardPort = documentCardPort(input.cardPort);
   if (ledgerPort !== undefined && ['put', 'drop', 'list'].some(key =>
     typeof ledgerPort?.[key] !== 'function' || types.isAsyncFunction(ledgerPort[key]))) fail('invalid_input');
   if (model?.onDiagnostic !== undefined && typeof model.onDiagnostic !== 'function') throw new MemoryStoreError('invalid_input');
@@ -313,7 +315,7 @@ export function createMemoryCore(input, internal) {
     ...(assets ? { assets } : {}),
     ...(roleProfiles ? { roleProfiles } : {}),
     ...(privateCards ? { privateCards } : {}), ...(decisionReview ? { decisionReview: 'required-v1' } : {}), ...(sessionEpisodes ? { sessionEpisodes } : {}) },
-    { engineCards: typeof model?.consolidate === 'function', ...(ledgerPort ? { ledgerPort } : {}) });
+    { engineCards: typeof model?.consolidate === 'function', ...(ledgerPort ? { ledgerPort } : {}), ...(cardPort ? { cardPort } : {}) });
   try {
   const { storeId, cursorSecret } = runtime.identity;
   let engineCards, engineCardsLoading;
@@ -672,7 +674,7 @@ export function createMemoryCore(input, internal) {
     });
   }
 
-  function finishAdmissionValidated(input, captureInitial, deadline, qualifiedDuplicates) {
+  function finishAdmissionValidated(input, captureInitial, deadline, qualifiedDuplicates, documentCards) {
     return invoke(() => {
       runtime.ready();
       object(input, ['namespace', 'client', 'eventId', 'payloadDigest', 'token', 'items']);
@@ -680,7 +682,7 @@ export function createMemoryCore(input, internal) {
       const key = admissionKey(input);
       const token = contractId(input.token);
       const items = admissionItems(input.items, captureInitial && Boolean(sessionEpisodes), captureInitial ? 20 : 5, captureInitial);
-      return captureInitial ? runtime.finishCapturedAdmission(ns, { ...key, token, items }, deadline, qualifiedDuplicates) :
+      return captureInitial ? runtime.finishCapturedAdmission(ns, { ...key, token, items, ...(documentCards ? { documentCards } : {}) }, deadline, qualifiedDuplicates) :
         runtime.finishAdmission(ns, { ...key, token, items });
     });
   }
@@ -1107,8 +1109,12 @@ export function createMemoryCore(input, internal) {
       const namespace = publicNamespace(ns);
       const captureKey = value => keepInput ? { ...value, [keepAdmissionKey]: true } : value;
       if ((captureEvidence || evidenceOnly) && Object.hasOwn(input, 'causal')) throw new MemoryStoreError('invalid_input');
+      // Retain the incoming text before capture flattens its whitespace. Raw
+      // registration supplies detached whole-message candidates of its own.
+      const documentMessages = cardPort && !keepInput ? rawRegistration?.documentMessages ??
+        denseArray(input.messages, 1, 24).map(({ id, role, content, occurredAt }) => ({ id, role, content, occurredAt })) : undefined;
       return success(await (keepInput ? keepEpisodeCapture : sessionEpisodes ? captureEpisodeMessages : captureMessages)({ model, captureQualification, captureSourcePolicy,
-        runtime, ns, sessionEpisodes, keepInput, rawRegistration, ledger: Boolean(ledgerPort),
+        runtime, ns, sessionEpisodes, keepInput, rawRegistration, ledger: Boolean(ledgerPort), documentMessages,
         startAdmission: () => (deadline = sharedDeadline ?? (captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs))),
         captureRationale, captureEvidence,
         deadline, input: { ...input, namespace },
@@ -1124,8 +1130,8 @@ export function createMemoryCore(input, internal) {
           claimAdmission: (value, sources) => invoke(() => runtime.claimCapturedAdmission(ns, {
           ...admissionKey(value), leaseMs: ADMISSION_LEASE_MS,
         }, deadline, rawRegistration, sources)),
-          finishAdmission: value => finishAdmissionValidated(captureKey(value), true, deadline,
-            keepInput || sessionEpisodes ? undefined : captureQualifiedDuplicates),
+          finishAdmission: (value, cards) => finishAdmissionValidated(captureKey(value), true, deadline,
+            keepInput || sessionEpisodes ? undefined : captureQualifiedDuplicates, cards),
           abandonAdmission: (value, retryable) => retryable
             ? invoke(() => runtime.abandonAdmission(ns, { ...admissionKey(captureKey(value)),
               token: contractId(value.token), retryable: true }))
@@ -1387,6 +1393,15 @@ export function createMemoryCore(input, internal) {
     listReviewTransitions, listReviewConflicts,
     confirm: input => resolveReview('confirm', input), reject: input => resolveReview('reject', input),
     isSuppressed,
+    ...(cardPort ? { forgetCard(value) { return invoke(() => {
+      runtime.ready();
+      object(value, ['namespace', 'cardId']);
+      const ns = publicNamespace(contractNamespace(value.namespace));
+      const cardId = contractId(value.cardId);
+      const forgotten = Boolean(cardPort.get(ns, cardId));
+      cardPort.hide(ns, cardId, 'card_forget');
+      return { forgotten };
+    }); } } : {}),
     admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     claimAdmission, finishAdmission, abandonAdmission, inspectAdmission,
     inspectCaptureEvidence, discardCaptureEvidence,

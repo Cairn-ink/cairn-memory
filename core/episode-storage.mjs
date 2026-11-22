@@ -69,7 +69,7 @@ export function episodeMetadata(ns, row) {
 }
 
 /** All write seams are model-free. SE-2 owns scheduling and provider calls. */
-export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch, epoch, forgetMutation, rawCapture, sourceAuthority, sourceRoots, deleteEpisode, assertEpisodeRead, episodeProjection }) {
+export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch, epoch, forgetMutation, rawCapture, sourceAuthority, sourceRoots, deleteEpisode, assertEpisodeRead, episodeProjection, fenceDocumentSession }) {
   const rawControls = createRawControlStorage(db);
   // Cleanup-only callers need only exec; defer the optional schema probe until
   // a real episode publication attempt, preserving that legacy failure seam.
@@ -1016,6 +1016,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       revision(input.expectedRevision);
       const row = live(ns, input.episodeId, input.expectedRevision);
       const ids = db.prepare('SELECT memory_id FROM episode_memory_links WHERE episode_id=?').all(row.id);
+      fenceDocumentSession?.(ns, row.client, row.session_key, 'source_episode_forgotten');
       invalidateSources(ns, row.id);
       for (const { memory_id: id } of ids) forgetMutation(ns, id, undefined, 'forgotten', 'user_forget', { cascade: true });
       const record = blank(null); record.processing.state = 'invalidated';

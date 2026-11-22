@@ -12,7 +12,7 @@ const same = (a, b) => a.client === b.client && a.sessionKey === b.sessionKey;
 const size = value => Buffer.byteLength(JSON.stringify({ ok: true, value }));
 
 /** One model-free live-source plan for preview, conversation delete and old episode delete. */
-export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, removeReceipts, advanceEpoch, localRawPrivacy }) {
+export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, removeReceipts, advanceEpoch, localRawPrivacy, fenceDocumentSession }) {
   const rawCards = createRawCardInvalidation(db);
   const key = Buffer.from(db.prepare('SELECT cursor_secret FROM store_metadata WHERE singleton=1').get().cursor_secret, 'hex');
   const hash = value => createHmac('sha256', key).update(JSON.stringify(value)).digest('base64url');
@@ -157,6 +157,7 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
       rawCards.collect(ns,[{ conversationId: row.id }]);
     }
     db.prepare('INSERT OR IGNORE INTO raw_session_fences VALUES(?,?,?,?,?)').run(...rawBoundary(ns), root.client, root.sessionKey);
+    fenceDocumentSession?.(ns, root.client, root.sessionKey);
     closeJobs(ns, plan.jobs);
     db.prepare(`DELETE FROM raw_job_sources WHERE ${where} AND source_client=? AND session_key=?`)
       .run(...rawBoundary(ns), root.client, root.sessionKey);
@@ -253,7 +254,7 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
             error.message !== 'local_raw_uuid_pending' || db.isTransaction) throw error;
         if (attempt === 1) fail('local_raw_privacy_write_failed');
         const row = check();
-        if (row) createLocalUuidFence(db).beforeDelete(ns,row.client,row.session_key);
+        if (row) createLocalUuidFence(db, fenceDocumentSession).beforeDelete(ns,row.client,row.session_key);
       }
     }
   }

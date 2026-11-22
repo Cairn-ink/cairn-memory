@@ -7,7 +7,7 @@ export const UUID_HASH_CHUNK = 128, UUID_BACKFILL_CHUNK = 64;
 const where = 'owner_id=? AND scope=? AND project_id=? AND client=? AND session_key=?';
 // All methods are local-selection only. Jobs and backfill watermarks commit
 // with fences; capture cannot pass while either kind of work remains.
-export function createLocalUuidFence(db) {
+export function createLocalUuidFence(db, fenceDocumentSession) {
   const secret = Buffer.from(db.prepare('SELECT secret FROM episode_identity WHERE singleton=1').get().secret,'hex');
   const hash = (ns,client,id) => createHmac('sha256',secret)
     .update(JSON.stringify(['local-raw-forgotten-uuid-v1',...rawBoundary(ns),client,id])).digest('hex');
@@ -65,6 +65,7 @@ export function createLocalUuidFence(db) {
   function beforeDelete(ns,client,session) {
     const ready = transaction(db,()=>{
       db.prepare('INSERT OR IGNORE INTO raw_session_fences VALUES(?,?,?,?,?)').run(...rawBoundary(ns),client,session);
+      fenceDocumentSession?.(ns, client, session);
       enqueueInside(ns,client,session); return advanceInside(); });
     if (!ready) fail('local_raw_privacy_write_failed');
   }

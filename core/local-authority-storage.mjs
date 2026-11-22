@@ -54,8 +54,8 @@ export const LOCAL_RAW_LEGACY_EVENT_LIMIT = 4096;
 export const LOCAL_RAW_HIDE_WINDOW_MS = 30 * 60 * 1000;
 
 /** Private local selection only. Every mutation joins its caller's transaction. */
-export function createLocalRawPrivacyStorage(db) {
-  const uuid = createLocalUuidFence(db);
+export function createLocalRawPrivacyStorage(db, fenceDocumentSession) {
+  const uuid = createLocalUuidFence(db, fenceDocumentSession);
   const sourceRoots = createRawSourceRoots(db);
   const nsWhere = 'owner_id=? AND scope=? AND project_id=?';
   const raw = createRawControlStorage(db);
@@ -75,6 +75,7 @@ export function createLocalRawPrivacyStorage(db) {
   function fenceInside(ns, client, session) {
     required();
     db.prepare('INSERT OR IGNORE INTO raw_session_fences VALUES(?,?,?,?,?)').run(...rawBoundary(ns), client, session);
+    fenceDocumentSession?.(ns, client, session);
     uuid.enqueueInside(ns,client,session);
     raw.closePendingInside({ ownerId: ns.ownerId, namespace: ns, client, sessionKey: session, reason: 'capture_barrier' });
   }

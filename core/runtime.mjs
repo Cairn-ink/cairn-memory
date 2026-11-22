@@ -1,3 +1,4 @@
+import { documentCardDependsOn, hideDocumentCards } from './document-card.mjs';
 import { ledgerNamespace, rowsFrom } from './quantity-ledger.mjs';
 import { captureSnapshot } from './capture-input.mjs';
 import { bindCommitRuntime, dispatchSynchronousCommit, withSynchronousCommitScope } from './commit-dispatch.mjs';
@@ -73,13 +74,17 @@ export function createMemoryRuntime(input, internal) {
   const sessionEpisodes = input.sessionEpisodes === undefined ? undefined : episodeOptions(input.sessionEpisodes);
   const decisionReview = decisionReviewOption(input);
   const ledgerPort = internal?.ledgerPort;
+  const cardPort = internal?.cardPort;
   const db = openDatabase(input.path, { ...(busyTimeoutMs !== undefined ? { busyTimeoutMs } : {}), privateCards: Boolean(privateCards), currentDependencies: Boolean(privateCards?.currentDependencies) || Boolean(input.contentSafety && internal?.rawCapture), methodPackages: Boolean(methodPackages), assets: Boolean(assets), roleProfiles: Boolean(roleProfiles), rawCapture: Boolean(internal?.rawCapture),
     rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion), rawSources: Boolean(internal?.rawSources), localControls: Boolean(internal?.localControls), existingStore: input.existingStore, storeFence: input.storeFence, contentSafety: input.contentSafety });
   try {
   if (internal?.localRawPrivacy && !hasLocalRawPrivacy(db)) transaction(db, () => installLocalRawPrivacy(db));
-  const localRawPrivacy = internal?.localRawPrivacy ? createLocalRawPrivacyStorage(db) : null;
   const rawLineage = createRawLineageStorage(db);
   const sourceRoots = createRawSourceRoots(db);
+  const fenceDocumentSession = cardPort && ((ns, client, key, reason = 'source_fenced') => afterTransactionCommit(db, () =>
+    hideDocumentCards(cardPort, documentNamespace(ns), reason, card => card.source.client === client &&
+      sourceRoots.keys(ns, client, card.source.sessionId).includes(key))));
+  const localRawPrivacy = internal?.localRawPrivacy ? createLocalRawPrivacyStorage(db, fenceDocumentSession) : null;
   const rawCards = createRawCardInvalidation(db);
   let deletion;
   let identity;
@@ -406,6 +411,7 @@ export function createMemoryRuntime(input, internal) {
       });
       if(result.memory&&contentSuppressionReasonInside(db,ns,{kind:'memory',key:result.memory.id,revision:result.memory.revision,
         version:JSON.stringify(['memory-revision-v1',result.memory.revision])}))fail('memory_suppressed');
+      if (cardPort) staleDocumentSources(db, cardPort, ns, id, result.memory, value.receiptTimes?.[0]);
       if (ledgerPort) {
         const rows = (value.quantities ?? []).flatMap(quantity => rowsFrom(result.memory, result.memory.revision,
           quantity, value.receiptTimes?.[0] ?? result.memory.updated_at));
@@ -459,6 +465,8 @@ export function createMemoryRuntime(input, internal) {
         revision = revision + 1, updated_at = ? WHERE id = ?`).run(now, id);
       db.prepare("DELETE FROM receipts WHERE memory_id = ?").run(id);
       if (ledgerPort) afterTransactionCommit(db, () => ledgerPort.drop(ledgerNamespace(ns), id));
+      if (cardPort) afterTransactionCommit(db, () =>
+        hideDocumentCards(cardPort, documentNamespace(ns), reason, card => documentCardDependsOn(card, id)));
       const reviewEffects = decisionReview ? effects : undefined;
       return { forgotten: true, indexRevision: advanceEpoch(ns), ...(reviewEffects ? { reviewEffects } : {}) };
   }
@@ -470,6 +478,13 @@ export function createMemoryRuntime(input, internal) {
   function removeReceipts(ns, id, receiptIds, suppression = { reason: 'purge', actionId: 'receipt-remove-'+id }) {
     requireSuppressionTransaction(db);
     suppressReceiptsInside(db, ns, id, suppression, receiptIds);
+    if (cardPort) {
+      const sources = receiptIds.map(receiptId => db.prepare(
+        'SELECT client,session_id,event_id,role FROM receipts WHERE memory_id=? AND id=?').get(id, receiptId)).filter(Boolean);
+      afterTransactionCommit(db, () => hideDocumentCards(cardPort, documentNamespace(ns), 'source_removed', card =>
+        sources.some(source => source.client === card.source.client && source.event_id === card.source.messageId &&
+          source.role === card.source.role && sourceRoots.keys(ns, source.client, card.source.sessionId).includes(source.session_id))));
+    }
     const current = activeRow(ns, id); if (!current) fail('memory_not_found');
     sourceRoots.touchMemory(ns, id);
     const now = new Date().toISOString();
@@ -846,10 +861,11 @@ export function createMemoryRuntime(input, internal) {
     evaluateQualified: qualifiedTransitionStorage.evaluate,
     evaluateQualifiedSet: qualifiedTransitionStorage.evaluateSet, epoch,
     dropLedger: ledgerPort && ((ns, id) => afterTransactionCommit(db, () => ledgerPort.drop(ledgerNamespace(ns), id))),
+    markDocumentStale: cardPort && ((ns, id, replacement) => staleDocumentSources(db, cardPort, ns, id, replacement)),
     recordHeldRetirement: (previous, replacement, linked) => recordHeldRetirement(db, previous, replacement, linked) });
   const stagedEvidence = createStagedEvidenceStorage({ db });
   let rawCapture;
-  rawCapture = internal?.attachRaw?.(db);
+  rawCapture = internal?.attachRaw?.(db, fenceDocumentSession);
   const episodeProjection = createEpisodeReadProjection({ db, epoch });
   function assertEpisodeRead(ns, row, budget = { remaining: 4096, bytesRemaining: 4*1024*1024 }, mode) {
     if (!(cachedContentLayout(db) ?? installedContentLayout(db)).suppressionRevision) return;
@@ -921,13 +937,13 @@ export function createMemoryRuntime(input, internal) {
     readSourceEvidence: row => readSourceEvidence(row, true, { withholdDenied: true }) });
   let episodes;
   episodes = createEpisodeStorage({ db, options: sessionEpisodes, stagedEvidence, advanceEpoch, epoch,
-    forgetMutation, rawCapture, sourceAuthority: rawLineage, sourceRoots, assertEpisodeRead, episodeProjection,
+    forgetMutation, rawCapture, sourceAuthority: rawLineage, sourceRoots, assertEpisodeRead, episodeProjection, fenceDocumentSession,
     deleteEpisode: (ns, input) => sourceRoots.enabled() ? deletion.forgetEpisode(ns, input) : undefined });
   stagedEvidence.setEpisodes(episodes);
-  deletion = createRawDeletionStorage({ db, localRawPrivacy, roots: sourceRoots, episodes, forgetMutation, removeReceipts, advanceEpoch });
+  deletion = createRawDeletionStorage({ db, localRawPrivacy, roots: sourceRoots, episodes, forgetMutation, removeReceipts, advanceEpoch, fenceDocumentSession });
   const admissionStorage = createAdmissionStorage({
     db, admitMutation, validateReceiptTimes, isSuppressed, activeRow, epoch, conflictStorage, stagedEvidence,
-    classificationJournal, episodes, proceduralStorage, ledgerPort, assertSources: rawLineage.assertReceipts, sourceRoots, memoryAncestry, privacyMemoryDenied,
+    classificationJournal, episodes, proceduralStorage, ledgerPort, cardPort, assertSources: rawLineage.assertReceipts, sourceRoots, memoryAncestry, privacyMemoryDenied,
   });
   const orderedStorage = createOrderedCaptureStorage({ db, admissionStorage, epoch, activeRow,
     supersessionStorage, receiptKey, isSuppressed });
@@ -1200,4 +1216,15 @@ export function createMemoryRuntime(input, internal) {
     try { db.close(); } catch { /* Preserve the construction failure. */ }
     throw error;
   }
+}
+
+const documentNamespace = ns => ({ ...ns, projectId: ns.projectId || null });
+
+function staleDocumentSources(db, port, ns, memoryId, row, date) {
+  const replacement = { memoryId: row.id, revision: row.revision, content: row.content, date: date ?? row.updated_at };
+  const namespace = documentNamespace(ns);
+  afterTransactionCommit(db, () => {
+    for (const card of port.list(namespace)) if (card.sourceMemoryIds.includes(memoryId))
+      port.markStale(namespace, card.id, { memoryId, replacement });
+  });
 }

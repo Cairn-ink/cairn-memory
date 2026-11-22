@@ -27,7 +27,10 @@ import { createSourceContext, expandRelations, relationDiagnostic, sourceReader,
 import { rankMoc, mocDiagnostic } from './context-read-moc.mjs';
 import { fuseCandidates, RRF_PRESETS, COMPACT_RRF_PRESETS } from './context-read-fusion.mjs';
 import { REPRESENTATION_VERSION, TOKENIZER_VERSION } from './context-read-tokenize.mjs';
-import { validateVector } from './context-read-embedder.mjs';
+import { countTokens } from './model-budget.mjs';
+import { createRawSourceRoots } from './raw-source-roots.mjs';
+import { DOCUMENT_CARD_CHANNEL, DOCUMENT_CARD_PRECEDENCE, documentCardPort, documentLexicalScore, documentPiece } from './document-card.mjs';
+import { cosine, validateVector } from './context-read-embedder.mjs';
 import { contextBudget } from './context-read-budget.mjs';
 import { receiptEventDate, completeResponseBytes, cardPackSources, receiptSourceRows, resolveMemorySourceDates } from './context-read-assembly.mjs';
 import { readRawChannel, citedRawTurns, assembleThreeLayerContext } from './context-read-three-layer.mjs';
@@ -93,7 +96,7 @@ export function withContextReadRankingPartition(key, work) {
 export function openContextCore(baseOptions, contextRead, openBase) {
   const busyTimeoutMs = busyTimeoutOption(baseOptions);
   const busyOptions = busyTimeoutMs === undefined ? {} : { busyTimeoutMs };
-  const options = { ...contextOptions(contextRead), ledgerPort: baseOptions.ledgerPort };
+  const options = { ...contextOptions(contextRead), ledgerPort: baseOptions.ledgerPort, cardPort: baseOptions.cardPort };
   const readOnly = Boolean(baseOptions.existingStore);
   // Managed-existing construction uses the retained managed opener, with its
   // journal refusal performed before that opener can touch either database.
@@ -124,11 +127,12 @@ export function openContextCore(baseOptions, contextRead, openBase) {
   } catch (error) { try { base.close(); } catch { /* Preserve the initialization refusal. */ } throw error; }
 }
 export function openContextReader(value) {
-  const input = ownData(value, ['path', 'contextRead', 'busyTimeoutMs']);
+  const input = ownData(value, ['path', 'contextRead', 'busyTimeoutMs', 'cardPort']);
   const busyTimeoutMs = busyTimeoutOption(input);
   const busyOptions = busyTimeoutMs === undefined ? {} : { busyTimeoutMs };
   if (typeof input.path !== 'string' || !isAbsolute(input.path) || input.path.includes('\0')) fail('invalid_path');
-  const options = contextOptions(input.contextRead), context = createContextFacade(input.path, options, { readOnly: true, ...busyOptions });
+  const options = { ...contextOptions(input.contextRead), cardPort: documentCardPort(input.cardPort) };
+  const context = createContextFacade(input.path, options, { readOnly: true, ...busyOptions });
   return Object.freeze({ ...context.methods, close() { context.close(); return success(null); } });
 }
 
@@ -182,6 +186,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     if (database) { database.assertFile(); guardAuxiliaries(); }
   }
   const read = (work, acquisition) => { ready(); return acquisition ? acquisition.transaction(db, work, readTransaction) : readTransaction(db, () => inContentSuppressionRequestInside(db,work)); };
+  const documentChannel = db && options.cardPort && createDocumentChannel(db, options, read, dispatch, controllers);
   const info = memoryOnly ? { storeId: null, cursorSecret: null, cards: false, raw: false } : read(() => {
     const row = db.prepare('SELECT store_id,cursor_secret FROM store_metadata WHERE singleton=1').get();
     if (!row) fail('unsupported_database');
@@ -410,7 +415,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     } catch (error) { lease.invalidate(error); throw error; }
     finally { lease.release(); }
   }
-  async function searchCandidates(input, access, deadlineAt, internal = false) {
+  async function searchCandidates(input, access, deadlineAt, internal = false, onQueryVector) {
     let diagnostics, controller, lease, sourceState;
     try {
       const compact = input.representation === COMPACT_MEMORY_REPRESENTATION;
@@ -494,6 +499,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
             finally { try { guard('post-send'); } finally { if(invoked)assertContentPort(); } }
             if (!Array.isArray(vectors) || vectors.length !== 1) throw Object.assign(new Error(), { code: 'provider_error' });
             const query = validateVector(vectors[0], options.embedder);
+            onQueryVector?.(query);
             const scoring = storage.semanticPreflight(projection, options.embedder, { deadlineAt });
             try {
               if (scoring.state !== 'ready') { preflight = scoring; diagnostics.channels.semantic = channel(scoring.state); }
@@ -772,7 +778,10 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       const deadlineAt = performance.now() + input.deadlineMs;
       const access = authorize('contextRead', input, payload, token);
       if (!options.counter) return failure(new MemoryStoreError('invalid_input'), { counter: 'absent' });
-      const searched = await searchCandidates(input, access, deadlineAt, true);
+      let queryVector;
+      const cardChannel = documentChannel && input.types.includes('memory') ? documentChannel : null;
+      const searched = await searchCandidates(input, access, deadlineAt, true,
+        cardChannel ? vector => { queryVector = vector; } : undefined);
       access.check();
       if (!searched.ok) {
         return deepFreeze({ ...searched, error: { ...searched.error,
@@ -783,6 +792,8 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       if (options.rawSearch && input.raw) access.check();
       const ledger = options.ledgerPort && input.types.includes('memory') && hasLedgerCue(input.query) && performance.now() < deadlineAt
         ? collectLedgerChannel(db, read, options.ledgerPort, input, deadlineAt, canonicalFence) : null;
+      const document = cardChannel && performance.now() < deadlineAt
+        ? await cardChannel.collect(input, access, deadlineAt, queryVector) : null;
       candidates = searched.horizon;
       searched.check(); // The horizon's search fences also cross the outer await.
       let deadline = performance.now() >= deadlineAt;
@@ -883,7 +894,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       const withoutSnapshot = compact ? new WeakSet() : null;
       // Wire-only Card projection retains canonical stored-body fences and bodyRevision.
       const assemble = raw => assembleThreeLayerContext({ prepared: prepared.items, counter: options.counter, policy: input.policy,
-        query: input.query, readSet: input.readSet, intent: input.intent, ledgerItem: ledger?.item,
+        query: input.query, readSet: input.readSet, intent: input.intent, ledgerItem: ledger?.item, documentItem: document?.item,
         budget: input.budget, representation: input.representation, deadlineAt,
         responseBytes: datedCandidates ? ({ meteredBytes, diagnostics, selected }) => {
           const envelope = success({ metered: null, snapshot: null,
@@ -917,6 +928,11 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         decorate(); access.check();
       }
       assembled.diagnostics.stops.deadline ||= performance.now() >= deadlineAt;
+      const deliveredDocument = document && assembled.metered.items.includes(document.item);
+      if (deliveredDocument) {
+        access.check();
+        documentChannel.assertCurrent(document);
+      }
       const result = deepFreeze(success(assembled));
       if (bytes(result) > CONTEXT_LIMITS.responseBytes) fail('context_item_too_large');
       // No host callback, count or await follows this authoritative read.
@@ -927,6 +943,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           for (const path of searched.sourceState.witnesses) if (delivered.some(item => same(item.ref, path.ref)))
             witnessInside(input, path, 'snapshot_stale', witnessBudget);
         }
+        if (deliveredDocument && !documentChannel.visible(document)) fail('snapshot_stale');
         if (ledger && assembled.metered.items.includes(ledger.item) &&
             !same(ledger.fence, canonicalFence(input.readSet, ['memory']))) fail('snapshot_stale');
         if (delivered.length && !same(canonicalFence(input.readSet, [...new Set(delivered.map(item => item.type))]), generationsFor(delivered))) fail('snapshot_stale');
@@ -1107,4 +1124,109 @@ function collectLedgerChannel(db, read, port, input, deadlineAt, canonicalFence)
     const result = digest(rows, rows, window);
     return result && { item: { channel: 'ledger-v1', ...result }, fence: canonicalFence(input.readSet, ['memory']) };
   });
+}
+
+function createDocumentChannel(db, { cardPort, embedder, counter, policy }, read, dispatch, controllers) {
+  const roots = createRawSourceRoots(db);
+  const call = work => assertContentPort({ invoke: () => inertContentPortValue(work(), 'invalid_input', { rejectProxies: true }) });
+  const witness = ({ id, revision, source, sourceMemoryIds, title, body, date, stale }) =>
+    JSON.stringify([id, revision, source, sourceMemoryIds, title, body, date, stale]);
+  const embeddingKey = embedder && JSON.stringify(metadata(embedder));
+  let hasEpisodes = false;
+  function visible({ namespace, card }) {
+    const { source, sourceMemoryIds, stale } = card;
+    if (contentSuppressionReasonInside(db, namespace)) return false;
+    try { roots.assertSession(namespace, source.client, source.sessionId, true); }
+    catch (error) { if (error.code === 'conversation_deleted') return false; throw error; }
+    hasEpisodes ||= Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE name='session_episodes'").get());
+    if (hasEpisodes && db.prepare(`SELECT 1 FROM session_episodes
+      WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND session_key IN (?,?) AND deleted=1`)
+      .get(namespace.ownerId, namespace.scope, namespace.projectId ?? '', source.client,
+        ...roots.keys(namespace, source.client, source.sessionId))) return false;
+    const row = db.prepare('SELECT deleted FROM memories WHERE owner_id=? AND scope=? AND project_id=? AND id=?');
+    return [...sourceMemoryIds, ...(stale?.map(entry => entry.replacement.memoryId) ?? [])].every(id =>
+      row.get(namespace.ownerId, namespace.scope, namespace.projectId ?? '', id)?.deleted !== 1);
+  }
+  function assertCurrent({ namespace, card }) {
+    const current = call(() => cardPort.get(namespace, card.id));
+    if (!current || witness(current) !== witness(card)) fail('snapshot_stale');
+  }
+  async function semanticScores(rows, query, access, deadlineAt, queryVector) {
+    if (!dispatch) return [];
+    const controller = new AbortController();
+    controllers.add(controller);
+    async function embed(texts, entries) {
+      const guard = () => {
+        access.check();
+        for (const entry of entries) assertCurrent(entry);
+        if (entries.length && !read(() => entries.every(visible))) fail('snapshot_stale');
+      };
+      const vectors = await dispatch(embedder, texts, { signal: controller.signal, deadlineAt, guard,
+        budgetClass: entries.length ? 'maintenance' : 'query' });
+      if (!Array.isArray(vectors) || vectors.length !== texts.length) fail('provider_error');
+      return vectors.map(vector => validateVector(vector, embedder));
+    }
+    try {
+      const missing = rows.filter(({ card }) => card.embedding?.key !== embeddingKey);
+      const size = policy.maxBatchDocuments ?? 32;
+      for (let index = 0; index < missing.length; index += size) {
+        const batch = missing.slice(index, index + size);
+        const vectors = await embed(batch.map(({ card }) => Array.from(card.body).slice(0, 2000).join('')), batch);
+        for (const [i, entry] of batch.entries()) {
+          const { namespace, card } = entry;
+          const embedding = { key: embeddingKey, vector: vectors[i] };
+          assertCurrent(entry);
+          call(() => cardPort.put(namespace, { ...card, embedding }));
+          card.embedding = embedding;
+        }
+      }
+      const vector = queryVector ?? (await embed([query], []))[0];
+      return rows.map(entry => [cosine(vector, validateVector(entry.card.embedding.vector, embedder)), entry]);
+    } finally {
+      assertContentPort({ invoke: () => controller.abort() });
+      controllers.delete(controller);
+    }
+  }
+  async function collect(input, access, deadlineAt, queryVector) {
+    try {
+      const rows = input.readSet.flatMap(namespace => call(() => cardPort.list(namespace)).map(card => ({ namespace, card })));
+      if (!rows.length || performance.now() >= deadlineAt) return null;
+      access.check();
+      // The canonical transaction returns only booleans. Embedding vectors
+      // belong to the port and stay outside the SQLite read result.
+      const allowed = read(() => rows.map(visible));
+      const eligible = rows.filter(({ namespace, card }, index) => {
+        if (!allowed[index]) call(() => cardPort.hide(namespace, card.id, 'source_unavailable'));
+        return allowed[index];
+      });
+      if (!eligible.length) return null;
+      const ranked = embedder ? await semanticScores(eligible, input.query, access, deadlineAt, queryVector) :
+        eligible.map(entry => [documentLexicalScore(input.query, entry.card), entry]);
+      let score = -Infinity, match;
+      const threshold = embedder ? .35 : .6;
+      for (const [similarity, entry] of ranked) if (similarity >= threshold && similarity > score) {
+        match = entry; score = similarity;
+      }
+      if (!match || performance.now() >= deadlineAt) return null;
+      access.check();
+      assertCurrent(match);
+      const { namespace, card } = match;
+      const count = text => {
+        if (performance.now() >= deadlineAt) fail('timeout');
+        return countTokens(counter, text, () => access.check());
+      };
+      const piece = documentPiece(card.body, input.query, input.budget.maxTokens, count);
+      if (!piece.body) return null;
+      const replacements = new Map((card.stale ?? []).map(({ replacement }) =>
+        [replacement.memoryId, replacement]));
+      return { ...match, item: { channel: DOCUMENT_CARD_CHANNEL, id: card.id, title: card.title, date: card.date, ...piece,
+        source: { namespace, ...card.source }, sourceMemoryIds: card.sourceMemoryIds,
+        ...(replacements.size ? { stale: true, replacements: [...replacements.values()],
+          precedence: DOCUMENT_CARD_PRECEDENCE } : {}) } };
+    } catch (error) {
+      if (['scope_changed', 'authority_required', 'store_closed'].includes(error.code)) throw error;
+      return null;
+    }
+  }
+  return { collect, visible, assertCurrent };
 }

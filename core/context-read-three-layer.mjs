@@ -315,14 +315,14 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
         return [buildUnit({ memories: members, evidence: unit.evidence.slice() })];
       });
     };
-    let withLedger = false;
+    const sourceItems = [args.documentItem, args.ledgerItem].filter(Boolean), includedSources = [];
     const payload = proposed => ({ framing: ASSEMBLY_FRAMING, items: [
-      ...(withLedger ? [args.ledgerItem] : []), ...[...deduped(proposed)]
+      ...includedSources, ...[...deduped(proposed)]
         .sort(args.representation === 'representation-v2-dated' ? datedOrder : (a, b) => a.rank - b.rank).map(unit => unit.wire)] });
     const memories = proposed => deduped(proposed).flatMap(unit => unit.memories);
-    const omitted = proposed => units.length - proposed.length + Number(Boolean(args.ledgerItem) && !withLedger);
+    const omitted = proposed => units.length - proposed.length + sourceItems.length - includedSources.length;
     const diagnostics = (proposed, used) => ({ version: CONTEXT_VERSION, policy: { id: args.policy.id }, representation: args.representation,
-      counter: { id: counter.id }, items: [...(withLedger ? [{ channel: args.ledgerItem.channel }] : []),
+      counter: { id: counter.id }, items: [...includedSources.map(item => ({ channel: item.channel })),
         ...memories(proposed).map(item => ({ ref: item.ref, metadata: item.metadata }))],
       budget: { ...args.budget, used }, omitted: { items: omitted(proposed), bodies: omitted(proposed),
         sources: 0, unavailable: 0, oversized: 0 }, dedup: { sources: 0, body: 0 }, stops,
@@ -339,16 +339,17 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
       return { metered, used, fits: used <= args.budget.maxTokens && bytes };
     };
     if (!fits([]).fits) fail('context_item_too_large');
-    if (args.ledgerItem) {
-      withLedger = true;
-      if (!fits([]).fits) { withLedger = false; stops.budget = true; }
+    for (const item of sourceItems) {
+      if (includedSources.length >= args.budget.maxItems) break;
+      includedSources.push(item);
+      if (!fits([]).fits) { includedSources.pop(); stops.budget = true; }
     }
     // A Memory unit that a selected Card already replaces is not delivered, so it
     // takes no item slot: count delivered units, and skip units that would vanish.
     const replaced = unit => { const covered = cardSourceKeys(selected.flatMap(other => other.memories));
       return covered.size > 0 && unit.memories.length > 0 && !unit.evidence.length &&
         unit.memories.every(item => item.type === 'memory' && covered.has(memoryPackKey(item.ref))); };
-    while (remaining.length && deduped(selected).length + Number(withLedger) < args.budget.maxItems) {
+    while (remaining.length && deduped(selected).length + includedSources.length < args.budget.maxItems) {
       check();
       remaining.sort((a, b) => {
         const score = unit => unit.bm25 + unit.prior - (unit.cardHit ? 0 : .15 * unit.cost / 250)

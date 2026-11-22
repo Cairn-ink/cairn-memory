@@ -17,7 +17,7 @@ const key = (ns, input) => [ns.ownerId, ns.scope, ns.projectId, input.client, in
 
 /** Content-free job state around the shared admission mutation transaction. */
 export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes, isSuppressed, activeRow, epoch,
-  conflictStorage, stagedEvidence, classificationJournal, episodes, proceduralStorage, ledgerPort, assertSources, sourceRoots, memoryAncestry = () => '', privacyMemoryDenied = row => {
+  conflictStorage, stagedEvidence, classificationJournal, episodes, proceduralStorage, ledgerPort, cardPort, assertSources, sourceRoots, memoryAncestry = () => '', privacyMemoryDenied = row => {
     if(!cachedContentLayout(db)?.suppressionRevision)return false;
     const namespace={ownerId:row.owner_id,scope:row.scope,projectId:row.project_id};
     return !contentReadSafety(db,{namespace,selectedMemory:row,intent:'history',ref:{type:'memory',namespace,memoryId:row.id,revision:row.revision}}).allowed;
@@ -234,6 +234,8 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
       }
       conflictStorage.insertBatch(ns, entries, "inferred-hint");
       const extra = hooks?.admitted?.(entries);
+      const documentCards = cardPort && input.documentCards;
+      if (documentCards) publishDocumentCards(db, cardPort, ns, documentCards, entries, assertSources);
       const memoryIds = [...ids];
       // Resolve revisions after the entire batch: later exact matches can attach
       // receipts to an earlier result while preserving its first occurrence order.
@@ -245,7 +247,8 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
       episodes.admitted(ns, input, entries);
       if (!input.keepActionId) stagedEvidence.mark(ns, input, 'admitted');
       if (hooks?.initialClassification && !input.keepActionId) classificationJournal.insert(ns, input, memories);
-      return { duplicate: false, memories, suppressedCount, indexRevision: epoch(ns), ...extra };
+      return { duplicate: false, memories, suppressedCount, indexRevision: epoch(ns), ...extra,
+        ...(documentCards ? { documentCards: { droppedOversize: documentCards.droppedOversize } } : {}) };
     }, deadline?.check);
     if (result.closed) fail(result.closed);
     return result;
@@ -290,4 +293,17 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
   }
 
   return { claimAdmission, beginCaptureDispatch, finishAdmission, abandonAdmission, assertCaptureEvidence, inspectAdmission };
+}
+
+function publishDocumentCards(db, port, ns, { cards, sources }, entries, assertSources) {
+  const namespace = { ...ns, projectId: ns.projectId || null };
+  for (const card of cards) {
+    const { client, sessionId, messageId: eventId, role } = card.source;
+    const matches = receipt => receipt.client === client && receipt.sessionId === sessionId &&
+      receipt.eventId === eventId && receipt.role === role;
+    const sourceMemoryIds = [...new Set(entries.filter(({ item }) => item.receipts.some(matches)).map(({ memoryId }) => memoryId))];
+    // Recheck on the canonical write connection, including cards without receipts.
+    assertSources?.(ns, sources.filter(matches));
+    afterTransactionCommit(db, () => port.put(namespace, { ...card, sourceMemoryIds }));
+  }
 }

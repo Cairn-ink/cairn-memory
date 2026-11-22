@@ -3,6 +3,7 @@
 `openMemoryCore({ path, model }).capture(input)` composes the existing admission
 and MOC runtime. It is a JavaScript source API, not an MCP server or passive hook.
 Run `npm run demo:capture` on Node >=22.16 for an offline synthetic example.
+Hosts can opt into [capture-time document cards](document-cards.md).
 
 Input is `{ namespace, client, eventId, sessionId, messages, causal? }`. The trusted
 host supplies the exact namespace; each message is `{ id, role, content }`, with

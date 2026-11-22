@@ -3,6 +3,7 @@ import { isStorageBusy } from './database.mjs';
 import { releaseStagedCaptureClaim } from './commit-dispatch.mjs';
 import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { isCaptureSourceBusy, isPreDispatchToken } from './capture-source-safety.mjs';
+import { routeDocumentCards } from './document-card.mjs';
 import { captureSnapshot, extractedItems, retainedSourceView, extractionLimit, quantityInstructions } from './capture-input.mjs';
 import { callModel } from './model-call.mjs';
 import { fittingCap, prefixUnits, requestFits } from './model-packing.mjs';
@@ -134,7 +135,7 @@ function keepRequest(model, request, deadline) {
 
 /** Public-envelope operations own all transactions; no model work runs inside them. */
 export async function captureMessages({ model, input, operations, captureQualification,
-  captureSourcePolicy, captureRationale, captureEvidence, deadline, episodeRun, rawRegistration, runtime, ns, ledger }) {
+  captureSourcePolicy, captureRationale, captureEvidence, deadline, episodeRun, rawRegistration, runtime, ns, ledger, documentMessages }) {
   deadline?.check();
   // The default Raw capture registration already supplies each message's
   // explicit or receive time; captureRaw and Raw-free captures keep their input.
@@ -182,6 +183,9 @@ export async function captureMessages({ model, input, operations, captureQualifi
     if (!allowed.length && !episodeRun?.skip) fail('source_excluded');
     const selected = allowed.map(index => identities[index]);
     const assertSources = () => operations.assertCaptureSources?.(selected);
+    const documentCards = documentMessages && { sources: selected,
+      ...routeDocumentCards(snapshot.namespace, snapshot.client, snapshot.sessionId,
+        documentMessages.filter(message => selected.some(source => source.eventId === message.id && source.role === message.role))) };
     const sourceView = allowed.length === identities.length ? undefined : allowed.map(index => ({
       index: catalog ? catalog.entries[index].messageIndex : index,
       role: sourceMessages[index].role, content: sourceMessages[index].content,
@@ -232,12 +236,12 @@ export async function captureMessages({ model, input, operations, captureQualifi
         ? { decisions: [], reason: items.length ? 'qualification_requires_identity' : null }
         : await reconcileCapture({ model, snapshot, items, discovery: prepared.discovery, deadline, validateFresh: () => { assertSources(); unwrap(operations.ordered.assertPrepared(snapshot, claim.order, prepared)); }, sourceView });
       deadline?.check();
-      const finish = () => operations.ordered.finish(snapshot, claim.token, claim.order, prepared, judged);
+      const finish = () => operations.ordered.finish(documentCards ? { ...snapshot, documentCards } : snapshot, claim.token, claim.order, prepared, judged);
       finished = unwrap(operations.commit ? await operations.commit(finish) : finish());
     } else {
       const finish = () => operations.finishAdmission({ ...owned, items: items.map(({ receiptTimes, ...item }) =>
       receiptTimes ? { ...item, receipts: item.receipts.map((receipt, index) =>
-        ({ ...receipt, occurredAt: receiptTimes[index] })) } : item) });
+        ({ ...receipt, occurredAt: receiptTimes[index] })) } : item) }, documentCards);
       finished = unwrap(operations.commit ? await operations.commit(finish) : finish());
     }
   } catch (error) {
@@ -265,6 +269,7 @@ export async function captureMessages({ model, input, operations, captureQualifi
   return { duplicate: false, admission, classification,
     ...(captureRationale ? { rationale } : {}),
     ...coverage,
+    ...(finished.documentCards ? { documentCards: finished.documentCards } : {}),
     ...(finished.reconciliation ? { reconciliation: finished.reconciliation } : {}),
     ...(itemsShortened || itemsUnqualified
       ? { qualificationTruncated: { itemsShortened, itemsUnqualified, reason: 'context_budget' } } : {}),

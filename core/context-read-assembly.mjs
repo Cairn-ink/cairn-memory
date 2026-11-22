@@ -142,7 +142,7 @@ function canonical(value) {
 // Prepared items retain full identities independently of the wire projection.
 // snapshotOf runs once, after all counts, using only cached preparation state.
 export function assembleContext({ prepared, counter, policy, budget, snapshotOf, deadlineAt, representation = 'representation-v2',
-  responseBytes, intent = 'current', now = () => performance.now(), ledgerItem }) {
+  responseBytes, intent = 'current', now = () => performance.now(), ledgerItem, documentItem }) {
   const started = now(), selected = new Map(), compact = representation === 'memory-compact-v1';
   const hasEngineCards = prepared.some(item => item.type === 'card' && item.metadata?.origin === 'engine');
   const hits = hasEngineCards ? engineCardHits(prepared, budget.maxItems) : new Map();
@@ -154,7 +154,8 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
   const datedSources = new Set(representation === 'representation-v2-dated'
     ? prepared.filter(item => item.sources.some(source => source.date || source.dates?.length)) : []);
   const stops = { budget: false, items: false, deadline: false };
-  let counterCalls = 0, oversized = 0, ledgerTokens;
+  let counterCalls = 0, oversized = 0;
+  const sourceItems = [documentItem, ledgerItem].filter(Boolean), includedSources = new Map();
   const expired = () => { stops.deadline ||= now() >= deadlineAt; return stops.deadline; };
   function count(text, required = false) {
     if (expired() && !required) return null;
@@ -214,9 +215,9 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
         ...(item.sourceAccess !== ASSEMBLY_DEFAULTS.sourceAccess ? { sourceAccess: item.sourceAccess } : {}),
         ...(complete !== ASSEMBLY_DEFAULTS.sourcesComplete ? { sourcesComplete: complete } : {}) };
     });
-    if (ledgerTokens !== undefined) {
-      items.unshift(ledgerItem);
-      details.unshift({ channel: ledgerItem.channel, sources: [], body: { tokens: ledgerTokens } });
+    if (includedSources.size) {
+      items.unshift(...includedSources.keys());
+      details.unshift(...Array.from(includedSources, ([item, tokens]) => ({ channel: item.channel, sources: [], body: { tokens } })));
     }
     return { metered: { framing: ASSEMBLY_FRAMING, items }, details };
   }
@@ -224,7 +225,7 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
   const totalSources = prepared.reduce((sum, item) => sum + item.sources.length, 0);
   function diagnostics(value, used, bounded = false) {
     const sources = value.metered.items.flatMap(item => item.sources ?? []);
-    const bodies = prepared.length + Number(Boolean(ledgerItem)) - value.metered.items.length;
+    const bodies = prepared.length + sourceItems.length - value.metered.items.length;
     return { version: CONTEXT_VERSION, policy: { id: policy.id }, representation, counter: { id: counter.id },
       items: value.details, budget: { ...budget, used: bounded ? budget.maxTokens : used },
       omitted: { items: bodies, bodies, sources: totalSources - value.details.reduce((n, item) => n + item.sources.length, 0), unavailable: 0,
@@ -242,16 +243,18 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
   let accepted = payload(selected, dateOrder);
   const emptyText = meteredText(accepted.metered), emptyUsed = count(emptyText, true);
   if (emptyUsed > budget.maxTokens || !fitsBytes(accepted, emptyText, emptyUsed, selected)) fail('context_item_too_large');
-  if (ledgerItem && !expired()) {
-    ledgerTokens = count(ledgerItem.body) ?? undefined;
+  for (const item of sourceItems) {
+    if (expired() || includedSources.size >= budget.maxItems) break;
+    const tokens = count(item.body);
+    if (tokens !== null) includedSources.set(item, tokens);
     const trial = payload(selected, dateOrder), text = meteredText(trial.metered), used = count(text);
     if (used !== null && !stops.deadline && used <= budget.maxTokens && fitsBytes(trial, text, used, selected)) accepted = trial;
     else {
-      ledgerTokens = undefined;
+      includedSources.delete(item);
       if (!stops.deadline) { stops.budget = true; oversized++; }
     }
   }
-  const size = selection => selection.size + Number(ledgerTokens !== undefined);
+  const size = selection => selection.size + includedSources.size;
   function visit(item, source) {
     if (expired()) return;
     if (!source && item.type === 'card' && item.metadata.origin === 'engine' && !hits.has(item)) {

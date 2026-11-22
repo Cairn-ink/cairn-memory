@@ -6,7 +6,7 @@ const where = 'owner_id = ? AND scope = ? AND project_id = ?';
 
 /** Durable directional history. Mutation callers own the enclosing transaction. */
 export function createSupersessionStorage({ db, activeRow, suppress, advanceEpoch,
-  invalidateConflicts, invalidateMemory, evaluateQualified, evaluateQualifiedSet, epoch, recordHeldRetirement, dropLedger }) {
+  invalidateConflicts, invalidateMemory, evaluateQualified, evaluateQualifiedSet, epoch, recordHeldRetirement, dropLedger, markDocumentStale }) {
   const requiresQualification = (previous, replacement) => Boolean(db.prepare(
     'SELECT 1 FROM memory_qualifications WHERE memory_id IN (?, ?) LIMIT 1').get(previous.id, replacement.id));
 
@@ -60,6 +60,7 @@ export function createSupersessionStorage({ db, activeRow, suppress, advanceEpoc
     db.prepare(`UPDATE memories SET currentness = 'historical', revision = revision + 1,
       updated_at = ? WHERE ${where} AND id = ?`).run(now, ...boundary(ns), previous.id);
     dropLedger?.(ns, previous.id);
+    markDocumentStale?.(ns, previous.id, replacement);
     return { previous: { id: previous.id, revision: previous.revision + 1 },
       indexRevision: advanceEpoch(ns) };
   }

@@ -30,7 +30,8 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
       rawDeletion: deletion,
       localControls,
       localRawPrivacy,
-      attachRaw: db => (storage = createRawCaptureStorage({ db, profile, ...rawOptions, sources, localRawPrivacy })) })),
+      attachRaw: (db, fenceDocumentSession) => (storage = createRawCaptureStorage({ db, profile, ...rawOptions, sources, localRawPrivacy,
+        documentCards: Boolean(input.cardPort), fenceDocumentSession })) })),
     attachCapture: operation => { capture = operation; },
   });
   const deadlineMs = Object.hasOwn(input, 'captureDeadlineMs') ? input.captureDeadlineMs : undefined;
