@@ -25,7 +25,8 @@
   Deleted or forgotten text was never returned in search, and still isn't.
 - **Known limit:** recovery covers a start that failed because the store was busy.
   If Claude Code cancelled the start hook, or the hook ran out of time, that
-  session still isn't saved. A later release addresses this.
+  session still isn't saved. Installer 0.6.10 added recovery for permission checks
+  interrupted by cancellation or timeout.
 - **Known issue:** Node.js 24.22.3 has SQLite 3.54 built in. With it, some
   searches run slower, and recall can return fewer results when you have a lot
   of saved memory. Your saved data isn't affected. Node.js 22, and Node.js 24
@@ -132,8 +133,7 @@ bumped here.
 ## 0.3.6 — 2026-11-10: hosted pause and capture session windows (unreleased; shipped in 0.3.7)
 
 Plugin and marketplace 0.3.6. Protocol stays 0.3.0. The installer version is not
-bumped here; the Codex changes reach installs through the next installer
-release.
+bumped here. The Codex changes shipped in installer 0.6.8.
 
 - Honour a hosted pause on the Claude Code client before recall and capture.
 - Honour a hosted pause when delivering Codex context output.
@@ -315,16 +315,16 @@ release.
   - While new turns keep arriving, the local MCP server keeps indexing: about one small index write per second and roughly 3% of one CPU core.
   - Histories of about 50,000 messages or more may never finish indexing; search keeps reporting partial coverage for them.
   - Searches served by a reader that doesn't run index maintenance itself, such as keyword-only searches when an embedding model is configured, can keep reporting partial coverage even after indexing has finished. Their results are still returned.
-  - With an embedding model configured, semantic search can still send the search text, and background index maintenance can send stored memory text, to that provider while saving is paused or disabled for that store; fixed in the next release.
-  - With an OpenAI key configured for the MCP server, recall, classify, relate and review requests can still send the query and stored memory text to OpenAI while saving is paused or disabled; fixed in the next release. Installs without a key, and automatic capture, are not affected.
-  - Local setup doesn't support a custom `CLAUDE_CONFIG_DIR` yet: setup stops with "The Claude Code local entry could not be verified." Fixed in the next release.
-  - If `~/.claude` or `~/.codex` (or `CLAUDE_CONFIG_DIR` / `CODEX_HOME`) is a symbolic link, local setup stops without connecting that tool. Fixed in the next release.
-  - macOS with Node from Homebrew: setup records Node's versioned path, so rerun setup after `brew upgrade` updates Node. Fixed in the next release.
+  - With an embedding model configured, semantic search can still send the search text, and background index maintenance can send stored memory text, to that provider while saving is paused or disabled for that store. Fixed in installer 0.6.8.
+  - With an OpenAI key configured for the MCP server, recall, classify, relate and review requests can still send the query and stored memory text to OpenAI while saving is paused or disabled. Still open as of installer 0.6.10. Installs without a key, and automatic capture, are not affected.
+  - Local setup doesn't support a custom `CLAUDE_CONFIG_DIR` yet: setup stops with "The Claude Code local entry could not be verified." Still open as of installer 0.6.10.
+  - If `~/.claude` or `~/.codex` (or `CLAUDE_CONFIG_DIR` / `CODEX_HOME`) is a symbolic link, local setup stops without connecting that tool. Still a setup limit as of installer 0.6.10.
+  - macOS with Node from Homebrew: setup records Node's versioned path, so rerun setup after `brew upgrade` updates Node. Still open as of installer 0.6.10.
   - Claude Code runs started by scripts or the Agent SDK (for example `claude -p`) are saved like interactive sessions.
   - Deleting a conversation or forgetting a memory removes that text from Cairn's database at once, and it is never shown again; conversations a forget only hides stay saved until you delete them. Local search index files can keep word lists (and, with semantic search, vectors) from deleted items until background cleanup reaches them. Cleanup runs only while Cairn is running, may not reach them while new conversations keep being saved, and never covers index files for a search setup you no longer use. As with most databases, deleted text can also remain in unused file space until it is overwritten.
   - Automatic saving runs on Linux and WSL. On macOS, setup connects Claude Code and Codex and the memory tools work, but automatic saving doesn't start yet: setup reports conversation saving OFF (runtime_unavailable) and exits with code 2.
   - When capture resumes after being turned off, Cairn reads up to the last 4 KiB of the conversation file, and for Codex up to the first 4 KiB to find its session header; some of those bytes may have been written while capture was off. They are used only to identify the session and check the file wasn't replaced, never saved or sent.
-  - A later release indexes newly saved conversations first.
+  - Raw search began indexing newly saved conversations first in installer 0.6.8.
 - Default reads keep the Raw excerpts they already validated when a read reaches
   its time limit, marked partial, instead of dropping them.
 - Deletion removes the conversation's Raw messages and index rows and its Episodes, and invalidates dependent Cards under the existing lineage rule. Confirmed authored Card bodies may remain stored. Re-sent copies (fork, resume or cursor reset) are not archived again. Extracted Memories are kept; use each Memory's own forget operation to remove it.
@@ -415,16 +415,14 @@ release.
 ## 0.3.5 — 2026-11-09: hosted recall pre-fetch durability
 
 Plugin and marketplace 0.3.5. Protocol stays 0.3.0. The installer version is not
-bumped here; the Codex prompt changes reach installs through the next installer
-release.
+bumped here. The Codex prompt changes shipped in installer 0.6.6.
 
 - Remove redundant durable publications before hosted recall while preserving pause barriers and diagnostic freshness.
 
 ## 0.3.4 — 2026-11-09: hosted recall deadline
 
 Plugin and marketplace 0.3.4. Protocol stays 0.3.0. The installer version is not
-bumped here; the Codex prompt changes reach installs through the next installer
-release.
+bumped here. The Codex prompt changes shipped in installer 0.6.6.
 
 - Allow 2,500 ms from the first recall fetch on both hosts. Codex prompt hooks
   have a 3,000 ms process-clock cap; Claude Code plugin prompt hooks keep their

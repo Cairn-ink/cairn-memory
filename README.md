@@ -255,10 +255,13 @@ This is a developer preview. Know these limits before you rely on it:
   `setup --local` refuses to run, so use WSL or the
   [source-checkout guide for PowerShell](docs/windows-install.md).
 - **Homebrew Node on macOS.** Setup records Node's versioned path, so rerun
-  setup after `brew upgrade` updates Node. Fixed in the next release.
-- **Config directories.** Local setup stops without connecting a tool if
-  `~/.claude` or `~/.codex` is a symbolic link, and it does not support a
-  custom `CLAUDE_CONFIG_DIR` yet.
+  setup after `brew upgrade` updates Node.
+- **Config directories.** When setting up automatic saving, local setup stops
+  before connecting a tool if its configuration directory is a symbolic link.
+  This applies to `~/.claude`, `~/.codex` and paths set through
+  `CLAUDE_CONFIG_DIR` or `CODEX_HOME`. If Claude Code writes its MCP entry under a
+  custom `CLAUDE_CONFIG_DIR`, local setup checks `~/.claude.json` and can stop
+  because it can't verify the entry.
 - **Deleted text and search indexes.** Deleting a conversation or forgetting a
   memory removes that text from Cairn's database at once, and it is never shown
   again; conversations a forget only hides stay saved until you delete them.

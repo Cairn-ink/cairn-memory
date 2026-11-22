@@ -223,9 +223,12 @@ Codex 的規則，以及外掛的隱私約定。
   `npx @cairn-ink/memory setup --local --client claude`。Windows 原生環境下 `setup --local` 會拒絕執行，請用 WSL，或照
   [PowerShell 原始碼安裝指南（英文）](docs/windows-install.md)操作。
 - **macOS 上用 Homebrew 裝的 Node。** 安裝時會記下 Node 帶版本號的路徑，所以
-  `brew upgrade` 更新 Node 之後請重新執行 setup。下一版修正。
-- **設定資料夾。** 如果 `~/.claude` 或 `~/.codex` 是符號連結，本機安裝會停下來、
-  不接上那個工具；自訂的 `CLAUDE_CONFIG_DIR` 目前也還不支援。
+  `brew upgrade` 更新 Node 之後請重新執行 setup。
+- **設定資料夾。** 設定自動保存時，如果工具的設定資料夾是符號連結，本機安裝
+  會在連接工具前停止。這適用於 `~/.claude`、`~/.codex`，以及透過
+  `CLAUDE_CONFIG_DIR` 或 `CODEX_HOME` 指定的路徑。如果 Claude Code 把 MCP 項目寫到
+  自訂的 `CLAUDE_CONFIG_DIR`，本機安裝會檢查 `~/.claude.json`，可能因為無法確認
+  該項目而停止。
 - **刪除的文字與搜尋索引。** 刪除對話或忘記記憶時，那段文字會立刻從 Cairn 的
   資料庫移除，之後不會再出現；只是因「忘記」而隱藏的對話仍然保存著，要刪除才會
   移除。搜尋不會回傳被刪除的文字，但本機搜尋索引檔可能還留著被刪內容的詞彙清單
