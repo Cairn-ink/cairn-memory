@@ -1,0 +1,34 @@
+{
+  "provenance": "hand-derived from search.ts; unverified-vs-sql",
+  "lexical": [
+    ["", 10, "1001"],
+    ["a-newer", 10, "1002"],
+    ["😀", 10, "1001"],
+    ["both-above", 12, "1000"]
+  ],
+  "vector": [
+    ["both-above", 0.9, "1000"],
+    ["over", 0.4500001, "1000"],
+    ["equal", 0.45, "1000"]
+  ],
+  "fused": [
+    ["both-above", 1, 3, "1000"],
+    ["equal", null, 1, "1000"],
+    ["over", null, 2, "1000"],
+    ["a-newer", 2, null, "1002"],
+    ["😀", 3, null, "1001"],
+    ["", 4, null, "1001"]
+  ],
+  "floorIds": ["both-above", "equal", "a-newer", "😀", ""],
+  "lexicalOnlyIds": ["both-above", "a-newer", "😀", ""],
+  "pages": [
+    [0, 3, ["v00", "v59", "v58"]],
+    [10, 3, ["v50", "v49", "v48"]],
+    [49, 3, ["v11", "l00", "l01"]],
+    [50, 3, ["l00", "l01", "l02"]],
+    [99, 1, ["l49"]],
+    [98, 10, ["l48", "l49"]],
+    [100, 10, []]
+  ],
+  "cursors": [[0, "MA"], [10, "MTA"], [49, "NDk"], [50, "NTA"], [99, "OTk"], [100, "MTAw"]]
+}
