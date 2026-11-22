@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { Pool } from "pg";
@@ -19,6 +20,18 @@ function database(t, max) {
       pids.push(client.processID);
       return {
         async query(sql, values) {
+          if (sql === "DISCARD ALL") {
+            // pg truncates multiword tags in Result.command. Read the actual wire tag.
+            let command;
+            const captureCommand = ({ text }) => { command = text; };
+            client.connection.once("commandComplete", captureCommand);
+            try {
+              const { rows, rowCount } = await client.query(sql);
+              return { rows, rowCount: rowCount ?? undefined, command };
+            } finally {
+              client.connection.removeListener("commandComplete", captureCommand);
+            }
+          }
           const { rows, rowCount, command } = await client.query(sql, values);
           return { rows, rowCount: rowCount ?? undefined, command };
         },
@@ -178,5 +191,66 @@ test("Postgres resets session locks and settings before reusing a read connectio
     }, { locks: [], settings: [defaults] });
   } finally {
     reused.release();
+  }
+});
+
+test("Postgres discards write session state before reusing the same backend", options, async (t) => {
+  const { pool, uow } = database(t, 1);
+  const sessionState = `
+    SELECT pg_backend_pid() AS pid,
+      to_regclass('pg_temp.adapter_test_table') IS NOT NULL AS has_temp_table,
+      ARRAY(SELECT name FROM pg_prepared_statements ORDER BY name) AS prepared,
+      ARRAY(SELECT name FROM pg_cursors ORDER BY name) AS cursors,
+      ARRAY(SELECT pg_listening_channels()) AS channels,
+      current_user::text AS current_role,
+      session_user::text AS login_role,
+      (SELECT count(*)::int FROM pg_locks
+        WHERE locktype = 'advisory' AND pid = pg_backend_pid()) AS advisory_locks,
+      current_setting('application_name') AS application_name
+  `;
+  const { rows: [defaults] } = await pool.query(sessionState);
+  const role = `adapter_test_${randomUUID().replaceAll("-", "")}`;
+  await pool.query(`CREATE ROLE ${role}`);
+  try {
+    await pool.query(`GRANT ${role} TO CURRENT_USER`);
+    const { rows: [during] } = await uow.run(owner, {}, async (tx) => {
+      await query(tx, "CREATE TEMP TABLE adapter_test_table (value int)");
+      await query(tx, "PREPARE adapter_test_statement AS SELECT 1");
+      await query(tx, "DECLARE adapter_test_cursor CURSOR WITH HOLD FOR SELECT 1");
+      await query(tx, "LISTEN adapter_test_channel");
+      await query(tx, `SET ROLE ${role}`);
+      await query(tx, "SELECT pg_advisory_lock(1, 2)");
+      await query(tx, "SET application_name = 'adapter_test_changed'");
+      return query(tx, sessionState);
+    });
+    // LISTEN takes effect at commit. Both the owner lock and session lock are held during the run.
+    assert.deepEqual(during, {
+      pid: defaults.pid,
+      has_temp_table: true,
+      prepared: ["adapter_test_statement"],
+      cursors: ["adapter_test_cursor"],
+      channels: [],
+      current_role: role,
+      login_role: defaults.login_role,
+      advisory_locks: 2,
+      application_name: "adapter_test_changed",
+    });
+
+    const { rows: [after] } = await pool.query(sessionState);
+    assert.equal(after.pid, during.pid);
+    assert.deepEqual(after, {
+      pid: during.pid,
+      has_temp_table: false,
+      prepared: [],
+      cursors: [],
+      channels: [],
+      current_role: after.login_role,
+      login_role: defaults.login_role,
+      advisory_locks: 0,
+      application_name: defaults.application_name,
+    });
+  } finally {
+    await pool.query("RESET ROLE");
+    await pool.query(`DROP ROLE ${role}`);
   }
 });

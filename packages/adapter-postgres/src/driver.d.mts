@@ -1,4 +1,5 @@
 export interface QueryResult {
+  /** Server command tag. Preserve the full multiword tag for DISCARD ALL. */
   command: string;
   rows: any[];
   rowCount?: number;

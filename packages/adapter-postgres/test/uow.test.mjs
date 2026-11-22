@@ -13,9 +13,8 @@ const ownerLock = ["SELECT pg_advisory_xact_lock(hashtext('w3:' || $1))", [owner
 const write = ["UPDATE example SET value = $1", [1]];
 const read = ["SELECT $1", [1]];
 const commit = ["COMMIT"];
-const unlock = ["SELECT pg_advisory_unlock_all()"];
-const reset = ["RESET ALL"];
-const commitAndReset = [commit, unlock, reset];
+const discard = ["DISCARD ALL"];
+const commitAndReset = [commit, discard];
 const rollback = ["ROLLBACK"];
 const writeSequence = [begin, lockTimeout, statementTimeout, pauseLock, ownerLock, write, commit];
 
@@ -36,7 +35,9 @@ function stub({ onConnect, onQuery, onRelease, commitResult = () => ({ command: 
           const result = await onQuery?.(sql, statements.length - 1);
           if (sql === "COMMIT") return commitResult();
           return result ?? {
-            command: sql.split(" ", 1)[0], rows: [{ value: 1 }], rowCount: 1,
+            command: sql === discard[0] ? sql : sql.split(" ", 1)[0],
+            rows: [{ value: 1 }],
+            rowCount: 1,
           };
         },
         async release(...args) {
@@ -74,7 +75,7 @@ for (const [label, options, statement, expected] of [
     });
     assert.deepEqual(result, { command: statement[0].split(" ", 1)[0], rows: [{ value: 1 }], rowCount: 1 });
     assert.equal(db.checkouts, 1);
-    const expectedQueries = [...expected, unlock, reset].map((args) => ["query", ...args]);
+    const expectedQueries = [...expected, discard].map((args) => ["query", ...args]);
     assert.deepEqual(db.events, [...expectedQueries, ["release"]]);
   });
 }
@@ -119,7 +120,7 @@ test("callback failure survives rollback and release failures", async () => {
   assert.deepEqual(db.releases, [[true]]);
 });
 
-test("a rolled-back run skips the session reset and preserves the original error", async () => {
+test("a rolled-back run skips DISCARD ALL and preserves the original error", async () => {
   const db = stub();
   const original = new CoreError("capture_paused");
   await assert.rejects(
@@ -132,19 +133,17 @@ test("a rolled-back run skips the session reset and preserves the original error
   ]);
 });
 
-for (const [statement, attempted] of [[unlock, [unlock]], [reset, [unlock, reset]]]) {
-  for (const [label, fail] of [
-    ["rejects", () => { throw { code: "08006" }; }],
-    ["returns an unexpected command", () => ({ command: "SET", rows: [] })],
-  ]) {
-    test(`a committed run returns its result and destroys the connection if ${statement[0]} ${label}`, async () => {
-      const result = {};
-      const db = stub({ onQuery: (sql) => sql === statement[0] ? fail() : undefined });
-      assert.equal(await db.uow.run(owner, {}, async () => result), result);
-      assert.deepEqual(db.statements, [begin, lockTimeout, statementTimeout, ownerLock, commit, ...attempted]);
-      assert.deepEqual(db.releases, [[true]]);
-    });
-  }
+for (const [label, fail] of [
+  ["rejects", () => { throw { code: "08006" }; }],
+  ["returns an unexpected command", () => ({ command: "DISCARD", rows: [] })],
+]) {
+  test(`a committed run returns its result and destroys the connection if DISCARD ALL ${label}`, async () => {
+    const result = {};
+    const db = stub({ onQuery: (sql) => sql === discard[0] ? fail() : undefined });
+    assert.equal(await db.uow.run(owner, {}, async () => result), result);
+    assert.deepEqual(db.statements, [begin, lockTimeout, statementTimeout, ownerLock, ...commitAndReset]);
+    assert.deepEqual(db.releases, [[true]]);
+  });
 }
 
 test("a confirmed commit returns the callback result even when both release attempts fail", async () => {

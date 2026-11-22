@@ -44,11 +44,10 @@ export function query(tx, text, values) {
 
 /** @param {Connection} connection @param {boolean} committed */
 async function releaseConnection(connection, committed) {
-  // Failed runs already discard the connection. Reset reusable sessions outside the transaction.
+  // Failed runs already destroy the connection. Reset reusable sessions outside the transaction.
   if (committed) {
     try {
-      if ((await connection.query("SELECT pg_advisory_unlock_all()")).command === "SELECT"
-        && (await connection.query("RESET ALL")).command === "RESET") {
+      if ((await connection.query("DISCARD ALL")).command === "DISCARD ALL") {
         await connection.release();
         return;
       }
@@ -63,7 +62,15 @@ async function releaseConnection(connection, committed) {
   }
 }
 
-/** @param {ConnectionSource} source @returns {UnitOfWork} */
+/**
+ * Production hosts should use a source that opens a fresh client on connect for
+ * each run and ends it on release. This prevents session state from carrying
+ * across runs at this layer. DISCARD ALL is the backstop for pooled sources.
+ * DISCARD ALL leaves the pseudorandom state set by setseed intact. Owner data
+ * and transaction correctness are independent of that state.
+ * @param {ConnectionSource} source
+ * @returns {UnitOfWork}
+ */
 export function createPostgresUnitOfWork(source) {
   return { run };
 
