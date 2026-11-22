@@ -101,9 +101,16 @@ test('throwing and rejecting observers preserve request and candidate decode fai
 });
 
 test('candidate mode defaults to inline and rejects unsupported configurations', () => {
-  const inline = cases.find(entry => entry.method === 'qualifyCandidates' && entry.mode === 'inline');
+  const inline = cases.find(entry => entry.method === 'qualifyCandidates' && entry.mode === 'inline' &&
+    entry.qualificationInputMode === 'inline' && entry.body && entry.expected.errorCode === undefined);
   const catalog = cases.find(entry => entry.method === 'qualifyCandidates' && entry.mode === 'catalog');
-  assert.deepEqual(buildModelRequest(inline.method, inline.request), build(inline));
+  assert.ok(inline && catalog);
+  // Omitted options must behave as the engine adapter's default ('inline'), checked against the engine golden.
+  assertRequest(inline, buildModelRequest(inline.method, inline.request));
+  assertRequest(inline, buildModelRequest(inline.method, inline.request, {}));
+  // The engine's default mode refuses named catalog input before dispatch (adapters/openai/index.mjs:247-248).
+  assertInvalidInput(() => buildModelRequest(catalog.method, catalog.request));
+  assertInvalidInput(() => buildModelRequest(catalog.method, catalog.request, {}));
   const events = [];
   const report = (...event) => events.push(event);
   assertInvalidInput(() => buildModelRequest(inline.method, inline.request, { qualificationInputMode: 'unknown', report }));
