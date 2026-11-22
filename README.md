@@ -114,6 +114,8 @@ The source text kept with a memory is called a **Source Receipt**. It shows what
 was submitted when the memory was saved or corrected. It does not prove that
 the memory is true. [All tools and parameters](docs/standalone-mcp.md#tools)
 
+Without a model key there are no extracted memories or quantity ledger. Keyword search still finds saved conversations and manually saved memories.
+
 ## How it works
 
 Cairn.ink Memory keeps what your agents learn in three layers, like the three

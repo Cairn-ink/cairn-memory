@@ -39,7 +39,7 @@ import { memoryRefs, fetchMemories } from './fetch.mjs';
 import { recallMemories } from './recall.mjs';
 import { captureEpisodeMessages, endEpisode, keepEpisodeCapture } from './episode-capture.mjs';
 import { captureMessages, extractionRequest } from './capture.mjs';
-import { captureSnapshot } from './capture-input.mjs';
+import { captureSnapshot, quantityInput } from './capture-input.mjs';
 import { requestFits } from './model-packing.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 import { createQueryExcerpt, QUERY_EXCERPT_VERSION } from './query-excerpt.mjs';
@@ -58,7 +58,7 @@ import {
 const CORE_OPTIONS = Object.freeze(['path','model','captureQualification','captureQualifiedDuplicates','captureSourcePolicy',
   'captureRationale','captureEvidence','captureDeadlineMs','sessionEpisodes',
   'decisionReview','privateCards','methodPackages','assets','roleProfiles','existingStore','storeFence','contentSafety','busyTimeoutMs',
-  'cardRelations','cardVectors']);
+  'cardRelations','cardVectors','ledgerPort']);
 const OPEN_OPTIONS = Object.freeze([...CORE_OPTIONS, 'rawConversations', 'raw', 'rawSearch']);
 
 const keepAdmissionKey = Symbol('keepAdmissionKey');
@@ -299,6 +299,9 @@ export function createMemoryCore(input, internal) {
   const sessionEpisodes = Object.hasOwn(input, 'sessionEpisodes') ? episodeOptions(input.sessionEpisodes) : undefined;
   if (sessionEpisodes && (captureQualification !== 'source-bound-v2' || captureEvidence !== 'staged-v1')) throw new MemoryStoreError('invalid_input');
   const model = input.model;
+  const { ledgerPort } = input;
+  if (ledgerPort !== undefined && ['put', 'drop', 'list'].some(key =>
+    typeof ledgerPort?.[key] !== 'function' || types.isAsyncFunction(ledgerPort[key]))) fail('invalid_input');
   if (model?.onDiagnostic !== undefined && typeof model.onDiagnostic !== 'function') throw new MemoryStoreError('invalid_input');
   if (input.contentSafety !== undefined && input.contentSafety !== 's2h-v1') fail('invalid_input');
   const runtime = (internal?.createRuntime ?? createMemoryRuntime)({ path: input.path,
@@ -310,7 +313,7 @@ export function createMemoryCore(input, internal) {
     ...(assets ? { assets } : {}),
     ...(roleProfiles ? { roleProfiles } : {}),
     ...(privateCards ? { privateCards } : {}), ...(decisionReview ? { decisionReview: 'required-v1' } : {}), ...(sessionEpisodes ? { sessionEpisodes } : {}) },
-    { engineCards: typeof model?.consolidate === 'function' });
+    { engineCards: typeof model?.consolidate === 'function', ...(ledgerPort ? { ledgerPort } : {}) });
   try {
   const { storeId, cursorSecret } = runtime.identity;
   let engineCards, engineCardsLoading;
@@ -488,13 +491,15 @@ export function createMemoryCore(input, internal) {
   function correct(input) {
     return invoke(() => {
       runtime.ready();
-      object(input, ["namespace", "memoryId", "expectedRevision", "content", "kind", "receipt"]);
+      object(input, ["namespace", "memoryId", "expectedRevision", "content", "kind", "receipt", ...(ledgerPort ? ["quantities"] : [])]);
       const ns = contractNamespace(input.namespace);
       const memoryId = contractId(input.memoryId);
       const expectedRevision = contractRevision(input.expectedRevision);
       const memory = contractMemory({ content: input.content, kind: input.kind });
       const receipt = contractReceipt(input.receipt);
-      const result = runtime.correct(ns, memoryId, { ...memory, receipts: [receipt], receiptTimes: [receiptEventTime(input.receipt.occurredAt)] },
+      const result = runtime.correct(ns, memoryId, { ...memory, receipts: [receipt],
+        receiptTimes: [receiptEventTime(input.receipt.occurredAt)],
+        ...(Object.hasOwn(input, 'quantities') ? { quantities: admittedQuantities(input.quantities) } : {}) },
         expectedRevision, { detail: true });
       return { memory: result.detail, indexRevision: result.indexRevision };
     });
@@ -649,9 +654,10 @@ export function createMemoryCore(input, internal) {
     });
   }
 
-  function admissionItems(input, episode = false, limit = 5) {
+  function admissionItems(input, episode = false, limit = 5, captured = false) {
     return denseArray(input, 0, limit).map((item) => {
-      object(item, ['content', 'kind', 'confidence', 'receipts', 'conflictHints', 'qualification', ...(episode ? ['procedural'] : [])]);
+      object(item, ['content', 'kind', 'confidence', 'receipts', 'conflictHints', 'qualification', ...(episode ? ['procedural'] : []),
+        ...(captured && ledgerPort ? ['quantities'] : [])]);
       if (typeof item.confidence !== 'number' || !Number.isFinite(item.confidence) ||
           item.confidence < 0 || item.confidence > 1) throw new MemoryStoreError('invalid_input');
       const memory = contractMemory({ content: item.content, kind: item.kind }, 600);
@@ -660,7 +666,9 @@ export function createMemoryCore(input, internal) {
       if (Object.hasOwn(item, 'qualification')) qualificationSources(item.content, item.receipts);
       const qualification = Object.hasOwn(item, 'qualification') ? qualificationInput(item.qualification, receipts) : undefined;
       return { ...memory, origin: 'agent-inferred', confidence: item.confidence, receipts, receiptTimes: item.receipts.map(receipt => receiptEventTime(receipt.occurredAt)), ...(episode ? { optionalReceiptTimes: true } : {}), conflictHints, qualification,
-        ...(episode && Object.hasOwn(item, 'procedural') ? { procedural: item.procedural } : {}) };
+        ...(episode && Object.hasOwn(item, 'procedural') ? { procedural: item.procedural } : {}),
+        ...(captured && ledgerPort && Object.hasOwn(item, 'quantities')
+          ? { quantities: admittedQuantities(item.quantities, input.length) } : {}) };
     });
   }
 
@@ -671,7 +679,7 @@ export function createMemoryCore(input, internal) {
       const ns = contractNamespace(input.namespace);
       const key = admissionKey(input);
       const token = contractId(input.token);
-      const items = admissionItems(input.items, captureInitial && Boolean(sessionEpisodes), captureInitial ? 20 : 5);
+      const items = admissionItems(input.items, captureInitial && Boolean(sessionEpisodes), captureInitial ? 20 : 5, captureInitial);
       return captureInitial ? runtime.finishCapturedAdmission(ns, { ...key, token, items }, deadline, qualifiedDuplicates) :
         runtime.finishAdmission(ns, { ...key, token, items });
     });
@@ -1100,7 +1108,7 @@ export function createMemoryCore(input, internal) {
       const captureKey = value => keepInput ? { ...value, [keepAdmissionKey]: true } : value;
       if ((captureEvidence || evidenceOnly) && Object.hasOwn(input, 'causal')) throw new MemoryStoreError('invalid_input');
       return success(await (keepInput ? keepEpisodeCapture : sessionEpisodes ? captureEpisodeMessages : captureMessages)({ model, captureQualification, captureSourcePolicy,
-        runtime, ns, sessionEpisodes, keepInput, rawRegistration,
+        runtime, ns, sessionEpisodes, keepInput, rawRegistration, ledger: Boolean(ledgerPort),
         startAdmission: () => (deadline = sharedDeadline ?? (captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs))),
         captureRationale, captureEvidence,
         deadline, input: { ...input, namespace },
@@ -1150,7 +1158,7 @@ export function createMemoryCore(input, internal) {
               return invoke(() => {
                 const items = admissionItems(extracted.map(({ sourceIndices, receiptTimes, ...item }) =>
                   receiptTimes ? { ...item, receipts: item.receipts.map((receipt, index) =>
-                    ({ ...receipt, occurredAt: receiptTimes[index] })) } : item), false, 20);
+                    ({ ...receipt, occurredAt: receiptTimes[index] })) } : item), false, 20, true);
                 return { items, discovery: runtime.discoverOrdered(ns, snapshot, order, items) };
               });
             },
@@ -1191,7 +1199,7 @@ export function createMemoryCore(input, internal) {
       const fits = (indices) => {
         let request;
         try {
-          request = extractionRequest(snapshot(indices.map((index) => messages[index])),
+          request = extractionRequest({ ...snapshot(indices.map(index => messages[index])), ledger: Boolean(ledgerPort) },
             { captureQualification, captureSourcePolicy, episode });
         } catch (error) {
           if (error instanceof MemoryStoreError && ['invalid_input', 'invalid_text'].includes(error.code)) return false;
@@ -1428,4 +1436,8 @@ export function createMemoryCore(input, internal) {
     try { runtime.close(); } catch { /* Preserve the construction failure. */ }
     throw error;
   }
+}
+
+function admittedQuantities(entries, itemCount = 1) {
+  return denseArray(entries, 0, entries?.length).map(entry => quantityInput(entry, itemCount));
 }

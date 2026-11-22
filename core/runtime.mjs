@@ -1,3 +1,4 @@
+import { ledgerNamespace, rowsFrom } from './quantity-ledger.mjs';
 import { captureSnapshot } from './capture-input.mjs';
 import { bindCommitRuntime, dispatchSynchronousCommit, withSynchronousCommitScope } from './commit-dispatch.mjs';
 import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
@@ -18,7 +19,7 @@ import { createEpisodeReadProjection, createEpisodeReads } from './episode-reads
 import { createEpisodeStorage, episodeOptions } from './episode-storage.mjs';
 import { createProceduralStorage } from './procedural-storage.mjs';
 import { createHash } from "node:crypto";
-import { openDatabase, transaction, readTransaction, isConnectionDiscarded, isStorageBusy, busyTimeoutOption } from "./database.mjs";
+import { openDatabase, transaction, readTransaction, isConnectionDiscarded, isStorageBusy, busyTimeoutOption, afterTransactionCommit } from "./database.mjs";
 import { createMocStorage } from "./moc-storage.mjs";
 import { createAdmissionStorage } from "./admission-storage.mjs";
 import { createClassificationJournalStorage } from './classification-journal-storage.mjs';
@@ -71,6 +72,7 @@ export function createMemoryRuntime(input, internal) {
   const roleProfiles = roleProfileOptions(input.roleProfiles);
   const sessionEpisodes = input.sessionEpisodes === undefined ? undefined : episodeOptions(input.sessionEpisodes);
   const decisionReview = decisionReviewOption(input);
+  const ledgerPort = internal?.ledgerPort;
   const db = openDatabase(input.path, { ...(busyTimeoutMs !== undefined ? { busyTimeoutMs } : {}), privateCards: Boolean(privateCards), currentDependencies: Boolean(privateCards?.currentDependencies) || Boolean(input.contentSafety && internal?.rawCapture), methodPackages: Boolean(methodPackages), assets: Boolean(assets), roleProfiles: Boolean(roleProfiles), rawCapture: Boolean(internal?.rawCapture),
     rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion), rawSources: Boolean(internal?.rawSources), localControls: Boolean(internal?.localControls), existingStore: input.existingStore, storeFence: input.storeFence, contentSafety: input.contentSafety });
   try {
@@ -404,6 +406,14 @@ export function createMemoryRuntime(input, internal) {
       });
       if(result.memory&&contentSuppressionReasonInside(db,ns,{kind:'memory',key:result.memory.id,revision:result.memory.revision,
         version:JSON.stringify(['memory-revision-v1',result.memory.revision])}))fail('memory_suppressed');
+      if (ledgerPort) {
+        const rows = (value.quantities ?? []).flatMap(quantity => rowsFrom(result.memory, result.memory.revision,
+          quantity, value.receiptTimes?.[0] ?? result.memory.updated_at));
+        afterTransactionCommit(db, () => {
+          if (rows.length) ledgerPort.put(ledgerNamespace(ns), id, result.memory.revision, rows);
+          else ledgerPort.drop(ledgerNamespace(ns), id);
+        });
+      }
       return result;
     });
   }
@@ -448,6 +458,7 @@ export function createMemoryRuntime(input, internal) {
       db.prepare(`UPDATE memories SET content = NULL, deleted = 1,
         revision = revision + 1, updated_at = ? WHERE id = ?`).run(now, id);
       db.prepare("DELETE FROM receipts WHERE memory_id = ?").run(id);
+      if (ledgerPort) afterTransactionCommit(db, () => ledgerPort.drop(ledgerNamespace(ns), id));
       const reviewEffects = decisionReview ? effects : undefined;
       return { forgotten: true, indexRevision: advanceEpoch(ns), ...(reviewEffects ? { reviewEffects } : {}) };
   }
@@ -468,6 +479,7 @@ export function createMemoryRuntime(input, internal) {
     episodes.invalidateMemory(ns, id, current.review_state === 'awaiting');
     db.prepare('UPDATE memories SET revision=revision+1,updated_at=? WHERE id=?').run(now, id);
     for (const receiptId of receiptIds) db.prepare('DELETE FROM receipts WHERE memory_id=? AND id=?').run(id, receiptId);
+    if (ledgerPort) afterTransactionCommit(db, () => ledgerPort.drop(ledgerNamespace(ns), id));
     advanceEpoch(ns);
   }
 
@@ -833,6 +845,7 @@ export function createMemoryRuntime(input, internal) {
     invalidateConflicts: conflictStorage.invalidateMemory, invalidateMemory: mocStorage.invalidateMemory,
     evaluateQualified: qualifiedTransitionStorage.evaluate,
     evaluateQualifiedSet: qualifiedTransitionStorage.evaluateSet, epoch,
+    dropLedger: ledgerPort && ((ns, id) => afterTransactionCommit(db, () => ledgerPort.drop(ledgerNamespace(ns), id))),
     recordHeldRetirement: (previous, replacement, linked) => recordHeldRetirement(db, previous, replacement, linked) });
   const stagedEvidence = createStagedEvidenceStorage({ db });
   let rawCapture;
@@ -914,7 +927,7 @@ export function createMemoryRuntime(input, internal) {
   deletion = createRawDeletionStorage({ db, localRawPrivacy, roots: sourceRoots, episodes, forgetMutation, removeReceipts, advanceEpoch });
   const admissionStorage = createAdmissionStorage({
     db, admitMutation, validateReceiptTimes, isSuppressed, activeRow, epoch, conflictStorage, stagedEvidence,
-    classificationJournal, episodes, proceduralStorage, assertSources: rawLineage.assertReceipts, sourceRoots, memoryAncestry, privacyMemoryDenied,
+    classificationJournal, episodes, proceduralStorage, ledgerPort, assertSources: rawLineage.assertReceipts, sourceRoots, memoryAncestry, privacyMemoryDenied,
   });
   const orderedStorage = createOrderedCaptureStorage({ db, admissionStorage, epoch, activeRow,
     supersessionStorage, receiptKey, isSuppressed });

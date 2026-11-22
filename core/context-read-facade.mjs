@@ -1,10 +1,11 @@
 import { bindCommitRuntime, dispatchCommit, dispatchSynchronousCommit, hasCommitDispatcher, withCommitBinding } from './commit-dispatch.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { cardLineageItemInside, cardLineageNamespaceInside } from './card-lineage.mjs';
-import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, cachedContentSuppressionRequestInside, hasContentSuppressionRequestInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
-import { contentScopeEpochGuard, assertContentScopes, contentSafetyFacade, assertContentPort, contentAuthorityPort } from './content-safety-boundary.mjs';
+import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, cachedContentSuppressionRequestInside, hasContentSuppressionRequestInside, contentSuppressionMayMatchInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
+import { contentScopeEpochGuard, assertContentScopes, contentSafetyFacade, assertContentPort, contentAuthorityPort, inertContentPortValue } from './content-safety-boundary.mjs';
 import { receiptEventTimeEnabled, cachedContentLayout } from './content-safety-schema.mjs';
-import { createContentReadMemo } from './content-safety.mjs';
+import { contentReadSafety, createContentReadMemo } from './content-safety.mjs';
+import { digest, hasLedgerCue, ledgerNamespace, parseWindow, readIntent } from './quantity-ledger.mjs';
 import { resolveContentLayout } from './content-safety-layout.mjs';
 import { sampleLocalStatus } from './context-read-local-status.mjs';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
@@ -92,7 +93,8 @@ export function withContextReadRankingPartition(key, work) {
 export function openContextCore(baseOptions, contextRead, openBase) {
   const busyTimeoutMs = busyTimeoutOption(baseOptions);
   const busyOptions = busyTimeoutMs === undefined ? {} : { busyTimeoutMs };
-  const options = contextOptions(contextRead), readOnly = Boolean(baseOptions.existingStore);
+  const options = { ...contextOptions(contextRead), ledgerPort: baseOptions.ledgerPort };
+  const readOnly = Boolean(baseOptions.existingStore);
   // Managed-existing construction uses the retained managed opener, with its
   // journal refusal performed before that opener can touch either database.
   if (readOnly) {
@@ -779,6 +781,8 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       const rawChannel = options.rawSearch && input.raw
         ? await readRawChannel(options.rawSearch, input, token, deadlineAt) : { items: [], coverage: 'unavailable' };
       if (options.rawSearch && input.raw) access.check();
+      const ledger = options.ledgerPort && input.types.includes('memory') && hasLedgerCue(input.query) && performance.now() < deadlineAt
+        ? collectLedgerChannel(db, read, options.ledgerPort, input, deadlineAt, canonicalFence) : null;
       candidates = searched.horizon;
       searched.check(); // The horizon's search fences also cross the outer await.
       let deadline = performance.now() >= deadlineAt;
@@ -879,7 +883,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       const withoutSnapshot = compact ? new WeakSet() : null;
       // Wire-only Card projection retains canonical stored-body fences and bodyRevision.
       const assemble = raw => assembleThreeLayerContext({ prepared: prepared.items, counter: options.counter, policy: input.policy,
-        query: input.query, readSet: input.readSet, intent: input.intent,
+        query: input.query, readSet: input.readSet, intent: input.intent, ledgerItem: ledger?.item,
         budget: input.budget, representation: input.representation, deadlineAt,
         responseBytes: datedCandidates ? ({ meteredBytes, diagnostics, selected }) => {
           const envelope = success({ metered: null, snapshot: null,
@@ -923,6 +927,8 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           for (const path of searched.sourceState.witnesses) if (delivered.some(item => same(item.ref, path.ref)))
             witnessInside(input, path, 'snapshot_stale', witnessBudget);
         }
+        if (ledger && assembled.metered.items.includes(ledger.item) &&
+            !same(ledger.fence, canonicalFence(input.readSet, ['memory']))) fail('snapshot_stale');
         if (delivered.length && !same(canonicalFence(input.readSet, [...new Set(delivered.map(item => item.type))]), generationsFor(delivered))) fail('snapshot_stale');
         const safetyMemo=cachedContentLayout(db)?.suppressionRevision&&!options.sources?createContentReadMemo(db):undefined;
         for (const item of delivered) {
@@ -1064,4 +1070,41 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     closed = true; for (const controller of controllers) assertContentPort({invoke:()=>controller.abort()});
     defaultRankings.rankings.clear(); defaultRankings.retainedSourceBytes = 0; rankingPartitions = new WeakMap(); for (const entry of indexes.values()) entry.storage.close(); indexes.clear(); if (db?.isOpen) db.close();
   } };
+}
+
+function collectLedgerChannel(db, read, port, input, deadlineAt, canonicalFence) {
+  const asOf = new Date();
+  const window = parseWindow(input.query, asOf);
+  let partitions;
+  try {
+    partitions = assertContentPort({ invoke: () => input.readSet.map(ns =>
+      inertContentPortValue(port.list(ledgerNamespace(ns), { to: asOf.toISOString().slice(0, 10) }))) });
+  } catch { return null; }
+  if (performance.now() >= deadlineAt || !partitions.every(Array.isArray) ||
+      !readIntent(input.query, partitions.flat())) return null;
+  return read(() => {
+    const current = db.prepare('SELECT revision FROM memories WHERE owner_id=? AND scope=? AND project_id=? AND id=?');
+    const safetyMemo = createContentReadMemo(db);
+    const rows = [];
+    for (const [index, partition] of partitions.entries()) {
+      const ns = input.readSet[index], checked = new Map();
+      for (const row of partition) {
+        if (performance.now() >= deadlineAt) return null;
+        const key = JSON.stringify([row.memoryId, row.revision]);
+        if (!checked.has(key)) {
+          const memory = current.get(ns.ownerId, ns.scope, ns.projectId ?? '', row.memoryId);
+          const ref = { type: 'memory', namespace: ns, memoryId: row.memoryId, revision: memory?.revision };
+          checked.set(key, memory && memory.revision >= row.revision &&
+            (memory.revision === row.revision || !contentSuppressionReasonInside(db, ns, {
+              kind: 'memory', key: row.memoryId, revision: row.revision,
+              version: JSON.stringify(['memory-revision-v1', row.revision]),
+            })) && contentReadSafety(db, { namespace: ns, ref, memo: safetyMemo }).allowed);
+        }
+        if (checked.get(key)) rows.push(row);
+      }
+    }
+    if (!readIntent(input.query, rows)) return null;
+    const result = digest(rows, rows, window);
+    return result && { item: { channel: 'ledger-v1', ...result }, fence: canonicalFence(input.readSet, ['memory']) };
+  });
 }

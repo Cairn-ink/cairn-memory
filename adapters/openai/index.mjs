@@ -1,4 +1,5 @@
-import { extractionOutputTokens } from '../../core/capture-input.mjs';
+import { extractionOutputTokens, extractionQuantities, quantityInstructions } from '../../core/capture-input.mjs';
+import { quantitySchema } from '../../core/quantity-ledger.mjs';
 import { get_encoding } from 'tiktoken';
 import { readFileSync } from 'node:fs';
 import { MemoryStoreError, boundedText } from '../../core/validation.mjs';
@@ -313,7 +314,9 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     let wire;
     let instructions;
     let qualifier;
-    const episodic = episodeMode(method, system);
+    const quantitySuffix = '\n' + quantityInstructions;
+    const ledger = method === 'extract' && system.endsWith(quantitySuffix);
+    const episodic = episodeMode(method, ledger ? system.slice(0, -quantitySuffix.length) : system);
     try {
       if (method === 'qualifyCandidates') {
         qualifier = prepareQualificationRequest({ system, input, maxOutputTokens });
@@ -332,6 +335,11 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
           // Count user material only after schema validation has canonicalized it.
           // A caller may state up to the derived allowance, never more. Capture states 1024.
           if (maxOutputTokens > extractionOutputTokens(snapshot.messages)) throw new Error('invalid_openai_request');
+        }
+        if (ledger) {
+          validationSchema = schema;
+          schema = { ...schema, properties: { ...schema.properties, quantities: quantitySchema },
+            required: [...schema.required, 'quantities'] };
         }
         instructions = qualificationInstructions(method, system, snapshot);
         localTokens = countTokens(JSON.stringify({ system: instructions, input: snapshot, maxOutputTokens }));
@@ -381,6 +389,13 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     checkAbort(signal, diagnose);
     const output = parseOutput(response, selected.contextWindow, selected.model, diagnose, maxOutputTokens, method === 'extract');
     if (method === 'consolidate' && !schemaAccepts(schema, output)) { diagnose('output_shape'); fail('invalid_model_output'); }
+    if (ledger) {
+      const { quantities, ...rest } = output;
+      if (episodic) normalizeEpisodeOutput(method, snapshot, rest, validationSchema, diagnose);
+      else if (!schemaAccepts(validationSchema, rest)) { diagnose('output_shape'); fail('invalid_model_output'); }
+      return { ...rest, ...(quantities === undefined ? {} :
+        { quantities: extractionQuantities(quantities, rest.items.length, diagnose) }) };
+    }
     if (episodic) return normalizeEpisodeOutput(method, snapshot, output, qualifier?.schema ?? schema, diagnose);
     return normalizeClassificationWire(method, output, schema, wire, diagnose)
       ?? normalizeQualificationSlots(method, snapshot, output, validationSchema, diagnose);

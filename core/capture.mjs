@@ -3,7 +3,7 @@ import { isStorageBusy } from './database.mjs';
 import { releaseStagedCaptureClaim } from './commit-dispatch.mjs';
 import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { isCaptureSourceBusy, isPreDispatchToken } from './capture-source-safety.mjs';
-import { captureSnapshot, extractedItems, retainedSourceView, extractionLimit } from './capture-input.mjs';
+import { captureSnapshot, extractedItems, retainedSourceView, extractionLimit, quantityInstructions } from './capture-input.mjs';
 import { callModel } from './model-call.mjs';
 import { fittingCap, prefixUnits, requestFits } from './model-packing.mjs';
 import { boundedText, fail, MemoryStoreError } from './validation.mjs';
@@ -90,8 +90,9 @@ export function extractionRequest(snapshot, { captureQualification, captureSourc
   const catalog = captureSourcePolicy ? sourceWindowCatalog(snapshot) : null;
   const retained = !catalog && captureQualification === 'source-bound-v2' ? retainedSourceView(snapshot) : null;
   const sourceMessages = retained?.messages ?? snapshot.messages;
+  const instructions = episode ? episodeSystem : catalog ? windowSystem : retained ? retainedSystem : system;
   return { catalog, retained, sourceMessages,
-    system: episode ? episodeSystem : catalog ? windowSystem : retained ? retainedSystem : system,
+    system: snapshot.ledger ? instructions + '\n' + quantityInstructions : instructions,
     input: catalog?.input ?? { messages: sourceMessages.map(({ role, content }, index) => ({ index, role, content })) } };
 }
 
@@ -133,7 +134,7 @@ function keepRequest(model, request, deadline) {
 
 /** Public-envelope operations own all transactions; no model work runs inside them. */
 export async function captureMessages({ model, input, operations, captureQualification,
-  captureSourcePolicy, captureRationale, captureEvidence, deadline, episodeRun, rawRegistration, runtime, ns }) {
+  captureSourcePolicy, captureRationale, captureEvidence, deadline, episodeRun, rawRegistration, runtime, ns, ledger }) {
   deadline?.check();
   // The default Raw capture registration already supplies each message's
   // explicit or receive time; captureRaw and Raw-free captures keep their input.
@@ -142,6 +143,7 @@ export async function captureMessages({ model, input, operations, captureQualifi
     snapshot = runtime.captureSnapshot(ns, snapshot, captureQualification, captureSourcePolicy);
   }
   deadline?.check();
+  if (ledger) snapshot = { ...snapshot, ledger: true };
   let request = extractionRequest(snapshot, { captureQualification, captureSourcePolicy, episode: Boolean(episodeRun) });
   let { catalog, retained, sourceMessages } = request;
   sourceMessages = catalog?.messages ?? sourceMessages;

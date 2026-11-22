@@ -239,7 +239,8 @@ export async function captureEpisodeMessages(options) {
   const sharedDeadline = options.rawRegistration ? options.deadline : undefined;
   const snapshot = episodeSnapshot(input);
   // Before staging, lazy interpretation or any claim: an oversized batch is an input error.
-  checkExtractionFits(model, extractionRequest(snapshot, { captureQualification, captureSourcePolicy, episode: true }));
+  checkExtractionFits(model, extractionRequest({ ...snapshot, ledger: options.ledger },
+    { captureQualification, captureSourcePolicy, episode: true }));
   const batch = { client: snapshot.client, sessionId: snapshot.sessionId, eventId: snapshot.eventId,
     payloadDigest: snapshot.payloadDigest, ...snapshot.episodeContext, view: snapshot.view,
     messages: snapshot.messages, eventStart: snapshot.eventStart, eventEnd: snapshot.eventEnd,

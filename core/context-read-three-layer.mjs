@@ -315,12 +315,16 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
         return [buildUnit({ memories: members, evidence: unit.evidence.slice() })];
       });
     };
-    const payload = proposed => ({ framing: ASSEMBLY_FRAMING, items: [...deduped(proposed)]
-      .sort(args.representation === 'representation-v2-dated' ? datedOrder : (a, b) => a.rank - b.rank).map(unit => unit.wire) });
+    let withLedger = false;
+    const payload = proposed => ({ framing: ASSEMBLY_FRAMING, items: [
+      ...(withLedger ? [args.ledgerItem] : []), ...[...deduped(proposed)]
+        .sort(args.representation === 'representation-v2-dated' ? datedOrder : (a, b) => a.rank - b.rank).map(unit => unit.wire)] });
     const memories = proposed => deduped(proposed).flatMap(unit => unit.memories);
+    const omitted = proposed => units.length - proposed.length + Number(Boolean(args.ledgerItem) && !withLedger);
     const diagnostics = (proposed, used) => ({ version: CONTEXT_VERSION, policy: { id: args.policy.id }, representation: args.representation,
-      counter: { id: counter.id }, items: memories(proposed).map(item => ({ ref: item.ref, metadata: item.metadata })),
-      budget: { ...args.budget, used }, omitted: { items: units.length - proposed.length, bodies: units.length - proposed.length,
+      counter: { id: counter.id }, items: [...(withLedger ? [{ channel: args.ledgerItem.channel }] : []),
+        ...memories(proposed).map(item => ({ ref: item.ref, metadata: item.metadata }))],
+      budget: { ...args.budget, used }, omitted: { items: omitted(proposed), bodies: omitted(proposed),
         sources: 0, unavailable: 0, oversized: 0 }, dedup: { sources: 0, body: 0 }, stops,
       coverage: { raw: raw.coverage }, trace: { timings: { assemblyMs: performance.now() - started }, counterCalls } });
     const fits = proposed => {
@@ -335,12 +339,16 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
       return { metered, used, fits: used <= args.budget.maxTokens && bytes };
     };
     if (!fits([]).fits) fail('context_item_too_large');
+    if (args.ledgerItem) {
+      withLedger = true;
+      if (!fits([]).fits) { withLedger = false; stops.budget = true; }
+    }
     // A Memory unit that a selected Card already replaces is not delivered, so it
     // takes no item slot: count delivered units, and skip units that would vanish.
     const replaced = unit => { const covered = cardSourceKeys(selected.flatMap(other => other.memories));
       return covered.size > 0 && unit.memories.length > 0 && !unit.evidence.length &&
         unit.memories.every(item => item.type === 'memory' && covered.has(memoryPackKey(item.ref))); };
-    while (remaining.length && deduped(selected).length < args.budget.maxItems) {
+    while (remaining.length && deduped(selected).length + Number(withLedger) < args.budget.maxItems) {
       check();
       remaining.sort((a, b) => {
         const score = unit => unit.bm25 + unit.prior - (unit.cardHit ? 0 : .15 * unit.cost / 250)

@@ -402,6 +402,9 @@ export function transaction(db, work, check, { deferred = false } = {}) {
       check?.();
       db.exec("COMMIT");
       if (before !== undefined && db.prepare("SELECT total_changes() AS n").get().n !== before) recordCommit(db);
+      const callbacks = committedWrites.get(db);
+      committedWrites.delete(db);
+      for (const publish of callbacks ?? []) publish();
       return result;
     } catch (error) {
       if (alreadyInTransaction && !began) throw error;
@@ -411,7 +414,7 @@ export function transaction(db, work, check, { deferred = false } = {}) {
         fail('dependency_limit_reached');
       }
       throw error;
-    } finally { contentWrite?.close(); }
+    } finally { if (began) committedWrites.delete(db); contentWrite?.close(); }
   };
   return contentWriteOperation(db) ? withoutContentSuppressionReadCacheInside(db, execute) : execute();
 }
@@ -865,4 +868,14 @@ export function openDatabase(path, options = {}) {
     db?.close();
     throw error;
   } finally { pin?.close(); }
+}
+
+const committedWrites = new WeakMap();
+
+/** Publish a synchronous side effect only after the owning write commits. */
+export function afterTransactionCommit(db, publish) {
+  if (!db.isTransaction) fail('storage_error');
+  const callbacks = committedWrites.get(db);
+  if (callbacks) callbacks.push(publish);
+  else committedWrites.set(db, [publish]);
 }

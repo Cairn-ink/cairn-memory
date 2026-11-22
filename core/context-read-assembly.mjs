@@ -142,7 +142,7 @@ function canonical(value) {
 // Prepared items retain full identities independently of the wire projection.
 // snapshotOf runs once, after all counts, using only cached preparation state.
 export function assembleContext({ prepared, counter, policy, budget, snapshotOf, deadlineAt, representation = 'representation-v2',
-  responseBytes, intent = 'current', now = () => performance.now() }) {
+  responseBytes, intent = 'current', now = () => performance.now(), ledgerItem }) {
   const started = now(), selected = new Map(), compact = representation === 'memory-compact-v1';
   const hasEngineCards = prepared.some(item => item.type === 'card' && item.metadata?.origin === 'engine');
   const hits = hasEngineCards ? engineCardHits(prepared, budget.maxItems) : new Map();
@@ -154,7 +154,7 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
   const datedSources = new Set(representation === 'representation-v2-dated'
     ? prepared.filter(item => item.sources.some(source => source.date || source.dates?.length)) : []);
   const stops = { budget: false, items: false, deadline: false };
-  let counterCalls = 0, oversized = 0;
+  let counterCalls = 0, oversized = 0, ledgerTokens;
   const expired = () => { stops.deadline ||= now() >= deadlineAt; return stops.deadline; };
   function count(text, required = false) {
     if (expired() && !required) return null;
@@ -214,12 +214,17 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
         ...(item.sourceAccess !== ASSEMBLY_DEFAULTS.sourceAccess ? { sourceAccess: item.sourceAccess } : {}),
         ...(complete !== ASSEMBLY_DEFAULTS.sourcesComplete ? { sourcesComplete: complete } : {}) };
     });
+    if (ledgerTokens !== undefined) {
+      items.unshift(ledgerItem);
+      details.unshift({ channel: ledgerItem.channel, sources: [], body: { tokens: ledgerTokens } });
+    }
     return { metered: { framing: ASSEMBLY_FRAMING, items }, details };
   }
   const dateOrder = representation === 'representation-v2-dated' || compact;
   const totalSources = prepared.reduce((sum, item) => sum + item.sources.length, 0);
   function diagnostics(value, used, bounded = false) {
-    const sources = value.metered.items.flatMap(item => item.sources ?? []), bodies = prepared.length - value.metered.items.length;
+    const sources = value.metered.items.flatMap(item => item.sources ?? []);
+    const bodies = prepared.length + Number(Boolean(ledgerItem)) - value.metered.items.length;
     return { version: CONTEXT_VERSION, policy: { id: policy.id }, representation, counter: { id: counter.id },
       items: value.details, budget: { ...budget, used: bounded ? budget.maxTokens : used },
       omitted: { items: bodies, bodies, sources: totalSources - value.details.reduce((n, item) => n + item.sources.length, 0), unavailable: 0,
@@ -237,6 +242,16 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
   let accepted = payload(selected, dateOrder);
   const emptyText = meteredText(accepted.metered), emptyUsed = count(emptyText, true);
   if (emptyUsed > budget.maxTokens || !fitsBytes(accepted, emptyText, emptyUsed, selected)) fail('context_item_too_large');
+  if (ledgerItem && !expired()) {
+    ledgerTokens = count(ledgerItem.body) ?? undefined;
+    const trial = payload(selected, dateOrder), text = meteredText(trial.metered), used = count(text);
+    if (used !== null && !stops.deadline && used <= budget.maxTokens && fitsBytes(trial, text, used, selected)) accepted = trial;
+    else {
+      ledgerTokens = undefined;
+      if (!stops.deadline) { stops.budget = true; oversized++; }
+    }
+  }
+  const size = selection => selection.size + Number(ledgerTokens !== undefined);
   function visit(item, source) {
     if (expired()) return;
     if (!source && item.type === 'card' && item.metadata.origin === 'engine' && !hits.has(item)) {
@@ -244,7 +259,7 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
       if ([...selected.keys()].some(entry => entry.type === 'memory' && entry.rank < item.rank && covered.has(memoryPackKey(entry.ref)))) return;
     }
     if (!source && hasEngineCards && item.type === 'memory' && cardSourceKeys([...selected.keys()]).has(memoryPackKey(item.ref))) return;
-    if (!source && selected.size >= budget.maxItems && !(item.type === 'card' && item.metadata.origin === 'engine')) { stops.items = true; return; }
+    if (!source && size(selected) >= budget.maxItems && !(item.type === 'card' && item.metadata.origin === 'engine')) { stops.items = true; return; }
     if (source && !selected.has(item)) return;
     const tokens = count(source ? source.excerpt : deliveredCardText(item, intent));
     if (stops.deadline) return;
@@ -253,7 +268,7 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
     if (!source && item.type === 'card' && item.metadata.origin === 'engine') {
       const covered = cardSourceKeys([...trial.keys()]);
       for (const entry of trial.keys()) if (entry.type === 'memory' && covered.has(memoryPackKey(entry.ref))) trial.delete(entry);
-      if (trial.size > budget.maxItems) { stops.items = true; return; }
+      if (size(trial) > budget.maxItems) { stops.items = true; return; }
     }
     const value = payload(trial, dateOrder), text = meteredText(value.metered), used = count(text);
     if (stops.deadline) return;
@@ -262,7 +277,7 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
         selected.clear(); for (const [entry, value] of trial) selected.set(entry, value);
       } else selected.set(item, trial.get(item));
       accepted = value;
-      if (selected.size >= budget.maxItems) stops.items = true;
+      if (size(selected) >= budget.maxItems) stops.items = true;
       return;
     }
     stops.budget = true;
