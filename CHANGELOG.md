@@ -40,7 +40,8 @@
   Deleted or forgotten text was never returned in search, and still isn't.
 - **Known limit:** recovery covers a start that failed because the store was busy.
   If Claude Code cancelled the start hook, or the hook ran out of time, that
-  session still isn't saved. A later release addresses this.
+  session still isn't saved. Installer 0.6.10 added recovery for permission checks
+  interrupted by cancellation or timeout.
 - **Known issue:** Node.js 24.22.3 has SQLite 3.54 built in. With it, some
   searches run slower, and recall can return fewer results when you have a lot
   of saved memory. Your saved data isn't affected. Node.js 22, and Node.js 24
@@ -102,11 +103,11 @@
 - Known limit: Forgetting or correcting can be refused when a summary mixes named and unrelated fenced conversations. Delete the unrelated or source conversation, then retry; narrowing the forget fence to named conversations removes this limit.
 - Known limit (local stores): after you forget or correct a memory, other memories that came from a conversation it hid keep a source that can no longer be read. Until each of them is corrected or forgotten, session start with background context is refused with `revision_conflict` (the default session start too, when one of them is a standing instruction), reading the memory source snapshot is refused with `revision_conflict`, and recall that asks for sources or reasons is refused (`source_unavailable`, or `revision_conflict` on stores upgraded with the offline safety migration). To find the affected memories, inspect each memory that came from a conversation the forget hid: an affected one reports a receipt count but returns no receipts. On stores upgraded with the offline safety migration, a memory from the same message as the forgotten one is not found at all (see the next sentence). On those upgraded stores, after you forget or correct a memory whose message produced other memories, listing memories for that namespace — and the time lists and the source snapshot — is refused with `revision_conflict` until each surviving memory from that message is corrected or forgotten by id. Recall still works and leaves those memories out; no read returns them any more, so this needs their ids from earlier output. Correct or forget those memories to clear it; deleting the conversation with the installed command does not clear it.
 - Known limit (local stores upgraded with the offline safety migration, with session summaries turned on): after a forget or correction, listing conversation summaries, session start and opening a summary can be refused with `conversation_deleted` while a nearby conversation hidden by it still has a summary. `cairn-memory raw list` shows such conversations as `fenced=true hidden=true`; run `cairn-memory raw delete --conversation ID --yes` for each one that still has a summary. Deleting one removes that conversation's saved text and its summaries; the forget has already hidden them permanently, so nothing you can still read is lost. Correct or forget the other memories from that conversation first; otherwise, after forgetting a memory saved without a conversation, its own source conversation must be deleted as well.
-- Known limit: For integrations that call the engine directly or run the MCP server with `--retained-raw-profile`: reading a saved conversation by its id and listing saved conversations are not yet stopped by a forget. On stores that were not upgraded with the offline safety migration they still return a conversation hidden by a forget or correction, with its text. On upgraded stores the hidden conversation is returned without its text, and listing saved conversations and the saved-text usage summary are refused (`evidence_unavailable`, `source_unavailable`) after a forget. Search, recall and memory sources do not return hidden conversations. Fixed in the next installer; until then `cairn-memory raw delete --conversation ID --yes` removes a hidden conversation's saved text. Installed setups do not expose these readers.
+- Known limit: For integrations that call the engine directly or run the MCP server with `--retained-raw-profile`: reading a saved conversation by its id and listing saved conversations are not yet stopped by a forget. On stores that were not upgraded with the offline safety migration they still return a conversation hidden by a forget or correction, with its text. On upgraded stores the hidden conversation is returned without its text, and listing saved conversations and the saved-text usage summary are refused (`evidence_unavailable`, `source_unavailable`) after a forget. Search, recall and memory sources do not return hidden conversations. Still open as of installer 0.6.10. `cairn-memory raw delete --conversation ID --yes` removes a hidden conversation's saved text. Installed setups do not expose these readers.
 - Known limit: Until cleanup removes a deleted item's index entries, its word counts can still slightly affect other results' ranking scores; its text is never returned.
 - Known limit: After you forget something, the conversation it came from and any resumed or forked copy of it (for example `claude --resume`) are not saved from then on. Any conversation that tries to save a message dated within 30 minutes of the forgotten message is not saved from then on either, including one you start right after the forget. To resume saving, start a new conversation more than 30 minutes after the forgotten message was written.
 - Known limit: After any local forget, correct, conversation delete or Episode forget, conversations whose message times are unknown are hidden from Raw search, and a conversation that saves a message without a time is not saved from then on, including new conversations. Memories are kept. Claude Code and Codex normally record message times, so this only affects messages whose transcript entry has no timestamp.
-- Known cost: Forgetting a memory now runs about one more database statement per event of each conversation summary it removes (about 20 ms more at 100 events on a slow machine). Follow-up: replace the per-event updates with one set-based update.
+- Known cost: Forgetting a memory now runs about one more database statement per event of each conversation summary it removes (about 20 ms more at 100 events on a slow machine).
 
 ## 0.6.7 — 2026-11-14
 
@@ -147,8 +148,7 @@ bumped here.
 ## 0.3.6 — 2026-11-10: hosted pause and capture session windows (unreleased; shipped in 0.3.7)
 
 Plugin and marketplace 0.3.6. Protocol stays 0.3.0. The installer version is not
-bumped here; the Codex changes reach installs through the next installer
-release.
+bumped here. The Codex changes shipped in installer 0.6.8.
 
 - Honour a hosted pause on the Claude Code client before recall and capture.
 - Honour a hosted pause when delivering Codex context output.
@@ -330,16 +330,16 @@ release.
   - While new turns keep arriving, the local MCP server keeps indexing: about one small index write per second and roughly 3% of one CPU core.
   - Histories of about 50,000 messages or more may never finish indexing; search keeps reporting partial coverage for them.
   - Searches served by a reader that doesn't run index maintenance itself, such as keyword-only searches when an embedding model is configured, can keep reporting partial coverage even after indexing has finished. Their results are still returned.
-  - With an embedding model configured, semantic search can still send the search text, and background index maintenance can send stored memory text, to that provider while saving is paused or disabled for that store; fixed in the next release.
-  - With an OpenAI key configured for the MCP server, recall, classify, relate and review requests can still send the query and stored memory text to OpenAI while saving is paused or disabled; fixed in the next release. Installs without a key, and automatic capture, are not affected.
-  - Local setup doesn't support a custom `CLAUDE_CONFIG_DIR` yet: setup stops with "The Claude Code local entry could not be verified." Fixed in the next release.
-  - If `~/.claude` or `~/.codex` (or `CLAUDE_CONFIG_DIR` / `CODEX_HOME`) is a symbolic link, local setup stops without connecting that tool. Fixed in the next release.
-  - macOS with Node from Homebrew: setup records Node's versioned path, so rerun setup after `brew upgrade` updates Node. Fixed in the next release.
+  - With an embedding model configured, semantic search can still send the search text, and background index maintenance can send stored memory text, to that provider while saving is paused or disabled for that store. Installer 0.6.8 added an embedding guard for namespace pause and project capture disable. Turning off automatic saving with `config --local-capture off` still leaves embedding requests enabled.
+  - With an OpenAI key configured for the MCP server, recall, classify, relate and review requests can still send the query and stored memory text to OpenAI while saving is paused or disabled. Still open as of 0.6.10. Installs without a key, and automatic capture, are not affected.
+  - Local setup doesn't support a custom `CLAUDE_CONFIG_DIR` yet: setup stops with "The Claude Code local entry could not be verified." Still open as of installer 0.6.10.
+  - If `~/.claude` or `~/.codex` (or `CLAUDE_CONFIG_DIR` / `CODEX_HOME`) is a symbolic link, local setup stops without connecting that tool. Still a setup limit as of installer 0.6.10.
+  - macOS with Node from Homebrew: setup records Node's versioned path, so rerun setup after `brew upgrade` updates Node. Still open as of installer 0.6.10.
   - Claude Code runs started by scripts or the Agent SDK (for example `claude -p`) are saved like interactive sessions.
   - Deleting a conversation or forgetting a memory removes that text from Cairn's database at once, and it is never shown again; conversations a forget only hides stay saved until you delete them. Local search index files can keep word lists (and, with semantic search, vectors) from deleted items until background cleanup reaches them. Cleanup runs only while Cairn is running, may not reach them while new conversations keep being saved, and never covers index files for a search setup you no longer use. As with most databases, deleted text can also remain in unused file space until it is overwritten.
   - Automatic saving runs on Linux and WSL. On macOS, setup connects Claude Code and Codex and the memory tools work, but automatic saving doesn't start yet: setup reports conversation saving OFF (runtime_unavailable) and exits with code 2.
   - When capture resumes after being turned off, Cairn reads up to the last 4 KiB of the conversation file, and for Codex up to the first 4 KiB to find its session header; some of those bytes may have been written while capture was off. They are used only to identify the session and check the file wasn't replaced, never saved or sent.
-  - A later release indexes newly saved conversations first.
+  - Raw search began indexing newly saved conversations first in installer 0.6.8.
 - Default reads keep the Raw excerpts they already validated when a read reaches
   its time limit, marked partial, instead of dropping them.
 - Deletion removes the conversation's Raw messages and index rows and its Episodes, and invalidates dependent Cards under the existing lineage rule. Confirmed authored Card bodies may remain stored. Re-sent copies (fork, resume or cursor reset) are not archived again. Extracted Memories are kept; use each Memory's own forget operation to remove it.
@@ -423,23 +423,21 @@ release.
   `--no-raw-search`, and `--no-context-read` disable the respective defaults;
   see [defaults and off switches](docs/defaults.md).
 - You can go back to 0.6.3; it keeps working with the upgraded store, but conversations captured while on 0.6.3 are not kept as Raw.
-- Prepared and unpublished; after publication, rerun setup to install 0.6.5's
-  engine, Codex notice/status updates and the prompt recall deadline. Existing
+- Installer 0.6.5 shipped on November 9, 2026. Rerun setup to install its
+  engine, Codex notice/status updates and prompt recall deadline. Existing
   installed runtimes stay in use until setup is rerun.
 
 ## 0.3.5 — 2026-11-09: hosted recall pre-fetch durability
 
 Plugin and marketplace 0.3.5. Protocol stays 0.3.0. The installer version is not
-bumped here; the Codex prompt changes reach installs through the next installer
-release.
+bumped here. The Codex prompt changes shipped in installer 0.6.6.
 
 - Remove redundant durable publications before hosted recall while preserving pause barriers and diagnostic freshness.
 
 ## 0.3.4 — 2026-11-09: hosted recall deadline
 
 Plugin and marketplace 0.3.4. Protocol stays 0.3.0. The installer version is not
-bumped here; the Codex prompt changes reach installs through the next installer
-release.
+bumped here. The Codex prompt recall deadline shipped in installer 0.6.5.
 
 - Allow 2,500 ms from the first recall fetch on both hosts. Codex prompt hooks
   have a 3,000 ms process-clock cap; Claude Code plugin prompt hooks keep their
@@ -463,7 +461,7 @@ release.
 
 - Optional admission capacity covers cold opens while work retains its normal quantum. Each domain prices exhaustion by its own next turn.
 - WAL-mode hosts pay main's integrity check once on the first open after upgrade; DELETE-mode caches rebuild once. Steady maintenance adds no BEGIN or COMMIT.
-- A reader opened after a mismatch is detected never serves the untrusted file; a reader opened before an out-of-band seal removal keeps serving until its next reopen (content safety by delivery revalidation). Invalidating serving handles on rejection is a planned follow-up.
+- A reader opened after a mismatch is detected never serves the untrusted file; a reader opened before an out-of-band seal removal keeps serving until its next reopen (content safety by delivery revalidation). Rejection on open does not invalidate readers that already have the file open.
 
 ## Unreleased — semantic provider key channel
 
