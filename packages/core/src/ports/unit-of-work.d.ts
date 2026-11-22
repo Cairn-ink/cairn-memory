@@ -2,7 +2,11 @@ import type { OwnerId } from "./common.d.ts";
 
 /**
  * Transaction handle. Opaque to core: core passes it to port methods unchanged.
- * Ports must only be called with a Tx obtained from the same UnitOfWork run.
+ * The Tx IS the run identity. Ports must only be called with a Tx obtained from the same
+ * UnitOfWork run. Adapters reject a Tx they did not issue or whose run has ended, and refuse
+ * writes on a readOnly Tx. Adapters are not required to detect a live Tx passed into a
+ * different, concurrently live run (no async-context mechanism exists on every runtime);
+ * core never does that, and the conformance kit checks core's call sites.
  */
 export interface Tx {
   readonly owner: OwnerId;
