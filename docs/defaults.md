@@ -48,7 +48,7 @@ limit, marked partial, instead of dropping them.
 **Search catches up after saving (installer 0.6.6 and later).** Each turn is saved to the local store as soon as it ends. From installer 0.6.8, Raw search indexes newly saved conversations first, so a new save is usually searchable within about 10 seconds (a long turn can take about half a minute, and a turn with very many messages up to about two minutes). Raw search builds its full index in the background while Cairn is running: allow about 15 minutes per 1,000 saved messages on a typical computer and up to about 20 minutes on a slower one; larger stores take less time per message (for 10,000, about 1.5 hours, or about 3 hours on a slower computer). After upgrading from 0.6.7, this first full indexing pass runs once more, so Raw search reports partial coverage for about as long as a first build. After each new saved message it re-checks the whole index (about 5 minutes per 1,000 saved messages), so while saves keep arriving the full pass may not finish until saving pauses; new saves are still indexed first. Times depend on how your conversations are shaped; many long turns take longer. Until a build or re-check finishes, Raw search still returns results but reports partial coverage. Until the first full pass has finished, conversations it hasn't reached yet may be missing from results. The coverage report marks such results as partial, but assistants using the memory tool see only the results, so an empty answer then doesn't mean nothing was saved. Memories, and conversations the index already covers, are not affected and stay searchable as before.
 
 Known limits in installers 0.6.6 and 0.6.7:
-- While new turns keep arriving, the local MCP server keeps indexing: about one small index write per second and roughly 3% of one CPU core.
+- While new turns keep arriving, indexing uses about one small index write per second and roughly 3% of one CPU core per running local MCP server.
 - Histories of about 50,000 messages or more may never finish indexing; search keeps reporting partial coverage for them.
 - Searches served by a reader that doesn't run index maintenance itself, such as keyword-only searches when an embedding model is configured, can keep reporting partial coverage even after indexing has finished. Their results are still returned.
 - When capture resumes after being turned off, Cairn reads up to the last 4 KiB of the conversation file, and for Codex up to the first 4 KiB to find its session header; some of those bytes may have been written while capture was off. They are used only to identify the session and check the file wasn't replaced, never saved or sent.
@@ -73,8 +73,18 @@ recall tools. Prefer these contextRead tools for memory reads. The default dated
 combines Memory with eligible Raw evidence; its default budget is
 6,000 local tokens and 24 items.
 
-These defaults apply to the ordinary local MCP server, including the engine
-registered by `setup --local`. Library `openMemoryCore({path})` keeps Raw off;
+These defaults apply to the ordinary local MCP server, including the shared
+background server used by eligible sessions from the same installation on Linux
+as of installer 0.6.10. The first session starts that server and it exits about
+30 seconds after the last session closes. Sessions using it share its indexing
+work. Sessions with different server environments, such as a
+different `PATH`, use separate servers. On macOS and other platforms, or for
+stores under `/mnt/` or on network filesystems, each session starts its own
+server. If the shared server can't start, the session automatically starts
+its own server. Uninstall keeps memory data, and a running background server
+exits about 30 seconds after its last session closes.
+
+Library `openMemoryCore({path})` keeps Raw off;
 select `raw:true` for the local Raw composition and its default search lane.
 Local foreground setup can select Raw-only capture with interpretation consent
 false and plaintext Raw/foreground consent true. It saves Raw and advances turns
@@ -205,7 +215,8 @@ and Memory. Turning a feature off stops future work and does not erase retained
 files or backups.
 
 With `OPENAI_API_KEY` available to the Cairn MCP server, memories and search text
-go to OpenAI for semantic search, up to an estimated US$1 per day per running Cairn server. Saved
+go to OpenAI for semantic search, up to an estimated US$1 per day per running Cairn server. Sessions
+that use the same background server share its budget. Saved
 conversations are sent only if you opt in with `--raw-semantic` or explicitly
 configure `--context-embedder`. Raw document and query embeddings are both off
 by default, with status reason `raw_semantic_not_enabled`; no Raw vectors are
