@@ -1,4 +1,5 @@
 import { CoreError } from "./errors.mjs";
+import { compareUtf8 } from "./utf8.mjs";
 
 // One SuppressionFact union for every store. Facts are permanent. A retry of the same fact
 // (same canonical body = incarnation) returns the original; a different body for the same
@@ -118,5 +119,11 @@ function canonical(value) {
  */
 export function factBody(fact) {
   const { owner: _owner, actionId: _actionId, ...body } = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (fact));
+  // A text fact's digests are a set: order them by (alg, value) so the same set always
+  // yields the same incarnation. Other arrays keep their given order.
+  const text = /** @type {{ digests?: unknown } | undefined} */ (body.text);
+  if (body.kind === "text" && text && Array.isArray(text.digests)) {
+    body.text = { ...text, digests: [...text.digests].sort((x, y) => compareUtf8(x.alg, y.alg) || compareUtf8(x.value, y.value)) };
+  }
   return JSON.stringify(canonical(body));
 }
