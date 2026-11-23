@@ -30,8 +30,8 @@ const READ_INDEX = `SELECT i.indisvalid AS valid, n.nspname AS schema, idx.relna
       )
     ) AS builtin_collations
   FROM pg_catalog.pg_index i
-  JOIN pg_catalog.pg_class idx ON idx.oid = i.indexrelid
-  JOIN pg_catalog.pg_namespace n ON n.oid = idx.relnamespace
+  JOIN pg_catalog.pg_class idx ON idx.oid OPERATOR(pg_catalog.=) i.indexrelid
+  JOIN pg_catalog.pg_namespace n ON n.oid OPERATOR(pg_catalog.=) idx.relnamespace
   WHERE idx.relname OPERATOR(pg_catalog.=) (pg_catalog.parse_ident($1)::pg_catalog.name[])[1]
     AND i.indrelid OPERATOR(pg_catalog.=) pg_catalog.to_regclass($2)`;
 
