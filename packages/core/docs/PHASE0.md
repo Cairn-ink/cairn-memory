@@ -80,6 +80,7 @@ Each addendum is additive unless it says what it supersedes. Adapters written ag
    - A throw from `fits()` counts as `false`: that group is not sent and planning splits it smaller; smaller groups are sent only if they fit. This deliberately differs from the engine, which aborts planning with `token_count_unavailable` when its hook throws.
    - It supersedes nothing. The conformance kit must accept adapters without it.
    - Reason: core's sizing text undercounts the provider body. Five inline qualification items with four 180-character CJK excerpts each measured 5,857 tokens by core's sizing text and 7,512 by the serialized provider body. The engine rejects that group and accepts each item alone. Without the hook, a verbatim adapter would plan differently.
+2. **Error code `model_cancelled`** (kind `unavailable`, not retryable). Raised only when the model adapter's call ends with an AbortError that is not the capture deadline, as the engine does today. The deadline path keeps `model_timeout`. It supersedes nothing.
 
 ## Change requests
 

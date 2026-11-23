@@ -74,6 +74,7 @@ export const ERROR_CODES = Object.freeze({
   evidence_unavailable: "denied",
   model_not_configured: "unavailable",
   model_timeout: "unavailable",
+  model_cancelled: "unavailable",
   token_count_unavailable: "unavailable",
   qualification_failed: "unavailable",
   reconciliation_failed: "unavailable",
