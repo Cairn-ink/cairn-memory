@@ -93,7 +93,7 @@ test("stored receipts use the same fields that were validated", async () => {
   assert.deepEqual([...reads.values()], [1, 1, 1, 1, 1]);
 });
 
-test("snapshot ignores times without a client and retains indexed validation with a client", async () => {
+test("snapshot validates indexed times with and without a client", async () => {
   const { uow, suppressions, harness } = createMemoryAdapter();
   await harness.seedFact(owner, { ...fact, kind: "window", client: key.client, window: { startMs: 10, endMs: 20 } });
   await uow.run(owner, { readOnly: true }, async (tx) => {
