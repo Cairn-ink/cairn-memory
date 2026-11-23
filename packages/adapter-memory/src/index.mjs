@@ -1,5 +1,6 @@
 import { CoreError, assertAdapterCapabilities, capabilities, toCoreError } from "@cairn-ink/core";
 import { createCapturePorts } from "./capture.mjs";
+import { createFactMatcher } from "./fact-match.mjs";
 import { createMemoryStore } from "./memory-store.mjs";
 import { createFactStore, createFingerprintProvider, createPauseStore } from "./privacy.mjs";
 import { createRetrievalPorts } from "./retrieval.mjs";
@@ -23,8 +24,9 @@ export function createMemoryAdapter(options = {}) {
   let clockOffset = 0;
   const now = () => clock() + clockOffset;
   const { uow, port, dump, runSeed, setWriteTime } = createUnitOfWork(nativeErrorMap, now);
-  const store = createMemoryStore(port, flags, newId);
-  const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now });
+  const matchFacts = createFactMatcher(flags.vectorSuppression, options.hashSessionKey);
+  const store = createMemoryStore(port, flags, newId, matchFacts);
+  const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts);
   const { keys, setFingerprintSecret } = createFingerprintProvider(flags.fingerprintKey, options.fingerprint);
   /** @type {import("./index.d.mts").MemoryAdapter} */
   const adapter = {
@@ -36,7 +38,7 @@ export function createMemoryAdapter(options = {}) {
     suppressions,
     pause: createPauseStore(port),
     keys,
-    ...createRetrievalPorts(port, flags),
+    ...createRetrievalPorts(port, flags, matchFacts),
     nativeErrorMap,
     harness: {
       async dump() { return dump(); },

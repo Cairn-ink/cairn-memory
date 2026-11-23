@@ -1,16 +1,20 @@
 import { CoreError, NEAR_DUPLICATE_DISTANCE, compareUtf8 } from "@cairn-ink/core";
 import { cosineDistance } from "./cosine.mjs";
 import { decodeCursor, encodeCursor, newestFirst } from "./cursor.mjs";
-import { factPolicy } from "./fact-match.mjs";
+import { createFactMatcher } from "./fact-match.mjs";
 import {
-  attachReceipts, copyContent, copyMerge, copyReceipts, validateDuplicateBatch, validateLimit, validateMemoryId,
+  attachReceipts, copyContent, copyDuplicateBatch, copyMerge, copyReceipts, validateLimit, validateMemoryId,
   validateSource, validateTime, writeNamespace,
 } from "./validation.mjs";
 
 /** @typedef {import("@cairn-ink/core/ports").DuplicateQuery} DuplicateQuery */
 /** @typedef {import("@cairn-ink/core/ports").MemoryMatch} MemoryMatch */
 /** @typedef {import("@cairn-ink/core/ports").MemoryStore} MemoryStore */
+/** @import { InsertRow, Receipt, Scope, SourceRef, Tx } from "@cairn-ink/core/ports" */
+/** @import { CanonicalQuery } from "./validation.mjs" */
+/** @typedef {ReturnType<typeof copyContent>} CopiedContent */
 /** @typedef {import("./unit-of-work.mjs").Row} Row */
+/** @typedef {import("./unit-of-work.mjs").Entry} Entry */
 /** @typedef {{match: "exact" | "near", distance: number}} MatchQuality */
 
 /** @param {MemoryMatch & MatchQuality} a @param {MemoryMatch & MatchQuality} b */
@@ -31,8 +35,9 @@ function writeTime(nowMs) {
  * @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>["port"]} port
  * @param {import("@cairn-ink/core").Capabilities} capabilities
  * @param {() => string} newId
+ * @param {ReturnType<typeof createFactMatcher>} [matchFacts]
  */
-export function createMemoryStore(port, capabilities, newId) {
+export function createMemoryStore(port, capabilities, newId, matchFacts = createFactMatcher(capabilities.vectorSuppression)) {
   let nearSkippedUnembedded = 0;
 
   /**
@@ -71,17 +76,23 @@ export function createMemoryStore(port, capabilities, newId) {
     });
   }
 
-  /** @param {Map<string, import("./unit-of-work.mjs").Entry> | undefined} namespace */
-  function rowsIn(namespace) {
-    return namespace ? [...namespace.values()].map(({ row }) => row) : [];
+  /** @param {Map<string, Entry> | undefined} namespace */
+  function entriesIn(namespace) {
+    return namespace ? [...namespace.values()] : [];
   }
 
-  /** @param {typeof port.writeFromFinish} write @returns {Pick<MemoryStore, "insert" | "touchDuplicate">} */
-  function memoryWrites(write) {
+  /**
+   * @template {InsertRow} T
+   * @param {typeof port.writeFromFinish} write
+   * @param {(row: T) => CopiedContent} prepareContent
+   * @returns {{insert: (tx: Tx, scope: Scope, row: T, receipts: readonly Receipt[], nowMs: number) =>
+   *   ReturnType<MemoryStore["insert"]>, touchDuplicate: MemoryStore["touchDuplicate"]}}
+   */
+  function memoryWrites(write, prepareContent) {
     return {
       async insert(tx, scope, row, receipts, nowMs) {
         return write(tx, scope, () => {
-          const content = copyContent(row);
+          const content = prepareContent(row);
           const evidence = attachReceipts([], copyReceipts(receipts));
           validateTime(nowMs);
           const namespace = writeNamespace(scope);
@@ -126,50 +137,65 @@ export function createMemoryStore(port, capabilities, newId) {
     };
   }
 
-  /** @type {MemoryStore} */
-  const memories = {
-    ...memoryWrites((tx, scope, prepare) => port.write(tx, scope, true, prepare)),
-
-    async findDuplicates(tx, scope, batch, options) {
+  const policyReads = {
+    /** @param {Tx} tx @param {Scope} scope @param {() => readonly CanonicalQuery[]} prepareBatch
+     * @param {SourceRef} source @param {"hash" | "full"} mode @param {string} [editId]
+     */
+    readWritePolicy(tx, scope, prepareBatch, source, mode, editId) {
       return port(tx, scope, false, (state) => {
-        validateDuplicateBatch(batch);
-        if (!options || typeof options !== "object" || !Number.isFinite(options.nearDistance) || options.nearDistance < 0 ||
-          (options.excludeId !== undefined && typeof options.excludeId !== "string")) throw new CoreError("invalid_input");
-        const { nearDistance, excludeId } = options;
-        const policy = factPolicy(state.facts, scope, capabilities.vectorSuppression);
-        const rows = rowsIn(state.rows.get(scope.namespace)).filter((row) => row.id !== excludeId && !policy.hides(row));
-        return matches(rows, batch, nearDistance);
-      });
-    },
-
-    async readWritePolicy(tx, scope, batch, source, mode, editId) {
-      return port(tx, scope, false, (state) => {
-        validateDuplicateBatch(batch);
-        validateSource(source);
-        if ((mode !== "hash" && mode !== "full") ||
-          (editId !== undefined && typeof editId !== "string")) throw new CoreError("invalid_input");
-        const policy = factPolicy(state.facts, scope, capabilities.vectorSuppression);
+        const batch = prepareBatch();
+        const policy = matchFacts(state.facts, scope);
         const namespace = state.rows.get(scope.namespace);
-        const rows = rowsIn(namespace).filter((row) => row.id !== editId);
-        const duplicates = matches(rows, batch, NEAR_DUPLICATE_DISTANCE);
-        const hidden = new Set(rows.filter(policy.hides).map((row) => row.id));
+        const entries = entriesIn(namespace).filter(({ row }) => row.id !== editId);
+        const duplicates = matches(entries.map(({ row }) => row), batch, NEAR_DUPLICATE_DISTANCE);
+        const hidden = new Set(entries.filter(policy.hides).map(({ row }) => row.id));
         const hiddenIds = new Set();
         for (const group of duplicates) {
           for (const match of group) {
             if (match.kind === "stored" && hidden.has(match.id)) hiddenIds.add(match.id);
           }
         }
+        const edit = editId === undefined ? undefined : namespace?.get(editId)?.row;
+        const sourceMemory = edit && { id: edit.id, createdAtMs: edit.createdAtMs };
         const blockedPositions = [];
         for (const [i, query] of batch.entries()) {
-          if (policy.blocks(query, mode)) blockedPositions.push(i);
+          if (policy.blocks(query, mode, sourceMemory)) blockedPositions.push(i);
         }
         return {
           matches: duplicates,
           hiddenIds: [...hiddenIds].sort(compareUtf8),
           blockedPositions,
-          blockedSession: policy.blocksSession(source),
+          blockedSession: policy.blocksSession(source.client, source.sessionId),
         };
       });
+    },
+  };
+
+  /** @type {MemoryStore} */
+  const memories = {
+    ...memoryWrites((tx, scope, prepare) => port.write(tx, scope, true, prepare), copyContent),
+
+    async findDuplicates(tx, scope, queries, options) {
+      return port(tx, scope, false, (state) => {
+        const batch = copyDuplicateBatch(queries);
+        if (!options || typeof options !== "object" || !Number.isFinite(options.nearDistance) || options.nearDistance < 0 ||
+          (options.excludeId !== undefined && typeof options.excludeId !== "string")) throw new CoreError("invalid_input");
+        const { nearDistance, excludeId } = options;
+        const policy = matchFacts(state.facts, scope);
+        const rows = entriesIn(state.rows.get(scope.namespace))
+          .filter((entry) => entry.row.id !== excludeId && !policy.hides(entry)).map(({ row }) => row);
+        return matches(rows, batch, nearDistance);
+      });
+    },
+
+    async readWritePolicy(tx, scope, batch, source, mode, editId) {
+      return policyReads.readWritePolicy(tx, scope, () => {
+        const queries = copyDuplicateBatch(batch);
+        validateSource(source);
+        if ((mode !== "hash" && mode !== "full") ||
+          (editId !== undefined && typeof editId !== "string")) throw new CoreError("invalid_input");
+        return queries;
+      }, source, mode, editId);
     },
 
     async readRevision(tx, scope, id) {
@@ -197,12 +223,14 @@ export function createMemoryStore(port, capabilities, newId) {
           if (row.historical) throw new CoreError("memory_historical");
           if (content.textHash === row.textHash) return { outcome: "unchanged", revision: row.revision };
 
-          const policy = factPolicy(state.facts, { owner: tx.owner, namespace }, capabilities.vectorSuppression);
-          if (rowsIn(entries).some((other) => other.id !== id && other.textHash === content.textHash && !policy.hides(other))) {
+          const policy = matchFacts(state.facts, { owner: tx.owner, namespace });
+          if (entriesIn(entries).some((other) => other.row.id !== id && other.row.textHash === content.textHash &&
+            !policy.hides(other))) {
             throw new CoreError("memory_conflict");
           }
           const revision = row.revision + 1;
           Object.assign(row, content, { revision, ...writeTime(nowMs) });
+          delete row.legacyHash;
           if (evidence !== null) entry.receipts = evidence;
           return { outcome: "changed", revision };
         };
@@ -235,10 +263,10 @@ export function createMemoryStore(port, capabilities, newId) {
         const { cursor, limit } = page;
         validateLimit(limit);
         const after = cursor === null ? null : decodeCursor(cursor);
-        const policy = factPolicy(state.facts, scope, capabilities.vectorSuppression);
-        const rows = rowsIn(state.rows.get(scope.namespace))
-          .filter((row) => (!after || newestFirst(row, after) > 0) && !policy.hides(row))
-          .sort(newestFirst);
+        const policy = matchFacts(state.facts, scope);
+        const rows = entriesIn(state.rows.get(scope.namespace))
+          .filter((entry) => (!after || newestFirst(entry.row, after) > 0) && !policy.hides(entry))
+          .map(({ row }) => row).sort(newestFirst);
         const items = rows.slice(0, limit).map((row) => structuredClone(row));
         const last = items.at(-1);
         return {
@@ -249,5 +277,12 @@ export function createMemoryStore(port, capabilities, newId) {
     },
   };
 
-  return { memories, finishWrites: memoryWrites(port.writeFromFinish), counters: () => ({ nearSkippedUnembedded }) };
+  // Finish already snapshots its items before entering the queue.
+  const finishWrites = memoryWrites(port.writeFromFinish, (/** @type {CopiedContent} */ row) => row);
+  /** @param {Tx} tx @param {Scope} scope @param {readonly CanonicalQuery[]} batch
+   * @param {SourceRef} source @param {"hash" | "full"} mode */
+  function readWritePolicy(tx, scope, batch, source, mode) {
+    return policyReads.readWritePolicy(tx, scope, () => batch, source, mode);
+  }
+  return { memories, finishWrites, readWritePolicy, counters: () => ({ nearSkippedUnembedded }) };
 }

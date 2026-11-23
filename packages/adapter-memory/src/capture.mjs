@@ -45,7 +45,7 @@ function copyResult(stored, pending) {
  * @param {() => number} now
  * @returns {import("@cairn-ink/core/ports").StorageAdapter["capture"]}
  */
-export function createCapturePorts(port, { memories, finishWrites, counters }, now) {
+export function createCapturePorts(port, { memories, finishWrites, readWritePolicy, counters }, now) {
   return {
     async claim(tx, key, messages, options) {
       return port.capture(tx, { owner: tx?.owner }, () => {
@@ -127,7 +127,7 @@ export function createCapturePorts(port, { memories, finishWrites, counters }, n
           /** @type {SourceRef} */
           const source = { kind: "capture", client, sessionId };
           const queries = batch.map(({ row }) => ({ textHash: row.textHash, embedding: row.embedding?.vector }));
-          const policy = await memories.readWritePolicy(tx, scope, queries, source, "full");
+          const policy = await readWritePolicy(tx, scope, queries, source, "full");
           const progress = { inserted: new Map(), writeTimes: new Map() };
           /** @type {FinishResult["memories"]} */
           const written = [];

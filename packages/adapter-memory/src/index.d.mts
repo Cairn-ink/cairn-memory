@@ -1,4 +1,4 @@
-import type { Capability, ErrorCode, FingerprintLabels } from "@cairn-ink/core";
+import type { Capability, ErrorCode, FactMatchPolicy, FingerprintLabels } from "@cairn-ink/core";
 import type { StorageAdapter } from "@cairn-ink/core/ports";
 import type { TestHarness } from "@cairn-ink/conformance/factory";
 
@@ -10,6 +10,7 @@ export interface MemoryAdapterOptions {
   newId?: () => string;
   now?: () => number;
   sessionRefs?: "plain" | "hashed";
+  hashSessionKey?: FactMatchPolicy["hashSessionKey"];
   fingerprint?: { secret: string; labels: FingerprintLabels } | null;
 }
 

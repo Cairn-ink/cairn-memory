@@ -321,13 +321,14 @@ test("a callback rejection takes precedence over a caught write failure", async 
   assert.equal(await token(adapter), before);
 });
 
-test("reports matching reads as unavailable", async () => {
+test("matching reads return empty results for an owner without facts", async () => {
   const { uow, suppressions } = createMemoryAdapter();
   await uow.run(owner, { readOnly: true }, async (tx) => {
     const factScope = { owner, namespace: null };
-    await assert.rejects(suppressions.snapshot(tx, factScope, {}), coreError("capability_unavailable"));
-    await assert.rejects(suppressions.factsFor(tx, factScope, { memoryId: "test-memory" }),
-      coreError("capability_unavailable"));
+    assert.deepEqual(await suppressions.snapshot(tx, factScope, {}), {
+      blockedSession: false, blockedMessages: [], passages: [],
+    });
+    assert.deepEqual(await suppressions.factsFor(tx, factScope, { memoryId: "test-memory" }), []);
   });
 });
 
