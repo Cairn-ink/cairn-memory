@@ -22,7 +22,12 @@ export interface DocumentRouteChoice {
 export interface DocumentRoutingDecision {
   /** In admission priority order; positions index the original messages. */
   chosen: DocumentRouteChoice[];
-  drops: { extract_only: number; capture_limit: number };
+  drops: {
+    extract_only: number;
+    capture_limit: number;
+    /** Included in extract_only and reported when positive. */
+    ill_formed_text?: number;
+  };
 }
 
 /** Determines eligible cards. All messages remain eligible for the existing extraction flow. */
@@ -57,7 +62,7 @@ export interface DocumentCard {
   sentences: DocumentSentence[];
 }
 
-export type DocumentCardDropReason = "oversize" | "unmappable_redaction" | "empty_body" | "missing_session_key";
+export type DocumentCardDropReason = "oversize" | "unmappable_redaction" | "empty_body" | "missing_session_key" | "ill_formed_text";
 export type DocumentCardBuild =
   | { card: DocumentCard; drops: Readonly<Record<string, never>> }
   | { card: null; drops: Partial<Record<DocumentCardDropReason, 1>> };
@@ -75,9 +80,10 @@ export interface DocumentPiece {
 }
 
 /**
- * Uses complete lines for a truncated head when possible. An oversized first line or
- * matching line uses the longest code-point prefix that fits its token limit.
- * An excerpt may add the preceding heading and an ellipsis outside the window limit.
+ * Uses complete lines for a truncated head when possible, with a code-point prefix
+ * for an oversized first line. An oversized matching line is excerpted around the
+ * match, with a preceding heading when the combined excerpt fits. Excerpts made
+ * from complete lines may add the heading and ellipsis outside the window limit.
  */
 export declare function selectDocumentPiece(
   card: Pick<DocumentCard, "body">,

@@ -1,4 +1,6 @@
-import { caseInsensitiveWords, normalizeDocumentText, NONSPACE, SPACE, WORD } from "./text.mjs";
+import { cleanContent } from "../privacy/text.mjs";
+import { redactDocumentText } from "./redaction.mjs";
+import { caseInsensitiveWords, NONSPACE, SPACE, WORD } from "./text.mjs";
 
 const LINE_START = String.raw`(?<![^\n])`;
 const LINE_END = String.raw`(?![^\n])`;
@@ -38,9 +40,19 @@ export function routeDocumentMessages(messages) {
   /** @type {import("./index.mjs").DocumentRouteChoice[][]} */
   const groups = [[], [], []];
   let extractOnly = 0;
+  let illFormedText = 0;
 
   for (const [position, message] of messages.entries()) {
-    const content = normalizeDocumentText(message.content);
+    if (cleanContent(message.content) !== message.content) {
+      extractOnly++;
+      illFormedText++;
+      continue;
+    }
+    const content = redactDocumentText(message.content);
+    if (content === null) {
+      extractOnly++;
+      continue;
+    }
     const assistant = message.role === "assistant";
     const explicit = message.role === "user" && content.length >= 200 && REMEMBER.test(content);
     const weighted = content.length + 2 * (content.match(CJK)?.length ?? 0);
@@ -64,6 +76,10 @@ export function routeDocumentMessages(messages) {
   const candidates = groups.flat();
   return {
     chosen: candidates.slice(0, CARD_LIMIT),
-    drops: { extract_only: extractOnly, capture_limit: Math.max(0, candidates.length - CARD_LIMIT) },
+    drops: {
+      extract_only: extractOnly,
+      capture_limit: Math.max(0, candidates.length - CARD_LIMIT),
+      ...(illFormedText ? { ill_formed_text: illFormedText } : {}),
+    },
   };
 }

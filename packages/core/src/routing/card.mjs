@@ -1,71 +1,10 @@
-import { redactSecrets } from "../extraction/redact.mjs";
-import { coreRedactionMasks } from "../privacy/redact.mjs";
 import { cleanContent } from "../privacy/text.mjs";
-import { normalizeDocumentText } from "./text.mjs";
+import { redactDocumentText } from "./redaction.mjs";
 
-const REPLACEMENT = "[REDACTED]";
 const REVISION = 1;
 const BODY_LIMIT = 4_000;
 const TITLE_LIMIT = 200;
 const encoder = new TextEncoder();
-
-/** @typedef {[start: number, end: number]} Span */
-
-/** @param {string} body @returns {Span[] | null} */
-function flattenedMasks(body) {
-  // The offset at either end of a collapsed space covers the entire source run.
-  const startsAt = body.length - body.trimStart().length;
-  const trimmed = body.trim();
-  const offsets = [startsAt];
-  const parts = [];
-  for (const match of trimmed.matchAll(/\s+|\S/gu)) {
-    const raw = match[0];
-    const part = /^\s/u.test(raw) ? " " : raw;
-    const start = startsAt + match.index;
-    parts.push(part);
-    for (let i = 1; i < part.length; i++) offsets.push(start + i);
-    offsets.push(start + raw.length);
-  }
-
-  const flat = parts.join("");
-  /** @type {Span[]} */
-  const mapped = [];
-  for (const [flatStart, flatEnd] of coreRedactionMasks(flat)) {
-    const start = offsets[flatStart];
-    const end = offsets[flatEnd];
-    if (!(start >= 0 && start < end && end <= body.length) ||
-        body.slice(start, end).replace(/\s+/gu, " ") !== flat.slice(flatStart, flatEnd)) return null;
-    mapped.push([start, end]);
-  }
-  return mapped;
-}
-
-/** @param {string} body @param {Span[]} masks */
-function maskBody(body, masks) {
-  let offset = 0;
-  const parts = [];
-  for (const [start, end] of masks.sort((a, b) => a[0] - b[0])) {
-    if (start >= offset) parts.push(body.slice(offset, start), REPLACEMENT);
-    offset = Math.max(offset, end);
-  }
-  return parts.join("") + body.slice(offset);
-}
-
-/** @param {string} content */
-function redactDocumentBody(content) {
-  let body = normalizeDocumentText(content);
-  while (true) {
-    const flat = flattenedMasks(body);
-    if (flat === null) return null;
-    // Both views see the same input. Masking one first can hide a boundary
-    // needed by the other. Check the resulting body again for exposed syntax.
-    const masked = maskBody(body, [...coreRedactionMasks(body), ...flat]);
-    const cleaned = normalizeDocumentText(cleanContent(redactSecrets(masked)));
-    const next = cleaned.split("\n").map(line => line.trimEnd()).join("\n");
-    if (body === next) return body;
-    body = next;
-  }
-}
 
 /** @param {string} body @param {import("./index.mjs").DocumentMessageRef} source */
 function sentenceSources(body, source) {
@@ -111,8 +50,9 @@ function dropped(reason) {
  * @returns {Promise<import("./index.mjs").DocumentCardBuild>}
  */
 export async function buildDocumentCard(message, { scope, client, canonicalSessionKey }) {
+  if (cleanContent(message.content) !== message.content) return dropped("ill_formed_text");
   if (typeof canonicalSessionKey !== "string" || !canonicalSessionKey) return dropped("missing_session_key");
-  const body = redactDocumentBody(message.content);
+  const body = redactDocumentText(message.content, true);
   if (body === null) return dropped("unmappable_redaction");
   if (body.length > BODY_LIMIT) return dropped("oversize");
   const firstLine = body.split("\n").find(line => line.trim());
