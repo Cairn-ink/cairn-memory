@@ -20,6 +20,10 @@
     },
     "./ports": {
       "types": "./src/ports/index.d.ts"
+    },
+    "./service": {
+      "types": "./src/service/index.d.mts",
+      "default": "./src/service/index.mjs"
     }
   },
   "files": [

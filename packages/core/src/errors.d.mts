@@ -21,7 +21,7 @@ export type ErrorCode =
   | "lock_timeout" | "statement_timeout" | "database_error" | "ingest_inputs_changed" | "capture_disabled"
   | "context_item_too_large" | "conflict_limit" | "supersession_limit" | "invalid_ref"
   | "invalid_text" | "extraction_failed" | "source_excluded" | "context_budget_exceeded" | "evidence_unavailable"
-  | "model_not_configured" | "model_timeout" | "token_count_unavailable"
+  | "model_not_configured" | "model_timeout" | "model_cancelled" | "token_count_unavailable"
   | "qualification_failed" | "reconciliation_failed" | "classification_failed";
 
 export declare const ERROR_CODES: Readonly<Record<ErrorCode, ErrorKind>>;

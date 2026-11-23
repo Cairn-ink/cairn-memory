@@ -45,6 +45,7 @@ change request to the core lead, answered on the same day.
 4. **Visibility.** Candidate ports return rows already filtered by the visibility predicate in the same snapshot. `VisibilityFence` re-checks right before delivery.
 5. **Optional ports.** An optional port is present exactly when its capability flag is true (`assertAdapterCapabilities` at registration, both directions). A missing capability degrades to a defined result: lexical-only, `index_unavailable`, or skipping the step. It is never an unhandled error.
 6. **Facts.** Core passes an `incarnation` (digest of `factIncarnationBody`: `factBody` without a text fact's embedding, which providers do not reproduce bit for bit; stores keep the full `factBody`). The same incarnation in a fact slot returns the original fact; a different one throws `fact_conflict` and rolls back. A new fact advances the owner epoch by exactly 1. Text facts carry every digest variant (core, hosted-v1, engine-legacy) and match on any of them; passages that held a secret use `hmac` digests, never unkeyed ones. Local stores keep only hashed session keys.
+   Stores without row shingles can set `rowShingles: false` to skip containment for full text facts. Paraphrases that miss both exact and vector matching stay visible on row reads, as with the hosted saved-memory predicate.
 7. **Erasure.** Raw erasure covers exactly the proven closure or text-withheld rows, the same set forget erases. `eraseSessions` accepts only a `ProvenClosure` from `provenClosure` (type-level guard). Id-only and unknown fences hide but never delete.
 8. **Forget's row step** makes the row permanently invisible and erases its content; adapters may delete or tombstone.
 9. **Read sets.** Retrieval reads take one owner and a list of namespaces fused into one ranking; every `ItemRef` carries its namespace.
@@ -70,6 +71,17 @@ change request to the core lead, answered on the same day.
 - The core capture modules replace `src/extraction/`; its fixtures stay as the old-versus-new extraction oracle.
 - The capture rationale stage is not in core until a keep/drop decision; `ModelStage` reserves its name only.
 - One id order in all of core: UTF-8 bytes (`compareUtf8`). Where the hosted service compares ids differently today (SQL collation, JS UTF-16 string order in in-batch ties), the difference is listed for the shadow comparison.
+
+## Addenda
+
+Each addendum is additive unless it says what it supersedes. Adapters written against an earlier version stay valid.
+
+1. **`ModelPort.fits?` (optional).** `fits?(stage: ModelStage, request: ModelRequest): boolean`, synchronous and content-free. It reports whether the adapter's full provider request for this exact `request` fits the adapter's own limits, measured on the body it would actually send, including provider framing, model id and strict schema, none of which core can see.
+   - Core consults `fits()` exactly where the engine consulted its adapter's hook: candidate qualification planning. There, core plans with its own count (sizing text ≤ 6000 tokens) AND `fits()` when the hook is present. When the hook is absent, core plans by its own count alone, as the engine does for an adapter without the hook. Other stages, including automatic qualification, plan by core's own count only.
+   - A throw from `fits()` counts as `false`: that group is not sent and planning splits it smaller; smaller groups are sent only if they fit. This deliberately differs from the engine, which aborts planning with `token_count_unavailable` when its hook throws.
+   - It supersedes nothing. The conformance kit must accept adapters without it.
+   - Reason: core's sizing text undercounts the provider body. Five inline qualification items with four 180-character CJK excerpts each measured 5,857 tokens by core's sizing text and 7,512 by the serialized provider body. The engine rejects that group and accepts each item alone. Without the hook, a verbatim adapter would plan differently.
+2. **Error code `model_cancelled`** (kind `unavailable`, not retryable). Raised only when the model adapter's call ends with an AbortError that is not the capture deadline, as the engine does today. The deadline path keeps `model_timeout`. It supersedes nothing.
 
 ## Change requests
 
