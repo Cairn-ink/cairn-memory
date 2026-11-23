@@ -113,6 +113,18 @@ function canonical(value) {
 }
 
 /**
+ * Order of a text fact's digests in its body: alg, then value (the set key), then the
+ * remaining fields, so the order is deterministic even for input that skipped validation.
+ * @param {any} x @param {any} y
+ */
+function compareDigests(x, y) {
+  return compareUtf8(String(x.alg), String(y.alg)) || compareUtf8(String(x.value), String(y.value)) ||
+    compareUtf8(String(x.pipeline), String(y.pipeline)) ||
+    compareUtf8(String(x.redactionVersion), String(y.redactionVersion)) ||
+    compareUtf8(String(x.keyId), String(y.keyId));
+}
+
+/**
  * Canonical JSON of the fact body without owner and actionId. Core hashes it (ClockAndHash)
  * into the incarnation passed to SuppressionStore.writeFact.
  * @param {import("./suppression-fact.mjs").SuppressionFact} fact
@@ -123,7 +135,7 @@ export function factBody(fact) {
   // yields the same incarnation. Other arrays keep their given order.
   const text = /** @type {{ digests?: unknown } | undefined} */ (body.text);
   if (body.kind === "text" && text && Array.isArray(text.digests)) {
-    body.text = { ...text, digests: [...text.digests].sort((x, y) => compareUtf8(x.alg, y.alg) || compareUtf8(x.value, y.value)) };
+    body.text = { ...text, digests: [...text.digests].sort(compareDigests) };
   }
   return JSON.stringify(canonical(body));
 }

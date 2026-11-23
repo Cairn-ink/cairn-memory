@@ -28,3 +28,9 @@ test("factBody leaves the caller's digest array untouched and other arrays in th
 test("factBody differs when the digest sets differ", () => {
   assert.notEqual(factBody(text([digest("hmac", "a"), digest("hmac", "b")])), factBody(text([digest("hmac", "a"), digest("hmac", "c")])));
 });
+
+test("factBody order is deterministic even for unvalidated duplicate digest keys", () => {
+  const a = digest("hmac", "a");
+  const b = { ...a, pipeline: "hosted-v1" };
+  assert.equal(factBody(text([a, b])), factBody(text([b, a])));
+});
