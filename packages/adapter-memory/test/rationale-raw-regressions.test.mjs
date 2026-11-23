@@ -185,3 +185,18 @@ test("a conflicting body for the same Raw message key makes its receipts uncerta
   await assertWithheld(f, edited.ref);
   await assertWithheld(f, ref);
 });
+
+test("a conflicting Raw import keeps the original row and withholds its rationale evidence", async () => {
+  const f = fixture();
+  const { ref, key, message } = await f.capture("source", "Use the brass latch.");
+  const importMessage = (content) => f.service.importRawMessages(scope, [
+    { client: key.client, sessionId: key.sessionId, messages: [{ ...message, content }] },
+  ]);
+  const duplicate = { imported: 0, duplicate: 1, suppressed: 0, invalid: 0 };
+  assert.deepEqual(await importMessage(message.content), duplicate);
+  assert.equal((await f.evidence(ref))[0].receipts[0].excerpt, message.content);
+  assert.deepEqual(await importMessage("Use the steel latch."), duplicate);
+  const raw = await f.service.listRawMessages(scope, { cursor: null, limit: 1 });
+  assert.equal(raw.items[0].content, message.content);
+  await assertWithheld(f, ref);
+});

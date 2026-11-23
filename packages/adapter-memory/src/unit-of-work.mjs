@@ -22,6 +22,7 @@ import { addKeyedDigest, createFactStore } from "./privacy.mjs";
  * rationale: Map<Namespace, Map<string, import("@cairn-ink/core/ports").RationaleEdge>>,
  * rationaleMessages: Map<Namespace, Map<string, RationaleMessage>>,
  * rawRows: Map<string, import("./raw.mjs").RawEntry>, rawFences: Set<string>, rawConflicts: Set<string>,
+ * rawAnchors: Map<string, Map<string, import("./raw.mjs").AnchorSession>>,
  * claims: Map<string, ClaimRecord>, activeTokens: Map<string, string>, abandonedTokens: Set<string>, relations: Map<Namespace, RelationState>}} State */
 /** @typedef {{state: State, run: {readonly ended: boolean}, indexDirty: boolean, stateWritten: boolean, pauseLock: boolean,
  * poisoned: boolean, writeErrorCode: ErrorCode, finishes: Set<FinishResult>, writingFinishes: number,
@@ -107,9 +108,9 @@ class Owner {
   /** @type {State} */
   committed = {
     topics: new Map(), rows: new Map(), facts: new Map(), epoch: null, pause: { paused: false, generation: 0 }, indexRevision: 0,
-    claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(),
-    rawRows: new Map(), rawFences: new Set(), rawConflicts: new Set(),
-    relations: new Map(), rationale: new Map(), rationaleMessages: new Map(),
+    claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(), rawRows: new Map(), rawFences: new Set(),
+    rawAnchors: new Map(), relations: new Map(),
+    rawConflicts: new Set(), rationale: new Map(), rationaleMessages: new Map(),
   };
   pause = new Mutex();
   write = new Mutex();
@@ -237,8 +238,8 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
     const issuedRun = issued.get(tx);
     let touchedState = false;
     try {
-      if (!issuedRun || issuedRun.run.ended || (write && tx.readOnly) || scope?.owner !== tx.owner ||
-          (pauseLock && !issuedRun.pauseLock)) {
+      if (!issuedRun || issuedRun.run.ended || (write && tx.readOnly) ||
+          (pauseLock && !issuedRun.pauseLock) || scope?.owner !== tx.owner) {
         throw new CoreError("internal_error");
       }
       const result = body(() => {
@@ -324,7 +325,8 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
       .filter(([, { committed }]) => committed.rows.size > 0 || committed.facts.size > 0 ||
         committed.pause.generation > 0 || committed.claims.size > 0 ||
         (includeTopics && (committed.topics.size > 0 || committed.indexRevision > 0)) ||
-        (includeRaw && (committed.rawRows.size > 0 || committed.rawFences.size > 0 || committed.indexRevision > 0)))
+        (includeRaw && (committed.rawRows.size > 0 || committed.rawFences.size > 0 ||
+          committed.rawAnchors.size > 0 || committed.indexRevision > 0)))
       .sort(([a], [b]) => compareUtf8(a, b))
       .map(([owner, { committed }]) => ({
         owner,
@@ -340,6 +342,15 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
         ...(includeRaw && {
           rawRows: [...committed.rawRows.values()].sort((a, b) => compareUtf8(a.ref.id, b.ref.id)),
           rawFences: [...committed.rawFences].sort(compareUtf8),
+        }),
+        ...(includeRaw && committed.rawAnchors.size > 0 && {
+          rawAnchors: [...committed.rawAnchors].sort(([a], [b]) => compareUtf8(a, b)).flatMap(([client, sessions]) =>
+            [...sessions].sort(([a], [b]) => compareUtf8(a, b)).map(([, { namespace, sessionId, messages }]) => ({
+              client, namespace, sessionId,
+              messages: [...messages].sort(([a], [b]) => compareUtf8(a, b)).map(([id, digests]) => ({
+                id, digests: [...digests].sort((a, b) => compareUtf8(a ?? "", b ?? "")),
+              })),
+            }))),
         }),
         ...((includeRaw || includeTopics) && { indexRevision: committed.indexRevision }),
         ...(includeTopics && {

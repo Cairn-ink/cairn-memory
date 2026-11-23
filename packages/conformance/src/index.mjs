@@ -6,6 +6,8 @@ import { unitOfWorkCases } from "./unit-of-work-cases.mjs";
 
 export { privacyCases as PRIVACY_CASES } from "./privacy-cases.mjs";
 export { captureCases as CAPTURE_CASES } from "./capture-cases.mjs";
+export { ADMISSION_CASES } from "./admission-cases.mjs";
+export { IMPORT_TIME_CASES } from "./import-time-cases.mjs";
 export { PRIVACY_MATCH_CASES } from "./privacy-match-cases.mjs";
 export { SOURCE_FILTER_CASES } from "./source-filter-cases.mjs";
 export { KEYED_DIGEST_CASES } from "./keyed-digest-cases.mjs";
@@ -15,6 +17,8 @@ export { FENCE_INTENT_CASES } from "./fence-intent-cases.mjs";
 export { topicCases as TOPIC_CASES } from "./topics-cases.mjs";
 export { TOPIC_FOR_MEMORIES_CASES } from "./topics-for-memories-cases.mjs";
 export { RAW_CASES } from "./raw-cases.mjs";
+export { IMPORT_ARCHIVE_CASES } from "./import-archive-cases.mjs";
+export { PROVEN_FORK_CASES } from "./proven-fork-cases.mjs";
 export { relationCases as RELATION_CASES } from "./relation-cases.mjs";
 
 /** @type {readonly import("./index.d.mts").ConformanceCase[]} */
@@ -64,6 +68,7 @@ async function runOpenedCase(factory, testCase) {
   const { adapter, embeddingDimensions, harness, nativeErrorMap, busyNativeCodes, sessionRefs, settleMs,
     timeoutMs = DEFAULT_TIMEOUT_MS } = opened;
   const validTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0;
+  const roundedTimeout = validTimeout ? Math.ceil(timeoutMs) : DEFAULT_TIMEOUT_MS;
   /** @type {{ error: unknown } | undefined} */
   let caseFailure;
   /** @type {import("./index.d.mts").CaseContext | undefined} */
@@ -86,8 +91,8 @@ async function runOpenedCase(factory, testCase) {
       nativeErrorMap,
       busyNativeCodes,
       sessionRefs,
-      settleMs,
-      timeoutMs,
+      settleMs: settleMs === undefined ? undefined : Math.ceil(settleMs),
+      timeoutMs: roundedTimeout,
       owner,
       otherOwner: crypto.randomUUID(),
       scope: (namespace) => ({ owner, namespace }),
@@ -105,7 +110,7 @@ async function runOpenedCase(factory, testCase) {
     throw error;
   } finally {
     try {
-      await bounded(() => opened.close(), "Adapter close", validTimeout ? timeoutMs : DEFAULT_TIMEOUT_MS);
+      await bounded(() => opened.close(), "Adapter close", roundedTimeout);
     } catch (closeError) {
       if (caseFailure) {
         throw new AggregateError([caseFailure.error, closeError], "Conformance case and adapter close both failed",
