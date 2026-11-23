@@ -152,7 +152,15 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now) {
    */
   function port(tx, scope, write, body, pauseLock = false) {
     if (write) return writePort(tx, scope, true, () => (getState) => body(getState()), pauseLock);
-    return accessPort(tx, scope, false, (getState) => body(getState()), pauseLock);
+    return readPort(tx, scope, (getState) => body(getState()), pauseLock);
+  }
+
+  /** @template T
+   * @param {Tx} tx @param {Pick<Scope, "owner">} scope
+   * @param {(getState: () => State) => T} body @param {boolean} [pauseLock]
+   */
+  function readPort(tx, scope, body, pauseLock = false) {
+    return accessPort(tx, scope, false, body, pauseLock);
   }
 
   /**
@@ -224,7 +232,8 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now) {
     }
   }
 
-  // Write ports validate arguments before requesting the owner state.
+  // Ports can validate arguments after the transaction guard and before requesting owner state.
+  port.read = readPort;
   port.write = writePort;
 
   /**
