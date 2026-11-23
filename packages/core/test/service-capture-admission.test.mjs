@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
-import { CoreError } from "@cairn-ink/core";
+import { coreDigest, CoreError } from "@cairn-ink/core";
 import { createMemoryService } from "@cairn-ink/core/service";
 import { hostedScope, serviceFake } from "./helpers/service-fake.mjs";
 
@@ -45,6 +45,7 @@ test("admission prepares and hashes one snapshot before a single pause-locked wr
     ["lock", "owner-write"],
     ["pause.get", scope.owner],
     ["suppressions.snapshot", scope, { client: selection.client, sessionId: selection.sessionId }],
+    ["capture.eligible", key, [prepared]],
     ["capture.admit", key, [prepared]],
   ]);
   assert.equal(JSON.stringify(calls).includes(secret), false);
@@ -89,6 +90,94 @@ test("paused, blocked, and fenced sessions make no admission or lineage writes",
   };
   assert.deepEqual(await service.enqueueCapture(scope, request({ sessionId: "fenced" })), { status: "blocked" });
   assert.deepEqual(mutations, []);
+});
+
+test("admission stores an empty slot for exact forgotten text in a fresh session", async () => {
+  const { service, storage, mutations, seedFact } = fixture({ rawArchive: true });
+  const content = "Pasted back forgotten wording";
+  seedFact({ ...scope, kind: "text", mode: "exact", origin: "forget", actionId: "forget-text",
+    text: { digests: [await coreDigest(content)] } });
+  const incoming = { ...fixtureMessage, content, occurredAtMs: 30 };
+  const scrubbed = { ...incoming, content: "" };
+  const fresh = { ...selection, sessionId: "fresh" };
+  assert.deepEqual(await service.enqueueCapture(scope, { ...fresh, messages: [incoming] }), { status: "accepted" });
+  assert.deepEqual(mutations.map(({ method, args }) => [method, args[1]]), [
+    ["capture.admit", [scrubbed]],
+    ["raw.recordLineage", [scrubbed]],
+  ]);
+  const row = await storage.uow.run(scope.owner, { readOnly: true },
+    tx => storage.capture.load(tx, { scope, ...fresh }));
+  assert.deepEqual(row.messages, [scrubbed]);
+  assert.deepEqual(await service.captureStatus(scope, fresh.eventId), { status: "pending" });
+});
+
+test("admission scrubs a message in a suppressed window and preserves the other slots", async () => {
+  const { service, mutations, seedFact } = fixture({ rawArchive: true });
+  seedFact({ ...scope, kind: "window", origin: "forget", actionId: "forget-window",
+    client: selection.client, window: { startMs: 10, endMs: 20 } });
+  const before = { ...fixtureMessage, id: "before", occurredAtMs: 9 };
+  const within = { ...fixtureMessage, occurredAtMs: 15 };
+  const after = { ...fixtureMessage, id: "after", role: "assistant", content: "Unrelated reply.", occurredAtMs: 21 };
+  const expected = [before, { ...within, content: "" }, after];
+  assert.deepEqual(await service.enqueueCapture(scope, request({ messages: [before, within, after] })),
+    { status: "accepted" });
+  assert.deepEqual(mutations.map(({ method, args }) => [method, args[1]]), [
+    ["capture.admit", expected],
+    ["raw.recordLineage", expected],
+  ]);
+});
+
+test("admission scrubs every slot of a first proven fork from a fenced session",
+  { todo: "SourceFilter needs to check incoming ID and content proofs against fenced anchors" }, async () => {
+    const { service, mutations, seedFact } = fixture({ rawArchive: true, sessionLineage: true });
+    const source = { client: selection.client, sessionId: "source" };
+    const anchor = { ...fixtureMessage, id: "anchor", content: "Observatory marker [REDACTED]" };
+    await service.enqueueCapture(scope, request({ ...source, messages: [anchor] }));
+    seedFact({ ...scope, kind: "session", origin: "forget", actionId: "fence", session: source });
+    mutations.length = 0;
+    const turn = { ...fixtureMessage, id: "fork-only", content: "The telescope inventory is ready.", occurredAtMs: 15 };
+    await service.enqueueCapture(scope, request({ sessionId: "fork", eventId: "fork-first", messages: [anchor, turn] }));
+    const expected = [anchor, turn].map(message => ({ ...message, content: "" }));
+    assert.deepEqual(mutations.map(({ method, args }) => [method, args[1]]), [
+      ["capture.admit", expected],
+      ["raw.recordLineage", expected],
+    ]);
+  });
+
+test("admission masks every hosted secret pattern before payload hashing and storage", async () => {
+  const { service, deps, storage, mutations } = fixture({ rawArchive: true });
+  const marker = "[REDACTED]";
+  const examples = [
+    ["-----BEGIN PRIVATE KEY-----\n" + "synthetic".repeat(4) + "\n-----END PRIVATE KEY-----", marker],
+    ["sk-" + "synthetic".repeat(4), marker],
+    ["crn_pat_" + "Z9_zaYx-".repeat(4), marker],
+    ["crn_pat_" + "ab".repeat(32), marker],
+    ["ghp_" + "synthetic".repeat(4), marker],
+    ["AKIA" + "0Z".repeat(8), marker],
+    ["eyJ" + "synthetic".repeat(2) + "." + "payload".repeat(2) + "." + "signature".repeat(2), marker],
+    ["Bearer " + "synthetic".repeat(4), marker],
+    ["api_key=" + "synthetic".repeat(4), "api_key=" + marker],
+    ['"refresh_token": "' + "synthetic".repeat(4) + '"', '"refresh_token": "' + marker + '"'],
+  ];
+  const message = (content, index) => ({ ...fixtureMessage, id: String(index), content: content + " remains." });
+  const messages = examples.map(([raw], index) => message(raw, index));
+  const expected = examples.map(([, redacted], index) => message(redacted, index));
+  const hash = deps.clock.sha256Hex;
+  const hashInputs = [];
+  deps.clock.sha256Hex = async value => {
+    hashInputs.push(value);
+    return hash(value);
+  };
+  assert.deepEqual(await service.enqueueCapture(scope, request({ messages })), { status: "accepted" });
+  assert.deepEqual(hashInputs.map(value => JSON.parse(value)), [[selection.client, selection.sessionId, selection.eventId,
+    expected.map(({ id, role, content, occurredAtMs }) => [id, role, content, occurredAtMs])]]);
+  assert.deepEqual(mutations.map(({ method, args }) => [method, args[1]]), [
+    ["capture.admit", expected],
+    ["raw.recordLineage", expected],
+  ]);
+  const row = await storage.uow.run(scope.owner, { readOnly: true },
+    tx => storage.capture.load(tx, { scope, ...selection }));
+  assert.deepEqual(row.messages, expected);
 });
 
 test("lineage is written with the fresh admission and rolls back with it on failure", async () => {
@@ -176,14 +265,11 @@ test("missing optional ports reject without claiming or opening a transaction", 
   assert.deepEqual(calls, []);
 });
 
-test("admission validates count, shape, identity, roles, and timestamps before storage", async () => {
+test("admission validates shape, identity, roles, and timestamps before storage", async () => {
   const { service, calls } = fixture();
-  const messages = Array.from({ length: 24 }, (_, index) => ({ ...fixtureMessage, id: String(index) }));
   for (const input of [
     request({ messages: [] }),
-    request({ messages: [...messages, { ...fixtureMessage }] }),
     request({ messages: [{ ...fixtureMessage, role: "system" }] }),
-    request({ messages: [{ ...fixtureMessage, id: "a".repeat(513) }] }),
     request({ messages: [{ ...fixtureMessage, content: 123 }] }),
     request({ messages: [{ ...fixtureMessage, occurredAtMs: undefined }] }),
     request({ messages: [{ ...fixtureMessage, occurredAtMs: NaN }] }),
@@ -193,8 +279,36 @@ test("admission validates count, shape, identity, roles, and timestamps before s
   ]) await assert.rejects(() => service.enqueueCapture(scope, input), code("invalid_input"));
   await assert.rejects(() => service.captureStatus(scope, selection.eventId, { client: "" }), code("invalid_input"));
   assert.deepEqual(calls, []);
-  messages[0].id = "a".repeat(512);
-  assert.deepEqual(await service.enqueueCapture(scope, request({ messages })), { status: "accepted" });
+});
+
+test("admission accepts hosted-sized messages, batches, and redacted slots", async () => {
+  const { service, mutations } = fixture();
+  const message = (content, index = 0) => ({ ...fixtureMessage, id: String(index), content });
+  const cases = [
+    [message("a".repeat(4_001))],
+    Array.from({ length: 6 }, (_, index) => message("a".repeat(index === 5 ? 3_336 : 3_333), index)),
+    [message("[REDACTED]"), message("Ordinary text.", 1)],
+    [message("[REDACTED] followed by ordinary text.")],
+    Array.from({ length: 24 }, (_, index) => index === 0
+      ? { ...message("a".repeat(20_000)), id: "a".repeat(200) }
+      : message("a", index)),
+  ];
+  for (const [index, messages] of cases.entries()) {
+    assert.deepEqual(await service.enqueueCapture(scope, request({ eventId: String(index), messages })),
+      { status: "accepted" });
+    assert.deepEqual(mutations.at(-1).args[1], messages);
+  }
+});
+
+test("admission rejects messages, ids, and batches above hosted limits", async () => {
+  const { service, calls } = fixture();
+  for (const messages of [
+    [{ ...fixtureMessage, content: "a".repeat(20_001) }],
+    [{ ...fixtureMessage, id: "a".repeat(201) }],
+    Array.from({ length: 25 }, (_, index) => ({ ...fixtureMessage, id: String(index) })),
+    [{ ...fixtureMessage, content: "" }],
+  ]) await assert.rejects(() => service.enqueueCapture(scope, request({ messages })), code("invalid_input"));
+  assert.deepEqual(calls, []);
 });
 
 test("admission maps a foreign hash failure before opening a transaction", async () => {
@@ -204,15 +318,26 @@ test("admission maps a foreign hash failure before opening a transaction", async
   assert.deepEqual(calls, []);
 });
 
-test("the same event is independent across owners and namespaces", async () => {
+test("the same event is independent across owners", async () => {
   const { service } = fixture();
   const otherOwner = { ...scope, owner: "other-owner" };
+  await service.enqueueCapture(scope, request());
+  assert.deepEqual(await service.captureStatus(otherOwner, selection.eventId), { status: "unknown" });
+  assert.deepEqual(await service.enqueueCapture(otherOwner, request({ sessionId: "other" })), { status: "accepted" });
+  assert.deepEqual(await service.captureStatus(otherOwner, selection.eventId), { status: "pending" });
+  assert.deepEqual(await service.enqueueCapture(scope, request()), { status: "duplicate" });
+});
+
+test("admission deduplicates across namespaces and conflicts on a changed digest", async () => {
+  const { service, storage, mutations } = fixture({ rawArchive: true });
   const otherNamespace = { ...scope, namespace: "other-namespace" };
   await service.enqueueCapture(scope, request());
-  for (const other of [otherOwner, otherNamespace]) {
-    assert.deepEqual(await service.captureStatus(other, selection.eventId), { status: "unknown" });
-    assert.deepEqual(await service.enqueueCapture(other, request({ sessionId: "other" })), { status: "accepted" });
-    assert.deepEqual(await service.captureStatus(other, selection.eventId), { status: "pending" });
-  }
-  assert.deepEqual(await service.enqueueCapture(scope, request()), { status: "duplicate" });
+  mutations.length = 0;
+  await assert.rejects(() => service.enqueueCapture(otherNamespace,
+    request({ messages: [{ ...fixtureMessage, content: "Changed content" }] })), code("event_payload_conflict"));
+  assert.deepEqual(await service.enqueueCapture(otherNamespace, request()), { status: "duplicate" });
+  assert.deepEqual(await service.captureStatus(otherNamespace, selection.eventId), { status: "unknown" });
+  assert.deepEqual(await storage.uow.run(scope.owner, { readOnly: true },
+    tx => storage.capture.load(tx, { scope: otherNamespace, ...selection })), null);
+  assert.deepEqual(mutations, []);
 });

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { compareSortKey, compareUtf8, CoreError } from "@cairn-ink/core";
+import { compareSortKey, compareUtf8, CoreError, withholdsAnyPassage } from "@cairn-ink/core";
+import { fingerprintMemoryPassages } from "../../src/privacy/fingerprint.mjs";
+import { requiresLegacyMacDomain } from "../../src/privacy/withholds.mjs";
 
 export const hostedScope = Object.freeze({ owner: "owner", namespace: null });
 
@@ -182,8 +184,15 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
     mutations,
   };
 
+  async function fixtureUserKey(owner) {
+    if (!hasKey) return null;
+    if (hooks.userKey) return hooks.userKey(owner);
+    const signingKey = await crypto.subtle.importKey("raw", new TextEncoder().encode("fixture key for " + owner),
+      { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    return { id: "fixture-key", signingKey };
+  }
+
   if (writes) {
-    const encoding = new TextEncoder();
     // The gate's marker expires after the first continuation gets a chance to start the send.
     let dispatchReady = false;
     fake.deps.gate.assertOpen = async (owner, phase) => {
@@ -211,11 +220,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       async userKey(owner) {
         assert.equal(active.size, 0, "key lookup outside the UoW");
         calls.push(["keys.userKey", owner]);
-        if (!hasKey) return null;
-        if (hooks.userKey) return hooks.userKey(owner);
-        const signingKey = await crypto.subtle.importKey("raw", encoding.encode("fixture key for " + owner),
-          { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-        return { id: "fixture-key", signingKey };
+        return fixtureUserKey(owner);
       },
     };
 
@@ -290,7 +295,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         const facts = tx.facts.filter(({ fact }) => (fact.namespace ?? null) === scope.namespace);
         const blockedSession = facts.some(({ fact }) => fact.kind === "session" &&
           fact.session.client === candidates.client && fact.session.sessionId === candidates.sessionId);
-        return { blockedSession, blockedMessages: [], passages: facts };
+        return { blockedSession, blockedMessages: [], passages: facts.filter(({ fact }) => fact.kind === "text") };
       },
       async writeFact(tx, fact, incarnation) {
         mutate(tx, fact.owner, "suppressions.writeFact", fact, incarnation);
@@ -303,10 +308,14 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
     fake.seedFact = fact => {
       const state = ownerState(fact.owner);
       state.facts = [...state.facts, { fact, factId: "seed-fact", epoch: 1n, createdAtMs: nowMs, incarnation: "fixture" }];
+      // Keyed capture fixtures need the same fingerprint key in the facade and the source filter.
+      if (capture && hasKey && fact.kind === "text" && fact.text.digests.some(({ alg }) => alg === "hmac")) {
+        storage.capabilities.fingerprintKey = true;
+      }
     };
   }
   if (capture) {
-    const admissionId = ({ scope, client, eventId }) => JSON.stringify([scope.namespace, client, eventId]);
+    const admissionId = ({ client, eventId }) => JSON.stringify([client, eventId]);
     let nextToken = 0;
 
     function claimWrite(tx, method, ...args) {
@@ -325,8 +334,29 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       return entry;
     }
 
-    function eligiblePositions(messages) {
-      return hooks.eligible?.(messages) ?? messages.map((_, position) => position);
+    async function eligiblePositions(tx, key, messages) {
+      const override = hooks.eligible?.(messages);
+      if (override != null) return override;
+
+      const { scope, client } = key;
+      const facts = tx.facts.map(({ fact }) => fact).filter(fact => (fact.namespace ?? null) === scope.namespace);
+      const windows = facts.filter(fact => fact.kind === "window" && (fact.client === null || fact.client === client));
+      const positions = messages.flatMap(({ occurredAtMs }, index) => windows.some(({ window, unknownTime }) =>
+        occurredAtMs === null ? unknownTime === true : occurredAtMs >= window.startMs && occurredAtMs < window.endMs)
+        ? [] : [index]);
+      const textFacts = facts.filter(fact => fact.kind === "text");
+      if (!textFacts.length || !positions.length) return positions;
+      if (textFacts.some(requiresLegacyMacDomain)) return [];
+
+      const fingerprintKey = storage.capabilities.fingerprintKey ? await fixtureUserKey(scope.owner) : null;
+      const allowed = await Promise.all(positions.map(async position => {
+        const { content } = messages[position];
+        if (content && withholdsAnyPassage(await fingerprintMemoryPassages(content, content, fingerprintKey), textFacts)) {
+          return null;
+        }
+        return position;
+      }));
+      return allowed.filter(position => position !== null);
     }
 
     fake.deps.model.contextWindow = 8192;
@@ -362,7 +392,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       async load(tx, selection) {
         record(tx, selection.scope.owner, "capture.load", selection);
         const row = tx.admissions.get(admissionId(selection));
-        if (row?.key.sessionId !== selection.sessionId) return null;
+        if (!row || row.key.scope.namespace !== selection.scope.namespace || row.key.sessionId !== selection.sessionId) return null;
         const { key, messages } = row;
         return structuredClone({ key, messages });
       },
@@ -381,7 +411,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         assert.ok(tx.options.pauseLock && !tx.options.readOnly);
         const id = admissionId(key);
         const row = tx.admissions.get(id);
-        assert.ok(row);
+        assert.ok(row && row.key.scope.namespace === key.scope.namespace);
         if (row.key.payloadDigest !== key.payloadDigest || row.key.sessionId !== key.sessionId) {
           throw new CoreError("event_payload_conflict");
         }
@@ -404,16 +434,18 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       async eligible(tx, key, messages) {
         record(tx, key.scope.owner, "capture.eligible", key, messages);
         assert.ok(tx.options.pauseLock && !tx.options.readOnly);
-        return eligiblePositions(messages);
+        return eligiblePositions(tx, key, messages);
       },
       async assertEligible(tx, key, positions) {
         record(tx, key.scope.owner, "capture.assertEligible", key, positions);
         assert.ok(tx.options.pauseLock && !tx.options.readOnly);
         const row = tx.admissions.get(admissionId(key));
-        if (!row?.token || row.key.payloadDigest !== key.payloadDigest) throw new CoreError("stale_admission");
+        if (!row?.token || row.key.scope.namespace !== key.scope.namespace || row.key.payloadDigest !== key.payloadDigest) {
+          throw new CoreError("stale_admission");
+        }
         liveClaim(tx, row.token);
         await hooks.assertEligible?.();
-        const allowed = eligiblePositions(row.messages);
+        const allowed = await eligiblePositions(tx, key, row.messages);
         if (positions.some(position => !allowed.includes(position))) throw new CoreError("suppressed");
       },
       async finish(tx, token, items) {

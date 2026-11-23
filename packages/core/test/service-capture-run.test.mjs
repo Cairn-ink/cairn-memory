@@ -247,6 +247,48 @@ test("no eligible messages finishes an empty batch without dispatch or archive",
   assert.deepEqual(mutation(f, "capture.finish").args, ["lease-1", []]);
 });
 
+test("an eligible scrubbed slot never reaches extraction, evidence, or Raw", async () => {
+  const f = setup({ rawArchive: true });
+  f.seedFact({ ...scope, kind: "window", origin: "forget", actionId: "forget-window",
+    client: selection.client, window: { startMs: 1000, endMs: 3000 } });
+  const [withheld, , normal] = messages;
+  assert.deepEqual(await f.service.enqueueCapture(scope, { ...selection, messages: [withheld, normal] }),
+    { status: "accepted" });
+  f.hooks.eligible = () => [0, 1];
+
+  assert.equal((await f.run()).status, "done");
+  assert.deepEqual(f.calls.find(([method]) => method === "capture.claim")[2], [{ ...withheld, content: "" }, normal]);
+  assert.deepEqual(f.calls.find(([method]) => method === "model.call")[2].input.messages,
+    [{ index: 0, role: normal.role, content: normal.content }]);
+  assert.deepEqual(f.calls.find(([method]) => method === "capture.assertEligible")[2], [1]);
+  assert.deepEqual(mutation(f, "capture.finish").args[1][0].receipts, [{
+    client: selection.client, sessionId: selection.sessionId, messageId: normal.id,
+    role: normal.role, occurredAtMs: normal.occurredAtMs,
+  }]);
+  assert.deepEqual(mutation(f, "raw.archive").args[1], [normal]);
+  assert.deepEqual(f.archived(scope.owner), [normal]);
+});
+
+test("an all-withheld admission finishes empty and marks the event done", async () => {
+  const f = setup({ rawArchive: true });
+  f.seedFact({ ...scope, kind: "window", origin: "forget", actionId: "forget-window",
+    client: selection.client, window: { startMs: 1000, endMs: 3000 } });
+  const incoming = messages.slice(0, 2);
+  assert.deepEqual(await f.service.enqueueCapture(scope, { ...selection, messages: incoming }), { status: "accepted" });
+  f.hooks.eligible = () => [0, 1];
+
+  assert.deepEqual(await f.run(), { status: "done", result: {
+    indexRevision: 0, memories: [], suppressedCount: 0, duplicateCount: 0, counters: {},
+  } });
+  assert.deepEqual(f.calls.find(([method]) => method === "capture.claim")[2],
+    incoming.map(message => ({ ...message, content: "" })));
+  assert.deepEqual(mutation(f, "capture.finish").args, ["lease-1", []]);
+  assert.deepEqual(sends(f), []);
+  assert.equal(mutation(f, "capture.beginDispatch"), undefined);
+  assert.equal(mutation(f, "raw.archive"), undefined);
+  assert.deepEqual(await f.service.captureStatus(scope, selection.eventId), { status: "done" });
+});
+
 test("the empty finish still abandons on a generation change", async () => {
   const f = setup();
   await f.admit();

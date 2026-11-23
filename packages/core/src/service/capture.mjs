@@ -5,7 +5,7 @@ import { detach, identifier, isWellFormedText, validateDenseArray, validateObjec
 import { CoreError, isErrorCode } from "../errors.mjs";
 import { plainExtractionSpec } from "../extraction/extraction.mjs";
 import { allDigests, fingerprintMemoryPassages } from "../privacy/fingerprint.mjs";
-import { boundedText, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
+import { normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
 import { requiresLegacyMacDomain, withholdsAnyPassage } from "../privacy/withholds.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
 import { pauseResult } from "./pause.mjs";
@@ -18,21 +18,18 @@ import { hashesOf, validWriteEmbedding } from "./writes.mjs";
 const DEFAULT_LEASE_MS = 125_000;
 const DEFAULT_EXTRACT_MS = 30_000;
 
-/** @param {unknown} raw @returns {import("../ports/capture.d.ts").CaptureMessage} */
+/** @param {unknown} raw
+ * @returns {{ message: import("../ports/capture.d.ts").CaptureMessage, originalContent: string }}
+ */
 function prepareMessage(raw) {
   const { id, role, content, occurredAtMs } = validateObject(raw, ["id", "role", "content", "occurredAtMs"]);
-  if (!isWellFormedText(id) || !id || id.length > 512 ||
-      (role !== "user" && role !== "assistant") || !isWellFormedText(content) ||
+  if (!isWellFormedText(id) || !id || id.length > 200 ||
+      (role !== "user" && role !== "assistant") || !isWellFormedText(content) || !content || content.length > 20_000 ||
       (occurredAtMs !== null && (typeof occurredAtMs !== "number" || !Number.isSafeInteger(occurredAtMs)))) {
     throw new CoreError("invalid_input");
   }
-  try {
-    // Use the same normalization, redaction, and bounds as captureSnapshot.
-    return { id, role, content: boundedText(content, 4000), occurredAtMs };
-  } catch (error) {
-    if (error instanceof CoreError && error.code === "invalid_text") throw new CoreError("invalid_input");
-    throw error;
-  }
+  // Keep capture's NFKC and whitespace normalization with the union of v1 and hosted masking.
+  return { message: { id, role, content: prepareCoreText(content), occurredAtMs }, originalContent: content };
 }
 
 /** @param {AbortSignal | undefined} signal @param {CaptureDeadline} deadline */
@@ -108,7 +105,7 @@ async function prepareCaptureCandidatesForFinish(candidates, messages, key, deps
  */
 export function captureMethods(deps) {
   const { storage, clock, model, gate, config, diagnostics } = deps;
-  const { uow, pause, suppressions, capture, sessionLineage, raw, capabilities } = storage;
+  const { uow, pause, suppressions, capture, sessionLineage, raw, keys, capabilities } = storage;
   return {
     enqueueCapture: entry(async (inputScope, input) => {
       const scope = scopeOf(inputScope);
@@ -119,19 +116,20 @@ export function captureMethods(deps) {
       const client = identifier(inputClient);
       const sessionId = identifier(inputSession);
       const eventId = identifier(inputEvent);
-      const prepared = validateDenseArray(messages, 1, 24).map(prepareMessage);
-      if (new Set(prepared.map(message => message.id)).size !== prepared.length ||
-          prepared.reduce((sum, message) => sum + message.content.length, 0) > 20000) {
+      const incoming = validateDenseArray(messages, 1, 24).map(prepareMessage);
+      const prepared = incoming.map(({ message }) => message);
+      if (new Set(prepared.map(message => message.id)).size !== prepared.length) {
         throw new CoreError("invalid_input");
       }
       // Canonical JSON is [client, sessionId, eventId, [[id, role, redactedContent, occurredAtMs], ...]] in message order.
       const payloadDigest = await clock.sha256Hex(JSON.stringify([client, sessionId, eventId,
         prepared.map(({ id, role, content, occurredAtMs }) => [id, role, content, occurredAtMs])]));
       const key = { scope, client, sessionId, eventId, payloadDigest };
+      const fingerprintKey = capabilities.fingerprintKey ? await keys.userKey(scope.owner) : null;
       return uow.run(scope.owner, { pauseLock: true }, async tx => {
         if (pauseResult(await pause.get(tx, scope.owner)).paused) return { status: "paused" };
         const session = { client, sessionId };
-        const { blockedSession } = await suppressions.snapshot(tx, scope, session);
+        const { blockedSession, passages } = await suppressions.snapshot(tx, scope, session);
         if (blockedSession === true) return { status: "blocked" };
         if (blockedSession !== false) throw new CoreError("internal_error");
         if (capabilities.sessionLineage) {
@@ -140,14 +138,31 @@ export function captureMethods(deps) {
           if (fenced === true) return { status: "blocked" };
           if (fenced !== false) throw new CoreError("internal_error");
         }
-        const { status } = await admit.call(capture, tx, key, prepared);
+        const positions = await capture.eligible(tx, key, prepared);
+        if (!Array.isArray(positions) ||
+            positions.some(position => !Number.isInteger(position) || position < 0 || position >= prepared.length)) {
+          throw new CoreError("internal_error");
+        }
+        const eligible = new Set(positions);
+        const textFacts = passages.map(({ fact }) => fact);
+        const legacyKeyUnavailable = textFacts.some(requiresLegacyMacDomain);
+        const admitted = await Promise.all(incoming.map(async ({ message, originalContent }, index) => {
+          const scrubbed = { ...message, content: "" };
+          if (!eligible.has(index) || legacyKeyUnavailable) return scrubbed;
+          // The reference filter checks the source and its time. Compare snapshot text facts too,
+          // using historical aliases for suppression only.
+          if (textFacts.length && message.content && withholdsAnyPassage(
+            await fingerprintMemoryPassages(originalContent, message.content, fingerprintKey), textFacts)) return scrubbed;
+          return message;
+        }));
+        const { status } = await admit.call(capture, tx, key, admitted);
         switch (status) {
           case "duplicate": case "processing": case "rawReplay":
             return { status: "duplicate" };
           case "admitted":
             if (capabilities.rawArchive) {
               if (typeof raw?.recordLineage !== "function") throw new CoreError("capability_unavailable");
-              await raw.recordLineage(tx, key, prepared);
+              await raw.recordLineage(tx, key, admitted);
             }
             return { status: "accepted" };
           default:
@@ -228,7 +243,8 @@ export function captureMethods(deps) {
                   positions.some(position => !Number.isSafeInteger(position) || position < 0 || position >= messages.length)) {
                 throw new CoreError("internal_error");
               }
-              return { ...claim, key, positions, messages: positions.map(position => messages[position]) };
+              const selected = positions.filter(position => messages[position].content !== "");
+              return { ...claim, key, positions: selected, messages: selected.map(position => messages[position]) };
             }
             default: throw new CoreError("internal_error");
           }
