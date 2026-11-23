@@ -33,7 +33,9 @@ export function canonicalDigests(digests: readonly TextDigest[]): TextDigest[];
 export function factSlot(fact: SuppressionFact): string;
 export function createPostgresSuppressionStore(): Pick<SuppressionStore, "writeFact" | "epoch">;
 
-export function createPostgresMemoryStore(options?: { nearDuplicate?: boolean }): MemoryStore;
+export function createPostgresMemoryStore(options?: { nearDuplicate?: boolean; allowNonNullNamespace?: boolean }): MemoryStore;
+export function createPostgresDigestGate(uow: UnitOfWork,
+  keyIdsForOwner: (owner: string) => readonly string[] | Promise<readonly string[]>): (owner: string) => Promise<number>;
 export function createPostgresMemoryReads(): {
   recent: ListRecent;
   snapshot: ReadSnapshot;
@@ -41,4 +43,4 @@ export function createPostgresMemoryReads(): {
   fence: VisibilityFence;
 };
 export function createPostgresPauseStore(): PauseStore;
-export function createPostgresSupersessionStore(): SupersessionStore;
+export function createPostgresSupersessionStore(options?: { allowNonNullNamespace?: boolean }): SupersessionStore;

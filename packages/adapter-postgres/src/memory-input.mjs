@@ -33,10 +33,10 @@ export function inputText(value) {
   return value;
 }
 
-/** @param {unknown} namespace @returns {string | null} */
-export function namespaceKey(namespace) {
+/** @param {unknown} namespace @param {boolean} [allowNonNull] @returns {string | null} */
+export function namespaceKey(namespace, allowNonNull = true) {
   if (namespace === null) return null;
-  if (typeof namespace !== "string" || UNPAIRED_SURROGATE.test(namespace)) invalid();
+  if (!allowNonNull || typeof namespace !== "string" || UNPAIRED_SURROGATE.test(namespace)) invalid();
   // JSON encoding keeps the NUL separator of engine namespaces out of PostgreSQL text.
   return JSON.stringify(namespace);
 }
@@ -146,7 +146,7 @@ export function copyReceipts(receipts) {
 
 /** @param {string} owner @param {Omit<RetrievalScope, "owner">} scope */
 export function copyReadScope(owner, { namespaces, clients, window }) {
-  const keys = copyArray(namespaces).map(namespaceKey);
+  const keys = copyArray(namespaces).map(namespace => namespaceKey(namespace));
   if (keys.length === 0 || new Set(keys).size !== keys.length) invalid();
   const clientList = clients === undefined ? null : copyArray(clients).map(inputText);
   let since = null;

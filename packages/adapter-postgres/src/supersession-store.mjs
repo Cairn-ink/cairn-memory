@@ -36,12 +36,12 @@ async function read(tx, scope, id) {
   });
 }
 
-/** @returns {SupersessionStore} */
-export function createPostgresSupersessionStore() {
+/** @param {{allowNonNullNamespace?: boolean}} [options] @returns {SupersessionStore} */
+export function createPostgresSupersessionStore({ allowNonNullNamespace = false } = {}) {
   return {
     async record(tx, scope, edge, receiptIds, nowMs) {
       guardOwner(tx, scope, true);
-      const ns = namespaceKey(scope.namespace);
+      const ns = namespaceKey(scope.namespace, allowNonNullNamespace);
       if (!edge?.previous || !edge.replacement) invalid();
       const previous = inputText(edge.previous.id);
       const replacement = inputText(edge.replacement.id);
@@ -68,7 +68,7 @@ export function createPostgresSupersessionStore() {
 
     async markHistorical(tx, scope, id, nowMs) {
       guardOwner(tx, scope, true);
-      const ns = namespaceKey(scope.namespace);
+      const ns = namespaceKey(scope.namespace, allowNonNullNamespace);
       const key = inputText(id);
       const us = writeTime(nowMs);
       return runOperation(tx, async (query) => {

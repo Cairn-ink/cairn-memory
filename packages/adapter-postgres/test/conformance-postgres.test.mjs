@@ -8,7 +8,7 @@ import * as kit from "@cairn-ink/conformance";
 import { capabilities, factIncarnationBody } from "@cairn-ink/core";
 import { toPostgresError } from "../src/errors.mjs";
 import {
-  applyMigrations, createPostgresMemoryReads, createPostgresMemoryStore, createPostgresPauseStore,
+  applyMigrations, createPostgresDigestGate, createPostgresMemoryReads, createPostgresMemoryStore, createPostgresPauseStore,
   createPostgresSupersessionStore, createPostgresSuppressionStore, createPostgresUnitOfWork, query,
 } from "../src/index.mjs";
 import { advanceIndex, timestampUs } from "../src/memory-rows.mjs";
@@ -222,8 +222,9 @@ function postgresFactory(wrapSuppressions = (store) => store) {
           })), matched: items.length > 0 };
         },
       };
-      /** @type {Pick<TestHarness, "dump" | "seedFact" | "setWriteTime"> & {seedOwners(owner: string, otherOwner: string): Promise<void>}} */
+      /** @type {Pick<TestHarness, "dump" | "seedFact" | "setWriteTime" | "rowsMissingKeyedDigest"> & {seedOwners(owner: string, otherOwner: string): Promise<void>}} */
       const harness = {
+        rowsMissingKeyedDigest: createPostgresDigestGate(uow, () => []),
         async seedOwners(owner, otherOwner) {
           await beforeDeadline("Owner fixture setup", 4_000,
             () => pool.query("INSERT INTO users (id) VALUES ($1), ($2)", [owner, otherOwner]));
@@ -249,8 +250,8 @@ function postgresFactory(wrapSuppressions = (store) => store) {
       return {
         adapter: {
           capabilities: flags, uow, suppressions, lexical, ...memoryReads,
-          memories: createPostgresMemoryStore({ nearDuplicate }),
-          pause: createPostgresPauseStore(), supersession: createPostgresSupersessionStore(),
+          memories: createPostgresMemoryStore({ nearDuplicate, allowNonNullNamespace: true }),
+          pause: createPostgresPauseStore(), supersession: createPostgresSupersessionStore({ allowNonNullNamespace: true }),
         },
         sessionRefs: /** @type {const} */ ("plain"),
         harness,

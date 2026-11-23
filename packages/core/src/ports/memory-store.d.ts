@@ -80,8 +80,12 @@ export interface DuplicateMerge {
 export interface MemoryStore {
   /** Exact first, then near (capability nearDuplicate, distance from decisions). Visible rows only. */
   findDuplicates(tx: Tx, scope: Scope, batch: readonly DuplicateQuery[], options: { nearDistance: number; excludeId?: string }): Promise<MemoryMatch[][]>;
-  /** Suppression runs BEFORE dedupe. mode "hash" lets an explicit save pass distance-only facts. */
-  readWritePolicy(tx: Tx, scope: Scope, batch: readonly DuplicateQuery[], source: SourceRef, mode: "hash" | "full", editId?: string): Promise<WritePolicy>;
+  /**
+   * Suppression runs BEFORE dedupe. mode "hash" lets an explicit save pass distance-only facts.
+   * nearDuplicate:false lets the adapter skip near lookups while keeping the embedding for suppression.
+   */
+  readWritePolicy(tx: Tx, scope: Scope, batch: readonly DuplicateQuery[], source: SourceRef, mode: "hash" | "full",
+    editId?: string, options?: { nearDuplicate?: boolean }): Promise<WritePolicy>;
   insert(tx: Tx, scope: Scope, row: InsertRow, receipts: readonly Receipt[], nowMs: number): Promise<{ id: string; revision: Revision; createdAtMs: number; updatedAtMs: number; updatedAtUs: SortKeyUs }>;
   /**
    * Attaches receipts and applies the merge verbatim; bumps the revision only when something

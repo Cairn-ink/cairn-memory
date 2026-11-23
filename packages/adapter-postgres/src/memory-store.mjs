@@ -3,15 +3,15 @@ import {
   copyContent, copyMerge, copyQueries, copyReceipts, copySource, guardOwner, inputText, invalid, namespaceKey, writeTime,
 } from "./memory-input.mjs";
 import {
-  advanceIndex, attachReceipts, contentDigests, MEMORY_COLUMNS, readEntry, selectMemory,
+  advanceIndex, attachReceipts, contentDigests, deleteActiveReceipts, selectMemory,
   storageHash, TEXT_HASH, timestampParts, timestampUs,
 } from "./memory-rows.mjs";
+import { duplicateMatches, exactCandidates } from "./memory-duplicates.mjs";
 import { readVisibility } from "./memory-visibility.mjs";
 import { memoryPage } from "./memory-read.mjs";
 import { runOperation } from "./uow.mjs";
 
-/** @import { DuplicateQuery, MemoryMatch, MemoryStore, Scope } from "../../core/src/ports/index.d.ts" */
-/** @import { MemoryEntry, Query } from "./memory-rows.mjs" */
+/** @import { MemoryStore } from "../../core/src/ports/index.d.ts" */
 
 const CONTENT_COLUMNS = "text, kind, origin, confidence, embedding, embedding_model, source_kind, source_client, source_session_id, core_digests";
 const TARGET = "user_id = $1 AND core_namespace IS NOT DISTINCT FROM $2 AND id = $3";
@@ -21,95 +21,12 @@ function contentValues({ text, kind, origin, confidence, vector, model, source }
   return [text, kind, origin, confidence, vector, model, source.kind, source.client, source.sessionId, JSON.stringify(digests)];
 }
 
-/** @param {Query} query @param {Scope} scope @param {string | null} ns
- * @param {readonly string[] | null} hashes @param {string | undefined} excluded */
-async function candidates(query, scope, ns, hashes, excluded) {
-  const { rows } = await query(`SELECT ${MEMORY_COLUMNS} FROM memories
-    WHERE user_id = $1 AND core_namespace IS NOT DISTINCT FROM $2
-      AND ($3::text[] IS NULL OR text_hash = ANY($3) OR core_text_hash = ANY($3))
-      AND ($4::text IS NULL OR id <> $4)`, [scope.owner, ns, hashes, excluded ?? null]);
-  return rows.map(row => readEntry(row, scope.owner));
-}
-
-/** @param {string} hash */
-function hashForms(hash) {
-  return [hash, hash.slice(7)];
-}
-
-/** @param {DuplicateQuery[]} queries @param {boolean} near */
-function candidateHashes(queries, near) {
-  if (near && queries.some(q => q.embedding?.length === 1536)) return null;
-  return [...new Set(queries.flatMap(({ textHash, legacyHash }) =>
-    legacyHash === undefined ? hashForms(textHash) : [...hashForms(textHash), ...hashForms(legacyHash)]))];
-}
-
-/** @param {ArrayLike<number> | null | undefined} a @param {ArrayLike<number> | null | undefined} b */
-function distance(a, b) {
-  if (!a || !b || a.length !== b.length) return undefined;
-  let aa = 0;
-  let bb = 0;
-  let dot = 0;
-  for (let i = 0; i < a.length; i++) {
-    // Compare prior items at the same precision as rows persisted by pgvector.
-    const x = Math.fround(a[i]);
-    const y = Math.fround(b[i]);
-    aa += x * x;
-    bb += y * y;
-    dot += x * y;
-  }
-  if (!aa || !bb || !Number.isFinite(dot)) return undefined;
-  return 1 - Math.max(-1, Math.min(1, dot / Math.sqrt(aa * bb)));
-}
-
-/** @param {DuplicateQuery} query @param {{textHash: string, historical?: boolean}} candidate
- * @param {ArrayLike<number> | null | undefined} embedding @param {boolean} near @param {number} threshold */
-function quality(query, candidate, embedding, near, threshold) {
-  const { textHash } = candidate;
-  const exact = hashForms(query.textHash).includes(textHash) ||
-    (query.legacyHash !== undefined && hashForms(query.legacyHash).includes(textHash));
-  if (!exact && (!near || candidate.historical)) return null;
-  const cosine = distance(query.embedding, embedding);
-  if (exact) return { match: /** @type {const} */ ("exact"), distance: cosine ?? 0 };
-  if (cosine !== undefined && cosine <= threshold) return { match: /** @type {const} */ ("near"), distance: cosine };
-  return null;
-}
-
-/** @param {MemoryMatch} a @param {MemoryMatch} b */
-function matchOrder(a, b) {
-  if (a.match !== b.match) return a.match === "exact" ? -1 : 1;
-  const byDistance = (a.distance ?? 0) - (b.distance ?? 0);
-  if (byDistance) return byDistance;
-  if (a.kind === "prior") return b.kind === "prior" ? b.batchIndex - a.batchIndex : -1;
-  if (b.kind === "prior") return 1;
-  if (a.writeTimeUs !== b.writeTimeUs) return a.writeTimeUs > b.writeTimeUs ? -1 : 1;
-  return compareUtf8(b.id, a.id);
-}
-
-/** @param {MemoryEntry[]} entries @param {DuplicateQuery[]} batch @param {boolean} near @param {number} threshold */
-function matches(entries, batch, near, threshold) {
-  return batch.map((query, i) => {
-    /** @type {MemoryMatch[]} */
-    const result = [];
-    for (const { memory } of entries) {
-      const match = quality(query, memory, memory.embedding?.vector, near, threshold);
-      if (match) result.push({ kind: "stored", ...match, id: memory.id, revision: memory.revision,
-        writeTimeUs: memory.updatedAtUs });
-    }
-    for (let j = 0; j < i; j++) {
-      const prior = batch[j];
-      const match = quality(query, prior, prior.embedding, near, threshold);
-      if (match) result.push({ kind: "prior", ...match, batchIndex: j });
-    }
-    return result.sort(matchOrder);
-  });
-}
-
-/** @param {{nearDuplicate?: boolean}} [options] @returns {MemoryStore} */
-export function createPostgresMemoryStore({ nearDuplicate = true } = {}) {
+/** @param {{nearDuplicate?: boolean, allowNonNullNamespace?: boolean}} [options] @returns {MemoryStore} */
+export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNamespace = false } = {}) {
   return {
     async insert(tx, scope, row, receipts, nowMs) {
       guardOwner(tx, scope, true);
-      const ns = namespaceKey(scope.namespace);
+      const ns = namespaceKey(scope.namespace, allowNonNullNamespace);
       const content = copyContent(row);
       const evidence = copyReceipts(receipts);
       const updatedAtUs = writeTime(nowMs);
@@ -122,12 +39,13 @@ export function createPostgresMemoryStore({ nearDuplicate = true } = {}) {
         const owner = tx.owner;
         const id = crypto.randomUUID();
         const digests = await contentDigests(content);
-        const [storedHash, logicalHash] = await storageHash(query, owner, id, content.textHash);
-        await query(`INSERT INTO memories (user_id, id, core_namespace, text_hash, core_text_hash,
+        const { rows } = await query(`INSERT INTO memories (user_id, id, core_namespace, text_hash,
           created_at, core_created_at_ms, updated_at, ${CONTENT_COLUMNS})
-          VALUES ($1, $2, $3, $4, $5, COALESCE(${timestampUs("$6")}, '-infinity'::timestamptz), $7,
-            ${timestampUs("$8")}, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
-        [owner, id, ns, storedHash, logicalHash, created.us, created.exact, updatedAtUs.toString(), ...contentValues(content, digests)]);
+          VALUES ($1, $2, $3, $4, COALESCE(${timestampUs("$5")}, '-infinity'::timestamptz), $6,
+            ${timestampUs("$7")}, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+          ON CONFLICT (user_id, text_hash) DO NOTHING RETURNING id`,
+        [owner, id, ns, storageHash(content.textHash), created.us, created.exact, updatedAtUs.toString(), ...contentValues(content, digests)]);
+        if (!rows.length) throw new CoreError("memory_conflict");
         await attachReceipts(query, owner, id, evidence);
         await advanceIndex(query, owner);
         return { id, revision: 1, createdAtMs, updatedAtMs: nowMs, updatedAtUs };
@@ -136,7 +54,7 @@ export function createPostgresMemoryStore({ nearDuplicate = true } = {}) {
 
     async touchDuplicate(tx, scope, id, receipts, merge, nowMs) {
       guardOwner(tx, scope, true);
-      const ns = namespaceKey(scope.namespace);
+      const ns = namespaceKey(scope.namespace, allowNonNullNamespace);
       const key = inputText(id);
       const incoming = copyReceipts(receipts);
       const values = copyMerge(merge);
@@ -177,7 +95,7 @@ export function createPostgresMemoryStore({ nearDuplicate = true } = {}) {
 
     async replaceContent(tx, scope, id, expectedRevision, next, receipts, nowMs) {
       guardOwner(tx, scope, true);
-      const ns = namespaceKey(scope.namespace);
+      const ns = namespaceKey(scope.namespace, allowNonNullNamespace);
       const key = inputText(id);
       if (!Number.isInteger(expectedRevision)) invalid();
       const content = copyContent(next);
@@ -191,23 +109,20 @@ export function createPostgresMemoryStore({ nearDuplicate = true } = {}) {
         const { memory } = entry;
         if (memory.revision !== expectedRevision) throw new CoreError("revision_conflict");
         if (memory.historical) throw new CoreError("memory_historical");
-        if (hashForms(content.textHash).includes(memory.textHash) || content.text === memory.text) {
+        if (content.textHash === memory.textHash || content.text === memory.text) {
           return { outcome: "unchanged", revision: memory.revision };
         }
-        const collisions = await candidates(query, memory.scope, ns, hashForms(content.textHash), key);
-        if (collisions.length) {
-          const visibility = await readVisibility(query, owner);
-          if ((await visibility.check(collisions)).some(row => !row.hidden)) throw new CoreError("memory_conflict");
-        }
+        const storedHash = storageHash(content.textHash);
+        const collisions = await exactCandidates(query, owner, "id", [storedHash], key);
+        if (collisions.length) throw new CoreError("memory_conflict");
 
         const revision = memory.revision + 1;
         const digests = await contentDigests(content);
-        const [storedHash, logicalHash] = await storageHash(query, owner, key, content.textHash);
-        await query(`UPDATE memories SET text_hash = $4, core_text_hash = $5, revision = $6,
-          updated_at = ${timestampUs("$7")}, (${CONTENT_COLUMNS}) = ($8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-          WHERE ${TARGET}`, [...values, storedHash, logicalHash, revision, us.toString(), ...contentValues(content, digests)]);
+        await query(`UPDATE memories SET text_hash = $4, revision = $5,
+          updated_at = ${timestampUs("$6")}, (${CONTENT_COLUMNS}) = ($7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+          WHERE ${TARGET}`, [...values, storedHash, revision, us.toString(), ...contentValues(content, digests)]);
         if (evidence !== null) {
-          await query("DELETE FROM core_memory_receipts WHERE user_id = $1 AND memory_id = $2", [owner, key]);
+          await deleteActiveReceipts(query, owner, key);
           await attachReceipts(query, owner, key, evidence);
         }
         await advanceIndex(query, owner);
@@ -224,13 +139,14 @@ export function createPostgresMemoryStore({ nearDuplicate = true } = {}) {
 
     async erase(tx, scope, id) {
       guardOwner(tx, scope, true);
-      const ns = namespaceKey(scope.namespace);
+      const ns = namespaceKey(scope.namespace, allowNonNullNamespace);
       const key = inputText(id);
       return runOperation(tx, async (query) => {
         const owner = tx.owner;
         const deleted = await query(`DELETE FROM memories WHERE ${TARGET} RETURNING id`, [owner, ns, key]);
         if (!deleted.rows.length) return false;
-        for (const table of ["core_memory_receipts", "memory_topics", "memory_placements"]) {
+        await deleteActiveReceipts(query, owner, key);
+        for (const table of ["memory_topics", "memory_placements"]) {
           await query(`DELETE FROM ${table} WHERE user_id = $1 AND memory_id = $2`, [owner, key]);
         }
         await query(`DELETE FROM memory_supersessions WHERE user_id = $1
@@ -255,15 +171,13 @@ export function createPostgresMemoryStore({ nearDuplicate = true } = {}) {
       if (!Number.isFinite(nearDistance) || nearDistance < 0) invalid();
       const excluded = excludeId === undefined ? undefined : inputText(excludeId);
       return runOperation(tx, async (query) => {
-        const entries = await candidates(query, selection, ns, candidateHashes(queries, nearDuplicate), excluded);
-        if (!entries.length) return matches([], queries, nearDuplicate, nearDistance);
         const visibility = await readVisibility(query, tx.owner);
-        const visible = (await visibility.check(entries)).filter(entry => !entry.hidden);
-        return matches(visible, queries, nearDuplicate, nearDistance);
+        const { matches, visible } = await duplicateMatches(query, selection, ns, visibility, queries, nearDuplicate, nearDistance, excluded);
+        return matches.map(group => group.filter(match => match.kind === "prior" || visible.has(match.id)));
       });
     },
 
-    async readWritePolicy(tx, scope, batch, source, mode, editId) {
+    async readWritePolicy(tx, scope, batch, source, mode, editId, options) {
       guardOwner(tx, scope);
       const { namespace } = scope;
       const selection = { owner: tx.owner, namespace };
@@ -278,12 +192,11 @@ export function createPostgresMemoryStore({ nearDuplicate = true } = {}) {
         const sourceMemory = edit && { id: edit.memory.id, createdAtMs: edit.memory.createdAtMs };
         const blockedSession = visibility.blocksSession(selection, incoming);
         const blockedPositions = queries.flatMap((item, i) => visibility.blocks(selection, item, mode, sourceMemory) ? [i] : []);
-        const entries = await candidates(query, selection, ns, candidateHashes(queries, nearDuplicate), excluded);
-        const duplicates = matches(entries, queries, nearDuplicate, NEAR_DUPLICATE_DISTANCE);
-        const matched = new Set(duplicates.flatMap(group => group.flatMap(match => match.kind === "stored" ? [match.id] : [])));
-        const checked = await visibility.check(entries.filter(({ memory }) => matched.has(memory.id)));
-        const hiddenIds = checked.filter(entry => entry.hidden).map(entry => entry.memory.id).sort(compareUtf8);
-        return { matches: duplicates, blockedPositions, blockedSession, hiddenIds };
+        const near = nearDuplicate && options?.nearDuplicate !== false;
+        const { matches, visible } = await duplicateMatches(query, selection, ns, visibility, queries, near, NEAR_DUPLICATE_DISTANCE, excluded);
+        const hiddenIds = [...new Set(matches.flatMap(group => group.flatMap(match =>
+          match.kind === "stored" && !visible.has(match.id) ? [match.id] : [])))].sort(compareUtf8);
+        return { matches, blockedPositions, blockedSession, hiddenIds };
       });
     },
 
