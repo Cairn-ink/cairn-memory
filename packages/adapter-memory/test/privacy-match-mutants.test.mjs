@@ -3,49 +3,50 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { test } from "node:test";
+import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
 import { PRIVACY_MATCH_CASES, runCase } from "@cairn-ink/conformance";
+import { CoreError } from "@cairn-ink/core";
 
 const adapterURL = new URL("../src/index.mjs", import.meta.url);
-const matcherURL = new URL("../src/fact-match.mjs", import.meta.url);
-const original = readFileSync(matcherURL, "utf8");
+const hashSessionKey = (client, sessionId) =>
+  createHash("sha256").update(JSON.stringify([client, sessionId])).digest("hex");
 
-/** Load each variant through the adapter's normal entry point with its own matcher module. */
-async function mutantFactory(name, replacements, sessionRefs = "plain") {
+/** Load each variant through the adapter's normal entry point with one mutated dependency. */
+async function mutantFactory(name, replacements, sessionRefs = "plain", moduleName = "fact-match") {
   const entry = new URL(adapterURL);
-  const matcher = new URL(matcherURL);
+  const specifier = `./${moduleName}.mjs`;
+  const module = new URL(specifier, adapterURL);
+  let source = readFileSync(module, "utf8");
   const variant = JSON.stringify([name, sessionRefs]);
   entry.searchParams.set("variant", variant);
-  matcher.searchParams.set("variant", variant);
+  module.searchParams.set("variant", variant);
 
-  let source = original;
   for (const [before, after] of replacements) {
     assert.equal(source.split(before).length, 2, `Expected a single mutation site for ${name}`);
     source = source.replace(before, () => after);
   }
   const hooks = registerHooks({
-    resolve(specifier, context, nextResolve) {
-      if (context.parentURL === entry.href && specifier === "./fact-match.mjs") {
-        return nextResolve(matcher.href, context);
+    resolve(request, context, nextResolve) {
+      if (context.parentURL === entry.href && request === specifier) {
+        return nextResolve(module.href, context);
       }
-      return nextResolve(specifier, context);
+      return nextResolve(request, context);
     },
     load(url, context, nextLoad) {
-      if (url === matcher.href) return { format: "module", source, shortCircuit: true };
+      if (url === module.href) return { format: "module", source, shortCircuit: true };
       return nextLoad(url, context);
     },
   });
-  let createMemoryAdapter;
+  let createVariant;
   try {
-    ({ createMemoryAdapter } = await import(entry.href));
+    ({ createMemoryAdapter: createVariant } = await import(entry.href));
   } finally {
     hooks.deregister();
   }
-  const hashSessionKey = (client, sessionId) =>
-    createHash("sha256").update(JSON.stringify([client, sessionId])).digest("hex");
   return {
     name,
     async open({ capabilities }) {
-      const adapter = createMemoryAdapter({ capabilities, sessionRefs, hashSessionKey });
+      const adapter = createVariant({ capabilities, sessionRefs, hashSessionKey });
       return {
         adapter, sessionRefs, harness: { ...adapter.harness, hashSessionKey },
         nativeErrorMap: adapter.nativeErrorMap, busyNativeCodes: [], embeddingDimensions: null,
@@ -154,6 +155,8 @@ const directRowMatch = "factHidesRow(stored, candidate, policy) !== false";
 const receiptRowMatch = "factHidesRow(stored, { ...candidate, source: { client, sessionId, occurredAtMs } }, policy) !== false";
 const matchReceipts = `return receipts.some(({ client, sessionId, occurredAtMs }) => client &&
               ${receiptRowMatch});`;
+const scopedTextFact = `[...state.facts.values()].some(({ fact }) =>
+            fact.kind === "text" && fact.owner === scope.owner && (fact.namespace ?? null) === scope.namespace)`;
 const mutants = [
   ["ineligible row visible", "K-HIDE-2", exactHidden, /Incomparable digest must hide the row/, [
     [directRowMatch, directRowMatch.replace("!== false", "=== true")],
@@ -190,15 +193,71 @@ const mutants = [
   ["legacy digest omitted", "K-WRITE-1", primaryDigestBlocked, /Exact digest must block the primary and legacy query positions/, [
     ["if (legacyHash !== undefined && legacyHash !== textHash)", "if (false)"],
   ]],
+  ["session refusal moved to positions", "K-WRITE-2", completeWriteSessionBlocked, /Explicit save without a session must have no blocked positions/, [
+    ["          blockedPositions,", `          blockedPositions: mode === "hash" && source.sessionId === null &&
+            policy.blocksSession(source.client, "") ? [0] : blockedPositions,`],
+  ], "memory-store"],
+  ["duplicate groups cleared under a text fact", "K-WRITE-1", primaryDigestBlocked, /Visible exact duplicate must be retained/, [
+    ["matches: duplicates,", `matches: ${scopedTextFact} ? batch.map(() => []) : duplicates,`],
+    ["return matches(rows, batch, nearDistance);",
+      `return ${scopedTextFact} ? batch.map(() => []) : matches(rows, batch, nearDistance);`],
+  ], "memory-store"],
+  ["receipt checks bypassed in candidate and recent reads", "K-HIDE-3", matchingReceiptAndSourceHidden, /Lexical must return only receipt-visible rows/, [
+    ["!policy.hides(entry)) rows.push(entry.row);", "!policy.hides({ ...entry, receipts: [] })) rows.push(entry.row);"],
+  ], "retrieval"],
 ];
 
-for (const [label, id, run, failure, replacements] of mutants) {
+for (const [label, id, run, failure, replacements, moduleName] of mutants) {
   test(`${id} detects ${label} after the naive case passes`, async () => {
     const testCase = PRIVACY_MATCH_CASES.find((candidate) => candidate.id === id);
     assert.ok(testCase);
-    const factory = await mutantFactory(label, replacements);
+    const factory = await mutantFactory(label, replacements, "plain", moduleName);
     assert.equal(await runCase(factory, { id, title: "naive", needs: [], run }), null);
     await assert.rejects(runCase(factory, testCase), failure);
+  });
+}
+
+for (const [sessionRefs, vectors] of [["hashed", true], ["plain", false]]) {
+  test(`privacy matching accepts required embeddings under the ${sessionRefs} profile`, async (t) => {
+    const factory = {
+      name: "memory requiring embeddings",
+      async open({ capabilities }) {
+        const adapter = createMemoryAdapter({
+          capabilities: { ...capabilities, vectorSuppression: vectors, semanticRetrieval: vectors },
+          sessionRefs, hashSessionKey,
+        });
+        const { memories } = adapter;
+        return {
+          adapter: {
+            ...adapter,
+            memories: {
+              ...memories,
+              async insert(tx, scope, row, receipts, nowMs) {
+                if (row.embedding === null) throw new CoreError("invalid_input");
+                return memories.insert(tx, scope, row, receipts, nowMs);
+              },
+            },
+          },
+          sessionRefs, harness: { ...adapter.harness, hashSessionKey },
+          nativeErrorMap: adapter.nativeErrorMap, busyNativeCodes: [], embeddingDimensions: 6,
+          async close() {},
+        };
+      },
+    };
+    for (const testCase of PRIVACY_MATCH_CASES) {
+      await t.test(testCase.id, async (t) => {
+        const reason = await runCase(factory, testCase);
+        const expected = vectors ? null :
+          ({
+            "K-HIDE-2": "needs vectorSuppression",
+            "K-HIDE-3": "needs semanticRetrieval",
+            "K-WRITE-1": "needs vectorSuppression",
+            "K-HASH-1": "needs hashed session refs",
+          })[testCase.id] ?? null;
+        assert.equal(reason, expected);
+        if (reason !== null) t.skip(reason);
+      });
+    }
   });
 }
 

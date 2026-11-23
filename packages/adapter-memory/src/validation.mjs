@@ -44,10 +44,14 @@ export function validateSource(source) {
     !nullableString(source.sessionId)) invalid();
 }
 
+/** @param {unknown} vector @returns {vector is Float32Array} */
+export function isFloat32Vector(vector) {
+  return ArrayBuffer.isView(vector) && typedArrayTag?.call(vector) === "Float32Array";
+}
+
 /** @param {number[] | Float32Array} vector */
 export function validateVector(vector) {
-  const float32 = ArrayBuffer.isView(vector) && typedArrayTag?.call(vector) === "Float32Array";
-  if (!(Array.isArray(vector) || float32) || vector.length === 0) invalid();
+  if (!(Array.isArray(vector) || isFloat32Vector(vector)) || vector.length === 0) invalid();
   for (const component of vector) {
     if (!Number.isFinite(component)) invalid();
   }

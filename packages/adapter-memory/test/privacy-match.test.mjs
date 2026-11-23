@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { runInNewContext } from "node:vm";
 import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
-import { capabilities } from "@cairn-ink/core";
+import { capabilities, PRIVACY_REDACTION_VERSIONS } from "@cairn-ink/core";
 import { createMemoryStore } from "../src/memory-store.mjs";
 import { createUnitOfWork } from "../src/unit-of-work.mjs";
 
@@ -15,6 +16,46 @@ const content = { kind: "fact", origin: "inferred", text: "test memory", textHas
 const receipt = { client, sessionId, messageId: "test-message", role: "user", occurredAtMs: 15 };
 const sessionKeyHash = "b".repeat(64);
 const factBase = { owner, origin: "forget" };
+
+const distantEmbeddings = [
+  ["array", [0, 1]],
+  ["local Float32Array", new Float32Array([0, 1])],
+  ["cross-realm Float32Array", runInNewContext("new Float32Array([0, 1])")],
+];
+
+for (const [label, embedding] of distantEmbeddings) {
+  test(`distant ${label} is comparable in privacy matching`, async () => {
+    const { uow, memories, suppressions, harness, fence } = createMemoryAdapter({
+      capabilities: { vectorSuppression: true },
+    });
+    const { id } = await uow.run(owner, {}, (tx) => memories.insert(tx, scope, {
+      ...content, embedding: { model: "test", vector: embedding },
+    }, [], 1));
+    const digest = {
+      alg: "sha256", value: textHash.slice(7), pipeline: "core",
+      redactionVersion: PRIVACY_REDACTION_VERSIONS.core, keyId: null,
+    };
+    await harness.seedFact(owner, {
+      ...factBase, kind: "text", actionId: "test-text", mode: "full",
+      text: { digests: [{ ...digest, value: "b".repeat(64) }], embedding: [1, 0] },
+    });
+
+    await uow.run(owner, { readOnly: true }, async (tx) => {
+      const ref = { type: "memory", id, namespace: null };
+      assert.deepEqual(await fence.assertVisible(tx, { owner, namespaces: [null] }, [ref]), [ref], "row visibility");
+      assert.deepEqual(await suppressions.factsFor(tx, scope, { memoryId: id }), [], "factsFor");
+      const policy = await memories.readWritePolicy(tx, scope, [{ textHash, embedding }], source, "full");
+      const snapshot = await suppressions.snapshot(tx, scope, {
+        passages: [{ digests: [digest], shingles: null, keyId: null, embedding }],
+      });
+      assert.deepEqual({
+        blockedPositions: policy.blockedPositions,
+        hiddenIds: policy.hiddenIds,
+        passages: snapshot.passages.map(({ fact }) => fact.actionId),
+      }, { blockedPositions: [], hiddenIds: [], passages: [] });
+    });
+  });
+}
 
 for (const [label, hashSessionKey] of [
   ["absent", undefined],

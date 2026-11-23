@@ -1,4 +1,5 @@
 import { factBlocksIncoming, factHidesRow, PRIVACY_REDACTION_VERSIONS } from "@cairn-ink/core";
+import { isFloat32Vector } from "./validation.mjs";
 
 /** @import { FactMatchIncoming, FactMatchPolicy, FactMatchRow, StoredFact, SuppressionFact, TextDigest, TextFact } from "@cairn-ink/core" */
 /** @import { DuplicateQuery, Scope, SourceRef, SuppressionStore } from "@cairn-ink/core/ports" */
@@ -23,6 +24,38 @@ function digestsFor({ textHash, legacyHash }) {
     });
   }
   return digests;
+}
+
+/** @template T @param {T} embedding */
+function projectEmbedding(embedding) {
+  return isFloat32Vector(embedding) ? Array.from(Float32Array.prototype.values.call(embedding)) : embedding;
+}
+
+/** @param {FactMatchIncoming["passages"]} passages @returns {FactMatchIncoming["passages"]} */
+function projectPassages(passages) {
+  try {
+    if (!Array.isArray(passages)) return passages;
+    const slots = Object.getOwnPropertyDescriptors(/** @type {object} */ (passages));
+    let changed = false;
+    for (const slot of Object.values(slots)) {
+      const passage = slot.value;
+      if (passage == null || typeof passage !== "object" || Array.isArray(passage)) continue;
+      const embedding = Object.getOwnPropertyDescriptor(passage, "embedding");
+      const vector = projectEmbedding(embedding?.value);
+      if (embedding && vector !== embedding.value) {
+        // Preserve the input descriptors so core still rejects accessor-based evidence.
+        slot.value = Object.defineProperties({}, {
+          ...Object.getOwnPropertyDescriptors(passage),
+          embedding: { ...embedding, value: vector },
+        });
+        changed = true;
+      }
+    }
+    return changed ? Object.defineProperties([], slots) : passages;
+  } catch {
+    // Let core classify malformed projections using its normal fail-closed rules.
+    return passages;
+  }
 }
 
 /** @template {SuppressionFact["kind"]} K @param {StoredFact} stored @param {K} kind
@@ -50,7 +83,7 @@ export function createFactMatcher(vectorSuppression, hashSessionKey) {
       /** @type {FactMatchRow} */
       const candidate = {
         type: "memory", scope, memoryId: row.id, revision: row.revision,
-        digests: digestsFor(row), embedding: row.embedding?.vector,
+        digests: digestsFor(row), embedding: projectEmbedding(row.embedding?.vector),
       };
       /** @param {StoredFact} stored */
       return (stored) => {
@@ -84,7 +117,8 @@ export function createFactMatcher(vectorSuppression, hashSessionKey) {
        */
       blocks(query, mode, sourceMemory) {
         if (texts.length === 0) return false;
-        const passages = [{ digests: digestsFor(query), shingles: null, keyId: null, embedding: query.embedding }];
+        const embedding = query.embedding == null ? query.embedding : Array.from(query.embedding);
+        const passages = [{ digests: digestsFor(query), shingles: null, keyId: null, embedding }];
         return texts.some((stored) => factBlocksIncoming(stored, { scope, passages, sourceMemory },
           { ...policy, mode: mode === "hash" ? "explicitSave" : "capture" }) !== false);
       },
@@ -122,7 +156,9 @@ export function createFactMatcher(vectorSuppression, hashSessionKey) {
 
     /** @param {StoredFact<TextFact>[]} stored @param {FactMatchIncoming["passages"]} passages */
     function matchingPassages(stored, passages) {
-      return stored.filter((fact) => factBlocksIncoming(fact, { scope, passages }, capture) !== false);
+      if (stored.length === 0) return [];
+      const incoming = { scope, passages: projectPassages(passages) };
+      return stored.filter((fact) => factBlocksIncoming(fact, incoming, capture) !== false);
     }
   };
 }
