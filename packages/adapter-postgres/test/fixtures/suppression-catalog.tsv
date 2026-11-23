@@ -17,6 +17,7 @@ core_fact_digests	index	core_fact_digests_user_value_idx	CREATE INDEX core_fact_
 core_owner_state	column	fact_epoch	bigint NOT NULL DEFAULT 0
 core_owner_state	column	index_revision	bigint NOT NULL DEFAULT 0
 core_owner_state	column	legacy_facts_ready	boolean NOT NULL DEFAULT false
+core_owner_state	column	legacy_writes_reconciled	boolean NOT NULL DEFAULT false
 core_owner_state	column	user_id	text NOT NULL
 core_owner_state	constraint	core_owner_state_fact_epoch_check	CHECK ((fact_epoch >= 0))
 core_owner_state	constraint	core_owner_state_index_revision_check	CHECK ((index_revision >= 0))
