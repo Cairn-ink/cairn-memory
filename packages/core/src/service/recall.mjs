@@ -1,3 +1,4 @@
+import { emitDiagnostic } from "../capture/model-call.mjs";
 import { validateObject } from "../capture/validate.mjs";
 import { FUSION_PRESETS } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
@@ -18,7 +19,7 @@ async function queryDigest(query) {
 }
 
 /** @param {import("./index.d.mts").MemoryServiceDeps} deps */
-export function recallMethod({ storage, embedQuery, gate }) {
+export function recallMethod({ storage, embedQuery, gate, diagnostics }) {
   const { uow, snapshot, lexical, vector, capabilities, hydrate, fence } = storage;
 
   return entry(async (input, raw, options) => {
@@ -53,15 +54,29 @@ export function recallMethod({ storage, embedQuery, gate }) {
     if (!lexical || !hydrate) throw new CoreError("capability_unavailable");
 
     let embedding = null;
-    if (positionPath !== "lexical" && embedQuery && capabilities.semanticRetrieval === true && vector) {
-      const text = normalizeForHash(query);
-      try {
+    // Why this request ranks lexical-only. A declared difference from hosted, whose hybrid search fails instead.
+    /** @type {string | null} */
+    let fallback = null;
+    if (positionPath !== "lexical") {
+      if (!embedQuery || capabilities.semanticRetrieval !== true || !vector) {
+        fallback = "semantic_unavailable";
+      } else {
+        const text = normalizeForHash(query);
         // Hosted search itself has no pause check (index.ts:65–83,119–133).
         // A closed send gate or failed query embed leaves lexical search available on the first page.
-        await gate.assertOpen(scope.owner, "dispatch");
-        embedding = await embedQuery.embedQuery(scope.owner, text, { budgetClass: "recall" });
-      } catch {
-        embedding = null;
+        try {
+          await gate.assertOpen(scope.owner, "dispatch");
+        } catch {
+          fallback = "dispatch_closed";
+        }
+        if (!fallback) {
+          try {
+            embedding = await embedQuery.embedQuery(scope.owner, text, { budgetClass: "recall" });
+          } catch {
+            embedding = null;
+          }
+          if (!embedding) fallback = "embed_failed";
+        }
       }
     }
     if (positionPath === "hybrid" && !embedding) throw new CoreError("cursor_stale");
@@ -73,7 +88,7 @@ export function recallMethod({ storage, embedQuery, gate }) {
     /** @param {ItemRef} ref */
     const isScopedMemory = ref => ref.type === "memory" && ref.namespace === scope.namespace;
 
-    const { rows, nextCursor, memories } = await uow.run(scope.owner, { readOnly: true }, async tx => {
+    const { rows, nextCursor, memories, path } = await uow.run(scope.owner, { readOnly: true }, async tx => {
       const token = await readStateToken(snapshot, tx, readScope, positionToken);
       const words = await lexical.lexical(tx, readScope, query, lexicalDepth, {});
       const semantic = embedding && vector
@@ -99,8 +114,13 @@ export function recallMethod({ storage, embedQuery, gate }) {
           }
         }
       }
-      return { rows, nextCursor, memories };
+      return { rows, nextCursor, memories, path };
     });
+    // One content-free event per first page that ranks lexical-only. Continuations on a lexical cursor
+    // were already counted, and a hybrid continuation that loses semantics is cursor_stale instead.
+    if (positionPath === undefined && path === "lexical") {
+      emitDiagnostic(diagnostics, "recall", "core_retrieval", fallback ?? "coverage_incomplete");
+    }
 
     if (!rows.length) return { items: [], nextCursor, scores: [] };
     // The fence runs alone in a fresh read run, after every read it guards, so a

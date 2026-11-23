@@ -386,3 +386,45 @@ test("foreign throws at recall ports are mapped to content-free CoreError failur
     await assert.rejects(() => createMemoryService(deps).recall(hostedScope, "query", page), code("internal_error"));
   }
 });
+
+test("each first page that falls back to lexical emits one content-free diagnostic", async () => {
+  const event = reason => ({ version: 1, stage: "recall", layer: "core_retrieval", reason });
+  const cases = [
+    ["semantic_unavailable", fake => { delete fake.deps.embedQuery; }],
+    ["semantic_unavailable", fake => { fake.storage.capabilities.semanticRetrieval = false; }],
+    ["semantic_unavailable", fake => { delete fake.storage.vector; }],
+    ["dispatch_closed", fake => { fake.hooks.gate = () => { throw new CoreError("capture_paused"); }; }],
+    ["embed_failed", fake => { fake.hooks.embedQuery = () => { throw new Error("provider details"); }; }],
+    ["coverage_incomplete", fake => { fake.hooks.coverage = { eligible: 4, embedded: 3, complete: false }; }],
+  ];
+  for (const [reason, disable] of cases) {
+    const fake = recallFixture();
+    disable(fake);
+    const events = [];
+    const service = createMemoryService({ ...fake.deps, diagnostics: e => { events.push(e); } });
+    assertLexical(await service.recall(hostedScope, "query", page));
+    assert.deepEqual(events, [event(reason)]);
+    assert.ok(Object.isFrozen(events[0]));
+  }
+
+  const hybrid = recallFixture();
+  const quiet = [];
+  await createMemoryService({ ...hybrid.deps, diagnostics: e => { quiet.push(e); } }).recall(hostedScope, "query", page);
+  const blank = [];
+  await createMemoryService({ ...recallFixture().deps, diagnostics: e => { blank.push(e); } }).recall(hostedScope, "  ", page);
+  assert.deepEqual([quiet, blank], [[], []]);
+});
+
+test("a lexical continuation is not counted again and a throwing observer changes nothing", async () => {
+  const fake = pagingFixture();
+  const events = [];
+  const service = createMemoryService({ ...fake.deps, diagnostics: e => { events.push(e.reason); throw new Error("observer"); } });
+  const options = { ...page, limit: 1 };
+  fake.hooks.embedQuery = () => { throw new Error("embed failed on first page"); };
+  const first = await service.recall(hostedScope, "query", options);
+  assert.deepEqual(ids(first), ["A"]);
+  delete fake.hooks.embedQuery;
+  const second = await service.recall(hostedScope, "query", { ...options, cursor: first.nextCursor });
+  assert.deepEqual(ids(second), ["B"]);
+  assert.deepEqual(events, ["embed_failed"]);
+});
