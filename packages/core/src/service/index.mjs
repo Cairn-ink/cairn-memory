@@ -4,6 +4,7 @@ import { FUSION_PRESETS, NEAR_DUPLICATE_DISTANCE } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
 import { forgetMethod } from "./forget.mjs";
+import { importMethod } from "./import.mjs";
 import { pauseMethods } from "./pause.mjs";
 import { readMethods } from "./reads.mjs";
 import { writeMethods } from "./writes.mjs";
@@ -105,7 +106,7 @@ export function createMemoryService(input) {
       recall: placeholder,
       captureStatus: placeholder,
       listRawMessages: placeholder,
-      importMemories: placeholder,
+      importMemories: importMethod(deps),
       importRawMessages: placeholder,
       enqueueCapture: placeholder,
       runCapture: placeholder,

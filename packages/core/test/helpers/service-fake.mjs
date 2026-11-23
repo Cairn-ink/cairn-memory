@@ -241,8 +241,9 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       calls.push(["embed", [...texts]]);
       assert.equal(active.size, 0, "embed outside the UoW");
       assert.ok(dispatchReady, "embed starts in the dispatch continuation");
+      if (hooks.embedBatch) return hooks.embedBatch(texts);
       const vector = await hooks.embed?.(texts);
-      return [vector ?? Float32Array.of(1)];
+      return texts.map(() => vector ?? Float32Array.of(1));
     };
     fake.deps.clock.nowMs = () => ++nowMs;
     fake.deps.clock.sha256Hex = async value => {
@@ -311,28 +312,33 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         await hooks.fault?.("memories.erase");
         return Boolean(row);
       },
-      async readWritePolicy(tx, scope, [query], source, mode, editId) {
-        record(tx, scope.owner, "memories.readWritePolicy", scope, query, source, mode, editId);
-        const matches = [];
-        const hiddenIds = [];
-        for (const row of tx.rows) {
-          if (row.scope.owner !== scope.owner || row.scope.namespace !== scope.namespace || row.id === editId) continue;
-          const exact = [query.textHash, query.legacyHash].includes(row.textHash);
-          const distance = exact ? 0 : hooks.nearDistance?.(row);
-          if (distance === undefined) continue;
-          matches.push({ id: row.id, kind: "stored", match: exact ? "exact" : "near",
-            revision: row.revision, writeTimeUs: row.updatedAtUs, distance });
-          if (hidesRow(tx, row)) hiddenIds.push(row.id);
-        }
-        matches.sort((a, b) => a.distance - b.distance);
-        const blocked = forgetting && tx.facts.some(stored => {
-          const { fact } = stored;
-          if (fact.kind !== "text" || !fact.text.digests.every(({ alg }) => alg === "hmac")) return false;
-          const passages = [{ digests: digestsWithHash(query), shingles: null, keyId: null }];
-          return factBlocksIncoming(stored, { scope, passages },
-            { mode: mode === "hash" ? "explicitSave" : "capture", rowShingles: false }) !== false;
+      async readWritePolicy(tx, scope, queries, source, mode, editId) {
+        record(tx, scope.owner, "memories.readWritePolicy", scope,
+          queries.length === 1 ? queries[0] : queries, source, mode, editId);
+        const hiddenIds = new Set();
+        const blockedPositions = [];
+        const matches = queries.map((query, index) => {
+          const matches = [];
+          for (const row of tx.rows) {
+            if (row.scope.owner !== scope.owner || row.scope.namespace !== scope.namespace || row.id === editId) continue;
+            const exact = [query.textHash, query.legacyHash].includes(row.textHash);
+            const distance = exact ? 0 : hooks.nearDistance?.(row);
+            if (distance === undefined) continue;
+            matches.push({ id: row.id, kind: "stored", match: exact ? "exact" : "near",
+              revision: row.revision, writeTimeUs: row.updatedAtUs, distance });
+            if (hidesRow(tx, row)) hiddenIds.add(row.id);
+          }
+          const blocked = forgetting && tx.facts.some(stored => {
+            const { fact } = stored;
+            if (fact.kind !== "text" || !fact.text.digests.every(({ alg }) => alg === "hmac")) return false;
+            const passages = [{ digests: digestsWithHash(query), shingles: null, keyId: null }];
+            return factBlocksIncoming(stored, { scope, passages },
+              { mode: mode === "hash" ? "explicitSave" : "capture", rowShingles: false }) !== false;
+          });
+          if (blocked) blockedPositions.push(index);
+          return matches.sort((a, b) => a.distance - b.distance);
         });
-        return { matches: [matches], hiddenIds, blockedSession: false, blockedPositions: blocked ? [0] : [] };
+        return { matches, hiddenIds: [...hiddenIds], blockedSession: false, blockedPositions };
       },
       async insert(tx, scope, content, receipts, timestamp) {
         mutate(tx, scope.owner, "memories.insert", content, receipts);
