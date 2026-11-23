@@ -1,14 +1,27 @@
 import { CoreError, decideWrite, planDuplicateMerge } from "@cairn-ink/core";
 import { indexRevisionAfterRun } from "./unit-of-work.mjs";
-import { copyCaptureFailure, copyCaptureKey, copyFinishItems, validateCaptureMessages, validateTime } from "./validation.mjs";
+import { captureMessageTimes, copyCaptureFailure, copyCaptureKey, copyFinishItems, validateTime } from "./validation.mjs";
 
 /** @typedef {import("@cairn-ink/core/ports").CaptureKey} CaptureKey */
 /** @typedef {import("@cairn-ink/core/ports").FinishResult} FinishResult */
 /** @typedef {import("@cairn-ink/core/ports").SourceRef} SourceRef */
 /** @typedef {import("./unit-of-work.mjs").State} State */
-/** @typedef {{status: "leased", expiresAtMs: number, token: string, dispatched: boolean}} Lease */
+/** @typedef {{status: "leased", expiresAtMs: number, token: string, dispatched: boolean,
+ * occurredAtMs: ReadonlyArray<number | null>}} Lease */
 /** @typedef {{key: CaptureKey} & (Lease | {status: "finished", result: FinishResult} |
  * {status: "abandoned", failure: ReturnType<typeof copyCaptureFailure>})} ClaimRecord */
+
+/** @param {CaptureKey} key */
+function claimIdentity({ scope: { owner, namespace }, client, eventId }) {
+  return JSON.stringify([owner, namespace, client, eventId]);
+}
+
+/** @param {ClaimRecord | undefined} claim @param {CaptureKey} key */
+function assertClaimKey(claim, key) {
+  if (claim && (claim.key.payloadDigest !== key.payloadDigest || claim.key.sessionId !== key.sessionId)) {
+    throw new CoreError("event_payload_conflict");
+  }
+}
 
 /** @param {State} state @param {string} token @param {number} nowMs */
 function liveClaim(state, token, nowMs) {
@@ -43,27 +56,25 @@ function copyResult(stored, pending) {
  * @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>["port"]} port
  * @param {ReturnType<typeof import("./memory-store.mjs").createMemoryStore>} store
  * @param {() => number} now
+ * @param {ReturnType<typeof import("./fact-match.mjs").createFactMatcher>} matchFacts
  * @returns {import("@cairn-ink/core/ports").StorageAdapter["capture"]}
  */
-export function createCapturePorts(port, { memories, finishWrites, readWritePolicy, counters }, now) {
+export function createCapturePorts(port, { memories, finishWrites, readWritePolicy, counters }, now, matchFacts) {
   return {
     async claim(tx, key, messages, options) {
       return port.capture(tx, { owner: tx?.owner }, () => {
         const copy = copyCaptureKey(key);
-        const { scope: { owner, namespace }, client, eventId, sessionId, payloadDigest } = copy;
-        if (owner !== tx.owner) throw new CoreError("internal_error");
-        validateCaptureMessages(messages);
+        if (copy.scope.owner !== tx.owner) throw new CoreError("internal_error");
+        const occurredAtMs = captureMessageTimes(messages);
         if (!options || typeof options !== "object" || Array.isArray(options)) throw new CoreError("invalid_input");
         const { leaseMs } = options;
         if (!Number.isSafeInteger(leaseMs) || leaseMs <= 0) throw new CoreError("invalid_input");
 
         return (getState, run) => {
-          const identity = JSON.stringify([owner, namespace, client, eventId]);
+          const identity = claimIdentity(copy);
           const state = getState();
           const previous = state.claims.get(identity);
-          if (previous && (previous.key.payloadDigest !== payloadDigest || previous.key.sessionId !== sessionId)) {
-            throw new CoreError("event_payload_conflict");
-          }
+          assertClaimKey(previous, copy);
           if (previous?.status === "finished") {
             return { status: "rawReplay", result: copyResult(previous.result, run.finishes.has(previous.result)) };
           }
@@ -75,7 +86,9 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
 
           const token = crypto.randomUUID();
           if (previous?.status === "leased") state.activeTokens.delete(previous.token);
-          state.claims.set(identity, { key: copy, status: "leased", token, expiresAtMs: nowMs + leaseMs, dispatched: false });
+          state.claims.set(identity, {
+            key: copy, status: "leased", token, expiresAtMs: nowMs + leaseMs, dispatched: false, occurredAtMs,
+          });
           state.activeTokens.set(token, identity);
           run.stateWritten = true;
           return { status: "claimed", token };
@@ -174,8 +187,48 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
       });
     },
 
-    // The privacy module's factBlocksIncoming will back these checks.
-    async eligible() { throw new CoreError("capability_unavailable"); },
-    async assertEligible() { throw new CoreError("capability_unavailable"); },
+    async eligible(tx, key, messages) {
+      const { scope, client, sessionId } = copyCaptureKey(key);
+      const occurredAtMs = captureMessageTimes(messages);
+      return port(tx, scope, false, (state) => {
+        const matcher = matchFacts(state.facts, scope);
+        if (matcher.blocksSession(client, sessionId)) return [];
+        const blocked = new Set(matcher.blockedMessages(client, sessionId, occurredAtMs));
+        return Array.from(occurredAtMs.keys()).filter((position) => !blocked.has(position));
+      });
+    },
+
+    async assertEligible(tx, key, positions) {
+      const copy = copyCaptureKey(key);
+      const { scope, client, sessionId } = copy;
+      return port.write(tx, scope, "conditional", () => {
+        if (!Array.isArray(positions)) throw new CoreError("invalid_input");
+        /** @type {Set<number>} */
+        const selected = new Set();
+        for (const position of positions) {
+          if (!Number.isSafeInteger(position) || position < 0 || selected.has(position)) {
+            throw new CoreError("invalid_input");
+          }
+          selected.add(position);
+        }
+        return (getState) => {
+          const state = getState();
+          const claim = state.claims.get(claimIdentity(copy));
+          assertClaimKey(claim, copy);
+          if (claim?.status !== "leased") throw new CoreError("stale_admission");
+          const nowMs = now();
+          validateTime(nowMs);
+          if (!(nowMs < claim.expiresAtMs)) throw new CoreError("stale_admission");
+          const occurredAtMs = Array.from(selected, (position) => {
+            if (position >= claim.occurredAtMs.length) throw new CoreError("invalid_input");
+            return claim.occurredAtMs[position];
+          });
+          const matcher = matchFacts(state.facts, scope);
+          if (matcher.blocksSession(client, sessionId) || matcher.blockedMessages(client, sessionId, occurredAtMs).length) {
+            throw new CoreError("suppressed");
+          }
+        };
+      });
+    },
   };
 }

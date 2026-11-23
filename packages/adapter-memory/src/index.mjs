@@ -34,7 +34,7 @@ export function createMemoryAdapter(options = {}) {
     capabilities: flags,
     uow,
     memories: store.memories,
-    capture: createCapturePorts(port, store, now),
+    capture: createCapturePorts(port, store, now, matchFacts),
     suppressions,
     pause: createPauseStore(port),
     keys,

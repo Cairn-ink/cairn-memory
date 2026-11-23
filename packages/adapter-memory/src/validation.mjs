@@ -39,13 +39,18 @@ export function copyCaptureKey(key) {
 }
 
 /** @param {readonly import("@cairn-ink/core/ports").CaptureMessage[]} messages */
-export function validateCaptureMessages(messages) {
+export function captureMessageTimes(messages) {
   if (!Array.isArray(messages)) invalid();
+  /** @type {Array<number | null>} */
+  const times = [];
   for (const message of messages) {
     if (!message || typeof message.id !== "string" || message.id.length > 512 || !roles.includes(message.role) ||
-      typeof message.content !== "string" ||
-      (message.occurredAtMs !== null && !Number.isSafeInteger(message.occurredAtMs))) invalid();
+      typeof message.content !== "string") invalid();
+    const { occurredAtMs } = message;
+    if (occurredAtMs !== null && !Number.isSafeInteger(occurredAtMs)) invalid();
+    times.push(occurredAtMs);
   }
+  return times;
 }
 
 /** @param {{code: string, retryable: boolean}} failure */

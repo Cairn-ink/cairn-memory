@@ -124,6 +124,23 @@ export function createFactMatcher(vectorSuppression, hashSessionKey) {
         factBlocksIncoming(stored, { scope, passages: [], session: { client, sessionId } }, capture) !== false);
     }
 
+    /** @param {string} client @param {string | undefined} sessionId
+     * @param {ReadonlyArray<number | null>} occurredAtMs
+     */
+    function blockedMessages(client, sessionId, occurredAtMs) {
+      const blocked = [];
+      const windows = scoped.filter((stored) => isKind(stored, "window"));
+      // Core's window comparison reads the client and time, including for messages without a session ID.
+      const session = { client, sessionId: sessionId ?? "" };
+      for (const [index, time] of occurredAtMs.entries()) {
+        if (windows.some((stored) => factBlocksIncoming(stored,
+          { scope, passages: [], session, occurredAtMs: time }, capture) !== false)) {
+          blocked.push(index);
+        }
+      }
+      return blocked;
+    }
+
     return {
       /** @param {Entry} entry */
       hides(entry) {
@@ -141,25 +158,14 @@ export function createFactMatcher(vectorSuppression, hashSessionKey) {
       },
 
       blocksSession,
+      blockedMessages,
 
       /** @param {Parameters<SuppressionStore["snapshot"]>[2]} candidates */
       snapshot({ client, sessionId, occurredAtMs, passages }) {
         const projected = passages === undefined ? undefined : projectPassages(passages);
-        const blockedMessages = [];
-        if (client != null && occurredAtMs) {
-          const windows = scoped.filter((stored) => isKind(stored, "window"));
-          // Core's window comparison reads the client and time, including for messages without a session ID.
-          const session = { client, sessionId: sessionId ?? "" };
-          for (const [index, time] of occurredAtMs.entries()) {
-            if (windows.some((stored) => factBlocksIncoming(stored,
-              { scope, passages: [], session, occurredAtMs: time }, capture) !== false)) {
-              blockedMessages.push(index);
-            }
-          }
-        }
         return {
           blockedSession: blocksSession(client ?? null, sessionId ?? null),
-          blockedMessages,
+          blockedMessages: client != null && occurredAtMs ? blockedMessages(client, sessionId, occurredAtMs) : [],
           passages: structuredClone(projected === undefined ? texts : matchingPassages(texts, projected)),
         };
       },
