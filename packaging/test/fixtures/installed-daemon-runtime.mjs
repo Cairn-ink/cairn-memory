@@ -280,16 +280,19 @@ export async function installedDaemonRuntime({ diagnostic = () => {}, recordLaun
         if (agreement) {
           // Publication selection is independent of the recorded digest. Compare
           // each matching launch by package inode and its actual configuration.
+          let matches = 0;
           for (const launch of launches.filter(launch => launch.db === db)) {
             const vector = launch.session.args.slice(1), value = flag => vector[vector.indexOf(flag) + 1];
             const config = descriptor.identity.configuration, pkg = descriptor.identity.package;
-            if (pkg.path !== launch.root || pkg.dev !== launch.dev || pkg.ino !== launch.ino ||
+            if (pkg.path !== launch.root || pkg.dev !== launch.dev || pkg.ino !== launch.ino || descriptor.identity.build !== launch.build ||
                 config.namespace.ownerId !== value('--owner') || config.namespace.projectId !== (vector.includes('--project') ? value('--project') : null) ||
                 config.raw !== !vector.includes('--no-raw') || config.rawSearch !== !vector.includes('--no-raw-search') ||
                 config.contextRead !== (vector.includes('--no-context-read') ? false : 'context-read-v1')) continue;
+            matches++;
             assert.ok(launch.prefixes.size > 0, 'publishing launch requires ownership recording');
             for (const recorded of launch.prefixes) assert.equal(recorded, prefix, 'recorded launch prefix agrees with published identity');
           }
+          assert.ok(matches > 0, 'published identity requires a matching recorded launch');
         }
         if (!owners.some(owner => sameOwner(owner, descriptor.owner))) owners.push(descriptor.owner);
         const lock = await readPrivate(directory, join(directory.path, prefix + '.lock'), { fileClass: 'lock', missing: true });
