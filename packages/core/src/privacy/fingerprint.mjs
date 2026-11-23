@@ -1,6 +1,6 @@
 import { CoreError } from "../errors.mjs";
 import { redactV1, PRIVACY_REDACTION_VERSIONS } from "./redact.mjs";
-import { cleanContent, normalizeForHash, prepareCoreText } from "./text.mjs";
+import { boundedText, cleanContent, normalizeForHash, prepareCoreText } from "./text.mjs";
 
 /** @typedef {import("./fingerprint.mjs").FingerprintKey} FingerprintKey */
 /** @typedef {import("./fingerprint.mjs").FingerprintLabels} FingerprintLabels */
@@ -166,10 +166,13 @@ export async function hostedV1Digest(raw) {
 
 /** @param {unknown} raw @param {number} max @param {number} rawMax */
 function engineLegacyText(raw, max, rawMax) {
-  if (typeof raw !== "string" || raw.length > rawMax) return;
-  const text = redactV1(raw.normalize("NFKC")).replace(/\s+/gu, " ").trim();
-  if (!text || text === "[REDACTED]" || text.includes("\0") || text.length > max) return;
-  return text.toLowerCase();
+  try {
+    return boundedText(raw, max, false, rawMax).toLowerCase();
+  } catch (error) {
+    // The engine suppression admission wrapper translates bounded-text refusals.
+    if (!(error instanceof CoreError) || error.code !== "invalid_text") throw error;
+    return undefined;
+  }
 }
 
 /** @param {string} text @returns {Promise<TextDigest>} */

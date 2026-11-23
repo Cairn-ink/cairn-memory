@@ -128,3 +128,23 @@ test("full containment withholds on an unknown key, malformed shingles, or inval
   assert.ok(withholdsPassage({ ...disjoint, shingles: Array(1) }, fact));
   assert.ok(withholdsPassage(disjoint, fact, Number.NaN));
 });
+
+test("explicit save helpers reject a rotated active key even with empty stored shingles", () => {
+  const text = passageOf({ sha: "a", shingles: [], keyId: "old" });
+  const fact = textFact(text, { origin: "edit", sourceMemory: { id: "m", createdAtMs: 42 } });
+  const candidate = passageOf({ sha: "b", shingles: ["aa"], keyId: "new" });
+  assert.equal(blocksMemoryPassage([candidate], [fact], { id: "new" }), true);
+});
+
+test("withholding helpers distinguish empty lists from unavailable shingles", () => {
+  const empty = passageOf({ sha: "a", shingles: [], keyId: "k" });
+  const unavailable = passageOf({ sha: "b", shingles: null, keyId: "k" });
+  const activeKey = { id: "k" };
+  const decisions = [];
+  for (const [candidate, reference] of [[empty, unavailable], [unavailable, empty]]) {
+    const fact = textFact(reference);
+    decisions.push(withholdsPassage(candidate, fact), withholdsAnyPassage([candidate], [fact]),
+      blocksMemoryPassage([candidate, candidate], [fact], activeKey));
+  }
+  assert.deepEqual(decisions, [true, true, true, true, true, true]);
+});

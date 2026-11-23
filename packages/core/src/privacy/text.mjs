@@ -1,5 +1,25 @@
 import { CoreError } from "../errors.mjs";
-import { redactCore } from "./redact.mjs";
+import { redactCore, redactV1 } from "./redact.mjs";
+
+/** @param {unknown} value @param {number} [rawMax] */
+export function normalizeBoundedText(value, rawMax = 20_000) {
+  if (typeof value !== "string" || value.length > rawMax) throw new CoreError("invalid_text");
+  const clean = redactV1(value.normalize("NFKC")).replace(/\s+/gu, " ").trim();
+  if (!clean || clean === "[REDACTED]" || clean.includes("\0")) throw new CoreError("invalid_text");
+  return clean;
+}
+
+/** @param {unknown} value @param {number} max @param {boolean} [truncate] @param {number} [rawMax] */
+export function boundedText(value, max, truncate = false, rawMax = 20_000) {
+  const clean = normalizeBoundedText(value, rawMax);
+  if (!truncate && clean.length > max) throw new CoreError("invalid_text");
+  let result = "";
+  for (const point of clean) {
+    if (result.length + point.length > max) break;
+    result += point;
+  }
+  return result;
+}
 
 /** @param {string} text */
 export function cleanContent(text) {
