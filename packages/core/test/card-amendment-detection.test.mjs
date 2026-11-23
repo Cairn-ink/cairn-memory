@@ -218,7 +218,11 @@ const failures = [
     signal.addEventListener("abort", () => reject(signal.reason), { once: true }))],
 ];
 for (const [reason, fail] of failures) {
-  test(`detect ${reason} yields no amendments and records the failure`, async () => {
+  test(`detect ${reason} yields no amendments and records the failure`, async (t) => {
+    if (reason === "timeout") {
+      const keepalive = setInterval(() => {}, 1_000);
+      t.after(() => clearInterval(keepalive));
+    }
     const model = makeModel([], []);
     model.detectChanges = fail;
     const { amendments, counters } = await detectCardAmendments({
@@ -228,7 +232,11 @@ for (const [reason, fail] of failures) {
     assert.deepEqual(counters, { detect_calls: 1, [`detect_${reason}`]: 1 });
   });
 
-  test(`verify ${reason} discards an amendment accepted earlier in the same capture`, async () => {
+  test(`verify ${reason} discards an amendment accepted earlier in the same capture`, async (t) => {
+    if (reason === "timeout") {
+      const keepalive = setInterval(() => {}, 1_000);
+      t.after(() => clearInterval(keepalive));
+    }
     const model = makeModel([change(old.id), change(old.id, "Use a blue label.")], [true]);
     let calls = 0;
     const verify = model.verifyChange.bind(model);
