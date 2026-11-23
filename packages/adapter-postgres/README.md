@@ -134,9 +134,19 @@ copying all remaining facts for that owner. Receipt-less rows use their stored
 source and creation/write times for session and window checks.
 
 `createPostgresDigestGate(uow, keyIdsForOwner)` returns
-`rowsMissingKeyedDigest(owner)`. Supply the owner's current key ID for the switch
-gate and require a zero count before enabling the adapter. A row with no
-comparable digest is withheld when evaluating an HMAC-only fact.
+`rowsMissingKeyedDigest(owner)`. Supply the owner's current key ID for cutover.
+The gate counts each row missing evidence for an accepted key or for any live
+HMAC-only fact domain, including hosted facts during dual-read. Require a zero
+count before enabling the adapter. For each fact, admission and visibility
+withhold candidates without a comparable MAC. MAC domains match on algorithm,
+key ID, and pipeline label.
+
+With the owner's memory writers paused, the host's cutover script can call
+`backfillPostgresHostedDigests(uow, owner, { keyId, redactionVersion, macForText })`
+for each required hosted key. The callback receives stored text and returns the
+legacy exact MAC as 64 lowercase hex characters. The host keeps the signing key.
+The backfill appends missing `hosted-v1` digests in one transaction per call and
+returns the number of rows updated. Recheck the digest gate before cutover.
 
 A receipt with `forgotten_at` set is a replay tombstone. Its original memory ID
 serves as part of the storage key. Replacement and erasure delete active receipts

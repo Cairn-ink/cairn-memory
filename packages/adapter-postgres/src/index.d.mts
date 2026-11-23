@@ -36,6 +36,12 @@ export function createPostgresSuppressionStore(): Pick<SuppressionStore, "writeF
 export function createPostgresMemoryStore(options?: { nearDuplicate?: boolean; allowNonNullNamespace?: boolean }): MemoryStore;
 export function createPostgresDigestGate(uow: UnitOfWork,
   keyIdsForOwner: (owner: string) => readonly string[] | Promise<readonly string[]>): (owner: string) => Promise<number>;
+/** Append missing hosted-v1 MACs for one owner's existing rows. Returns the number updated. */
+export function backfillPostgresHostedDigests(uow: UnitOfWork, owner: string, options: {
+  keyId: string;
+  redactionVersion: number;
+  macForText: (text: string) => string | Promise<string>;
+}): Promise<number>;
 export function createPostgresMemoryReads(): {
   recent: ListRecent;
   snapshot: ReadSnapshot;

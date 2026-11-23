@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import test from "node:test";
-import { capabilities, decideWrite, normalizeForHash } from "@cairn-ink/core";
+import { capabilities, coreDigest, decideWrite, legacyExactMac, normalizeForHash, userFingerprintKey } from "@cairn-ink/core";
 import { forgetMethod } from "../../core/src/service/forget.mjs";
 import { importMethod } from "../../core/src/service/import.mjs";
+import { cases, FAKE_MASTER, inputOf, OWNERS } from "../../core/test/privacy-vectors.mjs";
 import * as postgres from "../src/index.mjs";
 import {
   createPostgresMemoryReads, createPostgresMemoryStore, createPostgresPauseStore,
@@ -216,6 +218,85 @@ test("P1-5 keyed digest gate counts missing rows and HMAC-only visibility evalua
   assert.equal(await rowsMissingKeyedDigest(owner), 0);
 });
 
+const hostedFingerprints = JSON.parse(readFileSync(new URL("./fixtures/fingerprint-labels.json", import.meta.url), "utf8"));
+for (const caseId of ["fingerprint-forget-secret", "fingerprint-forget-fullwidth-secret"]) {
+  test(`P1-5 hosted HMAC domain ${caseId} fails closed until backfill`, migrationDbTest, async (t) => {
+    const f = await fixture(t);
+    const labels = postgres.HOSTED_FINGERPRINT_LABELS;
+    const key = await userFingerprintKey(FAKE_MASTER, OWNERS[0], labels);
+    const { text_hmac: mac, key_id: hostedKeyId } = hostedFingerprints.cases[caseId][OWNERS[0]];
+    const text = inputOf(cases.find(({ id }) => id === caseId));
+    assert.equal(key.id, hostedKeyId);
+    assert.equal(await legacyExactMac(text, key, labels), mac);
+    const miss = [0, 1, ...Array(1534).fill(0)];
+    const rows = await Promise.all([text, "unrelated wording"].map(async wording => ({
+      ...content(wording, miss), digests: [await coreDigest(wording, key)],
+    })));
+    assert.notEqual(rows[0].digests[0].value, mac);
+    const [matched, different] = await f.run(owner, {}, async tx => [
+      await f.memories.insert(tx, scope, rows[0], [], 10),
+      await f.memories.insert(tx, scope, rows[1], [], 11),
+    ]);
+    await hostedMemory(f.pool, "foreign", "foreign wording", { user: other });
+    await f.pool.query("UPDATE core_owner_state SET legacy_facts_ready = true WHERE user_id = $1", [owner]);
+    await f.pool.query(`INSERT INTO suppressions (id, user_id, kind, text_hash, text_hmac, key_id, embedding)
+      VALUES ('legacy-mac', $1, 'text', $2, $3, $4, $5)`,
+    [owner, "hmac:" + mac, mac, hostedKeyId, JSON.stringify(content("").embedding.vector)]);
+    const visible = () => f.run(owner, readOnly, tx =>
+      f.fence.assertVisible(tx, readSet, [ref(matched.id), ref(different.id)]));
+    const admission = (digests) => f.run(owner, readOnly, async tx => {
+      // Distinct hashes and a vector miss isolate the text-fact decision from dedupe.
+      const incoming = rows.map((row, i) => ({ textHash: content("incoming " + i).textHash, digests: digests[i], embedding: miss }));
+      const results = [];
+      for (const mode of ["hash", "full"]) {
+        const policy = await f.memories.readWritePolicy(tx, scope, incoming, rows[0].source, mode, undefined, { nearDuplicate: false });
+        results.push(policy.blockedPositions);
+      }
+      return results;
+    });
+    const rowsMissing = postgres.createPostgresDigestGate(f.uow, id => id === owner ? [hostedKeyId] : []);
+    const rowsMissingLiveDomains = postgres.createPostgresDigestGate(f.uow, () => []);
+    assert.deepEqual({
+      blocked: await admission(rows.map(row => row.digests)),
+      visible: (await visible()).length,
+      missing: await rowsMissing(owner),
+    }, { blocked: [[0, 1], [0, 1]], visible: 0, missing: 2 });
+    assert.equal(await rowsMissingLiveDomains(owner), 2);
+    const backfill = (macForText) => postgres.backfillPostgresHostedDigests(f.uow, owner, {
+      keyId: hostedKeyId, redactionVersion: 1, macForText,
+    });
+    let calls = 0;
+    await assert.rejects(backfill(wording => ++calls === 1 ? legacyExactMac(wording, key, labels) : "bad-mac"), { code: "invalid_input" });
+    assert.equal(await rowsMissing(owner), 2);
+    assert.equal(await backfill(wording => legacyExactMac(wording, key, labels)), 2);
+    assert.equal(await backfill(() => { assert.fail("an existing digest should be reused"); }), 0);
+    const { rows: stored } = await f.pool.query("SELECT core_digests FROM memories WHERE user_id = $1 ORDER BY updated_at", [owner]);
+    for (const [i, { core_digests }] of stored.entries()) {
+      assert.deepEqual(core_digests.slice(0, rows[i].digests.length), rows[i].digests);
+      assert.deepEqual(core_digests.at(-1), { alg: "hmac", pipeline: "hosted-v1", redactionVersion: 1,
+        keyId: hostedKeyId, value: await legacyExactMac(rows[i].text, key, labels) });
+    }
+    assert.deepEqual(await visible(), [ref(different.id)]);
+    assert.deepEqual(await admission(stored.map(row => row.core_digests)), [[0], [0]]);
+    const hostedMiss = stored[1].core_digests.at(-1);
+    assert.deepEqual(await admission([
+      [hostedMiss, { ...rows[0].digests[0], value: mac }],
+      [hostedMiss, { ...hostedMiss, value: mac, keyId: "retired" }],
+    ]), [[], []]);
+    assert.equal(await rowsMissing(owner), 0);
+    assert.equal(await rowsMissingLiveDomains(owner), 0);
+    assert.equal(await rowsMissing(other), 0);
+    assert.equal((await f.pool.query("SELECT core_digests FROM memories WHERE user_id = $1", [other])).rows[0].core_digests, null);
+
+    // A live core fact under a second key requires its own domain even after hosted backfill.
+    const coreFact = { ...scope, kind: "text", mode: "exact", origin: "forget", actionId: "second-key",
+      text: { digests: [{ ...rows[0].digests[0], keyId }] } };
+    await f.run(owner, {}, tx => f.suppressions.writeFact(tx, coreFact, hash(coreFact.actionId)));
+    assert.equal(await rowsMissing(owner), 2);
+    assert.deepEqual(await visible(), []);
+  });
+}
+
 test("P1-6 uses an owner-scoped bounded pgvector projection and skips it on import", migrationDbTest, async (t) => {
   const observed = [];
   const f = await fixture(t, (sql, result) => {
@@ -225,14 +306,23 @@ test("P1-6 uses an owner-scoped bounded pgvector projection and skips it on impo
     SELECT $1, 'near-' || i, 'near-' || i, lpad(i::text, 64, '0'), 'fact', $2, 'fixture', 'plugin'
     FROM generate_series(1, 64) i`, [owner, JSON.stringify(content("").embedding.vector)]);
   await hostedMemory(f.pool, "foreign-near", "foreign near", { user: other });
+  await f.pool.query("UPDATE memories SET updated_at = statement_timestamp() + interval '1 day' WHERE user_id = $1", [other]);
+  await f.pool.query(`INSERT INTO memories
+    (user_id, id, text, text_hash, kind, embedding, embedding_model, source_kind, core_namespace, updated_at)
+    VALUES ($1, 'other-namespace', 'other namespace', $2, 'fact', $3, 'fixture', 'plugin', '"project"',
+      statement_timestamp() + interval '1 day')`,
+  [owner, hash("other namespace"), JSON.stringify(content("").embedding.vector)]);
   const query = { textHash: content("new").textHash, embedding: content("").embedding.vector };
-  const [matches] = await f.run(owner, readOnly, tx => f.memories.findDuplicates(tx, scope, [query], { nearDistance: 0.08 }));
+  const matches = await f.run(owner, readOnly, tx => f.memories.findDuplicates(tx, scope,
+    [query, { ...query, textHash: content("another").textHash }], { nearDistance: 0.08 }));
   const vectorReads = observed.filter(({ sql }) => /ORDER BY[^;]*<=>[^;]*LIMIT/su.test(sql));
-  assert.equal(vectorReads.length, 1);
-  assert.ok(matches.length > 0 && matches.length < 64);
-  assert.equal(vectorReads[0].rows.length, matches.length);
-  assert.ok(matches.every(({ id }) => id.startsWith("near-")));
-  assert.ok(vectorReads[0].rows.every(row => !("embedding" in row) && !("text" in row)));
+  assert.equal(vectorReads.length, 2);
+  for (const [i, { rows }] of vectorReads.entries()) {
+    assert.equal(rows.length, 32);
+    assert.equal(matches[i].filter(match => match.kind === "stored").length, 32);
+    assert.ok(rows.every(row => row.id.startsWith("near-") && row.core_namespace === null));
+    assert.ok(rows.every(row => !("embedding" in row) && !("text" in row)));
+  }
   observed.length = 0;
   const importMemories = importMethod(await writeDeps(f));
   assert.deepEqual(await importMemories(scope, [{ text: "imported wording", kind: "fact" }], content("").source),
