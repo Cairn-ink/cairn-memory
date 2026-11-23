@@ -39,7 +39,8 @@ function fixture({ rows = [a, b], pending = guards, topics = [topic('existing')]
       async pending(tx, scope, query) {
         check(tx, scope, true);
         assert.deepEqual(query, { limit: 5 });
-        return pending;
+        return pending.filter(({ memoryId }) => !calls.some((call) =>
+          call.method === 'markFailed' && call.memoryIds.includes(memoryId))).slice(0, query.limit);
       },
       async catalog(tx, scope, query) {
         check(tx, scope, true);
@@ -141,9 +142,26 @@ test('missing and changed pending entries are excluded before classification', a
   assert.deepEqual(empty.calls, []);
 });
 
-test('CoreError reports retryability and records only failures that are neither paused nor retryable', async () => {
+test('a provider_error on the oldest five pending memories lets the sixth run next', async () => {
+  const rows = Array.from({ length: 6 }, (_, i) => ({ ...a, id: `memory-${i + 1}` }));
+  const pending = rows.map(({ id, revision }) => ({ memoryId: id, revision }));
+  let batches = 0;
+  const f = fixture({ rows, pending, classify(snapshot) {
+    if (++batches === 1) throw new CoreError('provider_error');
+    return abstain(snapshot);
+  } });
+  assert.deepEqual(await f.run(), { status: 'failed', error: { code: 'provider_error', retryable: true } });
+  assert.deepEqual(await f.run(), {
+    status: 'applied', placed: [{ memoryId: rows[5].id, topicIds: [] }], createdTopics: [],
+  });
+  assert.deepEqual(f.calls[1], {
+    method: 'markFailed', memoryIds: rows.slice(0, 5).map(({ id }) => id), code: 'provider_error',
+  });
+});
+
+test('CoreError reports retryability and records every failure except paused kinds', async () => {
   for (const [code, retryable, recorded] of [
-    ['storage_busy', true, false], ['provider_error', true, false],
+    ['storage_busy', true, true], ['provider_error', true, true],
     ['capture_evidence_closed', false, false], ['invalid_model_output', false, true],
   ]) {
     const f = fixture({ classify: () => { throw new CoreError(code); } });

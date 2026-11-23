@@ -1,5 +1,5 @@
 import {
-  CoreError, coalesceNewTopics, compareCatalogTopics, compareSortKey, compareUtf8, isErrorCode,
+  CoreError, ERROR_CODES, coalesceNewTopics, compareCatalogTopics, compareSortKey, compareUtf8, isErrorCode,
   memoryGuards, placementProposal, titleKey,
 } from "@cairn-ink/core";
 import { decodePayload, encodePayload, newestFirst } from "./cursor.mjs";
@@ -87,7 +87,9 @@ function checkParent(topics, id, level) {
 }
 
 /** @type {typeof import("./topics.d.mts").createTopicStore} */
-export function createTopicStore(port, _flags, newId, now, matchFacts) {
+export function createTopicStore(port, _flags, newId, now, matchFacts, {
+  topicRetryAfterMs = 3_600_000, topicMaxAttempts = 3,
+}) {
   /** @param {State} state @param {Scope} scope */
   const view = (state, scope) => visibility(state, scope, matchFacts);
 
@@ -98,10 +100,16 @@ export function createTopicStore(port, _flags, newId, now, matchFacts) {
         if (limit > 5) throw new CoreError("invalid_input");
         const scoped = state.topics.get(scope.namespace);
         const { current } = view(state, scope);
+        /** @type {number | undefined} */
+        let nowMs;
         return [...(state.rows.get(scope.namespace)?.values() ?? [])]
           .map(({ row }) => row)
-          .filter(({ id, revision }) => current(id) && scoped?.outcomes.get(id)?.revision !== revision &&
-            scoped?.failures.get(id)?.revision !== revision)
+          .filter(({ id, revision }) => {
+            if (!current(id) || scoped?.outcomes.get(id)?.revision === revision) return false;
+            const failure = scoped?.failures.get(id);
+            return failure?.revision !== revision || (ERROR_CODES[failure.code] === "retryable" &&
+              failure.attempts < topicMaxAttempts && (nowMs ??= now()) - failure.failedAtMs >= topicRetryAfterMs);
+          })
           .sort((a, b) => compareSortKey(writeTime(a.createdAtMs).updatedAtUs, writeTime(b.createdAtMs).updatedAtUs) ||
             compareUtf8(a.id, b.id))
           .slice(0, limit).map(({ id, revision }) => ({ memoryId: id, revision }));
@@ -210,10 +218,15 @@ export function createTopicStore(port, _flags, newId, now, matchFacts) {
             memoryIds.some((id) => typeof id !== "string" || !id)) throw new CoreError("invalid_input");
         const state = getState();
         const { current } = view(state, scope);
-        for (const id of memoryIds) {
+        /** @type {number | undefined} */
+        let failedAtMs;
+        for (const id of new Set(memoryIds)) {
           const row = current(id);
           if (!row) continue;
-          ensureTopicState(state, scope).failures.set(id, { revision: row.revision, code });
+          const { failures } = ensureTopicState(state, scope);
+          const previous = failures.get(id);
+          const attempts = previous?.revision === row.revision ? previous.attempts + 1 : 1;
+          failures.set(id, { revision: row.revision, code, attempts, failedAtMs: failedAtMs ??= now() });
           run.stateWritten = true;
         }
       });

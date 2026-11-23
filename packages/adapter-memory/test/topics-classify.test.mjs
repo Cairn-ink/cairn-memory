@@ -46,31 +46,57 @@ test('placePending classifies and applies on the memory adapter', async () => {
   });
 });
 
-async function pendingFixture(output = { items: [{ memoryId: 'm0', parentIds: [] }] }) {
-  const { uow, memories, placement } = createMemoryAdapter({
-    capabilities: { placement: true }, newId: () => 'queued-memory',
+async function pendingFixture({ output, count = 1, ...adapterOptions } = {}) {
+  let ids = 0;
+  const { uow, memories, placement, harness } = createMemoryAdapter({
+    capabilities: { placement: true }, newId: () => `queued-memory-${++ids}`, now: () => 100, ...adapterOptions,
   });
   const scope = { owner: 'owner', namespace: null };
-  const { id: memoryId, revision } = await uow.run(scope.owner, { pauseLock: true }, (tx) => memories.insert(tx, scope, {
+  const content = {
     kind: 'fact', origin: 'explicit', text: 'A queued memory.', textHash: 'sha256:' + '2'.repeat(64),
     confidence: 1, embedding: null, source: { kind: 'mcp', client: null, sessionId: null },
-  }, [], 10));
+  };
+  const queued = await uow.run(scope.owner, { pauseLock: true }, async (tx) => {
+    const rows = [];
+    for (let i = 0; i < count; i++) {
+      const { id: memoryId, revision } = await memories.insert(tx, scope, {
+        ...content, text: `Queued memory ${i + 1}.`, textHash: 'sha256:' + String(i + 1).repeat(64),
+      }, [], 10 + i);
+      rows.push({ memoryId, revision });
+    }
+    return rows;
+  });
+  const [memory] = queued;
   let modelCalls = 0;
   const model = {
     model: 'scripted', contextWindow: 8192, countTokens: () => 1,
-    async call() {
+    async call(_stage, { input }) {
       modelCalls++;
-      return output;
+      return output ?? { items: input.memories.map(({ id }) => ({ memoryId: id, parentIds: [] })) };
     },
   };
   const options = { uow, scope, memories, placement, model, gate: openGate };
   return {
-    placement, memory: { memoryId, revision },
+    placement, memory, queued, advanceClock: harness.advanceClock,
     run: (overrides) => placePending({ ...options, ...overrides }),
     pending: () => uow.run(scope.owner, { readOnly: true }, (tx) => placement.pending(tx, scope, { limit: 5 })),
+    async failures() {
+      const [owner] = await harness.dump();
+      return owner.topics[0]?.failures ?? [];
+    },
+    async revise() {
+      const { memoryId, revision } = memory;
+      const row = await uow.run(scope.owner, { pauseLock: true }, (tx) => memories.replaceContent(tx, scope,
+        memoryId, revision, { ...content, text: 'Revised memory.' }, null, 20));
+      return { memoryId, revision: row.revision };
+    },
     calls: () => modelCalls,
-    applied: { status: 'applied', placed: [{ memoryId, topicIds: [] }], createdTopics: [] },
+    applied: applied(queued.slice(0, 5)),
   };
+}
+
+function applied(memories) {
+  return { status: 'applied', placed: memories.map(({ memoryId }) => ({ memoryId, topicIds: [] })), createdTopics: [] };
 }
 
 test('a batch paused at dispatch leaves the memory pending for the next open batch', async () => {
@@ -82,13 +108,15 @@ test('a batch paused at dispatch leaves the memory pending for the next open bat
   };
   assert.deepEqual(await f.run({ gate }), { status: 'failed', error: { code: 'capture_paused', retryable: false } });
   assert.equal(f.calls(), 0);
+  assert.deepEqual(await f.failures(), []);
   assert.deepEqual(await f.pending(), [f.memory]);
   assert.deepEqual(await f.run(), f.applied);
   assert.equal(f.calls(), 1);
 });
 
-test('a batch hit by storage_busy during apply leaves the memory pending for the next batch', async () => {
-  const f = await pendingFixture();
+test('storage_busy during apply gives other memories a turn and retries after the configured window', async () => {
+  const retryAfterMs = 100;
+  const f = await pendingFixture({ count: 6, topicRetryAfterMs: retryAfterMs });
   let attempts = 0;
   const placement = {
     ...f.placement,
@@ -99,14 +127,40 @@ test('a batch hit by storage_busy during apply leaves the memory pending for the
   };
   assert.deepEqual(await f.run({ placement }), { status: 'failed', error: { code: 'storage_busy', retryable: true } });
   assert.equal(f.calls(), 1);
-  assert.deepEqual(await f.pending(), [f.memory]);
+  const failures = await f.failures();
+  assert.deepEqual(await f.run({ placement }), applied(f.queued.slice(5)));
+  assert.deepEqual(failures.map(([id, { revision, code }]) => ({ memoryId: id, revision, code })),
+    f.queued.slice(0, 5).map((memory) => ({ ...memory, code: 'storage_busy' })));
+  await f.advanceClock(retryAfterMs - 1);
+  assert.deepEqual(await f.run({ placement }), { status: 'idle' });
+  await f.advanceClock(1);
+  assert.deepEqual(await f.pending(), f.queued.slice(0, 5));
   assert.deepEqual(await f.run({ placement }), f.applied);
-  assert.equal(f.calls(), 2);
-  assert.equal(attempts, 2);
+  assert.equal(f.calls(), 3);
+  assert.equal(attempts, 3);
+});
+
+test('three retryable failures exhaust attempts until the memory revision changes', async () => {
+  const f = await pendingFixture();
+  const placement = {
+    ...f.placement,
+    async applyPlacement() { throw new CoreError('storage_busy'); },
+  };
+  for (let attempt = 0; attempt < 3; attempt++) {
+    assert.deepEqual(await f.run({ placement }), { status: 'failed', error: { code: 'storage_busy', retryable: true } });
+    await f.advanceClock(3_600_000);
+  }
+  assert.deepEqual(await f.pending(), []);
+  assert.deepEqual(await f.run(), { status: 'idle' });
+  assert.deepEqual(await f.pending(), []);
+  const revised = await f.revise();
+  assert.notEqual(revised.revision, f.memory.revision);
+  assert.deepEqual(await f.pending(), [revised]);
+  assert.deepEqual(await f.run(), f.applied);
 });
 
 test('a batch with invalid model output records the failure and is skipped on the next run', async () => {
-  const f = await pendingFixture({ items: [] });
+  const f = await pendingFixture({ output: { items: [] } });
   assert.deepEqual(await f.run(), { status: 'failed', error: { code: 'invalid_model_output', retryable: false } });
   assert.deepEqual(await f.pending(), []);
   assert.deepEqual(await f.run(), { status: 'idle' });

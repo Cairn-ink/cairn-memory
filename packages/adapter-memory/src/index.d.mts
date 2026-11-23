@@ -9,6 +9,8 @@ export interface MemoryAdapterOptions {
   capabilities?: Partial<Record<Capability, boolean>>;
   newId?: () => string;
   now?: () => number;
+  topicRetryAfterMs?: number;
+  topicMaxAttempts?: number;
   sessionRefs?: "plain" | "hashed";
   hashSessionKey?: FactMatchPolicy["hashSessionKey"];
   fingerprint?: { secret: string; labels: FingerprintLabels } | null;

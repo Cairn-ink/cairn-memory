@@ -24,7 +24,7 @@ interface TopicPage {
 
 /** Optional under the placement capability. Every operation is scoped to a live transaction. */
 export interface TopicStore {
-  /** Oldest current memories without a placement outcome or failure at their revision. Limit 1–5. */
+  /** Oldest current memories at their revision with no placement outcome and either no failure or a retryable failure eligible under host config. The memory store defaults to a 1-hour retry window and 3 failed attempts. Limit 1–5. */
   pending(tx: Tx, scope: Scope, query: { limit: number }): Promise<MemoryGuard[]>;
   /** Includes empty topics. A change to the owner's index revision invalidates earlier cursors. */
   catalog(tx: Tx, scope: Scope, query: TopicPage): Promise<{

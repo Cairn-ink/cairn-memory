@@ -76,7 +76,7 @@ async function runPendingBatch({ uow, scope, placement, memories }, classify) {
   } catch (error) {
     if (!isCoreError(error)) throw error;
     const { code, kind, retryable } = error;
-    if (kind !== 'paused' && !retryable) {
+    if (kind !== 'paused') {
       const ids = basedOn.memoryRevisions.map(({ memoryId }) => memoryId);
       try {
         await uow.run(scope.owner, {}, (tx) => placement.markFailed(tx, scope, ids, code));

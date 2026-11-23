@@ -40,7 +40,7 @@ export function createMemoryAdapter(options = {}) {
     pause: createPauseStore(port),
     keys,
     ...createRetrievalPorts(port, flags, matchFacts),
-    ...(flags.placement && { placement: createTopicStore(port, flags, newId, now, matchFacts) }),
+    ...(flags.placement && { placement: createTopicStore(port, flags, newId, now, matchFacts, options) }),
     nativeErrorMap,
     harness: {
       async dump() { return dump(); },
