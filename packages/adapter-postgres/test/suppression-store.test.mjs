@@ -20,14 +20,19 @@ const selectEpoch = "SELECT fact_epoch::text FROM core_owner_state WHERE user_id
 const code = (code) => ({ name: "CoreError", message: code, code });
 
 function stub(...replies) {
+  return controlledStub(() => replies.shift());
+}
+
+function controlledStub(reply) {
   const calls = [];
   const lifecycle = [];
   const uow = createPostgresUnitOfWork({ async connect() {
     return { async query(sql, values) {
       const command = sql.split(" ", 1)[0];
       if (values && !sql.startsWith("SELECT pg_advisory_")) {
-        calls.push([sql.replace(/\s+/gu, " "), values]);
-        const rows = replies.shift();
+        const statement = sql.replace(/\s+/gu, " ");
+        calls.push([statement, values]);
+        const rows = await reply(statement, values);
         if (rows instanceof Error) throw rows;
         return { command, rows: rows ?? [] };
       }
@@ -41,9 +46,10 @@ function stub(...replies) {
 for (const fact of [identity, text]) {
   test(`new ${fact.kind} binds the storage snapshot and runs the exact statement sequence`, async () => {
     const db = stub([], [{ fact_epoch: "9007199254740993" }], [{ created_at_us: "1234999" }]);
+    let ownerReads = 0;
     const candidate = new Proxy(fact, { get(target, key) {
       assert.equal(key, "owner");
-      return target.owner;
+      return ++ownerReads === 1 ? target.owner : "other";
     } });
     const result = await db.run(owner, {}, (tx) => store.writeFact(tx, candidate, incarnation));
     const { factId } = result;
@@ -55,12 +61,93 @@ for (const fact of [identity, text]) {
     if (fact.kind === "text") expected.push([digests, [owner, factId, [hmac.alg, sha.alg], [hmac.value, sha.value],
       [hmac.pipeline, sha.pipeline], [1, 2], ["key", null]]]);
     assert.deepEqual(db.calls, expected);
+    assert.equal(ownerReads, 1);
     assert.ok(db.lifecycle.includes("COMMIT"));
   });
 }
 
 const storage = await buildFactStorage(identity);
 const existing = { fact_id: "original", slot: storage.slot, incarnation, epoch: "4", created_at_us: "-1001" };
+
+for (const insertFails of [false, true]) {
+  test(`drains an in-flight fact write after a caught validation error (insert ${insertFails ? "fails" : "succeeds"})`, async () => {
+    const advanceStarted = Promise.withResolvers();
+    const finishAdvance = Promise.withResolvers();
+    const db = controlledStub((sql) => {
+      if (sql === selectSlot) return [];
+      if (sql === advance) {
+        advanceStarted.resolve();
+        return finishAdvance.promise;
+      }
+      assert.equal(sql, insert);
+      return insertFails ? Object.assign(new Error(), { code: "40001" }) : [{ created_at_us: "1234999" }];
+    });
+
+    let write;
+    const run = db.run(owner, {}, async (tx) => {
+      write = store.writeFact(tx, identity, incarnation);
+      void write.catch(() => {});
+      await advanceStarted.promise;
+      await assert.rejects(store.writeFact(tx, identity, "bad"), code("invalid_input"));
+    });
+    const outcome = insertFails ? assert.rejects(run, code("storage_busy")) : run;
+    try {
+      await advanceStarted.promise;
+      await new Promise(setImmediate);
+      assert.deepEqual(db.calls.map(([sql]) => sql), [selectSlot, advance]);
+      assert.ok(!db.lifecycle.includes("COMMIT"));
+    } finally {
+      finishAdvance.resolve([{ fact_epoch: "1" }]);
+      await outcome;
+    }
+
+    assert.deepEqual(db.calls.map(([sql]) => sql), [selectSlot, advance, insert]);
+    if (insertFails) {
+      await assert.rejects(write, code("storage_busy"));
+      assert.equal(db.lifecycle.at(-1), "ROLLBACK");
+      assert.ok(!db.lifecycle.includes("COMMIT"));
+    } else {
+      assert.equal((await write).epoch, 1n);
+      assert.ok(db.lifecycle.includes("COMMIT"));
+    }
+  });
+}
+
+for (const sameIncarnation of [true, false]) {
+  test(`parallel writes to a new slot ${sameIncarnation ? "replay" : "conflict"} in the same transaction`, async (t) => {
+    // Complete both slot hashes in the same turn so the race has a deterministic starting point.
+    t.mock.method(crypto.subtle, "digest", async () => new ArrayBuffer(32));
+    let row;
+    let epoch = 0n;
+    const db = controlledStub((sql, values) => {
+      if (sql === selectSlot) return row ? [row] : [];
+      if (sql === advance) return [{ fact_epoch: String(++epoch) }];
+      assert.equal(sql, insert);
+      if (row) return Object.assign(new Error(), { code: "23505" });
+      row = { fact_id: values[1], slot: values[2], incarnation: values[4], epoch: values[6], created_at_us: "1234999" };
+      return [row];
+    });
+
+    const writes = (tx) => Promise.all([
+      store.writeFact(tx, identity, incarnation),
+      store.writeFact(tx, identity, sameIncarnation ? incarnation : "b".repeat(64)),
+    ]);
+    if (sameIncarnation) {
+      const attempts = await db.run(owner, {}, writes);
+      const first = attempts.find((attempt) => attempt.created);
+      assert.deepEqual(first, { factId: row.fact_id, epoch: 1n, createdAtMs: 1234, created: true });
+      assert.deepEqual(attempts.find((attempt) => !attempt.created), { ...first, created: false });
+      assert.ok(db.lifecycle.includes("COMMIT"));
+    } else {
+      await assert.rejects(db.run(owner, {}, (tx) => assert.rejects(writes(tx), code("fact_conflict"))), code("fact_conflict"));
+      assert.equal(db.lifecycle.at(-1), "ROLLBACK");
+      assert.ok(!db.lifecycle.includes("COMMIT"));
+    }
+    assert.equal(epoch, 1n);
+    assert.deepEqual(db.calls.map(([sql]) => sql), [selectSlot, advance, insert, selectSlot]);
+  });
+}
+
 test("replay only reads the slot and floors timestamps before the Unix epoch", async () => {
   const db = stub([existing]);
   assert.deepEqual(await db.run(owner, {}, (tx) => store.writeFact(tx, identity, incarnation)),

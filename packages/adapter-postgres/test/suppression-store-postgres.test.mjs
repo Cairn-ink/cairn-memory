@@ -110,3 +110,49 @@ test("Postgres suppression store persists facts and rolls back atomically", migr
   assert.deepEqual(await counters(other), [{ user_id: other, fact_epoch: "1", index_revision: "8" }]);
   assert.deepEqual(await counters(owner), [{ user_id: owner, fact_epoch: "6", index_revision: "6" }]);
 });
+
+for (const sameIncarnation of [true, false]) {
+  test(`Postgres parallel writes to a new slot ${sameIncarnation ? "replay" : "conflict"} in the same transaction`, migrationDbTest, async (t) => {
+    const { pool, source } = await migrationDatabase(t);
+    const rows = keepConnections(pool);
+    const { run } = createPostgresUnitOfWork(source);
+    const store = createPostgresSuppressionStore();
+    const hash = await incarnation(text);
+    const writes = (tx) => Promise.all([
+      store.writeFact(tx, text, hash),
+      store.writeFact(tx, text, sameIncarnation ? hash : "0".repeat(64)),
+    ]);
+    await rows("INSERT INTO users (id) VALUES ($1)", [owner]);
+
+    if (sameIncarnation) {
+      const attempts = await run(owner, {}, writes);
+      const first = attempts.find((attempt) => attempt.created);
+      assert.equal(first?.epoch, 1n);
+      assert.deepEqual(attempts.find((attempt) => !attempt.created), { ...first, created: false });
+      assert.deepEqual(await rows("SELECT fact_epoch, index_revision FROM core_owner_state"), [{ fact_epoch: "1", index_revision: "1" }]);
+      assert.deepEqual(await rows("SELECT fact_id, epoch FROM core_suppression_facts"), [{ fact_id: first.factId, epoch: "1" }]);
+      assert.deepEqual(await rows("SELECT DISTINCT fact_id FROM core_fact_digests"), [{ fact_id: first.factId }]);
+    } else {
+      await assert.rejects(run(owner, {}, (tx) => assert.rejects(writes(tx), { code: "fact_conflict" })), { code: "fact_conflict" });
+      assert.deepEqual(await rows("SELECT * FROM core_owner_state"), []);
+      assert.deepEqual(await rows("SELECT * FROM core_suppression_facts"), []);
+      assert.deepEqual(await rows("SELECT * FROM core_fact_digests"), []);
+    }
+  });
+}
+
+test("Postgres writes the single digest of an exact text fact", migrationDbTest, async (t) => {
+  const { pool, source } = await migrationDatabase(t);
+  const rows = keepConnections(pool);
+  const { run } = createPostgresUnitOfWork(source);
+  const store = createPostgresSuppressionStore();
+  const [sha] = text.text.digests;
+  const single = { ...base, kind: "text", mode: "exact", text: { digests: [sha] } };
+  const hash = await incarnation(single);
+  await rows("INSERT INTO users (id) VALUES ($1)", [owner]);
+
+  const { factId } = await run(owner, {}, (tx) => store.writeFact(tx, single, hash));
+  assert.deepEqual(await rows("SELECT user_id, fact_id, alg, value, pipeline, redaction_version, key_id FROM core_fact_digests"),
+    [{ user_id: owner, fact_id: factId, alg: sha.alg, value: sha.value, pipeline: sha.pipeline,
+      redaction_version: sha.redactionVersion, key_id: sha.keyId }]);
+});

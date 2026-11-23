@@ -1,7 +1,7 @@
 import { CoreError } from "../../core/src/index.mjs";
 import { toPostgresError } from "./errors.mjs";
 import { buildFactStorage, canonicalDigests } from "./facts.mjs";
-import { failRun, query, requireLiveRun } from "./uow.mjs";
+import { requireLiveRun, runOperation } from "./uow.mjs";
 
 /** @import { SuppressionStore } from "../../core/src/ports/privacy.d.ts" */
 
@@ -57,8 +57,8 @@ async function writeFact(tx, fact, incarnation) {
   // A proxy can report a different owner when storage snapshots its own fields.
   if (owner !== tx.owner) throw new CoreError("internal_error");
 
-  try {
-    const { rows } = await query(tx, SELECT_SLOT, [owner, slotHash]);
+  return runOperation(tx, async (query) => {
+    const { rows } = await query(SELECT_SLOT, [owner, slotHash]);
     if (rows.length) {
       const { fact_id: factId, slot: existingSlot, incarnation: existingIncarnation, epoch, created_at_us } = rows[0];
       if (existingSlot !== slot || typeof factId !== "string" || !factId ||
@@ -67,37 +67,33 @@ async function writeFact(tx, fact, incarnation) {
       return { factId, epoch: readEpoch(epoch, 1n), createdAtMs: readCreatedAtMs(created_at_us), created: false };
     }
 
-    const { rows: [state] } = await query(tx, ADVANCE_OWNER, [owner]);
+    const { rows: [state] } = await query(ADVANCE_OWNER, [owner]);
     const epoch = readEpoch(state?.fact_epoch, 1n);
     const factId = crypto.randomUUID();
-    const { rows: [inserted] } = await query(tx, INSERT_FACT, [
+    const { rows: [inserted] } = await query(INSERT_FACT, [
       owner, factId, slot, slotHash, incarnation, stored.actionId, epoch.toString(), stored.origin,
       stored.kind, stored.mode, stored.body, stored.embedding, stored.shingles, stored.keyId,
     ]);
     const createdAtMs = readCreatedAtMs(inserted?.created_at_us);
     if (stored.kind === "text") {
       const digests = canonicalDigests(stored.digests);
-      await query(tx, INSERT_DIGESTS, [owner, factId, digests.map((d) => d.alg), digests.map((d) => d.value),
+      await query(INSERT_DIGESTS, [owner, factId, digests.map((d) => d.alg), digests.map((d) => d.value),
         digests.map((d) => d.pipeline), digests.map((d) => d.redactionVersion), digests.map((d) => d.keyId)]);
     }
     return { factId, epoch, createdAtMs, created: true };
-  } catch (error) {
-    throw failRun(tx, toPostgresError(error));
-  }
+  });
 }
 
 /** @type {SuppressionStore["epoch"]} */
 async function epoch(tx, owner) {
   requireLiveRun(tx);
   if (owner !== tx.owner) throw new CoreError("internal_error");
-  try {
-    const { rows } = await query(tx, "SELECT fact_epoch::text FROM core_owner_state WHERE user_id = $1", [owner]);
+  return runOperation(tx, async (query) => {
+    const { rows } = await query("SELECT fact_epoch::text FROM core_owner_state WHERE user_id = $1", [owner]);
     if (!rows.length) return null;
     const value = readEpoch(rows[0].fact_epoch, 0n);
     return value === 0n ? null : value;
-  } catch (error) {
-    throw failRun(tx, toPostgresError(error));
-  }
+  });
 }
 
 export function createPostgresSuppressionStore() {

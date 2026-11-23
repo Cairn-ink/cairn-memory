@@ -3,8 +3,8 @@ import { toPostgresError } from "./errors.mjs";
 import { isReadStatement } from "./read-only.mjs";
 
 /** @import { OwnerId, Tx, UnitOfWork, UnitOfWorkOptions } from "../../core/src/index.mjs" */
-/** @import { Connection, ConnectionSource, QueryResult } from "./driver.mjs" */
-/** @typedef {{ connection: Connection, pending: Set<Promise<QueryResult>>, failure?: CoreError }} Run */
+/** @import { Connection, ConnectionSource } from "./driver.mjs" */
+/** @typedef {{ connection: Connection, pending: Set<Promise<unknown>>, operationTail?: Promise<unknown>, failure?: CoreError }} Run */
 
 const LOCK_TIMEOUT = "SET LOCAL lock_timeout = '5s'";
 const STATEMENT_TIMEOUT = "SET LOCAL statement_timeout = '30s'";
@@ -22,10 +22,31 @@ export function requireLiveRun(tx, write = false) {
   return run;
 }
 
-/** @param {Tx} tx @param {CoreError} error */
-export function failRun(tx, error) {
-  const run = requireLiveRun(tx);
-  return run.failure ??= error;
+/** @template T @param {Run} run @param {Promise<T>} pending */
+function trackPending(run, pending) {
+  run.pending.add(pending);
+  // Observe rejections even when fn drops the returned promise.
+  const forget = () => run.pending.delete(pending);
+  void pending.then(forget, forget);
+  return pending;
+}
+
+/**
+ * @param {Run} run
+ * @param {boolean} readOnly
+ * @param {string} text
+ * @param {unknown[]} [values]
+ */
+async function queryInRun(run, readOnly, text, values) {
+  try {
+    if (run.failure) throw run.failure;
+    if (readOnly && !isReadStatement(text)) throw new CoreError("internal_error");
+    return await run.connection.query(text, values);
+  } catch (error) {
+    // A failed statement can leave the transaction aborted even if fn catches it.
+    run.failure ??= toPostgresError(error);
+    throw run.failure;
+  }
 }
 
 /**
@@ -36,23 +57,31 @@ export function failRun(tx, error) {
 export function query(tx, text, values) {
   const run = liveRuns.get(tx);
   if (!run) return Promise.reject(new CoreError("internal_error"));
+  return trackPending(run, queryInRun(run, tx.readOnly, text, values));
+}
 
-  const pending = (async () => {
+/**
+ * Keep a multi-statement operation on the captured connection until it settles.
+ * @template T
+ * @param {Tx} tx
+ * @param {(query: Connection["query"]) => Promise<T>} body
+ */
+export function runOperation(tx, body) {
+  const run = liveRuns.get(tx);
+  if (!run) return Promise.reject(new CoreError("internal_error"));
+
+  const start = async () => {
     try {
       if (run.failure) throw run.failure;
-      if (tx.readOnly && !isReadStatement(text)) throw new CoreError("internal_error");
-      return await run.connection.query(text, values);
+      return await body((text, values) => queryInRun(run, tx.readOnly, text, values));
     } catch (error) {
-      // A failed statement can leave the transaction aborted even if fn catches it.
       run.failure ??= toPostgresError(error);
       throw run.failure;
     }
-  })();
-  run.pending.add(pending);
-  // Observe rejections even when fn drops the returned promise.
-  const forget = () => run.pending.delete(pending);
-  void pending.then(forget, forget);
-  return pending;
+  };
+  const pending = (run.operationTail ?? Promise.resolve()).then(start, start);
+  run.operationTail = pending;
+  return trackPending(run, pending);
 }
 
 /** @param {Connection} connection @param {boolean} committed */
