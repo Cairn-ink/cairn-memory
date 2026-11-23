@@ -84,7 +84,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
   }
 
   function hidesRow(tx, row) {
-    return tx.forgotten.has(row.id) || (forgetting && tx.facts.some(stored =>
+    return tx.forgotten.has(row.id) || (forgetting && tx.facts.some(stored => stored.fact.kind !== "window" &&
       factHidesRow(stored, {
         type: "memory", scope: row.scope, memoryId: row.id, revision: row.revision,
         digests: digestsWithHash(row),
@@ -411,9 +411,11 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         return { matches, hiddenIds: [...hiddenIds], blockedSession: false, blockedPositions };
       },
       async insert(tx, scope, content, receipts, timestamp) {
+        const createdAtMs = content.createdAtMs === undefined ? timestamp : content.createdAtMs;
+        if (!Number.isSafeInteger(createdAtMs) || createdAtMs > timestamp) throw new CoreError("invalid_input");
         mutate(tx, scope.owner, "memories.insert", content, receipts);
         const row = {
-          ...content, id: "inserted-" + ++nextId, scope, revision: 1, createdAtMs: timestamp,
+          ...content, id: "inserted-" + ++nextId, scope, revision: 1, createdAtMs,
           updatedAtMs: timestamp, updatedAtUs: BigInt(timestamp) * 1000n,
         };
         tx.rows = [...tx.rows, row];
@@ -439,7 +441,15 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       async snapshot(tx, scope, candidates) {
         record(tx, scope.owner, "suppressions.snapshot", scope, candidates);
         await hooks.snapshot?.(candidates);
-        return { blockedSession: false, blockedMessages: [],
+        const { client, sessionId, occurredAtMs } = candidates;
+        const windows = tx.facts.filter(({ fact }) => fact.kind === "window" &&
+          (fact.namespace ?? null) === scope.namespace);
+        // Match the reference adapter, which skips window matching without a client.
+        const blockedMessages = client == null ? [] : (occurredAtMs ?? []).flatMap((time, index) =>
+          windows.some(stored => factBlocksIncoming(stored, {
+            scope, passages: [], session: { client, sessionId: sessionId ?? "" }, occurredAtMs: time,
+          }, { mode: "capture" }) !== false) ? [index] : []);
+        return { blockedSession: false, blockedMessages,
           passages: tx.facts.filter(stored => {
             const { fact } = stored;
             return fact.kind === "text" && (fact.namespace ?? null) === scope.namespace &&

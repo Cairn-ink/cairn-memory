@@ -67,24 +67,28 @@ export function importMethod(deps) {
 
       /** @type {ImportResult} */
       const counts = { imported: 0, duplicate: 0, suppressed: 0, invalid: 0 };
+      const paused = () => /** @type {const} */ ({ status: "paused", ...counts });
       for (let start = 0; start < rows.length; start += batchSize) {
         const inputBatch = rows.slice(start, start + batchSize);
-        const batch = inputBatch.filter(item => item !== null).map(item => ({
-          ...item, raw: item.text, text: prepareCoreText(item.text),
-        })).filter(item => item.text);
-        counts.invalid += inputBatch.length - batch.length;
-        if (!batch.length) continue;
+        let validationTime;
+        const batch = inputBatch.filter(item => item !== null)
+          .filter(({ createdAtMs }) => createdAtMs === undefined || createdAtMs <= (validationTime ??= clock.nowMs()))
+          .map(item => ({ ...item, raw: item.text, text: prepareCoreText(item.text) })).filter(item => item.text);
+        const invalid = inputBatch.length - batch.length;
+        if (!batch.length) {
+          counts.invalid += invalid;
+          continue;
+        }
 
         const before = await uow.run(owner, { pauseLock: true }, async tx => pauseResult(await pause.get(tx, owner)));
-        if (before.paused) return { status: "paused" };
+        if (before.paused) return paused();
         const key = await keys.userKey(owner);
         const prepared = await Promise.all(batch.map(async ({ raw, ...item }) => {
           const { query, passages } = await prepareWriteText(raw, item.text, key, text => clock.sha256Hex(text));
-          const { legacyHash: _legacyHash, ...exactQuery } = query;
-          return { ...item, query: exactQuery, passages };
+          return { ...item, query, passages };
         }));
         const embeddings = await embedImport(owner, prepared.map(({ text }) => text), key);
-        if (embeddings === null) return { status: "paused" };
+        if (embeddings === null) return paused();
 
         const committed = await uow.run(owner, { pauseLock: true }, async tx => {
           const state = pauseResult(await pause.get(tx, owner));
@@ -96,8 +100,14 @@ export function importMethod(deps) {
             ...policy, matches: policy.matches.map(matches => matches.filter(match => match.match === "exact")),
           };
           const inserted = new Set();
-          const result = { imported: 0, duplicate: 0, suppressed: 0 };
-          for (const [i, { kind, text, query: { textHash, digests } }] of prepared.entries()) {
+          const result = { imported: 0, duplicate: 0, suppressed: 0, invalid };
+          for (const [i, { kind, text, createdAtMs, query: { textHash, digests } }] of prepared.entries()) {
+            // The wall clock may have moved back during embedding or while waiting for the write lock.
+            const writeTime = createdAtMs === undefined ? undefined : clock.nowMs();
+            if (createdAtMs !== undefined && writeTime !== undefined && createdAtMs > writeTime) {
+              result.invalid++;
+              continue;
+            }
             const decision = decideWrite(exactPolicy, i);
             if (withheld[i] || decision.status === "suppressed") {
               result.suppressed++;
@@ -107,17 +117,19 @@ export function importMethod(deps) {
               await memories.insert(tx, scope, {
                 kind, text, textHash, source, origin: "explicit", confidence: 1, embedding: embeddings[i],
                 ...(digests && { digests }),
-              }, [], clock.nowMs());
+                ...(createdAtMs !== undefined && { createdAtMs }),
+              }, [], writeTime ?? clock.nowMs());
               inserted.add(textHash);
               result.imported++;
             }
           }
           return result;
         });
-        if (committed === null) return { status: "paused" };
+        if (committed === null) return paused();
         counts.imported += committed.imported;
         counts.duplicate += committed.duplicate;
         counts.suppressed += committed.suppressed;
+        counts.invalid += committed.invalid;
       }
       return counts;
     } catch (error) {

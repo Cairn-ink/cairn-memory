@@ -35,7 +35,7 @@ test("counts invalid rows individually and enforces the hosted code-point limit"
     { text: max, kind: "fact", origin: "explicit", source },
     { text: "Keep this note.", kind: "preference", origin: "explicit", source },
   ]);
-  assert.ok(rows.every(row => row.createdAtMs > 0));
+  assert.equal(rows[0].createdAtMs, rows[0].updatedAtMs);
   assert.deepEqual(calls.filter(([name]) => name === "embed"), [["embed", [max, "keep this note."]]]);
   calls.length = 0;
   assert.deepEqual(await service.importMemories(scope, [null], source), counts(0, 0, 0, 1));
@@ -136,6 +136,41 @@ test("the source and per-item times reach suppression, which takes precedence ov
   assert.deepEqual(candidates, { client: source.client, sessionId: source.sessionId, occurredAtMs: [10, null, null] });
 });
 
+test("owner-wide windows suppress clientless imports and keep the same behavior for named clients", async () => {
+  const { service, seedFact } = setup();
+  seedFact({ ...scope, kind: "window", origin: "forget", actionId: "owner-window", client: null,
+    window: { startMs: 10, endMs: 20 } });
+  seedFact({ ...scope, kind: "window", origin: "forget", actionId: "client-window", client: source.client,
+    window: { startMs: 20, endMs: 30 } });
+
+  const withoutClient = { kind: "import", client: null, sessionId: null };
+  const inside = { ...item("Inside window"), createdAtMs: 15 };
+  assert.deepEqual(await service.importMemories(scope, [inside], withoutClient), counts(0, 0, 1));
+  assert.deepEqual(await service.recent(scope, { limit: 10, cursor: null }), { items: [], nextCursor: null });
+  assert.deepEqual(await service.importMemories(scope, [inside], source), counts(0, 0, 1));
+
+  const end = { ...item("At end of owner window"), createdAtMs: 20 };
+  assert.deepEqual(await service.importMemories(scope, [end], source), counts(0, 0, 1));
+  assert.deepEqual(await service.importMemories(scope, [end], withoutClient), counts(1));
+  const { items } = await service.recent(scope, { limit: 10, cursor: null });
+  assert.deepEqual(items.map(({ text, source }) => ({ text, source })), [{ text: end.text, source: withoutClient }]);
+});
+
+test("an identity forget on a hosted-v1 alias suppresses import just as it suppresses save", async () => {
+  const wording = "Archive marker crn_pat_" + "z".repeat(32);
+  const [canonical, legacy] = await allDigests(wording, null);
+  assert.equal(legacy.pipeline, "hosted-v1");
+  assert.notEqual(legacy.value, canonical.value);
+  const row = { ...memory("legacy-alias", { text: wording }), textHash: "sha256:" + legacy.value };
+  const { service, seedFact, committed } = setup({ rows: [row] });
+  seedFact({ ...scope, kind: "identity", origin: "forget", actionId: "legacy-forget",
+    memoryId: row.id, throughRevision: row.revision });
+
+  assert.deepEqual(await service.save(scope, wording, source), { status: "suppressed" });
+  assert.deepEqual(await service.importMemories(scope, [item(wording)], source), counts(0, 0, 1));
+  assert.deepEqual(committed(scope.owner).rows, [row]);
+});
+
 test("forget suppresses exact wording and single-passage containment on import", async () => {
   // Hosted src/memory/import.ts:49–59 and src/memory/fingerprint.ts:91–109 apply full passage suppression.
   const wording = "The lantern is stored in the cellar.";
@@ -181,20 +216,31 @@ test("pause before the first batch sends nothing and writes nothing", async () =
   await service.setPause(scope.owner, true);
   calls.length = 0;
   const before = mutations.length;
-  assert.deepEqual(await service.importMemories(scope, [item("First")], source), { status: "paused" });
+  assert.deepEqual(await service.importMemories(scope, [item("First")], source), { status: "paused", ...counts() });
   assert.deepEqual(calls.map(([method]) => method), ["run", "lock", "lock", "pause.get"]);
   assert.equal(mutations.length, before);
 });
 
-test("pause between batches leaves the first commit and withholds partial counts", async () => {
+test("pause between batches returns the counts from the committed first batch only", async () => {
   const { service, calls, hooks, committed } = setup();
   let runs = 0;
   hooks.beforeRun = async () => {
     if (++runs === 3) await service.setPause(scope.owner, true);
   };
-  assert.deepEqual(await service.importMemories(scope, numbered(101), source), { status: "paused" });
-  assert.equal(committed(scope.owner).rows.length, 100);
+  const items = numbered(102);
+  items[1] = items[0];
+  items[2] = null;
+  items[100] = null;
+  assert.deepEqual(await service.importMemories(scope, items, source), { status: "paused", ...counts(98, 1, 0, 1) });
+  assert.equal(committed(scope.owner).rows.length, 98);
   assert.equal(calls.filter(([name]) => name === "embed").length, 1);
+});
+
+test("pause includes an already processed invalid-only batch and excludes invalids in the stopped batch", async () => {
+  const { service } = setup();
+  await service.setPause(scope.owner, true);
+  const items = [...Array(101).fill(null), item("Still pending")];
+  assert.deepEqual(await service.importMemories(scope, items, source), { status: "paused", ...counts(0, 0, 0, 100) });
 });
 
 test("a closed dispatch gate sends nothing and opens no write batch", async () => {
@@ -203,7 +249,7 @@ test("a closed dispatch gate sends nothing and opens no write batch", async () =
     assert.equal(phase, "dispatch");
     throw new CoreError("capture_paused");
   };
-  assert.deepEqual(await service.importMemories(scope, [item("First")], source), { status: "paused" });
+  assert.deepEqual(await service.importMemories(scope, [item("First")], source), { status: "paused", ...counts() });
   assert.deepEqual(calls.filter(([name]) => name === "gate" || name === "embed"), [["gate", scope.owner, "dispatch"]]);
   assert.equal(calls.filter(([name]) => name === "run").length, 1);
   assert.deepEqual(mutations, []);
@@ -215,10 +261,41 @@ test("pause and resume during the embed changes generation and discards the batc
     await service.setPause(scope.owner, true);
     await service.setPause(scope.owner, false);
   };
-  assert.deepEqual(await service.importMemories(scope, [item("First")], source), { status: "paused" });
+  assert.deepEqual(await service.importMemories(scope, [item("First")], source), { status: "paused", ...counts() });
   assert.deepEqual(await service.pauseState(scope.owner), { paused: false, generation: 1 });
   assert.deepEqual(committed(scope.owner).rows, []);
   assert.equal(calls.some(([method]) => method === "memories.readWritePolicy"), false);
+});
+
+test("import stores the supplied creation time and uses the write time for the update", async () => {
+  const { service, deps } = setup();
+  deps.clock.nowMs = () => 100;
+  const items = [{ ...item("Historical note"), createdAtMs: -10 }, { ...item("Current note"), createdAtMs: 100 }];
+  assert.deepEqual(await service.importMemories(scope, items, source), counts(2));
+  const recent = await service.recent(scope, { limit: 10, cursor: null });
+  assert.deepEqual(recent.items.map(({ text, createdAtMs, updatedAtMs }) => ({ text, createdAtMs, updatedAtMs })), [
+    { text: "Current note", createdAtMs: 100, updatedAtMs: 100 },
+    { text: "Historical note", createdAtMs: -10, updatedAtMs: 100 },
+  ]);
+});
+
+test("import counts a future creation time as invalid without embedding that item", async () => {
+  const { service, deps, calls, committed } = setup();
+  deps.clock.nowMs = () => 100;
+  const items = [{ ...item("Future note"), createdAtMs: 101 }, item("Valid note")];
+  assert.deepEqual(await service.importMemories(scope, items, source), counts(1, 0, 0, 1));
+  assert.deepEqual(calls.filter(([method]) => method === "embed"), [["embed", ["valid note"]]]);
+  assert.deepEqual(committed(scope.owner).rows.map(({ text }) => text), ["Valid note"]);
+});
+
+test("import counts a creation time that becomes future before the write as invalid", async () => {
+  const { service, deps, hooks, committed } = setup();
+  let now = 100;
+  deps.clock.nowMs = () => now;
+  hooks.embed = () => { now = 90; };
+  assert.deepEqual(await service.importMemories(scope, [{ ...item("Clock moved back"), createdAtMs: 95 }], source),
+    counts(0, 0, 0, 1));
+  assert.deepEqual(committed(scope.owner).rows, []);
 });
 
 test("a missing required embedding fails the whole batch before writes and retains the prior commit", async () => {

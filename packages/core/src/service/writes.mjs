@@ -17,6 +17,8 @@ import { pauseResult } from "./pause.mjs";
 const memoryKinds = /** @type {const} */ (["fact", "preference", "decision", "instruction", "context"]);
 const sourceKinds = /** @type {const} */ (["capture", "mcp", "web", "import", "plugin"]);
 const invalid = () => /** @type {const} */ ({ status: "invalid" });
+// Some stores only check windows when a client is present. Fact clients are at most 128 characters.
+const ownerWindowProbeClient = "-".repeat(129);
 
 /** @template {string} T @param {unknown} value @param {readonly T[]} choices */
 function enumValue(value, choices) {
@@ -238,6 +240,7 @@ async function withheld(suppressions, tx, scope, source, passages, key, edit) {
 export async function fullWriteWithholds(suppressions, tx, scope, source, batch) {
   // A scoped snapshot also supplies containment facts omitted by adapters without row shingles.
   const snapshot = await writeSnapshot(suppressions, tx, scope, source, {
+    ...(source.client === null && { client: ownerWindowProbeClient, sessionId: undefined }),
     occurredAtMs: batch.map(({ createdAtMs }) => createdAtMs ?? null),
   });
   const facts = scopedPassageFacts(scope, snapshot.passages.map(({ fact }) => fact));
