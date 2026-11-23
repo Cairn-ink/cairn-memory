@@ -84,7 +84,7 @@ export interface MemoryService {
   /** Paged export of visible raw messages (download, migration). */
   listRawMessages(scope: Scope, page: { cursor: string | null; limit: number }): Promise<{ items: RawSegment[]; nextCursor: string | null }>;
   /** Import goes through the FULL capture suppression policy and the pause check. */
-  importMemories(scope: Scope, items: readonly ImportMemory[], source: SourceRef): Promise<ImportResult | { status: "paused" }>;
+  importMemories(scope: Scope, items: readonly ImportMemory[], source: SourceRef): Promise<ImportResult | ({ status: "paused" } & ImportResult)>;
   /** Raw import goes through the full capture suppression (session, window, lineage, text) and pause. */
   importRawMessages(scope: Scope, sessions: readonly ImportRawSession[]): Promise<ImportResult | { status: "paused" }>;
 }

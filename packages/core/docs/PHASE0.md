@@ -118,6 +118,8 @@ Each addendum is additive unless it says what it supersedes. Adapters written ag
    - It supersedes nothing.
 
    The conformance kit adds cases for these methods; the reference adapter implements them.
+10. **Import progress and creation times.** A paused `MemoryService.importMemories` returns `{ status: "paused" }` with all four `ImportResult` counts from the batches that committed and any invalid-only batches already processed. The batch that stopped contributes no counts.
+   - `InsertRow.createdAtMs` is optional and supplied only on import. An insert validates that a supplied creation time is an integer in milliseconds at or before `nowMs` and stores it as the creation time. If omitted, creation time defaults to `nowMs`. The update time uses `nowMs` in both cases. Core counts a future creation time as an invalid import item.
 
 ## Change requests
 

@@ -88,7 +88,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
   }
 
   function hidesRow(tx, row) {
-    return tx.forgotten.has(row.id) || (forgetting && tx.facts.some(stored =>
+    return tx.forgotten.has(row.id) || (forgetting && tx.facts.some(stored => stored.fact.kind !== "window" &&
       factHidesRow(stored, {
         type: "memory", scope: row.scope, memoryId: row.id, revision: row.revision,
         digests: digestsWithHash(row),
@@ -327,8 +327,9 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       calls.push(["embed", [...texts]]);
       assert.equal(active.size, 0, "embed outside the UoW");
       assert.ok(dispatchReady, "embed starts in the dispatch continuation");
+      if (hooks.embedBatch) return hooks.embedBatch(texts);
       const result = await hooks.embed?.(texts, options);
-      if (capture && result != null) return result;
+      if (capture && Array.isArray(result)) return result;
       return texts.map(() => result ?? Float32Array.of(1));
     };
     fake.deps.clock.nowMs = () => ++nowMs;
@@ -398,33 +399,40 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         await hooks.fault?.("memories.erase");
         return Boolean(row);
       },
-      async readWritePolicy(tx, scope, [query], source, mode, editId) {
-        record(tx, scope.owner, "memories.readWritePolicy", scope, query, source, mode, editId);
-        const matches = [];
-        const hiddenIds = [];
-        for (const row of tx.rows) {
-          if (row.scope.owner !== scope.owner || row.scope.namespace !== scope.namespace || row.id === editId) continue;
-          const exact = [query.textHash, query.legacyHash].includes(row.textHash);
-          const distance = exact ? 0 : hooks.nearDistance?.(row);
-          if (distance === undefined) continue;
-          matches.push({ id: row.id, kind: "stored", match: exact ? "exact" : "near",
-            revision: row.revision, writeTimeUs: row.updatedAtUs, distance });
-          if (hidesRow(tx, row)) hiddenIds.push(row.id);
-        }
-        matches.sort((a, b) => a.distance - b.distance);
-        const blocked = forgetting && tx.facts.some(stored => {
-          const { fact } = stored;
-          if (fact.kind !== "text" || !fact.text.digests.every(({ alg }) => alg === "hmac")) return false;
-          const passages = [{ digests: digestsWithHash(query), shingles: null, keyId: null }];
-          return factBlocksIncoming(stored, { scope, passages },
-            { mode: mode === "hash" ? "explicitSave" : "capture", rowShingles: false }) !== false;
+      async readWritePolicy(tx, scope, queries, source, mode, editId) {
+        record(tx, scope.owner, "memories.readWritePolicy", scope,
+          queries.length === 1 ? queries[0] : queries, source, mode, editId);
+        const hiddenIds = new Set();
+        const blockedPositions = [];
+        const matches = queries.map((query, index) => {
+          const matches = [];
+          for (const row of tx.rows) {
+            if (row.scope.owner !== scope.owner || row.scope.namespace !== scope.namespace || row.id === editId) continue;
+            const exact = [query.textHash, query.legacyHash].includes(row.textHash);
+            const distance = exact ? 0 : hooks.nearDistance?.(row);
+            if (distance === undefined) continue;
+            matches.push({ id: row.id, kind: "stored", match: exact ? "exact" : "near",
+              revision: row.revision, writeTimeUs: row.updatedAtUs, distance });
+            if (hidesRow(tx, row)) hiddenIds.add(row.id);
+          }
+          const blocked = forgetting && tx.facts.some(stored => {
+            const { fact } = stored;
+            if (fact.kind !== "text" || !fact.text.digests.every(({ alg }) => alg === "hmac")) return false;
+            const passages = [{ digests: digestsWithHash(query), shingles: null, keyId: null }];
+            return factBlocksIncoming(stored, { scope, passages },
+              { mode: mode === "hash" ? "explicitSave" : "capture", rowShingles: false }) !== false;
+          });
+          if (blocked) blockedPositions.push(index);
+          return matches.sort((a, b) => a.distance - b.distance);
         });
-        return { matches: [matches], hiddenIds, blockedSession: false, blockedPositions: blocked ? [0] : [] };
+        return { matches, hiddenIds: [...hiddenIds], blockedSession: false, blockedPositions };
       },
       async insert(tx, scope, content, receipts, timestamp) {
+        const createdAtMs = content.createdAtMs === undefined ? timestamp : content.createdAtMs;
+        if (!Number.isSafeInteger(createdAtMs) || createdAtMs > timestamp) throw new CoreError("invalid_input");
         mutate(tx, scope.owner, "memories.insert", content, receipts);
         const row = {
-          ...content, id: "inserted-" + ++nextId, scope, revision: 1, createdAtMs: timestamp,
+          ...content, id: "inserted-" + ++nextId, scope, revision: 1, createdAtMs,
           updatedAtMs: timestamp, updatedAtUs: BigInt(timestamp) * 1000n,
         };
         tx.rows = [...tx.rows, row];
@@ -450,10 +458,20 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       async snapshot(tx, scope, candidates) {
         record(tx, scope.owner, "suppressions.snapshot", scope, candidates);
         await hooks.snapshot?.(candidates);
+        const { client, sessionId, occurredAtMs } = candidates;
         const facts = tx.facts.filter(({ fact }) => (fact.namespace ?? null) === scope.namespace);
         const blockedSession = facts.some(({ fact }) => fact.kind === "session" &&
           fact.session.client === candidates.client && fact.session.sessionId === candidates.sessionId);
-        return { blockedSession, blockedMessages: [],
+        const windows = facts.filter(({ fact }) => fact.kind === "window");
+        // The port contract: owner-wide windows apply even when the source has no client or session.
+        // A clientless source is matched against owner-wide windows only, as hosted does.
+        const applicable = client == null ? windows.filter(({ fact }) => fact.client === null) : windows;
+        const blockedMessages = (occurredAtMs ?? []).flatMap((time, index) =>
+          applicable.some(stored => factBlocksIncoming(stored, {
+            scope, passages: [], ...(client == null ? {} : { session: { client, sessionId: sessionId ?? "" } }),
+            occurredAtMs: time,
+          }, { mode: "capture" }) !== false) ? [index] : []);
+        return { blockedSession, blockedMessages,
           passages: facts.filter(stored => {
             const { fact } = stored;
             return fact.kind === "text" &&
