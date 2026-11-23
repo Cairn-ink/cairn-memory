@@ -81,8 +81,9 @@ work. Sessions with different server environments, such as a
 different `PATH`, use separate servers. On macOS and other platforms, or for
 stores under `/mnt/` or on network filesystems, each session starts its own
 server. If the shared server can't start, the session automatically starts
-its own server. Uninstall keeps memory data, and a running background server
-exits about 30 seconds after its last session closes.
+its own server. Uninstall keeps memory data. On Linux, a full uninstall that
+removes the engine first asks any running shared server for that store to stop.
+Use `daemon status --local` or `daemon stop --local` through the installer.
 
 Library `openMemoryCore({path})` keeps Raw off;
 select `raw:true` for the local Raw composition and its default search lane.
