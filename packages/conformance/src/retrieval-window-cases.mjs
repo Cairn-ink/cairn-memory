@@ -76,6 +76,7 @@ export const RETRIEVAL_WINDOW_CASES = [
   },
   {
     id: "K-RAW-W1", title: "excludes null event times and applies half-open raw windows", needs: [],
+    requests: { rawArchive: true },
     async run({ adapter: { capabilities, uow, raw }, owner, scope, hash }) {
       if (!capabilities.rawArchive) return "needs rawArchive";
       check(raw, "Raw archive requires a raw port");

@@ -1,3 +1,4 @@
+import { toCoreError } from "@cairn-ink/core";
 import { memoryCases } from "./memory-cases.mjs";
 import { retrievalCases } from "./retrieval-cases.mjs";
 import { bounded, check, DEFAULT_TIMEOUT_MS, isFixtureEmbeddingExhaustion, referenceVector } from "./support.mjs";
@@ -46,7 +47,16 @@ async function runOpenedCase(factory, testCase) {
     ...Object.fromEntries(testCase.needs.map((flag) => [flag, true])),
     ...Object.fromEntries(needsOff.map((flag) => [flag, false])),
   };
-  const opened = await factory.open({ capabilities });
+  let opened;
+  try {
+    opened = await factory.open({ capabilities });
+  } catch (error) {
+    const { rawArchive, ...withoutRawArchive } = capabilities;
+    if (rawArchive !== true || testCase.needs.includes("rawArchive") ||
+        toCoreError(error).code !== "capability_unavailable") throw error;
+    // A factory can reject an optional raw archive request during setup. Retry with its default raw setting.
+    opened = await factory.open({ capabilities: withoutRawArchive });
+  }
   const { adapter, embeddingDimensions, harness, nativeErrorMap, busyNativeCodes, sessionRefs, settleMs,
     timeoutMs = DEFAULT_TIMEOUT_MS } = opened;
   const validTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0;

@@ -5,7 +5,10 @@ import { RETRIEVAL_WINDOW_CASES, runCase } from "@cairn-ink/conformance";
 const factory = {
   name: "memory",
   async open({ capabilities }) {
-    const adapter = createMemoryAdapter({ capabilities: { semanticRetrieval: capabilities.semanticRetrieval ?? false } });
+    const adapter = createMemoryAdapter({ capabilities: {
+      semanticRetrieval: capabilities.semanticRetrieval ?? false,
+      rawArchive: capabilities.rawArchive ?? false,
+    } });
     return {
       adapter, harness: adapter.harness, nativeErrorMap: adapter.nativeErrorMap,
       busyNativeCodes: [], embeddingDimensions: null, sessionRefs: "plain",
