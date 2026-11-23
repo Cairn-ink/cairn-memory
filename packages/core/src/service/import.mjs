@@ -1,13 +1,14 @@
-import { detach, identifier, validateObject } from "../capture/validate.mjs";
+import { detach, identifier, isWellFormedText, validateObject } from "../capture/validate.mjs";
 import { CoreError } from "../errors.mjs";
 import { decideWrite } from "../memory-policy/index.mjs";
 import { cleanContent, prepareCoreText } from "../privacy/text.mjs";
-import { prepareMessageContent, validateMessage } from "./capture.mjs";
+import { captureTextWithholding, prepareMessageContent } from "./capture.mjs";
 import { entryError, scopeOf } from "./entry.mjs";
 import { pauseResult } from "./pause.mjs";
 import { fullWriteWithholds, memoryKindOf, prepareWriteText, sourceOf, writeEmbedding } from "./writes.mjs";
 
-/** @import {ImportMemory, ImportRawSession, ImportResult, MemoryService} from "../ports/host.d.ts" */
+/** @import {CaptureMessage} from "../ports/capture.d.ts" */
+/** @import {ImportMemory, ImportResult, MemoryService} from "../ports/host.d.ts" */
 
 const batchSize = 100;
 const rawMessageLimit = 500;
@@ -154,13 +155,21 @@ export function importMethod(deps) {
   };
 }
 
-/** @param {unknown} value */
+/** @param {unknown} value @returns {value is string} */
+function validRawIdentifier(value) {
+  return isWellFormedText(value) && value.length > 0 && !value.includes("\0");
+}
+
+/** @param {unknown} value @returns {{message: CaptureMessage, originalContent: string} | null} */
 function prepareRawMessage(value) {
-  const message = validateMessage(detach(value, "invalid_input"));
-  const { id, content, occurredAtMs } = message;
-  if (id.includes("\0") ||
-      (occurredAtMs !== null && (occurredAtMs < firstTimestampMs || occurredAtMs > lastTimestampMs))) return null;
-  return { ...message, content: prepareMessageContent(content) };
+  if (value == null) return null;
+  const { id, role, content, occurredAtMs } = /** @type {Partial<Record<keyof CaptureMessage, unknown>>} */ (value);
+  if (!validRawIdentifier(id) || id.length > 512 ||
+      (role !== "user" && role !== "assistant") || typeof content !== "string" ||
+      (occurredAtMs !== null && (typeof occurredAtMs !== "number" || !Number.isSafeInteger(occurredAtMs) ||
+        occurredAtMs < firstTimestampMs || occurredAtMs > lastTimestampMs))) return null;
+  const originalContent = cleanContent(content);
+  return { message: { id, role, content: prepareMessageContent(originalContent), occurredAtMs }, originalContent };
 }
 
 /** @param {unknown} input */
@@ -171,19 +180,20 @@ function snapshotRawSessions(input) {
     const { client: rawClient, sessionId: rawSessionId, messages: rawMessages } =
       validateObject(batch[index], ["client", "sessionId", "messages"]);
     const client = identifier(rawClient);
-    const sessionId = identifier(rawSessionId);
+    if (!validRawIdentifier(rawSessionId)) throw new CoreError("invalid_input");
+    const sessionId = rawSessionId;
     const rows = snapshotBatch(rawMessages, (messages, index) => importItem(messages, index, prepareRawMessage), remaining);
     remaining -= rows.length;
     const messages = rows.filter(message => message !== null);
     invalid += rows.length - messages.length;
-    return /** @satisfies {ImportRawSession} */ ({ client, sessionId, messages });
+    return { client, sessionId, messages };
   });
   return { sessions, invalid };
 }
 
 /** @param {import("./index.d.mts").MemoryServiceDeps} deps @returns {MemoryService["importRawMessages"]} */
 export function importRawMethod({ storage }) {
-  const { capabilities, raw, uow, pause } = storage;
+  const { capabilities, raw, uow, pause, suppressions, keys } = storage;
   return async (input, inputSessions) => {
     try {
       const scope = scopeOf(detach(input, "invalid_input"));
@@ -198,7 +208,22 @@ export function importRawMethod({ storage }) {
       for (const { client, sessionId, messages } of sessions) {
         const committed = await uow.run(owner, { pauseLock: true }, async tx => {
           if (pauseResult(await pause.get(tx, owner)).paused) return null;
-          return importArchive.call(raw, tx, scope, { client, sessionId }, messages);
+          const session = { client, sessionId };
+          const { passages } = await suppressions.snapshot(tx, scope, {
+            ...session, occurredAtMs: messages.map(({ message }) => message.occurredAtMs),
+          });
+          const { legacyKeyUnavailable, matches } = captureTextWithholding(passages);
+          let eligible = messages.map(({ message }) => message);
+          if (legacyKeyUnavailable) {
+            eligible = [];
+          } else if (matches && messages.length) {
+            const key = capabilities.fingerprintKey ? await keys.userKey(owner) : null;
+            const withheld = await Promise.all(messages.map(({ message, originalContent }) =>
+              matches(originalContent, message.content, key)));
+            eligible = eligible.filter((_, index) => !withheld[index]);
+          }
+          const archive = await importArchive.call(raw, tx, scope, session, eligible);
+          return archive === null ? null : { ...archive, withheld: archive.withheld + (messages.length - eligible.length) };
         });
         if (committed === null) return { status: "paused" };
         counts.imported += committed.archived;

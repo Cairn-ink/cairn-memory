@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { allDigests, CoreError } from "@cairn-ink/core";
+import { allDigests, CoreError, engineLegacyDigest, hostedV1Digest } from "@cairn-ink/core";
 import { createMemoryService } from "@cairn-ink/core/service";
 import { hostedScope as scope, serviceFake } from "./helpers/service-fake.mjs";
 
@@ -34,7 +34,8 @@ test("maps hosted archive, conflict, refusal and invalid counts in one pause-loc
     session([otherSession], "second"),
   ]), counts(2, 2, 1, 1));
   assert.deepEqual(archived(scope.owner), [original, fresh, otherSession]);
-  assert.deepEqual(methods(fake), Array(2).fill(["run", "lock", "lock", "pause.get", "raw.importArchive"]).flat());
+  assert.deepEqual(methods(fake),
+    Array(2).fill(["run", "lock", "lock", "pause.get", "suppressions.snapshot", "raw.importArchive"]).flat());
   assert.deepEqual(calls.filter(([method]) => method === "run"),
     Array(2).fill(["run", scope.owner, { pauseLock: true }]));
   assert.deepEqual(mutations.map(({ method, run }) => [method, run]), [["raw.importArchive", 2], ["raw.importArchive", 3]]);
@@ -42,22 +43,52 @@ test("maps hosted archive, conflict, refusal and invalid counts in one pause-loc
 
 test("invalid message positions are counted and valid boundary values reach the archive", async () => {
   // Hosted src/memory/import.ts:86–109 validates id/role/time and skips invalid rows.
-  // Hosted src/memory/contracts.ts:20–25 bounds id/content in UTF-16, and src/memory/time.ts:3–16 bounds UTC years.
+  // The Core port caps IDs at 512 UTF-16 units. Hosted src/memory/time.ts:3–16 bounds UTC years.
   const { service, archived } = setup();
-  const earliest = message("x".repeat(200), "😀".repeat(10_000), -62135596800000);
+  const earliest = message("x".repeat(512), "😀".repeat(10_000), -62135596800000);
   const latest = message("latest", " \ud800\0 ", 253402300799999);
   const whitespace = message("spaces", " \n\t ");
   const rows = [
-    null, 3, message(""), message("x".repeat(201)), message("zero\0id"), message("\ud800"),
-    { ...message("role"), role: "system" }, message("empty", ""), message("too-long", earliest.content + "x"),
+    null, 3, message(""), message("x".repeat(513)), message("zero\0id"), message("\ud800"),
+    { ...message("role"), role: "system" },
     message("non-text", 42), message("string-time", "Text", "1970-01-01T00:00:00Z"),
     { ...message("missing-time"), occurredAtMs: undefined }, message("fraction", "Text", 0.5),
     message("old", "Text", earliest.occurredAtMs - 1), message("future", "Text", latest.occurredAtMs + 1),
-    { get id() { throw new Error("malformed input"); } }, earliest, latest, whitespace,
+    { get id() { throw new Error("malformed input"); } },
+    { ...message("throwing-content"), get content() { throw new Error("malformed content"); } },
+    earliest, latest, whitespace,
   ];
   rows.length++;
-  assert.deepEqual(await service.importRawMessages(scope, [session(rows)]), counts(3, 0, 0, 17));
+  assert.deepEqual(await service.importRawMessages(scope, [session(rows)]), counts(3, 0, 0, 16));
   assert.deepEqual(archived(scope.owner), [earliest, { ...latest, content: " \ufffd " }, whitespace]);
+});
+
+test("raw message validation accepts hosted rows and re-imports prepared output as duplicates", async () => {
+  const { service, archived } = setup();
+  const longId = message("x".repeat(201));
+  const empty = message("empty", "");
+  const nul = message("nul", "\0");
+  const expanding = message("expanding", "ﷺ".repeat(1200));
+  const longContent = message("long-content", "x".repeat(20_001));
+  const metadata = message("metadata");
+  const rows = [longId, empty, nul, expanding, longContent,
+    { ...metadata, importSource: "backup", get unused() { throw new Error("ignored field"); } }];
+  assert.deepEqual(await service.importRawMessages(scope, [session(rows)]), counts(rows.length));
+  const saved = archived(scope.owner);
+  assert.deepEqual(saved, [longId, empty, { ...nul, content: "" },
+    { ...expanding, content: expanding.content.normalize("NFKC") }, longContent, metadata]);
+  assert.deepEqual(await service.importRawMessages(scope, [session(saved)]), counts(0, rows.length));
+  assert.deepEqual(archived(scope.owner), saved);
+});
+
+test("raw session IDs preserve leading and trailing spaces", async () => {
+  const { service, archived, calls } = setup();
+  const row = message("first");
+  const sessionId = " archived session ";
+  assert.deepEqual(await service.importRawMessages(scope, [session([row], sessionId)]), counts(1));
+  assert.deepEqual(archived(scope.owner), [row]);
+  assert.deepEqual(calls.find(([method]) => method === "raw.importArchive"),
+    ["raw.importArchive", scope, { client: "archive", sessionId }, [row]]);
 });
 
 test("caps the whole call at 500 input positions, including invalids", async () => {
@@ -138,7 +169,7 @@ test("an empty call has zero counts and an invalid-only session still checks pau
   assert.deepEqual(await service.importRawMessages(scope, []), counts());
   assert.deepEqual(methods(fake), []);
   assert.deepEqual(await service.importRawMessages(scope, [session([null])]), counts(0, 0, 0, 1));
-  assert.deepEqual(methods(fake), ["run", "lock", "lock", "pause.get", "raw.importArchive"]);
+  assert.deepEqual(methods(fake), ["run", "lock", "lock", "pause.get", "suppressions.snapshot", "raw.importArchive"]);
   assert.deepEqual(mutations, []);
 });
 
@@ -177,6 +208,33 @@ test("the archive counts a forgotten window, forgotten text and a fenced session
   assert.deepEqual(archived(scope.owner), [duplicate, visible]);
   assert.equal(mutations.length, 2);
 });
+
+for (const [label, wording, digest, forgottenWording = wording] of [
+  ["hosted-v1 original", "The recovery note in the attic says " + "crn_pat_" + "z".repeat(32), hostedV1Digest],
+  ["engine-legacy original", `Saved config {"client_secret": "${"example".repeat(5)}"} for the boat dock gate`,
+    engineLegacyDigest],
+  ["prepared", "The redacted note says " + "crn_pat_" + "z".repeat(32), hostedV1Digest, "The redacted note says [REDACTED]"],
+]) {
+  test(`raw passage suppression withholds the ${label} match before archiving`, async () => {
+    const { service, seedFact, archived, calls, mutations } = setup();
+    seedFact({ ...scope, kind: "text", mode: "exact", origin: "forget", actionId: "forgot-text",
+      text: { digests: [await digest(forgottenWording)] } });
+    const forgotten = message("forgotten", wording, 10);
+    assert.deepEqual(await service.importRawMessages(scope, [session([forgotten])]), counts(0, 0, 1));
+    assert.deepEqual(archived(scope.owner), []);
+    assert.deepEqual(mutations, []);
+    const visible = message("visible", "Unrelated note", 20);
+    assert.deepEqual(await service.importRawMessages(scope, [session([forgotten, visible])]), counts(1, 0, 1));
+    assert.deepEqual(archived(scope.owner), [visible]);
+    const target = { client: "archive", sessionId: "first" };
+    assert.deepEqual(calls.filter(([method]) => method === "suppressions.snapshot" || method === "raw.importArchive"), [
+      ["suppressions.snapshot", scope, { ...target, occurredAtMs: [10] }],
+      ["raw.importArchive", scope, target, []],
+      ["suppressions.snapshot", scope, { ...target, occurredAtMs: [10, 20] }],
+      ["raw.importArchive", scope, target, [visible]],
+    ]);
+  });
+}
 
 test("foreign port throws become CoreError and the failed session rolls back", async () => {
   const { service, storage, archived } = setup();
