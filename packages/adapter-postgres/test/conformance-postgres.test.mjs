@@ -254,7 +254,10 @@ const notApplicable = {
   "suppressions.factsFor": ["K-FACTSFOR-1"],
   capture: ["K-CLM-1", "K-CLM-2", "K-CLM-3", "K-CLM-4", "K-CLM-5",
     "K-SRC-1", "K-SRC-2", "K-SRC-3", "K-SRC-4", "K-SRC-5"],
-  "capture.admit": ["K-ADM-1", "K-ADM-2", "K-ADM-3", "K-ADM-4", "K-ADM-5", "K-ADM-6", "K-ADM-7", "K-ADM-8", "K-ADM-9"],
+  "capture.admit": [
+    "K-ADM-1", "K-ADM-2", "K-ADM-3", "K-ADM-4", "K-ADM-5", "K-ADM-6", "K-ADM-7",
+    "K-ADM-8", "K-ADM-9", "K-ADM-10", "K-ADM-11", "K-ADM-12", "K-ADM-13", "K-ADM-14",
+  ],
   "memories.insert": ["K-IMP-T1", "K-IMP-T2", "K-IMP-T3"],
   raw: ["K-RAW-1", "K-RAW-2", "K-RAW-2s", "K-RAW-3", "K-RAW-3w", "K-RAW-3c", "K-RAW-3s",
     "K-RAW-4", "K-RAW-5", "K-RAW-6", "K-RAW-7", "K-RAW-8", "K-RAW-8w", "K-RAW-8s"],
@@ -265,15 +268,41 @@ const notApplicable = {
 };
 
 const { PRIVACY_CASES, runCase } = kit;
-// Every exported case list, so a new kit export cannot escape the inventory below.
-/** @type {ConformanceCase[]} */
-const allCases = Object.values(kit).filter((value) => Array.isArray(value) && value.length > 0 &&
-  value.every((entry) => typeof entry?.id === "string" && typeof entry?.run === "function")).flat();
+
+/** @param {unknown} entry @returns {entry is ConformanceCase} */
+function isCase(entry) {
+  const candidate = /** @type {Partial<ConformanceCase> | null | undefined} */ (entry);
+  return typeof candidate?.id === "string" && typeof candidate?.run === "function";
+}
+
+/** @param {Readonly<Record<string, unknown>>} exports @returns {ConformanceCase[]} */
+function discoverCases(exports) {
+  const cases = [];
+  for (const [name, value] of Object.entries(exports)) {
+    if (!name.endsWith("CASES") && !(Array.isArray(value) && value.some(isCase))) continue;
+    assert.ok(Array.isArray(value), `${name} must export an array of conformance cases`);
+    for (let index = 0; index < value.length; index++) {
+      const entry = value[index];
+      assert.ok(isCase(entry), `${name}[${index}] must have a string id and a run function`);
+      cases.push(entry);
+    }
+  }
+  return cases;
+}
+
+const allCases = discoverCases(kit);
 assert.deepEqual(
   [...selected, ...Object.values(notApplicable).flat()].sort(),
   allCases.map(({ id }) => id).sort(),
   "Every conformance case must be selected or have a reason it is not applicable",
 );
+
+test("conformance inventory rejects malformed case exports offline", () => {
+  const valid = { id: "case", async run() {} };
+  assert.throws(() => discoverCases({ FUTURE_CASES: [valid, undefined] }), /FUTURE_CASES\[1\]/);
+  assert.throws(() => discoverCases({ future: [valid, undefined] }), /future\[1\]/);
+  assert.throws(() => discoverCases({ FUTURE_CASES: [undefined] }), /FUTURE_CASES\[0\]/);
+});
 
 /** @param {ConformanceCase} testCase */
 async function runPreparedCase(factory, testCase, t, execute = runCase) {

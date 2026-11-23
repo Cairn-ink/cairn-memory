@@ -17,14 +17,15 @@ function event(ctx) {
 
 /** @param {CaptureKey} key */
 function selection({ scope, client, sessionId, eventId }) {
-  return { scope, client, sessionId, eventId };
+  return { scope: { ...scope }, client, sessionId, eventId };
 }
 
 /** @param {Context} ctx @param {CaptureKey} key @param {readonly CaptureMessage[]} [batch] */
 function admit({ adapter: { uow, capture } }, key, batch = messages) {
   const enqueue = capture.admit?.bind(capture);
   check(enqueue, "Expected capture.admit");
-  return uow.run(key.scope.owner, { pauseLock: true }, tx => enqueue(tx, key, batch));
+  return uow.run(key.scope.owner, { pauseLock: true }, tx =>
+    enqueue(tx, structuredClone(key), batch.map(message => ({ ...message }))));
 }
 
 /** @param {Context} ctx @param {CaptureKey} key */
@@ -34,12 +35,30 @@ function load({ adapter: { uow, capture } }, key) {
   return uow.run(key.scope.owner, { readOnly: true }, tx => read(tx, selection(key)));
 }
 
-/** @param {Context} ctx @param {CaptureKey} key @param {readonly CaptureMessage[]} [batch] */
-async function claim({ adapter: { uow, capture } }, key, batch = messages) {
-  const claimed = await uow.run(key.scope.owner, { pauseLock: true }, tx =>
-    capture.claim(tx, key, batch, { leaseMs: 60_000 }));
-  check(claimed.status === "claimed", "An admission must be claimable");
+/** @param {Context} ctx @param {CaptureKey} key */
+function claimEvent({ adapter: { uow, capture } }, key) {
+  return uow.run(key.scope.owner, { pauseLock: true }, tx =>
+    capture.claim(tx, structuredClone(key), messages.map(message => ({ ...message })), { leaseMs: 60_000 }));
+}
+
+/** @param {Context} ctx @param {CaptureKey} key */
+async function claim(ctx, key) {
+  const claimed = await claimEvent(ctx, key);
+  check(claimed.status === "claimed", "A new capture must be claimable");
   return claimed.token;
+}
+
+/** @param {Context} ctx @param {string} token */
+async function finishMemory(ctx, token) {
+  const { adapter: { capture, uow }, owner } = ctx;
+  const memory = await row(ctx, "The orchard opens in spring.");
+  const item = { content: memory.text, kind: memory.kind, confidence: memory.confidence, textHash: memory.textHash,
+    embedding: memory.embedding && { model: memory.embedding.model, vector: new Float32Array(memory.embedding.vector) },
+    receipts: [] };
+  const dispatch = await uow.run(owner, { pauseLock: true }, tx => capture.beginDispatch(tx, token));
+  const result = await uow.run(owner, { pauseLock: true }, tx => capture.finish(tx, dispatch.token, [item]));
+  check(result.memories.length === 1, "The fixture must finish with a stored memory");
+  return { token: dispatch.token, result: structuredClone(result) };
 }
 
 /** @type {readonly import("./index.d.mts").ConformanceCase[]} */
@@ -64,21 +83,17 @@ export const ADMISSION_CASES = [
   {
     id: "K-ADM-2", title: "replays a pending, leased, or finished admission", needs: [],
     async run(ctx) {
-      const { adapter: { capture, uow }, owner } = ctx;
+      const { adapter: { capture } } = ctx;
       if (!capture?.admit) return "needs capture.admit";
       const key = event(ctx);
       equal(await admit(ctx, key), { status: "admitted" }, "First admission must be accepted");
       equal(await admit(ctx, key), { status: "duplicate" }, "The first admission must not take a lease");
       const token = await claim(ctx, key);
       equal(await admit(ctx, key), { status: "processing" }, "Redelivery during a live lease must report processing");
-      const memory = await row(ctx, "The orchard opens in spring.");
-      const item = { content: memory.text, kind: memory.kind, confidence: memory.confidence, textHash: memory.textHash,
-        embedding: memory.embedding && { model: memory.embedding.model, vector: new Float32Array(memory.embedding.vector) },
-        receipts: [] };
-      const dispatch = await uow.run(owner, { pauseLock: true }, tx => capture.beginDispatch(tx, token));
-      const result = await uow.run(owner, { pauseLock: true }, tx => capture.finish(tx, dispatch.token, [item]));
-      check(result.memories.length === 1, "The fixture must finish with a stored memory");
+      equal(await claimEvent(ctx, key), { status: "processing" }, "A live admission must not issue another lease");
+      const { result } = await finishMemory(ctx, token);
       equal(await admit(ctx, key), { status: "rawReplay", result }, "Redelivery must return the stored finish result");
+      equal(await claimEvent(ctx, key), { status: "rawReplay", result }, "A finished admission must replay on claim");
     },
   },
   {
@@ -114,7 +129,7 @@ export const ADMISSION_CASES = [
       const enqueue = capture?.admit?.bind(capture);
       if (!enqueue) return "needs capture.admit";
       const key = event(ctx);
-      const run = (/** @type {Tx} */ tx) => enqueue(tx, key, messages);
+      const run = (/** @type {Tx} */ tx) => enqueue(tx, structuredClone(key), messages.map(message => ({ ...message })));
       await rejects(() => uow.run(owner, {}, run), "internal_error");
       await rejects(() => uow.run(owner, { readOnly: true, pauseLock: true }, run), "internal_error");
       equal(await admit(ctx, key), { status: "admitted" }, "Refused calls must not reserve admission identity");
@@ -146,8 +161,8 @@ export const ADMISSION_CASES = [
       await admit(ctx, failed);
       const failedToken = await claim(ctx, failed);
       const failure = { code: "invalid_input", retryable: false, message: "Private error detail." };
+      const codeOnly = { status: "failed", code: "invalid_input" };
       await uow.run(owner, { pauseLock: true }, tx => capture.abandon(tx, failedToken, failure));
-      const codeOnly = { status: "failed", code: failure.code };
       equal(await status(), codeOnly, "Failed must take precedence over done and expose only the code");
       equal(await status(failed.client), codeOnly, "A terminal failure must expose only its code");
       equal(await admit(ctx, failed), { status: "duplicate" }, "Terminal failure must preserve admission identity");
@@ -175,7 +190,7 @@ export const ADMISSION_CASES = [
       await admit(ctx, key);
       const observeToken = () => uow.run(owner, { readOnly: true },
         tx => snapshot.stateToken(tx, { owner, namespaces: [key.scope.namespace] }));
-      const beforeDump = await readDump(harness);
+      const beforeDump = structuredClone(await readDump(harness));
       const beforeToken = await observeToken();
       await uow.run(owner, { readOnly: true }, async tx => {
         await read(tx, key.scope, key.eventId, key.client);
@@ -204,7 +219,7 @@ export const ADMISSION_CASES = [
         check(claimed.status === "claimed", "The all-withheld admission must be claimable");
         return claimed.token;
       });
-      const result = await uow.run(owner, { pauseLock: true }, tx => capture.finish(tx, token, []));
+      const result = structuredClone(await uow.run(owner, { pauseLock: true }, tx => capture.finish(tx, token, [])));
       equal(result.memories, [], "An all-withheld finish must write no memories");
       equal(await admit(ctx, key, withheld), { status: "rawReplay", result }, "The empty finish must be replayable");
     },
@@ -232,6 +247,78 @@ export const ADMISSION_CASES = [
         "Each load must return fresh copies");
       });
       equal(await load(ctx, key), { key, messages }, "The committed admission must preserve the stored values");
+    },
+  },
+  {
+    id: "K-ADM-10", title: "keeps one lease and one finish when a standalone claim precedes admission", needs: [],
+    async run(ctx) {
+      const { adapter: { capture, memories, uow }, owner } = ctx;
+      if (!capture?.admit) return "needs capture.admit";
+      const key = event(ctx);
+      const token = await claim(ctx, key);
+      const admission = await admit(ctx, key);
+      equal(await claimEvent(ctx, key), { status: "processing" }, "Admission must not allow a second lease");
+      equal(admission, { status: "processing" }, "Admission must see the existing standalone lease");
+
+      const finished = await finishMemory(ctx, token);
+      equal(await claimEvent(ctx, key), { status: "rawReplay", result: finished.result },
+        "Claim must replay the standalone finish");
+      await rejects(() => uow.run(owner, { pauseLock: true }, tx => capture.finish(tx, finished.token, [])), "stale_admission");
+      const { items } = await uow.run(owner, { readOnly: true }, tx =>
+        memories.exportPage(tx, ctx.scope(null), { cursor: null, limit: 10 }));
+      equal(items.map(({ id }) => id), [finished.result.memories[0].id], "Only one memory must be stored");
+    },
+  },
+  {
+    id: "K-ADM-11", title: "replays a standalone finish on admission", needs: [],
+    async run(ctx) {
+      if (!ctx.adapter.capture?.admit) return "needs capture.admit";
+      const key = event(ctx);
+      const { result } = await finishMemory(ctx, await claim(ctx, key));
+      equal(await admit(ctx, key), { status: "rawReplay", result }, "Admission must replay a standalone finish");
+      await rejects(() => admit(ctx, { ...key, payloadDigest: "b".repeat(64) }), "event_payload_conflict");
+    },
+  },
+  {
+    id: "K-ADM-12", title: "deduplicates a terminally abandoned standalone claim", needs: [],
+    async run(ctx) {
+      const { adapter: { capture, uow }, owner } = ctx;
+      if (!capture?.admit) return "needs capture.admit";
+      const key = event(ctx);
+      const token = await claim(ctx, key);
+      await uow.run(owner, { pauseLock: true }, tx =>
+        capture.abandon(tx, token, { code: "invalid_input", retryable: false }));
+      equal(await admit(ctx, key), { status: "duplicate" }, "Admission must honor a terminal standalone abandon");
+      await rejects(() => admit(ctx, { ...key, payloadDigest: "b".repeat(64) }), "event_payload_conflict");
+    },
+  },
+  {
+    id: "K-ADM-13", title: "rejects a different digest for a standalone claim", needs: [],
+    async run(ctx) {
+      if (!ctx.adapter.capture?.admit) return "needs capture.admit";
+      const key = event(ctx);
+      await claim(ctx, key);
+      await rejects(() => admit(ctx, { ...key, payloadDigest: "b".repeat(64) }), "event_payload_conflict");
+    },
+  },
+  {
+    id: "K-ADM-14", title: "checks every namespace for conflicts before choosing a standalone replay", needs: [],
+    async run(ctx) {
+      const { adapter: { capture, uow }, owner } = ctx;
+      if (!capture?.admit) return "needs capture.admit";
+      const key = event(ctx);
+      const { result } = await finishMemory(ctx, await claim(ctx, key));
+      const other = { ...key, scope: ctx.scope("other") };
+      const request = { ...key, scope: ctx.scope("requested") };
+      const token = await claim(ctx, other);
+      equal(await admit(ctx, request), { status: "processing" }, "A live lease must take precedence over a finish");
+      await uow.run(owner, { pauseLock: true }, tx =>
+        capture.abandon(tx, token, { code: "storage_error", retryable: true }));
+      equal(await admit(ctx, request), { status: "rawReplay", result }, "A finish must take precedence over duplicate");
+
+      await claim(ctx, other);
+      await claim(ctx, { ...key, scope: ctx.scope("mismatch"), payloadDigest: "b".repeat(64) });
+      await rejects(() => admit(ctx, request), "event_payload_conflict");
     },
   },
 ];

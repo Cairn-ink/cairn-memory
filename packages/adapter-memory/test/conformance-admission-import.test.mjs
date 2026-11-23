@@ -52,6 +52,27 @@ const imported = {
   confidence: 1, source: { kind: "import", client: null, sessionId: null }, embedding: null, createdAtMs: -10,
 };
 
+test("capture status exposes the validated failure code and reads failure fields once", async () => {
+  const { capture, uow } = createMemoryAdapter();
+  const write = (work) => uow.run(scope.owner, { pauseLock: true }, work);
+  await write(tx => capture.admit(tx, key, [message]));
+  const claim = await write(tx => capture.claim(tx, key, [message], { leaseMs: 60_000 }));
+  assert.equal(claim.status, "claimed");
+
+  let codeReads = 0;
+  let retryableReads = 0;
+  await write(tx => capture.abandon(tx, claim.token, {
+    get code() { return ++codeReads === 1 ? "invalid_input" : "Private error detail."; },
+    get retryable() { retryableReads++; return false; },
+  }));
+
+  const status = await uow.run(scope.owner, { readOnly: true }, tx =>
+    capture.status(tx, scope, key.eventId, key.client));
+  assert.deepEqual({ status, codeReads, retryableReads }, {
+    status: { status: "failed", code: "invalid_input" }, codeReads: 1, retryableReads: 1,
+  });
+});
+
 test("queued admission and import writes validate and copy their inputs at entry", async () => {
   const { capture, uow, memories, harness } = createMemoryAdapter();
   const mutableKey = structuredClone(key);
