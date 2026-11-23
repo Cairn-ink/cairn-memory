@@ -1,3 +1,4 @@
+import { cleanContent } from "../privacy/text.mjs";
 import { redactDocumentText } from "./redaction.mjs";
 import { caseInsensitiveWords, NONSPACE, SPACE, WORD } from "./text.mjs";
 
@@ -39,8 +40,14 @@ export function routeDocumentMessages(messages) {
   /** @type {import("./index.mjs").DocumentRouteChoice[][]} */
   const groups = [[], [], []];
   let extractOnly = 0;
+  let illFormedText = 0;
 
   for (const [position, message] of messages.entries()) {
+    if (cleanContent(message.content) !== message.content) {
+      extractOnly++;
+      illFormedText++;
+      continue;
+    }
     const content = redactDocumentText(message.content);
     if (content === null) {
       extractOnly++;
@@ -69,6 +76,10 @@ export function routeDocumentMessages(messages) {
   const candidates = groups.flat();
   return {
     chosen: candidates.slice(0, CARD_LIMIT),
-    drops: { extract_only: extractOnly, capture_limit: Math.max(0, candidates.length - CARD_LIMIT) },
+    drops: {
+      extract_only: extractOnly,
+      capture_limit: Math.max(0, candidates.length - CARD_LIMIT),
+      ...(illFormedText ? { ill_formed_text: illFormedText } : {}),
+    },
   };
 }

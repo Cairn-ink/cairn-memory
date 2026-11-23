@@ -1,3 +1,4 @@
+import { cleanContent } from "../privacy/text.mjs";
 import { redactDocumentText } from "./redaction.mjs";
 
 const REVISION = 1;
@@ -49,6 +50,7 @@ function dropped(reason) {
  * @returns {Promise<import("./index.mjs").DocumentCardBuild>}
  */
 export async function buildDocumentCard(message, { scope, client, canonicalSessionKey }) {
+  if (cleanContent(message.content) !== message.content) return dropped("ill_formed_text");
   if (typeof canonicalSessionKey !== "string" || !canonicalSessionKey) return dropped("missing_session_key");
   const body = redactDocumentText(message.content, true);
   if (body === null) return dropped("unmappable_redaction");

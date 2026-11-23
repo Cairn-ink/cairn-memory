@@ -22,7 +22,12 @@ export interface DocumentRouteChoice {
 export interface DocumentRoutingDecision {
   /** In admission priority order; positions index the original messages. */
   chosen: DocumentRouteChoice[];
-  drops: { extract_only: number; capture_limit: number };
+  drops: {
+    extract_only: number;
+    capture_limit: number;
+    /** Included in extract_only and reported when positive. */
+    ill_formed_text?: number;
+  };
 }
 
 /** Determines eligible cards. All messages remain eligible for the existing extraction flow. */
@@ -57,7 +62,7 @@ export interface DocumentCard {
   sentences: DocumentSentence[];
 }
 
-export type DocumentCardDropReason = "oversize" | "unmappable_redaction" | "empty_body" | "missing_session_key";
+export type DocumentCardDropReason = "oversize" | "unmappable_redaction" | "empty_body" | "missing_session_key" | "ill_formed_text";
 export type DocumentCardBuild =
   | { card: DocumentCard; drops: Readonly<Record<string, never>> }
   | { card: null; drops: Partial<Record<DocumentCardDropReason, 1>> };
