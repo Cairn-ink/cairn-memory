@@ -23,15 +23,17 @@ const READ_INDEX = `SELECT i.indisvalid AS valid, n.nspname AS schema, idx.relna
     pg_catalog.pg_get_indexdef(i.indexrelid) AS definition,
     NOT EXISTS (
       SELECT 1 FROM pg_catalog.unnest(i.indcollation::pg_catalog.oid[]) AS c(oid)
-      WHERE c.oid <> 0 AND NOT EXISTS (
+      WHERE c.oid OPERATOR(pg_catalog.<>) 0 AND NOT EXISTS (
         SELECT 1 FROM pg_catalog.pg_collation pc
-        WHERE pc.oid = c.oid AND pc.collnamespace = 'pg_catalog'::pg_catalog.regnamespace
+        WHERE pc.oid OPERATOR(pg_catalog.=) c.oid
+          AND pc.collnamespace OPERATOR(pg_catalog.=) 'pg_catalog'::pg_catalog.regnamespace
       )
     ) AS builtin_collations
   FROM pg_catalog.pg_index i
   JOIN pg_catalog.pg_class idx ON idx.oid = i.indexrelid
   JOIN pg_catalog.pg_namespace n ON n.oid = idx.relnamespace
-  WHERE idx.relname = (pg_catalog.parse_ident($1)::name[])[1] AND i.indrelid = pg_catalog.to_regclass($2)`;
+  WHERE idx.relname OPERATOR(pg_catalog.=) (pg_catalog.parse_ident($1)::pg_catalog.name[])[1]
+    AND i.indrelid OPERATOR(pg_catalog.=) pg_catalog.to_regclass($2)`;
 
 /** @param {string} name */
 function quoteIdentifier(name) {
@@ -121,6 +123,10 @@ export async function applyMigrations(source, migrations) {
     try {
       await connection.query("SET lock_timeout = '5s'");
       await connection.query("SET statement_timeout = '30s'");
+      // The runner owns its session: the hosted tables live in public, so new objects land there and
+      // only public and pg_catalog are visible. A caller's search_path (or lookalike objects in other
+      // schemas) cannot change what a migration touches or how index definitions render.
+      await connection.query("SET search_path = public, pg_catalog");
       // Index definitions are compared as text; keep their rendering independent of session quoting.
       await connection.query("SET quote_all_identifiers = off");
       if ((await connection.query(MIGRATION_LOCK)).rows[0]?.locked !== true) {

@@ -45,3 +45,7 @@ applied prefix.
 Database tests use `CORE_PG_TEST_URL` to reach a PostgreSQL instance with
 pgvector and PGroonga. The test role needs permission to create and drop the
 disposable databases and install the extensions.
+
+The migration runner owns its session settings: it sets `search_path = public, pg_catalog` (the
+hosted tables live in `public`) and turns off identifier quoting before it compares index
+definitions, so the caller's session settings cannot change what a migration touches.

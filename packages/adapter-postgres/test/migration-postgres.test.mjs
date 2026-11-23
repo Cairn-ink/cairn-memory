@@ -321,3 +321,28 @@ test('Postgres refuses a same-name index whose "C" collation only renders like t
   assert.ok(error instanceof CoreError);
   assert.equal(error.code, "index_unavailable");
 });
+
+test("the runner builds and records the index even when the caller's search path shadows the built-in collation", migrationDbTest, async (t) => {
+  const { pool, source, migrations } = await migrationDatabase(t, { migrate: false });
+  await pool.query("CREATE SCHEMA lookalike");
+  await pool.query("CREATE COLLATION lookalike.\"C\" (provider = libc, locale = 'C')");
+  const lookalikeFirst = {
+    async connect() {
+      const connection = await source.connect();
+      await connection.query("SET search_path = lookalike, pg_catalog, public");
+      return connection;
+    },
+  };
+  await applyMigrations(lookalikeFirst, migrations);
+  const { rows: [index] } = await pool.query(`
+    SELECT i.indisvalid,
+      (SELECT array_agg(n.nspname::text ORDER BY n.nspname::text COLLATE "C")
+        FROM unnest(i.indcollation::oid[]) AS c(oid)
+        JOIN pg_collation pc ON pc.oid = c.oid JOIN pg_namespace n ON n.oid = pc.collnamespace) AS schemas
+    FROM pg_index i WHERE i.indexrelid = 'public.memories_user_recent_c'::regclass`);
+  assert.equal(index.indisvalid, true);
+  // user_id (default collation) and id (COLLATE "C") must both use built-in collations.
+  assert.deepEqual(index.schemas, ["pg_catalog", "pg_catalog"]);
+  const { rows } = await pool.query("SELECT id FROM public.core_schema_migrations ORDER BY id");
+  assert.equal(rows.length, migrations.length);
+});
