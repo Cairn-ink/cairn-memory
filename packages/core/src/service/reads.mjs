@@ -13,9 +13,9 @@ import { hostedProjection } from "./session-wire.mjs";
 /** @typedef {import("../ports/retrieval.d.ts").RetrievalScope} RetrievalScope */
 /** @typedef {import("../ports/unit-of-work.d.ts").Tx} Tx */
 
-/** @param {Scope} scope @returns {RetrievalScope} */
-export function readSet({ owner, namespace }) {
-  return { owner, namespaces: [namespace] };
+/** @param {Scope} scope @param {Pick<RetrievalScope, "clients" | "window">} [filters] @returns {RetrievalScope} */
+export function readSet({ owner, namespace }, filters) {
+  return { owner, namespaces: [namespace], ...filters };
 }
 
 /** @param {MemoryRow[]} rows @param {RetrievalScope} scope @param {Tx} tx @param {StorageAdapter["fence"]} fence */
@@ -57,10 +57,10 @@ export async function readStateToken(snapshot, tx, scope, positionToken) {
 }
 
 /** @param {StorageAdapter} storage @param {"recent-v1" | "export-v1"} route
- * @param {Scope} scope @param {unknown} options
+ * @param {Scope} scope @param {unknown} options @param {Pick<RetrievalScope, "clients" | "window">} [filters]
  */
-async function storePage({ uow, recent, memories, snapshot, fence }, route, scope, options) {
-  const readScope = readSet(scope);
+async function storePage({ uow, recent, memories, snapshot, fence }, route, scope, options, filters) {
+  const readScope = readSet(scope, filters);
   const { cursor, limit } = validateObject(options === undefined ? {} : options, ["cursor", "limit"]);
   if (limit !== undefined && typeof limit !== "number") throw new CoreError("invalid_input");
   const binding = [route, scope.owner, scope.namespace];
@@ -94,9 +94,11 @@ async function storePage({ uow, recent, memories, snapshot, fence }, route, scop
   });
 }
 
-/** @param {StorageAdapter} storage @param {Scope} scope @param {unknown} options */
-export function recentPage(storage, scope, options) {
-  return storePage(storage, "recent-v1", scope, options);
+/** @param {StorageAdapter} storage @param {Scope} scope @param {unknown} options
+ * @param {Pick<RetrievalScope, "clients" | "window">} [filters]
+ */
+export function recentPage(storage, scope, options, filters) {
+  return storePage(storage, "recent-v1", scope, options, filters);
 }
 
 /** @param {unknown} value @param {number} max */

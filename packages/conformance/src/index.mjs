@@ -8,6 +8,7 @@ export { captureCases as CAPTURE_CASES } from "./capture-cases.mjs";
 export { PRIVACY_MATCH_CASES } from "./privacy-match-cases.mjs";
 export { SOURCE_FILTER_CASES } from "./source-filter-cases.mjs";
 export { KEYED_DIGEST_CASES } from "./keyed-digest-cases.mjs";
+export { RETRIEVAL_WINDOW_CASES } from "./retrieval-window-cases.mjs";
 export { topicCases as TOPIC_CASES } from "./topics-cases.mjs";
 export { RAW_CASES } from "./raw-cases.mjs";
 

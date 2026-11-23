@@ -13,9 +13,8 @@ import { readCursor, readSet, readStateToken, recentPage } from "./reads.mjs";
 /** @typedef {import("../ports/common.d.ts").MemoryRow} MemoryRow */
 
 /** @param {import("./index.d.mts").MemoryServiceDeps} deps */
-export function recallMethod({ storage, embedQuery, gate, diagnostics, clock }) {
-  const { uow, snapshot, lexical, vector, capabilities, hydrate, fence } = storage;
-
+export function recallMethod(deps) {
+  const search = recallSearch(deps);
   return entry(async (input, raw, options) => {
     const scope = scopeOf(input);
     if (typeof raw !== "string") throw new CoreError("invalid_input");
@@ -24,6 +23,20 @@ export function recallMethod({ storage, embedQuery, gate, diagnostics, clock }) 
     if (requestedLimit !== undefined && typeof requestedLimit !== "number") throw new CoreError("invalid_input");
     if (mode !== "search" && mode !== "plugin") throw new CoreError("invalid_input");
     const limit = pageLimit(requestedLimit);
+    return search(scope, query, { cursor, limit, mode });
+  });
+}
+
+/** @param {import("./index.d.mts").MemoryServiceDeps} deps */
+export function recallSearch({ storage, embedQuery, gate, diagnostics, clock }) {
+  const { uow, snapshot, lexical, vector, capabilities, hydrate, fence } = storage;
+  /**
+   * @param {import("../ports/common.d.ts").Scope} scope
+   * @param {string} query Prepared by the service entry.
+   * @param {{ cursor: unknown; limit: number; mode: "search" | "plugin" }} options
+   * @param {Pick<import("../ports/retrieval.d.ts").RetrievalScope, "clients" | "window">} [filters] Used by find for its first page.
+   */
+  return async (scope, query, { cursor, limit, mode }, filters) => {
     // Refuse an unsupported search before any dependency call, as the other placeholders do.
     if (query && (!lexical || !hydrate)) throw new CoreError("capability_unavailable");
     const binding = ["recall-v2", scope.owner, scope.namespace, await clock.sha256Hex(query), mode, limit];
@@ -32,7 +45,7 @@ export function recallMethod({ storage, embedQuery, gate, diagnostics, clock }) 
       const position = readCursor(cursor, binding, 1);
       const [inner] = position ?? [];
       if (position && (typeof inner !== "string" || !inner)) throw new CoreError("cursor_stale");
-      const result = await recentPage(storage, scope, { cursor: inner ?? null, limit });
+      const result = await recentPage(storage, scope, { cursor: inner ?? null, limit }, filters);
       return {
         items: result.items,
         nextCursor: result.nextCursor === null ? null : encodeCursor([...binding, result.nextCursor]),
@@ -77,7 +90,7 @@ export function recallMethod({ storage, embedQuery, gate, diagnostics, clock }) 
     }
     if (positionPath === "hybrid" && !embedding) throw new CoreError("cursor_stale");
 
-    const readScope = readSet(scope);
+    const readScope = readSet(scope, filters);
     const hostedPool = FUSION_PRESETS.hosted.pool;
     // Fetch enough lexical rows for the hybrid pool and for lexical fallback, including lookahead.
     const lexicalDepth = Math.max(embedding ? hostedPool : 0, offset + limit + 1);
@@ -138,5 +151,5 @@ export function recallMethod({ storage, embedQuery, gate, diagnostics, clock }) 
       }
       return { items, nextCursor, scores };
     });
-  });
+  };
 }
