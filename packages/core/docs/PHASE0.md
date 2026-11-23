@@ -82,11 +82,23 @@ Each addendum is additive unless it says what it supersedes. Adapters written ag
    - It supersedes nothing. The conformance kit must accept adapters without it.
    - Reason: core's sizing text undercounts the provider body. Five inline qualification items with four 180-character CJK excerpts each measured 5,857 tokens by core's sizing text and 7,512 by the serialized provider body. The engine rejects that group and accepts each item alone. Without the hook, a verbatim adapter would plan differently.
 2. **Error code `model_cancelled`** (kind `unavailable`, not retryable). Raised only when the model adapter's call ends with an AbortError that is not the capture deadline, as the engine does today. The deadline path keeps `model_timeout`. It supersedes nothing.
-
 3. **TopicStore** replaces PlacementJournal under the `placement` capability. Titles read as null when any
    source is gone, forgotten, or off its recorded revision. A classified-unfiled outcome is excluded from
    pending work until the memory revision changes. The new error code is `moc_title_conflict` (kind `conflict`).
    For privacy, `applyPlacement` binds every new topic title to all memory ids and guarded revisions in `basedOn.memoryRevisions`.
+4. **`embeddingRequiredOnInsert`** (capability, default false). A store with this flag refuses an insert or content replacement with `embedding: null` as `invalid_input`.
+   - The orchestrator never inserts a null embedding into a store with this flag. A missing vector is the retryable `embedding_failed`.
+   - The conformance kit supplies fixture vectors when the flag is set.
+   - It supersedes nothing.
+   - The hosted schema requires an embedding through its `NOT NULL` vector column.
+5. **Keyed row digests.** `DuplicateQuery`, `InsertRow`, and `FinishItem` accept optional `digests` from core's `allDigests(text, key)` under the owner's current key. Stores persist row digests.
+   - For an HMAC-only text fact, a row or query without a digest under the fact's key ID is ineligible. Reads hide the row and writes deny the query.
+   - The reference store can derive row digests from stored text. Stores with existing data backfill before switching and require the count of rows lacking a current-key digest to be zero.
+   - Rotation stages the pending key's digest for every existing row while writes continue to use the retained key ring. Before publishing, rotation rechecks owners with active writes or changed committed state and refreshes the staged rows to include writes that committed during staging. It then publishes the refreshed rows and adds the pending key to the ring as current in one step. Rows keep digests under every retained key so earlier facts remain comparable.
+   - A store with retained non-current keys refuses rotation while any live HMAC-only text fact holds a digest under one of those keys.
+   - A key may be dropped only when no live fact holds a digest under it.
+   - Core write paths fill query digests before core-backed writes. A query without digests is blocked while an HMAC-only text fact applies.
+   - It supersedes nothing.
 
 ## Change requests
 

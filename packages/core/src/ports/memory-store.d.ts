@@ -1,8 +1,11 @@
+import type { TextDigest } from "../suppression-fact.mjs";
 import type { MemoryKind, MemoryRow, Origin, Receipt, Revision, Scope, SortKeyUs, SourceRef } from "./common.d.ts";
 import type { Tx } from "./unit-of-work.d.ts";
 
 export interface DuplicateQuery {
   textHash: string;
+  /** Core's allDigests(text, key) under the owner's current key. Stores persist row digests. */
+  digests?: TextDigest[];
   /** Digest under the legacy engine fingerprint, when it differs (lookup only). */
   legacyHash?: string;
   /** Absent when the incoming text is not embedded (near matching is then skipped and counted). */
@@ -54,6 +57,8 @@ export interface InsertRow {
   origin: Origin;
   text: string;
   textHash: string;
+  /** Core's allDigests(text, key) under the owner's current key. Stores persist row digests. */
+  digests?: TextDigest[];
   confidence: number;
   source: SourceRef;
   /** null when not embedded at write time (engine pump, or a store without an embedder). */

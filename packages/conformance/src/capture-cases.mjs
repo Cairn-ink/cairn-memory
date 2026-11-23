@@ -1,5 +1,5 @@
 import { CoreError } from "@cairn-ink/core";
-import { caught, check, equal, readDump, rejects } from "./support.mjs";
+import { caught, check, equal, fixtureEmbedding, readDump, rejects } from "./support.mjs";
 
 /** @typedef {import("./index.d.mts").CaseContext} CaseContext */
 /** @typedef {import("@cairn-ink/core/ports").CaptureKey} CaptureKey */
@@ -32,9 +32,11 @@ function claimedToken(result) {
   return result.token;
 }
 
-/** @param {CaseContext} ctx @param {string} content @returns {Promise<FinishItem>} */
-async function itemFor(ctx, content) {
-  return { content, kind: "fact", confidence: 0.4, textHash: await ctx.hash(content), embedding: null, receipts: [] };
+/** @param {CaseContext} ctx @param {string} content @param {boolean} [needsFixtureEmbedding] @returns {Promise<FinishItem>} */
+async function itemFor(ctx, content, needsFixtureEmbedding = true) {
+  const fixture = needsFixtureEmbedding ? fixtureEmbedding(ctx) : null;
+  const embedding = fixture && { model: fixture.model, vector: new Float32Array(fixture.vector) };
+  return { content, kind: "fact", confidence: 0.4, textHash: await ctx.hash(content), embedding, receipts: [] };
 }
 
 /** @param {CaseContext} ctx @param {string} token @param {readonly FinishItem[]} items */
@@ -165,6 +167,7 @@ export const captureCases = [
     id: "K-CLM-3", title: "finish decisions, index revisions, and rollback", needs: [],
     async run(ctx) {
       const { adapter: { uow, capture, memories }, owner, harness } = ctx;
+      const { embeddingRequiredOnInsert, nearDuplicate } = ctx.adapter.capabilities;
       const scope = ctx.scope(null);
       const readPage = () => uow.run(owner, { readOnly: true },
         (tx) => memories.exportPage(tx, scope, { cursor: null, limit: 10 }));
@@ -184,7 +187,8 @@ export const captureCases = [
       check(seed.memories.length === 1, "The seed finish must produce one memory");
       const beforeA = await stateToken(ctx);
       const beforeSuppression = await storedExactMatches(ctx, blocked);
-      const a = await finishNew("mixed", [inserted, stored, blocked]);
+      const storedCopy = embeddingRequiredOnInsert ? await itemFor(ctx, stored.content) : stored;
+      const a = await finishNew("mixed", [inserted, storedCopy, blocked]);
       check(Number.isSafeInteger(a.indexRevision), "Finish must return a safe integer index revision");
       equal(a.indexRevision, seed.indexRevision + 1, "A finish with multiple writes must advance the index once");
       equal(a.duplicateCount, 1, "The stored duplicate must count as a duplicate");
@@ -216,7 +220,8 @@ export const captureCases = [
       equal(c.indexRevision, a.indexRevision + 1, "The next finish with writes must advance the index once");
 
       const repeated = await itemFor(ctx, "Repeated memory");
-      const batch = await finishNew("in-batch-duplicate", [repeated, repeated]);
+      const repeatedCopy = embeddingRequiredOnInsert ? await itemFor(ctx, repeated.content) : repeated;
+      const batch = await finishNew("in-batch-duplicate", [repeated, repeatedCopy]);
       equal(batch.duplicateCount, 1, "The in-batch copy must count as a duplicate");
       equal(batch.memories.length, 2, "Both in-batch positions must be reported");
       const [first, copy] = batch.memories;
@@ -255,13 +260,26 @@ export const captureCases = [
       equal(await readDump(harness), before, "A caught finish failure must roll back the committed dump");
       equal(await stateToken(ctx), beforeRollback, "A caught finish failure must preserve the state token");
       equal((await claim(ctx, rollbackKey)).status, "processing", "A caught finish failure must restore the live claim");
+
+      if (embeddingRequiredOnInsert && nearDuplicate) {
+        const [origin, paraphrase] = await Promise.all([
+          itemFor(ctx, "Near memory", false), itemFor(ctx, "Similar memory", false),
+        ]);
+        origin.embedding = { model: "test", vector: new Float32Array(ctx.vec(0)) };
+        paraphrase.embedding = { model: "test", vector: new Float32Array(ctx.vec(0.05)) };
+        const near = await finishNew("in-batch-near-duplicate", [origin, paraphrase]);
+        equal(near.duplicateCount, 1, "The near pair must count as a duplicate");
+        equal(near.memories.length, 2, "Both near positions must be reported");
+        equal(near.memories[0].outcome, "inserted", "The first near position must be inserted");
+        equal(near.memories[1].id, near.memories[0].id, "The near copy must refer to the first row");
+      }
     },
     followUp: {
       needs: ["vectorSuppression", "semanticRetrieval"],
       async run(ctx) {
         const { harness, owner } = ctx;
         const forgottenHash = await ctx.hash("Forgotten vector memory");
-        const nearby = await itemFor(ctx, "Nearby vector memory");
+        const nearby = await itemFor(ctx, "Nearby vector memory", false);
         nearby.embedding = { model: "test", vector: new Float32Array(ctx.vec(0.15)) };
         await harness.seedFact(owner, {
           owner, actionId: "forget-vector", origin: "forget", kind: "text", mode: "full",

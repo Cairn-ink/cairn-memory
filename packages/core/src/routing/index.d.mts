@@ -73,17 +73,6 @@ export type DocumentCardBuild =
 
 export declare function buildDocumentCard(message: DocumentMessage, session: DocumentSession): Promise<DocumentCardBuild>;
 
-/**
- * Optional fallback for hosts with receipts and no capture-time set of touched
- * memories. Keep capture-time binding when available. Matches client, plain
- * sessionId and messageId, ignores role for matching, keeps the highest matching
- * revision per id and sorts by UTF-8 id order. Malformed input throws invalid_input.
- */
-export declare function documentCardMemoryLinks(
-  sourceMessage: DocumentCardSourceMessage,
-  memories: ReadonlyArray<{ id: string; revision: Revision; receipts: readonly Receipt[] }>,
-): { id: string; revision: Revision }[];
-
 export interface DocumentPieceOptions {
   maxTokens: number;
   countTokens: (text: string) => number;
@@ -132,3 +121,15 @@ export declare function rankDocumentCards(
 ): DocumentCardMatch | null;
 
 export * from "./visibility.mjs";
+export * from "./amendments.mjs";
+
+/**
+ * Optional fallback for hosts with receipts and no capture-time set of touched
+ * memories. Keep capture-time binding when available. Matches client, plain
+ * sessionId and messageId, ignores role for matching, keeps the highest matching
+ * revision per id and sorts by UTF-8 id order. Malformed input throws invalid_input.
+ */
+export declare function documentCardMemoryLinks(
+  sourceMessage: DocumentCardSourceMessage,
+  memories: ReadonlyArray<{ id: string; revision: Revision; receipts: readonly Receipt[] }>,
+): { id: string; revision: Revision }[];

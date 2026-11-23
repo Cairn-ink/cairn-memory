@@ -1,4 +1,4 @@
-import { CoreError, isErrorCode } from "@cairn-ink/core";
+import { CoreError, isErrorCode, validateSuppressionFact } from "@cairn-ink/core";
 
 /** @typedef {import("@cairn-ink/core/ports").InsertRow} InsertRow */
 /** @typedef {import("@cairn-ink/core/ports").Receipt} Receipt */
@@ -29,23 +29,87 @@ function invalid() {
   throw new CoreError("invalid_input");
 }
 
-/** @param {import("@cairn-ink/core/ports").CaptureKey} key */
-export function copyCaptureKey(key) {
-  if (!key || !key.scope || !nonempty(key.scope.owner) || !nullableString(key.scope.namespace ?? null) ||
-    !nonempty(key.client) || !nonempty(key.sessionId) || !nonempty(key.eventId) ||
-    typeof key.payloadDigest !== "string" || !/^[0-9a-f]{64}$/.test(key.payloadDigest)) invalid();
-  const { scope: { owner, namespace }, client, sessionId, eventId, payloadDigest } = key;
+/** @param {import("@cairn-ink/core/ports").CaptureKey} key @param {string | undefined} owner
+ * @param {string | null | undefined} namespace
+ */
+export function copyCaptureKey(key, owner, namespace) {
+  if (!key) invalid();
+  const { client, sessionId, eventId, payloadDigest } = key;
+  if (typeof owner !== "string" || owner.length === 0 || !nullableString(namespace ?? null) || !nonempty(client) ||
+      !nonempty(sessionId) || !nonempty(eventId) || typeof payloadDigest !== "string" ||
+      !/^[0-9a-f]{64}$/.test(payloadDigest)) invalid();
   return { scope: { owner, namespace: namespace ?? null }, client, sessionId, eventId, payloadDigest };
 }
 
-/** @param {readonly import("@cairn-ink/core/ports").CaptureMessage[]} messages */
-export function validateCaptureMessages(messages) {
-  if (!Array.isArray(messages)) invalid();
-  for (const message of messages) {
-    if (!message || typeof message.id !== "string" || message.id.length > 512 || !roles.includes(message.role) ||
-      typeof message.content !== "string" ||
-      (message.occurredAtMs !== null && !Number.isSafeInteger(message.occurredAtMs))) invalid();
+/** Read indexed data once and ignore caller-provided traversal methods.
+ * @template T @param {readonly T[]} values
+ * @param {{strictKeys?: boolean, allowEntries?: boolean, maxLength?: number}} [options] @returns {T[]}
+ */
+export function snapshotArray(values, { strictKeys = false, allowEntries = false, maxLength = 0xffff_ffff } = {}) {
+  const snapshot = [];
+  try {
+    if (!Array.isArray(values)) invalid();
+    const descriptor = Object.getOwnPropertyDescriptor(values, "length");
+    if (!descriptor || !Object.hasOwn(descriptor, "value")) invalid();
+    const length = descriptor.value;
+    if (!Number.isSafeInteger(length) || length < 0 || length > maxLength ||
+        !Object.is(length, Reflect.get(values, "length"))) invalid();
+    const keys = new Set(Reflect.ownKeys(values));
+    // Existing callers may supply traversal overrides. These properties are never read.
+    for (const method of [!strictKeys ? Symbol.iterator : undefined, allowEntries ? "entries" : undefined]) {
+      if (method !== undefined && keys.delete(method) && !Object.getOwnPropertyDescriptor(values, method)) invalid();
+    }
+    if (!keys.delete("length") || keys.size !== length) invalid();
+    for (let index = 0; index < length; index++) {
+      const key = String(index);
+      if (!keys.has(key) || !(key in values)) invalid();
+      const slot = Object.getOwnPropertyDescriptor(values, key);
+      // The property read only checks for conflicting proxy traps.
+      if (!slot || !Object.hasOwn(slot, "value") ||
+          !Object.is(slot.value, Reflect.get(values, key)) || (strictKeys && !slot.enumerable)) invalid();
+      snapshot.push(slot.value);
+    }
+  } catch {
+    invalid();
   }
+  return snapshot;
+}
+
+/** @param {import("@cairn-ink/core").TextDigest[] | undefined} digests */
+function copyDigests(digests) {
+  if (digests === undefined) return undefined;
+  try {
+    const copy = snapshotArray(digests).map((digest) => {
+      if (!digest || typeof digest !== "object" || Array.isArray(digest)) invalid();
+      /** @param {keyof typeof digest} key */
+      const field = (key) => Object.getOwnPropertyDescriptor(digest, key)?.value;
+      return {
+        alg: field("alg"), value: field("value"), pipeline: field("pipeline"),
+        redactionVersion: field("redactionVersion"), keyId: field("keyId"),
+      };
+    });
+    validateSuppressionFact({
+      kind: "text", mode: "exact", origin: "forget", owner: "validation", actionId: "validation",
+      text: { digests: copy },
+    });
+    return copy;
+  } catch {
+    invalid();
+  }
+}
+
+/** @param {readonly import("@cairn-ink/core/ports").CaptureMessage[]} messages */
+export function captureMessageTimes(messages) {
+  /** @type {Array<number | null>} */
+  const times = [];
+  for (const message of snapshotArray(messages)) {
+    if (!message || typeof message.id !== "string" || message.id.length > 512 || !roles.includes(message.role) ||
+      typeof message.content !== "string") invalid();
+    const { occurredAtMs } = message;
+    if (occurredAtMs !== null && !Number.isSafeInteger(occurredAtMs)) invalid();
+    times.push(occurredAtMs);
+  }
+  return times;
 }
 
 /** @param {{code: string, retryable: boolean}} failure */
@@ -54,16 +118,15 @@ export function copyCaptureFailure(failure) {
   return { code: failure.code, retryable: failure.retryable };
 }
 
-/** @param {readonly import("@cairn-ink/core/ports").FinishItem[]} items */
-export function copyFinishItems(items) {
-  if (!Array.isArray(items)) invalid();
-  return Array.from(items, (item) => {
+/** @param {readonly import("@cairn-ink/core/ports").FinishItem[]} items @param {boolean} embeddingRequiredOnInsert */
+export function copyFinishItems(items, embeddingRequiredOnInsert) {
+  return snapshotArray(items).map((item) => {
     if (!item) invalid();
     const row = copyContent({
       kind: item.kind, origin: "inferred", text: item.content, textHash: item.textHash,
       confidence: item.confidence, source: { kind: "capture", client: null, sessionId: null },
-      embedding: item.embedding,
-    }, "capture");
+      embedding: item.embedding, digests: item.digests,
+    }, "capture", embeddingRequiredOnInsert);
     return { row, receipts: copyReceipts(item.receipts) };
   });
 }
@@ -111,19 +174,12 @@ export function validateSource(source) {
  * @returns {number[]}
  */
 export function readEmbedding(vector, format = "memory") {
-  const values = [];
+  /** @type {number[]} */
+  let values = [];
   try {
     if (Array.isArray(vector) && format !== "capture") {
-      const length = Object.getOwnPropertyDescriptor(vector, "length")?.value;
-      if (!Number.isInteger(length) || length < 0 || length > 0xffff_ffff ||
-          !Object.is(length, Reflect.get(vector, "length"))) invalid();
-      for (let index = 0; index < length; index++) {
-        const slot = Object.getOwnPropertyDescriptor(vector, index);
-        // Keep the descriptor value. The property read only detects conflicting proxy traps.
-        if (!slot || !Object.hasOwn(slot, "value") || !Number.isFinite(slot.value) ||
-            !Object.is(slot.value, Reflect.get(vector, String(index)))) invalid();
-        values.push(slot.value);
-      }
+      values = snapshotArray(vector);
+      if (!values.every(Number.isFinite)) invalid();
     } else {
       const tag = typedArrayTag?.call(vector);
       if (format === "fact" || (tag !== "Float32Array" && !(format === "passage" && tag === "Float64Array"))) invalid();
@@ -139,7 +195,7 @@ export function readEmbedding(vector, format = "memory") {
   } catch {
     invalid();
   }
-  if (values.length === 0 && format !== "fact") invalid();
+  if (values.length === 0 && format !== "fact" && !(format === "passage" && Array.isArray(vector))) invalid();
   return values;
 }
 
@@ -148,49 +204,46 @@ export function validateLimit(limit) {
   if (!Number.isSafeInteger(limit) || limit < 1) invalid();
 }
 
-/** @param {import("@cairn-ink/core/ports").RetrievalScope} scope */
-export function validateReadSet({ namespaces, clients }) {
-  if (!Array.isArray(namespaces) || namespaces.length === 0) invalid();
+/** @param {string} owner @param {Omit<import("@cairn-ink/core/ports").RetrievalScope, "owner">} scope */
+export function copyReadScope(owner, { namespaces, clients }) {
+  const namespaceList = snapshotArray(namespaces);
+  if (namespaceList.length === 0) invalid();
   const seen = new Set();
-  for (const namespace of namespaces) {
+  for (const namespace of namespaceList) {
     if (!nullableString(namespace) || seen.has(namespace)) invalid();
     seen.add(namespace);
   }
-  if (clients !== undefined) {
-    if (!Array.isArray(clients)) invalid();
-    for (const client of clients) {
-      if (typeof client !== "string") invalid();
-    }
-  }
+  const clientList = clients === undefined ? undefined : snapshotArray(clients);
+  if (clientList?.some((client) => typeof client !== "string")) invalid();
+  return { owner, namespaces: namespaceList, clients: clientList };
 }
 
 /** @param {readonly import("@cairn-ink/core/ports").ItemRef[]} refs */
-export function validateRefs(refs) {
-  if (!Array.isArray(refs)) invalid();
-  for (const ref of refs) {
-    if (!ref || typeof ref !== "object" || !["memory", "raw", "card"].includes(ref.type) ||
-      typeof ref.id !== "string" || !nullableString(ref.namespace)) invalid();
-  }
+export function copyRefs(refs) {
+  return snapshotArray(refs).map((ref) => {
+    if (!ref || typeof ref !== "object") invalid();
+    const { type, id, namespace } = ref;
+    if (!["memory", "raw", "card"].includes(type) || typeof id !== "string" || !nullableString(namespace)) invalid();
+    return { type, id, namespace };
+  });
 }
 
 /** @param {readonly DuplicateQuery[]} batch @returns {CanonicalQuery[]} */
 export function copyDuplicateBatch(batch) {
-  if (!Array.isArray(batch)) invalid();
-  const copy = [];
-  for (let index = 0, length = batch.length; index < length; index++) {
-    const query = batch[index];
+  return snapshotArray(batch).map((query) => {
     if (!query || typeof query !== "object") invalid();
-    const { textHash, legacyHash, embedding } = query;
+    const { textHash, legacyHash, embedding, digests } = query;
     if (!isTextHash(textHash) || (legacyHash !== undefined && !isTextHash(legacyHash))) invalid();
-    copy.push({ textHash, legacyHash, embedding: embedding == null ? embedding : readEmbedding(embedding) });
-  }
-  return copy;
+    return { textHash, legacyHash, digests: copyDigests(digests),
+      embedding: embedding == null ? embedding : readEmbedding(embedding) };
+  });
 }
 
-/** @param {InsertRow} row @param {"memory" | "capture"} [format] */
-export function copyContent(row, format = "memory") {
+/** @param {InsertRow} row @param {"memory" | "capture"} format @param {boolean} embeddingRequiredOnInsert */
+export function copyContent(row, format, embeddingRequiredOnInsert) {
   validateMerge(row);
-  const { kind, origin, text, textHash, confidence, source, embedding } = row;
+  const { kind, origin, text, textHash, confidence, source, embedding, digests } = row;
+  if (embeddingRequiredOnInsert && embedding === null) invalid();
   if (!kinds.includes(kind) || !origins.includes(origin) || !nonempty(text) ||
     !isTextHash(textHash)) invalid();
   validateSource(source);
@@ -203,18 +256,17 @@ export function copyContent(row, format = "memory") {
     if (!nonempty(model)) invalid();
     copy = { model, vector: readEmbedding(vector, format) };
   }
-  return { kind, origin, text, textHash, confidence,
+  return { kind, origin, text, textHash, confidence, digests: copyDigests(digests),
     source: { kind: source.kind, client: source.client, sessionId: source.sessionId }, embedding: copy };
 }
 
 /** @param {readonly Receipt[]} receipts */
 export function copyReceipts(receipts) {
-  if (!Array.isArray(receipts)) invalid();
-  return Array.from(receipts, (receipt) => {
-    if (!receipt || !nonempty(receipt.client) || !nonempty(receipt.sessionId) ||
-      !nonempty(receipt.messageId) || !roles.includes(receipt.role) ||
-      (receipt.occurredAtMs !== null && !Number.isFinite(receipt.occurredAtMs))) invalid();
+  return snapshotArray(receipts).map((receipt) => {
+    if (!receipt) invalid();
     const { client, sessionId, messageId, role, occurredAtMs } = receipt;
+    if (!nonempty(client) || !nonempty(sessionId) || !nonempty(messageId) || !roles.includes(role) ||
+      (occurredAtMs !== null && !Number.isFinite(occurredAtMs))) invalid();
     return { client, sessionId, messageId, role, occurredAtMs };
   });
 }

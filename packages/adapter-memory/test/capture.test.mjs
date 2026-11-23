@@ -43,13 +43,17 @@ function stateToken(adapter) {
   return read(adapter, (tx) => adapter.snapshot.stateToken(tx, readSet));
 }
 
-test("capture source filtering fails closed", async () => {
+test("capture source filtering admits messages for an owner without facts", async () => {
   const adapter = createMemoryAdapter();
   const { capture } = adapter;
-  await assert.rejects(write(adapter, (tx) => capture.eligible(tx, key("filter"), [])),
-    errorCode("capability_unavailable"));
-  await assert.rejects(write(adapter, (tx) => capture.assertEligible(tx, key("filter"), [0])),
-    errorCode("capability_unavailable"));
+  const captureKey = key("filter");
+  const messages = [null, 10].map((occurredAtMs, index) =>
+    ({ id: String(index), role: "user", content: "Test message", occurredAtMs }));
+  assert.deepEqual(await read(adapter, (tx) => capture.eligible(tx, captureKey, messages)), [0, 1]);
+  await write(adapter, async (tx) => {
+    assert.equal((await capture.claim(tx, captureKey, messages, options)).status, "claimed");
+    await capture.assertEligible(tx, captureKey, [0, 1]);
+  });
 });
 
 test("capture rejects forged and ended transactions", async () => {

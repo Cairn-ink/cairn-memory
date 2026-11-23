@@ -1,7 +1,9 @@
-import { CoreError, NEAR_DUPLICATE_DISTANCE, compareUtf8 } from "@cairn-ink/core";
+import { allDigests, coreDigest, CoreError, NEAR_DUPLICATE_DISTANCE, compareUtf8 } from "@cairn-ink/core";
 import { cosineDistance } from "./cosine.mjs";
 import { decodeCursor, encodeCursor, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
+import { addKeyedDigest } from "./privacy.mjs";
+import { copyPublicRow } from "./unit-of-work.mjs";
 import {
   attachReceipts, copyContent, copyDuplicateBatch, copyMerge, copyReceipts, validateLimit, validateMemoryId,
   validateSource, validateTime, writeNamespace,
@@ -36,9 +38,26 @@ export function writeTime(nowMs) {
  * @param {import("@cairn-ink/core").Capabilities} capabilities
  * @param {() => string} newId
  * @param {ReturnType<typeof createFactMatcher>} [matchFacts]
+ * @param {import("./privacy.mjs").RingKeys} [ringKeys]
  */
-export function createMemoryStore(port, capabilities, newId, matchFacts = createFactMatcher(capabilities.vectorSuppression)) {
+export function createMemoryStore(port, capabilities, newId, matchFacts = createFactMatcher(capabilities.vectorSuppression),
+  ringKeys = async () => []) {
   let nearSkippedUnembedded = 0;
+
+  /** @param {InsertRow} row */
+  const prepareContent = (row) => copyContent(row, "memory", capabilities.embeddingRequiredOnInsert);
+
+  /** @param {string} owner @param {CopiedContent} content */
+  async function rowDigests(owner, content) {
+    const keys = await ringKeys(owner);
+    const provided = content.digests;
+    const digests = provided ? [...provided] : await allDigests(content.text, keys[0]);
+    const remaining = provided ? keys : keys.slice(1);
+    for (const keyed of await Promise.all(remaining.map((key) => coreDigest(content.text, key)))) {
+      addKeyedDigest(digests, keyed);
+    }
+    return digests;
+  }
 
   /**
    * @param {DuplicateQuery} query @param {DuplicateQuery} candidate @param {number} nearDistance
@@ -96,18 +115,20 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           const evidence = attachReceipts([], copyReceipts(receipts));
           validateTime(nowMs);
           const namespace = writeNamespace(scope);
-          return (getState) => {
+          return async (getState, markDirty) => {
             const id = newId();
             if (typeof id !== "string" || !id) throw new CoreError("internal_error");
             const { rows } = getState();
+            const digests = await rowDigests(tx.owner, content);
             let entries = rows.get(namespace);
             if (entries?.has(id)) throw new CoreError("internal_error");
             if (!entries) rows.set(namespace, entries = new Map());
             const created = { id, revision: 1, createdAtMs: nowMs, ...writeTime(nowMs) };
             entries.set(id, {
-              row: { ...content, ...created, scope: { owner: tx.owner, namespace }, historical: false },
+              row: { ...content, digests, ...created, scope: { owner: tx.owner, namespace }, historical: false },
               receipts: evidence,
             });
+            markDirty();
             return created;
           };
         });
@@ -120,7 +141,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           validateTime(nowMs);
           const incoming = copyReceipts(receipts);
           const namespace = writeNamespace(scope);
-          return (getState) => {
+          return (getState, markDirty) => {
             const entry = getState().rows.get(namespace)?.get(id);
             if (!entry) throw new CoreError("memory_not_found");
             const evidence = attachReceipts(entry.receipts, incoming);
@@ -130,6 +151,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
             const revision = row.revision + Number(changed);
             Object.assign(row, { confidence, kind, origin, revision, ...writeTime(nowMs) });
             entry.receipts = evidence;
+            markDirty();
             return { outcome: changed ? "changed" : "touched", revision };
           };
         });
@@ -142,12 +164,17 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
      * @param {SourceRef} source @param {"hash" | "full"} mode @param {string} [editId]
      */
     readWritePolicy(tx, scope, prepareBatch, source, mode, editId) {
-      return port(tx, scope, false, (state) => {
+      return port.read(tx, scope, (getState) => {
         const batch = prepareBatch();
-        const policy = matchFacts(state.facts, scope);
-        const namespace = state.rows.get(scope.namespace);
+        const selection = { owner: tx.owner, namespace: scope.namespace };
+        const state = getState();
+        const policy = matchFacts(state.facts, selection);
+        const namespace = state.rows.get(selection.namespace);
         const entries = entriesIn(namespace).filter(({ row }) => row.id !== editId);
+        // The synchronous scan processes only adapter-owned rows and queries.
+        const before = nearSkippedUnembedded;
         const duplicates = matches(entries.map(({ row }) => row), batch, NEAR_DUPLICATE_DISTANCE);
+        const counters = { nearSkippedUnembedded: nearSkippedUnembedded - before };
         const hidden = new Set(entries.filter(policy.hides).map(({ row }) => row.id));
         const hiddenIds = new Set();
         for (const group of duplicates) {
@@ -166,6 +193,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           hiddenIds: [...hiddenIds].sort(compareUtf8),
           blockedPositions,
           blockedSession: policy.blocksSession(source.client, source.sessionId),
+          counters,
         };
       });
     },
@@ -173,29 +201,32 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
 
   /** @type {MemoryStore} */
   const memories = {
-    ...memoryWrites((tx, scope, prepare) => port.write(tx, scope, true, prepare), copyContent),
+    ...memoryWrites((tx, scope, prepare) => port.write(tx, scope, "conditional", prepare), prepareContent),
 
     async findDuplicates(tx, scope, queries, options) {
-      return port(tx, scope, false, (state) => {
+      return port.read(tx, scope, (getState) => {
         const batch = copyDuplicateBatch(queries);
         if (!options || typeof options !== "object" || !Number.isFinite(options.nearDistance) || options.nearDistance < 0 ||
           (options.excludeId !== undefined && typeof options.excludeId !== "string")) throw new CoreError("invalid_input");
         const { nearDistance, excludeId } = options;
-        const policy = matchFacts(state.facts, scope);
-        const rows = entriesIn(state.rows.get(scope.namespace))
+        const state = getState();
+        const selection = { owner: tx.owner, namespace: scope.namespace };
+        const policy = matchFacts(state.facts, selection);
+        const rows = entriesIn(state.rows.get(selection.namespace))
           .filter((entry) => entry.row.id !== excludeId && !policy.hides(entry)).map(({ row }) => row);
         return matches(rows, batch, nearDistance);
       });
     },
 
     async readWritePolicy(tx, scope, batch, source, mode, editId) {
-      return policyReads.readWritePolicy(tx, scope, () => {
+      const { counters: _counters, ...policy } = await policyReads.readWritePolicy(tx, scope, () => {
         const queries = copyDuplicateBatch(batch);
         validateSource(source);
         if ((mode !== "hash" && mode !== "full") ||
           (editId !== undefined && typeof editId !== "string")) throw new CoreError("invalid_input");
         return queries;
       }, source, mode, editId);
+      return policy;
     },
 
     async readRevision(tx, scope, id) {
@@ -207,13 +238,13 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
 
     async replaceContent(tx, scope, id, expectedRevision, next, receipts, nowMs) {
       return port.write(tx, scope, true, () => {
-        const content = copyContent(next);
+        const content = prepareContent(next);
         validateTime(nowMs);
         const evidence = receipts === null ? null : attachReceipts([], copyReceipts(receipts));
         validateMemoryId(id);
         if (!Number.isInteger(expectedRevision)) throw new CoreError("invalid_input");
         const namespace = writeNamespace(scope);
-        return (getState) => {
+        return async (getState) => {
           const state = getState();
           const entries = state.rows.get(namespace);
           const entry = entries?.get(id);
@@ -223,13 +254,14 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           if (row.historical) throw new CoreError("memory_historical");
           if (content.textHash === row.textHash) return { outcome: "unchanged", revision: row.revision };
 
+          const digests = await rowDigests(tx.owner, content);
           const policy = matchFacts(state.facts, { owner: tx.owner, namespace });
           if (entriesIn(entries).some((other) => other.row.id !== id && other.row.textHash === content.textHash &&
             !policy.hides(other))) {
             throw new CoreError("memory_conflict");
           }
           const revision = row.revision + 1;
-          Object.assign(row, content, { revision, ...writeTime(nowMs) });
+          Object.assign(row, content, { digests, revision, ...writeTime(nowMs) });
           delete row.legacyHash;
           if (evidence !== null) entry.receipts = evidence;
           return { outcome: "changed", revision };
@@ -240,7 +272,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
     async get(tx, scope, id) {
       return port(tx, scope, false, (state) => {
         const row = state.rows.get(scope.namespace)?.get(id)?.row;
-        return row ? structuredClone(row) : null;
+        return row ? copyPublicRow(row) : null;
       });
     },
 
@@ -263,11 +295,12 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
         const { cursor, limit } = page;
         validateLimit(limit);
         const after = cursor === null ? null : decodeCursor(cursor);
-        const policy = matchFacts(state.facts, scope);
-        const rows = entriesIn(state.rows.get(scope.namespace))
+        const selection = { owner: tx.owner, namespace: scope.namespace };
+        const policy = matchFacts(state.facts, selection);
+        const rows = entriesIn(state.rows.get(selection.namespace))
           .filter((entry) => (!after || newestFirst(entry.row, after) > 0) && !policy.hides(entry))
           .map(({ row }) => row).sort(newestFirst);
-        const items = rows.slice(0, limit).map((row) => structuredClone(row));
+        const items = rows.slice(0, limit).map(copyPublicRow);
         const last = items.at(-1);
         return {
           items,
