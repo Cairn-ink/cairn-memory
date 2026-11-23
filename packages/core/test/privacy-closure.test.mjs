@@ -1,26 +1,32 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
+import { builtinModules } from "node:module";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
-// A regex cannot parse JavaScript, so this check does not try to tell code from
-// comments or strings. The package is "type": "module", and in an ES module
-// `require` and `module` do not exist, so a built-in can be reached only through
-// a `node:` specifier, `createRequire` or `process.getBuiltinModule`. Shipped
-// core files may not contain the text `node:` or either loader name anywhere,
-// in code, comments or strings, and no shipped file may be CommonJS (.cjs).
-// The scan reads the text both as written and with escapes decoded.
-// A specifier assembled at run time (for example "no" + "de:fs") is out of
-// reach of any static scan; the closure rule in phase0.test.mjs and review
-// cover that.
+// Scope: this is a tripwire for ACCIDENTAL Node dependencies in shipped core
+// code (an import of a Node built-in, a CommonJS file, a Node-only loader). It is
+// not a sandbox against code written to evade it: eval, new Function, values
+// assembled at run time and similar tricks are out of scope and are covered by
+// review and by the closure rule in phase0.test.mjs.
+//
+// The package is "type": "module". A shipped file may not contain:
+// - the text `node:` (any node: specifier);
+// - a quoted string that is exactly a Node built-in module name, with or
+//   without the prefix (for example "fs", "fs/promises", "process", "module"),
+//   which is how a bare built-in import is written;
+// - the loader names `createRequire` or `getBuiltinModule`;
+// and no shipped file may be CommonJS (.cjs). Each text check runs on the text
+// as written and again with escapes decoded, so an escaped spelling is caught.
 const NODE_TEXT = /node:/u;
 const LOADER_NAMES = /\b(?:createRequire|getBuiltinModule)\b/u;
 const COMMONJS_FILE = /\.cjs$/u;
+const BUILTIN_NAMES = new Set(builtinModules.flatMap((name) => [name, name.replace(/^node:/u, "")]));
+const QUOTED = /(["'`])((?:\\.|(?!\1)[^\\\n])*)\1/gu;
 
-// Module code is strict, so legacy octal escapes cannot occur.
 const SINGLE_ESCAPES = Object.freeze({ b: "\b", f: "\f", n: "\n", r: "\r", t: "\t", v: "\v", 0: "\0" });
 const LINE_TERMINATORS = new Set(["\n", "\r", "\u2028", "\u2029"]);
 const isHex = (text) => text.length > 0 && /^[0-9a-fA-F]+$/u.test(text);
@@ -65,6 +71,9 @@ function violations(source) {
   const texts = [source, unescaped(source)];
   if (texts.some((text) => NODE_TEXT.test(text))) found.push("node: specifier");
   if (texts.some((text) => LOADER_NAMES.test(text))) found.push("loader");
+  for (const match of source.matchAll(QUOTED)) {
+    if (BUILTIN_NAMES.has(unescaped(match[2]))) { found.push("built-in specifier"); break; }
+  }
   return found;
 }
 
@@ -126,14 +135,28 @@ test("the shipped-file scan catches each banned form (negative control)", () => 
   for (const source of [
     'import { createRequire } from "./x.mjs";',
     "const load = globalThis.process.getBuiltinModule;",
-    'process?.["getBuiltinModule"]?.("fs");',
+    'process?.["getBuiltinModule"]?.("x");',
     'const r = create\\u0052equire(import.meta.url);',
-    'process.getBuiltin\\u{004D}odule("fs");',
-    'process["getBuiltin\\Module"]("fs");',
+    'process.getBuiltin\\u{004D}odule("x");',
+    'process["getBuiltin\\Module"]("x");',
   ]) assert.deepEqual(violations(source), loader, source);
+  const builtin = ["built-in specifier"];
+  for (const source of [
+    'import "fs";',
+    'import { readFileSync } from "fs";',
+    'import { readFile } from "fs/promises";',
+    'const fs = await import("fs");',
+    "const fs = await import('fs');",
+    "const fs = await import(`fs`);",
+    'export { readFileSync } from "fs";',
+    'import * as m from "module";',
+    'const p = (await import("process")).default;',
+    'const fs = require("fs");',
+    'const fs = await import("\\u0066s");',
+    'const fs = await import("f\\x73");',
+  ]) assert.deepEqual(violations(source), builtin, source);
   // In an ES module `require` is not defined and loads nothing; prose may use the word.
   for (const source of [
-    'const fs = require("fs");',
     'const s = "prefix\\nrequ\\u0069re";',
     'const s = "a\\\\nrequire";',
     'const ns = "project\\u0000" + id;',
