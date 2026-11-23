@@ -1,6 +1,16 @@
 # Changelog
 
-## 0.3.10 — 2026-11-22: capture windows say where they start and end
+## 0.3.11 — 2026-11-23: turn off capture for one session or project
+
+- Setting `CAIRN_MEMORY_CAPTURE=off` stops the plugin from capturing that
+  session: the Stop and PreCompact hooks and the session-start boundary exit
+  before reading the transcript, writing capture state or sending anything.
+  Set it with a shell export, or per project in `.claude/settings.local.json`
+  under `env`. Only the exact value `off` counts.
+- Recall and the optional start telemetry are unchanged. `/cairn-memory:status`
+  says when capture is off for the session; otherwise its output is unchanged.
+
+## 0.3.10 — 2026-11-23: capture windows say where they start and end
 
 - Each capture request now also carries the byte range of the transcript window
   it belongs to, whether it is the window's last slice, and the transcript
