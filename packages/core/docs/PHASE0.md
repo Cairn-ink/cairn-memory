@@ -104,6 +104,7 @@ Each addendum is additive unless it says what it supersedes. Adapters written ag
    - When a first page cannot rank semantically, recall ranks lexical-only instead of failing, and emits one content-free `DiagnosticEvent` `{ stage: "recall", layer: "core_retrieval", reason }` through the service `diagnostics` observer. `reason` is one of `semantic_unavailable`, `dispatch_closed`, `embed_failed` or `coverage_incomplete`. This is a declared difference from hosted, whose hybrid search fails on an embedding error.
    - A cursor binds the ranking path of its first page. A hybrid continuation that cannot rank semantically is `cursor_stale`, and a lexical continuation never embeds.
    - It supersedes nothing.
+7. **SuppressionFact ids up to 512.** SuppressionFact identity `memoryId` and `sourceMemory.id` accept up to 512 characters (was 128), so a forget never fails on an id the store already holds. Stores refuse ids over 512 at import. It supersedes the 128 bound.
 
 ## Change requests
 
