@@ -6,7 +6,11 @@ export * from "./memory-policy/index.mjs";
 export * from "./utf8.mjs";
 export { redactV1, redactHostedCurrent, redactCore, REDACT_CORE_POLICY, PRIVACY_REDACTION_VERSIONS } from "./privacy/redact.mjs";
 export * from "./privacy/text.mjs";
-export * from "./privacy/fingerprint.mjs";
+export type { FingerprintKey, FingerprintLabels, LegacyCaptureFingerprint } from "./privacy/fingerprint.mjs";
+export {
+  allDigests, coreDigest, engineLegacyDigest, fingerprintLegacyCapture, hostedV1Digest,
+  legacyExactMac, passageShingles, userFingerprintKey, validateFingerprintLabels,
+} from "./privacy/fingerprint.mjs";
 export * from "./privacy/fact-match.mjs";
 export { exactDigestMatch, withholdsPassage, withholdsAnyPassage, blocksMemoryPassage } from "./privacy/withholds.mjs";
 export * from "./privacy/forget-steps.mjs";

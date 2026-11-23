@@ -1,7 +1,8 @@
 import type { Revision, Scope } from "../ports/common.d.ts";
 import type { DocumentCardRecord } from "../ports/document-card.d.ts";
 import type { FactMatchPolicy, FactMatchRow } from "../privacy/fact-match.mjs";
-import type { StoredFact } from "../suppression-fact.mjs";
+import type { FingerprintKey } from "../privacy/fingerprint.mjs";
+import type { StoredFact, TextFact } from "../suppression-fact.mjs";
 
 export type DocumentCardMemoryState =
   | { status: "visible"; revision: Revision; content?: string; date?: number | null }
@@ -12,18 +13,27 @@ export type DocumentCardMemoryState =
 export type DocumentCardMemoryStates = ReadonlyMap<string, DocumentCardMemoryState>;
 
 export interface DocumentCardVisibilityInput {
-  card: Pick<DocumentCardRecord, "id" | "scope" | "sourceMessage" | "sourceMemories"> & {
+  card: Pick<DocumentCardRecord, "id" | "scope" | "origin" | "sourceMemories"> & {
+    /** The stored source. Import and manual cards require an explicit null. */
+    sourceMessage?: DocumentCardRecord["sourceMessage"] | null;
     /** Resolved by the host from the plain source, with the same resolver used at capture. */
-    canonicalSessionKey: string | null;
+    canonicalSessionKey?: string | null;
+    /** Stored text for import and manual cards. Use null for a stored card without a title. */
+    title?: DocumentCardRecord["title"] | null;
+    body?: DocumentCardRecord["body"];
   };
   requestedScope: Scope;
   memoryStates: DocumentCardMemoryStates;
-  /** A definite false is required to deliver the card. */
-  sourceWithheld: boolean | null;
+  /** The runtime check requires a definite false for message-backed cards. */
+  sourceWithheld?: boolean | null;
+  /** Complete applicable text facts from the same scope and read snapshot for import and manual cards. */
+  textFacts?: readonly TextFact[] | null;
+  /** The scope owner's memory fingerprint key. Null or omission means the key is unavailable. */
+  fingerprintKey?: FingerprintKey | null;
 }
 
 export type DocumentCardHiddenReason =
-  | "scope_mismatch" | "id_mismatch" | "source_withheld" | "source_memory_missing"
+  | "scope_mismatch" | "id_mismatch" | "source_withheld" | "text_withheld" | "source_memory_missing"
   | "source_memory_forgotten" | "source_memory_not_visible" | "uncertain";
 
 export type DocumentCardVisibility =
