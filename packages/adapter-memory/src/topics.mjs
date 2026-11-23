@@ -4,8 +4,9 @@ import {
 } from "@cairn-ink/core";
 import { decodePayload, encodePayload, newestFirst } from "./cursor.mjs";
 import { writeTime } from "./memory-store.mjs";
-import { validateLimit, validateTime } from "./validation.mjs";
+import { snapshotArray, validateLimit, validateTime } from "./validation.mjs";
 
+/** @import {PlacementProposal} from "@cairn-ink/core" */
 /** @import {Scope, Topic, TopicStore} from "@cairn-ink/core/ports" */
 /** @import {State} from "./unit-of-work.mjs" */
 /** @import {Outcome, StoredTopic, TopicState} from "./topics.d.mts" */
@@ -86,6 +87,32 @@ function checkParent(topics, id, level) {
   if (parent.level !== level) throw new CoreError("invalid_ref");
 }
 
+// Keep the core validator's key-count check on the original arrays before copying their slots.
+const placementArrayOptions = { checkKeyCount: true };
+
+/** @template T @param {T} value @param {readonly string[]} allowed */
+function placementFields(value, allowed) {
+  if (!value || typeof value !== "object" || Array.isArray(value) ||
+      Object.keys(value).some((key) => !allowed.includes(key))) throw new CoreError("invalid_input");
+  return value;
+}
+
+/** @param {PlacementProposal} proposal */
+function snapshotPlacementProposal(proposal) {
+  const { items } = placementFields(proposal, ["items"]);
+  return {
+    items: snapshotArray(items, placementArrayOptions).map((item) => {
+      const { memoryId, parentIds, newL1 } = placementFields(item, ["memoryId", "parentIds", "newL1"]);
+      const parents = snapshotArray(parentIds, placementArrayOptions);
+      if (newL1 === undefined) return { memoryId, parentIds: parents };
+      const { title, parentL2Ids, newL2Title } = placementFields(newL1, ["title", "parentL2Ids", "newL2Title"]);
+      return { memoryId, parentIds: parents, newL1: {
+        title, parentL2Ids: snapshotArray(parentL2Ids, placementArrayOptions), newL2Title,
+      } };
+    }),
+  };
+}
+
 /** @type {typeof import("./topics.d.mts").createTopicStore} */
 export function createTopicStore(port, _flags, newId, now, matchFacts, {
   topicRetryAfterMs = 3_600_000, topicMaxAttempts = 3,
@@ -127,108 +154,114 @@ export function createTopicStore(port, _flags, newId, now, matchFacts, {
     },
 
     async applyPlacement(tx, scope, basedOn, proposal) {
-      return port.write(tx, scope, "conditional", () => (getState, markDirty, run) => {
-        const { items } = placementProposal(proposal);
+      return port.write(tx, scope, "conditional", () => {
+        const { items } = placementProposal(snapshotPlacementProposal(proposal));
         const indexRevision = basedOn?.indexRevision;
         if (!Number.isSafeInteger(indexRevision) || indexRevision < 0) throw new CoreError("invalid_input");
-        const state = getState();
-        if (indexRevision !== state.indexRevision) throw new CoreError("revision_conflict");
-        const guards = memoryGuards(basedOn.memoryRevisions, items.map(({ memoryId }) => memoryId));
-        const revisions = new Map(guards.map(({ memoryId, revision }) => [memoryId, revision]));
-        const { current, topic } = view(state, scope);
-        for (const { memoryId, revision } of guards) {
-          if (current(memoryId)?.revision !== revision) throw new CoreError("revision_conflict");
-        }
-
-        const previous = state.topics.get(scope.namespace);
-        const existing = previous?.topics;
-        for (const { parentIds, newL1 } of items) {
-          for (const id of parentIds) checkParent(existing, id, "L1");
-          for (const id of newL1?.parentL2Ids ?? []) checkParent(existing, id, "L2");
-        }
-        const titles = new Set([...(existing?.values() ?? [])].map(({ title, level }) => level + titleKey(title)));
-        for (const { newL1 } of items) {
-          if (newL1 && (titles.has("L1" + titleKey(newL1.title)) ||
-              (newL1.newL2Title && titles.has("L2" + titleKey(newL1.newL2Title))))) {
-            throw new CoreError("moc_title_conflict");
+        const guards = memoryGuards(snapshotArray(basedOn.memoryRevisions, placementArrayOptions),
+          items.map(({ memoryId }) => memoryId));
+        return (getState, markDirty, run) => {
+          const state = getState();
+          if (indexRevision !== state.indexRevision) throw new CoreError("revision_conflict");
+          const revisions = new Map(guards.map(({ memoryId, revision }) => [memoryId, revision]));
+          const { current, topic } = view(state, scope);
+          for (const { memoryId, revision } of guards) {
+            if (current(memoryId)?.revision !== revision) throw new CoreError("revision_conflict");
           }
-        }
-        const { newL1, newL2 } = coalesceNewTopics(items);
 
-        const allocated = new Set([...state.topics.values()].flatMap(({ topics }) => [...topics.keys()]));
-        /** @param {Topic["level"]} level @param {string} title @param {string[]} parentIds @returns {StoredTopic} */
-        function create(level, title, parentIds) {
-          const id = newId();
-          if (typeof id !== "string" || !id || allocated.has(id)) throw new CoreError("internal_error");
-          allocated.add(id);
-          return { id, level, title, parentIds, sources: guards };
-        }
-        const l2s = new Map([...newL2].map(([key, plan]) => [key, create("L2", plan.title, [])]));
-        const l1s = new Map([...newL1].map(([key, plan]) => [key, create("L1", plan.title, [
-          ...plan.parentL2Ids, ...[...plan.newParentKeys].map((parent) => /** @type {StoredTopic} */ (l2s.get(parent)).id),
-        ])]));
-        const created = [...l2s.values(), ...l1s.values()];
-        const placed = items.map(({ memoryId, parentIds, newL1 }) => ({
-          memoryId,
-          topicIds: newL1 ? [...parentIds, /** @type {StoredTopic} */ (l1s.get(titleKey(newL1.title))).id] : [...parentIds],
-        }));
-
-        let changed = created.length > 0;
-        /** @type {bigint | undefined} */
-        let placedAtUs;
-        const readPlacementTime = () => {
-          if (placedAtUs === undefined) {
-            const nowMs = now();
-            validateTime(nowMs);
-            placedAtUs = writeTime(nowMs).updatedAtUs;
+          const previous = state.topics.get(scope.namespace);
+          const existing = previous?.topics;
+          for (const { parentIds, newL1 } of items) {
+            for (const id of parentIds) checkParent(existing, id, "L1");
+            for (const id of newL1?.parentL2Ids ?? []) checkParent(existing, id, "L2");
           }
-          return placedAtUs;
+          const titles = new Set([...(existing?.values() ?? [])].map(({ title, level }) => level + titleKey(title)));
+          for (const { newL1 } of items) {
+            if (newL1 && (titles.has("L1" + titleKey(newL1.title)) ||
+                (newL1.newL2Title && titles.has("L2" + titleKey(newL1.newL2Title))))) {
+              throw new CoreError("moc_title_conflict");
+            }
+          }
+          const { newL1, newL2 } = coalesceNewTopics(items);
+
+          const allocated = new Set([...state.topics.values()].flatMap(({ topics }) => [...topics.keys()]));
+          /** @param {Topic["level"]} level @param {string} title @param {string[]} parentIds @returns {StoredTopic} */
+          function create(level, title, parentIds) {
+            const id = newId();
+            if (typeof id !== "string" || !id || allocated.has(id)) throw new CoreError("internal_error");
+            allocated.add(id);
+            return { id, level, title, parentIds, sources: guards };
+          }
+          const l2s = new Map([...newL2].map(([key, plan]) => [key, create("L2", plan.title, [])]));
+          const l1s = new Map([...newL1].map(([key, plan]) => [key, create("L1", plan.title, [
+            ...plan.parentL2Ids, ...[...plan.newParentKeys].map((parent) => /** @type {StoredTopic} */ (l2s.get(parent)).id),
+          ])]));
+          const created = [...l2s.values(), ...l1s.values()];
+          const placed = items.map(({ memoryId, parentIds, newL1 }) => ({
+            memoryId,
+            topicIds: newL1 ? [...parentIds, /** @type {StoredTopic} */ (l1s.get(titleKey(newL1.title))).id] : [...parentIds],
+          }));
+
+          let changed = created.length > 0;
+          /** @type {bigint | undefined} */
+          let placedAtUs;
+          const readPlacementTime = () => {
+            if (placedAtUs === undefined) {
+              const nowMs = now();
+              validateTime(nowMs);
+              placedAtUs = writeTime(nowMs).updatedAtUs;
+            }
+            return placedAtUs;
+          };
+          /** @type {Map<string, Outcome>} */
+          const updates = new Map();
+          for (const { memoryId, topicIds } of placed) {
+            const revision = /** @type {number} */ (revisions.get(memoryId));
+            const before = previous?.outcomes.get(memoryId);
+            if (before?.revision === revision && before.memberships.size === topicIds.length &&
+                topicIds.every((id) => before.memberships.has(id))) continue;
+
+            const memberships = new Map();
+            for (const id of topicIds) {
+              const previousTime = before?.revision === revision ? before.memberships.get(id) : undefined;
+              memberships.set(id, previousTime ?? readPlacementTime());
+            }
+            if (topicIds.length || (before?.revision === revision && before.memberships.size)) changed = true;
+            updates.set(memoryId, { revision, memberships });
+          }
+
+          if (changed || updates.size) {
+            const scoped = ensureTopicState(state, scope);
+            for (const row of created) scoped.topics.set(row.id, row);
+            for (const [id, outcome] of updates) scoped.outcomes.set(id, outcome);
+            if (changed) markDirty();
+            else run.stateWritten = true;
+          }
+          return { placed, createdTopics: created.map(topic) };
         };
-        /** @type {Map<string, Outcome>} */
-        const updates = new Map();
-        for (const { memoryId, topicIds } of placed) {
-          const revision = /** @type {number} */ (revisions.get(memoryId));
-          const before = previous?.outcomes.get(memoryId);
-          if (before?.revision === revision && before.memberships.size === topicIds.length &&
-              topicIds.every((id) => before.memberships.has(id))) continue;
-
-          const memberships = new Map();
-          for (const id of topicIds) {
-            const previousTime = before?.revision === revision ? before.memberships.get(id) : undefined;
-            memberships.set(id, previousTime ?? readPlacementTime());
-          }
-          if (topicIds.length || (before?.revision === revision && before.memberships.size)) changed = true;
-          updates.set(memoryId, { revision, memberships });
-        }
-
-        if (changed || updates.size) {
-          const scoped = ensureTopicState(state, scope);
-          for (const row of created) scoped.topics.set(row.id, row);
-          for (const [id, outcome] of updates) scoped.outcomes.set(id, outcome);
-          if (changed) markDirty();
-          else run.stateWritten = true;
-        }
-        return { placed, createdTopics: created.map(topic) };
       });
     },
 
     async markFailed(tx, scope, memoryIds, code) {
-      return port.write(tx, scope, "conditional", () => (getState, _markDirty, run) => {
-        if (!isErrorCode(code) || !Array.isArray(memoryIds) ||
-            memoryIds.some((id) => typeof id !== "string" || !id)) throw new CoreError("invalid_input");
-        const state = getState();
-        const { current } = view(state, scope);
-        /** @type {number | undefined} */
-        let failedAtMs;
-        for (const id of new Set(memoryIds)) {
-          const row = current(id);
-          if (!row) continue;
-          const { failures } = ensureTopicState(state, scope);
-          const previous = failures.get(id);
-          const attempts = previous?.revision === row.revision ? previous.attempts + 1 : 1;
-          failures.set(id, { revision: row.revision, code, attempts, failedAtMs: failedAtMs ??= now() });
-          run.stateWritten = true;
-        }
+      return port.write(tx, scope, "conditional", () => {
+        if (!isErrorCode(code)) throw new CoreError("invalid_input");
+        const ids = snapshotArray(memoryIds);
+        if (ids.some((id) => typeof id !== "string" || !id)) throw new CoreError("invalid_input");
+        return (getState, _markDirty, run) => {
+          const state = getState();
+          const { current } = view(state, scope);
+          /** @type {number | undefined} */
+          let failedAtMs;
+          for (const id of new Set(ids)) {
+            const row = current(id);
+            if (!row) continue;
+            const { failures } = ensureTopicState(state, scope);
+            const previous = failures.get(id);
+            const attempts = previous?.revision === row.revision ? previous.attempts + 1 : 1;
+            failures.set(id, { revision: row.revision, code, attempts, failedAtMs: failedAtMs ??= now() });
+            run.stateWritten = true;
+          }
+        };
       });
     },
 

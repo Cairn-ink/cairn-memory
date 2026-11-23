@@ -38,14 +38,44 @@ export function copyCaptureKey(key) {
   return { scope: { owner, namespace: namespace ?? null }, client, sessionId, eventId, payloadDigest };
 }
 
-/** @param {readonly import("@cairn-ink/core/ports").CaptureMessage[]} messages */
-export function validateCaptureMessages(messages) {
-  if (!Array.isArray(messages)) invalid();
-  for (const message of messages) {
-    if (!message || typeof message.id !== "string" || message.id.length > 512 || !roles.includes(message.role) ||
-      typeof message.content !== "string" ||
-      (message.occurredAtMs !== null && !Number.isSafeInteger(message.occurredAtMs))) invalid();
+/** Read indexed data once and ignore caller-provided traversal methods.
+ * @template T @param {readonly T[]} values @param {{checkKeyCount?: boolean}} [options] @returns {T[]}
+ */
+export function snapshotArray(values, { checkKeyCount = false } = {}) {
+  const snapshot = [];
+  try {
+    if (!Array.isArray(values)) invalid();
+    const descriptor = Object.getOwnPropertyDescriptor(values, "length");
+    if (!descriptor || !Object.hasOwn(descriptor, "value")) invalid();
+    const length = descriptor.value;
+    if (!Number.isSafeInteger(length) || length < 0 || length > 0xffff_ffff ||
+        !Object.is(length, Reflect.get(values, "length"))) invalid();
+    if (checkKeyCount && Object.keys(values).length !== length) invalid();
+    for (let index = 0; index < length; index++) {
+      const slot = Object.getOwnPropertyDescriptor(values, index);
+      // The property read only checks for conflicting proxy traps.
+      if (!slot || !Object.hasOwn(slot, "value") ||
+          !Object.is(slot.value, Reflect.get(values, String(index)))) invalid();
+      snapshot.push(slot.value);
+    }
+  } catch {
+    invalid();
   }
+  return snapshot;
+}
+
+/** @param {readonly import("@cairn-ink/core/ports").CaptureMessage[]} messages */
+export function captureMessageTimes(messages) {
+  /** @type {Array<number | null>} */
+  const times = [];
+  for (const message of snapshotArray(messages)) {
+    if (!message || typeof message.id !== "string" || message.id.length > 512 || !roles.includes(message.role) ||
+      typeof message.content !== "string") invalid();
+    const { occurredAtMs } = message;
+    if (occurredAtMs !== null && !Number.isSafeInteger(occurredAtMs)) invalid();
+    times.push(occurredAtMs);
+  }
+  return times;
 }
 
 /** @param {{code: string, retryable: boolean}} failure */
@@ -56,8 +86,7 @@ export function copyCaptureFailure(failure) {
 
 /** @param {readonly import("@cairn-ink/core/ports").FinishItem[]} items @param {boolean} embeddingRequiredOnInsert */
 export function copyFinishItems(items, embeddingRequiredOnInsert) {
-  if (!Array.isArray(items)) invalid();
-  return Array.from(items, (item) => {
+  return snapshotArray(items).map((item) => {
     if (!item) invalid();
     const row = copyContent({
       kind: item.kind, origin: "inferred", text: item.content, textHash: item.textHash,
@@ -111,19 +140,12 @@ export function validateSource(source) {
  * @returns {number[]}
  */
 export function readEmbedding(vector, format = "memory") {
-  const values = [];
+  /** @type {number[]} */
+  let values = [];
   try {
     if (Array.isArray(vector) && format !== "capture") {
-      const length = Object.getOwnPropertyDescriptor(vector, "length")?.value;
-      if (!Number.isInteger(length) || length < 0 || length > 0xffff_ffff ||
-          !Object.is(length, Reflect.get(vector, "length"))) invalid();
-      for (let index = 0; index < length; index++) {
-        const slot = Object.getOwnPropertyDescriptor(vector, index);
-        // Keep the descriptor value. The property read only detects conflicting proxy traps.
-        if (!slot || !Object.hasOwn(slot, "value") || !Number.isFinite(slot.value) ||
-            !Object.is(slot.value, Reflect.get(vector, String(index)))) invalid();
-        values.push(slot.value);
-      }
+      values = snapshotArray(vector);
+      if (!values.every(Number.isFinite)) invalid();
     } else {
       const tag = typedArrayTag?.call(vector);
       if (format === "fact" || (tag !== "Float32Array" && !(format === "passage" && tag === "Float64Array"))) invalid();
@@ -149,42 +171,37 @@ export function validateLimit(limit) {
 }
 
 /** @param {import("@cairn-ink/core/ports").RetrievalScope} scope */
-export function validateReadSet({ namespaces, clients }) {
-  if (!Array.isArray(namespaces) || namespaces.length === 0) invalid();
+export function copyReadScope({ owner, namespaces, clients }) {
+  const namespaceList = snapshotArray(namespaces);
+  if (namespaceList.length === 0) invalid();
   const seen = new Set();
-  for (const namespace of namespaces) {
+  for (const namespace of namespaceList) {
     if (!nullableString(namespace) || seen.has(namespace)) invalid();
     seen.add(namespace);
   }
-  if (clients !== undefined) {
-    if (!Array.isArray(clients)) invalid();
-    for (const client of clients) {
-      if (typeof client !== "string") invalid();
-    }
-  }
+  const clientList = clients === undefined ? undefined : snapshotArray(clients);
+  if (clientList?.some((client) => typeof client !== "string")) invalid();
+  return { owner, namespaces: namespaceList, clients: clientList };
 }
 
 /** @param {readonly import("@cairn-ink/core/ports").ItemRef[]} refs */
-export function validateRefs(refs) {
-  if (!Array.isArray(refs)) invalid();
-  for (const ref of refs) {
-    if (!ref || typeof ref !== "object" || !["memory", "raw", "card"].includes(ref.type) ||
-      typeof ref.id !== "string" || !nullableString(ref.namespace)) invalid();
-  }
+export function copyRefs(refs) {
+  return snapshotArray(refs).map((ref) => {
+    if (!ref || typeof ref !== "object") invalid();
+    const { type, id, namespace } = ref;
+    if (!["memory", "raw", "card"].includes(type) || typeof id !== "string" || !nullableString(namespace)) invalid();
+    return { type, id, namespace };
+  });
 }
 
 /** @param {readonly DuplicateQuery[]} batch @returns {CanonicalQuery[]} */
 export function copyDuplicateBatch(batch) {
-  if (!Array.isArray(batch)) invalid();
-  const copy = [];
-  for (let index = 0, length = batch.length; index < length; index++) {
-    const query = batch[index];
+  return snapshotArray(batch).map((query) => {
     if (!query || typeof query !== "object") invalid();
     const { textHash, legacyHash, embedding } = query;
     if (!isTextHash(textHash) || (legacyHash !== undefined && !isTextHash(legacyHash))) invalid();
-    copy.push({ textHash, legacyHash, embedding: embedding == null ? embedding : readEmbedding(embedding) });
-  }
-  return copy;
+    return { textHash, legacyHash, embedding: embedding == null ? embedding : readEmbedding(embedding) };
+  });
 }
 
 /** @param {InsertRow} row @param {"memory" | "capture"} format @param {boolean} embeddingRequiredOnInsert */
@@ -210,8 +227,7 @@ export function copyContent(row, format, embeddingRequiredOnInsert) {
 
 /** @param {readonly Receipt[]} receipts */
 export function copyReceipts(receipts) {
-  if (!Array.isArray(receipts)) invalid();
-  return Array.from(receipts, (receipt) => {
+  return snapshotArray(receipts).map((receipt) => {
     if (!receipt || !nonempty(receipt.client) || !nonempty(receipt.sessionId) ||
       !nonempty(receipt.messageId) || !roles.includes(receipt.role) ||
       (receipt.occurredAtMs !== null && !Number.isFinite(receipt.occurredAtMs))) invalid();

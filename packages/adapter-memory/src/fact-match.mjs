@@ -1,5 +1,5 @@
-import { factBlocksIncoming, factHidesRow, PRIVACY_REDACTION_VERSIONS } from "@cairn-ink/core";
-import { readEmbedding } from "./validation.mjs";
+import { CoreError, factBlocksIncoming, factHidesRow, PRIVACY_REDACTION_VERSIONS } from "@cairn-ink/core";
+import { readEmbedding, snapshotArray } from "./validation.mjs";
 
 /** @import { FactMatchIncoming, FactMatchPolicy, FactMatchRow, StoredFact, SuppressionFact, TextDigest, TextFact } from "@cairn-ink/core" */
 /** @import { DuplicateQuery, Scope, SourceRef, SuppressionStore } from "@cairn-ink/core/ports" */
@@ -37,21 +37,21 @@ function evidenceDescriptor(input, key) {
   }
 }
 
+/** @template T @param {T} value @returns {T} */
+function snapshotPassageList(value) {
+  // Core handles non-array evidence using its existing fail-closed matching rules.
+  try {
+    return Array.isArray(value) ? /** @type {T} */ (snapshotArray(value)) : value;
+  } catch {
+    throw new CoreError("invalid_input");
+  }
+}
+
 /** @param {FactMatchIncoming["passages"]} passages @returns {FactMatchIncoming["passages"]} */
 function projectPassages(passages) {
-  let length;
-  try {
-    if (!Array.isArray(passages)) return passages;
-    length = evidenceDescriptor(passages, "length")?.value;
-  } catch {
-    return [{ digests: [] }];
-  }
-  if (!Number.isInteger(length) || length < 0 || length > 0xffff_ffff) return [{ digests: [] }];
-  const copy = new Array(length);
-  for (let index = 0; index < length; index++) {
-    const slot = evidenceDescriptor(passages, index);
-    if (!slot) continue;
-    const passage = slot.value;
+  const copy = snapshotPassageList(passages);
+  if (!Array.isArray(copy)) return copy;
+  return copy.map((passage) => {
     if (passage != null && typeof passage === "object") {
       let isRecord;
       try {
@@ -66,14 +66,25 @@ function projectPassages(passages) {
           const field = evidenceDescriptor(passage, key);
           if (!field) continue;
           if (key === "embedding" && field.value != null) field.value = readEmbedding(field.value, "passage");
+          if (key === "digests" || key === "shingles") {
+            if (Object.hasOwn(field, "value")) field.value = snapshotPassageList(field.value);
+          }
           Object.defineProperty(record, key, field);
         }
-        slot.value = record;
+        return record;
       }
     }
-    Object.defineProperty(copy, index, slot);
-  }
-  return copy;
+    return passage;
+  });
+}
+
+/** @param {Parameters<SuppressionStore["snapshot"]>[2]} candidates */
+export function copySuppressionCandidates({ client, sessionId, occurredAtMs, passages }) {
+  return {
+    client, sessionId,
+    passages: passages === undefined ? undefined : projectPassages(passages),
+    occurredAtMs: occurredAtMs == null ? occurredAtMs : snapshotArray(occurredAtMs),
+  };
 }
 
 /** @template {SuppressionFact["kind"]} K @param {StoredFact} stored @param {K} kind
@@ -124,6 +135,23 @@ export function createFactMatcher(vectorSuppression, hashSessionKey) {
         factBlocksIncoming(stored, { scope, passages: [], session: { client, sessionId } }, capture) !== false);
     }
 
+    /** @param {string} client @param {string | undefined} sessionId
+     * @param {ReadonlyArray<number | null>} occurredAtMs
+     */
+    function blockedMessages(client, sessionId, occurredAtMs) {
+      const blocked = [];
+      const windows = scoped.filter((stored) => isKind(stored, "window"));
+      // Core's window comparison reads the client and time, including for messages without a session ID.
+      const session = { client, sessionId: sessionId ?? "" };
+      for (const [index, time] of occurredAtMs.entries()) {
+        if (windows.some((stored) => factBlocksIncoming(stored,
+          { scope, passages: [], session, occurredAtMs: time }, capture) !== false)) {
+          blocked.push(index);
+        }
+      }
+      return blocked;
+    }
+
     return {
       /** @param {Entry} entry */
       hides(entry) {
@@ -141,25 +169,13 @@ export function createFactMatcher(vectorSuppression, hashSessionKey) {
       },
 
       blocksSession,
+      blockedMessages,
 
-      /** @param {Parameters<SuppressionStore["snapshot"]>[2]} candidates */
-      snapshot({ client, sessionId, occurredAtMs, passages }) {
-        const projected = passages === undefined ? undefined : projectPassages(passages);
-        const blockedMessages = [];
-        if (client != null && occurredAtMs) {
-          const windows = scoped.filter((stored) => isKind(stored, "window"));
-          // Core's window comparison reads the client and time, including for messages without a session ID.
-          const session = { client, sessionId: sessionId ?? "" };
-          for (const [index, time] of occurredAtMs.entries()) {
-            if (windows.some((stored) => factBlocksIncoming(stored,
-              { scope, passages: [], session, occurredAtMs: time }, capture) !== false)) {
-              blockedMessages.push(index);
-            }
-          }
-        }
+      /** @param {ReturnType<typeof copySuppressionCandidates>} candidates */
+      snapshot({ client, sessionId, occurredAtMs, passages: projected }) {
         return {
           blockedSession: blocksSession(client ?? null, sessionId ?? null),
-          blockedMessages,
+          blockedMessages: client != null && occurredAtMs ? blockedMessages(client, sessionId, occurredAtMs) : [],
           passages: structuredClone(projected === undefined ? texts : matchingPassages(texts, projected)),
         };
       },

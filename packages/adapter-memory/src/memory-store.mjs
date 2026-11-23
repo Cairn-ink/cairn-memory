@@ -145,8 +145,9 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
      * @param {SourceRef} source @param {"hash" | "full"} mode @param {string} [editId]
      */
     readWritePolicy(tx, scope, prepareBatch, source, mode, editId) {
-      return port(tx, scope, false, (state) => {
+      return port.read(tx, scope, (getState) => {
         const batch = prepareBatch();
+        const state = getState();
         const policy = matchFacts(state.facts, scope);
         const namespace = state.rows.get(scope.namespace);
         const entries = entriesIn(namespace).filter(({ row }) => row.id !== editId);
@@ -179,11 +180,12 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
     ...memoryWrites((tx, scope, prepare) => port.write(tx, scope, true, prepare), prepareContent),
 
     async findDuplicates(tx, scope, queries, options) {
-      return port(tx, scope, false, (state) => {
+      return port.read(tx, scope, (getState) => {
         const batch = copyDuplicateBatch(queries);
         if (!options || typeof options !== "object" || !Number.isFinite(options.nearDistance) || options.nearDistance < 0 ||
           (options.excludeId !== undefined && typeof options.excludeId !== "string")) throw new CoreError("invalid_input");
         const { nearDistance, excludeId } = options;
+        const state = getState();
         const policy = matchFacts(state.facts, scope);
         const rows = entriesIn(state.rows.get(scope.namespace))
           .filter((entry) => entry.row.id !== excludeId && !policy.hides(entry)).map(({ row }) => row);
