@@ -105,7 +105,7 @@ Each addendum is additive unless it says what it supersedes. Adapters written ag
    - A cursor binds the ranking path of its first page. A hybrid continuation that cannot rank semantically is `cursor_stale`, and a lexical continuation never embeds.
    - It supersedes nothing.
 7. **SuppressionFact ids up to 512.** SuppressionFact identity `memoryId` and `sourceMemory.id` accept up to 512 characters (was 128), so a forget never fails on an id the store already holds. Stores refuse ids over 512 at import. It supersedes the 128 bound.
-8. **Import progress and creation times.** A paused `MemoryService.importMemories` returns `{ status: "paused" }` with all four `ImportResult` counts from the batches that committed and any invalid-only batches already processed. The batch that stopped contributes no counts.
+9. **Import progress and creation times.** A paused `MemoryService.importMemories` returns `{ status: "paused" }` with all four `ImportResult` counts from the batches that committed and any invalid-only batches already processed. The batch that stopped contributes no counts.
    - `InsertRow.createdAtMs` is optional and supplied only on import. An insert validates that a supplied creation time is an integer in milliseconds at or before `nowMs` and stores it as the creation time. If omitted, creation time defaults to `nowMs`. The update time uses `nowMs` in both cases. Core counts a future creation time as an invalid import item.
 
 ## Change requests
