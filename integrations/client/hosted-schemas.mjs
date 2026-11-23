@@ -80,7 +80,7 @@ export const HOSTED_SCHEMAS = {
         "description": "Client clock at this send attempt; not part of event identity."
       },
       "window": {
-        "$comment": "Semantic validation in hosted-contract.mjs additionally requires slice <= slices.",
+        "$comment": "Semantic validation in hosted-contract.mjs additionally requires slice <= slices and end > start when both offsets are present.",
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -107,6 +107,22 @@ export const HOSTED_SCHEMAS = {
           },
           "initial": {
             "type": "boolean"
+          },
+          "start": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "end": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "final": {
+            "type": "boolean"
+          },
+          "parser": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
           }
         }
       }
