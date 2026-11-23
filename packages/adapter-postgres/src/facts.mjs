@@ -1,5 +1,8 @@
 // Snapshot the caller's fact once, validate that snapshot, and derive every
 // storage value from it. Never read the caller's fact again after snapshotting.
+// Each field is read through one property-descriptor lookup, and an object or
+// array reached twice within one fact is refused, so no input can show the
+// snapshot two different values.
 import { CoreError, compareUtf8, factBody, validateSuppressionFact } from "../../core/src/index.mjs";
 
 /** @import { SuppressionFact, TextDigest } from "../../core/src/suppression-fact.mjs" */
@@ -8,6 +11,16 @@ const encoder = new TextEncoder();
 const MAX_FLOAT4 = 3.4028234663852886e38;
 
 /** @typedef {(value: unknown) => unknown} SnapshotField */
+
+/** Objects already copied by the snapshot in progress; an object reached twice is refused. */
+/** @type {WeakSet<object> | null} */
+let snapshotSeen = null;
+
+/** @param {object} value */
+function claimOnce(value) {
+  if (snapshotSeen === null || snapshotSeen.has(value)) invalidInput();
+  snapshotSeen.add(value);
+}
 
 /** @returns {never} */
 function invalidInput() {
@@ -47,7 +60,8 @@ function assertPlainObject(value) {
 function readField(value, key) {
   const field = Object.getOwnPropertyDescriptor(value, key);
   if (!field?.enumerable || !Object.hasOwn(field, "value")) invalidInput();
-  return Reflect.get(value, key);
+  // One reflective read per field: the descriptor's value is the value we keep.
+  return field.value;
 }
 
 /**
@@ -69,6 +83,7 @@ function copyFields(value, fields, snapshot) {
 /** @param {unknown} value @param {Record<string, SnapshotField>} fields */
 function copyObject(value, fields) {
   assertPlainObject(value);
+  claimOnce(value);
   return copyFields(value, fields, Object.create(null));
 }
 
@@ -76,6 +91,7 @@ function copyObject(value, fields) {
 function arrayOf(copy) {
   return (value) => {
     if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) invalidInput();
+    claimOnce(value);
     const length = value.length;
     const keys = new Set(Reflect.ownKeys(value));
     if (!Number.isSafeInteger(length) || length < 0 || keys.size !== length + 1) invalidInput();
@@ -85,7 +101,7 @@ function arrayOf(copy) {
       if (!keys.has(key)) invalidInput();
       const element = Object.getOwnPropertyDescriptor(value, key);
       if (!element || !Object.hasOwn(element, "value")) invalidInput();
-      snapshot.push(copy(value[i]));
+      snapshot.push(copy(element.value));
     }
     return snapshot;
   };
@@ -147,8 +163,10 @@ const factFields = {
 
 /** @param {unknown} fact */
 function snapshotFact(fact) {
+  snapshotSeen = new WeakSet();
   try {
     assertPlainObject(fact);
+    claimOnce(fact);
     const kind = readField(fact, "kind");
     if (typeof kind !== "string" || !Object.hasOwn(factFields, kind)) invalidInput();
     const snapshot = Object.create(null);
@@ -157,6 +175,8 @@ function snapshotFact(fact) {
   } catch {
     // Reflection on a revoked proxy or a throwing trap is invalid input too.
     invalidInput();
+  } finally {
+    snapshotSeen = null;
   }
 }
 

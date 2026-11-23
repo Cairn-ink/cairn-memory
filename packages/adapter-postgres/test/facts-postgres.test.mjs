@@ -95,11 +95,19 @@ test("slot and insert read each caller field and array element once", async () =
       const target = Array.isArray(value) ? [] : {};
       for (const key of Object.keys(value)) target[key] = countReads(value[key], `${path}.${key}`);
       for (const key of Object.getOwnPropertyNames(target)) expected[`${path}.${key}`] = 1;
+      // A field counts as read by either a get or a property-descriptor lookup.
+      const count = (key) => {
+        const field = `${path}.${String(key)}`;
+        reads[field] = (reads[field] ?? 0) + 1;
+      };
       return new Proxy(target, {
         get(object, key, receiver) {
-          const field = `${path}.${String(key)}`;
-          reads[field] = (reads[field] ?? 0) + 1;
+          count(key);
           return Reflect.get(object, key, receiver);
+        },
+        getOwnPropertyDescriptor(object, key) {
+          count(key);
+          return Reflect.getOwnPropertyDescriptor(object, key);
         },
       });
     }

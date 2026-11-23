@@ -201,3 +201,43 @@ test("slot hash is the lowercase SHA-256 of the JSON slot's UTF-8 bytes", async 
   const slot = factSlot({ ...session, session: { client: "用戶", sessionId: "会話😀" } });
   assert.equal(await slotHash(slot), createHash("sha256").update(slot, "utf8").digest("hex"));
 });
+
+test("storage preflight refuses an array shared by two fields of one fact", () => {
+  const shared = [];
+  const fact = { ...text, text: { ...text.text, shingles: shared, embedding: shared } };
+  assert.throws(() => factSlot(fact), invalidInput);
+});
+
+test("storage preflight refuses an object reached twice within one fact", () => {
+  // A proxy that shows a different digest value on each read would yield two distinct
+  // copies if the snapshot visited it twice; reaching any object twice is refused.
+  let reads = 0;
+  const digest = new Proxy({ ...earlier }, {
+    getOwnPropertyDescriptor(target, key) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(target, key);
+      if (key === "value" && descriptor) descriptor.value = ++reads === 1 ? hash : "c".repeat(64);
+      return descriptor;
+    },
+  });
+  const fact = { ...text, text: { ...text.text, digests: [digest, digest] } };
+  assert.throws(() => factSlot(fact), invalidInput);
+});
+
+test("the snapshot reads each field through one descriptor lookup and never through get", () => {
+  const descriptorReads = new Map();
+  let gets = 0;
+  const digest = new Proxy({ ...earlier }, {
+    getOwnPropertyDescriptor(target, key) {
+      descriptorReads.set(key, (descriptorReads.get(key) ?? 0) + 1);
+      return Reflect.getOwnPropertyDescriptor(target, key);
+    },
+    get(target, key, receiver) {
+      gets++;
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  const fact = { ...text, text: { ...text.text, digests: [digest] } };
+  assert.equal(factSlot(fact), JSON.stringify(["text", "exact", [["hmac", hash]]]));
+  assert.equal(gets, 0);
+  assert.deepEqual([...descriptorReads.values()], Object.keys(earlier).map(() => 1));
+});
