@@ -1,5 +1,9 @@
 import { CoreError } from '../errors.mjs';
+import { extractionLimit, extractionOutputTokens } from './capture-input.mjs';
 import { snapshotQualificationTextCatalog } from './qualification-text-catalog.mjs';
+import { denseArray } from './validate.mjs';
+
+export { extractionOutputTokens };
 
 /** @returns {never} */
 function invalid() { throw new CoreError('invalid_input'); }
@@ -53,30 +57,6 @@ export const schemas = {
     sourceIndices: { ...array(integer, 4), minItems: 1 },
   }), 5) }),
 };
-
-/** Count distinct user messages, grouping windows. Engine core/capture-input.mjs:4–11.
- * @param {ReadonlyArray<unknown>} messages
- */
-function extractionLimit(messages) {
-  const userMessages = messages.filter(message => fieldValue(message, 'role') === 'user');
-  return Math.max(5, Math.min(20, new Set(userMessages.map((message, position) => {
-    const messageIndex = fieldValue(message, 'messageIndex');
-    return Number.isInteger(messageIndex) ? `w${messageIndex}` : `m${position}`;
-  })).size));
-}
-
-/** @param {ReadonlyArray<unknown>} messages */
-export const extractionOutputTokens = (messages) => Math.ceil(1024 * extractionLimit(messages) / 5);
-
-/** @param {unknown} value @param {number} min @param {number} max */
-function denseArray(value, min, max) {
-  if (!Array.isArray(value) || value.length < min || value.length > max ||
-      Object.keys(value).length !== value.length) throw new CoreError('invalid_input');
-  for (let index = 0; index < value.length; index++) {
-    if (!Object.hasOwn(value, index)) throw new CoreError('invalid_input');
-  }
-  return value;
-}
 
 /** @param {unknown} value @param {string[]} fields */
 function exactData(value, fields) {
