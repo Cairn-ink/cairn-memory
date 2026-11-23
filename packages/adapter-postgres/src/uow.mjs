@@ -15,6 +15,19 @@ const OWNER_LOCK = "SELECT pg_advisory_xact_lock(hashtext('w3:' || $1))";
 /** @type {WeakMap<Tx, Run>} */
 const liveRuns = new WeakMap();
 
+/** @param {Tx} tx @param {boolean} [write] */
+export function requireLiveRun(tx, write = false) {
+  const run = liveRuns.get(tx);
+  if (!run || (write && tx.readOnly)) throw new CoreError("internal_error");
+  return run;
+}
+
+/** @param {Tx} tx @param {CoreError} error */
+export function failRun(tx, error) {
+  const run = requireLiveRun(tx);
+  return run.failure ??= error;
+}
+
 /**
  * @param {Tx} tx
  * @param {string} text
