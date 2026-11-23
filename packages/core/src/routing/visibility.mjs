@@ -1,5 +1,7 @@
 import { factHidesRow } from "../privacy/fact-match.mjs";
-import { fingerprintLegacyCapture, fingerprintMemoryPassages, validateFingerprintLabels } from "../privacy/fingerprint.mjs";
+import {
+  fingerprintLegacyCapture, fingerprintMemoryPassages, validateFingerprintLabels, validateFingerprintSigningKey,
+} from "../privacy/fingerprint.mjs";
 import { PRIVACY_REDACTION_VERSIONS, redactHostedCurrent, redactV1 } from "../privacy/redact.mjs";
 import { cleanContent, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
 import { requiresLegacyMacDomain, snapshotReader, withholdsAnyPassage } from "../privacy/withholds.mjs";
@@ -27,19 +29,15 @@ const hidden = (reason) => ({ visible: false, reason });
 /** @param {TextDigest} digest */
 const isLegacyMac = (digest) => digest.alg === "hmac" && digest.pipeline !== "core";
 
-/** @param {LegacyFingerprint} input @returns {LegacyFingerprint | null} */
-function readLegacyFingerprint(input) {
+/** @param {LegacyFingerprint} input @returns {Promise<LegacyFingerprint | null>} */
+async function readLegacyFingerprint(input) {
   const { field } = snapshotReader();
   const labels = validateFingerprintLabels(field(input, "labels"));
   const key = field(input, "key");
   if (!key || typeof key !== "object" || Array.isArray(key)) return null;
   const id = field(key, "id");
-  const signingKey = field(key, "signingKey");
-  if (typeof id !== "string" || !/^[0-9a-f]{16}$/u.test(id) ||
-      !(signingKey instanceof globalThis.CryptoKey) || signingKey.type !== "secret" ||
-      !signingKey.usages.includes("sign")) return null;
-  const algorithm = /** @type {HmacKeyAlgorithm} */ (signingKey.algorithm);
-  if (algorithm.name !== "HMAC" || algorithm.hash.name !== "SHA-256" || algorithm.length !== 256) return null;
+  if (typeof id !== "string" || !/^[0-9a-f]{16}$/u.test(id)) return null;
+  const signingKey = await validateFingerprintSigningKey(field(key, "signingKey"));
   return { key: { id, signingKey }, labels };
 }
 
@@ -129,9 +127,8 @@ export async function documentCardVisible(input) {
       }
       let legacy;
       if (legacyFingerprint !== undefined) {
-        legacy = readLegacyFingerprint(legacyFingerprint);
+        legacy = await readLegacyFingerprint(legacyFingerprint);
         if (!legacy) return hidden("uncertain");
-        await globalThis.crypto.subtle.sign("HMAC", legacy.key.signingKey, new Uint8Array(0));
       }
       if (facts.length > 0) {
         if (!legacy && facts.some(requiresLegacyMacDomain)) return hidden("text_withheld");

@@ -218,3 +218,14 @@ for (const [scenario, facts] of [["no facts", []], ["a rotated fact", [rotatedFa
     }), uncertain);
   });
 }
+
+test("an unrelated card with a mixed MAC fact needs both fingerprint keys", async () => {
+  const { coreFingerprintLabels } = await import("../src/privacy/fingerprint.mjs");
+  const fingerprintKey = await userFingerprintKey("fake core fingerprint secret", scope.owner, coreFingerprintLabels);
+  const reference = "A record of concert tickets";
+  const fact = textFact({ digests: [await legacyDigest(reference), await coreDigest(reference, fingerprintKey)] });
+  const input = { ...read, textFacts: [fact], legacyFingerprint };
+
+  assert.deepEqual(await documentCardVisible(input), withheld);
+  assert.deepEqual(await documentCardVisible({ ...input, fingerprintKey }), visible);
+});

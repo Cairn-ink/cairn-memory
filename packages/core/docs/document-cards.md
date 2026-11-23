@@ -77,9 +77,13 @@ Use the adapter's frozen legacy domain labels and derive the key with
 `userFingerprintKey(secret, owner, labels)`. Core compares legacy exact MACs
 and keyed shingles for the original and historically redacted forms of each
 field after cleaning the stored text. A fact with both legacy and Core aliases
-can match through either comparison. A legacy MAC-only fact returns
-`text_withheld` when the input is omitted. With supplied evidence, a legacy MAC
-under a different key ID withholds the card, including after a key rotation.
+can match through either comparison. A host holding both kinds of facts passes
+both `fingerprintKey` (derived with Core labels) and `legacyFingerprint`
+(derived with adapter labels). Omitting either leaves facts that require that
+key fail-closed. For a fact with both MACs, passing only `legacyFingerprint`
+can withhold an unrelated card because the Core MAC cannot be compared. With
+both keys, the card can be visible when both MACs miss. A legacy MAC under a
+different key ID withholds the card, including after a key rotation.
 Invalid labels or an unusable signing key return `uncertain`.
 
 During forget, the host's `dependents.invalidate` step calls
