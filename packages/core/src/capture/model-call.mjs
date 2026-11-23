@@ -28,8 +28,6 @@ import { buildModelRequest, decodeModelOutput } from './wire.mjs';
 export const MIN_CONTEXT_WINDOW = 8192;
 const MAX_OUTPUT_UNITS = 40_000;
 const DEFAULT_TIMEOUT_MS = 30_000;
-// Only the capture entry can defer building until after the dispatch-path deadline check.
-const CAPTURE_REQUEST = Symbol('capture request');
 const MODEL_STAGES = ['extract', 'qualify', 'reconcile', 'classify', 'rationale'];
 
 /** @param {CallOptions['onDiagnostic']} observer @param {DiagnosticEvent} event */
@@ -73,13 +71,41 @@ export function modelError(error, fallback = 'internal_error') {
   return new CoreError(fallback);
 }
 
+/** @param {unknown} value */
+function assertJSONData(value) {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean' ||
+      (typeof value === 'number' && Number.isFinite(value) && !Object.is(value, -0))) return;
+  if (typeof value !== 'object') throw new CoreError('invalid_input');
+  // Typed arrays and DataViews are binary views (possibly over shared memory), never JSON data,
+  // whatever their prototype says.
+  if (ArrayBuffer.isView(value)) throw new CoreError('invalid_input');
+
+  const prototype = Object.getPrototypeOf(value);
+  const keys = Reflect.ownKeys(value);
+  if (Array.isArray(value)) {
+    if (prototype !== Array.prototype || keys.pop() !== 'length' || keys.length !== value.length ||
+        keys.some((key, index) => key !== String(index))) throw new CoreError('invalid_input');
+  } else if (prototype !== Object.prototype && prototype !== null) {
+    throw new CoreError('invalid_input');
+  }
+  for (const key of keys) {
+    const property = Object.getOwnPropertyDescriptor(value, key);
+    if (typeof key !== 'string' || !property?.enumerable || !Object.hasOwn(property, 'value')) {
+      throw new CoreError('invalid_input');
+    }
+    assertJSONData(property.value);
+  }
+}
+
 /** @param {BuiltModelRequest<unknown>} built @returns {BuiltModelRequest<unknown>} */
 function snapshotBuilt(built) {
   try {
     const { stage, request, validationSchema, sizingText, decode } = built;
-    const data = structuredClone({ stage, request, validationSchema, sizingText });
+    const jsonData = validationSchema === undefined ? { request } : { request, validationSchema };
+    assertJSONData(jsonData);
+    const data = JSON.parse(JSON.stringify(jsonData));
     const req = data.request;
-    if (!MODEL_STAGES.includes(data.stage) || typeof data.sizingText !== 'string' ||
+    if (!MODEL_STAGES.includes(stage) || typeof sizingText !== 'string' ||
         !req || typeof req !== 'object' || Array.isArray(req) ||
         typeof req.system !== 'string' || !Object.hasOwn(req, 'input') ||
         !Number.isSafeInteger(req.maxOutputTokens) || req.maxOutputTokens <= 0 ||
@@ -89,7 +115,7 @@ function snapshotBuilt(built) {
         typeof decode !== 'function') {
       throw new CoreError('invalid_input');
     }
-    return { ...data, decode };
+    return { stage, request: req, validationSchema: data.validationSchema, sizingText, decode };
   } catch { throw new CoreError('invalid_input'); }
 }
 
@@ -99,9 +125,11 @@ function snapshotBuilt(built) {
  * @param {Method} method
  * @param {Request} request
  * @param {ModelCallOptions} [options]
+ * @returns {Promise<ReturnType<typeof decodeModelOutput>>}
  */
-export function callModel(model, method, request, options = {}) {
-  return callBuiltModel(model, method, request, options, CAPTURE_REQUEST);
+export async function callModel(model, method, request, options = {}) {
+  try { return /** @type {ReturnType<typeof decodeModelOutput>} */ (await call(model, method, request, options, true)); }
+  catch (error) { throw modelError(error); }
 }
 
 /**
@@ -115,23 +143,13 @@ export function callModel(model, method, request, options = {}) {
  * @returns {Promise<Output>}
  */
 /**
- * @overload
- * @param {ModelPort | null | undefined} model
- * @param {Method} method
- * @param {Request} built
- * @param {ModelCallOptions} options
- * @param {typeof CAPTURE_REQUEST} capture
- * @returns {Promise<ReturnType<typeof decodeModelOutput>>}
- */
-/**
  * @param {ModelPort | null | undefined} model
  * @param {string} method
- * @param {BuiltModelRequest<unknown> | Request} built
+ * @param {BuiltModelRequest<unknown>} built
  * @param {ModelCallOptions} [options]
- * @param {typeof CAPTURE_REQUEST} [capture]
  */
-export async function callBuiltModel(model, method, built, options = {}, capture) {
-  try { return await call(model, method, built, options, capture === CAPTURE_REQUEST); }
+export async function callBuiltModel(model, method, built, options = {}) {
+  try { return await call(model, method, built, options, false); }
   catch (error) { throw modelError(error); }
 }
 
@@ -197,6 +215,7 @@ async function call(model, method, request, options, capture) {
   const args = capture ? detach(/** @type {Request} */ (request), 'invalid_input') : undefined;
   if (capture && args == null) throw new CoreError('invalid_input');
   const prebuilt = capture ? undefined : snapshotBuilt(/** @type {BuiltModelRequest<unknown>} */ (request));
+  const maxOutputTokens = prebuilt?.request.maxOutputTokens ?? MODEL_OUTPUT_TOKENS;
   /** @type {ModelPort['call'] | undefined} */
   let provider;
   try { provider = model?.call; }
@@ -323,13 +342,33 @@ async function call(model, method, request, options, capture) {
     return reject('invalid_model_output', 'output_bounds');
   }
 
+  if (!capture && tokens(text) > maxOutputTokens) return reject('invalid_model_output', 'output_bounds');
+
   let decoded;
-  try { decoded = built.decode(output, report); }
-  catch { return reject('invalid_model_output', 'adapter_output_invalid'); }
-  // The engine sizes the adapter's logical result after wire decoding.
-  if (method === 'qualifyCandidates') text = JSON.stringify(decoded);
-  if (text.length > MAX_OUTPUT_UNITS || tokens(text) > MODEL_OUTPUT_TOKENS) {
-    reject('invalid_model_output', 'output_bounds');
+  try {
+    decoded = built.decode(output, report);
+    if (!capture) {
+      if (typeof (/** @type {{then?: unknown} | null | undefined} */ (decoded))?.then === 'function') {
+        // Handle rejected native promises without invoking a foreign thenable's method.
+        try { Promise.prototype.then.call(decoded, undefined, () => {}); }
+        catch { /* A foreign thenable is rejected below. */ }
+        throw new CoreError('invalid_model_output');
+      }
+      const decodedText = JSON.stringify(decoded);
+      if (typeof decodedText !== 'string' || decodedText.length > MAX_OUTPUT_UNITS) {
+        throw new CoreError('invalid_model_output');
+      }
+      // Deliver plain data only: the decoder's own object (getters, toJSON, a late `then`) never
+      // leaves, so the async return cannot adopt a thenable or rerun caller code.
+      decoded = JSON.parse(decodedText);
+    }
+  } catch { return reject('invalid_model_output', 'adapter_output_invalid'); }
+  if (capture) {
+    // The engine sizes the adapter's logical result after wire decoding.
+    if (method === 'qualifyCandidates') text = JSON.stringify(decoded);
+    if (text.length > MAX_OUTPUT_UNITS || tokens(text) > MODEL_OUTPUT_TOKENS) {
+      reject('invalid_model_output', 'output_bounds');
+    }
   }
   check();
   runHook(validateFresh);
