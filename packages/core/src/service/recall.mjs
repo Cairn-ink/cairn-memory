@@ -7,7 +7,7 @@ import { canonicalKey } from "../retrieval/bm25.mjs";
 import { fuseHosted, fuseHostedLexicalOnly } from "../retrieval/fusion.mjs";
 import { encodeCursor, pageLimit } from "../retrieval/hosted-paging.mjs";
 import { entry, scopeOf } from "./entry.mjs";
-import { readCursor, readSet, readStateToken, recentPage } from "./reads.mjs";
+import { hydrateMemoryRows, readCursor, readSet, readStateToken, recentPage } from "./reads.mjs";
 
 /** @typedef {import("../ports/common.d.ts").ItemRef} ItemRef */
 /** @typedef {import("../ports/common.d.ts").MemoryRow} MemoryRow */
@@ -113,16 +113,7 @@ export function recallSearch({ storage, embedQuery, gate, diagnostics, clock }) 
         : fuseHostedLexicalOnly(lexicalRows, page);
       const nextOffset = offset + limit;
       const nextCursor = nextOffset < total ? encodeCursor([...binding, token, nextOffset, path]) : null;
-      /** @type {Map<string, MemoryRow>} */
-      const memories = new Map();
-      if (rows.length) {
-        for (const { ref, memory } of await hydrate.hydrate(tx, readScope, rows.map(row => row.ref), "recall")) {
-          if (isScopedMemory(ref) && memory?.id === ref.id && memory.scope.owner === scope.owner &&
-              memory.scope.namespace === ref.namespace) {
-            memories.set(canonicalKey(ref), memory);
-          }
-        }
-      }
+      const memories = await hydrateMemoryRows(hydrate, tx, readScope, rows.map(row => row.ref), "recall");
       return { rows, nextCursor, memories, path };
     });
     // One content-free event per first page that ranks lexical-only. Continuations on a lexical cursor
@@ -132,10 +123,11 @@ export function recallSearch({ storage, embedQuery, gate, diagnostics, clock }) 
     }
 
     if (!rows.length) return { items: [], nextCursor, scores: [] };
-    // The fence runs alone in a fresh read run, after every read it guards, so a
-    // forget committed at any point before this run starts is never delivered.
+    // Rehydrate beside the fence in a fresh snapshot. A correction can keep the
+    // same ref visible while changing the content ranked by the previous run.
     return uow.run(scope.owner, { readOnly: true }, async tx => {
       const refs = rows.map(row => row.ref);
+      const current = await hydrateMemoryRows(hydrate, tx, readScope, refs, "recall");
       const visible = new Set((await fence.assertVisible(tx, readScope, refs)).map(canonicalKey));
       /** @type {MemoryRow[]} */
       const items = [];
@@ -143,8 +135,8 @@ export function recallSearch({ storage, embedQuery, gate, diagnostics, clock }) 
       const scores = [];
       for (const { ref, score } of rows) {
         const key = canonicalKey(ref);
-        const memory = memories.get(key);
-        if (memory && visible.has(key)) {
+        const memory = current.get(key);
+        if (memory && memory.revision === memories.get(key)?.revision && visible.has(key)) {
           items.push(memory);
           scores.push(score);
         }

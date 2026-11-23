@@ -7,7 +7,7 @@ import { hostedScope as scope, memory, serviceFake } from "./helpers/service-fak
 const ref = id => ({ type: "memory", id });
 const missing = { status: "not_found" };
 
-test("read hydrates receipts and source dates, then fences alone in a fresh read run", async () => {
+test("read hydrates receipts and source dates in the fresh fence snapshot", async () => {
   const item = memory("present");
   const receipts = [{ client: "client", sessionId: "session", messageId: "message", occurredAtMs: 10, role: "user" }];
   const sourceDates = { firstMs: 10, lastMs: 10 };
@@ -21,6 +21,7 @@ test("read hydrates receipts and source dates, then fences alone in a fresh read
     ["run", scope.owner, { readOnly: true }],
     ["hydrate.hydrate", readScope, refs, "read"],
     ["run", scope.owner, { readOnly: true }],
+    ["hydrate.hydrate", readScope, refs, "read"],
     ["fence.assertVisible", readScope, refs],
   ]);
   delete hooks.hydrate;

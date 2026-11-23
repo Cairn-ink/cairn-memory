@@ -97,16 +97,20 @@ export function readMethod({ uow, hydrate, fence }) {
     /** @param {import("../ports/common.d.ts").ItemRef} candidate */
     const isRequested = candidate => candidate.type === type && candidate.id === id &&
       candidate.namespace === scope.namespace;
+    /** @param {import("../ports/retrieval.d.ts").HydratedItem} candidate */
+    const matches = ({ ref, memory }) => isRequested(ref) && memory?.id === id &&
+      memory.scope.owner === scope.owner && memory.scope.namespace === scope.namespace;
 
-    const hydrated = await uow.run(scope.owner, { readOnly: true }, tx =>
+    const initial = await uow.run(scope.owner, { readOnly: true }, tx =>
       hydrate.hydrate(tx, readScope, [ref], "read"));
-    const visible = await uow.run(scope.owner, { readOnly: true }, tx =>
-      fence.assertVisible(tx, readScope, [ref]));
-    const result = hydrated.find(({ ref, memory }) => isRequested(ref) && memory?.id === id &&
-      memory.scope.owner === scope.owner && memory.scope.namespace === scope.namespace);
-    if (!result?.memory || !visible.some(isRequested)) return { status: "not_found" };
-    return {
-      status: "found", item: result.memory, receipts: result.receipts ?? [], sourceDates: result.sourceDates ?? null,
-    };
+    return uow.run(scope.owner, { readOnly: true }, async tx => {
+      const hydrated = await hydrate.hydrate(tx, readScope, [ref], "read");
+      const visible = await fence.assertVisible(tx, readScope, [ref]);
+      const result = hydrated.find(matches);
+      if (!result?.memory || !visible.some(isRequested) || !initial.some(matches)) return { status: "not_found" };
+      return {
+        status: "found", item: result.memory, receipts: result.receipts ?? [], sourceDates: result.sourceDates ?? null,
+      };
+    });
   });
 }

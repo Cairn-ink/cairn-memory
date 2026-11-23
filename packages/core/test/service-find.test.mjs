@@ -64,7 +64,7 @@ test("find forwards window and deduped clients to the search read set in both ru
   assert.deepEqual(result.layers, { memory: { status: "ok", count: 1 }, card: skipped, raw: skipped });
   const ports = calls.filter(([method]) => method.includes("."));
   assert.deepEqual(ports.map(([method]) => method), [
-    "snapshot.stateToken", "lexical.lexical", "vector.vector", "hydrate.hydrate", "fence.assertVisible",
+    "snapshot.stateToken", "lexical.lexical", "vector.vector", "hydrate.hydrate", "hydrate.hydrate", "fence.assertVisible",
   ]);
   for (const [, selection] of ports) assert.deepEqual(selection, readScope);
 });
@@ -132,6 +132,6 @@ test("find fences in a fresh run after a forget commits during hydration", async
   assert.deepEqual(result.memories, []);
   assert.deepEqual(result.layers.memory, { status: "ok", count: 0 });
   assert.deepEqual(fake.calls.map(([method]) => method), [
-    "run", "snapshot.stateToken", "lexical.lexical", "hydrate.hydrate", "run", "fence.assertVisible",
+    "run", "snapshot.stateToken", "lexical.lexical", "hydrate.hydrate", "run", "hydrate.hydrate", "fence.assertVisible",
   ]);
 });
