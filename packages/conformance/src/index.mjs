@@ -1,9 +1,10 @@
 import { memoryCases } from "./memory-cases.mjs";
+import { retrievalCases } from "./retrieval-cases.mjs";
 import { bounded, check, DEFAULT_TIMEOUT_MS } from "./support.mjs";
 import { unitOfWorkCases } from "./unit-of-work-cases.mjs";
 
 /** @type {readonly import("./index.d.mts").ConformanceCase[]} */
-export const CASES = [...unitOfWorkCases, ...memoryCases];
+export const CASES = [...unitOfWorkCases, ...memoryCases, ...retrievalCases];
 
 const encoder = new TextEncoder();
 

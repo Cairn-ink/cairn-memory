@@ -1,5 +1,5 @@
 import type { Capabilities, ErrorCode, SuppressionFact } from "@cairn-ink/core";
-import type { MemoryStore, Scope, UnitOfWork } from "@cairn-ink/core/ports";
+import type { Scope, StorageAdapter } from "@cairn-ink/core/ports";
 
 export type AdapterFactory = {
   name: string;
@@ -8,7 +8,8 @@ export type AdapterFactory = {
 };
 
 export type OpenedAdapter = {
-  adapter: { capabilities: Capabilities; uow: UnitOfWork; memories: MemoryStore };
+  adapter: Pick<StorageAdapter, "capabilities" | "uow" | "memories" |
+    "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "supersession">;
   harness: TestHarness;
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;
   busyNativeCodes: readonly string[];

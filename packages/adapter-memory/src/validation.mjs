@@ -40,10 +40,40 @@ export function validateSource(source) {
 }
 
 /** @param {number[] | Float32Array} vector */
-function validateVector(vector) {
+export function validateVector(vector) {
   if (!(Array.isArray(vector) || vector instanceof Float32Array) || vector.length === 0) invalid();
   for (const component of vector) {
     if (!Number.isFinite(component)) invalid();
+  }
+}
+
+/** @param {number} limit */
+export function validateLimit(limit) {
+  if (!Number.isSafeInteger(limit) || limit < 1) invalid();
+}
+
+/** @param {import("@cairn-ink/core/ports").RetrievalScope} scope */
+export function validateReadSet({ namespaces, clients }) {
+  if (!Array.isArray(namespaces) || namespaces.length === 0) invalid();
+  const seen = new Set();
+  for (const namespace of namespaces) {
+    if (!nullableString(namespace) || seen.has(namespace)) invalid();
+    seen.add(namespace);
+  }
+  if (clients !== undefined) {
+    if (!Array.isArray(clients)) invalid();
+    for (const client of clients) {
+      if (typeof client !== "string") invalid();
+    }
+  }
+}
+
+/** @param {readonly import("@cairn-ink/core/ports").ItemRef[]} refs */
+export function validateRefs(refs) {
+  if (!Array.isArray(refs)) invalid();
+  for (const ref of refs) {
+    if (!ref || typeof ref !== "object" || !["memory", "raw", "card"].includes(ref.type) ||
+      typeof ref.id !== "string" || !nullableString(ref.namespace)) invalid();
   }
 }
 

@@ -8,11 +8,11 @@ const accepted = Object.fromEntries(CAPABILITIES.filter((flag) => !optional.has(
 function factory(name, enableFlags) {
   return {
     name,
-    async open() {
+    async open({ capabilities }) {
       const ids = ["first", "second", "id-\uE001", "id-\u{10001}", "id-\uE000", "id-\u{10000}"];
       let index = 0;
       const adapter = createMemoryAdapter({
-        capabilities: enableFlags ? accepted : {},
+        capabilities: enableFlags ? { ...accepted, semanticRetrieval: capabilities.semanticRetrieval ?? true } : {},
         newId() {
           const current = index++;
           return ids[current] ?? `id-${current}`;

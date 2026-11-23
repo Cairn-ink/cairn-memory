@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { setImmediate } from "node:timers/promises";
 import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
 import { CASES, runCase } from "@cairn-ink/conformance";
-import { CoreError } from "@cairn-ink/core";
+import { CoreError, compareSortKey, compareUtf8 } from "@cairn-ink/core";
 
 function factory(wrap) {
   return {
@@ -391,4 +391,290 @@ test("runCase preserves the case error when the adapter never closes", async () 
     assert.match(error.cause?.message ?? "", /Adapter close exceeded 5000 ms/);
     return true;
   });
+});
+
+function lexicalOutsideReadSet(opened) {
+  const { lexical } = opened.adapter;
+  return withPorts(opened, {
+    lexical: {
+      lexical: (tx, scope, ...args) => lexical.lexical(tx, { ...scope, namespaces: [...scope.namespaces, "outside"] }, ...args),
+    },
+  });
+}
+
+function lexicalUtf16Ties(opened) {
+  const { lexical } = opened.adapter;
+  const compare = (a, b) => a === b ? 0 : a === null || (b !== null && a < b) ? -1 : 1;
+  return withPorts(opened, {
+    lexical: {
+      async lexical(tx, scope, query, depth, options) {
+        const result = await lexical.lexical(tx, scope, query, Number.MAX_SAFE_INTEGER, options);
+        const rows = result.rows.sort((a, b) => b.score - a.score ||
+          compare(a.ref.namespace, b.ref.namespace) || compare(a.ref.id, b.ref.id));
+        return { ...result, rows: rows.slice(0, depth) };
+      },
+    },
+  });
+}
+
+function lexicalAlwaysMatches(opened) {
+  const { lexical } = opened.adapter;
+  return withPorts(opened, {
+    lexical: { async lexical(...args) { return { ...await lexical.lexical(...args), matched: true }; } },
+  });
+}
+
+function vectorAlwaysComplete(opened) {
+  const { vector } = opened.adapter;
+  return withPorts(opened, {
+    vector: {
+      async vector(...args) {
+        const result = await vector.vector(...args);
+        return { ...result, coverage: { ...result.coverage, complete: true } };
+      },
+    },
+  });
+}
+
+function vectorIgnoresModel(opened) {
+  const { vector } = opened.adapter;
+  return withPorts(opened, {
+    vector: {
+      async vector(tx, scope, query, model, depth) {
+        const { rows, coverage: { eligible, embedded } } = await vector.vector(tx, scope, query, model, depth);
+        const other = await vector.vector(tx, scope, query, "other", depth);
+        const combined = [...rows, ...other.rows].sort((a, b) => a.distance - b.distance ||
+          compareSortKey(b.updatedAtUs, a.updatedAtUs) || compareUtf8(b.ref.id, a.ref.id));
+        const total = embedded + other.coverage.embedded;
+        return { rows: combined.slice(0, depth), coverage: { eligible, embedded: total, complete: total === eligible } };
+      },
+    },
+  });
+}
+
+function recentTimeOnlyCursor(opened) {
+  const { recent } = opened.adapter;
+  const cursorTimes = new Map();
+  return withPorts(opened, {
+    recent: {
+      async recent(tx, scope, { cursor, limit }) {
+        if (limit < 1 || (cursor !== null && !cursorTimes.has(cursor))) {
+          return recent.recent(tx, scope, { cursor, limit });
+        }
+        const { items } = await recent.recent(tx, scope, { cursor: null, limit: Number.MAX_SAFE_INTEGER });
+        const after = cursor === null ? items : items.filter(({ updatedAtUs }) => updatedAtUs < cursorTimes.get(cursor));
+        const page = after.slice(0, limit);
+        const nextCursor = after.length > limit ? String(cursorTimes.size) : null;
+        if (nextCursor !== null) cursorTimes.set(nextCursor, page.at(-1).updatedAtUs);
+        return { items: page, nextCursor };
+      },
+    },
+  });
+}
+
+function recentLeaksHiddenRow(opened) {
+  const { recent, memories } = opened.adapter;
+  const { harness } = opened;
+  let hidden;
+  return {
+    ...withPorts(opened, {
+      recent: {
+        async recent(tx, scope, page) {
+          const result = await recent.recent(tx, scope, page);
+          if (page.cursor !== null || !hidden || result.items.length === 0) return result;
+          const row = await memories.get(tx, hidden.scope, hidden.id);
+          return { ...result, items: [row, ...result.items.slice(1)] };
+        },
+      },
+    }),
+    harness: {
+      ...harness,
+      async seedFact(owner, fact) {
+        if (fact.kind === "identity") hidden = { scope: { owner, namespace: fact.namespace }, id: fact.memoryId };
+        return harness.seedFact(owner, fact);
+      },
+    },
+  };
+}
+
+function snapshotIgnoresRevision(opened) {
+  const { snapshot } = opened.adapter;
+  const tokens = new Map();
+  return withPorts(opened, {
+    snapshot: {
+      async stateToken(tx, scope) {
+        const live = await snapshot.stateToken(tx, scope);
+        const key = JSON.stringify([scope.owner, [...scope.namespaces].sort(), scope.clients?.slice().sort()]);
+        if (!tokens.has(key)) tokens.set(key, live);
+        return tokens.get(key);
+      },
+      async assertUnchanged(tx, scope, token) {
+        if (tokens.has(JSON.stringify([scope.owner, [...scope.namespaces].sort(), scope.clients?.slice().sort()])) &&
+            token === await this.stateToken(tx, scope)) return;
+        return snapshot.assertUnchanged(tx, scope, token);
+      },
+    },
+  });
+}
+
+function snapshotIgnoresReadSet(opened) {
+  const { snapshot } = opened.adapter;
+  const ownerOnly = ({ owner }) => ({ owner, namespaces: [null] });
+  return withPorts(opened, {
+    snapshot: {
+      stateToken: (tx, scope) => snapshot.stateToken(tx, ownerOnly(scope)),
+      assertUnchanged: (tx, scope, token) => snapshot.assertUnchanged(tx, ownerOnly(scope), token),
+    },
+  });
+}
+
+function recordsHiddenRef(opened, wrap) {
+  const { harness } = opened;
+  let hidden;
+  const wrapped = wrap(() => hidden);
+  return {
+    ...wrapped,
+    harness: {
+      ...harness,
+      async seedFact(owner, fact) {
+        if (fact.kind === "identity") hidden = { type: "memory", namespace: fact.namespace, id: fact.memoryId };
+        return harness.seedFact(owner, fact);
+      },
+    },
+  };
+}
+
+function hydrateThrowsOnHidden(opened) {
+  const { hydrate } = opened.adapter;
+  return recordsHiddenRef(opened, (hidden) => withPorts(opened, {
+    hydrate: {
+      async hydrate(tx, scope, refs, intent) {
+        if (refs.some((ref) => ref.id === hidden()?.id)) throw new CoreError("memory_not_found");
+        return hydrate.hydrate(tx, scope, refs, intent);
+      },
+    },
+  }));
+}
+
+function hydrateReorders(opened) {
+  const { hydrate } = opened.adapter;
+  return withPorts(opened, {
+    hydrate: { async hydrate(...args) { return (await hydrate.hydrate(...args)).reverse(); } },
+  });
+}
+
+function hydrateOmitsExportReceipts(opened) {
+  const { hydrate } = opened.adapter;
+  return withPorts(opened, {
+    hydrate: {
+      async hydrate(tx, scope, refs, intent) {
+        const items = await hydrate.hydrate(tx, scope, refs, intent);
+        return intent === "export" ? items.map(({ receipts, ...item }) => item) : items;
+      },
+    },
+  });
+}
+
+function fenceLeaksHiddenRef(opened) {
+  const { fence } = opened.adapter;
+  return recordsHiddenRef(opened, (hidden) => withPorts(opened, {
+    fence: {
+      async assertVisible(tx, scope, refs) {
+        const visible = await fence.assertVisible(tx, scope, refs);
+        return refs.filter(({ id, namespace }) => id === hidden()?.id ||
+          visible.some((ref) => ref.id === id && ref.namespace === namespace));
+      },
+    },
+  }));
+}
+
+const retrievalRegressions = [
+  ["widens the lexical read set", "K-RET-1", lexicalOutsideReadSet, /Lexical returned the wrong refs/],
+  ["orders lexical ties by UTF-16", "K-RET-1", lexicalUtf16Ties, /Lexical ties were not in canonical order/],
+  ["reports matched for an empty lexical result", "K-RET-2", lexicalAlwaysMatches, /empty lexical result reported a match/],
+  ["reports complete vector coverage with missing embeddings", "K-RET-3", vectorAlwaysComplete,
+    /Incomplete vector coverage was reported complete/],
+  ["ignores the query model in vector search", "K-RET-3", vectorIgnoresModel, /Vector eligible and embedded counts/],
+  ["pages recent rows without an ID tie-break", "K-RET-9", recentTimeOnlyCursor, /Missing recent second-page continuation/],
+  ["includes a hidden recent row", "K-RET-9", recentLeaksHiddenRow, /Recent pages did not contain exactly the visible rows in order/],
+  ["ignores the owner revision in state tokens", "K-SNAP-1", snapshotIgnoresRevision, /Expected operation to reject/],
+  ["ignores the read set in state tokens", "K-SNAP-1", snapshotIgnoresReadSet, /Expected operation to reject/],
+  ["throws when asked to hydrate a hidden ref", "K-HYD-1", hydrateThrowsOnHidden, { code: "memory_not_found" }],
+  ["reorders hydrated refs", "K-HYD-1", hydrateReorders, /Hydrate refs did not preserve the visible input order/],
+  ["omits receipts from export hydration", "K-HYD-1", hydrateOmitsExportReceipts, /Hydrate receipts were missing or changed/],
+  ["lets hidden refs pass the fence", "K-FEN-1", fenceLeaksHiddenRef, /Fence did not return exactly the visible refs in input order/],
+];
+
+for (const [description, id, wrap, failure] of retrievalRegressions) {
+  test(`${id} rejects an adapter that ${description}`, async () => {
+    await assert.rejects(() => run(id, wrap), failure);
+  });
+}
+
+function returnsRetrievalInstances(opened) {
+  const { adapter: { lexical, vector, hydrate, recent, fence } } = opened;
+  class Result {
+    constructor(fields) {
+      Object.assign(this, fields);
+    }
+  }
+  const withRef = (row) => new Result({ ...row, ref: new Result(row.ref) });
+  return withPorts(returnsRowInstances(opened), {
+    lexical: {
+      async lexical(...args) {
+        const { rows, matched } = await lexical.lexical(...args);
+        return new Result({ rows: rows.map(withRef), matched });
+      },
+    },
+    ...(vector && {
+      vector: {
+        async vector(...args) {
+          const { rows, coverage } = await vector.vector(...args);
+          return new Result({ rows: rows.map(withRef), coverage: new Result(coverage) });
+        },
+      },
+    }),
+    hydrate: {
+      async hydrate(...args) {
+        return (await hydrate.hydrate(...args)).map((item) => withRef({
+          ...item, memory: new Result(item.memory), receipts: item.receipts.map((r) => new Result(r)),
+          sourceDates: new Result(item.sourceDates),
+        }));
+      },
+    },
+    recent: {
+      async recent(...args) {
+        const { items, nextCursor } = await recent.recent(...args);
+        return new Result({ items: items.map((item) => new Result(item)), nextCursor });
+      },
+    },
+    fence: { async assertVisible(...args) { return (await fence.assertVisible(...args)).map((ref) => new Result(ref)); } },
+  });
+}
+
+test("retrieval cases accept class instances", async () => {
+  for (const id of ["K-RET-1", "K-RET-2", "K-RET-3", "K-RET-9", "K-HYD-1", "K-MEM-4r", "K-FEN-1"]) {
+    assert.equal(await run(id, returnsRetrievalInstances), null);
+  }
+});
+
+test("K-RET-9 accepts fresh recent cursors for the same position", async () => {
+  let sequence = 0;
+  assert.equal(await run("K-RET-9", (opened) => {
+    const { recent } = opened.adapter;
+    return withPorts(opened, {
+      recent: {
+        async recent(tx, scope, { cursor, limit }) {
+          const page = await recent.recent(tx, scope, { cursor: cursor?.replace(/\.\d+$/, "") ?? null, limit });
+          return { ...page, nextCursor: page.nextCursor === null ? null : `${page.nextCursor}.${++sequence}` };
+        },
+      },
+    });
+  }), null);
+});
+
+test("retrieval cases accept a coarse write clock", async () => {
+  for (const id of ["K-RET-1", "K-RET-3", "K-RET-9", "K-SNAP-1", "K-HYD-1", "K-MEM-4r"]) {
+    assert.equal(await run(id, coarseClock), null);
+  }
 });

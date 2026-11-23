@@ -1,5 +1,6 @@
 import { assertAdapterCapabilities, capabilities, toCoreError } from "@cairn-ink/core";
 import { createMemoryStore } from "./memory-store.mjs";
+import { createRetrievalPorts } from "./retrieval.mjs";
 import { createUnitOfWork } from "./unit-of-work.mjs";
 
 const nativeErrorMap = Object.freeze({});
@@ -18,6 +19,7 @@ export function createMemoryAdapter(options = {}) {
     capabilities: flags,
     uow,
     memories,
+    ...createRetrievalPorts(port, flags),
     nativeErrorMap,
     harness: {
       async dump() { return dump(); },

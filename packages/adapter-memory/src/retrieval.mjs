@@ -1,0 +1,229 @@
+import { CoreError, compareUtf8, createBM25, rankScores, scoreBM25, termFrequencies, tokenizeT1 } from "@cairn-ink/core";
+import { cosineDistance } from "./cosine.mjs";
+import { decodePayload, decodeSortKey, encodePayload, newestFirst } from "./cursor.mjs";
+import { factPolicy } from "./fact-match.mjs";
+import { validateLimit, validateReadSet, validateRefs, validateVector } from "./validation.mjs";
+
+/** @typedef {import("@cairn-ink/core/ports").StorageAdapter} StorageAdapter */
+/** @typedef {import("@cairn-ink/core/ports").RetrievalScope} RetrievalScope */
+/** @typedef {import("@cairn-ink/core/ports").Namespace} Namespace */
+/** @typedef {import("@cairn-ink/core/ports").ItemRef} ItemRef */
+/** @typedef {import("@cairn-ink/core/ports").Receipt} Receipt */
+/** @typedef {import("./unit-of-work.mjs").State} State */
+/** @typedef {import("./unit-of-work.mjs").Row} Row */
+
+/** @param {Row} row @returns {ItemRef} */
+function memoryRef({ id, scope: { namespace } }) {
+  return { type: "memory", id, namespace };
+}
+
+/** @param {string} a @param {string} b */
+function compareStrings(a, b) {
+  // Distinct lone surrogates can encode to the same UTF-8 bytes.
+  return compareUtf8(a, b) || (a === b ? 0 : a < b ? -1 : 1);
+}
+
+/** @param {Namespace} a @param {Namespace} b */
+function compareNamespaces(a, b) {
+  return a === b ? 0 : a === null ? -1 : b === null ? 1 : compareStrings(a, b);
+}
+
+/** @typedef {{id: string, updatedAtUs: bigint, scope: {namespace: Namespace}}} RecentKey */
+
+/** @param {RecentKey} a @param {RecentKey} b */
+function recentOrder(a, b) {
+  // Different namespaces can contain the same ID and timestamp.
+  return newestFirst(a, b) || compareNamespaces(a.scope.namespace, b.scope.namespace) || compareStrings(a.id, b.id);
+}
+
+/** @param {string} cursor @returns {RecentKey} */
+function recentAfter(cursor) {
+  const [time, id, namespace, ...extra] = decodePayload(cursor);
+  if (extra.length || (namespace !== null && typeof namespace !== "string")) throw new CoreError("invalid_cursor");
+  return { ...decodeSortKey(time, id), scope: { namespace } };
+}
+
+/** @param {RetrievalScope} scope @param {number} revision */
+function stateToken({ owner, namespaces, clients }, revision) {
+  return encodePayload([owner, revision, [...namespaces].sort(compareNamespaces), clients ? [...clients].sort(compareStrings) : null]);
+}
+
+/** @param {string} token */
+function validateToken(token) {
+  const [owner, revision, namespaces, clients, ...extra] = decodePayload(token);
+  if (extra.length || typeof owner !== "string" || !owner ||
+    typeof revision !== "number" || !Number.isSafeInteger(revision) || revision < 0) {
+    throw new CoreError("invalid_cursor");
+  }
+  const scope = /** @type {RetrievalScope} */ ({ owner, namespaces, clients: clients === null ? undefined : clients });
+  try {
+    validateReadSet(scope);
+  } catch {
+    throw new CoreError("invalid_cursor");
+  }
+  if (stateToken(scope, revision) !== token) throw new CoreError("invalid_cursor");
+}
+
+/** @param {Receipt[]} receipts */
+function sourceDates(receipts) {
+  /** @type {number | null} */
+  let firstMs = null;
+  /** @type {number | null} */
+  let lastMs = null;
+  for (const { occurredAtMs } of receipts) {
+    if (occurredAtMs === null) continue;
+    firstMs = firstMs === null ? occurredAtMs : Math.min(firstMs, occurredAtMs);
+    lastMs = lastMs === null ? occurredAtMs : Math.max(lastMs, occurredAtMs);
+  }
+  return { firstMs, lastMs };
+}
+
+/**
+ * @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>["port"]} port
+ * @param {import("@cairn-ink/core").Capabilities} capabilities
+ * @returns {Pick<StorageAdapter, "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent">}
+ */
+export function createRetrievalPorts(port, capabilities) {
+  /** @param {State} state @param {RetrievalScope} scope */
+  function policies(state, scope) {
+    return new Map(scope.namespaces.map((namespace) =>
+      [namespace, factPolicy(state.facts, { owner: scope.owner, namespace }, capabilities.vectorSuppression)]));
+  }
+
+  /** @param {State} state @param {RetrievalScope} scope */
+  function visibleRows(state, scope) {
+    /** @type {Row[]} */
+    const rows = [];
+    for (const [namespace, policy] of policies(state, scope)) {
+      const entries = state.rows.get(namespace);
+      if (!entries) continue;
+      for (const { row } of entries.values()) {
+        if (!row.historical && !policy.hides(row)) rows.push(row);
+      }
+    }
+    return rows;
+  }
+
+  /** @param {State} state @param {RetrievalScope} scope @param {readonly ItemRef[]} refs @param {boolean} includeHistorical */
+  function* visibleRefs(state, scope, refs, includeHistorical) {
+    validateRefs(refs);
+    const byNamespace = policies(state, scope);
+    for (const ref of refs) {
+      const policy = byNamespace.get(ref.namespace);
+      if (ref.type !== "memory" || !policy) continue;
+      const entry = state.rows.get(ref.namespace)?.get(ref.id);
+      if (entry && (includeHistorical || !entry.row.historical) && !policy.hides(entry.row)) {
+        yield { ref: memoryRef(entry.row), entry };
+      }
+    }
+  }
+
+  /** @type {import("@cairn-ink/core/ports").VectorCandidates} */
+  const vector = {
+    async vector(tx, scope, query, model, depth) {
+      return port(tx, scope, false, (state) => {
+        validateReadSet(scope);
+        validateLimit(depth);
+        validateVector(query);
+        if (typeof model !== "string" || !model) throw new CoreError("invalid_input");
+
+        const visible = visibleRows(state, scope);
+        const rows = [];
+        for (const row of visible) {
+          const { embedding } = row;
+          if (embedding?.model !== model || embedding.vector.length !== query.length) continue;
+          // Treat a zero vector as orthogonal so every matching embedding is ranked.
+          const distance = cosineDistance(query, embedding.vector) ?? 1;
+          rows.push({ ref: memoryRef(row), distance, updatedAtUs: row.updatedAtUs });
+        }
+        rows.sort((a, b) => a.distance - b.distance || newestFirst(
+          { id: a.ref.id, updatedAtUs: a.updatedAtUs }, { id: b.ref.id, updatedAtUs: b.updatedAtUs }));
+        const eligible = visible.length;
+        const embedded = rows.length;
+        return { rows: rows.slice(0, depth), coverage: { eligible, embedded, complete: embedded === eligible } };
+      });
+    },
+  };
+
+  return {
+    ...(capabilities.semanticRetrieval ? { vector } : {}),
+    lexical: {
+      async lexical(tx, scope, query, depth) {
+        return port(tx, scope, false, (state) => {
+          validateReadSet(scope);
+          validateLimit(depth);
+          if (typeof query !== "string") throw new CoreError("invalid_input");
+          const terms = tokenizeT1(query);
+          if (terms.length === 0) return { rows: [], matched: false };
+
+          const documents = visibleRows(state, scope).map((row) => ({
+            ref: memoryRef(row), updatedAtUs: row.updatedAtUs, text: row.text,
+          }));
+          // The core search convenience method caps depth. Score using the same corpus stats
+          // and scorer so the port can honor all positive safe-integer depths.
+          const index = createBM25(documents);
+          const rows = [];
+          for (const { ref, updatedAtUs, text } of documents) {
+            const score = scoreBM25(terms, termFrequencies(text), index);
+            if (score !== null) rows.push({ ref, updatedAtUs, score });
+          }
+          return { rows: rankScores(rows).slice(0, depth), matched: rows.length > 0 };
+        });
+      },
+    },
+    snapshot: {
+      async stateToken(tx, scope) {
+        return port(tx, scope, false, (state) => {
+          validateReadSet(scope);
+          return stateToken(scope, state.indexRevision);
+        });
+      },
+      async assertUnchanged(tx, scope, token) {
+        return port(tx, scope, false, (state) => {
+          validateReadSet(scope);
+          validateToken(token);
+          if (token !== stateToken(scope, state.indexRevision)) throw new CoreError("cursor_stale");
+        });
+      },
+    },
+    hydrate: {
+      async hydrate(tx, scope, refs, intent) {
+        return port(tx, scope, false, (state) => {
+          validateReadSet(scope);
+          if (intent !== "recall" && intent !== "read" && intent !== "export") throw new CoreError("invalid_input");
+          return Array.from(visibleRefs(state, scope, refs, intent !== "recall"), ({ ref, entry }) => ({
+            ref, memory: structuredClone(entry.row), receipts: structuredClone(entry.receipts),
+            sourceDates: sourceDates(entry.receipts),
+          }));
+        });
+      },
+    },
+    fence: {
+      async assertVisible(tx, scope, refs) {
+        return port(tx, scope, false, (state) => {
+          validateReadSet(scope);
+          return Array.from(visibleRefs(state, scope, refs, false), ({ ref }) => ref);
+        });
+      },
+    },
+    recent: {
+      async recent(tx, scope, page) {
+        return port(tx, scope, false, (state) => {
+          validateReadSet(scope);
+          if (!page || typeof page !== "object") throw new CoreError("invalid_input");
+          const { cursor, limit } = page;
+          validateLimit(limit);
+          const after = cursor === null ? null : recentAfter(cursor);
+          const rows = visibleRows(state, scope).filter((row) => !after || recentOrder(row, after) > 0).sort(recentOrder);
+          const items = rows.slice(0, limit).map((row) => structuredClone(row));
+          const last = items.at(-1);
+          return {
+            items,
+            nextCursor: last && rows.length > limit ?
+              encodePayload([last.updatedAtUs.toString(), last.id, last.scope.namespace]) : null,
+          };
+        });
+      },
+    },
+  };
+}
