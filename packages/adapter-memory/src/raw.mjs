@@ -18,10 +18,16 @@ function sessionSlot(namespace, { client, sessionId }) {
   return JSON.stringify([namespace, client, sessionId]);
 }
 
+/** @param {Scope} scope @param {Session} session @param {string} id */
+function rawId({ owner, namespace }, { client, sessionId }, id) {
+  return JSON.stringify([owner, namespace, client, sessionId, id]);
+}
+
 /** @param {Scope} scope @param {Session} session @param {CaptureMessage} message @returns {RawEntry} */
-function rawEntry({ owner, namespace }, { client, sessionId }, { id, role, content, occurredAtMs }) {
+function rawEntry(scope, session, { id, role, content, occurredAtMs }) {
+  const { client, sessionId } = session;
   return {
-    ref: { type: "raw", namespace, id: JSON.stringify([owner, namespace, client, sessionId, id]) },
+    ref: { type: "raw", namespace: scope.namespace, id: rawId(scope, session, id) },
     client, sessionId, messageId: id, role, content, occurredAtMs,
   };
 }
@@ -161,6 +167,16 @@ export function createRawPorts({ port, runSeed }, ringKeys, hashSessionKey) {
       rows.push(row);
     }
     return rows;
+  }
+
+  /** @param {State} state @param {Scope} scope @param {Session & {messageId: string}} receipt */
+  async function findVisibleSource(state, scope, receipt) {
+    const id = rawId(scope, receipt, receipt.messageId);
+    const row = state.rawRows.get(id);
+    if (!row) return undefined;
+    const [visible] = await visibleRows({ ...state, rawRows: new Map([[id, row]]) },
+      { owner: scope.owner, namespaces: [scope.namespace] });
+    return visible;
   }
 
   /** @param {Tx} tx @param {Scope} scope @param {() => Session[]} prepare */
@@ -327,5 +343,5 @@ export function createRawPorts({ port, runSeed }, ringKeys, hashSessionKey) {
     }));
   }
 
-  return { raw, seedClientlessRaw, counters: () => ({ rawKeyConflict, rawArchiveRefused }) };
+  return { raw, findVisibleSource, seedClientlessRaw, counters: () => ({ rawKeyConflict, rawArchiveRefused }) };
 }

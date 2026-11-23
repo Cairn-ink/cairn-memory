@@ -68,6 +68,21 @@ const mutations = {
       }
     };
   }, /Expected operation to reject/],
+  "raw-deleted": ["evidence still returns a cached copy of deleted Raw", adapter => {
+    const { sourceEvidence } = adapter.rationale;
+    const cached = new Map();
+    adapter.rationale.sourceEvidence = async (tx, scope, refs) => {
+      const key = JSON.stringify([scope, refs]);
+      try {
+        const evidence = await sourceEvidence(tx, scope, refs);
+        cached.set(key, evidence);
+        return evidence;
+      } catch (error) {
+        if (error.code === "revision_conflict" && cached.has(key)) return cached.get(key);
+        throw error;
+      }
+    };
+  }, /Only the path with archived Raw remains/],
   scope: ["foreign incident reads expose another namespace's edge", adapter => {
     const { incident } = adapter.rationale;
     let cached;

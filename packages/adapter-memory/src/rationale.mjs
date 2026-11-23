@@ -65,8 +65,9 @@ function validateAnchor(anchor) {
  * @param {Port} port
  * @param {ReturnType<typeof import("./fact-match.mjs").createFactMatcher>} matchFacts
  * @param {import("./privacy.mjs").RingKeys} ringKeys
+ * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>["findVisibleSource"]} [findVisibleSource]
  */
-export function createRationaleStore(port, matchFacts, ringKeys) {
+export function createRationaleStore(port, matchFacts, ringKeys, findVisibleSource) {
   /** @param {Tx} tx @param {Scope} scope @param {readonly RationaleGuard[]} refs */
   function readSources(tx, scope, refs) {
     return port.read(tx, scope, async getState => {
@@ -84,7 +85,7 @@ export function createRationaleStore(port, matchFacts, ringKeys) {
       const entries = state.rows.get(namespace);
       const messages = state.rationaleMessages.get(namespace);
       const policy = matchFacts(state.facts, { owner: tx.owner, namespace });
-      const keys = await ringKeys(tx.owner);
+      const keys = findVisibleSource ? [] : await ringKeys(tx.owner);
       return Promise.all(guards.map(async ({ memoryId, revision }) => {
         const entry = entries?.get(memoryId);
         if (!entry || entry.row.historical) throw new CoreError("memory_not_found");
@@ -94,6 +95,14 @@ export function createRationaleStore(port, matchFacts, ringKeys) {
         if (entry.receipts.length > RATIONALE_LIMITS.receipts) throw new CoreError("context_item_too_large");
         const receipts = await Promise.all(entry.receipts.map(async receipt => {
           const key = sourceMessageKey(receipt);
+          if (findVisibleSource) {
+            const raw = await findVisibleSource(state, { owner: tx.owner, namespace }, receipt);
+            if (!raw || raw.role !== receipt.role || raw.occurredAtMs !== receipt.occurredAtMs) {
+              throw new CoreError("revision_conflict");
+            }
+            return { id: await receiptId(key), role: raw.role, text: raw.content };
+          }
+          // Synthetic sources exist for adapters opened without Raw.
           const message = messages?.get(key);
           if (!message || message.role !== receipt.role || message.occurredAtMs !== receipt.occurredAtMs) {
             throw new CoreError("revision_conflict");

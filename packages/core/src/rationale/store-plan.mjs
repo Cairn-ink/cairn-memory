@@ -1,5 +1,6 @@
 import { identifier, isWellFormedText, revision, validateDenseArray, validateObject } from '../capture/validate.mjs';
 import { CoreError, isCoreError } from '../errors.mjs';
+import { sha256Hex } from '../privacy/fingerprint.mjs';
 import { RATIONALE_LIMITS } from './limits.mjs';
 
 /** @import { ClockAndHash, RationaleEdge, RationaleEdgeStore, RationaleGuard, RationaleReceipt,
@@ -8,13 +9,7 @@ import { RATIONALE_LIMITS } from './limits.mjs';
 /** @typedef {{sources: RationaleSource[], indexToken: string}} RationaleSnapshot */
 
 /** @type {Pick<ClockAndHash, 'sha256Hex'>} */
-export const webHash = {
-  async sha256Hex(text) {
-    const bytes = typeof text === 'string' ? new TextEncoder().encode(text) : new Uint8Array(text);
-    const hash = await crypto.subtle.digest('SHA-256', bytes);
-    return Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('');
-  },
-};
+export const webHash = { sha256Hex };
 
 /** @param {RationaleReceipt} receipt @param {Pick<ClockAndHash, 'sha256Hex'>} clock */
 export function receiptDigest({ id, role, excerpt }, clock) {

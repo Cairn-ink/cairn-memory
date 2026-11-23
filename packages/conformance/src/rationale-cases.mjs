@@ -16,14 +16,31 @@ const edge = (from, to, relation = support) => ({ from, to, relation, fromReceip
 /** @param {CaseContext} ctx @param {Scope} [scope] */
 function fixture(ctx, scope = ctx.scope(null)) {
   const { adapter, harness } = ctx;
-  const { uow, memories, rationale } = adapter;
-  const { seedRationaleMessage, changeRationaleMemory } = harness;
-  check(rationale && seedRationaleMessage, "rationale port and source message fixtures are required");
+  const { uow, memories, rationale, raw } = adapter;
+  const { changeRationaleMemory } = harness;
+  check(rationale && (raw || harness.seedRationaleMessage), "rationale port and source message fixtures are required");
   /** @template T @param {(tx: Tx) => Promise<T>} fn */
   const read = fn => uow.run(scope.owner, { readOnly: true }, fn);
   /** @template T @param {(tx: Tx) => Promise<T>} fn */
   const write = fn => uow.run(scope.owner, { pauseLock: true }, fn);
   const options = { uow, scope, store: rationale, retrieval: adapter };
+  /** @param {Scope} target @param {Receipt} receipt @param {string | null} text */
+  async function seedRationaleMessage(target, receipt, text) {
+    if (!raw) {
+      check(harness.seedRationaleMessage, "adapter needs synthetic sources when Raw is unavailable");
+      return harness.seedRationaleMessage(target, receipt, text);
+    }
+    const { client, sessionId, messageId, role, occurredAtMs } = receipt;
+    // Each synthetic source has its own conversation and can be retired independently.
+    if (text === null) {
+      const result = await write(tx => raw.deleteConversation(tx, target, { client, sessionId }));
+      equal(result.rawDeleted, 1, "Retire the archived source");
+      return;
+    }
+    const capture = { scope: target, client, sessionId, eventId: crypto.randomUUID(), payloadDigest: "a".repeat(64) };
+    const result = await write(tx => raw.archive(tx, capture, [{ id: messageId, role, occurredAtMs, content: text }]));
+    equal(result.archived, 1, "Archive the source message");
+  }
   return {
     rationale, scope, read, write, seedRationaleMessage,
     /** @param {string} name @param {string} [text] */
@@ -58,8 +75,11 @@ function fixture(ctx, scope = ctx.scope(null)) {
   };
 }
 
-/** @param {string} id @param {string} title @param {ConformanceCase["run"]} run @returns {ConformanceCase} */
-const rationaleCase = (id, title, run) => ({ id: "T-RAT-" + id, title, needs: ["rationaleEdges"], run });
+/** @param {string} id @param {string} title @param {ConformanceCase["run"]} run
+ * @param {boolean} [rawArchive] @returns {ConformanceCase}
+ */
+const rationaleCase = (id, title, run, rawArchive = true) =>
+  ({ id: "T-RAT-" + id, title, needs: ["rationaleEdges"], requests: { rawArchive }, run });
 
 const invalidationCases = [
   rationaleCase("revision", "a revision-only write deletes incident edges", async ctx => {
@@ -95,7 +115,7 @@ const invalidationCases = [
   }),
   rationaleCase("receipt-update", "updating a receipt's source text deletes incident edges", async ctx => {
     await invalidates(ctx, (f, source) => f.seedRationaleMessage(f.scope, source.receipt, "Updated raw text"));
-  }),
+  }, false), // Raw keeps the first content for a message identity.
   rationaleCase("duplicate", "reattaching an identical receipt deletes incident edges at the same revision", async ctx => {
     await invalidates(ctx, async (f, source) => {
       equal((await f.touch(source, [source.receipt])).revision, source.revision, "Guard stays current");
@@ -136,6 +156,35 @@ const indexCase = rationaleCase("index", "the owner index advances once per none
   equal(await index(), before + 1, "No index advance for a duplicate or empty proposal");
 });
 indexCase.needs.push("placement");
+
+const rawDeletedCase = rationaleCase("raw-deleted", "deleting cited Raw hides only its path and prevents dispatch", async ctx => {
+  const { raw, memories } = ctx.adapter;
+  check(raw, "rawArchive requires the raw ports");
+  const f = fixture(ctx);
+  const root = await f.seed("deletion-root");
+  const retained = await f.seed("retained");
+  const removed = await f.seed("removed");
+  const child = await f.seed("removed-challenge");
+  const result = await f.review([root, retained, removed, child], [edge(1, 0), edge(2, 0), edge(3, 2, challenge)]);
+  check(result.status === "reviewed" && result.inserted === 3, "Both paths must commit before Raw deletion");
+  const before = await f.context(root);
+  equal(before.status, "reconfirmation-suggested", "The removed path initially has a challenge");
+  equal(before.refs.length, 3, "Both paths are visible before Raw deletion");
+
+  const deletion = await f.write(tx => raw.deleteConversation(tx, f.scope, removed.receipt));
+  equal(deletion.rawDeleted, 1, "Delete the cited Raw message");
+  equal((await f.read(tx => memories.readRevision(tx, f.scope, removed.memoryId)))?.revision, removed.revision,
+    "The cited memory stays at the same revision");
+  equal(await f.context(root), { status: "unassessed", refs: [{
+    id: retained.memoryId, revision: retained.revision, relation: support, direction: "incoming",
+  }] }, "Only the path with archived Raw remains");
+  await rejects(() => f.read(tx => f.rationale.sourceEvidence(tx, f.scope, [root, removed])), "revision_conflict");
+  let calls = 0;
+  const after = await f.review([root, removed], [], async () => { calls++; return { edges: [] }; });
+  check(after.status === "failed" && after.error.code === "revision_conflict", "Deleted Raw must fail closed");
+  equal(calls, 0, "No provider call with deleted Raw");
+});
+rawDeletedCase.needs.push("rawArchive");
 
 /** @type {readonly ConformanceCase[]} */
 export const RATIONALE_CASES = [
@@ -256,5 +305,6 @@ export const RATIONALE_CASES = [
     }
     equal(await f.incident(root), [stored], "Original scope keeps its edge");
   }),
+  rawDeletedCase,
   indexCase,
 ];

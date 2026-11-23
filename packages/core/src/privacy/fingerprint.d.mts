@@ -27,6 +27,8 @@ export declare function legacyExactMac(text: string, key: FingerprintKey, labels
 export declare function passageShingles(text: string, key: FingerprintKey, labels: FingerprintLabels): Promise<string[]>;
 export declare function fingerprintLegacyCapture(text: string, key: FingerprintKey, labels: FingerprintLabels): Promise<LegacyCaptureFingerprint>;
 
+/** @internal Hashes the supplied bytes or UTF-8 text without normalization. */
+export declare function sha256Hex(input: string | Uint8Array): Promise<string>;
 export declare function coreDigest(raw: string, key?: FingerprintKey | null): Promise<TextDigest>;
 export declare function hostedV1Digest(raw: string): Promise<TextDigest>;
 /** Throws invalid_input for refusals from the engine suppression input bounds. */
