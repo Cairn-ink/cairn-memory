@@ -48,6 +48,17 @@ function validateDigests(digests) {
   }
 }
 
+/** @param {unknown} values @param {(value: unknown) => boolean} isValid */
+function validateArrayItems(values, isValid) {
+  if (!Array.isArray(values)) fail();
+  const length = Object.getOwnPropertyDescriptor(values, "length")?.value;
+  if (!Number.isInteger(length) || length < 0 || length > 0xffff_ffff) fail();
+  for (let index = 0; index < length; index++) {
+    const item = Object.getOwnPropertyDescriptor(values, index);
+    if (!item || !Object.hasOwn(item, "value") || !isValid(item.value)) fail();
+  }
+}
+
 /**
  * Validates a fact before it reaches a store. Never inspects or returns content.
  * @param {unknown} fact
@@ -67,11 +78,9 @@ export function validateSuppressionFact(fact) {
       const t = f.text;
       if (!t || typeof t !== "object") fail();
       validateDigests(t.digests);
-      if (t.shingles !== undefined && t.shingles !== null &&
-        (!Array.isArray(t.shingles) || t.shingles.includes(undefined) ||
-          t.shingles.some((/** @type {unknown} */ s) => typeof s !== "string" || !HEX.test(s)))) fail();
-      if (t.embedding !== undefined && t.embedding !== null &&
-        (!Array.isArray(t.embedding) || t.embedding.includes(undefined) || !t.embedding.every(Number.isFinite))) fail();
+      const { shingles, embedding } = t;
+      if (shingles != null) validateArrayItems(shingles, (item) => typeof item === "string" && HEX.test(item));
+      if (embedding != null) validateArrayItems(embedding, Number.isFinite);
       if (t.keyId !== undefined && t.keyId !== null && !str(t.keyId, 64)) fail();
       if (f.sourceMemory !== undefined && f.sourceMemory !== null &&
         (!str(f.sourceMemory.id, 128) || !ms(f.sourceMemory.createdAtMs))) fail();
