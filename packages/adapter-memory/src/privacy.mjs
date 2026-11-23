@@ -2,12 +2,14 @@ import {
   CoreError, compareUtf8, factIncarnationBody, pauseGenerationAfter, userFingerprintKey,
   validateFingerprintLabels, validateSuppressionFact,
 } from "@cairn-ink/core";
-import { createFactMatcher } from "./fact-match.mjs";
-import { readEmbedding } from "./validation.mjs";
+import { copySuppressionCandidates, createFactMatcher } from "./fact-match.mjs";
+import { readEmbedding, snapshotArray } from "./validation.mjs";
 
 /** @typedef {import("./index.d.mts").MemoryAdapterOptions} Options */
 /** @typedef {import("@cairn-ink/core").SuppressionFact} SuppressionFact */
 /** @typedef {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>} UnitOfWork */
+/** @typedef {(owner: string) => Promise<import("@cairn-ink/core").FingerprintKey[]>} RingKeys */
+/** @import { TextDigest } from "@cairn-ink/core" */
 
 // This reference adapter can supply a public key fixture for tests. The fixture is unsuitable for production.
 export const TEST_FINGERPRINT_SECRET = "test-secret-a";
@@ -19,15 +21,25 @@ export const TEST_FINGERPRINT_LABELS = Object.freeze({
 
 const encoder = new TextEncoder();
 
+/** @param {TextDigest[]} digests @param {TextDigest} keyed */
+export function addKeyedDigest(digests, keyed) {
+  if (!digests.some(({ alg, keyId, value }) => alg === keyed.alg && keyId === keyed.keyId && value === keyed.value)) {
+    digests.push(keyed);
+  }
+}
+
 /** @param {SuppressionFact} fact */
 function validateFact(fact) {
   if (fact?.kind === "text") {
     const { text, ...fields } = fact;
     if (text && typeof text === "object") {
       const { embedding, ...fingerprint } = text;
-      const evidence = embedding === undefined && !Object.hasOwn(text, "embedding") ? fingerprint : {
-        ...fingerprint, embedding: embedding == null ? embedding : readEmbedding(embedding, "fact"),
-      };
+      /** @type {Extract<SuppressionFact, {kind: "text"}>["text"]} */
+      const evidence = { ...fingerprint, digests: snapshotArray(fingerprint.digests) };
+      if (evidence.shingles != null) evidence.shingles = snapshotArray(evidence.shingles);
+      if (embedding !== undefined || Object.hasOwn(text, "embedding")) {
+        evidence.embedding = embedding == null ? embedding : readEmbedding(embedding, "fact");
+      }
       fact = { ...fields, text: evidence };
     }
   }
@@ -83,8 +95,9 @@ function storeFact(getState, fact, incarnation, { newId = () => crypto.randomUUI
  * @param {UnitOfWork["port"]} port @param {UnitOfWork["runSeed"]} runSeed
  * @param {Pick<Options, "newId" | "now" | "sessionRefs" | "hashSessionKey">} options
  * @param {ReturnType<typeof createFactMatcher>} [matchFacts]
+ * @param {RingKeys} [ringKeys]
  */
-export function createFactStore(port, runSeed, options, matchFacts = createFactMatcher(false, options.hashSessionKey)) {
+export function createFactStore(port, runSeed, options, matchFacts = createFactMatcher(false, options.hashSessionKey), ringKeys) {
   /** @param {SuppressionFact} fact @param {string} incarnation */
   function prepareFactWrite(fact, incarnation) {
     if (typeof incarnation !== "string" ||
@@ -104,11 +117,16 @@ export function createFactStore(port, runSeed, options, matchFacts = createFactM
       });
     },
     async snapshot(tx, scope, candidates) {
-      return port(tx, scope, false, (state) => matchFacts(state.facts, scope).snapshot(candidates));
+      return port.read(tx, scope, (getState) => {
+        const copy = copySuppressionCandidates(candidates);
+        return matchFacts(getState().facts, { owner: tx.owner, namespace: scope.namespace }).snapshot(copy);
+      });
     },
     async factsFor(tx, scope, { memoryId }) {
-      return port(tx, scope, false, (state) =>
-        matchFacts(state.facts, scope).factsFor(memoryId, state.rows.get(scope.namespace)?.get(memoryId)));
+      return port(tx, scope, false, (state) => {
+        const { namespace } = scope;
+        return matchFacts(state.facts, { owner: tx.owner, namespace }).factsFor(memoryId, state.rows.get(namespace)?.get(memoryId));
+      });
     },
     async epoch(tx, owner) {
       return port(tx, { owner }, false, (state) => state.epoch);
@@ -121,6 +139,12 @@ export function createFactStore(port, runSeed, options, matchFacts = createFactM
     if (validated.owner !== owner) throw new CoreError("invalid_input");
     const copy = structuredClone(validated);
     await runSeed(owner, async (tx) => {
+      if (ringKeys && copy.kind === "text" && copy.text.digests.some(({ alg }) => alg === "hmac")) {
+        const keys = await ringKeys(owner);
+        if (copy.text.digests.some(({ alg, keyId }) => alg === "hmac" && !keys.some(({ id }) => id === keyId))) {
+          throw new CoreError("invalid_input");
+        }
+      }
       const digest = await crypto.subtle.digest("SHA-256", encoder.encode(factIncarnationBody(copy)));
       const incarnation = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
       await port.write(tx, copy, true, () => prepareFactWrite(copy, incarnation));
@@ -152,12 +176,24 @@ export function createPauseStore(port) {
   };
 }
 
-/** @param {boolean} enabled @param {Options["fingerprint"]} config */
-export function createFingerprintProvider(enabled, config) {
+/** @param {boolean} enabled @param {Options["fingerprint"]} config
+ * @param {UnitOfWork["rotateRowDigests"]} rotateRowDigests
+ */
+export function createFingerprintProvider(enabled, config, rotateRowDigests) {
   if (!enabled && config != null) throw new CoreError("capability_unavailable");
   const labels = config == null ? TEST_FINGERPRINT_LABELS : validateFingerprintLabels(config.labels);
   let secret = enabled ? (config == null ? TEST_FINGERPRINT_SECRET : config.secret) : null;
   if (enabled && (typeof secret !== "string" || secret.length === 0)) throw new CoreError("invalid_input");
+  const ring = new Set(secret === null ? [] : [secret]);
+  /** @type {Promise<void> | undefined} */
+  let rotation;
+
+  /** @type {RingKeys} */
+  const ringKeys = async (owner) => {
+    // Snapshot the ring before any key derivation yields.
+    const derived = await Promise.all([...ring].map((seed) => userFingerprintKey(seed, owner, labels)));
+    return derived.filter((key) => key !== null);
+  };
 
   /** @type {import("@cairn-ink/core/ports").FingerprintKeyProvider} */
   const keys = {
@@ -170,8 +206,28 @@ export function createFingerprintProvider(enabled, config) {
   async function setFingerprintSecret(next) {
     if (!enabled) throw new CoreError("capability_unavailable");
     if (typeof next !== "string" || next.length === 0) throw new CoreError("invalid_input");
-    secret = next;
+
+    const apply = async () => {
+      const olderSeeds = [...ring].filter((seed) => seed !== secret);
+      const pendingKey = (/** @type {string} */ owner) => userFingerprintKey(next, owner, labels);
+      const retainedKeyIds = async (/** @type {string} */ owner) => {
+        const keys = await Promise.all(olderSeeds.map((seed) => userFingerprintKey(seed, owner, labels)));
+        return new Set(keys.flatMap((key) => key === null ? [] : [key.id]));
+      };
+      await rotateRowDigests(pendingKey, retainedKeyIds, () => {
+        ring.add(next);
+        secret = next;
+      });
+    };
+    const change = rotation ? rotation.then(apply) : apply();
+    const tail = change.then(() => {}, () => {});
+    rotation = tail;
+    try {
+      await change;
+    } finally {
+      if (rotation === tail) rotation = undefined;
+    }
   }
 
-  return { keys, setFingerprintSecret };
+  return { keys, ringKeys, setFingerprintSecret };
 }

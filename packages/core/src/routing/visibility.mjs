@@ -1,4 +1,8 @@
 import { factHidesRow } from "../privacy/fact-match.mjs";
+import { fingerprintMemoryPassages } from "../privacy/fingerprint.mjs";
+import { prepareCoreText } from "../privacy/text.mjs";
+import { requiresLegacyMacDomain, snapshotReader, withholdsAnyPassage } from "../privacy/withholds.mjs";
+import { validateSuppressionFact } from "../suppression-fact.mjs";
 import { buildDocumentCard } from "./card.mjs";
 
 /** @import { Scope } from "../ports/common.d.ts" */
@@ -20,25 +24,32 @@ const hidden = (reason) => ({ visible: false, reason });
 export async function documentCardVisible(input) {
   try {
     const { card, requestedScope, memoryStates, sourceWithheld } = input;
-    if (!validScope(card?.scope) || !validScope(requestedScope)) return hidden("uncertain");
+    if (!nonempty(card?.id) || !validScope(card.scope) || !validScope(requestedScope)) return hidden("uncertain");
     if (card.scope.owner !== requestedScope.owner || card.scope.namespace !== requestedScope.namespace) {
       return hidden("scope_mismatch");
     }
-    if (sourceWithheld === true) return hidden("source_withheld");
-    if (sourceWithheld !== false || typeof memoryStates?.get !== "function" || !Array.isArray(card.sourceMemories)) {
+    const { origin, sourceMessage, canonicalSessionKey } = card;
+    const messageBacked = origin === "router" || origin === undefined;
+    if (!messageBacked && ((origin !== "import" && origin !== "manual") || sourceMessage !== null)) {
+      return hidden("uncertain");
+    }
+    if (messageBacked && sourceWithheld === true) return hidden("source_withheld");
+    if (!Array.isArray(card.sourceMemories) ||
+        ((messageBacked || card.sourceMemories.length > 0) && typeof memoryStates?.get !== "function")) {
       return hidden("uncertain");
     }
 
-    const { sourceMessage, canonicalSessionKey } = card;
-    if (!nonempty(card.id) || !nonempty(sourceMessage?.client) || !nonempty(sourceMessage.sessionId) ||
-        !nonempty(sourceMessage.messageId) || !nonempty(canonicalSessionKey)) return hidden("uncertain");
-    // The builder owns the ID recipe. A fixed body lets it compute the ID without reading stored text.
-    const expected = await buildDocumentCard(
-      { id: sourceMessage.messageId, role: "user", content: "." },
-      { scope: requestedScope, client: sourceMessage.client, canonicalSessionKey },
-    );
-    if (!expected.card) return hidden("uncertain");
-    if (expected.card.id !== card.id) return hidden("id_mismatch");
+    if (messageBacked) {
+      if (sourceWithheld !== false || !nonempty(sourceMessage?.client) || !nonempty(sourceMessage.sessionId) ||
+          !nonempty(sourceMessage.messageId) || !nonempty(canonicalSessionKey)) return hidden("uncertain");
+      // The builder owns the ID recipe. A fixed body lets it compute the ID without reading stored text.
+      const expected = await buildDocumentCard(
+        { id: sourceMessage.messageId, role: "user", content: "." },
+        { scope: requestedScope, client: sourceMessage.client, canonicalSessionKey },
+      );
+      if (!expected.card) return hidden("uncertain");
+      if (expected.card.id !== card.id) return hidden("id_mismatch");
+    }
 
     for (const source of card.sourceMemories) {
       if (!nonempty(source?.id) || !natural(source.revision)) return hidden("uncertain");
@@ -47,6 +58,25 @@ export async function documentCardVisible(input) {
       if (state.status === "forgotten") return hidden("source_memory_forgotten");
       if (state.status !== "visible") return hidden("source_memory_not_visible");
       if (!natural(state.revision)) return hidden("uncertain");
+      if (!messageBacked && state.revision !== source.revision) return hidden("source_memory_not_visible");
+    }
+
+    if (!messageBacked) {
+      const { title, body } = card;
+      const { textFacts, fingerprintKey = null } = input;
+      if ((title !== null && typeof title !== "string") || typeof body !== "string") return hidden("uncertain");
+      const facts = snapshotReader().array(textFacts, validateSuppressionFact);
+      if (!facts?.every(fact => fact.kind === "text") ||
+          facts.some(fact => fact.owner !== card.scope.owner || (fact.namespace ?? null) !== card.scope.namespace)) {
+        return hidden("uncertain");
+      }
+      if (facts.length > 0) {
+        if (facts.some(requiresLegacyMacDomain)) return hidden("text_withheld");
+        const texts = title === null ? [body] : [title, body];
+        const fingerprints = await Promise.all(texts.map(text =>
+          fingerprintMemoryPassages(text, prepareCoreText(text), fingerprintKey)));
+        if (withholdsAnyPassage(fingerprints.flat(), facts)) return hidden("text_withheld");
+      }
     }
     return { visible: true, reason: null };
   } catch {

@@ -10,7 +10,7 @@ export type AdapterFactory = {
 export type OpenedAdapter = {
   adapter: Pick<StorageAdapter, "capabilities" | "uow" | "memories" | "capture" |
     "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "supersession" |
-    "suppressions" | "pause" | "keys">;
+    "suppressions" | "pause" | "keys" | "placement">;
   sessionRefs: "plain" | "hashed";
   harness: TestHarness;
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;
@@ -31,6 +31,8 @@ export type TestHarness = {
   seedFact(owner: string, fact: SuppressionFact): Promise<void>;
   setWriteTime(scope: Scope, id: string, updatedAtUs: bigint): Promise<void>;
   setFingerprintSecret?(secret: string): Promise<void>;
+  /** Counts rows missing a digest under any key in the owner's ring. Returns zero when no key is enabled. */
+  rowsMissingKeyedDigest?(owner: string): Promise<number>;
   advanceClock?(ms: number): Promise<void>;
   /** Required for privacy matching cases under the hashed session profile. */
   hashSessionKey?: FactMatchPolicy["hashSessionKey"];

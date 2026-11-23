@@ -1,5 +1,5 @@
 import { CoreError } from "../errors.mjs";
-import { redactV1, PRIVACY_REDACTION_VERSIONS } from "./redact.mjs";
+import { redactHostedCurrent, redactV1, PRIVACY_REDACTION_VERSIONS } from "./redact.mjs";
 import { boundedText, cleanContent, normalizeForHash, prepareCoreText } from "./text.mjs";
 
 /** @typedef {import("./fingerprint.mjs").FingerprintKey} FingerprintKey */
@@ -8,6 +8,11 @@ import { boundedText, cleanContent, normalizeForHash, prepareCoreText } from "./
 
 const encoder = new TextEncoder();
 const hmac = { name: "HMAC", hash: "SHA-256" };
+
+// The key provider supplies the signing key. Adapters own their legacy MAC labels.
+export const coreFingerprintLabels = Object.freeze({
+  keyIdDomain: "core-key-id", shingleKeyPrefix: "core-shingles:", legacyExactPrefix: "core-exact:",
+});
 
 /** @param {ArrayBuffer} bytes */
 function toHex(bytes) {
@@ -202,4 +207,44 @@ export async function allDigests(raw, key) {
     if (!unique.has(identity)) unique.set(identity, digest);
   }
   return [...unique.values()];
+}
+
+/** @param {TextDigest[]} digests @param {TextDigest} digest */
+export function addDigest(digests, digest) {
+  if (!digests.some(({ alg, value }) => alg === digest.alg && value === digest.value)) digests.push(digest);
+}
+
+/** Builds the withholding evidence for a passage under current and historical memory pipelines.
+ * @param {string} raw @param {string} text @param {FingerprintKey | null} key
+ * @param {(text: string) => Promise<string>} [sha256Hex]
+ * @returns {Promise<import("../ports/privacy.d.ts").PassageFingerprint[]>}
+ */
+export async function fingerprintMemoryPassages(raw, text, key, sha256Hex = sha256) {
+  const original = cleanContent(raw);
+  const { v1, hostedCurrent, core } = PRIVACY_REDACTION_VERSIONS;
+  /** @type {Array<[string, TextDigest["pipeline"], number]>} */
+  const variants = [
+    [original, "hosted-v1", v1],
+    [redactV1(original), "hosted-v1", v1],
+    [redactHostedCurrent(original), "hosted-v1", hostedCurrent],
+    [text, "core", core],
+    // Hosted capture derives its stored V1 evidence after capture normalization.
+    [redactV1(original.normalize("NFKC")), "hosted-v1", v1],
+  ];
+  const distinct = new Map(variants.map(variant => [normalizeForHash(variant[0]), variant]));
+  return Promise.all(Array.from(distinct, async ([normalized, [variant, pipeline, redactionVersion]]) => {
+    const [digests, exact, legacy] = await Promise.all([
+      allDigests(variant, key),
+      sha256Hex(normalized),
+      key && fingerprintLegacyCapture(variant, key, coreFingerprintLabels),
+    ]);
+    // allDigests re-redacts its input. Keep the exact variant for historical facts.
+    addDigest(digests, { alg: "sha256", value: exact, pipeline, redactionVersion, keyId: null });
+    if (legacy) {
+      addDigest(digests, {
+        alg: "hmac", value: legacy.text_hmac, pipeline: "core", redactionVersion, keyId: legacy.key_id,
+      });
+    }
+    return { digests, shingles: legacy?.shingles ?? null, keyId: legacy?.key_id ?? null };
+  }));
 }

@@ -27,6 +27,8 @@ export interface DocumentRoutingDecision {
     capture_limit: number;
     /** Included in extract_only and reported when positive. */
     ill_formed_text?: number;
+    /** Included in extract_only and reported when positive. */
+    marker_only?: number;
   };
 }
 
@@ -62,7 +64,8 @@ export interface DocumentCard {
   sentences: DocumentSentence[];
 }
 
-export type DocumentCardDropReason = "oversize" | "unmappable_redaction" | "empty_body" | "missing_session_key" | "ill_formed_text";
+export type DocumentCardDropReason =
+  | "oversize" | "unmappable_redaction" | "empty_body" | "missing_session_key" | "ill_formed_text" | "marker_only";
 export type DocumentCardBuild =
   | { card: DocumentCard; drops: Readonly<Record<string, never>> }
   | { card: null; drops: Partial<Record<DocumentCardDropReason, 1>> };
@@ -117,3 +120,4 @@ export declare function rankDocumentCards(
 ): DocumentCardMatch | null;
 
 export * from "./visibility.mjs";
+export * from "./amendments.mjs";
