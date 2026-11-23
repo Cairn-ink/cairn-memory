@@ -25,5 +25,5 @@ export type Migration = MigrationBase & (
 
 export function applyMigrations(source: ConnectionSource, migrations: readonly Migration[]): Promise<void>;
 export function canonicalDigests(digests: readonly TextDigest[]): TextDigest[];
-/** Compute the slot of a fact already checked by core's validator. */
+/** Compute the slot of a fact already checked by the storage preflight. */
 export function factSlot(fact: SuppressionFact): string;

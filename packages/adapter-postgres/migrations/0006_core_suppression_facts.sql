@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS core_suppression_facts (
   UNIQUE (user_id, slot_hash),
   UNIQUE (user_id, epoch),
   CONSTRAINT core_suppression_facts_text_mode_check CHECK (kind <> 'text' OR mode IS NOT NULL),
-  CONSTRAINT core_suppression_facts_shingle_key_check CHECK (shingles IS NULL OR key_id IS NOT NULL)
+  CONSTRAINT core_suppression_facts_shingle_key_check CHECK (shingles IS NULL OR key_id IS NOT NULL),
+  CONSTRAINT core_suppression_facts_legacy_ref_check CHECK (legacy_ref IS NULL OR octet_length(legacy_ref) <= 256)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS core_suppression_facts_legacy_ref_uidx

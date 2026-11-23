@@ -53,33 +53,44 @@ rows. Each new fact advances its owner's `fact_epoch` by one. The owner's
 `index_revision` advances on every committed change to visible rows, receipts,
 raw data, lineage, or facts. This is the value returned as
 `FinishResult.indexRevision` and used to bind retrieval state tokens.
-`legacy_facts_ready` defaults to false for the later legacy copy.
+`legacy_facts_ready` defaults to false for the later legacy copy. The backfill
+must keep each non-null `legacy_ref` within 256 UTF-8 bytes so the owner and
+reference can be indexed together.
 
 Validate the fact with core's `validateSuppressionFact`, then call
-`assertRepresentable` from `src/facts.mjs` before writing. The adapter rejects
-U+0000 in string fields, digest redaction versions above 2147483647, and slots
-over 8192 UTF-8 bytes with `CoreError("invalid_input")`.
+`assertStorableFact` from `src/facts.mjs` before deriving the stored values or
+executing SQL. The adapter requires plain records with only declared fields,
+the declared JavaScript types, and dense arrays. It rejects U+0000 and unpaired
+UTF-16 surrogates anywhere in the fact, digest redaction versions above
+2147483647, and slots over 8192 UTF-8 bytes with `CoreError("invalid_input")`.
+For full-mode text facts, a non-null embedding must contain exactly 1536 finite
+numbers in the float4 range, and non-empty shingles require a non-empty key ID.
 
 `factSlot(fact)` uses `JSON.stringify` on the following target tuples.
 
 | Kind | Tuple |
 | --- | --- |
 | Identity | `["identity", memoryId, throughRevision ?? null]` |
-| Text | `["text", mode, alg, value]` using the first canonical digest |
+| Text | `["text", mode, [[alg, value], …]]` using every digest in canonical order |
 | Session | `["session", client, "id", sessionId]` or `["session", client, "hash", sessionKeyHash]` |
 | Window | `["window", client, startMs, endMs, unknownTime === true, anchor ?? null]` |
 | Raw span | `["rawSpan", sessionKeyHash, messageKey, startUtf16, endUtf16]` |
 
 A null window client selects all clients. `canonicalDigests(digests)` sorts a
-copy by pipeline, algorithm, and value in UTF-8 byte order. Store the JSON
-slot for diagnostics and use `slotHash(slot)` for the lowercase SHA-256 of
-its UTF-8 bytes. The owner and hash form the unique key.
+copy by pipeline, algorithm, and value in UTF-8 byte order. Each digest
+contributes only its algorithm and value to the target tuple. Reordering the
+same digests preserves the slot. Core's `factBody(fact)` preserves input array
+order for the incarnation. Store the JSON slot for diagnostics and use
+`slotHash(slot)` for the lowercase SHA-256 of its UTF-8 bytes. The owner and
+hash form the unique key.
 
 Store core's canonical `factBody(fact)` in `body` and index every text digest
 in `core_fact_digests`. Populate the embedding and shingle lookup columns
-only for full-mode text facts. In exact mode, the embedding and shingles
-stay in `body` for raw checks and the lookup columns stay null. A populated
-shingles column requires `key_id`.
+only for full-mode text facts. The `vector(1536)` column is a float4 projection
+used only for neighbour search, and `body` stays authoritative. In exact mode,
+the embedding and shingles stay in `body` for raw checks, with no vector
+dimension or float4 range check. Leave the shingle lookup column null for
+absent or empty shingles. A populated shingles column requires `key_id`.
 
 ## Database tests
 

@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { factBody, validateSuppressionFact } from "../../core/src/index.mjs";
-import { assertRepresentable, slotHash } from "../src/facts.mjs";
+import { CoreError, factBody, validateSuppressionFact } from "../../core/src/index.mjs";
+import { assertStorableFact, slotHash } from "../src/facts.mjs";
 import { applyMigrations, factSlot } from "../src/index.mjs";
 import { migrationDatabase, migrationDbTest, readCatalog } from "./migration-database.mjs";
 
 const factsTables = ["core_owner_state", "core_suppression_facts", "core_fact_digests"];
+const readFactsCatalog = (connection) => readCatalog(connection, factsTables, { includeDefaults: true });
 const ledger = "SELECT id, applied_at::text FROM core_schema_migrations ORDER BY id";
 const digest = { alg: "sha256", value: "f".repeat(64), pipeline: "core", keyId: null, redactionVersion: 1 };
 const exact = {
@@ -17,7 +18,7 @@ const exact = {
 
 async function insertFact(pool, candidate, { id, epoch, legacyRef = null }) {
   const fact = validateSuppressionFact(candidate);
-  assertRepresentable(fact);
+  assertStorableFact(fact);
   const slot = factSlot(fact);
   const mode = fact.kind === "text" ? fact.mode : null;
   const lookup = fact.kind === "text" && fact.mode === "full" ? fact.text : null;
@@ -30,7 +31,7 @@ async function insertFact(pool, candidate, { id, epoch, legacyRef = null }) {
   `, [
     fact.owner, id, slot, await slotHash(slot), "0".repeat(64), fact.actionId, epoch, fact.origin, fact.kind,
     mode, factBody(fact), lookup?.embedding == null ? null : JSON.stringify(lookup.embedding),
-    lookup?.shingles ?? null, lookup?.keyId ?? null, legacyRef,
+    lookup?.shingles?.length ? lookup.shingles : null, lookup?.keyId ?? null, legacyRef,
   ]);
 }
 
@@ -51,16 +52,16 @@ test("suppression migrations upgrade the existing prefix and match the structura
   await applyMigrations(source, prefix);
   const previous = (await pool.query(ledger)).rows;
   assert.deepEqual(previous.map(({ id }) => id), prefix.map(({ id }) => id));
-  assert.deepEqual(await readCatalog(pool, factsTables), []);
+  assert.deepEqual(await readFactsCatalog(pool), []);
 
   await applyMigrations(source, migrations);
   const applied = (await pool.query(ledger)).rows;
   assert.deepEqual(applied.slice(0, prefix.length), previous);
   assert.deepEqual(applied.map(({ id }) => id), migrations.map(({ id }) => id));
-  assert.deepEqual(await readCatalog(pool, factsTables), expected);
+  assert.deepEqual(await readFactsCatalog(pool), expected);
   await applyMigrations(source, migrations);
   assert.deepEqual((await pool.query(ledger)).rows, applied);
-  assert.deepEqual(await readCatalog(pool, factsTables), expected);
+  assert.deepEqual(await readFactsCatalog(pool), expected);
 
   const connection = await pool.connect();
   try {
@@ -71,7 +72,7 @@ test("suppression migrations upgrade the existing prefix and match the structura
       await connection.query("BEGIN");
       try {
         await connection.query(drop);
-        await assert.rejects(async () => assert.deepEqual(await readCatalog(connection, factsTables), expected), {
+        await assert.rejects(async () => assert.deepEqual(await readFactsCatalog(connection), expected), {
           code: "ERR_ASSERTION",
         });
       } finally {
@@ -81,6 +82,13 @@ test("suppression migrations upgrade the existing prefix and match the structura
   } finally {
     connection.release();
   }
+});
+
+test("the suppression catalog snapshot detects a change to the created_at default", migrationDbTest, async (t) => {
+  const { pool } = await migrationDatabase(t);
+  const before = await readFactsCatalog(pool);
+  await pool.query("ALTER TABLE core_suppression_facts ALTER COLUMN created_at SET DEFAULT now()");
+  assert.notDeepEqual(await readFactsCatalog(pool), before);
 });
 
 test("fact storage enforces owner, slot, epoch, legacy reference, and digest constraints", migrationDbTest, async (t) => {
@@ -125,13 +133,15 @@ test("fact storage enforces owner, slot, epoch, legacy reference, and digest con
   await insertDigest(pool, "owner", "fact", { ...digest, alg: "hmac", keyId: "digest-key" });
   await insertDigest(pool, "other-owner", "other-fact", digest);
 
-  const full = { ...exact, mode: "full", text: { ...exact.text, embedding: [1, ...Array(1535).fill(0)] } };
+  const full = { ...exact, mode: "full", text: { ...exact.text, embedding: [0.123456789, ...Array(1535).fill(0)] } };
   const withoutKey = { ...full, text: { ...full.text, keyId: null } };
-  await assert.rejects(insertFact(pool, withoutKey, { id: "full", epoch: 2 }), {
-    code: "23514", constraint: "core_suppression_facts_shingle_key_check",
+  const noSql = { query: () => assert.fail("storage preflight must finish before SQL") };
+  await assert.rejects(insertFact(noSql, withoutKey, { id: "full", epoch: 2 }), {
+    name: CoreError.name, code: "invalid_input",
   });
   const { rows: [fullRow] } = await insertFact(pool, full, { id: "full", epoch: 2 });
-  assert.deepEqual(JSON.parse(fullRow.embedding), full.text.embedding);
+  assert.deepEqual(JSON.parse(fullRow.embedding).map(Math.fround), full.text.embedding.map(Math.fround));
+  assert.deepEqual(fullRow.body.text.embedding, full.text.embedding);
   assert.deepEqual(fullRow.shingles, full.text.shingles);
   assert.equal(fullRow.key_id, full.text.keyId);
 
@@ -140,6 +150,29 @@ test("fact storage enforces owner, slot, epoch, legacy reference, and digest con
     assert.equal((await pool.query(`SELECT 1 FROM ${table} WHERE user_id = 'owner'`)).rowCount, 0);
   }
   assert.equal((await pool.query("SELECT 1 FROM core_fact_digests WHERE user_id = 'other-owner'")).rowCount, 1);
+});
+
+test("the shingle key CHECK rejects a raw SQL write that bypasses storage preflight", migrationDbTest, async (t) => {
+  const { pool } = await migrationDatabase(t);
+  await pool.query("INSERT INTO users (id) VALUES ('owner')");
+  const full = { ...exact, mode: "full", text: { ...exact.text, embedding: null } };
+  await insertFact(pool, full, { id: "fact", epoch: 1 });
+  await assert.rejects(pool.query("UPDATE core_suppression_facts SET key_id = NULL WHERE fact_id = 'fact'"), {
+    code: "23514", constraint: "core_suppression_facts_shingle_key_check",
+  });
+});
+
+test("legacy references accept 256 UTF-8 bytes and reject 257", migrationDbTest, async (t) => {
+  const { pool } = await migrationDatabase(t);
+  await pool.query("INSERT INTO users (id) VALUES ('owner')");
+  const atLimit = "界".repeat(85) + "a";
+  const overLimit = atLimit + "b";
+  assert.equal(Buffer.byteLength(atLimit), 256);
+  assert.equal(Buffer.byteLength(overLimit), 257);
+  await assert.rejects(insertFact(pool, exact, { id: "fact", epoch: 1, legacyRef: overLimit }), {
+    code: "23514", constraint: "core_suppression_facts_legacy_ref_check",
+  });
+  await insertFact(pool, exact, { id: "fact", epoch: 1, legacyRef: atLimit });
 });
 
 test("a slot for maximum multibyte hosted session identifiers inserts and still conflicts on replay", migrationDbTest, async (t) => {

@@ -6,7 +6,7 @@ import { applyMigrations } from "../src/index.mjs";
 const url = process.env.CORE_PG_TEST_URL;
 export const migrationDbTest = { skip: !url, timeout: 20_000 };
 
-export async function readCatalog(connection, tables = null) {
+export async function readCatalog(connection, tables = null, { includeDefaults = false } = {}) {
   const { rows } = await connection.query(`
     WITH tables AS (
       SELECT c.oid, c.relname FROM pg_class c
@@ -19,10 +19,12 @@ export async function readCatalog(connection, tables = null) {
       SELECT t.relname AS table_name, 'column' AS item, a.attname AS name,
         format_type(a.atttypid, a.atttypmod)
           || COALESCE(' COLLATE ' || quote_ident(coll.collname), '')
-          || CASE WHEN a.attnotnull THEN ' NOT NULL' ELSE ' NULL' END AS definition
+          || CASE WHEN a.attnotnull THEN ' NOT NULL' ELSE ' NULL' END
+          || COALESCE(' DEFAULT ' || pg_get_expr(d.adbin, d.adrelid), '') AS definition
       FROM tables t JOIN pg_attribute a ON a.attrelid = t.oid
       JOIN pg_type ty ON ty.oid = a.atttypid
       LEFT JOIN pg_collation coll ON coll.oid = a.attcollation AND a.attcollation <> ty.typcollation
+      LEFT JOIN pg_attrdef d ON $2::boolean AND d.adrelid = a.attrelid AND d.adnum = a.attnum
       WHERE a.attnum > 0 AND NOT a.attisdropped
       UNION ALL
       SELECT t.relname, 'constraint', c.conname, pg_get_constraintdef(c.oid)
@@ -34,7 +36,7 @@ export async function readCatalog(connection, tables = null) {
     )
     SELECT concat_ws(chr(9), table_name, item, name, definition) AS entry
     FROM catalog ORDER BY table_name::text COLLATE "C", item COLLATE "C", name::text COLLATE "C"
-  `, [tables]);
+  `, [tables, includeDefaults]);
   return rows.map(({ entry }) => entry);
 }
 
