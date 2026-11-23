@@ -8,7 +8,7 @@ export type AdapterFactory = {
 };
 
 export type OpenedAdapter = {
-  adapter: Pick<StorageAdapter, "capabilities" | "uow" | "memories" |
+  adapter: Pick<StorageAdapter, "capabilities" | "uow" | "memories" | "capture" |
     "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "supersession" |
     "suppressions" | "pause" | "keys" | "placement">;
   sessionRefs: "plain" | "hashed";
@@ -31,6 +31,7 @@ export type TestHarness = {
   seedFact(owner: string, fact: SuppressionFact): Promise<void>;
   setWriteTime(scope: Scope, id: string, updatedAtUs: bigint): Promise<void>;
   setFingerprintSecret?(secret: string): Promise<void>;
+  advanceClock?(ms: number): Promise<void>;
   counters(): Promise<Readonly<Record<string, number>>>;
   // TODO: Named-step fault injection.
   // TODO: Coverage control.

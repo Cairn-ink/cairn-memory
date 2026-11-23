@@ -120,7 +120,7 @@ export function createTopicStore(port, capabilities, newId, now) {
     },
 
     async applyPlacement(tx, scope, basedOn, proposal) {
-      return port.write(tx, scope, "conditional", (getState, markDirty) => {
+      return port.write(tx, scope, "conditional", () => (getState, markDirty, run) => {
         const { items } = placementProposal(proposal);
         const indexRevision = basedOn?.indexRevision;
         if (!Number.isSafeInteger(indexRevision) || indexRevision < 0) throw new CoreError("invalid_input");
@@ -201,15 +201,15 @@ export function createTopicStore(port, capabilities, newId, now) {
           const scoped = ensureTopicState(state, scope);
           for (const row of created) scoped.topics.set(row.id, row);
           for (const [id, outcome] of updates) scoped.outcomes.set(id, outcome);
-          if (changed) state.indexRevision++;
-          markDirty(false);
+          if (changed) markDirty();
+          else run.stateWritten = true;
         }
         return { placed, createdTopics: created.map(topic) };
       });
     },
 
     async markFailed(tx, scope, memoryIds, code) {
-      return port.write(tx, scope, "conditional", (getState, markDirty) => {
+      return port.write(tx, scope, "conditional", () => (getState, _markDirty, run) => {
         if (!isErrorCode(code) || !Array.isArray(memoryIds) ||
             memoryIds.some((id) => typeof id !== "string" || !id)) throw new CoreError("invalid_input");
         const state = getState();
@@ -218,7 +218,7 @@ export function createTopicStore(port, capabilities, newId, now) {
           const row = current(id);
           if (!row) continue;
           ensureTopicState(state, scope).failures.set(id, { revision: row.revision, code });
-          markDirty(false);
+          run.stateWritten = true;
         }
       });
     },
@@ -259,14 +259,13 @@ export function createTopicStore(port, capabilities, newId, now) {
     },
 
     async dropMemory(tx, scope, memoryId) {
-      return port.write(tx, scope, "conditional", (getState, markDirty) => {
+      return port.write(tx, scope, "conditional", () => (getState, markDirty) => {
         const state = getState();
         const memberships = state.topics.get(scope.namespace)?.outcomes.get(memoryId)?.memberships;
         const dropped = memberships?.size ?? 0;
         if (memberships?.size) {
           memberships.clear();
-          state.indexRevision++;
-          markDirty(false);
+          markDirty();
         }
         return { dropped };
       });

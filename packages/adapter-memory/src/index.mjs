@@ -1,9 +1,11 @@
 import { CoreError, assertAdapterCapabilities, capabilities, toCoreError } from "@cairn-ink/core";
+import { createCapturePorts } from "./capture.mjs";
 import { createMemoryStore } from "./memory-store.mjs";
 import { createFactStore, createFingerprintProvider, createPauseStore } from "./privacy.mjs";
 import { createRetrievalPorts } from "./retrieval.mjs";
 import { createTopicStore } from "./topics.mjs";
 import { createUnitOfWork } from "./unit-of-work.mjs";
+import { validateTime } from "./validation.mjs";
 
 export { TEST_FINGERPRINT_LABELS, TEST_FINGERPRINT_SECRET } from "./privacy.mjs";
 
@@ -17,10 +19,12 @@ export function createMemoryAdapter(options = {}) {
   const flags = capabilities(options.capabilities ?? {});
   const sessionRefs = options.sessionRefs ?? "plain";
   if (sessionRefs !== "plain" && sessionRefs !== "hashed") throw new CoreError("invalid_input");
-  const now = options.now ?? Date.now;
   const newId = options.newId ?? (() => crypto.randomUUID());
-  const { uow, port, dump, runSeed, setWriteTime } = createUnitOfWork(nativeErrorMap, flags.placement);
-  const { memories, counters } = createMemoryStore(port, flags, newId);
+  const clock = options.now ?? Date.now;
+  let clockOffset = 0;
+  const now = () => clock() + clockOffset;
+  const { uow, port, dump, runSeed, setWriteTime } = createUnitOfWork(nativeErrorMap, now, flags.placement);
+  const store = createMemoryStore(port, flags, newId);
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now });
   const { keys, setFingerprintSecret } = createFingerprintProvider(flags.fingerprintKey, options.fingerprint);
   /** @type {import("./index.d.mts").MemoryAdapter} */
@@ -28,7 +32,8 @@ export function createMemoryAdapter(options = {}) {
     name: "memory",
     capabilities: flags,
     uow,
-    memories,
+    memories: store.memories,
+    capture: createCapturePorts(port, store, now),
     suppressions,
     pause: createPauseStore(port),
     keys,
@@ -46,7 +51,12 @@ export function createMemoryAdapter(options = {}) {
       },
       setWriteTime,
       setFingerprintSecret,
-      async counters() { return counters(); },
+      async advanceClock(ms) {
+        validateTime(ms);
+        validateTime(clock() + clockOffset + ms);
+        clockOffset += ms;
+      },
+      async counters() { return store.counters(); },
     },
   };
   assertAdapterCapabilities(adapter);

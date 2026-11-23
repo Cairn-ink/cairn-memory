@@ -10,8 +10,16 @@
       "types": "./src/index.d.mts",
       "default": "./src/index.mjs"
     },
+    "./routing": {
+      "types": "./src/routing/index.d.mts",
+      "default": "./src/routing/index.mjs"
+    },
     "./ports": {
       "types": "./src/ports/index.d.ts"
+    },
+    "./service": {
+      "types": "./src/service/index.d.mts",
+      "default": "./src/service/index.mjs"
     }
   },
   "files": [
