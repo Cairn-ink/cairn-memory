@@ -98,8 +98,8 @@ test("snapshot ignores times without a client and retains indexed validation wit
   await harness.seedFact(owner, { ...fact, kind: "window", client: key.client, window: { startMs: 10, endMs: 20 } });
   await uow.run(owner, { readOnly: true }, async (tx) => {
     const times = new Int32Array([10]);
-    const noClient = await suppressions.snapshot(tx, scope, { client: null, occurredAtMs: times });
-    assert.deepEqual(noClient.blockedMessages, []);
+    await assert.rejects(suppressions.snapshot(tx, scope, { client: null, occurredAtMs: times }), invalid);
+    await assert.rejects(suppressions.snapshot(tx, scope, { occurredAtMs: Object.defineProperty([], "0", { get: () => 10 }) }), invalid);
     await assert.rejects(suppressions.snapshot(tx, scope, { client: key.client, occurredAtMs: times }), invalid);
     let reads = 0;
     const accessor = Object.defineProperty([], "0", { get() { reads++; return 10; } });
