@@ -3,7 +3,8 @@ import {
   memoryGuards, placementProposal, titleKey,
 } from "@cairn-ink/core";
 import { decodePayload, encodePayload, newestFirst } from "./cursor.mjs";
-import { snapshotArray, validateLimit, validateTime, writeTime } from "./validation.mjs";
+import { writeTime } from "./memory-store.mjs";
+import { snapshotArray, validateLimit, validateTime } from "./validation.mjs";
 
 /** @import {PlacementProposal} from "@cairn-ink/core" */
 /** @import {Scope, Topic, TopicStore} from "@cairn-ink/core/ports" */

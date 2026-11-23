@@ -48,26 +48,31 @@ export function eraseRelations(state, namespace, id) {
   if (!relations.supersessions.size && !relations.conflicts.size) state.relations.delete(namespace);
 }
 
-/** @param {State} state @param {Namespace} namespace @param {readonly string[]} ids */
-function readSupersessions(state, namespace, ids) {
-  /** @type {Map<string, SupersessionView>} */
-  const result = new Map(ids.map((id) => [id, { supersededBy: null, supersedes: [] }]));
-  const rows = state.rows.get(namespace);
-  for (const { previous, replacement } of state.relations.get(namespace)?.supersessions.values() ?? []) {
-    if (!rows?.has(previous.id) || !rows.has(replacement.id)) continue;
-    const predecessor = result.get(previous.id);
-    if (predecessor) predecessor.supersededBy = replacement.id;
-    result.get(replacement.id)?.supersedes.push(previous.id);
-  }
-  for (const view of result.values()) view.supersedes.sort(compareUtf8);
-  return result;
-}
-
 /**
  * @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>["port"]} port
  * @param {ReturnType<typeof import("./fact-match.mjs").createFactMatcher>} matchFacts
  */
 export function createRelationStores(port, matchFacts) {
+  /** @param {State} state @param {Scope} scope @param {readonly string[]} ids */
+  function readSupersessions(state, scope, ids) {
+    /** @type {Map<string, SupersessionView>} */
+    const result = new Map(ids.map((id) => [id, { supersededBy: null, supersedes: [] }]));
+    const rows = state.rows.get(scope.namespace);
+    const policy = matchFacts(state.facts, scope);
+    for (const { previous, replacement } of state.relations.get(scope.namespace)?.supersessions.values() ?? []) {
+      const predecessor = result.get(previous.id);
+      const successor = result.get(replacement.id);
+      if (!predecessor && !successor) continue;
+      const previousEntry = rows?.get(previous.id);
+      const replacementEntry = rows?.get(replacement.id);
+      if (!previousEntry || !replacementEntry || policy.hides(previousEntry) || policy.hides(replacementEntry)) continue;
+      if (predecessor) predecessor.supersededBy = replacement.id;
+      successor?.supersedes.push(previous.id);
+    }
+    for (const view of result.values()) view.supersedes.sort(compareUtf8);
+    return result;
+  }
+
   /** @param {State} state @param {Scope} scope @param {readonly string[]} ids */
   function readConflicts(state, scope, ids) {
     /** @type {Map<string, ConflictEdge[]>} */
@@ -103,6 +108,7 @@ export function createRelationStores(port, matchFacts) {
           replacement: { id: replacement.id, revision: replacement.revision },
           receiptIds: [...receiptIds], createdAtMs: nowMs,
         };
+        if (record.previous.id === record.replacement.id) throw new CoreError("invalid_ref");
         return (getState) => {
           const { supersessions } = ensureRelations(getState(), namespace);
           if (supersessions.has(record.previous.id)) throw new CoreError("invalid_ref");
@@ -125,10 +131,10 @@ export function createRelationStores(port, matchFacts) {
       });
     },
     async read(tx, scope, id) {
-      return port(tx, scope, false, (state) => [...readSupersessions(state, scope.namespace, [id]).values()][0]);
+      return port(tx, scope, false, (state) => [...readSupersessions(state, scope, [id]).values()][0]);
     },
     async readMany(tx, scope, ids) {
-      return port(tx, scope, false, (state) => readSupersessions(state, scope.namespace, ids));
+      return port(tx, scope, false, (state) => readSupersessions(state, scope, ids));
     },
     async incomingCount(tx, scope, replacementId) {
       return port(tx, scope, false, (state) => {

@@ -37,3 +37,9 @@ test("the relation flags expose each store and its batched read independently", 
     assert.equal(adapter[other], undefined);
   }
 });
+
+test("memory-store exports the writeTime helper used by topics", async () => {
+  const { writeTime } = await import("../src/memory-store.mjs");
+  assert.equal(typeof writeTime, "function");
+  assert.deepEqual(writeTime(7), { updatedAtMs: 7, updatedAtUs: 7000n });
+});

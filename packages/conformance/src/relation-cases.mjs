@@ -1,7 +1,7 @@
-import { canonicalPair, compareUtf8, planConflictInsert, planSupersede, RELATION_LIMIT } from "@cairn-ink/core";
+import { canonicalPair, compareUtf8, NEAR_DUPLICATE_DISTANCE, planConflictInsert, planSupersede, RELATION_LIMIT } from "@cairn-ink/core";
 import { check, equal, rejects, row } from "./support.mjs";
 
-/** @import { ConflictEdge, ItemRef, Scope, Tx } from "@cairn-ink/core/ports" */
+/** @import { ConflictEdge, InsertRow, ItemRef, Scope, Tx } from "@cairn-ink/core/ports" */
 /** @import { CaseContext, ConformanceCase } from "./index.d.mts" */
 /** @typedef {{id: string, revision: number}} Endpoint */
 
@@ -22,6 +22,34 @@ async function insert(ctx, tx, scope, names) {
   const rows = [];
   for (const name of names) rows.push(await ctx.adapter.memories.insert(tx, scope, await row(ctx, name), [], 1));
   return rows;
+}
+
+/** @param {CaseContext} ctx @param {InsertRow} content */
+async function retire(ctx, content) {
+  const { adapter: { uow, memories, supersession }, owner } = ctx;
+  check(supersession, "Supersession port is missing");
+  const scope = ctx.scope(null);
+  const replacementRow = await row(ctx, "Replacement memory", 0.5);
+  return uow.run(owner, {}, async (tx) => {
+    const previous = await memories.insert(tx, scope, content, [], 1);
+    const replacement = await memories.insert(tx, scope, replacementRow, [], 1);
+    await supersession.record(tx, scope, { previous, replacement }, [], 2);
+    await supersession.markHistorical(tx, scope, previous.id, 2);
+    return { id: previous.id, revision: previous.revision + 1 };
+  });
+}
+
+/** @param {CaseContext} ctx @param {InsertRow} row */
+async function captureRow({ adapter: { uow, capture }, owner, scope }, { text, kind, confidence, textHash, embedding }) {
+  const claim = await uow.run(owner, { pauseLock: true }, (tx) => capture.claim(tx, {
+    scope: scope(null), client: "test-client", sessionId: "test-session", eventId: "test-event", payloadDigest: "a".repeat(64),
+  }, [{ id: "message", role: "user", content: text, occurredAtMs: null }], { leaseMs: 60_000 }));
+  check(claim.status === "claimed", "Expected a fresh capture claim");
+  const { token } = await uow.run(owner, { pauseLock: true }, (tx) => capture.beginDispatch(tx, claim.token));
+  return uow.run(owner, { pauseLock: true }, (tx) => capture.finish(tx, token, [{
+    content: text, kind, confidence, textHash, receipts: [],
+    embedding: embedding && { model: embedding.model, vector: new Float32Array(embedding.vector) },
+  }]));
 }
 
 /** @param {unknown} value @param {string} erased */
@@ -333,6 +361,104 @@ export const relationCases = [
         const { items } = await memories.exportPage(tx, scope, { cursor: null, limit: 10 });
         equal(items.map(({ id }) => id), [survivor], "Export returned an erased memory or lost the surviving endpoint");
         assertNoForgottenRelation(items[0], erased);
+      });
+    },
+  },
+  {
+    id: "K-REL-9", title: "hides identity-suppressed ids in both supersession directions", needs: ["supersession"],
+    async run(ctx) {
+      const { adapter: { uow, supersession, hydrate }, harness, owner } = ctx;
+      check(supersession, "Supersession port is missing");
+      const scope = ctx.scope(null);
+      const [a, b, c, d] = await uow.run(owner, {}, async (tx) => {
+        const [a, b, c, d] = await insert(ctx, tx, scope, ["former A", "current B", "former C", "current D"]);
+        for (const [previous, replacement] of [[a, b], [c, d]]) {
+          await supersession.record(tx, scope, { previous, replacement }, [], 2);
+          await supersession.markHistorical(tx, scope, previous.id, 2);
+        }
+        return [a.id, b.id, c.id, d.id];
+      });
+      await uow.run(owner, { readOnly: true }, async (tx) => {
+        equal(await supersession.read(tx, scope, a), { supersededBy: b, supersedes: [] }, "Control replacement is missing");
+        equal(await supersession.read(tx, scope, d), { supersededBy: null, supersedes: [c] }, "Control historical previous id is missing");
+      });
+      for (const memoryId of [b, c]) {
+        await harness.seedFact(owner, { owner, namespace: scope.namespace, kind: "identity", memoryId, origin: "forget",
+          actionId: `suppress-${memoryId}` });
+      }
+      await uow.run(owner, { readOnly: true }, async (tx) => {
+        const items = await hydrate.hydrate(tx, { owner, namespaces: [scope.namespace] }, [a, b, c, d].map((id) => ref(scope, id)), "read");
+        equal(items.map(({ ref }) => ref.id), [a, d], "The suppression fixture must hide exactly the selected endpoints");
+        const singles = await Promise.all([a, d].map((id) => supersession.read(tx, scope, id)));
+        const batches = supersession.readMany
+          ? [await supersession.readMany(tx, scope, [a]), await supersession.readMany(tx, scope, [d])]
+          : [];
+        equal({ singles, batches }, {
+          singles: [emptySupersession, emptySupersession],
+          batches: supersession.readMany ? [new Map([[a, emptySupersession]]), new Map([[d, emptySupersession]])] : [],
+        }, "Supersession returned an identity-suppressed id");
+      });
+    },
+  },
+  {
+    id: "K-REL-10", title: "touches an exact historical capture match without merging", needs: ["supersession"],
+    async run(ctx) {
+      const { adapter: { uow, memories }, owner } = ctx;
+      const scope = ctx.scope(null);
+      const original = { ...await row(ctx, "Retired capture text", 0), origin: /** @type {const} */ ("inferred") };
+      const { id, revision } = await retire(ctx, original);
+      const [[match]] = await uow.run(owner, { readOnly: true }, (tx) => memories.findDuplicates(tx, scope,
+        [{ textHash: original.textHash }], { nearDistance: NEAR_DUPLICATE_DISTANCE }));
+      check(match?.kind === "stored" && match.match === "exact" && match.id === id, "Expected the exact historical match");
+
+      const { duplicateCount, suppressedCount, memories: written } = await captureRow(ctx, { ...original, confidence: 0.9 });
+      const captured = await uow.run(owner, { readOnly: true }, (tx) => memories.get(tx, scope, id));
+      check(captured, "Historical row is missing after capture");
+      equal({ duplicateCount, suppressedCount, written,
+        row: [captured.kind, captured.origin, captured.confidence, captured.revision, captured.historical] }, {
+        duplicateCount: 1, suppressedCount: 0, written: [{ id, revision, outcome: "touched" }],
+        row: [original.kind, "inferred", 0.4, revision, true],
+      }, "Exact capture merged into a historical row or failed to report a duplicate");
+
+      const touch = await uow.run(owner, {}, (tx) => memories.touchDuplicate(tx, scope, id, [],
+        { kind: "decision", origin: "explicit", confidence: 0.9 }, captured.updatedAtMs + 1));
+      equal(touch, { outcome: "touched", revision }, "Direct touch merged into a historical row");
+      const saved = await uow.run(owner, { readOnly: true }, (tx) => memories.get(tx, scope, id));
+      check(saved, "Historical row is missing after direct touch");
+      equal([saved.kind, saved.origin, saved.confidence, saved.revision, saved.historical],
+        [original.kind, "inferred", 0.4, revision, true], "Direct touch changed historical row fields");
+    },
+  },
+  {
+    id: "K-REL-11", title: "saves a near duplicate of a historical memory as a new current row",
+    needs: ["supersession", "nearDuplicate"],
+    async run(ctx) {
+      const { adapter: { uow, memories }, owner } = ctx;
+      const scope = ctx.scope(null);
+      const previous = await retire(ctx, await row(ctx, "Retired nearby text", 0));
+      const incoming = await row(ctx, "New nearby text", 0.05);
+      const query = { textHash: incoming.textHash, embedding: ctx.vec(0.05) };
+      const matches = await uow.run(owner, { readOnly: true }, (tx) => memories.findDuplicates(tx, scope, [query],
+        { nearDistance: NEAR_DUPLICATE_DISTANCE }));
+      const { duplicateCount, suppressedCount, memories: written } = await captureRow(ctx, incoming);
+      equal({ matches: matches[0].map(({ match }) => match), duplicateCount, suppressedCount, outcomes: written.map(({ outcome }) => outcome) },
+        { matches: [], duplicateCount: 0, suppressedCount: 0, outcomes: ["inserted"] }, "Near capture matched a historical row");
+      check(written[0].id !== previous.id, "Near capture reused a historical id");
+      const saved = await uow.run(owner, { readOnly: true }, (tx) => memories.get(tx, scope, written[0].id));
+      check(saved && !saved.historical && saved.text === incoming.text, "Near capture did not save a current row");
+    },
+  },
+  {
+    id: "K-REL-12", title: "rejects recording a memory as its own replacement", needs: ["supersession"],
+    async run(ctx) {
+      const { adapter: { uow, supersession }, owner } = ctx;
+      check(supersession, "Supersession port is missing");
+      const scope = ctx.scope(null);
+      const [memory] = await uow.run(owner, {}, (tx) => insert(ctx, tx, scope, ["Same endpoint"]));
+      await rejects(() => uow.run(owner, {}, (tx) =>
+        supersession.record(tx, scope, { previous: memory, replacement: memory }, [], 2)), "invalid_ref");
+      await uow.run(owner, { readOnly: true }, async (tx) => {
+        equal(await supersession.incomingCount(tx, scope, memory.id), 0, "Rejected self-link was stored");
       });
     },
   },
