@@ -464,8 +464,8 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
           fact.session.client === candidates.client && fact.session.sessionId === candidates.sessionId);
         const windows = facts.filter(({ fact }) => fact.kind === "window");
         // The port contract: owner-wide windows apply even when the source has no client or session.
-        // Owner ruling B: a clientless source is checked against every window. A client-specific
-        // window cannot be ruled out without a client, so the core matcher's "ineligible" blocks it.
+        // Ruling B, time-bounded: a clientless source is checked against every window. Inside a
+        // client-specific window the core matcher returns "ineligible" (blocked); outside it, no match.
         const applicable = windows;
         const blockedMessages = (occurredAtMs ?? []).flatMap((time, index) =>
           applicable.some(stored => factBlocksIncoming(stored, {

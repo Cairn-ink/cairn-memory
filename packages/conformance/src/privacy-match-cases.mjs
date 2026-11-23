@@ -382,7 +382,7 @@ export const PRIVACY_MATCH_CASES = [
     },
   },
   {
-    id: "K-SNAP-F5", title: "blocks every position without a client against a client-specific window", needs: [],
+    id: "K-SNAP-F5", title: "blocks positions without a client only inside a client-specific window", needs: [],
     async run(ctx) {
       await ctx.harness.seedFact(ctx.owner, {
         ...factBase(ctx, "window"), kind: "window", client, window: { startMs: 10, endMs: 20 },
@@ -391,7 +391,22 @@ export const PRIVACY_MATCH_CASES = [
       const scope = ctx.scope(null);
       await uow.run(ctx.owner, { readOnly: true }, async (tx) => {
         const result = await suppressions.snapshot(tx, scope, { occurredAtMs: [9, 10, 15, 20, 21, null] });
-        equal(result.blockedMessages, [0, 1, 2, 3, 4, 5], "Client-specific window must block all times without a client");
+        equal(result.blockedMessages, [1, 2],
+          "A client-specific window must block clientless times inside [start, end) and admit times outside it");
+      });
+    },
+  },
+  {
+    id: "K-SNAP-F5u", title: "blocks an unknown time without a client when a client-specific window covers unknown times", needs: [],
+    async run(ctx) {
+      await ctx.harness.seedFact(ctx.owner, {
+        ...factBase(ctx, "window"), kind: "window", client, window: { startMs: 10, endMs: 20 }, unknownTime: true,
+      });
+      const { uow, suppressions } = ctx.adapter;
+      const scope = ctx.scope(null);
+      await uow.run(ctx.owner, { readOnly: true }, async (tx) => {
+        const result = await suppressions.snapshot(tx, scope, { occurredAtMs: [null, 21] });
+        equal(result.blockedMessages, [0], "An unknown time without a client must be blocked when the window covers unknown times");
       });
     },
   },
