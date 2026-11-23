@@ -9,7 +9,7 @@ const codename = String.fromCharCode(119, 51);
 // The hosted domain labels and any codename-prefixed identifier. A bare short
 // token is not matched: it also occurs as an ordinary id in unrelated fixtures.
 const forbidden = new RegExp(
-  String.raw`${codename}-fingerprint-key-id|${codename}:raw-shingles:|${codename}:v1-exact(?:\x00|\\(?:0|x00|u0000))|\b${codename}[-:][a-z]|FAKE-[A-Z-]*${codename}`,
+  String.raw`${codename}-fingerprint-key-id|${codename}:raw-shingles:|${codename}:v1-exact(?:\x00|\\(?:0|x00|u0000))|\b${codename}[-:_.][a-z0-9]|FAKE-[A-Z-]*${codename}`,
   "i",
 );
 
@@ -50,6 +50,10 @@ test("the codename guard catches each hosted label form (negative control)", () 
     `sign(key, \`${codename}:raw-shingles:\${userId}\`)`,
     `"${codename}:v1-exact\\0"`,
     `const KEY = "FAKE-CONFORMANCE-ONLY-${codename.toUpperCase()}-KEY";`,
+    `{"id":"${codename}-123"}`,
+    `{"id":"${codename}:123"}`,
+    `{"id":"${codename}_owner"}`,
+    `{"id":"${codename}.owner"}`,
   ]) assert.ok(forbidden.test(line), line);
   assert.equal(forbidden.test('{"id":"' + codename + '","role":"user"}'), false);
 });

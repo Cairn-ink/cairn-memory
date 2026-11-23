@@ -41,10 +41,26 @@ function labelValue(labels, name) {
   return value;
 }
 
+const LABEL_KEYS = Object.freeze(["keyIdDomain", "legacyExactPrefix", "shingleKeyPrefix"]);
+
+/**
+ * Exactly the three label keys as own properties: no extra string, symbol, or
+ * non-enumerable keys. Reflect.ownKeys reads keys only; no getter runs.
+ * @param {object} labels
+ */
+function hasExactlyLabelKeys(labels) {
+  const keys = Reflect.ownKeys(labels);
+  if (keys.length !== LABEL_KEYS.length) return false;
+  if (keys.some((key) => typeof key !== "string")) return false;
+  const sorted = /** @type {string[]} */ (keys).slice().sort();
+  return sorted.every((key, index) => key === LABEL_KEYS[index]);
+}
+
 /** @param {unknown} labels @returns {FingerprintLabels} */
 export function validateFingerprintLabels(labels) {
   try {
-    if (labels !== null && typeof labels === "object" && !Array.isArray(labels) && Object.isFrozen(labels)) {
+    if (labels !== null && typeof labels === "object" && !Array.isArray(labels) && Object.isFrozen(labels) &&
+      hasExactlyLabelKeys(labels)) {
       return Object.freeze({
         keyIdDomain: labelValue(labels, "keyIdDomain"),
         shingleKeyPrefix: labelValue(labels, "shingleKeyPrefix"),

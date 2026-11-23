@@ -50,6 +50,10 @@ test("domain labels must be supplied as frozen data properties with non-empty st
     Object.freeze({ ...labels, legacyExactPrefix: null }),
     Object.freeze(Object.create(labels)),
     Object.freeze({ ...labels, get legacyExactPrefix() { return labels.legacyExactPrefix; } }),
+    Object.freeze({ ...labels, extra: "bad" }),
+    Object.freeze(Object.defineProperty({ ...labels }, "hidden", { value: "bad", enumerable: false })),
+    Object.freeze({ ...labels, [Symbol("extra")]: "bad" }),
+    Object.freeze(Object.defineProperty({ ...labels }, "computed", { get() { return "bad"; }, enumerable: true })),
   ]) {
     assert.throws(() => validateFingerprintLabels(candidate), invalid);
     await assert.rejects(userFingerprintKey(FAKE_MASTER, OWNERS[0], candidate), invalid);
