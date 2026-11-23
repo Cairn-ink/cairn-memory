@@ -64,7 +64,14 @@ function hasCode(code) {
 for (const [label, options, statement, expected] of [
   ["write", {}, write, [begin, lockTimeout, statementTimeout, ownerLock, write, commit]],
   ["pause lock", { pauseLock: true }, write, writeSequence],
-  ["read only", { readOnly: true, pauseLock: true }, read, [readBegin, lockTimeout, statementTimeout, read, commit]],
+  ["read only", { readOnly: true, pauseLock: true }, read, [
+    ["SELECT current_setting('lock_timeout') AS value"],
+    ["SET lock_timeout = '5s'"],
+    ["SELECT pg_advisory_lock_shared(hashtextextended('cairn:memory-pause:' || $1, 0))", [owner]],
+    ["SELECT set_config('lock_timeout', $1, false)", [1]],
+    readBegin, lockTimeout, statementTimeout, read, commit,
+    ["SELECT pg_advisory_unlock_shared(hashtextextended('cairn:memory-pause:' || $1, 0)) AS value", [owner]],
+  ]],
 ]) {
   test(`${label} uses one connection and the exact SQL sequence`, async () => {
     const db = stub();

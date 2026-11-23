@@ -72,6 +72,20 @@ keyed shingle containment at the shared 0.6 threshold. A match in either
 field returns `text_withheld`. Unknown or malformed facts and unavailable
 key evidence needed for comparison withhold the card.
 
+For facts with legacy MACs, the adapter can pass `legacyFingerprint: { key, labels }`.
+Use the adapter's frozen legacy domain labels and derive the key with
+`userFingerprintKey(secret, owner, labels)`. Core compares legacy exact MACs
+and keyed shingles for the original and historically redacted forms of each
+field after cleaning the stored text. A fact with both legacy and Core aliases
+can match through either comparison. A host holding both kinds of facts passes
+both `fingerprintKey` (derived with Core labels) and `legacyFingerprint`
+(derived with adapter labels). Omitting either leaves facts that require that
+key fail-closed. For a fact with both MACs, passing only `legacyFingerprint`
+can withhold an unrelated card because the Core MAC cannot be compared. With
+both keys, the card can be visible when both MACs miss. A legacy MAC under a
+different key ID withholds the card, including after a key rotation.
+Invalid labels or an unusable signing key return `uncertain`.
+
 During forget, the host's `dependents.invalidate` step calls
 `hideWhere(tx, scope, { sourceMemoryId }, reason)` for each forgotten memory.
 The selector hides linked cards in the forget transaction. The linked memory

@@ -6,10 +6,13 @@ import { isReadStatement } from "./read-only.mjs";
 /** @import { Connection, ConnectionSource } from "./driver.mjs" */
 /** @typedef {{ connection: Connection, pending: Set<Promise<unknown>>, operationTail?: Promise<unknown>, failure?: CoreError }} Run */
 
-const LOCK_TIMEOUT = "SET LOCAL lock_timeout = '5s'";
+const LOCK_TIMEOUT = "5s";
 const STATEMENT_TIMEOUT = "SET LOCAL statement_timeout = '30s'";
 // Match the hosted service so both implementations serialize on the same locks.
-const PAUSE_LOCK = "SELECT pg_advisory_xact_lock(hashtextextended('cairn:memory-pause:' || $1, 0))";
+const PAUSE_LOCK_KEY = "hashtextextended('cairn:memory-pause:' || $1, 0)";
+const PAUSE_LOCK = `SELECT pg_advisory_xact_lock(${PAUSE_LOCK_KEY})`;
+const SHARED_PAUSE_LOCK = `SELECT pg_advisory_lock_shared(${PAUSE_LOCK_KEY})`;
+const SHARED_PAUSE_UNLOCK = `SELECT pg_advisory_unlock_shared(${PAUSE_LOCK_KEY}) AS value`;
 const OWNER_LOCK = "SELECT pg_advisory_xact_lock(hashtext('w3:' || $1))";
 
 /** @type {WeakMap<Tx, Run>} */
@@ -84,10 +87,21 @@ export function runOperation(tx, body) {
   return trackPending(run, pending);
 }
 
-/** @param {Connection} connection @param {boolean} committed */
-async function releaseConnection(connection, committed) {
-  // Failed runs already destroy the connection. Reset reusable sessions outside the transaction.
-  if (committed) {
+/** @param {Connection} connection @param {OwnerId} owner */
+async function unlockSharedPause(connection, owner) {
+  try {
+    const { rows } = await connection.query(SHARED_PAUSE_UNLOCK, [owner]);
+    return Boolean(rows[0]?.value);
+  } catch {
+    // The caller discards the session and preserves the transaction outcome.
+    return false;
+  }
+}
+
+/** @param {Connection} connection @param {boolean} reusable */
+async function releaseConnection(connection, reusable) {
+  // Reset reusable sessions outside the transaction.
+  if (reusable) {
     try {
       // The server tag is "DISCARD ALL"; some drivers report only the first word.
       const { command } = await connection.query("DISCARD ALL");
@@ -136,11 +150,20 @@ export function createPostgresUnitOfWork(source) {
       /** @type {Run} */
       const state = { connection, pending: new Set() };
       let committed = false;
+      let sharedPauseHeld = false;
       try {
+        if (readOnly && pauseLock) {
+          // Acquire the session lock before BEGIN so the snapshot follows the wait.
+          const { rows: [{ value: previousTimeout }] } = await connection.query("SELECT current_setting('lock_timeout') AS value");
+          await connection.query(`SET lock_timeout = '${LOCK_TIMEOUT}'`);
+          await connection.query(SHARED_PAUSE_LOCK, [owner]);
+          sharedPauseHeld = true;
+          await connection.query("SELECT set_config('lock_timeout', $1, false)", [previousTimeout]);
+        }
         let result;
         try {
           await connection.query(readOnly ? "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY" : "BEGIN");
-          await connection.query(LOCK_TIMEOUT);
+          await connection.query(`SET LOCAL lock_timeout = '${LOCK_TIMEOUT}'`);
           await connection.query(STATEMENT_TIMEOUT);
           if (!readOnly) {
             if (pauseLock) await connection.query(PAUSE_LOCK, [owner]);
@@ -178,7 +201,8 @@ export function createPostgresUnitOfWork(source) {
         committed = true;
         return result;
       } finally {
-        await releaseConnection(connection, committed);
+        const unlocked = !sharedPauseHeld || await unlockSharedPause(connection, owner);
+        await releaseConnection(connection, committed && unlocked);
       }
     } catch (error) {
       throw toPostgresError(error);

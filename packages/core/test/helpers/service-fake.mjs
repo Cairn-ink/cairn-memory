@@ -53,7 +53,7 @@ function publicRow({ digests: _digests, ...row }) {
 }
 
 export function serviceFake({ rows = [], leakForgotten = false, writes = false, near = false, hasKey = true, forgetting,
-  recall = false, semantic = false } = {}) {
+  recall = false, semantic = false, capture = false, rawArchive = false, sessionLineage = false } = {}) {
   let committedRows = [...rows];
   const calls = [];
   const mutations = [];
@@ -68,6 +68,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       owners.set(owner, {
         forgotten: new Set(), revision: 0, pause: { paused: false, generation: 0 }, facts: [],
         effects: { fences: [], closures: [], purges: [], hiddenCards: [], logs: [], invalidatedConflicts: [], quantityDrops: [] },
+        admissions: new Map(),
       });
     }
     return owners.get(owner);
@@ -115,7 +116,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         // Writes replace committedRows, so an open run retains its original rows and suppressions.
         const tx = {
           owner, options, rows: committedRows, revision: state.revision, facts: state.facts, runId: ++runId,
-          forgotten: new Set(state.forgotten), pause: state.pause,
+          forgotten: new Set(state.forgotten), pause: state.pause, admissions: state.admissions,
           effects: Object.fromEntries(Object.entries(state.effects).map(([field, items]) => [field, [...items]])),
         };
         active.add(tx);
@@ -126,6 +127,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
             state.pause = tx.pause;
             state.facts = tx.facts;
             state.revision = tx.revision;
+            state.admissions = tx.admissions;
             state.effects = tx.effects;
             committedRows = tx.rows;
           }
@@ -179,6 +181,20 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         const result = readPage(candidates(tx, { owner: scope.owner, namespaces: [scope.namespace] }), page);
         await hooks.afterExportPage?.(result);
         return result;
+      },
+    },
+    hydrate: {
+      async hydrate(tx, scope, refs, intent) {
+        record(tx, scope.owner, "hydrate.hydrate", scope, refs, intent);
+        assert.ok(tx.options.readOnly);
+        const rows = candidates(tx, scope);
+        const result = refs.flatMap(ref => {
+          const memory = rows.find(row => row.id === ref.id && row.scope.namespace === ref.namespace);
+          return memory ? [{ ref, memory: tx.ranked ? memory : publicRow(memory) }] : [];
+        }).reverse();
+        // Recall hooks act on the ranking snapshot. Delivery reads its own rows.
+        if (intent === "recall" && !tx.ranked) return result;
+        return hooks.hydrate?.(result) ?? result;
       },
     },
     fence: {
@@ -258,6 +274,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       async lexical(tx, scope, query, depth, options) {
         record(tx, scope.owner, "lexical.lexical", scope, query, depth, options);
         assert.ok(tx.options.readOnly);
+        tx.ranked = true;
         const ranked = candidates(tx, scope).flatMap(row => {
           const score = hooks.lexicalScore?.(row, query);
           return score === undefined ? [] : [{ ref: refOf(row), score, updatedAtUs: row.updatedAtUs }];
@@ -265,18 +282,6 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         const rows = ranked.slice(0, depth);
         hooks.afterLexical?.(rows);
         return { rows, matched: ranked.length > 0 };
-      },
-    };
-    storage.hydrate = {
-      async hydrate(tx, scope, refs, intent) {
-        record(tx, scope.owner, "hydrate.hydrate", scope, refs, intent);
-        assert.ok(tx.options.readOnly);
-        const rows = candidates(tx, scope);
-        const result = refs.flatMap(ref => {
-          const memory = rows.find(row => row.id === ref.id && row.scope.namespace === ref.namespace);
-          return memory ? [{ ref, memory }] : [];
-        }).reverse();
-        return hooks.hydrate?.(result) ?? result;
       },
     };
     fake.deps.embedQuery = {
@@ -442,8 +447,10 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         record(tx, scope.owner, "suppressions.snapshot", scope, candidates);
         await hooks.snapshot?.(candidates);
         const { client, sessionId, occurredAtMs } = candidates;
-        const windows = tx.facts.filter(({ fact }) => fact.kind === "window" &&
-          (fact.namespace ?? null) === scope.namespace);
+        const facts = tx.facts.filter(({ fact }) => (fact.namespace ?? null) === scope.namespace);
+        const blockedSession = facts.some(({ fact }) => fact.kind === "session" &&
+          fact.session.client === candidates.client && fact.session.sessionId === candidates.sessionId);
+        const windows = facts.filter(({ fact }) => fact.kind === "window");
         // The port contract: owner-wide windows apply even when the source has no client or session.
         // A clientless source is matched against owner-wide windows only, as hosted does.
         const applicable = client == null ? windows.filter(({ fact }) => fact.client === null) : windows;
@@ -452,10 +459,10 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
             scope, passages: [], ...(client == null ? {} : { session: { client, sessionId: sessionId ?? "" } }),
             occurredAtMs: time,
           }, { mode: "capture" }) !== false) ? [index] : []);
-        return { blockedSession: false, blockedMessages,
-          passages: tx.facts.filter(stored => {
+        return { blockedSession, blockedMessages,
+          passages: facts.filter(stored => {
             const { fact } = stored;
-            return fact.kind === "text" && (fact.namespace ?? null) === scope.namespace &&
+            return fact.kind === "text" &&
               (!forgetting || candidates.passages === undefined ||
                 factBlocksIncoming(stored, { scope, passages: candidates.passages },
                   { mode: "capture", rowShingles: false }) !== false);
@@ -489,8 +496,10 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
     if (forgetting) {
       const { capabilities = {}, spans = [], receipts = [], closure = [] } = forgetting;
       Object.assign(storage.capabilities, capabilities);
+      const readHydrate = storage.hydrate.hydrate;
       storage.hydrate = {
-        async hydrate(tx, scope, refs) {
+        async hydrate(tx, scope, refs, intent) {
+          if (tx.options.readOnly) return readHydrate(tx, scope, refs, intent);
           record(tx, scope.owner, "hydrate.hydrate", scope, refs);
           await hooks.fault?.("hydrate.hydrate");
           return refs.map(ref => ({ ref, receipts }));
@@ -548,6 +557,84 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         async record(tx, owner, id, atMs) {
           if (tx.effects.logs.includes(id)) return;
           await effect(tx, owner, "forgetLog.record", "logs", id, id, atMs);
+        },
+      };
+    }
+  }
+  if (capture) {
+    const admissionId = ({ client, eventId }) => JSON.stringify([client, eventId]);
+    storage.capture = {
+      claim: unexpected,
+      async eligible(tx, key, messages) {
+        record(tx, key.scope.owner, "capture.eligible", key, messages);
+        assert.ok(tx.options.pauseLock && !tx.options.readOnly);
+        const windows = tx.facts.map(({ fact }) => fact).filter(fact =>
+          fact.kind === "window" && (fact.namespace ?? null) === key.scope.namespace &&
+          (fact.client === null || fact.client === key.client));
+        return messages.flatMap(({ occurredAtMs }, index) => windows.some(({ window, unknownTime }) =>
+          occurredAtMs === null ? unknownTime === true : occurredAtMs >= window.startMs && occurredAtMs < window.endMs)
+          ? [] : [index]);
+      },
+      async admit(tx, key, messages) {
+        record(tx, key.scope.owner, "capture.admit", key, messages);
+        assert.ok(tx.options.pauseLock && !tx.options.readOnly);
+        const id = admissionId(key);
+        const row = tx.admissions.get(id);
+        if (row) {
+          if (row.key.payloadDigest !== key.payloadDigest) throw new CoreError("event_payload_conflict");
+          if (row.processing) return { status: "processing" };
+          if (row.result) return { status: "rawReplay", result: row.result };
+          return { status: "duplicate" };
+        }
+        mutations.push({ method: "capture.admit", run: tx.runId, args: [key, messages] });
+        tx.admissions = new Map(tx.admissions).set(id, {
+          key: { ...key, scope: { ...key.scope } }, messages: messages.map(message => ({ ...message })), status: "pending",
+        });
+        return { status: "admitted" };
+      },
+      async load(tx, selection) {
+        record(tx, selection.scope.owner, "capture.load", selection);
+        const row = tx.admissions.get(admissionId(selection));
+        if (!row || row.key.scope.namespace !== selection.scope.namespace || row.key.sessionId !== selection.sessionId) return null;
+        const { key, messages } = row;
+        return structuredClone({ key, messages });
+      },
+      async status(tx, scope, eventId, client) {
+        record(tx, scope.owner, "capture.status", scope, eventId, client);
+        assert.ok(tx.options.readOnly);
+        const rows = [...tx.admissions.values()].filter(({ key }) => key.scope.namespace === scope.namespace &&
+          key.eventId === eventId && (client === undefined || key.client === client));
+        if (rows.some(row => row.status === "pending")) return { status: "pending" };
+        const failed = rows.find(row => row.status === "failed");
+        if (failed) return failed.code === undefined ? { status: "failed" } : { status: "failed", code: failed.code };
+        return { status: rows.length ? "done" : "unknown" };
+      },
+    };
+    fake.setCaptureResult = (selection, result) => {
+      const rows = ownerState(selection.scope.owner).admissions;
+      const id = admissionId(selection);
+      assert.ok(rows.has(id));
+      rows.set(id, { ...rows.get(id), ...result });
+    };
+    if (rawArchive) {
+      storage.capabilities.rawArchive = true;
+      storage.raw = {
+        async recordLineage(tx, key, messages) {
+          record(tx, key.scope.owner, "raw.recordLineage", key, messages);
+          assert.ok(tx.options.pauseLock && !tx.options.readOnly);
+          assert.ok(tx.admissions.has(admissionId(key)));
+          mutations.push({ method: "raw.recordLineage", run: tx.runId, args: [key, messages] });
+          await hooks.recordLineage?.();
+        },
+      };
+    }
+    if (sessionLineage) {
+      storage.capabilities.sessionLineage = true;
+      storage.sessionLineage = {
+        async isFenced(tx, scope, session) {
+          record(tx, scope.owner, "sessionLineage.isFenced", scope, session);
+          assert.ok(tx.options.pauseLock && !tx.options.readOnly);
+          return hooks.isFenced?.(session) ?? { fenced: false, proof: "proven" };
         },
       };
     }
