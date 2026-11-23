@@ -444,10 +444,13 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         const { client, sessionId, occurredAtMs } = candidates;
         const windows = tx.facts.filter(({ fact }) => fact.kind === "window" &&
           (fact.namespace ?? null) === scope.namespace);
-        // Match the reference adapter, which skips window matching without a client.
-        const blockedMessages = client == null ? [] : (occurredAtMs ?? []).flatMap((time, index) =>
-          windows.some(stored => factBlocksIncoming(stored, {
-            scope, passages: [], session: { client, sessionId: sessionId ?? "" }, occurredAtMs: time,
+        // The port contract: owner-wide windows apply even when the source has no client or session.
+        // A clientless source is matched against owner-wide windows only, as hosted does.
+        const applicable = client == null ? windows.filter(({ fact }) => fact.client === null) : windows;
+        const blockedMessages = (occurredAtMs ?? []).flatMap((time, index) =>
+          applicable.some(stored => factBlocksIncoming(stored, {
+            scope, passages: [], ...(client == null ? {} : { session: { client, sessionId: sessionId ?? "" } }),
+            occurredAtMs: time,
           }, { mode: "capture" }) !== false) ? [index] : []);
         return { blockedSession: false, blockedMessages,
           passages: tx.facts.filter(stored => {
