@@ -85,6 +85,10 @@ const cases = [
     'packaging/core-local/bridge.mjs': "export * from './host.mjs';" }, /invalid_core_local_host_edge/],
   ['core adapter import', { [coreEntry]: "import('../../../packaging/core-local/adapter-slot.mjs');" },
     /core_import_escapes_package/],
+  ['core static bare import', { [coreEntry]: "import 'fixture';" }, /unsupported_core_local_import/],
+  ['core dynamic bare import', { [coreEntry]: "import('fixture');" }, /unsupported_core_local_import/],
+  ['core static Node import', { [coreEntry]: "import 'node:fs';" }, /unsupported_core_local_import/],
+  ['core dynamic Node import', { [coreEntry]: "import('node:fs');" }, /unsupported_core_local_import/],
 ];
 for (const [label, overrides, error] of cases) {
   test(`closure rejects ${label}`, t => assert.throws(() => deriveRuntimeGraph(fixture(t, overrides)), error));
@@ -121,6 +125,54 @@ for (const [label, statement, error = /unsupported_core_local_capability/] of ca
     assert.throws(() => deriveRuntimeGraph(fixture(t, { [coreEntry]: statement })), error);
   });
 }
+
+const deniedCoreGlobals = [
+  'fetch', 'WebSocket', 'XMLHttpRequest', 'EventSource', 'Worker', 'SharedWorker',
+  'WebAssembly', 'eval', 'Function', 'require', 'module', 'process', 'Deno', 'Bun',
+  'importScripts', '__dirname', '__filename',
+];
+const ambientRoots = ['globalThis', 'self', 'window'];
+for (const name of deniedCoreGlobals) {
+  test(`core rejects ambient ${name} as a bare reference and as a global member`, t => {
+    const path = fixture(t);
+    for (const access of [name, ...ambientRoots.map(root => `${root}.${name}`)]) {
+      writeFileSync(join(path, coreEntry), `const value = ${access};`);
+      assert.throws(() => deriveRuntimeGraph(path), /unsupported_core_local_capability/, access);
+    }
+  });
+}
+
+test('core rejects computed global members and global objects used as values', t => {
+  const path = fixture(t);
+  for (const root of ambientRoots) {
+    for (const access of [`${root}['AbortController']`, `Object.keys(${root})`, `globalThis.${root}`]) {
+      writeFileSync(join(path, coreEntry), `const value = ${access};`);
+      assert.throws(() => deriveRuntimeGraph(path), /unsupported_core_local_capability/, access);
+    }
+  }
+});
+
+test('core permits portable globals while host and CLI retain their allowlist', t => {
+  const path = fixture(t, {
+    [coreEntry]: `export async function run() {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(new DOMException('timeout', 'TimeoutError')), 10);
+      try {
+        const url = new globalThis.URL('https://example.invalid');
+        const bytes = new TextEncoder().encode(url.href);
+        return await globalThis.crypto.subtle.digest('SHA-256', bytes);
+      } finally {
+        clearTimeout(timer);
+      }
+    }`,
+  });
+  assert.deepEqual(deriveRuntimeGraph(path), [coreEntry, slot, cliEntry, host]);
+  writeFileSync(join(path, cliEntry), "import { serveStdio } from './host.mjs'; new AbortController();");
+  assert.throws(() => deriveRuntimeGraph(path), /unsupported_core_local_capability.*cli\.mjs: AbortController/);
+  writeFileSync(join(path, cliEntry), "import { serveStdio } from './host.mjs';");
+  writeFileSync(join(path, host), deferredHost + 'new AbortController();');
+  assert.throws(() => deriveRuntimeGraph(path), /unsupported_core_local_capability.*host\.mjs: AbortController/);
+});
 
 test('core permits literal reads of Web Crypto methods and respects local bindings', t => {
   const path = fixture(t, {

@@ -17,6 +17,12 @@ const runtimeGlobals = new Set([
   'TextEncoder', 'TypeError', 'Uint8Array', 'WeakMap', 'WeakSet', 'atob', 'btoa',
   'encodeURIComponent', 'isFinite', 'isNaN', 'parseInt', 'structuredClone', 'undefined',
 ]);
+const deniedCoreGlobals = new Set([
+  'fetch', 'WebSocket', 'XMLHttpRequest', 'EventSource', 'Worker', 'SharedWorker',
+  'WebAssembly', 'eval', 'Function', 'require', 'module', 'process', 'Deno', 'Bun',
+  'importScripts', '__dirname', '__filename',
+]);
+const ambientRoots = new Set(['globalThis', 'self', 'window']);
 const stdioProcessMembers = new Set(['argv', 'stdin', 'stdout']);
 const subtleMethods = new Set([
   'decrypt', 'deriveBits', 'deriveKey', 'digest', 'encrypt', 'exportKey',
@@ -107,6 +113,26 @@ function isMemberRead(node, parents) {
   return use.type !== 'UpdateExpression' && !(use.type === 'UnaryExpression' && use.operator === 'delete');
 }
 
+function isCryptoMethodRead(object, parents) {
+  const member = parents.get(object);
+  const property = dotMember(object, member);
+  if (property === 'getRandomValues' || property === 'randomUUID') return isMemberRead(member, parents);
+  if (property !== 'subtle') return false;
+  const method = parents.get(member);
+  return subtleMethods.has(dotMember(member, method)) && isMemberRead(method, parents);
+}
+
+function allowedCoreAmbient(node, parents) {
+  const { name } = node;
+  if (name === 'crypto') return isCryptoMethodRead(node, parents);
+  if (!ambientRoots.has(name)) return !deniedCoreGlobals.has(name);
+  const member = parents.get(node);
+  if (member.type !== 'MemberExpression' || member.object !== node || member.computed) return false;
+  const property = member.property.name;
+  if (property === 'crypto') return !member.optional && isCryptoMethodRead(member, parents);
+  return !deniedCoreGlobals.has(property) && !ambientRoots.has(property);
+}
+
 function allowedAmbient(name, node, parents, path) {
   const member = parents.get(node);
   const use = parents.get(member);
@@ -117,17 +143,6 @@ function allowedAmbient(name, node, parents, path) {
   }
   if (path === cliEntry && name === 'console') {
     return (property === 'log' || property === 'error') && use.type === 'CallExpression' && use.callee === member;
-  }
-  if (path.startsWith(coreSource) && (name === 'crypto' || name === 'globalThis' && property === 'crypto')) {
-    const cryptoObject = name === 'crypto' ? node : member;
-    const cryptoMember = parents.get(cryptoObject);
-    const cryptoProperty = dotMember(cryptoObject, cryptoMember);
-    if (cryptoProperty === 'getRandomValues' || cryptoProperty === 'randomUUID') {
-      return isMemberRead(cryptoMember, parents);
-    }
-    if (cryptoProperty !== 'subtle') return false;
-    const method = parents.get(cryptoMember);
-    return subtleMethods.has(dotMember(cryptoMember, method)) && isMemberRead(method, parents);
   }
   return runtimeGlobals.has(name);
 }
@@ -141,6 +156,7 @@ function computedString(node) {
 }
 
 function auditCapabilities(ast, path, parents) {
+  const isCore = path.startsWith(coreSource);
   const scopes = new WeakMap(), declarations = new WeakSet();
   const unsupported = name => { throw new Error(`unsupported_core_local_capability: ${path}: ${name}`); };
   walk(ast, null, (node, parent) => {
@@ -179,7 +195,8 @@ function auditCapabilities(ast, path, parents) {
     for (let scope = scopes.get(node); scope; scope = scope.outer) {
       if (scope.names.has(node.name)) return;
     }
-    if (!allowedAmbient(node.name, node, parents, path)) unsupported(node.name);
+    const allowed = isCore ? allowedCoreAmbient(node, parents) : allowedAmbient(node.name, node, parents, path);
+    if (!allowed) unsupported(node.name);
   });
 }
 
