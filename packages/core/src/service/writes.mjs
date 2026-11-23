@@ -43,7 +43,7 @@ export function sourceOf(value) {
 }
 
 /** @param {string} raw @param {string} text @param {FingerprintKey | null} key @returns {Promise<DuplicateQuery>} */
-async function hashesOf(raw, text, key) {
+export async function hashesOf(raw, text, key) {
   const [[core, ...aliases], digests] = await Promise.all([
     allDigests(raw, null), key && allDigests(text, key),
   ]);
@@ -132,6 +132,12 @@ export async function scopedRow(memories, scope, id, tx) {
   return row?.id === id && row.scope?.owner === scope.owner && row.scope.namespace === scope.namespace ? row : null;
 }
 
+/** @param {unknown} vector @param {number} dimensions @returns {vector is Float32Array} */
+export function validWriteEmbedding(vector, dimensions) {
+  return vector instanceof Float32Array && vector.length === dimensions &&
+    vector.every(Number.isFinite) && vector.some(component => component !== 0);
+}
+
 /** @param {WritePolicy} policy @param {boolean} near @param {string} [editId] */
 function decide(policy, near, editId) {
   const matches = policy.matches[0];
@@ -192,8 +198,7 @@ export function writeEmbedding({ storage: { keys, capabilities }, embedder, gate
     const validBatch = Array.isArray(vectors) && vectors.length <= texts.length;
     const embeddings = texts.map((_, index) => {
       const vector = validBatch ? vectors[index] : undefined;
-      if (vector instanceof Float32Array && vector.length === dimensions &&
-          vector.every(Number.isFinite) && vector.some(component => component !== 0)) return { model, vector };
+      if (validWriteEmbedding(vector, dimensions)) return { model, vector };
       if (!importing || capabilities.embeddingRequiredOnInsert === true) throw new CoreError("embedding_failed");
       return null;
     });

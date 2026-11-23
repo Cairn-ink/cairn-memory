@@ -45,7 +45,11 @@ function freezeConfig(input) {
     validateObject(deadlines, ["extract", "qualify", "reconcile", "classify", "rationale"]);
   }
   const stages = { ...deadlines };
-  for (const duration of Object.values(stages)) positiveInteger(duration);
+  for (const duration of Object.values(stages)) {
+    positiveInteger(duration);
+    // Match the capture runner's deadline range.
+    if (duration > 120_000) throw new CoreError("invalid_input");
+  }
 
   return Object.freeze({
     nearDuplicateDistance, lexicalWeight, vectorWeight, rowShingles, leaseMs,
@@ -113,7 +117,6 @@ export function createMemoryService(input) {
       listRawMessages: placeholder,
       importMemories: importMethod(deps),
       importRawMessages: placeholder,
-      runCapture: placeholder,
     };
   } catch (error) {
     throw entryError(error);

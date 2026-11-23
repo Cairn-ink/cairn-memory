@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { compareSortKey, compareUtf8, CoreError, factBlocksIncoming, factHidesRow } from "@cairn-ink/core";
+import { compareSortKey, compareUtf8, CoreError, factBlocksIncoming, factHidesRow, withholdsAnyPassage } from "@cairn-ink/core";
+import { fingerprintMemoryPassages } from "../../src/privacy/fingerprint.mjs";
+import { requiresLegacyMacDomain } from "../../src/privacy/withholds.mjs";
 
 export const hostedScope = Object.freeze({ owner: "owner", namespace: null });
 
@@ -63,12 +65,13 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
   let runId = 0;
   let nextId = 0;
   let nowMs = 100;
+  let dispatchReady = false;
   function ownerState(owner) {
     if (!owners.has(owner)) {
       owners.set(owner, {
         forgotten: new Set(), revision: 0, pause: { paused: false, generation: 0 }, facts: [],
         effects: { fences: [], closures: [], purges: [], hiddenCards: [], logs: [], invalidatedConflicts: [], quantityDrops: [] },
-        admissions: new Map(),
+        admissions: new Map(), archived: [],
       });
     }
     return owners.get(owner);
@@ -109,14 +112,14 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
     uow: {
       async run(owner, options, run) {
         calls.push(["run", owner, { ...options }]);
-        await hooks.beforeRun?.();
+        await hooks.beforeRun?.(owner, options);
         if (options.pauseLock) calls.push(["lock", "pause"]);
         if (!options.readOnly) calls.push(["lock", "owner-write"]);
         const state = ownerState(owner);
         // Writes replace committedRows, so an open run retains its original rows and suppressions.
         const tx = {
           owner, options, rows: committedRows, revision: state.revision, facts: state.facts, runId: ++runId,
-          forgotten: new Set(state.forgotten), pause: state.pause, admissions: state.admissions,
+          forgotten: new Set(state.forgotten), pause: state.pause, admissions: state.admissions, archived: state.archived,
           effects: Object.fromEntries(Object.entries(state.effects).map(([field, items]) => [field, [...items]])),
         };
         active.add(tx);
@@ -128,8 +131,10 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
             state.facts = tx.facts;
             state.revision = tx.revision;
             state.admissions = tx.admissions;
+            state.archived = tx.archived;
             state.effects = tx.effects;
             committedRows = tx.rows;
+            hooks.afterCommit?.(tx);
           }
           return result;
         } finally {
@@ -250,7 +255,14 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
     mutations,
   };
 
-  let dispatchReady = false;
+  async function fixtureUserKey(owner) {
+    if (!hasKey) return null;
+    if (hooks.userKey) return hooks.userKey(owner);
+    const signingKey = await crypto.subtle.importKey("raw", new TextEncoder().encode("fixture key for " + owner),
+      { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    return { id: "fixture-key", signingKey };
+  }
+
   if (writes || recall) {
     // The gate's marker expires after the first continuation gets a chance to start the send.
     fake.deps.gate.assertOpen = async (owner, phase) => {
@@ -311,14 +323,14 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
   }
 
   if (writes) {
-    const encoding = new TextEncoder();
-    fake.deps.embedder.embed = async texts => {
+    fake.deps.embedder.embed = async (texts, options) => {
       calls.push(["embed", [...texts]]);
       assert.equal(active.size, 0, "embed outside the UoW");
       assert.ok(dispatchReady, "embed starts in the dispatch continuation");
       if (hooks.embedBatch) return hooks.embedBatch(texts);
-      const vector = await hooks.embed?.(texts);
-      return texts.map(() => vector ?? Float32Array.of(1));
+      const result = await hooks.embed?.(texts, options);
+      if (capture && Array.isArray(result)) return result;
+      return texts.map(() => result ?? Float32Array.of(1));
     };
     fake.deps.clock.nowMs = () => ++nowMs;
     fake.deps.clock.sha256Hex = async value => {
@@ -329,14 +341,14 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
     storage.capabilities.nearDuplicate = near;
     storage.keys = {
       async userKey(owner) {
-        assert.equal(active.size, 0, "key lookup outside the UoW");
+        if (active.size > 0) {
+          const [tx] = active;
+          assert.ok(capture && active.size === 1 && tx.owner === owner && tx.options.pauseLock && !tx.options.readOnly,
+            "capture may recheck the key under the owner pause lock");
+        }
         calls.push(["keys.userKey", owner]);
         await hooks.fault?.("keys.userKey");
-        if (!hasKey) return null;
-        if (hooks.userKey) return hooks.userKey(owner);
-        const signingKey = await crypto.subtle.importKey("raw", encoding.encode("fixture key for " + owner),
-          { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-        return { id: "fixture-key", signingKey };
+        return fixtureUserKey(owner);
       },
     };
 
@@ -491,6 +503,10 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
     fake.seedFact = (fact, incarnation = "fixture") => {
       const state = ownerState(fact.owner);
       state.facts = [...state.facts, { fact, factId: "seed-fact", epoch: 1n, createdAtMs: nowMs, incarnation }];
+      // Keyed capture fixtures need the same fingerprint key in the facade and the source filter.
+      if (capture && hasKey && fact.kind === "text" && fact.text.digests.some(({ alg }) => alg === "hmac")) {
+        storage.capabilities.fingerprintKey = true;
+      }
     };
 
     if (forgetting) {
@@ -563,18 +579,63 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
   }
   if (capture) {
     const admissionId = ({ client, eventId }) => JSON.stringify([client, eventId]);
+    let nextToken = 0;
+
+    function claimWrite(tx, method, ...args) {
+      record(tx, tx.owner, method, ...args);
+      assert.ok(tx.options.pauseLock && !tx.options.readOnly);
+      mutations.push({ method, run: tx.runId, args });
+    }
+
+    function updateAdmission(tx, id, row) {
+      tx.admissions = new Map(tx.admissions).set(id, row);
+    }
+
+    function liveClaim(tx, token) {
+      const entry = [...tx.admissions].find(([, row]) => row.token === token && row.expiresAt > nowMs);
+      if (!entry) throw new CoreError("stale_admission");
+      return entry;
+    }
+
+    async function eligiblePositions(tx, key, messages) {
+      const override = hooks.eligible?.(messages);
+      if (override != null) return override;
+
+      const { scope, client } = key;
+      const facts = tx.facts.map(({ fact }) => fact).filter(fact => (fact.namespace ?? null) === scope.namespace);
+      const windows = facts.filter(fact => fact.kind === "window" && (fact.client === null || fact.client === client));
+      const positions = messages.flatMap(({ occurredAtMs }, index) => windows.some(({ window, unknownTime }) =>
+        occurredAtMs === null ? unknownTime === true : occurredAtMs >= window.startMs && occurredAtMs < window.endMs)
+        ? [] : [index]);
+      const textFacts = facts.filter(fact => fact.kind === "text");
+      if (!textFacts.length || !positions.length) return positions;
+      if (textFacts.some(requiresLegacyMacDomain)) return [];
+
+      const fingerprintKey = storage.capabilities.fingerprintKey ? await fixtureUserKey(scope.owner) : null;
+      const allowed = await Promise.all(positions.map(async position => {
+        const { content } = messages[position];
+        if (content && withholdsAnyPassage(await fingerprintMemoryPassages(content, content, fingerprintKey), textFacts)) {
+          return null;
+        }
+        return position;
+      }));
+      return allowed.filter(position => position !== null);
+    }
+
+    fake.deps.model.contextWindow = 8192;
+    fake.deps.model.countTokens = () => {
+      assert.equal(active.size, 0, "model token count outside the UoW");
+      return 1;
+    };
+    fake.deps.model.call = async (stage, request, options) => {
+      calls.push(["model.call", stage, request]);
+      assert.equal(active.size, 0, "model call outside the UoW");
+      assert.ok(dispatchReady, "model call starts in the dispatch continuation");
+      return await hooks.model?.(stage, request, options) ?? { items: [] };
+    };
+    fake.deps.clock.monotonicMs = () => hooks.monotonicMs?.() ?? performance.now();
+
     storage.capture = {
-      claim: unexpected,
-      async eligible(tx, key, messages) {
-        record(tx, key.scope.owner, "capture.eligible", key, messages);
-        assert.ok(tx.options.pauseLock && !tx.options.readOnly);
-        const windows = tx.facts.map(({ fact }) => fact).filter(fact =>
-          fact.kind === "window" && (fact.namespace ?? null) === key.scope.namespace &&
-          (fact.client === null || fact.client === key.client));
-        return messages.flatMap(({ occurredAtMs }, index) => windows.some(({ window, unknownTime }) =>
-          occurredAtMs === null ? unknownTime === true : occurredAtMs >= window.startMs && occurredAtMs < window.endMs)
-          ? [] : [index]);
-      },
       async admit(tx, key, messages) {
         record(tx, key.scope.owner, "capture.admit", key, messages);
         assert.ok(tx.options.pauseLock && !tx.options.readOnly);
@@ -609,6 +670,72 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         if (failed) return failed.code === undefined ? { status: "failed" } : { status: "failed", code: failed.code };
         return { status: rows.length ? "done" : "unknown" };
       },
+      async claim(tx, key, messages, { leaseMs }) {
+        record(tx, key.scope.owner, "capture.claim", key, messages, { leaseMs });
+        assert.ok(tx.options.pauseLock && !tx.options.readOnly);
+        const id = admissionId(key);
+        const row = tx.admissions.get(id);
+        assert.ok(row && row.key.scope.namespace === key.scope.namespace);
+        if (row.key.payloadDigest !== key.payloadDigest || row.key.sessionId !== key.sessionId) {
+          throw new CoreError("event_payload_conflict");
+        }
+        if (row.result) return { status: "rawReplay", result: structuredClone(row.result) };
+        if (row.status === "failed") return { status: "duplicate" };
+        if (row.processing || (row.token && row.expiresAt > nowMs)) return { status: "processing" };
+        const token = "lease-" + ++nextToken;
+        updateAdmission(tx, id, { ...row, token, expiresAt: nowMs + leaseMs, dispatched: false });
+        mutations.push({ method: "capture.claim", run: tx.runId, args: [key, token] });
+        return { status: "claimed", token };
+      },
+      async beginDispatch(tx, token) {
+        claimWrite(tx, "capture.beginDispatch", token);
+        const [id, row] = liveClaim(tx, token);
+        assert.equal(row.dispatched, false);
+        const next = "dispatch-" + ++nextToken;
+        updateAdmission(tx, id, { ...row, token: next, dispatched: true });
+        return { token: next };
+      },
+      async eligible(tx, key, messages) {
+        record(tx, key.scope.owner, "capture.eligible", key, messages);
+        assert.ok(tx.options.pauseLock && !tx.options.readOnly);
+        return eligiblePositions(tx, key, messages);
+      },
+      async assertEligible(tx, key, positions) {
+        record(tx, key.scope.owner, "capture.assertEligible", key, positions);
+        assert.ok(tx.options.pauseLock && !tx.options.readOnly);
+        const row = tx.admissions.get(admissionId(key));
+        if (!row?.token || row.key.scope.namespace !== key.scope.namespace || row.key.payloadDigest !== key.payloadDigest) {
+          throw new CoreError("stale_admission");
+        }
+        liveClaim(tx, row.token);
+        await hooks.assertEligible?.();
+        const allowed = await eligiblePositions(tx, key, row.messages);
+        if (positions.some(position => !allowed.includes(position))) throw new CoreError("suppressed");
+      },
+      async finish(tx, token, items) {
+        claimWrite(tx, "capture.finish", token, items);
+        const [id, row] = liveClaim(tx, token);
+        assert.ok(!items.length || row.dispatched);
+        await hooks.finish?.();
+        const memories = items.map(item => {
+          const memoryId = "captured-" + ++nextId;
+          tx.rows = [...tx.rows, {
+            ...memory(memoryId, { scope: row.key.scope, kind: item.kind, text: item.content }),
+            origin: "inferred", confidence: item.confidence, textHash: item.textHash, embedding: item.embedding,
+          }];
+          return { id: memoryId, revision: 1, outcome: "inserted" };
+        });
+        if (items.length) tx.revision++;
+        const result = { indexRevision: tx.revision, memories, suppressedCount: 0, duplicateCount: 0, counters: {} };
+        updateAdmission(tx, id, { ...row, status: "done", token: undefined, result: structuredClone(result) });
+        return result;
+      },
+      async abandon(tx, token, failure) {
+        claimWrite(tx, "capture.abandon", token, failure);
+        const [id, row] = liveClaim(tx, token);
+        updateAdmission(tx, id, { ...row, status: failure.retryable ? "pending" : "failed",
+          token: undefined, code: failure.code });
+      },
     };
     fake.setCaptureResult = (selection, result) => {
       const rows = ownerState(selection.scope.owner).admissions;
@@ -618,7 +745,9 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
     };
     if (rawArchive) {
       storage.capabilities.rawArchive = true;
+      fake.archived = owner => ownerState(owner).archived;
       storage.raw = {
+        ...storage.raw,
         async recordLineage(tx, key, messages) {
           record(tx, key.scope.owner, "raw.recordLineage", key, messages);
           assert.ok(tx.options.pauseLock && !tx.options.readOnly);
@@ -626,11 +755,24 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
           mutations.push({ method: "raw.recordLineage", run: tx.runId, args: [key, messages] });
           await hooks.recordLineage?.();
         },
+        async archiveAllowed(tx, key) {
+          record(tx, key.scope.owner, "raw.archiveAllowed", key);
+          assert.ok(tx.options.pauseLock && !tx.options.readOnly);
+          return hooks.archiveAllowed?.() ?? true;
+        },
+        async archive(tx, key, messages) {
+          assert.equal(key.scope.owner, tx.owner);
+          claimWrite(tx, "raw.archive", key, messages);
+          await hooks.archive?.();
+          tx.archived = [...tx.archived, ...messages];
+          return { archived: messages.length };
+        },
       };
     }
     if (sessionLineage) {
       storage.capabilities.sessionLineage = true;
       storage.sessionLineage = {
+        ...storage.sessionLineage,
         async isFenced(tx, scope, session) {
           record(tx, scope.owner, "sessionLineage.isFenced", scope, session);
           assert.ok(tx.options.pauseLock && !tx.options.readOnly);
