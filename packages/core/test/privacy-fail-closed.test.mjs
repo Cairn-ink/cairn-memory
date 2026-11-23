@@ -5,6 +5,7 @@ import {
   REDACTION_VERSIONS, userFingerprintKey, validateSuppressionFact,
   withholdsAnyPassage, withholdsPassage,
 } from "@cairn-ink/core";
+import { FAKE_MASTER, TEST_FINGERPRINT_LABELS as labels } from "./privacy-vectors.mjs";
 
 const keyA = { id: "key-a" };
 const keyB = { id: "key-b" };
@@ -117,16 +118,16 @@ for (const [field, value, description] of [
 
 for (const profile of ["SHA-only", "same-key HMAC"]) {
   test(`exact mode ignores empty shingles on either side: ${profile}`, async () => {
-    const signingKey = await userFingerprintKey("test-secret", "owner");
+    const signingKey = await userFingerprintKey(FAKE_MASTER, "owner", labels);
     const key = profile === "SHA-only" ? null : signingKey;
     const short = {
       digests: [await coreDigest("cat", key)],
-      shingles: await passageShingles("cat", signingKey),
+      shingles: await passageShingles("cat", signingKey, labels),
       keyId: key?.id ?? null,
     };
     const long = {
       digests: [await coreDigest("different wording", key)],
-      shingles: key ? await passageShingles("different wording", key) : null,
+      shingles: key ? await passageShingles("different wording", key, labels) : null,
       keyId: key?.id ?? null,
     };
     assert.deepEqual(short.shingles, []);

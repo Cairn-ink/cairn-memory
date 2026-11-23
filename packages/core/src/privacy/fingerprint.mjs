@@ -3,6 +3,7 @@ import { redactV1, PRIVACY_REDACTION_VERSIONS } from "./redact.mjs";
 import { cleanContent, normalizeForHash, prepareCoreText } from "./text.mjs";
 
 /** @typedef {import("./fingerprint.mjs").FingerprintKey} FingerprintKey */
+/** @typedef {import("./fingerprint.mjs").FingerprintLabels} FingerprintLabels */
 /** @typedef {import("../suppression-fact.mjs").TextDigest} TextDigest */
 
 const encoder = new TextEncoder();
@@ -32,14 +33,39 @@ function sign(key, text) {
   return globalThis.crypto.subtle.sign("HMAC", key, encoder.encode(text));
 }
 
-/** @param {string | null} secret @param {string} userId @returns {Promise<FingerprintKey | null>} */
-export async function userFingerprintKey(secret, userId) {
+/** @param {object} labels @param {keyof FingerprintLabels} name */
+function labelValue(labels, name) {
+  /** @type {unknown} */
+  const value = Object.getOwnPropertyDescriptor(labels, name)?.value;
+  if (typeof value !== "string" || value.length === 0) throw new CoreError("invalid_input");
+  return value;
+}
+
+/** @param {unknown} labels @returns {FingerprintLabels} */
+export function validateFingerprintLabels(labels) {
+  try {
+    if (labels !== null && typeof labels === "object" && !Array.isArray(labels) && Object.isFrozen(labels)) {
+      return Object.freeze({
+        keyIdDomain: labelValue(labels, "keyIdDomain"),
+        shingleKeyPrefix: labelValue(labels, "shingleKeyPrefix"),
+        legacyExactPrefix: labelValue(labels, "legacyExactPrefix"),
+      });
+    }
+  } catch {
+    throw new CoreError("invalid_input");
+  }
+  throw new CoreError("invalid_input");
+}
+
+/** @param {string | null} secret @param {string} userId @param {FingerprintLabels} labels @returns {Promise<FingerprintKey | null>} */
+export async function userFingerprintKey(secret, userId, labels) {
+  const { keyIdDomain, shingleKeyPrefix } = validateFingerprintLabels(labels);
   if (!secret) return null;
   try {
     const key = await signingKey(encoder.encode(secret));
     const [id, derived] = await Promise.all([
-      sign(key, "w3-fingerprint-key-id"),
-      sign(key, `w3:raw-shingles:${userId}`),
+      sign(key, keyIdDomain),
+      sign(key, shingleKeyPrefix + userId),
     ]);
     return { id: toHex(id).slice(0, 16), signingKey: await signingKey(derived) };
   } catch {
@@ -47,9 +73,9 @@ export async function userFingerprintKey(secret, userId) {
   }
 }
 
-/** @param {string} text @param {FingerprintKey} key */
-function signLegacyExact(text, key) {
-  return sign(key.signingKey, `w3:v1-exact\0${text}`).then(toHex);
+/** @param {string} text @param {FingerprintKey} key @param {string} prefix */
+function signLegacyExact(text, key, prefix) {
+  return sign(key.signingKey, prefix + text).then(toHex);
 }
 
 /** @param {string} text @param {FingerprintKey} key */
@@ -69,17 +95,19 @@ async function signShingles(text, key) {
   return shingles;
 }
 
-/** @param {string} text @param {FingerprintKey} key */
-export async function legacyExactMac(text, key) {
+/** @param {string} text @param {FingerprintKey} key @param {FingerprintLabels} labels */
+export async function legacyExactMac(text, key, labels) {
+  const { legacyExactPrefix } = validateFingerprintLabels(labels);
   try {
-    return await signLegacyExact(normalizeForHash(text), key);
+    return await signLegacyExact(normalizeForHash(text), key, legacyExactPrefix);
   } catch {
     throw new CoreError("fingerprint_unavailable");
   }
 }
 
-/** @param {string} text @param {FingerprintKey} key */
-export async function passageShingles(text, key) {
+/** @param {string} text @param {FingerprintKey} key @param {FingerprintLabels} labels */
+export async function passageShingles(text, key, labels) {
+  validateFingerprintLabels(labels);
   try {
     return await signShingles(normalizeForHash(text), key);
   } catch {
@@ -87,11 +115,15 @@ export async function passageShingles(text, key) {
   }
 }
 
-/** @param {string} text @param {FingerprintKey} key */
-export async function fingerprintLegacyCapture(text, key) {
+/** @param {string} text @param {FingerprintKey} key @param {FingerprintLabels} labels */
+export async function fingerprintLegacyCapture(text, key, labels) {
+  const { legacyExactPrefix } = validateFingerprintLabels(labels);
   try {
     const normalized = normalizeForHash(text);
-    const [text_hmac, shingles] = await Promise.all([signLegacyExact(normalized, key), signShingles(normalized, key)]);
+    const [text_hmac, shingles] = await Promise.all([
+      signLegacyExact(normalized, key, legacyExactPrefix),
+      signShingles(normalized, key),
+    ]);
     return { text_hmac, shingles, key_id: key.id };
   } catch {
     throw new CoreError("fingerprint_unavailable");

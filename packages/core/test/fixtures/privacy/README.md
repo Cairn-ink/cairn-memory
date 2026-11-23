@@ -11,11 +11,12 @@ from the legacy hash when emitted and from the current hash when both agree.
 
 For this corpus the union reference applies the shipped frozen redactor to
 the hosted redaction output. Prepared text uses the hosted capture output
-with that same extra pass, then collapses whitespace and trims. Its digest
-oracles use the hosted hash and an independent HMAC with a fixed fake key.
+with that same extra pass, then collapses whitespace and trims. The SHA
+digests retain their original values. The keyed vectors use an independent
+WebCrypto implementation with neutral test domains and fake master keys.
 The withholding cases also exercise the hosted exact, key mismatch,
 containment, and memory policy helpers with synthetic fingerprints.
 
-The input file is 162,153 bytes and the projected expected file is 1,799,177
+The input file is 162,153 bytes and the projected expected file is 1,799,243
 bytes. The full expected output was 8,471,155 bytes. It also recorded
 streaming and storage behavior for qualification.

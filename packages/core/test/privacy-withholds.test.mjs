@@ -4,7 +4,9 @@ import {
   blocksMemoryPassage, cleanContent, exactDigestMatch, fingerprintLegacyCapture, normalizeForHash,
   redactHostedCurrent, redactV1, userFingerprintKey, withholdsAnyPassage, withholdsPassage,
 } from "../src/index.mjs";
-import { cases, decodeUtf16, expected, FAKE_MASTER, inputOf, OWNERS, withholding } from "./privacy-vectors.mjs";
+import {
+  cases, decodeUtf16, expected, FAKE_MASTER, inputOf, OWNERS, withholding, TEST_FINGERPRINT_LABELS as labels,
+} from "./privacy-vectors.mjs";
 
 function digest(alg, value) {
   return { alg, value, pipeline: "hosted-v1", redactionVersion: 1, keyId: alg === "hmac" ? "fake-key" : null };
@@ -21,14 +23,14 @@ function textFact(text, { origin = "forget", sourceMemory = null, mode = "full" 
   return { owner: OWNERS[0], actionId: "fake-action", kind: "text", text, origin, mode, sourceMemory };
 }
 
-const key = await userFingerprintKey(FAKE_MASTER, OWNERS[0]);
+const key = await userFingerprintKey(FAKE_MASTER, OWNERS[0], labels);
 const encoder = new TextEncoder();
 
 async function hostedReference(text) {
   const hash = await globalThis.crypto.subtle.digest("SHA-256", encoder.encode(normalizeForHash(text)));
   return {
     text_hash: Buffer.from(hash).toString("hex"),
-    ...await fingerprintLegacyCapture(text, key),
+    ...await fingerprintLegacyCapture(text, key, labels),
   };
 }
 
@@ -59,7 +61,7 @@ for (const vector of cases) {
       original: await hostedReference(original),
       v1: await hostedReference(redactV1(original)),
       current: await hostedReference(redactHostedCurrent(original)),
-      stored: await fingerprintLegacyCapture("FAKE stored historical wording, distinct from every incoming variant", key),
+      stored: await fingerprintLegacyCapture("FAKE stored historical wording, distinct from every incoming variant", key, labels),
     };
     const variants = row.history.variants.map(hostedDigests);
     for (const [name, reference] of Object.entries(references)) {

@@ -5,17 +5,26 @@ export interface FingerprintKey {
   signingKey: CryptoKey;
 }
 
+export interface FingerprintLabels {
+  readonly keyIdDomain: string;
+  readonly shingleKeyPrefix: string;
+  readonly legacyExactPrefix: string;
+}
+
 export interface LegacyCaptureFingerprint {
   text_hmac: string;
   shingles: string[];
   key_id: string;
 }
 
-/** Derives the hosted key id and per-user signing key. */
-export declare function userFingerprintKey(secret: string | null, userId: string): Promise<FingerprintKey | null>;
-export declare function legacyExactMac(text: string, key: FingerprintKey): Promise<string>;
-export declare function passageShingles(text: string, key: FingerprintKey): Promise<string[]>;
-export declare function fingerprintLegacyCapture(text: string, key: FingerprintKey): Promise<LegacyCaptureFingerprint>;
+/** Validates a frozen record of non-empty string labels and returns a frozen snapshot. */
+export declare function validateFingerprintLabels(labels: unknown): FingerprintLabels;
+/** Derives the key ID and per-user signing key using the supplied domains. Prefixes include their delimiters. */
+export declare function userFingerprintKey(secret: string | null, userId: string, labels: FingerprintLabels): Promise<FingerprintKey | null>;
+export declare function legacyExactMac(text: string, key: FingerprintKey, labels: FingerprintLabels): Promise<string>;
+/** Signs raw shingles with the key derived using the supplied labels. */
+export declare function passageShingles(text: string, key: FingerprintKey, labels: FingerprintLabels): Promise<string[]>;
+export declare function fingerprintLegacyCapture(text: string, key: FingerprintKey, labels: FingerprintLabels): Promise<LegacyCaptureFingerprint>;
 
 export declare function coreDigest(raw: string, key?: FingerprintKey | null): Promise<TextDigest>;
 export declare function hostedV1Digest(raw: string): Promise<TextDigest>;

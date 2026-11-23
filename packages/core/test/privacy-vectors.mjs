@@ -7,8 +7,13 @@ export const { cases } = fixture("cases");
 const projection = fixture("expected");
 export const { cases: expected, keyIds, withholding } = projection;
 const { texts } = projection;
-export const FAKE_MASTER = "FAKE-CONFORMANCE-ONLY-W3-KEY";
-export const FAKE_ROTATED_MASTER = "FAKE-CONFORMANCE-ONLY-W3-ROTATED-KEY";
+export const FAKE_MASTER = "FAKE-CONFORMANCE-ONLY-KEY";
+export const FAKE_ROTATED_MASTER = "FAKE-CONFORMANCE-ONLY-ROTATED-KEY";
+export const TEST_FINGERPRINT_LABELS = Object.freeze({
+  keyIdDomain: "test-key-id",
+  shingleKeyPrefix: "test-shingles:",
+  legacyExactPrefix: "test-exact\0",
+});
 export const OWNERS = ["fake-owner-a", "fake-owner-b"];
 
 export function decodeUtf16(encoded) {
