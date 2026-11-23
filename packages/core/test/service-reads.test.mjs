@@ -36,9 +36,9 @@ test("recent pages by exact microseconds and descending ID in one read-only snap
   assert.deepEqual(ids(second), ["a", "old"]);
   assert.equal(second.nextCursor, null);
   assert.deepEqual(calls, [
-    read, snapshot, ["recent.recent", readSet, { cursor: null, limit: 2 }], read, callsFor(readSet, "new", "b"),
+    read, snapshot, ["recent.recent", readSet, { cursor: null, limit: 2 }], read, ["hydrate.hydrate", readSet, refs("new", "b"), "recall"], callsFor(readSet, "new", "b"),
     read, ["snapshot.assertUnchanged", readSet, token],
-    ["recent.recent", readSet, { cursor: inner, limit: 50 }], read, callsFor(readSet, "a", "old"),
+    ["recent.recent", readSet, { cursor: inner, limit: 50 }], read, ["hydrate.hydrate", readSet, refs("a", "old"), "recall"], callsFor(readSet, "a", "old"),
   ]);
 });
 
@@ -223,14 +223,14 @@ test("export uses a fresh delivery snapshot for every memory-store page", async 
   const assertUnchanged = ["snapshot.assertUnchanged", readSet, token];
   assert.deepEqual(calls.splice(0), [
     read, snapshot, ["memories.exportPage", hostedScope, { cursor: null, limit: 1 }], callsFor(readSet, "b"),
-    read, assertUnchanged, callsFor(readSet, "b"),
+    read, assertUnchanged, ["hydrate.hydrate", readSet, refs("b"), "export"], callsFor(readSet, "b"),
   ]);
 
   const second = await service.exportMemories(hostedScope, { limit: 1, cursor: first.nextCursor });
   assert.deepEqual(second, { items: [rows[1]], nextCursor: null });
   assert.deepEqual(calls, [
     read, assertUnchanged, ["memories.exportPage", hostedScope, { cursor: inner, limit: 1 }], callsFor(readSet, "a"),
-    read, assertUnchanged, callsFor(readSet, "a"),
+    read, assertUnchanged, ["hydrate.hydrate", readSet, refs("a"), "export"], callsFor(readSet, "a"),
   ]);
 });
 

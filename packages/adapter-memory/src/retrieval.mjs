@@ -2,6 +2,7 @@ import { CoreError, compareUtf8, createBM25, rankScores, scoreBM25, termFrequenc
 import { cosineDistance } from "./cosine.mjs";
 import { decodePayload, decodeSortKey, encodePayload, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
+import { matchesMemoryFilters } from "./retrieval-window.mjs";
 import { copyPublicRow } from "./unit-of-work.mjs";
 import { copyReadScope, copyRefs, readEmbedding, validateLimit } from "./validation.mjs";
 
@@ -45,18 +46,25 @@ function recentAfter(cursor) {
 }
 
 /** @param {RetrievalScope} scope @param {number} revision */
-export function stateToken({ owner, namespaces, clients }, revision) {
-  return encodePayload([owner, revision, [...namespaces].sort(compareNamespaces), clients ? [...clients].sort(compareStrings) : null]);
+export function stateToken({ owner, namespaces, clients, window }, revision) {
+  /** @type {unknown[]} */
+  const payload = [owner, revision, [...namespaces].sort(compareNamespaces), clients ? [...clients].sort(compareStrings) : null];
+  if (window) payload.push([window.sinceMs ?? null, window.untilMs ?? null]);
+  return encodePayload(payload);
 }
 
 /** @param {string} token */
 export function validateToken(token) {
-  const [owner, revision, namespaces, clients, ...extra] = decodePayload(token);
+  const [owner, revision, namespaces, clients, bounds, ...extra] = decodePayload(token);
   if (extra.length || typeof owner !== "string" || !owner ||
     typeof revision !== "number" || !Number.isSafeInteger(revision) || revision < 0) {
     throw new CoreError("invalid_cursor");
   }
-  const scope = /** @type {Omit<RetrievalScope, "owner">} */ ({ namespaces, clients: clients === null ? undefined : clients });
+  if (bounds !== undefined && (!Array.isArray(bounds) || bounds.length !== 2)) throw new CoreError("invalid_cursor");
+  const window = bounds === undefined ? undefined : { sinceMs: bounds[0] ?? undefined, untilMs: bounds[1] ?? undefined };
+  const scope = /** @type {Omit<RetrievalScope, "owner">} */ ({
+    namespaces, clients: clients === null ? undefined : clients, window,
+  });
   let selection;
   try {
     selection = copyReadScope(owner, scope);
@@ -116,7 +124,7 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
       const entries = state.rows.get(namespace);
       if (!entries) continue;
       for (const entry of entries.values()) {
-        if (!entry.row.historical && !policy.hides(entry)) rows.push(entry.row);
+        if (!entry.row.historical && matchesMemoryFilters(scope, entry.row) && !policy.hides(entry)) rows.push(entry.row);
       }
     }
     return rows;
@@ -129,7 +137,8 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
       const policy = byNamespace.get(ref.namespace);
       if (ref.type !== "memory" || !policy) continue;
       const entry = state.rows.get(ref.namespace)?.get(ref.id);
-      if (entry && (includeHistorical || !entry.row.historical) && !policy.hides(entry)) {
+      if (entry && (includeHistorical || !entry.row.historical) &&
+          matchesMemoryFilters(scope, entry.row) && !policy.hides(entry)) {
         yield { ref: memoryRef(entry.row), entry };
       }
     }

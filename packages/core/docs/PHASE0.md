@@ -105,6 +105,9 @@ Each addendum is additive unless it says what it supersedes. Adapters written ag
    - A cursor binds the ranking path of its first page. A hybrid continuation that cannot rank semantically is `cursor_stale`, and a lexical continuation never embeds.
    - It supersedes nothing.
 7. **SuppressionFact ids up to 512.** SuppressionFact identity `memoryId` and `sourceMemory.id` accept up to 512 characters (was 128), so a forget never fails on an id the store already holds. Stores refuse ids over 512 at import. It supersedes the 128 bound.
+8. **Retrieval scope window and memory clients (2026-11-24).** The optional `window` is a half-open range `[sinceMs, untilMs)` over store-entry time. It uses memory `createdAtMs`, card creation time, and raw `occurredAtMs`. Either bound may be omitted. A raw segment with null `occurredAtMs` is excluded whenever a window is set. With no window, time is unrestricted.
+   - When `clients` is set, memories must have a matching `source.client`. A null memory client never matches. Raw keeps its client filter.
+   - Adapters must apply the window and client filters inside the lexical, vector, recent, and raw candidate queries before any depth or pool cut. State tokens bind the window as they bind clients.
 
 ## Change requests
 
