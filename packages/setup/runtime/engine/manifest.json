@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "f35c715849b9d1e5010ba3562a0e69fe525d41e4cc286ef51376cb7deb40401d",
-  "bytes": 1488040,
+  "sha256": "04a6dd620d2c7d63d72e346b45ff00f651ee20a2f33872cafa4e42f82334e48c",
+  "bytes": 1488106,
   "files": [
     "LICENSE",
     "README.md",
@@ -519,7 +519,7 @@
     "core/raw-options.mjs": "0f6096453772f324e5f171fb86ea5703c0ce17b959231f73448fbde3aacc62b7",
     "core/raw-composition.mjs": "60389139226573dd6e6ef7e9a741492a320373c1c6017092ef1eb511f4b9571f",
     "core/local-defaults.mjs": "4a43fe03077cfe6431a1df9024a479ae10aa47eea25a4ad311dfec34d5e3cbff",
-    "core/local-raw-search.mjs": "7980f070085de653c7c8d38272c8005a55a4e9915e59197d21d084546ba9529e",
+    "core/local-raw-search.mjs": "f7f971bbe34249dfe14d72a62e3181e558b4222eca0e86298c863a6e780d5f0c",
     "core/raw-capture-storage.mjs": "f060955e6774e7552aa1c5936db9f72646ce53c805cb2dbd4320368548bf7702",
     "core/raw-journal.mjs": "e7946bd4330dab6646ec01566998f8c9375e4d59313117e689631570a16c0a45",
     "core/raw-reads.mjs": "340c6d48bfaf9bd56554db5cfcca12a8a0e701d32107987d17d0aa50b7ba097d",
@@ -811,7 +811,7 @@
     "core/raw-search-storage.mjs": "75d90e8dded814b387f4da519689ab7aad632cbc641f133ad5059ec8fb3cc27e",
     "core/raw-search-sqlite.mjs": "b51bd300bec030018b67fb52b32ec354057eda11f870f87305b7e34a9a20fc9a",
     "core/raw-search-authority.mjs": "735a2ebe0e4d10a1d9a8276054cb3797c345c373c313bed3faa749fcdab4e0d4",
-    "core/raw-search-index.mjs": "ad4901f8a07a3e70c8e7df6daf372a904aafa9365556c9c932608992188c423d",
+    "core/raw-search-index.mjs": "4dde955416d035641ef4785c1e2116162b73b6cfed82eaac6316b36cb8e057cb",
     "core/raw-search-retrieval.mjs": "a802a2e138a279907d058eafa46d763a3a5b6bbd749ff49dafd6f1461d568e57",
     "core/raw-search-maintenance.mjs": "33031c1726f053e336d6b1442283e12873fbf6ce030f83a7a900fa6656c2c635",
     "docs/plans/raw-search-interface.md": "97da386b7acb86a0e2221d005273723b6983f5c7b50bb52324d3f330c319723b",
@@ -838,6 +838,6 @@
   "generatedHashes": {
     "package.json": "e255ff4d23e921de9bed8e058c64e57aed3e1bc6a8ed242cee52a716add2d69c",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8",
-    "engine-build.json": "e0eaff89ff345305b02ddb99839cd6d242ccb49d58d0798b0ef72d5811ef2ccf"
+    "engine-build.json": "832a399a62d6ca7132c4cfe2b33b10be0874d7a927cb2d4d754e6b0f0fafe1fb"
   }
 }

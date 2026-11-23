@@ -503,7 +503,7 @@ export async function openRawSearch(value, { signal } = {}) {
         maintenance:{phase:progress.phase,quantum:progress.quantum,noProgress:progress.noProgress,pending:progress.pending,
           checkpoint:authority.bind('raw-search-progress-v1',progress.checkpointAdvances),lastActualWork:progress.lastActualWork}};
     };
-    return Object.freeze({supportsLexicalSearch:true,search:tracked(search),prepare:tracked(prepare),prepareMany:tracked(prepareMany),prepareSource:tracked(prepareSource),classify:tracked(classify),validate:revalidate,revalidate,
+    const port={search:tracked(search),prepare:tracked(prepare),prepareMany:tracked(prepareMany),prepareSource:tracked(prepareSource),classify:tracked(classify),validate:revalidate,revalidate,
       maintain:tracked((input,token)=>withRawSearchRequestScope(async()=>{const access=authority.authorize('rawSearchMaintenance',{},token);
         const cacheError=cache.maintain();
         await maintenance.maintain(input,access,
@@ -512,6 +512,8 @@ export async function openRawSearch(value, { signal } = {}) {
       purge:tracked(async()=>{cache.close();await maintenance.close();await administrativeRetry(()=>storage.dropOwner());prepared.clear();searches.clear();}),
       close:()=>withContentSuppressionRequest(async()=>{if(closed)return;closed=true;
         try{cache.close();await maintenance.close();await Promise.allSettled([...operations]);prepared.clear();searches.clear();}
-        finally{try{await storage.close();}finally{try{database.db.close();}finally{releaseResidency();}}}},{fresh:true})});
+        finally{try{await storage.close();}finally{try{database.db.close();}finally{releaseResidency();}}}},{fresh:true})};
+    Object.defineProperty(port, 'supportsLexicalSearch', { value: true });
+    return Object.freeze(port);
   }catch(error){await storage?.close();database?.db.close();safeFailure(error);}
 }
