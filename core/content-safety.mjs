@@ -5,13 +5,15 @@ import { createCardRawSources } from './card-raw-sources.mjs';
 import { createRawLineageStorage } from './raw-lineage-storage.mjs';
 import { sourceRef } from './private-card-input.mjs';
 import { hasCardLineage, loadCardBodyContributorsInside } from './card-lineage.mjs';
+import { receiptDenialTokens } from './raw-source-roots.mjs';
+import { QUERY_CANDIDATES } from './query-candidates.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
 const sameNamespace = (a, b) => a && b && JSON.stringify(boundary(a)) === JSON.stringify(boundary(b));
 export const CONTENT_SAFETY_POLICY_REVISION = 'content-safety-s1-v1';
 export const CONTENT_SUPPRESSION_REASONS = Object.freeze(['user_forget', 'correction_supersession', 'purge', 'privacy_erase', 'account_erasure']);
-/** @typedef {{allowed:true}|{allowed:false,reason:'user_forget'|'correction_supersession'|'purge'|'privacy_erase'|'account_erasure'|'missing'|'identity_mismatch'|'ineligible'}} SafetyResult */
+/** @typedef {{allowed:true}|{allowed:false,reason:'user_forget'|'correction_supersession'|'purge'|'privacy_erase'|'account_erasure'|'missing'|'identity_mismatch'|'ineligible'|'source_withheld'}} SafetyResult */
 export const memoryContentIdentity = row => createHash('sha256').update(JSON.stringify([row.content, row.fingerprint])).digest('hex');
 const allowed = Object.freeze({ allowed: true });
 const denied = reason => ({ allowed: false, reason });
@@ -69,11 +71,12 @@ function rawAncestryColumn(db, table) {
 }
 // Canonical S1 receipt validation is also part of a source-ref decision. It
 // cannot invoke a serving entry; its memo is distinct from completed decisions.
-function canonicalReceiptReadSafety(db, { namespace, receipt, memo, rawTargets = [], rawAncestryEmpty = false }) {
+function canonicalReceiptReadSafety(db, { namespace, receipt, memo, rawTargets = [], rawAncestryEmpty = false, withheld }) {
   const key = JSON.stringify([namespace, receipt]);
   const cache = memo && (memo.canonicalReceipts ??= new Map());
-  if (cache?.has(key)) { const entry = cache.get(key); rawTargets.push(...entry.rawTargets); return entry.result; }
-  const remember = result => { cache?.set(key, { result, rawTargets: [...rawTargets] }); return result; };
+  const deliver = result => result.allowed && withheld?.has(receipt.id) ? denied('source_withheld') : result;
+  if (cache?.has(key)) { const entry = cache.get(key); rawTargets.push(...entry.rawTargets); return deliver(entry.result); }
+  const remember = result => { cache?.set(key, { result, rawTargets: [...rawTargets] }); return deliver(result); };
   const source = { client: receipt.client, sessionId: receipt.session_id, eventId: receipt.event_id, role: receipt.role, excerpt: receipt.excerpt };
   if (createHash('sha256').update(JSON.stringify(source)).digest('hex') !== receipt.receipt_key) return remember(denied('identity_mismatch'));
   try {
@@ -93,11 +96,12 @@ function canonicalReceiptReadSafety(db, { namespace, receipt, memo, rawTargets =
 }
 export function receiptReadSafety(db, options) {
   return withReadDecision(db, ['receipt', boundary(options.namespace ?? {}), options.receipt?.id], () => {
-    const { namespace, receipt, memo } = options;
+    const { namespace, receipt, memo, withheld } = options;
     const key = JSON.stringify([namespace, receipt]);
-    if (memo?.receipts.has(key)) return memo.receipts.get(key);
+    const deliver = result => result.allowed && withheld?.has(receipt.id) ? denied('source_withheld') : result;
+    if (memo?.receipts.has(key)) return deliver(memo.receipts.get(key));
     const rawTargets = [];
-    let result = canonicalReceiptReadSafety(db, { ...options, rawTargets });
+    let result = canonicalReceiptReadSafety(db, { ...options, rawTargets, withheld: undefined });
     if (result.allowed) {
       const fact = contentSuppressionReasonInside(memo?.db ?? db, namespace, { kind: 'receipt', key: receipt.id, ancestryChecked: true }) ??
         rawSuppression(memo?.db ?? db, namespace, rawTargets);
@@ -106,19 +110,22 @@ export function receiptReadSafety(db, options) {
     memo?.receipts.set(key, result);
     const state = result.allowed ? cachedContentSuppressionRequestInside(db, namespace.ownerId) : null;
     if (state && result.allowed) (state.completed ??= new Set()).add(JSON.stringify([...boundary(namespace),'receipt',receipt.id,null]));
-    return result;
+    return deliver(result);
   });
 }
 
-export function anchoredReadSafety(db, { namespace, memoryId, anchors, memo = createContentReadMemo(db) }) {
+export function anchoredReadSafety(db, { namespace, memoryId, anchors, memo = createContentReadMemo(db), project = false, withheld }) {
+  const receipts = [];
   for (const anchor of anchors) {
     const receipt = memo.db.prepare('SELECT * FROM receipts WHERE memory_id=? AND id=?').get(memoryId, anchor.receiptId);
     if (!receipt) return denied('missing');
     if (createHash('sha256').update(receipt.excerpt).digest('hex') !== (anchor.receiptDigest ?? anchor.digest)) return denied('identity_mismatch');
     const result = receiptReadSafety(db, { namespace, receipt, memo });
     if (!result.allowed) return result;
+    receipts.push(receipt);
   }
-  return allowed;
+  return project && (withheld ? receipts.some(receipt => withheld.has(receipt.id)) :
+    withheldReceiptIdsInside(db, namespace, receipts).size) ? denied('source_withheld') : allowed;
 }
 
 function memorySuppression(db, ns, row, boundRevision) {
@@ -168,7 +175,7 @@ function sourceSuppression(db, ns, ref, rawTargets, ancestryChecked) {
 
 /** Canonical only: caller owns authorization and the existing transaction/snapshot.
  * Reasons are internal and must never be serialized or used as public errors. */
-export function sourceReadSafety(db, { identity, namespace: ns, ref, strict = false, rawBudget, memo, rawMutableRevision = true }) {
+export function sourceReadSafety(db, { identity, namespace: ns, ref, strict = false, rawBudget, memo, rawMutableRevision = true, withheld }) {
   const decision = ref?.type === 'raw' ? ['raw', boundary(ns ?? {}), ref.conversationId, ref.messageId,
     ref.span?.start, ref.span?.end, ref.span?.precision] :
     [ref?.type, boundary(ns ?? {}), ref?.receiptId ?? ref?.sourceId];
@@ -181,12 +188,12 @@ export function sourceReadSafety(db, { identity, namespace: ns, ref, strict = fa
       if (!cached.result.allowed) return cached.result;
       if (strict && cached.memory && !memoryReadEligible(cached.memory)) return denied('ineligible');
       if (strict && cached.memory && cached.memory.revision !== ref.memoryRevision) return denied('identity_mismatch');
-      return cached.result;
+      return withheld?.has(ref.receiptId) ? denied('source_withheld') : cached.result;
     }
     const rawTargets = [];
-    const remember = (result, value, memory) => {
+    const remember = (result, value, memory, receipt) => {
       if (result.allowed) { const fact = memory?.invalid_raw_ancestry ? 'ineligible' : sourceSuppression(db, ns, ref, rawTargets, memory && Object.hasOwn(memory, 'invalid_raw_ancestry')); if (fact) result = denied(fact); }
-      memo?.sources.set(key, { result, value, memory });
+      memo?.sources.set(key, { result, value, memory, receipt });
       const state = cachedContentSuppressionRequestInside(db, ns.ownerId);
       if (state && result.allowed) {
         (state.sourcesChecked ??= new Set()).add(key);
@@ -197,7 +204,7 @@ export function sourceReadSafety(db, { identity, namespace: ns, ref, strict = fa
           completed.add(JSON.stringify([...boundary(ns),'receipt',ref.receiptId,null]));
         } else if (ref.type === 'submitted-note') completed.add(JSON.stringify([...boundary(ns),ref.type,ref.sourceId,ref.revision]));
       }
-      return result;
+      return result.allowed && withheld?.has(ref.receiptId) ? denied('source_withheld') : result;
     };
     if (ref.type === 'receipt') {
       const memoryKey = JSON.stringify([ns, ref.memoryId]);
@@ -215,7 +222,7 @@ export function sourceReadSafety(db, { identity, namespace: ns, ref, strict = fa
       if (!lineage.allowed) return remember(lineage);
       if (strict && !memoryReadEligible(memory)) return denied('ineligible');
       if (strict && memory.revision !== ref.memoryRevision) return denied('identity_mismatch');
-      return remember(allowed, { text: row.excerpt, byte_count: Buffer.byteLength(row.excerpt, 'utf8') }, memory);
+      return remember(allowed, { text: row.excerpt, byte_count: Buffer.byteLength(row.excerpt, 'utf8') }, memory, row);
     }
     if (ref.type === 'submitted-note') {
       const row = db.prepare(`SELECT * FROM card_notes WHERE ${where} AND id=?`).get(...boundary(ns), ref.sourceId);
@@ -374,4 +381,154 @@ export function engineCardRevisionsInside(db, ns, row) {
   return sources.length > 0 && sources.length === metadata.sourceRevisions.length && sources.every(s =>
     metadata.sourceRevisions.some(ref => ref.memoryId === s.memory_id && ref.revision === s.memory_revision) &&
     s.memory_revision === s.revision && !s.deleted && s.owner_id === ns.ownerId && s.scope === ns.scope && s.project_id === (ns.projectId ?? ''));
+}
+
+// The page's canonical receipt rows and the marker lookup share a snapshot.
+export function withheldReceiptIdsInside(db, ns, receipts) {
+  if (!receipts.length) return new Set();
+  if (!db.isTransaction) throw Object.assign(new Error('Receipt projection requires a read snapshot'), { code: 'storage_error' });
+  const candidates = receipts.map(receipt => [receipt.id, receiptDenialTokens([receipt])]);
+  const tokens = [...new Set(candidates.flatMap(([, keys]) => keys))];
+  const hits = new Set(db.prepare(`SELECT s.fingerprint FROM json_each(?) w CROSS JOIN suppressed s
+WHERE s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=w.value`)
+    .all(JSON.stringify(tokens), ...boundary(ns)).map(row => row.fingerprint));
+  return new Set(candidates.filter(([, keys]) => keys.some(key => hits.has(key))).map(([id]) => id));
+}
+
+export function withheldCardSourcesInside(db, ns, refs, memo) {
+  const receipts = refs.flatMap(ref => {
+    const receipt = memo.sources.get(JSON.stringify(ref))?.receipt;
+    return receipt ? [receipt] : [];
+  });
+  return withheldReceiptIdsInside(db, ns, receipts);
+}
+
+const markerFunctions = new WeakSet();
+export function bindReceiptMarkerKeys(db) {
+  const native = contentSafetyConnection(db);
+  if (markerFunctions.has(native)) return;
+  native.function('receipt_marker_keys', { deterministic: true }, (receipt_key, client, session_id, event_id, role) =>
+    JSON.stringify(receiptDenialTokens([{ receipt_key, client, session_id, event_id, role }])));
+  markerFunctions.add(native);
+}
+
+export function withheldStoredReceiptIdsInside(db, ns, ids) {
+  if (!ids.length) return new Set();
+  if (!db.isTransaction) throw Object.assign(new Error('Receipt projection requires a read snapshot'), { code: 'storage_error' });
+  bindReceiptMarkerKeys(db);
+  return new Set(db.prepare(`SELECT r.id FROM json_each(?) wanted
+CROSS JOIN receipts r ON r.id=wanted.value
+CROSS JOIN memories m ON m.id=r.memory_id
+CROSS JOIN json_each(receipt_marker_keys(r.receipt_key,r.client,r.session_id,r.event_id,r.role)) k
+CROSS JOIN suppressed s ON s.owner_id=m.owner_id AND s.scope=m.scope AND s.project_id=m.project_id AND s.fingerprint=k.value
+WHERE m.owner_id=? AND m.scope=? AND m.project_id=?`).all(JSON.stringify(ids), ...boundary(ns)).map(row => row.id));
+}
+
+export function withheldReceiptPageInside(db, pages) {
+  const scoped = new Map();
+  for (const [ns, ids] of pages) {
+    const key = JSON.stringify(boundary(ns));
+    if (!scoped.has(key)) scoped.set(key, new Set());
+    for (const id of ids) scoped.get(key).add(id);
+  }
+  const chunks = [];
+  for (const [key, unique] of scoped) {
+    const ns = JSON.parse(key), ids = [...unique];
+    for (let i = 0; i < ids.length; i += QUERY_CANDIDATES.page) {
+      chunks.push([...ns, ids.slice(i, i + QUERY_CANDIDATES.page)]);
+    }
+  }
+  if (!chunks.length) return new Set();
+  if (!db.isTransaction) throw Object.assign(new Error('Receipt projection requires a read snapshot'), { code: 'storage_error' });
+  bindReceiptMarkerKeys(db);
+  return new Set(db.prepare(`SELECT r.id FROM json_each(?) page
+CROSS JOIN json_each(page.value,'$[3]') wanted
+CROSS JOIN receipts r ON r.id=wanted.value
+CROSS JOIN memories m ON m.id=r.memory_id
+CROSS JOIN json_each(receipt_marker_keys(r.receipt_key,r.client,r.session_id,r.event_id,r.role)) k
+CROSS JOIN suppressed s ON s.owner_id=m.owner_id AND s.scope=m.scope AND s.project_id=m.project_id AND s.fingerprint=k.value
+WHERE m.owner_id=json_extract(page.value,'$[0]') AND m.scope=json_extract(page.value,'$[1]')
+  AND m.project_id=json_extract(page.value,'$[2]')`).all(JSON.stringify(chunks)).map(row => row.id));
+}
+
+// Keyset refills and final delivery select receipts in their original order.
+// Resolve marker hits up front for the owning memories in the same snapshot.
+export function withheldMemoryReceiptIdsInside(db, memories, rationale = false) {
+  if (!memories.length) return new Set();
+  if (!db.isTransaction) throw Object.assign(new Error('Receipt projection requires a read snapshot'), { code: 'storage_error' });
+  bindReceiptMarkerKeys(db);
+  const requested = memories.map(([ns, id]) => [...boundary(ns), id]);
+  return new Set(db.prepare(`WITH marker_selection AS MATERIALIZED (
+  SELECT json_extract(value,'$[0]') AS owner_id, json_extract(value,'$[1]') AS scope,
+    json_extract(value,'$[2]') AS project_id, json_extract(value,'$[3]') AS id
+  FROM json_each(?) requested
+  WHERE EXISTS(SELECT 1 FROM suppressed
+    WHERE owner_id=json_extract(requested.value,'$[0]') AND scope=json_extract(requested.value,'$[1]')
+      AND project_id=json_extract(requested.value,'$[2]') AND fingerprint GLOB 'rs1:*')
+), marker_memories AS (
+  SELECT owner_id,scope,project_id,id FROM marker_selection${rationale ? `
+  UNION
+  SELECT root.owner_id,root.scope,root.project_id,edge.from_id
+  FROM marker_selection root JOIN rationale_edges edge ON edge.to_id=root.id
+    AND edge.relation IN ('supports-decision','challenges-premise')
+  UNION
+  SELECT root.owner_id,root.scope,root.project_id,challenge.from_id
+  FROM marker_selection root JOIN rationale_edges support ON support.to_id=root.id AND support.relation='supports-decision'
+  JOIN rationale_edges challenge ON challenge.to_id=support.from_id AND challenge.relation='challenges-premise'` : ''}
+)
+SELECT r.id FROM marker_memories wanted
+CROSS JOIN memories m ON m.id=wanted.id AND m.owner_id=wanted.owner_id AND m.scope=wanted.scope AND m.project_id=wanted.project_id
+CROSS JOIN receipts r ON r.memory_id=m.id
+CROSS JOIN json_each(receipt_marker_keys(r.receipt_key,r.client,r.session_id,r.event_id,r.role)) k
+CROSS JOIN suppressed s ON s.owner_id=m.owner_id AND s.scope=m.scope AND s.project_id=m.project_id AND s.fingerprint=k.value`)
+    .all(JSON.stringify(requested)).map(row => row.id));
+}
+
+export function withheldEvidenceInside(db, ns, ids, storedReceiptIds = [], memoryIds = [], perMemory = 17) {
+  if (!(ids.length || storedReceiptIds.length || memoryIds.length)) return { cards: new Set(), receipts: new Set() };
+  if (!db.isTransaction) throw Object.assign(new Error('Evidence projection requires a read snapshot'), { code: 'storage_error' });
+  bindReceiptMarkerKeys(db);
+  const lookups = [], args = [];
+  const layout = cachedContentLayout(db);
+  if (ids.length && (!layout || layout.base >= 21)) {
+    const lineage = hasCardLineage(db);
+    const sources = lineage
+      ? `card_body_sources b ON b.owner_id=c.owner_id AND b.scope=c.scope AND b.project_id=c.project_id
+        AND b.card_id=c.id AND b.body_revision=c.body_revision AND b.source_kind='receipt'`
+      : 'card_memory_bindings b ON b.card_id=c.id';
+    lookups.push(`SELECT 'card' AS kind,c.id,r.receipt_key,r.client,r.session_id,r.event_id,r.role
+FROM json_each(?) wanted
+CROSS JOIN private_cards c ON c.id=wanted.value
+CROSS JOIN ${sources}
+CROSS JOIN receipts r ON r.id=${lineage ? 'b.source_key' : 'b.receipt_id'}
+WHERE c.owner_id=? AND c.scope=? AND c.project_id=?`);
+    args.push(JSON.stringify(ids), ...boundary(ns));
+  }
+  if (storedReceiptIds.length) {
+    lookups.push(`SELECT 'receipt',r.id,r.receipt_key,r.client,r.session_id,r.event_id,r.role
+FROM json_each(?) wanted
+CROSS JOIN receipts r ON r.id=wanted.value
+CROSS JOIN memories m ON m.id=r.memory_id
+WHERE m.owner_id=? AND m.scope=? AND m.project_id=?`);
+    args.push(JSON.stringify(storedReceiptIds), ...boundary(ns));
+  }
+  if (memoryIds.length) {
+    lookups.push(`SELECT 'receipt',r.id,r.receipt_key,r.client,r.session_id,r.event_id,r.role
+FROM json_each(?) wanted
+CROSS JOIN memories m ON m.id=wanted.value
+CROSS JOIN receipts r ON r.id IN (
+  SELECT page.id FROM receipts page INDEXED BY memory_receipts
+  WHERE page.memory_id=m.id ORDER BY page.created_at,page.id LIMIT ?)
+WHERE m.owner_id=? AND m.scope=? AND m.project_id=?`);
+    args.push(JSON.stringify(memoryIds), perMemory, ...boundary(ns));
+  }
+  if (!lookups.length) return { cards: new Set(), receipts: new Set() };
+  const rows = db.prepare(`WITH candidates(kind,id,receipt_key,client,session_id,event_id,role) AS (
+${lookups.join(' UNION ALL ')})
+SELECT r.kind,r.id FROM candidates r
+CROSS JOIN json_each(receipt_marker_keys(r.receipt_key,r.client,r.session_id,r.event_id,r.role)) k
+CROSS JOIN suppressed s ON s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=k.value`)
+    .all(...args, ...boundary(ns));
+  return { cards: new Set(rows.filter(row => row.kind === 'card').map(row => row.id)),
+    receipts: new Set(rows.filter(row => row.kind === 'receipt').map(row => row.id)) };
 }

@@ -310,22 +310,22 @@
       2
     ],
     "[\"R2 temporal/admission/review v18 1 items\",18,1,null,\"getEpisode\",\"hit\",0]": [
-      17,
+      18,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v18 1 items\",18,1,null,\"getEpisode\",\"hit\",5]": [
-      19,
+      20,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v18 1 items\",18,1,null,\"listEpisodes\",\"hit\",0]": [
-      8,
+      9,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v18 1 items\",18,1,null,\"listEpisodes\",\"hit\",5]": [
-      10,
+      11,
       1,
       0
     ],
@@ -340,32 +340,32 @@
       0
     ],
     "[\"R2 temporal/admission/review v18 12 items\",18,12,null,\"getEpisode\",\"hit\",0]": [
-      17,
+      18,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v18 12 items\",18,12,null,\"getEpisode\",\"hit\",5]": [
-      19,
+      20,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v18 12 items\",18,12,null,\"listEpisodes\",\"hit\",0]": [
-      8,
+      9,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v18 12 items\",18,12,null,\"listEpisodes\",\"hit\",5]": [
-      10,
+      11,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v18 12 items\",18,12,null,\"listEpisodes\",\"cursor\",0]": [
-      8,
+      9,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v18 12 items\",18,12,null,\"listEpisodes\",\"cursor\",5]": [
-      10,
+      11,
       1,
       0
     ],
@@ -380,22 +380,22 @@
       0
     ],
     "[\"R2 temporal/admission/review v23 1 items\",23,1,null,\"getEpisode\",\"hit\",0]": [
-      17,
+      18,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v23 1 items\",23,1,null,\"getEpisode\",\"hit\",5]": [
-      19,
+      20,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v23 1 items\",23,1,null,\"listEpisodes\",\"hit\",0]": [
-      8,
+      9,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v23 1 items\",23,1,null,\"listEpisodes\",\"hit\",5]": [
-      10,
+      11,
       1,
       0
     ],
@@ -410,32 +410,32 @@
       0
     ],
     "[\"R2 temporal/admission/review v23 12 items\",23,12,null,\"getEpisode\",\"hit\",0]": [
-      17,
+      18,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v23 12 items\",23,12,null,\"getEpisode\",\"hit\",5]": [
-      19,
+      20,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v23 12 items\",23,12,null,\"listEpisodes\",\"hit\",0]": [
-      8,
+      9,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v23 12 items\",23,12,null,\"listEpisodes\",\"hit\",5]": [
-      10,
+      11,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v23 12 items\",23,12,null,\"listEpisodes\",\"cursor\",0]": [
-      8,
+      9,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v23 12 items\",23,12,null,\"listEpisodes\",\"cursor\",5]": [
-      10,
+      11,
       1,
       0
     ],
@@ -450,22 +450,22 @@
       0
     ],
     "[\"R2 temporal/admission/review v33 1 items\",33,1,null,\"getEpisode\",\"hit\",0]": [
-      17,
+      18,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v33 1 items\",33,1,null,\"getEpisode\",\"hit\",5]": [
-      19,
+      20,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v33 1 items\",33,1,null,\"listEpisodes\",\"hit\",0]": [
-      8,
+      9,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v33 1 items\",33,1,null,\"listEpisodes\",\"hit\",5]": [
-      10,
+      11,
       1,
       0
     ],
@@ -480,32 +480,32 @@
       0
     ],
     "[\"R2 temporal/admission/review v33 12 items\",33,12,null,\"getEpisode\",\"hit\",0]": [
-      17,
+      18,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v33 12 items\",33,12,null,\"getEpisode\",\"hit\",5]": [
-      19,
+      20,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v33 12 items\",33,12,null,\"listEpisodes\",\"hit\",0]": [
-      8,
+      9,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v33 12 items\",33,12,null,\"listEpisodes\",\"hit\",5]": [
-      10,
+      11,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v33 12 items\",33,12,null,\"listEpisodes\",\"cursor\",0]": [
-      8,
+      9,
       1,
       0
     ],
     "[\"R2 temporal/admission/review v33 12 items\",33,12,null,\"listEpisodes\",\"cursor\",5]": [
-      10,
+      11,
       1,
       0
     ],
@@ -520,22 +520,22 @@
       0
     ],
     "[\"role modes R2: 12 items, now/refresh/compare/file and empty namespace\",33,12,null,\"readRoleTaskContext\",\"now\",5]": [
-      356,
+      358,
       21,
       50
     ],
     "[\"role modes R2: 12 items, now/refresh/compare/file and empty namespace\",33,12,null,\"readRoleTaskContext\",\"refresh\",5]": [
-      356,
+      358,
       21,
       50
     ],
     "[\"role modes R2: 24 items, now/refresh/compare/file and empty namespace\",33,24,null,\"readRoleTaskContext\",\"now\",5]": [
-      452,
+      454,
       21,
       98
     ],
     "[\"role modes R2: 24 items, now/refresh/compare/file and empty namespace\",33,24,null,\"readRoleTaskContext\",\"refresh\",5]": [
-      452,
+      454,
       21,
       98
     ]
@@ -554,17 +554,17 @@
   },
   "episodeProjection": {
     "[18,12,0,\"getEpisode\",\"hit\"]": [
-      17,
+      18,
       1,
       0
     ],
     "[18,12,0,\"listEpisodes\",\"hit\"]": [
-      8,
+      9,
       1,
       0
     ],
     "[18,12,0,\"listEpisodes\",\"cursor\"]": [
-      8,
+      9,
       1,
       0
     ],
@@ -579,17 +579,17 @@
       4
     ],
     "[18,12,5,\"getEpisode\",\"hit\"]": [
-      19,
+      20,
       1,
       0
     ],
     "[18,12,5,\"listEpisodes\",\"hit\"]": [
-      10,
+      11,
       1,
       0
     ],
     "[18,12,5,\"listEpisodes\",\"cursor\"]": [
-      10,
+      11,
       1,
       0
     ],
@@ -604,17 +604,17 @@
       4
     ],
     "[18,24,0,\"getEpisode\",\"hit\"]": [
-      17,
+      18,
       1,
       0
     ],
     "[18,24,0,\"listEpisodes\",\"hit\"]": [
-      8,
+      9,
       1,
       0
     ],
     "[18,24,0,\"listEpisodes\",\"cursor\"]": [
-      8,
+      9,
       1,
       0
     ],
@@ -629,17 +629,17 @@
       4
     ],
     "[18,24,5,\"getEpisode\",\"hit\"]": [
-      19,
+      20,
       1,
       0
     ],
     "[18,24,5,\"listEpisodes\",\"hit\"]": [
-      10,
+      11,
       1,
       0
     ],
     "[18,24,5,\"listEpisodes\",\"cursor\"]": [
-      10,
+      11,
       1,
       0
     ],
@@ -654,17 +654,17 @@
       4
     ],
     "[23,12,0,\"getEpisode\",\"hit\"]": [
-      17,
+      18,
       1,
       0
     ],
     "[23,12,0,\"listEpisodes\",\"hit\"]": [
-      8,
+      9,
       1,
       0
     ],
     "[23,12,0,\"listEpisodes\",\"cursor\"]": [
-      8,
+      9,
       1,
       0
     ],
@@ -679,17 +679,17 @@
       4
     ],
     "[23,12,5,\"getEpisode\",\"hit\"]": [
-      19,
+      20,
       1,
       0
     ],
     "[23,12,5,\"listEpisodes\",\"hit\"]": [
-      10,
+      11,
       1,
       0
     ],
     "[23,12,5,\"listEpisodes\",\"cursor\"]": [
-      10,
+      11,
       1,
       0
     ],
@@ -704,17 +704,17 @@
       4
     ],
     "[23,24,0,\"getEpisode\",\"hit\"]": [
-      17,
+      18,
       1,
       0
     ],
     "[23,24,0,\"listEpisodes\",\"hit\"]": [
-      8,
+      9,
       1,
       0
     ],
     "[23,24,0,\"listEpisodes\",\"cursor\"]": [
-      8,
+      9,
       1,
       0
     ],
@@ -729,17 +729,17 @@
       4
     ],
     "[23,24,5,\"getEpisode\",\"hit\"]": [
-      19,
+      20,
       1,
       0
     ],
     "[23,24,5,\"listEpisodes\",\"hit\"]": [
-      10,
+      11,
       1,
       0
     ],
     "[23,24,5,\"listEpisodes\",\"cursor\"]": [
-      10,
+      11,
       1,
       0
     ],
@@ -754,17 +754,17 @@
       4
     ],
     "[33,12,0,\"getEpisode\",\"hit\"]": [
-      17,
+      18,
       1,
       0
     ],
     "[33,12,0,\"listEpisodes\",\"hit\"]": [
-      8,
+      9,
       1,
       0
     ],
     "[33,12,0,\"listEpisodes\",\"cursor\"]": [
-      8,
+      9,
       1,
       0
     ],
@@ -779,17 +779,17 @@
       4
     ],
     "[33,12,5,\"getEpisode\",\"hit\"]": [
-      19,
+      20,
       1,
       0
     ],
     "[33,12,5,\"listEpisodes\",\"hit\"]": [
-      10,
+      11,
       1,
       0
     ],
     "[33,12,5,\"listEpisodes\",\"cursor\"]": [
-      10,
+      11,
       1,
       0
     ],
@@ -804,17 +804,17 @@
       4
     ],
     "[33,24,0,\"getEpisode\",\"hit\"]": [
-      17,
+      18,
       1,
       0
     ],
     "[33,24,0,\"listEpisodes\",\"hit\"]": [
-      8,
+      9,
       1,
       0
     ],
     "[33,24,0,\"listEpisodes\",\"cursor\"]": [
-      8,
+      9,
       1,
       0
     ],
@@ -829,17 +829,17 @@
       4
     ],
     "[33,24,5,\"getEpisode\",\"hit\"]": [
-      19,
+      20,
       1,
       0
     ],
     "[33,24,5,\"listEpisodes\",\"hit\"]": [
-      10,
+      11,
       1,
       0
     ],
     "[33,24,5,\"listEpisodes\",\"cursor\"]": [
-      10,
+      11,
       1,
       0
     ],
@@ -862,17 +862,17 @@
     ],
     "caps": {
       "[18,12,\"getEpisode\",\"hit\"]": [
-        13,
+        14,
         1,
         0
       ],
       "[18,12,\"listEpisodes\",\"hit\"]": [
-        4,
+        5,
         1,
         0
       ],
       "[18,12,\"listEpisodes\",\"cursor\"]": [
-        4,
+        5,
         1,
         0
       ],
@@ -887,17 +887,17 @@
         4
       ],
       "[18,24,\"getEpisode\",\"hit\"]": [
-        13,
+        14,
         1,
         0
       ],
       "[18,24,\"listEpisodes\",\"hit\"]": [
-        4,
+        5,
         1,
         0
       ],
       "[18,24,\"listEpisodes\",\"cursor\"]": [
-        4,
+        5,
         1,
         0
       ],
@@ -912,17 +912,17 @@
         4
       ],
       "[23,12,\"getEpisode\",\"hit\"]": [
-        13,
+        14,
         1,
         0
       ],
       "[23,12,\"listEpisodes\",\"hit\"]": [
-        4,
+        5,
         1,
         0
       ],
       "[23,12,\"listEpisodes\",\"cursor\"]": [
-        4,
+        5,
         1,
         0
       ],
@@ -937,17 +937,17 @@
         4
       ],
       "[23,24,\"getEpisode\",\"hit\"]": [
-        13,
+        14,
         1,
         0
       ],
       "[23,24,\"listEpisodes\",\"hit\"]": [
-        4,
+        5,
         1,
         0
       ],
       "[23,24,\"listEpisodes\",\"cursor\"]": [
-        4,
+        5,
         1,
         0
       ],
@@ -962,17 +962,17 @@
         4
       ],
       "[33,12,\"getEpisode\",\"hit\"]": [
-        13,
+        14,
         1,
         0
       ],
       "[33,12,\"listEpisodes\",\"hit\"]": [
-        4,
+        5,
         1,
         0
       ],
       "[33,12,\"listEpisodes\",\"cursor\"]": [
-        4,
+        5,
         1,
         0
       ],
@@ -987,17 +987,17 @@
         4
       ],
       "[33,24,\"getEpisode\",\"hit\"]": [
-        13,
+        14,
         1,
         0
       ],
       "[33,24,\"listEpisodes\",\"hit\"]": [
-        4,
+        5,
         1,
         0
       ],
       "[33,24,\"listEpisodes\",\"cursor\"]": [
-        4,
+        5,
         1,
         0
       ],
@@ -1014,12 +1014,12 @@
     },
     "nontrivial": {
       "[12,\"getEpisode\"]": [
-        13,
+        14,
         1,
         0
       ],
       "[12,\"listEpisodes\"]": [
-        4,
+        5,
         1,
         0
       ],
@@ -1029,12 +1029,12 @@
         4
       ],
       "[24,\"getEpisode\"]": [
-        13,
+        14,
         1,
         0
       ],
       "[24,\"listEpisodes\"]": [
-        4,
+        5,
         1,
         0
       ],
@@ -1047,12 +1047,12 @@
   },
   "episodeNontrivial": {
     "[12,0,\"getEpisode\"]": [
-      17,
+      18,
       1,
       0
     ],
     "[12,0,\"listEpisodes\"]": [
-      8,
+      9,
       1,
       0
     ],
@@ -1062,12 +1062,12 @@
       4
     ],
     "[12,5,\"getEpisode\"]": [
-      19,
+      20,
       1,
       0
     ],
     "[12,5,\"listEpisodes\"]": [
-      10,
+      11,
       1,
       0
     ],
@@ -1077,12 +1077,12 @@
       4
     ],
     "[24,0,\"getEpisode\"]": [
-      17,
+      18,
       1,
       0
     ],
     "[24,0,\"listEpisodes\"]": [
-      8,
+      9,
       1,
       0
     ],
@@ -1092,12 +1092,12 @@
       4
     ],
     "[24,5,\"getEpisode\"]": [
-      19,
+      20,
       1,
       0
     ],
     "[24,5,\"listEpisodes\"]": [
-      10,
+      11,
       1,
       0
     ],
@@ -1178,24 +1178,24 @@
   "integratedPins": {
     "[\"event-time\",51,\"Episode projection cost v18 n12 [event-time v51]\",18,12,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"event-time\",51,\"Episode projection cost v18 n12 [event-time v51]\",18,12,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -1226,48 +1226,48 @@
     },
     "[\"event-time\",51,\"Episode projection cost v18 n12 [event-time v51]\",18,12,null,\"listEpisodes\",\"cursor\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",51,\"Episode projection cost v18 n12 [event-time v51]\",18,12,null,\"listEpisodes\",\"cursor\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",51,\"Episode projection cost v18 n12 [event-time v51]\",18,12,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",51,\"Episode projection cost v18 n12 [event-time v51]\",18,12,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
@@ -1298,24 +1298,24 @@
     },
     "[\"event-time\",51,\"Episode projection cost v18 n24 [event-time v51]\",18,24,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"event-time\",51,\"Episode projection cost v18 n24 [event-time v51]\",18,24,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -1346,48 +1346,48 @@
     },
     "[\"event-time\",51,\"Episode projection cost v18 n24 [event-time v51]\",18,24,null,\"listEpisodes\",\"cursor\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",51,\"Episode projection cost v18 n24 [event-time v51]\",18,24,null,\"listEpisodes\",\"cursor\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",51,\"Episode projection cost v18 n24 [event-time v51]\",18,24,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",51,\"Episode projection cost v18 n24 [event-time v51]\",18,24,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
@@ -2642,24 +2642,24 @@
     },
     "[\"event-time\",51,\"R2 temporal/admission/review v18 1 items [event-time v51]\",18,1,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"event-time\",51,\"R2 temporal/admission/review v18 1 items [event-time v51]\",18,1,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -2690,48 +2690,48 @@
     },
     "[\"event-time\",51,\"R2 temporal/admission/review v18 1 items [event-time v51]\",18,1,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",51,\"R2 temporal/admission/review v18 1 items [event-time v51]\",18,1,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",51,\"R2 temporal/admission/review v18 12 items [event-time v51]\",18,12,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"event-time\",51,\"R2 temporal/admission/review v18 12 items [event-time v51]\",18,12,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -2762,48 +2762,48 @@
     },
     "[\"event-time\",51,\"R2 temporal/admission/review v18 12 items [event-time v51]\",18,12,null,\"listEpisodes\",\"cursor\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",51,\"R2 temporal/admission/review v18 12 items [event-time v51]\",18,12,null,\"listEpisodes\",\"cursor\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",51,\"R2 temporal/admission/review v18 12 items [event-time v51]\",18,12,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",51,\"R2 temporal/admission/review v18 12 items [event-time v51]\",18,12,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
@@ -4106,24 +4106,24 @@
     },
     "[\"event-time\",52,\"Episode projection cost v23 n12 [event-time v52]\",23,12,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"event-time\",52,\"Episode projection cost v23 n12 [event-time v52]\",23,12,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -4154,48 +4154,48 @@
     },
     "[\"event-time\",52,\"Episode projection cost v23 n12 [event-time v52]\",23,12,null,\"listEpisodes\",\"cursor\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",52,\"Episode projection cost v23 n12 [event-time v52]\",23,12,null,\"listEpisodes\",\"cursor\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",52,\"Episode projection cost v23 n12 [event-time v52]\",23,12,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",52,\"Episode projection cost v23 n12 [event-time v52]\",23,12,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
@@ -4226,24 +4226,24 @@
     },
     "[\"event-time\",52,\"Episode projection cost v23 n24 [event-time v52]\",23,24,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"event-time\",52,\"Episode projection cost v23 n24 [event-time v52]\",23,24,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -4274,48 +4274,48 @@
     },
     "[\"event-time\",52,\"Episode projection cost v23 n24 [event-time v52]\",23,24,null,\"listEpisodes\",\"cursor\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",52,\"Episode projection cost v23 n24 [event-time v52]\",23,24,null,\"listEpisodes\",\"cursor\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",52,\"Episode projection cost v23 n24 [event-time v52]\",23,24,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",52,\"Episode projection cost v23 n24 [event-time v52]\",23,24,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
@@ -5570,24 +5570,24 @@
     },
     "[\"event-time\",52,\"R2 temporal/admission/review v23 1 items [event-time v52]\",23,1,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"event-time\",52,\"R2 temporal/admission/review v23 1 items [event-time v52]\",23,1,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -5618,48 +5618,48 @@
     },
     "[\"event-time\",52,\"R2 temporal/admission/review v23 1 items [event-time v52]\",23,1,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",52,\"R2 temporal/admission/review v23 1 items [event-time v52]\",23,1,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",52,\"R2 temporal/admission/review v23 12 items [event-time v52]\",23,12,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"event-time\",52,\"R2 temporal/admission/review v23 12 items [event-time v52]\",23,12,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -5690,48 +5690,48 @@
     },
     "[\"event-time\",52,\"R2 temporal/admission/review v23 12 items [event-time v52]\",23,12,null,\"listEpisodes\",\"cursor\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",52,\"R2 temporal/admission/review v23 12 items [event-time v52]\",23,12,null,\"listEpisodes\",\"cursor\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",52,\"R2 temporal/admission/review v23 12 items [event-time v52]\",23,12,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",52,\"R2 temporal/admission/review v23 12 items [event-time v52]\",23,12,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
@@ -7034,48 +7034,48 @@
     },
     "[\"event-time\",53,\"Episode nontrivial source cost v33 n12 [event-time v53]\",33,12,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"event-time\",53,\"Episode nontrivial source cost v33 n12 [event-time v53]\",33,12,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"event-time\",53,\"Episode nontrivial source cost v33 n12 [event-time v53]\",33,12,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",53,\"Episode nontrivial source cost v33 n12 [event-time v53]\",33,12,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
@@ -7106,48 +7106,48 @@
     },
     "[\"event-time\",53,\"Episode nontrivial source cost v33 n24 [event-time v53]\",33,24,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"event-time\",53,\"Episode nontrivial source cost v33 n24 [event-time v53]\",33,24,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"event-time\",53,\"Episode nontrivial source cost v33 n24 [event-time v53]\",33,24,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",53,\"Episode nontrivial source cost v33 n24 [event-time v53]\",33,24,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
@@ -7178,24 +7178,24 @@
     },
     "[\"event-time\",53,\"Episode projection cost v33 n12 [event-time v53]\",33,12,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"event-time\",53,\"Episode projection cost v33 n12 [event-time v53]\",33,12,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -7226,48 +7226,48 @@
     },
     "[\"event-time\",53,\"Episode projection cost v33 n12 [event-time v53]\",33,12,null,\"listEpisodes\",\"cursor\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",53,\"Episode projection cost v33 n12 [event-time v53]\",33,12,null,\"listEpisodes\",\"cursor\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",53,\"Episode projection cost v33 n12 [event-time v53]\",33,12,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",53,\"Episode projection cost v33 n12 [event-time v53]\",33,12,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
@@ -7298,24 +7298,24 @@
     },
     "[\"event-time\",53,\"Episode projection cost v33 n24 [event-time v53]\",33,24,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"event-time\",53,\"Episode projection cost v33 n24 [event-time v53]\",33,24,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -7346,48 +7346,48 @@
     },
     "[\"event-time\",53,\"Episode projection cost v33 n24 [event-time v53]\",33,24,null,\"listEpisodes\",\"cursor\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",53,\"Episode projection cost v33 n24 [event-time v53]\",33,24,null,\"listEpisodes\",\"cursor\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",53,\"Episode projection cost v33 n24 [event-time v53]\",33,24,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",53,\"Episode projection cost v33 n24 [event-time v53]\",33,24,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
@@ -8642,24 +8642,24 @@
     },
     "[\"event-time\",53,\"R2 temporal/admission/review v33 1 items [event-time v53]\",33,1,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"event-time\",53,\"R2 temporal/admission/review v33 1 items [event-time v53]\",33,1,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -8690,48 +8690,48 @@
     },
     "[\"event-time\",53,\"R2 temporal/admission/review v33 1 items [event-time v53]\",33,1,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",53,\"R2 temporal/admission/review v33 1 items [event-time v53]\",33,1,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",53,\"R2 temporal/admission/review v33 12 items [event-time v53]\",33,12,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"event-time\",53,\"R2 temporal/admission/review v33 12 items [event-time v53]\",33,12,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -8762,48 +8762,48 @@
     },
     "[\"event-time\",53,\"R2 temporal/admission/review v33 12 items [event-time v53]\",33,12,null,\"listEpisodes\",\"cursor\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",53,\"R2 temporal/admission/review v33 12 items [event-time v53]\",33,12,null,\"listEpisodes\",\"cursor\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",53,\"R2 temporal/admission/review v33 12 items [event-time v53]\",33,12,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"event-time\",53,\"R2 temporal/admission/review v33 12 items [event-time v53]\",33,12,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
@@ -10130,168 +10130,168 @@
     },
     "[\"event-time\",53,\"role R2: 1 evidence items, private counters add no observations [event-time v53]\",33,1,null,\"readRoleTaskContext\",\"then-1\",0]": {
       "counts": [
-        48,
+        50,
         2,
         6
       ],
       "legacy": [
-        76,
+        78,
         2,
         6
       ]
     },
     "[\"event-time\",53,\"role R2: 1 evidence items, private counters add no observations [event-time v53]\",33,1,null,\"readRoleTaskContext\",\"then-1\",5]": {
       "counts": [
-        50,
+        52,
         2,
         6
       ],
       "legacy": [
-        76,
+        78,
         2,
         6
       ]
     },
     "[\"event-time\",53,\"role R2: 12 evidence items, private counters add no observations [event-time v53]\",33,12,null,\"readRoleTaskContext\",\"then-12\",0]": {
       "counts": [
-        136,
+        138,
         2,
         50
       ],
       "legacy": [
-        538,
+        540,
         2,
         50
       ]
     },
     "[\"event-time\",53,\"role R2: 12 evidence items, private counters add no observations [event-time v53]\",33,12,null,\"readRoleTaskContext\",\"then-12\",5]": {
       "counts": [
-        138,
+        140,
         2,
         50
       ],
       "legacy": [
-        538,
+        540,
         2,
         50
       ]
     },
     "[\"event-time\",53,\"role modes R2: 12 items, now/refresh/compare/file and empty namespace [event-time v53]\",33,12,null,\"readRoleTaskContext\",\"now\",0]": {
       "counts": [
-        354,
+        356,
         21,
         50
       ],
       "legacy": [
-        756,
+        758,
         21,
         50
       ]
     },
     "[\"event-time\",53,\"role modes R2: 12 items, now/refresh/compare/file and empty namespace [event-time v53]\",33,12,null,\"readRoleTaskContext\",\"now\",5]": {
       "counts": [
-        356,
+        358,
         21,
         50
       ],
       "legacy": [
-        756,
+        758,
         21,
         50
       ]
     },
     "[\"event-time\",53,\"role modes R2: 12 items, now/refresh/compare/file and empty namespace [event-time v53]\",33,12,null,\"readRoleTaskContext\",\"refresh\",0]": {
       "counts": [
-        354,
+        356,
         21,
         50
       ],
       "legacy": [
-        756,
+        758,
         21,
         50
       ]
     },
     "[\"event-time\",53,\"role modes R2: 12 items, now/refresh/compare/file and empty namespace [event-time v53]\",33,12,null,\"readRoleTaskContext\",\"refresh\",5]": {
       "counts": [
-        356,
+        358,
         21,
         50
       ],
       "legacy": [
-        756,
+        758,
         21,
         50
       ]
     },
     "[\"event-time\",53,\"role modes R2: 24 items, now/refresh/compare/file and empty namespace [event-time v53]\",33,24,null,\"readRoleTaskContext\",\"now\",0]": {
       "counts": [
-        450,
+        452,
         21,
         98
       ],
       "legacy": [
-        1260,
+        1262,
         21,
         98
       ]
     },
     "[\"event-time\",53,\"role modes R2: 24 items, now/refresh/compare/file and empty namespace [event-time v53]\",33,24,null,\"readRoleTaskContext\",\"now\",5]": {
       "counts": [
-        452,
+        454,
         21,
         98
       ],
       "legacy": [
-        1260,
+        1262,
         21,
         98
       ]
     },
     "[\"event-time\",53,\"role modes R2: 24 items, now/refresh/compare/file and empty namespace [event-time v53]\",33,24,null,\"readRoleTaskContext\",\"refresh\",0]": {
       "counts": [
-        450,
+        452,
         21,
         98
       ],
       "legacy": [
-        1260,
+        1262,
         21,
         98
       ]
     },
     "[\"event-time\",53,\"role modes R2: 24 items, now/refresh/compare/file and empty namespace [event-time v53]\",33,24,null,\"readRoleTaskContext\",\"refresh\",5]": {
       "counts": [
-        452,
+        454,
         21,
         98
       ],
       "legacy": [
-        1260,
+        1262,
         21,
         98
       ]
     },
     "[\"safety\",34,\"Episode projection cost v18 n12\",18,12,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"safety\",34,\"Episode projection cost v18 n12\",18,12,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -10322,48 +10322,48 @@
     },
     "[\"safety\",34,\"Episode projection cost v18 n12\",18,12,null,\"listEpisodes\",\"cursor\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",34,\"Episode projection cost v18 n12\",18,12,null,\"listEpisodes\",\"cursor\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",34,\"Episode projection cost v18 n12\",18,12,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",34,\"Episode projection cost v18 n12\",18,12,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
@@ -10394,24 +10394,24 @@
     },
     "[\"safety\",34,\"Episode projection cost v18 n24\",18,24,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"safety\",34,\"Episode projection cost v18 n24\",18,24,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -10442,48 +10442,48 @@
     },
     "[\"safety\",34,\"Episode projection cost v18 n24\",18,24,null,\"listEpisodes\",\"cursor\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",34,\"Episode projection cost v18 n24\",18,24,null,\"listEpisodes\",\"cursor\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",34,\"Episode projection cost v18 n24\",18,24,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",34,\"Episode projection cost v18 n24\",18,24,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
@@ -11738,24 +11738,24 @@
     },
     "[\"safety\",34,\"R2 temporal/admission/review v18 1 items\",18,1,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"safety\",34,\"R2 temporal/admission/review v18 1 items\",18,1,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -11786,48 +11786,48 @@
     },
     "[\"safety\",34,\"R2 temporal/admission/review v18 1 items\",18,1,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",34,\"R2 temporal/admission/review v18 1 items\",18,1,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",34,\"R2 temporal/admission/review v18 12 items\",18,12,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"safety\",34,\"R2 temporal/admission/review v18 12 items\",18,12,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -11858,48 +11858,48 @@
     },
     "[\"safety\",34,\"R2 temporal/admission/review v18 12 items\",18,12,null,\"listEpisodes\",\"cursor\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",34,\"R2 temporal/admission/review v18 12 items\",18,12,null,\"listEpisodes\",\"cursor\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",34,\"R2 temporal/admission/review v18 12 items\",18,12,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",34,\"R2 temporal/admission/review v18 12 items\",18,12,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
@@ -13202,24 +13202,24 @@
     },
     "[\"safety\",38,\"Episode projection cost v23 n12\",23,12,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"safety\",38,\"Episode projection cost v23 n12\",23,12,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -13250,48 +13250,48 @@
     },
     "[\"safety\",38,\"Episode projection cost v23 n12\",23,12,null,\"listEpisodes\",\"cursor\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",38,\"Episode projection cost v23 n12\",23,12,null,\"listEpisodes\",\"cursor\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",38,\"Episode projection cost v23 n12\",23,12,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",38,\"Episode projection cost v23 n12\",23,12,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
@@ -13322,24 +13322,24 @@
     },
     "[\"safety\",38,\"Episode projection cost v23 n24\",23,24,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"safety\",38,\"Episode projection cost v23 n24\",23,24,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -13370,48 +13370,48 @@
     },
     "[\"safety\",38,\"Episode projection cost v23 n24\",23,24,null,\"listEpisodes\",\"cursor\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",38,\"Episode projection cost v23 n24\",23,24,null,\"listEpisodes\",\"cursor\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",38,\"Episode projection cost v23 n24\",23,24,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",38,\"Episode projection cost v23 n24\",23,24,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
@@ -14666,24 +14666,24 @@
     },
     "[\"safety\",38,\"R2 temporal/admission/review v23 1 items\",23,1,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"safety\",38,\"R2 temporal/admission/review v23 1 items\",23,1,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -14714,48 +14714,48 @@
     },
     "[\"safety\",38,\"R2 temporal/admission/review v23 1 items\",23,1,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",38,\"R2 temporal/admission/review v23 1 items\",23,1,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",38,\"R2 temporal/admission/review v23 12 items\",23,12,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"safety\",38,\"R2 temporal/admission/review v23 12 items\",23,12,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -14786,48 +14786,48 @@
     },
     "[\"safety\",38,\"R2 temporal/admission/review v23 12 items\",23,12,null,\"listEpisodes\",\"cursor\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",38,\"R2 temporal/admission/review v23 12 items\",23,12,null,\"listEpisodes\",\"cursor\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",38,\"R2 temporal/admission/review v23 12 items\",23,12,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",38,\"R2 temporal/admission/review v23 12 items\",23,12,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
@@ -16130,48 +16130,48 @@
     },
     "[\"safety\",48,\"Episode nontrivial source cost v33 n12\",33,12,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"safety\",48,\"Episode nontrivial source cost v33 n12\",33,12,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"safety\",48,\"Episode nontrivial source cost v33 n12\",33,12,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",48,\"Episode nontrivial source cost v33 n12\",33,12,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
@@ -16202,48 +16202,48 @@
     },
     "[\"safety\",48,\"Episode nontrivial source cost v33 n24\",33,24,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"safety\",48,\"Episode nontrivial source cost v33 n24\",33,24,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"safety\",48,\"Episode nontrivial source cost v33 n24\",33,24,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",48,\"Episode nontrivial source cost v33 n24\",33,24,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
@@ -16274,24 +16274,24 @@
     },
     "[\"safety\",48,\"Episode projection cost v33 n12\",33,12,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"safety\",48,\"Episode projection cost v33 n12\",33,12,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -16322,48 +16322,48 @@
     },
     "[\"safety\",48,\"Episode projection cost v33 n12\",33,12,null,\"listEpisodes\",\"cursor\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",48,\"Episode projection cost v33 n12\",33,12,null,\"listEpisodes\",\"cursor\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",48,\"Episode projection cost v33 n12\",33,12,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",48,\"Episode projection cost v33 n12\",33,12,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
@@ -16394,24 +16394,24 @@
     },
     "[\"safety\",48,\"Episode projection cost v33 n24\",33,24,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"safety\",48,\"Episode projection cost v33 n24\",33,24,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -16442,48 +16442,48 @@
     },
     "[\"safety\",48,\"Episode projection cost v33 n24\",33,24,null,\"listEpisodes\",\"cursor\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",48,\"Episode projection cost v33 n24\",33,24,null,\"listEpisodes\",\"cursor\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",48,\"Episode projection cost v33 n24\",33,24,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",48,\"Episode projection cost v33 n24\",33,24,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
@@ -17738,24 +17738,24 @@
     },
     "[\"safety\",48,\"R2 temporal/admission/review v33 1 items\",33,1,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"safety\",48,\"R2 temporal/admission/review v33 1 items\",33,1,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -17786,48 +17786,48 @@
     },
     "[\"safety\",48,\"R2 temporal/admission/review v33 1 items\",33,1,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",48,\"R2 temporal/admission/review v33 1 items\",33,1,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",48,\"R2 temporal/admission/review v33 12 items\",33,12,null,\"getEpisode\",\"hit\",0]": {
       "counts": [
-        17,
+        18,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
     },
     "[\"safety\",48,\"R2 temporal/admission/review v33 12 items\",33,12,null,\"getEpisode\",\"hit\",5]": {
       "counts": [
-        19,
+        20,
         1,
         0
       ],
       "legacy": [
-        13,
+        14,
         1,
         0
       ]
@@ -17858,48 +17858,48 @@
     },
     "[\"safety\",48,\"R2 temporal/admission/review v33 12 items\",33,12,null,\"listEpisodes\",\"cursor\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",48,\"R2 temporal/admission/review v33 12 items\",33,12,null,\"listEpisodes\",\"cursor\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",48,\"R2 temporal/admission/review v33 12 items\",33,12,null,\"listEpisodes\",\"hit\",0]": {
       "counts": [
-        8,
+        9,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
     },
     "[\"safety\",48,\"R2 temporal/admission/review v33 12 items\",33,12,null,\"listEpisodes\",\"hit\",5]": {
       "counts": [
-        10,
+        11,
         1,
         0
       ],
       "legacy": [
-        4,
+        5,
         1,
         0
       ]
@@ -19226,144 +19226,144 @@
     },
     "[\"safety\",48,\"role R2: 1 evidence items, private counters add no observations\",33,1,null,\"readRoleTaskContext\",\"then-1\",0]": {
       "counts": [
-        48,
+        50,
         2,
         6
       ],
       "legacy": [
-        76,
+        78,
         2,
         6
       ]
     },
     "[\"safety\",48,\"role R2: 1 evidence items, private counters add no observations\",33,1,null,\"readRoleTaskContext\",\"then-1\",5]": {
       "counts": [
-        50,
+        52,
         2,
         6
       ],
       "legacy": [
-        76,
+        78,
         2,
         6
       ]
     },
     "[\"safety\",48,\"role R2: 12 evidence items, private counters add no observations\",33,12,null,\"readRoleTaskContext\",\"then-12\",0]": {
       "counts": [
-        136,
+        138,
         2,
         50
       ],
       "legacy": [
-        538,
+        540,
         2,
         50
       ]
     },
     "[\"safety\",48,\"role R2: 12 evidence items, private counters add no observations\",33,12,null,\"readRoleTaskContext\",\"then-12\",5]": {
       "counts": [
-        138,
+        140,
         2,
         50
       ],
       "legacy": [
-        538,
+        540,
         2,
         50
       ]
     },
     "[\"safety\",48,\"role modes R2: 12 items, now/refresh/compare/file and empty namespace\",33,12,null,\"readRoleTaskContext\",\"now\",0]": {
       "counts": [
-        354,
+        356,
         21,
         50
       ],
       "legacy": [
-        756,
+        758,
         21,
         50
       ]
     },
     "[\"safety\",48,\"role modes R2: 12 items, now/refresh/compare/file and empty namespace\",33,12,null,\"readRoleTaskContext\",\"now\",5]": {
       "counts": [
-        356,
+        358,
         21,
         50
       ],
       "legacy": [
-        756,
+        758,
         21,
         50
       ]
     },
     "[\"safety\",48,\"role modes R2: 12 items, now/refresh/compare/file and empty namespace\",33,12,null,\"readRoleTaskContext\",\"refresh\",0]": {
       "counts": [
-        354,
+        356,
         21,
         50
       ],
       "legacy": [
-        756,
+        758,
         21,
         50
       ]
     },
     "[\"safety\",48,\"role modes R2: 12 items, now/refresh/compare/file and empty namespace\",33,12,null,\"readRoleTaskContext\",\"refresh\",5]": {
       "counts": [
-        356,
+        358,
         21,
         50
       ],
       "legacy": [
-        756,
+        758,
         21,
         50
       ]
     },
     "[\"safety\",48,\"role modes R2: 24 items, now/refresh/compare/file and empty namespace\",33,24,null,\"readRoleTaskContext\",\"now\",0]": {
       "counts": [
-        450,
+        452,
         21,
         98
       ],
       "legacy": [
-        1260,
+        1262,
         21,
         98
       ]
     },
     "[\"safety\",48,\"role modes R2: 24 items, now/refresh/compare/file and empty namespace\",33,24,null,\"readRoleTaskContext\",\"now\",5]": {
       "counts": [
-        452,
+        454,
         21,
         98
       ],
       "legacy": [
-        1260,
+        1262,
         21,
         98
       ]
     },
     "[\"safety\",48,\"role modes R2: 24 items, now/refresh/compare/file and empty namespace\",33,24,null,\"readRoleTaskContext\",\"refresh\",0]": {
       "counts": [
-        450,
+        452,
         21,
         98
       ],
       "legacy": [
-        1260,
+        1262,
         21,
         98
       ]
     },
     "[\"safety\",48,\"role modes R2: 24 items, now/refresh/compare/file and empty namespace\",33,24,null,\"readRoleTaskContext\",\"refresh\",5]": {
       "counts": [
-        452,
+        454,
         21,
         98
       ],
       "legacy": [
-        1260,
+        1262,
         21,
         98
       ]

@@ -1,7 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import { hasCommitDispatcher } from './commit-dispatch.mjs';
 import { cachedContentLayout, checkInstalledContentSafety } from './content-safety-schema.mjs';
-import { contentReadSafety, receiptReadSafety, createContentReadMemo } from './content-safety.mjs';
+import { contentReadSafety, receiptReadSafety, createContentReadMemo, withheldReceiptIdsInside } from './content-safety.mjs';
 import { contentSuppressionRequestFenceInside, contentSuppressionReasonInside, cachedContentSuppressionRequestInside,
   contentSuppressionFenceInside, withContentSuppressionRequest,
   resetContentSuppressionRequestInside, contentSuppressionRequestInside } from './content-suppression-storage.mjs';
@@ -437,30 +437,33 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         `SELECT r.*${receiptAncestry} FROM receipts r INDEXED BY capture_memory_receipts
           WHERE r.memory_id = ? ORDER BY r.id LIMIT ?` :
         `SELECT * FROM receipts INDEXED BY capture_memory_receipts WHERE memory_id = ? ORDER BY id LIMIT ?`);
-      const scoreMemory = (memory) => {
-        const bodyScore = score(memory.content);
-        let candidateScore = bodyScore;
-        let winningExcerpt;
-        if (receiptSources) {
-          const receipts = receiptSources.all(...(rawReceiptProof ? Array.from({length:4},()=>boundary(ns)).flat() : []), memory.id, sourceReceiptLimit);
-          for (const receipt of receipts) {
-            const source = validateSourceReceipt(memory.id, receipt, receiptKey);
-            // The selected Memory already completed its canonical decision above.
-            // This row is canonical and validateSourceReceipt binds its identity;
-            // retain the receipt's own S1/ancestry and suppression decision.
-            if (safety && !receiptReadSafety(db, { namespace: ns, receipt, memo: readMemo,
-              rawAncestryEmpty: receipt.empty_raw_ancestry === 1 }).allowed) continue;
-            const receiptScore = score(source.excerpt);
-            // Stable receipt-ID order and strict improvement preserve the first
-            // receipt on ties and retain the body label on a body/receipt tie.
-            if (receiptScore > candidateScore) {
-              candidateScore = receiptScore;
-              winningExcerpt = source.excerpt;
-            }
-          }
+      const candidateSources = memory => {
+        const sources = [];
+        if (!receiptSources) return sources;
+        const receipts = receiptSources.all(...(rawReceiptProof ? Array.from({length:4},()=>boundary(ns)).flat() : []), memory.id, sourceReceiptLimit);
+        for (const receipt of receipts) {
+          const source = validateSourceReceipt(memory.id, receipt, receiptKey);
+          // The selected Memory already completed its canonical decision above.
+          // Its receipt still owns its conservative ancestry check.
+          if (safety && !receiptReadSafety(db, { namespace: ns, receipt, memo: readMemo,
+            rawAncestryEmpty: receipt.empty_raw_ancestry === 1 }).allowed) continue;
+          sources.push({ receipt, excerpt: source.excerpt, score: score(source.excerpt) });
         }
-        return { memory, score: candidateScore, winningExcerpt };
+        return sources;
       };
+      const scoreBatch = candidates => {
+        const withheld = withheldReceiptIdsInside(db, ns, candidates.flatMap(candidate => candidate.sources.map(item => item.receipt)));
+        for (const { memory, bodyScore, sources } of candidates) {
+          let candidateScore = bodyScore, winningExcerpt, receiptId;
+          for (const source of sources) {
+            if (withheld.has(source.receipt.id) || source.score <= candidateScore) continue;
+            candidateScore = source.score;
+            winningExcerpt = source.excerpt; receiptId = source.receipt.id;
+          }
+          retain({ memory, score: candidateScore, winningExcerpt, receiptId });
+        }
+      };
+      const candidateFor = memory => ({ memory, bodyScore: score(memory.content), sources: candidateSources(memory) });
       const compare = (left, right) => right.score - left.score ||
         (left.memory.id < right.memory.id ? -1 : left.memory.id > right.memory.id ? 1 : 0);
       const physicalSQL = `SELECT id, revision, updated_at FROM memories
@@ -507,11 +510,12 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
           : { type: 'unfiled', ref: { memoryId: memory.id, revision: memory.revision }, label: candidateLabel } };
       };
       const result = rows => ({ rows, epoch: currentEpoch, suppressionEpoch: currentSuppressionEpoch,
+        receiptProofs: eligible.flatMap(candidate => candidate.receiptId ? [candidate.receiptId] : []),
         scanExhausted: stop !== 'changed' && !more && !pruned,
         scanBoundary: { rows: visited, last, stop } });
       const scanRows = (limit, tail) => {
         const pageStarted = performance.now();
-        const batch = physicalRows(last, limit);
+        const batch = physicalRows(last, limit), candidates = [];
         let consumed = 0;
         for (const physical of batch) {
           // Residual filters and projection denials consume rows and time.
@@ -526,10 +530,11 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
           if (discoveryPrepare(`SELECT id FROM memories WHERE ${namespaceWhere} AND id = ?
             AND revision = ?`).get(...boundary(ns), physical.id, physical.revision)) {
             const memory = projected.get(...boundary(ns), physical.id, physical.revision);
-            if (memory && (!safety || safeMemory(ns, memory, true))) retain(scoreMemory(memory));
+            if (memory && (!safety || safeMemory(ns, memory, true))) candidates.push(candidateFor(memory));
           }
           if (tail && performance.now() - pageStarted >= pageMs) break;
         }
+        scoreBatch(candidates);
         more = !(consumed === batch.length && batch.length < limit);
         const bound = replay ? scanBoundary.rows : scan;
         if (visited === bound || !tail) more = physicalRows(last, 1).length !== 0;
@@ -549,15 +554,16 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         if (replay && currentEpoch !== expectedEpoch) fail('cursor_stale');
         readMemo = safety ? createContentReadMemo(db) : undefined;
         const limit = Math.min(floor, replay ? scanBoundary.rows : scan);
-        const batch = floorPage.all(...boundary(ns), limit + 1);
+        const batch = floorPage.all(...boundary(ns), limit + 1), candidates = [];
         for (const memory of batch.slice(0, limit)) {
           visited++;
           last = positionOf(memory);
           if (memory.deleted || memory.currentness !== 'current' || safety && !safeMemory(ns, memory, true)) continue;
           if (!discoveryPrepare(`SELECT id FROM memories WHERE ${namespaceWhere} AND id = ?
             AND revision = ?`).get(...boundary(ns), memory.id, memory.revision)) continue;
-          retain(scoreMemory(memory));
+          candidates.push(candidateFor(memory));
         }
+        scoreBatch(candidates);
         more = batch.length > limit;
         if (replay && visited === scanBoundary.rows) {
           stop = scanBoundary.stop;

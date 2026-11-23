@@ -509,10 +509,10 @@
     "open:33": "dd5d19a05cc94529e1ccee40dd64496435c1ac707c775e79b5eb21a4dea668c9",
     "open:52": "d5eb8ce3dff9d76c60cddfeedb911b2f62d87907e46f29767328e9cfa0cce973",
     "open:53": "7a647c9fb1a2993f0874fa1c71a5eb079dc98f21317f084ba600445bcd4158a9",
-    "workload:23": "d544d6de25bdacf76f03476cc68344fc5db4bfdb90e9e00e155c6fa05d326ced",
-    "workload:33": "da141b5f460fd55026767e3bb6ab77a004573eafe738465bd4638fd7d65dc684",
-    "workload:52": "14a3cb98fb211e6b0d1c862b53504032a78bcb0e81333cabfb9400b9ed227d82",
-    "workload:53": "c8ddd052d908d54266d2612499abcb885dc701d70c00f3b8b048e9ae1decec01"
+    "workload:23": "6d17e386f6f8e77d57a5e00f3528bd6bfb292bfe8808b30fec32b7ab0dcc52db",
+    "workload:33": "272cc7ba9353bb4ebb11a692bb7c435858e18230caaac695de46a3d9111000c4",
+    "workload:52": "78df76824e80d0781215268745dbcafa2a2084fc93a0f6f32d5cae53e271bc85",
+    "workload:53": "ad5db7c4483828902fbe09a77160c71d3dd8a8015002d79d7e58ed008b0d998b"
   },
   "currentCensus": {
     "open:23": {
@@ -622,9 +622,9 @@
       ]
     },
     "workload:23": {
-      "statements": 3879,
-      "sql": "cb532597332fcecfa0481531c5842d98ce239b133749975e034a2a676d3562f2",
-      "callOffsets": "0c6a44edcd8303b1c8edadc97f1b2975a284fee8244462fa3d89a81849930c30",
+      "statements": 3910,
+      "sql": "104b24467350b61f139c14d2ac2e336cc02abe57de65908ce221d7aa483806d1",
+      "callOffsets": "4ece5c7a57e49289664f9fec9d0cf68c5f532922974666ff166beb7dd87f54a3",
       "openers": [
         {
           "index": 1,
@@ -636,9 +636,9 @@
       ]
     },
     "workload:33": {
-      "statements": 11337,
-      "sql": "c2c6892c23c3ecc43cd6d6c8d745da3c25e80de95375fb0f54405ffc9893801b",
-      "callOffsets": "83309cd906ae2b3def74294a14a27fd9eeef4d667818bf6cee11b713c34bdd2f",
+      "statements": 11382,
+      "sql": "8a9f9e1f2cc1342756f24060480b728bc839c313d1984d54ba2a203b8aa5095a",
+      "callOffsets": "077d1673a75e971f46d36b3ef1a62b33c7d383ddb45c5d37e6ffaf650210a10d",
       "openers": [
         {
           "index": 1,
@@ -648,7 +648,7 @@
           "archivedIndex": 1
         },
         {
-          "index": 9669,
+          "index": 9702,
           "method": "openRawCaptureCore",
           "ordinal": 1,
           "after": 0,
@@ -657,9 +657,9 @@
       ]
     },
     "workload:52": {
-      "statements": 8658,
-      "sql": "346011df97482a2162c67dfaacd7961f150471a59cf628456b813e39af4d864b",
-      "callOffsets": "b9c2f6f2d845b376b522b2038fabe13c322fd69644b3731c6c80b43ab1e71297",
+      "statements": 8695,
+      "sql": "f88e3bafddd174a6023950c61752fc4db0c5c54b03de146a35c86ef887d4040a",
+      "callOffsets": "47d7b8113e98d76ada4df1057e4218c8cd351a3073c56212ea6ff4816429286c",
       "openers": [
         {
           "index": 1,
@@ -671,9 +671,9 @@
       ]
     },
     "workload:53": {
-      "statements": 20660,
-      "sql": "087295cac0fe9988a154e05a2675166d3016a00bd907aefb2094fb7eaaa21a96",
-      "callOffsets": "fd74bf8b78cd80f363e88359de8c0d701d0b89f6ac341c2fd6dfbfc464cd9621",
+      "statements": 20711,
+      "sql": "27f0c4ad4deb047f5e3603e5ca415044b9cff1a964eb1138181d93905aae4a74",
+      "callOffsets": "26d2a9bb02ef5ecfad4959b94949a1dda09af9583f1bd584c47799ab426e3e79",
       "openers": [
         {
           "index": 1,
@@ -683,7 +683,7 @@
           "archivedIndex": 1
         },
         {
-          "index": 15652,
+          "index": 15685,
           "method": "openRawCaptureCore",
           "ordinal": 1,
           "after": 0,

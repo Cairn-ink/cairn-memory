@@ -27,7 +27,16 @@ test('unmigrated v18/v23/v33: every gated method/variant stays within main 26f9e
  assert.equal(expectedByKey.size,expected.length,'unique main cells');
  assert.deepEqual(records.map(r=>r.key).sort(),[...expectedByKey.keys()].sort(),'exact complete main method/variant/cell/n set; no stale or missing cells');
  assert.equal(records.filter(r=>JSON.parse(r.key)[0]==='native').length,535,'499 existing native plus twelve optional MOC and 24 relations source cells');
- for(const row of records)for(const [i,metric]of ['executed statements','BEGIN','host-port invocations'].entries())
-  assert.ok(row.counts[i]<=expectedByKey.get(row.key)[i],'unmigrated '+metric+' exceeds main 26f9e467: '+JSON.stringify({key:row.key,main:expectedByKey.get(row.key),branch:row.counts}));
+ const budget=fixture.deliveryStatementBudget??{};
+ for(const [key,extra] of Object.entries(budget))assert.ok(expectedByKey.has(key)&&Number.isSafeInteger(extra)&&extra>0,'scoped lookup budget belongs to a measured cell');
+ for(const row of records)for(const [i,metric]of ['executed statements','BEGIN','host-port invocations'].entries()){
+  const main=expectedByKey.get(row.key)[i];
+  if(i===0&&Object.hasOwn(budget,row.key)){
+   const expected=main+budget[row.key];
+   assert.equal(row.counts[0],expected,'unmigrated executed statements must equal the reviewed budget: '+JSON.stringify({key:row.key,expected,branch:row.counts}));
+  }else{
+   assert.ok(row.counts[i]<=main,'unmigrated '+metric+' exceeds main 26f9e467: '+JSON.stringify({key:row.key,main:expectedByKey.get(row.key),branch:row.counts}));
+  }
+ }
 });
 function tReport(records){console.log('S2H_UNMIGRATED_COUNTS '+JSON.stringify({node:process.version,mainSha:fixture.mainSha,cells:records.length,records}));}

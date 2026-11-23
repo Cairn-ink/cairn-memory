@@ -56,7 +56,9 @@ test(`event-time cost ${kind} base ${base}: exact S2h statements, BEGIN, ports a
       for (const row of legacy) {
         const expected = expectedMain.get(childCostKey(job,row));
         assert.ok(expected,'mapped frozen main cell: '+childCostKey(job,row));
-        costTriple(row).forEach((count,i) => assert.ok(count <= expected[i],'original <=main counts: '+childCostKey(job,row)));
+        const extraStatements = main.deliveryStatementBudget?.[childCostKey(job,row)] ?? 0;
+        costTriple(row).forEach((count,i) => assert.ok(count <= expected[i] + (i === 0 ? extraStatements : 0),
+          'original <=main counts: '+childCostKey(job,row)));
       }
       if (!absent && ['memory','topic','card','raw'].includes(kind)) for (const [i,row] of old.entries()) {
         const method = row.kind ?? (kind === 'raw' ? row.limit : row.method);
