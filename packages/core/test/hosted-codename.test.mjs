@@ -13,9 +13,9 @@ const forbidden = new RegExp(
   "i",
 );
 
-// Shipped source, plus the privacy tests and fixtures this guard belongs to.
-const roots = ["src", "test/fixtures/privacy"];
-const privacyTest = (name) => /^privacy-.*\.(?:mjs|json)$|^hosted-codename\.test\.mjs$/u.test(name);
+// The whole core package (source, tests, fixtures, scripts, prompts), except the
+// installed dependency directory.
+const skipped = new Set(["node_modules"]);
 
 function scanLines(path, hits) {
   return readFile(path, "utf8").then((text) => {
@@ -29,18 +29,14 @@ async function scan(dir, hits) {
   const entries = await readdir(dir, { withFileTypes: true });
   for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
     const path = join(dir, entry.name);
-    if (entry.isDirectory()) await scan(path, hits);
+    if (entry.isDirectory()) { if (!skipped.has(entry.name)) await scan(path, hits); }
     else if (entry.isFile()) await scanLines(path, hits);
   }
 }
 
-test("core source and privacy tests contain no hosted codename or HMAC domains", async () => {
+test("the core package contains no hosted codename or HMAC domains", async () => {
   const hits = [];
-  for (const dir of roots) await scan(join(root, dir), hits);
-  const tests = await readdir(join(root, "test"), { withFileTypes: true });
-  for (const entry of tests) {
-    if (entry.isFile() && privacyTest(entry.name)) await scanLines(join(root, "test", entry.name), hits);
-  }
+  await scan(root, hits);
   assert.deepEqual(hits, []);
 });
 
