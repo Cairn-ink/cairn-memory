@@ -214,14 +214,17 @@ or for stores under `/mnt/` or on network filesystems, each session starts
 its own server. If the shared server can't start, the session automatically
 starts its own server.
 
-From installer 0.6.11, `npx @cairn-ink/memory daemon status --local` shows each
-shared server for the installed store, with its short store ID, running state,
-build and session count.
-`npx @cairn-ink/memory daemon stop --local` asks running shared servers for the
-installed store to exit. It never force-kills them and reports how many are still
-running. Run it when sessions are idle. A call in flight can report
-`daemon_outcome_unknown` even if its write was saved. These commands work on
-Linux and report `daemon_platform` elsewhere.
+Installer 0.6.11 adds `npx @cairn-ink/memory daemon status --local` for a local
+store whose installed engine supports shared servers. On Linux it returns JSON
+with each published server's short store ID, running state, build and last
+reported session count, when available. An endpoint without a published server
+record can appear as `endpoint_uncertain`.
+`npx @cairn-ink/memory daemon stop --local` sends SIGTERM to verified running
+servers for that store and waits up to five seconds before reporting `stopped`
+and `still_running` for the servers it signalled. Run it when sessions are
+idle. A call in flight can report `daemon_outcome_unknown` even if its write
+was saved. With an engine that supports these commands, both print
+`daemon_platform` on other platforms.
 
 To keep workers from loading the memory server:
 
