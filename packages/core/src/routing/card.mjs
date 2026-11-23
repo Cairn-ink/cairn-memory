@@ -6,6 +6,14 @@ const BODY_LIMIT = 4_000;
 const TITLE_LIMIT = 200;
 const encoder = new TextEncoder();
 
+/** Version of the redacted text used for indexing and embedding document cards. */
+export const DOCUMENT_CARD_SEARCH_TEXT_VERSION = 1;
+
+/** @param {{ title: string | null, body: string }} card */
+export function documentCardSearchText({ title, body }) {
+  return title ? `${title}\n\n${body}` : body;
+}
+
 /** @param {string} body @param {import("./index.mjs").DocumentMessageRef} source */
 function sentenceSources(body, source) {
   /** @type {import("./index.mjs").DocumentSentence[]} */

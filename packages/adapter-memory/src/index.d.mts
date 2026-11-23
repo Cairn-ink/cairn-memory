@@ -18,7 +18,7 @@ export interface MemoryAdapterOptions {
 
 export type MemoryAdapter = Pick<StorageAdapter<StoredDocumentCardRecord>, "capabilities" | "uow" | "memories" | "capture" |
   "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "suppressions" | "pause" | "keys" | "placement" |
-  "documentCards"> & {
+  "raw" | "supersession" | "conflicts" | "documentCards"> & {
   name: "memory";
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;
   harness: TestHarness & Required<Pick<TestHarness, "setFingerprintSecret" | "rowsMissingKeyedDigest" | "advanceClock">>;

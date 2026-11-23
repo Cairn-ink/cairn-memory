@@ -18,8 +18,10 @@ import { addKeyedDigest, createFactStore } from "./privacy.mjs";
 /** @typedef {import("./topics.mjs").TopicState} TopicState */
 /** @typedef {{ card: import("./document-cards.mjs").CardWrite | null, createdAtMs: number,
  * amendments?: Map<string, import("@cairn-ink/core/ports").DocumentCardAmendment | null> }} CardEntry */
+/** @typedef {import("./memory-relations.mjs").RelationState} RelationState */
 /** @typedef {{topics: Map<Namespace, TopicState>, documentCards: Map<Namespace, Map<string, CardEntry>>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
- * claims: Map<string, ClaimRecord>, activeTokens: Map<string, string>, abandonedTokens: Set<string>}} State */
+ * rawRows: Map<string, import("./raw.mjs").RawEntry>, rawFences: Set<string>,
+ * claims: Map<string, ClaimRecord>, activeTokens: Map<string, string>, abandonedTokens: Set<string>, relations: Map<Namespace, RelationState>}} State */
 /** @typedef {{state: State, run: {readonly ended: boolean}, indexDirty: boolean, stateWritten: boolean, pauseLock: boolean,
  * poisoned: boolean, writeErrorCode: ErrorCode, finishes: Set<FinishResult>, writingFinishes: number, cardWrites: number,
  * writeTail?: Promise<void>}} IssuedRun */
@@ -79,9 +81,9 @@ class Mutex {
 class Owner {
   /** @type {State} */
   committed = {
-    topics: new Map(), documentCards: new Map(), rows: new Map(), facts: new Map(), epoch: null,
-    pause: { paused: false, generation: 0 }, indexRevision: 0,
-    claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(),
+    topics: new Map(), documentCards: new Map(), rows: new Map(), facts: new Map(), epoch: null, pause: { paused: false, generation: 0 }, indexRevision: 0,
+    claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(), rawRows: new Map(), rawFences: new Set(),
+    relations: new Map(),
   };
   pause = new Mutex();
   write = new Mutex();
@@ -291,11 +293,12 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
     return (getState, _markDirty, run) => body(getState, run);
   }, true);
 
-  function dump(includeDocumentCards = false) {
+  function dump(includeRaw = false, includeDocumentCards = false) {
     const snapshot = [...owners]
       .filter(([, { committed }]) => committed.rows.size > 0 || committed.facts.size > 0 ||
         committed.pause.generation > 0 || committed.claims.size > 0 ||
         (includeTopics && (committed.topics.size > 0 || committed.indexRevision > 0)) ||
+        (includeRaw && (committed.rawRows.size > 0 || committed.rawFences.size > 0 || committed.indexRevision > 0)) ||
         (includeDocumentCards && committed.documentCards.size > 0))
       .sort(([a], [b]) => compareUtf8(a, b))
       .map(([owner, { committed }]) => ({
@@ -309,7 +312,11 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
           }),
         facts: [...committed.facts.values()],
         pause: committed.pause,
-        ...((includeTopics || includeDocumentCards) && { indexRevision: committed.indexRevision }),
+        ...(includeRaw && {
+          rawRows: [...committed.rawRows.values()].sort((a, b) => compareUtf8(a.ref.id, b.ref.id)),
+          rawFences: [...committed.rawFences].sort(compareUtf8),
+        }),
+        ...((includeRaw || includeTopics || includeDocumentCards) && { indexRevision: committed.indexRevision }),
         ...(includeTopics && {
           topics: [...committed.topics].map(([namespace, { topics, outcomes, failures, cardOutcomes, cardFailures }]) => ({
             namespace,

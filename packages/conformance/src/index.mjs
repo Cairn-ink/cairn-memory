@@ -9,6 +9,8 @@ export { PRIVACY_MATCH_CASES } from "./privacy-match-cases.mjs";
 export { SOURCE_FILTER_CASES } from "./source-filter-cases.mjs";
 export { KEYED_DIGEST_CASES } from "./keyed-digest-cases.mjs";
 export { topicCases as TOPIC_CASES } from "./topics-cases.mjs";
+export { RAW_CASES } from "./raw-cases.mjs";
+export { relationCases as RELATION_CASES } from "./relation-cases.mjs";
 export { TOPIC_CARD_CASES } from "./topics-cards-cases.mjs";
 export { DOCUMENT_CARD_AMENDMENT_CASES } from "./document-card-amendment-cases.mjs";
 export { TOPICS_FOR_CARDS_CASES } from "./topics-for-cards-cases.mjs";

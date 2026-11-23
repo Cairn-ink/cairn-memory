@@ -41,6 +41,23 @@ export function copyCaptureKey(key, owner, namespace) {
   return { scope: { owner, namespace: namespace ?? null }, client, sessionId, eventId, payloadDigest };
 }
 
+/** @param {import("@cairn-ink/core/ports").Tx} tx @param {import("@cairn-ink/core/ports").CaptureKey} key */
+export function admissionScope(tx, key) {
+  /** @type {import("@cairn-ink/core/ports").Scope | undefined} */
+  let scope;
+  /** @type {string | undefined} */
+  let owner;
+  return {
+    get owner() {
+      scope = key?.scope;
+      owner = scope?.owner;
+      // Leave missing or malformed owners to input validation after the transaction guard.
+      return typeof owner === "string" && owner ? owner : tx.owner;
+    },
+    copyKey: () => copyCaptureKey(key, owner, scope?.namespace),
+  };
+}
+
 /** Read indexed data once and ignore caller-provided traversal methods.
  * @template T @param {readonly T[]} values
  * @param {{strictKeys?: boolean, allowEntries?: boolean, maxLength?: number}} [options] @returns {T[]}
@@ -99,17 +116,19 @@ function copyDigests(digests) {
 }
 
 /** @param {readonly import("@cairn-ink/core/ports").CaptureMessage[]} messages */
-export function captureMessageTimes(messages) {
-  /** @type {Array<number | null>} */
-  const times = [];
-  for (const message of snapshotArray(messages)) {
-    if (!message || typeof message.id !== "string" || message.id.length > 512 || !roles.includes(message.role) ||
-      typeof message.content !== "string") invalid();
-    const { occurredAtMs } = message;
+export function copyCaptureMessages(messages) {
+  return snapshotArray(messages).map((message) => {
+    if (!message) invalid();
+    const { id, role, content, occurredAtMs } = message;
+    if (typeof id !== "string" || id.length > 512 || !roles.includes(role) || typeof content !== "string") invalid();
     if (occurredAtMs !== null && !Number.isSafeInteger(occurredAtMs)) invalid();
-    times.push(occurredAtMs);
-  }
-  return times;
+    return { id, role, content, occurredAtMs };
+  });
+}
+
+/** @param {readonly import("@cairn-ink/core/ports").CaptureMessage[]} messages */
+export function captureMessageTimes(messages) {
+  return copyCaptureMessages(messages).map(({ occurredAtMs }) => occurredAtMs);
 }
 
 /** @param {{code: string, retryable: boolean}} failure */
@@ -134,6 +153,11 @@ export function copyFinishItems(items, embeddingRequiredOnInsert) {
 /** @param {number} nowMs */
 export function validateTime(nowMs) {
   if (!Number.isSafeInteger(nowMs) || nowMs < 0) invalid();
+}
+
+/** @param {number} nowMs */
+export function writeTime(nowMs) {
+  return { updatedAtMs: nowMs, updatedAtUs: BigInt(nowMs) * 1000n };
 }
 
 /** @param {import("@cairn-ink/core/ports").Scope} scope */

@@ -50,12 +50,12 @@ function recentAfter(cursor) {
 }
 
 /** @param {RetrievalScope} scope @param {number} revision */
-function stateToken({ owner, namespaces, clients }, revision) {
+export function stateToken({ owner, namespaces, clients }, revision) {
   return encodePayload([owner, revision, [...namespaces].sort(compareNamespaces), clients ? [...clients].sort(compareStrings) : null]);
 }
 
 /** @param {string} token */
-function validateToken(token) {
+export function validateToken(token) {
   const [owner, revision, namespaces, clients, ...extra] = decodePayload(token);
   if (extra.length || typeof owner !== "string" || !owner ||
     typeof revision !== "number" || !Number.isSafeInteger(revision) || revision < 0) {
@@ -69,6 +69,21 @@ function validateToken(token) {
     throw new CoreError("invalid_cursor");
   }
   if (stateToken(selection, revision) !== token) throw new CoreError("invalid_cursor");
+}
+
+/**
+ * @template {{ref: ItemRef, text: string}} T
+ * @param {T[]} documents @param {string[]} terms @param {number} depth
+ */
+export function rankLexical(documents, terms, depth) {
+  // The BM25 search convenience method caps depth. The port accepts any positive safe integer.
+  const index = createBM25(documents);
+  const rows = [];
+  for (const { text, ...document } of documents) {
+    const score = scoreBM25(terms, termFrequencies(text), index);
+    if (score !== null) rows.push({ ...document, score });
+  }
+  return rankScores(rows).slice(0, depth);
 }
 
 /** @param {Receipt[]} receipts */
@@ -212,15 +227,8 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
           const documents = visibleRows(getState(), selection).map((row) => ({
             ref: memoryRef(row), updatedAtUs: row.updatedAtUs, text: row.text,
           }));
-          // The core search convenience method caps depth. Score using the same corpus stats
-          // and scorer so the port can honor all positive safe-integer depths.
-          const index = createBM25(documents);
-          const rows = [];
-          for (const { ref, updatedAtUs, text } of documents) {
-            const score = scoreBM25(terms, termFrequencies(text), index);
-            if (score !== null) rows.push({ ref, updatedAtUs, score });
-          }
-          return { rows: rankScores(rows).slice(0, depth), matched: rows.length > 0 };
+          const rows = rankLexical(documents, terms, depth);
+          return { rows, matched: rows.length > 0 };
         });
       },
     },

@@ -34,6 +34,8 @@ export declare const PRIVACY_MATCH_CASES: readonly ConformanceCase[];
 export declare const SOURCE_FILTER_CASES: readonly ConformanceCase[];
 export declare const KEYED_DIGEST_CASES: readonly ConformanceCase[];
 export declare const TOPIC_CASES: readonly ConformanceCase[];
+export declare const RAW_CASES: readonly ConformanceCase[];
+export declare const RELATION_CASES: readonly ConformanceCase[];
 export declare const TOPIC_CARD_CASES: readonly ConformanceCase[];
 export declare const DOCUMENT_CARD_AMENDMENT_CASES: readonly ConformanceCase[];
 export declare const TOPICS_FOR_CARDS_CASES: readonly ConformanceCase[];
