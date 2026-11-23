@@ -6,3 +6,6 @@ export declare function redactV1(text: string): string;
 export declare function redactHostedCurrent(text: string): string;
 /** Masks the union of v1 and hosted-current matches. */
 export declare function redactCore(text: string): string;
+
+/** One pass of the core policy, with UTF-16 offsets in the original text. */
+export declare function coreRedactionMasks(text: string): [start: number, end: number][];
