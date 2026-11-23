@@ -46,3 +46,24 @@ export function fuseHosted(
 };
 
 export function fuseHostedLexicalOnly(rows: readonly LexicalRow[], opts: Page): { rows: LexicalRow[]; total: number };
+
+export interface HostedCardChannels {
+  memoryLexical: readonly LexicalRow[];
+  /** Null when the memory vector channel is unavailable or its coverage is incomplete. */
+  memoryVector: readonly VectorRow[] | null;
+  cardLexical: readonly LexicalRow[];
+  /** Null when the card vector channel is unavailable or its coverage is incomplete. */
+  cardVector: readonly VectorRow[] | null;
+}
+
+/** Fuses separately ranked memory and card channels before applying the hosted page. */
+export function fuseHostedWithCards(
+  channels: HostedCardChannels & ({ memoryVector: readonly VectorRow[] } | { cardVector: readonly VectorRow[] }),
+  opts: Page & { floor?: boolean },
+): ReturnType<typeof fuseHosted>;
+
+/** With both vector channels null and no card candidates, returns the legacy lexical page. */
+export function fuseHostedWithCards(
+  channels: HostedCardChannels,
+  opts: Page & { floor?: boolean },
+): ReturnType<typeof fuseHosted> | ReturnType<typeof fuseHostedLexicalOnly>;

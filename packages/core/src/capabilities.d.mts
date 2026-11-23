@@ -3,7 +3,7 @@ export type Capability =
   | "orderedCapture" | "stagedEvidence" | "placement" | "relations" | "cards" | "documentCards" | "episodes"
   | "spanLineage" | "sessionLineage" | "rawSpans" | "rawArchive" | "rawWindowHide"
   | "supersession" | "conflictEdges" | "semanticRetrieval" | "forgetLog"
-  | "quantityLedger";
+  | "quantityLedger" | "documentCardSearch";
 
 export type Capabilities = Readonly<Record<Capability, boolean>>;
 
@@ -15,7 +15,7 @@ export declare function requireCapability(caps: Capabilities, name: Capability):
 
 export declare const OPTIONAL_PORTS: Readonly<
   Record<"vector" | "raw" | "staged" | "placement" | "relations" | "causal" | "supersession" | "conflicts" | "forgetLog" | "sessionLineage" | "spanLineage", Capability>
-  & { documentCards: "documentCards"; quantityLedger: "quantityLedger" }
+  & { documentCards: "documentCards"; documentCardCandidates: "documentCardSearch"; quantityLedger: "quantityLedger" }
 >;
-/** Throws capability_unavailable unless every optional port is present exactly when its flag is true. */
+/** Throws capability_unavailable unless optional ports match their flags and documentCardSearch implies documentCards. */
 export declare function assertAdapterCapabilities(adapter: { capabilities: Capabilities } & Record<string, unknown>): void;

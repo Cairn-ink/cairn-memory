@@ -1,4 +1,5 @@
 import { FUSION_PRESETS, VECTOR_ONLY_FLOOR } from "../decisions.mjs";
+import { CoreError } from "../errors.mjs";
 import { compareSortKey, compareUtf8 } from "../utf8.mjs";
 import { canonicalKey, rankScores } from "./bm25.mjs";
 
@@ -133,4 +134,42 @@ export function fuseHosted(lexicalRows, vectorRows, { offset, limit, floor = fal
 /** @param {readonly LexicalRow[]} rows @param {Page} opts */
 export function fuseHostedLexicalOnly(rows, { offset, limit }) {
   return { rows: [...rows].sort(compareHostedScore).slice(offset, offset + limit), total: rows.length };
+}
+
+/** @param {readonly LexicalRow[]} rows @returns {HostedRow[]} */
+function rankHostedLexical(rows) {
+  const { k, lexicalWeight, pool } = FUSION_PRESETS.hosted;
+  const ranked = fuseHostedLexicalOnly(rows, { offset: 0, limit: pool });
+  return ranked.rows.map(({ ref, updatedAtUs }, index) => {
+    const lexicalRank = index + 1;
+    return { ref, updatedAtUs, score: lexicalWeight / (k + lexicalRank), lexicalRank, vectorRank: null };
+  });
+}
+
+/**
+ * @param {import("./fusion.mjs").HostedCardChannels} channels
+ * @param {Page & { floor?: boolean }} opts
+ */
+export function fuseHostedWithCards({ memoryLexical, memoryVector, cardLexical, cardVector }, { offset, limit, floor = false }) {
+  if (memoryLexical.some(row => row.ref.type === "card") || memoryVector?.some(row => row.ref.type === "card") ||
+      cardLexical.some(row => row.ref.type !== "card") || cardVector?.some(row => row.ref.type !== "card")) {
+    throw new CoreError("invalid_input");
+  }
+
+  /** @type {HostedRow[]} */
+  let rows;
+  if (memoryVector === null && cardVector === null) {
+    if (cardLexical.length === 0) return fuseHostedLexicalOnly(memoryLexical, { offset, limit });
+    rows = [...rankHostedLexical(memoryLexical), ...rankHostedLexical(cardLexical)];
+  } else {
+    if (cardLexical.length === 0 && !cardVector?.length) {
+      return fuseHosted(memoryLexical, memoryVector ?? [], { offset, limit, floor });
+    }
+    const all = { offset: 0, limit: 2 * FUSION_PRESETS.hosted.pool, floor };
+    const memories = fuseHosted(memoryLexical, memoryVector ?? [], all);
+    const cards = fuseHosted(cardLexical, cardVector ?? [], all);
+    rows = [...memories.rows, ...cards.rows];
+  }
+  rows.sort(compareHostedScore);
+  return { rows: rows.slice(offset, offset + limit), total: rows.length };
 }

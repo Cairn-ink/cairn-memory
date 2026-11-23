@@ -1,5 +1,6 @@
 import type { DocumentSentence, DocumentVector } from "../routing/index.mjs";
 import type { Revision, Scope } from "./common.d.ts";
+import type { LexicalCandidates, VectorCandidates } from "./retrieval.d.ts";
 import type { Tx } from "./unit-of-work.d.ts";
 
 export interface DocumentCardSession {
@@ -72,3 +73,12 @@ export interface DocumentCardStore {
   /** Same read snapshot as get. */
   list(tx: Tx, scope: Scope): Promise<DocumentCardRecord[]>;
 }
+
+/**
+ * Optional (capability documentCardSearch). Both methods return only visible cards
+ * within the RetrievalScope in the same read snapshot. Exclude hidden and tombstoned
+ * cards. Each row has ref.type "card" and the card's namespace in ref.namespace.
+ * Order vector rows by distance ascending, then updatedAtUs descending, then id
+ * descending by UTF-8 bytes. Core uses the vector channel only when coverage.complete is true.
+ */
+export interface DocumentCardCandidates extends LexicalCandidates, VectorCandidates {}

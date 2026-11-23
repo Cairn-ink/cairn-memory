@@ -14,6 +14,7 @@ export const CAPABILITIES = Object.freeze([
   "relations", // card relations and MOC rank
   "cards", // cards and card lineage
   "documentCards", // document card storage and invalidation
+  "documentCardSearch", // lexical and vector candidates for document cards
   "quantityLedger", // quantity rows and invalidation
   "episodes", // episode capture (parked: SQLite only, not in core)
   "spanLineage", // span-level raw receipt lineage (engine): resolveSpans
@@ -61,6 +62,7 @@ export const OPTIONAL_PORTS = Object.freeze({
   sessionLineage: "sessionLineage",
   spanLineage: "spanLineage",
   documentCards: "documentCards",
+  documentCardCandidates: "documentCardSearch",
   quantityLedger: "quantityLedger",
 });
 
@@ -74,4 +76,5 @@ export function assertAdapterCapabilities(adapter) {
   for (const [member, flag] of Object.entries(OPTIONAL_PORTS)) {
     if ((adapter[member] != null) !== (caps[flag] === true)) throw new CoreError("capability_unavailable");
   }
+  if (caps.documentCardSearch === true && caps.documentCards !== true) throw new CoreError("capability_unavailable");
 }
