@@ -251,20 +251,20 @@ function redactDocument(content) {
   };
   const redact = view => {
     if (view.text.normalize('NFKC') !== view.text) return null;
-    let locations = view.locations;
-    const text = redactSecrets(view.text, edits => {
-      const next = [];
-      let offset = 0;
-      for (const { start, end, replacement } of edits) {
-        next.push(...locations.slice(offset, start));
-        const span = [locations[start][0], locations[end - 1][1]];
-        spans.push(span);
-        next.push(...Array(replacement.length).fill(span));
-        offset = end;
-      }
-      locations = next.concat(locations.slice(offset));
-    });
-    return { text, locations };
+    const text = redactSecrets(view.text);
+    if (text === view.text) return view;
+    const edits = redactionEdits(view.text, text);
+    if (!edits) return null;
+    const locations = [];
+    let offset = 0;
+    for (const { start, end, length } of edits) {
+      locations.push(...view.locations.slice(offset, start));
+      const span = [view.locations[start][0], view.locations[end - 1][1]];
+      spans.push(span);
+      locations.push(...Array(length).fill(span));
+      offset = end;
+    }
+    return { text, locations: locations.concat(view.locations.slice(offset)) };
   };
 
   // Capture flattens before the Raw snapshot and can normalize the bounded
@@ -283,4 +283,45 @@ function redactDocument(content) {
     offset = Math.max(offset, end);
   }
   return result + body.slice(offset);
+}
+
+// The redactor only removes spans and emits a fixed marker. Align each
+// unchanged run from both ends. If the alignments disagree, some text could
+// have belonged to a removed span, so the caller drops the entire document.
+function redactionEdits(before, after) {
+  const markers = [...after.matchAll(/(?:\[REDACTED\])+/gu)];
+  if (!markers.length) return null;
+  const runs = [];
+  let offset = 0;
+  for (const marker of markers) {
+    runs.push(after.slice(offset, marker.index));
+    offset = marker.index + marker[0].length;
+  }
+  runs.push(after.slice(offset));
+
+  const last = runs.length - 1;
+  if (!before.startsWith(runs[0]) || !before.endsWith(runs[last])) return null;
+  const positions = [0];
+  let end = runs[0].length;
+  for (let index = 1; index < last; index++) {
+    const start = before.indexOf(runs[index], end + 1);
+    if (start < 0) return null;
+    positions.push(start);
+    end = start + runs[index].length;
+  }
+  const tail = before.length - runs[last].length;
+  if (tail <= end) return null;
+  positions.push(tail);
+
+  let start = tail;
+  for (let index = last - 1; index > 0; index--) {
+    const limit = start - runs[index].length - 1;
+    if (limit < 0 || before.lastIndexOf(runs[index], limit) !== positions[index]) return null;
+    start = positions[index];
+  }
+  return markers.map(([marker], index) => ({
+    start: positions[index] + runs[index].length,
+    end: positions[index + 1],
+    length: marker.length,
+  }));
 }

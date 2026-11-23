@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "2aa5030ac075f6dcff24f8a36592cdb64476dfdd7608110e1bcc31c3520cc2e0",
-  "bytes": 1504703,
+  "sha256": "3f5ef3c789d52934a725f1d1455f1cb3de30b1834b3356a6371b33474cd28b77",
+  "bytes": 1504854,
   "files": [
     "LICENSE",
     "README.md",
@@ -551,7 +551,7 @@
     "core/qualification-candidates-prompt.mjs": "3aaf3527643a728da8ff2090fcfefc61a12ae2a815d6195adb57c72558f23ea7",
     "core/qualification-text-catalog.mjs": "d4593f67661ad790ccb79b875b26ebfd87da416c4b5fdba9c06650043098e965",
     "core/quantity-ledger.mjs": "e68cbb4e175d44616c0b515d8717d18aa61940521835ff025d2b91de6f365c4e",
-    "core/document-card.mjs": "c6b1bbac4264e4ac240eb846f374da4b18ceef5d5563d00f9db6d30ef7e2402f",
+    "core/document-card.mjs": "1fa8f38c45a23da45ad08273ea195aef92abbdb4afda7f827b950ca06054d6b8",
     "core/query-candidates.mjs": "9564d53daea476ac0b83839ea039ca8554a6bc584046023b626a3a38c5f9cf65",
     "core/query-excerpt.mjs": "952cdc3ff88f3a57181188565ce1bbe89b6ff1f5eaa2870d7ef4a295739a4265",
     "core/qualified-transition-schema.mjs": "acbc489570626d41409c89321f2a48ad600603aa11dab775c3d7e440951b3f58",
@@ -628,7 +628,7 @@
     "adapters/openai/qualification-evidence-pool.mjs": "10207e775f628584a16cecfbe784dcb6764171123aeca088c4a7d69ee1fcc946",
     "adapters/openai/profiles.mjs": "08d0b47b9d694ec5764e75d6a6d13019a4daa8d196495216da80639d82a592a0",
     "adapters/openai/schemas.mjs": "6817e934c7d49b5f1bc3d3a4a62d68458fff97d31c32463b2c428f51b6f03350",
-    "plugins/cairn-memory/lib/redact.mjs": "8a7e30c290765710e962b93584d8ba2c16f7a25535e41cd81584271150ce5ef3",
+    "plugins/cairn-memory/lib/redact.mjs": "55ea9bfb8fe49c328cd4782f06332b5647fb0756ee992539da6dc0874c22c3c5",
     "evaluation/live/diagnostics.mjs": "2cb6ec674503bfb979b0a700e9430bdf284adf5b0d5c4d0d338afbdbac6a1077",
     "integrations/client/control-state.mjs": "8664a54da21f5168b9168e8a76d902f8d1df59ee7e299e61ca4cfccd811e4be1",
     "integrations/client/file-lock.mjs": "42535bd8d6d96e89819e2669c7c671f1136fb753c3ffd2153919f3eb3c8e46b6",
@@ -674,7 +674,7 @@
     "integrations/client/raw/selection.mjs": "29cbbb13392b8ce3e6ef78930ef573ce02f7070d711ea8402ea77f07d5152382",
     "integrations/client/raw/protocol.mjs": "b8bc52c7af71a945fc470188a51cd63b2904bea6898eec84b30805aefc98fb94",
     "integrations/client/common-profile.mjs": "8c9fab55e95e0eaf92f963155433ef357bc8d9bae1843c2c149182f363644ad5",
-    "integrations/client/redact.mjs": "3adcddbf64d39fdeb2895f3789a2052bfc8af7c664c23a5673a790ea4b0fd7fd",
+    "integrations/client/redact.mjs": "f4bcfdc8edd177060b62a75f9dbc229443328eb822e40d814f0a48684c253f88",
     "integrations/codex/parser.mjs": "de6f77febc02c7790261e138b9be2a8cc96e46675e11d0505c340e77224c2cea",
     "integrations/codex/source.mjs": "6bf982b4227d6a7834c02faa74690340c72b269ccf1e9a1242358135de37b580",
     "integrations/codex/session-source.mjs": "1341cc42eebf5a996be305f471393a717bfdd5eddd19fc3fd556fe8483fdfbc3",
@@ -842,6 +842,6 @@
   "generatedHashes": {
     "package.json": "2f6b26708f5832f7ed14af9b15f695d49f4b3f862509afc82163702948d6c91e",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8",
-    "engine-build.json": "30c8000fda1930ebd1575436e7d13b307ab88227a3430bb770aa5fb500f20145"
+    "engine-build.json": "73fa64002eb0e1aafeda6703b252e09e9380bd9ad2cddd7b8ab6168867d7e35c"
   }
 }

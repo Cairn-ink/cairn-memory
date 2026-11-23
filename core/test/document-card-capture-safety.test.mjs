@@ -86,3 +86,15 @@ test('the window tries the original left and right bounds in order', () => {
   assert.deepEqual(documentPiece(body, 'target', 1200, text => text.length),
     { body: ['# H', '…', 'target', right].join('\n'), piece: 'window' });
 });
+
+test('an ambiguous redaction mapping drops the card without dropping capture', async t => {
+  const port = createInMemoryDocumentCardPort();
+  const f = fixture(t, { coreOptions: { cardPort: port }, model: { extract: empty } });
+  const key = value => '-----BEGIN PRIVATE  KEY-----\n' + value + '\n-----END PRIVATE  KEY-----';
+  const text = document + '\n' + key('first divider material') + ' divider ' + key('second material');
+  const result = completed(await f.core.captureRaw(request(splitRaw(text)[0])));
+  assert.equal(result.documentCards.droppedRedaction, 1);
+  assert.deepEqual(port.list(ns), []);
+  const shown = f.calls.find(call => call.method === 'extract').input.messages[0].content;
+  assert.doesNotMatch(shown, /first divider material|second material/);
+});

@@ -14,7 +14,7 @@
     "integrations/client/pairing.mjs": "46a3cc1bb1e88ad1ab06c0096fb9c1dbee0d34b19b4c1435c9c07b496065af3c",
     "integrations/client/private-state.mjs": "14a576ec9f24c568e15cefff540f3771ecb2b974248ef73b4cee5124c83c365e",
     "integrations/client/recall-query.mjs": "87d606696185da8c0455889c9cf359116f82f70b3a92a1153629026b5406f765",
-    "integrations/client/redact.mjs": "3adcddbf64d39fdeb2895f3789a2052bfc8af7c664c23a5673a790ea4b0fd7fd",
+    "integrations/client/redact.mjs": "f4bcfdc8edd177060b62a75f9dbc229443328eb822e40d814f0a48684c253f88",
     "integrations/client/runtime-usage.mjs": "8bf732bb36664b33aa238a40903986b16c112a44829412c32a11b01dcad08d4d",
     "integrations/client/source-time.mjs": "002acf215bd6b79b3e4ace3e9d181a89dbf8efc48093a6e980c8417df64b9401",
     "integrations/client/state-lock.mjs": "a7dbbf6c805fce74039a224f19e720d5740506c1fcd41129bea8ecb6a60c7c84",
