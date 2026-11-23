@@ -2,6 +2,7 @@ import { countTokens as checkedTokenCount, MODEL_INPUT_TOKENS, modelRequestText 
 import { cleanContent } from "../privacy/text.mjs";
 import { compareUtf8 } from "../utf8.mjs";
 import { SYS_DETECT, SYS_VERIFY } from "./amendment-prompts.mjs";
+import { identityDigest } from "./card.mjs";
 import { redactAmendmentText } from "./redaction.mjs";
 import { SPACE } from "./text.mjs";
 
@@ -16,7 +17,6 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const VERIFY_LIMIT = 4;
 const WHITESPACE = new RegExp(`${SPACE}+`, "gu");
 const EDGE_WHITESPACE = new RegExp(`^${SPACE}+|(?<!${SPACE})${SPACE}+(?![\\s\\S])`, "gu");
-const encoder = new TextEncoder();
 
 /** @param {Record<string, object>} properties */
 function strictObject(properties) {
@@ -240,27 +240,24 @@ export function buildVerifyRequest({ card, sessionDate, quote, newValue }) {
 /** @param {string} cardId @param {DocumentCardSourceMessage} sourceMessage @param {string} quote */
 export async function amendmentId(cardId, { client, sessionId, messageId }, quote) {
   const identity = ["document-card-amendment", cardId, client, sessionId, messageId, norm(quote)];
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", encoder.encode(JSON.stringify(identity)));
-  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+  return identityDigest(identity);
 }
 
 /** @param {(signal: AbortSignal) => Promise<unknown>} send @param {number} timeoutMs */
 async function withTimeout(send, timeoutMs) {
-  const controller = new AbortController();
-  const reason = new DOMException("Model deadline exceeded", "TimeoutError");
-  /** @type {ReturnType<typeof setTimeout> | undefined} */
-  let timer;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => {
-      reject(reason);
-      controller.abort(reason);
-    }, timeoutMs);
+  const signal = AbortSignal.timeout(timeoutMs);
+  /** @type {() => void} */
+  let onAbort = () => {};
+  const abort = new Promise((_, reject) => {
+    onAbort = () => reject(signal.reason);
+    if (signal.aborted) onAbort();
+    else signal.addEventListener("abort", onAbort, { once: true });
   });
   try {
-    const pending = Promise.resolve().then(() => send(controller.signal));
-    return await Promise.race([pending, timeout]);
+    const pending = Promise.resolve().then(() => send(signal));
+    return await Promise.race([abort, pending]);
   } finally {
-    clearTimeout(timer);
+    signal.removeEventListener("abort", onAbort);
   }
 }
 
