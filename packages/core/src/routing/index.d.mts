@@ -109,3 +109,5 @@ export declare function rankDocumentCards(
   cards: readonly DocumentCard[],
   options?: DocumentRankingOptions,
 ): DocumentCardMatch | null;
+
+export * from "./visibility.mjs";
