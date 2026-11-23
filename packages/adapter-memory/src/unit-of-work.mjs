@@ -1,4 +1,4 @@
-import { CoreError, compareUtf8, toCoreError } from "@cairn-ink/core";
+import { CoreError, compareUtf8, isErrorCode, toCoreError } from "@cairn-ink/core";
 import { createFactStore } from "./privacy.mjs";
 
 /** @typedef {import("@cairn-ink/core").ErrorCode} ErrorCode */
@@ -10,7 +10,7 @@ import { createFactStore } from "./privacy.mjs";
 /** @typedef {import("@cairn-ink/core").StoredFact} StoredFact */
 /** @typedef {import("@cairn-ink/core/ports").PauseState} PauseState */
 /** @typedef {{rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number}} State */
-/** @typedef {{state: State, run: {readonly ended: boolean}, dirty: boolean, pauseLock: boolean, writeErrorCode?: ErrorCode}} IssuedRun */
+/** @typedef {{state: State, run: {readonly ended: boolean}, dirty: boolean, pauseLock: boolean, poisoned: boolean, writeErrorCode: ErrorCode}} IssuedRun */
 
 class Mutex {
   #tail = Promise.resolve();
@@ -99,10 +99,10 @@ export function createUnitOfWork(nativeErrorMap) {
         const run = Object.freeze({ get ended() { return ended; } });
         tx = Object.freeze({ owner, readOnly, __adapter: run });
         /** @type {IssuedRun} */
-        const issuedRun = { run, state, dirty: false, pauseLock };
+        const issuedRun = { run, state, dirty: false, pauseLock, poisoned: false, writeErrorCode: "internal_error" };
         issued.set(tx, issuedRun);
         const result = await fn(tx);
-        if (issuedRun.writeErrorCode !== undefined) throw new CoreError(issuedRun.writeErrorCode);
+        if (issuedRun.poisoned) throw new CoreError(issuedRun.writeErrorCode);
         if (issuedRun.dirty) {
           state.indexRevision++;
           current.committed = state;
@@ -149,8 +149,14 @@ export function createUnitOfWork(nativeErrorMap) {
       if (write === true) issuedRun.dirty = true;
       return result;
     } catch (error) {
+      const firstFailure = write && touchedState && issuedRun && !issuedRun.poisoned;
+      // Poison the run even if inspecting the thrown value fails.
+      if (firstFailure) issuedRun.poisoned = true;
       const mapped = toCoreError(error, nativeErrorMap);
-      if (write && touchedState && issuedRun) issuedRun.writeErrorCode ??= mapped.code;
+      if (firstFailure) {
+        const code = mapped.code;
+        issuedRun.writeErrorCode = isErrorCode(code) ? code : "internal_error";
+      }
       throw mapped;
     }
   }

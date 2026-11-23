@@ -275,6 +275,36 @@ test("a caught store clock failure after fact lookup aborts the run", async () =
   assert.equal(await token(adapter), before);
 });
 
+for (const [label, code] of [["a missing", undefined], ["an unrecognized", "test-unknown-code"]]) {
+  test(`a caught store clock error with ${label} code aborts the run`, async () => {
+    let clockError;
+    const { uow, memories, suppressions, harness } = createMemoryAdapter({
+      now() {
+        if (clockError) throw clockError;
+        return clockStart;
+      },
+    });
+    const memoryScope = { owner, namespace: null };
+    const row = {
+      kind: "fact", origin: "explicit", text: "test memory", textHash: `sha256:${a}`,
+      confidence: 1, source: { kind: "mcp", client: null, sessionId: null }, embedding: null,
+    };
+    await assert.rejects(uow.run(owner, {}, async (tx) => {
+      const { id } = await memories.insert(tx, memoryScope, row, [], clockStart);
+      const fact = identity(id);
+      await assert.rejects(suppressions.writeFact(tx, { ...fact, throughRevision: -1 }, a), (error) => {
+        assert.ok(error instanceof CoreError);
+        assert.equal(error.code, "invalid_input");
+        error.code = code;
+        clockError = error;
+        return true;
+      });
+      await assert.rejects(suppressions.writeFact(tx, fact, a), (error) => error === clockError);
+    }), coreError("internal_error"));
+    assert.deepEqual(await harness.dump(), []);
+  });
+}
+
 test("a callback rejection takes precedence over a caught write failure", async () => {
   const adapter = createMemoryAdapter();
   const { uow, suppressions, harness } = adapter;
@@ -315,6 +345,17 @@ test("pause state is detached and access requires a live owner transaction", asy
   });
   await assert.rejects(pause.get(expired, owner), coreError("internal_error"));
   await assert.rejects(pause.set(expired, owner, false), coreError("internal_error"));
+  const committed = await uow.run(owner, { pauseLock: true, readOnly: true }, (tx) => pause.get(tx, owner));
+  assert.deepEqual(committed, { paused: true, generation: 1 });
+});
+
+test("caught nonboolean pause arguments allow valid writes to commit", async () => {
+  const { uow, pause } = createMemoryAdapter();
+  await uow.run(owner, { pauseLock: true }, async (tx) => {
+    await assert.rejects(pause.set(tx, owner, "false"), coreError("invalid_input"));
+    assert.deepEqual(await pause.get(tx, owner), { paused: false, generation: 0 });
+    await pause.set(tx, owner, true);
+  });
   const committed = await uow.run(owner, { pauseLock: true, readOnly: true }, (tx) => pause.get(tx, owner));
   assert.deepEqual(committed, { paused: true, generation: 1 });
 });

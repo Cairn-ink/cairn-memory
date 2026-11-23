@@ -109,6 +109,7 @@ export function createPauseStore(port) {
     },
     async set(tx, owner, paused) {
       return port.write(tx, { owner }, "conditional", (getState, markDirty) => {
+        if (typeof paused !== "boolean") throw new CoreError("invalid_input");
         const state = getState();
         if (!paused && !state.pause.paused) return { ...state.pause };
         const generation = pauseGenerationAfter(state.pause.generation, paused ? "pause" : "resume");
