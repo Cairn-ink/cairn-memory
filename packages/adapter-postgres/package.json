@@ -16,6 +16,8 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
+    "@cairn-ink/conformance": "file:../conformance",
+    "@cairn-ink/core": "file:../core",
     "pg": "^8.23.1",
     "typescript": "7.0.2"
   },

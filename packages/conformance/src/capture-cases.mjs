@@ -1,5 +1,4 @@
-import { CoreError } from "@cairn-ink/core";
-import { caught, check, equal, fixtureEmbedding, readDump, rejects } from "./support.mjs";
+import { caught, check, equal, fixtureEmbedding, isCoreErrorShape, readDump, rejects } from "./support.mjs";
 
 /** @typedef {import("./index.d.mts").CaseContext} CaseContext */
 /** @typedef {import("@cairn-ink/core/ports").CaptureKey} CaptureKey */
@@ -255,7 +254,7 @@ export const captureCases = [
         await rejects(() => capture.finish(tx, token, []), "stale_admission");
         caughtStale = true;
       }).then(() => null, (error) => error);
-      check(caughtStale && failure instanceof CoreError && failure.code === "stale_admission",
+      check(caughtStale && isCoreErrorShape(failure) && failure.code === "stale_admission",
         "A caught stale_admission must still reject the run with that code");
       equal(await readDump(harness), before, "A caught finish failure must roll back the committed dump");
       equal(await stateToken(ctx), beforeRollback, "A caught finish failure must preserve the state token");

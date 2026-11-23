@@ -1,4 +1,4 @@
-import { CoreError, NEAR_DUPLICATE_DISTANCE, SUPPRESSION_DISTANCE, VECTOR_ONLY_FLOOR } from "@cairn-ink/core";
+import { isErrorCode, NEAR_DUPLICATE_DISTANCE, SUPPRESSION_DISTANCE, VECTOR_ONLY_FLOOR } from "@cairn-ink/core";
 
 export const DEFAULT_TIMEOUT_MS = 5000;
 export const DEFAULT_EMBEDDING_DIMENSIONS = 4;
@@ -117,10 +117,17 @@ export async function caught(action) {
   throw new Error("Expected operation to reject");
 }
 
+/** @param {unknown} error @returns {error is Error & { code: import("@cairn-ink/core").ErrorCode }} */
+export function isCoreErrorShape(error) {
+  if (!(error instanceof Error) || !Object.hasOwn(error, "code")) return false;
+  const { code } = /** @type {Error & { code: unknown }} */ (error);
+  return isErrorCode(code) && error.message === code;
+}
+
 /** @param {() => Promise<unknown>} action @param {import("@cairn-ink/core").ErrorCode} code */
 export async function rejects(action, code) {
   const error = await caught(action);
-  check(error instanceof CoreError && error.code === code, `Expected CoreError ${code}`);
+  check(isCoreErrorShape(error) && error.code === code, `Expected CoreError ${code}`);
 }
 
 /** @type {import("@cairn-ink/core/ports").SourceRef} */
