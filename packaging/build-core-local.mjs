@@ -14,6 +14,7 @@ const name = 'cairn-memory-core-local-candidate';
 const bin = 'cairn-memory-core-local';
 const version = '0.0.0';
 const filename = `${name}-${version}.tgz`;
+const inventoryPath = 'packaging/core-local-files.json';
 const readJSON = path => JSON.parse(readFileSync(path, 'utf8'));
 const json = value => JSON.stringify(value, null, 2) + '\n';
 
@@ -82,9 +83,22 @@ function verifyInstalledStartup(install, installed, scratch) {
 
 export function buildCoreLocalCandidate(output) {
   const dest = resolve(output);
-  const runtime = readJSON(join(repo, 'packaging/core-local-files.json'));
+  const runtime = readJSON(join(repo, inventoryPath));
   const graph = deriveRuntimeGraph(repo);
-  if (!isDeepStrictEqual(runtime, graph)) throw new Error('core_local_inventory_graph_mismatch');
+  if (!isDeepStrictEqual(runtime, graph)) {
+    const listed = Array.isArray(runtime) ? runtime : [];
+    const missing = graph.filter(path => !listed.includes(path));
+    const extra = listed.filter(path => !graph.includes(path));
+    const code = 'core_local_inventory_graph_mismatch';
+    const error = new Error([
+      code,
+      `Missing from inventory: ${JSON.stringify(missing)}`,
+      `Extra in inventory: ${JSON.stringify(extra)}`,
+      `Update ${inventoryPath} to match the sorted runtime graph.`,
+    ].join('\n'));
+    error.code = code;
+    throw error;
+  }
   const copied = [...runtime, 'LICENSE'];
   const files = [...copied, 'package.json', coreManifest].sort();
   const generated = {

@@ -4,6 +4,8 @@ Build the candidate with `node packaging/build-core-local.mjs --output NEW_DIREC
 
 The builder checks the explicit runtime inventory against an AST walk from the CLI and each executable core export. The walk checks imports and ambient capabilities in the host and core, including unbundled core modules. The storage slot is reachable only through the deferred composition entry, and the CLI can import the stdio entry. The bundled core manifest carries the executable exports with their original names and targets. Candidate modules use relative ESM imports. A future bare dependency, worker entry or asset needs an explicit resolution rule and an inventory check. The source, extracted archive and offline npm installation must agree on the runtime graph and payload file digests. Before publishing the candidate, the builder also runs the installed bin's help and MCP initialize and ping with SQLite disabled and storage loading blocked.
 
+Adding a core runtime module to the candidate graph requires updating `packaging/core-local-files.json`.
+
 ## Generation identity
 
 `engineIdForCoreLocal` uses `core-local-v1-` followed by the full lowercase SHA-256 of the UTF-8 JSON encoding of `["core-local-v1", sortedPairs]`. Each pair contains a portable archive path and the lowercase SHA-256 of its exact bytes. Sort paths lexically in ASCII order. Include the generated `package.json` and every payload file. The detached manifest records the compressed archive's byte count and hash separately, so repacking the same payload can retain its generation identity. The release verifier should check the trusted manifest, archive and member bytes before using the ID. Keep repair suffixes on published directory names outside the base ID.
