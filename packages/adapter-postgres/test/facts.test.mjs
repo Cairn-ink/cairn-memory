@@ -24,8 +24,8 @@ const invalidInput = { name: CoreError.name, code: "invalid_input", message: "in
 for (const [name, fact, tuple] of [
   ["identity", { ...base, kind: "identity", memoryId: "memory" }, ["identity", "memory", null]],
   ["identity through a revision", { ...base, kind: "identity", memoryId: "memory", throughRevision: 0 }, ["identity", "memory", 0]],
-  ["exact text", text, ["text", "exact", [["hmac", hash]]]],
-  ["full text", full, ["text", "full", [["hmac", hash]]]],
+  ["exact text", text, ["text", "exact", [["hmac", hash]], "source"]],
+  ["full text", full, ["text", "full", [["hmac", hash]], "source"]],
   ["session ID", session, ["session", "client", "id", hash]],
   ["session hash", { ...session, session: { client: "client", sessionKeyHash: hash } }, ["session", "client", "hash", hash]],
   ["all-client window", window, ["window", null, -10, 20, false, null]],
@@ -38,19 +38,19 @@ for (const [name, fact, tuple] of [
   }, ["rawSpan", hash, "message", 5, 10]],
 ]) {
   test(`slot contains exactly the ${name} target tuple`, () => {
-    assert.equal(factSlot(fact), JSON.stringify(tuple));
+    assert.equal(factSlot(fact), JSON.stringify([fact.namespace ?? null, ...tuple]));
   });
 }
 
-test("canonical digest ordering uses pipeline, algorithm, and value without changing the input", () => {
+test("canonical digest ordering uses algorithm then value, ignoring the pipeline, without changing the input", () => {
   const laterValue = { ...earlier, value: "b".repeat(64) };
   const laterAlgorithm = { ...earlier, alg: "sha256", value: "0".repeat(64), keyId: null };
-  const laterPipeline = { ...earlier, pipeline: "engine-legacy", value: "1".repeat(64) };
-  const order = [earlier, laterValue, laterAlgorithm, laterPipeline];
-  const shuffled = Object.freeze([laterAlgorithm, laterPipeline, laterValue, earlier]);
+  const otherPipeline = { ...earlier, pipeline: "engine-legacy", value: "1".repeat(64) };
+  const order = [otherPipeline, earlier, laterValue, laterAlgorithm];
+  const shuffled = Object.freeze([laterAlgorithm, otherPipeline, laterValue, earlier]);
   assert.deepEqual(canonicalDigests(shuffled), order);
   assert.deepEqual(canonicalDigests(order), order);
-  const expected = JSON.stringify(["text", "exact", order.map(({ alg, value }) => [alg, value])]);
+  const expected = JSON.stringify(["namespace", "text", "exact", order.map(({ alg, value }) => [alg, value]), "source"]);
   assert.equal(factSlot({ ...text, text: { digests: shuffled } }), expected);
   assert.equal(factSlot({ ...text, text: { digests: order } }), expected);
 });
@@ -64,7 +64,7 @@ test("text slots differ when digest sets share only the first canonical digest",
 
 test("an all-client window and a client named * have distinct slots", () => {
   const star = { ...window, client: "*" };
-  assert.equal(factSlot(star), JSON.stringify(["window", "*", -10, 20, false, null]));
+  assert.equal(factSlot(star), JSON.stringify(["namespace", "window", "*", -10, 20, false, null]));
   assert.notEqual(factSlot(window), factSlot(star));
 });
 
@@ -72,8 +72,8 @@ test("session tuple boundaries survive delimiters, quotes, and backslashes", () 
   const left = { ...session, session: { client: "a", sessionId: 'b:c|"d\\' } };
   const right = { ...session, session: { client: "a:b", sessionId: 'c|"d\\' } };
   assert.notEqual(factSlot(left), factSlot(right));
-  assert.deepEqual(JSON.parse(factSlot(left)), ["session", "a", "id", left.session.sessionId]);
-  assert.deepEqual(JSON.parse(factSlot(right)), ["session", "a:b", "id", right.session.sessionId]);
+  assert.deepEqual(JSON.parse(factSlot(left)), ["namespace", "session", "a", "id", left.session.sessionId]);
+  assert.deepEqual(JSON.parse(factSlot(right)), ["namespace", "session", "a:b", "id", right.session.sessionId]);
 });
 
 test("core validation refuses invalid facts before slot derivation", () => {
@@ -173,15 +173,15 @@ test("storage preflight enforces the integer ceiling for all digest redaction ve
 });
 
 test("storage preflight enforces the slot's UTF-8 byte limit across all digests", () => {
-  const withDigests = (shaCount) => ({
-    ...text,
-    text: { digests: Array.from({ length: 107 }, (_, i) => ({
-      ...earlier, value: i.toString(16).padStart(64, "0"),
-      ...(i < shaCount ? { alg: "sha256", keyId: null } : {}),
-    })) },
+  // Many digests plus a namespace padded so the slot lands exactly on the limit.
+  const withNamespace = (namespace) => ({
+    ...text, namespace,
+    text: { digests: Array.from({ length: 101 }, (_, i) => ({ ...earlier, value: i.toString(16).padStart(64, "0") })) },
   });
-  const atLimit = validateSuppressionFact(withDigests(21));
-  const overLimit = validateSuppressionFact(withDigests(22));
+  const pad = 8192 - Buffer.byteLength(factSlot(withNamespace("x"))) + 1;
+  assert.ok(pad >= 1 && pad < 512);
+  const atLimit = validateSuppressionFact(withNamespace("x".repeat(pad)));
+  const overLimit = validateSuppressionFact(withNamespace("x".repeat(pad + 1)));
   assert.equal(Buffer.byteLength(factSlot(atLimit)), 8192);
   assert.throws(() => factSlot(overLimit), invalidInput);
 });
@@ -266,7 +266,26 @@ test("the snapshot reads each field through one descriptor lookup and never thro
     },
   });
   const fact = { ...text, text: { ...text.text, digests: [digest] } };
-  assert.equal(factSlot(fact), JSON.stringify(["text", "exact", [["hmac", hash]]]));
+  assert.equal(factSlot(fact), JSON.stringify(["namespace", "text", "exact", [["hmac", hash]], "source"]));
   assert.equal(gets, 0);
   assert.deepEqual([...descriptorReads.values()], Object.keys(earlier).map(() => 1));
+});
+
+test("a digest set that differs only in pipeline labels is the same target", () => {
+  const relabelled = { ...text, text: { ...text.text, digests: [{ ...earlier, pipeline: "hosted-v1", redactionVersion: 2 }] } };
+  assert.equal(factSlot(relabelled), factSlot(text));
+});
+
+test("text facts that differ only in sourceMemory.id are distinct targets", () => {
+  const other = { ...text, sourceMemory: { ...text.sourceMemory, id: "other-source" } };
+  const none = { ...text, sourceMemory: null };
+  assert.notEqual(factSlot(other), factSlot(text));
+  assert.notEqual(factSlot(none), factSlot(text));
+  assert.equal(factSlot({ ...text, sourceMemory: { ...text.sourceMemory, createdAtMs: 999 } }), factSlot(text));
+});
+
+test("the namespace is part of every slot, and an absent namespace equals null", () => {
+  assert.notEqual(factSlot({ ...session, namespace: "other" }), factSlot(session));
+  const { namespace: _omit, ...withoutNamespace } = session;
+  assert.equal(factSlot(withoutNamespace), factSlot({ ...session, namespace: null }));
 });

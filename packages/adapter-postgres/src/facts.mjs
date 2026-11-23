@@ -171,31 +171,40 @@ function snapshotFact(fact) {
 /** @param {readonly TextDigest[]} digests */
 export function canonicalDigests(digests) {
   return [...digests].sort((a, b) => (
-    compareUtf8(a.pipeline, b.pipeline) || compareUtf8(a.alg, b.alg) || compareUtf8(a.value, b.value)
+    compareUtf8(a.alg, b.alg) || compareUtf8(a.value, b.value)
   ));
 }
 
-/** @param {SuppressionFact} fact The validated snapshot. */
+/**
+ * The slot is the canonical JSON array [namespace ?? null, ...target]. The target is
+ * the same in every store; pipeline, redactionVersion and keyId are not part of it.
+ * @param {SuppressionFact} fact The validated snapshot.
+ */
 function encodeSlot(fact) {
+  return JSON.stringify([fact.namespace ?? null, ...slotTarget(fact)]);
+}
+
+/** @param {SuppressionFact} fact The validated snapshot. @returns {unknown[]} */
+function slotTarget(fact) {
   switch (fact.kind) {
     case "identity":
-      return JSON.stringify(["identity", fact.memoryId, fact.throughRevision ?? null]);
+      return ["identity", fact.memoryId, fact.throughRevision ?? null];
     case "text": {
       const target = canonicalDigests(fact.text.digests).map(({ alg, value }) => [alg, value]);
-      return JSON.stringify(["text", fact.mode, target]);
+      return ["text", fact.mode, target, fact.sourceMemory?.id ?? null];
     }
     case "session": {
       const { session } = fact;
-      return JSON.stringify("sessionId" in session
+      return "sessionId" in session
         ? ["session", session.client, "id", session.sessionId]
-        : ["session", session.client, "hash", session.sessionKeyHash]);
+        : ["session", session.client, "hash", session.sessionKeyHash];
     }
     case "window":
-      return JSON.stringify([
+      return [
         "window", fact.client, fact.window.startMs, fact.window.endMs, fact.unknownTime === true, fact.anchor ?? null,
-      ]);
+      ];
     case "rawSpan":
-      return JSON.stringify(["rawSpan", fact.sessionKeyHash, fact.messageKey, fact.startUtf16, fact.endUtf16]);
+      return ["rawSpan", fact.sessionKeyHash, fact.messageKey, fact.startUtf16, fact.endUtf16];
   }
 }
 

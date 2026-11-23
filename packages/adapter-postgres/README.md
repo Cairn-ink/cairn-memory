@@ -69,19 +69,23 @@ numbers in the float4 range, and non-empty shingles require a non-empty key ID.
 
 `factSlot(fact)` uses `JSON.stringify` on the following target tuples.
 
-| Kind | Tuple |
+The slot is the canonical JSON array `[namespace ?? null, ...target]`. Every
+store uses the same target per kind; only its encoding is store-specific.
+
+| Kind | Target |
 | --- | --- |
 | Identity | `["identity", memoryId, throughRevision ?? null]` |
-| Text | `["text", mode, [[alg, value], …]]` using every digest in canonical order |
+| Text | `["text", mode, [[alg, value], …], sourceMemory?.id ?? null]` using every digest in canonical order |
 | Session | `["session", client, "id", sessionId]` or `["session", client, "hash", sessionKeyHash]` |
 | Window | `["window", client, startMs, endMs, unknownTime === true, anchor ?? null]` |
 | Raw span | `["rawSpan", sessionKeyHash, messageKey, startUtf16, endUtf16]` |
 
 A null window client selects all clients. `canonicalDigests(digests)` sorts a
-copy by pipeline, algorithm, and value in UTF-8 byte order. Each digest
-contributes only its algorithm and value to the target tuple. Reordering the
-same digests preserves the slot. Core's `factBody(snapshot)` preserves input array
-order for the incarnation. Store the JSON slot for diagnostics and use
+copy by algorithm, then value, in UTF-8 byte order. Each digest contributes
+only its algorithm and value to the target: the pipeline, redaction version and
+key id are not part of it, so the same digest set under a different pipeline
+label is the same target. Reordering the same digests preserves the slot.
+Store the JSON slot for diagnostics and use
 `slotHash(slot)` for the lowercase SHA-256 of its UTF-8 bytes. The owner and
 hash form the unique key.
 
