@@ -10,7 +10,7 @@ import { admissionScope, copyCaptureMessages, copyReadScope, guardCaptureScope, 
   writeNamespace } from "./validation.mjs";
 
 /** @import { FactMatchPolicy, FactMatchRow, StoredFact, TextDigest, TextFact } from "@cairn-ink/core" */
-/** @import { CaptureMessage, FingerprintKeyProvider, Namespace, RawSegment, RetrievalScope, Scope, StorageAdapter, Tx } from "@cairn-ink/core/ports" */
+/** @import { CaptureMessage, FingerprintKeyProvider, ItemRef, Namespace, RawSegment, RetrievalScope, Scope, StorageAdapter, Tx } from "@cairn-ink/core/ports" */
 /** @import { IssuedRun, State } from "./unit-of-work.mjs" */
 /** @typedef {Omit<RawSegment, "score">} RawEntry */
 /** @typedef {Pick<RawEntry, "client" | "sessionId">} Session */
@@ -138,7 +138,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
   }
 
-  /** @param {State} state @param {Scope} scope */
+  /** @param {Pick<State, "facts">} state @param {Scope} scope */
   function scopedFacts(state, { owner, namespace }) {
     return [...state.facts.values()].filter(({ fact }) => fact.owner === owner && (fact.namespace ?? null) === namespace);
   }
@@ -222,7 +222,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     };
   }
 
-  /** @param {State} state @param {RetrievalScope} selection */
+  /** @param {Pick<State, "facts" | "rawFences" | "rawRows">} state @param {RetrievalScope} selection */
   async function visibleRows(state, selection) {
     const byNamespace = new Map(selection.namespaces.map((namespace) => {
       const scope = { owner: selection.owner, namespace };
@@ -245,6 +245,21 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
       rows.push(row);
     }
     return rows;
+  }
+
+  /** @param {State} state @param {RetrievalScope} selection @param {readonly ItemRef[]} refs */
+  async function visibleRawRefs(state, selection, refs) {
+    /** @type {State["rawRows"]} */
+    const rawRows = new Map();
+    for (const ref of refs) {
+      if (ref.type !== "raw") continue;
+      const row = state.rawRows.get(ref.id);
+      if (row && row.ref.namespace === ref.namespace) rawRows.set(ref.id, row);
+    }
+    if (!rawRows.size) return [];
+    const { facts, rawFences } = state;
+    const rows = await visibleRows({ facts, rawFences, rawRows }, selection);
+    return rows.map(({ ref }) => ({ ...ref }));
   }
 
   /** @param {Tx} tx @param {Scope} scope @param {() => Session[]} prepare */
@@ -469,6 +484,6 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     }));
   }
 
-  return { raw, captureProofs, lineageFenced, seedClientlessRaw,
+  return { raw, visibleRawRefs, captureProofs, lineageFenced, seedClientlessRaw,
     counters: () => ({ rawKeyConflict, rawArchiveRefused }) };
 }

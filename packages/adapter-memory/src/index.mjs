@@ -47,7 +47,7 @@ export function createMemoryAdapter(options = {}) {
     suppressions: handleWriteRejections(suppressions, ["writeFact"]),
     pause: handleWriteRejections(createPauseStore(port), ["set"]),
     keys,
-    ...createRetrievalPorts(port, flags, matchFacts),
+    ...createRetrievalPorts(port, flags, matchFacts, archive?.visibleRawRefs),
     ...(archive && { raw: handleWriteRejections(archive.raw,
       ["recordLineage", "archive", "importArchive", "fenceSession", "purgeWithheld", "eraseSessions", "deleteConversation"]) }),
     ...(flags.supersession && { supersession: handleWriteRejections(supersession, ["record", "markHistorical"]) }),

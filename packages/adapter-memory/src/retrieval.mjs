@@ -107,9 +107,10 @@ function sourceDates(receipts) {
  * @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>["port"]} port
  * @param {import("@cairn-ink/core").Capabilities} capabilities
  * @param {ReturnType<typeof createFactMatcher>} [matchFacts]
+ * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>["visibleRawRefs"]} [visibleRawRefs]
  * @returns {Pick<StorageAdapter, "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent">}
  */
-export function createRetrievalPorts(port, capabilities, matchFacts = createFactMatcher(capabilities.vectorSuppression)) {
+export function createRetrievalPorts(port, capabilities, matchFacts = createFactMatcher(capabilities.vectorSuppression), visibleRawRefs) {
   /** @param {State} state @param {RetrievalScope} scope */
   function policies(state, scope) {
     return new Map(scope.namespaces.map((namespace) =>
@@ -223,7 +224,10 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
         return port.read(tx, scope, (getState) => {
           const selection = copyReadScope(tx.owner, scope);
           const references = copyRefs(refs);
-          return Array.from(visibleRefs(getState(), selection, references, intent === "read"), ({ ref }) => ref);
+          const state = getState();
+          const visible = Array.from(visibleRefs(state, selection, references, intent === "read"), ({ ref }) => ref);
+          if (!visibleRawRefs || !references.some(({ type }) => type === "raw")) return visible;
+          return visibleRawRefs(state, selection, references).then(rawRefs => [...visible, ...rawRefs]);
         });
       },
     },
