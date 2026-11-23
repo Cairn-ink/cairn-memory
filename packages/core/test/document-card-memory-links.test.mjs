@@ -131,7 +131,7 @@ test("missing, suppressed, unknown and malformed states hide message-backed card
   for (const [states, reason] of [
     [[], "source_memory_missing"],
     [[{ status: "suppressed" }], "source_memory_not_visible"],
-    [[{ status: "unknown" }], "uncertain"],
+    [[{ status: "unknown" }], "source_memory_not_visible"],
     [[{ status: "unexpected" }], "uncertain"],
     [[null], "uncertain"],
     [[{ status: "visible" }], "uncertain"],

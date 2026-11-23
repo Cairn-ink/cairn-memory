@@ -56,7 +56,7 @@ in the same snapshot.
 | Forgotten | Hidden (`source_memory_forgotten`) | Hidden (`source_memory_forgotten`) |
 | Suppressed | Hidden (`source_memory_not_visible`) | Hidden (`source_memory_not_visible`) |
 | Missing | Hidden (`source_memory_missing`) | Hidden (`source_memory_missing`) |
-| Unknown | Hidden (`uncertain`) | Hidden (`source_memory_not_visible`) |
+| Unknown | Hidden (`source_memory_not_visible`) | Hidden (`source_memory_not_visible`) |
 | Visible with an invalid revision | Hidden (`uncertain`) | Hidden (`uncertain`) |
 
 A malformed linked memory state also hides a router or legacy card with

@@ -61,6 +61,7 @@ export async function documentCardVisible(input) {
           case "forgotten":
             return hidden("source_memory_forgotten");
           case "suppressed":
+          case "unknown":
             return hidden("source_memory_not_visible");
           case "historical":
           case "visible":
