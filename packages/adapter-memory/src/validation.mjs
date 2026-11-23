@@ -155,6 +155,11 @@ export function validateTime(nowMs) {
   if (!Number.isSafeInteger(nowMs) || nowMs < 0) invalid();
 }
 
+/** @param {number} nowMs */
+export function writeTime(nowMs) {
+  return { updatedAtMs: nowMs, updatedAtUs: BigInt(nowMs) * 1000n };
+}
+
 /** @param {import("@cairn-ink/core/ports").Scope} scope */
 export function writeNamespace({ namespace }) {
   if (!nullableString(namespace)) invalid();
