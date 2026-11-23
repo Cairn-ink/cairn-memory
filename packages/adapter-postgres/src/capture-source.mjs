@@ -8,15 +8,22 @@ import { CoreError, factBlocksIncoming } from "../../core/src/index.mjs";
 const SOURCE_FACTS = `SELECT kind, body, action_id FROM core_suppression_facts
   WHERE user_id = $1 AND (
     kind IN ('session', 'window') AND (body ->> 'namespace') IS NOT DISTINCT FROM $2
-    OR kind = 'session' AND body #>> '{session,client}' = $3 AND body #>> '{session,sessionId}' <> $4
+    OR kind = 'session' AND body #>> '{session,client}' = $3 AND (
+      body #>> '{session,sessionId}' <> $4 OR body #>> '{session,sessionKeyHash}' IS NOT NULL
+    )
   )`;
 
 const MAX_LINEAGE_SESSIONS = 1_000;
 const MAX_LINEAGE_VERTICES = 20_000;
 // Traverse sessions and proof pairs separately so each pair is expanded only once.
+// Session ref hashes use SHA-256 of the UTF-8, compact JSON pair [client, sessionId].
 const CHECK_LINEAGE = `WITH RECURSIVE fences(session_id) AS MATERIALIZED (
     SELECT session_id FROM capture_raw_fences WHERE user_id = $1 AND client = $2
     UNION SELECT unnest($4::text[])
+    UNION SELECT l.session_id FROM capture_raw_lineage l
+    WHERE cardinality($7::text[]) > 0 AND l.user_id = $1 AND l.client = $2 AND l.session_id <> $3
+      AND encode(sha256(convert_to('[' || to_json(l.client)::text || ',' || to_json(l.session_id)::text || ']',
+        'UTF8')), 'hex') = ANY($7::text[])
   ), incoming AS (
     SELECT * FROM jsonb_to_recordset($5::jsonb) AS proof(message_mac text, content_mac text)
   ), roots(session_id, message_mac, content_mac) AS (
@@ -91,6 +98,8 @@ export async function filterSources(query, key, times, proofs, mode) {
   const windows = [];
   /** @type {Set<string>} */
   const fencedSessions = new Set();
+  /** @type {Set<string>} */
+  const fencedSessionHashes = new Set();
   const candidate = { scope, passages: [], session: { client, sessionId } };
   const policy = /** @type {const} */ ({ mode: "capture" });
   for (const { kind, body, action_id: actionId } of rows) {
@@ -112,6 +121,8 @@ export async function filterSources(query, key, times, proofs, mode) {
             ...candidate, scope: { owner: scope.owner, namespace: fact.namespace ?? null }, session: ancestor,
           }, policy) !== false) {
         fencedSessions.add(ancestor.sessionId);
+      } else if (ancestor.client === client && typeof ancestor.sessionKeyHash === "string") {
+        fencedSessionHashes.add(ancestor.sessionKeyHash);
       }
     }
   }
@@ -122,6 +133,7 @@ export async function filterSources(query, key, times, proofs, mode) {
 
   const { rows: [lineage] } = await query(CHECK_LINEAGE, [
     scope.owner, client, sessionId, [...fencedSessions], JSON.stringify(proofs ?? []), proofs === null,
+    [...fencedSessionHashes],
   ]);
   if (lineage?.fenced !== false || lineage.exceeded !== false || lineage.withheld !== false) {
     if (mode === "assert") throw new CoreError("lineage_fenced");

@@ -363,6 +363,57 @@ test("Core message metadata round-trips when it exceeds stored request bounds", 
     { key, messages: [{ ...batch[0], content: "" }] });
 });
 
+test("a Core admission completed by the hosted service deduplicates both retry paths", migrationDbTest, async (t) => {
+  const { pool, uow, capture } = await database(t);
+  const key = { ...event, eventId: "capture-event", scope: { owner, namespace: "archive" } };
+  const admit = () => uow.run(owner, write, (tx) => capture.admit(tx, key, messages));
+  const claim = () => uow.run(owner, write, (tx) => capture.claim(tx, key, messages, options));
+  assert.deepEqual(await admit(), { status: "admitted" });
+  const { rows: [completed] } = await pool.query(`UPDATE capture_events
+    SET status = 'completed', memory_count = greatest(memory_count, $4)
+    WHERE user_id = $1 AND client = $2 AND event_id = $3 RETURNING *`, [owner, key.client, key.eventId, 1]);
+  assert.equal(completed.core_payload_digest, key.payloadDigest);
+  assert.equal(completed.core_result, null);
+  assert.deepEqual(await uow.run(owner, read, (tx) => capture.status(tx, key.scope, key.eventId)), { status: "done" });
+  assert.deepEqual(await admit(), { status: "duplicate" });
+  assert.deepEqual(await claim(), { status: "duplicate" });
+  assert.deepEqual((await pool.query("SELECT * FROM capture_events")).rows, [completed]);
+});
+
+test("hosted completion takes precedence over a stale Core failure", migrationDbTest, async (t) => {
+  const { pool, uow, capture } = await database(t);
+  const key = { ...event, eventId: "capture-event" };
+  await uow.run(owner, write, async (tx) => {
+    await capture.admit(tx, key, messages);
+    const { token } = await capture.claim(tx, key, messages, options);
+    await capture.abandon(tx, token, terminal);
+  });
+  await pool.query(`UPDATE capture_events SET status = 'completed', memory_count = greatest(memory_count, $4)
+    WHERE user_id = $1 AND client = $2 AND event_id = $3`, [owner, key.client, key.eventId, 1]);
+  assert.deepEqual(await uow.run(owner, read, (tx) => capture.status(tx, key.scope, key.eventId)), { status: "done" });
+});
+
+for (const state of ["pending", "queued"]) {
+  test(`a Core admission held ${state} by the hosted service reports processing`, migrationDbTest, async (t) => {
+    const { pool, uow, capture } = await database(t);
+    const key = { ...event, eventId: "capture-event" };
+    const admit = () => uow.run(owner, write, (tx) => capture.admit(tx, key, messages));
+    assert.deepEqual(await admit(), { status: "admitted" });
+    const identity = [owner, key.client, key.eventId];
+    const { rows: [held] } = state === "pending"
+      ? await pool.query(`UPDATE capture_events SET raw_archive_from = $4
+          WHERE user_id = $1 AND client = $2 AND event_id = $3 RETURNING *`, [...identity, 0])
+      : await pool.query(`UPDATE capture_events SET status = 'queued'
+          WHERE user_id = $1 AND client = $2 AND event_id = $3 RETURNING *`, identity);
+    assert.equal(held.status, state);
+    assert.deepEqual(await admit(), { status: "processing" });
+    assert.deepEqual(await uow.run(owner, write, (tx) => capture.claim(tx, key, messages, options)),
+      { status: "processing" });
+    assert.deepEqual(await uow.run(owner, read, (tx) => capture.status(tx, key.scope, key.eventId)), { status: "pending" });
+    assert.deepEqual((await pool.query("SELECT * FROM capture_events")).rows, [held]);
+  });
+}
+
 test("a proven fork rechecks the ancestor's namespace on read and write", migrationDbTest, async (t) => {
   const secret = randomBytes(32).toString("hex");
   const { pool, uow, capture } = await database(t, { lineageSecret: secret });
@@ -386,6 +437,36 @@ test("a proven fork rechecks the ancestor's namespace on read and write", migrat
   await suppress(ancestor.sessionId);
   assert.deepEqual(await eligible(), []);
   await assert.rejects(uow.run(owner, {}, (tx) => capture.assertEligible(tx, replay, [0])), { code: "lineage_fenced" });
+});
+
+test("a proven fork checks hashed ancestor facts across namespaces on read and write", migrationDbTest, async (t) => {
+  const secret = randomBytes(32).toString("hex");
+  const { pool, uow, capture } = await database(t, { lineageSecret: secret });
+  const ancestor = { ...event, client: 'client"', scope: { owner, namespace: "archive" }, sessionId: "source\n🌿" };
+  const replay = { ...ancestor, scope: { owner, namespace: "replay" }, sessionId: event.sessionId };
+  const { id, content } = messages[0];
+  const mac = (value) => createHmac("sha256", secret).update(value).digest("hex");
+  await pool.query(`INSERT INTO capture_raw_lineage (user_id, client, session_id, message_mac, content_mac)
+    VALUES ($1, $2, $3, $4, $5)`, [owner, ancestor.client, ancestor.sessionId, mac(id),
+    mac("\0cairn:raw-lineage-content:" + JSON.stringify([owner, ancestor.client, id, content]))]);
+  await uow.run(owner, write, (tx) => capture.claim(tx, replay, messages, options));
+  const eligible = () => uow.run(owner, read, (tx) => capture.eligible(tx, replay, messages));
+  const recheck = () => uow.run(owner, {}, (tx) => capture.assertEligible(tx, replay, [0]));
+  const suppress = (actionId, sessionId) => {
+    const sessionKeyHash = createHash("sha256").update(JSON.stringify([ancestor.client, sessionId])).digest("hex");
+    const fact = { ...ancestor.scope, actionId, origin: "forget", kind: "session",
+      session: { client: ancestor.client, sessionKeyHash } };
+    const incarnation = createHash("sha256").update(factIncarnationBody(fact)).digest("hex");
+    return uow.run(owner, write, (tx) => createPostgresSuppressionStore().writeFact(tx, fact, incarnation));
+  };
+  await suppress("different-hash", "unrelated-session");
+  assert.deepEqual(await eligible(), [0]);
+  await recheck();
+  await suppress("matching-hash", ancestor.sessionId);
+  await Promise.all([
+    eligible().then((positions) => assert.deepEqual(positions, [])),
+    assert.rejects(recheck(), { code: "lineage_fenced" }),
+  ]);
 });
 
 for (const keyed of [true, false]) {

@@ -17,7 +17,7 @@ import { requireLiveRun, runOperation } from "./uow.mjs";
 /** @typedef {{
  *   session_id: string, status: string, core_namespace: string | null, core_payload_digest: string | null,
  *   core_admitted: boolean | null, core_failure_code: string | null, core_result: FinishResult | null,
- *   legacy_failed: boolean,
+ *   legacy_failed: boolean, raw_archive_from: number | null,
  *   core_lease_expires_at_ms: string | null, core_lease_sources: {
  *     times: (number | null)[], proofs: Awaited<ReturnType<ReturnType<typeof createCaptureProofs>>>
  *   } | null
@@ -41,14 +41,14 @@ const LEGACY_FAILED = `core_payload_digest IS NULL AND status <> 'completed' AND
       THEN '["mcp",' || to_json(capture_events.event_id)::text || ']'
       ELSE capture_events.client || ':' || capture_events.event_id END
 )`;
-const SELECT_EVENT = `SELECT session_id, status, core_namespace, core_payload_digest, core_admitted,
+const SELECT_EVENT = `SELECT session_id, status, raw_archive_from, core_namespace, core_payload_digest, core_admitted,
     core_failure_code, core_result, core_lease_expires_at_ms::text, core_lease_sources, ${LEGACY_FAILED} AS legacy_failed
   FROM capture_events WHERE ${IDENTITY}`;
 const LOAD = `SELECT raw_request, core_payload_digest, core_outbox_metadata FROM capture_events
   WHERE ${IDENTITY} AND session_id = $4 AND core_namespace IS NOT DISTINCT FROM $5 AND core_admitted`;
 const STATUS = `SELECT core_failure_code,
-    CASE WHEN core_failure_code IS NOT NULL OR (${LEGACY_FAILED}) THEN 1
-      WHEN status = 'completed' THEN 2 ELSE 0 END AS status_rank
+    CASE WHEN status = 'completed' THEN 2
+      WHEN core_failure_code IS NOT NULL OR (${LEGACY_FAILED}) THEN 1 ELSE 0 END AS status_rank
   FROM capture_events
   WHERE user_id = $1 AND event_id = $2 AND core_namespace IS NOT DISTINCT FROM $3
     AND (core_admitted OR core_payload_digest IS NULL) AND ($4::text IS NULL OR client = $4)
@@ -79,17 +79,22 @@ function assertSameEvent(row, key) {
   }
 }
 
-/** @param {CaptureRow} row */
-function legacyRetry(row) {
-  // The cutover drains the hosted queue. A retry must leave that work with its original consumer.
-  const acknowledged = row.status === "completed" || (row.status === "queued" && row.legacy_failed);
-  return /** @type {const} */ ({ status: acknowledged ? "duplicate" : "processing" });
-}
-
-/** @param {CaptureRow} row */
-function replay(row) {
-  if (!row.core_result) throw new CoreError("internal_error");
-  return /** @type {const} */ ({ status: "rawReplay", result: row.core_result });
+/** @param {CaptureRow} row @param {CaptureKey} key */
+function storedRetry(row, key) {
+  // Hosted completion records the ledger status without a Core result.
+  if (row.status === "completed" && row.core_result === null) return /** @type {const} */ ({ status: "duplicate" });
+  if (row.core_payload_digest === null) {
+    const acknowledged = row.status === "completed" || (row.status === "queued" && row.legacy_failed);
+    return /** @type {const} */ ({ status: acknowledged ? "duplicate" : "processing" });
+  }
+  assertSameEvent(row, key);
+  if (row.status === "completed" && row.core_result !== null) {
+    return /** @type {const} */ ({ status: "rawReplay", result: row.core_result });
+  }
+  // Both writers start at pending. A persisted raw archive cut identifies work the hosted consumer has planned.
+  if (row.status === "queued" || (row.status === "pending" && row.raw_archive_from !== null)) {
+    return /** @type {const} */ ({ status: "processing" });
+  }
 }
 
 /** @param {CaptureRow} row @param {bigint} now */
@@ -163,9 +168,8 @@ export function createPostgresCapturePorts({ now = Date.now, lineageSecret } = {
         return async (query) => {
           const row = await reserveEvent(query, copy);
           if (row) {
-            if (row.core_payload_digest === null) return legacyRetry(row);
-            assertSameEvent(row, copy);
-            if (row.status === "completed") return replay(row);
+            const retry = storedRetry(row, copy);
+            if (retry) return retry;
             if (row.core_failure_code !== null) return { status: "duplicate" };
           }
           const current = clockMs(now());
@@ -221,9 +225,8 @@ export function createPostgresCapturePorts({ now = Date.now, lineageSecret } = {
         return async (query) => {
           const row = await reserveEvent(query, copy, batch);
           if (!row) return { status: "admitted" };
-          if (row.core_payload_digest === null) return legacyRetry(row);
-          assertSameEvent(row, copy);
-          if (row.status === "completed") return replay(row);
+          const retry = storedRetry(row, copy);
+          if (retry) return retry;
           if (row.core_lease_expires_at_ms !== null && hasLiveLease(row, clockMs(now()))) {
             return { status: "processing" };
           }
@@ -251,11 +254,12 @@ export function createPostgresCapturePorts({ now = Date.now, lineageSecret } = {
       return runOperation(tx, async (query) => {
         const { rows: [row] } = await query(STATUS, [owner, event, namespace, selectedClient]);
         if (!row) return { status: "unknown" };
+        if (row.status_rank === 2) return { status: "done" };
         if (row.core_failure_code !== null) {
           if (!isErrorCode(row.core_failure_code)) throw new CoreError("internal_error");
           return { status: "failed", code: row.core_failure_code };
         }
-        return { status: row.status_rank === 2 ? "done" : row.status_rank === 1 ? "failed" : "pending" };
+        return { status: row.status_rank === 1 ? "failed" : "pending" };
       });
     },
 
