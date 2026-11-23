@@ -29,6 +29,7 @@ const coreError = (code) => (error) => error instanceof CoreError && error.code 
 test("refuses capabilities with unimplemented ports and accepts the remaining flags", () => {
   const unavailable = new Set(Object.values(OPTIONAL_PORTS));
   unavailable.delete("semanticRetrieval");
+  unavailable.delete("placement");
   for (const flag of unavailable) {
     assert.throws(() => createMemoryAdapter({ capabilities: { [flag]: true } }), coreError("capability_unavailable"), flag);
   }
