@@ -123,8 +123,7 @@ export function snapshotReader() {
     const mode = string(field(data, "mode"));
     let textSnapshot;
     if (mode === "exact") {
-      // Exact matching only uses digests, so skip the other text fields.
-      textSnapshot = { digests: digests(field(text, "digests")) };
+      textSnapshot = fingerprint(text);
     } else {
       const embedding = field(text, "embedding");
       textSnapshot = {
@@ -187,7 +186,9 @@ const isValidSource = (source) => source.id.length > 0 && Number.isSafeInteger(s
 function isValidFact(fact) {
   if (fact.kind !== "text") return false;
   try {
-    validateSuppressionFact({ owner: "validation", actionId: "validation", ...fact });
+    // Exact facts keep the fingerprint shape checks and validate only digest content.
+    const text = fact.mode === "exact" ? { digests: fact.text.digests } : fact.text;
+    validateSuppressionFact({ owner: "validation", actionId: "validation", ...fact, text });
     return true;
   } catch {
     return false;

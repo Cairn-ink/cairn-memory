@@ -528,7 +528,7 @@ test("malformed stored text fields affect withholding by mode", async () => {
   const incoming = { scope, passages };
   for (const [label, patch, exactDenies = false] of [
     ["empty key ID", { text: { ...reference, keyId: "" } }],
-    ["non-string key ID", { text: { ...reference, keyId: 1 } }],
+    ["non-string key ID", { text: { ...reference, keyId: 1 } }, true],
     ["oversized key ID", { text: { ...reference, keyId: "x".repeat(65) } }],
     ["non-hex shingle", { text: { ...reference, shingles: ["not-hex"] } }],
     ["sparse shingles", { text: { ...reference, shingles: Array(1) } }],
@@ -551,3 +551,19 @@ test("malformed stored text fields affect withholding by mode", async () => {
     }
   }
 });
+
+for (const [label, patch] of [
+  ["numeric key ID", { keyId: 1 }],
+  ["string shingle list", { shingles: "aa" }],
+  ["numeric shingle", { shingles: [1] }],
+]) {
+  test(`exact facts deny a comparable digest miss with a ${label}`, async () => {
+    const { withholdsAnyPassage } = await import("../src/index.mjs");
+    const fact = store({ ...exact, text: { ...reference, ...patch } }).fact;
+    assert.deepEqual({
+      withholdsPassage: withholdsPassage(passage, fact),
+      withholdsAnyPassage: withholdsAnyPassage([passage], [fact]),
+      blocksMemoryPassage: blocksMemoryPassage([passage], [fact], null),
+    }, { withholdsPassage: true, withholdsAnyPassage: true, blocksMemoryPassage: true });
+  });
+}
