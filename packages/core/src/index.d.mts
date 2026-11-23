@@ -8,7 +8,7 @@ export { redactV1, redactHostedCurrent, redactCore, REDACT_CORE_POLICY, PRIVACY_
 export * from "./privacy/text.mjs";
 export type { FingerprintKey, FingerprintLabels, LegacyCaptureFingerprint } from "./privacy/fingerprint.mjs";
 export {
-  allDigests, coreDigest, engineLegacyDigest, fingerprintLegacyCapture, hostedV1Digest,
+  allDigests, coreDigest, coreFingerprintLabels, engineLegacyDigest, fingerprintLegacyCapture, hostedV1Digest,
   legacyExactMac, passageShingles, userFingerprintKey, validateFingerprintLabels,
 } from "./privacy/fingerprint.mjs";
 export * from "./privacy/fact-match.mjs";

@@ -38,8 +38,10 @@ export interface RationaleEdgeStore {
   /**
    * Complete receipts in stable order (1–100 per current memory). Read each source message
    * through Raw visibility, including retired receipts, then cut to 800 UTF-16 units on a
-   * code-point boundary. Missing memory: memory_not_found. Wrong revision or any missing,
-   * withheld or uncertain receipt text: revision_conflict. More than 100: context_item_too_large.
+   * code-point boundary and check the excerpt against text facts, including containment.
+   * Missing memory: memory_not_found. Wrong revision or any missing, withheld or uncertain
+   * receipt text (including a known Raw key conflict): revision_conflict.
+   * More than 100: context_item_too_large.
    */
   sourceEvidence(tx: Tx, scope: Scope, refs: readonly RationaleGuard[]): Promise<RationaleSource[]>;
   /**
@@ -53,7 +55,11 @@ export interface RationaleEdgeStore {
   incoming(tx: Tx, scope: Scope, memoryId: string, relation: RationaleRelation, page: { limit: number }): Promise<RationaleEdge[]>;
   /** Order by the full insert key (UTF-8). Limit 1–11. */
   incident(tx: Tx, scope: Scope, memoryId: string, page: { limit: number }): Promise<RationaleEdge[]>;
-  /** Delete all incident rows in the same transaction as an invalidating write or forget. */
+  /**
+   * Delete all incident rows in the same transaction as an invalidating write or forget.
+   * Hosts must also delete edges citing a removed Raw message's receipts in the same
+   * transaction as the Raw deletion or purge.
+   */
   invalidate(tx: Tx, scope: Scope, memoryId: string): Promise<{ deleted: number }>;
 }
 

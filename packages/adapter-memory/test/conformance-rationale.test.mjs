@@ -72,17 +72,19 @@ const mutations = {
     const { sourceEvidence } = adapter.rationale;
     const cached = new Map();
     adapter.rationale.sourceEvidence = async (tx, scope, refs) => {
-      const key = JSON.stringify([scope, refs]);
       try {
         const evidence = await sourceEvidence(tx, scope, refs);
-        cached.set(key, evidence);
+        for (const source of evidence) cached.set(JSON.stringify([scope, source.memory.id, source.memory.revision]), source);
         return evidence;
       } catch (error) {
-        if (error.code === "revision_conflict" && cached.has(key)) return cached.get(key);
+        if (error.code === "revision_conflict") {
+          const previous = refs.map(({ memoryId, revision }) => cached.get(JSON.stringify([scope, memoryId, revision])));
+          if (previous.every(Boolean)) return previous;
+        }
         throw error;
       }
     };
-  }, /Only the path with archived Raw remains/],
+  }, /Expected operation to reject/],
   scope: ["foreign incident reads expose another namespace's edge", adapter => {
     const { incident } = adapter.rationale;
     let cached;

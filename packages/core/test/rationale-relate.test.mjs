@@ -23,19 +23,19 @@ for (const closedPhase of ['pre-send', 'dispatch']) {
   });
 }
 
-for (const phase of ['pre-send', 'dispatch', 'after output', 'in write tx']) {
+for (const phase of ['before dispatch', 'after output', 'in write tx']) {
   test('whole snapshot freshness blocks a change ' + phase, async () => {
     const f = rationaleFixture([{ id: 'root', excerpt: 'The chosen approach.' }, { id: 'second', excerpt: 'Another source.' }]);
     let sends = 0;
     const mutate = () => { f.state.sources.get('second').receipts[0].excerpt = 'Uncited source changed.'; };
+    if (phase === 'before dispatch') f.options.beforeRead = number => { if (number === 2) mutate(); };
     if (phase === 'in write tx') f.options.beforeWrite = mutate;
     const model = modelReturning(() => {
       sends++;
       if (phase === 'after output') mutate();
       return oneEdge;
     });
-    const gate = { async assertOpen(_owner, checkpoint) { if (phase === checkpoint) mutate(); } };
-    const result = await relatePlaced({ ...f, refs: [f.guard('root'), f.guard('second')], model, gate });
+    const result = await relatePlaced({ ...f, refs: [f.guard('root'), f.guard('second')], model });
     assert.equal(result.status, 'failed');
     assert.equal(result.error.code, 'revision_conflict');
     assert.equal(sends, phase === 'after output' || phase === 'in write tx' ? 1 : 0);

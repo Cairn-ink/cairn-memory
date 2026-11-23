@@ -21,7 +21,7 @@ import { addKeyedDigest, createFactStore } from "./privacy.mjs";
 /** @typedef {{topics: Map<Namespace, TopicState>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
  * rationale: Map<Namespace, Map<string, import("@cairn-ink/core/ports").RationaleEdge>>,
  * rationaleMessages: Map<Namespace, Map<string, RationaleMessage>>,
- * rawRows: Map<string, import("./raw.mjs").RawEntry>, rawFences: Set<string>,
+ * rawRows: Map<string, import("./raw.mjs").RawEntry>, rawFences: Set<string>, rawConflicts: Set<string>,
  * claims: Map<string, ClaimRecord>, activeTokens: Map<string, string>, abandonedTokens: Set<string>, relations: Map<Namespace, RelationState>}} State */
 /** @typedef {{state: State, run: {readonly ended: boolean}, indexDirty: boolean, stateWritten: boolean, pauseLock: boolean,
  * poisoned: boolean, writeErrorCode: ErrorCode, finishes: Set<FinishResult>, writingFinishes: number,
@@ -83,7 +83,8 @@ class Owner {
   /** @type {State} */
   committed = {
     topics: new Map(), rows: new Map(), facts: new Map(), epoch: null, pause: { paused: false, generation: 0 }, indexRevision: 0,
-    claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(), rawRows: new Map(), rawFences: new Set(),
+    claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(),
+    rawRows: new Map(), rawFences: new Set(), rawConflicts: new Set(),
     relations: new Map(), rationale: new Map(), rationaleMessages: new Map(),
   };
   pause = new Mutex();

@@ -33,7 +33,7 @@ export function createMemoryAdapter(options = {}) {
   const matchFacts = createFactMatcher(flags.vectorSuppression, options.hashSessionKey);
   const { keys, ringKeys, setFingerprintSecret } =
     createFingerprintProvider(flags.fingerprintKey, options.fingerprint, rotateRowDigests);
-  const archive = flags.rawArchive ? createRawPorts(work, ringKeys, options.hashSessionKey) : undefined;
+  const archive = flags.rawArchive ? createRawPorts(work, ringKeys, options.hashSessionKey, flags.rationaleEdges) : undefined;
   const store = createMemoryStore(port, flags, newId, matchFacts, ringKeys);
   const { supersession, conflicts } = createRelationStores(port, matchFacts);
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts,

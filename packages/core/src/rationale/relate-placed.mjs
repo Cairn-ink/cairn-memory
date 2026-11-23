@@ -53,8 +53,13 @@ export async function relatePlaced(options) {
       return { snapshot, discovery };
     });
     const { snapshot } = initial;
-    const validateFresh = () => uow.run(owner, { readOnly: true }, tx =>
-      assertRationaleSnapshot(tx, scope, store, retrieval.snapshot, refs, snapshot));
+    const validateFresh = async () => {
+      await uow.run(owner, { readOnly: true }, tx =>
+        assertRationaleSnapshot(tx, scope, store, retrieval.snapshot, refs, snapshot));
+      // A forget can commit while the evidence read still sees its starting snapshot.
+      const current = await uow.run(owner, { readOnly: true }, tx => retrieval.snapshot.stateToken(tx, readScope));
+      if (current !== snapshot.indexToken) throw new CoreError('revision_conflict');
+    };
     const proposals = await relate({ model, sources: snapshot.sources, validateFresh, deadline, gate, owner, signal, onDiagnostic });
     proposed = proposals.length;
     const edges = await planRationaleEdges(snapshot, proposals, clock);

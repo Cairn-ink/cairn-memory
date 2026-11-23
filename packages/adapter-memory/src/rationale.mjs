@@ -1,9 +1,13 @@
-import { allDigests, compareUtf8, coreDigest, CoreError, cutRationaleText, RATIONALE_LIMITS } from "@cairn-ink/core";
+import {
+  allDigests, compareUtf8, coreDigest, coreFingerprintLabels, CoreError, cutRationaleText,
+  factBlocksIncoming, passageShingles, RATIONALE_LIMITS,
+} from "@cairn-ink/core";
 import { addKeyedDigest } from "./privacy.mjs";
 import { snapshotArray, validateLimit, validateMemoryId, writeNamespace } from "./validation.mjs";
 
 /** @import { Namespace, RationaleAnchor, RationaleEdge, RationaleEdgeStore, RationaleGuard,
  * Receipt, Scope, Tx } from "@cairn-ink/core/ports" */
+/** @import { FingerprintKey, StoredFact } from "@cairn-ink/core" */
 /** @import { State } from "./unit-of-work.mjs" */
 /** @typedef {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>["port"]} Port */
 
@@ -50,6 +54,44 @@ export function invalidateRationale(state, namespace, id) {
   return deleted;
 }
 
+/** @param {State} state @param {Namespace} namespace
+ * @param {readonly Pick<Receipt, "client" | "sessionId" | "messageId">[]} messages
+ */
+export async function invalidateRationaleSources(state, namespace, messages) {
+  const edges = state.rationale.get(namespace);
+  if (!edges?.size || !messages.length) return;
+  const ids = new Set(await Promise.all(messages.map(message => receiptId(sourceMessageKey(message)))));
+  for (const [key, { from, to }] of edges) {
+    if (ids.has(from.receiptId) || ids.has(to.receiptId)) edges.delete(key);
+  }
+  if (!edges.size) state.rationale.delete(namespace);
+}
+
+/** @param {Scope} scope @param {readonly StoredFact[]} facts
+ * @param {string} excerpt @param {readonly FingerprintKey[]} keys
+ */
+async function withholdsExcerpt(scope, facts, excerpt, keys) {
+  const digests = await allDigests(excerpt, null);
+  for (const keyed of await Promise.all(keys.map(key => coreDigest(excerpt, key)))) {
+    addKeyedDigest(digests, keyed);
+  }
+  /** @type {Map<string, string[]>} */
+  const shingleCache = new Map();
+  for (const stored of facts) {
+    const { fact } = stored;
+    if (fact.kind !== "text") continue;
+    const key = fact.mode === "full" ? keys.find(key => key.id === fact.text.keyId) : undefined;
+    let shingles = key ? shingleCache.get(key.id) : undefined;
+    if (key && !shingles) {
+      shingles = await passageShingles(excerpt, key, coreFingerprintLabels);
+      shingleCache.set(key.id, shingles);
+    }
+    const passage = { digests, keyId: key?.id ?? null, shingles: shingles ?? null };
+    if (factBlocksIncoming(stored, { scope, passages: [passage] }, { mode: "capture" }) !== false) return true;
+  }
+  return false;
+}
+
 /** @param {RationaleAnchor} anchor */
 function validateAnchor(anchor) {
   if (!anchor) throw new CoreError("invalid_input");
@@ -84,8 +126,19 @@ export function createRationaleStore(port, matchFacts, ringKeys, findVisibleSour
       const state = getState();
       const entries = state.rows.get(namespace);
       const messages = state.rationaleMessages.get(namespace);
-      const policy = matchFacts(state.facts, { owner: tx.owner, namespace });
-      const keys = findVisibleSource ? [] : await ringKeys(tx.owner);
+      const target = { owner: tx.owner, namespace };
+      const policy = matchFacts(state.facts, target);
+      const textFacts = [...state.facts.values()].filter(({ fact }) =>
+        fact.kind === "text" && fact.owner === target.owner && (fact.namespace ?? null) === namespace);
+      const keys = !findVisibleSource || textFacts.length ? await ringKeys(tx.owner) : [];
+      /** @param {string} text */
+      const checkExcerpt = async text => {
+        const excerpt = cutRationaleText(text, RATIONALE_LIMITS.excerptUnits);
+        if (textFacts.length && await withholdsExcerpt(target, textFacts, excerpt, keys)) {
+          throw new CoreError("revision_conflict");
+        }
+        return excerpt;
+      };
       return Promise.all(guards.map(async ({ memoryId, revision }) => {
         const entry = entries?.get(memoryId);
         if (!entry || entry.row.historical) throw new CoreError("memory_not_found");
@@ -96,11 +149,12 @@ export function createRationaleStore(port, matchFacts, ringKeys, findVisibleSour
         const receipts = await Promise.all(entry.receipts.map(async receipt => {
           const key = sourceMessageKey(receipt);
           if (findVisibleSource) {
-            const raw = await findVisibleSource(state, { owner: tx.owner, namespace }, receipt);
+            const raw = await findVisibleSource(state, target, receipt);
             if (!raw || raw.role !== receipt.role || raw.occurredAtMs !== receipt.occurredAtMs) {
               throw new CoreError("revision_conflict");
             }
-            return { id: await receiptId(key), role: raw.role, text: raw.content };
+            const excerpt = await checkExcerpt(raw.content);
+            return { id: await receiptId(key), role: raw.role, text: raw.content, excerpt };
           }
           // Synthetic sources exist for adapters opened without Raw.
           const message = messages?.get(key);
@@ -113,7 +167,8 @@ export function createRationaleStore(port, matchFacts, ringKeys, findVisibleSour
             addKeyedDigest(digests, keyed);
           }
           if (policy.withholdsRaw(receipt, digests)) throw new CoreError("revision_conflict");
-          return { id: await receiptId(key), role: message.role, text };
+          const excerpt = await checkExcerpt(text);
+          return { id: await receiptId(key), role: message.role, text, excerpt };
         }));
         return { memory: { id: memoryId, revision }, receipts };
       }));
@@ -124,9 +179,7 @@ export function createRationaleStore(port, matchFacts, ringKeys, findVisibleSour
   const rationale = {
     async sourceEvidence(tx, scope, refs) {
       return (await readSources(tx, scope, refs)).map(({ memory, receipts }) => ({
-        memory, receipts: receipts.map(({ id, role, text }) => ({
-          id, role, excerpt: cutRationaleText(text, RATIONALE_LIMITS.excerptUnits),
-        })),
+        memory, receipts: receipts.map(({ id, role, excerpt }) => ({ id, role, excerpt })),
       }));
     },
 

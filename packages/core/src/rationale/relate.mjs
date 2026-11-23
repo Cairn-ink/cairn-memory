@@ -82,12 +82,7 @@ export async function relate({ model, sources, validateFresh, deadline, gate, ow
   const built = buildRelateRequest(sources);
   await validateFresh();
   const edges = await callBuiltModel(model, 'relate', built, {
-    failureCode: 'rationale_failed', deadline, owner, signal, onDiagnostic,
-    gate: { async assertOpen(owner, phase) {
-      await gate.assertOpen(owner, phase);
-      // The guarded dispatch phase is the last await before the provider call.
-      if (phase === 'dispatch') await validateFresh();
-    } },
+    failureCode: 'rationale_failed', deadline, gate, owner, signal, onDiagnostic,
   });
   await validateFresh();
   return edges;

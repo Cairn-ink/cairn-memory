@@ -1,6 +1,7 @@
 import { allDigests, compareUtf8, CoreError, coreDigest, factHidesRow, tokenizeT1 } from "@cairn-ink/core";
 import { decodePayload, encodePayload } from "./cursor.mjs";
 import { addKeyedDigest, validateFact } from "./privacy.mjs";
+import { invalidateRationaleSources } from "./rationale.mjs";
 import { rankLexical, stateToken, validateToken } from "./retrieval.mjs";
 import { admissionScope, copyCaptureMessages, copyReadScope, snapshotArray, validateLimit, writeNamespace } from "./validation.mjs";
 
@@ -84,8 +85,9 @@ function publicSegment(segment) {
  * @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>} work
  * @param {import("./privacy.mjs").RingKeys} ringKeys
  * @param {FactMatchPolicy["hashSessionKey"]} [hashSessionKey]
+ * @param {boolean} [rationaleEdges]
  */
-export function createRawPorts({ port, runSeed }, ringKeys, hashSessionKey) {
+export function createRawPorts({ port, runSeed }, ringKeys, hashSessionKey, rationaleEdges = false) {
   const cursorBinding = crypto.randomUUID();
   const policy = { hashSessionKey, rowShingles: false };
   let rawKeyConflict = 0;
@@ -173,7 +175,7 @@ export function createRawPorts({ port, runSeed }, ringKeys, hashSessionKey) {
   async function findVisibleSource(state, scope, receipt) {
     const id = rawId(scope, receipt, receipt.messageId);
     const row = state.rawRows.get(id);
-    if (!row) return undefined;
+    if (!row || state.rawConflicts.has(id)) return undefined;
     const [visible] = await visibleRows({ ...state, rawRows: new Map([[id, row]]) },
       { owner: scope.owner, namespaces: [scope.namespace] });
     return visible;
@@ -184,17 +186,19 @@ export function createRawPorts({ port, runSeed }, ringKeys, hashSessionKey) {
     return port.write(tx, scope, "conditional", () => {
       const namespace = writeNamespace(scope);
       const slots = new Set(prepare().map((session) => sessionSlot(namespace, session)));
-      return (getState, _markDirty, run) => {
+      return async (getState, _markDirty, run) => {
         const state = getState();
-        let rawDeleted = 0;
+        const deleted = [];
         for (const [id, row] of state.rawRows) {
           if (slots.has(sessionSlot(row.ref.namespace, row))) {
             state.rawRows.delete(id);
-            rawDeleted++;
+            state.rawConflicts.delete(id);
+            deleted.push(row);
           }
         }
-        if (rawDeleted) advanceRevision(run);
-        return { rawDeleted };
+        await invalidateRationaleSources(state, namespace, deleted);
+        if (deleted.length) advanceRevision(run);
+        return { rawDeleted: deleted.length };
       };
     });
   }
@@ -223,7 +227,7 @@ export function createRawPorts({ port, runSeed }, ringKeys, hashSessionKey) {
         const admission = guarded.copyKey();
         const { scope } = admission;
         const entries = copyCaptureMessages(messages).map((message) => rawEntry(scope, admission, message));
-        return async (getState, _markDirty, run) => {
+        return async (getState, markDirty, run) => {
           if (!entries.length) return { archived: 0 };
           const state = getState();
           const facts = scopedFacts(state, scope);
@@ -231,9 +235,16 @@ export function createRawPorts({ port, runSeed }, ringKeys, hashSessionKey) {
           const refusalFacts = facts.filter(({ fact }) => fact.kind === "window" || fact.kind === "rawSpan");
           const hash = allowed && refusalFacts.some(({ fact }) => fact.kind === "rawSpan") ? await spanSessionHash(admission) : "";
           let archived = 0;
+          let newConflict = false;
           for (const entry of entries) {
             const previous = state.rawRows.get(entry.ref.id);
-            if (previous && previous.content !== entry.content) rawKeyConflict++;
+            if (previous && previous.content !== entry.content) {
+              rawKeyConflict++;
+              if (rationaleEdges && !state.rawConflicts.has(entry.ref.id)) {
+                state.rawConflicts.add(entry.ref.id);
+                newConflict = true;
+              }
+            }
             const candidate = evidence(entry, scope, hash);
             if (!allowed || refusalFacts.some((stored) => {
               const { fact } = stored;
@@ -249,6 +260,7 @@ export function createRawPorts({ port, runSeed }, ringKeys, hashSessionKey) {
             state.rawRows.set(entry.ref.id, entry);
             archived++;
           }
+          if (newConflict && !archived) markDirty();
           if (archived) advanceRevision(run);
           return { archived };
         };
@@ -314,15 +326,20 @@ export function createRawPorts({ port, runSeed }, ringKeys, hashSessionKey) {
         return async (getState, _markDirty, run) => {
           if (!candidates.length) return { rawDeleted: 0, ledgerBlanked: 0 };
           const state = getState();
+          const deleted = [];
+          const hasEdges = state.rationale.has(target.namespace);
           let rawDeleted = 0;
           for (const [id, row] of state.rawRows) {
             if (row.ref.namespace !== target.namespace) continue;
             const candidate = await project(row);
             if (candidates.some((stored) => factHidesRow(stored, candidate, policy) === true)) {
               state.rawRows.delete(id);
+              state.rawConflicts.delete(id);
+              if (hasEdges) deleted.push(row);
               rawDeleted++;
             }
           }
+          await invalidateRationaleSources(state, target.namespace, deleted);
           if (rawDeleted) advanceRevision(run);
           return { rawDeleted, ledgerBlanked: 0 };
         };

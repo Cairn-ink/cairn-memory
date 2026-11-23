@@ -12,7 +12,7 @@ export * from "./retrieval/session-start.mjs";
 export { redactV1, redactHostedCurrent, redactCore, REDACT_CORE_POLICY, PRIVACY_REDACTION_VERSIONS } from "./privacy/redact.mjs";
 export * from "./privacy/text.mjs";
 export {
-  allDigests, coreDigest, engineLegacyDigest, fingerprintLegacyCapture, hostedV1Digest,
+  allDigests, coreDigest, coreFingerprintLabels, engineLegacyDigest, fingerprintLegacyCapture, hostedV1Digest,
   legacyExactMac, passageShingles, userFingerprintKey, validateFingerprintLabels,
 } from "./privacy/fingerprint.mjs";
 export * from "./privacy/fact-match.mjs";

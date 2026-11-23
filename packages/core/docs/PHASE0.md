@@ -131,16 +131,19 @@ uses the core retrieval tokenizer. The lexical query stays local.
 rules. It checks forget facts, session fences, text and window facts, retired receipts and
 uncertain visibility at read time. It returns one to 100 receipts per memory. Each receipt
 has a stable digest of `(client, sessionId, messageId)`, its role and up to 800 UTF-16 units
-of the source message cut on a code-point boundary. A missing, withheld or uncertain excerpt
-fails the memory closed with `revision_conflict`. Excess receipts or a snapshot over 24,000
-serialized UTF-16 units fail before sending with `context_item_too_large`. Core uses the
-whole evidence set with no packing. The reference adapter's capture path retains receipt
+of the source message cut on a code-point boundary. The host applies text facts to that
+excerpt with containment. A missing, withheld or uncertain excerpt, including one from a
+conflicted Raw message key, fails the memory closed with `revision_conflict`. Excess
+receipts or a snapshot over 24,000 serialized UTF-16 units fail before sending with
+`context_item_too_large`. Core uses the whole evidence set with no packing. The
+reference adapter's capture path retains receipt
 metadata. Its test harness seeds synthetic raw text and passes reads through the shared
 fact matcher.
 
 Core sends the engine `relate` prompt with indexed receipt roles and excerpts only. The
 `rationale` stage uses `cairn_relate`, a strict provider schema and a 1,024-token output
-limit. A closed `ModelGate` stops the send. Provider failures use `rationale_failed`
+limit. The freshness reread finishes before the dispatch gate check. A closed `ModelGate`
+stops the send. Provider failures use `rationale_failed`
 (`unavailable`). The complete ordered evidence and owner index revision must match before
 dispatch, after output and again in the write transaction. A change returns
 `revision_conflict`. The diagnostic for invalid rationale is
@@ -157,9 +160,10 @@ memory revisions unchanged, so no filing rebind is needed.
 
 Hosts invalidate all incident rows in the same transaction as a revision, content,
 currentness, namespace, erasure or receipt change. That includes adding, removing or
-updating receipts and duplicate attaches at the same revision. Forget runs rationale
-invalidation at `dependents.invalidate`. Every edge read also checks current endpoint
-revisions and each cited receipt's digest.
+updating receipts and duplicate attaches at the same revision. Hosts also delete every
+edge whose endpoint cites a receipt in a removed Raw message in the same transaction as
+the Raw deletion or purge. Forget runs rationale invalidation at `dependents.invalidate`.
+Every edge read also checks current endpoint revisions and each cited receipt's digest.
 
 `decisionContext` follows incoming supports and challenges to the root and challenges to
 its visible supporting premises. The walk deduplicates stored edge keys and is bounded at
