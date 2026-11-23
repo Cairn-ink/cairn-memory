@@ -24,8 +24,15 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const NODE_TEXT = /node:/u;
 const LOADER_NAMES = /\b(?:createRequire|getBuiltinModule)\b/u;
 const COMMONJS_FILE = /\.cjs$/u;
-const BUILTIN_NAMES = new Set(builtinModules.flatMap((name) => [name, name.replace(/^node:/u, "")]));
-const QUOTED = /(["'`])((?:\\.|(?!\1)[^\\\n])*)\1/gu;
+// A quote, exactly a built-in name, then the same quote, found anywhere in the
+// text (raw and decoded). Quotes are not paired across the file, so an apostrophe
+// in a comment or an enclosing template cannot hide the specifier. Known cost: a
+// data string that equals a built-in name (for example "url" or "events") also
+// trips the scan; rename such a value or quote it differently.
+const BUILTIN_NAMES = [...new Set(builtinModules.flatMap((name) => [name, name.replace(/^node:/u, "")]))]
+  .sort((a, b) => b.length - a.length);
+const regexLiteral = (text) => text.replace(/[.*+?^$\{\}()|[\]\\]/gu, "\\$&");
+const BUILTIN_QUOTED = new RegExp("([\"'`])(?:" + BUILTIN_NAMES.map(regexLiteral).join("|") + ")\\1", "u");
 
 const SINGLE_ESCAPES = Object.freeze({ b: "\b", f: "\f", n: "\n", r: "\r", t: "\t", v: "\v", 0: "\0" });
 const LINE_TERMINATORS = new Set(["\n", "\r", "\u2028", "\u2029"]);
@@ -71,9 +78,7 @@ function violations(source) {
   const texts = [source, unescaped(source)];
   if (texts.some((text) => NODE_TEXT.test(text))) found.push("node: specifier");
   if (texts.some((text) => LOADER_NAMES.test(text))) found.push("loader");
-  for (const match of source.matchAll(QUOTED)) {
-    if (BUILTIN_NAMES.has(unescaped(match[2]))) { found.push("built-in specifier"); break; }
-  }
+  if (texts.some((text) => BUILTIN_QUOTED.test(text))) found.push("built-in specifier");
   return found;
 }
 
@@ -154,6 +159,10 @@ test("the shipped-file scan catches each banned form (negative control)", () => 
     'const fs = require("fs");',
     'const fs = await import("\\u0066s");',
     'const fs = await import("f\\x73");',
+    'await import("fs/\\\npromises");',
+    'await import("fs/\\\r\npromises");',
+    "import /* Node's filesystem API */ 'fs';",
+    'const label = `Filesystem lookup: ${typeof (await import("fs")).readFile}`;',
   ]) assert.deepEqual(violations(source), builtin, source);
   // In an ES module `require` is not defined and loads nothing; prose may use the word.
   for (const source of [
