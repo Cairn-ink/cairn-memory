@@ -131,7 +131,8 @@ test('prebuilt outputs allow exactly 40,000 UTF-16 units and at most 1024 tokens
   for (const [output, tokens, expectedPass, expectedDecodes, expectedCounts] of [
     [atLimit, 1024, true, 1, 2],
     [atLimit + 'a', 1, false, 0, 1],
-    ['tea', 1025, false, 1, 2],
+    // The raw-output token bound runs before decode, so an over-budget response is never decoded.
+    ['tea', 1025, false, 0, 2],
   ]) {
     const { model, sizes } = scriptedPort(() => output, (_text, read) => read === 1 ? 1 : tokens);
     const { events, onDiagnostic } = reports();
