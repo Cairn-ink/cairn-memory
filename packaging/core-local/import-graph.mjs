@@ -3,7 +3,7 @@ import { join, posix } from 'node:path';
 import { parse } from '../../tools/testing/vendor/acorn/acorn.mjs';
 
 const coreRoot = 'packages/core';
-const coreSource = coreRoot + '/src/';
+export const coreSource = coreRoot + '/src/';
 const hostEntry = 'packaging/core-local/host.mjs';
 const adapterSlot = 'packaging/core-local/adapter-slot.mjs';
 const compositionEntry = 'openLocalService';
@@ -18,9 +18,10 @@ const runtimeGlobals = new Set([
   'encodeURIComponent', 'isFinite', 'isNaN', 'parseInt', 'structuredClone', 'undefined',
 ]);
 const stdioProcessMembers = new Set(['argv', 'stdin', 'stdout']);
-const webCryptoMembers = new Map([
-  [coreSource + 'privacy/fingerprint.mjs', new Set(['digest', 'importKey', 'sign'])],
-  [coreSource + 'routing/card.mjs', new Set(['digest'])],
+const subtleMethods = new Set([
+  'decrypt', 'deriveBits', 'deriveKey', 'digest', 'encrypt', 'exportKey',
+  'generateKey', 'importKey', 'sign', 'unwrapKey', 'verify', 'wrapKey',
+  'decapsulateBits', 'decapsulateKey', 'encapsulateBits', 'encapsulateKey', 'getPublicKey',
 ]);
 const functionTypes = new Set(['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression']);
 const scopeTypes = new Set([
@@ -91,6 +92,21 @@ function dotMember(object, member) {
     !member.computed && !member.optional ? member.property.name : undefined;
 }
 
+function isMemberRead(node, parents) {
+  let use = parents.get(node);
+  // A member can be a write target inside a destructuring pattern.
+  while (use.type === 'ArrayPattern' || use.type === 'ObjectPattern' ||
+    use.type === 'RestElement' || use.type === 'AssignmentPattern' && use.left === node ||
+    use.type === 'Property' && use.value === node && parents.get(use).type === 'ObjectPattern') {
+    node = use;
+    use = parents.get(node);
+  }
+  if (use.type === 'AssignmentExpression' || use.type === 'ForInStatement' || use.type === 'ForOfStatement') {
+    return use.left !== node;
+  }
+  return use.type !== 'UpdateExpression' && !(use.type === 'UnaryExpression' && use.operator === 'delete');
+}
+
 function allowedAmbient(name, node, parents, path) {
   const member = parents.get(node);
   const use = parents.get(member);
@@ -102,11 +118,16 @@ function allowedAmbient(name, node, parents, path) {
   if (path === cliEntry && name === 'console') {
     return (property === 'log' || property === 'error') && use.type === 'CallExpression' && use.callee === member;
   }
-  if (name === 'globalThis' && property === 'crypto' && dotMember(member, use) === 'subtle') {
-    const method = parents.get(use);
-    const call = parents.get(method);
-    return webCryptoMembers.get(path)?.has(dotMember(use, method)) &&
-      call.type === 'CallExpression' && call.callee === method;
+  if (path.startsWith(coreSource) && (name === 'crypto' || name === 'globalThis' && property === 'crypto')) {
+    const cryptoObject = name === 'crypto' ? node : member;
+    const cryptoMember = parents.get(cryptoObject);
+    const cryptoProperty = dotMember(cryptoObject, cryptoMember);
+    if (cryptoProperty === 'getRandomValues' || cryptoProperty === 'randomUUID') {
+      return isMemberRead(cryptoMember, parents);
+    }
+    if (cryptoProperty !== 'subtle') return false;
+    const method = parents.get(cryptoMember);
+    return subtleMethods.has(dotMember(cryptoMember, method)) && isMemberRead(method, parents);
   }
   return runtimeGlobals.has(name);
 }

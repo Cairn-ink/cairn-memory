@@ -104,6 +104,12 @@ const capabilities = [
   ['ambient require', 'const load = require;'],
   ['ambient eval', 'const run = eval;'],
   ['aliased global', "const ambient = globalThis; const request = ambient['fe' + 'tch'];"],
+  ['computed crypto member', "crypto['getRandomValues'](new Uint8Array(1));"],
+  ['computed subtle method', "globalThis.crypto.subtle['digest']('SHA-256', new Uint8Array());"],
+  ['crypto object as an argument', 'Object.keys(globalThis.crypto);'],
+  ['subtle object assigned to a variable', 'const subtle = crypto.subtle;'],
+  ['crypto member write', 'crypto.randomUUID = () => "";'],
+  ['destructuring write to a subtle method', '({ digest: crypto.subtle.digest } = {});'],
   ['computed constructor', "const make = (() => {})['con' + 'structor'];"],
   ['out-of-scope shadow', '{ const fetch = 1; } const request = fetch;'],
   ['switch discriminant', 'switch (fetch) { default: let fetch; }'],
@@ -115,6 +121,22 @@ for (const [label, statement, error = /unsupported_core_local_capability/] of ca
     assert.throws(() => deriveRuntimeGraph(fixture(t, { [coreEntry]: statement })), error);
   });
 }
+
+test('core permits literal reads of Web Crypto methods and respects local bindings', t => {
+  const path = fixture(t, {
+    [coreEntry]: `export async function run() {
+      const bytes = crypto.getRandomValues(new Uint8Array(1));
+      const uuid = globalThis.crypto.randomUUID();
+      const hash = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+      return { uuid, hash };
+    }
+    export const digest = crypto.subtle.digest;
+    export function local(crypto) { return crypto['fixture']; }`,
+  });
+  assert.deepEqual(deriveRuntimeGraph(path), [coreEntry, slot, cliEntry, host]);
+  writeFileSync(join(path, host), deferredHost + "crypto.randomUUID();");
+  assert.throws(() => deriveRuntimeGraph(path), /unsupported_core_local_capability.*host\.mjs: crypto/);
+});
 
 test('closure permits injected capabilities and CLI stdio while refusing broader process access', t => {
   const path = fixture(t, {
@@ -177,6 +199,10 @@ test('builder checks installed help and handshake before publishing a candidate'
     'tools/testing/vendor/acorn/acorn.mjs']) {
     cpSync(new URL('../../' + file, import.meta.url), join(path, file), { recursive: true });
   }
+  const added = 'packages/core/src/added.mjs';
+  const addedSource = 'export const added = true;\n';
+  writeFileSync(join(path, added), addedSource);
+  writeFileSync(join(path, coreEntry), "export { added } from './added.mjs';\n", { flag: 'a' });
   // The installed slot can link SQLite when composed. Startup must never load it.
   writeFileSync(join(path, slot), "export { DatabaseSync } from 'node:sqlite';\n" + readFileSync(join(path, slot), 'utf8'));
   const cliSource = readFileSync(join(path, cliEntry), 'utf8');
@@ -187,6 +213,7 @@ test('builder checks installed help and handshake before publishing a candidate'
   const valid = run('valid');
   assert.ifError(valid.error);
   assert.equal(valid.status, 0, valid.stderr);
+  assert.equal(JSON.parse(valid.stdout).files[added], digest(addedSource));
   for (const [file, oldSource, from, to, error] of [
     [cliEntry, cliSource, 'Usage:', 'Broken:', /core_local_startup_help_mismatch/],
     [host, hostSource, 'reply.result = {};', 'reply.result = { broken: true };', /core_local_startup_handshake_mismatch/],

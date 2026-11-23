@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { command } from './build.mjs';
 import { engineIdForCoreLocal, sha256 } from './core-local/engine-id.mjs';
-import { cliEntry, coreManifest, coreRuntimeManifest, deriveRuntimeGraph } from './core-local/import-graph.mjs';
+import { cliEntry, coreManifest, coreRuntimeManifest, coreSource, deriveRuntimeGraph } from './core-local/import-graph.mjs';
 
 const repo = realpathSync(fileURLToPath(new URL('../', import.meta.url)));
 const name = 'cairn-memory-core-local-candidate';
@@ -83,23 +83,24 @@ function verifyInstalledStartup(install, installed, scratch) {
 
 export function buildCoreLocalCandidate(output) {
   const dest = resolve(output);
-  const runtime = readJSON(join(repo, inventoryPath));
+  const inventory = readJSON(join(repo, inventoryPath));
   const graph = deriveRuntimeGraph(repo);
-  if (!isDeepStrictEqual(runtime, graph)) {
-    const listed = Array.isArray(runtime) ? runtime : [];
-    const missing = graph.filter(path => !listed.includes(path));
-    const extra = listed.filter(path => !graph.includes(path));
+  const candidateFiles = ['LICENSE', coreManifest, ...graph.filter(path => !path.startsWith(coreSource))].sort();
+  if (!isDeepStrictEqual(inventory, candidateFiles)) {
+    const listed = Array.isArray(inventory) ? inventory : [];
+    const missing = candidateFiles.filter(path => !listed.includes(path));
+    const extra = listed.filter(path => !candidateFiles.includes(path));
     const code = 'core_local_inventory_graph_mismatch';
     const error = new Error([
       code,
       `Missing from inventory: ${JSON.stringify(missing)}`,
       `Extra in inventory: ${JSON.stringify(extra)}`,
-      `Update ${inventoryPath} to match the sorted runtime graph.`,
+      `Update ${inventoryPath} to match the sorted candidate-owned file list.`,
     ].join('\n'));
     error.code = code;
     throw error;
   }
-  const copied = [...runtime, 'LICENSE'];
+  const copied = [...inventory, ...graph.filter(path => path.startsWith(coreSource))];
   const files = [...copied, 'package.json', coreManifest].sort();
   const generated = {
     'package.json': json({
