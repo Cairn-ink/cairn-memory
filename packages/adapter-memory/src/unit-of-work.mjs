@@ -1,5 +1,5 @@
-import { allDigests, CoreError, compareUtf8, isErrorCode, toCoreError } from "@cairn-ink/core";
-import { createFactStore } from "./privacy.mjs";
+import { coreDigest, CoreError, compareUtf8, isErrorCode, toCoreError } from "@cairn-ink/core";
+import { addKeyedDigest, createFactStore } from "./privacy.mjs";
 
 /** @typedef {import("@cairn-ink/core").ErrorCode} ErrorCode */
 /** @typedef {import("@cairn-ink/core/ports").Tx} Tx */
@@ -82,9 +82,6 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
   const owners = new Map();
   /** @type {WeakMap<Tx, IssuedRun>} */
   const issued = new WeakMap();
-  /** @type {Promise<void> | undefined} */
-  let rotation;
-
   /** @param {string} owner */
   function ownerState(owner) {
     let state = owners.get(owner);
@@ -102,7 +99,6 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
       const pauseLock = options.pauseLock === true;
       const current = ownerState(owner);
       if (current.fixtureWrite) await current.fixtureWrite;
-      while (!readOnly && rotation) await rotation;
       current.open++;
       let ended = false;
       /** @type {Tx | undefined} */
@@ -250,9 +246,11 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
   /**
    * Memory operations invoked by the finish that already holds the queue.
    * @template T
-   * @param {Tx} tx @param {Pick<Scope, "owner">} scope @param {() => (getState: () => State) => T} prepare
+   * @param {Tx} tx @param {Pick<Scope, "owner">} scope
+   * @param {() => (getState: () => State, markDirty: () => void) => T} prepare
    */
-  port.writeFromFinish = (tx, scope, prepare) => accessPort(tx, scope, "conditional", (getState) => prepare()(getState));
+  port.writeFromFinish = (tx, scope, prepare) =>
+    accessPort(tx, scope, "conditional", (getState) => prepare()(getState, () => {}));
 
   /**
    * @template T
@@ -317,81 +315,67 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
   }
 
   /** @param {Scope} scope @param {string} id @param {bigint} updatedAtUs */
-  async function setWriteTime(scope, id, updatedAtUs) {
-    while (rotation) await rotation;
-    const current = owners.get(scope.owner);
+  async function setWriteTime({ owner, namespace }, id, updatedAtUs) {
+    const current = owners.get(owner);
     if ((current && current.open > 0) || typeof updatedAtUs !== "bigint" || updatedAtUs < 0n) {
       throw new CoreError("invalid_input");
     }
-    const namespace = current?.committed.rows.get(scope.namespace);
-    const entry = namespace?.get(id);
-    if (!current || !namespace || !entry) throw new CoreError("memory_not_found");
-
-    const rows = new Map(current.committed.rows);
-    const updated = new Map(namespace);
-    updated.set(id, { ...entry, row: { ...entry.row, updatedAtUs, updatedAtMs: Number(updatedAtUs / 1000n) } });
-    rows.set(scope.namespace, updated);
-    current.committed = { ...current.committed, rows, indexRevision: current.committed.indexRevision + 1 };
-  }
-
-  /** @param {UserKey} userKey @param {() => void} publishKey */
-  async function rotateRowDigests(userKey, publishKey) {
-    const previous = rotation;
-    const change = Promise.resolve(previous).then(async () => {
-      const affected = [...owners];
-      const releases = await Promise.all(affected.map(([, current]) => current.write.acquire()));
-      try {
-        /** @type {Map<Owner, State>} */
-        const updates = new Map();
-        for (const [owner, current] of affected) {
-          const committed = current.committed;
-          if (committed.rows.size === 0) continue;
-          const key = await userKey(owner);
-          /** @type {State["rows"]} */
-          const rows = new Map();
-          for (const [namespace, entries] of committed.rows) {
-            const refreshed = new Map();
-            for (const [id, entry] of entries) {
-              const { row } = entry;
-              const digests = await allDigests(row.text, key);
-              for (const alias of row.digests ?? []) {
-                if (alias.alg === "sha256" && !digests.some(({ alg, value }) => alg === alias.alg && value === alias.value)) {
-                  digests.push(alias);
-                }
-              }
-              refreshed.set(id, { ...entry, row: { ...row, digests } });
-            }
-            rows.set(namespace, refreshed);
-          }
-          const indexRevision = committed.indexRevision + 1;
-          if (!Number.isSafeInteger(indexRevision)) throw new CoreError("internal_error");
-          updates.set(current, { ...committed, rows, indexRevision });
-        }
-        // Publish the prepared snapshots and key without yielding to readers or writers.
-        for (const [current, state] of updates) current.committed = state;
-        publishKey();
-      } finally {
-        for (const release of releases) release();
-      }
-    });
-    const tail = change.then(() => {}, () => {});
-    rotation = tail;
+    if (!current) throw new CoreError("memory_not_found");
+    const release = await current.write.acquire();
     try {
-      await change;
+      const entries = current.committed.rows.get(namespace);
+      const entry = entries?.get(id);
+      if (!entries || !entry) throw new CoreError("memory_not_found");
+
+      const rows = new Map(current.committed.rows);
+      const updated = new Map(entries);
+      updated.set(id, { ...entry, row: { ...entry.row, updatedAtUs, updatedAtMs: Number(updatedAtUs / 1000n) } });
+      rows.set(namespace, updated);
+      current.committed = { ...current.committed, rows, indexRevision: current.committed.indexRevision + 1 };
     } finally {
-      if (rotation === tail) rotation = undefined;
+      release();
     }
   }
 
-  /** @param {string} owner @param {UserKey} userKey */
-  async function rowsMissingKeyedDigest(owner, userKey) {
+  /** @param {UserKey} pendingKey */
+  async function rotateRowDigests(pendingKey) {
+    // Owners created after this snapshot can only write with the pending key in their ring.
+    for (const [owner, current] of [...owners]) {
+      const release = await current.write.acquire();
+      try {
+        const committed = current.committed;
+        if (committed.rows.size === 0) continue;
+        const key = await pendingKey(owner);
+        /** @type {State["rows"]} */
+        const rows = new Map();
+        for (const [namespace, entries] of committed.rows) {
+          const refreshed = new Map();
+          for (const [id, entry] of entries) {
+            const { row } = entry;
+            const digests = [...(row.digests ?? [])];
+            addKeyedDigest(digests, await coreDigest(row.text, key));
+            refreshed.set(id, { ...entry, row: { ...row, digests } });
+          }
+          rows.set(namespace, refreshed);
+        }
+        const indexRevision = committed.indexRevision + 1;
+        if (!Number.isSafeInteger(indexRevision)) throw new CoreError("internal_error");
+        current.committed = { ...committed, rows, indexRevision };
+      } finally {
+        release();
+      }
+    }
+  }
+
+  /** @param {string} owner @param {import("./privacy.mjs").RingKeys} ringKeys */
+  async function rowsMissingKeyedDigest(owner, ringKeys) {
     const rows = owners.get(owner)?.committed.rows;
-    const key = await userKey(owner);
-    if (!key || !rows) return 0;
+    if (!rows) return 0;
+    const keys = await ringKeys(owner);
     let count = 0;
     for (const entries of rows.values()) {
       for (const { row: { digests } } of entries.values()) {
-        if (!digests?.some(({ alg, keyId }) => alg === "hmac" && keyId === key.id)) count++;
+        if (keys.some((key) => !digests?.some(({ alg, keyId }) => alg === "hmac" && keyId === key.id))) count++;
       }
     }
     return count;

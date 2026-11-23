@@ -4,7 +4,7 @@ import { CoreError, isErrorCode, validateSuppressionFact } from "@cairn-ink/core
 /** @typedef {import("@cairn-ink/core/ports").Receipt} Receipt */
 /** @typedef {import("@cairn-ink/core/ports").DuplicateMerge} DuplicateMerge */
 /** @typedef {import("@cairn-ink/core/ports").DuplicateQuery} DuplicateQuery */
-/** @typedef {Omit<DuplicateQuery, "embedding"> & {embedding?: number[] | null}} CanonicalQuery */
+/** @typedef {Omit<DuplicateQuery, "embedding"> & {embedding?: number[] | null, text?: string}} CanonicalQuery */
 
 const kinds = ["fact", "preference", "decision", "instruction", "context"];
 const origins = ["explicit", "inferred"];
@@ -217,13 +217,25 @@ export function copyRefs(refs) {
   });
 }
 
-/** @param {readonly DuplicateQuery[]} batch @returns {CanonicalQuery[]} */
-export function copyDuplicateBatch(batch) {
+/** @param {DuplicateQuery} query */
+function queryText(query) {
+  try {
+    const text = Object.getOwnPropertyDescriptor(query, "text")?.value;
+    return typeof text === "string" ? text : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** @param {readonly DuplicateQuery[]} batch @param {boolean} [copyText] @returns {CanonicalQuery[]} */
+export function copyDuplicateBatch(batch, copyText = false) {
   return snapshotArray(batch).map((query) => {
     if (!query || typeof query !== "object") invalid();
     const { textHash, legacyHash, embedding, digests } = query;
     if (!isTextHash(textHash) || (legacyHash !== undefined && !isTextHash(legacyHash))) invalid();
-    return { textHash, legacyHash, digests: copyDigests(digests),
+    const copy = copyDigests(digests);
+    const text = copyText && copy?.some(({ alg }) => alg === "hmac") ? queryText(query) : undefined;
+    return { textHash, legacyHash, digests: copy, text,
       embedding: embedding == null ? embedding : readEmbedding(embedding) };
   });
 }

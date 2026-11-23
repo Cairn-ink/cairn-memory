@@ -8,6 +8,8 @@ import { readEmbedding, snapshotArray } from "./validation.mjs";
 /** @typedef {import("./index.d.mts").MemoryAdapterOptions} Options */
 /** @typedef {import("@cairn-ink/core").SuppressionFact} SuppressionFact */
 /** @typedef {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>} UnitOfWork */
+/** @typedef {(owner: string) => Promise<import("@cairn-ink/core").FingerprintKey[]>} RingKeys */
+/** @import { TextDigest } from "@cairn-ink/core" */
 
 // This reference adapter can supply a public key fixture for tests. The fixture is unsuitable for production.
 export const TEST_FINGERPRINT_SECRET = "test-secret-a";
@@ -18,6 +20,13 @@ export const TEST_FINGERPRINT_LABELS = Object.freeze({
 });
 
 const encoder = new TextEncoder();
+
+/** @param {TextDigest[]} digests @param {TextDigest} keyed */
+export function addKeyedDigest(digests, keyed) {
+  if (!digests.some(({ alg, keyId, value }) => alg === keyed.alg && keyId === keyed.keyId && value === keyed.value)) {
+    digests.push(keyed);
+  }
+}
 
 /** @param {SuppressionFact} fact */
 function validateFact(fact) {
@@ -166,6 +175,16 @@ export function createFingerprintProvider(enabled, config, rotateRowDigests) {
   const labels = config == null ? TEST_FINGERPRINT_LABELS : validateFingerprintLabels(config.labels);
   let secret = enabled ? (config == null ? TEST_FINGERPRINT_SECRET : config.secret) : null;
   if (enabled && (typeof secret !== "string" || secret.length === 0)) throw new CoreError("invalid_input");
+  const ring = new Set(secret === null ? [] : [secret]);
+  /** @type {Promise<void> | undefined} */
+  let rotation;
+
+  /** @type {RingKeys} */
+  const ringKeys = async (owner) => {
+    // Snapshot the ring before any key derivation yields.
+    const derived = await Promise.all([...ring].map((seed) => userFingerprintKey(seed, owner, labels)));
+    return derived.filter((key) => key !== null);
+  };
 
   /** @type {import("@cairn-ink/core/ports").FingerprintKeyProvider} */
   const keys = {
@@ -178,8 +197,28 @@ export function createFingerprintProvider(enabled, config, rotateRowDigests) {
   async function setFingerprintSecret(next) {
     if (!enabled) throw new CoreError("capability_unavailable");
     if (typeof next !== "string" || next.length === 0) throw new CoreError("invalid_input");
-    await rotateRowDigests((owner) => userFingerprintKey(next, owner, labels), () => { secret = next; });
+
+    const apply = async () => {
+      const retained = ring.has(next);
+      // Writes see the pending key before rotation starts acquiring owner locks.
+      ring.add(next);
+      try {
+        await rotateRowDigests((owner) => userFingerprintKey(next, owner, labels));
+        secret = next;
+      } catch (error) {
+        if (!retained) ring.delete(next);
+        throw error;
+      }
+    };
+    const change = rotation ? rotation.then(apply) : apply();
+    const tail = change.then(() => {}, () => {});
+    rotation = tail;
+    try {
+      await change;
+    } finally {
+      if (rotation === tail) rotation = undefined;
+    }
   }
 
-  return { keys, setFingerprintSecret };
+  return { keys, ringKeys, setFingerprintSecret };
 }

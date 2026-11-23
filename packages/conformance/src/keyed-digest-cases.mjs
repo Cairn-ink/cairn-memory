@@ -1,5 +1,5 @@
-import { allDigests, coreDigest } from "@cairn-ink/core";
-import { check, equal, row, source } from "./support.mjs";
+import { allDigests, coreDigest, decideWrite } from "@cairn-ink/core";
+import { bounded, check, DEFAULT_TIMEOUT_MS, equal, gate, observe, row, source, wait } from "./support.mjs";
 
 /** @import { FingerprintKey } from "@cairn-ink/core" */
 /** @import { FinishItem, ItemRef } from "@cairn-ink/core/ports" */
@@ -7,6 +7,7 @@ import { check, equal, row, source } from "./support.mjs";
 
 const matching = "Garden basil";
 const unrelated = "Garden thyme";
+const third = "Garden mint";
 
 /** @param {CaseContext} ctx */
 async function ownerKey({ adapter, owner }) {
@@ -15,11 +16,11 @@ async function ownerKey({ adapter, owner }) {
   return key;
 }
 
-/** @param {CaseContext} ctx @param {FingerprintKey} key */
-async function seedFact(ctx, key) {
+/** @param {CaseContext} ctx @param {FingerprintKey} key @param {string} [text] @param {string} [actionId] */
+async function seedFact(ctx, key, text = matching, actionId = "test-forget") {
   await ctx.harness.seedFact(ctx.owner, {
-    owner: ctx.owner, actionId: "test-forget", origin: "forget", kind: "text", mode: "exact",
-    text: { digests: [await coreDigest(matching, key)], keyId: key.id },
+    owner: ctx.owner, actionId, origin: "forget", kind: "text", mode: "exact",
+    text: { digests: [await coreDigest(text, key)], keyId: key.id },
   });
 }
 
@@ -58,6 +59,48 @@ async function finishItem(ctx, content, key) {
   };
 }
 
+/**
+ * @param {CaseContext} ctx @param {string} oldId
+ * @param {() => Promise<void>} rotate @param {() => Promise<number>} countMissing
+ */
+async function sampleRotation(ctx, oldId, rotate, countMissing) {
+  const { owner, adapter: { uow }, settleMs = 100, timeoutMs = DEFAULT_TIMEOUT_MS } = ctx;
+  const started = gate();
+  const release = gate();
+  let sampled = false;
+  try {
+    await bounded(async () => {
+      const writer = observe(uow.run(owner, {}, async () => {
+        started.release(undefined);
+        await release.promise;
+      }));
+      await Promise.race([started.promise, writer]);
+      let finished = false;
+      const rotation = observe(rotate().finally(() => { finished = true; }));
+      const done = observe(rotation.then(() => null));
+      const sampler = observe((async () => {
+        while (!finished) {
+          const key = await Promise.race([ownerKey(ctx), done]);
+          if (!key || finished) break;
+          if (key.id !== oldId) {
+            equal(await countMissing(), 0, "A published rotated key must already cover every row");
+          }
+          sampled = true;
+          await wait(1);
+        }
+      })());
+
+      // Give rotation a chance to reach the writer's lock, then keep sampling after release.
+      await wait(settleMs);
+      release.release(undefined);
+      await Promise.all([writer, rotation, sampler]);
+    }, "Key rotation observation", timeoutMs + settleMs);
+  } finally {
+    release.release(undefined);
+  }
+  return sampled ? undefined : "rotation sampling skipped because no key read completed while rotation was in flight";
+}
+
 /** @type {readonly ConformanceCase[]} */
 export const KEYED_DIGEST_CASES = [
   {
@@ -85,6 +128,12 @@ export const KEYED_DIGEST_CASES = [
       await uow.run(ctx.owner, { readOnly: true }, async (tx) => {
         const keyed = await memories.readWritePolicy(tx, scope, queries, source, "hash");
         equal(keyed.blockedPositions, [0], "Keyed write policy must block the matching query only");
+        equal(keyed.blockedSession, false, "Keyed write policy must leave this session unblocked");
+        equal(decideWrite(keyed, 1).status, "saved", "Core must save the unrelated query in the keyed batch");
+        const unrelatedPolicy = await memories.readWritePolicy(tx, scope, [queries[1]], source, "hash");
+        equal(unrelatedPolicy.blockedPositions, [], "The unrelated keyed save must have no blocked positions");
+        equal(unrelatedPolicy.blockedSession, false, "The unrelated keyed save must leave this session unblocked");
+        equal(decideWrite(unrelatedPolicy, 0).status, "saved", "Core must save the unrelated keyed query");
         const unkeyed = await memories.readWritePolicy(tx, scope, [{ textHash }], source, "hash");
         equal(unkeyed.blockedPositions, [0], "A query without a comparable keyed digest must fail closed");
       });
@@ -117,14 +166,24 @@ export const KEYED_DIGEST_CASES = [
       if (!harness.setFingerprintSecret) return "needs harness.setFingerprintSecret for keyed digest rotation";
       if (!harness.rowsMissingKeyedDigest) return "needs harness.rowsMissingKeyedDigest for the rotation gate";
       const oldKey = await ownerKey(ctx);
-      const hidden = await insert(ctx, matching, oldKey);
-      const visible = await insert(ctx, unrelated, oldKey);
-      await harness.setFingerprintSecret("test-secret-rotation");
+      await insert(ctx, matching, oldKey);
+      const second = await insert(ctx, unrelated, oldKey);
+      const visible = await insert(ctx, third, oldKey);
+      const skipSampling = await sampleRotation(ctx, oldKey.id,
+        harness.setFingerprintSecret.bind(harness, "test-secret-rotation"),
+        harness.rowsMissingKeyedDigest.bind(harness, owner));
       const newKey = await ownerKey(ctx);
       check(newKey.id !== oldKey.id, "Rotation must change the current key ID");
-      equal(await harness.rowsMissingKeyedDigest(owner), 0, "Rotation must leave zero rows missing a current-key digest");
-      await seedFact(ctx, newKey);
-      await expectVisible(ctx, hidden.id, visible.id);
+      equal(await harness.rowsMissingKeyedDigest(owner), 0, "Rotation must leave zero rows missing a keyed digest");
+      await seedFact(ctx, oldKey);
+      const { uow, memories } = ctx.adapter;
+      const page = await uow.run(owner, { readOnly: true }, (tx) =>
+        memories.exportPage(tx, ctx.scope(null), { cursor: null, limit: 10 }));
+      equal(page.items.map(({ id }) => id).sort(), [second.id, visible.id].sort(),
+        "The old-key fact must hide only its matching row");
+      await seedFact(ctx, newKey, unrelated, "test-forget-rotated");
+      await expectVisible(ctx, second.id, visible.id);
+      return skipSampling;
     },
   },
 ];

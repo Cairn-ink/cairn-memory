@@ -126,21 +126,31 @@ async function rotationChangesKey(ctx) {
   assert.notEqual(after.id, before.id);
 }
 
-const storedDigests = "const digests = content.digests ?? await allDigests(content.text, await userKey(tx.owner));";
 const omitStoredKeyedDigests = {
-  "memory-store": [[storedDigests,
-    "const digests = (content.digests ?? await allDigests(content.text, null)).filter(({ alg }) => alg === \"sha256\");", 2]],
+  "memory-store": [["return digests;", 'return digests.filter(({ alg }) => alg === "sha256");']],
 };
-const skipRedigest = ["const digests = await allDigests(row.text, key);", "const digests = [...(row.digests ?? [])];"];
+const skipRedigest = ["addKeyedDigest(digests, await coreDigest(row.text, key));", ""];
 
 const mutants = [
   ["rows omit keyed digests", "K-KD-1", matchingRowHidden, /Lexical must retain the unrelated row only/, omitStoredKeyedDigests],
   ["write queries ignore digests", "K-KD-2", matchingQueryBlocked, /Keyed write policy must block the matching query only/, {
     "fact-match": [["digests: query.digests ?? digestsFor(query)", "digests: digestsFor(query)"]],
   }],
-  ["rotation skips row digests", "K-KD-4", rotationChangesKey, /Rotation must leave zero rows missing a current-key digest/, {
+  ["keyed explicit saves block the session", "K-KD-2", (ctx) => matchingQueryBlocked(ctx, true),
+    /Keyed write policy must leave this session unblocked/, {
+      "memory-store": [["blockedSession: policy.blocksSession(source.client, source.sessionId),",
+        'blockedSession: (mode === "hash" && batch.some(({ digests }) => digests?.some(({ alg }) => alg === "hmac"))) || policy.blocksSession(source.client, source.sessionId),']],
+    }],
+  ["rotation skips row digests", "K-KD-4", rotationChangesKey, /Rotation must leave zero rows missing a keyed digest/, {
     "unit-of-work": [skipRedigest],
   }],
+  ["rotation publishes the key before covering rows", "K-KD-4", rotationChangesKey,
+    /A published rotated key must already cover every row/, {
+      privacy: [[
+        "await rotateRowDigests((owner) => userFingerprintKey(next, owner, labels));\n        secret = next;",
+        "secret = next;\n        await rotateRowDigests((owner) => userFingerprintKey(next, owner, labels));",
+      ]],
+    }],
   ["ineligible queries are allowed", "K-KD-2", (ctx) => matchingQueryBlocked(ctx, true),
     /A query without a comparable keyed digest must fail closed/, {
       "fact-match": [['mode: mode === "hash" ? "explicitSave" : "capture" }) !== false',
@@ -161,12 +171,11 @@ for (const [name, id, run, failure, mutations] of mutants) {
   });
 }
 
-async function withKeyedDigests(rows, key) {
+async function withKeyedDigests(rows, keys) {
   const copy = structuredClone(rows);
   for (const entries of copy.values()) {
     for (const { row } of entries.values()) {
-      const computed = await allDigests(row.text, key);
-      row.digests.push(...computed.filter(({ alg }) => alg === "hmac"));
+      for (const key of keys) row.digests.push(await coreDigest(row.text, key));
     }
   }
   return copy;
@@ -176,18 +185,18 @@ test("keyed digest cases accept a store that computes keyed digests at read time
   const factory = await variantFactory("lazy row digests", {
     ...omitStoredKeyedDigests,
     index: [["createUnitOfWork(nativeErrorMap, now, flags.placement)",
-      "createUnitOfWork(nativeErrorMap, now, flags.placement, (owner) => keys.userKey(owner))"]],
+      "createUnitOfWork(nativeErrorMap, now, flags.placement, (owner) => ringKeys(owner))"]],
     "unit-of-work": [
       ["export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics = false) {",
-        `${withKeyedDigests}\nexport function createUnitOfWork(nativeErrorMap, now, includeTopics, readKey) {`],
+        `${withKeyedDigests}\nexport function createUnitOfWork(nativeErrorMap, now, includeTopics, readKeys) {`],
       ["const result = body(() => {", `const current = issuedRun.state;
       const state = !write && current.rows.size > 0
-        ? { ...current, rows: await withKeyedDigests(current.rows, await readKey(tx.owner)) }
+        ? { ...current, rows: await withKeyedDigests(current.rows, await readKeys(tx.owner)) }
         : current;
       const result = body(() => {`],
       ["return issuedRun.state;", "return state;"],
       skipRedigest,
-      ["for (const entries of rows.values()) {", "for (const entries of (await withKeyedDigests(rows, key)).values()) {"],
+      ["for (const entries of rows.values()) {", "for (const entries of (await withKeyedDigests(rows, keys)).values()) {"],
     ],
   }, async (harness) => {
     for (const { rows } of await harness.dump()) {

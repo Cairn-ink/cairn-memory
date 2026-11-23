@@ -94,7 +94,7 @@ Each addendum is additive unless it says what it supersedes. Adapters written ag
 5. **Keyed row digests.** `DuplicateQuery`, `InsertRow`, and `FinishItem` accept optional `digests` from core's `allDigests(text, key)` under the owner's current key. Stores persist row digests.
    - For an HMAC-only text fact, a row or query without a digest under the fact's key ID is ineligible. Reads hide the row and writes deny the query.
    - The reference store can derive row digests from stored text. Stores with existing data backfill before switching and require the count of rows lacking a current-key digest to be zero.
-   - Rotation (i) re-digests every row under the new key in the same operation as the key change, before a fact can be written under the new key.
+   - Rotation (i) adds the new key to the key ring so writes include it, adds its digest to every existing row, then publishes it as current. Rows keep digests under every retained key so earlier facts remain comparable, and the new key is published only after all rows have its digest.
    - Core write paths fill query digests before core-backed writes. A query without digests is blocked while an HMAC-only text fact applies.
    - It supersedes nothing.
 

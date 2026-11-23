@@ -31,7 +31,7 @@ export type TestHarness = {
   seedFact(owner: string, fact: SuppressionFact): Promise<void>;
   setWriteTime(scope: Scope, id: string, updatedAtUs: bigint): Promise<void>;
   setFingerprintSecret?(secret: string): Promise<void>;
-  /** Counts rows without a digest under the owner's current key. Returns zero when no key is enabled. */
+  /** Counts rows missing a digest under any key in the owner's ring. Returns zero when no key is enabled. */
   rowsMissingKeyedDigest?(owner: string): Promise<number>;
   advanceClock?(ms: number): Promise<void>;
   /** Required for privacy matching cases under the hashed session profile. */

@@ -1,7 +1,8 @@
-import { allDigests, CoreError, NEAR_DUPLICATE_DISTANCE, compareUtf8 } from "@cairn-ink/core";
+import { allDigests, coreDigest, CoreError, NEAR_DUPLICATE_DISTANCE, compareUtf8 } from "@cairn-ink/core";
 import { cosineDistance } from "./cosine.mjs";
 import { decodeCursor, encodeCursor, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
+import { addKeyedDigest } from "./privacy.mjs";
 import { copyPublicRow } from "./unit-of-work.mjs";
 import {
   attachReceipts, copyContent, copyDuplicateBatch, copyMerge, copyReceipts, validateLimit, validateMemoryId,
@@ -12,6 +13,7 @@ import {
 /** @typedef {import("@cairn-ink/core/ports").MemoryMatch} MemoryMatch */
 /** @typedef {import("@cairn-ink/core/ports").MemoryStore} MemoryStore */
 /** @import { InsertRow, Receipt, Scope, SourceRef, Tx } from "@cairn-ink/core/ports" */
+/** @import { FingerprintKey } from "@cairn-ink/core" */
 /** @import { CanonicalQuery } from "./validation.mjs" */
 /** @typedef {ReturnType<typeof copyContent>} CopiedContent */
 /** @typedef {import("./unit-of-work.mjs").Row} Row */
@@ -37,14 +39,43 @@ export function writeTime(nowMs) {
  * @param {import("@cairn-ink/core").Capabilities} capabilities
  * @param {() => string} newId
  * @param {ReturnType<typeof createFactMatcher>} [matchFacts]
- * @param {import("@cairn-ink/core/ports").FingerprintKeyProvider["userKey"]} [userKey]
+ * @param {import("./privacy.mjs").RingKeys} [ringKeys]
  */
 export function createMemoryStore(port, capabilities, newId, matchFacts = createFactMatcher(capabilities.vectorSuppression),
-  userKey = async () => null) {
+  ringKeys = async () => []) {
   let nearSkippedUnembedded = 0;
 
   /** @param {InsertRow} row */
   const prepareContent = (row) => copyContent(row, "memory", capabilities.embeddingRequiredOnInsert);
+
+  /** @param {string} owner @param {CopiedContent} content */
+  async function rowDigests(owner, content) {
+    const keys = await ringKeys(owner);
+    const provided = content.digests;
+    const digests = provided ? [...provided] : await allDigests(content.text, keys[0]);
+    const remaining = provided ? keys : keys.slice(1);
+    for (const keyed of await Promise.all(remaining.map((key) => coreDigest(content.text, key)))) {
+      addKeyedDigest(digests, keyed);
+    }
+    return digests;
+  }
+
+  /** @param {CanonicalQuery} query @param {FingerprintKey[]} keys */
+  async function withRetainedDigests(query, keys) {
+    const { text, digests } = query;
+    if (text === undefined || !digests ||
+        keys.every(({ id }) => digests.some(({ alg, keyId }) => alg === "hmac" && keyId === id))) return query;
+
+    // A full row can also be a query. Verify its text against supplied keyed evidence
+    // before using it to fill in digests under other keys.
+    const computed = await Promise.all(keys.map((key) => coreDigest(text, key)));
+    const supplied = digests.filter(({ alg, keyId }) => alg === "hmac" && keys.some(({ id }) => id === keyId));
+    if (!supplied.length || !supplied.every(({ keyId, value }) =>
+      computed.some((digest) => digest.keyId === keyId && digest.value === value))) return query;
+    const comparable = [...digests];
+    for (const keyed of computed) addKeyedDigest(comparable, keyed);
+    return { ...query, digests: comparable };
+  }
 
   /**
    * @param {DuplicateQuery} query @param {DuplicateQuery} candidate @param {number} nearDistance
@@ -102,11 +133,11 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           const evidence = attachReceipts([], copyReceipts(receipts));
           validateTime(nowMs);
           const namespace = writeNamespace(scope);
-          return async (getState) => {
+          return async (getState, markDirty) => {
             const id = newId();
             if (typeof id !== "string" || !id) throw new CoreError("internal_error");
             const { rows } = getState();
-            const digests = content.digests ?? await allDigests(content.text, await userKey(tx.owner));
+            const digests = await rowDigests(tx.owner, content);
             let entries = rows.get(namespace);
             if (entries?.has(id)) throw new CoreError("internal_error");
             if (!entries) rows.set(namespace, entries = new Map());
@@ -115,6 +146,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
               row: { ...content, digests, ...created, scope: { owner: tx.owner, namespace }, historical: false },
               receipts: evidence,
             });
+            markDirty();
             return created;
           };
         });
@@ -127,7 +159,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           validateTime(nowMs);
           const incoming = copyReceipts(receipts);
           const namespace = writeNamespace(scope);
-          return (getState) => {
+          return (getState, markDirty) => {
             const entry = getState().rows.get(namespace)?.get(id);
             if (!entry) throw new CoreError("memory_not_found");
             const evidence = attachReceipts(entry.receipts, incoming);
@@ -137,6 +169,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
             const revision = row.revision + Number(changed);
             Object.assign(row, { confidence, kind, origin, revision, ...writeTime(nowMs) });
             entry.receipts = evidence;
+            markDirty();
             return { outcome: changed ? "changed" : "touched", revision };
           };
         });
@@ -149,9 +182,13 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
      * @param {SourceRef} source @param {"hash" | "full"} mode @param {string} [editId]
      */
     readWritePolicy(tx, scope, prepareBatch, source, mode, editId) {
-      return port.read(tx, scope, (getState) => {
-        const batch = prepareBatch();
+      return port.read(tx, scope, async (getState) => {
+        let batch = prepareBatch();
         const state = getState();
+        if (batch.some(({ text, digests }) => text !== undefined && digests?.some(({ alg }) => alg === "hmac"))) {
+          const keys = await ringKeys(tx.owner);
+          if (keys.length > 1) batch = await Promise.all(batch.map((query) => withRetainedDigests(query, keys)));
+        }
         const policy = matchFacts(state.facts, scope);
         const namespace = state.rows.get(scope.namespace);
         const entries = entriesIn(namespace).filter(({ row }) => row.id !== editId);
@@ -181,7 +218,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
 
   /** @type {MemoryStore} */
   const memories = {
-    ...memoryWrites((tx, scope, prepare) => port.write(tx, scope, true, prepare), prepareContent),
+    ...memoryWrites((tx, scope, prepare) => port.write(tx, scope, "conditional", prepare), prepareContent),
 
     async findDuplicates(tx, scope, queries, options) {
       return port.read(tx, scope, (getState) => {
@@ -199,7 +236,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
 
     async readWritePolicy(tx, scope, batch, source, mode, editId) {
       return policyReads.readWritePolicy(tx, scope, () => {
-        const queries = copyDuplicateBatch(batch);
+        const queries = copyDuplicateBatch(batch, capabilities.fingerprintKey);
         validateSource(source);
         if ((mode !== "hash" && mode !== "full") ||
           (editId !== undefined && typeof editId !== "string")) throw new CoreError("invalid_input");
@@ -232,7 +269,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           if (row.historical) throw new CoreError("memory_historical");
           if (content.textHash === row.textHash) return { outcome: "unchanged", revision: row.revision };
 
-          const digests = content.digests ?? await allDigests(content.text, await userKey(tx.owner));
+          const digests = await rowDigests(tx.owner, content);
           const policy = matchFacts(state.facts, { owner: tx.owner, namespace });
           if (entriesIn(entries).some((other) => other.row.id !== id && other.row.textHash === content.textHash &&
             !policy.hides(other))) {
