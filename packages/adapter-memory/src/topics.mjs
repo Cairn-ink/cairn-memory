@@ -4,7 +4,7 @@ import {
 } from "@cairn-ink/core";
 import { decodePayload, encodePayload, newestFirst } from "./cursor.mjs";
 import { writeTime } from "./memory-store.mjs";
-import { snapshotArray, validateLimit, validateTime, writeNamespace } from "./validation.mjs";
+import { copyScope, snapshotArray, validateLimit, validateMemoryId, validateTime } from "./validation.mjs";
 
 /** @import {PlacementProposal} from "@cairn-ink/core" */
 /** @import {Scope, Topic, TopicStore} from "@cairn-ink/core/ports" */
@@ -91,6 +91,12 @@ function checkParent(topics, id, level) {
   const parent = topics?.get(id);
   if (!parent) throw new CoreError("not_found");
   if (parent.level !== level) throw new CoreError("invalid_ref");
+}
+
+/** @param {TopicState} scoped @param {CardOutcome} outcome */
+function cardTopics(scoped, outcome) {
+  return [...outcome.memberships.keys()].sort(compareUtf8)
+    .map((id) => scoped.topics.get(id)).filter((topic) => topic?.level === "L1");
 }
 
 const placementBatchLimit = 5;
@@ -186,11 +192,14 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
       });
     },
 
-    async pendingCards(tx, scope, { limit }) {
-      return port(tx, scope, false, (state) => {
+    async pendingCards(tx, callerScope, query) {
+      const scope = copyScope(callerScope);
+      return port.read(tx, scope, (getState) => {
+        const { limit } = query;
         validateLimit(limit);
         if (limit > placementBatchLimit) throw new CoreError("invalid_input");
         if (!flags.documentCards) return [];
+        const state = getState();
         const scoped = state.topics.get(scope.namespace);
         /** @type {number | undefined} */
         let nowMs;
@@ -326,10 +335,10 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
       });
     },
 
-    async applyCardPlacement(tx, scope, basedOn, proposal) {
+    async applyCardPlacement(tx, callerScope, basedOn, proposal) {
+      const scope = copyScope(callerScope);
+      const { namespace } = scope;
       return port.write(tx, scope, "conditional", () => {
-        const namespace = writeNamespace(scope);
-        const selection = { owner: tx.owner, namespace };
         const { items: input } = placementFields(proposal, ["items"]);
         const items = snapshotArray(input, { ...placementArrayOptions, maxLength: placementBatchLimit }).map((item) => {
           const { cardId, parentIds } = placementFields(item, ["cardId", "parentIds"]);
@@ -352,7 +361,7 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
           const previous = state.topics.get(namespace);
           const { current } = view(state, tx.owner, namespace);
           for (const [id, hash] of hashes) {
-            if (!await visibleCardAt(state, selection, id, hash, current)) throw new CoreError("revision_conflict");
+            if (!await visibleCardAt(state, scope, id, hash, current)) throw new CoreError("revision_conflict");
           }
           for (const { topicIds } of items) {
             if (topicIds.some((id) => previous?.topics.get(id)?.level !== "L1")) throw new CoreError("revision_conflict");
@@ -381,7 +390,7 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
             updates.set(cardId, { contentHash, memberships });
           }
           if (updates.size) {
-            const { cardOutcomes } = ensureTopicState(state, selection);
+            const { cardOutcomes } = ensureTopicState(state, scope);
             for (const [id, outcome] of updates) cardOutcomes.set(id, outcome);
             if (changed) markDirty();
             else run.stateWritten = true;
@@ -391,7 +400,8 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
       });
     },
 
-    async markCardsFailed(tx, scope, cardIds, code) {
+    async markCardsFailed(tx, callerScope, cardIds, code) {
+      const scope = copyScope(callerScope);
       return port.write(tx, scope, "conditional", () => {
         const ids = failureIds(cardIds, code);
         return (getState, _markDirty, run) => {
@@ -458,17 +468,42 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
       });
     },
 
-    async forCard(tx, scope, cardId) {
+    async forCard(tx, callerScope, cardId) {
+      const scope = copyScope(callerScope);
       return port(tx, scope, false, async (state) => {
-        const outcome = state.topics.get(scope.namespace)?.cardOutcomes.get(cardId);
-        if (!outcome?.memberships.size) return [];
+        const scoped = state.topics.get(scope.namespace);
+        const outcome = scoped?.cardOutcomes.get(cardId);
+        if (!scoped || !outcome?.memberships.size) return [];
         const { current } = view(state, tx.owner, scope.namespace);
         return await visibleCardAt(state, scope, cardId, outcome.contentHash, current)
-          ? [...outcome.memberships.keys()].sort(compareUtf8) : [];
+          ? cardTopics(scoped, outcome).map(({ id }) => id) : [];
       });
     },
 
-    async dropCard(tx, scope, cardId) {
+    async forCards(tx, callerScope, cardIds) {
+      const scope = copyScope(callerScope);
+      return port.read(tx, scope, async (getState) => {
+        const ids = snapshotArray(cardIds, { strictKeys: true, maxLength: 100 });
+        validateLimit(ids.length);
+        ids.forEach(validateMemoryId);
+
+        const state = getState();
+        const scoped = state.topics.get(scope.namespace);
+        if (!scoped) return [];
+        const { current, topic } = view(state, scope.owner, scope.namespace);
+        const rows = [];
+        for (const cardId of new Set(ids)) {
+          const outcome = scoped.cardOutcomes.get(cardId);
+          if (!outcome || !await visibleCardAt(state, scope, cardId, outcome.contentHash, current)) continue;
+          const topics = cardTopics(scoped, outcome).map((stored) => ({ id: stored.id, title: topic(stored).title }));
+          rows.push({ cardId, topics });
+        }
+        return rows;
+      });
+    },
+
+    async dropCard(tx, callerScope, cardId) {
+      const scope = copyScope(callerScope);
       return port.write(tx, scope, "conditional", () => (getState, markDirty) => {
         const dropped = dropCardMemberships(getState(), scope.namespace, cardId);
         if (dropped) markDirty();

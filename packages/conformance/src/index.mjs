@@ -10,6 +10,8 @@ export { SOURCE_FILTER_CASES } from "./source-filter-cases.mjs";
 export { KEYED_DIGEST_CASES } from "./keyed-digest-cases.mjs";
 export { topicCases as TOPIC_CASES } from "./topics-cases.mjs";
 export { TOPIC_CARD_CASES } from "./topics-cards-cases.mjs";
+export { DOCUMENT_CARD_AMENDMENT_CASES } from "./document-card-amendment-cases.mjs";
+export { TOPICS_FOR_CARDS_CASES } from "./topics-for-cards-cases.mjs";
 
 /** @type {readonly import("./index.d.mts").ConformanceCase[]} */
 export const CASES = [...unitOfWorkCases, ...memoryCases, ...retrievalCases];

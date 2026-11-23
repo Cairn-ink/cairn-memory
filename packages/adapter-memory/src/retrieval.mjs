@@ -15,7 +15,8 @@ import { copyReadScope, copyRefs, readEmbedding, validateLimit } from "./validat
 /** @typedef {import("./unit-of-work.mjs").Row} Row */
 /** @import { DocumentCardMemoryState } from "@cairn-ink/core/routing" */
 /** @import { FingerprintKey } from "@cairn-ink/core" */
-/** @import { StoredDocumentCardRecord, FingerprintKeyProvider, Scope } from "@cairn-ink/core/ports" */
+/** @import { FingerprintKeyProvider, Scope } from "@cairn-ink/core/ports" */
+/** @import { CardWrite } from "./document-cards.mjs" */
 
 /** @param {Row} row @returns {ItemRef} */
 function memoryRef({ id, scope: { namespace } }) {
@@ -86,7 +87,7 @@ function sourceDates(receipts) {
 
 /** @param {ReturnType<typeof createFactMatcher>} matchFacts @param {FingerprintKeyProvider} keys */
 export function createCardVisibility(matchFacts, keys) {
-  /** @param {State} state @param {Scope} scope @param {StoredDocumentCardRecord} card */
+  /** @param {State} state @param {Scope} scope @param {CardWrite} card */
   return async function cardVisible(state, scope, card) {
     const policy = matchFacts(state.facts, scope);
     const rows = state.rows.get(scope.namespace);

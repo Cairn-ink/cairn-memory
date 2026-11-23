@@ -68,6 +68,18 @@ export interface TopicStore {
   markCardsFailed(tx: Tx, scope: Scope, cardIds: readonly string[], code: ErrorCode): Promise<void>;
   /** Returns memberships only while the card and its sources are visible at their recorded versions. */
   forCard(tx: Tx, scope: Scope, cardId: string): Promise<string[]>;
+  /**
+   * Batch L1 topic annotations. A row requires a placement outcome and a visible card in scope
+   * at the outcome's recorded content hash, using the visibility rule of `forCard` and `members`.
+   * Visible outcomes without topics return `topics: []`. Unknown, foreign, hidden and tombstoned
+   * cards yield no row. Rows follow first occurrence and topics follow `forCard` order.
+   * A title is null when any title source is no longer current at its recorded revision.
+   * Accepts 1–100 ids, including duplicates in the limit. Other sizes throw `invalid_input`.
+   * The adapter copies the scope once at entry and snapshots the caller array before reading state.
+   */
+  forCards?(tx: Tx, scope: Scope, cardIds: readonly string[]): Promise<
+    Array<{ cardId: string; topics: Array<{ id: string; title: string | null }> }>
+  >;
   /** Forget step. The host must drop memberships in the same transaction as every card hide or tombstone. */
   dropCard(tx: Tx, scope: Scope, cardId: string): Promise<{ dropped: number }>;
   /** Topics with visible members. L2 counts distinct members across its L1 children.

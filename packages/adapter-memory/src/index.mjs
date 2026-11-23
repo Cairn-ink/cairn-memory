@@ -50,7 +50,7 @@ export function createMemoryAdapter(options = {}) {
       createTopicStore(port, flags, newId, now, matchFacts, options, cardVisible),
       ["applyPlacement", "markFailed", "dropMemory", "applyCardPlacement", "markCardsFailed", "dropCard"]) }),
     ...(flags.documentCards && { documentCards: handleWriteRejections(
-      createDocumentCardStore(port, now), ["put", "hide", "hideWhere", "markStale"]) }),
+      createDocumentCardStore(port, now), ["put", "amend", "hideAmendment", "hide", "hideWhere", "markStale"]) }),
     nativeErrorMap,
     harness: {
       async dump() { return dump(flags.documentCards); },

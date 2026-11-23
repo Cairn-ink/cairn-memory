@@ -2,7 +2,8 @@ import { CoreError, factBlocksIncoming, factHidesRow, PRIVACY_REDACTION_VERSIONS
 import { readEmbedding, snapshotArray } from "./validation.mjs";
 
 /** @import { FactMatchIncoming, FactMatchPolicy, FactMatchRow, StoredFact, SuppressionFact, TextDigest, TextFact } from "@cairn-ink/core" */
-/** @import { StoredDocumentCardRecord, DuplicateQuery, Scope, SourceRef, SuppressionStore } from "@cairn-ink/core/ports" */
+/** @import { DuplicateQuery, Scope, SourceRef, SuppressionStore } from "@cairn-ink/core/ports" */
+/** @import { CardWrite } from "./document-cards.mjs" */
 /** @import { Entry, State } from "./unit-of-work.mjs" */
 /** @import { CanonicalQuery } from "./validation.mjs" */
 
@@ -188,14 +189,14 @@ export function createFactMatcher(vectorSuppression, hashSessionKey, sessionRefs
       blocksSession,
       blockedMessages,
 
-      /** @param {NonNullable<StoredDocumentCardRecord["sourceMessage"]>} source */
+      /** @param {NonNullable<CardWrite["sourceMessage"]>} source */
       canonicalSessionKey({ client, sessionId }) {
         return hashSessionKey ? hashSessionKey(client, sessionId) : sessionRefs === "plain" ? sessionId : null;
       },
 
       textFacts: texts.map(({ fact }) => fact),
 
-      /** @param {StoredDocumentCardRecord} card @param {FactMatchIncoming["passages"]} passages */
+      /** @param {CardWrite} card @param {FactMatchIncoming["passages"]} passages */
       withholdsCardSource({ sourceMessage, sourceMemories, date }, passages) {
         if (!sourceMessage) return false;
         const { client, sessionId } = sourceMessage;

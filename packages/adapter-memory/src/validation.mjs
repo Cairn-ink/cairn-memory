@@ -142,6 +142,12 @@ export function writeNamespace({ namespace }) {
   return namespace;
 }
 
+/** @param {import("@cairn-ink/core/ports").Scope} scope */
+export function copyScope(scope) {
+  if (!scope) invalid();
+  return { owner: scope.owner, namespace: writeNamespace(scope) };
+}
+
 /** @param {string} id */
 export function validateMemoryId(id) {
   if (typeof id !== "string") invalid();

@@ -16,7 +16,8 @@ import { addKeyedDigest, createFactStore } from "./privacy.mjs";
 /** @typedef {import("./capture.mjs").ClaimRecord} ClaimRecord */
 /** @typedef {import("@cairn-ink/core/ports").FinishResult} FinishResult */
 /** @typedef {import("./topics.mjs").TopicState} TopicState */
-/** @typedef {{card: import("@cairn-ink/core/ports").StoredDocumentCardRecord | null, createdAtMs: number}} CardEntry */
+/** @typedef {{ card: import("./document-cards.mjs").CardWrite | null, createdAtMs: number,
+ * amendments?: Map<string, import("@cairn-ink/core/ports").DocumentCardAmendment | null> }} CardEntry */
 /** @typedef {{topics: Map<Namespace, TopicState>, documentCards: Map<Namespace, Map<string, CardEntry>>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
  * claims: Map<string, ClaimRecord>, activeTokens: Map<string, string>, abandonedTokens: Set<string>}} State */
 /** @typedef {{state: State, run: {readonly ended: boolean}, indexDirty: boolean, stateWritten: boolean, pauseLock: boolean,
@@ -324,7 +325,8 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
         }),
         ...(includeDocumentCards && {
           documentCards: [...committed.documentCards].map(([namespace, cards]) =>
-            ({ namespace, cards: [...cards] })),
+            ({ namespace, cards: [...cards].map(([id, { amendments, ...entry }]) =>
+              [id, amendments ? { ...entry, amendments: [...amendments] } : entry]) })),
         }),
         ...(committed.claims.size ? {
           claims: [...committed.claims.values()],

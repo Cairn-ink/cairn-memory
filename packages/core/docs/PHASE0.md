@@ -131,6 +131,14 @@ cards. Requests set `mapExhausted` to false and core discards any proposed new t
   only with `documentCards` enabled and counts distinct visible cards across the L1 children
   for an L2 topic. `pendingCards` returns an empty list without `documentCards`.
 
+The optional `forCards` batch lookup annotates placed cards with L1 topic IDs and titles.
+It copies the scope once at entry and snapshots 1–100 caller IDs before reading state.
+Duplicates count toward the limit, and other batch sizes raise `invalid_input`. Rows follow
+first occurrence and include only cards visible under `forCard` and `members` at the
+placement's recorded hash. A visible outcome without topics returns `topics: []`. Topic
+order follows `forCard`. A title is null when a title source is no longer current at its
+recorded revision.
+
 The memory adapter has no Raw archive. Its source-message predicate uses the capture session
 resolver (plain session ID by default or the configured session hash resolver) and the shared
 fact matcher. It withholds a message when an applicable session or window fact matches the
