@@ -333,8 +333,9 @@ for (const [label, fact, input, policy, want] of [
   ["capture recognizes an edit's old wording by containment", editFact, { passages: [contained], sourceMemory: edit }, capture, true],
   ["explicit single passage uses exact matching", text, { passages: [contained] }, explicit, false],
   ["explicit single passage needs shingles", text, { passages: [{ ...passage, shingles: null }] }, explicit, ineligible],
-  ["explicit single passage permits different known shingle keys", text,
-    { passages: [{ ...passage, keyId: "fake-rotated-key" }] }, explicit, false],
+  // Stricter than hosted: a single new passage under another key still goes through containment.
+  ["explicit single passage under another key withholds", text,
+    { passages: [{ ...passage, keyId: "fake-rotated-key" }] }, explicit, ineligible],
   ["explicit aliases can match containment", text, { passages: [passage, contained] }, explicit, true],
   ["explicit aliases skip vector comparisons", text, { passages: [passage, near] }, { ...explicit, ...vectorPolicy }, false],
   ["explicit own edit exempts paraphrase", editFact, { passages: [contained], sourceMemory: edit }, explicit, false],
@@ -391,13 +392,13 @@ test("an exempt edit clears a comparable digest miss after key rotation", () => 
   ], [false, false]);
 });
 
-test("a single-passage explicit save clears a comparable digest miss against a forget fact after key rotation", () => {
+test("a single-passage explicit save under a rotated key still withholds against a forget fact (stricter than hosted)", () => {
   const fact = store({ ...text, text: rotatedReference });
   const passages = [rotatedPassage];
   assert.deepEqual([
     factBlocksIncoming(fact, { scope, passages }, { ...explicit, key: rotatedKey }),
     blocksMemoryPassage(passages, [fact.fact], rotatedKey),
-  ], [false, false]);
+  ], [ineligible, true]);
 });
 
 for (const [label, unavailable] of [["null", { shingles: null }], ["missing", {}]]) {

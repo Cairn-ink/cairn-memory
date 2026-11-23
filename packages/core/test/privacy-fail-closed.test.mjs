@@ -40,14 +40,10 @@ test("package root exposes both redaction version constants", () => {
   assert.deepEqual(PRIVACY_REDACTION_VERSIONS, { v1: 1, hostedCurrent: 2, core: 3 });
 });
 
-test("full containment withholds when candidate shingles are unavailable or signed under another key", () => {
+test("full facts withhold when candidate shingles are unavailable or signed under another key", () => {
   const fact = textFact(reference);
   assertWithholds({ ...disjoint, shingles: null, keyId: null }, fact, null);
-  const rotated = { ...disjoint, keyId: keyB.id };
-  assert.equal(withholdsPassage(rotated, fact), true);
-  assert.equal(withholdsAnyPassage([rotated], [fact]), true);
-  assert.equal(blocksMemoryPassage([rotated], [fact], keyB), false);
-  assert.equal(blocksMemoryPassage([rotated, rotated], [fact], keyB), true);
+  assertWithholds({ ...disjoint, keyId: keyB.id }, fact, keyB);
 });
 
 test("HMAC-only exact facts require a comparable keyed digest to decide a miss", () => {
@@ -150,10 +146,8 @@ test("full mode falls back to comparable digests when either shingle list is emp
   const incomparable = { ...disjoint, digests: [digest("hmac", "b", keyA.id)] };
   assertMiss(disjoint, textFact(short), keyA);
   assertMiss(short, textFact(disjoint), keyA);
-  for (const [candidate, fact, activeKey] of [[disjoint, textFact(short), null], [short, textFact(disjoint), keyB]]) {
-    assert.equal(blocksMemoryPassage([candidate], [fact], activeKey), false);
-    assert.equal(blocksMemoryPassage([candidate, candidate], [fact], activeKey), true);
-  }
+  assertMiss(disjoint, textFact(short), null);
+  assertMiss(short, textFact(disjoint), keyB);
   assertWithholds(reference, textFact(short), keyA);
   assertWithholds(short, textFact(reference), keyA);
   assertWithholds(incomparable, textFact(short), keyA);

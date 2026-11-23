@@ -176,8 +176,11 @@ function vectorMatch(passage, fact, policy) {
 }
 
 /** @param {TextFact} fact @param {FactMatchIncoming["sourceMemory"]} edit @param {number} count */
-function checksExplicitPassages(fact, edit, count) {
-  if (fact.origin !== "edit") return count > 1;
+function checksExplicitPassages(fact, edit, passages) {
+  // Hosted compares a single ordinary passage by digest only. Core is stricter
+  // after a key change: a passage fingerprinted under any other key than the
+  // fact's still goes through containment, so it withholds (known difference).
+  if (fact.origin !== "edit") return passages.length > 1 || passages.some((passage) => passage.keyId !== fact.text.keyId);
   if (edit == null || fact.sourceMemory == null) return true;
   return edit.id !== fact.sourceMemory.id || edit.createdAtMs !== fact.sourceMemory.createdAtMs;
 }
@@ -211,7 +214,7 @@ function matchPassages(passages, fact, policy, explicit, edit) {
   }
   if (fact.mode === "exact") return result;
 
-  const checkContainment = !explicit || checksExplicitPassages(fact, edit, passages.length);
+  const checkContainment = !explicit || checksExplicitPassages(fact, edit, passages);
   const containmentKeyUnavailable = explicit != null && checkContainment &&
     (explicit.key !== undefined || passages.length === 0) && (!explicit.key || explicit.key.id !== fact.text.keyId);
   if (containmentKeyUnavailable && passages.length === 0) return "ineligible";

@@ -296,7 +296,8 @@ export function blocksMemoryPassage(passages, facts, key, threshold = CONTAINMEN
       const source = fact.sourceMemory;
       const checkContainment = fact.mode === "full" && (fact.origin === "edit"
         ? !edited || !source || source.id !== edited.id || source.createdAtMs !== edited.createdAtMs
-        : candidates.length > 1);
+        // Stricter than hosted after a key change: see checksExplicitPassages.
+        : candidates.length > 1 || candidates.some((passage) => passage.keyId !== fact.text.keyId));
       const containmentKeyUnavailable = checkContainment && (activeKeyId === null || fact.text.keyId !== activeKeyId);
       if (containmentKeyUnavailable && candidates.length === 0) return true;
       // The exemption skips containment only after a comparable exact miss.
