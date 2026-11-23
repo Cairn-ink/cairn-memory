@@ -1,15 +1,18 @@
+// Capture boundaries read accessor-backed fields once through a snapshot. The engine may reread them.
+// Proxies, functions and symbol values are refused with the entry's invalid code. Some engine entries accept stable Proxies.
 import { boundedText } from '../privacy/text.mjs';
-import { qualificationInput, qualificationSources } from './claim-qualification-input.mjs';
-import { denseArray, fail, isWellFormedText, object } from './validate.mjs';
+import { validateQualificationInput, validateQualificationSources } from './claim-qualification-input.mjs';
+import { detach, fail, isWellFormedText, validateDenseArray, validateObject } from './validate.mjs';
 
 /** @import { MemoryKind, Role } from '../ports/common.d.ts' */
 
 const FIELDS = ['subject', 'property', 'scope', 'applies', 'value', 'attribution', 'commitment'];
 const LABEL_LIMITS = Object.freeze({ subject: 160, property: 160, scope: 120, applies: 120, value: 160 });
+const builtSnapshots = new WeakSet();
 
 /** @param {unknown} value @param {readonly string[]} keys */
 function exact(value, keys) {
-  const data = object(value, keys);
+  const data = validateObject(value, keys);
   if (keys.some(key => !Object.hasOwn(data, key))) fail('invalid_model_output');
   return data;
 }
@@ -29,10 +32,10 @@ function freeze(value) {
  */
 export function createQualificationCandidateSnapshot(items) {
   try {
-    const copied = /** @type {Item[]} */ (structuredClone(denseArray(items, 1, 5)));
+    const copied = /** @type {Item[]} */ (validateDenseArray(structuredClone(items), 1, 5));
     let candidateIndex = 0;
     const candidates = copied.map(item => {
-      qualificationSources(item.content, item.receipts);
+      validateQualificationSources(item.content, item.receipts);
       if (boundedText(item.content, 600) !== item.content) fail('invalid_model_output');
       // A truncated excerpt can end in whitespace. Canonicalize it again before assigning offsets.
       item.receipts = item.receipts.map(receipt => {
@@ -61,7 +64,9 @@ export function createQualificationCandidateSnapshot(items) {
     });
     const input = { items: copied.map((item, itemIndex) => ({ itemIndex, content: item.content, kind: item.kind,
       candidates: candidates[itemIndex].map(({ candidateIndex, role, text }) => ({ candidateIndex, role, text })) })) };
-    return freeze({ items: copied, candidates, input });
+    const snapshot = freeze({ items: copied, candidates, input });
+    builtSnapshots.add(snapshot);
+    return snapshot;
   } catch { fail('invalid_model_output'); }
 }
 
@@ -82,23 +87,27 @@ function canonicalLabel(value, limit) {
  */
 export function compileQualificationCandidates(output, snapshot) {
   try {
-    const { qualifications } = exact(output, ['qualifications']);
-    const entries = denseArray(qualifications, snapshot.items.length, snapshot.items.length);
-    /** @type {Map<number, {qualification: ReturnType<typeof qualificationInput>}>} */
+    const trustedSnapshot = builtSnapshots.has(snapshot) ? snapshot : undefined;
+    const [detached, copiedSnapshot] = detach(
+      /** @type {const} */ ([output, trustedSnapshot ? undefined : snapshot]), 'invalid_model_output');
+    const sourceSnapshot = trustedSnapshot ?? /** @type {typeof snapshot} */ (copiedSnapshot);
+    const { qualifications } = exact(detached, ['qualifications']);
+    const entries = validateDenseArray(qualifications, sourceSnapshot.items.length, sourceSnapshot.items.length);
+    /** @type {Map<number, {qualification: ReturnType<typeof validateQualificationInput>}>} */
     const compiled = new Map();
     for (const raw of entries) {
       const entry = exact(raw, ['itemIndex', ...FIELDS]);
       const index = entry.itemIndex;
-      if (typeof index !== 'number' || !Number.isSafeInteger(index) || index < 0 || index >= snapshot.items.length ||
+      if (typeof index !== 'number' || !Number.isSafeInteger(index) || index < 0 || index >= sourceSnapshot.items.length ||
           compiled.has(index)) fail('invalid_model_output');
-      const candidates = new Map(snapshot.candidates[index].map(candidate => [candidate.candidateIndex, candidate]));
+      const candidates = new Map(sourceSnapshot.candidates[index].map(candidate => [candidate.candidateIndex, candidate]));
       /** @type {Map<number, string[]>} */
       const selected = new Map();
       /** @type {Record<string, unknown>} */
       const values = {};
       for (const field of FIELDS) {
         const { value, evidenceIndices } = exact(entry[field], ['value', 'evidenceIndices']);
-        const suppliedReferences = denseArray(evidenceIndices, 0, 4);
+        const suppliedReferences = validateDenseArray(evidenceIndices, 0, 4);
         if (new Set(suppliedReferences).size !== suppliedReferences.length || suppliedReferences.some(id =>
           typeof id !== 'number' || !Number.isSafeInteger(id) || !candidates.has(id))) fail('invalid_model_output');
         const references = /** @type {number[]} */ (suppliedReferences);
@@ -118,11 +127,11 @@ export function compileQualificationCandidates(output, snapshot) {
         return { receiptIndex, start, end, text, fields };
       });
       const { subject, property, scope, applies, value, attribution, commitment } = values;
-      const qualification = qualificationInput({ version: 1,
-        slot: { subject, property, scope, applies }, value, attribution, commitment, anchors }, snapshot.items[index].receipts);
+      const qualification = validateQualificationInput({ version: 1,
+        slot: { subject, property, scope, applies }, value, attribution, commitment, anchors }, sourceSnapshot.items[index].receipts);
       compiled.set(index, { qualification });
     }
-    return snapshot.items.map((source, index) => {
+    return sourceSnapshot.items.map((source, index) => {
       const { proceduralProposal, ...item } = /** @type {typeof source & {proceduralProposal?: boolean}} */ (source);
       return { ...item, ...compiled.get(index) };
     });

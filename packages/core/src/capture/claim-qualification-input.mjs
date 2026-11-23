@@ -1,5 +1,7 @@
+// Capture boundaries read accessor-backed fields once through a snapshot. The engine may reread them.
+// Proxies, functions and symbol values are refused with the entry's invalid code. Some engine entries accept stable Proxies.
 import { boundedText } from '../privacy/text.mjs';
-import { denseArray, fail, isWellFormedText, object, receiptEventTime } from './validate.mjs';
+import { detach, fail, isWellFormedText, validateDenseArray, validateObject, validateReceiptEventTime } from './validate.mjs';
 
 const FIELDS = ['subject', 'property', 'scope', 'applies', 'value', 'attribution', 'commitment'];
 const ATTRIBUTIONS = ['direct', 'reported', 'quoted', 'proposed', 'unknown'];
@@ -7,7 +9,7 @@ const COMMITMENTS = ['adopted', 'considered', 'rejected', 'unknown'];
 
 /** @param {unknown} value @param {readonly string[]} keys */
 function exact(value, keys) {
-  const data = object(value, keys);
+  const data = validateObject(value, keys);
   if (keys.some(key => !Object.hasOwn(data, key))) fail('invalid_input');
   return data;
 }
@@ -23,13 +25,22 @@ function label(value, maximum) {
 
 /** @param {unknown} content @param {unknown} receipts */
 export function qualificationSources(content, receipts) {
+  const [text, sources] = detach([content, receipts], 'invalid_input');
+  try { validateQualificationSources(text, sources); }
+  catch { fail('invalid_input'); }
+}
+
+/** @internal Check detached source data. @param {unknown} content @param {unknown} receipts */
+export function validateQualificationSources(content, receipts) {
   if (!isWellFormedText(content)) fail('invalid_input');
-  for (const raw of denseArray(receipts, 1, 4)) {
-    const receipt = object(raw, ['client', 'sessionId', 'eventId', 'role', 'excerpt', 'occurredAt']);
-    receiptEventTime(receipt.occurredAt);
+  const sources = validateDenseArray(receipts, 1, 4);
+  for (const raw of sources) {
+    const receipt = validateObject(raw, ['client', 'sessionId', 'eventId', 'role', 'excerpt', 'occurredAt']);
+    validateReceiptEventTime(receipt.occurredAt);
     const { occurredAt, ...identity } = receipt;
     if (Object.values(identity).some(value => !isWellFormedText(value))) fail('invalid_input');
   }
+  return sources;
 }
 
 /** @param {string} text @param {number} offset */
@@ -43,6 +54,13 @@ function splitPair(text, offset) {
  * @param {unknown} receipts
  */
 export function qualificationInput(input, receipts) {
+  const [claim, sources] = detach([input, receipts], 'invalid_input');
+  try { return validateQualificationInput(claim, sources); }
+  catch { fail('invalid_input'); }
+}
+
+/** @internal Check detached claim and receipt data. @param {unknown} input @param {unknown} receipts */
+export function validateQualificationInput(input, receipts) {
   const claim = exact(input, ['version', 'slot', 'value', 'attribution', 'commitment', 'anchors']);
   if (claim.version !== 1) fail('invalid_input');
   const rawSlot = exact(claim.slot, ['subject', 'property', 'scope', 'applies']);
@@ -52,11 +70,10 @@ export function qualificationInput(input, receipts) {
   const { attribution, commitment } = claim;
   if (typeof attribution !== 'string' || !ATTRIBUTIONS.includes(attribution) ||
       typeof commitment !== 'string' || !COMMITMENTS.includes(commitment)) fail('invalid_input');
-  const sources = denseArray(receipts, 1, 4);
-  qualificationSources('', sources);
+  const sources = validateQualificationSources('', receipts);
   const covered = new Set();
   const seen = new Set();
-  const anchors = denseArray(claim.anchors, 1, 4).map(raw => {
+  const anchors = validateDenseArray(claim.anchors, 1, 4).map(raw => {
     const { receiptIndex, start, end, text, fields: rawFields } = exact(raw, ['receiptIndex', 'start', 'end', 'text', 'fields']);
     if (typeof receiptIndex !== 'number' || !Number.isSafeInteger(receiptIndex) || receiptIndex < 0 || receiptIndex >= sources.length ||
         typeof start !== 'number' || !Number.isSafeInteger(start) || typeof end !== 'number' || !Number.isSafeInteger(end) ||
@@ -65,7 +82,7 @@ export function qualificationInput(input, receipts) {
     const excerpt = receipt.excerpt;
     if (typeof excerpt !== 'string' || end > excerpt.length || splitPair(excerpt, start) || splitPair(excerpt, end) ||
         excerpt.slice(start, end) !== text) fail('invalid_input');
-    const fields = denseArray(rawFields, 1, 7);
+    const fields = validateDenseArray(rawFields, 1, 7);
     if (new Set(fields).size !== fields.length || fields.some(field => typeof field !== 'string' || !FIELDS.includes(field))) {
       fail('invalid_input');
     }

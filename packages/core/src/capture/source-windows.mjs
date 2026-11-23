@@ -1,16 +1,33 @@
+// Capture boundaries read accessor-backed fields once through a snapshot. The engine may reread them.
+// Proxies, functions and symbol values are refused with the entry's invalid code. Some engine entries accept stable Proxies.
+import { CoreError } from '../errors.mjs';
 import { boundedText } from '../privacy/text.mjs';
-import { extractedItems, extractionLimit } from './capture-input.mjs';
-import { fail } from './validate.mjs';
+import { countExtractionLimit, detachExtraction, extractDetachedItems, rejectExtraction } from './capture-input.mjs';
+import { detach, fail } from './validate.mjs';
 
 /** @import { Role } from '../ports/common.d.ts' */
 
 const MAX_WINDOW = 800;
 const MAX_CATALOG = 64;
+const builtCatalogs = new WeakSet();
 
 /** Build exact, non-overlapping canonical slices before a claim or model call.
  * @param {{messages: ReadonlyArray<{id: string, role: Role, content: string}>}} snapshot
  */
 export function sourceWindowCatalog(snapshot) {
+  const detached = detach(snapshot, 'invalid_input');
+  try {
+    const catalog = buildSourceWindowCatalog(detached);
+    builtCatalogs.add(catalog);
+    return catalog;
+  } catch (error) {
+    if (error instanceof CoreError) throw error;
+    fail('invalid_input');
+  }
+}
+
+/** @param {Parameters<typeof sourceWindowCatalog>[0]} snapshot */
+function buildSourceWindowCatalog(snapshot) {
   const entries = [];
   for (const [messageIndex, message] of snapshot.messages.entries()) {
     const source = message.content;
@@ -44,18 +61,22 @@ export function sourceWindowCatalog(snapshot) {
 
 /** Model indices select windows in the trusted catalog. Ordered capture uses the original message indices.
  * @param {unknown} output
- * @param {Parameters<typeof extractedItems>[1]} snapshot
+ * @param {Parameters<typeof extractDetachedItems>[1]} snapshot
  * @param {ReturnType<typeof sourceWindowCatalog>} catalog
  * @param {(reason: string) => void} [onInvalid]
  * @param {number} [limit]
  */
-export function extractedWindowItems(output, snapshot, catalog, onInvalid, limit = extractionLimit(catalog.input.messages)) {
-  /** @param {string} reason */
-  const diagnose = reason => { try { onInvalid?.(reason); } catch { /* Diagnostics are isolated from validation. */ } };
-  let detached;
-  try { detached = structuredClone(output); }
-  catch { diagnose('invalid_extraction_output_shape'); fail('invalid_model_output'); }
-  const items = extractedItems(detached, snapshot, catalog.messages, onInvalid, undefined, limit);
+export function extractedWindowItems(output, snapshot, catalog, onInvalid, limit) {
+  const trustedCatalog = builtCatalogs.has(catalog) ? catalog : undefined;
+  const [detached, sourceSnapshot, copiedCatalog, suppliedLimit] = detachExtraction(
+    /** @type {const} */ ([output, snapshot, trustedCatalog ? undefined : catalog, limit]), onInvalid);
+  const sourceCatalog = trustedCatalog ?? /** @type {typeof catalog} */ (copiedCatalog);
+  let messages, maximum;
+  try {
+    messages = sourceCatalog.messages;
+    maximum = suppliedLimit === undefined ? countExtractionLimit(sourceCatalog.input.messages) : suppliedLimit;
+  } catch { rejectExtraction('invalid_extraction_output_shape', onInvalid); }
+  const items = extractDetachedItems(detached, sourceSnapshot, messages, onInvalid, undefined, maximum);
   try {
     const { items: selections } = /** @type {{items: Array<{sourceIndices: number[]}>}} */ (detached);
     for (const [position, item] of items.entries()) {
@@ -64,10 +85,9 @@ export function extractedWindowItems(output, snapshot, catalog, onInvalid, limit
         receipt.client, receipt.sessionId, receipt.eventId, receipt.role, receipt.excerpt,
       ]));
       if (new Set(identities).size !== identities.length) {
-        diagnose('invalid_extraction_source_duplicate');
-        fail('invalid_model_output');
+        rejectExtraction('invalid_extraction_source_duplicate', onInvalid);
       }
-      if (snapshot.causal) item.sourceIndices = indices.map(index => catalog.entries[index].messageIndex);
+      if (sourceSnapshot.causal) item.sourceIndices = indices.map(index => sourceCatalog.entries[index].messageIndex);
     }
     return items;
   } catch { fail('invalid_model_output'); }

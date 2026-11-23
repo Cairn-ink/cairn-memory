@@ -1,7 +1,10 @@
+// Capture boundaries read accessor-backed fields once through a snapshot and refuse Proxies,
+// functions and symbol values with the entry's invalid code. The engine may reread fields or accept stable Proxies.
+// Indexed wire input has its own property descriptor checks.
 import { CoreError } from '../errors.mjs';
 import { extractionLimit, extractionOutputTokens } from './capture-input.mjs';
 import { snapshotQualificationTextCatalog } from './qualification-text-catalog.mjs';
-import { denseArray } from './validate.mjs';
+import { validateDenseArray } from './validate.mjs';
 
 export { extractionOutputTokens };
 
@@ -76,7 +79,7 @@ export function snapshotIndexedExtractInput(input) {
   const { inputMode, messages } = exactData(input, ['inputMode', 'messages']);
   if (inputMode !== 'indexed-windows-v1') invalid();
   let windows;
-  try { windows = denseArray(messages, 1, 64); } catch { invalid(); }
+  try { windows = validateDenseArray(messages, 1, 64); } catch { invalid(); }
   if (Reflect.ownKeys(windows).length !== windows.length + 1) invalid();
   const copied = [];
   let messageIndex = -1, groupUnits = 0, totalUnits = 0;
