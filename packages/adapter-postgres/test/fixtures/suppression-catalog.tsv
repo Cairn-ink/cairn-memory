@@ -1,0 +1,64 @@
+core_fact_digests	column	alg	text NOT NULL
+core_fact_digests	column	fact_id	text COLLATE "C" NOT NULL
+core_fact_digests	column	key_id	text NULL
+core_fact_digests	column	pipeline	text NOT NULL
+core_fact_digests	column	redaction_version	integer NOT NULL
+core_fact_digests	column	user_id	text NOT NULL
+core_fact_digests	column	value	text NOT NULL
+core_fact_digests	constraint	core_fact_digests_alg_check	CHECK ((alg = ANY (ARRAY['sha256'::text, 'hmac'::text])))
+core_fact_digests	constraint	core_fact_digests_key_check	CHECK (((alg = 'hmac'::text) = (key_id IS NOT NULL)))
+core_fact_digests	constraint	core_fact_digests_pipeline_check	CHECK ((pipeline = ANY (ARRAY['core'::text, 'hosted-v1'::text, 'engine-legacy'::text])))
+core_fact_digests	constraint	core_fact_digests_pkey	PRIMARY KEY (user_id, fact_id, alg, value)
+core_fact_digests	constraint	core_fact_digests_redaction_version_check	CHECK ((redaction_version >= 1))
+core_fact_digests	constraint	core_fact_digests_user_id_fact_id_fkey	FOREIGN KEY (user_id, fact_id) REFERENCES core_suppression_facts(user_id, fact_id) ON DELETE CASCADE
+core_fact_digests	constraint	core_fact_digests_value_check	CHECK ((value ~ '^[0-9a-f]{64}$'::text))
+core_fact_digests	index	core_fact_digests_pkey	CREATE UNIQUE INDEX core_fact_digests_pkey ON public.core_fact_digests USING btree (user_id, fact_id, alg, value)
+core_fact_digests	index	core_fact_digests_user_value_idx	CREATE INDEX core_fact_digests_user_value_idx ON public.core_fact_digests USING btree (user_id, value)
+core_owner_state	column	fact_epoch	bigint NOT NULL
+core_owner_state	column	index_revision	bigint NOT NULL
+core_owner_state	column	legacy_facts_ready	boolean NOT NULL
+core_owner_state	column	user_id	text NOT NULL
+core_owner_state	constraint	core_owner_state_fact_epoch_check	CHECK ((fact_epoch >= 0))
+core_owner_state	constraint	core_owner_state_index_revision_check	CHECK ((index_revision >= 0))
+core_owner_state	constraint	core_owner_state_pkey	PRIMARY KEY (user_id)
+core_owner_state	constraint	core_owner_state_user_id_fkey	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+core_owner_state	index	core_owner_state_pkey	CREATE UNIQUE INDEX core_owner_state_pkey ON public.core_owner_state USING btree (user_id)
+core_suppression_facts	column	action_id	text NOT NULL
+core_suppression_facts	column	body	jsonb NOT NULL
+core_suppression_facts	column	created_at	timestamp with time zone NOT NULL
+core_suppression_facts	column	embedding	vector(1536) NULL
+core_suppression_facts	column	epoch	bigint NOT NULL
+core_suppression_facts	column	fact_id	text COLLATE "C" NOT NULL
+core_suppression_facts	column	incarnation	text NOT NULL
+core_suppression_facts	column	key_id	text NULL
+core_suppression_facts	column	kind	text NOT NULL
+core_suppression_facts	column	legacy_ref	text NULL
+core_suppression_facts	column	mode	text NULL
+core_suppression_facts	column	origin	text NOT NULL
+core_suppression_facts	column	shingles	text[] NULL
+core_suppression_facts	column	slot	text NOT NULL
+core_suppression_facts	column	slot_hash	text NOT NULL
+core_suppression_facts	column	user_id	text NOT NULL
+core_suppression_facts	constraint	core_suppression_facts_action_id_check	CHECK (((length(action_id) >= 1) AND (length(action_id) <= 128)))
+core_suppression_facts	constraint	core_suppression_facts_epoch_check	CHECK ((epoch > 0))
+core_suppression_facts	constraint	core_suppression_facts_incarnation_check	CHECK ((incarnation ~ '^[0-9a-f]{64}$'::text))
+core_suppression_facts	constraint	core_suppression_facts_kind_check	CHECK ((kind = ANY (ARRAY['identity'::text, 'text'::text, 'session'::text, 'window'::text, 'rawSpan'::text])))
+core_suppression_facts	constraint	core_suppression_facts_mode_check	CHECK ((mode = ANY (ARRAY['exact'::text, 'full'::text])))
+core_suppression_facts	constraint	core_suppression_facts_origin_check	CHECK ((origin = ANY (ARRAY['forget'::text, 'correct'::text, 'edit'::text, 'backfill'::text, 'import'::text])))
+core_suppression_facts	constraint	core_suppression_facts_pkey	PRIMARY KEY (user_id, fact_id)
+core_suppression_facts	constraint	core_suppression_facts_shingle_key_check	CHECK (((shingles IS NULL) OR (key_id IS NOT NULL)))
+core_suppression_facts	constraint	core_suppression_facts_slot_hash_check	CHECK ((slot_hash ~ '^[0-9a-f]{64}$'::text))
+core_suppression_facts	constraint	core_suppression_facts_text_mode_check	CHECK (((kind <> 'text'::text) OR (mode IS NOT NULL)))
+core_suppression_facts	constraint	core_suppression_facts_user_id_epoch_key	UNIQUE (user_id, epoch)
+core_suppression_facts	constraint	core_suppression_facts_user_id_fkey	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+core_suppression_facts	constraint	core_suppression_facts_user_id_slot_hash_key	UNIQUE (user_id, slot_hash)
+core_suppression_facts	index	core_suppression_facts_embedding_idx	CREATE INDEX core_suppression_facts_embedding_idx ON public.core_suppression_facts USING hnsw (embedding vector_cosine_ops) WHERE (embedding IS NOT NULL)
+core_suppression_facts	index	core_suppression_facts_identity_idx	CREATE INDEX core_suppression_facts_identity_idx ON public.core_suppression_facts USING btree (user_id, ((body ->> 'memoryId'::text)) COLLATE "C") WHERE (kind = 'identity'::text)
+core_suppression_facts	index	core_suppression_facts_legacy_ref_uidx	CREATE UNIQUE INDEX core_suppression_facts_legacy_ref_uidx ON public.core_suppression_facts USING btree (user_id, legacy_ref) WHERE (legacy_ref IS NOT NULL)
+core_suppression_facts	index	core_suppression_facts_pkey	CREATE UNIQUE INDEX core_suppression_facts_pkey ON public.core_suppression_facts USING btree (user_id, fact_id)
+core_suppression_facts	index	core_suppression_facts_raw_span_idx	CREATE INDEX core_suppression_facts_raw_span_idx ON public.core_suppression_facts USING btree (user_id, ((body ->> 'sessionKeyHash'::text)) COLLATE "C") WHERE (kind = 'rawSpan'::text)
+core_suppression_facts	index	core_suppression_facts_session_idx	CREATE INDEX core_suppression_facts_session_idx ON public.core_suppression_facts USING btree (user_id, ((body #>> '{session,client}'::text[])) COLLATE "C") WHERE (kind = 'session'::text)
+core_suppression_facts	index	core_suppression_facts_text_idx	CREATE INDEX core_suppression_facts_text_idx ON public.core_suppression_facts USING btree (user_id, mode) WHERE (kind = 'text'::text)
+core_suppression_facts	index	core_suppression_facts_user_id_epoch_key	CREATE UNIQUE INDEX core_suppression_facts_user_id_epoch_key ON public.core_suppression_facts USING btree (user_id, epoch)
+core_suppression_facts	index	core_suppression_facts_user_id_slot_hash_key	CREATE UNIQUE INDEX core_suppression_facts_user_id_slot_hash_key ON public.core_suppression_facts USING btree (user_id, slot_hash)
+core_suppression_facts	index	core_suppression_facts_window_idx	CREATE INDEX core_suppression_facts_window_idx ON public.core_suppression_facts USING btree (user_id, ((body ->> 'client'::text)) COLLATE "C") WHERE (kind = 'window'::text)
