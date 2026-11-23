@@ -2,8 +2,8 @@ import { identifier, isWellFormedText, revision, validateObject } from "../captu
 import { NEAR_DUPLICATE_DISTANCE } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
 import { decideWrite, planCorrect, planDuplicateMerge } from "../memory-policy/index.mjs";
-import { allDigests, passageShingles } from "../privacy/fingerprint.mjs";
-import { redactV1 } from "../privacy/redact.mjs";
+import { allDigests, fingerprintLegacyCapture, legacyExactMac, passageShingles } from "../privacy/fingerprint.mjs";
+import { PRIVACY_REDACTION_VERSIONS, redactHostedCurrent, redactV1 } from "../privacy/redact.mjs";
 import { cleanContent, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
 import { blocksMemoryPassage } from "../privacy/withholds.mjs";
 import { factIncarnationBody, validateSuppressionFact } from "../suppression-fact.mjs";
@@ -12,12 +12,13 @@ import { pauseResult } from "./pause.mjs";
 
 /** @import {DuplicateQuery, InsertRow, MemoryRow, PassageFingerprint, Scope, SourceRef, Tx, WritePolicy} from "../ports/index.d.ts" */
 /** @import {FingerprintKey} from "../privacy/fingerprint.mjs" */
-/** @import {TextFact} from "../suppression-fact.mjs" */
+/** @import {ClockAndHash} from "../ports/model.d.ts" */
+/** @import {TextDigest, TextFact} from "../suppression-fact.mjs" */
 
 const memoryKinds = /** @type {const} */ (["fact", "preference", "decision", "instruction", "context"]);
 const sourceKinds = /** @type {const} */ (["capture", "mcp", "web", "import", "plugin"]);
-// The shingle primitive validates this record but signs each gram directly with the supplied owner key.
-const shingleLabels = Object.freeze({
+// The key provider supplies the signing key. Adapters own their legacy MAC labels.
+const coreLabels = Object.freeze({
   keyIdDomain: "core-key-id", shingleKeyPrefix: "core-shingles:", legacyExactPrefix: "core-exact:",
 });
 const invalid = () => /** @type {const} */ ({ status: "invalid" });
@@ -48,14 +49,41 @@ async function hashesOf(raw) {
   return { textHash: 'sha256:' + core.value, ...(legacy && { legacyHash: 'sha256:' + legacy.value }) };
 }
 
-/** @param {string} raw @param {string} text @param {FingerprintKey | null} key */
-async function passagesOf(raw, text, key) {
+/** @param {TextDigest[]} digests @param {TextDigest} digest */
+function addDigest(digests, digest) {
+  if (!digests.some(({ alg, value }) => alg === digest.alg && value === digest.value)) digests.push(digest);
+}
+
+/** @param {string} raw @param {string} text @param {FingerprintKey | null} key
+ * @param {ClockAndHash} clock @returns {Promise<PassageFingerprint[]>}
+ */
+async function passagesOf(raw, text, key, clock) {
   const original = cleanContent(raw);
-  const variants = new Map([original, redactV1(original), text].map(variant => [normalizeForHash(variant), variant]));
-  return Promise.all([...variants.values()].map(async (variant) => {
-    const digests = await allDigests(variant, key);
-    const shingles = key === null ? null : await passageShingles(variant, key, shingleLabels);
-    return { digests, shingles, keyId: key?.id ?? null };
+  const { v1, hostedCurrent, core } = PRIVACY_REDACTION_VERSIONS;
+  /** @type {Array<[string, TextDigest["pipeline"], number]>} */
+  const variants = [
+    [original, "hosted-v1", v1],
+    [redactV1(original), "hosted-v1", v1],
+    [redactHostedCurrent(original), "hosted-v1", hostedCurrent],
+    [text, "core", core],
+    // Hosted capture derives its stored V1 evidence after capture normalization.
+    [redactV1(original.normalize("NFKC")), "hosted-v1", v1],
+  ];
+  const distinct = new Map(variants.map(variant => [normalizeForHash(variant[0]), variant]));
+  return Promise.all(Array.from(distinct, async ([normalized, [variant, pipeline, redactionVersion]]) => {
+    const [digests, exact, legacy] = await Promise.all([
+      allDigests(variant, key),
+      clock.sha256Hex(normalized),
+      key && fingerprintLegacyCapture(variant, key, coreLabels),
+    ]);
+    // allDigests re-redacts its input. Keep the exact variant for historical facts.
+    addDigest(digests, { alg: "sha256", value: exact, pipeline, redactionVersion, keyId: null });
+    if (legacy) {
+      addDigest(digests, {
+        alg: "hmac", value: legacy.text_hmac, pipeline: "core", redactionVersion, keyId: legacy.key_id,
+      });
+    }
+    return { digests, shingles: legacy?.shingles ?? null, keyId: legacy?.key_id ?? null };
   }));
 }
 
@@ -112,7 +140,6 @@ export function writeMethods({ storage, embedder, gate, clock }) {
     const { model, dimensions } = embedder;
     await gate.assertOpen(owner, "dispatch");
     const vectors = await embedder.embed(texts, options);
-    await gate.assertOpen(owner, "post-send");
     const vector = vectors?.[0];
     if (!Array.isArray(vectors) || vectors.length !== 1 || !(vector instanceof Float32Array) || vector.length !== dimensions ||
         !vector.every(Number.isFinite) || !vector.some(component => component !== 0)) {
@@ -124,8 +151,9 @@ export function writeMethods({ storage, embedder, gate, clock }) {
 
   /** @param {Tx} tx @param {Scope} scope @param {SourceRef} source
    * @param {PassageFingerprint[]} passages @param {FingerprintKey | null} key
+   * @param {TextFact["sourceMemory"]} [edit]
    */
-  async function withheld(tx, scope, source, passages, key) {
+  async function withheld(tx, scope, source, passages, key, edit) {
     if (typeof suppressions?.snapshot !== "function") throw new CoreError("capability_unavailable");
     const snapshot = await suppressions.snapshot(tx, scope, {
       client: source.client ?? undefined, sessionId: source.sessionId ?? undefined, passages,
@@ -134,10 +162,10 @@ export function writeMethods({ storage, embedder, gate, clock }) {
     const passagesInSnapshot = snapshot.passages.map(({ fact }) => fact);
     if (passagesInSnapshot.some(fact => typeof fact?.owner !== "string")) return true;
     const facts = passagesInSnapshot.filter(fact => fact.owner === scope.owner && (fact.namespace ?? null) === scope.namespace);
-    // The key port does not supply legacy MAC domains. An opaque historical MAC cannot prove a miss.
+    // Legacy domains are adapter-owned. A MAC-only fact without comparable evidence cannot prove a miss.
     if (facts.some(({ text }) => text.digests.every(digest => digest.alg === "hmac") &&
         text.digests.some(digest => digest.pipeline !== "core"))) return true;
-    return blocksMemoryPassage(passages, facts, key);
+    return blocksMemoryPassage(passages, facts, key, undefined, edit ?? undefined);
   }
 
   return {
@@ -160,7 +188,7 @@ export function writeMethods({ storage, embedder, gate, clock }) {
       if (!text) return invalid();
       const key = await keys.userKey(owner);
       const query = await hashesOf(raw);
-      const passages = await passagesOf(raw, text, key);
+      const passages = await passagesOf(raw, text, key, clock);
       const embedding = await embed(owner, text, key);
       query.embedding = embedding.vector;
       const explicit = source.kind === "mcp" || source.kind === "web";
@@ -170,6 +198,7 @@ export function writeMethods({ storage, embedder, gate, clock }) {
         origin: explicit || source.kind === "import" ? "explicit" : "inferred",
       });
 
+      await gate.assertOpen(owner, "post-send");
       const result = await uow.run(owner, { pauseLock: true }, async tx => {
         const state = pauseResult(await pause.get(tx, owner));
         if (state.paused || state.generation !== preflight.generation) return /** @type {const} */ ({ status: "paused" });
@@ -221,7 +250,7 @@ export function writeMethods({ storage, embedder, gate, clock }) {
       const key = await keys.userKey(owner);
       if (key === null) throw new CoreError("fingerprint_unavailable");
       const query = await hashesOf(raw);
-      const passages = await passagesOf(raw, text, key);
+      const passages = await passagesOf(raw, text, key, clock);
       const unchanged = sameText(previous, query, text);
       const embedding = unchanged ? null : await embed(owner, text, key);
       query.embedding = embedding?.vector;
@@ -232,19 +261,26 @@ export function writeMethods({ storage, embedder, gate, clock }) {
       if (!unchanged) {
         const oldText = prepareCoreText(previous.text);
         const heldSecret = normalizeForHash(cleanContent(previous.text)) !== normalizeForHash(oldText);
-        const aliases = await allDigests(previous.text, key);
+        const [aliases, legacyMac, shingles] = await Promise.all([
+          allDigests(previous.text, key),
+          legacyExactMac(previous.text, key, coreLabels),
+          passageShingles(previous.text, key, coreLabels),
+        ]);
         const digests = heldSecret ? aliases.filter(digest => digest.alg === "hmac") : aliases;
+        const { v1, core } = PRIVACY_REDACTION_VERSIONS;
+        addDigest(digests, {
+          alg: "hmac", value: legacyMac, pipeline: "core",
+          redactionVersion: heldSecret ? v1 : core, keyId: key.id,
+        });
         if (!heldSecret) {
           const [canonical] = await allDigests(previous.text, null);
-          if (!digests.some(digest => digest.alg === canonical.alg && digest.value === canonical.value)) {
-            digests.push(canonical);
-          }
+          addDigest(digests, canonical);
         }
         const fact = /** @satisfies {TextFact} */ ({
-          owner, namespace: scope.namespace, kind: "text", mode: "exact", origin: "edit",
+          owner, namespace: scope.namespace, kind: "text", mode: "full", origin: "edit",
           actionId: "",
           sourceMemory: { id, createdAtMs: previous.createdAtMs },
-          text: { digests, keyId: key.id },
+          text: { digests, shingles, keyId: key.id },
         });
         const incarnation = await clock.sha256Hex(factIncarnationBody(fact));
         fact.actionId = "edit:" + expectedRevision + ":" + incarnation;
@@ -253,6 +289,7 @@ export function writeMethods({ storage, embedder, gate, clock }) {
       }
 
       let result;
+      if (!unchanged) await gate.assertOpen(owner, "post-send");
       try {
         result = await uow.run(owner, { pauseLock: true }, async tx => {
           const state = pauseResult(await pause.get(tx, owner));
@@ -263,7 +300,9 @@ export function writeMethods({ storage, embedder, gate, clock }) {
               current.text !== previous.text || current.createdAtMs !== previous.createdAtMs || current.historical) {
             return /** @type {const} */ ({ status: "conflict" });
           }
-          if (await withheld(tx, scope, source, passages, key)) return /** @type {const} */ ({ status: "suppressed" });
+          if (await withheld(tx, scope, source, passages, key, { id, createdAtMs: current.createdAtMs })) {
+            return /** @type {const} */ ({ status: "suppressed" });
+          }
           const policy = await memories.readWritePolicy(tx, scope, [query], source, "full", id);
           const decision = decide(policy, false, id);
           if (decision.status === "suppressed") return decision;
