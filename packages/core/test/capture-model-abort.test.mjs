@@ -65,7 +65,7 @@ test('caller cancellation reaches the in-flight provider and reports the pending
   const result = callModel(model, 'extract', request, {
     deadline, signal: caller.signal, onDiagnostic: event => events.push(event),
   });
-  const rejection = assert.rejects(result, { name: 'CoreError', code: 'internal_error' });
+  const rejection = assert.rejects(result, { name: 'CoreError', code: 'model_cancelled' });
   const signal = await Promise.race([dispatched, result]);
   assert.equal(signal.aborted, false);
   caller.abort(reason);
@@ -81,6 +81,6 @@ test('an already cancelled caller makes no outbound call', async () => {
   const model = { contextWindow: 8192, countTokens: () => 1, async call() { calls++; } };
   const caller = new AbortController();
   caller.abort();
-  await assert.rejects(callModel(model, 'extract', request, { signal: caller.signal }), { code: 'internal_error' });
+  await assert.rejects(callModel(model, 'extract', request, { signal: caller.signal }), { code: 'model_cancelled' });
   assert.equal(calls, 0);
 });

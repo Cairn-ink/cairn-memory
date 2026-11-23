@@ -166,8 +166,8 @@ async function call(model, method, request, options) {
   const { signal, timedOut } = boundary;
   const checkAbort = () => {
     if (timedOut()) reject('model_timeout');
-    // The cancellation diagnostic is stable while the error code is pending.
-    if (signal.aborted) reject('internal_error', 'model_cancelled');
+    // A non-deadline abort is the engine's model_cancelled (Phase 0 addendum 2).
+    if (signal.aborted) reject('model_cancelled');
   };
   // A counter can queue a freshness change before the provider invocation.
   await Promise.resolve();
@@ -217,7 +217,7 @@ async function call(model, method, request, options) {
       adapterError = error instanceof CoreError ? error : undefined;
     } catch { return reject(failureCode, 'provider_failure'); }
     if (code === 'model_timeout') reject('model_timeout');
-    if (name === 'AbortError') reject('internal_error', 'model_cancelled');
+    if (name === 'AbortError') reject('model_cancelled');
     if (adapterError && (code === 'context_budget_exceeded' || code === 'token_count_unavailable' ||
         code === 'invalid_model_output')) {
       report(method, 'core_call', code === 'invalid_model_output' ? 'adapter_output_invalid' : code);

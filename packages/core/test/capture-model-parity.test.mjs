@@ -140,10 +140,6 @@ for (const golden of cases) {
       expectedDiagnostics = [{ stage: 'qualifyCandidates', layer: 'core_call', reason: 'context_budget_exceeded' }];
       expectedTrace = Array.from({ length: 5 }, () => ['input count', 'fits']).flat();
       expectedReport = { itemsShortened: 0, itemsUnqualified: 1 };
-    } else if (script.provider === 'abort') {
-      // The Phase 0 error enum is awaiting model_cancelled.
-      assert.deepEqual(golden.expected, { errorCode: 'model_cancelled' });
-      await assert.rejects(run, { name: 'CoreError', code: 'internal_error' });
     } else if (golden.expected.errorCode) {
       await assert.rejects(run, { name: 'CoreError', code: golden.expected.errorCode });
     } else {
