@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
 import { PRIVACY_CASES, runCase } from "@cairn-ink/conformance";
-import { CoreError, compareUtf8, validateSuppressionFact } from "@cairn-ink/core";
+import { CoreError, compareUtf8, factBody, validateSuppressionFact } from "@cairn-ink/core";
+import { createFactStore } from "../src/privacy.mjs";
+import { createUnitOfWork } from "../src/unit-of-work.mjs";
 
 function factory(wrap = (opened) => opened, sessionRefs = "plain", storeProfile = sessionRefs) {
   return {
@@ -28,6 +30,31 @@ function withPorts(opened, ports) {
 
 function withFactWrites(opened, writeFact) {
   return withPorts(opened, { suppressions: { ...opened.adapter.suppressions, writeFact } });
+}
+
+function hashesFullFactBody(opened) {
+  const { writeFact } = opened.adapter.suppressions;
+  return withFactWrites(opened, async (tx, fact) => writeFact(tx, fact, await sha256(factBody(fact))));
+}
+
+function overwritesRetryEmbedding(opened) {
+  const { uow, port, runSeed, dump } = createUnitOfWork(opened.nativeErrorMap);
+  const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs: opened.sessionRefs });
+  const mutant = withPorts(opened, { uow, suppressions });
+  return {
+    ...withFactWrites(mutant, async (tx, fact, version) => {
+      const result = await suppressions.writeFact(tx, fact, version);
+      if (!result.created && fact.kind === "text") {
+        port(tx, fact, true, (state) => {
+          const stored = [...state.facts.values()].find(({ factId }) => factId === result.factId);
+          assert.equal(stored.fact.kind, "text");
+          stored.fact.text.embedding = structuredClone(fact.text.embedding);
+        });
+      }
+      return result;
+    }),
+    harness: { ...opened.harness, seedFact, async dump() { return dump(); } },
+  };
 }
 
 function ignoresSourceMemory(opened) {
@@ -389,6 +416,21 @@ const naive = {
       assert.equal(await epoch(ctx), 1n);
     },
   },
+  "K-FACT-7": {
+    async run(ctx) {
+      const fact = {
+        ...identity(ctx.owner, "test-memory"), kind: "text", mode: "exact",
+        text: {
+          digests: [{ alg: "sha256", value: a, pipeline: "core", redactionVersion: 1, keyId: null }],
+          embedding: [1, 0],
+        },
+      };
+      const first = await write(ctx, fact);
+      assert.equal(first.created, true);
+      assert.deepEqual(await write(ctx, fact), { ...first, created: false });
+      assert.equal(await epoch(ctx), first.epoch);
+    },
+  },
   "K-PAUSE-1": {
     async run({ adapter: { uow, pause }, owner }) {
       assert.equal((await uow.run(owner, { pauseLock: true }, (tx) => pause.set(tx, owner, true))).paused, true);
@@ -427,6 +469,8 @@ const mutants = [
   ["pause allowed without pause lock", "K-PAUSE-1", factory(allowsPauseWithoutLock), /Expected operation to reject/],
   ["key ignores owner", "K-KEY-1", factory(ignoresKeyOwner), /Distinct owners must have different signing keys/],
   ["hashed profile accepts plaintext", "K-SESS-1", factory(undefined, "hashed", "plain"), /Expected operation to reject/],
+  ["incarnation includes the text embedding", "K-FACT-7", factory(hashesFullFactBody), { code: "fact_conflict" }],
+  ["retry overwrites the stored embedding", "K-FACT-7", factory(overwritesRetryEmbedding), /must preserve the original stored fact and embedding/],
 ];
 
 for (const [label, id, mutant, failure] of mutants) {

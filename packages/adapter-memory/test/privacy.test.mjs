@@ -3,7 +3,7 @@ import { test } from "node:test";
 import {
   createMemoryAdapter, TEST_FINGERPRINT_LABELS, TEST_FINGERPRINT_SECRET,
 } from "@cairn-ink/adapter-memory";
-import { CoreError, factBody, userFingerprintKey } from "@cairn-ink/core";
+import { CoreError, factIncarnationBody, userFingerprintKey } from "@cairn-ink/core";
 
 const owner = "test-owner";
 const scope = { owner, namespaces: [null] };
@@ -28,7 +28,7 @@ function token({ uow, snapshot }) {
 }
 
 async function incarnation(fact) {
-  const bytes = new TextEncoder().encode(factBody(fact));
+  const bytes = new TextEncoder().encode(factIncarnationBody(fact));
   return Buffer.from(await crypto.subtle.digest("SHA-256", bytes)).toString("hex");
 }
 
@@ -79,6 +79,29 @@ test("seeding shares the fact table, canonical body hash and index revision", as
   await assert.rejects(harness.seedFact(owner, { ...fact, origin: "edit" }), coreError("fact_conflict"));
   assert.deepEqual(await harness.dump(), committed);
   assert.equal(await epoch(adapter), 1n);
+});
+
+test("seeding a text fact preserves its original embedding on retry", async () => {
+  const adapter = createMemoryAdapter({ newId: () => "test-fact", now: () => clockStart });
+  const { uow, suppressions, harness } = adapter;
+  const fact = {
+    kind: "text", owner, actionId: "test-action", origin: "forget", mode: "exact",
+    text: {
+      digests: [{ alg: "sha256", value: a, pipeline: "core", redactionVersion: 1, keyId: null }],
+      embedding: [1, 0],
+    },
+  };
+  const refreshed = { ...fact, text: { ...fact.text, embedding: [0, 1] } };
+  await harness.seedFact(owner, fact);
+  const committed = await harness.dump();
+  assert.deepEqual(committed[0].facts[0].fact.text.embedding, fact.text.embedding);
+
+  await harness.seedFact(owner, refreshed);
+  const version = await incarnation(refreshed);
+  const retry = await uow.run(owner, {}, (tx) => suppressions.writeFact(tx, refreshed, version));
+  assert.deepEqual(retry, { factId: "test-fact", epoch: 1n, createdAtMs: clockStart, created: false });
+  assert.equal(await epoch(adapter), 1n);
+  assert.deepEqual(await harness.dump(), committed);
 });
 
 test("an identity fact without a namespace hides only the null-namespace row", async () => {

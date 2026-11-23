@@ -1,5 +1,5 @@
-import { CoreError, compareUtf8, factBody, toCoreError, validateSuppressionFact } from "@cairn-ink/core";
-import { storeFact } from "./privacy.mjs";
+import { CoreError, compareUtf8, toCoreError } from "@cairn-ink/core";
+import { createFactStore } from "./privacy.mjs";
 
 /** @typedef {import("@cairn-ink/core").ErrorCode} ErrorCode */
 /** @typedef {import("@cairn-ink/core/ports").Tx} Tx */
@@ -33,6 +33,8 @@ class Owner {
   pause = new Mutex();
   write = new Mutex();
   open = 0;
+  /** @type {Promise<void> | undefined} */
+  fixtureWrite;
 }
 
 /** @param {unknown} value @returns {import("@cairn-ink/conformance/factory").JsonValue} */
@@ -73,6 +75,7 @@ export function createUnitOfWork(nativeErrorMap) {
       const readOnly = options.readOnly === true;
       const pauseLock = options.pauseLock === true;
       const current = ownerState(owner);
+      if (current.fixtureWrite) await current.fixtureWrite;
       current.open++;
       let ended = false;
       /** @type {Tx | undefined} */
@@ -164,19 +167,15 @@ export function createUnitOfWork(nativeErrorMap) {
   }
 
   /**
-   * Synchronous fixture entry point for unit-of-work tests, using the canonical body as its
-   * retry token. The adapter harness computes a WebCrypto incarnation before calling writeFact.
+   * Unit-of-work tests can start a fixture write and observe it from their next run.
    * @param {string} owner @param {import("@cairn-ink/core").SuppressionFact} fact
    */
   function appendFact(owner, fact) {
     const current = ownerState(owner);
     if (current.open > 0) throw new CoreError("invalid_input");
-    const validated = validateSuppressionFact(fact);
-    if (validated.owner !== owner) throw new CoreError("invalid_input");
-    const state = { ...current.committed, facts: new Map(current.committed.facts) };
-    storeFact(state, validated, factBody(validated));
-    state.indexRevision++;
-    current.committed = state;
+    const { seedFact } = createFactStore(port, runSeed, {});
+    current.fixtureWrite = seedFact(owner, fact).finally(() => { current.fixtureWrite = undefined; });
+    return current.fixtureWrite;
   }
 
   /** @param {Scope} scope @param {string} id @param {bigint} updatedAtUs */

@@ -1,4 +1,4 @@
-import { CoreError, factBody } from "@cairn-ink/core";
+import { CoreError, factIncarnationBody } from "@cairn-ink/core";
 import { caught, check, equal, readDump, rejects } from "./support.mjs";
 
 /** @typedef {import("./index.d.mts").CaseContext} Context */
@@ -33,7 +33,7 @@ function textFact(owner, digests) {
 
 /** @param {Context} ctx @param {Fact} fact */
 async function incarnation(ctx, fact) {
-  return (await ctx.hash(factBody(fact))).slice("sha256:".length);
+  return (await ctx.hash(factIncarnationBody(fact))).slice("sha256:".length);
 }
 
 /** @param {Context} ctx @param {Fact} fact @param {string} [version] */
@@ -211,13 +211,16 @@ export const privacyCases = [
       const fact = textFact(ctx.owner, [secondDigest, firstDigest]);
       const version = await incarnation(ctx, fact);
       const first = await write(ctx, fact, version);
+      const reordered = textFact(ctx.owner, [firstDigest, secondDigest]);
+      // The core hash already canonicalizes order. Supply a different token to probe the slot.
+      const conflictingVersion = await incarnation(ctx, { ...fact, origin: "edit" });
       const variants = [
         textFact(ctx.owner, [secondDigest, { ...firstDigest, pipeline: "hosted-v1" }]),
-        textFact(ctx.owner, [firstDigest, secondDigest]),
+        reordered,
         textFact(ctx.owner, [secondDigest, { ...firstDigest, redactionVersion: 2, keyId: "test-key-b" }]),
       ];
       for (const variant of variants) {
-        await rejects(() => write(ctx, variant), "fact_conflict");
+        await rejects(() => write(ctx, variant, variant === reordered ? conflictingVersion : undefined), "fact_conflict");
         const retry = await write(ctx, variant, version);
         check(retry.created === false, "Equivalent digest sets must reuse the slot");
         equal(projectWrite(retry), projectWrite(first), "An equivalent digest set must return the original result");
@@ -263,6 +266,34 @@ export const privacyCases = [
       await rejects(() => uow.run(owner, { readOnly: true }, (tx) => suppressions.writeFact(tx, own, ownVersion)), "internal_error");
       equal(await readDump(harness), afterForeign, "A refused read-only write must leave the committed dump unchanged");
       equal([await epoch(ctx), await epoch(ctx, otherOwner)], [null, null], "Rejected writes must leave both owners unchanged");
+    },
+  },
+  {
+    id: "K-FACT-7", title: "keeps the original text fact across embedding and digest order changes", needs: [],
+    async run(ctx) {
+      const fact = {
+        ...textFact(ctx.owner, [digest("b"), digest("a")]),
+        sourceMemory: { id: "test-source", createdAtMs: 10 },
+      };
+      const original = { ...fact, text: { ...fact.text, embedding: [1, 0] } };
+      const refreshed = { ...fact, text: { ...fact.text, embedding: [0, 1] } };
+      const reordered = { ...refreshed, text: { ...refreshed.text, digests: [...fact.text.digests].reverse() } };
+
+      const originalVersion = await incarnation(ctx, original);
+      const first = await write(ctx, original, originalVersion);
+      check(first.created === true, "The first text write must create the fact");
+      const committed = await readDump(ctx.harness);
+      equal(await epoch(ctx), first.epoch, "The first text write must establish the owner epoch");
+
+      for (const variant of [refreshed, reordered]) {
+        const version = await incarnation(ctx, variant);
+        equal(version, originalVersion, "Embedding and digest order changes must preserve the text incarnation");
+        const retry = await write(ctx, variant, version);
+        check(retry.created === false, "The text retry must reuse the original fact");
+        equal(projectWrite(retry), projectWrite(first), "The text retry must return the original fact ID, epoch and creation time");
+        equal(await epoch(ctx), first.epoch, "The text retry must leave the owner epoch unchanged");
+        equal(await readDump(ctx.harness), committed, "The text retry must preserve the original stored fact and embedding");
+      }
     },
   },
   {

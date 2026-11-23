@@ -1,5 +1,5 @@
 import {
-  CoreError, compareUtf8, factBody, pauseGenerationAfter, userFingerprintKey,
+  CoreError, compareUtf8, factIncarnationBody, pauseGenerationAfter, userFingerprintKey,
   validateFingerprintLabels, validateSuppressionFact,
 } from "@cairn-ink/core";
 
@@ -93,7 +93,7 @@ export function createFactStore(port, runSeed, options) {
       const validated = validateSuppressionFact(fact);
       if (validated.owner !== owner) throw new CoreError("invalid_input");
       const copy = structuredClone(validated);
-      const digest = await crypto.subtle.digest("SHA-256", encoder.encode(factBody(copy)));
+      const digest = await crypto.subtle.digest("SHA-256", encoder.encode(factIncarnationBody(copy)));
       const incarnation = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
       await suppressions.writeFact(tx, copy, incarnation);
     });
