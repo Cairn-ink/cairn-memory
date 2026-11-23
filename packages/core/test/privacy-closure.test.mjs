@@ -16,10 +16,25 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const NODE_TEXT = /node:/u;
 const REQUIRE_WORD = /\brequire\b/u;
 
+// Escapes and line continuations spell the same specifier or identifier, so the
+// scan reads the text as JavaScript would after unescaping: a backslash line
+// continuation is removed, and \uXXXX, \u{X…} and \xXX become their characters.
+// Module code is strict, so legacy octal escapes cannot occur.
+function unescaped(source) {
+  return source
+    .replace(/\\(?:\r\n|[\n\r\u2028\u2029])/gu, "")
+    .replace(/\\u\{([0-9a-fA-F]{1,6})\}|\\u([0-9a-fA-F]{4})|\\x([0-9a-fA-F]{2})/gu,
+      (match, braced, four, two) => {
+        const code = Number.parseInt(braced ?? four ?? two, 16);
+        return code <= 0x10ffff ? String.fromCodePoint(code) : match;
+      });
+}
+
 function violations(source) {
   const found = [];
-  if (NODE_TEXT.test(source)) found.push("node: specifier");
-  if (REQUIRE_WORD.test(source)) found.push("require");
+  const texts = [source, unescaped(source)];
+  if (texts.some((text) => NODE_TEXT.test(text))) found.push("node: specifier");
+  if (texts.some((text) => REQUIRE_WORD.test(text))) found.push("require");
   return found;
 }
 
@@ -66,6 +81,14 @@ test("the shipped-file scan catches each banned form (negative control)", () => 
   assert.deepEqual(violations('module["require"]("path");'), ["require"]);
   assert.deepEqual(violations('module.require?.("path");'), ["require"]);
   assert.deepEqual(violations('const start = "/*";\nawait import("node:fs");'), ["node: specifier"]);
+  assert.deepEqual(violations('await import("n\\u006fde:fs");'), ["node: specifier"]);
+  assert.deepEqual(violations('import "node\\x3afs";'), ["node: specifier"]);
+  assert.deepEqual(violations('await import("no\\\nde:fs");'), ["node: specifier"]);
+  assert.deepEqual(violations('await import("no\\\r\nde:fs");'), ["node: specifier"]);
+  assert.deepEqual(violations('requ\\u0069re("fs");'), ["require"]);
+  assert.deepEqual(violations('\\u{72}equire("fs");'), ["require"]);
+  assert.deepEqual(violations('module.requ\\u0069re("path");'), ["require"]);
+  assert.deepEqual(violations('const ns = "project\\u0000" + id;'), []);
   assert.deepEqual(violations('import { redactV1 } from "./privacy/redact.mjs";'), []);
   // Comments and strings count too: the text itself is banned.
   assert.deepEqual(violations('// import "node:fs" in a comment only'), ["node: specifier"]);
