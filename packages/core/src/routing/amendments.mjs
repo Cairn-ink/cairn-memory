@@ -8,7 +8,7 @@ import { SPACE } from "./text.mjs";
 export { SYS_DETECT, SYS_VERIFY };
 export { selectAmendmentsForRead, renderCardAmendments, documentCardAmendmentVisible } from "./amendment-read.mjs";
 
-/** @import { AmendmentCounters, CheckedChange, DetectedCardAmendment } from "./amendments.mjs" */
+/** @import { AmendmentConversation, AmendmentCounters, CheckedChange, DetectedCardAmendment } from "./amendments.mjs" */
 /** @import { DocumentCardSession, DocumentCardSourceMessage } from "../ports/document-card.d.ts" */
 /** @import { ModelRequest } from "../ports/model.d.ts" */
 
@@ -47,8 +47,35 @@ const sessionOrder = (left, right) => compareUtf8(left.date, right.date) || comp
 const requestFits = ({ system, input, maxOutputTokens }, countTokens, limit) =>
   checkedTokenCount({ countTokens }, modelRequestText(system, input, maxOutputTokens)) <= Math.min(limit, MODEL_INPUT_TOKENS);
 
+/** @param {AmendmentConversation["messages"]} messages */
+function redactCaptureMessages(messages) {
+  /** @type {AmendmentConversation["messages"][number][]} */
+  const redacted = [];
+  let index = 0;
+  for (const message of messages) {
+    const defaultTurn = ++index;
+    if (message == null) continue;
+    const { id, role, content, turn } = message;
+    if (typeof id !== "string" || (role !== "user" && role !== "assistant") ||
+        (turn !== undefined && typeof turn !== "number") ||
+        typeof content !== "string" || cleanContent(content) !== content) continue;
+    const safeContent = redactAmendmentText(content);
+    if (safeContent !== null) redacted.push({ id, role, content: safeContent, turn: turn ?? defaultTurn });
+  }
+  return redacted;
+}
+
 /** @type {typeof import("./amendments.mjs").buildDetectRequest} */
-export function buildDetectRequest({ conversation, cards, countTokens, inputLimit = MODEL_INPUT_TOKENS }) {
+export function buildDetectRequest({ conversation, cards, countTokens, inputLimit }) {
+  const { client, sessionId, date, scope, messages } = conversation;
+  return buildDetectRequestFromCapture({
+    conversation: { client, sessionId, date, scope, messages: redactCaptureMessages(messages) },
+    cards, countTokens, inputLimit,
+  });
+}
+
+/** @type {typeof buildDetectRequest} */
+function buildDetectRequestFromCapture({ conversation, cards, countTokens, inputLimit = MODEL_INPUT_TOKENS }) {
   /** @param {keyof AmendmentCounters} reason */
   const skip = (reason) => ({ request: null, listedCards: [], counters: { [reason]: 1 } });
   if (!conversation.messages.some(({ role }) => role === "user")) return skip("detect_skipped_no_user");
@@ -116,6 +143,14 @@ function hasKeys(value, required, optional = []) {
 /** @param {unknown} value @returns {value is string} */
 const nonblank = (value) => typeof value === "string" && norm(value).length > 0;
 
+/** @param {Record<string, unknown>} value @param {string} key */
+function ownString(value, key) {
+  if (!Object.hasOwn(value, key)) return "";
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  return descriptor && Object.hasOwn(descriptor, "value") && typeof descriptor.value === "string"
+    ? descriptor.value : "";
+}
+
 /** @param {string} normalizedQuote */
 function quotePattern(normalizedQuote) {
   const parts = normalizedQuote.split(" ").map(part => part.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"));
@@ -124,24 +159,33 @@ function quotePattern(normalizedQuote) {
 
 /** @type {typeof import("./amendments.mjs").checkChangeCandidates} */
 export function checkChangeCandidates({ changes, listedCards, captureMessages, captureSession }) {
+  return checkChangeCandidatesFromCapture({
+    changes, listedCards, captureMessages: redactCaptureMessages(captureMessages), captureSession,
+  });
+}
+
+/** @type {typeof checkChangeCandidates} */
+function checkChangeCandidatesFromCapture({ changes, listedCards, captureMessages, captureSession }) {
   const byId = new Map(listedCards.map(card => [card.id, card]));
   /** @type {CheckedChange[]} */
   const candidates = [];
   /** @type {ReturnType<typeof import("./amendments.mjs").checkChangeCandidates>["drops"]} */
   const drops = {};
 
-  for (const entry of changes) {
-    const change = record(entry) ? entry : null;
-    if (change && Object.values(change).some(text => typeof text === "string" && cleanContent(text) !== text)) {
-      drops.ill_formed_model_text = (drops.ill_formed_model_text ?? 0) + 1;
-      continue;
-    }
-    if (!change || !hasKeys(change, ["card_id", "quote", "new_value"])) {
+  for (const change of changes) {
+    if (!record(change) || Array.isArray(change)) {
       drops.malformed = (drops.malformed ?? 0) + 1;
       continue;
     }
-    const { card_id: cardId, quote, new_value: value } = change;
-    if (!nonblank(cardId) || !nonblank(quote) || !nonblank(value)) {
+    const cardId = ownString(change, "card_id");
+    const quote = ownString(change, "quote");
+    const value = ownString(change, "new_value");
+    if (cleanContent(cardId) !== cardId || cleanContent(quote) !== quote || cleanContent(value) !== value) {
+      drops.ill_formed_model_text = (drops.ill_formed_model_text ?? 0) + 1;
+      continue;
+    }
+    // Each required field is checked above. The key count rules out extra fields.
+    if (!nonblank(cardId) || !nonblank(quote) || !nonblank(value) || Reflect.ownKeys(change).length !== 3) {
       drops.malformed = (drops.malformed ?? 0) + 1;
       continue;
     }
@@ -162,12 +206,10 @@ export function checkChangeCandidates({ changes, listedCards, captureMessages, c
       if (!verbatimQuote) continue;
       if (message.role === "user") {
         accepted = true;
-        const safeQuote = redactAmendmentText(quote);
-        const safeVerbatimQuote = redactAmendmentText(verbatimQuote);
         const newValue = redactAmendmentText(value);
-        if (nonblank(safeQuote) && nonblank(safeVerbatimQuote) && nonblank(newValue)) {
+        if (nonblank(newValue)) {
           candidates.push({
-            card, quote: safeQuote, verbatimQuote: safeVerbatimQuote, newValue,
+            card, quote: verbatimQuote, verbatimQuote, newValue,
             sourceMessage: { client: captureSession.client, sessionId: captureSession.sessionId, messageId: message.id },
           });
         } else {
@@ -265,7 +307,7 @@ export async function detectCardAmendments(options) {
     const { client, sessionId, date, scope: { owner, namespace }, messages } = capture;
     const conversation = {
       client, sessionId, date, scope: { owner, namespace },
-      messages: Array.from(messages, ({ id, role, content, turn }) => ({ id, role, content, turn })),
+      messages: redactCaptureMessages(messages),
     };
     let timeoutMs = limits?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 2_147_483_647) timeoutMs = DEFAULT_TIMEOUT_MS;
@@ -290,7 +332,7 @@ export async function detectCardAmendments(options) {
 
     /** @param {string} text */
     const countTokens = text => model.countTokens(text);
-    const { request, listedCards, counters: planning } = buildDetectRequest({
+    const { request, listedCards, counters: planning } = buildDetectRequestFromCapture({
       conversation, cards, countTokens, inputLimit,
     });
     Object.assign(counters, planning);
@@ -302,7 +344,7 @@ export async function detectCardAmendments(options) {
     if (!record(output)) return fail("detect_malformed_output");
     meter("detect", output.usage);
     if (!hasKeys(output, ["changes"], ["usage"]) || !Array.isArray(output.changes)) return fail("detect_malformed_output");
-    const { candidates, drops } = checkChangeCandidates({
+    const { candidates, drops } = checkChangeCandidatesFromCapture({
       changes: output.changes, listedCards, captureMessages: conversation.messages, captureSession: conversation,
     });
     Object.assign(counters, drops);

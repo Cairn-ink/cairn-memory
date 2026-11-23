@@ -112,7 +112,7 @@ test("candidate checks count each drop and recover the verbatim user substring",
     malformed: 2, unknown_card: 1, quote_not_verbatim: 1, same_session: 1, quote_from_assistant: 1,
   });
   assert.deepEqual(candidates, [{
-    card: old, quote: "Set [width] to 4.", verbatimQuote: "Set [width] to\u00854.",
+    card: old, quote: "Set [width] to\u00854.", verbatimQuote: "Set [width] to\u00854.",
     newValue: " Width is now 4. ",
     sourceMessage: { client: capture.client, sessionId: capture.sessionId, messageId: "question" },
   }]);
@@ -186,7 +186,9 @@ test("verify consumes at most four calls in candidate order, even across interle
   assert.equal(counters.verify_calls, 4);
   assert.equal(counters.verify_skipped_limit, 1);
   assert.equal(amendments.length, 1);
-  assert.deepEqual(model.requests.slice(1).map(request => request.input.split("QUOTE: ")[1].split("\nNEW VALUE:")[0]), quotes.slice(0, 4));
+  const verbatim = capture.messages[0].content.split("\n")[0];
+  assert.deepEqual(model.requests.slice(1).map(request => request.input.split("QUOTE: ")[1].split("\nNEW VALUE:")[0]),
+    [verbatim, quotes[1], verbatim, quotes[3]]);
 });
 
 test("an oversized verify request skips its candidate before calling the model", async () => {

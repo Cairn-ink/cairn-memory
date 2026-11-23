@@ -13,7 +13,7 @@ export interface AmendmentConversation extends DocumentCardSession {
   scope: Scope;
   /** Session date in YYYY-MM-DD format. */
   date: string;
-  /** Eligible, model-safe messages in capture order. Missing turns are numbered from 1. */
+  /** Eligible messages in capture order. Core redacts their text and numbers missing turns from 1. */
   messages: readonly (Pick<DocumentMessage, "id" | "role" | "content"> & { turn?: number })[];
 }
 
@@ -53,7 +53,7 @@ export type ChangeCandidateDropReason =
 
 export interface CheckedChange {
   card: AmendmentRequestCard;
-  /** Detect quote after redaction, for the verify request. */
+  /** Matched redacted source substring for the verify request. */
   quote: string;
   /** Matched source substring after redaction, for storage. */
   verbatimQuote: string;
@@ -62,6 +62,7 @@ export interface CheckedChange {
   sourceMessage: DocumentCardSourceMessage;
 }
 
+/** Candidates come from parsed model JSON. Non-JSON adapter values are out of contract. */
 export declare function checkChangeCandidates(input: {
   changes: readonly unknown[];
   listedCards: readonly AmendmentRequestCard[];
