@@ -1,12 +1,13 @@
 import { factHidesRow } from "../privacy/fact-match.mjs";
 import { fingerprintLegacyCapture, fingerprintMemoryPassages, validateFingerprintLabels } from "../privacy/fingerprint.mjs";
 import { PRIVACY_REDACTION_VERSIONS, redactHostedCurrent, redactV1 } from "../privacy/redact.mjs";
-import { normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
+import { cleanContent, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
 import { requiresLegacyMacDomain, snapshotReader, withholdsAnyPassage } from "../privacy/withholds.mjs";
 import { validateSuppressionFact } from "../suppression-fact.mjs";
 import { buildDocumentCard } from "./card.mjs";
 
 /** @import { Scope } from "../ports/common.d.ts" */
+/** @import { TextDigest } from "../suppression-fact.mjs" */
 /** @import { DocumentCardHiddenReason, DocumentCardSourceWithheldInput, DocumentCardStalenessInput, DocumentCardVisibility, DocumentCardVisibilityInput, StaleReplacement, StaleReplacementInput } from "./visibility.mjs" */
 
 /** @param {unknown} value @returns {value is string} */
@@ -22,6 +23,9 @@ const natural = (value) => typeof value === "number" && Number.isSafeInteger(val
 const hidden = (reason) => ({ visible: false, reason });
 
 /** @typedef {NonNullable<DocumentCardVisibilityInput["legacyFingerprint"]>} LegacyFingerprint */
+
+/** @param {TextDigest} digest */
+const isLegacyMac = (digest) => digest.alg === "hmac" && digest.pipeline !== "core";
 
 /** @param {LegacyFingerprint} input @returns {LegacyFingerprint | null} */
 function readLegacyFingerprint(input) {
@@ -42,11 +46,12 @@ function readLegacyFingerprint(input) {
 /** @param {string} text @param {LegacyFingerprint} legacy
  * @returns {Promise<import("../ports/privacy.d.ts").PassageFingerprint[]>} */
 function legacyCardPassages(text, { key, labels }) {
+  const original = cleanContent(text);
   const { v1, hostedCurrent } = PRIVACY_REDACTION_VERSIONS;
   const variants = new Map([
-    [normalizeForHash(text), v1],
-    [normalizeForHash(redactV1(text)), v1],
-    [normalizeForHash(redactHostedCurrent(text)), hostedCurrent],
+    [normalizeForHash(original), v1],
+    [normalizeForHash(redactV1(original)), v1],
+    [normalizeForHash(redactHostedCurrent(original)), hostedCurrent],
   ]);
   return Promise.all(Array.from(variants, async ([variant, redactionVersion]) => {
     const { text_hmac, shingles, key_id: keyId } = await fingerprintLegacyCapture(variant, key, labels);
@@ -108,21 +113,33 @@ export async function documentCardVisible(input) {
       if (legacyFingerprint !== undefined) {
         legacy = readLegacyFingerprint(legacyFingerprint);
         if (!legacy) return hidden("uncertain");
+        await globalThis.crypto.subtle.sign("HMAC", legacy.key.signingKey, new Uint8Array(0));
       }
       if (facts.length > 0) {
         if (!legacy && facts.some(requiresLegacyMacDomain)) return hidden("text_withheld");
         const texts = title === null ? [body] : [title, body];
         let memoryFacts = facts;
         if (legacy) {
-          // The matcher withholds when a passage and fact lack comparable evidence.
-          const legacyFacts = facts.filter(requiresLegacyMacDomain);
-          if (legacyFacts.length > 0) {
-            const legacyKeyId = legacy.key.id;
-            if (legacyFacts.some(fact => fact.text.digests.some(digest => digest.keyId !== legacyKeyId))) {
+          const legacyFacts = [];
+          const coreFacts = [];
+          for (const fact of facts) {
+            const legacyDigests = fact.text.digests.filter(isLegacyMac);
+            if (legacyDigests.length === 0) {
+              coreFacts.push(fact);
+              continue;
+            }
+            if (legacyDigests.some(digest => digest.keyId !== legacy.key.id)) {
               return hidden("text_withheld");
             }
-            const legacySet = new Set(legacyFacts);
-            memoryFacts = facts.filter(fact => !legacySet.has(fact));
+            // A fact with aliases in both domains participates in both comparisons.
+            legacyFacts.push({ ...fact, text: { ...fact.text, digests: legacyDigests } });
+            const coreDigests = fact.text.digests.filter(digest => !isLegacyMac(digest));
+            if (coreDigests.length > 0) {
+              coreFacts.push({ ...fact, text: { ...fact.text, digests: coreDigests } });
+            }
+          }
+          memoryFacts = coreFacts;
+          if (legacyFacts.length > 0) {
             const fingerprints = await Promise.all(texts.map(text => legacyCardPassages(text, legacy)));
             if (withholdsAnyPassage(fingerprints.flat(), legacyFacts)) return hidden("text_withheld");
           }

@@ -30,7 +30,7 @@ export interface DocumentCardVisibilityInput {
   textFacts?: readonly TextFact[] | null;
   /** The scope owner's memory fingerprint key. Null or omission means the key is unavailable. */
   fingerprintKey?: FingerprintKey | null;
-  /** Optional evidence for legacy MAC-only facts on import and manual cards. Derive the owner's key with these adapter labels. */
+  /** Optional evidence for legacy MAC aliases on import and manual cards. Derive the owner's key with these adapter labels. */
   legacyFingerprint?: { key: FingerprintKey; labels: FingerprintLabels };
 }
 

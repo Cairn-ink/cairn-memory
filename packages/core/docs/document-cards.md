@@ -44,13 +44,15 @@ keyed shingle containment at the shared 0.6 threshold. A match in either
 field returns `text_withheld`. Unknown or malformed facts and unavailable
 key evidence needed for comparison withhold the card.
 
-For legacy MAC-only facts, the adapter can pass `legacyFingerprint: { key, labels }`.
+For facts with legacy MACs, the adapter can pass `legacyFingerprint: { key, labels }`.
 Use the adapter's frozen legacy domain labels and derive the key with
 `userFingerprintKey(secret, owner, labels)`. Core compares legacy exact MACs
 and keyed shingles for the original and historically redacted forms of each
-field. A legacy MAC-only fact still returns `text_withheld` when the input is
-omitted or any of the fact's digests uses a different key ID, including after a
-key rotation. Invalid labels or key return `uncertain`.
+field after cleaning the stored text. A fact with both legacy and Core aliases
+can match through either comparison. A legacy MAC-only fact returns
+`text_withheld` when the input is omitted. With supplied evidence, a legacy MAC
+under a different key ID withholds the card, including after a key rotation.
+Invalid labels or an unusable signing key return `uncertain`.
 
 To forget a source-less card, use the store's scoped
 `hide(tx, scope, cardId, reason)` by ID and apply text withholding as for

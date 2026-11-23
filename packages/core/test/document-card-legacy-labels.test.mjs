@@ -141,3 +141,80 @@ test("router card visibility uses the source verdict with or without legacy evid
       { visible: false, reason: "source_withheld" });
   }
 });
+
+for (const field of ["body", "title"]) {
+  test(`legacy exact MACs use the cleaned ${field}`, async () => {
+    const reference = 'Stored credential {"access_token":"fake-demo-value"}';
+    const withNul = reference.replace("access_token", "access_\0token");
+    const fact = textFact({ digests: [await legacyDigest(reference)] });
+    assert.deepEqual(await documentCardVisible({
+      ...read, card: { ...card, [field]: withNul }, textFacts: [fact], legacyFingerprint,
+    }), withheld);
+  });
+}
+
+test("legacy redaction runs after the stored passage is cleaned", async () => {
+  const body = 'Stored credential {"access_\0token":"fake-demo-value"}';
+  const reference = 'Stored credential {"access_token":"[REDACTED]"}';
+  const fact = textFact({ digests: [await legacyDigest(reference)] });
+  assert.deepEqual(await documentCardVisible({
+    ...read, card: { ...card, body }, textFacts: [fact], legacyFingerprint,
+  }), withheld);
+});
+
+test("legacy shingles use the cleaned passage when exact MACs miss", async () => {
+  const reference = "abcdef";
+  const fact = textFact({
+    digests: [await legacyDigest(reference)], shingles: await passageShingles(reference, key, labels), keyId: key.id,
+  }, "full");
+  assert.deepEqual(await documentCardVisible({
+    ...read, card: { ...card, body: "abc\0def extra" }, textFacts: [fact], legacyFingerprint,
+  }), withheld);
+});
+
+for (const mode of ["exact", "full"]) {
+  test(`a legacy MAC miss preserves a matching core alias in ${mode} mode`, async () => {
+    const reference = "password: fake-alpha-123456789";
+    const body = "password: fake-omega-987654321";
+    const hosted = await legacyDigest(reference);
+    const core = await coreDigest(reference, key);
+    const fullEvidence = mode === "full" ? {
+      shingles: await passageShingles(reference, key, labels), keyId: key.id,
+    } : {};
+    const withDigests = (...digests) => [textFact({ digests, ...fullEvidence }, mode)];
+    const input = { ...read, card: { ...card, body }, fingerprintKey: key };
+
+    assert.deepEqual(await documentCardVisible({
+      ...input, legacyFingerprint, textFacts: withDigests(hosted),
+    }), visible);
+    assert.deepEqual(await documentCardVisible({
+      ...input, legacyFingerprint, textFacts: withDigests(core),
+    }), withheld);
+    assert.deepEqual(await documentCardVisible({ ...input, textFacts: withDigests(hosted, core) }), withheld);
+    assert.deepEqual(await documentCardVisible({
+      ...input, legacyFingerprint, textFacts: withDigests(hosted, core),
+    }), withheld);
+  });
+}
+
+test("a core SHA alias miss preserves a matching legacy MAC", async () => {
+  const core = await coreDigest("An unrelated core passage");
+  const fact = textFact({ digests: [...matchingFact.text.digests, core] });
+  assert.deepEqual(await documentCardVisible({ ...read, textFacts: [fact] }), visible);
+  assert.deepEqual(await documentCardVisible({ ...read, textFacts: [fact], legacyFingerprint }), withheld);
+});
+
+for (const [scenario, facts] of [["no facts", []], ["a rotated fact", [rotatedFact]]]) {
+  test(`an unusable legacy signing key is uncertain with ${scenario}`, async () => {
+    const signingKey = Object.create(CryptoKey.prototype, {
+      type: { value: "secret" },
+      usages: { value: ["sign"] },
+      algorithm: { value: { name: "HMAC", hash: { name: "SHA-256" }, length: 256 } },
+    });
+    assert.ok(signingKey instanceof CryptoKey);
+    await assert.rejects(crypto.subtle.sign("HMAC", signingKey, new Uint8Array(0)));
+    assert.deepEqual(await documentCardVisible({
+      ...read, textFacts: facts, legacyFingerprint: { key: { ...key, signingKey }, labels },
+    }), uncertain);
+  });
+}
