@@ -1,5 +1,5 @@
 import { CoreError, factIncarnationBody } from "@cairn-ink/core";
-import { check, equal, isCoreErrorShape, readDump, rejects, row } from "./support.mjs";
+import { check, equal, readDump, rejects, row } from "./support.mjs";
 
 /** @typedef {import("./index.d.mts").CaseContext} Context */
 /** @typedef {import("@cairn-ink/core").SuppressionFact} Fact */
@@ -71,23 +71,13 @@ async function signProbe(key) {
   return new Uint8Array(await crypto.subtle.sign("HMAC", key, probe));
 }
 
-/** @param {Context} ctx @param {Fact[]} targets @param {((separator: string) => Fact[])[]} delimiterFixtures */
-async function assertDistinctTargets(ctx, targets, delimiterFixtures) {
+/** @param {Context} ctx @param {Fact[]} targets */
+async function assertDistinctTargets(ctx, targets) {
   let expectedEpoch = 0n;
-  /** @param {Fact} target @param {FactWrite} result */
-  function checkCreated(target, result) {
+  for (const target of targets) {
+    const result = await write(ctx, target);
     check(result.created === true, `Distinct ${target.kind} targets must create new facts`);
     equal(result.epoch, ++expectedEpoch, "Each new target must advance the epoch once");
-  }
-  for (const target of targets) checkCreated(target, await write(ctx, target));
-  for (const fixtures of delimiterFixtures) {
-    const [first, ...rest] = fixtures("\u0000");
-    // Some text columns reject NUL. Retry the same tuple collision with storable text.
-    const result = await write(ctx, first).catch((error) => {
-      if (!isCoreErrorShape(error) || error.code !== "invalid_input") throw error;
-    });
-    if (result) checkCreated(first, result);
-    for (const target of result ? rest : fixtures("|")) checkCreated(target, await write(ctx, target));
   }
   equal(await epoch(ctx), expectedEpoch, "The owner epoch must count all distinct targets");
 }
@@ -185,6 +175,8 @@ export const privacyCases = [
     id: "K-FACT-3", title: "creates a new fact for each distinct target", needs: [],
     async run(ctx) {
       const { owner } = ctx;
+      // Keep the legacy NUL-join probes for the flag-false drivers.
+      const separator = ctx.adapter.capabilities.embeddingRequiredOnInsert ? "|" : "\u0000";
       const firstText = textFact(owner, [digest("a"), digest("b")]);
       const firstIdentity = identity(owner, "test-revision");
       /** @type {Extract<Fact, {kind: "window"}>} */
@@ -199,6 +191,8 @@ export const privacyCases = [
         { ...window, anchor: "pm30min" },
         { ...identity(owner, 'c"\\\u0001'), namespace: "a,b" },
         { ...identity(owner, 'b,c"\\\u0001'), namespace: "a" },
+        { ...identity(owner, "c"), namespace: `a${separator}b` },
+        { ...identity(owner, `b${separator}c`), namespace: "a" },
         firstText,
         textFact(owner, [digest("a"), digest("c")]),
         { ...firstText, sourceMemory: { id: "test-source-a", createdAtMs: 10 } },
@@ -209,31 +203,27 @@ export const privacyCases = [
         { ...firstIdentity, throughRevision: 0 },
         { ...firstIdentity, namespace: "test-namespace" },
       ];
-      /** @type {((separator: string) => Fact[])[]} */
-      const delimiterFixtures = [(separator) => [
-        { ...identity(owner, "c"), namespace: `a${separator}b` },
-        { ...identity(owner, `b${separator}c`), namespace: "a" },
-      ]];
       if (sessionProfile(ctx) === "plain") {
         const plain = { ...factBase(owner), kind: /** @type {const} */ ("session"), session: sessionId };
-        targets.push(plain);
-        delimiterFixtures.push((separator) => [
+        targets.push(
+          plain,
           { ...plain, session: { client: `a${separator}b`, sessionId: "c" } },
           { ...plain, session: { client: "a", sessionId: `b${separator}c` } },
           // Also exercise a join that puts the ref-kind discriminator between the two fields.
           { ...plain, session: { client: `a${separator}id${separator}b`, sessionId: "c" } },
           { ...plain, session: { client: "a", sessionId: `b${separator}id${separator}c` } },
-        ]);
+        );
       }
       targets.push({ ...factBase(owner), kind: "session", session: sessionHash });
       targets.push({ ...factBase(owner), kind: "session", session: { ...sessionHash, client: "test-other-client" } });
 
-      await assertDistinctTargets(ctx, targets, delimiterFixtures);
+      await assertDistinctTargets(ctx, targets);
     },
   },
   {
     id: "K-FACT-3r", title: "creates a new fact for each distinct raw span target", needs: ["rawSpans"],
     async run(ctx) {
+      const separator = ctx.adapter.capabilities.embeddingRequiredOnInsert ? "\t" : "\u0000";
       /** @type {Extract<Fact, {kind: "rawSpan"}>} */
       const span = {
         ...factBase(ctx.owner), kind: "rawSpan", sessionKeyHash: sessionValue, messageKey: "test-message",
@@ -246,10 +236,9 @@ export const privacyCases = [
         { ...span, messageKey: "test-other-message" },
         { ...span, startUtf16: 0 },
         { ...span, endUtf16: 4 },
-      ], [(separator) => [
         { ...span, namespace: `a${separator}${sessionValue}${separator}b`, messageKey: "c" },
         { ...span, namespace: "a", messageKey: `b${separator}${sessionValue}${separator}c` },
-      ]]);
+      ]);
     },
   },
   {

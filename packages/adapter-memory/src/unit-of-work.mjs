@@ -20,7 +20,6 @@ import { addKeyedDigest, createFactStore } from "./privacy.mjs";
 /** @typedef {{topics: Map<Namespace, TopicState>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
  * rawRows: Map<string, import("./raw.mjs").RawEntry>, rawFences: Set<string>,
  * rawAnchors: Map<string, Map<string, import("./raw.mjs").AnchorSession>>,
- * rawUnfencedAnchors: Map<string, Map<string, import("./raw.mjs").AnchorSession>>,
  * claims: Map<string, ClaimRecord>, activeTokens: Map<string, string>, abandonedTokens: Set<string>, relations: Map<Namespace, RelationState>}} State */
 /** @typedef {{state: State, run: {readonly ended: boolean}, indexDirty: boolean, stateWritten: boolean, pauseLock: boolean,
  * poisoned: boolean, writeErrorCode: ErrorCode, finishes: Set<FinishResult>, writingFinishes: number,
@@ -107,7 +106,7 @@ class Owner {
   committed = {
     topics: new Map(), rows: new Map(), facts: new Map(), epoch: null, pause: { paused: false, generation: 0 }, indexRevision: 0,
     claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(), rawRows: new Map(), rawFences: new Set(),
-    rawAnchors: new Map(), rawUnfencedAnchors: new Map(), relations: new Map(),
+    rawAnchors: new Map(), relations: new Map(),
   };
   pause = new Mutex();
   write = new Mutex();
@@ -323,7 +322,7 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
         committed.pause.generation > 0 || committed.claims.size > 0 ||
         (includeTopics && (committed.topics.size > 0 || committed.indexRevision > 0)) ||
         (includeRaw && (committed.rawRows.size > 0 || committed.rawFences.size > 0 ||
-          committed.rawAnchors.size > 0 || committed.rawUnfencedAnchors.size > 0 || committed.indexRevision > 0)))
+          committed.rawAnchors.size > 0 || committed.indexRevision > 0)))
       .sort(([a], [b]) => compareUtf8(a, b))
       .map(([owner, { committed }]) => ({
         owner,
@@ -340,17 +339,14 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
           rawRows: [...committed.rawRows.values()].sort((a, b) => compareUtf8(a.ref.id, b.ref.id)),
           rawFences: [...committed.rawFences].sort(compareUtf8),
         }),
-        ...(includeRaw && (committed.rawAnchors.size > 0 || committed.rawUnfencedAnchors.size > 0) && {
-          rawAnchors: [committed.rawAnchors, committed.rawUnfencedAnchors]
-            .flatMap((index) => [...index].flatMap(([client, sessions]) =>
-              [...sessions].map(([slot, anchor]) => ({ client, slot, anchor }))))
-            .sort((a, b) => compareUtf8(a.client, b.client) || compareUtf8(a.slot, b.slot))
-            .map(({ client, anchor: { namespace, sessionId, messages } }) => ({
+        ...(includeRaw && committed.rawAnchors.size > 0 && {
+          rawAnchors: [...committed.rawAnchors].sort(([a], [b]) => compareUtf8(a, b)).flatMap(([client, sessions]) =>
+            [...sessions].sort(([a], [b]) => compareUtf8(a, b)).map(([, { namespace, sessionId, messages }]) => ({
               client, namespace, sessionId,
               messages: [...messages].sort(([a], [b]) => compareUtf8(a, b)).map(([id, digests]) => ({
                 id, digests: [...digests].sort((a, b) => compareUtf8(a ?? "", b ?? "")),
               })),
-            })),
+            }))),
         }),
         ...((includeRaw || includeTopics) && { indexRevision: committed.indexRevision }),
         ...(includeTopics && {
