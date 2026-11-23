@@ -4,16 +4,18 @@ import { CoreError, isErrorCode } from "@cairn-ink/core";
 /** @typedef {import("@cairn-ink/core/ports").Receipt} Receipt */
 /** @typedef {import("@cairn-ink/core/ports").DuplicateMerge} DuplicateMerge */
 /** @typedef {import("@cairn-ink/core/ports").DuplicateQuery} DuplicateQuery */
+/** @typedef {Omit<DuplicateQuery, "embedding"> & {embedding?: number[] | null}} CanonicalQuery */
 
 const kinds = ["fact", "preference", "decision", "instruction", "context"];
 const origins = ["explicit", "inferred"];
 const sources = ["capture", "mcp", "web", "import", "plugin"];
 const roles = ["user", "assistant"];
 
-// The intrinsic getter reads the typed-array brand across realms and ignores custom tags.
-const typedArrayTag = Object.getOwnPropertyDescriptor(
-  Object.getPrototypeOf(Float32Array.prototype), Symbol.toStringTag,
-)?.get;
+const typedArrayPrototype = Object.getPrototypeOf(Float32Array.prototype);
+const typedArrayTag = Object.getOwnPropertyDescriptor(typedArrayPrototype, Symbol.toStringTag)?.get;
+const typedArrayBuffer = Object.getOwnPropertyDescriptor(typedArrayPrototype, "buffer")?.get;
+const typedArrayOffset = Object.getOwnPropertyDescriptor(typedArrayPrototype, "byteOffset")?.get;
+const typedArrayLength = Object.getOwnPropertyDescriptor(typedArrayPrototype, "length")?.get;
 
 /** @param {unknown} value */
 const nonempty = (value) => typeof value === "string" && value.length > 0;
@@ -22,12 +24,10 @@ const nullableString = (value) => value === null || typeof value === "string";
 /** @param {unknown} value */
 const isTextHash = (value) => typeof value === "string" && /^sha256:[0-9a-f]{64}$/.test(value);
 
+/** @returns {never} */
 function invalid() {
   throw new CoreError("invalid_input");
 }
-
-/** @param {unknown} vector */
-const isFloat32 = (vector) => ArrayBuffer.isView(vector) && typedArrayTag?.call(vector) === "Float32Array";
 
 /** @param {import("@cairn-ink/core/ports").CaptureKey} key */
 export function copyCaptureKey(key) {
@@ -58,12 +58,12 @@ export function copyCaptureFailure(failure) {
 export function copyFinishItems(items) {
   if (!Array.isArray(items)) invalid();
   return Array.from(items, (item) => {
-    if (!item || (item.embedding !== null && !isFloat32(item.embedding?.vector))) invalid();
+    if (!item) invalid();
     const row = copyContent({
       kind: item.kind, origin: "inferred", text: item.content, textHash: item.textHash,
       confidence: item.confidence, source: { kind: "capture", client: null, sessionId: null },
       embedding: item.embedding,
-    });
+    }, "capture");
     return { row, receipts: copyReceipts(item.receipts) };
   });
 }
@@ -104,12 +104,43 @@ export function validateSource(source) {
     !nullableString(source.sessionId)) invalid();
 }
 
-/** @param {number[] | Float32Array} vector */
-export function validateVector(vector) {
-  if (!(Array.isArray(vector) || isFloat32(vector)) || vector.length === 0) invalid();
-  for (const component of vector) {
-    if (!Number.isFinite(component)) invalid();
+/**
+ * Capture the values once, with the input shapes accepted by each port.
+ * @param {unknown} vector
+ * @param {"memory" | "capture" | "passage" | "fact"} [format]
+ * @returns {number[]}
+ */
+export function readEmbedding(vector, format = "memory") {
+  const values = [];
+  try {
+    if (Array.isArray(vector) && format !== "capture") {
+      const length = Object.getOwnPropertyDescriptor(vector, "length")?.value;
+      if (!Number.isInteger(length) || length < 0 || length > 0xffff_ffff ||
+          !Object.is(length, Reflect.get(vector, "length"))) invalid();
+      for (let index = 0; index < length; index++) {
+        const slot = Object.getOwnPropertyDescriptor(vector, index);
+        // Keep the descriptor value. The property read only detects conflicting proxy traps.
+        if (!slot || !Object.hasOwn(slot, "value") || !Number.isFinite(slot.value) ||
+            !Object.is(slot.value, Reflect.get(vector, String(index)))) invalid();
+        values.push(slot.value);
+      }
+    } else {
+      const tag = typedArrayTag?.call(vector);
+      if (format === "fact" || (tag !== "Float32Array" && !(format === "passage" && tag === "Float64Array"))) invalid();
+      const View = tag === "Float64Array" ? Float64Array : Float32Array;
+      const length = typedArrayLength?.call(vector);
+      const view = new View(typedArrayBuffer?.call(vector), typedArrayOffset?.call(vector), length);
+      for (let index = 0; index < length; index++) {
+        const value = view[index];
+        if (!Number.isFinite(value)) invalid();
+        values.push(value);
+      }
+    }
+  } catch {
+    invalid();
   }
+  if (values.length === 0 && format !== "fact") invalid();
+  return values;
 }
 
 /** @param {number} limit */
@@ -142,18 +173,22 @@ export function validateRefs(refs) {
   }
 }
 
-/** @param {readonly DuplicateQuery[]} batch */
-export function validateDuplicateBatch(batch) {
+/** @param {readonly DuplicateQuery[]} batch @returns {CanonicalQuery[]} */
+export function copyDuplicateBatch(batch) {
   if (!Array.isArray(batch)) invalid();
-  for (const query of batch) {
-    if (!query || typeof query !== "object" || !isTextHash(query.textHash) ||
-      (query.legacyHash !== undefined && !isTextHash(query.legacyHash))) invalid();
-    if (query.embedding !== undefined && query.embedding !== null) validateVector(query.embedding);
+  const copy = [];
+  for (let index = 0, length = batch.length; index < length; index++) {
+    const query = batch[index];
+    if (!query || typeof query !== "object") invalid();
+    const { textHash, legacyHash, embedding } = query;
+    if (!isTextHash(textHash) || (legacyHash !== undefined && !isTextHash(legacyHash))) invalid();
+    copy.push({ textHash, legacyHash, embedding: embedding == null ? embedding : readEmbedding(embedding) });
   }
+  return copy;
 }
 
-/** @param {InsertRow} row */
-export function copyContent(row) {
+/** @param {InsertRow} row @param {"memory" | "capture"} [format] */
+export function copyContent(row, format = "memory") {
   validateMerge(row);
   const { kind, origin, text, textHash, confidence, source, embedding } = row;
   if (!kinds.includes(kind) || !origins.includes(origin) || !nonempty(text) ||
@@ -163,9 +198,10 @@ export function copyContent(row) {
   /** @type {{model: string, vector: number[]} | null} */
   let copy = null;
   if (embedding !== null) {
-    if (!embedding || !nonempty(embedding.model)) invalid();
-    validateVector(embedding.vector);
-    copy = { model: embedding.model, vector: Array.from(embedding.vector) };
+    if (!embedding) invalid();
+    const { model, vector } = embedding;
+    if (!nonempty(model)) invalid();
+    copy = { model, vector: readEmbedding(vector, format) };
   }
   return { kind, origin, text, textHash, confidence,
     source: { kind: source.kind, client: source.client, sessionId: source.sessionId }, embedding: copy };

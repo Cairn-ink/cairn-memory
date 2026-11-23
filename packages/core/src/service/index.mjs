@@ -5,6 +5,7 @@ import { CoreError } from "../errors.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
 import { pauseMethods } from "./pause.mjs";
 import { readMethods } from "./reads.mjs";
+import { writeMethods } from "./writes.mjs";
 
 /** @param {unknown} value */
 function positiveInteger(value) {
@@ -98,8 +99,7 @@ export function createMemoryService(input) {
     return {
       ...pauseMethods(deps.storage),
       ...readMethods(deps.storage, deps.tokens),
-      save: entry(unavailable, () => /** @type {const} */ ({ status: "invalid" })),
-      correct: placeholder,
+      ...writeMethods(deps),
       forget: placeholder,
       recall: placeholder,
       captureStatus: placeholder,

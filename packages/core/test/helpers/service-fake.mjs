@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { compareSortKey, compareUtf8, CoreError } from "@cairn-ink/core";
 
 export const hostedScope = Object.freeze({ owner: "owner", namespace: null });
@@ -27,15 +28,19 @@ function readPage(rows, { cursor, limit }) {
   };
 }
 
-export function serviceFake({ rows = [], leakForgotten = false } = {}) {
+export function serviceFake({ rows = [], leakForgotten = false, writes = false, near = false, hasKey = true } = {}) {
   let committedRows = [...rows];
   const calls = [];
+  const mutations = [];
   const owners = new Map();
   const active = new Set();
   const hooks = {};
+  let runId = 0;
+  let nextId = 0;
+  let nowMs = 100;
   function ownerState(owner) {
     if (!owners.has(owner)) {
-      owners.set(owner, { forgotten: new Set(), revision: 0, pause: { paused: false, generation: 0 } });
+      owners.set(owner, { forgotten: new Set(), revision: 0, pause: { paused: false, generation: 0 }, facts: [] });
     }
     return owners.get(owner);
   }
@@ -66,13 +71,18 @@ export function serviceFake({ rows = [], leakForgotten = false } = {}) {
         if (!options.readOnly) calls.push(["lock", "owner-write"]);
         const state = ownerState(owner);
         const tx = {
-          owner, options, rows: committedRows, revision: state.revision,
+          owner, options, rows: committedRows, revision: state.revision, facts: state.facts, runId: ++runId,
           forgotten: new Set(state.forgotten), pause: state.pause,
         };
         active.add(tx);
         try {
           const result = await run(tx);
-          if (!options.readOnly) state.pause = tx.pause;
+          if (!options.readOnly) {
+            state.pause = tx.pause;
+            state.facts = tx.facts;
+            state.revision = tx.revision;
+            committedRows = tx.rows;
+          }
           return result;
         } finally {
           active.delete(tx);
@@ -126,7 +136,7 @@ export function serviceFake({ rows = [], leakForgotten = false } = {}) {
     fence: {
       async assertVisible(tx, scope, refs) {
         record(tx, scope.owner, "fence.assertVisible", scope, refs);
-        assert.ok(tx.options.readOnly);
+        assert.ok(tx.options.readOnly || (writes && tx.options.pauseLock));
         return refs.filter(ref => !tx.forgotten.has(ref.id) && !hooks.hideAtFence?.(ref));
       },
     },
@@ -136,7 +146,7 @@ export function serviceFake({ rows = [], leakForgotten = false } = {}) {
     assert.fail("unexpected dependency call");
   }
 
-  return {
+  const fake = {
     storage, calls, hooks,
     deps: {
       storage,
@@ -161,5 +171,133 @@ export function serviceFake({ rows = [], leakForgotten = false } = {}) {
       committedRows = [...committedRows, row];
       ownerState(row.scope.owner).revision++;
     },
+    committed(owner) {
+      return { rows: committedRows.filter(row => row.scope.owner === owner), facts: ownerState(owner).facts };
+    },
+    mutations,
   };
+
+  if (writes) {
+    const encoding = new TextEncoder();
+    // The gate's marker expires after the first continuation gets a chance to start the send.
+    let dispatchReady = false;
+    fake.deps.gate.assertOpen = async (owner, phase) => {
+      assert.equal(active.size, 0, "gate outside the UoW");
+      calls.push(["gate", owner, phase]);
+      hooks.gate?.(phase);
+      if (phase === "dispatch") {
+        dispatchReady = true;
+        queueMicrotask(() => queueMicrotask(() => { dispatchReady = false; }));
+      }
+    };
+    fake.deps.embedder.embed = async texts => {
+      calls.push(["embed", [...texts]]);
+      assert.equal(active.size, 0, "embed outside the UoW");
+      assert.ok(dispatchReady, "embed starts in the dispatch continuation");
+      await hooks.embed?.();
+      return [Float32Array.of(1)];
+    };
+    fake.deps.clock.nowMs = () => ++nowMs;
+    fake.deps.clock.sha256Hex = async value => {
+      assert.equal(active.size, 0, "hash outside the UoW");
+      return createHash("sha256").update(value).digest("hex");
+    };
+    storage.capabilities.nearDuplicate = near;
+    storage.keys = {
+      async userKey(owner) {
+        assert.equal(active.size, 0, "key lookup outside the UoW");
+        calls.push(["keys.userKey", owner]);
+        if (!hasKey) return null;
+        if (hooks.userKey) return hooks.userKey(owner);
+        const signingKey = await crypto.subtle.importKey("raw", encoding.encode("fixture key for " + owner),
+          { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+        return { id: "fixture-key", signingKey };
+      },
+    };
+
+    function mutate(tx, owner, method, ...args) {
+      record(tx, owner, method, ...args);
+      assert.ok(!tx.options.readOnly);
+      mutations.push({ method, run: tx.runId, args });
+      tx.revision++;
+    }
+
+    function getRow(tx, scope, id) {
+      return tx.rows.find(row => row.id === id && row.scope.owner === scope.owner &&
+        row.scope.namespace === scope.namespace) ?? null;
+    }
+
+    function changedRow(tx, row, changes, timestamp) {
+      tx.rows = tx.rows.map(candidate => candidate === row ? {
+        ...row, ...changes, updatedAtMs: timestamp, updatedAtUs: BigInt(timestamp) * 1000n,
+      } : candidate);
+    }
+
+    Object.assign(storage.memories, {
+      async get(tx, scope, id) {
+        record(tx, scope.owner, "memories.get", scope, id);
+        return hooks.get ? hooks.get(tx, scope, id) : getRow(tx, scope, id);
+      },
+      async readWritePolicy(tx, scope, [query], source, mode, editId) {
+        record(tx, scope.owner, "memories.readWritePolicy", scope, query, source, mode, editId);
+        const matches = [];
+        const hiddenIds = [];
+        for (const row of tx.rows) {
+          if (row.scope.owner !== scope.owner || row.scope.namespace !== scope.namespace || row.id === editId) continue;
+          const exact = [query.textHash, query.legacyHash].includes(row.textHash);
+          const distance = exact ? 0 : hooks.nearDistance?.(row);
+          if (distance === undefined) continue;
+          matches.push({ id: row.id, kind: "stored", match: exact ? "exact" : "near",
+            revision: row.revision, writeTimeUs: row.updatedAtUs, distance });
+          if (tx.forgotten.has(row.id)) hiddenIds.push(row.id);
+        }
+        matches.sort((a, b) => a.distance - b.distance);
+        return { matches: [matches], hiddenIds, blockedSession: false, blockedPositions: [] };
+      },
+      async insert(tx, scope, content, receipts, timestamp) {
+        mutate(tx, scope.owner, "memories.insert", content, receipts);
+        const row = {
+          ...content, id: "inserted-" + ++nextId, scope, revision: 1, createdAtMs: timestamp,
+          updatedAtMs: timestamp, updatedAtUs: BigInt(timestamp) * 1000n,
+        };
+        tx.rows = [...tx.rows, row];
+        return row;
+      },
+      async touchDuplicate(tx, scope, id, receipts, merge, timestamp) {
+        mutate(tx, scope.owner, "memories.touchDuplicate", id, receipts, merge);
+        const row = getRow(tx, scope, id);
+        assert.ok(row);
+        changedRow(tx, row, merge, timestamp);
+        return { outcome: "touched", revision: row.revision };
+      },
+      async replaceContent(tx, scope, id, revision, next, receipts, timestamp) {
+        mutate(tx, scope.owner, "memories.replaceContent", id, revision, next, receipts);
+        const row = getRow(tx, scope, id);
+        assert.equal(row?.revision, revision);
+        await hooks.replaceContent?.();
+        changedRow(tx, row, { ...next, revision: revision + 1 }, timestamp);
+        return { outcome: "changed", revision: revision + 1 };
+      },
+    });
+    storage.suppressions = {
+      async snapshot(tx, scope, candidates) {
+        record(tx, scope.owner, "suppressions.snapshot", scope, candidates);
+        await hooks.snapshot?.();
+        return { blockedSession: false, blockedMessages: [],
+          passages: tx.facts.filter(({ fact }) => (fact.namespace ?? null) === scope.namespace) };
+      },
+      async writeFact(tx, fact, incarnation) {
+        mutate(tx, fact.owner, "suppressions.writeFact", fact, incarnation);
+        const stored = { fact, incarnation, factId: "fact-" + (tx.facts.length + 1),
+          epoch: BigInt(tx.facts.length + 1), createdAtMs: nowMs };
+        tx.facts = [...tx.facts, stored];
+        return { ...stored, created: true };
+      },
+    };
+    fake.seedFact = fact => {
+      const state = ownerState(fact.owner);
+      state.facts = [...state.facts, { fact, factId: "seed-fact", epoch: 1n, createdAtMs: nowMs, incarnation: "fixture" }];
+    };
+  }
+  return fake;
 }

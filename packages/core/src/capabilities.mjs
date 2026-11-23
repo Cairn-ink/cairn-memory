@@ -14,6 +14,7 @@ export const CAPABILITIES = Object.freeze([
   "relations", // card relations and MOC rank
   "cards", // cards and card lineage
   "documentCards", // document card storage and invalidation
+  "quantityLedger", // quantity rows and invalidation
   "episodes", // episode capture (parked: SQLite only, not in core)
   "spanLineage", // span-level raw receipt lineage (engine): resolveSpans
   "sessionLineage", // session-level message-MAC lineage with keyed content proofs (hosted)
@@ -60,6 +61,7 @@ export const OPTIONAL_PORTS = Object.freeze({
   sessionLineage: "sessionLineage",
   spanLineage: "spanLineage",
   documentCards: "documentCards",
+  quantityLedger: "quantityLedger",
 });
 
 /**

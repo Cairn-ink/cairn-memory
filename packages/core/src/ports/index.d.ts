@@ -17,6 +17,9 @@ import type { HydrateItems, LexicalCandidates, ListRawMessages, ListRecent, RawC
 import type { FingerprintKeyProvider, ForgetLog, PauseStore, RawStore, SessionLineageStore, SpanLineageStore, SuppressionStore } from "./privacy.d.ts";
 import type { TopicStore } from "./topics.d.ts";
 import type { UnitOfWork } from "./unit-of-work.d.ts";
+import type { QuantityLedgerStore } from "./quantity-ledger.d.ts";
+
+export type * from "./quantity-ledger.d.ts";
 
 /**
  * Everything a storage adapter provides. Optional members must be present exactly when
@@ -48,4 +51,5 @@ export interface StorageAdapter {
   readonly conflicts?: ConflictEdgeStore; // conflictEdges
   readonly forgetLog?: ForgetLog; // forgetLog
   readonly documentCards?: DocumentCardStore; // documentCards
+  readonly quantityLedger?: QuantityLedgerStore; // quantityLedger
 }

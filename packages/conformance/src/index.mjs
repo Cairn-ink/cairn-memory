@@ -5,6 +5,7 @@ import { unitOfWorkCases } from "./unit-of-work-cases.mjs";
 
 export { privacyCases as PRIVACY_CASES } from "./privacy-cases.mjs";
 export { captureCases as CAPTURE_CASES } from "./capture-cases.mjs";
+export { PRIVACY_MATCH_CASES } from "./privacy-match-cases.mjs";
 export { topicCases as TOPIC_CASES } from "./topics-cases.mjs";
 
 /** @type {readonly import("./index.d.mts").ConformanceCase[]} */

@@ -1,8 +1,8 @@
 import { compareUtf8 } from "@cairn-ink/core";
-import { check, equal, readDump, rejects, row } from "./support.mjs";
+import { check, equal, evidence, readDump, rejects, row } from "./support.mjs";
 
 /** @import {ErrorCode, PlacementItem} from "@cairn-ink/core" */
-/** @import {Scope, TopicStore, Tx} from "@cairn-ink/core/ports" */
+/** @import {Receipt, Scope, TopicStore, Tx} from "@cairn-ink/core/ports" */
 /** @import {CaseContext, ConformanceCase} from "./index.d.mts" */
 /** @typedef {Awaited<ReturnType<TopicStore["pending"]>>[number]} Guard */
 
@@ -16,11 +16,11 @@ function setup(ctx, scope = ctx.scope(null)) {
     placement, scope,
     /** @template T @param {(tx: Tx) => Promise<T>} fn */
     write: (fn) => uow.run(scope.owner, {}, fn),
-    /** @param {string} content @param {number} [now] @returns {Promise<Guard>} */
-    async seed(content, now = 1) {
+    /** @param {string} content @param {number} [now] @param {readonly Receipt[]} [receipts] @returns {Promise<Guard>} */
+    async seed(content, now = 1, receipts = []) {
       const next = await row(ctx, content);
       const { id, revision } = await uow.run(scope.owner, { pauseLock: true },
-        (tx) => memories.insert(tx, scope, next, [], now));
+        (tx) => memories.insert(tx, scope, next, receipts, now));
       return { memoryId: id, revision };
     },
     /** @param {Guard} guard @param {string} content */
@@ -323,5 +323,39 @@ export const topicCases = [
     }
     equal(observed, [[[null, null], [null, null]], [[null, null], [null, null]]],
       "Catalog and list must hide both titles after erasing or correcting the non-proposing memory");
+  }),
+
+  topicCase(15, "session facts hide receipt-linked members and titles", async (ctx) => {
+    const store = setup(ctx);
+    const receipt = evidence("topic-source", 1);
+    const { client, sessionId } = receipt;
+    const source = await store.seed("Title source with a receipt", 1, [receipt]);
+    const retained = await store.seed("Member without a receipt", 2);
+    const pending = await store.seed("Pending memory with a receipt", 3, [evidence("topic-pending", 3)]);
+    const { createdTopics: [created] } = await store.apply([source], [item(source, [], topic("Receipt-linked title"))]);
+    await store.apply([retained], [item(retained, [created.id])]);
+    equal((await store.list()).items.map(({ title, memberCount }) => [title, memberCount]),
+      [["Receipt-linked title", 2]], "Both members and the sourced title are initially visible");
+    equal(await store.pending(), [pending], "The unplaced receipt-linked memory is initially pending");
+
+    let session;
+    if (ctx.sessionRefs === "hashed") {
+      const sessionKeyHash = ctx.harness.hashSessionKey?.(client, sessionId);
+      check(typeof sessionKeyHash === "string" && /^[0-9a-f]{64}$/u.test(sessionKeyHash),
+        "Hashed profile requires a session hash for the fixture");
+      session = { client, sessionKeyHash };
+    } else {
+      session = { client, sessionId };
+    }
+    await ctx.harness.seedFact(ctx.owner, { ...store.scope, kind: "session", origin: "forget", actionId: crypto.randomUUID(), session });
+
+    equal((await store.members(created.id)).items.map(({ id }) => id), [retained.memoryId],
+      "A session fact must hide the receipt-linked member from members");
+    equal((await store.list()).items.map(({ id, memberCount, newestMemberIds, title }) => [id, memberCount, newestMemberIds, title]),
+      [[created.id, 1, [retained.memoryId], null]], "List must omit the suppressed member and null its sourced title");
+    equal((await store.catalog()).items.map(({ id, title }) => [id, title]), [[created.id, null]],
+      "Catalog must null the suppressed member's sourced title");
+    equal(await store.forMemory(source), [], "A suppressed member must have no visible topic ids");
+    equal(await store.pending(), [], "A suppressed memory must leave pending");
   }),
 ];

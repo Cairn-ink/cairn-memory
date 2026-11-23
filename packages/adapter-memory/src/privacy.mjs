@@ -2,6 +2,8 @@ import {
   CoreError, compareUtf8, factIncarnationBody, pauseGenerationAfter, userFingerprintKey,
   validateFingerprintLabels, validateSuppressionFact,
 } from "@cairn-ink/core";
+import { createFactMatcher } from "./fact-match.mjs";
+import { readEmbedding } from "./validation.mjs";
 
 /** @typedef {import("./index.d.mts").MemoryAdapterOptions} Options */
 /** @typedef {import("@cairn-ink/core").SuppressionFact} SuppressionFact */
@@ -16,6 +18,21 @@ export const TEST_FINGERPRINT_LABELS = Object.freeze({
 });
 
 const encoder = new TextEncoder();
+
+/** @param {SuppressionFact} fact */
+function validateFact(fact) {
+  if (fact?.kind === "text") {
+    const { text, ...fields } = fact;
+    if (text && typeof text === "object") {
+      const { embedding, ...fingerprint } = text;
+      const evidence = embedding === undefined && !Object.hasOwn(text, "embedding") ? fingerprint : {
+        ...fingerprint, embedding: embedding == null ? embedding : readEmbedding(embedding, "fact"),
+      };
+      fact = { ...fields, text: evidence };
+    }
+  }
+  return validateSuppressionFact(fact);
+}
 
 /** @param {SuppressionFact} fact */
 function factSlot(fact) {
@@ -64,25 +81,35 @@ function storeFact(getState, fact, incarnation, { newId = () => crypto.randomUUI
 
 /**
  * @param {UnitOfWork["port"]} port @param {UnitOfWork["runSeed"]} runSeed
- * @param {Pick<Options, "newId" | "now" | "sessionRefs">} options
+ * @param {Pick<Options, "newId" | "now" | "sessionRefs" | "hashSessionKey">} options
+ * @param {ReturnType<typeof createFactMatcher>} [matchFacts]
  */
-export function createFactStore(port, runSeed, options) {
+export function createFactStore(port, runSeed, options, matchFacts = createFactMatcher(false, options.hashSessionKey)) {
+  /** @param {SuppressionFact} fact @param {string} incarnation */
+  function prepareFactWrite(fact, incarnation) {
+    if (typeof incarnation !== "string" ||
+        (options.sessionRefs === "hashed" && fact.kind === "session" && "sessionId" in fact.session)) {
+      throw new CoreError("invalid_input");
+    }
+    return (/** @type {() => import("./unit-of-work.mjs").State} */ getState) =>
+      storeFact(getState, fact, incarnation, options);
+  }
+
   /** @type {import("@cairn-ink/core/ports").SuppressionStore} */
   const suppressions = {
     async writeFact(tx, fact, incarnation) {
       return port.write(tx, fact, true, () => {
-        const validated = validateSuppressionFact(fact);
-        if (typeof incarnation !== "string" ||
-            (options.sessionRefs === "hashed" && validated.kind === "session" && "sessionId" in validated.session)) {
-          throw new CoreError("invalid_input");
-        }
-        const copy = structuredClone(validated);
-        return (getState) => storeFact(getState, copy, incarnation, options);
+        const copy = structuredClone(validateFact(fact));
+        return prepareFactWrite(copy, incarnation);
       });
     },
-    // The privacy module's fact-match functions will back these reads in part b.
-    async snapshot() { throw new CoreError("capability_unavailable"); },
-    async factsFor() { throw new CoreError("capability_unavailable"); },
+    async snapshot(tx, scope, candidates) {
+      return port(tx, scope, false, (state) => matchFacts(state.facts, scope).snapshot(candidates));
+    },
+    async factsFor(tx, scope, { memoryId }) {
+      return port(tx, scope, false, (state) =>
+        matchFacts(state.facts, scope).factsFor(memoryId, state.rows.get(scope.namespace)?.get(memoryId)));
+    },
     async epoch(tx, owner) {
       return port(tx, { owner }, false, (state) => state.epoch);
     },
@@ -90,13 +117,13 @@ export function createFactStore(port, runSeed, options) {
 
   /** @param {string} owner @param {SuppressionFact} fact */
   async function seedFact(owner, fact) {
+    const validated = validateFact(fact);
+    if (validated.owner !== owner) throw new CoreError("invalid_input");
+    const copy = structuredClone(validated);
     await runSeed(owner, async (tx) => {
-      const validated = validateSuppressionFact(fact);
-      if (validated.owner !== owner) throw new CoreError("invalid_input");
-      const copy = structuredClone(validated);
       const digest = await crypto.subtle.digest("SHA-256", encoder.encode(factIncarnationBody(copy)));
       const incarnation = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-      await suppressions.writeFact(tx, copy, incarnation);
+      await port.write(tx, copy, true, () => prepareFactWrite(copy, incarnation));
     });
   }
 

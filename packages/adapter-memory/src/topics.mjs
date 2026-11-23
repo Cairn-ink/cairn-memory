@@ -3,7 +3,6 @@ import {
   memoryGuards, placementProposal, titleKey,
 } from "@cairn-ink/core";
 import { decodePayload, encodePayload, newestFirst } from "./cursor.mjs";
-import { factPolicy } from "./fact-match.mjs";
 import { writeTime } from "./memory-store.mjs";
 import { validateLimit, validateTime } from "./validation.mjs";
 
@@ -22,14 +21,14 @@ function ensureTopicState(state, scope) {
   return scoped;
 }
 
-/** @param {State} state @param {Scope} scope @param {boolean} vectorSuppression */
-function visibility(state, scope, vectorSuppression) {
+/** @param {State} state @param {Scope} scope @param {ReturnType<typeof import("./fact-match.mjs").createFactMatcher>} matchFacts */
+function visibility(state, scope, matchFacts) {
   const rows = state.rows.get(scope.namespace);
-  const policy = factPolicy(state.facts, scope, vectorSuppression);
+  const policy = matchFacts(state.facts, scope);
   /** @param {string} id */
   const current = (id) => {
-    const row = rows?.get(id)?.row;
-    return row && !row.historical && !policy.hides(row) ? row : undefined;
+    const entry = rows?.get(id);
+    return entry && !entry.row.historical && !policy.hides(entry) ? entry.row : undefined;
   };
   return {
     current,
@@ -88,9 +87,9 @@ function checkParent(topics, id, level) {
 }
 
 /** @type {typeof import("./topics.d.mts").createTopicStore} */
-export function createTopicStore(port, capabilities, newId, now) {
+export function createTopicStore(port, _flags, newId, now, matchFacts) {
   /** @param {State} state @param {Scope} scope */
-  const view = (state, scope) => visibility(state, scope, capabilities.vectorSuppression);
+  const view = (state, scope) => visibility(state, scope, matchFacts);
 
   return {
     async pending(tx, scope, { limit }) {

@@ -3,7 +3,7 @@ import { pauseGenerationAfter } from "../privacy/pause.mjs";
 import { entry, ownerOf } from "./entry.mjs";
 
 /** @param {import("../ports/privacy.d.ts").PauseState} state */
-function pauseResult(state) {
+export function pauseResult(state) {
   if (typeof state?.paused !== "boolean" || !Number.isSafeInteger(state.generation) || state.generation < 0) {
     throw new CoreError("internal_error");
   }

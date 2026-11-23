@@ -5,7 +5,9 @@ import { createFactStore } from "./privacy.mjs";
 /** @typedef {import("@cairn-ink/core/ports").Tx} Tx */
 /** @typedef {import("@cairn-ink/core/ports").Scope} Scope */
 /** @typedef {import("@cairn-ink/core/ports").Namespace} Namespace */
-/** @typedef {import("@cairn-ink/core/ports").MemoryRow & {embedding: {model: string, vector: number[]} | null, historical: boolean}} Row */
+/** @typedef {import("@cairn-ink/core/ports").MemoryRow & {
+ *   embedding: {model: string, vector: number[]} | null, historical: boolean, legacyHash?: string
+ * }} Row */
 /** @typedef {{row: Row, receipts: import("@cairn-ink/core/ports").Receipt[]}} Entry */
 /** @typedef {import("@cairn-ink/core").StoredFact} StoredFact */
 /** @typedef {import("@cairn-ink/core/ports").PauseState} PauseState */

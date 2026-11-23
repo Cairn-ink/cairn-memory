@@ -1,5 +1,6 @@
 import type { Capabilities, ErrorCode } from "@cairn-ink/core";
 import type { Revision, Topic, TopicStore } from "@cairn-ink/core/ports";
+import type { createFactMatcher } from "./fact-match.mjs";
 import type { createUnitOfWork } from "./unit-of-work.mjs";
 
 export type StoredTopic = Topic & { title: string; sources: Array<{ memoryId: string; revision: Revision }> };
@@ -11,4 +12,4 @@ export type TopicState = {
 };
 
 export function createTopicStore(port: ReturnType<typeof createUnitOfWork>["port"],
-  capabilities: Capabilities, newId: () => string, now: () => number): TopicStore;
+  flags: Capabilities, newId: () => string, now: () => number, matchFacts: ReturnType<typeof createFactMatcher>): TopicStore;

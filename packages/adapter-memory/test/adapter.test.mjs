@@ -326,7 +326,7 @@ test("validates facts, isolates namespace and revision, and excludes hidden rows
   });
 });
 
-test("uses legacy digests and ignores hashed source references", async () => {
+test("uses legacy digests and fails closed on hashed session facts without a hasher", async () => {
   const { uow, memories, harness } = createMemoryAdapter();
   const base = { owner: scope.owner, origin: "forget" };
   await harness.seedFact(scope.owner, {
@@ -342,7 +342,7 @@ test("uses legacy digests and ignores hashed source references", async () => {
     const batch = [{ textHash: otherHash, legacyHash: textHash }];
     const policy = await memories.readWritePolicy(tx, scope, batch, source, "full");
     assert.deepEqual(policy.blockedPositions, [0]);
-    assert.equal(policy.blockedSession, false);
+    assert.equal(policy.blockedSession, true);
   });
 });
 
