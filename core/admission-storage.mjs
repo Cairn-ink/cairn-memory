@@ -280,30 +280,31 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
 
 function publishCaptureAmounts(ns, entries, activeRow, putLedger) {
   const writes = new Map();
+  const now = new Date().toISOString();
   for (const { memoryId, item } of entries) {
     if (!item.quantities?.length) continue;
-    const source = amountSource(item);
-    if (!source) continue;
     const memory = activeRow(ns, memoryId);
     if (memory.currentness === 'historical') continue;
-    const sourceKey = ledgerSourceKey(source.receipt);
-    const key = JSON.stringify([memoryId, sourceKey]);
-    const write = writes.get(key) ?? { memoryId, revision: memory.revision, rows: [] };
+    const sources = amountSources(item);
     for (const quantity of item.quantities) {
-      const rows = rowsFrom(memory, memory.revision, quantity, source.time ?? memory.updated_at);
-      write.rows.push(...rows.map(row => ({ ...row, sourceKey })));
+      const matching = sources.filter(source => source.values.includes(quantity.value));
+      const source = matching.length === 1 ? matching[0] : sources[0];
+      if (!source) continue;
+      const key = JSON.stringify([memoryId, ledgerSourceKey(source.receipt)]);
+      const write = writes.get(key) ?? { memory, receipt: source.receipt, rows: [] };
+      write.rows.push(...rowsFrom(memory, memory.revision, quantity, source.time ?? now));
+      writes.set(key, write);
     }
-    writes.set(key, write);
   }
-  for (const { memoryId, revision, rows } of writes.values()) putLedger(ns, memoryId, revision, rows);
+  for (const { memory, receipt, rows } of writes.values()) putLedger(ns, memory, receipt, rows);
 }
 
-function amountSource(item) {
-  let source;
-  for (const [index, receipt] of item.receipts.entries()) {
-    if (receipt.role !== 'user') continue;
-    const time = item.ledgerEventTimes?.[index] ?? null;
-    if (!source || time && (!source.time || time > source.time)) source = { receipt, time };
-  }
-  return source;
+function amountSources(item) {
+  return item.receipts.flatMap((receipt, index) => receipt.role === 'user' ? [{ receipt,
+    time: item.ledgerEventTimes?.[index] ?? null,
+    values: (receipt.excerpt.match(/[+−-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|[+−-]?\.\d+/gu) ?? [])
+      .map(value => Number(value.replaceAll(',', '').replace('−', '-'))),
+  }] : []).sort((left, right) =>
+    Number(left.time === null) - Number(right.time === null) ||
+    (left.time ?? '').localeCompare(right.time ?? '') || left.receipt.eventId.localeCompare(right.receipt.eventId, 'en'));
 }

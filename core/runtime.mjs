@@ -1,4 +1,4 @@
-import { hasLedgerRevision, indexLedgerWrite, ledgerNamespace, ledgerSourceKey, rowsFrom, unindexLedgerMemory } from './quantity-ledger.mjs';
+import { ledgerNamespace, ledgerSourceKey, rowsFrom } from './quantity-ledger.mjs';
 import { captureSnapshot } from './capture-input.mjs';
 import { bindCommitRuntime, dispatchSynchronousCommit, withSynchronousCommitScope } from './commit-dispatch.mjs';
 import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
@@ -320,7 +320,6 @@ export function createMemoryRuntime(input, internal) {
         db.prepare(`UPDATE memories SET kind = ?, origin = ?, confidence = ?, review_state = ?,
           revision = revision + 1, updated_at = ? WHERE id = ?`)
           .run(kind, origin, confidence, reviewState, now, existing.id);
-        rebindLedger?.(ns, existing.id, existing.revision, existing.revision + 1);
       }
       const memory = memoryWriteSafety(ns,activeRow(ns, existing.id));
       const reviewEffects = existing.review_state === 'awaiting' && reviewState !== 'awaiting'
@@ -408,10 +407,10 @@ export function createMemoryRuntime(input, internal) {
       if(result.memory&&contentSuppressionReasonInside(db,ns,{kind:'memory',key:result.memory.id,revision:result.memory.revision,
         version:JSON.stringify(['memory-revision-v1',result.memory.revision])}))fail('memory_suppressed');
       if (ledgerPort) {
-        const sourceKey = ledgerSourceKey(value.receipts[0]);
+        const source = value.receipts[0];
         const rows = (value.quantities ?? []).flatMap(quantity => rowsFrom(result.memory, result.memory.revision,
-          quantity, value.receiptTimes?.[0] ?? result.memory.updated_at).map(row => ({ ...row, sourceKey })));
-        if (rows.length) putLedger(ns, id, result.memory.revision, rows);
+          quantity, value.receiptTimes?.[0] ?? result.memory.updated_at));
+        if (rows.length && source.role === 'user') putLedger(ns, result.memory, source, rows);
         else dropLedger(ns, id);
       }
       return result;
@@ -830,19 +829,17 @@ export function createMemoryRuntime(input, internal) {
     }, undefined, { deferred: true });
   }
 
-  const putLedger = ledgerPort && ((ns, id, revision, rows, fromRevision) =>
-    publishLedger(() => {
-      const namespace = ledgerNamespace(ns);
-      if (fromRevision !== undefined && !hasLedgerRevision(ledgerPort, namespace, id, fromRevision)) return;
-      ledgerPort.put(namespace, id, revision, rows, fromRevision);
-      indexLedgerWrite(ledgerPort, namespace, id, revision, rows, fromRevision);
-    }));
-  const rebindLedger = putLedger && ((ns, id, fromRevision, revision) => putLedger(ns, id, revision, [], fromRevision));
-  const dropLedger = ledgerPort && ((ns, id) => publishLedger(() => {
-    const namespace = ledgerNamespace(ns);
-    unindexLedgerMemory(ledgerPort, namespace, id);
-    ledgerPort.drop(namespace, id);
-  }));
+  const putLedger = ledgerPort && ((ns, memory, source, rows) => {
+    // Receipt IDs survive additive writes. Correction replaces the receipts,
+    // even when the replacement has the same content and source message ID.
+    const anchor = db.prepare(`SELECT id FROM receipts WHERE memory_id=? AND client=? AND session_id=?
+      AND event_id=? AND role='user' ORDER BY rowid LIMIT 1`).get(memory.id, source.client, source.sessionId, source.eventId);
+    if (!anchor) return;
+    const sourceKey = ledgerSourceKey(source);
+    const boundRows = rows.map(row => ({ ...row, sourceKey, receiptId: anchor.id }));
+    publishLedger(() => ledgerPort.put(ledgerNamespace(ns), memory.id, memory.revision, boundRows));
+  });
+  const dropLedger = ledgerPort && ((ns, id) => publishLedger(() => ledgerPort.drop(ledgerNamespace(ns), id)));
 
   const conflictStorage = createConflictStorage({ db, activeRow: currentRow, rawRow: activeRow, advanceEpoch,
     dropHeldWork: (id, reason) => dropHeldWork(db, id, reason) });
@@ -854,7 +851,7 @@ export function createMemoryRuntime(input, internal) {
   const classificationJournal = createClassificationJournalStorage({ db });
   mocStorage = createMocStorage({ db, epoch, advanceEpoch, memoryDto,
     invalidateConflicts: conflictStorage.invalidateMemory, assertIndexAvailable: indexStorage.assertAvailable,
-    rationaleStorage, receiptKey, classificationJournal, rebindLedger });
+    rationaleStorage, receiptKey, classificationJournal });
   const supersessionStorage = createSupersessionStorage({ db, activeRow: visibleRow, suppress, advanceEpoch,
     invalidateConflicts: conflictStorage.invalidateMemory, invalidateMemory: mocStorage.invalidateMemory,
     evaluateQualified: qualifiedTransitionStorage.evaluate,
@@ -947,7 +944,7 @@ export function createMemoryRuntime(input, internal) {
     supersessionStorage, receiptKey, isSuppressed });
 
   const resolveHeld = createHeldReviewResolver({ db, activeRow, supersessionStorage, conflictStorage });
-  const resolveReview = createConfirmationStorage({ db, enabled: decisionReview, activeRow, attach, forgetMutation, advanceEpoch, resolveHeld, rebindLedger,
+  const resolveReview = createConfirmationStorage({ db, enabled: decisionReview, activeRow, attach, forgetMutation, advanceEpoch, resolveHeld,
     assertConfirm(ns,row,boundRevision,result) {
       if(!cachedContentLayout(db)?.suppressionRevision)return;
       if(!row)fail('memory_suppressed');

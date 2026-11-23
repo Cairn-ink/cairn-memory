@@ -4,8 +4,8 @@ import { cardLineageItemInside, cardLineageNamespaceInside } from './card-lineag
 import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, cachedContentSuppressionRequestInside, hasContentSuppressionRequestInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
 import { contentScopeEpochGuard, assertContentScopes, contentSafetyFacade, assertContentPort, contentAuthorityPort, inertContentPortValue } from './content-safety-boundary.mjs';
 import { receiptEventTimeEnabled, cachedContentLayout } from './content-safety-schema.mjs';
-import { contentReadSafety, createContentReadMemo } from './content-safety.mjs';
-import { digest, hasLedgerIntent, ledgerNamespace, parseWindow, readIntent } from './quantity-ledger.mjs';
+import { contentReadSafety, createContentReadMemo, receiptReadSafety } from './content-safety.mjs';
+import { digest, ledgerNamespace, ledgerSourceKey, mayHaveLedgerIntent, parseWindow, readIntent } from './quantity-ledger.mjs';
 import { resolveContentLayout } from './content-safety-layout.mjs';
 import { sampleLocalStatus } from './context-read-local-status.mjs';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
@@ -781,9 +781,6 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       const rawChannel = options.rawSearch && input.raw
         ? await readRawChannel(options.rawSearch, input, token, deadlineAt) : { items: [], coverage: 'unavailable' };
       if (options.rawSearch && input.raw) access.check();
-      const ledger = options.ledgerPort && input.types.includes('memory') &&
-        hasLedgerIntent(options.ledgerPort, input.readSet, input.query) && performance.now() < deadlineAt
-        ? collectLedgerChannel(db, read, options.ledgerPort, input, deadlineAt, canonicalFence) : null;
       candidates = searched.horizon;
       searched.check(); // The horizon's search fences also cross the outer await.
       let deadline = performance.now() >= deadlineAt;
@@ -883,8 +880,8 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       // identifies an accepted trial. Minimal probes use the rejected item.
       const withoutSnapshot = compact ? new WeakSet() : null;
       // Wire-only Card projection retains canonical stored-body fences and bodyRevision.
-      const assemble = raw => assembleThreeLayerContext({ prepared: prepared.items, counter: options.counter, policy: input.policy,
-        query: input.query, readSet: input.readSet, intent: input.intent, ledgerItem: ledger?.item,
+      const assemble = (raw, ledgerItem, omittedSnapshots = withoutSnapshot) => assembleThreeLayerContext({ prepared: prepared.items, counter: options.counter, policy: input.policy,
+        query: input.query, readSet: input.readSet, intent: input.intent, ledgerItem,
         budget: input.budget, representation: input.representation, deadlineAt,
         responseBytes: datedCandidates ? ({ meteredBytes, diagnostics, selected }) => {
           const envelope = success({ metered: null, snapshot: null,
@@ -894,14 +891,15 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           const fits = completeResponseBytes(envelope, meteredBytes, value) <= CONTEXT_LIMITS.responseBytes;
           if (fits || !compact || value === null) return fits;
           if (completeResponseBytes(envelope, meteredBytes, null) > CONTEXT_LIMITS.responseBytes) return false;
-          withoutSnapshot.add(selected.at(-1));
+          omittedSnapshots.add(selected.at(-1));
           return true;
         } : undefined,
         snapshotOf: items => {
-          const value = withoutSnapshot?.has(items.at(-1)) ? null : snapshotFor(items);
+          const value = omittedSnapshots?.has(items.at(-1)) ? null : snapshotFor(items);
           return value === null ? null : encode('snapshot', value, 16384);
         } }, raw);
-      let { selected: delivered, validateRaw, ...assembled } = assemble(rawChannel);
+      let packingRaw = rawChannel;
+      let { selected: delivered, validateRaw, ...assembled } = assemble(packingRaw);
       const decorate = () => {
         const diagnostics = assembled.diagnostics;
         diagnostics.omitted.unavailable = prepared.unavailable;
@@ -914,10 +912,28 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       // Counting and authority callbacks have finished. A failed final Raw
       // validation discards the whole Raw projection, including diagnostics.
       if (!validateRaw()) {
-        ({ selected: delivered, validateRaw, ...assembled } = assemble({ items: [], coverage: 'partial' }));
+        packingRaw = { items: [], coverage: 'partial' };
+        ({ selected: delivered, validateRaw, ...assembled } = assemble(packingRaw));
         decorate(); access.check();
       }
       assembled.diagnostics.stops.deadline ||= performance.now() >= deadlineAt;
+      // Preserve the completed ordinary pack if the optional probe or packing trial cannot deliver.
+      let ledger;
+      if (options.ledgerPort && input.types.includes('memory') &&
+          mayHaveLedgerIntent(input.query) && performance.now() < deadlineAt) {
+        const optional = collectLedgerChannel(db, read, options.ledgerPort, input, deadlineAt, canonicalFence);
+        if (optional && performance.now() < deadlineAt) {
+          const { selected, validateRaw, ...trial } = assemble(packingRaw, optional.item, new WeakSet());
+          if (trial.metered.items.includes(optional.item) && !trial.diagnostics.stops.deadline &&
+              validateRaw() && performance.now() < deadlineAt) {
+            ledger = optional;
+            delivered = selected;
+            assembled = trial;
+            decorate();
+          }
+        }
+        access.check();
+      }
       const result = deepFreeze(success(assembled));
       if (bytes(result) > CONTEXT_LIMITS.responseBytes) fail('context_item_too_large');
       // No host callback, count or await follows this authoritative read.
@@ -1085,23 +1101,28 @@ function collectLedgerChannel(db, read, port, input, deadlineAt, canonicalFence)
       !readIntent(input.query, partitions.flat())) return null;
   return read(() => {
     const current = db.prepare('SELECT id, revision FROM memories WHERE owner_id=? AND scope=? AND project_id=? AND id=?');
+    const receiptById = db.prepare('SELECT * FROM receipts WHERE memory_id=? AND id=?');
     const safetyMemo = createContentReadMemo(db);
     const rows = [];
     for (const [index, partition] of partitions.entries()) {
       const ns = input.readSet[index], checked = new Map();
       for (const row of partition) {
         if (performance.now() >= deadlineAt) return null;
-        const key = JSON.stringify([row.memoryId, row.revision]);
+        if (typeof row.memoryId !== 'string' || typeof row.receiptId !== 'string') continue;
+        const key = JSON.stringify([row.memoryId, row.receiptId, row.sourceKey]);
         if (!checked.has(key)) {
           const memory = current.get(ns.ownerId, ns.scope, ns.projectId ?? '', row.memoryId);
+          const receipt = memory && receiptById.get(memory.id, row.receiptId);
           const ref = { type: 'memory', namespace: ns, memoryId: row.memoryId, revision: memory?.revision };
-          checked.set(key, memory?.id === row.memoryId && memory.revision === row.revision &&
-            contentReadSafety(db, { namespace: ns, ref, memo: safetyMemo }).allowed);
+          checked.set(key, receipt?.role === 'user' && row.sourceKey === ledgerSourceKey({ client: receipt.client,
+            sessionId: receipt.session_id, eventId: receipt.event_id }) &&
+            contentReadSafety(db, { namespace: ns, ref, memo: safetyMemo }).allowed &&
+            receiptReadSafety(db, { namespace: ns, receipt, memo: safetyMemo }).allowed);
         }
         if (checked.get(key)) rows.push(row);
       }
     }
-    if (!readIntent(input.query, rows)) return null;
+    if (!readIntent(input.query, rows.filter(row => row.kind === 'goal' || row.date >= window.from))) return null;
     const result = digest(rows, rows, window);
     return result && { item: { channel: 'ledger-v1', ...result }, fence: canonicalFence(input.readSet, ['memory']) };
   });

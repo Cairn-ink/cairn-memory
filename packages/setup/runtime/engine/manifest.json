@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "cefd1a3e0bda7986a84cf2416cb836b2ed85bc28bdb8e5842e399a52a4b090f3",
-  "bytes": 1496354,
+  "sha256": "8e86923f130a2cc5c38e930c77f4974b738594ca43517310bd9a7ace7659954b",
+  "bytes": 1496279,
   "files": [
     "LICENSE",
     "README.md",
@@ -427,14 +427,14 @@
     "core/content-write-context.mjs": "01ee9d2c14d57ed99069fe026c619d5a8bf0b537de328bf20e2da5f3b19b9999",
     "core/content-write-changes.mjs": "876f6fa7bc67c69031ef8ccc645eab9b321713803b77f9203ac30ca783e88caa",
     "core/content-write-safety.mjs": "72a00cb00058ab94280b9317ed20bda6d31914978ca349912bd2f65dca5ce32d",
-    "core/admission-storage.mjs": "89e97056631d9320d31caa996de10dbedb4297ff393c317c99f571301e787390",
+    "core/admission-storage.mjs": "7547f8df8ea847a74ac07cfe5fba6529b3aab33aa720bb74da65bbba96f8a51c",
     "core/local-authority-input.mjs": "bfce603a1081956e8d4dd790d09e8e394c0b06b20cca987980217d2e4d85a988",
     "core/local-authority-schema.mjs": "b1ff2de1a829c503dff18f425ac57942b52e3b90e9ef01aa209e06863945a3d3",
     "core/local-authority-storage.mjs": "08e66e391fa3dad257b478e335d35a5a4415dbcd8e83bc0871b4f86511347b50",
     "core/local-authority-uuid.mjs": "7c75d6e49d77ceb83d1074eb520e7436fadb26ceed949b51e007fd4bf5f0f92d",
     "core/local-authority-guard.mjs": "f6856880a3e4d9c3d4685e063fd0d6768832e721ed0ccebdf035574bb0d976c6",
     "core/confirmation-schema.mjs": "abfd7cb0f8ad71a54aae23b341a9ddb6ec4c05cf7e123690a5c58f7b4f8b1bf5",
-    "core/confirmation-storage.mjs": "1b44e65e217d92c8df6023619a4d0630a1841a894c23004a4f3cb21d1ea27aab",
+    "core/confirmation-storage.mjs": "02917ae3e6e10150def0b673ae999f1ce5601b255b8019b41770381782bf5ffa",
     "core/relation-limits.mjs": "dc4e2a2b63e526f3decc7549d49e496cf247aab4d3117c08d8fd21acd80e09cf",
     "core/episode-schema.mjs": "f69f29986233a10715f0ffb84f96212052e3072b52d69c92627a2aed9a00c549",
     "core/episode-storage.mjs": "734c3ea6b42e3a0679872908283894a3d1832a37d062010e796567229b2d974a",
@@ -493,7 +493,7 @@
     "core/context-read-bm25.mjs": "a8174fe0b187063048e386d871caba1c55b65d4d28ea5e408b2abb7eb34ee6e4",
     "core/context-read-budget.mjs": "6cfc74c62834cae31903f18b5a472b23d807f011f8be4b0f979862f9ccaa2781",
     "core/context-read-embedder.mjs": "5852e65bb1b01cae14b94536b6872ef1003707501791d38a5b7d7dbf0aedc1ec",
-    "core/context-read-facade.mjs": "70b4e531b577e64e6da570d4deb864244091e217bb325e74903d227f035f312e",
+    "core/context-read-facade.mjs": "e4a5dff35e9758894744fb4c484818e37cd85178172598527d6be6aeb9d148a4",
     "core/context-read-fusion.mjs": "6a9fe68c31a55b0b3081733ddf55407cda8ad6542317e5ba5c9b2ca495c871bd",
     "core/context-read-input.mjs": "1c13efdabbe9a84a79a905e1483b10aaa422d16db12207dfae20397385703b4f",
     "core/context-read-sidecar.mjs": "ebcb37891b562edeaa180c0c6ad60000107a0ccc24813d1dc05770576c398773",
@@ -537,7 +537,7 @@
     "core/topic-overview-input.mjs": "7c20bfe7e2e8d6c50f19a7610c046408d9ffd0faff0dd5e12b3188789a149ab2",
     "core/topic-overview-storage.mjs": "aa988ca542b10921776e2e7f5a559fef50097c22bde56afb02d26f6217fd945c",
     "core/topic-overview-worker.mjs": "cce8f887003d73f141a8aff27d3b9e9b923c83bfad25e9ce838ef7fdc3c1a947",
-    "core/moc-storage.mjs": "090bee3236d9a6b07f21f35307b750a4786ca56ac2a25f7843b29d2203fdb23b",
+    "core/moc-storage.mjs": "837c98476de15a83115dc9a80471daf683a9d86a84050e8ddfb5da82eeff1b38",
     "core/model-budget.mjs": "4becaf34eb5e18270de8a0b1df93913eb75859b76d38e1d59f5b8600be42bc9d",
     "core/model-call.mjs": "fa0498d803807db6700d43f9f1beb8b7eeb2ad22b3f246b5e64608d3a135c2b4",
     "core/model-diagnostics.mjs": "ba3cd81cbe91d826a5f5aba9ef655f6132a12e25b5bd86c5759d80c58e78dc32",
@@ -549,7 +549,7 @@
     "core/qualification-candidates.mjs": "12f52ec66fbe12e99a258525dcfe8750f4e4c7bcef5bc3ea02ce555970ce06f2",
     "core/qualification-candidates-prompt.mjs": "3aaf3527643a728da8ff2090fcfefc61a12ae2a815d6195adb57c72558f23ea7",
     "core/qualification-text-catalog.mjs": "d4593f67661ad790ccb79b875b26ebfd87da416c4b5fdba9c06650043098e965",
-    "core/quantity-ledger.mjs": "92dfe26e6e0431ace500a92a97f00310420d4dc28aab7ccef223cfd71b64496b",
+    "core/quantity-ledger.mjs": "5bb3d996d2318aaec451b446cb615e6b1ba1b254638a4bea00efdefa223a6a0c",
     "core/query-candidates.mjs": "9564d53daea476ac0b83839ea039ca8554a6bc584046023b626a3a38c5f9cf65",
     "core/query-excerpt.mjs": "952cdc3ff88f3a57181188565ce1bbe89b6ff1f5eaa2870d7ef4a295739a4265",
     "core/qualified-transition-schema.mjs": "acbc489570626d41409c89321f2a48ad600603aa11dab775c3d7e440951b3f58",
@@ -564,7 +564,7 @@
     "core/prompts/relate-rationale.md": "b00cc2511e7e01d6507f9d13abf6115b315cca8208866a5e15721b6bee212615",
     "core/prompts/relate-claim-focus.md": "17ba366ce9d34f9cef84ad4fea20ba86a9399ff9a34afcd7b4e900cefca332ec",
     "core/recall.mjs": "0cd71707502e3f144f2f26b5a358e7aaeb10a663796ef3d31b74ff75422b6174",
-    "core/runtime.mjs": "50d0070c25cc563e763ec7913e0c8d8306de63fb217ce3a901fa87e6fd8873ae",
+    "core/runtime.mjs": "4a5d261780bb916fa49e2940a207269fbb9868a0db38b7f8ff95e4a8134a037a",
     "core/supersession-storage.mjs": "59c029d9a166300d48aa0bf02df882a9c764263a859b2226e1e64db3c796db31",
     "core/validation.mjs": "fb8fa11ee5951ebd2c6bd0b67e3b528ca7cacfd95cd7ddefc22c242a71e1aa0d",
     "core/suppression-content.mjs": "a3d47ffc353c079ba1b1e35cbb506bd7bbb661f3d2ea89562ce7e6e914aaff98",
@@ -840,6 +840,6 @@
   "generatedHashes": {
     "package.json": "981551a6c99e5f8c55b8e3a44d71240280eba4f0913fe0917b3b43f5c622586b",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8",
-    "engine-build.json": "b347e929dff2c5a5a4b902095b39ba5e5d3484a9d7419165d248667e2fb958eb"
+    "engine-build.json": "5c353a3090f561a3f5875d3dd7b5cf179219a2fba64a235fd757d6288a7f6969"
   }
 }

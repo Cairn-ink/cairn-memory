@@ -116,7 +116,7 @@ the memory is true. [All tools and parameters](docs/standalone-mcp.md#tools)
 
 Without a model key there are no extracted memories or quantity ledger. Keyword search still finds saved conversations and manually saved memories.
 
-A durable ledger adapter must write quantity rows in the same transaction as the memory, because SQLite does not store the quantities and a lost row cannot be replayed.
+A durable ledger adapter must preserve previously stored rows when a write fails because SQLite does not store quantities and cannot replay the failed write.
 
 ## How it works
 
