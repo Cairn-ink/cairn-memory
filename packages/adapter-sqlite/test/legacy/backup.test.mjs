@@ -1,16 +1,17 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { chmodSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
 import { openMemoryCore } from '../../../../core/index.mjs';
 import { assertLegacyBackupCanServe, createLegacyBackup, verifyLegacyBackup,
   verifyLegacyBackupAgainstSource } from '../../src/legacy/backup.mjs';
-import { editFixture, fixture, namespace, quiescence, receipt, scratch } from './fixtures.mjs';
+import { addFixtureCard, editFixture, fixture, namespace, quiescence, receipt, scratch } from './fixtures.mjs';
 
-async function archiveInput(t, physical = 29) {
+async function archiveInput(t, physical = 29, options) {
   const directory = scratch(t);
-  const { path, storeId: expectedStoreId } = await fixture(directory, physical);
+  const { path, storeId: expectedStoreId } = await fixture(directory, physical, options);
   return { path, expectedStoreId, backupDirectory: join(directory, 'archive'), quiescence };
 }
 
@@ -45,17 +46,20 @@ test('refuses copy without the cold barrier or if source or destination proof is
   await assert.rejects(createLegacyBackup(input), { code: 'legacy_backup_exists' });
 });
 
-test('rejects SQL integrity, logical content and byte proof mismatches', async t => {
+for (const [physical, state] of [[52, 'draft'], [53, 'confirmed']]) {
+  test(`refuses to back up physical ${physical} with a headerless ${state} Card`, async t => {
+    const input = await archiveInput(t, physical, { lineage: true });
+    addFixtureCard(input.path, 'headerless-card', state);
+    await assert.rejects(createLegacyBackup(input), { name: 'LegacyRefusal', code: 'legacy_incomplete' });
+    assert.throws(() => verifyLegacyBackup(input), { code: 'legacy_backup_unpublished' });
+  });
+}
+
+test('rejects SQL integrity and byte proof mismatches', async t => {
   const input = await archiveInput(t);
   const proof = await createLegacyBackup(input);
   const proofPath = join(input.backupDirectory, 'proof.json');
-  const copy = join(input.backupDirectory, 'store.sqlite');
-  const restoreProof = () => writeFileSync(proofPath, JSON.stringify(proof));
   writeFileSync(proofPath, JSON.stringify({ ...proof, byteDigest: '0'.repeat(64) }));
-  assert.throws(() => verifyLegacyBackup(input), { code: 'legacy_integrity_mismatch' });
-  restoreProof();
-  // This changes logical content without damaging SQLite or the expected schema.
-  editFixture(copy, db => db.exec("INSERT INTO suppressed VALUES ('fixture-owner','personal','',lower(hex(zeroblob(32))) )"));
   assert.throws(() => verifyLegacyBackup(input), { code: 'legacy_integrity_mismatch' });
 
   // A database written with FK checks off can look physically healthy.
@@ -64,6 +68,23 @@ test('rejects SQL integrity, logical content and byte proof mismatches', async t
       'fixture-event','user','synthetic orphan','fixture-time');`));
   await assert.rejects(createLegacyBackup({ ...input, backupDirectory: input.backupDirectory + '-invalid' }),
     { code: 'legacy_integrity_mismatch' });
+});
+
+test('rejects a logical mismatch with a matching byte proof', async t => {
+  const input = await archiveInput(t);
+  editFixture(input.path, db => db.exec(`
+    INSERT INTO episode_controls VALUES ('fixture-owner','personal','','fixture-generation',1,0,0);
+  `));
+  const proof = await createLegacyBackup(input);
+  const copy = join(input.backupDirectory, 'store.sqlite');
+  editFixture(copy, db => {
+    const result = db.prepare("UPDATE episode_controls SET enabled = 1 WHERE owner_id = 'fixture-owner' AND enabled = 0").run();
+    assert.equal(result.changes, 1);
+  });
+  const byteDigest = createHash('sha256').update(readFileSync(copy)).digest('hex');
+  assert.notEqual(byteDigest, proof.byteDigest);
+  writeFileSync(join(input.backupDirectory, 'proof.json'), JSON.stringify({ ...proof, byteDigest }));
+  assert.throws(() => verifyLegacyBackup(input), { code: 'legacy_integrity_mismatch' });
 });
 
 for (const physical of [29, 48]) {

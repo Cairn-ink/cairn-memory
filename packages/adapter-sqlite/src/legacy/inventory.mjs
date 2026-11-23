@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { verifyCardLineageCommitmentsInside } from '../../../../core/card-lineage.mjs';
 import { APPLICATION_ID } from '../../../../core/database.mjs';
 import { contentSafetyInventory } from '../../../../core/content-safety-migration.mjs';
 import { cardLineageRevision, receiptEventTimeEnabled } from '../../../../core/content-safety-schema.mjs';
@@ -21,7 +22,7 @@ function readIdentity(db, expectedStoreId) {
   }
   const storeId = identifier(stores[0].store_id);
   if (expectedStoreId !== undefined && storeId !== expectedStoreId) throw new LegacyRefusal('legacy_foreign_store');
-  return storeId;
+  return { storeId, cursorSecret: stores[0].cursor_secret };
 }
 
 function assertIntegrity(db) {
@@ -31,6 +32,16 @@ function assertIntegrity(db) {
   const foreignKeys = db.prepare('PRAGMA foreign_key_check');
   foreignKeys.setReadBigInts(true);
   if (foreignKeys.get()) throw new LegacyRefusal('legacy_integrity_mismatch');
+}
+
+function assertCurrentCardLineage(db, identity) {
+  // Apply the migration's current-body rule with the reader's commitment check.
+  // A verified header may still describe unknown historical ancestry.
+  const cards = db.prepare(`SELECT id, owner_id AS ownerId, scope, NULLIF(project_id, '') AS projectId
+    FROM private_cards WHERE state IN ('draft', 'confirmed')`);
+  for (const { id, ownerId, scope, projectId } of cards.iterate()) {
+    verifyCardLineageCommitmentsInside(db, identity, { ownerId, scope, projectId }, id);
+  }
 }
 
 // A content-safety owner fence is the end of a contiguous unsigned 64-bit
@@ -171,11 +182,13 @@ export function readLegacySnapshot(path, { expectedStoreId, digest = false } = {
     const { user_version: physical } = db.prepare('PRAGMA user_version').get();
     assertLegacyLayout(physical);
     const { layout, localRawPrivacy } = attestLegacySchema(db, physical);
-    const storeId = readIdentity(db, expectedStoreId);
+    const identity = readIdentity(db, expectedStoreId);
     assertIntegrity(db);
+    const lineageRevision = cardLineageRevision(layout);
+    if (lineageRevision === 1) assertCurrentCardLineage(db, identity);
     const inventory = Object.freeze({
-      ...layout, storeId, complete: true, localRawPrivacy,
-      cardLineageRevision: cardLineageRevision(layout),
+      ...layout, storeId: identity.storeId, complete: true, localRawPrivacy,
+      cardLineageRevision: lineageRevision,
       receiptEventTime: receiptEventTimeEnabled(layout),
       privacy: readPrivacy(db, layout, localRawPrivacy),
     });

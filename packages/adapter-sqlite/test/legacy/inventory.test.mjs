@@ -5,7 +5,7 @@ import test from 'node:test';
 import { openMemoryCore } from '../../../../core/index.mjs';
 import { inventoryLegacyStore } from '../../src/legacy/inventory.mjs';
 import { assertForwardTarget, assertLegacyOpen, LEGACY_LAYOUTS, LEGACY_RULES, LegacyRefusal } from '../../src/legacy/refusal.mjs';
-import { editFixture, fixture, namespace, receipt, scratch } from './fixtures.mjs';
+import { addFixtureCard, editFixture, fixture, namespace, receipt, scratch } from './fixtures.mjs';
 
 const refusal = code => ({ name: 'LegacyRefusal', code });
 
@@ -43,6 +43,39 @@ test('physical 53 independently attests event time and card lineage', async t =>
   assert.deepEqual([time.physical, time.cardLineageRevision, time.receiptEventTime, time.localRawPrivacy], [53, 0, true, false]);
   assert.deepEqual([lineage.physical, lineage.cardLineageRevision, lineage.receiptEventTime, lineage.localRawPrivacy], [53, 1, false, true]);
   assert.throws(() => assertLegacyOpen(lineage, { ...time, storeId: lineage.storeId }), refusal('legacy_cross_version'));
+});
+
+for (const physical of [52, 53]) {
+  for (const state of ['draft', 'confirmed']) {
+    test(`physical ${physical} refuses a current ${state} Card without a provenance header`, async t => {
+      const { path } = await fixture(scratch(t), physical, { lineage: true });
+      assert.equal(inventoryLegacyStore(path).complete, true);
+      addFixtureCard(path, 'headerless-card', state);
+      editFixture(path, db => {
+        assert.equal(db.prepare('PRAGMA integrity_check').get().integrity_check, 'ok');
+        assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
+      });
+      assert.throws(() => inventoryLegacyStore(path), refusal('legacy_incomplete'));
+    });
+  }
+}
+
+test('refuses a current Card with a mismatched provenance commitment', async t => {
+  const { path } = await fixture(scratch(t), 52, { lineage: true });
+  editFixture(path, db => {
+    const header = db.prepare('SELECT completeness, origin FROM card_body_provenance').get();
+    assert.equal(header.completeness, 'unknown');
+    assert.equal(header.origin, 'legacy-unknown');
+  });
+  assert.equal(inventoryLegacyStore(path).complete, true);
+  editFixture(path, db => db.exec(`
+    UPDATE private_cards SET body_revision = 2, body = 'Synthetic revised body' WHERE id = 'migrated-card';
+    INSERT INTO card_body_provenance
+      SELECT owner_id, scope, project_id, card_kind, card_id, 2, 1, body_digest, provenance_digest,
+        completeness, origin, source_count, authorization_action
+      FROM card_body_provenance WHERE card_id = 'migrated-card' AND body_revision = 1;
+  `));
+  assert.throws(() => inventoryLegacyStore(path), refusal('legacy_incomplete'));
 });
 
 test('reports retained forget, Raw seal, hashed fence and pause evidence without exposing payloads', async t => {
@@ -143,9 +176,11 @@ test('refuses unsafe paths and journal companions without creating a database or
   const hardlink = join(directory, 'alias-hard.sqlite');
   linkSync(path, hardlink);
   assert.throws(() => inventoryLegacyStore(path), refusal('legacy_unsafe_path'));
-  const writableParent = join(directory, 'shared');
-  mkdirSync(writableParent, { mode: 0o755 });
-  assert.throws(() => inventoryLegacyStore(join(writableParent, 'ignored.sqlite')), refusal('legacy_unsafe_path'));
+  const sharedParent = join(directory, 'shared');
+  mkdirSync(sharedParent, { mode: 0o700 });
+  const { path: sharedPath } = await fixture(sharedParent, 18);
+  chmodSync(sharedParent, 0o755);
+  assert.throws(() => inventoryLegacyStore(sharedPath), refusal('legacy_unsafe_path'));
   const legacy = await fixture(directory, 18);
   chmodSync(legacy.path, 0o644);
   assert.throws(() => inventoryLegacyStore(legacy.path), refusal('legacy_unsafe_path'));

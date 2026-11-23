@@ -54,6 +54,7 @@ export async function fixture(directory, physical, { localPrivacy = false, linea
 
   if (lineage) {
     // The real lineage maintenance path accepts the non-attested safety cell.
+    addFixtureCard(path, 'migrated-card', 'draft');
     const backupPath = join(directory, 'maintenance.sqlite');
     copyFileSync(path, backupPath);
     await migrateCardLineage({ path, backupPath, expected: { storeId, base, suppressionDomain }, quiescence });
@@ -65,6 +66,13 @@ export function editFixture(path, work) {
   const db = new DatabaseSync(path);
   try { return work(db); }
   finally { db.close(); }
+}
+
+export function addFixtureCard(path, id, state) {
+  editFixture(path, db => db.prepare(`INSERT INTO private_cards
+    (id, owner_id, scope, project_id, revision, state, title, body, body_revision, created_at, updated_at, confirmed_at)
+    VALUES (?, 'fixture-owner', 'personal', '', 1, ?, 'Synthetic title', 'Synthetic body', 1,
+      'fixture-time', 'fixture-time', ?)`).run(id, state, state === 'confirmed' ? 'fixture-time' : null));
 }
 
 export const namespace = Object.freeze({ ownerId: 'fixture-owner', scope: 'personal', projectId: null });
