@@ -12,14 +12,8 @@ import { readCursor, readSet, readStateToken, recentPage } from "./reads.mjs";
 /** @typedef {import("../ports/common.d.ts").ItemRef} ItemRef */
 /** @typedef {import("../ports/common.d.ts").MemoryRow} MemoryRow */
 
-/** @param {string} query */
-async function queryDigest(query) {
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(query));
-  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
-}
-
 /** @param {import("./index.d.mts").MemoryServiceDeps} deps */
-export function recallMethod({ storage, embedQuery, gate, diagnostics }) {
+export function recallMethod({ storage, embedQuery, gate, diagnostics, clock }) {
   const { uow, snapshot, lexical, vector, capabilities, hydrate, fence } = storage;
 
   return entry(async (input, raw, options) => {
@@ -30,7 +24,9 @@ export function recallMethod({ storage, embedQuery, gate, diagnostics }) {
     if (requestedLimit !== undefined && typeof requestedLimit !== "number") throw new CoreError("invalid_input");
     if (mode !== "search" && mode !== "plugin") throw new CoreError("invalid_input");
     const limit = pageLimit(requestedLimit);
-    const binding = ["recall-v2", scope.owner, scope.namespace, await queryDigest(query), mode, limit];
+    // Refuse an unsupported search before any dependency call, as the other placeholders do.
+    if (query && (!lexical || !hydrate)) throw new CoreError("capability_unavailable");
+    const binding = ["recall-v2", scope.owner, scope.namespace, await clock.sha256Hex(query), mode, limit];
 
     if (!query) {
       const position = readCursor(cursor, binding, 1);

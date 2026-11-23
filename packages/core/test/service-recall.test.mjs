@@ -271,7 +271,7 @@ for (const route of ["recent", "blank recall"]) {
   test(`${route} omits a forget committed after the recent page read`, async () => {
     const gone = memory("gone", { updatedAtUs: 2000n });
     const older = memory("older");
-    const fake = serviceFake({ rows: [gone, older] });
+    const fake = serviceFake({ rows: [gone, older], recall: route === "blank recall" });
     const service = createMemoryService(fake.deps);
     fake.hooks.afterRecentPage = ({ items }) => {
       assert.deepEqual(items, [gone]);

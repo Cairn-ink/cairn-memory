@@ -202,6 +202,10 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
   }
 
   if (recall) {
+    fake.deps.clock.sha256Hex = async value => {
+      assert.equal(active.size, 0, "hash outside the UoW");
+      return createHash("sha256").update(value).digest("hex");
+    };
     const refOf = row => ({ type: "memory", id: row.id, namespace: row.scope.namespace });
     storage.lexical = {
       async lexical(tx, scope, query, depth, options) {
