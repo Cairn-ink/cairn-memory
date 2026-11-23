@@ -3,7 +3,7 @@ import { cosineDistance } from "./cosine.mjs";
 import { decodeCursor, encodeCursor, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
 import { addKeyedDigest } from "./privacy.mjs";
-import { copyPublicRow } from "./unit-of-work.mjs";
+import { copyPublicRow, retireTopicTitleSources } from "./unit-of-work.mjs";
 import {
   attachReceipts, copyContent, copyDuplicateBatch, copyMerge, copyReceipts, validateLimit, validateMemoryId,
   validateSource, validateTime, writeNamespace,
@@ -281,10 +281,11 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
         validateMemoryId(id);
         const namespace = writeNamespace(scope);
         return (getState) => {
-          const { rows } = getState();
+          const { rows, topics } = getState();
           const entries = rows.get(namespace);
           if (!entries?.delete(id)) return false;
           if (!entries.size) rows.delete(namespace);
+          retireTopicTitleSources(topics.get(namespace), id);
           return true;
         };
       });

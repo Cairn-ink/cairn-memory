@@ -35,6 +35,20 @@ export function copyPublicRow({ digests: _digests, ...row }) {
   return structuredClone(row);
 }
 
+/** @param {TopicState | undefined} scoped @param {string} memoryId */
+export function retireTopicTitleSources(scoped, memoryId) {
+  let changed = false;
+  for (const { sources } of scoped?.topics.values() ?? []) {
+    const source = sources.find((entry) => entry.memoryId === memoryId);
+    if (source && source.revision !== 0) {
+      // Memory revisions start at 1, even when an ID is reused.
+      source.revision = 0;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 /**
  * Handle the promise exposed by each queued write, including async wrappers around the queue.
  * The caller still observes the rejection and the run retains the first state-level error.
