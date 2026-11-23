@@ -18,6 +18,8 @@ export interface ModelRequest {
   input: unknown;
   /** Strict JSON schema for structured output, when the stage uses one. */
   schema?: object;
+  /** Structured-output format name sent verbatim (engine convention: `cairn_${method}`). */
+  schemaName?: string;
   maxOutputTokens: number;
 }
 

@@ -3,7 +3,9 @@ import type { Tx } from "./unit-of-work.d.ts";
 
 /**
  * A read set: one owner, one or more namespaces fused into one ranking (engine: personal +
- * project; hosted: [null]). Canonical ties order by (namespace bytes, type, id bytes).
+ * project; hosted: [null]). After fusion, core orders ties canonically by (namespace bytes, type,
+ * id bytes) under its preset. Within a lexical candidate list, tie order is store-defined
+ * (scores are store-specific); vector candidates order by distance, updatedAtUs desc, id desc.
  */
 export interface RetrievalScope {
   owner: OwnerId;
