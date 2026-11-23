@@ -336,12 +336,17 @@ export const PRIVACY_MATCH_CASES = [
       await ctx.harness.seedFact(ctx.owner, {
         ...factBase(ctx, "global-window"), kind: "window", client: null, window: { startMs: 30, endMs: 40 }, unknownTime: true,
       });
+      const key = ctx.adapter.capabilities.fingerprintKey ? await ctx.adapter.keys?.userKey(ctx.owner) : null;
+      await seedText(ctx, "incomparable", "exact", { digests: [{ ...digests[0], alg: "hmac", keyId: key?.id ?? "test-key" }] });
       await uow.run(ctx.owner, { readOnly: true }, async (tx) => {
         const other = await suppressions.snapshot(tx, scope, { client: otherClient, occurredAtMs });
         equal(other.blockedMessages, [4, 5], "All-client window must block inside and unknown times");
         equal(other.blockedSession, false, "Window matching without a session must leave the session open");
         const noClient = await suppressions.snapshot(tx, scope, { occurredAtMs });
         equal(noClient.blockedMessages, [], "Snapshot window matching requires a client");
+        const incomparable = await suppressions.snapshot(tx, scope, { passages });
+        equal(new Set(incomparable.passages.map(({ fact }) => fact.actionId)), new Set(["matching-text", "incomparable"]),
+          "Snapshot must retain an ineligible passage fact");
       });
     },
   },

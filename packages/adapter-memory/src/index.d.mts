@@ -20,7 +20,7 @@ export type MemoryAdapter = Pick<StorageAdapter, "capabilities" | "uow" | "memor
   "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "suppressions" | "pause" | "keys" | "placement"> & {
   name: "memory";
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;
-  harness: TestHarness & Required<Pick<TestHarness, "setFingerprintSecret" | "advanceClock">>;
+  harness: TestHarness & Required<Pick<TestHarness, "setFingerprintSecret" | "rowsMissingKeyedDigest" | "advanceClock">>;
 };
 
 /** Public fixtures for the reference adapter's tests. Unsuitable for production. */

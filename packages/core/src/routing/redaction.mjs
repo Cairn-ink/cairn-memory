@@ -95,24 +95,25 @@ function captureMasks(text) {
 }
 
 /** @param {string} original @param {string} normalized @param {Span[]} masks
+ * @param {(text: string) => string} normalize
  * @returns {Span[] | null}
  */
-function normalizeMasks(original, normalized, masks) {
+function normalizeMasks(original, normalized, masks, normalize) {
   let offset = 0;
   let mappedLength = 0;
   const parts = [];
   /** @type {Span[]} */
   const mapped = [];
   for (const [start, end] of masks) {
-    const prefix = normalizeDocumentText(original.slice(offset, start));
-    const secret = normalizeDocumentText(original.slice(start, end));
+    const prefix = normalize(original.slice(offset, start));
+    const secret = normalize(original.slice(start, end));
     mappedLength += prefix.length;
     mapped.push([mappedLength, mappedLength + secret.length]);
     mappedLength += secret.length;
     parts.push(prefix, secret);
     offset = end;
   }
-  parts.push(normalizeDocumentText(original.slice(offset)));
+  parts.push(normalize(original.slice(offset)));
   // A normalization that crosses a mask boundary has no verified projection.
   return parts.join("") === normalized ? mapped : null;
 }
@@ -128,26 +129,41 @@ function maskBody(body, masks) {
   return parts.join("") + body.slice(offset);
 }
 
-/** @param {string} content @param {boolean} [trimLines] */
-export function redactDocumentText(content, trimLines = false) {
-  let body = normalizeDocumentText(content);
+/** @param {string} content @param {(text: string) => string} normalize @param {boolean} [trimLines] */
+function redactText(content, normalize, trimLines = false) {
+  let body = normalize(content);
   /** @type {Span[]} */
   let originalMasks = [];
   if (body !== content) {
     const traced = captureMasks(content);
-    const mapped = traced && normalizeMasks(content, body, traced.masks);
+    const mapped = traced && normalizeMasks(content, body, traced.masks, normalize);
     if (!mapped) return null;
     originalMasks = mapped;
   }
   for (let round = 0; round <= MAX_ROUNDS; round++) {
     const traced = captureMasks(body);
     if (!traced) return null;
-    const masked = maskBody(body, [...originalMasks, ...traced.masks]);
-    const cleaned = normalizeDocumentText(cleanContent(redactSecrets(masked)));
+    const masks = [...originalMasks, ...traced.masks];
+    const masked = masks.length === 0 ? body : maskBody(body, masks);
+    const cleaned = normalize(cleanContent(redactSecrets(masked)));
     const next = trimLines ? cleaned.split("\n").map(line => line.trimEnd()).join("\n") : cleaned;
     if (traced.stable && masked === body && next === body) return body;
     body = next;
     originalMasks = [];
   }
   return null;
+}
+
+/** @param {string} content @param {boolean} [trimLines] */
+export function redactDocumentText(content, trimLines = false) {
+  return redactText(content, normalizeDocumentText, trimLines);
+}
+
+/** @param {string} text */
+export function redactAmendmentText(text) {
+  try {
+    return redactText(cleanContent(text), text => text.normalize("NFKC"));
+  } catch {
+    return null;
+  }
 }

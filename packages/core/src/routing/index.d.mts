@@ -72,29 +72,6 @@ export type DocumentCardBuild =
 
 export declare function buildDocumentCard(message: DocumentMessage, session: DocumentSession): Promise<DocumentCardBuild>;
 
-/** Bump when the search text changes to invalidate indexes and embeddings. */
-export declare const DOCUMENT_CARD_SEARCH_TEXT_VERSION: 1;
-
-/** Exact text for indexing and embedding. The stored title and body are already redacted. */
-export declare function documentCardSearchText(card: { title: string | null; body: string }): string;
-
-export interface DocumentCardFindItem {
-  type: "card";
-  id: string;
-  title: string | null;
-  date: number | null;
-  excerpt: string;
-  /** True when the selected line was clipped. */
-  truncated: boolean;
-}
-
-/** Selects a matching line and clips it to maxChars Unicode code points (positive integer, default 240). */
-export declare function documentCardFindItem(
-  card: Pick<DocumentCardFindItem, "id" | "title" | "date"> & { body: string },
-  query: string,
-  options?: { maxChars?: number },
-): DocumentCardFindItem;
-
 export interface DocumentPieceOptions {
   maxTokens: number;
   countTokens: (text: string) => number;
@@ -143,3 +120,27 @@ export declare function rankDocumentCards(
 ): DocumentCardMatch | null;
 
 export * from "./visibility.mjs";
+export * from "./amendments.mjs";
+
+/** Bump when the search text changes to invalidate indexes and embeddings. */
+export declare const DOCUMENT_CARD_SEARCH_TEXT_VERSION: 1;
+
+/** Exact text for indexing and embedding. The stored title and body are already redacted. */
+export declare function documentCardSearchText(card: { title: string | null; body: string }): string;
+
+export interface DocumentCardFindItem {
+  type: "card";
+  id: string;
+  title: string | null;
+  date: number | null;
+  excerpt: string;
+  /** True when the selected line was clipped. */
+  truncated: boolean;
+}
+
+/** Selects a matching line and clips it to maxChars Unicode code points (positive integer, default 240). */
+export declare function documentCardFindItem(
+  card: Pick<DocumentCardFindItem, "id" | "title" | "date"> & { body: string },
+  query: string,
+  options?: { maxChars?: number },
+): DocumentCardFindItem;

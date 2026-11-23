@@ -5,6 +5,7 @@ import { CoreError } from "./errors.mjs";
 // unless the caller explicitly requires it (then: capability_unavailable).
 export const CAPABILITIES = Object.freeze([
   "nearDuplicate", // vector near-duplicate collapse on write (distance NEAR_DUPLICATE_DISTANCE)
+  "embeddingRequiredOnInsert", // inserts and content replacements require an embedding
   "vectorSuppression", // forget hides vector neighbours within SUPPRESSION_DISTANCE
   "shingleSuppression", // keyed 4-char shingle containment withholds passages
   "fingerprintKey", // a per-owner fingerprint key is configured (HMAC facts, shingles)
