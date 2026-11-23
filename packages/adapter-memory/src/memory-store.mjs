@@ -3,13 +3,16 @@ import { cosineDistance } from "./cosine.mjs";
 import { decodeCursor, encodeCursor, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
 import {
-  attachReceipts, copyContent, copyMerge, copyReceipts, validateDuplicateBatch, validateLimit, validateMemoryId,
+  attachReceipts, copyContent, copyDuplicateBatch, copyMerge, copyReceipts, validateLimit, validateMemoryId,
   validateSource, validateTime, writeNamespace,
 } from "./validation.mjs";
 
 /** @typedef {import("@cairn-ink/core/ports").DuplicateQuery} DuplicateQuery */
 /** @typedef {import("@cairn-ink/core/ports").MemoryMatch} MemoryMatch */
 /** @typedef {import("@cairn-ink/core/ports").MemoryStore} MemoryStore */
+/** @import { InsertRow, Receipt, Scope, SourceRef, Tx } from "@cairn-ink/core/ports" */
+/** @import { CanonicalQuery } from "./validation.mjs" */
+/** @typedef {ReturnType<typeof copyContent>} CopiedContent */
 /** @typedef {import("./unit-of-work.mjs").Row} Row */
 /** @typedef {import("./unit-of-work.mjs").Entry} Entry */
 /** @typedef {{match: "exact" | "near", distance: number}} MatchQuality */
@@ -78,12 +81,18 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
     return namespace ? [...namespace.values()] : [];
   }
 
-  /** @param {typeof port.writeFromFinish} write @returns {Pick<MemoryStore, "insert" | "touchDuplicate">} */
-  function memoryWrites(write) {
+  /**
+   * @template {InsertRow} T
+   * @param {typeof port.writeFromFinish} write
+   * @param {(row: T) => CopiedContent} prepareContent
+   * @returns {{insert: (tx: Tx, scope: Scope, row: T, receipts: readonly Receipt[], nowMs: number) =>
+   *   ReturnType<MemoryStore["insert"]>, touchDuplicate: MemoryStore["touchDuplicate"]}}
+   */
+  function memoryWrites(write, prepareContent) {
     return {
       async insert(tx, scope, row, receipts, nowMs) {
         return write(tx, scope, () => {
-          const content = copyContent(row);
+          const content = prepareContent(row);
           const evidence = attachReceipts([], copyReceipts(receipts));
           validateTime(nowMs);
           const namespace = writeNamespace(scope);
@@ -128,29 +137,13 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
     };
   }
 
-  /** @type {MemoryStore} */
-  const memories = {
-    ...memoryWrites((tx, scope, prepare) => port.write(tx, scope, true, prepare)),
-
-    async findDuplicates(tx, scope, batch, options) {
+  const policyReads = {
+    /** @param {Tx} tx @param {Scope} scope @param {() => readonly CanonicalQuery[]} prepareBatch
+     * @param {SourceRef} source @param {"hash" | "full"} mode @param {string} [editId]
+     */
+    readWritePolicy(tx, scope, prepareBatch, source, mode, editId) {
       return port(tx, scope, false, (state) => {
-        validateDuplicateBatch(batch);
-        if (!options || typeof options !== "object" || !Number.isFinite(options.nearDistance) || options.nearDistance < 0 ||
-          (options.excludeId !== undefined && typeof options.excludeId !== "string")) throw new CoreError("invalid_input");
-        const { nearDistance, excludeId } = options;
-        const policy = matchFacts(state.facts, scope);
-        const rows = entriesIn(state.rows.get(scope.namespace))
-          .filter((entry) => entry.row.id !== excludeId && !policy.hides(entry)).map(({ row }) => row);
-        return matches(rows, batch, nearDistance);
-      });
-    },
-
-    async readWritePolicy(tx, scope, batch, source, mode, editId) {
-      return port(tx, scope, false, (state) => {
-        validateDuplicateBatch(batch);
-        validateSource(source);
-        if ((mode !== "hash" && mode !== "full") ||
-          (editId !== undefined && typeof editId !== "string")) throw new CoreError("invalid_input");
+        const batch = prepareBatch();
         const policy = matchFacts(state.facts, scope);
         const namespace = state.rows.get(scope.namespace);
         const entries = entriesIn(namespace).filter(({ row }) => row.id !== editId);
@@ -175,6 +168,34 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           blockedSession: policy.blocksSession(source.client, source.sessionId),
         };
       });
+    },
+  };
+
+  /** @type {MemoryStore} */
+  const memories = {
+    ...memoryWrites((tx, scope, prepare) => port.write(tx, scope, true, prepare), copyContent),
+
+    async findDuplicates(tx, scope, queries, options) {
+      return port(tx, scope, false, (state) => {
+        const batch = copyDuplicateBatch(queries);
+        if (!options || typeof options !== "object" || !Number.isFinite(options.nearDistance) || options.nearDistance < 0 ||
+          (options.excludeId !== undefined && typeof options.excludeId !== "string")) throw new CoreError("invalid_input");
+        const { nearDistance, excludeId } = options;
+        const policy = matchFacts(state.facts, scope);
+        const rows = entriesIn(state.rows.get(scope.namespace))
+          .filter((entry) => entry.row.id !== excludeId && !policy.hides(entry)).map(({ row }) => row);
+        return matches(rows, batch, nearDistance);
+      });
+    },
+
+    async readWritePolicy(tx, scope, batch, source, mode, editId) {
+      return policyReads.readWritePolicy(tx, scope, () => {
+        const queries = copyDuplicateBatch(batch);
+        validateSource(source);
+        if ((mode !== "hash" && mode !== "full") ||
+          (editId !== undefined && typeof editId !== "string")) throw new CoreError("invalid_input");
+        return queries;
+      }, source, mode, editId);
     },
 
     async readRevision(tx, scope, id) {
@@ -256,5 +277,12 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
     },
   };
 
-  return { memories, finishWrites: memoryWrites(port.writeFromFinish), counters: () => ({ nearSkippedUnembedded }) };
+  // Finish already snapshots its items before entering the queue.
+  const finishWrites = memoryWrites(port.writeFromFinish, (/** @type {CopiedContent} */ row) => row);
+  /** @param {Tx} tx @param {Scope} scope @param {readonly CanonicalQuery[]} batch
+   * @param {SourceRef} source @param {"hash" | "full"} mode */
+  function readWritePolicy(tx, scope, batch, source, mode) {
+    return policyReads.readWritePolicy(tx, scope, () => batch, source, mode);
+  }
+  return { memories, finishWrites, readWritePolicy, counters: () => ({ nearSkippedUnembedded }) };
 }

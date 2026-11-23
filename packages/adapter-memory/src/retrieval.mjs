@@ -2,7 +2,7 @@ import { CoreError, compareUtf8, createBM25, rankScores, scoreBM25, termFrequenc
 import { cosineDistance } from "./cosine.mjs";
 import { decodePayload, decodeSortKey, encodePayload, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
-import { validateLimit, validateReadSet, validateRefs, validateVector } from "./validation.mjs";
+import { readEmbedding, validateLimit, validateReadSet, validateRefs } from "./validation.mjs";
 
 /** @typedef {import("@cairn-ink/core/ports").StorageAdapter} StorageAdapter */
 /** @typedef {import("@cairn-ink/core/ports").RetrievalScope} RetrievalScope */
@@ -125,16 +125,16 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
       return port(tx, scope, false, (state) => {
         validateReadSet(scope);
         validateLimit(depth);
-        validateVector(query);
+        const queryVector = readEmbedding(query);
         if (typeof model !== "string" || !model) throw new CoreError("invalid_input");
 
         const visible = visibleRows(state, scope);
         const rows = [];
         for (const row of visible) {
           const { embedding } = row;
-          if (embedding?.model !== model || embedding.vector.length !== query.length) continue;
+          if (embedding?.model !== model || embedding.vector.length !== queryVector.length) continue;
           // Treat a zero vector as orthogonal so every matching embedding is ranked.
-          const distance = cosineDistance(query, embedding.vector) ?? 1;
+          const distance = cosineDistance(queryVector, embedding.vector) ?? 1;
           rows.push({ ref: memoryRef(row), distance, updatedAtUs: row.updatedAtUs });
         }
         rows.sort((a, b) => a.distance - b.distance || newestFirst(

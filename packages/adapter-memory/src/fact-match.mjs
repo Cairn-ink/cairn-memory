@@ -1,9 +1,10 @@
 import { factBlocksIncoming, factHidesRow, PRIVACY_REDACTION_VERSIONS } from "@cairn-ink/core";
-import { isFloat32Vector } from "./validation.mjs";
+import { readEmbedding } from "./validation.mjs";
 
 /** @import { FactMatchIncoming, FactMatchPolicy, FactMatchRow, StoredFact, SuppressionFact, TextDigest, TextFact } from "@cairn-ink/core" */
 /** @import { DuplicateQuery, Scope, SourceRef, SuppressionStore } from "@cairn-ink/core/ports" */
 /** @import { Entry, State } from "./unit-of-work.mjs" */
+/** @import { CanonicalQuery } from "./validation.mjs" */
 
 /** @param {string} hash */
 function digestValue(hash) {
@@ -26,36 +27,53 @@ function digestsFor({ textHash, legacyHash }) {
   return digests;
 }
 
-/** @template T @param {T} embedding */
-function projectEmbedding(embedding) {
-  return isFloat32Vector(embedding) ? Array.from(Float32Array.prototype.values.call(embedding)) : embedding;
+/** @param {object} input @param {PropertyKey} key */
+function evidenceDescriptor(input, key) {
+  try {
+    return Object.getOwnPropertyDescriptor(input, key);
+  } catch {
+    // Core rejects accessor descriptors without calling them.
+    return { get: () => undefined };
+  }
 }
 
 /** @param {FactMatchIncoming["passages"]} passages @returns {FactMatchIncoming["passages"]} */
 function projectPassages(passages) {
+  let length;
   try {
     if (!Array.isArray(passages)) return passages;
-    const slots = Object.getOwnPropertyDescriptors(/** @type {object} */ (passages));
-    let changed = false;
-    for (const slot of Object.values(slots)) {
-      const passage = slot.value;
-      if (passage == null || typeof passage !== "object" || Array.isArray(passage)) continue;
-      const embedding = Object.getOwnPropertyDescriptor(passage, "embedding");
-      const vector = projectEmbedding(embedding?.value);
-      if (embedding && vector !== embedding.value) {
-        // Preserve the input descriptors so core still rejects accessor-based evidence.
-        slot.value = Object.defineProperties({}, {
-          ...Object.getOwnPropertyDescriptors(passage),
-          embedding: { ...embedding, value: vector },
-        });
-        changed = true;
+    length = evidenceDescriptor(passages, "length")?.value;
+  } catch {
+    return [{ digests: [] }];
+  }
+  if (!Number.isInteger(length) || length < 0 || length > 0xffff_ffff) return [{ digests: [] }];
+  const copy = new Array(length);
+  for (let index = 0; index < length; index++) {
+    const slot = evidenceDescriptor(passages, index);
+    if (!slot) continue;
+    const passage = slot.value;
+    if (passage != null && typeof passage === "object") {
+      let isRecord;
+      try {
+        isRecord = !Array.isArray(passage);
+      } catch {
+        isRecord = false;
+      }
+      if (isRecord) {
+        // Preserve descriptor-based validation of every other field in core.
+        const record = {};
+        for (const key of ["digests", "shingles", "keyId", "embedding"]) {
+          const field = evidenceDescriptor(passage, key);
+          if (!field) continue;
+          if (key === "embedding" && field.value != null) field.value = readEmbedding(field.value, "passage");
+          Object.defineProperty(record, key, field);
+        }
+        slot.value = record;
       }
     }
-    return changed ? Object.defineProperties([], slots) : passages;
-  } catch {
-    // Let core classify malformed projections using its normal fail-closed rules.
-    return passages;
+    Object.defineProperty(copy, index, slot);
   }
+  return copy;
 }
 
 /** @template {SuppressionFact["kind"]} K @param {StoredFact} stored @param {K} kind
@@ -83,7 +101,7 @@ export function createFactMatcher(vectorSuppression, hashSessionKey) {
       /** @type {FactMatchRow} */
       const candidate = {
         type: "memory", scope, memoryId: row.id, revision: row.revision,
-        digests: digestsFor(row), embedding: projectEmbedding(row.embedding?.vector),
+        digests: digestsFor(row), embedding: row.embedding?.vector,
       };
       /** @param {StoredFact} stored */
       return (stored) => {
@@ -112,13 +130,12 @@ export function createFactMatcher(vectorSuppression, hashSessionKey) {
         return scoped.length > 0 && scoped.some(rowMatcher(entry));
       },
 
-      /** @param {DuplicateQuery} query @param {"hash" | "full"} mode
+      /** @param {CanonicalQuery} query @param {"hash" | "full"} mode
        * @param {FactMatchIncoming["sourceMemory"]} sourceMemory
        */
       blocks(query, mode, sourceMemory) {
         if (texts.length === 0) return false;
-        const embedding = query.embedding == null ? query.embedding : Array.from(query.embedding);
-        const passages = [{ digests: digestsFor(query), shingles: null, keyId: null, embedding }];
+        const passages = [{ digests: digestsFor(query), shingles: null, keyId: null, embedding: query.embedding }];
         return texts.some((stored) => factBlocksIncoming(stored, { scope, passages, sourceMemory },
           { ...policy, mode: mode === "hash" ? "explicitSave" : "capture" }) !== false);
       },
@@ -127,6 +144,7 @@ export function createFactMatcher(vectorSuppression, hashSessionKey) {
 
       /** @param {Parameters<SuppressionStore["snapshot"]>[2]} candidates */
       snapshot({ client, sessionId, occurredAtMs, passages }) {
+        const projected = passages === undefined ? undefined : projectPassages(passages);
         const blockedMessages = [];
         if (client != null && occurredAtMs) {
           const windows = scoped.filter((stored) => isKind(stored, "window"));
@@ -142,7 +160,7 @@ export function createFactMatcher(vectorSuppression, hashSessionKey) {
         return {
           blockedSession: blocksSession(client ?? null, sessionId ?? null),
           blockedMessages,
-          passages: structuredClone(passages === undefined ? texts : matchingPassages(texts, passages)),
+          passages: structuredClone(projected === undefined ? texts : matchingPassages(texts, projected)),
         };
       },
 
@@ -157,7 +175,7 @@ export function createFactMatcher(vectorSuppression, hashSessionKey) {
     /** @param {StoredFact<TextFact>[]} stored @param {FactMatchIncoming["passages"]} passages */
     function matchingPassages(stored, passages) {
       if (stored.length === 0) return [];
-      const incoming = { scope, passages: projectPassages(passages) };
+      const incoming = { scope, passages };
       return stored.filter((fact) => factBlocksIncoming(fact, incoming, capture) !== false);
     }
   };
