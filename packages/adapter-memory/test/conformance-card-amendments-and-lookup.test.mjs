@@ -26,7 +26,7 @@ test("forCards validates and snapshots the caller batch before accessing state",
   const scope = { owner: "owner", namespace: null };
   const tx = { owner: scope.owner, readOnly: true };
   const ids = ["second", "first"];
-  const entries = new Map(ids.map((id) => [id, { card: { contentHash: id, sourceMemories: [] } }]));
+  const entries = new Map(ids.map((id) => [id, { card: { contentHash: id, sourceMemories: [], stale: [] } }]));
   const cardOutcomes = new Map(ids.map((id) => [id, { contentHash: id, memberships: new Map() }]));
   const state = { rows: new Map(), documentCards: new Map([[null, entries]]), topics: new Map([[null, { cardOutcomes }]]) };
   let reads = 0;

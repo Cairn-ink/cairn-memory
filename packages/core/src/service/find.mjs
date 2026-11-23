@@ -83,7 +83,8 @@ export function findMethod(deps) {
   });
 }
 
-/** @param {import("../ports/index.d.ts").StorageAdapter} storage @returns {MemoryService["read"]} */
+/** @param {Pick<import("../ports/index.d.ts").StorageAdapter, "uow" | "hydrate" | "fence">} storage
+ * @returns {MemoryService["read"]} */
 export function readMethod({ uow, hydrate, fence }) {
   return entry(async (input, target) => {
     const scope = scopeOf(input);

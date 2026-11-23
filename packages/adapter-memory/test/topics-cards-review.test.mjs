@@ -152,6 +152,22 @@ test('a router card with a historical source is skipped so a healthy import can 
   assert.deepEqual(await f.pendingCards(), []);
 });
 
+test('a stored stale marker excludes a card from placement even with current links', async () => {
+  const f = fixture();
+  const topicId = await f.topic();
+  const { id, revision } = await f.insert('Current source for the marked note', 'b');
+  const card = { ...imported('marked-stale'), sourceMemories: [{ id, revision }] };
+  await f.put(card);
+  assert.deepEqual(await f.pendingCards(), [guard(card)]);
+
+  await f.write((tx) => f.documentCards.markStale(tx, personal, card.id, {
+    memoryId: id, replacementMemoryId: 'successor',
+  }));
+
+  assert.deepEqual(await f.pendingCards(), []);
+  await assert.rejects(f.applyCard(card, topicId), { code: 'revision_conflict' });
+});
+
 test('reverting a replacement cannot revive the old card placement or failure', async () => {
   const f = fixture();
   const topicId = await f.topic();

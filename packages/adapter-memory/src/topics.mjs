@@ -2,6 +2,7 @@ import {
   CoreError, ERROR_CODES, coalesceNewTopics, compareCatalogTopics, compareSortKey, compareUtf8, isErrorCode,
   memoryGuards, placementProposal, titleKey, uniqueIds,
 } from "@cairn-ink/core";
+import { documentCardStaleness } from "@cairn-ink/core/routing";
 import { decodePayload, encodePayload, newestFirst } from "./cursor.mjs";
 import { writeTime } from "./memory-store.mjs";
 import { dropMemoryPlacement } from "./unit-of-work.mjs";
@@ -9,6 +10,7 @@ import { snapshotArray, validateCardId, validateLimit, validateMemoryId, validat
 
 /** @import {PlacementProposal} from "@cairn-ink/core" */
 /** @import {Scope, StoredDocumentCardRecord, Topic, TopicStore} from "@cairn-ink/core/ports" */
+/** @import {DocumentCardMemoryState} from "@cairn-ink/core/routing" */
 /** @import {State} from "./unit-of-work.mjs" */
 /** @import {CardOutcome, Failure, Outcome, StoredTopic, TopicState} from "./topics.d.mts" */
 /** @typedef {{id: string, updatedAtUs: bigint}} Member */
@@ -118,13 +120,16 @@ export function dropCardPlacement(state, namespace, cardId) {
   scoped?.cardFailures.delete(cardId);
 }
 
-/** @param {Pick<StoredDocumentCardRecord, "sourceMemories">} card
+/** @param {Pick<StoredDocumentCardRecord, "sourceMemories" | "stale">} card
  * @param {ReturnType<typeof visibility>["current"]} current */
-function cardSourcesAreCurrent(card, current) {
-  return card.sourceMemories.every((source) => {
+function cardIsStale(card, current) {
+  /** @type {Map<string, DocumentCardMemoryState>} */
+  const memoryStates = new Map();
+  for (const source of card.sourceMemories) {
     const row = source && current(source.id);
-    return !!row && row.revision === source.revision;
-  });
+    if (row) memoryStates.set(source.id, { status: "visible", revision: row.revision });
+  }
+  return documentCardStaleness({ card, memoryStates });
 }
 
 /** @param {readonly string[]} callerIds @param {import("@cairn-ink/core").ErrorCode} code */
@@ -173,7 +178,7 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
   async function visibleCardAt(state, scope, cardId, contentHash, current) {
     const card = state.documentCards.get(scope.namespace)?.get(cardId)?.card;
     return card?.contentHash === contentHash &&
-      cardSourcesAreCurrent(card, current) &&
+      !cardIsStale(card, current) &&
       await cardVisible(state, scope, card);
   }
 
@@ -226,7 +231,7 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
         return [...(state.documentCards.get(namespace)?.values() ?? [])]
           .flatMap(({ card, createdAtMs }) => {
             if (!card || scoped?.cardOutcomes.get(card.id)?.contentHash === card.contentHash ||
-                !cardSourcesAreCurrent(card, current)) return [];
+                cardIsStale(card, current)) return [];
             const failure = scoped?.cardFailures.get(card.id);
             return failure?.contentHash !== card.contentHash || mayRetry(failure, () => nowMs ??= now())
               ? [{ cardId: card.id, contentHash: card.contentHash, createdAtMs }] : [];
