@@ -37,7 +37,7 @@ export interface DocumentCardStalenessInput {
   memoryStates: DocumentCardMemoryStates;
 }
 
-/** True also on uncertain revision evidence. Check visibility independently. */
+/** True for stale entries, changed revisions, or any source state other than current and visible. */
 export declare function documentCardStaleness(input: DocumentCardStalenessInput): boolean;
 
 export interface StaleReplacementInput {
@@ -58,7 +58,9 @@ export interface StaleReplacement {
 export declare function resolveStaleReplacement(input: StaleReplacementInput): StaleReplacement | null;
 
 export interface DocumentCardSourceWithheldInput {
-  /** Raw match projections covering the whole source message, before any span is removed. */
+  /** Full source message length in Raw's UTF-16 coordinates before any span is removed. */
+  sourceLengthUtf16: number;
+  /** Raw projections for one source in span order, with no gaps or overlaps. */
   rawRows: readonly Extract<FactMatchRow, { type: "raw" }>[] | null;
   /** Complete applicable fact set from the same snapshot, or null if unknown. */
   facts: readonly StoredFact[] | null;

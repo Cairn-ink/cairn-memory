@@ -65,8 +65,7 @@ export function documentCardStaleness(input) {
     for (const source of card.sourceMemories) {
       if (!nonempty(source?.id) || !natural(source.revision)) return true;
       const state = memoryStates.get(source.id);
-      if ((state?.status !== "visible" && state?.status !== "historical") ||
-          state.revision !== source.revision) return true;
+      if (state?.status !== "visible" || state.revision !== source.revision) return true;
     }
     return false;
   } catch {
@@ -104,17 +103,24 @@ export function resolveStaleReplacement(input) {
 /** @param {DocumentCardSourceWithheldInput} input */
 export function documentCardSourceWithheld(input) {
   try {
-    const { rawRows, facts, sourceExcluded, policy } = input;
-    if (sourceExcluded !== false || !Array.isArray(rawRows) || !rawRows.length || !Array.isArray(facts)) return true;
+    const { rawRows, sourceLengthUtf16, facts, sourceExcluded, policy } = input;
+    if (sourceExcluded !== false || !natural(sourceLengthUtf16) || sourceLengthUtf16 === 0 ||
+        !Array.isArray(rawRows) || !rawRows.length || !Array.isArray(facts)) return true;
+    const source = rawRows[0];
+    let coveredUntil = 0;
     for (const row of rawRows) {
       if (row?.type !== "raw" || !validScope(row.scope) || !nonempty(row.messageKey) ||
           !nonempty(row.sessionKeyHash) || !/^[0-9a-f]{64}$/u.test(row.sessionKeyHash) ||
-          !natural(row.startUtf16) || !natural(row.endUtf16) || row.endUtf16 <= row.startUtf16) return true;
+          row.startUtf16 !== coveredUntil || !natural(row.endUtf16) ||
+          row.endUtf16 <= coveredUntil || row.endUtf16 > sourceLengthUtf16) return true;
+      if (row.scope.owner !== source.scope.owner || row.scope.namespace !== source.scope.namespace ||
+          row.sessionKeyHash !== source.sessionKeyHash || row.messageKey !== source.messageKey) return true;
       for (const fact of facts) {
         if (factHidesRow(fact, row, policy) !== false) return true;
       }
+      coveredUntil = row.endUtf16;
     }
-    return false;
+    return coveredUntil !== sourceLengthUtf16;
   } catch {
     return true;
   }
