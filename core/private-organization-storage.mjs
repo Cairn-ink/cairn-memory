@@ -253,7 +253,12 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
       if (cachedContentLayout(db)?.suppressionRevision && ['member','unfiled'].includes(row.kind)) {
         const id=row.kind==='member'?row.b:row.a;
         if(!contentReadSafety(db,{identity,namespace:ns,method:'getCard',memo:safetyMemo,
-          ref:{type:'card',namespace:ns,cardId:id,revision:row.card_revision,bodyRevision:row.body_revision}}).allowed)fail('evidence_unavailable');
+          ref:{type:'card',namespace:ns,cardId:id,revision:row.card_revision,bodyRevision:row.body_revision}}).allowed) {
+          // Retained membership rows still consume their physical page offset.
+          if (row.kind === 'member' && db.prepare(`SELECT 1 FROM private_cards WHERE ${where} AND id=?
+            AND state IN ('deleted','cancelled')`).get(...marks, id)) continue;
+          fail('evidence_unavailable');
+        }
       }
       if (withheld.has(row.kind === 'member' ? row.b : row.kind === 'unfiled' ? row.a : undefined)) continue;
       scanned++;

@@ -437,42 +437,52 @@ export function beginContentWriteSafety(db, operation) {
       if(!source||!origin||origin.deleted||!ns||JSON.stringify(boundary(namespace(origin)))!==JSON.stringify(boundary(ns)))fail('evidence_unavailable');
       sourceAuthority.assertReceipts(ns,[{client:origin.client,sessionId:origin.session_key,eventId:source.message_id,role:source.role,excerpt:source.text}]);
     }
-    function check(kind,key,ns,revision,extra={},audit=false) {
+    function check(kind,key,ns,revision,extra={},audit=false,titleSource=false) {
       if(key===null||key===undefined)return;
       if(typeof key!=='string'||!key)fail('evidence_unavailable');
       const found=locate(kind,key);ns=ns??found.ns;
       if(!ns||!ceilings.has(ns.ownerId)||found.ns&&JSON.stringify(boundary(found.ns))!==JSON.stringify(boundary(ns)))fail('evidence_unavailable');
-      if(terminal.has(JSON.stringify([...boundary(ns),kind,key])))return;
-      const boundRevision=revision??found.row?.revision;
-      const version=Number.isSafeInteger(boundRevision)?kind==='memory'?JSON.stringify(['memory-revision-v1',boundRevision]):kind==='submitted-note'?JSON.stringify(['note-v1',boundRevision]):undefined:undefined;
-      const target={kind,key,revision:boundRevision,version,...extra};
-      if(ownTerminal(ns,target))return;
-      if(audit&&newFacts.some(f=>contentSuppressionTargetMatches(f,ns,target)))return;
-      if(!found.row)fail('evidence_unavailable');
-      if(lineage&&kind==='card'&&automaticallyInvalidatedCard(key,ns))return;
-      if(contentSuppressionReasonInside(db,ns,target))fail('evidence_unavailable');
-      if(kind==='card'&&engineRetiredCard(key,ns))return;
-      const stamp=JSON.stringify([kind,key,ns,revision,extra,audit]);if(checked.has(stamp))return;checked.add(stamp);
-      if(kind==='card'&&automaticallyInvalidatedCard(key,ns))return;
-      if(kind==='memory'||kind==='card'){
-        const publicNs={...ns,projectId:ns.projectId||null},ref={type:kind,namespace:publicNs,[kind==='memory'?'memoryId':'cardId']:key,revision:found.row.revision,
-          ...(kind==='card'?{bodyRevision:found.row.body_revision}:{})};
-        if(!contentReadSafety(db,{identity,namespace:publicNs,ref,intent:'history',method:kind==='card'?'getCard':'retrieval'}).allowed)fail('evidence_unavailable');
-        // Acknowledgements may project these anchors after storage returns.
-        // Validate their canonical contributors before this transaction commits.
-        if(kind==='memory')for(const table of ['procedural_tags','qualification_anchors'])if(exists(table))for(const row of db.prepare('SELECT * FROM '+table+' WHERE memory_id=?').all(key)){
-          if(table==='procedural_tags'&&row.anchors)walk(JSON.parse(row.anchors),ns,'anchors');
-          if(table==='qualification_anchors')check('receipt',row.receipt_id,ns);
+      const checkedBefore = checked.size, seenBefore = seen.size;
+      try {
+        if(terminal.has(JSON.stringify([...boundary(ns),kind,key])))return;
+        const boundRevision=revision??found.row?.revision;
+        const version=Number.isSafeInteger(boundRevision)?kind==='memory'?JSON.stringify(['memory-revision-v1',boundRevision]):kind==='submitted-note'?JSON.stringify(['note-v1',boundRevision]):undefined:undefined;
+        const target={kind,key,revision:boundRevision,version,...extra};
+        if(ownTerminal(ns,target))return;
+        if(audit&&newFacts.some(f=>contentSuppressionTargetMatches(f,ns,target)))return;
+        if(!found.row)fail('evidence_unavailable');
+        if(lineage&&kind==='card'&&automaticallyInvalidatedCard(key,ns))return;
+        if(contentSuppressionReasonInside(db,ns,target))fail('evidence_unavailable');
+        if(kind==='card'&&engineRetiredCard(key,ns))return;
+        const stamp=JSON.stringify([kind,key,ns,revision,extra,audit]);if(checked.has(stamp))return;checked.add(stamp);
+        if(kind==='card'&&automaticallyInvalidatedCard(key,ns))return;
+        if(kind==='memory'||kind==='card'){
+          const publicNs={...ns,projectId:ns.projectId||null},ref={type:kind,namespace:publicNs,[kind==='memory'?'memoryId':'cardId']:key,revision:found.row.revision,
+            ...(kind==='card'?{bodyRevision:found.row.body_revision}:{})};
+          if(!contentReadSafety(db,{identity,namespace:publicNs,ref,intent:'history',method:kind==='card'?'getCard':'retrieval'}).allowed)fail('evidence_unavailable');
+          // Acknowledgements may project these anchors after storage returns.
+          // Validate their canonical contributors before this transaction commits.
+          if(kind==='memory')for(const table of ['procedural_tags','qualification_anchors'])if(exists(table))for(const row of db.prepare('SELECT * FROM '+table+' WHERE memory_id=?').all(key)){
+            if(table==='procedural_tags'&&row.anchors)walk(JSON.parse(row.anchors),ns,'anchors');
+            if(table==='qualification_anchors')check('receipt',row.receipt_id,ns);
+          }
+        }else if(kind==='receipt'){
+          const memory=found.parent;
+          if(!memory)fail('evidence_unavailable');
+          const publicNs={...ns,projectId:ns.projectId||null};
+          if(!contentReadSafety(db,{identity,namespace:publicNs,intent:'history',ref:{type:'memory',namespace:publicNs,memoryId:memory.id,revision:memory.revision},receipts:[found.row]}).allowed)fail('evidence_unavailable');
+        }else if(kind==='submitted-note'){
+          const row=found.row,publicNs={...ns,projectId:ns.projectId||null},ref={type:kind,namespace:publicNs,sourceId:key,revision:row.revision,completeness:'provided-note',
+            contentIdentity:createHmac('sha256',identity.cursorSecret).update(JSON.stringify(['submitted-note-content-v1',[identity.storeId,[publicNs,row.id,row.revision,row.text]]])).digest('base64url')};
+          if(!sourceReadSafety(db,{identity,namespace:publicNs,ref}).allowed)fail('evidence_unavailable');
         }
-      }else if(kind==='receipt'){
-        const memory=found.parent;
-        if(!memory)fail('evidence_unavailable');
-        const publicNs={...ns,projectId:ns.projectId||null};
-        if(!contentReadSafety(db,{identity,namespace:publicNs,intent:'history',ref:{type:'memory',namespace:publicNs,memoryId:memory.id,revision:memory.revision},receipts:[found.row]}).allowed)fail('evidence_unavailable');
-      }else if(kind==='submitted-note'){
-        const row=found.row,publicNs={...ns,projectId:ns.projectId||null},ref={type:kind,namespace:publicNs,sourceId:key,revision:row.revision,completeness:'provided-note',
-          contentIdentity:createHmac('sha256',identity.cursorSecret).update(JSON.stringify(['submitted-note-content-v1',[identity.storeId,[publicNs,row.id,row.revision,row.text]]])).digest('base64url')};
-        if(!sourceReadSafety(db,{identity,namespace:publicNs,ref}).allowed)fail('evidence_unavailable');
+      } catch (error) {
+        if (!titleSource || error?.code !== 'evidence_unavailable' || !retiredTopicTitleSource(db,kind,found.row,ns,revision)) throw error;
+        // Recursive checks mark visits before descending. A failed title
+        // check must leave no marks that could excuse a later reference.
+        discardVisitsAfter(checked, checkedBefore);
+        discardVisitsAfter(seen, seenBefore);
+        dependentMemo = undefined;
       }
     }
     function metadataIdentity(table,key,ns) {
@@ -482,8 +492,10 @@ export function beginContentWriteSafety(db, operation) {
       if(bound&&contentSuppressionReasonInside(db,bound))fail('evidence_unavailable');
       if(table==='mocs'||table==='card_mocs') {
         const card=table==='card_mocs',kind=card?'card':'memory',prefix=card?'card_moc':'moc';
-        for(const member of db.prepare('SELECT * FROM '+prefix+'_title_sources WHERE moc_id=?').all(key))
-          check(kind,member[card?'card_id':'memory_id'],bound,member[card?'card_revision':'memory_revision']);
+        for(const member of db.prepare('SELECT * FROM '+prefix+'_title_sources WHERE moc_id=?').all(key)) {
+          const id=member[card?'card_id':'memory_id'],revision=member[card?'card_revision':'memory_revision'];
+          check(kind,id,bound,revision,{},false,true);
+        }
       }
     }
     function mocIdentity(key,ns) {
@@ -781,4 +793,19 @@ function indexIncarnationFacts(facts) {
       return writerOnly ? writer === true : writer !== undefined;
     }),
   };
+}
+
+function discardVisitsAfter(visits, size) {
+  if (visits.size === size) return;
+  let index = 0;
+  for (const visit of visits) if (index++ >= size) visits.delete(visit);
+}
+
+function retiredTopicTitleSource(db, kind, row, ns, revision) {
+  // A stale title may have several sources. Only a proven retirement excuses
+  // this binding; each remaining live source still needs its usual read proof.
+  if (!row || row.owner_id !== ns.ownerId || row.scope !== ns.scope || row.project_id !== ns.projectId) return false;
+  if (kind === 'memory') return row.deleted === 1 || row.revision > revision;
+  return row.state === 'deleted' || row.state === 'cancelled' ||
+    row.state === 'confirmed' && row.revision > revision && engineCardMetadataInside(db, ns, row)?.revision === revision;
 }

@@ -194,9 +194,9 @@ hosted MCP endpoint, the Codex rules and the plugin's privacy contract.
   saved. This can hide an unrelated conversation and miss a related one, so use
   `raw delete` to remove a specific conversation.
 - **Uninstalling.** `npx @cairn-ink/memory uninstall --local` disconnects the
-  tools and keeps your data on disk. A running background server exits about
-  30 seconds after its last session closes. Uninstalling Cloud keeps your
-  memories on cairn.ink.
+  tools and keeps your data on disk. On Linux, a full uninstall that removes the
+  engine first asks any running shared server for that store to stop. Uninstalling
+  Cloud keeps your memories on cairn.ink.
 
 [Local data, backup and deletion](docs/local-from-source.md#local-privacy-and-control) ·
 [Privacy and threat model](docs/privacy.md) ·
@@ -211,7 +211,17 @@ about 30 seconds after the last one closes. Sessions with different server envir
 as a different `PATH`, use separate servers. On macOS and other platforms,
 or for stores under `/mnt/` or on network filesystems, each session starts
 its own server. If the shared server can't start, the session automatically
-starts its own server. To keep workers from loading the memory server:
+starts its own server.
+
+`npx @cairn-ink/memory daemon status --local` shows each shared server for the
+installed store, with its short store ID, running state, build and session count.
+`npx @cairn-ink/memory daemon stop --local` asks running shared servers for the
+installed store to exit. It never force-kills them and reports how many are still
+running. Run it when sessions are idle. A call in flight can report
+`daemon_outcome_unknown` even if its write was saved. These commands work on
+Linux and report `daemon_platform` elsewhere.
+
+To keep workers from loading the memory server:
 
 - **Claude Code.** Start workers with `--strict-mcp-config`, which loads only
   the servers you pass with `--mcp-config`.
