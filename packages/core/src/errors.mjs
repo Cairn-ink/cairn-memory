@@ -79,6 +79,8 @@ export const ERROR_CODES = Object.freeze({
   qualification_failed: "unavailable",
   reconciliation_failed: "unavailable",
   classification_failed: "unavailable",
+  rationale_failed: "unavailable",
+  rationale_limit: "limit",
   // Memory policy
   conflict_limit: "limit",
   supersession_limit: "limit",

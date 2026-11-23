@@ -1,4 +1,5 @@
 import { canonicalPair, compareUtf8, CoreError } from "@cairn-ink/core";
+import { invalidateRationale } from "./rationale.mjs";
 import { validateMemoryId, validateTime, writeNamespace, writeTime } from "./validation.mjs";
 
 /** @import { ConflictEdge, ConflictEdgeStore, Namespace, Scope, SupersessionStore } from "@cairn-ink/core/ports" */
@@ -125,7 +126,10 @@ export function createRelationStores(port, matchFacts) {
           const state = getState();
           const row = state.rows.get(namespace)?.get(id)?.row;
           const dropped = deleteConflicts(state.relations.get(namespace), id);
-          if (row) Object.assign(row, { historical: true, revision: row.revision + 1, ...writeTime(nowMs) });
+          if (row) {
+            Object.assign(row, { historical: true, revision: row.revision + 1, ...writeTime(nowMs) });
+            invalidateRationale(state, namespace, id);
+          }
           if (row || dropped) markDirty();
         };
       });

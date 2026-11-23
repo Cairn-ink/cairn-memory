@@ -69,7 +69,7 @@ change request to the core lead, answered on the same day.
 
 - Ordered capture (`CausalStream`) ships as the capture module's second slice, after the supersession port.
 - The core capture modules replace `src/extraction/`; its fixtures stay as the old-versus-new extraction oracle.
-- The capture rationale stage is not in core until a keep/drop decision; `ModelStage` reserves its name only.
+- Rationale runs after placement through the opt-in port in Addendum 6.
 - One id order in all of core: UTF-8 bytes (`compareUtf8`). Where the hosted service compares ids differently today (SQL collation, JS UTF-16 string order in in-batch ties), the difference is listed for the shadow comparison.
 
 ## Addenda
@@ -195,3 +195,69 @@ Callers skip annotations when the adapter omits the method.
 retires at least one title source. A title becoming null can reorder `list` and `catalog`, so
 their earlier cursors become stale. Memory erase covers the same changes through its existing
 index revision advance.
+
+### Addendum 6: rationale edges
+
+Rationale is opt-in and off by default. A host registers `StorageAdapter.rationale` with
+`rationaleEdges` and invokes `relatePlaced` immediately after a placement batch commits. The
+pass takes one to five distinct memory guards from that batch, plus the model, `ModelGate`,
+retrieval ports, deadline, cancellation signal and diagnostic observer. It makes at most one
+attempt. Its reviewed, failed or skipped report carries proposal and insert counts and, when
+available, lexical discovery counts and truncation flags. A failure leaves placement intact.
+
+Discovery joins the admitted source message texts in admission order, deduplicated by raw
+message identity. The query uses the first 4,000 UTF-16 units and drops a trailing high
+surrogate. A host supplies full visible text for local discovery through
+`rationaleSourceText`. The lexical candidate port uses the admission's exact namespace.
+Admitted guards come first and lexical candidates fill the batch to six unique refs. Scoring
+uses the core retrieval tokenizer. The lexical query stays local.
+
+`sourceEvidence` reads every receipt of each current memory through the host's Raw visibility
+rules. It checks forget facts, session fences, text and window facts, retired receipts and
+uncertain visibility at read time. It returns one to 100 receipts per memory. Each receipt
+has a stable digest of `(client, sessionId, messageId)`, its role and up to 800 UTF-16 units
+of the source message cut on a code-point boundary. The host applies text facts to that
+excerpt with containment. If any applicable text fact is too short for containment or the
+comparison is otherwise unavailable or uncertain, the host withholds the receipt. A missing,
+withheld or uncertain excerpt, including one from a conflicted Raw message key, fails the
+memory closed with `revision_conflict`. Excess
+receipts or a snapshot over 24,000 serialized UTF-16 units fail before sending with
+`context_item_too_large`. Core uses the whole evidence set with no packing. The
+reference adapter's capture path retains receipt
+metadata. Its test harness seeds synthetic raw text and passes reads through the shared
+fact matcher.
+
+Core sends the engine `relate` prompt with indexed receipt roles and excerpts only. The
+`rationale` stage uses `cairn_relate`, a strict provider schema and a 1,024-token output
+limit. The freshness reread finishes before the dispatch gate check. A closed `ModelGate`
+stops the send. Provider failures use `rationale_failed`
+(`unavailable`). The complete ordered evidence and owner index revision must match before
+dispatch, after output and again in the write transaction. A change returns
+`revision_conflict`. The diagnostic for invalid rationale is
+`relate/core_validation/invalid_rationale`.
+
+Core validates at most ten proposed edges. Supports may point to themselves and challenges
+must have distinct endpoints. The store uses the directed endpoint ids, relation and two
+receipt ids as its idempotency key. The write binds each endpoint revision and the unkeyed
+`ClockAndHash.sha256Hex` digest of `{ id, role, excerpt }`. Degree counts at most ten edges
+per memory and counts a self-support once. Overflow returns `rationale_limit` (`limit`) and
+rolls back the whole batch. Any successful insert advances the owner index revision once per
+batch. A duplicate or empty proposal leaves it unchanged. Core placement itself leaves
+memory revisions unchanged, so no filing rebind is needed.
+
+Hosts invalidate all incident rows in the same transaction as a revision, content,
+currentness, namespace, erasure or receipt change. That includes adding, removing or
+updating receipts and duplicate attaches at the same revision. Hosts also delete every
+edge whose endpoint cites a receipt in a removed Raw message in the same transaction as
+the Raw deletion or purge. Forget runs rationale invalidation at `dependents.invalidate`.
+Every edge read also checks current endpoint revisions and each cited receipt's digest.
+
+`decisionContext` follows incoming supports and challenges to the root and challenges to
+its visible supporting premises. The walk deduplicates stored edge keys and is bounded at
+ten edges and six sources. A suppressed or hidden linked endpoint removes its edges from
+the view. The other paths remain visible. The result contains only refs
+`{ id, revision, relation, direction }` and a status, `reconfirmation-suggested` when a
+visible challenge exists or `unassessed` otherwise. It exposes no excerpts, counts or
+markers for hidden evidence. FIND retains authority over text delivery. Edge persistence
+and the incident-row port are available to hosts with the capability. Cloud enablement
+depends on its Raw-aware receipt ledger.

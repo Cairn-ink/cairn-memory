@@ -22,10 +22,16 @@ function toHex(bytes) {
 /** @param {string} text */
 async function sha256(text) {
   try {
-    return toHex(await globalThis.crypto.subtle.digest("SHA-256", encoder.encode(text)));
+    return await sha256Hex(text);
   } catch {
     throw new CoreError("fingerprint_unavailable");
   }
+}
+
+/** @param {string | Uint8Array} input */
+export async function sha256Hex(input) {
+  const bytes = typeof input === "string" ? encoder.encode(input) : new Uint8Array(input);
+  return toHex(await globalThis.crypto.subtle.digest("SHA-256", bytes));
 }
 
 /** @param {BufferSource} bytes */

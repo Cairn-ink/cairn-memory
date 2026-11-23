@@ -18,9 +18,13 @@ import { addKeyedDigest, createFactStore } from "./privacy.mjs";
 /** @typedef {import("./topics.mjs").TopicState} TopicState */
 /** @typedef {{ card: import("./document-cards.mjs").CardWrite | null, createdAtMs: number,
  * amendments?: Map<string, import("@cairn-ink/core/ports").DocumentCardAmendment | null> }} CardEntry */
+/** @typedef {{text: string, role: import("@cairn-ink/core/ports").Role, occurredAtMs: number | null}} RationaleMessage */
 /** @typedef {import("./memory-relations.mjs").RelationState} RelationState */
-/** @typedef {{topics: Map<Namespace, TopicState>, documentCards: Map<Namespace, Map<string, CardEntry>>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
- * rawRows: Map<string, import("./raw.mjs").RawEntry>, rawFences: Set<string>,
+/** @typedef {{topics: Map<Namespace, TopicState>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
+ * documentCards: Map<Namespace, Map<string, CardEntry>>,
+ * rationale: Map<Namespace, Map<string, import("@cairn-ink/core/ports").RationaleEdge>>,
+ * rationaleMessages: Map<Namespace, Map<string, RationaleMessage>>,
+ * rawRows: Map<string, import("./raw.mjs").RawEntry>, rawFences: Set<string>, rawConflicts: Set<string>,
  * rawAnchors: Map<string, Map<string, import("./raw.mjs").AnchorSession>>,
  * claims: Map<string, ClaimRecord>, activeTokens: Map<string, string>, abandonedTokens: Set<string>, relations: Map<Namespace, RelationState>}} State */
 /** @typedef {{state: State, run: {readonly ended: boolean}, indexDirty: boolean, stateWritten: boolean, pauseLock: boolean,
@@ -109,6 +113,7 @@ class Owner {
     topics: new Map(), documentCards: new Map(), rows: new Map(), facts: new Map(), epoch: null, pause: { paused: false, generation: 0 }, indexRevision: 0,
     claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(), rawRows: new Map(), rawFences: new Set(),
     rawAnchors: new Map(), relations: new Map(),
+    rawConflicts: new Set(), rationale: new Map(), rationaleMessages: new Map(),
   };
   pause = new Mutex();
   write = new Mutex();
@@ -318,14 +323,16 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
     return (getState, _markDirty, run) => body(getState, run);
   }, true);
 
-  function dump(includeRaw = false, includeDocumentCards = false) {
+  function dump(includeRaw = false, includeDocumentCards = false, includeRationale = false) {
     const snapshot = [...owners]
       .filter(([, { committed }]) => committed.rows.size > 0 || committed.facts.size > 0 ||
         committed.pause.generation > 0 || committed.claims.size > 0 ||
         (includeTopics && (committed.topics.size > 0 || committed.indexRevision > 0)) ||
         (includeRaw && (committed.rawRows.size > 0 || committed.rawFences.size > 0 ||
           committed.rawAnchors.size > 0 || committed.indexRevision > 0)) ||
-        (includeDocumentCards && committed.documentCards.size > 0))
+        (includeDocumentCards && committed.documentCards.size > 0) ||
+        (includeRationale && (committed.rationale.size > 0 || committed.rationaleMessages.size > 0 ||
+          committed.rawConflicts.size > 0)))
       .sort(([a], [b]) => compareUtf8(a, b))
       .map(([owner, { committed }]) => ({
         owner,
@@ -342,6 +349,7 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
           rawRows: [...committed.rawRows.values()].sort((a, b) => compareUtf8(a.ref.id, b.ref.id)),
           rawFences: [...committed.rawFences].sort(compareUtf8),
         }),
+        ...(includeRaw && includeRationale && { rawConflicts: [...committed.rawConflicts].sort(compareUtf8) }),
         ...(includeRaw && committed.rawAnchors.size > 0 && {
           rawAnchors: [...committed.rawAnchors].sort(([a], [b]) => compareUtf8(a, b)).flatMap(([client, sessions]) =>
             [...sessions].sort(([a], [b]) => compareUtf8(a, b)).map(([, { namespace, sessionId, messages }]) => ({
@@ -369,6 +377,11 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
           documentCards: [...committed.documentCards].map(([namespace, cards]) =>
             ({ namespace, cards: [...cards].map(([id, { amendments, ...entry }]) =>
               [id, amendments ? { ...entry, amendments: [...amendments] } : entry]) })),
+        }),
+        ...(includeRationale && {
+          rationale: [...committed.rationale].map(([namespace, edges]) => ({ namespace, edges: [...edges.values()] })),
+          rationaleMessages: [...committed.rationaleMessages].map(([namespace, messages]) =>
+            ({ namespace, messages: [...messages] })),
         }),
         ...(committed.claims.size ? {
           claims: [...committed.claims.values()],

@@ -20,7 +20,7 @@ type CapturePorts = StorageAdapter["capture"];
 
 export type MemoryAdapter = Pick<StorageAdapter<StoredDocumentCardRecord>, "capabilities" | "uow" | "memories" |
   "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "suppressions" | "pause" | "keys" | "placement" | "raw" |
-  "supersession" | "conflicts" | "documentCards"> & {
+  "supersession" | "conflicts" | "documentCards" | "rationale" | "rationaleSourceText"> & {
   readonly capture: CapturePorts & Required<Pick<CapturePorts, "admit" | "load" | "status">>;
   name: "memory";
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;

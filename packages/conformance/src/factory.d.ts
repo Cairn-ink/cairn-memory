@@ -1,5 +1,5 @@
 import type { Capabilities, ErrorCode, FactMatchPolicy, SuppressionFact } from "@cairn-ink/core";
-import type { CaptureMessage, Scope, StorageAdapter, StoredDocumentCardRecord } from "@cairn-ink/core/ports";
+import type { CaptureMessage, Receipt, Scope, StorageAdapter, StoredDocumentCardRecord } from "@cairn-ink/core/ports";
 
 export type AdapterFactory = {
   name: string;
@@ -10,7 +10,7 @@ export type AdapterFactory = {
 export type OpenedAdapter = {
   adapter: Pick<StorageAdapter<StoredDocumentCardRecord>, "capabilities" | "uow" | "memories" | "capture" |
     "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "supersession" | "conflicts" |
-    "suppressions" | "pause" | "keys" | "placement" | "raw" | "documentCards">;
+    "suppressions" | "pause" | "keys" | "placement" | "raw" | "documentCards" | "rationale" | "rationaleSourceText">;
   sessionRefs: "plain" | "hashed";
   harness: TestHarness;
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;
@@ -25,7 +25,13 @@ export type OpenedAdapter = {
 
 export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 
+export type RationaleFixtureChange = "revision" | "content" | "currentness" | "receipt-remove" | "namespace";
+
 export type TestHarness = {
+  /** Synthetic raw text for a receipt. Null retires the source. */
+  seedRationaleMessage?(scope: Scope, receipt: Receipt, text: string | null): Promise<void>;
+  /** Exercise invalidating writes an adapter does not expose on its ordinary ports. */
+  changeRationaleMemory?(scope: Scope, id: string, change: RationaleFixtureChange): Promise<void>;
   /** A JSON-safe snapshot. Numbers must be finite. */
   dump(): Promise<JsonValue>;
   seedFact(owner: string, fact: SuppressionFact): Promise<void>;
