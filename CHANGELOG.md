@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.11 — 2026-11-23
+
+- **On Linux, uninstall asks the store’s running shared background servers to stop before removing the engine.** The request is best effort, and uninstall keeps memory data. Use `daemon status --local` to check the servers or `daemon stop --local` to ask them to stop. The stop command can report that a server is still running.
+- **Claude Code keeps completed session starts intact during recovery.** A later save can still recover an eligible interrupted start recorded by installer 0.6.10.
+
 ## 0.3.9 — 2026-11-22: compact recall when the service offers it
 
 - When the Cairn service says it supports context-read, recall first asks it

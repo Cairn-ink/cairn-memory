@@ -11,7 +11,12 @@ Requires Node ≥22.16 and the selected CLI on PATH. The installer itself has no
 runtime dependencies.
 Known issue: on Node.js 24.22.3, whose built-in SQLite is 3.54, some searches run slower, so recall can return fewer results when you have a lot of saved memory. Your saved data isn't affected. Node.js 22, or Node.js 24 up to 24.22.2, works as before. Setup uses the Node.js that ran it, so run setup again after you switch versions.
 
-This README describes **installer 0.6.10** (2026-11-22). Claude Code can recover a session if its start hook is cancelled or times out during a permission check. New saves are usually searchable within about 10 seconds, and Claude Code runs started by scripts or the Agent SDK are no longer saved. Claude Code automatic saving works
+This README describes **installer 0.6.11** (2026-11-23). Claude Code can recover
+a session if its start hook is cancelled or times out during a permission check.
+Recovery preserves completed start records. A later save can still recover an
+eligible interrupted start recorded by 0.6.10. New saves are usually searchable
+within about 10 seconds, and Claude Code runs started by scripts or the Agent SDK
+are no longer saved. Claude Code automatic saving works
 on macOS. Codex automatic saving on macOS isn't supported yet; the memory tools
 work. To set up only Claude Code, run
 `npx @cairn-ink/memory setup --local --client claude`. Codex CLI 0.167.0 and 0.167.2 are qualified
@@ -45,7 +50,8 @@ text written while off. Claude Code also skips the first turn of an already-runn
 conversation after re-enabling; subsequent turns resume.
 
 `uninstall --local` disables capture and removes its hooks and MCP registration,
-keeping Raw, identity and the pinned engine runtime so setup can restore capture.
+keeping Raw. If uninstall keeps a capture identity, it also keeps the engine
+version it uses so setup can restore capture.
 To inspect and remove one conversation:
 
 ```sh
@@ -114,7 +120,10 @@ stop them.
 
 已知問題：Node.js 24.22.3 內建的 SQLite 是 3.54，部分搜尋會變慢，記憶很多時，回想可能找到比較少的結果。已存的資料不受影響。Node.js 22，或 Node.js 24 的 24.22.2 以前版本，都跟以前一樣。安裝程式會用執行它的那個 Node.js，所以換版本後要重新跑一次安裝。
 
-本說明對應**安裝器 0.6.10**（2026-11-22）。Claude Code 的啟動 hook 如果在檢查權限時被取消或逾時，之後有機會恢復保存該對話。新存的內容通常約 10 秒內就搜得到，由腳本或 Agent SDK 啟動的 Claude Code 執行也不再被保存。Claude Code 也能在 macOS 自動保存對話。
+本說明對應**安裝器 0.6.11**（2026-11-23）。Claude Code 的啟動 hook 如果在檢查權限時被取消
+或逾時，之後有機會恢復保存該對話。恢復過程會保留已完成的啟動紀錄。0.6.10 留下的啟動中斷
+紀錄只要符合條件，下次保存時仍可用來恢復對話。新存的內容通常約 10 秒內就搜得到，由腳本或
+Agent SDK 啟動的 Claude Code 執行也不再被保存。Claude Code 也能在 macOS 自動保存對話。
 Codex 在 macOS 還不支援自動保存，但記憶工具可以正常使用。若只要設定
 Claude Code，請執行 `npx @cairn-ink/memory setup --local --client claude`。
 Codex CLI 0.167.0 與 0.167.2 已通過格式驗證，可以自動擷取；已經在 Cairn 使用
@@ -140,8 +149,8 @@ Claude Code 新對話從第一輪開始保存，包含逐字稿在 session start
 恢復，跳過關閉期間的文字。Claude Code 已在進行中的對話，重新開啟後的第一輪
 也不會保存，後續輪次才恢復。
 
-`uninstall --local` 會關閉擷取、移除 hooks 與 MCP 連接，保留 Raw、身分與綁定的
-引擎，讓重跑 setup 可以恢復。要查看或移除一段對話：
+`uninstall --local` 會關閉擷取、移除 hooks 與 MCP 連接，保留 Raw。若有留存的擷取身分，
+綁定的引擎也會一起保留，重跑 setup 就能恢復擷取。要查看或移除一段對話：
 
 ```sh
 npx @cairn-ink/memory raw list
@@ -286,7 +295,7 @@ Linux 上使用同一份安裝且符合條件的對話會共用一個背景伺�
 請等對話閒置再執行。進行中的呼叫即使已經寫入資料，也可能收到 `daemon_outcome_unknown`。
 這兩個指令只在 Linux 上運作，其他平台會回報 `daemon_platform`。
 
-**0.6.10 local mode captures Raw automatically by default on supported platforms.** Use the explicit MCP tools:
+**Local mode captures Raw automatically by default on supported platforms.** Use the explicit MCP tools:
 `remember_memory`, `recall_memory`, `inspect_memory`, `correct_memory`,
 `forget_memory`, alongside the default dated contextRead tools
 `find_memory_candidates`, `fetch_memory_candidate_evidence`, and
@@ -305,7 +314,7 @@ it reads the Claude registration configuration file `~/.claude.json` with a
 `cairn-local` MCP registrations. It does not access credential stores or use
 authentication fields. Unrelated entries and file contents are never printed.
 
-**0.6.10 本機模式在支援的平台預設自動保存 Raw。** 可明確呼叫 `remember_memory`、
+**本機模式在支援的平台預設自動保存 Raw。** 可明確呼叫 `remember_memory`、
 `recall_memory`、`inspect_memory`、`correct_memory`、`forget_memory`，
 也可使用預設開啟、附日期的 contextRead 工具 `find_memory_candidates`、
 `fetch_memory_candidate_evidence`、`read_memory_context`。自動 hooks 不需要模型就能保存 Raw，setup 不會註冊 `capture_memory`。
@@ -326,8 +335,9 @@ result: retry the operation; it does not mean memory is empty. `status` reports
 registration, engine, Node and per-client capture on/off/blocked state, reason and Raw cap through read-only engine status; it does not test a live connection. `--verbose` adds private paths, owner, engine ID and retained
 failed installations. Uninstall disables capture, removes hooks and detaches
 selected registrations. **Memory data is kept**, along with any retained capture
-identity and its pinned runtime. On Linux, a full uninstall that removes the
-engine first asks any running shared server for that store to stop.
+identity and its pinned runtime. On Linux, an uninstall that removes the engine
+first asks the store's running shared servers to stop. The stop request is best
+effort, and uninstall proceeds regardless of the outcome.
 `--client claude|codex` limits registration or detachment, not conflict
 detection.
 `uninstall --local --purge-config` also removes the descriptor and `.npmrc`,
@@ -337,8 +347,8 @@ uninstalled without `--client`.
 兩個工具共用資料庫時，`storage_busy` 是暫時忙碌，請重試該操作，不能當成
 沒有記憶。`status` 顯示註冊、引擎與 Node 狀態，也會透過唯讀引擎 status 顯示各工具擷取狀態、原因與 Raw 上限，不測試實際連線；`--verbose` 會多顯示私有路徑、owner、引擎 ID 與保留的失敗安裝。
 解除安裝會關閉擷取、移除 hooks，並解除所選工具的連接。**記憶資料會保留**，
-留存的擷取身分和綁定引擎也會保留。在 Linux 上，完整解除安裝若會移除引擎，
-會先請這個資料庫還在執行的共用伺服器停止。
+留存的擷取身分和綁定引擎也會保留。在 Linux 上，解除安裝時如果要移除引擎，
+會先請這個資料庫還在執行的共用伺服器停止。無論伺服器是否停下來，解除安裝都會繼續。
 `--client claude|codex` 只限制註冊或解除的工具，衝突仍檢查兩邊。
 `uninstall --local --purge-config` 會加刪安裝紀錄與 `.npmrc`，不刪資料，
 不能搭配 `--client`。尚未完成的安裝若要移除，不能只選單一工具。
