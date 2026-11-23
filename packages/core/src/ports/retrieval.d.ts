@@ -67,7 +67,8 @@ export interface RawCandidates {
 
 /** Final fence: re-checks refs in the same snapshot right before delivery; drops anything now hidden. */
 export interface VisibilityFence {
-  assertVisible(tx: Tx, scope: RetrievalScope, refs: readonly ItemRef[]): Promise<ItemRef[]>;
+  /** The "read" intent includes historical memories that pass the other visibility checks. */
+  assertVisible(tx: Tx, scope: RetrievalScope, refs: readonly ItemRef[], intent?: "read"): Promise<ItemRef[]>;
 }
 
 export interface ReadSnapshot {
