@@ -1,4 +1,4 @@
-import { CoreError } from "@cairn-ink/core";
+import { CoreError, isErrorCode } from "@cairn-ink/core";
 
 /** @typedef {import("@cairn-ink/core/ports").InsertRow} InsertRow */
 /** @typedef {import("@cairn-ink/core/ports").Receipt} Receipt */
@@ -26,6 +26,48 @@ function invalid() {
   throw new CoreError("invalid_input");
 }
 
+/** @param {unknown} vector */
+const isFloat32 = (vector) => ArrayBuffer.isView(vector) && typedArrayTag?.call(vector) === "Float32Array";
+
+/** @param {import("@cairn-ink/core/ports").CaptureKey} key */
+export function copyCaptureKey(key) {
+  if (!key || !key.scope || !nonempty(key.scope.owner) || !nullableString(key.scope.namespace ?? null) ||
+    !nonempty(key.client) || !nonempty(key.sessionId) || !nonempty(key.eventId) ||
+    typeof key.payloadDigest !== "string" || !/^[0-9a-f]{64}$/.test(key.payloadDigest)) invalid();
+  const { scope: { owner, namespace }, client, sessionId, eventId, payloadDigest } = key;
+  return { scope: { owner, namespace: namespace ?? null }, client, sessionId, eventId, payloadDigest };
+}
+
+/** @param {readonly import("@cairn-ink/core/ports").CaptureMessage[]} messages */
+export function validateCaptureMessages(messages) {
+  if (!Array.isArray(messages)) invalid();
+  for (const message of messages) {
+    if (!message || typeof message.id !== "string" || message.id.length > 512 || !roles.includes(message.role) ||
+      typeof message.content !== "string" ||
+      (message.occurredAtMs !== null && !Number.isSafeInteger(message.occurredAtMs))) invalid();
+  }
+}
+
+/** @param {{code: string, retryable: boolean}} failure */
+export function copyCaptureFailure(failure) {
+  if (!failure || !isErrorCode(failure.code) || typeof failure.retryable !== "boolean") invalid();
+  return { code: failure.code, retryable: failure.retryable };
+}
+
+/** @param {readonly import("@cairn-ink/core/ports").FinishItem[]} items */
+export function copyFinishItems(items) {
+  if (!Array.isArray(items)) invalid();
+  return Array.from(items, (item) => {
+    if (!item || (item.embedding !== null && !isFloat32(item.embedding?.vector))) invalid();
+    const row = copyContent({
+      kind: item.kind, origin: "inferred", text: item.content, textHash: item.textHash,
+      confidence: item.confidence, source: { kind: "capture", client: null, sessionId: null },
+      embedding: item.embedding,
+    });
+    return { row, receipts: copyReceipts(item.receipts) };
+  });
+}
+
 /** @param {number} nowMs */
 export function validateTime(nowMs) {
   if (!Number.isSafeInteger(nowMs) || nowMs < 0) invalid();
@@ -46,8 +88,7 @@ export function validateSource(source) {
 
 /** @param {number[] | Float32Array} vector */
 export function validateVector(vector) {
-  const float32 = ArrayBuffer.isView(vector) && typedArrayTag?.call(vector) === "Float32Array";
-  if (!(Array.isArray(vector) || float32) || vector.length === 0) invalid();
+  if (!(Array.isArray(vector) || isFloat32(vector)) || vector.length === 0) invalid();
   for (const component of vector) {
     if (!Number.isFinite(component)) invalid();
   }
