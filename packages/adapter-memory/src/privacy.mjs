@@ -2,8 +2,8 @@ import {
   CoreError, compareUtf8, factIncarnationBody, pauseGenerationAfter, userFingerprintKey,
   validateFingerprintLabels, validateSuppressionFact,
 } from "@cairn-ink/core";
-import { createFactMatcher } from "./fact-match.mjs";
-import { readEmbedding } from "./validation.mjs";
+import { copySuppressionCandidates, createFactMatcher } from "./fact-match.mjs";
+import { readEmbedding, snapshotArray } from "./validation.mjs";
 
 /** @typedef {import("./index.d.mts").MemoryAdapterOptions} Options */
 /** @typedef {import("@cairn-ink/core").SuppressionFact} SuppressionFact */
@@ -25,9 +25,12 @@ function validateFact(fact) {
     const { text, ...fields } = fact;
     if (text && typeof text === "object") {
       const { embedding, ...fingerprint } = text;
-      const evidence = embedding === undefined && !Object.hasOwn(text, "embedding") ? fingerprint : {
-        ...fingerprint, embedding: embedding == null ? embedding : readEmbedding(embedding, "fact"),
-      };
+      /** @type {Extract<SuppressionFact, {kind: "text"}>["text"]} */
+      const evidence = { ...fingerprint, digests: snapshotArray(fingerprint.digests) };
+      if (evidence.shingles != null) evidence.shingles = snapshotArray(evidence.shingles);
+      if (embedding !== undefined || Object.hasOwn(text, "embedding")) {
+        evidence.embedding = embedding == null ? embedding : readEmbedding(embedding, "fact");
+      }
       fact = { ...fields, text: evidence };
     }
   }
@@ -104,7 +107,10 @@ export function createFactStore(port, runSeed, options, matchFacts = createFactM
       });
     },
     async snapshot(tx, scope, candidates) {
-      return port(tx, scope, false, (state) => matchFacts(state.facts, scope).snapshot(candidates));
+      return port.read(tx, scope, (getState) => {
+        const copy = copySuppressionCandidates(candidates);
+        return matchFacts(getState().facts, scope).snapshot(copy);
+      });
     },
     async factsFor(tx, scope, { memoryId }) {
       return port(tx, scope, false, (state) =>

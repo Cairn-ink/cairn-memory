@@ -3,7 +3,7 @@ import { defineConformanceTests } from "@cairn-ink/conformance/node-test";
 import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
 
 const optional = new Set(Object.values(OPTIONAL_PORTS));
-const accepted = Object.fromEntries(CAPABILITIES.filter((flag) => !optional.has(flag)).map((flag) => [flag, true]));
+const accepted = Object.fromEntries(CAPABILITIES.filter((flag) => !optional.has(flag) && flag !== "embeddingRequiredOnInsert").map((flag) => [flag, true]));
 
 function factory(name, enableFlags) {
   return {

@@ -16,3 +16,4 @@ export * from "./privacy/fact-match.mjs";
 export { exactDigestMatch, withholdsPassage, withholdsAnyPassage, blocksMemoryPassage } from "./privacy/withholds.mjs";
 export * from "./privacy/forget-steps.mjs";
 export * from "./privacy/pause.mjs";
+export * from "./topics/index.mjs";

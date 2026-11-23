@@ -27,7 +27,7 @@ function matchOrder(a, b) {
 }
 
 /** @param {number} nowMs */
-function writeTime(nowMs) {
+export function writeTime(nowMs) {
   return { updatedAtMs: nowMs, updatedAtUs: BigInt(nowMs) * 1000n };
 }
 
@@ -39,6 +39,9 @@ function writeTime(nowMs) {
  */
 export function createMemoryStore(port, capabilities, newId, matchFacts = createFactMatcher(capabilities.vectorSuppression)) {
   let nearSkippedUnembedded = 0;
+
+  /** @param {InsertRow} row */
+  const prepareContent = (row) => copyContent(row, "memory", capabilities.embeddingRequiredOnInsert);
 
   /**
    * @param {DuplicateQuery} query @param {DuplicateQuery} candidate @param {number} nearDistance
@@ -142,8 +145,9 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
      * @param {SourceRef} source @param {"hash" | "full"} mode @param {string} [editId]
      */
     readWritePolicy(tx, scope, prepareBatch, source, mode, editId) {
-      return port(tx, scope, false, (state) => {
+      return port.read(tx, scope, (getState) => {
         const batch = prepareBatch();
+        const state = getState();
         const policy = matchFacts(state.facts, scope);
         const namespace = state.rows.get(scope.namespace);
         const entries = entriesIn(namespace).filter(({ row }) => row.id !== editId);
@@ -173,14 +177,15 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
 
   /** @type {MemoryStore} */
   const memories = {
-    ...memoryWrites((tx, scope, prepare) => port.write(tx, scope, true, prepare), copyContent),
+    ...memoryWrites((tx, scope, prepare) => port.write(tx, scope, true, prepare), prepareContent),
 
     async findDuplicates(tx, scope, queries, options) {
-      return port(tx, scope, false, (state) => {
+      return port.read(tx, scope, (getState) => {
         const batch = copyDuplicateBatch(queries);
         if (!options || typeof options !== "object" || !Number.isFinite(options.nearDistance) || options.nearDistance < 0 ||
           (options.excludeId !== undefined && typeof options.excludeId !== "string")) throw new CoreError("invalid_input");
         const { nearDistance, excludeId } = options;
+        const state = getState();
         const policy = matchFacts(state.facts, scope);
         const rows = entriesIn(state.rows.get(scope.namespace))
           .filter((entry) => entry.row.id !== excludeId && !policy.hides(entry)).map(({ row }) => row);
@@ -207,7 +212,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
 
     async replaceContent(tx, scope, id, expectedRevision, next, receipts, nowMs) {
       return port.write(tx, scope, true, () => {
-        const content = copyContent(next);
+        const content = prepareContent(next);
         validateTime(nowMs);
         const evidence = receipts === null ? null : attachReceipts([], copyReceipts(receipts));
         validateMemoryId(id);

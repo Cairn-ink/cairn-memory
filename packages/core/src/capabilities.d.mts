@@ -3,7 +3,7 @@ export type Capability =
   | "orderedCapture" | "stagedEvidence" | "placement" | "relations" | "cards" | "documentCards" | "episodes"
   | "spanLineage" | "sessionLineage" | "rawSpans" | "rawArchive" | "rawWindowHide"
   | "supersession" | "conflictEdges" | "semanticRetrieval" | "forgetLog"
-  | "quantityLedger";
+  | "quantityLedger" | "embeddingRequiredOnInsert";
 
 export type Capabilities = Readonly<Record<Capability, boolean>>;
 
