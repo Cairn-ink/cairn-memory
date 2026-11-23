@@ -5,11 +5,12 @@ import { pathToFileURL } from "node:url";
 import { types } from "node:util";
 import { CoreError } from "@cairn-ink/core";
 import { isNativeSqliteError, toSqliteError } from "./errors.mjs";
+import { sqlitePortScope } from "./port-scope.mjs";
 
-/** @import { OwnerId, Tx, UnitOfWork, UnitOfWorkOptions } from "@cairn-ink/core/ports" */
-/** @typedef {{ db: DatabaseSync, pauseLock: boolean, failure?: CoreError }} LiveRun */
+/** @import { OwnerId, Tx, UnitOfWork } from "@cairn-ink/core/ports" */
+/** @typedef {{ db: DatabaseSync, pauseLock: boolean, failure?: CoreError, transactionEnded?: boolean, executing?: boolean }} LiveRun */
+/** @typedef {ReturnType<typeof sqlitePortScope>["connection"]} PortConnection */
 
-const openFiles = new Set();
 /** @type {AsyncLocalStorage<Tx>} */
 const runContext = new AsyncLocalStorage();
 
@@ -33,6 +34,35 @@ function fileIdentity(path) {
   return `${file.dev}:${file.ino}`;
 }
 
+/** @param {string} identity */
+function reserveFile(identity) {
+  // Named shared-memory databases are shared by SQLite connections across Workers.
+  // This transaction reserves the physical file without locking its WAL writer.
+  const reservation = new DatabaseSync(`file:cairn-sqlite-owner-${identity}?mode=memory&cache=shared`);
+  try {
+    if (reservation.prepare("SELECT sqlite_compileoption_used('OMIT_SHARED_CACHE') AS omitted").get()?.omitted !== 0) {
+      throw new CoreError("storage_error");
+    }
+    reservation.exec("BEGIN IMMEDIATE");
+    return reservation;
+  } catch (error) {
+    reservation.close();
+    throw error;
+  }
+}
+
+/** @param {unknown} value */
+function hasThenableResult(value) {
+  if (value === null || (typeof value !== "object" && typeof value !== "function")) return false;
+  // Accessors and proxies can supply a callable then during Promise resolution.
+  for (let object = value; object; object = Object.getPrototypeOf(object)) {
+    if (types.isProxy(object)) return true;
+    const then = Object.getOwnPropertyDescriptor(object, "then");
+    if (then) return !Object.hasOwn(then, "value") || typeof then.value === "function";
+  }
+  return false;
+}
+
 /**
  * Own the reader and writer for a provisioned database file. The host routes
  * owners to files and keeps the canonical path stable for the lifetime of the store.
@@ -46,14 +76,12 @@ export function openSqliteUnitOfWork(filename) {
   let openingWriter;
   /** @type {DatabaseSync | undefined} */
   let openingReader;
-  /** @type {string | undefined} */
-  let reserved;
+  /** @type {DatabaseSync | undefined} */
+  let reservation;
   try {
     const path = realpathSync(filename);
     const identity = fileIdentity(path);
-    if (openFiles.has(identity)) throw new CoreError("storage_busy");
-    openFiles.add(identity);
-    reserved = identity;
+    reservation = reserveFile(identity);
     const uri = pathToFileURL(path);
     uri.searchParams.set("mode", "rw");
     openingWriter = new DatabaseSync(uri.href);
@@ -64,7 +92,7 @@ export function openSqliteUnitOfWork(filename) {
     if (fileIdentity(path) !== identity) throw new CoreError("storage_error");
   } catch (error) {
     try {
-      closeConnections(openingReader, openingWriter, reserved);
+      closeConnections(openingReader, openingWriter, reservation);
     } catch {
       // Keep the startup failure and reserve the file if a handle could not close.
     }
@@ -90,7 +118,16 @@ export function openSqliteUnitOfWork(filename) {
         return Promise.reject(new CoreError("invalid_input"));
       }
       if (closing || unusable || runContext.getStore()) return Promise.reject(new CoreError("internal_error"));
-      const work = execute(owner, options, fn);
+      let pauseLock;
+      let readOnly;
+      try {
+        pauseLock = options.pauseLock === true;
+        readOnly = options.readOnly === true;
+      } catch (error) {
+        return Promise.reject(error);
+      }
+      if (closing || unusable) return Promise.reject(new CoreError("internal_error"));
+      const work = Promise.resolve().then(() => execute(owner, pauseLock, readOnly, fn));
       pending.add(work);
       const settled = () => pending.delete(work);
       void work.then(settled, settled);
@@ -98,10 +135,8 @@ export function openSqliteUnitOfWork(filename) {
     },
   });
 
-  /** @template T @param {OwnerId} owner @param {UnitOfWorkOptions} options @param {(tx: Tx) => Promise<T>} fn */
-  async function execute(owner, options, fn) {
-    const pauseLock = options.pauseLock === true;
-    const readOnly = options.readOnly === true;
+  /** @template T @param {OwnerId} owner @param {boolean} pauseLock @param {boolean} readOnly @param {(tx: Tx) => Promise<T>} fn */
+  async function execute(owner, pauseLock, readOnly, fn) {
     const db = readOnly ? reader : writer;
     const pause = pauseLock ? pauseLocks.get(owner) ?? { lock: new Mutex(), users: 0 } : undefined;
     if (pause) {
@@ -130,7 +165,7 @@ export function openSqliteUnitOfWork(filename) {
           live.delete(tx);
         }
         if (run.failure) throw run.failure;
-        if (!db.isTransaction) throw new CoreError("internal_error");
+        if (run.transactionEnded || !db.isTransaction) throw new CoreError("internal_error");
         db.exec("COMMIT");
         return result;
       } catch (error) {
@@ -149,6 +184,17 @@ export function openSqliteUnitOfWork(filename) {
     }
   }
 
+  /** @param {Tx} tx @param {LiveRun} run */
+  function assertTransaction(tx, run) {
+    if (live.get(tx) !== run || runContext.getStore() !== tx || unusable || run.executing) {
+      throw new CoreError("internal_error");
+    }
+    if (run.transactionEnded || !run.db.isTransaction) {
+      run.transactionEnded = true;
+      throw new CoreError("internal_error");
+    }
+  }
+
   /**
    * Adapter-private access for a trusted, synchronous storage operation. Bodies
    * only use the supplied connection for statements and return materialized data.
@@ -156,7 +202,7 @@ export function openSqliteUnitOfWork(filename) {
    * @param {Tx} tx
    * @param {OwnerId} owner
    * @param {{ write?: boolean, pauseLock?: boolean }} options
-   * @param {(db: DatabaseSync) => T} body
+   * @param {(db: PortConnection) => T} body
    * @returns {Promise<Awaited<T>>}
    */
   function port(tx, owner, { write = false, pauseLock = false }, body) {
@@ -166,14 +212,27 @@ export function openSqliteUnitOfWork(filename) {
       return Promise.reject(new CoreError("internal_error"));
     }
     try {
-      // A failed statement can roll back SQLite itself. No later statement may
-      // fall through to autocommit, including after a caught write error.
-      if (!run.db.isTransaction || types.isAsyncFunction(body) || types.isGeneratorFunction(body)) {
-        throw new CoreError("internal_error");
+      assertTransaction(tx, run);
+      if (types.isAsyncFunction(body) || types.isGeneratorFunction(body)) throw new CoreError("internal_error");
+      const scope = sqlitePortScope(run.db, operation => {
+        assertTransaction(tx, run);
+        run.executing = true;
+        try {
+          return operation();
+        } finally {
+          run.executing = false;
+          // SQLite can end the transaction before surfacing a statement error.
+          if (!run.db.isTransaction) run.transactionEnded = true;
+        }
+      });
+      let result;
+      try {
+        result = body(scope.connection);
+      } finally {
+        scope.revoke();
       }
-      const result = body(run.db);
       if (types.isPromise(result)) void Promise.prototype.then.call(result, undefined, () => {});
-      if (result === run.db || (result != null && typeof (/** @type {{ then?: unknown }} */ (result)).then === "function")) {
+      if (result === scope.connection || types.isPromise(result) || hasThenableResult(result)) {
         throw new CoreError("internal_error");
       }
       return Promise.resolve(result);
@@ -189,24 +248,26 @@ export function openSqliteUnitOfWork(filename) {
 
   function close() {
     if (runContext.getStore()) return Promise.reject(new CoreError("internal_error"));
-    closing ??= Promise.allSettled(pending).then(() => closeConnections(reader, writer, reserved));
+    closing ??= Promise.allSettled(pending).then(() => closeConnections(reader, writer, reservation));
     return closing;
   }
 
   return { uow, port, close };
 }
 
-/** @param {DatabaseSync | undefined} reader @param {DatabaseSync | undefined} writer @param {string | undefined} identity */
-function closeConnections(reader, writer, identity) {
+/** @param {DatabaseSync | undefined} reader @param {DatabaseSync | undefined} writer @param {DatabaseSync | undefined} reservation */
+function closeConnections(reader, writer, reservation) {
   try {
     try {
-      if (reader?.isOpen) reader.close();
+      try {
+        if (reader?.isOpen) reader.close();
+      } finally {
+        if (writer?.isOpen) writer.close();
+      }
     } finally {
-      if (writer?.isOpen) writer.close();
+      if (reservation?.isOpen && !reader?.isOpen && !writer?.isOpen) reservation.close();
     }
   } catch (error) {
     throw toSqliteError(error);
-  } finally {
-    if (identity !== undefined && !reader?.isOpen && !writer?.isOpen) openFiles.delete(identity);
   }
 }
