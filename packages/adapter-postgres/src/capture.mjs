@@ -155,8 +155,10 @@ async function pauseLockedWrite(tx, prepare) {
   throw result.error;
 }
 
-/** @param {CaptureOptions} [options] @returns {CapturePorts} */
-export function createPostgresCapturePorts({ now = Date.now, lineageSecret, hashSessionKey } = {}) {
+/** @param {CaptureOptions} options @returns {CapturePorts} */
+export function createPostgresCapturePorts(options) {
+  const { now = Date.now, lineageSecret, hashSessionKey } = options ?? {};
+  if (typeof lineageSecret !== "string" || lineageSecret.length === 0) throw new CoreError("invalid_input");
   const captureProofs = createCaptureProofs(lineageSecret);
 
   return {

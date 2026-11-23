@@ -38,7 +38,8 @@ async function database(t, captureOptions, afterQuery) {
       };
     },
   });
-  return { pool, uow, backends, capture: createPostgresCapturePorts(captureOptions) };
+  const { lineageSecret = randomBytes(32).toString("hex"), ...overrides } = captureOptions ?? {};
+  return { pool, uow, backends, capture: createPostgresCapturePorts({ lineageSecret, ...overrides }) };
 }
 
 function holdWrite(uow, operation) {
@@ -264,8 +265,6 @@ test("source filter rechecks admitted times and requires both MACs for a fork", 
   assert.deepEqual(await eligible([{ ...message, occurredAtMs: 20 }]), []);
   assert.deepEqual(await eligible([{ ...message, content: "Different", occurredAtMs: 20 }]), [0]);
   await assert.rejects(recheck([]), { code: "lineage_fenced" });
-  const unkeyed = createPostgresCapturePorts();
-  assert.deepEqual(await uow.run(owner, read, (tx) => unkeyed.eligible(tx, event, [{ ...message, occurredAtMs: 20 }])), []);
 });
 
 for (const [legacyState, ledgerState, retryStatus, eventStatus] of [
@@ -493,6 +492,33 @@ test("a proven fork checks the host hash before allowing an unrelated session fa
   assert.deepEqual(inputs, Array.from({ length: 2 }, () => [ancestor.client, ancestor.sessionId]));
 });
 
+test("an unrelated hashed fact allows capture with 1,001 ID-only lineage sessions", migrationDbTest, async (t) => {
+  const lineageSecret = randomBytes(32).toString("hex");
+  const sessionKey = randomBytes(32);
+  const hashedAnchors = new Set();
+  const hashSessionKey = (client, sessionId) => {
+    if (sessionId.startsWith("legacy-")) hashedAnchors.add(sessionId);
+    return createHmac("sha256", sessionKey).update(JSON.stringify([client, sessionId])).digest("hex");
+  };
+  const { pool, uow, capture } = await database(t, { lineageSecret, hashSessionKey });
+  const messageMac = createHmac("sha256", lineageSecret).update(messages[0].id).digest("hex");
+  // Reused message IDs make these legacy anchors candidates without proving ancestry.
+  await pool.query(`INSERT INTO capture_raw_lineage (user_id, client, session_id, message_mac, content_mac)
+    SELECT $1, $2, 'legacy-' || n, $3, NULL FROM generate_series(1, 1001) AS n`,
+  [owner, event.client, messageMac]);
+  const fact = { owner, actionId: "different-hash", origin: "forget", kind: "session",
+    session: { client: event.client, sessionKeyHash: hashSessionKey(event.client, "unrelated-session") } };
+  const incarnation = createHash("sha256").update(factIncarnationBody(fact)).digest("hex");
+  await uow.run(owner, write, (tx) => createPostgresSuppressionStore().writeFact(tx, fact, incarnation));
+
+  assert.deepEqual(await uow.run(owner, read, (tx) => capture.eligible(tx, event, messages)), [0]);
+  assert.equal(hashedAnchors.size, 1_001);
+  hashedAnchors.clear();
+  await uow.run(owner, write, (tx) => capture.claim(tx, event, messages, options));
+  await uow.run(owner, {}, (tx) => capture.assertEligible(tx, event, [0]));
+  assert.equal(hashedAnchors.size, 1_001);
+});
+
 for (const [name, hashSessionKey] of [
   ["throws", () => { throw new Error("synthetic hasher failure"); }],
   ["returns null", () => null],
@@ -507,24 +533,31 @@ for (const [name, hashSessionKey] of [
   });
 }
 
-for (const keyed of [true, false]) {
-  test(`an ID-only anchor withholds a replay ${keyed ? "with" : "without"} a signing secret`, migrationDbTest, async (t) => {
-    const secret = randomBytes(32).toString("hex");
-    const { pool, uow, capture } = await database(t, keyed ? { lineageSecret: secret } : undefined);
-    const ancestor = "ancestor-session";
-    const messageMac = createHmac("sha256", secret).update(messages[0].id).digest("hex");
-    await pool.query("INSERT INTO capture_raw_fences (user_id, client, session_id) VALUES ($1, $2, $3)",
-      [owner, event.client, ancestor]);
-    await pool.query(`INSERT INTO capture_raw_lineage (user_id, client, session_id, message_mac, content_mac)
-      VALUES ($1, $2, $3, $4, NULL)`, [owner, event.client, ancestor, messageMac]);
-    const eligible = (batch) => uow.run(owner, read, (tx) => capture.eligible(tx, event, batch));
-    await uow.run(owner, write, (tx) => capture.claim(tx, event, messages, options));
-    assert.deepEqual(await eligible(messages), []);
-    assert.deepEqual(await eligible([{ ...messages[0], content: "" }]), []);
-    if (keyed) assert.deepEqual(await eligible([{ ...messages[0], id: "unrelated" }]), [0]);
-    await assert.rejects(uow.run(owner, {}, (tx) => capture.assertEligible(tx, event, [0])), { code: "lineage_fenced" });
-  });
-}
+test("an ID-only anchor withholds a replay with a signing secret", migrationDbTest, async (t) => {
+  const secret = randomBytes(32).toString("hex");
+  const { pool, uow, capture } = await database(t, { lineageSecret: secret });
+  const ancestor = "ancestor-session";
+  const messageMac = createHmac("sha256", secret).update(messages[0].id).digest("hex");
+  await pool.query("INSERT INTO capture_raw_fences (user_id, client, session_id) VALUES ($1, $2, $3)",
+    [owner, event.client, ancestor]);
+  await pool.query(`INSERT INTO capture_raw_lineage (user_id, client, session_id, message_mac, content_mac)
+    VALUES ($1, $2, $3, $4, NULL)`, [owner, event.client, ancestor, messageMac]);
+  const eligible = (batch) => uow.run(owner, read, (tx) => capture.eligible(tx, event, batch));
+  await uow.run(owner, write, (tx) => capture.claim(tx, event, messages, options));
+  assert.deepEqual(await eligible(messages), []);
+  assert.deepEqual(await eligible([{ ...messages[0], content: "" }]), []);
+  assert.deepEqual(await eligible([{ ...messages[0], id: "unrelated" }]), [0]);
+  await assert.rejects(uow.run(owner, {}, (tx) => capture.assertEligible(tx, event, [0])), { code: "lineage_fenced" });
+});
+
+test("capture port construction refuses missing, empty, or invalid lineage signing secrets", () => {
+  const invalidSecret = { value: randomBytes(32).toString("hex") };
+  const expected = { name: "CoreError", code: "invalid_input", message: "invalid_input" };
+  assert.throws(() => createPostgresCapturePorts(), expected);
+  for (const lineageSecret of [undefined, "", null, invalidSecret]) {
+    assert.throws(() => createPostgresCapturePorts({ lineageSecret }), expected);
+  }
+});
 
 for (const operation of ["beginDispatch", "abandon"]) {
   test(`${operation} refuses a lease that expires at token lock acquisition`, migrationDbTest, async (t) => {

@@ -222,7 +222,7 @@ function postgresFactory(wrapSuppressions = (store) => store) {
       const suppressions = wrapSuppressions(createPostgresSuppressionStore());
       const { pool, source, close } = await openDatabase();
       const uow = createPostgresUnitOfWork(source);
-      const capture = createPostgresCapturePorts();
+      const capture = createPostgresCapturePorts({ lineageSecret: randomUUID() });
       const nearDuplicate = requested.nearDuplicate !== false;
       const flags = capabilities({ embeddingRequiredOnInsert: true, nearDuplicate, vectorSuppression: true, supersession: true });
       const memoryReads = createPostgresMemoryReads();

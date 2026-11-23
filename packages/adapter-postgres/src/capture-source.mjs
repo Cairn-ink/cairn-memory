@@ -23,10 +23,10 @@ const CHECK_LINEAGE = `WITH RECURSIVE fences(session_id) AS MATERIALIZED (
   ), incoming AS (
     SELECT * FROM jsonb_to_recordset($5::jsonb) AS proof(message_mac text, content_mac text)
   ), roots(session_id, message_mac, content_mac) AS (
-    SELECT $3::text, NULL::text, NULL::text WHERE $7::boolean OR EXISTS (SELECT 1 FROM fences)
+    SELECT $3::text, NULL::text, NULL::text WHERE $6::boolean OR EXISTS (SELECT 1 FROM fences)
     UNION ALL
     SELECT NULL::text, incoming.message_mac, incoming.content_mac
-    FROM incoming WHERE incoming.content_mac IS NOT NULL AND ($7::boolean OR EXISTS (SELECT 1 FROM fences))
+    FROM incoming WHERE incoming.content_mac IS NOT NULL AND ($6::boolean OR EXISTS (SELECT 1 FROM fences))
   ), vertices(session_id, message_mac, content_mac) AS (
     SELECT session_id, message_mac, content_mac FROM roots
     UNION
@@ -44,31 +44,29 @@ const CHECK_LINEAGE = `WITH RECURSIVE fences(session_id) AS MATERIALIZED (
   ), bounded AS MATERIALIZED (SELECT * FROM vertices LIMIT ${MAX_LINEAGE_VERTICES + 1}),
   uncertain AS NOT MATERIALIZED (
     SELECT l.session_id FROM capture_raw_lineage l
-    WHERE l.user_id = $1 AND l.client = $2 AND ($6::boolean OR EXISTS (
+    WHERE l.user_id = $1 AND l.client = $2 AND EXISTS (
       SELECT 1 FROM incoming WHERE incoming.message_mac = l.message_mac
         AND (incoming.content_mac IS NULL OR l.content_mac IS NULL)
-    ))
+    )
   )
   SELECT EXISTS (SELECT 1 FROM bounded JOIN fences USING (session_id)) AS fenced,
     (SELECT count(*) FROM bounded) > ${MAX_LINEAGE_VERTICES}
       OR (SELECT count(session_id) FROM bounded) > ${MAX_LINEAGE_SESSIONS} AS exceeded,
     EXISTS (SELECT 1 FROM uncertain JOIN fences USING (session_id)) AS withheld,
     ARRAY(
-      SELECT session_id FROM bounded WHERE $7::boolean AND session_id <> $3
+      SELECT session_id FROM bounded WHERE $6::boolean AND session_id <> $3
       UNION
-      SELECT session_id FROM uncertain WHERE $7::boolean AND session_id <> $3
-      LIMIT ${MAX_LINEAGE_SESSIONS + 1}
+      SELECT session_id FROM uncertain WHERE $6::boolean AND session_id <> $3
     ) AS hash_candidates`;
 
 const encoder = new TextEncoder();
 
-/** @param {string | undefined} secret */
+/** @param {string} secret */
 export function createCaptureProofs(secret) {
   /** @type {Promise<CryptoKey> | undefined} */
   let key;
   /** @param {string} value */
   async function sign(value) {
-    if (!secret) throw new CoreError("raw_lineage_unavailable");
     key ??= crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
     const bytes = await crypto.subtle.sign("HMAC", await key, encoder.encode(value));
     return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -77,7 +75,6 @@ export function createCaptureProofs(secret) {
   /** @param {CaptureKey} capture @param {readonly CaptureMessage[]} messages @returns {Promise<Proof[] | null>} */
   return async ({ scope: { owner }, client }, messages) => {
     if (!messages.length) return [];
-    if (!secret) return null;
     try {
       return await Promise.all(messages.map(async ({ id, content }) => ({
         message_mac: await sign(id),
@@ -148,16 +145,18 @@ export async function filterSources(query, key, times, proofs, mode, hashSession
     factBlocksIncoming(stored, { ...candidate, occurredAtMs: times[position] }, policy) !== false));
   if (mode === "assert" && positions.length !== times.length) throw new CoreError("suppressed");
 
+  // Signing failures and older leases can leave proofs unavailable.
+  if (proofs === null) {
+    if (mode === "assert") throw new CoreError("lineage_fenced");
+    return [];
+  }
   const { rows: [lineage] } = await query(CHECK_LINEAGE, [
-    scope.owner, client, sessionId, [...fencedSessions], JSON.stringify(proofs ?? []), proofs === null,
-    fencedSessionHashes.size > 0,
+    scope.owner, client, sessionId, [...fencedSessions], JSON.stringify(proofs), fencedSessionHashes.size > 0,
   ]);
-  // Lineage is shared across namespaces. The query returns only the owner's
-  // same-client ancestors and sessions whose proofs are unavailable or incomplete.
-  if (lineage?.fenced !== false || lineage.exceeded !== false || lineage.withheld !== false ||
-      lineage.hash_candidates.length > MAX_LINEAGE_SESSIONS ||
+  // Check every returned hash candidate, including ID-only matches outside the traversal.
+  if (lineage?.fenced !== false || lineage.withheld !== false ||
       lineage.hash_candidates.some((/** @type {string} */ id) =>
-        withholdsHashedAncestor(fencedSessionHashes, hashSessionKey, client, id))) {
+        withholdsHashedAncestor(fencedSessionHashes, hashSessionKey, client, id)) || lineage.exceeded !== false) {
     if (mode === "assert") throw new CoreError("lineage_fenced");
     return [];
   }
