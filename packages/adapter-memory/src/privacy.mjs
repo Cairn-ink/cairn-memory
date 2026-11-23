@@ -29,7 +29,7 @@ export function addKeyedDigest(digests, keyed) {
 }
 
 /** @param {SuppressionFact} fact */
-function validateFact(fact) {
+export function validateFact(fact) {
   if (fact?.kind === "text") {
     const { text, ...fields } = fact;
     if (text && typeof text === "object") {

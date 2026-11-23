@@ -18,7 +18,7 @@ forward migrations in `migrations/`. The metadata change commits with its
 check marked `NOT VALID`. The next migration validates the check in a separate
 transaction while ordinary reads and writes continue.
 
-Migration 0007 adds memory relations. The hosted service ships a byte-identical copy as a drizzle migration until it applies the engine SQL directly.
+Migration 0010 adds memory relations. The hosted service ships a byte-identical copy as a drizzle migration until it applies the engine SQL directly.
 
 Load the SQL in the host and pass the full ordered list to
 `applyMigrations(source, migrations)`. Use immutable IDs, append new entries,
@@ -98,6 +98,13 @@ used only for neighbour search, and `body` stays authoritative. In exact mode,
 the embedding and shingles stay in `body` for raw checks, with no vector
 dimension or float4 range check. Leave the shingle lookup column null for
 absent or empty shingles. A populated shingles column requires `key_id`.
+
+## Topics and document cards
+
+Migration 0007 defines the topic store, 0008 adds the concurrent oldest-first
+index on `memories`, and 0009 defines `document_cards`. These migrations skip
+objects already created by the hosted service. Make subsequent changes to
+these tables through adapter-postgres migrations.
 
 ## Database tests
 

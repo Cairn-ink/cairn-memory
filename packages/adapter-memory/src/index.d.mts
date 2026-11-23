@@ -17,7 +17,7 @@ export interface MemoryAdapterOptions {
 }
 
 export type MemoryAdapter = Pick<StorageAdapter, "capabilities" | "uow" | "memories" | "capture" |
-  "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "suppressions" | "pause" | "keys" | "placement" |
+  "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "suppressions" | "pause" | "keys" | "placement" | "raw" |
   "supersession" | "conflicts"> & {
   name: "memory";
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;

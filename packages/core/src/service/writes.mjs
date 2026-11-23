@@ -2,25 +2,20 @@ import { identifier, isWellFormedText, revision, validateObject } from "../captu
 import { NEAR_DUPLICATE_DISTANCE } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
 import { decideWrite, planCorrect, planDuplicateMerge } from "../memory-policy/index.mjs";
-import { allDigests, fingerprintLegacyCapture, legacyExactMac, passageShingles } from "../privacy/fingerprint.mjs";
-import { PRIVACY_REDACTION_VERSIONS, redactHostedCurrent, redactV1 } from "../privacy/redact.mjs";
+import { addDigest, allDigests, coreFingerprintLabels, fingerprintMemoryPassages, legacyExactMac, passageShingles } from "../privacy/fingerprint.mjs";
+import { PRIVACY_REDACTION_VERSIONS } from "../privacy/redact.mjs";
 import { cleanContent, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
-import { blocksMemoryPassage } from "../privacy/withholds.mjs";
+import { blocksMemoryPassage, requiresLegacyMacDomain } from "../privacy/withholds.mjs";
 import { factIncarnationBody, validateSuppressionFact } from "../suppression-fact.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
 import { pauseResult } from "./pause.mjs";
 
 /** @import {DuplicateQuery, InsertRow, MemoryRow, PassageFingerprint, Scope, SourceRef, Tx, WritePolicy} from "../ports/index.d.ts" */
 /** @import {FingerprintKey} from "../privacy/fingerprint.mjs" */
-/** @import {ClockAndHash} from "../ports/model.d.ts" */
-/** @import {TextDigest, TextFact} from "../suppression-fact.mjs" */
+/** @import {TextFact} from "../suppression-fact.mjs" */
 
 const memoryKinds = /** @type {const} */ (["fact", "preference", "decision", "instruction", "context"]);
 const sourceKinds = /** @type {const} */ (["capture", "mcp", "web", "import", "plugin"]);
-// The key provider supplies the signing key. Adapters own their legacy MAC labels.
-const coreLabels = Object.freeze({
-  keyIdDomain: "core-key-id", shingleKeyPrefix: "core-shingles:", legacyExactPrefix: "core-exact:",
-});
 const invalid = () => /** @type {const} */ ({ status: "invalid" });
 
 /** @template {string} T @param {unknown} value @param {readonly T[]} choices */
@@ -49,44 +44,6 @@ async function hashesOf(raw) {
   return { textHash: 'sha256:' + core.value, ...(legacy && { legacyHash: 'sha256:' + legacy.value }) };
 }
 
-/** @param {TextDigest[]} digests @param {TextDigest} digest */
-function addDigest(digests, digest) {
-  if (!digests.some(({ alg, value }) => alg === digest.alg && value === digest.value)) digests.push(digest);
-}
-
-/** @param {string} raw @param {string} text @param {FingerprintKey | null} key
- * @param {ClockAndHash} clock @returns {Promise<PassageFingerprint[]>}
- */
-async function passagesOf(raw, text, key, clock) {
-  const original = cleanContent(raw);
-  const { v1, hostedCurrent, core } = PRIVACY_REDACTION_VERSIONS;
-  /** @type {Array<[string, TextDigest["pipeline"], number]>} */
-  const variants = [
-    [original, "hosted-v1", v1],
-    [redactV1(original), "hosted-v1", v1],
-    [redactHostedCurrent(original), "hosted-v1", hostedCurrent],
-    [text, "core", core],
-    // Hosted capture derives its stored V1 evidence after capture normalization.
-    [redactV1(original.normalize("NFKC")), "hosted-v1", v1],
-  ];
-  const distinct = new Map(variants.map(variant => [normalizeForHash(variant[0]), variant]));
-  return Promise.all(Array.from(distinct, async ([normalized, [variant, pipeline, redactionVersion]]) => {
-    const [digests, exact, legacy] = await Promise.all([
-      allDigests(variant, key),
-      clock.sha256Hex(normalized),
-      key && fingerprintLegacyCapture(variant, key, coreLabels),
-    ]);
-    // allDigests re-redacts its input. Keep the exact variant for historical facts.
-    addDigest(digests, { alg: "sha256", value: exact, pipeline, redactionVersion, keyId: null });
-    if (legacy) {
-      addDigest(digests, {
-        alg: "hmac", value: legacy.text_hmac, pipeline: "core", redactionVersion, keyId: legacy.key_id,
-      });
-    }
-    return { digests, shingles: legacy?.shingles ?? null, keyId: legacy?.key_id ?? null };
-  }));
-}
-
 /** @param {WritePolicy} policy @param {boolean} near @param {string} [editId] */
 function decide(policy, near, editId) {
   const matches = policy.matches[0];
@@ -110,6 +67,8 @@ function sameText(row, query, text) {
  */
 export function writeMethods({ storage, embedder, gate, clock }) {
   const { uow, pause, memories, suppressions, keys, fence, capabilities } = storage;
+  /** @param {string} text */
+  const sha256Hex = (text) => clock.sha256Hex(text);
 
   /** @param {Scope} scope @param {string} id @param {Tx} tx */
   async function scopedRow(scope, id, tx) {
@@ -162,9 +121,7 @@ export function writeMethods({ storage, embedder, gate, clock }) {
     const passagesInSnapshot = snapshot.passages.map(({ fact }) => fact);
     if (passagesInSnapshot.some(fact => typeof fact?.owner !== "string")) return true;
     const facts = passagesInSnapshot.filter(fact => fact.owner === scope.owner && (fact.namespace ?? null) === scope.namespace);
-    // Legacy domains are adapter-owned. A MAC-only fact without comparable evidence cannot prove a miss.
-    if (facts.some(({ text }) => text.digests.every(digest => digest.alg === "hmac") &&
-        text.digests.some(digest => digest.pipeline !== "core"))) return true;
+    if (facts.some(requiresLegacyMacDomain)) return true;
     return blocksMemoryPassage(passages, facts, key, undefined, edit ?? undefined);
   }
 
@@ -188,7 +145,7 @@ export function writeMethods({ storage, embedder, gate, clock }) {
       if (!text) return invalid();
       const key = await keys.userKey(owner);
       const query = await hashesOf(raw);
-      const passages = await passagesOf(raw, text, key, clock);
+      const passages = await fingerprintMemoryPassages(raw, text, key, sha256Hex);
       const embedding = await embed(owner, text, key);
       query.embedding = embedding.vector;
       const explicit = source.kind === "mcp" || source.kind === "web";
@@ -250,7 +207,7 @@ export function writeMethods({ storage, embedder, gate, clock }) {
       const key = await keys.userKey(owner);
       if (key === null) throw new CoreError("fingerprint_unavailable");
       const query = await hashesOf(raw);
-      const passages = await passagesOf(raw, text, key, clock);
+      const passages = await fingerprintMemoryPassages(raw, text, key, sha256Hex);
       const unchanged = sameText(previous, query, text);
       const embedding = unchanged ? null : await embed(owner, text, key);
       query.embedding = embedding?.vector;
@@ -263,8 +220,8 @@ export function writeMethods({ storage, embedder, gate, clock }) {
         const heldSecret = normalizeForHash(cleanContent(previous.text)) !== normalizeForHash(oldText);
         const [aliases, legacyMac, shingles] = await Promise.all([
           allDigests(previous.text, key),
-          legacyExactMac(previous.text, key, coreLabels),
-          passageShingles(previous.text, key, coreLabels),
+          legacyExactMac(previous.text, key, coreFingerprintLabels),
+          passageShingles(previous.text, key, coreFingerprintLabels),
         ]);
         const digests = heldSecret ? aliases.filter(digest => digest.alg === "hmac") : aliases;
         const { v1, core } = PRIVACY_REDACTION_VERSIONS;

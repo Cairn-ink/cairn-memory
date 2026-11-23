@@ -29,6 +29,8 @@ export declare function shingleContainmentMatch(
   containmentKeyUnavailable?: boolean,
 ): boolean | "ineligible";
 export declare function withholdsPassage(passage: PassageFingerprint, fact: TextFact, threshold?: number): boolean;
+/** @internal True when core fingerprints alone cannot prove an exact miss against the fact. */
+export declare function requiresLegacyMacDomain(fact: TextFact): boolean;
 export declare function withholdsAnyPassage(
   passages: readonly PassageFingerprint[], facts: readonly TextFact[], threshold?: number,
 ): boolean;
