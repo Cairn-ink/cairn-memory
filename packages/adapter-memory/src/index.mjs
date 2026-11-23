@@ -1,6 +1,7 @@
 import { CoreError, assertAdapterCapabilities, capabilities, toCoreError } from "@cairn-ink/core";
 import { createCapturePorts } from "./capture.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
+import { createRelationStores } from "./memory-relations.mjs";
 import { createMemoryStore } from "./memory-store.mjs";
 import { createFactStore, createFingerprintProvider, createPauseStore } from "./privacy.mjs";
 import { createRetrievalPorts } from "./retrieval.mjs";
@@ -30,6 +31,7 @@ export function createMemoryAdapter(options = {}) {
   const { keys, ringKeys, setFingerprintSecret } =
     createFingerprintProvider(flags.fingerprintKey, options.fingerprint, rotateRowDigests);
   const store = createMemoryStore(port, flags, newId, matchFacts, ringKeys);
+  const { supersession, conflicts } = createRelationStores(port, matchFacts);
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts,
     flags.fingerprintKey ? ringKeys : undefined);
   /** @type {import("./index.d.mts").MemoryAdapter} */
@@ -44,6 +46,8 @@ export function createMemoryAdapter(options = {}) {
     pause: handleWriteRejections(createPauseStore(port), ["set"]),
     keys,
     ...createRetrievalPorts(port, flags, matchFacts),
+    ...(flags.supersession && { supersession: handleWriteRejections(supersession, ["record", "markHistorical"]) }),
+    ...(flags.conflictEdges && { conflicts: handleWriteRejections(conflicts, ["insert", "invalidate"]) }),
     ...(flags.placement && { placement: handleWriteRejections(
       createTopicStore(port, flags, newId, now, matchFacts, options), ["applyPlacement", "markFailed", "dropMemory"]) }),
     nativeErrorMap,

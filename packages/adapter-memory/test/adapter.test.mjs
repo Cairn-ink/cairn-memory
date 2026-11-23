@@ -30,6 +30,8 @@ test("refuses capabilities with unimplemented ports and accepts the remaining fl
   const unavailable = new Set(Object.values(OPTIONAL_PORTS));
   unavailable.delete("semanticRetrieval");
   unavailable.delete("placement");
+  unavailable.delete("supersession");
+  unavailable.delete("conflictEdges");
   for (const flag of unavailable) {
     assert.throws(() => createMemoryAdapter({ capabilities: { [flag]: true } }), coreError("capability_unavailable"), flag);
   }

@@ -2,11 +2,12 @@ import { allDigests, coreDigest, CoreError, NEAR_DUPLICATE_DISTANCE, compareUtf8
 import { cosineDistance } from "./cosine.mjs";
 import { decodeCursor, encodeCursor, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
+import { eraseRelations } from "./memory-relations.mjs";
 import { addKeyedDigest } from "./privacy.mjs";
 import { copyPublicRow } from "./unit-of-work.mjs";
 import {
   attachReceipts, copyContent, copyDuplicateBatch, copyMerge, copyReceipts, validateLimit, validateMemoryId,
-  validateSource, validateTime, writeNamespace,
+  validateSource, validateTime, writeNamespace, writeTime,
 } from "./validation.mjs";
 
 /** @typedef {import("@cairn-ink/core/ports").DuplicateQuery} DuplicateQuery */
@@ -26,11 +27,6 @@ function matchOrder(a, b) {
   if (a.kind === "prior") return b.kind === "prior" ? b.batchIndex - a.batchIndex : -1;
   if (b.kind === "prior") return 1;
   return newestFirst({ id: a.id, updatedAtUs: a.writeTimeUs }, { id: b.id, updatedAtUs: b.writeTimeUs });
-}
-
-/** @param {number} nowMs */
-export function writeTime(nowMs) {
-  return { updatedAtMs: nowMs, updatedAtUs: BigInt(nowMs) * 1000n };
 }
 
 /**
@@ -281,10 +277,11 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
         validateMemoryId(id);
         const namespace = writeNamespace(scope);
         return (getState) => {
-          const { rows } = getState();
-          const entries = rows.get(namespace);
+          const state = getState();
+          eraseRelations(state, namespace, id);
+          const entries = state.rows.get(namespace);
           if (!entries?.delete(id)) return false;
-          if (!entries.size) rows.delete(namespace);
+          if (!entries.size) state.rows.delete(namespace);
           return true;
         };
       });
