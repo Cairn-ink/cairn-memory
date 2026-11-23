@@ -122,6 +122,9 @@ Each addendum is additive unless it says what it supersedes. Adapters written ag
 11. **Visibility fence read intent (2026-11-24).** `VisibilityFence.assertVisible` accepts an optional fourth argument `"read"` to include historical memories. The fence still drops forgotten, suppressed, and out-of-scope rows. With the argument omitted, the fence drops historical memories.
    - `MemoryService.read` supplies `"read"` to the fence in the same snapshot as delivery hydration. Recall, find, recent, and export omit the argument.
    - Adapters that ignore the argument still satisfy the default cases.
+12. **Raw import withheld positions.** `RawCapture.importArchive` accepts an optional fifth argument `options?: { withheld?: readonly number[] }`. The zero-based positions identify messages Core has already withheld in the full prepared batch. All text at the port uses Core's usual normalization and redaction.
+   - The adapter computes lineage and fork proofs over the entire batch, including the withheld positions. It never stores, indexes or returns a message at a withheld position. It counts that position once in `withheld` and applies the ordinary eligibility rules to the other positions, including fencing a proven fork.
+   - It supersedes nothing.
 
 ## Change requests
 
