@@ -15,11 +15,20 @@ use lexical matching only.
 
 Read with one snapshot. The store excludes hidden cards in `get` and `list`.
 Before delivery, the host's `VisibilityFence` uses `documentCardVisible` to
-verify owner and namespace, the deterministic ID, each source memory's
-current visibility, and that Raw would expose the entire source message.
+verify owner and namespace and each source memory's current visibility. For
+message-backed cards it also verifies the deterministic ID and that Raw would
+expose the entire source message.
 The ID check uses the canonical session key supplied on the helper's card
 input. The host must resolve it from the record's plain source with the
 capture resolver. A missing key, state, or Raw verdict hides the card.
+
+For authored or imported cards, pass `sourceMessage: null` to
+`documentCardVisible`. The helper checks the stored scope and accepts the
+stored ID as supplied. The Raw verdict is optional. Every linked memory must
+be visible at its recorded revision in the same snapshot. With zero linked
+memories, the card stays visible within its scope until it is hidden or
+deleted directly via `forgetCard`. The store excludes hidden and tombstoned
+IDs from reads.
 
 For `documentCardSourceWithheld`, supply the complete Raw match projections
 for the card's source message, plus all applicable facts and the Raw matching
@@ -32,10 +41,10 @@ projections, or inconsistent coverage or identity withholds the card.
 Its Raw branch treats identity facts as targeting memories. Pass Raw lineage
 fences and any identity-derived exclusions already resolved by Raw as
 `sourceExcluded`. An uncertain comparison or projection withholds the card.
-Use this check even when the card has no linked memories. A match anywhere
-in the message withholds the entire card. A host with its own Raw predicate
-can pass `sourceWithheld: false` after that predicate confirms visibility for
-the entire source message in the same snapshot.
+Use this check for a source message even when the card has no linked memories.
+A match anywhere in the message withholds the entire card. A host with its own
+Raw predicate can pass `sourceWithheld: false` after that predicate confirms
+visibility for the entire source message in the same snapshot.
 
 `documentCardStaleness` detects recorded stale entries, revision changes, and
 sources whose state is anything other than current and visible. A historical
