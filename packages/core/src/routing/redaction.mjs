@@ -6,6 +6,14 @@ import { normalizeDocumentText } from "./text.mjs";
 const REPLACEMENT = "[REDACTED]";
 const MAX_ROUNDS = 4;
 
+/** At least one redaction marker is required. No Unicode letter or number may
+ * remain after removing the markers. Punctuation without markers routes as usual.
+ * @param {string} content
+ */
+export function isMarkerOnly(content) {
+  return content.includes(REPLACEMENT) && !/[\p{L}\p{N}]/u.test(content.replaceAll(REPLACEMENT, ""));
+}
+
 /** @typedef {[start: number, end: number]} Span */
 /** @typedef {[start: number, end: number, replacement: string]} Edit */
 /** @typedef {{ text: string, source: Span[] }} TracedText */

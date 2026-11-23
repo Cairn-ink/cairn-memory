@@ -13,13 +13,41 @@ owner index revision once per call. Store only memory IDs in stale entries.
 Pass an embedding with its model key to index a vector. Without a model key,
 use lexical matching only.
 
+Text is marker-only when it contains at least one `[REDACTED]` marker and no
+Unicode letter or number remains after removing all markers. Punctuation-only
+text without a marker follows the usual routing rules.
+
 Read with one snapshot. The store excludes hidden cards in `get` and `list`.
 Before delivery, the host's `VisibilityFence` uses `documentCardVisible` to
-verify owner and namespace, the deterministic ID, each source memory's
-current visibility, and that Raw would expose the entire source message.
+verify a nonempty card ID, owner and namespace, and each source memory's
+current visibility. Pass the immutable `origin` from the stored record in
+that snapshot. Keep it unchanged on replacement. Router cards (`"router"`)
+and legacy cards with no origin require a source message. The helper verifies
+the deterministic ID and that Raw would expose the entire source message.
 The ID check uses the canonical session key supplied on the helper's card
 input. The host must resolve it from the record's plain source with the
 capture resolver. A missing key, state, or Raw verdict hides the card.
+
+Source-less cards have stored origin `"import"` or `"manual"` and
+`sourceMessage: null`. An unknown origin or a source message that conflicts
+with the stored origin hides the card. Every linked memory must be present,
+current and visible at its recorded revision in the same snapshot. An empty
+source set is valid and can use an empty `memoryStates` map.
+
+For a source-less card, pass the stored `card.title` and `card.body` to
+`documentCardVisible`. Use `null` if the stored title is absent. Supply
+`textFacts` as the complete applicable set of unwrapped `TextFact` objects
+from that scope and read snapshot. Use `[]` when there are no applicable
+facts. Pass the owner's memory `fingerprintKey` when available. Core checks
+the title and body separately with memory fingerprints, exact digests and
+keyed shingle containment at the shared 0.6 threshold. A match in either
+field returns `text_withheld`. Unknown or malformed facts and unavailable
+key evidence needed for comparison withhold the card.
+
+To forget a source-less card, use the store's scoped
+`hide(tx, scope, cardId, reason)` by ID and apply text withholding as for
+memories. The store excludes hidden and tombstoned IDs from reads and keeps
+them tombstoned on replay.
 
 For `documentCardSourceWithheld`, supply the complete Raw match projections
 for the card's source message, plus all applicable facts and the Raw matching
@@ -32,10 +60,10 @@ projections, or inconsistent coverage or identity withholds the card.
 Its Raw branch treats identity facts as targeting memories. Pass Raw lineage
 fences and any identity-derived exclusions already resolved by Raw as
 `sourceExcluded`. An uncertain comparison or projection withholds the card.
-Use this check even when the card has no linked memories. A match anywhere
-in the message withholds the entire card. A host with its own Raw predicate
-can pass `sourceWithheld: false` after that predicate confirms visibility for
-the entire source message in the same snapshot.
+Use this check for a source message even when the card has no linked memories.
+A match anywhere in the message withholds the entire card. A host with its own
+Raw predicate can pass `sourceWithheld: false` after that predicate confirms
+visibility for the entire source message in the same snapshot.
 
 `documentCardStaleness` detects recorded stale entries, revision changes, and
 sources whose state is anything other than current and visible. A historical
