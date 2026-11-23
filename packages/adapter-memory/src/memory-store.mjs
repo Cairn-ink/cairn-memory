@@ -5,7 +5,7 @@ import { createFactMatcher } from "./fact-match.mjs";
 import { eraseRelations } from "./memory-relations.mjs";
 import { invalidateRationale } from "./rationale.mjs";
 import { addKeyedDigest } from "./privacy.mjs";
-import { copyPublicRow } from "./unit-of-work.mjs";
+import { copyPublicRow, dropMemoryPlacement } from "./unit-of-work.mjs";
 import {
   attachReceipts, copyContent, copyDuplicateBatch, copyMerge, copyReceipts, validateLimit, validateMemoryId,
   validateSource, validateTime, writeNamespace, writeTime,
@@ -294,6 +294,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           if (!entries?.delete(id)) return false;
           invalidateRationale(state, namespace, id);
           if (!entries.size) state.rows.delete(namespace);
+          dropMemoryPlacement(state.topics.get(namespace), id, { erase: true });
           return true;
         };
       });
