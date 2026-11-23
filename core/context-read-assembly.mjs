@@ -142,7 +142,7 @@ function canonical(value) {
 // Prepared items retain full identities independently of the wire projection.
 // snapshotOf runs once, after all counts, using only cached preparation state.
 export function assembleContext({ prepared, counter, policy, budget, snapshotOf, deadlineAt, representation = 'representation-v2',
-  responseBytes, intent = 'current', now = () => performance.now(), ledgerItem, documentItem }) {
+  responseBytes, intent = 'current', now = () => performance.now(), ledgerItem }) {
   const started = now(), selected = new Map(), compact = representation === 'memory-compact-v1';
   const hasEngineCards = prepared.some(item => item.type === 'card' && item.metadata?.origin === 'engine');
   const hits = hasEngineCards ? engineCardHits(prepared, budget.maxItems) : new Map();
@@ -155,7 +155,7 @@ export function assembleContext({ prepared, counter, policy, budget, snapshotOf,
     ? prepared.filter(item => item.sources.some(source => source.date || source.dates?.length)) : []);
   const stops = { budget: false, items: false, deadline: false };
   let counterCalls = 0, oversized = 0;
-  const sourceItems = [documentItem, ledgerItem].filter(Boolean), includedSources = new Map();
+  const sourceItems = [ledgerItem].filter(Boolean), includedSources = new Map();
   const expired = () => { stops.deadline ||= now() >= deadlineAt; return stops.deadline; };
   function count(text, required = false) {
     if (expired() && !required) return null;

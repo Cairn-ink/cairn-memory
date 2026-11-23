@@ -28,11 +28,11 @@ import { rankMoc, mocDiagnostic } from './context-read-moc.mjs';
 import { fuseCandidates, RRF_PRESETS, COMPACT_RRF_PRESETS } from './context-read-fusion.mjs';
 import { REPRESENTATION_VERSION, TOKENIZER_VERSION } from './context-read-tokenize.mjs';
 import { countTokens } from './model-budget.mjs';
-import { createRawSourceRoots } from './raw-source-roots.mjs';
-import { DOCUMENT_CARD_CHANNEL, DOCUMENT_CARD_PRECEDENCE, documentCardPort, documentLexicalScore, documentPiece } from './document-card.mjs';
+import { createDocumentSourceGuard } from './raw-lineage-storage.mjs';
+import { DOCUMENT_CARD_CHANNEL, DOCUMENT_CARD_PRECEDENCE, documentCardBoundTo, documentCardPort, documentLexicalScore, documentPiece, tryDocumentWrite } from './document-card.mjs';
 import { cosine, validateVector } from './context-read-embedder.mjs';
 import { contextBudget } from './context-read-budget.mjs';
-import { receiptEventDate, completeResponseBytes, cardPackSources, receiptSourceRows, resolveMemorySourceDates } from './context-read-assembly.mjs';
+import { receiptEventDate, completeResponseBytes, cardPackSources, receiptSourceRows, resolveMemorySourceDates, meteredText } from './context-read-assembly.mjs';
 import { readRawChannel, citedRawTurns, assembleThreeLayerContext } from './context-read-three-layer.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
 import { CONTEXT_VERSION, CONTEXT_METHODS, CONTEXT_LIMITS, SOURCE_LIMITS, ASSEMBLY_LIMITS, ASSEMBLY_POLICIES, ASSEMBLY_REPRESENTATIONS, ASSEMBLY_DEFAULTS, DEFAULT_ASSEMBLY_POLICY,
@@ -792,8 +792,6 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       if (options.rawSearch && input.raw) access.check();
       const ledger = options.ledgerPort && input.types.includes('memory') && hasLedgerCue(input.query) && performance.now() < deadlineAt
         ? collectLedgerChannel(db, read, options.ledgerPort, input, deadlineAt, canonicalFence) : null;
-      const document = cardChannel && performance.now() < deadlineAt
-        ? await cardChannel.collect(input, access, deadlineAt, queryVector) : null;
       candidates = searched.horizon;
       searched.check(); // The horizon's search fences also cross the outer await.
       let deadline = performance.now() >= deadlineAt;
@@ -894,7 +892,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       const withoutSnapshot = compact ? new WeakSet() : null;
       // Wire-only Card projection retains canonical stored-body fences and bodyRevision.
       const assemble = raw => assembleThreeLayerContext({ prepared: prepared.items, counter: options.counter, policy: input.policy,
-        query: input.query, readSet: input.readSet, intent: input.intent, ledgerItem: ledger?.item, documentItem: document?.item,
+        query: input.query, readSet: input.readSet, intent: input.intent, ledgerItem: ledger?.item,
         budget: input.budget, representation: input.representation, deadlineAt,
         responseBytes: datedCandidates ? ({ meteredBytes, diagnostics, selected }) => {
           const envelope = success({ metered: null, snapshot: null,
@@ -928,10 +926,21 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         decorate(); access.check();
       }
       assembled.diagnostics.stops.deadline ||= performance.now() >= deadlineAt;
-      const deliveredDocument = document && assembled.metered.items.includes(document.item);
-      if (deliveredDocument) {
+      const canAddDocument = cardChannel && !assembled.diagnostics.stops.deadline &&
+        assembled.metered.items.length < input.budget.maxItems;
+      const document = canAddDocument ? await cardChannel.collect(input, access, deadlineAt, queryVector) : null;
+      const withDocument = document && addDocumentToPack(assembled, document, options.counter, input.budget, deadlineAt, access);
+      let deliverDocument = withDocument && cardChannel.isCurrent(document);
+      if (canAddDocument) {
         access.check();
-        documentChannel.assertCurrent(document);
+        // Raw passed its timed final check before the optional card work.
+        // Recheck authority after those callbacks without charging their time
+        // to the already-assembled ordinary pack.
+        if (rawChannel.items.length && !validateRaw(false)) {
+          ({ selected: delivered, validateRaw, ...assembled } = assemble({ items: [], coverage: 'partial' }));
+          decorate(); access.check();
+          deliverDocument = false;
+        }
       }
       const result = deepFreeze(success(assembled));
       if (bytes(result) > CONTEXT_LIMITS.responseBytes) fail('context_item_too_large');
@@ -943,7 +952,6 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           for (const path of searched.sourceState.witnesses) if (delivered.some(item => same(item.ref, path.ref)))
             witnessInside(input, path, 'snapshot_stale', witnessBudget);
         }
-        if (deliveredDocument && !documentChannel.visible(document)) fail('snapshot_stale');
         if (ledger && assembled.metered.items.includes(ledger.item) &&
             !same(ledger.fence, canonicalFence(input.readSet, ['memory']))) fail('snapshot_stale');
         if (delivered.length && !same(canonicalFence(input.readSet, [...new Set(delivered.map(item => item.type))]), generationsFor(delivered))) fail('snapshot_stale');
@@ -957,7 +965,8 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           }
           if (bind('snapshot-item', cardLineageItemInside(db,current)) !== item.fence) fail('snapshot_stale');
         }
-        return result;
+        return deliverDocument && performance.now() < deadlineAt && cardChannel.matchesState(document)
+          ? withDocument : result;
       });
     } catch (error) {
       const finalTrace = candidates && error.code === 'index_unavailable' && options.localStatus ? { ...candidates.trace, localEmbedder: sampleLocalStatus(options.localStatus) } : candidates?.trace;
@@ -1127,106 +1136,145 @@ function collectLedgerChannel(db, read, port, input, deadlineAt, canonicalFence)
 }
 
 function createDocumentChannel(db, { cardPort, embedder, counter, policy }, read, dispatch, controllers) {
-  const roots = createRawSourceRoots(db);
+  const sourceUnavailable = createDocumentSourceGuard(db);
   const call = work => assertContentPort({ invoke: () => inertContentPortValue(work(), 'invalid_input', { rejectProxies: true }) });
-  const witness = ({ id, revision, source, sourceMemoryIds, title, body, date, stale }) =>
-    JSON.stringify([id, revision, source, sourceMemoryIds, title, body, date, stale]);
+  const witness = ({ id, revision, namespace, source, sourceMemoryIds, sourceMemoryRevisions, title, body, date, stale }) =>
+    JSON.stringify([id, revision, namespace, source, sourceMemoryIds, sourceMemoryRevisions, title, body, date, stale]);
   const embeddingKey = embedder && JSON.stringify(metadata(embedder));
-  let hasEpisodes = false;
-  function visible({ namespace, card }) {
-    const { source, sourceMemoryIds, stale } = card;
-    if (contentSuppressionReasonInside(db, namespace)) return false;
-    try { roots.assertSession(namespace, source.client, source.sessionId, true); }
-    catch (error) { if (error.code === 'conversation_deleted') return false; throw error; }
-    hasEpisodes ||= Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE name='session_episodes'").get());
-    if (hasEpisodes && db.prepare(`SELECT 1 FROM session_episodes
-      WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND session_key IN (?,?) AND deleted=1`)
-      .get(namespace.ownerId, namespace.scope, namespace.projectId ?? '', source.client,
-        ...roots.keys(namespace, source.client, source.sessionId))) return false;
-    const row = db.prepare('SELECT deleted FROM memories WHERE owner_id=? AND scope=? AND project_id=? AND id=?');
-    return [...sourceMemoryIds, ...(stale?.map(entry => entry.replacement.memoryId) ?? [])].every(id =>
-      row.get(namespace.ownerId, namespace.scope, namespace.projectId ?? '', id)?.deleted !== 1);
+  let maintaining = false;
+
+  function stateOf({ namespace, card }) {
+    if (!documentCardBoundTo(namespace, card) || contentSuppressionReasonInside(db, namespace) ||
+        sourceUnavailable(namespace, card.source)) return null;
+    const memory = db.prepare(`SELECT id,revision,deleted,currentness,content,updated_at FROM memories
+      WHERE owner_id=? AND scope=? AND project_id=? AND id=?`);
+    const row = memoryId => memory.get(namespace.ownerId, namespace.scope, namespace.projectId ?? '', memoryId);
+    const visible = (value, intent) => value && !value.deleted && contentReadSafety(db, { namespace, intent,
+      ref: { type: 'memory', namespace, memoryId: value.id, revision: value.revision } }).allowed;
+    const revisions = new Map((card.sourceMemoryRevisions ?? []).map(({ memoryId, revision }) => [memoryId, revision]));
+    let stale = Boolean(card.stale?.length);
+    for (const id of card.sourceMemoryIds) {
+      const current = row(id);
+      if (!visible(current, 'history')) return null;
+      if (current.currentness === 'historical' || current.revision !== revisions.get(id)) stale = true;
+    }
+    const replacements = new Map();
+    for (const { replacement: { memoryId } } of card.stale ?? []) {
+      const current = row(memoryId);
+      if (current?.deleted) return null;
+      if (visible(current, 'current')) replacements.set(memoryId, { memoryId, revision: current.revision,
+        content: current.content, date: current.updated_at });
+    }
+    return { stale, replacements: [...replacements.values()] };
   }
-  function assertCurrent({ namespace, card }) {
-    const current = call(() => cardPort.get(namespace, card.id));
-    if (!current || witness(current) !== witness(card)) fail('snapshot_stale');
+
+  const matchesState = entry => same(stateOf(entry), entry.state);
+  function isCurrent({ namespace, card }) {
+    try {
+      const current = call(() => cardPort.get(namespace, card.id));
+      return current && witness(current) === witness(card);
+    } catch { return false; }
   }
-  async function semanticScores(rows, query, access, deadlineAt, queryVector) {
-    if (!dispatch) return [];
+
+  async function embed(texts, entries, access, deadlineAt) {
     const controller = new AbortController();
     controllers.add(controller);
-    async function embed(texts, entries) {
-      const guard = () => {
-        access.check();
-        for (const entry of entries) assertCurrent(entry);
-        if (entries.length && !read(() => entries.every(visible))) fail('snapshot_stale');
-      };
+    const guard = () => {
+      access.check();
+      if (!entries.every(isCurrent) || entries.length && !read(() => entries.every(matchesState))) fail('snapshot_stale');
+    };
+    try {
       const vectors = await dispatch(embedder, texts, { signal: controller.signal, deadlineAt, guard,
         budgetClass: entries.length ? 'maintenance' : 'query' });
       if (!Array.isArray(vectors) || vectors.length !== texts.length) fail('provider_error');
       return vectors.map(vector => validateVector(vector, embedder));
-    }
-    try {
-      const missing = rows.filter(({ card }) => card.embedding?.key !== embeddingKey);
-      const size = policy.maxBatchDocuments ?? 32;
-      for (let index = 0; index < missing.length; index += size) {
-        const batch = missing.slice(index, index + size);
-        const vectors = await embed(batch.map(({ card }) => Array.from(card.body).slice(0, 2000).join('')), batch);
-        for (const [i, entry] of batch.entries()) {
-          const { namespace, card } = entry;
-          const embedding = { key: embeddingKey, vector: vectors[i] };
-          assertCurrent(entry);
-          call(() => cardPort.put(namespace, { ...card, embedding }));
-          card.embedding = embedding;
-        }
-      }
-      const vector = queryVector ?? (await embed([query], []))[0];
-      return rows.map(entry => [cosine(vector, validateVector(entry.card.embedding.vector, embedder)), entry]);
     } finally {
-      assertContentPort({ invoke: () => controller.abort() });
       controllers.delete(controller);
     }
   }
+
+  function maintain(rows, access, deadlineAt) {
+    if (maintaining || !dispatch || !rows.length) return;
+    maintaining = true;
+    const batch = rows.slice(0, policy.maxBatchDocuments ?? 32);
+    setImmediate(async () => {
+      try {
+        if (performance.now() >= deadlineAt) return;
+        const vectors = await embed(batch.map(({ card }) => Array.from(card.body).slice(0, 2000).join('')), batch, access, deadlineAt);
+        for (const [index, entry] of batch.entries()) {
+          const { namespace, card } = entry;
+          if (isCurrent(entry) && read(() => matchesState(entry))) {
+            const embedding = { key: embeddingKey, vector: vectors[index] };
+            tryDocumentWrite(() => call(() => cardPort.put(namespace, { ...card, embedding })));
+          }
+        }
+      } catch { /* A later read can use lexical matching while vectors are unavailable. */ }
+      finally { maintaining = false; }
+    });
+  }
+
   async function collect(input, access, deadlineAt, queryVector) {
     try {
-      const rows = input.readSet.flatMap(namespace => call(() => cardPort.list(namespace)).map(card => ({ namespace, card })));
+      const rows = input.readSet.flatMap(namespace => call(() => cardPort.list(namespace))
+        .filter(card => documentCardBoundTo(namespace, card)).map(card => ({ namespace, card })));
       if (!rows.length || performance.now() >= deadlineAt) return null;
       access.check();
-      // The canonical transaction returns only booleans. Embedding vectors
-      // belong to the port and stay outside the SQLite read result.
-      const allowed = read(() => rows.map(visible));
-      const eligible = rows.filter(({ namespace, card }, index) => {
-        if (!allowed[index]) call(() => cardPort.hide(namespace, card.id, 'source_unavailable'));
-        return allowed[index];
+      const states = read(() => rows.map(stateOf));
+      const eligible = rows.flatMap((entry, index) => {
+        if (states[index]) return [{ ...entry, state: states[index] }];
+        tryDocumentWrite(() => call(() => cardPort.hide(entry.namespace, entry.card.id, 'source_unavailable')));
+        return [];
       });
-      if (!eligible.length) return null;
-      const ranked = embedder ? await semanticScores(eligible, input.query, access, deadlineAt, queryVector) :
-        eligible.map(entry => [documentLexicalScore(input.query, entry.card), entry]);
+      if (!eligible.length || performance.now() >= deadlineAt) return null;
+      const missing = embedder ? eligible.filter(({ card }) => card.embedding?.key !== embeddingKey) : [];
+      maintain(missing, access, deadlineAt);
+      const semantic = embedder && dispatch && !missing.length;
+      const vector = semantic && (queryVector ?? (await embed([input.query], [], access, deadlineAt))[0]);
       let score = -Infinity, match;
-      const threshold = embedder ? .35 : .6;
-      for (const [similarity, entry] of ranked) if (similarity >= threshold && similarity > score) {
-        match = entry; score = similarity;
+      for (const entry of eligible) {
+        const similarity = vector ? cosine(vector, validateVector(entry.card.embedding.vector, embedder))
+          : documentLexicalScore(input.query, entry.card);
+        if (similarity >= (vector ? .35 : .6) && similarity > score) { match = entry; score = similarity; }
       }
       if (!match || performance.now() >= deadlineAt) return null;
       access.check();
-      assertCurrent(match);
-      const { namespace, card } = match;
+      if (!isCurrent(match) || !read(() => matchesState(match))) return null;
+      const { namespace, card, state } = match;
       const count = text => {
         if (performance.now() >= deadlineAt) fail('timeout');
         return countTokens(counter, text, () => access.check());
       };
       const piece = documentPiece(card.body, input.query, input.budget.maxTokens, count);
       if (!piece.body) return null;
-      const replacements = new Map((card.stale ?? []).map(({ replacement }) =>
-        [replacement.memoryId, replacement]));
       return { ...match, item: { channel: DOCUMENT_CARD_CHANNEL, id: card.id, title: card.title, date: card.date, ...piece,
-        source: { namespace, ...card.source }, sourceMemoryIds: card.sourceMemoryIds,
-        ...(replacements.size ? { stale: true, replacements: [...replacements.values()],
-          precedence: DOCUMENT_CARD_PRECEDENCE } : {}) } };
+        source: { ...card.source, namespace }, sourceMemoryIds: card.sourceMemoryIds,
+        ...(state.stale ? { stale: true, replacements: state.replacements, precedence: DOCUMENT_CARD_PRECEDENCE } : {}) } };
     } catch (error) {
       if (['scope_changed', 'authority_required', 'store_closed'].includes(error.code)) throw error;
       return null;
     }
   }
-  return { collect, visible, assertCurrent };
+  return { collect, isCurrent, matchesState };
+}
+
+function addDocumentToPack(assembled, { item }, counter, budget, deadlineAt, access) {
+  if (performance.now() >= deadlineAt) return null;
+  const { metered: ordinary, diagnostics } = assembled;
+  const metered = { ...ordinary, items: [...ordinary.items, item] };
+  let used, tokens;
+  try {
+    const check = () => access.check();
+    used = countTokens(counter, meteredText(metered), check);
+    if (used > budget.maxTokens || performance.now() >= deadlineAt) return null;
+    tokens = countTokens(counter, item.body, check);
+  } catch (error) {
+    if (['scope_changed', 'authority_required', 'store_closed'].includes(error.code)) throw error;
+    return null;
+  }
+  if (performance.now() >= deadlineAt) return null;
+  const result = success({ ...assembled, metered, diagnostics: { ...diagnostics,
+    items: [...diagnostics.items, { channel: item.channel, sources: [], body: { tokens } }],
+    budget: { ...diagnostics.budget, used },
+    trace: { ...diagnostics.trace, counterCalls: diagnostics.trace.counterCalls + 2 } } });
+  return bytes(result) <= CONTEXT_LIMITS.responseBytes ? deepFreeze(result) : null;
 }

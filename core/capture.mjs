@@ -135,7 +135,7 @@ function keepRequest(model, request, deadline) {
 
 /** Public-envelope operations own all transactions; no model work runs inside them. */
 export async function captureMessages({ model, input, operations, captureQualification,
-  captureSourcePolicy, captureRationale, captureEvidence, deadline, episodeRun, rawRegistration, runtime, ns, ledger, documentMessages }) {
+  captureSourcePolicy, captureRationale, captureEvidence, deadline, episodeRun, rawRegistration, runtime, ns, ledger, documentMessages, documentSessionId }) {
   deadline?.check();
   // The default Raw capture registration already supplies each message's
   // explicit or receive time; captureRaw and Raw-free captures keep their input.
@@ -184,7 +184,7 @@ export async function captureMessages({ model, input, operations, captureQualifi
     const selected = allowed.map(index => identities[index]);
     const assertSources = () => operations.assertCaptureSources?.(selected);
     const documentCards = documentMessages && { sources: selected,
-      ...routeDocumentCards(snapshot.namespace, snapshot.client, snapshot.sessionId,
+      ...routeDocumentCards(snapshot.namespace, snapshot.client, documentSessionId ?? snapshot.sessionId,
         documentMessages.filter(message => selected.some(source => source.eventId === message.id && source.role === message.role))) };
     const sourceView = allowed.length === identities.length ? undefined : allowed.map(index => ({
       index: catalog ? catalog.entries[index].messageIndex : index,

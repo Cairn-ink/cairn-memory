@@ -13,10 +13,30 @@ const SECRET_PATTERNS = [
 const ASSIGNMENT_PATTERN =
   /\b((?:[a-z][a-z0-9_]*_)?(?:api[_-]?(?:key|token)|access[_-]?token|auth[_-]?token|client[_-]?secret|password)\s*[:=]\s*)["']?[^\s"']{8,}["']?/gi;
 
-export function redactSecrets(value) {
+export function redactSecrets(value, observe) {
+  if (typeof observe === 'function') {
+    let text = String(value);
+    for (const pattern of SECRET_PATTERNS) text = redactWithEdits(text, pattern, observe);
+    return redactWithEdits(text, ASSIGNMENT_PATTERN, observe, true);
+  }
   const redacted = SECRET_PATTERNS.reduce(
     (text, pattern) => text.replace(pattern, REPLACEMENT),
     String(value),
   );
   return redacted.replace(ASSIGNMENT_PATTERN, `$1${REPLACEMENT}`);
+}
+
+// Report edits in the coordinates of each redaction pass, without changing
+// the substitutions (including the captured assignment prefix).
+function redactWithEdits(text, pattern, observe, assignment = false) {
+  const edits = [];
+  const result = text.replace(pattern, (match, prefixOrOffset, offset) => {
+    const prefix = assignment ? prefixOrOffset : '';
+    const start = assignment ? offset : prefixOrOffset;
+    if (match.slice(prefix.length) !== REPLACEMENT)
+      edits.push({ start: start + prefix.length, end: start + match.length, replacement: REPLACEMENT });
+    return prefix + REPLACEMENT;
+  });
+  if (edits.length) observe(edits);
+  return result;
 }

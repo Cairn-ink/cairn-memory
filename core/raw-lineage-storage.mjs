@@ -2,7 +2,7 @@ import { bindContentSafetyConnection, cachedContentLayout, installedContentLayou
 import { hasContentSuppressionRequestInside, contentSuppressionTargetMatches, writeContentSuppressionInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { createHash, createHmac } from 'node:crypto';
 import { fail } from './validation.mjs';
-import { createRawSourceRoots, rawSessionKeys } from './raw-source-roots.mjs';
+import { createRawSourceRoots, rawSessionKeys, rawUuidFenceHash } from './raw-source-roots.mjs';
 import { createRawCardInvalidation } from './card-raw-sources.mjs';
 
 // The read optimisation has a bounded lease on SHARED. Overflow restarts the
@@ -830,4 +830,35 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
 
 function captureReceiptTuple(receipt) {
   return [receipt.client, receipt.sessionId, receipt.eventId, receipt.role, receipt.excerpt];
+}
+
+// A document exposes the whole message, so one excluded span is enough.
+export function createDocumentSourceGuard(db) {
+  const roots = createRawSourceRoots(db);
+  const hasTable = name => Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name));
+  let hasEpisodes, hasRaw, hasExclusions, uuidSecret;
+  return function documentSourceUnavailable(ns, { client, sessionId, messageId }) {
+    try { roots.assertSession(ns, client, sessionId, true); }
+    catch (error) { if (error.code === 'conversation_deleted') return true; throw error; }
+    if (!uuidSecret && hasTable('local_raw_uuid_fences'))
+      uuidSecret = Buffer.from(db.prepare('SELECT secret FROM episode_identity WHERE singleton=1').get().secret, 'hex');
+    if (uuidSecret && db.prepare(`SELECT 1 FROM local_raw_uuid_fences
+      WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND uuid_hash=?`)
+      .get(...boundary(ns), client, rawUuidFenceHash(ns, client, messageId, uuidSecret))) return true;
+    const identity = [...boundary(ns), client, ...roots.keys(ns, client, sessionId)];
+    hasEpisodes ||= hasTable('session_episodes');
+    if (hasEpisodes && db.prepare(`SELECT 1 FROM session_episodes
+      WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND session_key IN (?,?) AND deleted=1`).get(...identity)) return true;
+
+    hasRaw ||= hasTable('raw_conversations');
+    if (!hasRaw) return false;
+    hasExclusions ||= hasTable('raw_source_exclusions');
+    const sources = db.prepare(`SELECT c.id, m.total_units FROM raw_conversations c
+      JOIN raw_messages m ON m.conversation_id=c.id AND m.message_id=?
+      WHERE c.owner_id=? AND c.scope=? AND c.project_id=? AND c.client=? AND c.session_key IN (?,?)`)
+      .all(messageId, ...identity);
+    return sources.some(({ id, total_units }) => hasExclusions &&
+      db.prepare('SELECT 1 FROM raw_source_exclusions WHERE conversation_id=? AND message_id=? LIMIT 1').get(id, messageId) ||
+      contentSuppressionReasonInside(db, ns, { kind: 'raw', key: id, messageId, start: 0, end: total_units }));
+  };
 }

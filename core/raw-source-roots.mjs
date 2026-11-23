@@ -275,3 +275,8 @@ export function receiptCoordinateStateInside(db, version, changes) {
   return state;
 }
 export function clearReceiptCoordinatesInside(db) { receiptCoordinates.delete(db); }
+
+export function rawUuidFenceHash(ns, client, id, secret) {
+  return createHmac('sha256', secret)
+    .update(JSON.stringify(['local-raw-forgotten-uuid-v1', ...boundary(ns), client, id])).digest('hex');
+}

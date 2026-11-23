@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { rawUuidFenceHash } from './raw-source-roots.mjs';
 import { transaction } from './database.mjs';
 import { rawBoundary } from './raw-input.mjs';
 import { fail } from './validation.mjs';
@@ -9,8 +9,7 @@ const where = 'owner_id=? AND scope=? AND project_id=? AND client=? AND session_
 // with fences; capture cannot pass while either kind of work remains.
 export function createLocalUuidFence(db, fenceDocumentSession) {
   const secret = Buffer.from(db.prepare('SELECT secret FROM episode_identity WHERE singleton=1').get().secret,'hex');
-  const hash = (ns,client,id) => createHmac('sha256',secret)
-    .update(JSON.stringify(['local-raw-forgotten-uuid-v1',...rawBoundary(ns),client,id])).digest('hex');
+  const hash = (ns, client, id) => rawUuidFenceHash(ns, client, id, secret);
   const required = () => { if (!db.isTransaction) fail('raw_transaction_required'); };
   function rememberInside(ns,client,messages) {
     required(); if (client !== 'claude-code') return;

@@ -1,4 +1,4 @@
-import { documentCardPort } from './document-card.mjs';
+import { documentCardBoundTo, documentCardPort } from './document-card.mjs';
 import { suppressionContent } from './suppression-content.mjs';
 import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
 import { withCommitDelivery, inCommitDelivery, dispatchCommit, hasCommitDispatcher, commitFailure, dispatchSynchronousCommit } from './commit-dispatch.mjs';
@@ -1115,6 +1115,7 @@ export function createMemoryCore(input, internal) {
         denseArray(input.messages, 1, 24).map(({ id, role, content, occurredAt }) => ({ id, role, content, occurredAt })) : undefined;
       return success(await (keepInput ? keepEpisodeCapture : sessionEpisodes ? captureEpisodeMessages : captureMessages)({ model, captureQualification, captureSourcePolicy,
         runtime, ns, sessionEpisodes, keepInput, rawRegistration, ledger: Boolean(ledgerPort), documentMessages,
+        documentSessionId: rawRegistration?.documentSessionId,
         startAdmission: () => (deadline = sharedDeadline ?? (captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs))),
         captureRationale, captureEvidence,
         deadline, input: { ...input, namespace },
@@ -1398,9 +1399,10 @@ export function createMemoryCore(input, internal) {
       object(value, ['namespace', 'cardId']);
       const ns = publicNamespace(contractNamespace(value.namespace));
       const cardId = contractId(value.cardId);
-      const forgotten = Boolean(cardPort.get(ns, cardId));
+      const card = cardPort.get(ns, cardId);
+      if (card && !documentCardBoundTo(ns, card)) return { forgotten: false };
       cardPort.hide(ns, cardId, 'card_forget');
-      return { forgotten };
+      return { forgotten: Boolean(card) };
     }); } } : {}),
     admit, list, get, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     claimAdmission, finishAdmission, abandonAdmission, inspectAdmission,

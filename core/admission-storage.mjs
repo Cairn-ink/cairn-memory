@@ -1,3 +1,5 @@
+import { tryDocumentWrite } from './document-card.mjs';
+import { createDocumentSourceGuard } from './raw-lineage-storage.mjs';
 import { dispatchSynchronousCommit } from './commit-dispatch.mjs';
 import { ADMISSION_LEASE_MS } from './episode-schema.mjs';
 import { captureSourceBusy, isPreDispatchToken, postDispatchToken, preDispatchToken } from './capture-source-safety.mjs';
@@ -22,6 +24,7 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
     const namespace={ownerId:row.owner_id,scope:row.scope,projectId:row.project_id};
     return !contentReadSafety(db,{namespace,selectedMemory:row,intent:'history',ref:{type:'memory',namespace,memoryId:row.id,revision:row.revision}}).allowed;
   } }) {
+  const documentSourceUnavailable = cardPort && createDocumentSourceGuard(db);
   // A current feature-off connection may predate another connection's optional
   // migration. Cache presence, never absence, so persisted guards still apply.
   let rawCaptureAvailable = false;
@@ -235,7 +238,8 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
       conflictStorage.insertBatch(ns, entries, "inferred-hint");
       const extra = hooks?.admitted?.(entries);
       const documentCards = cardPort && input.documentCards;
-      if (documentCards) publishDocumentCards(db, cardPort, ns, documentCards, entries, assertSources);
+      if (documentCards) publishDocumentCards(db, cardPort, ns, documentCards, entries,
+        assertSources, sourceRoots, activeRow, documentSourceUnavailable);
       const memoryIds = [...ids];
       // Resolve revisions after the entire batch: later exact matches can attach
       // receipts to an earlier result while preserving its first occurrence order.
@@ -248,7 +252,8 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
       if (!input.keepActionId) stagedEvidence.mark(ns, input, 'admitted');
       if (hooks?.initialClassification && !input.keepActionId) classificationJournal.insert(ns, input, memories);
       return { duplicate: false, memories, suppressedCount, indexRevision: epoch(ns), ...extra,
-        ...(documentCards ? { documentCards: { droppedOversize: documentCards.droppedOversize } } : {}) };
+        ...(documentCards ? { documentCards: { droppedOversize: documentCards.droppedOversize,
+          ...(documentCards.droppedRedaction ? { droppedRedaction: documentCards.droppedRedaction } : {}) } } : {}) };
     }, deadline?.check);
     if (result.closed) fail(result.closed);
     return result;
@@ -295,15 +300,20 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
   return { claimAdmission, beginCaptureDispatch, finishAdmission, abandonAdmission, assertCaptureEvidence, inspectAdmission };
 }
 
-function publishDocumentCards(db, port, ns, { cards, sources }, entries, assertSources) {
+function publishDocumentCards(db, port, ns, { cards, sources }, entries, assertSources,
+  sourceRoots, activeRow, documentSourceUnavailable) {
   const namespace = { ...ns, projectId: ns.projectId || null };
   for (const card of cards) {
+    if (documentSourceUnavailable(ns, card.source)) continue;
     const { client, sessionId, messageId: eventId, role } = card.source;
-    const matches = receipt => receipt.client === client && receipt.sessionId === sessionId &&
+    const sessions = sourceRoots.keys(ns, client, sessionId);
+    const matches = receipt => receipt.client === client && sessions.includes(receipt.sessionId) &&
       receipt.eventId === eventId && receipt.role === role;
     const sourceMemoryIds = [...new Set(entries.filter(({ item }) => item.receipts.some(matches)).map(({ memoryId }) => memoryId))];
+    const sourceMemoryRevisions = sourceMemoryIds.map(memoryId => ({ memoryId, revision: activeRow(ns, memoryId).revision }));
     // Recheck on the canonical write connection, including cards without receipts.
-    assertSources?.(ns, sources.filter(matches));
-    afterTransactionCommit(db, () => port.put(namespace, { ...card, sourceMemoryIds }));
+    try { assertSources?.(ns, sources.filter(matches)); }
+    catch (error) { if (error.code === 'source_excluded') continue; throw error; }
+    afterTransactionCommit(db, () => tryDocumentWrite(() => port.put(namespace, { ...card, sourceMemoryIds, sourceMemoryRevisions })));
   }
 }

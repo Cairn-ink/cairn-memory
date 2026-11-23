@@ -11,13 +11,14 @@ export const CONTENT_WRITE_METHODS = Object.freeze(`abandonAdmission admit adopt
  deleteAsset deleteAssetDerivative deleteAssetVersion deleteConversation deleteKnowledgeCard deleteMethodPackage deleteMethodVersion
  deleteRoleProfileRelease deleteSourceNote disableMethodBinding disableRoleProfile discardCaptureEvidence discoverOrdered
  editCardDraft editKnowledgeCard endEpisodeSession failEpisodeDraft failEpisodeKeep failInitialClassification fenceSession
- finishAdmission finishCapturedAdmission finishOrdered forget forgetCard forgetEpisode importAssetVersion importMethodVersion keepEpisode
+ finishAdmission finishCapturedAdmission finishOrdered forget forgetEpisode importAssetVersion importMethodVersion keepEpisode
  linkMocs maintainCards planCaptureBatches prepareEpisodeKeep proposeEvidenceMapping publishRoleProfileRelease rebuildIndex reject
  refreshCardTopic releaseEpisodeCorrection releaseEpisodeWriter remember reserveEpisodeBatch resolveReview revalidateCardCurrentDependencies
  reviewEvidenceMapping reviewRationale setCapturePaused setEpisodePolicy setLocalCaptureControl
  setProceduralMemory setProjectCapture setRawCaptureControl settleEpisodeAttempt startEpisodeAttempt submitSourceNote supersede
  transitionQualified transitionQualifiedSet`.split(/\s+/));
 const writes = new Set(CONTENT_WRITE_METHODS);
+const portMutations = new Set(['forgetCard']);
 export const CONTENT_TERMINAL_FIELDS = Object.freeze({
   forget: 'memories.id', reject: 'memories.id', resolveReview: 'memories.id',
   cancelCardDraft: 'private_cards.id', deleteKnowledgeCard: 'private_cards.id',
@@ -65,6 +66,7 @@ export function withContentWriteOperation(method, scopes, work, boundary) {
 export function contentWriteOperation(db) {
   const operation = operations.getStore();
   if(operation?.connection&&operation.connection!==contentSafetyConnection(db))return null;
+  if (operation && portMutations.has(operation.method)) fail('evidence_unavailable');
   if(operation&&!writes.has(operation.method)&&!nonwrites.has(operation.method))fail('evidence_unavailable');
   return operation && writes.has(operation.method) ? operation : null;
 }
@@ -95,5 +97,5 @@ export function declareContentTerminalInside(db, kind, canonical) {
 }
 
 export function contentWriteMethodClass(method) {
-  return writes.has(method)?'write':nonwrites.has(method)?'read':null;
+  return writes.has(method)?'write':nonwrites.has(method)?'read':portMutations.has(method)?'port-mutation':null;
 }

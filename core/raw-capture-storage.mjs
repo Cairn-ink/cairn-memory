@@ -253,7 +253,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
     }
     const commitOnly = () => { const result = transaction(db, commit, checkDeadline); if (result.closed) fail(result.closed); accepted = true; return result; };
     return Object.freeze({ localPrivacy: Boolean(privacy), input: projection, hasProjection: Boolean(snapshot), replay,
-      ...(documentMessages ? { documentMessages } : {}),
+      ...(documentMessages ? { documentMessages, documentSessionId: profile.sessionEpisodes ? undefined : input.sessionId } : {}),
       emptyOutcome, commit, observeReplay, assertEpochCurrent, checkDeadline, checkFailureDeadline,
       // A winner can commit even during a failing model preflight. Only an
       // unaccepted attempt may observe that winner; it never acquires work.

@@ -136,6 +136,7 @@ export function contentSafetyFacade(api, { check, noOwner = [], failure, select 
       const native = contentWriteBoundaryConnection(writeBoundary);
       const enclosing = activeReadBoundaries.getStore();
       const reentered = native && enclosing?.get(native)?.has(facadeToken);
+      const portMutation = contentWriteMethodClass(method) === 'port-mutation';
       const nestedRead = native && enclosing?.has(native) && !reentered && contentWriteMethodClass(method) === 'read';
       const execute = () => {
         let scopes, delivering = false;
@@ -155,6 +156,7 @@ export function contentSafetyFacade(api, { check, noOwner = [], failure, select 
           // An engine snapshot held by a synchronous host callback cannot
           // certify a new caller read after another connection commits a fact.
           if(callerPortReads.getStore()&&native?.isOpen!==false&&native?.isTransaction&&contentWriteMethodClass(method)==='read')fail('evidence_unavailable');
+          if (portMutation && native?.isOpen !== false && native?.isTransaction) fail('evidence_unavailable');
           scopes = contentScopes(select(args, method));
           check(scopes,{delivery:false});
           const deliver = result => {

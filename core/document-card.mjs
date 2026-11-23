@@ -47,27 +47,28 @@ const prefix = (text, units) => {
 
 export function routeDocumentCards(namespace, client, sessionId, messages) {
   const matches = [];
-  let droppedOversize = 0;
+  let droppedOversize = 0, droppedRedaction = 0;
   for (const { id: messageId, role, content, occurredAt, totalUnits } of messages) {
     // A Raw fragment cannot supply the full body, even when it matches the rule.
     if (totalUnits !== undefined && totalUnits !== content.length) {
       if (totalUnits > 4000) droppedOversize++;
       continue;
     }
-    const body = redactSecrets(content.normalize('NFKC')).replace(/\r\n/g, '\n').split('\n')
-      .map(line => line.trimEnd()).join('\n');
+    const routed = redactDocument(content);
+    if (routed === null) { droppedRedaction++; continue; }
+    const body = routed.replace(/\r\n/g, '\n').split('\n').map(line => line.trimEnd()).join('\n');
     if (body.length > 4000) { droppedOversize++; continue; }
-    if (!body.trim() || !documentRoute(role, body)) continue;
+    if (!body.trim() || !documentRoute(role, routed)) continue;
     const revision = 1;
-    const id = createHash('sha256').update(JSON.stringify([DOCUMENT_CARD_CHANNEL,
-      namespaceKey(namespace), client, sessionId, messageId, revision])).digest('hex');
+    const source = { client, sessionId, messageId, role };
+    const id = documentCardId(namespace, source);
     const title = prefix(body.split('\n').find(line => line.trim()).trim(), 200);
-    const priority = role === 'user' && remember.test(body) ? 0 : role === 'assistant' ? 1 : 2;
+    const priority = role === 'user' && remember.test(routed) ? 0 : role === 'assistant' ? 1 : 2;
     matches.push({ priority, card: { id, revision, title, date: occurredAt ?? null, body,
-      source: { client, sessionId, messageId, role }, sourceMemoryIds: [] } });
+      namespace: { ...namespace, projectId: namespace.projectId || null }, source, sourceMemoryIds: [], sourceMemoryRevisions: [] } });
   }
   matches.sort((a, b) => a.priority - b.priority);
-  return { cards: matches.slice(0, 4).map(({ card }) => card), droppedOversize };
+  return { cards: matches.slice(0, 4).map(({ card }) => card), droppedOversize, ...(droppedRedaction ? { droppedRedaction } : {}) };
 }
 
 function bigrams(text) {
@@ -118,29 +119,25 @@ export function documentPiece(body, query, maxTokens, count) {
     if (matched > score) { best = index; score = matched; }
   }
   let lo = best, hi = best;
-  const render = (start, end) => {
-    const window = lines.slice(start, end + 1);
-    for (let i = start; i >= 0; i--) if (heading.test(lines[i])) {
-      if (i < start) window.unshift(lines[i], '…');
-      break;
-    }
-    return window.join('\n');
-  };
-  const first = render(lo, hi);
-  if (count(first) > limit) {
-    const prefix = first.slice(0, first.length - lines[best].length);
-    const window = tokenPrefix(lines[best], Math.max(0, limit - count(prefix)), count);
-    const joined = prefix + window;
-    return { body: count(joined) <= limit && window ? joined : tokenPrefix(lines[best], limit, count), piece: 'window' };
-  }
   while (true) {
-    const left = lo > 0 && count(render(lo - 1, hi)) <= limit;
-    if (left) lo--;
-    const right = hi + 1 < lines.length && count(render(lo, hi + 1)) <= limit;
-    if (right) hi++;
-    if (!left && !right) break;
+    // Both candidates start from the same bounds. A fitting right candidate
+    // replaces the left candidate selected earlier in the iteration.
+    const candidates = [[lo - 1, hi], [lo, hi + 1]];
+    let grew = false;
+    for (const [start, end] of candidates) {
+      if (start < 0 || end >= lines.length || count(lines.slice(start, end + 1).join('\n')) > limit) continue;
+      lo = start;
+      hi = end;
+      grew = true;
+    }
+    if (!grew) break;
   }
-  return { body: render(lo, hi), piece: 'window' };
+  const window = lines.slice(lo, hi + 1);
+  for (let index = lo; index >= 0; index--) if (heading.test(lines[index])) {
+    if (index < lo) window.unshift(lines[index], '…');
+    break;
+  }
+  return { body: window.join('\n'), piece: 'window' };
 }
 
 /**
@@ -167,6 +164,8 @@ export function createInMemoryDocumentCardPort() {
       if (prior === null) return false;
       if (!prior) cards.set(card.id, structuredClone(card));
       else cards.set(card.id, { ...prior, sourceMemoryIds: [...new Set([...prior.sourceMemoryIds, ...card.sourceMemoryIds])],
+        sourceMemoryRevisions: structuredClone([...new Map([...(card.sourceMemoryRevisions ?? []), ...(prior.sourceMemoryRevisions ?? [])]
+          .map(value => [value.memoryId, value])).values()]),
         ...(card.embedding && card.body === prior.body ? { embedding: structuredClone(card.embedding) } : {}) });
       return true;
     },
@@ -195,9 +194,93 @@ export function createInMemoryDocumentCardPort() {
 }
 
 export function hideDocumentCards(port, namespace, reason, matches) {
-  for (const card of port.list(namespace)) if (matches(card)) port.hide(namespace, card.id, reason);
+  visitDocumentCards(port, namespace, card => {
+    if (matches(card)) tryDocumentWrite(() => port.hide(namespace, card.id, reason));
+  });
 }
 
 export function documentCardDependsOn(card, memoryId) {
   return card.sourceMemoryIds.includes(memoryId) || Boolean(card.stale?.some(entry => entry.replacement.memoryId === memoryId));
+}
+
+export function documentCardId(namespace, { client, sessionId, messageId }) {
+  return createHash('sha256').update(JSON.stringify([DOCUMENT_CARD_CHANNEL,
+    namespaceKey(namespace), client, sessionId, messageId, 1])).digest('hex');
+}
+
+export function documentCardBoundTo(namespace, card) {
+  return card?.namespace && card.source && card.revision === 1 &&
+    card.namespace.ownerId === namespace.ownerId && card.namespace.scope === namespace.scope &&
+    card.namespace.projectId === namespace.projectId &&
+    card.id === documentCardId(namespace, card.source);
+}
+
+export function tryDocumentWrite(work) {
+  try { return work(); }
+  catch {
+    try { process.emitWarning('Document card publication failed.', { code: 'document_card_write_failed' }); }
+    catch { /* A diagnostic cannot change a committed result. */ }
+  }
+}
+
+export function visitDocumentCards(port, namespace, visit) {
+  const cards = tryDocumentWrite(() => port.list(namespace));
+  for (const card of cards ?? []) if (documentCardBoundTo(namespace, card)) visit(card);
+}
+
+function redactDocument(content) {
+  const body = redactSecrets(content.normalize('NFKC'));
+  const locations = [];
+  let text = '';
+  for (const match of body.matchAll(/\s+|\S+/gu)) {
+    const [run] = match, start = match.index;
+    if (/^\s/u.test(run)) {
+      if (text) {
+        text += ' ';
+        locations.push([start, start + run.length]);
+      }
+    } else {
+      text += run;
+      for (let index = 0; index < run.length; index++) locations.push([start + index, start + index + 1]);
+    }
+  }
+  const spans = [];
+  const cut = (view, limit) => {
+    const text = prefix(view.text, limit).trimEnd();
+    return { text, locations: view.locations.slice(0, text.length) };
+  };
+  const redact = view => {
+    if (view.text.normalize('NFKC') !== view.text) return null;
+    let locations = view.locations;
+    const text = redactSecrets(view.text, edits => {
+      const next = [];
+      let offset = 0;
+      for (const { start, end, replacement } of edits) {
+        next.push(...locations.slice(offset, start));
+        const span = [locations[start][0], locations[end - 1][1]];
+        spans.push(span);
+        next.push(...Array(replacement.length).fill(span));
+        offset = end;
+      }
+      locations = next.concat(locations.slice(offset));
+    });
+    return { text, locations };
+  };
+
+  // Capture flattens before the Raw snapshot and can normalize the bounded
+  // receipt prefix again. Keep coordinates through those same projections.
+  const flat = cut({ text, locations }, text.length);
+  const full = redact(flat);
+  const raw = flat.text.length <= 4000 ? full : redact(cut(flat, 4000));
+  if (!full || !raw) return null;
+  for (const view of [flat, raw]) {
+    const normalized = redact(view);
+    if (!normalized || !redact(cut(normalized, 800))) return null;
+  }
+  let result = '', offset = 0;
+  for (const [start, end] of spans.sort((a, b) => a[0] - b[0])) {
+    if (start >= offset) result += body.slice(offset, start) + '[REDACTED]';
+    offset = Math.max(offset, end);
+  }
+  return result + body.slice(offset);
 }

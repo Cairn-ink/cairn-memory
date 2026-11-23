@@ -1,4 +1,4 @@
-import { documentCardDependsOn, hideDocumentCards } from './document-card.mjs';
+import { documentCardDependsOn, hideDocumentCards, tryDocumentWrite, visitDocumentCards } from './document-card.mjs';
 import { ledgerNamespace, rowsFrom } from './quantity-ledger.mjs';
 import { captureSnapshot } from './capture-input.mjs';
 import { bindCommitRuntime, dispatchSynchronousCommit, withSynchronousCommitScope } from './commit-dispatch.mjs';
@@ -1224,7 +1224,9 @@ function staleDocumentSources(db, port, ns, memoryId, row, date) {
   const replacement = { memoryId: row.id, revision: row.revision, content: row.content, date: date ?? row.updated_at };
   const namespace = documentNamespace(ns);
   afterTransactionCommit(db, () => {
-    for (const card of port.list(namespace)) if (card.sourceMemoryIds.includes(memoryId))
-      port.markStale(namespace, card.id, { memoryId, replacement });
+    visitDocumentCards(port, namespace, card => {
+      if (card.sourceMemoryIds.includes(memoryId))
+        tryDocumentWrite(() => port.markStale(namespace, card.id, { memoryId, replacement }));
+    });
   });
 }
