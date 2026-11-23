@@ -45,6 +45,7 @@
   "packages/core/src/routing/redaction.mjs",
   "packages/core/src/routing/text.mjs",
   "packages/core/src/routing/visibility.mjs",
+  "packages/core/src/service/capture.mjs",
   "packages/core/src/service/entry.mjs",
   "packages/core/src/service/find.mjs",
   "packages/core/src/service/forget.mjs",

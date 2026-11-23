@@ -109,6 +109,16 @@ Each addendum is additive unless it says what it supersedes. Adapters written ag
    - When `clients` is set, memories must have a matching `source.client`. A null memory client never matches. Raw keeps its client filter.
    - Adapters must apply the window and client filters inside the lexical, vector, recent, and raw candidate queries before any depth or pool cut. State tokens bind the window as they bind clients.
 
+9. **Capture admission, status and Raw import.** The four new port methods are optional. Core raises `capability_unavailable` when a needed method is missing.
+   - `CaptureClaim.admit(tx, key, messages)` stores the prepared messages as the admission row, which is the outbox. It runs under the pause lock without taking a lease. It returns `admitted`, `duplicate`, `processing`, or `rawReplay` with the stored `FinishResult`. The dedupe identity is `(owner, client, eventId)` across namespaces. The same `payloadDigest` replays the first admission. A different digest throws `event_payload_conflict`. Core never falls back to `claim` for admission.
+   - Admission validates 1–24 messages, with ids of 1–200 UTF-16 units and content of 1–20,000 UTF-16 units per message before preparation. Core normalizes content and applies union redaction before computing the payload digest. Inside the pause-locked write, core checks source eligibility with the message times and matches the suppression snapshot's text facts. Each withheld message keeps its original position as `{ id, role, content: "", occurredAtMs }` in both the outbox and the lineage call. An all-withheld batch still gets an admission row so `runCapture` can finish it with no items and clear the pending event.
+   - `CaptureClaim.load(tx, { scope, client, sessionId, eventId })` returns the stored `{ key, messages }` for the runner, or null if absent.
+   - `CaptureClaim.status(tx, scope, eventId, client?)` reads a single event without writing. It returns `unknown` for an absent event. With no client, any pending row yields `pending`, otherwise any failed row yields `failed` with its code, otherwise the event is `done`. Failures expose only codes. `MemoryService.captureStatus(scope, eventId, options?)` accepts an optional `{ client?: string }`.
+   - `RawCapture.importArchive(tx, scope, { client, sessionId }, messages)` returns `{ archived, existing, withheld }`. It checks session, window, lineage and text eligibility internally and fails closed. It counts refusals per message without storing them. Existing message ids are conflict-ignored.
+   - It supersedes nothing.
+
+   The conformance kit adds cases for these methods; the reference adapter implements them.
+
 ## Change requests
 
 Send the core lead the port, the method, and the reason. A request is

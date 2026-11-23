@@ -2,6 +2,7 @@ import { CAPABILITIES } from "../capabilities.mjs";
 import { identifier, validateObject } from "../capture/validate.mjs";
 import { FUSION_PRESETS, NEAR_DUPLICATE_DISTANCE } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
+import { captureMethods } from "./capture.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
 import { findMethod, readMethod } from "./find.mjs";
 import { forgetMethod } from "./forget.mjs";
@@ -103,15 +104,14 @@ export function createMemoryService(input) {
       ...pauseMethods(deps.storage),
       ...readMethods(deps.storage, deps.tokens),
       ...writeMethods(deps),
+      ...captureMethods(deps),
       forget: forgetMethod(deps),
       recall: recallMethod(deps),
       find: findMethod(deps),
       read: readMethod(deps.storage),
-      captureStatus: placeholder,
       listRawMessages: placeholder,
       importMemories: placeholder,
       importRawMessages: placeholder,
-      enqueueCapture: placeholder,
       runCapture: placeholder,
     };
   } catch (error) {
