@@ -2,7 +2,8 @@ import { CoreError, compareUtf8, createBM25, rankScores, scoreBM25, termFrequenc
 import { cosineDistance } from "./cosine.mjs";
 import { decodePayload, decodeSortKey, encodePayload, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
-import { readEmbedding, validateLimit, validateReadSet, validateRefs } from "./validation.mjs";
+import { copyPublicRow } from "./unit-of-work.mjs";
+import { copyReadScope, copyRefs, readEmbedding, validateLimit } from "./validation.mjs";
 
 /** @typedef {import("@cairn-ink/core/ports").StorageAdapter} StorageAdapter */
 /** @typedef {import("@cairn-ink/core/ports").RetrievalScope} RetrievalScope */
@@ -55,13 +56,14 @@ function validateToken(token) {
     typeof revision !== "number" || !Number.isSafeInteger(revision) || revision < 0) {
     throw new CoreError("invalid_cursor");
   }
-  const scope = /** @type {RetrievalScope} */ ({ owner, namespaces, clients: clients === null ? undefined : clients });
+  const scope = /** @type {Omit<RetrievalScope, "owner">} */ ({ namespaces, clients: clients === null ? undefined : clients });
+  let selection;
   try {
-    validateReadSet(scope);
+    selection = copyReadScope(owner, scope);
   } catch {
     throw new CoreError("invalid_cursor");
   }
-  if (stateToken(scope, revision) !== token) throw new CoreError("invalid_cursor");
+  if (stateToken(selection, revision) !== token) throw new CoreError("invalid_cursor");
 }
 
 /** @param {Receipt[]} receipts */
@@ -107,7 +109,6 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
 
   /** @param {State} state @param {RetrievalScope} scope @param {readonly ItemRef[]} refs @param {boolean} includeHistorical */
   function* visibleRefs(state, scope, refs, includeHistorical) {
-    validateRefs(refs);
     const byNamespace = policies(state, scope);
     for (const ref of refs) {
       const policy = byNamespace.get(ref.namespace);
@@ -122,13 +123,13 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
   /** @type {import("@cairn-ink/core/ports").VectorCandidates} */
   const vector = {
     async vector(tx, scope, query, model, depth) {
-      return port(tx, scope, false, (state) => {
-        validateReadSet(scope);
+      return port.read(tx, scope, (getState) => {
+        const selection = copyReadScope(tx.owner, scope);
         validateLimit(depth);
         const queryVector = readEmbedding(query);
         if (typeof model !== "string" || !model) throw new CoreError("invalid_input");
 
-        const visible = visibleRows(state, scope);
+        const visible = visibleRows(getState(), selection);
         const rows = [];
         for (const row of visible) {
           const { embedding } = row;
@@ -150,14 +151,14 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
     ...(capabilities.semanticRetrieval ? { vector } : {}),
     lexical: {
       async lexical(tx, scope, query, depth) {
-        return port(tx, scope, false, (state) => {
-          validateReadSet(scope);
+        return port.read(tx, scope, (getState) => {
+          const selection = copyReadScope(tx.owner, scope);
           validateLimit(depth);
           if (typeof query !== "string") throw new CoreError("invalid_input");
           const terms = tokenizeT1(query);
           if (terms.length === 0) return { rows: [], matched: false };
 
-          const documents = visibleRows(state, scope).map((row) => ({
+          const documents = visibleRows(getState(), selection).map((row) => ({
             ref: memoryRef(row), updatedAtUs: row.updatedAtUs, text: row.text,
           }));
           // The core search convenience method caps depth. Score using the same corpus stats
@@ -174,26 +175,27 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
     },
     snapshot: {
       async stateToken(tx, scope) {
-        return port(tx, scope, false, (state) => {
-          validateReadSet(scope);
-          return stateToken(scope, state.indexRevision);
+        return port.read(tx, scope, (getState) => {
+          const selection = copyReadScope(tx.owner, scope);
+          return stateToken(selection, getState().indexRevision);
         });
       },
       async assertUnchanged(tx, scope, token) {
-        return port(tx, scope, false, (state) => {
-          validateReadSet(scope);
+        return port.read(tx, scope, (getState) => {
+          const selection = copyReadScope(tx.owner, scope);
           validateToken(token);
-          if (token !== stateToken(scope, state.indexRevision)) throw new CoreError("cursor_stale");
+          if (token !== stateToken(selection, getState().indexRevision)) throw new CoreError("cursor_stale");
         });
       },
     },
     hydrate: {
       async hydrate(tx, scope, refs, intent) {
-        return port(tx, scope, false, (state) => {
-          validateReadSet(scope);
+        return port.read(tx, scope, (getState) => {
+          const selection = copyReadScope(tx.owner, scope);
           if (intent !== "recall" && intent !== "read" && intent !== "export") throw new CoreError("invalid_input");
-          return Array.from(visibleRefs(state, scope, refs, intent !== "recall"), ({ ref, entry }) => ({
-            ref, memory: structuredClone(entry.row), receipts: structuredClone(entry.receipts),
+          const references = copyRefs(refs);
+          return Array.from(visibleRefs(getState(), selection, references, intent !== "recall"), ({ ref, entry }) => ({
+            ref, memory: copyPublicRow(entry.row), receipts: structuredClone(entry.receipts),
             sourceDates: sourceDates(entry.receipts),
           }));
         });
@@ -201,22 +203,23 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
     },
     fence: {
       async assertVisible(tx, scope, refs) {
-        return port(tx, scope, false, (state) => {
-          validateReadSet(scope);
-          return Array.from(visibleRefs(state, scope, refs, false), ({ ref }) => ref);
+        return port.read(tx, scope, (getState) => {
+          const selection = copyReadScope(tx.owner, scope);
+          const references = copyRefs(refs);
+          return Array.from(visibleRefs(getState(), selection, references, false), ({ ref }) => ref);
         });
       },
     },
     recent: {
       async recent(tx, scope, page) {
-        return port(tx, scope, false, (state) => {
-          validateReadSet(scope);
+        return port.read(tx, scope, (getState) => {
+          const selection = copyReadScope(tx.owner, scope);
           if (!page || typeof page !== "object") throw new CoreError("invalid_input");
           const { cursor, limit } = page;
           validateLimit(limit);
           const after = cursor === null ? null : recentAfter(cursor);
-          const rows = visibleRows(state, scope).filter((row) => !after || recentOrder(row, after) > 0).sort(recentOrder);
-          const items = rows.slice(0, limit).map((row) => structuredClone(row));
+          const rows = visibleRows(getState(), selection).filter((row) => !after || recentOrder(row, after) > 0).sort(recentOrder);
+          const items = rows.slice(0, limit).map(copyPublicRow);
           const last = items.at(-1);
           return {
             items,

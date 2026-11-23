@@ -175,6 +175,8 @@ export const privacyCases = [
     id: "K-FACT-3", title: "creates a new fact for each distinct target", needs: [],
     async run(ctx) {
       const { owner } = ctx;
+      // Keep the legacy NUL-join probes for the flag-false drivers.
+      const separator = ctx.adapter.capabilities.embeddingRequiredOnInsert ? "|" : "\u0000";
       const firstText = textFact(owner, [digest("a"), digest("b")]);
       const firstIdentity = identity(owner, "test-revision");
       /** @type {Extract<Fact, {kind: "window"}>} */
@@ -187,10 +189,10 @@ export const privacyCases = [
         { ...window, window: { ...window.window, endMs: 21 } },
         { ...window, unknownTime: true },
         { ...window, anchor: "pm30min" },
-        { ...identity(owner, 'c"\\\u0000'), namespace: "a,b" },
-        { ...identity(owner, 'b,c"\\\u0000'), namespace: "a" },
-        { ...identity(owner, "c"), namespace: "a\u0000b" },
-        { ...identity(owner, "b\u0000c"), namespace: "a" },
+        { ...identity(owner, 'c"\\\u0001'), namespace: "a,b" },
+        { ...identity(owner, 'b,c"\\\u0001'), namespace: "a" },
+        { ...identity(owner, "c"), namespace: `a${separator}b` },
+        { ...identity(owner, `b${separator}c`), namespace: "a" },
         firstText,
         textFact(owner, [digest("a"), digest("c")]),
         { ...firstText, sourceMemory: { id: "test-source-a", createdAtMs: 10 } },
@@ -205,11 +207,11 @@ export const privacyCases = [
         const plain = { ...factBase(owner), kind: /** @type {const} */ ("session"), session: sessionId };
         targets.push(
           plain,
-          { ...plain, session: { client: "a\u0000b", sessionId: "c" } },
-          { ...plain, session: { client: "a", sessionId: "b\u0000c" } },
+          { ...plain, session: { client: `a${separator}b`, sessionId: "c" } },
+          { ...plain, session: { client: "a", sessionId: `b${separator}c` } },
           // Also exercise a join that puts the ref-kind discriminator between the two fields.
-          { ...plain, session: { client: "a\u0000id\u0000b", sessionId: "c" } },
-          { ...plain, session: { client: "a", sessionId: "b\u0000id\u0000c" } },
+          { ...plain, session: { client: `a${separator}id${separator}b`, sessionId: "c" } },
+          { ...plain, session: { client: "a", sessionId: `b${separator}id${separator}c` } },
         );
       }
       targets.push({ ...factBase(owner), kind: "session", session: sessionHash });
@@ -221,6 +223,7 @@ export const privacyCases = [
   {
     id: "K-FACT-3r", title: "creates a new fact for each distinct raw span target", needs: ["rawSpans"],
     async run(ctx) {
+      const separator = ctx.adapter.capabilities.embeddingRequiredOnInsert ? "\t" : "\u0000";
       /** @type {Extract<Fact, {kind: "rawSpan"}>} */
       const span = {
         ...factBase(ctx.owner), kind: "rawSpan", sessionKeyHash: sessionValue, messageKey: "test-message",
@@ -233,8 +236,8 @@ export const privacyCases = [
         { ...span, messageKey: "test-other-message" },
         { ...span, startUtf16: 0 },
         { ...span, endUtf16: 4 },
-        { ...span, namespace: `a\u0000${sessionValue}\u0000b`, messageKey: "c" },
-        { ...span, namespace: "a", messageKey: `b\u0000${sessionValue}\u0000c` },
+        { ...span, namespace: `a${separator}${sessionValue}${separator}b`, messageKey: "c" },
+        { ...span, namespace: "a", messageKey: `b${separator}${sessionValue}${separator}c` },
       ]);
     },
   },

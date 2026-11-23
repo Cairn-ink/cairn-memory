@@ -1,3 +1,4 @@
+import type { TextDigest } from "../suppression-fact.mjs";
 import type { Counters, MemoryKind, Receipt, Revision, Role, Scope } from "./common.d.ts";
 import type { Tx } from "./unit-of-work.d.ts";
 
@@ -45,6 +46,8 @@ export interface FinishItem {
   kind: MemoryKind;
   confidence: number;
   textHash: string;
+  /** Core's allDigests(text, key) under the owner's current key. Stores persist row digests. */
+  digests?: TextDigest[];
   /** null when not embedded at write time (rule 10). */
   embedding: { model: string; vector: Float32Array } | null;
   receipts: Receipt[];
@@ -85,15 +88,6 @@ export interface StagedEvidence {
   claimEvidence(tx: Tx, key: CaptureKey): Promise<{ claimId: string } | { status: "busy" }>;
   assertEvidence(tx: Tx, claimId: string): Promise<void>;
   release(tx: Tx, claimId: string): Promise<void>;
-}
-
-/** Optional (capability placement): MOC placement journal. */
-export interface PlacementJournal {
-  get(tx: Tx, scope: Scope, memoryId: string): Promise<{ mocIds: string[]; revision: Revision } | null>;
-  map(tx: Tx, scope: Scope): Promise<Array<{ mocId: string; level: 1 | 2; parentId: string | null; title: string }>>;
-  begin(tx: Tx, scope: Scope, memoryIds: readonly string[]): Promise<{ jobId: string }>;
-  apply(tx: Tx, jobId: string, placements: ReadonlyArray<{ memoryId: string; mocIds: string[] }>): Promise<void>;
-  fail(tx: Tx, jobId: string, code: string): Promise<void>;
 }
 
 /** Optional (capability orderedCapture). */

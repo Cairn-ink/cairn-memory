@@ -1,19 +1,22 @@
-import { CoreError, compareUtf8, isErrorCode, toCoreError } from "@cairn-ink/core";
-import { createFactStore } from "./privacy.mjs";
+import { coreDigest, CoreError, compareUtf8, isErrorCode, toCoreError } from "@cairn-ink/core";
+import { addKeyedDigest, createFactStore } from "./privacy.mjs";
 
 /** @typedef {import("@cairn-ink/core").ErrorCode} ErrorCode */
 /** @typedef {import("@cairn-ink/core/ports").Tx} Tx */
 /** @typedef {import("@cairn-ink/core/ports").Scope} Scope */
 /** @typedef {import("@cairn-ink/core/ports").Namespace} Namespace */
 /** @typedef {import("@cairn-ink/core/ports").MemoryRow & {
- *   embedding: {model: string, vector: number[]} | null, historical: boolean, legacyHash?: string
+ *   embedding: {model: string, vector: number[]} | null, historical: boolean, legacyHash?: string,
+ *   digests: import("@cairn-ink/core").TextDigest[]
  * }} Row */
 /** @typedef {{row: Row, receipts: import("@cairn-ink/core/ports").Receipt[]}} Entry */
+/** @typedef {import("@cairn-ink/core/ports").FingerprintKeyProvider["userKey"]} UserKey */
 /** @typedef {import("@cairn-ink/core").StoredFact} StoredFact */
 /** @typedef {import("@cairn-ink/core/ports").PauseState} PauseState */
 /** @typedef {import("./capture.mjs").ClaimRecord} ClaimRecord */
 /** @typedef {import("@cairn-ink/core/ports").FinishResult} FinishResult */
-/** @typedef {{rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
+/** @typedef {import("./topics.mjs").TopicState} TopicState */
+/** @typedef {{topics: Map<Namespace, TopicState>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
  * claims: Map<string, ClaimRecord>, activeTokens: Map<string, string>, abandonedTokens: Set<string>}} State */
 /** @typedef {{state: State, run: {readonly ended: boolean}, indexDirty: boolean, stateWritten: boolean, pauseLock: boolean,
  * poisoned: boolean, writeErrorCode: ErrorCode, finishes: Set<FinishResult>, writingFinishes: number,
@@ -27,8 +30,35 @@ export function indexRevisionAfterRun(run) {
   return revision;
 }
 
+/** @param {Row} row */
+export function copyPublicRow({ digests: _digests, ...row }) {
+  return structuredClone(row);
+}
+
+/**
+ * Handle the promise exposed by each queued write, including async wrappers around the queue.
+ * The caller still observes the rejection and the run retains the first state-level error.
+ * @template {PropertyKey} K
+ * @template {Record<K, (...args: any[]) => Promise<unknown>>} P
+ * @param {P} ports @param {readonly K[]} names
+ */
+export function handleWriteRejections(ports, names) {
+  for (const name of names) {
+    const write = ports[name];
+    ports[name] = /** @type {P[K]} */ ((/** @type {any[]} */ ...args) => {
+      const pending = write.apply(ports, args);
+      void pending.catch(() => {});
+      return pending;
+    });
+  }
+  return ports;
+}
+
 class Mutex {
   #tail = Promise.resolve();
+  #locked = false;
+
+  get locked() { return this.#locked; }
 
   async acquire() {
     const previous = this.#tail;
@@ -36,14 +66,18 @@ class Mutex {
     let release = () => {};
     this.#tail = new Promise((resolve) => { release = resolve; });
     await previous;
-    return release;
+    this.#locked = true;
+    return () => {
+      this.#locked = false;
+      release();
+    };
   }
 }
 
 class Owner {
   /** @type {State} */
   committed = {
-    rows: new Map(), facts: new Map(), epoch: null, pause: { paused: false, generation: 0 }, indexRevision: 0,
+    topics: new Map(), rows: new Map(), facts: new Map(), epoch: null, pause: { paused: false, generation: 0 }, indexRevision: 0,
     claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(),
   };
   pause = new Mutex();
@@ -68,13 +102,12 @@ function jsonSafe(value) {
   throw new TypeError("Unsupported value in memory snapshot");
 }
 
-/** @param {Readonly<Record<string, ErrorCode>>} nativeErrorMap @param {() => number} [now] */
-export function createUnitOfWork(nativeErrorMap, now = Date.now) {
+/** @param {Readonly<Record<string, ErrorCode>>} nativeErrorMap @param {() => number} [now] @param {boolean} [includeTopics] */
+export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics = false) {
   /** @type {Map<string, Owner>} */
   const owners = new Map();
   /** @type {WeakMap<Tx, IssuedRun>} */
   const issued = new WeakMap();
-
   /** @param {string} owner */
   function ownerState(owner) {
     let state = owners.get(owner);
@@ -152,7 +185,15 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now) {
    */
   function port(tx, scope, write, body, pauseLock = false) {
     if (write) return writePort(tx, scope, true, () => (getState) => body(getState()), pauseLock);
-    return accessPort(tx, scope, false, (getState) => body(getState()), pauseLock);
+    return readPort(tx, scope, (getState) => body(getState()), pauseLock);
+  }
+
+  /** @template T
+   * @param {Tx} tx @param {Pick<Scope, "owner">} scope
+   * @param {(getState: () => State) => T} body @param {boolean} [pauseLock]
+   */
+  function readPort(tx, scope, body, pauseLock = false) {
+    return accessPort(tx, scope, false, body, pauseLock);
   }
 
   /**
@@ -224,15 +265,18 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now) {
     }
   }
 
-  // Write ports validate arguments before requesting the owner state.
+  // Ports can validate arguments after the transaction guard and before requesting owner state.
+  port.read = readPort;
   port.write = writePort;
 
   /**
    * Memory operations invoked by the finish that already holds the queue.
    * @template T
-   * @param {Tx} tx @param {Pick<Scope, "owner">} scope @param {() => (getState: () => State) => T} prepare
+   * @param {Tx} tx @param {Pick<Scope, "owner">} scope
+   * @param {() => (getState: () => State, markDirty: () => void) => T} prepare
    */
-  port.writeFromFinish = (tx, scope, prepare) => accessPort(tx, scope, "conditional", (getState) => prepare()(getState));
+  port.writeFromFinish = (tx, scope, prepare) =>
+    accessPort(tx, scope, "conditional", (getState) => prepare()(getState, () => {}));
 
   /**
    * @template T
@@ -247,7 +291,8 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now) {
   function dump() {
     const snapshot = [...owners]
       .filter(([, { committed }]) => committed.rows.size > 0 || committed.facts.size > 0 ||
-        committed.pause.generation > 0 || committed.claims.size > 0)
+        committed.pause.generation > 0 || committed.claims.size > 0 ||
+        (includeTopics && (committed.topics.size > 0 || committed.indexRevision > 0)))
       .sort(([a], [b]) => compareUtf8(a, b))
       .map(([owner, { committed }]) => ({
         owner,
@@ -260,6 +305,15 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now) {
           }),
         facts: [...committed.facts.values()],
         pause: committed.pause,
+        ...(includeTopics && {
+          indexRevision: committed.indexRevision,
+          topics: [...committed.topics].map(([namespace, { topics, outcomes, failures }]) => ({
+            namespace,
+            topics: [...topics.values()],
+            outcomes: [...outcomes].map(([id, { revision, memberships }]) => ({ id, revision, memberships: [...memberships] })),
+            failures: [...failures],
+          })),
+        }),
         ...(committed.claims.size ? {
           claims: [...committed.claims.values()],
           abandonedTokens: [...committed.abandonedTokens],
@@ -287,21 +341,100 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now) {
   }
 
   /** @param {Scope} scope @param {string} id @param {bigint} updatedAtUs */
-  async function setWriteTime(scope, id, updatedAtUs) {
-    const current = owners.get(scope.owner);
+  async function setWriteTime({ owner, namespace }, id, updatedAtUs) {
+    const current = owners.get(owner);
     if ((current && current.open > 0) || typeof updatedAtUs !== "bigint" || updatedAtUs < 0n) {
       throw new CoreError("invalid_input");
     }
-    const namespace = current?.committed.rows.get(scope.namespace);
-    const entry = namespace?.get(id);
-    if (!current || !namespace || !entry) throw new CoreError("memory_not_found");
+    if (!current) throw new CoreError("memory_not_found");
+    const release = await current.write.acquire();
+    try {
+      const entries = current.committed.rows.get(namespace);
+      const entry = entries?.get(id);
+      if (!entries || !entry) throw new CoreError("memory_not_found");
 
-    const rows = new Map(current.committed.rows);
-    const updated = new Map(namespace);
-    updated.set(id, { ...entry, row: { ...entry.row, updatedAtUs, updatedAtMs: Number(updatedAtUs / 1000n) } });
-    rows.set(scope.namespace, updated);
-    current.committed = { ...current.committed, rows, indexRevision: current.committed.indexRevision + 1 };
+      const rows = new Map(current.committed.rows);
+      const updated = new Map(entries);
+      updated.set(id, { ...entry, row: { ...entry.row, updatedAtUs, updatedAtMs: Number(updatedAtUs / 1000n) } });
+      rows.set(namespace, updated);
+      current.committed = { ...current.committed, rows, indexRevision: current.committed.indexRevision + 1 };
+    } finally {
+      release();
+    }
   }
 
-  return { uow, port, dump, appendFact, runSeed, setWriteTime };
+  /** @param {State["rows"]} rows @param {Awaited<ReturnType<UserKey>>} key @returns {Promise<State["rows"]>} */
+  async function refreshRows(rows, key) {
+    const refreshed = new Map();
+    for (const [namespace, entries] of rows) {
+      const updated = new Map();
+      for (const [id, entry] of entries) {
+        const { row } = entry;
+        const digests = [...(row.digests ?? [])];
+        addKeyedDigest(digests, await coreDigest(row.text, key));
+        updated.set(id, { ...entry, row: { ...row, digests } });
+      }
+      refreshed.set(namespace, updated);
+    }
+    return refreshed;
+  }
+
+  /**
+   * @param {UserKey} pendingKey
+   * @param {(owner: string) => Promise<Set<string>>} retainedKeyIds
+   * @param {() => void} publish
+   */
+  async function rotateRowDigests(pendingKey, retainedKeyIds, publish) {
+    /** @type {Map<Owner, {base: State, rows: State["rows"]}>} */
+    const staged = new Map();
+    /** @param {Owner} owner */
+    const needsRefresh = (owner) => owner.write.locked || staged.get(owner)?.base !== owner.committed;
+
+    do {
+      for (const [owner, current] of owners) {
+        if (!needsRefresh(current)) continue;
+        const release = await current.write.acquire();
+        try {
+          const base = current.committed;
+          if (staged.get(current)?.base === base) continue;
+          const keyedFacts = [...base.facts.values()].flatMap(({ fact }) =>
+            fact.kind === "text" && fact.text.digests.every(({ alg }) => alg === "hmac") ? fact.text.digests : []);
+          if (keyedFacts.length > 0) {
+            const olderIds = await retainedKeyIds(owner);
+            if (keyedFacts.some(({ keyId }) => keyId !== null && olderIds.has(keyId))) {
+              throw new CoreError("fingerprint_key_mismatch");
+            }
+          }
+          const rows = base.rows.size === 0 ? base.rows : await refreshRows(base.rows, await pendingKey(owner));
+          staged.set(current, { base, rows });
+        } finally {
+          release();
+        }
+      }
+      // A writer can commit or start while another owner is being refreshed. Recheck those owners
+      // under their locks so their rows and facts are included and an active write cannot replace the refresh.
+    } while ([...owners.values()].some(needsRefresh));
+
+    // Publish all validated snapshots and the key in one synchronous step.
+    for (const [current, { base, rows }] of staged) {
+      if (rows !== base.rows) current.committed = { ...base, rows };
+    }
+    publish();
+  }
+
+  /** @param {string} owner @param {import("./privacy.mjs").RingKeys} ringKeys */
+  async function rowsMissingKeyedDigest(owner, ringKeys) {
+    const rows = owners.get(owner)?.committed.rows;
+    if (!rows) return 0;
+    const keys = await ringKeys(owner);
+    let count = 0;
+    for (const entries of rows.values()) {
+      for (const { row: { digests } } of entries.values()) {
+        if (keys.some((key) => !digests?.some(({ alg, keyId }) => alg === "hmac" && keyId === key.id))) count++;
+      }
+    }
+    return count;
+  }
+
+  return { uow, port, dump, appendFact, runSeed, setWriteTime, rotateRowDigests, rowsMissingKeyedDigest };
 }

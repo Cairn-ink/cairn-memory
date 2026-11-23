@@ -1,5 +1,5 @@
 import { cleanContent } from "../privacy/text.mjs";
-import { redactDocumentText } from "./redaction.mjs";
+import { isMarkerOnly, redactDocumentText } from "./redaction.mjs";
 import { caseInsensitiveWords, NONSPACE, SPACE, WORD } from "./text.mjs";
 
 const LINE_START = String.raw`(?<![^\n])`;
@@ -41,6 +41,7 @@ export function routeDocumentMessages(messages) {
   const groups = [[], [], []];
   let extractOnly = 0;
   let illFormedText = 0;
+  let markerOnly = 0;
 
   for (const [position, message] of messages.entries()) {
     if (cleanContent(message.content) !== message.content) {
@@ -51,6 +52,11 @@ export function routeDocumentMessages(messages) {
     const content = redactDocumentText(message.content);
     if (content === null) {
       extractOnly++;
+      continue;
+    }
+    if (isMarkerOnly(content)) {
+      extractOnly++;
+      markerOnly++;
       continue;
     }
     const assistant = message.role === "assistant";
@@ -80,6 +86,7 @@ export function routeDocumentMessages(messages) {
       extract_only: extractOnly,
       capture_limit: Math.max(0, candidates.length - CARD_LIMIT),
       ...(illFormedText ? { ill_formed_text: illFormedText } : {}),
+      ...(markerOnly ? { marker_only: markerOnly } : {}),
     },
   };
 }
