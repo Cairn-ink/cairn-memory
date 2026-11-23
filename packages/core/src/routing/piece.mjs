@@ -52,18 +52,20 @@ function headPiece(lines, budget, countTokens) {
   return head;
 }
 
+/** @typedef {[start: number, end: number]} Span */
+
 /** @param {string} line @param {Set<string>} query */
-function bestBigramRun(line, query) {
+function matchingSpans(line, query) {
   const offsets = [0];
   const lower = line.toLowerCase();
-  /** @type {[start: number, end: number][]} */
+  /** @type {Span[]} */
   const pairs = [];
+  /** @type {{ span: Span, score: number }[]} */
+  const runs = [];
   let lowerOffset = 0;
   let previous = "";
   let previousIndex = 0;
-  let runLength = 0;
-  let bestLength = 0;
-  let bestEnd = 0;
+  let current;
   for (const point of line) {
     const index = offsets.length - 1;
     offsets.push(offsets[index] + point.length);
@@ -73,56 +75,94 @@ function bestBigramRun(line, query) {
     for (const part of folded) {
       if (query.has(previous + part)) {
         pairs.push([previousIndex, index + 1]);
-        if (++runLength > bestLength) {
-          bestLength = runLength;
-          bestEnd = pairs.length;
+        if (!current) {
+          current = { span: /** @type {Span} */ ([previousIndex, index + 1]), score: 0 };
+          runs.push(current);
         }
+        current.span[1] = index + 1;
+        current.score++;
       } else {
-        runLength = 0;
+        current = undefined;
       }
       previous = part;
       previousIndex = index;
     }
   }
-  return { offsets, run: pairs.slice(bestEnd - bestLength, bestEnd) };
+  runs.sort((a, b) => b.score - a.score);
+  return { offsets, runs, pairs };
 }
 
-/** @param {string} line @param {number[]} offsets @param {number} start @param {number} end
- * @param {(text: string) => number} countTokens
+/** @param {Span[]} spans @param {number} length
+ * @param {(left: number, right: number) => string | null} fit
  */
-function windowAround(line, offsets, start, end, countTokens) {
-  let left = 0;
-  let right = offsets.length - 1;
-  // Shorten the side with more room around the match. Check each size because
-  // the token meter can count a shorter string as more tokens.
-  while (left <= start && right >= end) {
-    const window = line.slice(offsets[left], offsets[right]);
-    if (countTokens(window) <= WINDOW_LIMIT) return window;
-    if (start - left > right - end) left++;
-    else right--;
+function matchingWindow(spans, length, fit) {
+  const nearbyLimit = Math.ceil(length / spans.length);
+  for (const [index, [start, end]] of spans.entries()) {
+    const spanLength = end - start;
+    if (index === 0) {
+      // Keep the centered excerpt when it fits, and try both extremes at each
+      // width. Each window gets its own measurement, independent of the others.
+      for (let width = length - 1; width > spanLength; width--) {
+        const first = Math.max(0, end - width);
+        const last = Math.min(start, length - width);
+        const center = Math.max(first, Math.min(last, start - Math.ceil((width - spanLength) / 2)));
+        const window = fit(center, center + width) ?? fit(first, first + width) ?? fit(last, last + width);
+        if (window !== null) return window;
+      }
+    }
+
+    // Give every occurrence a share of the remaining search, starting at the
+    // exact span and then trying independent ways of adding context.
+    let remaining = nearbyLimit;
+    for (let width = spanLength; width < length && remaining > 0; width++) {
+      const first = Math.max(0, end - width);
+      const last = Math.min(start, length - width);
+      for (let left = first; left <= last && remaining > 0; left++, remaining--) {
+        const window = fit(left, left + width);
+        if (window !== null) return window;
+      }
+    }
   }
   return null;
 }
 
 /** @param {string} line @param {Set<string>} query @param {(text: string) => number} countTokens */
-function centeredWindow(line, query, countTokens) {
-  const { offsets, run } = bestBigramRun(line, query);
-  const start = run[0][0];
-  const end = run[run.length - 1][1];
-  const window = windowAround(line, offsets, start, end, countTokens);
-  if (window !== null) return window;
+function oversizedWindow(line, query, countTokens) {
+  const { offsets, runs, pairs } = matchingSpans(line, query);
+  const length = offsets.length - 1;
+  const rejected = new Set();
+  // For n code points there are at most n runs and 2n pairs after lowercasing.
+  // The two width sweeps use up to 6n probes, nearby windows up to 5n, and
+  // prefixes up to n. The caller already measured the full line.
+  /** @param {number} left @param {number} right */
+  const fit = (left, right) => {
+    const key = `${left}:${right}`;
+    if (rejected.has(key)) return null;
+    const window = line.slice(offsets[left], offsets[right]);
+    if (countTokens(window) <= WINDOW_LIMIT) return window;
+    rejected.add(key);
+    return null;
+  };
 
-  // If the full run is too large, keep a matching bigram closest to its center.
-  let distance = Infinity;
-  let anchor;
-  for (const [first, last] of run) {
-    const next = Math.abs(first + last - start - end);
-    if (next < distance && countTokens(line.slice(offsets[first], offsets[last])) <= WINDOW_LIMIT) {
-      anchor = [first, last];
-      distance = next;
-    }
+  if (runs.length) {
+    const runWindow = matchingWindow(runs.map(run => run.span), length, fit);
+    if (runWindow !== null) return runWindow;
+
+    const [start, end] = runs[0].span;
+    /** @param {Span} span */
+    const distance = ([left, right]) => Math.abs(left + right - start - end);
+    // Prefer compact pairs, then proximity to the strongest run's center.
+    pairs.sort((a, b) => (a[1] - a[0]) - (b[1] - b[0]) || distance(a) - distance(b));
+    const pairWindow = matchingWindow(pairs, length, fit);
+    if (pairWindow !== null) return pairWindow;
   }
-  return anchor ? windowAround(line, offsets, anchor[0], anchor[1], countTokens) ?? "" : "";
+
+  for (let end = length - 1; end > 0; end--) {
+    const prefix = fit(0, end);
+    if (prefix !== null) return prefix;
+  }
+  // Even the shortest nonempty prefix can be over budget under a custom meter.
+  return line.slice(0, offsets[1]);
 }
 
 /** @param {string[]} lines @param {number} first @param {string} window
@@ -159,7 +199,7 @@ export function selectDocumentPiece({ body }, query, { maxTokens, countTokens })
   const scores = lines.map(line => overlap(line, queryBigrams));
   const best = scores.indexOf(Math.max(...scores));
   if (scores[best] > 0 && countTokens(lines[best]) > WINDOW_LIMIT) {
-    const window = centeredWindow(lines[best], queryBigrams, countTokens);
+    const window = oversizedWindow(lines[best], queryBigrams, countTokens);
     return { body: withHeading(lines, best, window, countTokens), kind: "excerpt" };
   }
   let lo = best;
@@ -181,6 +221,8 @@ export function selectDocumentPiece({ body }, query, { maxTokens, countTokens })
   }
 
   let window = lines.slice(lo, hi + 1).join("\n");
-  if (countTokens(window) > WINDOW_LIMIT) window = tokenPrefix(window, WINDOW_LIMIT, countTokens);
+  if (countTokens(window) > WINDOW_LIMIT) {
+    window = tokenPrefix(window, WINDOW_LIMIT, countTokens) || Array.from(window)[0] || "";
+  }
   return { body: withHeading(lines, lo, window), kind: "excerpt" };
 }
