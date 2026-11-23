@@ -46,3 +46,29 @@ export function fuseHosted(
 };
 
 export function fuseHostedLexicalOnly(rows: readonly LexicalRow[], opts: Page): { rows: LexicalRow[]; total: number };
+
+export interface HostedCardChannels {
+  memoryLexical: readonly LexicalRow[];
+  /** Null when the memory vector channel is unavailable or its coverage is incomplete. */
+  memoryVector: readonly VectorRow[] | null;
+  cardLexical: readonly LexicalRow[];
+  /** Null when the card vector channel is unavailable or its coverage is incomplete. */
+  cardVector: readonly VectorRow[] | null;
+}
+
+/** Fuses separately ranked memory and card channels before applying the hosted page. */
+export function fuseHostedWithCards(
+  channels: HostedCardChannels & ({ memoryVector: readonly VectorRow[] } | { cardVector: readonly VectorRow[] }),
+  opts: Page & { floor?: boolean },
+): ReturnType<typeof fuseHosted>;
+
+/**
+ * With both vector channels null, orders the original lexical rows by rank within
+ * each list, then by hosted ties. Memory and card store scores are incomparable.
+ * Callers must preserve the returned ranking order as-is. With no card
+ * candidates, returns the same page as fuseHostedLexicalOnly.
+ */
+export function fuseHostedWithCards(
+  channels: HostedCardChannels,
+  opts: Page & { floor?: boolean },
+): ReturnType<typeof fuseHosted> | ReturnType<typeof fuseHostedLexicalOnly>;

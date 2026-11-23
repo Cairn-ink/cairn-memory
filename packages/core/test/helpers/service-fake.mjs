@@ -52,7 +52,8 @@ function publicRow({ digests: _digests, ...row }) {
   return row;
 }
 
-export function serviceFake({ rows = [], leakForgotten = false, writes = false, near = false, hasKey = true, forgetting } = {}) {
+export function serviceFake({ rows = [], leakForgotten = false, writes = false, near = false, hasKey = true, forgetting,
+  recall = false, semantic = false } = {}) {
   let committedRows = [...rows];
   const calls = [];
   const mutations = [];
@@ -111,6 +112,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         if (options.pauseLock) calls.push(["lock", "pause"]);
         if (!options.readOnly) calls.push(["lock", "owner-write"]);
         const state = ownerState(owner);
+        // Writes replace committedRows, so an open run retains its original rows and suppressions.
         const tx = {
           owner, options, rows: committedRows, revision: state.revision, facts: state.facts, runId: ++runId,
           forgotten: new Set(state.forgotten), pause: state.pause,
@@ -165,7 +167,9 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       async recent(tx, scope, page) {
         record(tx, scope.owner, "recent.recent", scope, page);
         assert.ok(tx.options.readOnly);
-        return readPage(candidates(tx, scope), page);
+        const result = readPage(candidates(tx, scope), page);
+        await hooks.afterRecentPage?.(result);
+        return result;
       },
     },
     memories: {
@@ -212,6 +216,12 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       state.forgotten.add(id);
       state.revision++;
     },
+    commitForget(row) {
+      fake.forget(row);
+      const { id, scope: { owner, namespace } } = row;
+      committedRows = committedRows.filter(candidate => candidate.id !== id ||
+        candidate.scope.owner !== owner || candidate.scope.namespace !== namespace);
+    },
     insert(row) {
       committedRows = [...committedRows, row];
       ownerState(row.scope.owner).revision++;
@@ -224,10 +234,9 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
     mutations,
   };
 
-  if (writes) {
-    const encoding = new TextEncoder();
+  let dispatchReady = false;
+  if (writes || recall) {
     // The gate's marker expires after the first continuation gets a chance to start the send.
-    let dispatchReady = false;
     fake.deps.gate.assertOpen = async (owner, phase) => {
       assert.equal(active.size, 0, "gate outside the UoW");
       calls.push(["gate", owner, phase]);
@@ -237,6 +246,67 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         queueMicrotask(() => queueMicrotask(() => { dispatchReady = false; }));
       }
     };
+  }
+
+  if (recall) {
+    fake.deps.clock.sha256Hex = async value => {
+      assert.equal(active.size, 0, "hash outside the UoW");
+      return createHash("sha256").update(value).digest("hex");
+    };
+    const refOf = row => ({ type: "memory", id: row.id, namespace: row.scope.namespace });
+    storage.lexical = {
+      async lexical(tx, scope, query, depth, options) {
+        record(tx, scope.owner, "lexical.lexical", scope, query, depth, options);
+        assert.ok(tx.options.readOnly);
+        const ranked = candidates(tx, scope).flatMap(row => {
+          const score = hooks.lexicalScore?.(row, query);
+          return score === undefined ? [] : [{ ref: refOf(row), score, updatedAtUs: row.updatedAtUs }];
+        }).sort((a, b) => b.score - a.score || newestFirst({ ...a, id: a.ref.id }, { ...b, id: b.ref.id }));
+        const rows = ranked.slice(0, depth);
+        hooks.afterLexical?.(rows);
+        return { rows, matched: ranked.length > 0 };
+      },
+    };
+    storage.hydrate = {
+      async hydrate(tx, scope, refs, intent) {
+        record(tx, scope.owner, "hydrate.hydrate", scope, refs, intent);
+        assert.ok(tx.options.readOnly);
+        const rows = candidates(tx, scope);
+        const result = refs.flatMap(ref => {
+          const memory = rows.find(row => row.id === ref.id && row.scope.namespace === ref.namespace);
+          return memory ? [{ ref, memory }] : [];
+        }).reverse();
+        return hooks.hydrate?.(result) ?? result;
+      },
+    };
+    fake.deps.embedQuery = {
+      async embedQuery(owner, query, options) {
+        calls.push(["embedQuery", owner, query, options]);
+        assert.equal(active.size, 0, "query embed outside the UoW");
+        assert.ok(dispatchReady, "query embed starts in the dispatch continuation");
+        await hooks.embedQuery?.();
+        return { vector: Float32Array.of(1), model: "query-model" };
+      },
+    };
+    if (semantic) {
+      storage.capabilities.semanticRetrieval = true;
+      storage.vector = {
+        async vector(tx, scope, query, model, depth) {
+          record(tx, scope.owner, "vector.vector", scope, query, model, depth);
+          assert.ok(tx.options.readOnly);
+          const ranked = candidates(tx, scope).flatMap(row => {
+            const distance = hooks.vectorDistance?.(row);
+            return distance === undefined ? [] : [{ ref: refOf(row), distance, updatedAtUs: row.updatedAtUs }];
+          }).sort((a, b) => a.distance - b.distance || newestFirst({ ...a, id: a.ref.id }, { ...b, id: b.ref.id }));
+          return { rows: ranked.slice(0, depth),
+            coverage: hooks.coverage ?? { eligible: ranked.length, embedded: ranked.length, complete: true } };
+        },
+      };
+    }
+  }
+
+  if (writes) {
+    const encoding = new TextEncoder();
     fake.deps.embedder.embed = async texts => {
       calls.push(["embed", [...texts]]);
       assert.equal(active.size, 0, "embed outside the UoW");
