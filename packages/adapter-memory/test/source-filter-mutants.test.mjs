@@ -5,7 +5,7 @@ import { registerHooks } from "node:module";
 import { test } from "node:test";
 import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
 import { runCase, SOURCE_FILTER_CASES } from "@cairn-ink/conformance";
-import { allDigests, withholdsAnyPassage } from "@cairn-ink/core";
+import { allDigests, CoreError, withholdsAnyPassage } from "@cairn-ink/core";
 
 const adapterURL = new URL("../src/index.mjs", import.meta.url);
 const hashSessionKey = (client, sessionId) =>
@@ -184,6 +184,84 @@ for (const [label, id, run, failure, moduleName, edits] of mutants) {
     await assert.rejects(runCase(variant, full), failure);
   });
 }
+
+function transactionSuppressionAdapter(options, failWrite) {
+  const adapter = createMemoryAdapter(options);
+  const { capture, suppressions, uow } = adapter;
+  const factWrites = new WeakSet();
+  return {
+    ...adapter,
+    suppressions: {
+      ...suppressions,
+      async writeFact(tx, ...args) {
+        if (failWrite) throw new CoreError("suppressed");
+        const written = await suppressions.writeFact(tx, ...args);
+        factWrites.add(tx);
+        return written;
+      },
+    },
+    capture: {
+      ...capture,
+      async assertEligible(tx, ...args) {
+        if (!factWrites.has(tx)) await capture.assertEligible(tx, ...args);
+      },
+    },
+    uow: {
+      ...uow,
+      run(owner, options, callback) {
+        return uow.run(owner, options, async (tx) => {
+          const result = await callback(tx);
+          if (factWrites.has(tx)) throw new CoreError("suppressed");
+          return result;
+        });
+      },
+    },
+  };
+}
+
+async function transactionOnlyRecheck(ctx) {
+  const { adapter: { capture, suppressions, uow }, owner, harness } = ctx;
+  const admission = key(ctx);
+  const message = messageAt(10);
+  await uow.run(owner, { pauseLock: true }, (tx) => capture.claim(tx, admission, [message], { leaseMs: 60_000 }));
+  const positions = await eligible(ctx, admission, message);
+  assert.deepEqual(positions, [0]);
+  const before = await harness.dump();
+  await assert.rejects(uow.run(owner, { pauseLock: true }, async (tx) => {
+    await suppressions.writeFact(tx, { owner, actionId: "session", origin: "forget", kind: "session",
+      session: { client, sessionId } }, "c".repeat(64));
+    await capture.assertEligible(tx, admission, positions);
+  }), (error) => error instanceof CoreError && error.code === "suppressed");
+  assert.deepEqual(await harness.dump(), before);
+  await uow.run(owner, {}, (tx) => capture.assertEligible(tx, admission, positions));
+}
+
+for (const [label, failWrite, failure] of [
+  ["only the transaction rejects", false, /assertEligible must reject with suppressed/],
+  ["writeFact rejects", true, /writeFact must resolve and create the fact/],
+]) {
+  test(`K-SRC-3 detects when ${label} after the naive case passes`, async () => {
+    const id = "K-SRC-3";
+    const full = SOURCE_FILTER_CASES.find((candidate) => candidate.id === id);
+    const variant = factory((options) => transactionSuppressionAdapter(options, failWrite));
+    assert.equal(await runCase(variant, { id, title: "naive", needs: [], run: transactionOnlyRecheck }), null);
+    await assert.rejects(runCase(variant, full), failure);
+  });
+}
+
+test("K-SRC-4 detects missing text facts on an always-keyed store", async () => {
+  const id = "K-SRC-4";
+  const full = SOURCE_FILTER_CASES.find((candidate) => candidate.id === id);
+  const omitted = await mutantFactory("always-keyed snapshot omits text", "fact-match", [
+    [snapshotPassages, "passages: [],"],
+  ], "plain");
+  const variant = { ...omitted, open: ({ capabilities }) =>
+    omitted.open({ capabilities: { ...capabilities, fingerprintKey: true } }) };
+  assert.equal(await runCase(variant, {
+    id, title: "naive", needs: [], run: (ctx) => textAdmitted(ctx, withheld),
+  }), null);
+  await assert.rejects(runCase(variant, full), /Core must withhold matching text from snapshot passages/);
+});
 
 for (const profile of ["plain", "hashed"]) {
   test(`source filtering accepts reverse fact order under the ${profile} profile`, async () => {

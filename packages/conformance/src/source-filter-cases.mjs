@@ -1,4 +1,4 @@
-import { allDigests, passageShingles, withholdsAnyPassage } from "@cairn-ink/core";
+import { allDigests, CoreError, passageShingles, withholdsAnyPassage } from "@cairn-ink/core";
 import { check, equal, readDump, rejects } from "./support.mjs";
 
 /** @import { FingerprintKey, SuppressionFact } from "@cairn-ink/core" */
@@ -93,6 +93,13 @@ async function textFilter(ctx, key) {
   await assertEligible(ctx, admission, [0, 1]);
 }
 
+/** @param {CaseContext} ctx */
+async function keyedTextFilter(ctx) {
+  const key = await ctx.adapter.keys.userKey(ctx.owner);
+  if (key === null) return "needs an owner fingerprint key";
+  await textFilter(ctx, key);
+}
+
 /** @type {readonly ConformanceCase[]} */
 export const SOURCE_FILTER_CASES = [
   {
@@ -162,26 +169,38 @@ export const SOURCE_FILTER_CASES = [
       const positions = await eligible(ctx, key, messages);
       equal(positions, [0], "Preflight must admit the message before the fact is written");
       const before = await readDump(harness);
+      let factWritten = false;
+      let recheckSuppressed = false;
       await rejects(() => uow.run(owner, { pauseLock: true }, async (tx) => {
-        await suppressions.writeFact(tx, sessionFact(ctx), "c".repeat(64));
-        await capture.assertEligible(tx, key, positions);
+        const written = await suppressions.writeFact(tx, sessionFact(ctx), "c".repeat(64));
+        check(written.created === true, "writeFact must create the fact in the write run");
+        factWritten = true;
+        try {
+          await capture.assertEligible(tx, key, positions);
+        } catch (error) {
+          check(error instanceof CoreError && error.code === "suppressed", "assertEligible must reject with suppressed");
+          recheckSuppressed = true;
+          throw error;
+        }
       }), "suppressed");
+      check(factWritten, "writeFact must resolve and create the fact before assertEligible");
+      check(recheckSuppressed, "assertEligible must reject with suppressed");
       equal(await readDump(harness), before, "Suppressed write run must roll back all changes");
       await assertEligible(ctx, key, positions);
     },
   },
   {
-    id: "K-SRC-4", title: "leaves text eligible and withholds it through core", needs: [], needsOff: ["fingerprintKey"],
+    id: "K-SRC-4", title: "leaves text eligible and withholds it through core", needs: [],
+    requests: { fingerprintKey: false },
     async run(ctx) {
+      if (ctx.adapter.capabilities.fingerprintKey) {
+        return (await keyedTextFilter(ctx)) ?? "needs fingerprintKey off";
+      }
       await textFilter(ctx, null);
     },
     followUp: {
       needs: ["fingerprintKey"],
-      async run(ctx) {
-        const key = await ctx.adapter.keys.userKey(ctx.owner);
-        if (key === null) return "needs an owner fingerprint key";
-        await textFilter(ctx, key);
-      },
+      run: keyedTextFilter,
     },
   },
   {

@@ -102,3 +102,78 @@ test("position shape errors allow commit and bounds errors poison the run", asyn
     return assert.rejects(capture.assertEligible(tx, key, positions), errorCode("invalid_input"));
   }
 });
+
+async function windowedCapture() {
+  const { capture, harness, uow } = createMemoryAdapter({ now: () => 0 });
+  await harness.seedFact(owner, {
+    owner, kind: "window", origin: "forget", actionId: "test-window",
+    client: key.client, window: { startMs: 20, endMs: 21 },
+  });
+  return {
+    capture, harness,
+    read: (fn) => uow.run(owner, { readOnly: true }, fn),
+    write: (fn) => uow.run(owner, { pauseLock: true }, fn),
+  };
+}
+
+const options = { leaseMs: 10 };
+const windowedMessage = { ...message, id: "windowed-message", occurredAtMs: 20 };
+
+function reversedMessages() {
+  const messages = [message, windowedMessage];
+  messages[Symbol.iterator] = function* () { yield this[1]; yield this[0]; };
+  return messages;
+}
+
+test("assertEligible reads positions by index despite a custom iterator", async () => {
+  const { capture, write } = await windowedCapture();
+  await write((tx) => capture.claim(tx, key, [message, windowedMessage], options));
+  const positions = [1];
+  positions[Symbol.iterator] = function* () { yield 0; };
+  await assert.rejects(write((tx) => capture.assertEligible(tx, key, positions)), errorCode("suppressed"));
+});
+
+test("eligible filters message indices despite a reversed iterator", async () => {
+  const { capture, read } = await windowedCapture();
+  assert.deepEqual(await read((tx) => capture.eligible(tx, key, reversedMessages())), [0]);
+});
+
+test("claim stores timestamps by message index despite a reversed iterator", async () => {
+  const { capture, write } = await windowedCapture();
+  assert.equal((await write((tx) => capture.claim(tx, key, reversedMessages(), options))).status, "claimed");
+  await assert.rejects(write((tx) => capture.assertEligible(tx, key, [1])), errorCode("suppressed"));
+  await write((tx) => capture.assertEligible(tx, key, [0]));
+});
+
+for (const method of ["claim", "eligible", "assertEligible"]) {
+  test(`${method} rejects malformed array slots before state access`, async () => {
+    const { capture, harness, read, write } = await windowedCapture();
+    const slot = method === "assertEligible" ? 0 : message;
+    const invoke = {
+      claim: (input) => write((tx) => capture.claim(tx, key, input, options)),
+      eligible: (input) => read((tx) => capture.eligible(tx, key, input)),
+      assertEligible: (input) => write((tx) => capture.assertEligible(tx, key, input)),
+    }[method];
+    const before = await harness.dump();
+    let accessorReads = 0;
+    const accessor = Object.defineProperty([slot], "0", { get() { accessorReads++; return slot; } });
+    const inherited = Object.setPrototypeOf(new Array(1), Object.assign(Object.create(Array.prototype), { 0: slot }));
+    const revoked = Proxy.revocable([slot], {});
+    revoked.revoke();
+    const trapError = () => { throw new Error("Unexpected array read"); };
+    for (const [label, input] of [
+      ["accessor", accessor],
+      ["hole", new Array(1)],
+      ["inherited slot", inherited],
+      ["revoked proxy", revoked.proxy],
+      ["throwing descriptor trap", new Proxy([slot], { getOwnPropertyDescriptor: trapError })],
+      ["throwing get trap", new Proxy([slot], { get: trapError })],
+      ["conflicting length", new Proxy([slot], { get: (array, name) => name === "length" ? 0 : array[name] })],
+      ["conflicting slot", new Proxy([slot], { get: (array, name) => name === "0" ? null : array[name] })],
+    ]) {
+      await assert.rejects(invoke(input), errorCode("invalid_input"), label);
+      assert.deepEqual(await harness.dump(), before, label);
+    }
+    assert.equal(accessorReads, 0);
+  });
+}

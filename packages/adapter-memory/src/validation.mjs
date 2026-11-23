@@ -38,12 +38,31 @@ export function copyCaptureKey(key) {
   return { scope: { owner, namespace: namespace ?? null }, client, sessionId, eventId, payloadDigest };
 }
 
+/** @template T @param {readonly T[]} values @returns {T[]} */
+export function snapshotCaptureArray(values) {
+  const snapshot = [];
+  try {
+    if (!Array.isArray(values)) invalid();
+    const length = Object.getOwnPropertyDescriptor(values, "length")?.value;
+    if (!Number.isSafeInteger(length) || length < 0 || length > 0xffff_ffff ||
+        !Object.is(length, Reflect.get(values, "length"))) invalid();
+    for (let index = 0; index < length; index++) {
+      const slot = Object.getOwnPropertyDescriptor(values, index);
+      // The property read only checks for conflicting proxy traps.
+      if (!slot || !Object.hasOwn(slot, "value") || !Object.is(slot.value, Reflect.get(values, String(index)))) invalid();
+      snapshot.push(slot.value);
+    }
+  } catch {
+    invalid();
+  }
+  return snapshot;
+}
+
 /** @param {readonly import("@cairn-ink/core/ports").CaptureMessage[]} messages */
 export function captureMessageTimes(messages) {
-  if (!Array.isArray(messages)) invalid();
   /** @type {Array<number | null>} */
   const times = [];
-  for (const message of messages) {
+  for (const message of snapshotCaptureArray(messages)) {
     if (!message || typeof message.id !== "string" || message.id.length > 512 || !roles.includes(message.role) ||
       typeof message.content !== "string") invalid();
     const { occurredAtMs } = message;

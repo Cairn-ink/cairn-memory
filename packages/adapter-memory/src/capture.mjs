@@ -1,6 +1,7 @@
 import { CoreError, decideWrite, planDuplicateMerge } from "@cairn-ink/core";
 import { indexRevisionAfterRun } from "./unit-of-work.mjs";
-import { captureMessageTimes, copyCaptureFailure, copyCaptureKey, copyFinishItems, validateTime } from "./validation.mjs";
+import { captureMessageTimes, copyCaptureFailure, copyCaptureKey, copyFinishItems, snapshotCaptureArray,
+  validateTime } from "./validation.mjs";
 
 /** @typedef {import("@cairn-ink/core/ports").CaptureKey} CaptureKey */
 /** @typedef {import("@cairn-ink/core/ports").FinishResult} FinishResult */
@@ -202,10 +203,9 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
       const copy = copyCaptureKey(key);
       const { scope, client, sessionId } = copy;
       return port.write(tx, scope, "conditional", () => {
-        if (!Array.isArray(positions)) throw new CoreError("invalid_input");
         /** @type {Set<number>} */
         const selected = new Set();
-        for (const position of positions) {
+        for (const position of snapshotCaptureArray(positions)) {
           if (!Number.isSafeInteger(position) || position < 0 || selected.has(position)) {
             throw new CoreError("invalid_input");
           }
