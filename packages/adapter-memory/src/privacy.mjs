@@ -199,16 +199,16 @@ export function createFingerprintProvider(enabled, config, rotateRowDigests) {
     if (typeof next !== "string" || next.length === 0) throw new CoreError("invalid_input");
 
     const apply = async () => {
-      const retained = ring.has(next);
-      // Writes see the pending key before rotation starts acquiring owner locks.
-      ring.add(next);
-      try {
-        await rotateRowDigests((owner) => userFingerprintKey(next, owner, labels));
+      const olderSeeds = [...ring].filter((seed) => seed !== secret);
+      const pendingKey = (/** @type {string} */ owner) => userFingerprintKey(next, owner, labels);
+      const retainedKeyIds = async (/** @type {string} */ owner) => {
+        const keys = await Promise.all(olderSeeds.map((seed) => userFingerprintKey(seed, owner, labels)));
+        return new Set(keys.flatMap((key) => key === null ? [] : [key.id]));
+      };
+      await rotateRowDigests(pendingKey, retainedKeyIds, () => {
+        ring.add(next);
         secret = next;
-      } catch (error) {
-        if (!retained) ring.delete(next);
-        throw error;
-      }
+      });
     };
     const change = rotation ? rotation.then(apply) : apply();
     const tail = change.then(() => {}, () => {});

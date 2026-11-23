@@ -37,6 +37,9 @@ export function copyPublicRow({ digests: _digests, ...row }) {
 
 class Mutex {
   #tail = Promise.resolve();
+  #locked = false;
+
+  get locked() { return this.#locked; }
 
   async acquire() {
     const previous = this.#tail;
@@ -44,7 +47,11 @@ class Mutex {
     let release = () => {};
     this.#tail = new Promise((resolve) => { release = resolve; });
     await previous;
-    return release;
+    this.#locked = true;
+    return () => {
+      this.#locked = false;
+      release();
+    };
   }
 }
 
@@ -337,34 +344,63 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
     }
   }
 
-  /** @param {UserKey} pendingKey */
-  async function rotateRowDigests(pendingKey) {
-    // Owners created after this snapshot can only write with the pending key in their ring.
-    for (const [owner, current] of [...owners]) {
-      const release = await current.write.acquire();
-      try {
-        const committed = current.committed;
-        if (committed.rows.size === 0) continue;
-        const key = await pendingKey(owner);
-        /** @type {State["rows"]} */
-        const rows = new Map();
-        for (const [namespace, entries] of committed.rows) {
-          const refreshed = new Map();
-          for (const [id, entry] of entries) {
-            const { row } = entry;
-            const digests = [...(row.digests ?? [])];
-            addKeyedDigest(digests, await coreDigest(row.text, key));
-            refreshed.set(id, { ...entry, row: { ...row, digests } });
-          }
-          rows.set(namespace, refreshed);
-        }
-        const indexRevision = committed.indexRevision + 1;
-        if (!Number.isSafeInteger(indexRevision)) throw new CoreError("internal_error");
-        current.committed = { ...committed, rows, indexRevision };
-      } finally {
-        release();
+  /** @param {State["rows"]} rows @param {Awaited<ReturnType<UserKey>>} key @returns {Promise<State["rows"]>} */
+  async function refreshRows(rows, key) {
+    const refreshed = new Map();
+    for (const [namespace, entries] of rows) {
+      const updated = new Map();
+      for (const [id, entry] of entries) {
+        const { row } = entry;
+        const digests = [...(row.digests ?? [])];
+        addKeyedDigest(digests, await coreDigest(row.text, key));
+        updated.set(id, { ...entry, row: { ...row, digests } });
       }
+      refreshed.set(namespace, updated);
     }
+    return refreshed;
+  }
+
+  /**
+   * @param {UserKey} pendingKey
+   * @param {(owner: string) => Promise<Set<string>>} retainedKeyIds
+   * @param {() => void} publish
+   */
+  async function rotateRowDigests(pendingKey, retainedKeyIds, publish) {
+    /** @type {Map<Owner, {base: State, rows: State["rows"]}>} */
+    const staged = new Map();
+    /** @param {Owner} owner */
+    const needsRefresh = (owner) => owner.write.locked || staged.get(owner)?.base !== owner.committed;
+
+    do {
+      for (const [owner, current] of owners) {
+        if (!needsRefresh(current)) continue;
+        const release = await current.write.acquire();
+        try {
+          const base = current.committed;
+          if (staged.get(current)?.base === base) continue;
+          const keyedFacts = [...base.facts.values()].flatMap(({ fact }) =>
+            fact.kind === "text" && fact.text.digests.every(({ alg }) => alg === "hmac") ? fact.text.digests : []);
+          if (keyedFacts.length > 0) {
+            const olderIds = await retainedKeyIds(owner);
+            if (keyedFacts.some(({ keyId }) => keyId !== null && olderIds.has(keyId))) {
+              throw new CoreError("fingerprint_key_mismatch");
+            }
+          }
+          const rows = base.rows.size === 0 ? base.rows : await refreshRows(base.rows, await pendingKey(owner));
+          staged.set(current, { base, rows });
+        } finally {
+          release();
+        }
+      }
+      // A writer can commit or start while another owner is being refreshed. Recheck those owners
+      // under their locks so their rows and facts are included and an active write cannot replace the refresh.
+    } while ([...owners.values()].some(needsRefresh));
+
+    // Publish all validated snapshots and the key in one synchronous step.
+    for (const [current, { base, rows }] of staged) {
+      if (rows !== base.rows) current.committed = { ...base, rows };
+    }
+    publish();
   }
 
   /** @param {string} owner @param {import("./privacy.mjs").RingKeys} ringKeys */

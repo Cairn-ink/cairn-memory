@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { test } from "node:test";
+import { createMemoryAdapter, TEST_FINGERPRINT_LABELS } from "@cairn-ink/adapter-memory";
 import { KEYED_DIGEST_CASES, runCase } from "@cairn-ink/conformance";
 import { allDigests, coreDigest } from "@cairn-ink/core";
 
@@ -130,11 +131,12 @@ const omitStoredKeyedDigests = {
   "memory-store": [["return digests;", 'return digests.filter(({ alg }) => alg === "sha256");']],
 };
 const skipRedigest = ["addKeyedDigest(digests, await coreDigest(row.text, key));", ""];
+const blockIneligible = "return result !== false;";
 
 const mutants = [
   ["rows omit keyed digests", "K-KD-1", matchingRowHidden, /Lexical must retain the unrelated row only/, omitStoredKeyedDigests],
   ["write queries ignore digests", "K-KD-2", matchingQueryBlocked, /Keyed write policy must block the matching query only/, {
-    "fact-match": [["digests: query.digests ?? digestsFor(query)", "digests: digestsFor(query)"]],
+    "fact-match": [["digests: withDigestAliases(query)", "digests: digestsFor(query)"]],
   }],
   ["keyed explicit saves block the session", "K-KD-2", (ctx) => matchingQueryBlocked(ctx, true),
     /Keyed write policy must leave this session unblocked/, {
@@ -144,20 +146,25 @@ const mutants = [
   ["rotation skips row digests", "K-KD-4", rotationChangesKey, /Rotation must leave zero rows missing a keyed digest/, {
     "unit-of-work": [skipRedigest],
   }],
-  ["rotation publishes the key before covering rows", "K-KD-4", rotationChangesKey,
-    /A published rotated key must already cover every row/, {
-      privacy: [[
-        "await rotateRowDigests((owner) => userFingerprintKey(next, owner, labels));\n        secret = next;",
-        "secret = next;\n        await rotateRowDigests((owner) => userFingerprintKey(next, owner, labels));",
-      ]],
-    }],
   ["ineligible queries are allowed", "K-KD-2", (ctx) => matchingQueryBlocked(ctx, true),
     /A query without a comparable keyed digest must fail closed/, {
-      "fact-match": [['mode: mode === "hash" ? "explicitSave" : "capture" }) !== false',
-        'mode: mode === "hash" ? "explicitSave" : "capture" }) === true']],
+      "fact-match": [[blockIneligible, "return result === true;"]],
     }],
   ["finish ignores item digests", "K-KD-3", matchingFinishSuppressed, /Capture finish must suppress only the matching item/, {
     capture: [["textHash: row.textHash, digests: row.digests,", "textHash: row.textHash,"]],
+  }],
+  ["ineligible keyed queries are allowed", "K-KD-5", (ctx) => matchingQueryBlocked(ctx, true),
+    /A current-key-only query must fail closed/, {
+      "fact-match": [[blockIneligible,
+        'return result === true || (result === "ineligible" && !(mode === "hash" && query.digests?.some(({ alg }) => alg === "hmac")));']],
+    }],
+  ["ineligible finish items are allowed", "K-KD-5", matchingFinishSuppressed,
+    /A current-key-only finish item must fail closed/, {
+      "fact-match": [[blockIneligible,
+        'return result === true || (result === "ineligible" && mode !== "full");']],
+    }],
+  ["rotation ignores a retained-key fact", "K-KD-6", rotationChangesKey, /Expected operation to reject/, {
+    "unit-of-work": [['throw new CoreError("fingerprint_key_mismatch");', ""]],
   }],
 ];
 
@@ -170,6 +177,67 @@ for (const [name, id, run, failure, mutations] of mutants) {
     await assert.rejects(runCase(factory, testCase), failure);
   });
 }
+
+async function expectAtomicPublication(t, { uow, memories, keys, harness }) {
+  const owners = ["test-first-owner", "test-second-owner"];
+  const insert = async (owner, text) => {
+    const textHash = `sha256:${(await coreDigest(text)).value}`;
+    await uow.run(owner, {}, (tx) => memories.insert(tx, { owner, namespace: null }, {
+      text, textHash, source, kind: "fact", origin: "explicit", confidence: 1, embedding: null,
+    }, [], 1));
+  };
+  for (const owner of owners) await insert(owner, matching);
+  const [first, second] = owners;
+  const old = await keys.userKey(first);
+  const before = await harness.dump();
+  const reached = Promise.withResolvers();
+  const resume = Promise.withResolvers();
+  const sign = crypto.subtle.sign.bind(crypto.subtle);
+  const barrier = t.mock.method(crypto.subtle, "sign", async (algorithm, key, data) => {
+    if (new TextDecoder().decode(data) === TEST_FINGERPRINT_LABELS.shingleKeyPrefix + second) {
+      reached.resolve();
+      await resume.promise;
+    }
+    return sign(algorithm, key, data);
+  });
+  const rotation = harness.setFingerprintSecret("test-secret-rotation");
+  let beforePublish;
+  try {
+    await Promise.race([reached.promise, rotation.then(() => assert.fail("Rotation missed the derivation barrier"))]);
+    assert.equal((await keys.userKey(first)).id, old.id, "The pending key became current before all rows were covered");
+    assert.deepEqual(await harness.dump(), before, "The first owner changed while the second owner was still refreshing");
+    assert.equal(await harness.rowsMissingKeyedDigest(first), 0, "The gate must count retained keys during rotation");
+    await insert(first, unrelated);
+    beforePublish = await harness.dump();
+  } finally {
+    resume.resolve();
+    try {
+      await rotation;
+    } finally {
+      barrier.mock.restore();
+    }
+  }
+  assert.notEqual((await keys.userKey(first)).id, old.id);
+  for (const owner of owners) assert.equal(await harness.rowsMissingKeyedDigest(owner), 0);
+  assert.deepEqual((await harness.dump()).map(({ indexRevision }) => indexRevision),
+    beforePublish.map(({ indexRevision }) => indexRevision));
+}
+
+test("memory publishes the key only after staging all row digests", { timeout: 5000 }, async (t) => {
+  await expectAtomicPublication(t, createMemoryAdapter({ capabilities: { fingerprintKey: true, placement: true } }));
+});
+
+test("the memory barrier detects early key publication after the naive case passes", { timeout: 5000 }, async (t) => {
+  const factory = await variantFactory("early key publication", {
+    privacy: [["await rotateRowDigests(pendingKey, retainedKeyIds, () => {",
+      "secret = next;\n      await rotateRowDigests(pendingKey, retainedKeyIds, () => {"]],
+  });
+  assert.equal(await runCase(factory, {
+    id: "K-KD-4", title: "naive", needs: ["fingerprintKey"], run: rotationChangesKey,
+  }), null);
+  const { adapter } = await factory.open({ capabilities: { fingerprintKey: true, placement: true } });
+  await assert.rejects(expectAtomicPublication(t, adapter), /pending key became current before all rows were covered/);
+});
 
 async function withKeyedDigests(rows, keys) {
   const copy = structuredClone(rows);

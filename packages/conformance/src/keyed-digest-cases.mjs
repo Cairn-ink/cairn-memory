@@ -1,5 +1,5 @@
 import { allDigests, coreDigest, decideWrite } from "@cairn-ink/core";
-import { bounded, check, DEFAULT_TIMEOUT_MS, equal, gate, observe, row, source, wait } from "./support.mjs";
+import { check, equal, rejects, row, source } from "./support.mjs";
 
 /** @import { FingerprintKey } from "@cairn-ink/core" */
 /** @import { FinishItem, ItemRef } from "@cairn-ink/core/ports" */
@@ -8,6 +8,7 @@ import { bounded, check, DEFAULT_TIMEOUT_MS, equal, gate, observe, row, source, 
 const matching = "Garden basil";
 const unrelated = "Garden thyme";
 const third = "Garden mint";
+const nextSecret = "test-secret-rotation";
 
 /** @param {CaseContext} ctx */
 async function ownerKey({ adapter, owner }) {
@@ -59,46 +60,14 @@ async function finishItem(ctx, content, key) {
   };
 }
 
-/**
- * @param {CaseContext} ctx @param {string} oldId
- * @param {() => Promise<void>} rotate @param {() => Promise<number>} countMissing
- */
-async function sampleRotation(ctx, oldId, rotate, countMissing) {
-  const { owner, adapter: { uow }, settleMs = 100, timeoutMs = DEFAULT_TIMEOUT_MS } = ctx;
-  const started = gate();
-  const release = gate();
-  let sampled = false;
-  try {
-    await bounded(async () => {
-      const writer = observe(uow.run(owner, {}, async () => {
-        started.release(undefined);
-        await release.promise;
-      }));
-      await Promise.race([started.promise, writer]);
-      let finished = false;
-      const rotation = observe(rotate().finally(() => { finished = true; }));
-      const done = observe(rotation.then(() => null));
-      const sampler = observe((async () => {
-        while (!finished) {
-          const key = await Promise.race([ownerKey(ctx), done]);
-          if (!key || finished) break;
-          if (key.id !== oldId) {
-            equal(await countMissing(), 0, "A published rotated key must already cover every row");
-          }
-          sampled = true;
-          await wait(1);
-        }
-      })());
-
-      // Give rotation a chance to reach the writer's lock, then keep sampling after release.
-      await wait(settleMs);
-      release.release(undefined);
-      await Promise.all([writer, rotation, sampler]);
-    }, "Key rotation observation", timeoutMs + settleMs);
-  } finally {
-    release.release(undefined);
-  }
-  return sampled ? undefined : "rotation sampling skipped because no key read completed while rotation was in flight";
+/** @param {CaseContext} ctx @param {FinishItem[]} items */
+async function finish({ adapter: { uow, capture }, owner, scope }, items) {
+  const claim = await uow.run(owner, { pauseLock: true }, (tx) => capture.claim(tx, {
+    scope: scope(null), client: "test-client", sessionId: "test-session", eventId: "test-event", payloadDigest: "a".repeat(64),
+  }, [{ id: "test-message", role: "user", content: "Herb garden", occurredAtMs: null }], { leaseMs: 60_000 }));
+  check(claim.status === "claimed", "Expected a fresh capture claim");
+  const { token } = await uow.run(owner, { pauseLock: true }, (tx) => capture.beginDispatch(tx, claim.token));
+  return uow.run(owner, { pauseLock: true }, (tx) => capture.finish(tx, token, items));
 }
 
 /** @type {readonly ConformanceCase[]} */
@@ -144,15 +113,10 @@ export const KEYED_DIGEST_CASES = [
     async run(ctx) {
       const key = await ownerKey(ctx);
       await seedFact(ctx, key);
-      const { uow, capture, memories } = ctx.adapter;
+      const { uow, memories } = ctx.adapter;
       const scope = ctx.scope(null);
-      const claim = await uow.run(ctx.owner, { pauseLock: true }, (tx) => capture.claim(tx, {
-        scope, client: "test-client", sessionId: "test-session", eventId: "test-event", payloadDigest: "a".repeat(64),
-      }, [{ id: "test-message", role: "user", content: "Herb garden", occurredAtMs: null }], { leaseMs: 60_000 }));
-      check(claim.status === "claimed", "Expected a fresh capture claim");
-      const { token } = await uow.run(ctx.owner, { pauseLock: true }, (tx) => capture.beginDispatch(tx, claim.token));
       const items = await Promise.all([matching, unrelated].map((text) => finishItem(ctx, text, key)));
-      const finished = await uow.run(ctx.owner, { pauseLock: true }, (tx) => capture.finish(tx, token, items));
+      const finished = await finish(ctx, items);
       equal(finished.suppressedCount, 1, "Capture finish must suppress only the matching item");
       equal(finished.memories.map(({ outcome }) => outcome), ["inserted"], "Capture finish must insert the unrelated item");
       const saved = await uow.run(ctx.owner, { readOnly: true }, (tx) => memories.get(tx, scope, finished.memories[0].id));
@@ -160,7 +124,7 @@ export const KEYED_DIGEST_CASES = [
     },
   },
   {
-    id: "K-KD-4", title: "covers existing rows before publishing the rotated key", needs: ["fingerprintKey"],
+    id: "K-KD-4", title: "retains row digest coverage after rotation", needs: ["fingerprintKey"],
     async run(ctx) {
       const { harness, owner } = ctx;
       if (!harness.setFingerprintSecret) return "needs harness.setFingerprintSecret for keyed digest rotation";
@@ -169,9 +133,7 @@ export const KEYED_DIGEST_CASES = [
       await insert(ctx, matching, oldKey);
       const second = await insert(ctx, unrelated, oldKey);
       const visible = await insert(ctx, third, oldKey);
-      const skipSampling = await sampleRotation(ctx, oldKey.id,
-        harness.setFingerprintSecret.bind(harness, "test-secret-rotation"),
-        harness.rowsMissingKeyedDigest.bind(harness, owner));
+      await harness.setFingerprintSecret(nextSecret);
       const newKey = await ownerKey(ctx);
       check(newKey.id !== oldKey.id, "Rotation must change the current key ID");
       equal(await harness.rowsMissingKeyedDigest(owner), 0, "Rotation must leave zero rows missing a keyed digest");
@@ -183,7 +145,48 @@ export const KEYED_DIGEST_CASES = [
         "The old-key fact must hide only its matching row");
       await seedFact(ctx, newKey, unrelated, "test-forget-rotated");
       await expectVisible(ctx, second.id, visible.id);
-      return skipSampling;
+    },
+  },
+  {
+    id: "K-KD-5", title: "denies current-key-only write inputs against a retained-key fact", needs: ["fingerprintKey"],
+    async run(ctx) {
+      const { harness, owner, adapter: { uow, memories } } = ctx;
+      if (!harness.setFingerprintSecret) return "needs harness.setFingerprintSecret for retained-key facts";
+      const oldKey = await ownerKey(ctx);
+      await seedFact(ctx, oldKey);
+      await harness.setFingerprintSecret(nextSecret);
+      const newKey = await ownerKey(ctx);
+      check(newKey.id !== oldKey.id, "Expected a distinct current key");
+      const query = { textHash: await ctx.hash(unrelated), digests: await allDigests(unrelated, newKey) };
+      const policy = await uow.run(owner, { readOnly: true }, (tx) =>
+        memories.readWritePolicy(tx, ctx.scope(null), [query], source, "hash"));
+      equal(policy.blockedPositions, [0], "A current-key-only query must fail closed against a retained-key fact");
+      equal(decideWrite(policy, 0).status, "suppressed", "Core must suppress the ineligible query");
+      const finished = await finish(ctx, [await finishItem(ctx, unrelated, newKey)]);
+      equal(finished.suppressedCount, 1, "A current-key-only finish item must fail closed against a retained-key fact");
+      equal(finished.memories, [], "An ineligible capture item must produce no writes");
+    },
+  },
+  {
+    id: "K-KD-6", title: "refuses rotation while an older key has a live HMAC-only fact", needs: ["fingerprintKey"],
+    async run(ctx) {
+      const { harness, owner } = ctx;
+      if (!harness.setFingerprintSecret) return "needs harness.setFingerprintSecret for rotation refusal";
+      if (!harness.rowsMissingKeyedDigest) return "needs harness.rowsMissingKeyedDigest for the rotation gate";
+      const oldKey = await ownerKey(ctx);
+      await seedFact(ctx, oldKey);
+      await insert(ctx, unrelated, oldKey);
+      const rotate = harness.setFingerprintSecret.bind(harness);
+      await rotate(nextSecret);
+      const current = await ownerKey(ctx);
+      check(current.id !== oldKey.id, "Expected a retained non-current key");
+      const before = await harness.dump();
+      const gate = await harness.rowsMissingKeyedDigest(owner);
+      equal(gate, 0, "The first rotation must leave full digest coverage");
+      await rejects(() => rotate("test-secret-later"), "fingerprint_key_mismatch");
+      equal((await ownerKey(ctx)).id, current.id, "A refused rotation must preserve the current key");
+      equal(await harness.dump(), before, "A refused rotation must preserve stored state");
+      equal(await harness.rowsMissingKeyedDigest(owner), gate, "A refused rotation must preserve the gate");
     },
   },
 ];

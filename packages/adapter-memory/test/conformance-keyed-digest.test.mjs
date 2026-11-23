@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
+import { createMemoryAdapter, TEST_FINGERPRINT_LABELS } from "@cairn-ink/adapter-memory";
 import { KEYED_DIGEST_CASES, runCase } from "@cairn-ink/conformance";
 import { allDigests, coreDigest } from "@cairn-ink/core";
 import { embeddingRequiredFactory } from "./fixtures/embedding-required.mjs";
@@ -33,41 +33,57 @@ test("keyed digest cases report missing capabilities and rotation hooks", async 
   for (const testCase of KEYED_DIGEST_CASES) {
     assert.equal(await runCase(disabled, testCase), "needs fingerprintKey");
   }
-  const rotation = KEYED_DIGEST_CASES.find(({ id }) => id === "K-KD-4");
-  for (const hook of ["setFingerprintSecret", "rowsMissingKeyedDigest"]) {
-    const withoutHook = {
-      ...memory,
-      async open(options) {
-        const opened = await memory.open(options);
-        const { [hook]: _hook, ...harness } = opened.harness;
-        return { ...opened, harness };
-      },
-    };
-    assert.match(await runCase(withoutHook, rotation), new RegExp(`^needs harness\\.${hook}\\b`));
+  for (const [id, hooks] of [
+    ["K-KD-4", ["setFingerprintSecret", "rowsMissingKeyedDigest"]],
+    ["K-KD-5", ["setFingerprintSecret"]],
+    ["K-KD-6", ["setFingerprintSecret", "rowsMissingKeyedDigest"]],
+  ]) {
+    const rotationCase = KEYED_DIGEST_CASES.find((candidate) => candidate.id === id);
+    for (const hook of hooks) {
+      const withoutHook = {
+        ...memory,
+        async open(options) {
+          const opened = await memory.open(options);
+          const { [hook]: _hook, ...harness } = opened.harness;
+          return { ...opened, harness };
+        },
+      };
+      assert.match(await runCase(withoutHook, rotationCase), new RegExp(`^needs harness\\.${hook}\\b`));
+    }
   }
 });
 
-test("the rotation case reports when a factory serializes key sampling behind rotation", async () => {
+test("the rotation coverage case reads keys and coverage only outside rotation", async () => {
   const rotationCase = KEYED_DIGEST_CASES.find(({ id }) => id === "K-KD-4");
   let seeded = 0;
+  let gates = 0;
   const factory = {
     ...memory,
     async open(options) {
       const opened = await memory.open(options);
       const { adapter, harness } = opened;
-      let rotation;
+      let rotating = false;
       return {
         ...opened,
         adapter: { ...adapter, keys: {
           async userKey(owner) {
-            await rotation;
+            assert.equal(rotating, false, "K-KD-4 must not sample the current key during rotation");
             return adapter.keys.userKey(owner);
           },
         } },
         harness: { ...harness,
-          setFingerprintSecret(secret) {
-            rotation = harness.setFingerprintSecret(secret);
-            return rotation;
+          async setFingerprintSecret(secret) {
+            rotating = true;
+            try {
+              await harness.setFingerprintSecret(secret);
+            } finally {
+              rotating = false;
+            }
+          },
+          async rowsMissingKeyedDigest(owner) {
+            assert.equal(rotating, false, "K-KD-4 must not sample coverage during rotation");
+            gates++;
+            return harness.rowsMissingKeyedDigest(owner);
           },
           async seedFact(owner, fact) {
             await harness.seedFact(owner, fact);
@@ -77,8 +93,9 @@ test("the rotation case reports when a factory serializes key sampling behind ro
       };
     },
   };
-  assert.match(await runCase(factory, rotationCase), /^rotation sampling skipped because no key read completed/);
+  assert.equal(await runCase(factory, rotationCase), null);
   assert.equal(seeded, 2);
+  assert.equal(gates, 1);
 });
 
 const owner = "test-owner";
@@ -191,7 +208,7 @@ async function keyedContent(text, key) {
   return content(text, await allDigests(text, key));
 }
 
-test("rotation retains old facts without hiding unrelated rows or blocking keyed saves with text", async () => {
+test("write queries use port digests and aliases across rotation", async () => {
   const adapter = createMemoryAdapter({ capabilities: { fingerprintKey: true } });
   const { uow, memories, keys, harness } = adapter;
   const old = await keys.userKey(owner);
@@ -203,17 +220,112 @@ test("rotation retains old facts without hiding unrelated rows or blocking keyed
   await harness.setFingerprintSecret(nextSecret);
   const fresh = await keys.userKey(owner);
   assert.notEqual(fresh.id, old.id);
-  const query = await keyedContent(mint, fresh);
+  const row = await keyedContent(mint, fresh);
+  const query = { textHash: row.textHash, digests: row.digests };
   const policy = (batch) => uow.run(owner, { readOnly: true }, (tx) =>
-    memories.readWritePolicy(tx, scope, batch, query.source, "hash"));
+    memories.readWritePolicy(tx, scope, batch, row.source, "hash"));
   assert.deepEqual(await visible(adapter), [thyme]);
   assert.equal(await harness.rowsMissingKeyedDigest(owner), 0);
-  assert.deepEqual((await policy([query])).blockedPositions, []);
-  assert.deepEqual((await policy([await keyedContent(basil, fresh)])).blockedPositions, [0]);
-  assert.deepEqual((await policy([{ ...query, text: basil }])).blockedPositions, [0]);
-  assert.deepEqual((await policy([{ textHash: query.textHash, digests: query.digests }])).blockedPositions, [0]);
-  await insert(adapter, query);
+  assert.deepEqual((await policy([query])).blockedPositions, [0]);
+  assert.deepEqual((await policy([{ ...query, text: mint }])).blockedPositions, [0]);
+  let textReads = 0;
+  const fields = new Proxy(query, {
+    get(target, property, receiver) {
+      if (property === "text") textReads++;
+      return Reflect.get(target, property, receiver);
+    },
+    getOwnPropertyDescriptor(target, property) {
+      if (property === "text") textReads++;
+      return Reflect.getOwnPropertyDescriptor(target, property);
+    },
+  });
+  assert.deepEqual((await policy([fields])).blockedPositions, [0]);
+  assert.equal(textReads, 0);
+  const bothKeys = async (text) => ({
+    textHash: (await content(text)).textHash,
+    digests: [...await allDigests(text, fresh), await coreDigest(text, old)],
+  });
+  assert.deepEqual((await policy([await bothKeys(basil), await bothKeys(mint)])).blockedPositions, [0]);
+  await insert(adapter, row);
   assert.deepEqual((await visible(adapter)).sort(), [mint, thyme].sort());
+  assert.equal(await harness.rowsMissingKeyedDigest(owner), 0);
+});
+
+test("write queries retain both hash aliases when keyed digests are supplied", async () => {
+  const adapter = createMemoryAdapter({ capabilities: { fingerprintKey: true } });
+  const { uow, memories, keys, harness } = adapter;
+  const digests = await allDigests(mint, await keys.userKey(owner));
+  const { textHash, source } = await content(thyme);
+  const legacyHash = (await content(basil)).textHash;
+  const policy = (query) => uow.run(owner, { readOnly: true }, (tx) =>
+    memories.readWritePolicy(tx, scope, [query], source, "hash"));
+  for (const [text, actionId] of [[basil, "test-legacy-alias"], [thyme, "test-core-alias"]]) {
+    await harness.seedFact(owner, {
+      owner, actionId, origin: "forget", kind: "text", mode: "exact",
+      text: { digests: [await coreDigest(text)] },
+    });
+  }
+  assert.deepEqual((await policy({ textHash, digests })).blockedPositions, [0]);
+  assert.deepEqual((await policy({ textHash: (await content(mint)).textHash, legacyHash, digests })).blockedPositions, [0]);
+});
+
+test("rotation refusal considers a retained-key fact in another owner", async () => {
+  const adapter = createMemoryAdapter({ capabilities: { fingerprintKey: true, placement: true } });
+  const { keys, harness } = adapter;
+  const otherOwner = "test-other-owner";
+  const other = { owner: otherOwner, namespace: "test-namespace" };
+  const old = await keys.userKey(otherOwner);
+  await insert(adapter, await content(thyme));
+  await harness.setFingerprintSecret(nextSecret);
+  const current = await keys.userKey(owner);
+  await harness.seedFact(otherOwner, {
+    owner: otherOwner, namespace: other.namespace, actionId: "test-forget", origin: "forget", kind: "text", mode: "exact",
+    text: { digests: [await coreDigest(basil, old)] },
+  });
+  const before = await harness.dump();
+  await assert.rejects(harness.setFingerprintSecret("test-secret-later"), { code: "fingerprint_key_mismatch" });
+  assert.deepEqual(await harness.dump(), before);
+  assert.equal((await keys.userKey(owner)).id, current.id);
+  assert.equal(await harness.rowsMissingKeyedDigest(owner), 0);
+  assert.equal(await harness.rowsMissingKeyedDigest(otherOwner), 0);
+});
+
+test("a second-owner derivation failure preserves rows and placement guards", async (t) => {
+  const adapter = createMemoryAdapter({ capabilities: { fingerprintKey: true, placement: true } });
+  const { uow, keys, harness, placement } = adapter;
+  const other = { owner: "test-other-owner", namespace: null };
+  const { id: memoryId, revision } = await insert(adapter, await content(thyme));
+  await insert(adapter, await content(basil), other);
+  const old = await keys.userKey(owner);
+  const catalog = () => uow.run(owner, { readOnly: true }, (tx) =>
+    placement.catalog(tx, scope, { cursor: null, limit: 10 }));
+  const { indexRevision } = await catalog();
+  const before = await harness.dump();
+  const sign = crypto.subtle.sign.bind(crypto.subtle);
+  let failed = 0;
+  const fault = t.mock.method(crypto.subtle, "sign", (algorithm, key, data) => {
+    if (new TextDecoder().decode(data) === TEST_FINGERPRINT_LABELS.shingleKeyPrefix + other.owner) {
+      failed++;
+      return Promise.reject(new Error("Owner key derivation failed"));
+    }
+    return sign(algorithm, key, data);
+  });
+  await assert.rejects(harness.setFingerprintSecret(nextSecret), { code: "fingerprint_unavailable" });
+  fault.mock.restore();
+  assert.equal(failed, 1);
+
+  const after = await harness.dump();
+  const current = await keys.userKey(owner);
+  const afterRevision = (await catalog()).indexRevision;
+  const proposal = await Promise.allSettled([uow.run(owner, {}, (tx) =>
+    placement.applyPlacement(tx, scope, { indexRevision, memoryRevisions: [{ memoryId, revision }] },
+      { items: [{ memoryId, parentIds: [] }] }))]);
+  assert.deepEqual({
+    stateUnchanged: JSON.stringify(after) === JSON.stringify(before),
+    revision: afterRevision,
+    keyId: current.id,
+    placement: proposal.map((result) => result.status === "fulfilled" ? result.status : result.reason.code),
+  }, { stateUnchanged: true, revision: indexRevision, keyId: old.id, placement: ["fulfilled"] });
   assert.equal(await harness.rowsMissingKeyedDigest(owner), 0);
 });
 

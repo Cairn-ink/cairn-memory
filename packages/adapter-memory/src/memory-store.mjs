@@ -13,7 +13,6 @@ import {
 /** @typedef {import("@cairn-ink/core/ports").MemoryMatch} MemoryMatch */
 /** @typedef {import("@cairn-ink/core/ports").MemoryStore} MemoryStore */
 /** @import { InsertRow, Receipt, Scope, SourceRef, Tx } from "@cairn-ink/core/ports" */
-/** @import { FingerprintKey } from "@cairn-ink/core" */
 /** @import { CanonicalQuery } from "./validation.mjs" */
 /** @typedef {ReturnType<typeof copyContent>} CopiedContent */
 /** @typedef {import("./unit-of-work.mjs").Row} Row */
@@ -58,23 +57,6 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
       addKeyedDigest(digests, keyed);
     }
     return digests;
-  }
-
-  /** @param {CanonicalQuery} query @param {FingerprintKey[]} keys */
-  async function withRetainedDigests(query, keys) {
-    const { text, digests } = query;
-    if (text === undefined || !digests ||
-        keys.every(({ id }) => digests.some(({ alg, keyId }) => alg === "hmac" && keyId === id))) return query;
-
-    // A full row can also be a query. Verify its text against supplied keyed evidence
-    // before using it to fill in digests under other keys.
-    const computed = await Promise.all(keys.map((key) => coreDigest(text, key)));
-    const supplied = digests.filter(({ alg, keyId }) => alg === "hmac" && keys.some(({ id }) => id === keyId));
-    if (!supplied.length || !supplied.every(({ keyId, value }) =>
-      computed.some((digest) => digest.keyId === keyId && digest.value === value))) return query;
-    const comparable = [...digests];
-    for (const keyed of computed) addKeyedDigest(comparable, keyed);
-    return { ...query, digests: comparable };
   }
 
   /**
@@ -182,13 +164,9 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
      * @param {SourceRef} source @param {"hash" | "full"} mode @param {string} [editId]
      */
     readWritePolicy(tx, scope, prepareBatch, source, mode, editId) {
-      return port.read(tx, scope, async (getState) => {
-        let batch = prepareBatch();
+      return port.read(tx, scope, (getState) => {
+        const batch = prepareBatch();
         const state = getState();
-        if (batch.some(({ text, digests }) => text !== undefined && digests?.some(({ alg }) => alg === "hmac"))) {
-          const keys = await ringKeys(tx.owner);
-          if (keys.length > 1) batch = await Promise.all(batch.map((query) => withRetainedDigests(query, keys)));
-        }
         const policy = matchFacts(state.facts, scope);
         const namespace = state.rows.get(scope.namespace);
         const entries = entriesIn(namespace).filter(({ row }) => row.id !== editId);
@@ -236,7 +214,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
 
     async readWritePolicy(tx, scope, batch, source, mode, editId) {
       return policyReads.readWritePolicy(tx, scope, () => {
-        const queries = copyDuplicateBatch(batch, capabilities.fingerprintKey);
+        const queries = copyDuplicateBatch(batch);
         validateSource(source);
         if ((mode !== "hash" && mode !== "full") ||
           (editId !== undefined && typeof editId !== "string")) throw new CoreError("invalid_input");
