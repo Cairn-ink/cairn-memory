@@ -67,5 +67,10 @@ export interface TopicStore {
   forMemories?(tx: Tx, scope: Scope, memoryIds: readonly string[]): Promise<
     Array<{ memoryId: string; topics: Array<{ id: string; title: string | null }> }>
   >;
+  /**
+   * Advances the owner's index revision once when it drops at least one membership or retires
+   * at least one title source. A title becoming null can reorder `list` and `catalog`.
+   * Memory erase covers the same changes through its existing index revision advance.
+   */
   dropMemory(tx: Tx, scope: Scope, memoryId: string): Promise<{ dropped: number }>;
 }

@@ -337,11 +337,10 @@ export function createTopicStore(port, _flags, newId, now, matchFacts, {
     },
 
     async dropMemory(tx, scope, memoryId) {
-      return port.write(tx, scope, "conditional", () => (getState, markDirty, run) => {
+      return port.write(tx, scope, "conditional", () => (getState, markDirty) => {
         const scoped = getState().topics.get(scope.namespace);
         const { dropped, retired } = dropMemoryPlacement(scoped, memoryId);
-        if (dropped) markDirty();
-        else if (retired) run.stateWritten = true;
+        if (dropped || retired) markDirty();
         return { dropped };
       });
     },

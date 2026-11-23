@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { test } from "node:test";
 import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
 
-test("a title-only drop commits without advancing the index or invalidating topic cursors", async () => {
+test("a title-only drop advances the index and invalidates topic cursors", async () => {
   const scope = { owner: "owner", namespace: "notes" };
   const page = { cursor: null, limit: 1 };
   const { memories, placement, uow } = createMemoryAdapter({ capabilities: { placement: true } });
@@ -25,33 +25,40 @@ test("a title-only drop commits without advancing the index or invalidating topi
   const list = (query = page) => read((tx) => placement.list(tx, scope, query));
   const drop = ({ memoryId }) => write((tx) => placement.dropMemory(tx, scope, memoryId));
 
-  const source = await insert("Original title source");
-  const retained = await insert("Retained member");
-  const newL1 = { title: "Child title", parentL2Ids: [], newL2Title: "Parent title" };
-  const { createdTopics } = await apply([source, retained], [source, retained].map(({ memoryId }) => ({
-    memoryId, parentIds: [], newL1,
-  })));
-  const { id: parentId } = createdTopics.find(({ level }) => level === "L2");
-  await apply([source], [{ memoryId: source.memoryId, parentIds: [] }]);
+  const alpha = await insert("Alpha member");
+  const zulu = await insert("Zulu member");
+  const source = await insert("Second Zulu title source");
+  const item = ({ memoryId }, title) => ({ memoryId, parentIds: [], newL1: { title, parentL2Ids: [] } });
+  const { createdTopics: [alphaTopic] } = await apply([alpha], [item(alpha, "Alpha")]);
+  const { createdTopics: [zuluTopic] } = await apply([zulu, source], [
+    item(zulu, "Zulu"), { memoryId: source.memoryId, parentIds: [] },
+  ]);
 
   const beforeCatalog = await catalog();
   const beforeList = await list();
-  assert.ok(beforeCatalog.nextCursor);
-  assert.ok(beforeList.nextCursor);
-  const catalogContinuation = { ...page, cursor: beforeCatalog.nextCursor };
-  const listContinuation = { ...page, cursor: beforeList.nextCursor };
-  assert.equal((await catalog(catalogContinuation)).items[0].title, "Parent title");
-  assert.equal((await list(listContinuation)).items[0].title, "Parent title");
+  const titleRow = ({ id, level, title }) => ({ id, level, title });
+  const expectedAlpha = { id: alphaTopic.id, level: "L1", title: "Alpha" };
+  const expectedZulu = { id: zuluTopic.id, level: "L1", title: "Zulu" };
+  for (const [query, before] of [[catalog, beforeCatalog], [list, beforeList]]) {
+    assert.deepEqual(before.items.map(titleRow), [expectedAlpha]);
+    assert.ok(before.nextCursor);
+    const second = await query({ ...page, cursor: before.nextCursor });
+    assert.deepEqual(second.items.map(titleRow), [expectedZulu]);
+  }
 
   assert.deepEqual(await drop(source), { dropped: 0 });
-  assert.equal((await catalog()).indexRevision, beforeCatalog.indexRevision);
-  const afterCatalogPage = await catalog(catalogContinuation);
-  const afterListPage = await list(listContinuation);
-  assert.deepEqual(afterCatalogPage.items.map(({ id, title }) => ({ id, title })), [{ id: parentId, title: null }]);
-  assert.deepEqual(afterListPage.items.map(({ id, title }) => ({ id, title })), [{ id: parentId, title: null }]);
+  const afterCatalog = await catalog({ ...page, limit: 2 });
+  const afterList = await list({ ...page, limit: 2 });
+  const reordered = [{ ...expectedZulu, title: null }, expectedAlpha];
+  assert.deepEqual(afterCatalog.items.map(titleRow), reordered);
+  assert.deepEqual(afterList.items.map(titleRow), reordered);
+  assert.deepEqual(afterList.items.map(({ memberCount }) => memberCount), [1, 1]);
+  await Promise.all([
+    assert.rejects(() => catalog({ ...page, cursor: beforeCatalog.nextCursor }), { code: "cursor_stale" }, "catalog cursor"),
+    assert.rejects(() => list({ ...page, cursor: beforeList.nextCursor }), { code: "cursor_stale" }, "list cursor"),
+  ]);
+  assert.equal(afterCatalog.indexRevision, beforeCatalog.indexRevision + 1);
 
-  assert.deepEqual(await drop(retained), { dropped: 1 });
-  assert.equal((await catalog()).indexRevision, beforeCatalog.indexRevision + 1);
-  await assert.rejects(() => catalog(catalogContinuation), { code: "cursor_stale" });
-  await assert.rejects(() => list(listContinuation), { code: "cursor_stale" });
+  assert.deepEqual(await drop(source), { dropped: 0 });
+  assert.equal((await catalog()).indexRevision, afterCatalog.indexRevision);
 });

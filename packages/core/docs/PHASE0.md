@@ -125,3 +125,8 @@ Callers skip annotations when the adapter omits the method.
 - Topics follow `forMemory` order. A title is null when any title source is no longer current at
   its recorded revision, as in `list` and `catalog`.
 - The input must contain 1–100 ids, counting duplicates. Other batch sizes throw `invalid_input`.
+
+`dropMemory` advances the owner's index revision once when it drops at least one membership or
+retires at least one title source. A title becoming null can reorder `list` and `catalog`, so
+their earlier cursors become stale. Memory erase covers the same changes through its existing
+index revision advance.
