@@ -73,7 +73,7 @@ export function recallMethod({ storage, embedQuery, gate }) {
     /** @param {ItemRef} ref */
     const isScopedMemory = ref => ref.type === "memory" && ref.namespace === scope.namespace;
 
-    const { rows, nextCursor } = await uow.run(scope.owner, { readOnly: true }, async tx => {
+    const { rows, nextCursor, memories } = await uow.run(scope.owner, { readOnly: true }, async tx => {
       const token = await readStateToken(snapshot, tx, readScope, positionToken);
       const words = await lexical.lexical(tx, readScope, query, lexicalDepth, {});
       const semantic = embedding && vector
@@ -89,21 +89,24 @@ export function recallMethod({ storage, embedQuery, gate }) {
         : fuseHostedLexicalOnly(lexicalRows, page);
       const nextOffset = offset + limit;
       const nextCursor = nextOffset < total ? encodeCursor([...binding, token, nextOffset, path]) : null;
-      return { rows, nextCursor };
+      /** @type {Map<string, MemoryRow>} */
+      const memories = new Map();
+      if (rows.length) {
+        for (const { ref, memory } of await hydrate.hydrate(tx, readScope, rows.map(row => row.ref), "recall")) {
+          if (isScopedMemory(ref) && memory?.id === ref.id && memory.scope.owner === scope.owner &&
+              memory.scope.namespace === ref.namespace) {
+            memories.set(canonicalKey(ref), memory);
+          }
+        }
+      }
+      return { rows, nextCursor, memories };
     });
 
     if (!rows.length) return { items: [], nextCursor, scores: [] };
+    // The fence runs alone in a fresh read run, after every read it guards, so a
+    // forget committed at any point before this run starts is never delivered.
     return uow.run(scope.owner, { readOnly: true }, async tx => {
       const refs = rows.map(row => row.ref);
-      const hydrated = await hydrate.hydrate(tx, readScope, refs, "recall");
-      /** @type {Map<string, MemoryRow>} */
-      const memories = new Map();
-      for (const { ref, memory } of hydrated) {
-        if (isScopedMemory(ref) && memory?.id === ref.id && memory.scope.owner === scope.owner &&
-            memory.scope.namespace === ref.namespace) {
-          memories.set(canonicalKey(ref), memory);
-        }
-      }
       const visible = new Set((await fence.assertVisible(tx, readScope, refs)).map(canonicalKey));
       /** @type {MemoryRow[]} */
       const items = [];
