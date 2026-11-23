@@ -11,7 +11,7 @@ export type * from "./topics.d.ts";
 
 import type { Capabilities } from "../capabilities.mjs";
 import type { CaptureClaim, CaptureFinish, CausalStream, RawCapture, SourceFilter, StagedEvidence } from "./capture.d.ts";
-import type { DocumentCardStore } from "./document-card.d.ts";
+import type { DocumentCardCandidates, DocumentCardStore } from "./document-card.d.ts";
 import type { ConflictEdgeStore, MemoryStore, SupersessionStore } from "./memory-store.d.ts";
 import type { HydrateItems, LexicalCandidates, ListRawMessages, ListRecent, RawCandidates, ReadSnapshot, RelationSource, VectorCandidates, VisibilityFence } from "./retrieval.d.ts";
 import type { FingerprintKeyProvider, ForgetLog, PauseStore, RawStore, SessionLineageStore, SpanLineageStore, SuppressionStore } from "./privacy.d.ts";
@@ -51,5 +51,6 @@ export interface StorageAdapter {
   readonly conflicts?: ConflictEdgeStore; // conflictEdges
   readonly forgetLog?: ForgetLog; // forgetLog
   readonly documentCards?: DocumentCardStore; // documentCards
+  readonly documentCardCandidates?: DocumentCardCandidates; // documentCardSearch
   readonly quantityLedger?: QuantityLedgerStore; // quantityLedger
 }
