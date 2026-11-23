@@ -1,7 +1,10 @@
-import { assertAdapterCapabilities, capabilities, toCoreError } from "@cairn-ink/core";
+import { CoreError, assertAdapterCapabilities, capabilities, toCoreError } from "@cairn-ink/core";
 import { createMemoryStore } from "./memory-store.mjs";
+import { createFactStore, createFingerprintProvider, createPauseStore } from "./privacy.mjs";
 import { createRetrievalPorts } from "./retrieval.mjs";
 import { createUnitOfWork } from "./unit-of-work.mjs";
+
+export { TEST_FINGERPRINT_LABELS, TEST_FINGERPRINT_SECRET } from "./privacy.mjs";
 
 const nativeErrorMap = Object.freeze({});
 
@@ -11,26 +14,35 @@ const nativeErrorMap = Object.freeze({});
  */
 export function createMemoryAdapter(options = {}) {
   const flags = capabilities(options.capabilities ?? {});
-  const { uow, port, dump, appendFact, setWriteTime } = createUnitOfWork(nativeErrorMap);
-  const { memories, counters } = createMemoryStore(port, flags, options.newId ?? (() => crypto.randomUUID()));
+  const sessionRefs = options.sessionRefs ?? "plain";
+  if (sessionRefs !== "plain" && sessionRefs !== "hashed") throw new CoreError("invalid_input");
+  const newId = options.newId ?? (() => crypto.randomUUID());
+  const { uow, port, dump, runSeed, setWriteTime } = createUnitOfWork(nativeErrorMap);
+  const { memories, counters } = createMemoryStore(port, flags, newId);
+  const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now: options.now ?? Date.now });
+  const { keys, setFingerprintSecret } = createFingerprintProvider(flags.fingerprintKey, options.fingerprint);
   /** @type {import("./index.d.mts").MemoryAdapter} */
   const adapter = {
     name: "memory",
     capabilities: flags,
     uow,
     memories,
+    suppressions,
+    pause: createPauseStore(port),
+    keys,
     ...createRetrievalPorts(port, flags),
     nativeErrorMap,
     harness: {
       async dump() { return dump(); },
       async seedFact(owner, fact) {
         try {
-          appendFact(owner, fact);
+          await seedFact(owner, fact);
         } catch (error) {
           throw toCoreError(error, nativeErrorMap);
         }
       },
       setWriteTime,
+      setFingerprintSecret,
       async counters() { return counters(); },
     },
   };

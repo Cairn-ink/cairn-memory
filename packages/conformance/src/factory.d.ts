@@ -9,7 +9,9 @@ export type AdapterFactory = {
 
 export type OpenedAdapter = {
   adapter: Pick<StorageAdapter, "capabilities" | "uow" | "memories" |
-    "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "supersession">;
+    "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "supersession" |
+    "suppressions" | "pause" | "keys">;
+  sessionRefs: "plain" | "hashed";
   harness: TestHarness;
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;
   busyNativeCodes: readonly string[];
@@ -28,6 +30,7 @@ export type TestHarness = {
   dump(): Promise<JsonValue>;
   seedFact(owner: string, fact: SuppressionFact): Promise<void>;
   setWriteTime(scope: Scope, id: string, updatedAtUs: bigint): Promise<void>;
+  setFingerprintSecret?(secret: string): Promise<void>;
   counters(): Promise<Readonly<Record<string, number>>>;
   // TODO: Named-step fault injection.
   // TODO: Coverage control.
