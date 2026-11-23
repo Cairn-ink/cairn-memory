@@ -117,7 +117,7 @@ async function readMigrations() {
 }
 
 function adminQuery(admin, label, sql, params) {
-  return beforeDeadline(label, 9_000, () => admin.pool.query(sql, params));
+  return beforeDeadline(label, 4_000, () => admin.pool.query(sql, params));
 }
 
 async function closeDatabase(database, admin, name) {
@@ -146,9 +146,8 @@ async function openDatabase() {
   url.pathname = `/${name}`;
   const admin = trackedPool(databaseUrl, {
     connectionTimeoutMillis: 1_000,
-    // Creating and dropping a database can wait for checkpoints on a shared server.
-    statement_timeout: 8_000,
-    query_timeout: 8_500,
+    statement_timeout: 2_500,
+    query_timeout: 2_750,
   });
   const database = trackedPool(url.href, {
     connectionTimeoutMillis: 3_000,
