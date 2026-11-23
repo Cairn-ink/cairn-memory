@@ -56,6 +56,8 @@ export interface TopicStore {
   /** Stores only the failure code at each memory's current revision. */
   markFailed(tx: Tx, scope: Scope, memoryIds: readonly string[], code: ErrorCode): Promise<void>;
   /** Oldest unhidden, untombstoned cards in this exact scope, with no outcome at their content hash.
+   * All linked source memories must be current at their recorded revisions.
+   * A stale card is not placed until it is re-routed.
    * Uses the same retry policy as pending. Limit 1–5. Returns [] without documentCards. */
   pendingCards(tx: Tx, scope: Scope, query: { limit: number }): Promise<TopicCardGuard[]>;
   /** Atomically replaces memberships at the guarded hashes. A stale index, invisible card,

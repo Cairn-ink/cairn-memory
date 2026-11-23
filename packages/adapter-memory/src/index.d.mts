@@ -28,4 +28,7 @@ export type MemoryAdapter = Pick<StorageAdapter<StoredDocumentCardRecord>, "capa
 export declare const TEST_FINGERPRINT_SECRET: string;
 export declare const TEST_FINGERPRINT_LABELS: FingerprintLabels;
 
+export declare function createMemoryAdapter(options?: MemoryAdapterOptions & {
+  capabilities?: { documentCards?: false };
+}): Omit<MemoryAdapter, "documentCards"> & { documentCards?: undefined };
 export declare function createMemoryAdapter(options?: MemoryAdapterOptions): MemoryAdapter;

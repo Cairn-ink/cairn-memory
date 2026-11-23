@@ -4,10 +4,10 @@ import {
 } from "@cairn-ink/core";
 import { decodePayload, encodePayload, newestFirst } from "./cursor.mjs";
 import { writeTime } from "./memory-store.mjs";
-import { copyScope, snapshotArray, validateLimit, validateMemoryId, validateTime } from "./validation.mjs";
+import { copyScope, snapshotArray, validateCardId, validateLimit, validateTime } from "./validation.mjs";
 
 /** @import {PlacementProposal} from "@cairn-ink/core" */
-/** @import {Scope, Topic, TopicStore} from "@cairn-ink/core/ports" */
+/** @import {Scope, StoredDocumentCardRecord, Topic, TopicStore} from "@cairn-ink/core/ports" */
 /** @import {State} from "./unit-of-work.mjs" */
 /** @import {CardOutcome, Failure, Outcome, StoredTopic, TopicState} from "./topics.d.mts" */
 /** @typedef {{id: string, updatedAtUs: bigint}} Member */
@@ -110,6 +110,22 @@ export function dropCardMemberships(state, namespace, cardId) {
   return dropped;
 }
 
+/** @param {State} state @param {Scope["namespace"]} namespace @param {string} cardId */
+export function dropCardPlacement(state, namespace, cardId) {
+  const scoped = state.topics.get(namespace);
+  scoped?.cardOutcomes.delete(cardId);
+  scoped?.cardFailures.delete(cardId);
+}
+
+/** @param {Pick<StoredDocumentCardRecord, "sourceMemories">} card
+ * @param {ReturnType<typeof visibility>["current"]} current */
+function cardSourcesAreCurrent(card, current) {
+  return card.sourceMemories.every((source) => {
+    const row = source && current(source.id);
+    return !!row && row.revision === source.revision;
+  });
+}
+
 /** @param {readonly string[]} callerIds @param {import("@cairn-ink/core").ErrorCode} code */
 function failureIds(callerIds, code) {
   if (!isErrorCode(code)) throw new CoreError("invalid_input");
@@ -156,13 +172,13 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
   async function visibleCardAt(state, scope, cardId, contentHash, current) {
     const card = state.documentCards.get(scope.namespace)?.get(cardId)?.card;
     return card?.contentHash === contentHash &&
-      card.sourceMemories.every(({ id, revision }) => current(id)?.revision === revision) &&
+      cardSourcesAreCurrent(card, current) &&
       await cardVisible(state, scope, card);
   }
 
-  /** @param {State} state @param {Scope} scope @param {TopicState} scoped
-   * @param {ReturnType<typeof visibility>["current"]} current */
-  async function visibleFiledCards(state, scope, scoped, current) {
+  /** @param {State} state @param {Scope} scope @param {TopicState} scoped */
+  async function visibleFiledCards(state, scope, scoped) {
+    const { current } = visibility(state, scope, matchFacts);
     const ids = new Set();
     for (const [id, { contentHash, memberships }] of scoped.cardOutcomes) {
       if (memberships.size && await visibleCardAt(state, scope, id, contentHash, current)) ids.add(id);
@@ -201,11 +217,13 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
         if (!flags.documentCards) return [];
         const state = getState();
         const scoped = state.topics.get(scope.namespace);
+        const { current } = visibility(state, scope, matchFacts);
         /** @type {number | undefined} */
         let nowMs;
         return [...(state.documentCards.get(scope.namespace)?.values() ?? [])]
           .flatMap(({ card, createdAtMs }) => {
-            if (!card || scoped?.cardOutcomes.get(card.id)?.contentHash === card.contentHash) return [];
+            if (!card || scoped?.cardOutcomes.get(card.id)?.contentHash === card.contentHash ||
+                !cardSourcesAreCurrent(card, current)) return [];
             const failure = scoped?.cardFailures.get(card.id);
             return failure?.contentHash !== card.contentHash || mayRetry(failure, () => nowMs ??= now())
               ? [{ cardId: card.id, contentHash: card.contentHash, createdAtMs }] : [];
@@ -343,9 +361,10 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
         const items = snapshotArray(input, { ...placementArrayOptions, maxLength: placementBatchLimit }).map((item) => {
           const { cardId, parentIds } = placementFields(item, ["cardId", "parentIds"]);
           const parents = uniqueIds(snapshotArray(parentIds, { ...placementArrayOptions, maxLength: 3 }), 3);
-          return { cardId, topicIds: parents };
+          return { cardId: validateCardId(cardId), topicIds: parents };
         });
-        const ids = new Set(uniqueIds(items.map(({ cardId }) => cardId), placementBatchLimit, 1));
+        const ids = new Set(items.map(({ cardId }) => cardId));
+        if (!items.length || ids.size !== items.length) throw new CoreError("invalid_input");
         const indexRevision = basedOn?.indexRevision;
         if (!Number.isSafeInteger(indexRevision) || indexRevision < 0) throw new CoreError("invalid_input");
         const guards = snapshotArray(basedOn.cards, { ...placementArrayOptions, maxLength: ids.size }).map((guard) => {
@@ -427,9 +446,10 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
       return port(tx, scope, false, async (state) => {
         const { level } = query;
         if (level !== undefined && level !== "L1" && level !== "L2") throw new CoreError("invalid_input");
-        const scoped = state.topics.get(scope.namespace);
+        const namespace = scope.namespace;
+        const scoped = state.topics.get(namespace);
         const { current, topic } = view(state, tx.owner, scope.namespace);
-        const cards = flags.documentCards && scoped ? await visibleFiledCards(state, scope, scoped, current) : null;
+        const cards = flags.documentCards && scoped ? await visibleFiledCards(state, { owner: tx.owner, namespace }, scoped) : null;
         const rows = scoped ? [...scoped.topics.values()].filter((row) => !level || row.level === level)
           .flatMap((row) => {
             const children = memberTopics(scoped, row);
@@ -446,7 +466,8 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
 
     async members(tx, scope, topicId, query) {
       return port(tx, scope, false, async (state) => {
-        const scoped = state.topics.get(scope.namespace);
+        const namespace = scope.namespace;
+        const scoped = state.topics.get(namespace);
         const topic = scoped?.topics.get(topicId);
         /** @type {Array<Member & {kind: "memory" | "card"}>} */
         const rows = [];
@@ -456,7 +477,7 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
           const memories = visibleMembers(scoped.outcomes, children, (id, outcome) => current(id)?.revision === outcome.revision);
           for (const memory of memories) rows.push({ ...memory, kind: "memory" });
           if (flags.documentCards) {
-            const cards = await visibleFiledCards(state, scope, scoped, current);
+            const cards = await visibleFiledCards(state, { owner: tx.owner, namespace }, scoped);
             for (const card of visibleMembers(scoped.cardOutcomes, children, (id) => cards.has(id))) {
               rows.push({ ...card, kind: "card" });
             }
@@ -471,6 +492,7 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
     async forCard(tx, callerScope, cardId) {
       const scope = copyScope(callerScope);
       return port(tx, scope, false, async (state) => {
+        validateCardId(cardId);
         const scoped = state.topics.get(scope.namespace);
         const outcome = scoped?.cardOutcomes.get(cardId);
         if (!scoped || !outcome?.memberships.size) return [];
@@ -485,7 +507,7 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
       return port.read(tx, scope, async (getState) => {
         const ids = snapshotArray(cardIds, { strictKeys: true, maxLength: 100 });
         validateLimit(ids.length);
-        ids.forEach(validateMemoryId);
+        ids.forEach(validateCardId);
 
         const state = getState();
         const scoped = state.topics.get(scope.namespace);
@@ -504,10 +526,13 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
 
     async dropCard(tx, callerScope, cardId) {
       const scope = copyScope(callerScope);
-      return port.write(tx, scope, "conditional", () => (getState, markDirty) => {
-        const dropped = dropCardMemberships(getState(), scope.namespace, cardId);
-        if (dropped) markDirty();
-        return { dropped };
+      return port.write(tx, scope, "conditional", () => {
+        validateCardId(cardId);
+        return (getState, markDirty) => {
+          const dropped = dropCardMemberships(getState(), scope.namespace, cardId);
+          if (dropped) markDirty();
+          return { dropped };
+        };
       });
     },
 

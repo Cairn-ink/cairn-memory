@@ -3,7 +3,7 @@ import { readClassificationCatalog } from './catalog.mjs';
 import { classifyPlacement } from './classify.mjs';
 
 /** @import { ErrorCode } from '../errors.mjs' */
-/** @import { ItemRef, StoredDocumentCardRecord, TopicCardGuard, Tx } from '../ports/index.d.ts' */
+/** @import { ItemRef, Scope, StoredDocumentCardRecord, TopicCardGuard, Tx } from '../ports/index.d.ts' */
 /** @import { PlacePendingCardsBatchOptions, PlacePendingCardsOptions, PlacePendingCardsResult } from './cards.mjs' */
 
 /** @param {PlacePendingCardsBatchOptions} options @returns {Promise<PlacePendingCardsResult>} */
@@ -14,24 +14,26 @@ export function placePendingCardsBatch(options) {
 /** @param {PlacePendingCardsOptions} options @returns {Promise<PlacePendingCardsResult>} */
 export async function placePendingCards({ model, gate, deadline, signal, onDiagnostic, ...options }) {
   if (typeof gate?.assertOpen !== 'function') throw new CoreError('invalid_input');
-  return runPendingCards(options, async ({ cards }, catalog, { validateFresh }, indexRevision) => {
-    const memories = cards.map(({ cardId, content }) =>
-      ({ id: cardId, revision: 1, kind: /** @type {const} */ ('context'), content }));
+  return runPendingCards(options, async ({ cards }, catalog, { validateFresh }, indexRevision, owner) => {
+    // Classification uses batch-local IDs, so card IDs have no effect on validation or token sizing.
+    const memories = cards.map(({ content }, index) =>
+      ({ id: String(index), revision: 1, kind: /** @type {const} */ ('context'), content }));
     const { proposal } = await classifyPlacement({
       model, snapshot: { memories, indexRevision }, catalog, allowNewTopics: false,
-      validateFresh, gate, deadline, owner: options.scope.owner, signal, onDiagnostic,
+      validateFresh, gate, deadline, owner, signal, onDiagnostic,
     });
-    return { items: proposal.items.map(({ memoryId: cardId, parentIds }) => ({ cardId, parentIds })) };
+    return { items: proposal.items.map(({ memoryId, parentIds }) => ({ cardId: cards[Number(memoryId)].cardId, parentIds })) };
   });
 }
 
 /**
  * @param {Omit<PlacePendingCardsBatchOptions, 'classify'>} options
- * @param {(...args: [...Parameters<PlacePendingCardsBatchOptions['classify']>, number]) =>
+ * @param {(...args: [...Parameters<PlacePendingCardsBatchOptions['classify']>, number, Scope['owner']]) =>
  *   ReturnType<PlacePendingCardsBatchOptions['classify']>} classify
  * @returns {Promise<PlacePendingCardsResult>}
  */
-async function runPendingCards({ uow, scope, placement, documentCards, fence }, classify) {
+async function runPendingCards({ uow, scope: { owner, namespace }, placement, documentCards, fence }, classify) {
+  const scope = { owner, namespace };
   /** @param {Tx} tx @param {readonly TopicCardGuard[]} guards */
   async function readCards(tx, guards) {
     /** @type {StoredDocumentCardRecord[]} */
@@ -46,7 +48,6 @@ async function runPendingCards({ uow, scope, placement, documentCards, fence }, 
   /** @param {Tx} tx @param {readonly StoredDocumentCardRecord[]} cards */
   async function visibleIds(tx, cards) {
     if (!cards.length) return new Set();
-    const { owner, namespace } = scope;
     const refs = cards.map(({ id }) => /** @type {ItemRef} */ ({ type: 'card', id, namespace }));
     const visible = await fence.assertVisible(tx, { owner, namespaces: [namespace] }, refs);
     return new Set(visible.filter((ref) => ref.type === 'card' && ref.namespace === namespace).map(({ id }) => id));
@@ -54,13 +55,13 @@ async function runPendingCards({ uow, scope, placement, documentCards, fence }, 
 
   /** @param {readonly TopicCardGuard[]} guards @param {ErrorCode} code */
   async function markFailed(guards, code) {
-    await uow.run(scope.owner, {}, async (tx) => {
+    await uow.run(owner, {}, async (tx) => {
       const cards = await readCards(tx, guards);
       if (cards.length) await placement.markCardsFailed(tx, scope, cards.map(({ id }) => id), code);
     });
   }
 
-  const batch = await uow.run(scope.owner, { readOnly: true }, async (tx) => {
+  const batch = await uow.run(owner, { readOnly: true }, async (tx) => {
     const pending = await placement.pendingCards(tx, scope, { limit: 5 });
     if (!pending.length) return null;
     const { indexRevision, catalogView } = await readClassificationCatalog(placement, tx, scope);
@@ -86,7 +87,7 @@ async function runPendingCards({ uow, scope, placement, documentCards, fence }, 
   /** @type {TopicCardGuard[]} */
   let newlyExcluded = [];
   const validateFresh = async () => {
-    const fresh = await uow.run(scope.owner, { readOnly: true }, async (tx) => {
+    const fresh = await uow.run(owner, { readOnly: true }, async (tx) => {
       const cards = await readCards(tx, basedOn.cards);
       const visible = await visibleIds(tx, cards);
       newlyExcluded = cards.filter(({ id }) => !visible.has(id))
@@ -99,13 +100,13 @@ async function runPendingCards({ uow, scope, placement, documentCards, fence }, 
   };
 
   try {
-    const proposal = await classify(snapshot, catalogView, { validateFresh }, basedOn.indexRevision);
-    const result = await uow.run(scope.owner, {}, (tx) => placement.applyCardPlacement(tx, scope, basedOn, proposal));
+    const proposal = await classify(snapshot, catalogView, { validateFresh }, basedOn.indexRevision, owner);
+    const result = await uow.run(owner, {}, (tx) => placement.applyCardPlacement(tx, scope, basedOn, proposal));
     return { status: 'applied', ...result };
   } catch (error) {
     if (!isCoreError(error)) throw error;
     const { code, kind, retryable } = error;
-    if (kind !== 'paused') {
+    if (kind !== 'paused' && kind !== 'conflict') {
       try {
         if (newlyExcluded.length) await markFailed(newlyExcluded, 'source_excluded');
         const remaining = basedOn.cards.filter(({ cardId }) => !newlyExcluded.some((guard) => guard.cardId === cardId));

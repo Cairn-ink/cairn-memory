@@ -177,6 +177,12 @@ export function validateMemoryId(id) {
   if (typeof id !== "string") invalid();
 }
 
+/** @param {unknown} id */
+export function validateCardId(id) {
+  if (typeof id !== "string" || !id) invalid();
+  return id;
+}
+
 /** @param {DuplicateMerge} merge */
 function validateMerge(merge) {
   if (!merge || !Number.isFinite(merge.confidence) || merge.confidence < 0 || merge.confidence > 1 ||

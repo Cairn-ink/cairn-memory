@@ -18,6 +18,8 @@ export type TopicState = {
 
 export function dropCardMemberships(state: State, namespace: import("@cairn-ink/core/ports").Namespace,
   cardId: string): number;
+export function dropCardPlacement(state: State, namespace: import("@cairn-ink/core/ports").Namespace,
+  cardId: string): void;
 
 export function createTopicStore(port: ReturnType<typeof createUnitOfWork>["port"],
   flags: Capabilities, newId: () => string, now: () => number, matchFacts: ReturnType<typeof createFactMatcher>,

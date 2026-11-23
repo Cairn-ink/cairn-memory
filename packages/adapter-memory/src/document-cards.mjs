@@ -1,6 +1,6 @@
 import { CoreError, compareUtf8 } from "@cairn-ink/core";
-import { dropCardMemberships } from "./topics.mjs";
-import { copyScope, snapshotArray, validateTime, writeNamespace } from "./validation.mjs";
+import { dropCardMemberships, dropCardPlacement } from "./topics.mjs";
+import { copyScope, snapshotArray, validateCardId, validateTime, writeNamespace } from "./validation.mjs";
 
 /** @import { DocumentCardAmendment, DocumentCardHideSelector, DocumentCardSourceMessage,
  * DocumentCardStore, Scope, StoredDocumentCardRecord, Tx } from "@cairn-ink/core/ports" */
@@ -95,7 +95,7 @@ export function createDocumentCardStore(port, now) {
       return port.write(tx, scope, "conditional", () => {
         const namespace = writeNamespace(scope);
         const copy = structuredClone(card);
-        requireString(copy?.id);
+        validateCardId(copy?.id);
         requireString(copy.contentHash);
         if (copy.scope?.owner !== tx.owner || copy.scope.namespace !== namespace) throw new CoreError("invalid_input");
         if (!Array.isArray(copy.sourceMemories) || !Array.isArray(copy.stale)) throw new CoreError("invalid_input");
@@ -116,6 +116,7 @@ export function createDocumentCardStore(port, now) {
           }
           const createdAtMs = previous?.createdAtMs ?? now();
           validateTime(createdAtMs);
+          if (previous) dropCardPlacement(state, namespace, copy.id);
           cards.set(copy.id, { ...previous, card: copy, createdAtMs });
           state.documentCards.set(namespace, cards);
           run.cardWrites++;
@@ -127,7 +128,7 @@ export function createDocumentCardStore(port, now) {
     async linkMemories(tx, callerScope, cardId, links) {
       const scope = copyScope(callerScope);
       return port.write(tx, scope, "conditional", () => {
-        requireString(cardId);
+        validateCardId(cardId);
         const incoming = snapshotArray(links).map((link) => {
           if (!link || typeof link !== "object") throw new CoreError("invalid_input");
           const { id, revision } = link;
@@ -153,7 +154,7 @@ export function createDocumentCardStore(port, now) {
     async amend(tx, callerScope, cardId, amendment) {
       const scope = copyScope(callerScope);
       return port.write(tx, scope, "conditional", () => {
-        requireString(cardId);
+        validateCardId(cardId);
         const copy = structuredClone(amendment);
         requireString(copy?.amendmentId);
         return (getState, _markDirty, run) => {
@@ -171,7 +172,7 @@ export function createDocumentCardStore(port, now) {
     async hideAmendment(tx, callerScope, cardId, amendmentId, _reason) {
       const scope = copyScope(callerScope);
       return port.write(tx, scope, "conditional", () => {
-        requireString(cardId);
+        validateCardId(cardId);
         requireString(amendmentId);
         return (getState, _markDirty, run) => {
           const amendments = getState().documentCards.get(scope.namespace)?.get(cardId)?.amendments;
@@ -184,7 +185,7 @@ export function createDocumentCardStore(port, now) {
 
     async hide(tx, scope, cardId, _reason) {
       await hideCards(tx, scope, () => {
-        requireString(cardId);
+        validateCardId(cardId);
         return { card: ({ id }) => id === cardId };
       });
     },
@@ -196,7 +197,7 @@ export function createDocumentCardStore(port, now) {
     async markStale(tx, scope, cardId, { memoryId, replacementMemoryId }) {
       return port.write(tx, scope, "conditional", () => {
         const namespace = writeNamespace(scope);
-        requireString(cardId);
+        validateCardId(cardId);
         requireString(memoryId);
         requireString(replacementMemoryId);
         const stale = { memoryId, replacementMemoryId };
