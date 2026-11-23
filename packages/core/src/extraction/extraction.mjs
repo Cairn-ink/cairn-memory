@@ -1,4 +1,6 @@
 import { EXTRACT_MEMORIES_PROMPT } from './generated/extract-memories-prompt.mjs';
+import { validateQuantities } from '../ledger/quantities.mjs';
+import { withQuantityExtraction } from './quantity-spec.mjs';
 import { redactSecrets } from './redact.mjs';
 
 export { EXTRACT_MEMORIES_PROMPT };
@@ -16,7 +18,7 @@ const extractSchema = schemaObject({ items: array(schemaObject({
 }), 5) });
 
 /** Project the host's eligible messages in their supplied order. */
-export function plainExtractionSpec(messages) {
+export function plainExtractionSpec(messages, options = {}) {
   const input = { messages: messages.map(({ role, content }, index) => ({ index, role, content })) };
   const projected = input.messages;
   if (projected.length > 24) throw new Error('invalid_openai_request');
@@ -29,7 +31,10 @@ export function plainExtractionSpec(messages) {
   const userCount = projected.filter(message => message.role === 'user').length;
   schema.properties.items.maxItems = projected.length ? Math.max(5, Math.min(20, userCount)) : 0;
   if (projected.length) schema.properties.items.items.properties.sourceIndices.items.maximum = projected.length - 1;
-  return { system: EXTRACT_MEMORIES_PROMPT, input, schema };
+  const request = options.quantities === true
+    ? withQuantityExtraction(EXTRACT_MEMORIES_PROMPT, schema)
+    : { system: EXTRACT_MEMORIES_PROMPT, schema };
+  return { system: request.system, input, schema: request.schema };
 }
 
 const fail = (code) => { throw Object.assign(new Error(code), { code }); };
@@ -63,10 +68,23 @@ function boundedText(value, max) {
 }
 
 /** Validate the whole batch before the host binds source indices to receipts. */
-export function validatePlainCandidates(output, { sourceCount, itemLimit }) {
+export function validatePlainCandidates(output, policy) {
+  return validateCandidates(output, policy, ['items']);
+}
+
+/** Validate items as usual and independently drop invalid entries from the optional list. */
+export function validatePlainExtraction(output, policy, options = {}) {
+  const enabled = options.quantities === true;
+  const items = validateCandidates(output, policy, enabled ? ['items', 'quantities'] : ['items']);
+  const descriptor = enabled ? Object.getOwnPropertyDescriptor(output, 'quantities') : undefined;
+  const value = descriptor && (Object.hasOwn(descriptor, 'value') ? descriptor.value : null);
+  return { items, ...validateQuantities(value, items.length) };
+}
+
+function validateCandidates(output, { sourceCount, itemLimit }, allowed) {
   let reason = 'invalid_extraction_output_shape';
   try {
-    object(output, ['items']);
+    object(output, allowed);
     return denseArray(output.items, 0, itemLimit).map((item) => {
       reason = 'invalid_extraction_item_shape';
       object(item, ['content', 'kind', 'confidence', 'sourceIndices']);
