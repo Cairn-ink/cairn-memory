@@ -9,8 +9,21 @@ import { createFactStore } from "./privacy.mjs";
 /** @typedef {{row: Row, receipts: import("@cairn-ink/core/ports").Receipt[]}} Entry */
 /** @typedef {import("@cairn-ink/core").StoredFact} StoredFact */
 /** @typedef {import("@cairn-ink/core/ports").PauseState} PauseState */
-/** @typedef {{rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number}} State */
-/** @typedef {{state: State, run: {readonly ended: boolean}, dirty: boolean, pauseLock: boolean, poisoned: boolean, writeErrorCode: ErrorCode}} IssuedRun */
+/** @typedef {import("./capture.mjs").ClaimRecord} ClaimRecord */
+/** @typedef {import("@cairn-ink/core/ports").FinishResult} FinishResult */
+/** @typedef {{rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
+ * claims: Map<string, ClaimRecord>, activeTokens: Map<string, string>, abandonedTokens: Set<string>}} State */
+/** @typedef {{state: State, run: {readonly ended: boolean}, indexDirty: boolean, stateWritten: boolean, pauseLock: boolean,
+ * poisoned: boolean, writeErrorCode: ErrorCode, finishes: Set<FinishResult>, writingFinishes: number,
+ * writeTail?: Promise<void>}} IssuedRun */
+
+/** @param {IssuedRun} run */
+export function indexRevisionAfterRun(run) {
+  // Ordinary writes share one revision advance. Each finish with writes contributes one.
+  const revision = run.state.indexRevision + Number(run.indexDirty) + run.writingFinishes;
+  if (!Number.isSafeInteger(revision)) throw new CoreError("internal_error");
+  return revision;
+}
 
 class Mutex {
   #tail = Promise.resolve();
@@ -29,6 +42,7 @@ class Owner {
   /** @type {State} */
   committed = {
     rows: new Map(), facts: new Map(), epoch: null, pause: { paused: false, generation: 0 }, indexRevision: 0,
+    claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(),
   };
   pause = new Mutex();
   write = new Mutex();
@@ -52,8 +66,8 @@ function jsonSafe(value) {
   throw new TypeError("Unsupported value in memory snapshot");
 }
 
-/** @param {Readonly<Record<string, ErrorCode>>} nativeErrorMap */
-export function createUnitOfWork(nativeErrorMap) {
+/** @param {Readonly<Record<string, ErrorCode>>} nativeErrorMap @param {() => number} [now] */
+export function createUnitOfWork(nativeErrorMap, now = Date.now) {
   /** @type {Map<string, Owner>} */
   const owners = new Map();
   /** @type {WeakMap<Tx, IssuedRun>} */
@@ -99,12 +113,22 @@ export function createUnitOfWork(nativeErrorMap) {
         const run = Object.freeze({ get ended() { return ended; } });
         tx = Object.freeze({ owner, readOnly, __adapter: run });
         /** @type {IssuedRun} */
-        const issuedRun = { run, state, dirty: false, pauseLock, poisoned: false, writeErrorCode: "internal_error" };
+        const issuedRun = {
+          run, state, indexDirty: false, stateWritten: false, pauseLock, poisoned: false,
+          writeErrorCode: "internal_error", finishes: new Set(), writingFinishes: 0,
+        };
         issued.set(tx, issuedRun);
         const result = await fn(tx);
+        // A write callback can submit another write before the run callback returns.
+        while (issuedRun.writeTail) await issuedRun.writeTail;
         if (issuedRun.poisoned) throw new CoreError(issuedRun.writeErrorCode);
-        if (issuedRun.dirty) {
-          state.indexRevision++;
+        if (issuedRun.indexDirty || issuedRun.stateWritten) {
+          const revision = indexRevisionAfterRun(issuedRun);
+          for (const finish of issuedRun.finishes) {
+            // A later port call in the same run may have made the index dirty.
+            finish.indexRevision = revision;
+          }
+          state.indexRevision = revision;
           current.committed = state;
         }
         return result;
@@ -125,16 +149,17 @@ export function createUnitOfWork(nativeErrorMap) {
    * @param {boolean} [pauseLock]
    */
   function port(tx, scope, write, body, pauseLock = false) {
-    return accessPort(tx, scope, write, (getState) => body(getState()), pauseLock);
+    if (write) return writePort(tx, scope, true, () => (getState) => body(getState()), pauseLock);
+    return accessPort(tx, scope, false, (getState) => body(getState()), pauseLock);
   }
 
   /**
    * @template T
    * @param {Tx} tx @param {Pick<Scope, "owner">} scope @param {boolean | "conditional"} write
-   * @param {(getState: () => State, markDirty: () => void) => T} body
+   * @param {(getState: () => State, markDirty: () => void, run: IssuedRun) => T} body
    * @param {boolean} [pauseLock]
    */
-  function accessPort(tx, scope, write, body, pauseLock = false) {
+  async function accessPort(tx, scope, write, body, pauseLock = false) {
     const issuedRun = issued.get(tx);
     let touchedState = false;
     try {
@@ -145,9 +170,8 @@ export function createUnitOfWork(nativeErrorMap) {
       const result = body(() => {
         touchedState = true;
         return issuedRun.state;
-      }, () => { issuedRun.dirty = true; });
-      if (write === true) issuedRun.dirty = true;
-      return result;
+      }, () => { issuedRun.indexDirty = true; }, issuedRun);
+      return await result;
     } catch (error) {
       const firstFailure = write && touchedState && issuedRun && !issuedRun.poisoned;
       // Poison the run even if inspecting the thrown value fails.
@@ -161,12 +185,67 @@ export function createUnitOfWork(nativeErrorMap) {
     }
   }
 
+  /**
+   * @template T
+   * @param {Tx} tx @param {Pick<Scope, "owner">} scope @param {boolean | "conditional"} write
+   * @param {() => (getState: () => State, markDirty: () => void, run: IssuedRun) => T} prepare
+   * @param {boolean} [pauseLock]
+   */
+  async function writePort(tx, scope, write, prepare, pauseLock = false) {
+    const run = issued.get(tx);
+    if (!run) throw new CoreError("internal_error");
+
+    // Reserve the slot before preparation or execution can call back into another port.
+    const previous = run.writeTail;
+    /** @type {() => void} */
+    let release = () => {};
+    const complete = new Promise((resolve) => { release = () => resolve(undefined); });
+    // Failed preparation can release its slot early. Later writes still wait for its predecessor.
+    const tail = previous ? previous.then(() => complete) : complete;
+    run.writeTail = tail;
+    void tail.then(() => {
+      if (run.writeTail === tail) run.writeTail = undefined;
+    });
+    try {
+      return await accessPort(tx, scope, write, (getState, markDirty, run) => {
+        const body = prepare();
+        const execute = () => {
+          if (run.run.ended) throw new CoreError("internal_error");
+          const result = body(getState, markDirty, run);
+          if (write === true) markDirty();
+          return result;
+        };
+        return previous ? previous.then(execute) : execute();
+      }, pauseLock);
+    } finally {
+      release();
+    }
+  }
+
   // Write ports validate arguments before requesting the owner state.
-  port.write = accessPort;
+  port.write = writePort;
+
+  /**
+   * Memory operations invoked by the finish that already holds the queue.
+   * @template T
+   * @param {Tx} tx @param {Pick<Scope, "owner">} scope @param {() => (getState: () => State) => T} prepare
+   */
+  port.writeFromFinish = (tx, scope, prepare) => accessPort(tx, scope, "conditional", (getState) => prepare()(getState));
+
+  /**
+   * @template T
+   * @param {Tx} tx @param {Pick<Scope, "owner">} scope
+   * @param {() => (getState: () => State, run: IssuedRun) => T} prepare
+   */
+  port.capture = (tx, scope, prepare) => writePort(tx, scope, "conditional", () => {
+    const body = prepare();
+    return (getState, _markDirty, run) => body(getState, run);
+  }, true);
 
   function dump() {
     const snapshot = [...owners]
-      .filter(([, { committed }]) => committed.rows.size > 0 || committed.facts.size > 0 || committed.pause.generation > 0)
+      .filter(([, { committed }]) => committed.rows.size > 0 || committed.facts.size > 0 ||
+        committed.pause.generation > 0 || committed.claims.size > 0)
       .sort(([a], [b]) => compareUtf8(a, b))
       .map(([owner, { committed }]) => ({
         owner,
@@ -179,6 +258,10 @@ export function createUnitOfWork(nativeErrorMap) {
           }),
         facts: [...committed.facts.values()],
         pause: committed.pause,
+        ...(committed.claims.size ? {
+          claims: [...committed.claims.values()],
+          abandonedTokens: [...committed.abandonedTokens],
+        } : {}),
       }));
     return jsonSafe(snapshot);
   }
@@ -196,7 +279,7 @@ export function createUnitOfWork(nativeErrorMap) {
   function appendFact(owner, fact) {
     const current = ownerState(owner);
     if (current.open > 0) throw new CoreError("invalid_input");
-    const { seedFact } = createFactStore(port, runSeed, {});
+    const { seedFact } = createFactStore(port, runSeed, { now });
     current.fixtureWrite = seedFact(owner, fact).finally(() => { current.fixtureWrite = undefined; });
     return current.fixtureWrite;
   }
