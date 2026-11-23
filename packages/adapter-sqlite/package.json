@@ -1,0 +1,23 @@
+{
+  "name": "@cairn-ink/adapter-sqlite",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": { "node": ">=22.16.0" },
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@cairn-ink/core": "file:../core"
+  },
+  "devDependencies": {
+    "@cairn-ink/conformance": "file:../conformance",
+    "@types/node": "22.16.0",
+    "typescript": "7.0.2"
+  }
+}
