@@ -17,6 +17,24 @@ const exact = {
   sourceMemory: { id: "memory", createdAtMs: 0 },
 };
 
+// A failed pool.query destroys its connection, and the closing socket can still be open when
+// teardown force-drops the database; the late termination error then has no listener. These
+// tests expect SQL errors, so every query runs on a checked-out connection that is returned
+// normally (a statement error leaves an autocommit connection usable).
+function keepConnections(pool) {
+  return {
+    async query(sql, values) {
+      const client = await pool.connect();
+      try {
+        return await client.query(sql, values);
+      } finally {
+        client.release();
+      }
+    },
+    connect: () => pool.connect(),
+  };
+}
+
 async function insertFact(pool, candidate, { id, epoch, legacyRef = null }) {
   const fact = await buildFactStorage(candidate);
   const inserted = await pool.query(`
@@ -121,7 +139,8 @@ test("slot and insert read each caller field and array element once", async () =
 });
 
 test("suppression migrations upgrade the existing prefix and match the structural snapshot", migrationDbTest, async (t) => {
-  const { pool, source, migrations } = await migrationDatabase(t, { migrate: false });
+  const { pool: database, source, migrations } = await migrationDatabase(t, { migrate: false });
+  const pool = keepConnections(database);
   const expected = (await readFile(new URL("./fixtures/suppression-catalog.tsv", import.meta.url), "utf8"))
     .trimEnd().split("\n");
   const prefix = migrations.slice(0, 4);
@@ -161,14 +180,14 @@ test("suppression migrations upgrade the existing prefix and match the structura
 });
 
 test("the suppression catalog snapshot detects a change to the created_at default", migrationDbTest, async (t) => {
-  const { pool } = await migrationDatabase(t);
+  const pool = keepConnections((await migrationDatabase(t)).pool);
   const before = await readFactsCatalog(pool);
   await pool.query("ALTER TABLE core_suppression_facts ALTER COLUMN created_at SET DEFAULT now()");
   assert.notDeepEqual(await readFactsCatalog(pool), before);
 });
 
 test("fact storage enforces owner, slot, epoch, legacy reference, and digest constraints", migrationDbTest, async (t) => {
-  const { pool } = await migrationDatabase(t);
+  const pool = keepConnections((await migrationDatabase(t)).pool);
   await pool.query("INSERT INTO users (id) VALUES ('owner'), ('other-owner')");
   const { rows: [state] } = await pool.query("INSERT INTO core_owner_state (user_id) VALUES ('owner') RETURNING *");
   assert.deepEqual(state, { user_id: "owner", fact_epoch: "0", index_revision: "0", legacy_facts_ready: false });
@@ -227,7 +246,7 @@ test("fact storage enforces owner, slot, epoch, legacy reference, and digest con
 });
 
 test("the shingle key CHECK rejects a raw SQL write that bypasses storage preflight", migrationDbTest, async (t) => {
-  const { pool } = await migrationDatabase(t);
+  const pool = keepConnections((await migrationDatabase(t)).pool);
   await pool.query("INSERT INTO users (id) VALUES ('owner')");
   const full = { ...exact, mode: "full", text: { ...exact.text, embedding: null } };
   await insertFact(pool, full, { id: "fact", epoch: 1 });
@@ -237,7 +256,7 @@ test("the shingle key CHECK rejects a raw SQL write that bypasses storage prefli
 });
 
 test("legacy references accept 256 UTF-8 bytes and reject 257", migrationDbTest, async (t) => {
-  const { pool } = await migrationDatabase(t);
+  const pool = keepConnections((await migrationDatabase(t)).pool);
   await pool.query("INSERT INTO users (id) VALUES ('owner')");
   const atLimit = "界".repeat(85) + "a";
   const overLimit = atLimit + "b";
@@ -250,7 +269,7 @@ test("legacy references accept 256 UTF-8 bytes and reject 257", migrationDbTest,
 });
 
 test("a slot for maximum multibyte hosted session identifiers inserts and still conflicts on replay", migrationDbTest, async (t) => {
-  const { pool } = await migrationDatabase(t);
+  const pool = keepConnections((await migrationDatabase(t)).pool);
   // Vary the three-byte characters so index compression cannot mask the old size failure.
   const identifier = (first, length) => Array.from({ length }, (_, i) => (
     String.fromCodePoint(first + i * 64 + i % 64)
