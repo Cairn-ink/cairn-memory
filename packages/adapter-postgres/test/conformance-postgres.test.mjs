@@ -250,7 +250,7 @@ const notApplicable = {
   fence: ["K-FEN-1"],
   pause: ["K-PAUSE-1"],
   keys: ["K-KEY-1", "K-KD-1", "K-KD-2", "K-KD-3", "K-KD-4", "K-KD-5", "K-KD-6"],
-  "suppressions.snapshot": ["K-SNAP-F1"],
+  "suppressions.snapshot": ["K-SNAP-F1", "K-SNAP-F3", "K-SNAP-F4", "K-SNAP-F5", "K-SNAP-F6", "K-SNAP-F7"],
   "suppressions.factsFor": ["K-FACTSFOR-1"],
   capture: ["K-CLM-1", "K-CLM-2", "K-CLM-3", "K-CLM-4", "K-CLM-5",
     "K-SRC-1", "K-SRC-2", "K-SRC-3", "K-SRC-4", "K-SRC-5"],
@@ -275,31 +275,18 @@ assert.deepEqual(
   "Every conformance case must be selected or have a reason it is not applicable",
 );
 
-const pauseLockFailure = "Pause-lock writer entered while the reader held the pause lock";
-const pauseLockTodo = "known store bug: read-only pauseLock runs do not yet exclude pauseLock writers (store fix pending)";
-
 /** @param {ConformanceCase} testCase */
 async function runPreparedCase(factory, testCase, t, execute = runCase) {
-  let knownFailure = false;
   const prepare = (run) => async (ctx) => {
     // runCase generates these IDs after open(), so seed both together at the case entry point.
     await ctx.harness.seedOwners(ctx.owner, ctx.otherOwner);
-    return beforeDeadline("Conformance case", 40_000, async () => {
-      try {
-        return await run(ctx);
-      } catch (error) {
-        if (testCase.id !== "K-UOW-3r" || !(error instanceof Error) || error.message !== pauseLockFailure) throw error;
-        knownFailure = true;
-      }
-    });
+    return beforeDeadline("Conformance case", 40_000, () => run(ctx));
   };
   const prepared = { ...testCase, run: prepare(testCase.run) };
   if (testCase.followUp) prepared.followUp = { ...testCase.followUp, run: prepare(testCase.followUp.run) };
   // The factory type describes the full kit. The selected cases define this driver's subset.
   const reason = await execute(/** @type {AdapterFactory} */ (/** @type {unknown} */ (factory)), prepared);
   if (reason !== null) t.skip(reason);
-  // The runner has closed the database successfully before this can mark the test todo.
-  else if (knownFailure) t.todo(pauseLockTodo);
   return reason;
 }
 
@@ -324,29 +311,6 @@ test("Postgres conformance K-FACT-6 detects a bypassed foreign-owner guard", opt
   }));
   await assert.rejects(runPreparedCase(mutant, testCase, t), { message: "Expected operation to reject" });
   assert.equal(wroteFact, true);
-});
-
-test("Postgres conformance classifies only the exact read-only pause-lock failure as todo", async () => {
-  const todos = [];
-  const t = { todo: (reason) => todos.push(reason) };
-  const ctx = { owner: "owner", otherOwner: "other-owner", harness: { async seedOwners() {} } };
-  const phase = (run) => ({ id: "K-UOW-3r", title: "", needs: [], run });
-  const runStub = async (_factory, testCase) => (await testCase.run(ctx)) ?? null;
-  const exact = phase(async () => { throw new Error(pauseLockFailure); });
-  const unrelated = new Error(`${pauseLockFailure} (unexpected)`);
-
-  await assert.rejects(runPreparedCase(factory, phase(async () => { throw unrelated; }), t, runStub),
-    (error) => error === unrelated);
-  await assert.rejects(runPreparedCase(factory, exact, t, async () => { throw new Error(pauseLockFailure); }),
-    { message: pauseLockFailure });
-  await assert.rejects(runPreparedCase(factory, exact, t, async (_factory, testCase) => {
-    await testCase.run(ctx);
-    throw new Error(pauseLockFailure);
-  }), { message: pauseLockFailure });
-  await runPreparedCase(factory, phase(async () => {}), t, runStub);
-  assert.deepEqual(todos, []);
-  await runPreparedCase(factory, exact, t, runStub);
-  assert.deepEqual(todos, [pauseLockTodo]);
 });
 
 test("Postgres conformance tears down the database after a stalled pool drain", { timeout: 5_000 }, async (t) => {
