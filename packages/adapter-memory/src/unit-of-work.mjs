@@ -9,8 +9,9 @@ import { createFactStore } from "./privacy.mjs";
 /** @typedef {{row: Row, receipts: import("@cairn-ink/core/ports").Receipt[]}} Entry */
 /** @typedef {import("@cairn-ink/core").StoredFact} StoredFact */
 /** @typedef {import("@cairn-ink/core/ports").PauseState} PauseState */
-/** @typedef {{rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number}} State */
-/** @typedef {{state: State, run: {readonly ended: boolean}, dirty: boolean, pauseLock: boolean, poisoned: boolean, writeErrorCode: ErrorCode}} IssuedRun */
+/** @typedef {import("./topics.mjs").TopicState} TopicState */
+/** @typedef {{topics: Map<Namespace, TopicState>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number}} State */
+/** @typedef {{state: State, run: {readonly ended: boolean}, dirty: boolean, advancedRevision: boolean, pauseLock: boolean, poisoned: boolean, writeErrorCode: ErrorCode}} IssuedRun */
 
 class Mutex {
   #tail = Promise.resolve();
@@ -28,7 +29,7 @@ class Mutex {
 class Owner {
   /** @type {State} */
   committed = {
-    rows: new Map(), facts: new Map(), epoch: null, pause: { paused: false, generation: 0 }, indexRevision: 0,
+    topics: new Map(), rows: new Map(), facts: new Map(), epoch: null, pause: { paused: false, generation: 0 }, indexRevision: 0,
   };
   pause = new Mutex();
   write = new Mutex();
@@ -52,8 +53,8 @@ function jsonSafe(value) {
   throw new TypeError("Unsupported value in memory snapshot");
 }
 
-/** @param {Readonly<Record<string, ErrorCode>>} nativeErrorMap */
-export function createUnitOfWork(nativeErrorMap) {
+/** @param {Readonly<Record<string, ErrorCode>>} nativeErrorMap @param {boolean} [includeTopics] */
+export function createUnitOfWork(nativeErrorMap, includeTopics = false) {
   /** @type {Map<string, Owner>} */
   const owners = new Map();
   /** @type {WeakMap<Tx, IssuedRun>} */
@@ -99,14 +100,11 @@ export function createUnitOfWork(nativeErrorMap) {
         const run = Object.freeze({ get ended() { return ended; } });
         tx = Object.freeze({ owner, readOnly, __adapter: run });
         /** @type {IssuedRun} */
-        const issuedRun = { run, state, dirty: false, pauseLock, poisoned: false, writeErrorCode: "internal_error" };
+        const issuedRun = { run, state, dirty: false, advancedRevision: false, pauseLock, poisoned: false, writeErrorCode: "internal_error" };
         issued.set(tx, issuedRun);
         const result = await fn(tx);
         if (issuedRun.poisoned) throw new CoreError(issuedRun.writeErrorCode);
-        if (issuedRun.dirty) {
-          state.indexRevision++;
-          current.committed = state;
-        }
+        if (issuedRun.dirty) current.committed = state;
         return result;
       } finally {
         ended = true;
@@ -131,7 +129,7 @@ export function createUnitOfWork(nativeErrorMap) {
   /**
    * @template T
    * @param {Tx} tx @param {Pick<Scope, "owner">} scope @param {boolean | "conditional"} write
-   * @param {(getState: () => State, markDirty: () => void) => T} body
+   * @param {(getState: () => State, markDirty: (advanceRevision?: boolean) => void) => T} body
    * @param {boolean} [pauseLock]
    */
   function accessPort(tx, scope, write, body, pauseLock = false) {
@@ -142,11 +140,18 @@ export function createUnitOfWork(nativeErrorMap) {
           (pauseLock && !issuedRun.pauseLock)) {
         throw new CoreError("internal_error");
       }
+      const markDirty = (advanceRevision = true) => {
+        issuedRun.dirty = true;
+        if (advanceRevision && !issuedRun.advancedRevision) {
+          issuedRun.state.indexRevision++;
+          issuedRun.advancedRevision = true;
+        }
+      };
       const result = body(() => {
         touchedState = true;
         return issuedRun.state;
-      }, () => { issuedRun.dirty = true; });
-      if (write === true) issuedRun.dirty = true;
+      }, markDirty);
+      if (write === true) markDirty();
       return result;
     } catch (error) {
       const firstFailure = write && touchedState && issuedRun && !issuedRun.poisoned;
@@ -166,7 +171,8 @@ export function createUnitOfWork(nativeErrorMap) {
 
   function dump() {
     const snapshot = [...owners]
-      .filter(([, { committed }]) => committed.rows.size > 0 || committed.facts.size > 0 || committed.pause.generation > 0)
+      .filter(([, { committed }]) => committed.rows.size > 0 || committed.facts.size > 0 || committed.pause.generation > 0 ||
+        (includeTopics && (committed.topics.size > 0 || committed.indexRevision > 0)))
       .sort(([a], [b]) => compareUtf8(a, b))
       .map(([owner, { committed }]) => ({
         owner,
@@ -179,6 +185,15 @@ export function createUnitOfWork(nativeErrorMap) {
           }),
         facts: [...committed.facts.values()],
         pause: committed.pause,
+        ...(includeTopics && {
+          indexRevision: committed.indexRevision,
+          topics: [...committed.topics].map(([namespace, { topics, outcomes, failures }]) => ({
+            namespace,
+            topics: [...topics.values()],
+            outcomes: [...outcomes].map(([id, { revision, memberships }]) => ({ id, revision, memberships: [...memberships] })),
+            failures: [...failures],
+          })),
+        }),
       }));
     return jsonSafe(snapshot);
   }

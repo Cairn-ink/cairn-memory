@@ -11,7 +11,7 @@ export interface MemoryAdapterOptions {
 }
 
 export type MemoryAdapter = Pick<StorageAdapter, "capabilities" | "uow" | "memories" |
-  "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "suppressions" | "pause" | "keys"> & {
+  "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "suppressions" | "pause" | "keys" | "placement"> & {
   name: "memory";
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;
   harness: TestHarness & Required<Pick<TestHarness, "setFingerprintSecret">>;

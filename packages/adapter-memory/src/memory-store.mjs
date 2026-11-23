@@ -22,7 +22,7 @@ function matchOrder(a, b) {
 }
 
 /** @param {number} nowMs */
-function writeTime(nowMs) {
+export function writeTime(nowMs) {
   return { updatedAtMs: nowMs, updatedAtUs: BigInt(nowMs) * 1000n };
 }
 

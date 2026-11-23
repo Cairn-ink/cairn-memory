@@ -6,12 +6,14 @@ export type * from "./memory-store.d.ts";
 export type * from "./retrieval.d.ts";
 export type * from "./privacy.d.ts";
 export type * from "./host.d.ts";
+export type * from "./topics.d.ts";
 
 import type { Capabilities } from "../capabilities.mjs";
-import type { CaptureClaim, CaptureFinish, CausalStream, PlacementJournal, RawCapture, SourceFilter, StagedEvidence } from "./capture.d.ts";
+import type { CaptureClaim, CaptureFinish, CausalStream, RawCapture, SourceFilter, StagedEvidence } from "./capture.d.ts";
 import type { ConflictEdgeStore, MemoryStore, SupersessionStore } from "./memory-store.d.ts";
 import type { HydrateItems, LexicalCandidates, ListRawMessages, ListRecent, RawCandidates, ReadSnapshot, RelationSource, VectorCandidates, VisibilityFence } from "./retrieval.d.ts";
 import type { FingerprintKeyProvider, ForgetLog, PauseStore, RawStore, SessionLineageStore, SpanLineageStore, SuppressionStore } from "./privacy.d.ts";
+import type { TopicStore } from "./topics.d.ts";
 import type { UnitOfWork } from "./unit-of-work.d.ts";
 
 /**
@@ -37,7 +39,7 @@ export interface StorageAdapter {
   readonly sessionLineage?: SessionLineageStore; // sessionLineage
   readonly spanLineage?: SpanLineageStore; // spanLineage
   readonly staged?: StagedEvidence; // stagedEvidence
-  readonly placement?: PlacementJournal; // placement
+  readonly placement?: TopicStore; // placement
   readonly relations?: RelationSource; // relations
   readonly causal?: CausalStream; // orderedCapture
   readonly supersession?: SupersessionStore; // supersession
