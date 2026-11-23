@@ -772,12 +772,14 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
           tx.archivedIds = new Set([...tx.archivedIds, ...messages.map(({ id }) => rawId(key.scope, key, id))]);
           return { archived: messages.length };
         },
-        async importArchive(tx, scope, session, messages) {
-          record(tx, scope.owner, "raw.importArchive", scope, session, messages);
+        async importArchive(tx, scope, session, messages, options) {
+          record(tx, scope.owner, "raw.importArchive", scope, session, messages, options);
           assert.ok(tx.options.pauseLock && !tx.options.readOnly);
-          const fenced = hooks.isFenced?.(session)?.fenced || hooks.archiveAllowed?.() === false ||
+          const fenced = hooks.isFenced?.(session, messages)?.fenced || hooks.archiveAllowed?.() === false ||
             tx.effects.fences.some(fence => fence.client === session.client && fence.sessionId === session.sessionId);
-          const eligible = fenced ? [] : await eligiblePositions(tx, { scope, ...session }, messages);
+          const withheld = new Set(options?.withheld);
+          const eligible = fenced ? [] : (await eligiblePositions(tx, { scope, ...session }, messages))
+            .filter(position => !withheld.has(position));
           const ids = new Set(tx.archivedIds);
           const added = [];
           let existing = 0;

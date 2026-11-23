@@ -213,17 +213,18 @@ export function importRawMethod({ storage }) {
             ...session, occurredAtMs: messages.map(({ message }) => message.occurredAtMs),
           });
           const { legacyKeyUnavailable, matches } = captureTextWithholding(passages);
-          let eligible = messages.map(({ message }) => message);
+          const prepared = messages.map(({ message }) => message);
+          /** @type {number[]} */
+          let withheld = [];
           if (legacyKeyUnavailable) {
-            eligible = [];
+            withheld = prepared.map((_, position) => position);
           } else if (matches && messages.length) {
             const key = capabilities.fingerprintKey ? await keys.userKey(owner) : null;
-            const withheld = await Promise.all(messages.map(({ message, originalContent }) =>
+            const blocked = await Promise.all(messages.map(({ message, originalContent }) =>
               matches(originalContent, message.content, key)));
-            eligible = eligible.filter((_, index) => !withheld[index]);
+            withheld = blocked.flatMap((matched, position) => matched ? [position] : []);
           }
-          const archive = await importArchive.call(raw, tx, scope, session, eligible);
-          return archive === null ? null : { ...archive, withheld: archive.withheld + (messages.length - eligible.length) };
+          return importArchive.call(raw, tx, scope, session, prepared, { withheld });
         });
         if (committed === null) return { status: "paused" };
         counts.imported += committed.archived;

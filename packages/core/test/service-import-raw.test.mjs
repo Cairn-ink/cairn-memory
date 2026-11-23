@@ -88,7 +88,7 @@ test("raw session IDs preserve leading and trailing spaces", async () => {
   assert.deepEqual(await service.importRawMessages(scope, [session([row], sessionId)]), counts(1));
   assert.deepEqual(archived(scope.owner), [row]);
   assert.deepEqual(calls.find(([method]) => method === "raw.importArchive"),
-    ["raw.importArchive", scope, { client: "archive", sessionId }, [row]]);
+    ["raw.importArchive", scope, { client: "archive", sessionId }, [row], { withheld: [] }]);
 });
 
 test("caps the whole call at 500 input positions, including invalids", async () => {
@@ -131,7 +131,7 @@ test("prepares a single detached snapshot before any UoW, normalizing and redact
   assert.deepEqual(await service.importRawMessages(scope, sessions), counts(2));
   assert.equal(archived(scope.owner)[1].content, expected);
   assert.deepEqual(calls.filter(([name]) => name === "raw.importArchive").at(-1),
-    ["raw.importArchive", scope, { client: "archive", sessionId: "second" }, [message("second", expected)]]);
+    ["raw.importArchive", scope, { client: "archive", sessionId: "second" }, [message("second", expected)], { withheld: [] }]);
   assert.equal(calls.some(([name]) => /^(model|embed|gate)/.test(name)), false);
 });
 
@@ -209,11 +209,13 @@ test("the archive counts a forgotten window, forgotten text and a fenced session
   assert.equal(mutations.length, 2);
 });
 
-for (const [label, wording, digest, forgottenWording = wording] of [
-  ["hosted-v1 original", "The recovery note in the attic says " + "crn_pat_" + "z".repeat(32), hostedV1Digest],
+for (const [label, wording, prepared, digest, forgottenWording = wording] of [
+  ["hosted-v1 original", "The recovery note in the attic says " + "crn_pat_" + "z".repeat(32),
+    "The recovery note in the attic says [REDACTED]", hostedV1Digest],
   ["engine-legacy original", `Saved config {"client_secret": "${"example".repeat(5)}"} for the boat dock gate`,
-    engineLegacyDigest],
-  ["prepared", "The redacted note says " + "crn_pat_" + "z".repeat(32), hostedV1Digest, "The redacted note says [REDACTED]"],
+    'Saved config {"client_secret": "[REDACTED]"} for the boat dock gate', engineLegacyDigest],
+  ["prepared", "The redacted note says " + "crn_pat_" + "z".repeat(32), "The redacted note says [REDACTED]",
+    hostedV1Digest, "The redacted note says [REDACTED]"],
 ]) {
   test(`raw passage suppression withholds the ${label} match before archiving`, async () => {
     const { service, seedFact, archived, calls, mutations } = setup();
@@ -224,17 +226,67 @@ for (const [label, wording, digest, forgottenWording = wording] of [
     assert.deepEqual(archived(scope.owner), []);
     assert.deepEqual(mutations, []);
     const visible = message("visible", "Unrelated note", 20);
-    assert.deepEqual(await service.importRawMessages(scope, [session([forgotten, visible])]), counts(1, 0, 1));
+    assert.deepEqual(await service.importRawMessages(scope, [session([null, visible, forgotten])]), counts(1, 0, 1, 1));
     assert.deepEqual(archived(scope.owner), [visible]);
     const target = { client: "archive", sessionId: "first" };
+    const preparedForgotten = { ...forgotten, content: prepared };
     assert.deepEqual(calls.filter(([method]) => method === "suppressions.snapshot" || method === "raw.importArchive"), [
       ["suppressions.snapshot", scope, { ...target, occurredAtMs: [10] }],
-      ["raw.importArchive", scope, target, []],
-      ["suppressions.snapshot", scope, { ...target, occurredAtMs: [10, 20] }],
-      ["raw.importArchive", scope, target, [visible]],
+      ["raw.importArchive", scope, target, [preparedForgotten], { withheld: [0] }],
+      ["suppressions.snapshot", scope, { ...target, occurredAtMs: [20, 10] }],
+      ["raw.importArchive", scope, target, [visible, preparedForgotten], { withheld: [1] }],
     ]);
   });
 }
+
+async function withheldForkFixture() {
+  const fake = setup();
+  const source = { client: "archive", sessionId: "deleted-source" };
+  const anchor = message("anchor", "The observatory code was " + "crn_pat_" + "z".repeat(32), 10);
+  const deleted = message("deleted", "The telescope inventory is ready.", 20);
+  const anchorContent = "The observatory code was [REDACTED]";
+  // The source rows have been deleted. Only the prepared anchor proof survives its fence.
+  fake.hooks.isFenced = ({ client, sessionId }, messages = []) => ({
+    fenced: client === source.client && (sessionId === source.sessionId ||
+      messages.some(({ id, content }) => id === anchor.id && content === anchorContent)),
+  });
+  fake.seedFact({ ...scope, kind: "text", mode: "exact", origin: "forget", actionId: "forgot-anchor-text",
+    text: { digests: [await hostedV1Digest(anchor.content)] } });
+  return { ...fake, anchor, replay: session([deleted, anchor], "fork") };
+}
+
+test("a core-withheld anchor fences a replay of the other deleted raw row", async () => {
+  const { service, replay, archived } = await withheldForkFixture();
+  await service.importRawMessages(scope, [replay]);
+  assert.deepEqual(archived(scope.owner), []);
+});
+
+test("the raw archive port skips storage and ID deduplication for withheld positions", async () => {
+  const { storage, service, archived } = setup();
+  const blocked = message("blocked");
+  const visible = message("visible");
+  const target = { client: "archive", sessionId: "first" };
+  await storage.uow.run(scope.owner, { pauseLock: true }, tx =>
+    storage.raw.importArchive(tx, scope, target, [visible, blocked], { withheld: [1] }));
+  assert.deepEqual(archived(scope.owner), [visible]);
+  assert.deepEqual(await service.importRawMessages(scope, [session([blocked])]), counts(1));
+});
+
+test("raw import counts each withheld position once when Core and the fork fence overlap", async () => {
+  const { service, anchor, replay } = await withheldForkFixture();
+  const visible = message("visible", "An unrelated message");
+  await service.importRawMessages(scope, [session([visible])]);
+  assert.deepEqual(await service.importRawMessages(scope, [
+    replay, session([visible, message("new"), { ...anchor, id: "other-id" }, null]),
+  ]), counts(1, 1, 3, 1));
+});
+
+test("an unrelated raw session still imports alongside a withheld-anchor fork", async () => {
+  const { service, anchor, replay, archived } = await withheldForkFixture();
+  const unrelated = { ...anchor, content: "A different message with the same ID" };
+  await service.importRawMessages(scope, [replay, session([unrelated], "unrelated")]);
+  assert.deepEqual(archived(scope.owner), [unrelated]);
+});
 
 test("foreign port throws become CoreError and the failed session rolls back", async () => {
   const { service, storage, archived } = setup();
