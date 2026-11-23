@@ -234,8 +234,8 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
     const issuedRun = issued.get(tx);
     let touchedState = false;
     try {
-      if (!issuedRun || issuedRun.run.ended || (write && tx.readOnly) || scope?.owner !== tx.owner ||
-          (pauseLock && !issuedRun.pauseLock)) {
+      if (!issuedRun || issuedRun.run.ended || (write && tx.readOnly) ||
+          (pauseLock && !issuedRun.pauseLock) || scope?.owner !== tx.owner) {
         throw new CoreError("internal_error");
       }
       const result = body(() => {

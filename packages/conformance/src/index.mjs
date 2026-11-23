@@ -67,6 +67,7 @@ async function runOpenedCase(factory, testCase) {
   const { adapter, embeddingDimensions, harness, nativeErrorMap, busyNativeCodes, sessionRefs, settleMs,
     timeoutMs = DEFAULT_TIMEOUT_MS } = opened;
   const validTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0;
+  const roundedTimeout = validTimeout ? Math.ceil(timeoutMs) : DEFAULT_TIMEOUT_MS;
   /** @type {{ error: unknown } | undefined} */
   let caseFailure;
   /** @type {import("./index.d.mts").CaseContext | undefined} */
@@ -89,8 +90,8 @@ async function runOpenedCase(factory, testCase) {
       nativeErrorMap,
       busyNativeCodes,
       sessionRefs,
-      settleMs,
-      timeoutMs,
+      settleMs: settleMs === undefined ? undefined : Math.ceil(settleMs),
+      timeoutMs: roundedTimeout,
       owner,
       otherOwner: crypto.randomUUID(),
       scope: (namespace) => ({ owner, namespace }),
@@ -108,7 +109,7 @@ async function runOpenedCase(factory, testCase) {
     throw error;
   } finally {
     try {
-      await bounded(() => opened.close(), "Adapter close", validTimeout ? timeoutMs : DEFAULT_TIMEOUT_MS);
+      await bounded(() => opened.close(), "Adapter close", roundedTimeout);
     } catch (closeError) {
       if (caseFailure) {
         throw new AggregateError([caseFailure.error, closeError], "Conformance case and adapter close both failed",
