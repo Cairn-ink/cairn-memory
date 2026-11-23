@@ -219,7 +219,13 @@ export function createRawPorts({ port, runSeed }, ringKeys, hashSessionKey) {
             const previous = state.rawRows.get(entry.ref.id);
             if (previous && previous.content !== entry.content) rawKeyConflict++;
             const candidate = evidence(entry, scope, hash);
-            if (!allowed || refusalFacts.some((stored) => factHidesRow(stored, candidate, policy) === true)) {
+            if (!allowed || refusalFacts.some((stored) => {
+              const { fact } = stored;
+              if (fact.kind !== "rawSpan") return factHidesRow(stored, candidate, policy) === true;
+              // Use the saved bounds so admission depends only on the message identity.
+              const { startUtf16, endUtf16 } = fact;
+              return factHidesRow(stored, { ...candidate, startUtf16, endUtf16 }, policy) !== false;
+            })) {
               rawArchiveRefused++;
               continue;
             }

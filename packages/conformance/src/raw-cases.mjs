@@ -53,7 +53,8 @@ function factBase(capture, actionId) {
 
 /** @param {CaseContext} ctx @param {CaptureKey} capture */
 function hashSession(ctx, capture) {
-  const hash = ctx.harness.hashSessionKey?.(capture.client, capture.sessionId);
+  check(typeof ctx.harness.hashSessionKey === "function", "Hashed session and raw span fixtures require harness.hashSessionKey");
+  const hash = ctx.harness.hashSessionKey(capture.client, capture.sessionId);
   check(typeof hash === "string" && /^[a-f0-9]{64}$/u.test(hash), "Raw span and hashed session fixtures need a session hash");
   return hash;
 }
@@ -162,7 +163,7 @@ async function windowRefusal(ctx) {
 
 /** @param {CaseContext} ctx */
 async function spanRefusal(ctx) {
-  if (!ctx.harness.hashSessionKey) return "raw span fixtures require harness.hashSessionKey";
+  if (ctx.sessionRefs === "plain" && !ctx.harness.hashSessionKey) return "raw span fixtures require harness.hashSessionKey";
   const f = fixture(ctx);
   const refused = message("spanned", 1);
   const other = message("other", 1);
@@ -178,8 +179,8 @@ async function spanRefusal(ctx) {
 
 /** @param {CaseContext} ctx */
 async function sessionTextFenceReads(ctx) {
-  if (ctx.sessionRefs === "hashed" && !ctx.harness.hashSessionKey) return "hashed session fixtures require harness.hashSessionKey";
   const f = fixture(ctx);
+  const session = sessionFact(ctx, f.capture);
   const fenced = fixture(ctx, { ...f.capture, sessionId: "fenced-conversation" });
   const survivor = fixture(ctx, { ...f.capture, client: otherClient });
   const hidden = message("text", 3, "cedar withhold this passage");
@@ -187,7 +188,7 @@ async function sessionTextFenceReads(ctx) {
   await f.archive([message("session", 1)]);
   await fenced.archive([message("fenced", 2)]);
   await survivor.archive([hidden, message("visible", 4)]);
-  await ctx.harness.seedFact(ctx.owner, sessionFact(ctx, f.capture));
+  await ctx.harness.seedFact(ctx.owner, session);
   await ctx.harness.seedFact(ctx.owner, await textFact(survivor.capture, hidden, fingerprintKey));
   await fenced.fence();
   await visible(f, ["visible"], "Session, text and fence visibility");
@@ -222,7 +223,7 @@ async function clientlessReads(ctx) {
 
 /** @param {CaseContext} ctx */
 async function spanReads(ctx) {
-  if (!ctx.harness.hashSessionKey) return "raw span fixtures require harness.hashSessionKey";
+  if (ctx.sessionRefs === "plain" && !ctx.harness.hashSessionKey) return "raw span fixtures require harness.hashSessionKey";
   const f = fixture(ctx);
   const spanned = message("spanned", 1);
   const adjacent = message("adjacent", 1);
@@ -248,12 +249,34 @@ async function rawSearch(ctx) {
   const scope = { ...f.scope, namespaces: ["project", null] };
   const { items } = await f.page(20, null, scope);
   equal(messageIds(items), ["other", "project", "tie-a", "tie-b", "weak"], "Read set must list visible raw messages");
-  const docs = items.map(({ ref, content, messageId }) => ({ ref, text: content, messageId }));
-  const expected = createBM25(docs).search(query).map(({ ref, score }) => [ref.id, score]);
-  const { segments, coverage } = await f.search(20, scope);
-  equal(coverage.complete, true, "A raw lexical search must be complete");
-  equal((await f.search(1, scope)).segments.map(({ ref }) => ref.id), [expected[0][0]], "Raw limit must apply after visibility and ranking");
-  equal(segments.map(({ ref, score }) => [ref.id, score]), expected, "Raw BM25 must rank only the visible corpus with canonical ties");
+  const docs = items.map(({ ref, content }) => ({ ref, text: content }));
+  const expected = createBM25(docs).search(query);
+  /** @param {RawSegment["ref"]} ref */
+  const refKey = ({ namespace, type, id }) => JSON.stringify([namespace, type, id]);
+  const scores = new Map(expected.map(({ ref, score }) => [refKey(ref), Math.fround(score)]));
+  for (const limit of [1, 2, 20]) {
+    const { segments, coverage } = await f.search(limit, scope);
+    equal(coverage.complete, true, "A raw lexical search must be complete");
+    const size = Math.min(limit, expected.length);
+    equal(segments.length, size, "Raw limit must apply after visibility and ranking");
+    const cutoff = Math.fround(expected[size - 1].score);
+    const seen = new Set();
+    let priorScore = Infinity;
+    let priorRankScore = Infinity;
+    for (const { ref, score } of segments) {
+      const id = refKey(ref);
+      const rankScore = scores.get(id);
+      check(rankScore !== undefined && !seen.has(id), "Raw search must return distinct visible matching segments");
+      check(rankScore >= cutoff, "Raw limit must apply after visibility and ranking");
+      check(Number.isFinite(score) && score <= priorScore, "Raw store scores must be finite and non-increasing");
+      check(rankScore <= priorRankScore, "Raw search must order strict BM25 ranks");
+      seen.add(id);
+      priorScore = score;
+      priorRankScore = rankScore;
+    }
+    check(expected.every(({ ref, score }) => Math.fround(score) <= cutoff || seen.has(refKey(ref))),
+      "Raw limit must include all segments strictly above the cutoff");
+  }
   equal(messageIds((await f.search()).segments), ["tie-a", "tie-b", "weak"], "Raw search must isolate namespaces");
   const clients = { ...scope, clients: [otherClient] };
   equal(messageIds((await f.search(20, clients)).segments), [], "Raw search must honor client scope");
@@ -268,12 +291,16 @@ async function listPages(ctx) {
   const f = fixture(ctx);
   await f.archive([message("unknown-b", null), message("tie-b", 2), message("last", 3),
     message("first", -1), message("unknown-a", null), message("tie-a", 2)]);
-  const first = await f.page(2);
+  const limit = 2;
+  const first = await f.page(limit);
   check(first.nextCursor, "A partial raw page must return a cursor");
-  const second = await f.page(2, first.nextCursor);
+  equal(first.items.length, limit, "A raw page with a next cursor must have exactly limit items");
+  const second = await f.page(limit, first.nextCursor);
   check(second.nextCursor, "A second partial raw page must return a cursor");
-  const third = await f.page(2, second.nextCursor);
+  equal(second.items.length, limit, "A raw page with a next cursor must have exactly limit items");
+  const third = await f.page(limit, second.nextCursor);
   equal(third.nextCursor, null, "The final raw page must terminate");
+  check(third.items.length <= limit, "The final raw page must have at most limit items");
   const byId = (/** @type {RawSegment} */ a, /** @type {RawSegment} */ b) => compareUtf8(a.ref.id, b.ref.id);
   const all = [...first.items, ...second.items, ...third.items];
   equal(messageIds(all), ["first", "last", "tie-a", "tie-b", "unknown-a", "unknown-b"], "Raw pages must have no gaps or duplicates");
@@ -284,11 +311,12 @@ async function listPages(ctx) {
   equal(all.map(({ messageId }) => messageId), expected.map((item) => item?.messageId), "Raw pages must order times, nulls last, then ids");
   const cursor = first.nextCursor;
   await fixture(ctx, key(ctx, "project")).archive([message("unrelated", 3)]);
-  await rejects(() => f.page(2, cursor), "cursor_stale");
-  const { nextCursor: fresh } = await f.page(2);
+  await rejects(() => f.page(limit, cursor), "cursor_stale");
+  const { items, nextCursor: fresh } = await f.page(limit);
   check(fresh, "A new snapshot must still page");
-  await rejects(() => f.page(2, fresh, { ...f.scope, clients: [client] }), "cursor_stale");
-  await rejects(() => f.page(2, fresh, { ...f.scope, owner: ctx.otherOwner }), "cursor_stale");
+  equal(items.length, limit, "A raw page with a next cursor must have exactly limit items");
+  await rejects(() => f.page(limit, fresh, { ...f.scope, clients: [client] }), "cursor_stale");
+  await rejects(() => f.page(limit, fresh, { ...f.scope, owner: ctx.otherOwner }), "cursor_stale");
 }
 
 /** @param {CaseContext} ctx */
@@ -359,31 +387,34 @@ async function keyConflict(ctx) {
 
 /** @param {CaseContext} ctx */
 async function purgeSafety(ctx) {
-  if (ctx.sessionRefs === "hashed" && !ctx.harness.hashSessionKey) return "hashed session fixtures require harness.hashSessionKey";
   const f = fixture(ctx);
   const matching = message("matching", 1, "cedar remove this passage");
   const ineligible = fixture(ctx, key(ctx, "ineligible"));
-  const sessionOnly = fixture(ctx, { ...f.capture, sessionId: "session-only" });
   await f.archive([matching, message("visible", 1)]);
   await ineligible.archive([message("ineligible", 1)]);
-  await sessionOnly.archive([message("session-only", 2)]);
   const text = await storeFact(ctx, await textFact(f.capture, matching));
-  const session = await storeFact(ctx, sessionFact(ctx, sessionOnly.capture));
   const missingKey = await textFact(ineligible.capture, message("different", 3));
   const [digest] = missingKey.text.digests;
   const doubt = await storeFact(ctx, { ...missingKey, text: { digests: [{ ...digest, alg: "hmac", keyId: "unavailable-key" }] } });
   const before = await revision(ctx);
-  const deleted = await purge(f, [text, session, doubt]);
+  const deleted = await purge(f, [text, doubt]);
   equal([deleted.rawDeleted, deleted.ledgerBlanked], [1, 0], "Purge must delete only the definite text match");
   equal(await revision(ctx), before + 1, "Changing purge must advance the revision once");
-  equal((await purge(f, [text, session])).rawDeleted, 0, "A repeated purge must delete zero");
+  equal((await purge(f, [text])).rawDeleted, 0, "A repeated purge must delete zero");
   equal((await purge(ineligible, [doubt])).rawDeleted, 0, "Purge must retain ineligible rows");
   equal(await revision(ctx), before + 1, "No-op purges must preserve the revision");
-  await visible(f, ["visible"], "Session-only visibility after purge");
+  await visible(f, ["visible"], "Text visibility after purge");
   await visible(ineligible, [], "Ineligible visibility after purge");
   equal((await f.remove()).rawDeleted, 1, "The definite text match must be physically deleted");
-  equal((await sessionOnly.remove()).rawDeleted, 1, "A session-only-hidden row must remain physically stored");
   equal((await ineligible.remove()).rawDeleted, 1, "An ineligible row must remain physically stored");
+
+  const sessionOnly = fixture(ctx, { ...f.capture, sessionId: "session-only" });
+  const session = sessionFact(ctx, sessionOnly.capture);
+  await sessionOnly.archive([message("session-only", 2)]);
+  const storedSession = await storeFact(ctx, session);
+  equal((await purge(f, [storedSession])).rawDeleted, 0, "Purge must retain session-only-hidden rows");
+  await visible(f, [], "Session-only visibility after purge");
+  equal((await sessionOnly.remove()).rawDeleted, 1, "A session-only-hidden row must remain physically stored");
 }
 
 /** @param {CaseContext} ctx */
@@ -398,7 +429,7 @@ async function purgeWindow(ctx) {
 
 /** @param {CaseContext} ctx */
 async function purgeSpan(ctx) {
-  if (!ctx.harness.hashSessionKey) return "raw span fixtures require harness.hashSessionKey";
+  if (ctx.sessionRefs === "plain" && !ctx.harness.hashSessionKey) return "raw span fixtures require harness.hashSessionKey";
   const f = fixture(ctx);
   const spanned = message("spanned", 1);
   await f.archive([spanned, message("visible", 2)]);

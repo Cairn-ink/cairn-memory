@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { test } from "node:test";
+import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
 import { RAW_CASES, runCase } from "@cairn-ink/conformance";
 import { coreDigest, factIncarnationBody } from "@cairn-ink/core";
 import { rawFactory } from "./fixtures/raw.mjs";
@@ -9,7 +10,7 @@ import { rawFactory } from "./fixtures/raw.mjs";
 const adapterURL = new URL("../src/index.mjs", import.meta.url);
 const rawURL = new URL("./raw.mjs", adapterURL);
 
-async function variantFactory(name, replacements) {
+async function variantFactory(name, replacements, options = {}) {
   const adapter = new URL(adapterURL);
   const archive = new URL(rawURL);
   adapter.searchParams.set("variant", name);
@@ -30,7 +31,7 @@ async function variantFactory(name, replacements) {
     },
   });
   try {
-    return rawFactory({ create: (await import(adapter.href)).createMemoryAdapter });
+    return rawFactory({ ...options, create: (await import(adapter.href)).createMemoryAdapter });
   } finally {
     hooks.deregister();
   }
@@ -102,6 +103,17 @@ async function unchangedCursor(ctx) {
   assert.deepEqual((await f.page(1, nextCursor)).items.map(({ messageId }) => messageId), ["second"]);
 }
 
+async function allPages(ctx) {
+  const f = fixture(ctx);
+  const messages = Array.from({ length: 6 }, (_, i) => ({ ...item, id: `message-${i}`, occurredAtMs: i }));
+  await f.archive(messages);
+  const first = await f.page(2);
+  const second = await f.page(2, first.nextCursor);
+  const last = await f.page(2, second.nextCursor);
+  assert.equal(last.nextCursor, null);
+  assert.deepEqual([...first.items, ...second.items, ...last.items].map(({ messageId }) => messageId), messages.map(({ id }) => id));
+}
+
 async function fenceVisibility(ctx) {
   const f = fixture(ctx);
   await f.archive([item]);
@@ -119,7 +131,7 @@ async function changingRevision(ctx) {
 }
 
 const visibleDecision = "match.facts.some((stored) => factHidesRow(stored, candidate, policy) !== false)";
-const refusal = 'if (!allowed || refusalFacts.some((stored) => factHidesRow(stored, candidate, policy) === true)) {';
+const refusal = "rawArchiveRefused++;";
 const purgeKinds = '(fact.kind === "text" || fact.kind === "rawSpan") && fact.owner === target.owner';
 const rawSearchRows = "const rows = await visibleRows(getState(), selection);";
 const rawSearchRank = "rankLexical(documents, terms, limit).map(publicSegment)";
@@ -164,6 +176,12 @@ const mutants = [
   ["listRaw ignores the state token", "K-RAW-5", unchangedCursor, /Expected operation to reject/, [
     ["after.token !== token || after.binding !== cursorBinding", "after.binding !== cursorBinding"],
   ]],
+  ["the first raw page is oversized", "K-RAW-5", allPages, /A raw page with a next cursor must have exactly limit items/, [
+    ["rows.slice(0, limit).map(", "rows.slice(0, limit + (after ? 0 : 1)).map("],
+  ]],
+  ["raw search reverses BM25 ranks", "K-RAW-4", fenceVisibility, /Raw search must order strict BM25 ranks/, [
+    [rawSearchRank, "rankLexical(documents, terms, limit).reverse().map((row) => publicSegment({ ...row, score: 1 }))"],
+  ]],
   ["search limits before filtering hidden rows", "K-RAW-4", fenceVisibility, /Raw limit must apply after visibility and ranking/, [
     [rawSearchRows, `const state = getState();
         const visible = new Set((await visibleRows(state, selection)).map((row) => row.ref.id));
@@ -179,13 +197,97 @@ const mutants = [
   ]],
 ];
 
+function rawCase(id) {
+  const testCase = RAW_CASES.find((candidate) => candidate.id === id);
+  assert.ok(testCase);
+  return testCase;
+}
+
 for (const [name, id, naive, failure, replacements] of mutants) {
   test(`${id} rejects when ${name} after the naive check passes`, async () => {
-    const testCase = RAW_CASES.find((candidate) => candidate.id === id);
-    assert.ok(testCase);
+    const testCase = rawCase(id);
     const factory = await variantFactory(name, replacements);
     assert.equal(await runCase(factory, { ...testCase, run: naive }), null);
     await assert.rejects(runCase(factory, testCase), failure);
+  });
+}
+
+async function savedSpan(ctx) {
+  return { kind: "rawSpan", startUtf16: 8, endUtf16: 12, messageKey: item.id,
+    sessionKeyHash: ctx.harness.hashSessionKey("test-client", "test-conversation"),
+    contentDigest: (await ctx.hash(item.content)).slice(7) };
+}
+
+for (const sessionRefs of ["plain", "hashed"]) {
+  test(`Purged raw span identity refuses a shorter replay (${sessionRefs})`, async () => {
+    const result = await runCase(rawFactory({ sessionRefs }), { ...rawCase("K-RAW-8s"), async run(ctx) {
+      const f = fixture(ctx);
+      assert.equal((await f.archive([item])).archived, 1);
+      const span = await f.fact(await savedSpan(ctx));
+      assert.deepEqual(await f.purge([span]), { rawDeleted: 1, ledgerBlanked: 0 });
+      const before = (await ctx.harness.counters()).rawArchiveRefused;
+      const { archived } = await f.archive([{ ...item, content: "cedar" }]);
+      assert.deepEqual({ archived, refused: (await ctx.harness.counters()).rawArchiveRefused - before,
+        search: (await f.search()).segments.map(({ messageId }) => messageId),
+        listing: (await f.page()).items.map(({ messageId }) => messageId) },
+      { archived: 0, refused: 1, search: [], listing: [] });
+    } });
+    assert.equal(result, null);
+  });
+
+  test(`K-RAW-4 accepts float32 scores and store-specific ties (${sessionRefs})`, async () => {
+    const factory = await variantFactory("float32 scores and reversed ties", [
+      [rawSearchRank, `rankLexical(documents, terms, documents.length).reverse()
+          .map((row) => publicSegment({ ...row, score: Math.fround(row.score) }))
+          .sort((a, b) => b.score - a.score).slice(0, limit)`],
+    ], { sessionRefs });
+    assert.equal(await runCase(factory, rawCase("K-RAW-4")), null);
+  });
+}
+
+test("Raw span admission refuses an ineligible identity", async () => {
+  const factory = rawFactory({ sessionRefs: "hashed",
+    create: (options) => createMemoryAdapter({ ...options, hashSessionKey: () => null }) });
+  const result = await runCase(factory, { ...rawCase("K-RAW-2s"), async run(ctx) {
+    const f = fixture(ctx);
+    await f.fact(await savedSpan(ctx));
+    const before = await ctx.harness.dump();
+    const { archived } = await f.archive([item]);
+    assert.deepEqual({ archived, refused: (await ctx.harness.counters()).rawArchiveRefused }, { archived: 0, refused: 1 });
+    assert.deepEqual(await ctx.harness.dump(), before);
+  } });
+  assert.equal(result, null);
+});
+
+function withoutHasher(sessionRefs, purgeWithheld) {
+  const factory = rawFactory({ sessionRefs });
+  return {
+    ...factory,
+    async open(options) {
+      const opened = await factory.open(options);
+      const { hashSessionKey, ...harness } = opened.harness;
+      if (purgeWithheld) opened.adapter.raw.purgeWithheld = purgeWithheld;
+      return { ...opened, harness };
+    },
+  };
+}
+
+test("Hashed raw cases reject a missing session hasher", async () => {
+  const factory = withoutHasher("hashed");
+  for (const id of ["K-RAW-2s", "K-RAW-3", "K-RAW-3s", "K-RAW-8", "K-RAW-8s"]) {
+    await assert.rejects(runCase(factory, rawCase(id)), /require harness\.hashSessionKey/, id);
+  }
+});
+
+test("K-RAW-8s rejects a hashed no-op purge factory with no session hasher", async () => {
+  const factory = withoutHasher("hashed", async () => ({ rawDeleted: 0, ledgerBlanked: 0 }));
+  await assert.rejects(runCase(factory, rawCase("K-RAW-8s")), /require harness\.hashSessionKey/);
+});
+
+for (const sessionRefs of ["plain", "hashed"]) {
+  test(`K-RAW-8 checks text deletion without a session hasher (${sessionRefs})`, async () => {
+    const factory = withoutHasher(sessionRefs, async () => ({ rawDeleted: 0, ledgerBlanked: 0 }));
+    await assert.rejects(runCase(factory, rawCase("K-RAW-8")), /Purge must delete only the definite text match/);
   });
 }
 
