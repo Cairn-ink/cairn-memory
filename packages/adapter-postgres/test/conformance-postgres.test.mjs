@@ -262,7 +262,7 @@ const notApplicable = {
   raw: ["K-RAW-1", "K-RAW-2", "K-RAW-2s", "K-RAW-3", "K-RAW-3w", "K-RAW-3c", "K-RAW-3s",
     "K-RAW-4", "K-RAW-5", "K-RAW-6", "K-RAW-7", "K-RAW-8", "K-RAW-8w", "K-RAW-8s"],
   "raw.importArchive": ["K-IMP-RAW-1", "K-IMP-RAW-2", "K-IMP-RAW-3", "K-IMP-RAW-3s", "K-IMP-RAW-4", "K-IMP-RAW-4e", "K-IMP-RAW-4k",
-    "K-IMP-RAW-5", "K-IMP-RAW-6"],
+    "K-IMP-RAW-5", "K-IMP-RAW-6", "K-IMP-RAW-7", "K-IMP-RAW-8", "K-IMP-RAW-9", "K-IMP-RAW-10"],
   "raw.recordLineage": ["K-FORK-1", "K-FORK-2", "K-FORK-3", "K-FORK-4", "K-FORK-5",
     "K-FORK-6", "K-FORK-7", "K-FORK-8", "K-FORK-9", "K-FORK-10"],
   "rawSpans not declared": ["K-FACT-3r"],

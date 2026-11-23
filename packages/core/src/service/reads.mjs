@@ -12,6 +12,7 @@ import { hostedProjection } from "./session-wire.mjs";
 /** @typedef {import("../ports/common.d.ts").ItemRef} ItemRef */
 /** @typedef {import("../ports/common.d.ts").Scope} Scope */
 /** @typedef {import("../ports/retrieval.d.ts").RetrievalScope} RetrievalScope */
+/** @typedef {import("../ports/retrieval.d.ts").RawSegment} RawSegment */
 /** @typedef {import("../ports/unit-of-work.d.ts").Tx} Tx */
 
 /** @param {Scope} scope @param {Pick<RetrievalScope, "clients" | "window">} [filters] @returns {RetrievalScope} */
@@ -81,6 +82,53 @@ export async function readStateToken(snapshot, tx, scope, positionToken) {
   const token = await snapshot.stateToken(tx, scope);
   if (typeof token !== "string" || !token) throw new CoreError("internal_error");
   return token;
+}
+
+/** @param {RawSegment[]} segments @param {RetrievalScope} scope @param {Tx} tx @param {StorageAdapter["fence"]} fence */
+export async function visibleRawSegments(segments, scope, tx, fence) {
+  const visible = await fence.assertVisible(tx, scope, segments.map(({ ref }) => ref));
+  const keys = new Set(visible.map(canonicalKey));
+  return segments.filter(({ ref }) => keys.has(canonicalKey(ref)));
+}
+
+/** @param {unknown} cursor @param {Scope} scope */
+function rawPosition(cursor, scope) {
+  if (cursor == null) return null;
+  if (typeof cursor !== "string") throw new CoreError("invalid_cursor");
+  const value = decodeCursor(cursor);
+  if (!Array.isArray(value)) {
+    const isOffset = typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+    throw new CoreError(isOffset ? "cursor_stale" : "invalid_cursor");
+  }
+  const [route, owner, namespace, token, inner] = value;
+  if (route !== "raw-export-v1") throw new CoreError("cursor_stale");
+  if (value.length !== 5 || typeof owner !== "string" || !owner ||
+      (namespace !== null && typeof namespace !== "string") ||
+      typeof token !== "string" || !token || typeof inner !== "string" || !inner) {
+    throw new CoreError("invalid_cursor");
+  }
+  if (owner !== scope.owner || namespace !== scope.namespace) throw new CoreError("cursor_stale");
+  return { token, inner };
+}
+
+/** @param {StorageAdapter} storage @returns {import("../ports/host.d.ts").MemoryService["listRawMessages"]} */
+export function listRawMessagesMethod({ uow, raw, capabilities, snapshot, fence }) {
+  return entry(async (input, options) => {
+    const scope = scopeOf(input);
+    if (!capabilities.rawArchive || !raw) throw new CoreError("capability_unavailable");
+    const { cursor, limit } = validateObject(options === undefined ? {} : options, ["cursor", "limit"]);
+    if (limit !== undefined && typeof limit !== "number") throw new CoreError("invalid_input");
+    const position = rawPosition(cursor, scope);
+    const readScope = readSet(scope);
+    return uow.run(scope.owner, { readOnly: true }, async tx => {
+      const token = await readStateToken(snapshot, tx, readScope, position?.token);
+      const page = await raw.listRaw(tx, readScope, { cursor: position?.inner ?? null, limit: pageLimit(limit) });
+      const items = await visibleRawSegments(page.items, readScope, tx, fence);
+      const nextCursor = page.nextCursor === null ? null :
+        encodeCursor(["raw-export-v1", scope.owner, scope.namespace, token, page.nextCursor]);
+      return { items, nextCursor };
+    });
+  });
 }
 
 /** @param {StorageAdapter} storage @param {"recent-v1" | "export-v1"} route

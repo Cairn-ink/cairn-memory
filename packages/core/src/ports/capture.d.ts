@@ -90,7 +90,7 @@ export interface RawCapture {
   archiveAllowed(tx: Tx, key: CaptureKey): Promise<boolean>;
   archive(tx: Tx, key: CaptureKey, messages: readonly CaptureMessage[]): Promise<{ archived: number }>;
   /** Checks session, window, lineage and text eligibility, failing closed. Counts refused messages without storing them and ignores existing message ids. */
-  importArchive?(tx: Tx, scope: Scope, session: Pick<CaptureKey, "client" | "sessionId">, messages: readonly CaptureMessage[]): Promise<{ archived: number; existing: number; withheld: number }>;
+  importArchive?(tx: Tx, scope: Scope, session: Pick<CaptureKey, "client" | "sessionId">, messages: readonly CaptureMessage[], options?: { withheld?: readonly number[] }): Promise<{ archived: number; existing: number; withheld: number }>;
 }
 
 /** Optional (capability stagedEvidence). */

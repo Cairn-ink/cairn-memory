@@ -30,18 +30,39 @@ const HOSTED_EXTRACT_OUTPUT_TOKENS = 32_768;
 const EXTRACT_FRAMING_TOKENS = 1024;
 const MAX_EXTRACT_OUTPUT_UNITS = 80_000;
 
-/** @param {unknown} raw
- * @returns {{ message: import("../ports/capture.d.ts").CaptureMessage, originalContent: string }}
- */
-function prepareMessage(raw) {
+/** @param {unknown} raw @returns {CaptureMessage} */
+function validateMessage(raw) {
   const { id, role, content, occurredAtMs } = validateObject(raw, ["id", "role", "content", "occurredAtMs"]);
   if (!isWellFormedText(id) || !id || id.length > 200 ||
-      (role !== "user" && role !== "assistant") || !isWellFormedText(content) || !content || content.length > 20_000 ||
+      (role !== "user" && role !== "assistant") || typeof content !== "string" || !content || content.length > 20_000 ||
       (occurredAtMs !== null && (typeof occurredAtMs !== "number" || !Number.isSafeInteger(occurredAtMs)))) {
     throw new CoreError("invalid_input");
   }
-  const redacted = redactCore(cleanContent(content).normalize("NFKC"));
-  return { message: { id, role, content: redacted, occurredAtMs }, originalContent: content };
+  return { id, role, content, occurredAtMs };
+}
+
+/** @param {string} cleanedContent */
+export function prepareMessageContent(cleanedContent) {
+  return redactCore(cleanedContent.normalize("NFKC"));
+}
+
+/** @param {unknown} raw */
+function prepareMessage(raw) {
+  const message = validateMessage(raw);
+  const originalContent = message.content;
+  if (!isWellFormedText(originalContent)) throw new CoreError("invalid_input");
+  return { message: { ...message, content: prepareMessageContent(cleanContent(originalContent)) }, originalContent };
+}
+
+/** @param {import("../ports/privacy.d.ts").SuppressionSnapshot["passages"]} passages */
+export function captureTextWithholding(passages) {
+  const textFacts = passages.map(({ fact }) => fact);
+  const legacyKeyUnavailable = textFacts.some(requiresLegacyMacDomain);
+  // Historical aliases are used for suppression only.
+  /** @param {string} originalContent @param {string} preparedContent @param {FingerprintKey | null} key */
+  const matches = async (originalContent, preparedContent, key) =>
+    withholdsAnyPassage(await fingerprintMemoryPassages(originalContent, preparedContent, key), textFacts);
+  return { legacyKeyUnavailable, matches: textFacts.length ? matches : null };
 }
 
 /** @param {AbortSignal | undefined} signal @param {CaptureDeadline} deadline */
@@ -229,15 +250,12 @@ export function captureMethods(deps) {
           throw new CoreError("internal_error");
         }
         const eligible = new Set(positions);
-        const textFacts = passages.map(({ fact }) => fact);
-        const legacyKeyUnavailable = textFacts.some(requiresLegacyMacDomain);
+        const { legacyKeyUnavailable, matches } = captureTextWithholding(passages);
         const admitted = await Promise.all(incoming.map(async ({ message, originalContent }, index) => {
           const scrubbed = { ...message, content: "" };
           if (!eligible.has(index) || legacyKeyUnavailable) return scrubbed;
-          // The reference filter checks the source and its time. Compare snapshot text facts too,
-          // using historical aliases for suppression only.
-          if (textFacts.length && message.content && withholdsAnyPassage(
-            await fingerprintMemoryPassages(originalContent, message.content, fingerprintKey), textFacts)) return scrubbed;
+          // The reference filter checks the source and its time. Compare snapshot text facts too.
+          if (matches && message.content && await matches(originalContent, message.content, fingerprintKey)) return scrubbed;
           return message;
         }));
         const { status } = await admit.call(capture, tx, key, admitted);

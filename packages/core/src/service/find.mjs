@@ -3,12 +3,13 @@ import { CoreError } from "../errors.mjs";
 import { prepareCoreText } from "../privacy/text.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
 import { recallSearch } from "./recall.mjs";
-import { readSet } from "./reads.mjs";
+import { readSet, visibleRawSegments } from "./reads.mjs";
 
 /** @typedef {import("../ports/host.d.ts").MemoryService} MemoryService */
 /** @typedef {import("../ports/retrieval.d.ts").RetrievalScope} RetrievalScope */
 /** @typedef {import("../ports/host.d.ts").Layer} Layer */
 /** @typedef {import("../ports/common.d.ts").MemoryRow} MemoryRow */
+/** @typedef {import("../ports/retrieval.d.ts").RawSegment} RawSegment */
 
 /** @param {unknown} value */
 function timeBound(value) {
@@ -58,29 +59,67 @@ function notSearched(requested) {
 
 /** @param {import("./index.d.mts").MemoryServiceDeps} deps @returns {MemoryService["find"]} */
 export function findMethod(deps) {
-  const search = recallSearch(deps);
-  return entry(async (input, raw, options) => {
+  const searchMemories = recallSearch(deps);
+  const { storage: { uow, fence, raw, capabilities }, embedQuery } = deps;
+  /** @type {(...args: Parameters<MemoryService["find"]>) => ReturnType<MemoryService["find"]>} */
+  const find = entry(async (input, rawQuery, options) => {
     const scope = scopeOf(input);
-    if (raw !== null && typeof raw !== "string") throw new CoreError("invalid_input");
+    if (rawQuery !== null && typeof rawQuery !== "string") throw new CoreError("invalid_input");
     const { limit, requested, filters } = findOptions(options);
-    const query = prepareCoreText(raw ?? "");
+    const query = prepareCoreText(rawQuery ?? "");
+    const rawRequested = requested.includes("raw");
+    const rawAvailable = capabilities.rawArchive && raw;
+    const searchRaw = rawRequested && query && rawAvailable;
+    /** @type {Float32Array | undefined} */
+    let queryVector;
 
     /** @type {MemoryRow[]} */
     let memories = [];
     let memory = notSearched();
     if (requested.includes("memory")) {
       try {
+        // Capture this request's vector as memory search computes it.
+        const search = searchRaw && embedQuery ? recallSearch({
+          ...deps,
+          embedQuery: {
+            async embedQuery(owner, text, options) {
+              const embedding = await embedQuery.embedQuery(owner, text, options);
+              queryVector = embedding.vector;
+              return embedding;
+            },
+          },
+        }) : searchMemories;
         ({ items: memories } = await search(scope, query, { cursor: null, limit, mode: "search" }, filters));
         memory = { status: "ok", count: memories.length };
       } catch (error) {
         memory = { status: "unavailable", count: 0, code: entryError(error).code };
       }
     }
+    /** @type {RawSegment[]} */
+    let segments = [];
+    let rawLayer = notSearched(rawRequested && !rawAvailable);
+    if (searchRaw) {
+      const readScope = readSet(scope, filters);
+      try {
+        ({ segments, layer: rawLayer } = await uow.run(scope.owner, { readOnly: true }, async tx => {
+          const result = await searchRaw.raw(tx, readScope, query, "search", queryVector ? { limit, queryVector } : { limit });
+          const segments = await visibleRawSegments(result.segments, readScope, tx, fence);
+          /** @type {Layer} */
+          const layer = { status: "ok", count: segments.length };
+          if (result.coverage.complete === false) layer.code = "index_unavailable";
+          return { segments, layer };
+        }));
+      } catch (error) {
+        rawLayer = { status: "unavailable", count: 0, code: entryError(error).code };
+      }
+    }
     return {
-      memories, cards: [], raw: [],
-      layers: { memory, card: notSearched(requested.includes("card")), raw: notSearched(requested.includes("raw")) },
+      memories, cards: [], raw: segments,
+      layers: { memory, card: notSearched(requested.includes("card")), raw: rawLayer },
     };
   });
+  // A null query cannot enter the raw search branch, so its result has an empty raw tuple.
+  return /** @type {MemoryService["find"]} */ (find);
 }
 
 /** @param {Pick<import("../ports/index.d.ts").StorageAdapter, "uow" | "hydrate" | "fence">} storage

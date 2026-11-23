@@ -10,7 +10,7 @@ import { admissionScope, copyCaptureMessages, copyReadScope, guardCaptureScope, 
   writeNamespace } from "./validation.mjs";
 
 /** @import { FactMatchPolicy, FactMatchRow, StoredFact, TextDigest, TextFact } from "@cairn-ink/core" */
-/** @import { CaptureMessage, FingerprintKeyProvider, Namespace, RawSegment, RetrievalScope, Scope, StorageAdapter, Tx } from "@cairn-ink/core/ports" */
+/** @import { CaptureMessage, FingerprintKeyProvider, ItemRef, Namespace, RawSegment, RetrievalScope, Scope, StorageAdapter, Tx } from "@cairn-ink/core/ports" */
 /** @import { IssuedRun, State } from "./unit-of-work.mjs" */
 /** @typedef {Omit<RawSegment, "score">} RawEntry */
 /** @typedef {Pick<RawEntry, "client" | "sessionId">} Session */
@@ -37,6 +37,36 @@ function rawEntry(scope, session, { id, role, content, occurredAtMs }) {
     ref: { type: "raw", namespace: scope.namespace, id: rawId(scope, session, id) },
     client, sessionId, messageId: id, role, content, occurredAtMs,
   };
+}
+
+/** @param {readonly CaptureMessage[]} messages */
+function copyRawMessages(messages) {
+  const copied = copyCaptureMessages(messages);
+  if (copied.some(({ id }) => id.length === 0)) throw new CoreError("invalid_input");
+  return copied;
+}
+
+/** @param {unknown} options @param {number} length @returns {Set<number>} */
+function copyWithheldPositions(options, length) {
+  if (options === undefined) return new Set();
+  try {
+    if (options === null || typeof options !== "object") throw new CoreError("invalid_input");
+    const prototype = Object.getPrototypeOf(options);
+    const keys = Reflect.ownKeys(options);
+    const slot = Object.getOwnPropertyDescriptor(options, "withheld");
+    if ((prototype !== Object.prototype && prototype !== null) || keys.length !== (slot ? 1 : 0) ||
+        (slot && (keys[0] !== "withheld" || !Object.hasOwn(slot, "value"))) ||
+        ("withheld" in options) !== (slot !== undefined) ||
+        !Object.is(slot?.value, Reflect.get(options, "withheld"))) throw new CoreError("invalid_input");
+    if (!slot) return new Set();
+    const positions = snapshotArray(slot.value, { maxLength: length });
+    const withheld = new Set(positions);
+    if (withheld.size !== positions.length || positions.some((position) =>
+      !Number.isSafeInteger(position) || position < 0 || position >= length)) throw new CoreError("invalid_input");
+    return withheld;
+  } catch {
+    throw new CoreError("invalid_input");
+  }
 }
 
 /** @param {PageKey} a @param {PageKey} b */
@@ -137,7 +167,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
   }
 
-  /** @param {State} state @param {Scope} scope */
+  /** @param {Pick<State, "facts">} state @param {Scope} scope */
   function scopedFacts(state, { owner, namespace }) {
     return [...state.facts.values()].filter(({ fact }) => fact.owner === owner && (fact.namespace ?? null) === namespace);
   }
@@ -232,7 +262,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     return facts.every((stored) => factHidesRow(stored, candidate, policy) === false);
   }
 
-  /** @param {State} state @param {RetrievalScope} selection */
+  /** @param {Pick<State, "facts" | "rawFences" | "rawRows">} state @param {RetrievalScope} selection */
   async function visibleRows(state, selection) {
     const byNamespace = new Map(selection.namespaces.map((namespace) => {
       const scope = { owner: selection.owner, namespace };
@@ -255,6 +285,21 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
       rows.push(row);
     }
     return rows;
+  }
+
+  /** @param {State} state @param {RetrievalScope} selection @param {readonly ItemRef[]} refs */
+  async function visibleRawRefs(state, selection, refs) {
+    /** @type {State["rawRows"]} */
+    const rawRows = new Map();
+    for (const ref of refs) {
+      if (ref.type !== "raw") continue;
+      const row = state.rawRows.get(ref.id);
+      if (row && row.ref.namespace === ref.namespace) rawRows.set(ref.id, row);
+    }
+    if (!rawRows.size) return [];
+    const { facts, rawFences } = state;
+    const rows = await visibleRows({ facts, rawFences, rawRows }, selection);
+    return rows.map(({ ref }) => ({ ...ref }));
   }
 
   /** @param {Tx} tx @param {Scope} scope @param {() => Session[]} prepare */
@@ -317,7 +362,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
       return port.write(tx, guarded, "conditional", () => {
         const admission = guarded.copyKey();
         const { scope } = admission;
-        const entries = copyCaptureMessages(messages).map((message) => rawEntry(scope, admission, message));
+        const entries = copyRawMessages(messages).map((message) => rawEntry(scope, admission, message));
         return async (getState, _markDirty, run) => {
           if (!entries.length) return { archived: 0 };
           const state = getState();
@@ -349,12 +394,13 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
         };
       });
     },
-    async importArchive(tx, scope, session, messages) {
+    async importArchive(tx, scope, session, messages, options) {
       const guarded = guardCaptureScope(tx, () => scope);
       return port.write(tx, guarded, "conditional", () => {
         const selection = guarded.copyScope();
         const admission = copySession(session);
-        const copied = copyCaptureMessages(messages);
+        const copied = copyRawMessages(messages);
+        const withheld = copyWithheldPositions(options, copied.length);
         return async (getState, _markDirty, run) => {
           const counts = { archived: 0, existing: 0, withheld: 0 };
           if (!copied.length) return counts;
@@ -369,8 +415,10 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
           const texts = facts.map(({ fact }) => fact).filter((fact) => fact.kind === "text");
           const textBlocked = importTextFilter(selection, texts);
           const hash = spans.length ? await spanSessionHash(admission).catch(() => "") : "";
-          for (const message of copied) {
-            const entry = rawEntry(selection, admission, message);
+          counts.withheld = withheld.size;
+          for (let position = 0; position < copied.length; position++) {
+            if (withheld.has(position)) continue;
+            const entry = rawEntry(selection, admission, copied[position]);
             const { id } = entry.ref;
             const candidate = evidence(entry, selection, hash);
             if (windows.some((stored) => factHidesRow(stored, candidate, policy) !== false) ||
@@ -479,6 +527,6 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     }));
   }
 
-  return { raw, captureProofs, lineageFenced, sourceVisible, seedClientlessRaw,
+  return { raw, visibleRawRefs, captureProofs, lineageFenced, sourceVisible, seedClientlessRaw,
     counters: () => ({ rawKeyConflict, rawArchiveRefused }) };
 }

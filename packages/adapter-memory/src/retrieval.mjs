@@ -160,11 +160,12 @@ export function createCardVisibility(matchFacts, keys, rawSourceVisible) {
  * @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>["port"]} port
  * @param {import("@cairn-ink/core").Capabilities} capabilities
  * @param {ReturnType<typeof createFactMatcher>} [matchFacts]
+ * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>["visibleRawRefs"]} [visibleRawRefs]
  * @param {ReturnType<typeof createCardVisibility>} [cardVisible]
  * @returns {Pick<StorageAdapter, "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent">}
  */
 export function createRetrievalPorts(port, capabilities, matchFacts = createFactMatcher(capabilities.vectorSuppression),
-  cardVisible = createCardVisibility(matchFacts, { async userKey() { return null; } })) {
+  visibleRawRefs, cardVisible = createCardVisibility(matchFacts, { async userKey() { return null; } })) {
   /** @param {State} state @param {RetrievalScope} scope */
   function policies(state, scope) {
     return new Map(scope.namespaces.map((namespace) =>
@@ -280,8 +281,11 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
           const references = copyRefs(refs);
           const state = getState();
           const includeHistorical = intent === "read";
+          const rawFence = visibleRawRefs && references.some(({ type }) => type === "raw") ? visibleRawRefs : undefined;
           if (!capabilities.documentCards || !references.some(({ type }) => type === "card")) {
-            return Array.from(visibleRefs(state, selection, references, includeHistorical), ({ ref }) => ref);
+            const visible = Array.from(visibleRefs(state, selection, references, includeHistorical), ({ ref }) => ref);
+            if (!rawFence) return visible;
+            return rawFence(state, selection, references).then(rawRefs => [...visible, ...rawRefs]);
           }
           return (async () => {
             const byNamespace = policies(state, selection);
@@ -297,7 +301,8 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
                 if (card && await cardVisible(state, { owner: tx.owner, namespace }, card)) visible.push(ref);
               }
             }
-            return visible;
+            if (!rawFence) return visible;
+            return [...visible, ...await rawFence(state, selection, references)];
           })();
         });
       },
