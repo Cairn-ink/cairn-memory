@@ -2,6 +2,7 @@ import { CoreError, factBlocksIncoming } from "../../core/src/index.mjs";
 
 /** @import { CaptureKey, CaptureMessage } from "../../core/src/ports/capture.d.ts" */
 /** @import { StoredFact } from "../../core/src/suppression-fact.mjs" */
+/** @import { CaptureOptions } from "./capture.d.mts" */
 /** @import { Connection } from "./driver.mjs" */
 /** @typedef {{message_mac: string, content_mac: string | null}} Proof */
 
@@ -16,21 +17,16 @@ const SOURCE_FACTS = `SELECT kind, body, action_id FROM core_suppression_facts
 const MAX_LINEAGE_SESSIONS = 1_000;
 const MAX_LINEAGE_VERTICES = 20_000;
 // Traverse sessions and proof pairs separately so each pair is expanded only once.
-// Session ref hashes use SHA-256 of the UTF-8, compact JSON pair [client, sessionId].
 const CHECK_LINEAGE = `WITH RECURSIVE fences(session_id) AS MATERIALIZED (
     SELECT session_id FROM capture_raw_fences WHERE user_id = $1 AND client = $2
     UNION SELECT unnest($4::text[])
-    UNION SELECT l.session_id FROM capture_raw_lineage l
-    WHERE cardinality($7::text[]) > 0 AND l.user_id = $1 AND l.client = $2 AND l.session_id <> $3
-      AND encode(sha256(convert_to('[' || to_json(l.client)::text || ',' || to_json(l.session_id)::text || ']',
-        'UTF8')), 'hex') = ANY($7::text[])
   ), incoming AS (
     SELECT * FROM jsonb_to_recordset($5::jsonb) AS proof(message_mac text, content_mac text)
   ), roots(session_id, message_mac, content_mac) AS (
-    SELECT $3::text, NULL::text, NULL::text WHERE EXISTS (SELECT 1 FROM fences)
+    SELECT $3::text, NULL::text, NULL::text WHERE $7::boolean OR EXISTS (SELECT 1 FROM fences)
     UNION ALL
     SELECT NULL::text, incoming.message_mac, incoming.content_mac
-    FROM incoming WHERE incoming.content_mac IS NOT NULL AND EXISTS (SELECT 1 FROM fences)
+    FROM incoming WHERE incoming.content_mac IS NOT NULL AND ($7::boolean OR EXISTS (SELECT 1 FROM fences))
   ), vertices(session_id, message_mac, content_mac) AS (
     SELECT session_id, message_mac, content_mac FROM roots
     UNION
@@ -45,17 +41,24 @@ const CHECK_LINEAGE = `WITH RECURSIVE fences(session_id) AS MATERIALIZED (
       WHERE v.session_id IS NULL AND l.user_id = $1 AND l.client = $2
         AND l.message_mac = v.message_mac AND l.content_mac = v.content_mac
     ) AS next(session_id, message_mac, content_mac)
-  ), bounded AS MATERIALIZED (SELECT * FROM vertices LIMIT ${MAX_LINEAGE_VERTICES + 1})
+  ), bounded AS MATERIALIZED (SELECT * FROM vertices LIMIT ${MAX_LINEAGE_VERTICES + 1}),
+  uncertain AS NOT MATERIALIZED (
+    SELECT l.session_id FROM capture_raw_lineage l
+    WHERE l.user_id = $1 AND l.client = $2 AND ($6::boolean OR EXISTS (
+      SELECT 1 FROM incoming WHERE incoming.message_mac = l.message_mac
+        AND (incoming.content_mac IS NULL OR l.content_mac IS NULL)
+    ))
+  )
   SELECT EXISTS (SELECT 1 FROM bounded JOIN fences USING (session_id)) AS fenced,
     (SELECT count(*) FROM bounded) > ${MAX_LINEAGE_VERTICES}
       OR (SELECT count(session_id) FROM bounded) > ${MAX_LINEAGE_SESSIONS} AS exceeded,
-    EXISTS (
-      SELECT 1 FROM capture_raw_lineage l JOIN fences USING (session_id)
-      WHERE l.user_id = $1 AND l.client = $2 AND ($6::boolean OR EXISTS (
-        SELECT 1 FROM incoming WHERE incoming.message_mac = l.message_mac
-          AND (incoming.content_mac IS NULL OR l.content_mac IS NULL)
-      ))
-    ) AS withheld`;
+    EXISTS (SELECT 1 FROM uncertain JOIN fences USING (session_id)) AS withheld,
+    ARRAY(
+      SELECT session_id FROM bounded WHERE $7::boolean AND session_id <> $3
+      UNION
+      SELECT session_id FROM uncertain WHERE $7::boolean AND session_id <> $3
+      LIMIT ${MAX_LINEAGE_SESSIONS + 1}
+    ) AS hash_candidates`;
 
 const encoder = new TextEncoder();
 
@@ -88,10 +91,24 @@ export function createCaptureProofs(secret) {
 }
 
 /**
+ * @param {Set<string>} hashes @param {CaptureOptions["hashSessionKey"]} hashSessionKey
+ * @param {string} client @param {string} sessionId
+ */
+function withholdsHashedAncestor(hashes, hashSessionKey, client, sessionId) {
+  try {
+    const hash = hashSessionKey?.(client, sessionId);
+    return typeof hash !== "string" || !/^[0-9a-f]{64}$/u.test(hash) || hashes.has(hash);
+  } catch {
+    return true;
+  }
+}
+
+/**
  * @param {Connection["query"]} query @param {CaptureKey} key
  * @param {readonly (number | null)[]} times @param {Proof[] | null} proofs @param {"read" | "assert"} mode
+ * @param {CaptureOptions["hashSessionKey"]} hashSessionKey
  */
-export async function filterSources(query, key, times, proofs, mode) {
+export async function filterSources(query, key, times, proofs, mode, hashSessionKey) {
   const { scope, client, sessionId } = key;
   const { rows } = await query(SOURCE_FACTS, [scope.owner, scope.namespace, client, sessionId]);
   /** @type {StoredFact[]} */
@@ -101,7 +118,7 @@ export async function filterSources(query, key, times, proofs, mode) {
   /** @type {Set<string>} */
   const fencedSessionHashes = new Set();
   const candidate = { scope, passages: [], session: { client, sessionId } };
-  const policy = /** @type {const} */ ({ mode: "capture" });
+  const policy = /** @type {const} */ ({ mode: "capture", hashSessionKey });
   for (const { kind, body, action_id: actionId } of rows) {
     const fact = { ...body, owner: scope.owner, actionId };
     if (fact.kind !== kind) throw new CoreError("suppressed");
@@ -133,9 +150,14 @@ export async function filterSources(query, key, times, proofs, mode) {
 
   const { rows: [lineage] } = await query(CHECK_LINEAGE, [
     scope.owner, client, sessionId, [...fencedSessions], JSON.stringify(proofs ?? []), proofs === null,
-    [...fencedSessionHashes],
+    fencedSessionHashes.size > 0,
   ]);
-  if (lineage?.fenced !== false || lineage.exceeded !== false || lineage.withheld !== false) {
+  // Lineage is shared across namespaces. The query returns only the owner's
+  // same-client ancestors and sessions whose proofs are unavailable or incomplete.
+  if (lineage?.fenced !== false || lineage.exceeded !== false || lineage.withheld !== false ||
+      lineage.hash_candidates.length > MAX_LINEAGE_SESSIONS ||
+      lineage.hash_candidates.some((/** @type {string} */ id) =>
+        withholdsHashedAncestor(fencedSessionHashes, hashSessionKey, client, id))) {
     if (mode === "assert") throw new CoreError("lineage_fenced");
     return [];
   }

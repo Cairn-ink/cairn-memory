@@ -439,9 +439,12 @@ test("a proven fork rechecks the ancestor's namespace on read and write", migrat
   await assert.rejects(uow.run(owner, {}, (tx) => capture.assertEligible(tx, replay, [0])), { code: "lineage_fenced" });
 });
 
-test("a proven fork checks hashed ancestor facts across namespaces on read and write", migrationDbTest, async (t) => {
+async function hashedFork(t, selectHasher = (hashSessionKey) => hashSessionKey) {
   const secret = randomBytes(32).toString("hex");
-  const { pool, uow, capture } = await database(t, { lineageSecret: secret });
+  const sessionKey = randomBytes(32);
+  const hashSessionKey = (client, sessionId) =>
+    createHmac("sha256", sessionKey).update(JSON.stringify([client, sessionId])).digest("hex");
+  const { pool, uow, capture } = await database(t, { lineageSecret: secret, hashSessionKey: selectHasher(hashSessionKey) });
   const ancestor = { ...event, client: 'client"', scope: { owner, namespace: "archive" }, sessionId: "source\n🌿" };
   const replay = { ...ancestor, scope: { owner, namespace: "replay" }, sessionId: event.sessionId };
   const { id, content } = messages[0];
@@ -450,15 +453,20 @@ test("a proven fork checks hashed ancestor facts across namespaces on read and w
     VALUES ($1, $2, $3, $4, $5)`, [owner, ancestor.client, ancestor.sessionId, mac(id),
     mac("\0cairn:raw-lineage-content:" + JSON.stringify([owner, ancestor.client, id, content]))]);
   await uow.run(owner, write, (tx) => capture.claim(tx, replay, messages, options));
-  const eligible = () => uow.run(owner, read, (tx) => capture.eligible(tx, replay, messages));
-  const recheck = () => uow.run(owner, {}, (tx) => capture.assertEligible(tx, replay, [0]));
+  const eligible = (ports = capture) => uow.run(owner, read, (tx) => ports.eligible(tx, replay, messages));
+  const recheck = (ports = capture) => uow.run(owner, {}, (tx) => ports.assertEligible(tx, replay, [0]));
   const suppress = (actionId, sessionId) => {
-    const sessionKeyHash = createHash("sha256").update(JSON.stringify([ancestor.client, sessionId])).digest("hex");
+    const sessionKeyHash = hashSessionKey(ancestor.client, sessionId);
     const fact = { ...ancestor.scope, actionId, origin: "forget", kind: "session",
       session: { client: ancestor.client, sessionKeyHash } };
     const incarnation = createHash("sha256").update(factIncarnationBody(fact)).digest("hex");
     return uow.run(owner, write, (tx) => createPostgresSuppressionStore().writeFact(tx, fact, incarnation));
   };
+  return { ancestor, eligible, recheck, suppress, withoutHasher: createPostgresCapturePorts({ lineageSecret: secret }) };
+}
+
+test("a proven fork checks hashed ancestor facts across namespaces on read and write", migrationDbTest, async (t) => {
+  const { ancestor, eligible, recheck, suppress, withoutHasher } = await hashedFork(t);
   await suppress("different-hash", "unrelated-session");
   assert.deepEqual(await eligible(), [0]);
   await recheck();
@@ -467,7 +475,37 @@ test("a proven fork checks hashed ancestor facts across namespaces on read and w
     eligible().then((positions) => assert.deepEqual(positions, [])),
     assert.rejects(recheck(), { code: "lineage_fenced" }),
   ]);
+  await Promise.all([
+    eligible(withoutHasher).then((positions) => assert.deepEqual(positions, [])),
+    assert.rejects(recheck(withoutHasher), { code: "lineage_fenced" }),
+  ]);
 });
+
+test("a proven fork checks the host hash before allowing an unrelated session fact", migrationDbTest, async (t) => {
+  const inputs = [];
+  const { ancestor, eligible, recheck, suppress } = await hashedFork(t, (hashSessionKey) => (client, sessionId) => {
+    inputs.push([client, sessionId]);
+    return hashSessionKey(client, sessionId);
+  });
+  await suppress("different-hash", "unrelated-session");
+  assert.deepEqual(await eligible(), [0]);
+  await recheck();
+  assert.deepEqual(inputs, Array.from({ length: 2 }, () => [ancestor.client, ancestor.sessionId]));
+});
+
+for (const [name, hashSessionKey] of [
+  ["throws", () => { throw new Error("synthetic hasher failure"); }],
+  ["returns null", () => null],
+]) {
+  test(`a proven fork is withheld when the host session hasher ${name}`, migrationDbTest, async (t) => {
+    const { ancestor, eligible, recheck, suppress } = await hashedFork(t, () => hashSessionKey);
+    await suppress("matching-hash", ancestor.sessionId);
+    await Promise.all([
+      eligible().then((positions) => assert.deepEqual(positions, [])),
+      assert.rejects(recheck(), { code: "lineage_fenced" }),
+    ]);
+  });
+}
 
 for (const keyed of [true, false]) {
   test(`an ID-only anchor withholds a replay ${keyed ? "with" : "without"} a signing secret`, migrationDbTest, async (t) => {

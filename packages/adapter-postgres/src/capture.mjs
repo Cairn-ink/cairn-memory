@@ -10,9 +10,9 @@ import { requireLiveRun, runOperation } from "./uow.mjs";
 /** @import { CaptureClaim, CaptureKey, FinishResult, SourceFilter } from "../../core/src/ports/capture.d.ts" */
 /** @import { CaptureMessage } from "../../core/src/ports/capture.d.ts" */
 /** @import { Tx } from "../../core/src/ports/unit-of-work.d.ts" */
+/** @import { CaptureOptions } from "./capture.d.mts" */
 /** @import { Connection } from "./driver.mjs" */
 /** @typedef {Required<CaptureClaim> & SourceFilter} CapturePorts */
-/** @typedef {{now?: () => number, lineageSecret?: string}} CaptureOptions */
 /** @typedef {Connection["query"]} Query */
 /** @typedef {{
  *   session_id: string, status: string, core_namespace: string | null, core_payload_digest: string | null,
@@ -156,7 +156,7 @@ async function pauseLockedWrite(tx, prepare) {
 }
 
 /** @param {CaptureOptions} [options] @returns {CapturePorts} */
-export function createPostgresCapturePorts({ now = Date.now, lineageSecret } = {}) {
+export function createPostgresCapturePorts({ now = Date.now, lineageSecret, hashSessionKey } = {}) {
   const captureProofs = createCaptureProofs(lineageSecret);
 
   return {
@@ -267,7 +267,7 @@ export function createPostgresCapturePorts({ now = Date.now, lineageSecret } = {
       requireLiveRun(tx);
       const [copy, batch] = readInput(() => /** @type {const} */ ([copyKey(tx, key), copyMessages(messages)]));
       return runOperation(tx, async (query) => filterSources(query, copy, batch.map(({ occurredAtMs }) => occurredAtMs),
-        await captureProofs(copy, batch), "read"));
+        await captureProofs(copy, batch), "read", hashSessionKey));
     },
 
     async assertEligible(tx, key, positions) {
@@ -286,7 +286,7 @@ export function createPostgresCapturePorts({ now = Date.now, lineageSecret } = {
           if (position >= times.length) throw new CoreError("invalid_input");
           return times[position];
         });
-        await filterSources(query, copy, selectedTimes, proofs, "assert");
+        await filterSources(query, copy, selectedTimes, proofs, "assert", hashSessionKey);
       });
     },
   };
