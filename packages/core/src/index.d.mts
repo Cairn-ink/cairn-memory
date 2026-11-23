@@ -17,3 +17,4 @@ export * from "./retrieval/bm25.mjs";
 export * from "./retrieval/fusion.mjs";
 export * from "./retrieval/hosted-paging.mjs";
 export * from "./retrieval/session-start.mjs";
+export * from "./topics/index.mjs";

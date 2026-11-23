@@ -87,15 +87,6 @@ export interface StagedEvidence {
   release(tx: Tx, claimId: string): Promise<void>;
 }
 
-/** Optional (capability placement): MOC placement journal. */
-export interface PlacementJournal {
-  get(tx: Tx, scope: Scope, memoryId: string): Promise<{ mocIds: string[]; revision: Revision } | null>;
-  map(tx: Tx, scope: Scope): Promise<Array<{ mocId: string; level: 1 | 2; parentId: string | null; title: string }>>;
-  begin(tx: Tx, scope: Scope, memoryIds: readonly string[]): Promise<{ jobId: string }>;
-  apply(tx: Tx, jobId: string, placements: ReadonlyArray<{ memoryId: string; mocIds: string[] }>): Promise<void>;
-  fail(tx: Tx, jobId: string, code: string): Promise<void>;
-}
-
 /** Optional (capability orderedCapture). */
 export interface CausalStream {
   highWater(tx: Tx, scope: Scope, client: string, sessionId: string): Promise<number>;
