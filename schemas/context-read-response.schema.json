@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Cairn-ink/cairn-memory/schemas/context-read-response.schema.json",
+  "title": "Cairn Memory context-read response",
+  "$defs": {
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "client",
+        "sessionId",
+        "eventId",
+        "role",
+        "excerpt",
+        "createdAt"
+      ],
+      "properties": {
+        "client": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "eventId": {
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "user",
+            "assistant"
+          ]
+        },
+        "excerpt": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "content",
+        "kind",
+        "scope",
+        "projectId",
+        "origin",
+        "confidence",
+        "createdAt",
+        "updatedAt",
+        "receipts"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "content": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "fact",
+            "preference",
+            "decision",
+            "instruction",
+            "context"
+          ]
+        },
+        "scope": {
+          "enum": [
+            "personal",
+            "project"
+          ]
+        },
+        "projectId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "origin": {
+          "enum": [
+            "explicit",
+            "agent-inferred"
+          ]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "receipts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/receipt"
+          }
+        }
+      }
+    },
+    "compactIdentifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^(?![\\s\\uFEFF])(?![\\s\\S]*[\\u0000-\\u001F\\u007F-\\u009F\\uD800-\\uDFFF])(?![\\s\\S]*[\\s\\uFEFF]$)[\\s\\S]+$",
+      "description": "Opaque identifier of 1 to 200 Unicode code points with no leading or trailing whitespace, Unicode Cc controls or lone surrogates. Validators must count code points rather than UTF-16 units and use Unicode-aware regular expressions."
+    },
+    "compactItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "text", "date", "scope"],
+      "properties": {
+        "id": { "$ref": "#/$defs/compactIdentifier" },
+        "text": { "type": "string" },
+        "date": {
+          "type": ["null", "string"],
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "format": "date",
+          "description": "Earliest authorized receipt date or null if undated. Calendar validity is enforced by clients and requires format assertion in a schema validator."
+        },
+        "scope": { "enum": ["personal", "project"] },
+        "project_id": { "$ref": "#/$defs/compactIdentifier" }
+      },
+      "if": { "properties": { "scope": { "const": "project" } } },
+      "then": { "required": ["project_id"] },
+      "else": { "not": { "required": ["project_id"] } }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["memories", "mode"],
+  "properties": {
+    "memories": { "type": "array" },
+    "mode": { "enum": ["semantic", "lexical"] },
+    "degraded": { "enum": ["semantic_unavailable"] }
+  },
+  "oneOf": [
+    {
+      "description": "Full representation, including the empty array shared by both representations.",
+      "properties": {
+        "memories": { "type": "array", "items": { "$ref": "#/$defs/memory" } }
+      }
+    },
+    {
+      "description": "Nonempty compact representation. The caller enforces the requested max_items when it is below the schema's upper bound.",
+      "properties": {
+        "memories": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 24,
+          "items": { "$ref": "#/$defs/compactItem" }
+        }
+      }
+    }
+  ]
+}

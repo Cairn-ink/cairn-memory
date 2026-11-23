@@ -67,7 +67,7 @@ export function createLocalRawWorker(value) {
           if (!fromStart) {
             const attempt = await readSessionStartAttempt(identity,context);
             if (attempt === 'fresh') {
-              await markSessionStart(identity,context);
+              await markSessionStart(identity,context,{ recovery:true });
               fromStart = true;
             } else if (attempt !== 'present') fault('state_invalid');
           }
