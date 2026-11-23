@@ -7,7 +7,11 @@ import { Pool } from "pg";
 import * as kit from "@cairn-ink/conformance";
 import { capabilities, factIncarnationBody } from "@cairn-ink/core";
 import { toPostgresError } from "../src/errors.mjs";
-import { applyMigrations, createPostgresSuppressionStore, createPostgresUnitOfWork } from "../src/index.mjs";
+import {
+  applyMigrations, createPostgresMemoryReads, createPostgresMemoryStore, createPostgresPauseStore,
+  createPostgresSupersessionStore, createPostgresSuppressionStore, createPostgresUnitOfWork, query,
+} from "../src/index.mjs";
+import { advanceIndex, timestampUs } from "../src/memory-rows.mjs";
 
 /** @import { AdapterFactory, ConformanceCase, TestHarness } from "@cairn-ink/conformance" */
 
@@ -18,7 +22,7 @@ const nativeCodes = [...busyNativeCodes, "57014", "08000", "57P01", "57P02", "57
 const nativeErrorMap = Object.fromEntries(nativeCodes.map((code) => [code, toPostgresError({ code }).code]));
 
 // Cast bigint counters and the vector projection to text before JSON decoding.
-// One statement reads the three tables from the same committed snapshot.
+// Read the fixture tables from the same committed snapshot.
 const dumpSql = `SELECT jsonb_build_object(
   'facts', ARRAY(
     SELECT to_jsonb(f) || jsonb_build_object('epoch', f.epoch::text, 'embedding', f.embedding::text)
@@ -27,6 +31,14 @@ const dumpSql = `SELECT jsonb_build_object(
   'factDigests', ARRAY(
     SELECT to_jsonb(d) FROM core_fact_digests d ORDER BY d.user_id, d.fact_id, d.alg, d.value
   ),
+  'memories', ARRAY(
+    SELECT to_jsonb(m) || jsonb_build_object('embedding', m.embedding::text) FROM memories m ORDER BY m.user_id, m.id
+  ),
+  'receipts', ARRAY(
+    SELECT to_jsonb(r) FROM core_memory_receipts r ORDER BY r.user_id, r.memory_id, r.client, r.session_id, r.message_id
+  ),
+  'pause', ARRAY(SELECT to_jsonb(p) FROM memory_pause p ORDER BY p.user_id),
+  'supersessions', ARRAY(SELECT to_jsonb(s) FROM memory_supersessions s ORDER BY s.user_id, s.previous_memory_id),
   'ownerState', ARRAY(
     SELECT to_jsonb(s) || jsonb_build_object('fact_epoch', s.fact_epoch::text, 'index_revision', s.index_revision::text)
     FROM core_owner_state s ORDER BY s.user_id
@@ -113,7 +125,7 @@ async function readMigrations() {
 }
 
 function adminQuery(admin, label, sql, params) {
-  return beforeDeadline(label, 4_000, () => admin.pool.query(sql, params));
+  return beforeDeadline(label, 18_000, () => admin.pool.query(sql, params));
 }
 
 async function closeDatabase(database, admin, name) {
@@ -142,8 +154,9 @@ async function openDatabase() {
   url.pathname = `/${name}`;
   const admin = trackedPool(databaseUrl, {
     connectionTimeoutMillis: 1_000,
-    statement_timeout: 2_500,
-    query_timeout: 2_750,
+    // DROP DATABASE can wait for a checkpoint after marking the database invalid.
+    statement_timeout: 15_000,
+    query_timeout: 16_000,
   });
   const database = trackedPool(url.href, {
     connectionTimeoutMillis: 3_000,
@@ -187,11 +200,29 @@ async function openDatabase() {
 function postgresFactory(wrapSuppressions = (store) => store) {
   return {
     name: "Postgres",
-    async open() {
+    async open({ capabilities: requested }) {
       const suppressions = wrapSuppressions(createPostgresSuppressionStore());
       const { pool, source, close } = await openDatabase();
       const uow = createPostgresUnitOfWork(source);
-      /** @type {Pick<TestHarness, "dump" | "seedFact"> & {seedOwners(owner: string, otherOwner: string): Promise<void>}} */
+      const nearDuplicate = requested.nearDuplicate !== false;
+      const flags = capabilities({ embeddingRequiredOnInsert: true, nearDuplicate, vectorSuppression: true, supersession: true });
+      const memoryReads = createPostgresMemoryReads();
+      // Exercise hydration's read filters on lexical matches for the memory cases.
+      // The production lexical ranker and its own cases belong to the lexical lane.
+      const lexical = {
+        async lexical(tx, scope, text, depth) {
+          const { rows } = await query(tx, `SELECT id, core_namespace FROM memories
+            WHERE user_id = $1 AND text &@ $2 ORDER BY updated_at DESC, id COLLATE "C" DESC`, [tx.owner, text]);
+          const refs = rows.map(({ id, core_namespace }) => ({
+            type: "memory", id, namespace: core_namespace === null ? null : JSON.parse(core_namespace),
+          }));
+          const items = await memoryReads.hydrate.hydrate(tx, scope, refs, "recall");
+          return { rows: items.slice(0, depth).map(({ ref, memory }) => ({
+            ref, updatedAtUs: memory.updatedAtUs, score: 1,
+          })), matched: items.length > 0 };
+        },
+      };
+      /** @type {Pick<TestHarness, "dump" | "seedFact" | "setWriteTime"> & {seedOwners(owner: string, otherOwner: string): Promise<void>}} */
       const harness = {
         async seedOwners(owner, otherOwner) {
           await beforeDeadline("Owner fixture setup", 4_000,
@@ -201,19 +232,32 @@ function postgresFactory(wrapSuppressions = (store) => store) {
           const { rows } = await pool.query(dumpSql);
           return rows[0].snapshot;
         },
+        async setWriteTime({ owner, namespace }, id, updatedAtUs) {
+          await uow.run(owner, {}, async (tx) => {
+            const result = await query(tx, `UPDATE memories SET updated_at = ${timestampUs("$4")}
+              WHERE user_id = $1 AND core_namespace IS NOT DISTINCT FROM $2 AND id = $3`,
+            [owner, namespace === null ? null : JSON.stringify(namespace), id, updatedAtUs.toString()]);
+            assert.equal(result.rowCount, 1);
+            await advanceIndex((sql, values) => query(tx, sql, values), owner);
+          });
+        },
         async seedFact(owner, fact) {
           const incarnation = createHash("sha256").update(factIncarnationBody(fact)).digest("hex");
           await uow.run(owner, {}, (tx) => suppressions.writeFact(tx, fact, incarnation));
         },
       };
       return {
-        adapter: { capabilities: capabilities({ embeddingRequiredOnInsert: true }), uow, suppressions },
+        adapter: {
+          capabilities: flags, uow, suppressions, lexical, ...memoryReads,
+          memories: createPostgresMemoryStore({ nearDuplicate }),
+          pause: createPostgresPauseStore(), supersession: createPostgresSupersessionStore(),
+        },
         sessionRefs: /** @type {const} */ ("plain"),
         harness,
         nativeErrorMap,
         busyNativeCodes,
         embeddingDimensions: 1536,
-        timeoutMs: 10_000,
+        timeoutMs: 22_000,
         settleMs: 100,
         close,
       };
@@ -228,27 +272,23 @@ const selected = new Set([
   "K-UOW-3", "K-UOW-3r", "K-ERR-1", "K-CAP-0", "K-CAP-2",
   "K-FACT-1", "K-FACT-2", "K-UOW-8a", "K-FACT-3", "K-FACT-4",
   "K-FACT-5", "K-FACT-6", "K-FACT-7", "K-SESS-1",
+  "K-UOW-1", "K-UOW-2", "K-UOW-4", "K-UOW-7", "K-UOW-8b",
+  "K-MEM-1", "K-MEM-3", "K-CAP-1", "K-MEM-4", "K-MEM-4r", "K-MEM-5",
+  "K-MEM-11", "K-MEM-12", "K-MEM-13",
+  "K-HIDE-1", "K-HIDE-2", "K-HIDE-3", "K-HIDE-4", "K-WRITE-1", "K-WRITE-2",
+  "K-RET-9", "K-SNAP-1", "K-HYD-1", "K-HYD-2", "K-PAUSE-1", "K-IMP-T1", "K-IMP-T2", "K-IMP-T3",
 ]);
 
 // Each entry names a missing port, method, or capability.
 const notApplicable = {
-  memories: [
-    "K-UOW-1", "K-UOW-2", "K-UOW-4", "K-UOW-7", "K-UOW-8b",
-    "K-MEM-1", "K-MEM-3", "K-CAP-1", "K-MEM-4", "K-MEM-4r", "K-MEM-5",
-    "K-MEM-10", "K-MEM-11", "K-MEM-12", "K-MEM-13",
-    "K-HIDE-1", "K-HIDE-2", "K-HIDE-3", "K-HIDE-4", "K-WRITE-1", "K-WRITE-2",
-  ],
+  "hosted profile requires an embedding": ["K-MEM-10"],
+  "pending historical edit case has no assertions": ["K-MEM-5h"],
   lexical: ["K-RET-1", "K-RET-2"],
   vector: ["K-RET-3"],
-  recent: ["K-RET-9"],
-  snapshot: ["K-SNAP-1"],
-  hydrate: ["K-HYD-1"],
-  supersession: ["K-MEM-5h", "K-HYD-2"],
   fence: ["K-FEN-1", "K-FEN-I1", "K-FEN-I2", "K-FEN-I3"],
   "retrieval window": ["K-RET-W1", "K-RET-W2", "K-SNAP-W1", "K-RAW-W1"],
   supersessionEdges: ["K-REL-1", "K-REL-2", "K-REL-3", "K-REL-6", "K-REL-7", "K-REL-9", "K-REL-10", "K-REL-11", "K-REL-12"],
   conflictEdges: ["K-REL-4", "K-REL-5", "K-REL-8"],
-  pause: ["K-PAUSE-1"],
   keys: ["K-KEY-1", "K-KD-1", "K-KD-2", "K-KD-3", "K-KD-4", "K-KD-5", "K-KD-6"],
   "suppressions.snapshot": ["K-SNAP-F1", "K-SNAP-F3", "K-SNAP-F4", "K-SNAP-F5", "K-SNAP-F5u", "K-SNAP-F6", "K-SNAP-F7"],
   "suppressions.factsFor": ["K-FACTSFOR-1"],
@@ -258,7 +298,6 @@ const notApplicable = {
     "K-ADM-1", "K-ADM-2", "K-ADM-3", "K-ADM-4", "K-ADM-5", "K-ADM-6", "K-ADM-7",
     "K-ADM-8", "K-ADM-9", "K-ADM-10", "K-ADM-11", "K-ADM-12", "K-ADM-13", "K-ADM-14",
   ],
-  "memories.insert": ["K-IMP-T1", "K-IMP-T2", "K-IMP-T3"],
   raw: ["K-RAW-1", "K-RAW-2", "K-RAW-2s", "K-RAW-3", "K-RAW-3w", "K-RAW-3c", "K-RAW-3s",
     "K-RAW-4", "K-RAW-5", "K-RAW-6", "K-RAW-7", "K-RAW-8", "K-RAW-8w", "K-RAW-8s"],
   "raw.importArchive": ["K-IMP-RAW-1", "K-IMP-RAW-2", "K-IMP-RAW-3", "K-IMP-RAW-3s", "K-IMP-RAW-4", "K-IMP-RAW-4e", "K-IMP-RAW-4k",
@@ -327,7 +366,12 @@ async function runPreparedCase(factory, testCase, t, execute = runCase) {
 const factory = postgresFactory();
 for (const testCase of allCases.filter(({ id }) => selected.has(id))) {
   const name = `${factory.name} conformance ${testCase.id} ${testCase.title}`;
-  test(name, options, (t) => runPreparedCase(factory, testCase, t));
+  // K-HYD-2 contains assertions even though the kit marks the supersession suite pending.
+  const prepared = testCase.id === "K-HYD-2" ? { ...testCase, pending: undefined } : testCase;
+  // The primary cases cover the memory ports. Their semantic follow-ups belong to the vector lane.
+  const memoryOnly = ["K-HIDE-2", "K-HIDE-3", "K-WRITE-1"].includes(testCase.id);
+  test(name, options, (t) => runPreparedCase(factory,
+    memoryOnly ? { ...prepared, followUp: undefined } : prepared, t));
 }
 
 test("Postgres conformance K-FACT-6 detects a bypassed foreign-owner guard", options, async (t) => {

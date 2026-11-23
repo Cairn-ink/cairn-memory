@@ -108,6 +108,24 @@ created by the hosted service. The hosted service applies a byte-identical
 copy of `0011_core_topic_cards.sql` as a Drizzle migration. Make subsequent
 changes to these tables through adapter-postgres migrations.
 
+## Memory ports
+
+Migration 0012 adds memory namespaces and digest evidence. Existing rows keep a
+null namespace. The hosted hash constraint still applies to the physical hash.
+A row that shares its hash with another namespace or a suppressed row keeps its
+logical hash in a separate column. Exact creation and receipt times outside
+PostgreSQL's timestamp range or precision also use separate columns.
+
+`createPostgresMemoryStore` and `createPostgresMemoryReads` use the same
+visibility checks for duplicates, export, recent, hydration, and the memory
+fence. A pending legacy suppression copy closes those reads and write policy
+for owners with legacy suppression rows. The direct MemoryStore lookup is
+available inside transactions for revision checks and forget operations.
+`createPostgresPauseStore` requires a run opened with `pauseLock`.
+`createPostgresSupersessionStore` records edges and marks historical rows.
+Historical rows remain available for direct reads and export after the other
+visibility checks pass.
+
 ## Database tests
 
 Database tests use `CORE_PG_TEST_URL` to reach a PostgreSQL instance with

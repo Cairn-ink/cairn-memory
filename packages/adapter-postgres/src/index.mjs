@@ -4,3 +4,7 @@ export { readSourceKind, requireEmbedding, storedSourceKind } from "./memory-met
 export { applyMigrations } from "./migrate.mjs";
 export { canonicalDigests, factSlot } from "./facts.mjs";
 export { createPostgresSuppressionStore } from "./suppression-store.mjs";
+export { createPostgresMemoryStore } from "./memory-store.mjs";
+export { createPostgresMemoryReads } from "./memory-read.mjs";
+export { createPostgresPauseStore } from "./pause-store.mjs";
+export { createPostgresSupersessionStore } from "./supersession-store.mjs";

@@ -102,7 +102,7 @@ test("Postgres bounds the metadata lock wait, then upgrades an existing row with
     code: "23514", constraint: "memories_source_kind_check",
   });
   await insertMemory(pool, "old");
-  const oldProjection = "SELECT to_jsonb(memories) - ARRAY['revision', 'confidence', 'origin', 'currentness'] AS value FROM memories";
+  const oldProjection = "SELECT to_jsonb(memories) - ARRAY['revision', 'confidence', 'origin', 'currentness', 'core_namespace', 'core_digests', 'core_text_hash', 'core_created_at_ms'] AS value FROM memories";
   const fileNode = "SELECT pg_relation_filenode('memories') AS node";
   const { rows: [oldRow] } = await pool.query(oldProjection);
   const { rows: [{ node: before }] } = await pool.query(fileNode);
