@@ -48,7 +48,7 @@ change request to the core lead, answered on the same day.
 7. **Erasure.** Raw erasure covers exactly the proven closure or text-withheld rows, the same set forget erases. `eraseSessions` accepts only a `ProvenClosure` from `provenClosure` (type-level guard). Id-only and unknown fences hide but never delete.
 8. **Forget's row step** makes the row permanently invisible and erases its content; adapters may delete or tombstone.
 9. **Read sets.** Retrieval reads take one owner and a list of namespaces fused into one ranking; every `ItemRef` carries its namespace.
-11. **Deterministic candidate order.** Core orders by distance or relevance, then `updatedAtUs` desc, then `id` desc by UTF-8 bytes. SQL candidate queries use the same order before `LIMIT` (`ORDER BY distance|relevance, updated_at DESC, id COLLATE "C" DESC`); boundary ties that differ from the shipped hosted order are expected differences on the shadow-comparison list.
+11. **Deterministic candidate order.** Vector candidates order by distance, then `updatedAtUs` desc, then `id` desc by UTF-8 bytes (SQL: `ORDER BY distance, updated_at DESC, id COLLATE "C" DESC` before `LIMIT`). Lexical candidates order by non-increasing store score with a store-defined tie order (the hosted SQL uses `relevance, updated_at DESC, id COLLATE "C" DESC`; the local store keeps canonical ties). Core re-sorts after fusion with its preset tie rule. Boundary ties that differ from the shipped hosted order are expected differences on the shadow-comparison list.
 10. **Embeddings are optional at write.** `InsertRow.embedding` may be null; near matching then skips that row and counts it.
 
 ## Team map
