@@ -51,6 +51,7 @@ function conflatesSessionKinds(opened) {
   return withFactWrites(opened, (tx, fact, version) => {
     if (fact.kind !== "session" || !("sessionId" in fact.session)) return writeFact(tx, fact, version);
     const { client, sessionId: sessionKeyHash } = fact.session;
+    if (!/^[0-9a-f]{64}$/u.test(sessionKeyHash)) return writeFact(tx, fact, version);
     return writeFact(tx, { ...fact, session: { client, sessionKeyHash } }, version);
   });
 }
@@ -70,23 +71,36 @@ function freshRetryId(opened) {
   });
 }
 
-function leaksWritesOnConflict(opened) {
+function returnsCurrentEpochOnRetry(opened) {
+  const { suppressions } = opened.adapter;
+  return withFactWrites(opened, async (tx, fact, version) => {
+    const result = await suppressions.writeFact(tx, fact, version);
+    return result.created ? result : { ...result, epoch: await suppressions.epoch(tx, tx.owner) };
+  });
+}
+
+function leaksWritesOnConflict(opened, caughtOnly = false) {
   const { uow, suppressions } = opened.adapter;
   const writesByTx = new WeakMap();
   return withPorts(opened, {
     uow: {
       async run(owner, options, fn) {
         const accepted = [];
+        let callbackReturned = false;
+        let result;
         try {
-          return await uow.run(owner, options, (tx) => {
+          return await uow.run(owner, options, async (tx) => {
             writesByTx.set(tx, accepted);
-            return fn(tx);
+            result = await fn(tx);
+            callbackReturned = true;
+            return result;
           });
         } catch (error) {
-          if (error.code === "fact_conflict" && accepted.length) {
+          if (error.code === "fact_conflict" && accepted.length && (!caughtOnly || callbackReturned)) {
             await uow.run(owner, options, async (tx) => {
               for (const args of accepted) await suppressions.writeFact(tx, ...args);
             });
+            if (caughtOnly) return result;
           }
           throw error;
         }
@@ -172,6 +186,53 @@ function advancesGenerationOnResume(opened) {
   });
 }
 
+function leaksResumeOnRollback(opened) {
+  const { uow, pause } = opened.adapter;
+  const pending = new WeakMap();
+  return withPorts(opened, {
+    uow: {
+      async run(owner, options, fn) {
+        let tx;
+        try {
+          return await uow.run(owner, options, (issued) => {
+            tx = issued;
+            return fn(issued);
+          });
+        } catch (error) {
+          if (pending.get(tx) === false) {
+            await uow.run(owner, options, (retry) => pause.set(retry, owner, false));
+          }
+          throw error;
+        }
+      },
+    },
+    pause: {
+      ...pause,
+      async set(tx, owner, paused) {
+        const result = await pause.set(tx, owner, paused);
+        pending.set(tx, paused);
+        return result;
+      },
+    },
+  });
+}
+
+function ignoresRepeatedPause(opened) {
+  const { pause } = opened.adapter;
+  return withPorts(opened, {
+    pause: {
+      ...pause,
+      async set(tx, owner, paused) {
+        if (paused && !tx.readOnly) {
+          const previous = await pause.get(tx, owner);
+          if (previous.paused) return previous;
+        }
+        return pause.set(tx, owner, paused);
+      },
+    },
+  });
+}
+
 function allowsPauseWithoutLock(opened) {
   const { uow } = opened.adapter;
   return withPorts(opened, {
@@ -182,6 +243,43 @@ function allowsPauseWithoutLock(opened) {
 function ignoresKeyOwner(opened) {
   const { keys } = opened.adapter;
   return withPorts(opened, { keys: { userKey: () => keys.userKey("test-fixed-owner") } });
+}
+
+function retainsSigningKeyOnRotation(opened) {
+  const { keys } = opened.adapter;
+  const signingKeys = new Map();
+  return withPorts(opened, {
+    keys: {
+      async userKey(owner) {
+        const key = await keys.userKey(owner);
+        if (key === null) return null;
+        if (!signingKeys.has(owner)) signingKeys.set(owner, key.signingKey);
+        return { id: key.id, signingKey: signingKeys.get(owner) };
+      },
+    },
+  });
+}
+
+function persistsRefusedFact(opened, matches) {
+  const { writeFact } = opened.adapter.suppressions;
+  const leaked = createMemoryAdapter();
+  const mutant = withFactWrites(opened, async (tx, fact, version) => {
+    try {
+      return await writeFact(tx, fact, version);
+    } catch (error) {
+      if (matches(tx, error)) {
+        await leaked.uow.run(fact.owner, {}, (separateTx) => leaked.suppressions.writeFact(separateTx, fact, version));
+      }
+      throw error;
+    }
+  });
+  return {
+    ...mutant,
+    harness: {
+      ...opened.harness,
+      async dump() { return [...await opened.harness.dump(), ...await leaked.harness.dump()]; },
+    },
+  };
 }
 
 function compareDigestPairs(a, b) {
@@ -213,7 +311,7 @@ function canonicalTarget(fact) {
   }
 }
 
-function hashesSlots(opened) {
+function hashesSlots(opened, encode = (tuple) => JSON.stringify(tuple)) {
   const { writeFact } = opened.adapter.suppressions;
   return withFactWrites(opened, async (tx, fact, version) => {
     if (!tx.readOnly && fact.owner === tx.owner) {
@@ -221,12 +319,16 @@ function hashesSlots(opened) {
       if (opened.sessionRefs === "hashed" && fact.kind === "session" && "sessionId" in fact.session) {
         throw new CoreError("invalid_input");
       }
-      const key = await sha256(JSON.stringify([fact.kind, fact.namespace ?? null, ...canonicalTarget(fact)]));
+      const key = await sha256(encode([fact.kind, fact.namespace ?? null, ...canonicalTarget(fact)]));
       // Back the alternate slot encoding with an opaque identity key in the transaction store.
       return writeFact(tx, identity(fact.owner, key), version);
     }
     return writeFact(tx, fact, version);
   });
+}
+
+function joinsSlotWithNul(kind) {
+  return (opened) => hashesSlots(opened, (tuple) => tuple[0] === kind ? tuple.join("\u0000") : JSON.stringify(tuple));
 }
 
 const a = "a".repeat(64);
@@ -336,6 +438,32 @@ for (const [label, id, mutant, failure] of mutants) {
   });
 }
 
+const roundOneMutants = [
+  ["retry returns the current owner epoch", "K-FACT-1", factory(returnsCurrentEpochOnRetry), /original fact ID, epoch and creation time/],
+  ["a caught conflict commits earlier writes", "K-FACT-2", factory((opened) => leaksWritesOnConflict(opened, true)), /Expected operation to reject/],
+  ["NUL-joined identity slot conflates targets", "K-FACT-3", factory(joinsSlotWithNul("identity")), { code: "fact_conflict" }],
+  ["NUL-joined session slot conflates targets", "K-FACT-3", factory(joinsSlotWithNul("session")), { code: "fact_conflict" }],
+  ["NUL-joined raw span slot conflates targets", "K-FACT-3r", factory(joinsSlotWithNul("rawSpan")), { code: "fact_conflict" }],
+  ["foreign-owner refusal persists a fact", "K-FACT-6", factory((opened) =>
+    persistsRefusedFact(opened, (tx, error) => !tx.readOnly && error.code === "internal_error")), /foreign-owner write must leave/],
+  ["read-only refusal persists a fact", "K-FACT-6", factory((opened) =>
+    persistsRefusedFact(opened, (tx, error) => tx.readOnly && error.code === "internal_error")), /read-only write must leave/],
+  ["plaintext refusal persists a fact", "K-SESS-1", factory((opened) =>
+    persistsRefusedFact(opened, (_tx, error) => error.code === "invalid_input"), "hashed"), /plaintext session must leave the committed dump unchanged/],
+  ["a failed resume leaks the paused bit", "K-PAUSE-1", factory(leaksResumeOnRollback), /Rolling back a resume must preserve/],
+  ["repeated pause is a no-op", "K-PAUSE-1", factory(ignoresRepeatedPause), /Repeating pause must advance/],
+  ["rotation changes the ID but retains the signing key", "K-KEY-1", factory(retainsSigningKeyOnRotation), /Rotating the fingerprint secret must change the signature/],
+];
+
+// These mutants passed the original privacy cases before the checks below were added.
+for (const [label, id, mutant, failure] of roundOneMutants) {
+  test(`${id} detects when ${label}`, async () => {
+    const testCase = PRIVACY_CASES.find((candidate) => candidate.id === id);
+    assert.ok(testCase);
+    await assert.rejects(runCase(mutant, testCase), failure);
+  });
+}
+
 for (const profile of ["plain", "hashed"]) {
   test(`privacy cases accept SHA-256 slots under the ${profile} profile`, async () => {
     const control = factory(hashesSlots, profile);
@@ -352,4 +480,31 @@ test("key conformance reports a reason when the optional rotation hook is absent
   });
   const testCase = PRIVACY_CASES.find(({ id }) => id === "K-KEY-1");
   assert.equal(await runCase(withoutRotation, testCase), "fingerprint key rotation is unavailable in the harness");
+});
+
+test("rotation conformance accepts a provider already on the destination secret", async () => {
+  const alreadyRotated = factory(async (opened) => {
+    if (opened.adapter.capabilities.fingerprintKey) {
+      await opened.harness.setFingerprintSecret("test-secret-rotation");
+    }
+    return opened;
+  });
+  const testCase = PRIVACY_CASES.find(({ id }) => id === "K-KEY-1");
+  assert.equal(await runCase(alreadyRotated, testCase), null);
+});
+
+test("raw span coverage reports a skip when the factory declines the capability", async () => {
+  const withoutRawSpans = factory((opened) => {
+    const { writeFact } = opened.adapter.suppressions;
+    return withFactWrites(opened, (tx, fact, version) => {
+      assert.notEqual(fact.kind, "rawSpan", "A factory without raw spans must receive no raw span writes");
+      return writeFact(tx, fact, version);
+    });
+  });
+  const limited = { ...withoutRawSpans, open: ({ capabilities }) =>
+    withoutRawSpans.open({ capabilities: { ...capabilities, rawSpans: false } }) };
+  const baseCase = PRIVACY_CASES.find(({ id }) => id === "K-FACT-3");
+  const spanCase = PRIVACY_CASES.find(({ id }) => id === "K-FACT-3r");
+  assert.equal(await runCase(limited, baseCase), null);
+  assert.equal(await runCase(limited, spanCase), "needs rawSpans");
 });

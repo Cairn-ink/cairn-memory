@@ -43,12 +43,9 @@ function factSlot(fact) {
 
 /**
  * @param {import("./unit-of-work.mjs").State} state @param {SuppressionFact} fact
- * @param {string} incarnation @param {Pick<Options, "newId" | "now" | "sessionRefs">} [options]
+ * @param {string} incarnation @param {Pick<Options, "newId" | "now">} [options]
  */
-export function storeFact(state, fact, incarnation, { sessionRefs, newId = () => crypto.randomUUID(), now = Date.now } = {}) {
-  if (sessionRefs === "hashed" && fact.kind === "session" && "sessionId" in fact.session) {
-    throw new CoreError("invalid_input");
-  }
+export function storeFact(state, fact, incarnation, { newId = () => crypto.randomUUID(), now = Date.now } = {}) {
   const slot = factSlot(fact);
   const previous = state.facts.get(slot);
   if (previous) {
@@ -72,8 +69,15 @@ export function createFactStore(port, runSeed, options) {
   /** @type {import("@cairn-ink/core/ports").SuppressionStore} */
   const suppressions = {
     async writeFact(tx, fact, incarnation) {
-      return port(tx, { owner: fact?.owner }, true, (state) =>
-        storeFact(state, validateSuppressionFact(fact), incarnation, options));
+      const scope = { owner: fact?.owner };
+      return port(tx, scope, false, () => {
+        if (tx.readOnly) throw new CoreError("internal_error");
+        const validated = validateSuppressionFact(fact);
+        if (options.sessionRefs === "hashed" && validated.kind === "session" && "sessionId" in validated.session) {
+          throw new CoreError("invalid_input");
+        }
+        return port(tx, scope, true, (state) => storeFact(state, validated, incarnation, options));
+      });
     },
     // The privacy module's fact-match functions will back these reads in part b.
     async snapshot() { throw new CoreError("capability_unavailable"); },
@@ -108,7 +112,7 @@ export function createPauseStore(port) {
       const scope = { owner };
       return port(tx, scope, false, (state) => {
         if (tx.readOnly) throw new CoreError("internal_error");
-        if (state.pause.paused === paused) return { ...state.pause };
+        if (!paused && !state.pause.paused) return { ...state.pause };
         return port(tx, scope, true, () => {
           const generation = pauseGenerationAfter(state.pause.generation, paused ? "pause" : "resume");
           state.pause = { paused, generation };

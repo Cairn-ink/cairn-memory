@@ -45,10 +45,14 @@ Run each entry in `PRIVACY_CASES` with `runCase(factory, testCase)`. The factory
 as `"plain"` or `"hashed"`. The plain profile accepts both forms. The hashed profile
 rejects plaintext session IDs.
 
+The distinct-target raw span case, `K-FACT-3r`, requests `rawSpans` and reports
+`needs rawSpans` when the adapter does not provide it.
+
 The optional test hook `harness.setFingerprintSecret(secret)` rotates the fingerprint
 secret. The runner reports a skip reason for the rotation check when the hook is
 unavailable. Signing key stability and owner isolation are checked with signatures
-over a fixed test message.
+over a fixed test message. With the hook, the rotation check sets a known initial
+secret and checks that both the key ID and signature change after rotation.
 
 The in-memory reference adapter uses the public fixture `TEST_FINGERPRINT_SECRET`
 (`"test-secret-a"`) and `TEST_FINGERPRINT_LABELS` when `fingerprintKey` is enabled with

@@ -14,7 +14,7 @@ export function factPolicy(facts, scope, vectorSuppression) {
   /** @type {SuppressionFact[]} */
   const scoped = [];
   for (const { fact } of facts.values()) {
-    if (fact.namespace === undefined || fact.namespace === scope.namespace) scoped.push(fact);
+    if ((fact.namespace ?? null) === scope.namespace) scoped.push(fact);
   }
   const texts = scoped.filter((fact) => fact.kind === "text");
 

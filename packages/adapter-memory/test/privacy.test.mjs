@@ -81,6 +81,28 @@ test("seeding shares the fact table, canonical body hash and index revision", as
   assert.equal(await epoch(adapter), 1n);
 });
 
+test("an identity fact without a namespace hides only the null-namespace row", async () => {
+  const adapter = createMemoryAdapter({ newId: () => "test-memory" });
+  const { uow, memories, fence, harness } = adapter;
+  const namespaces = [null, "test-project"];
+  const readSet = { owner, namespaces };
+  const row = {
+    kind: "fact", origin: "explicit", text: "test memory", textHash: `sha256:${a}`,
+    confidence: 1, source: { kind: "mcp", client: null, sessionId: null }, embedding: null,
+  };
+  const refs = await uow.run(owner, {}, async (tx) => {
+    const inserted = [];
+    for (const namespace of namespaces) {
+      const { id } = await memories.insert(tx, { owner, namespace }, row, [], clockStart);
+      inserted.push({ id, namespace, type: "memory" });
+    }
+    return inserted;
+  });
+  await harness.seedFact(owner, identity(refs[0].id));
+  const visible = await uow.run(owner, { readOnly: true }, (tx) => fence.assertVisible(tx, readSet, refs));
+  assert.deepEqual(visible, [refs[1]]);
+});
+
 test("catching a fact conflict inside a run still aborts it", async () => {
   const adapter = createMemoryAdapter();
   const { uow, suppressions, harness } = adapter;
@@ -109,6 +131,24 @@ test("validates facts and session profile restrictions for writes and seeding", 
     await assert.rejects(harness.seedFact(owner, fact), coreError("invalid_input"));
   }
   assert.equal(await epoch(adapter), null);
+});
+
+test("caught fact refusals preserve the retrieval token and epoch", async () => {
+  const adapter = createMemoryAdapter({ sessionRefs: "hashed" });
+  const { uow, suppressions, snapshot } = adapter;
+  const refused = [
+    { ...identity("test-memory"), throughRevision: -1 },
+    { ...identity("test-memory"), kind: "session", session: { client: "test-client", sessionId: a } },
+  ];
+  const before = await token(adapter);
+  for (const fact of refused) {
+    await uow.run(owner, {}, async (tx) => {
+      await assert.rejects(suppressions.writeFact(tx, fact, a), coreError("invalid_input"));
+    });
+    await uow.run(owner, { readOnly: true }, (tx) => snapshot.assertUnchanged(tx, scope, before));
+    assert.equal(await token(adapter), before);
+    assert.equal(await epoch(adapter), null);
+  }
 });
 
 test("reports matching reads as unavailable", async () => {

@@ -1,5 +1,5 @@
 import { CoreError, factBody } from "@cairn-ink/core";
-import { check, equal, readDump, rejects } from "./support.mjs";
+import { caught, check, equal, readDump, rejects } from "./support.mjs";
 
 /** @typedef {import("./index.d.mts").CaseContext} Context */
 /** @typedef {import("@cairn-ink/core").SuppressionFact} Fact */
@@ -71,6 +71,17 @@ async function signProbe(key) {
   return new Uint8Array(await crypto.subtle.sign("HMAC", key, probe));
 }
 
+/** @param {Context} ctx @param {Fact[]} targets */
+async function assertDistinctTargets(ctx, targets) {
+  let expectedEpoch = 0n;
+  for (const target of targets) {
+    const result = await write(ctx, target);
+    check(result.created === true, `Distinct ${target.kind} targets must create new facts`);
+    equal(result.epoch, ++expectedEpoch, "Each new target must advance the epoch once");
+  }
+  equal(await epoch(ctx), expectedEpoch, "The owner epoch must count all distinct targets");
+}
+
 /** @type {readonly import("./index.d.mts").ConformanceCase[]} */
 export const privacyCases = [
   {
@@ -84,10 +95,13 @@ export const privacyCases = [
         Number.isSafeInteger(first.createdAtMs), "A created fact must have an ID and creation time");
       equal([first.epoch, await epoch(ctx)], [1n, 1n], "The first write must advance the epoch once");
 
+      const second = await write(ctx, identity(ctx.owner, "test-other-memory"));
+      equal([second.created, second.epoch, await epoch(ctx)], [true, 2n, 2n],
+        "A different fact must advance the owner epoch before the retry");
       const retry = await write(ctx, fact, version);
       check(retry.created === false, "A retry must report that no fact was created");
       equal(projectWrite(retry), projectWrite(first), "A retry must return the original fact ID, epoch and creation time");
-      equal(await epoch(ctx), first.epoch, "A retry must leave the owner epoch unchanged");
+      equal(await epoch(ctx), second.epoch, "A retry must leave the owner epoch unchanged");
     },
   },
   {
@@ -108,6 +122,18 @@ export const privacyCases = [
       }), "fact_conflict");
       equal(await readDump(harness), before, "A fact conflict must roll back earlier writes in the same run");
       equal(await epoch(ctx), beforeEpoch, "A fact conflict must leave the owner epoch unchanged");
+
+      let callbackReturned = false;
+      const error = await caught(() => uow.run(owner, {}, async (tx) => {
+        const added = await suppressions.writeFact(tx, other, otherVersion);
+        check(added.created === true, "The run must create a new fact before the conflict");
+        await rejects(() => suppressions.writeFact(tx, conflicting, conflictingVersion), "fact_conflict");
+        callbackReturned = true;
+      }));
+      check(callbackReturned, "The callback must catch the fact conflict and return normally");
+      check(error instanceof CoreError, "A caught fact conflict must reject the run with a CoreError");
+      equal(await readDump(harness), before, "A caught fact conflict must roll back earlier writes in the same run");
+      equal(await epoch(ctx), beforeEpoch, "A caught fact conflict must leave the owner epoch unchanged");
     },
   },
   {
@@ -118,11 +144,6 @@ export const privacyCases = [
       const firstIdentity = identity(owner, "test-revision");
       /** @type {Extract<Fact, {kind: "window"}>} */
       const window = { ...factBase(owner), kind: "window", client: null, window: { startMs: 10, endMs: 20 } };
-      /** @type {Extract<Fact, {kind: "rawSpan"}>} */
-      const span = {
-        ...factBase(owner), kind: "rawSpan", sessionKeyHash: sessionValue, messageKey: "test-message",
-        startUtf16: 1, endUtf16: 3, contentDigest: "d".repeat(64),
-      };
       /** @type {Fact[]} */
       const targets = [
         window,
@@ -133,6 +154,8 @@ export const privacyCases = [
         { ...window, anchor: "pm30min" },
         { ...identity(owner, 'c"\\\u0000'), namespace: "a,b" },
         { ...identity(owner, 'b,c"\\\u0000'), namespace: "a" },
+        { ...identity(owner, "c"), namespace: "a\u0000b" },
+        { ...identity(owner, "b\u0000c"), namespace: "a" },
         firstText,
         textFact(owner, [digest("a"), digest("c")]),
         { ...firstText, sourceMemory: { id: "test-source-a", createdAtMs: 10 } },
@@ -142,23 +165,42 @@ export const privacyCases = [
         firstIdentity,
         { ...firstIdentity, throughRevision: 0 },
         { ...firstIdentity, namespace: "test-namespace" },
+      ];
+      if (sessionProfile(ctx) === "plain") {
+        const plain = { ...factBase(owner), kind: /** @type {const} */ ("session"), session: sessionId };
+        targets.push(
+          plain,
+          { ...plain, session: { client: "a\u0000b", sessionId: "c" } },
+          { ...plain, session: { client: "a", sessionId: "b\u0000c" } },
+          // Also exercise a join that puts the ref-kind discriminator between the two fields.
+          { ...plain, session: { client: "a\u0000id\u0000b", sessionId: "c" } },
+          { ...plain, session: { client: "a", sessionId: "b\u0000id\u0000c" } },
+        );
+      }
+      targets.push({ ...factBase(owner), kind: "session", session: sessionHash });
+      targets.push({ ...factBase(owner), kind: "session", session: { ...sessionHash, client: "test-other-client" } });
+
+      await assertDistinctTargets(ctx, targets);
+    },
+  },
+  {
+    id: "K-FACT-3r", title: "creates a new fact for each distinct raw span target", needs: ["rawSpans"],
+    async run(ctx) {
+      /** @type {Extract<Fact, {kind: "rawSpan"}>} */
+      const span = {
+        ...factBase(ctx.owner), kind: "rawSpan", sessionKeyHash: sessionValue, messageKey: "test-message",
+        startUtf16: 1, endUtf16: 3, contentDigest: "d".repeat(64),
+      };
+      // The fixed-width session hash sits between the namespace and message key in the slot.
+      await assertDistinctTargets(ctx, [
         span,
         { ...span, sessionKeyHash: "b".repeat(64) },
         { ...span, messageKey: "test-other-message" },
         { ...span, startUtf16: 0 },
         { ...span, endUtf16: 4 },
-      ];
-      if (sessionProfile(ctx) === "plain") targets.push({ ...factBase(owner), kind: "session", session: sessionId });
-      targets.push({ ...factBase(owner), kind: "session", session: sessionHash });
-      targets.push({ ...factBase(owner), kind: "session", session: { ...sessionHash, client: "test-other-client" } });
-
-      let expectedEpoch = 0n;
-      for (const target of targets) {
-        const result = await write(ctx, target);
-        check(result.created === true, `Distinct ${target.kind} targets must create new facts`);
-        equal(result.epoch, ++expectedEpoch, "Each new target must advance the epoch once");
-      }
-      equal(await epoch(ctx), expectedEpoch, "The owner epoch must count all distinct targets");
+        { ...span, namespace: `a\u0000${sessionValue}\u0000b`, messageKey: "c" },
+        { ...span, namespace: "a", messageKey: `b\u0000${sessionValue}\u0000c` },
+      ]);
     },
   },
   {
@@ -210,12 +252,16 @@ export const privacyCases = [
   {
     id: "K-FACT-6", title: "rejects foreign-owner and read-only fact writes", needs: [],
     async run(ctx) {
-      const { adapter: { uow, suppressions }, owner, otherOwner } = ctx;
+      const { adapter: { uow, suppressions }, owner, otherOwner, harness } = ctx;
       const own = identity(owner, "test-owned");
       const other = identity(otherOwner, "test-foreign");
       const [ownVersion, otherVersion] = await Promise.all([incarnation(ctx, own), incarnation(ctx, other)]);
+      const before = await readDump(harness);
       await rejects(() => uow.run(owner, {}, (tx) => suppressions.writeFact(tx, other, otherVersion)), "internal_error");
+      const afterForeign = await readDump(harness);
+      equal(afterForeign, before, "A refused foreign-owner write must leave the committed dump unchanged");
       await rejects(() => uow.run(owner, { readOnly: true }, (tx) => suppressions.writeFact(tx, own, ownVersion)), "internal_error");
+      equal(await readDump(harness), afterForeign, "A refused read-only write must leave the committed dump unchanged");
       equal([await epoch(ctx), await epoch(ctx, otherOwner)], [null, null], "Rejected writes must leave both owners unchanged");
     },
   },
@@ -229,10 +275,11 @@ export const privacyCases = [
 
       equal(projectPause(await get(owner)), [false, 0], "An owner must start unpaused at generation zero");
       equal(projectPause(await set(true)), [true, 1], "The first pause must advance to generation one");
-      equal(projectPause(await set(true)), [true, 1], "Repeating pause must leave the generation unchanged");
-      equal(projectPause(await set(false)), [false, 1], "Resume must keep the generation");
-      equal(projectPause(await set(true)), [true, 2], "Pausing again must advance to generation two");
-      equal(projectPause(await get(owner)), [true, 2], "The read-only locked run must see the committed pause state");
+      equal(projectPause(await set(true)), [true, 2], "Repeating pause must advance to generation two");
+      equal(projectPause(await set(false)), [false, 2], "Resume must keep the generation");
+      equal(projectPause(await set(false)), [false, 2], "Repeating resume must keep the generation");
+      equal(projectPause(await set(true)), [true, 3], "Pausing again must advance to generation three");
+      equal(projectPause(await get(owner)), [true, 3], "The read-only locked run must see the committed pause state");
       equal(projectPause(await get(otherOwner)), [false, 0], "The other owner must keep its initial pause state");
 
       await rejects(() => uow.run(owner, { readOnly: true }, (tx) => pause.get(tx, owner)), "internal_error");
@@ -244,7 +291,13 @@ export const privacyCases = [
         await pause.set(tx, owner, true);
         throw new CoreError("internal_error");
       }), "internal_error");
-      equal(projectPause(await get(owner)), [true, 2], "Rolling back a pause transition must restore the committed generation");
+      equal(projectPause(await get(owner)), [true, 3], "Rolling back a pause transition must restore the committed generation");
+
+      await rejects(() => uow.run(owner, { pauseLock: true }, async (tx) => {
+        await pause.set(tx, owner, false);
+        throw new CoreError("internal_error");
+      }), "internal_error");
+      equal(projectPause(await get(owner)), [true, 3], "Rolling back a resume must preserve the paused state and generation");
     },
   },
   {
@@ -256,6 +309,7 @@ export const privacyCases = [
     followUp: {
       needs: ["fingerprintKey"],
       async run({ adapter: { keys }, harness, owner, otherOwner }) {
+        await harness.setFingerprintSecret?.("test-secret-a");
         const [first, retry, other] = await Promise.all([keys.userKey(owner), keys.userKey(owner), keys.userKey(otherOwner)]);
         check(first && retry && other, "The enabled fingerprint key provider must return keys");
         check([first.id, retry.id, other.id].every((id) => typeof id === "string" && id.length > 0),
@@ -272,6 +326,9 @@ export const privacyCases = [
         const rotated = await keys.userKey(owner);
         check(rotated && typeof rotated.id === "string" && rotated.id.length > 0 && rotated.id !== first.id,
           "Rotating the fingerprint secret must change the key ID");
+        const rotatedSignature = await signProbe(rotated.signingKey);
+        check(signature.length !== rotatedSignature.length || signature.some((byte, index) => byte !== rotatedSignature[index]),
+          "Rotating the fingerprint secret must change the signature");
       },
     },
   },
@@ -282,7 +339,9 @@ export const privacyCases = [
       const plain = { ...factBase(ctx.owner), kind: "session", session: sessionId };
       const hashed = { ...plain, session: sessionHash };
       if (sessionProfile(ctx) === "hashed") {
+        const before = await readDump(ctx.harness);
         await rejects(() => write(ctx, plain), "invalid_input");
+        equal(await readDump(ctx.harness), before, "Rejecting a plaintext session must leave the committed dump unchanged");
         equal(await epoch(ctx), null, "Rejecting a plaintext session must leave the epoch unchanged");
       } else {
         check((await write(ctx, plain)).created === true, "The plain profile must accept a plaintext session");
