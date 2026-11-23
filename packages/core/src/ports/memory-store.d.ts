@@ -61,6 +61,7 @@ export interface InsertRow {
   digests?: TextDigest[];
   confidence: number;
   source: SourceRef;
+  createdAtMs?: number;
   /** null when not embedded at write time (engine pump, or a store without an embedder). */
   embedding: { model: string; vector: Float32Array | number[] } | null;
 }
