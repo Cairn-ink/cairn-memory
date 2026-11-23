@@ -1,0 +1,294 @@
+import { identifier, isWellFormedText, revision, validateObject } from "../capture/validate.mjs";
+import { NEAR_DUPLICATE_DISTANCE } from "../decisions.mjs";
+import { CoreError } from "../errors.mjs";
+import { decideWrite, planCorrect, planDuplicateMerge } from "../memory-policy/index.mjs";
+import { allDigests, passageShingles } from "../privacy/fingerprint.mjs";
+import { redactV1 } from "../privacy/redact.mjs";
+import { cleanContent, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
+import { blocksMemoryPassage } from "../privacy/withholds.mjs";
+import { factIncarnationBody, validateSuppressionFact } from "../suppression-fact.mjs";
+import { entry, entryError, scopeOf } from "./entry.mjs";
+import { pauseResult } from "./pause.mjs";
+
+/** @import {DuplicateQuery, InsertRow, MemoryRow, PassageFingerprint, Scope, SourceRef, Tx, WritePolicy} from "../ports/index.d.ts" */
+/** @import {FingerprintKey} from "../privacy/fingerprint.mjs" */
+/** @import {TextFact} from "../suppression-fact.mjs" */
+
+const memoryKinds = /** @type {const} */ (["fact", "preference", "decision", "instruction", "context"]);
+const sourceKinds = /** @type {const} */ (["capture", "mcp", "web", "import", "plugin"]);
+// The shingle primitive validates this record but signs each gram directly with the supplied owner key.
+const shingleLabels = Object.freeze({
+  keyIdDomain: "core-key-id", shingleKeyPrefix: "core-shingles:", legacyExactPrefix: "core-exact:",
+});
+const invalid = () => /** @type {const} */ ({ status: "invalid" });
+
+/** @template {string} T @param {unknown} value @param {readonly T[]} choices */
+function enumValue(value, choices) {
+  const choice = choices.find(candidate => candidate === value);
+  if (choice === undefined) throw new CoreError("invalid_input");
+  return choice;
+}
+
+/** @param {unknown} value */
+function sourceText(value) {
+  if (value === null || (isWellFormedText(value) && !value.includes("\0"))) return value;
+  throw new CoreError("invalid_input");
+}
+
+/** @param {unknown} value @returns {SourceRef} */
+function sourceOf(value) {
+  const { kind, client, sessionId } = validateObject(value, ["kind", "client", "sessionId"]);
+  return { kind: enumValue(kind, sourceKinds), client: sourceText(client), sessionId: sourceText(sessionId) };
+}
+
+/** @param {string} raw @returns {Promise<DuplicateQuery>} */
+async function hashesOf(raw) {
+  const [core, ...aliases] = await allDigests(raw, null);
+  const legacy = aliases.at(-1);
+  return { textHash: 'sha256:' + core.value, ...(legacy && { legacyHash: 'sha256:' + legacy.value }) };
+}
+
+/** @param {string} raw @param {string} text @param {FingerprintKey | null} key */
+async function passagesOf(raw, text, key) {
+  const original = cleanContent(raw);
+  const variants = new Map([original, redactV1(original), text].map(variant => [normalizeForHash(variant), variant]));
+  return Promise.all([...variants.values()].map(async (variant) => {
+    const digests = await allDigests(variant, key);
+    const shingles = key === null ? null : await passageShingles(variant, key, shingleLabels);
+    return { digests, shingles, keyId: key?.id ?? null };
+  }));
+}
+
+/** @param {WritePolicy} policy @param {boolean} near @param {string} [editId] */
+function decide(policy, near, editId) {
+  const matches = policy.matches[0];
+  // Unclassified hidden ids could own the hash. Refuse if their match details were omitted.
+  if (policy.hiddenIds.some(id => !matches.some(match => match.kind === "stored" && match.id === id))) {
+    return /** @type {const} */ ({ status: "suppressed" });
+  }
+  const eligible = matches.filter(match => match.kind === "stored" && match.id !== editId &&
+    (match.match === "exact" || (near && match.distance !== undefined && match.distance <= NEAR_DUPLICATE_DISTANCE)));
+  return decideWrite({ ...policy, matches: [eligible] }, 0);
+}
+
+/** @param {MemoryRow} row @param {DuplicateQuery} query @param {string} text */
+function sameText(row, query, text) {
+  return row.textHash === query.textHash ||
+    normalizeForHash(prepareCoreText(row.text)) === normalizeForHash(text);
+}
+
+/** @param {import("./index.d.mts").MemoryServiceDeps} deps
+ * @returns {Pick<import("../ports/host.d.ts").MemoryService, "save" | "correct">}
+ */
+export function writeMethods({ storage, embedder, gate, clock }) {
+  const { uow, pause, memories, suppressions, keys, fence, capabilities } = storage;
+
+  /** @param {Scope} scope @param {string} id @param {Tx} tx */
+  async function scopedRow(scope, id, tx) {
+    const row = await memories.get(tx, scope, id);
+    return row?.id === id && row.scope?.owner === scope.owner && row.scope.namespace === scope.namespace ? row : null;
+  }
+
+  /** @param {Scope} scope @param {string} id @param {Tx} tx */
+  async function visible(scope, id, tx) {
+    const refs = await fence.assertVisible(tx, { owner: scope.owner, namespaces: [scope.namespace] },
+      [{ type: "memory", id, namespace: scope.namespace }]);
+    return refs.some(ref => ref.type === "memory" && ref.id === id && ref.namespace === scope.namespace);
+  }
+
+  /** @param {Scope} scope @param {string} id @param {number} revision */
+  function deliver(scope, id, revision) {
+    return uow.run(scope.owner, { readOnly: true }, async tx => {
+      const row = await scopedRow(scope, id, tx);
+      if (row === null || row.revision !== revision || !await visible(scope, id, tx)) return null;
+      return { ...row, text: prepareCoreText(row.text) };
+    });
+  }
+
+  /** @param {string} owner @param {string} text @param {FingerprintKey | null} key */
+  async function embed(owner, text, key) {
+    const options = {};
+    const texts = [normalizeForHash(text)];
+    const { model, dimensions } = embedder;
+    await gate.assertOpen(owner, "dispatch");
+    const vectors = await embedder.embed(texts, options);
+    await gate.assertOpen(owner, "post-send");
+    const vector = vectors?.[0];
+    if (!Array.isArray(vectors) || vectors.length !== 1 || !(vector instanceof Float32Array) || vector.length !== dimensions ||
+        !vector.every(Number.isFinite) || !vector.some(component => component !== 0)) {
+      throw new CoreError("embedding_failed");
+    }
+    if ((await keys.userKey(owner))?.id !== key?.id) throw new CoreError("fingerprint_key_mismatch");
+    return { model, vector };
+  }
+
+  /** @param {Tx} tx @param {Scope} scope @param {SourceRef} source
+   * @param {PassageFingerprint[]} passages @param {FingerprintKey | null} key
+   */
+  async function withheld(tx, scope, source, passages, key) {
+    if (typeof suppressions?.snapshot !== "function") throw new CoreError("capability_unavailable");
+    const snapshot = await suppressions.snapshot(tx, scope, {
+      client: source.client ?? undefined, sessionId: source.sessionId ?? undefined, passages,
+    });
+    if (snapshot.blockedSession || snapshot.blockedMessages.length) return true;
+    const passagesInSnapshot = snapshot.passages.map(({ fact }) => fact);
+    if (passagesInSnapshot.some(fact => typeof fact?.owner !== "string")) return true;
+    const facts = passagesInSnapshot.filter(fact => fact.owner === scope.owner && (fact.namespace ?? null) === scope.namespace);
+    // The key port does not supply legacy MAC domains. An opaque historical MAC cannot prove a miss.
+    if (facts.some(({ text }) => text.digests.every(digest => digest.alg === "hmac") &&
+        text.digests.some(digest => digest.pipeline !== "core"))) return true;
+    return blocksMemoryPassage(passages, facts, key);
+  }
+
+  return {
+    save: entry(async (input, raw, inputSource, inputKind = "fact") => {
+      let scope, source, kind;
+      try {
+        scope = scopeOf(input);
+        source = sourceOf(inputSource);
+        kind = enumValue(inputKind, memoryKinds);
+        if (typeof raw !== "string") return invalid();
+      } catch {
+        return invalid();
+      }
+
+      const { owner } = scope;
+      const preflight = await uow.run(owner, { pauseLock: true }, async tx => pauseResult(await pause.get(tx, owner)));
+      if (preflight.paused) return { status: "paused" };
+      await gate.assertOpen(owner, "pre-send");
+      const text = prepareCoreText(raw);
+      if (!text) return invalid();
+      const key = await keys.userKey(owner);
+      const query = await hashesOf(raw);
+      const passages = await passagesOf(raw, text, key);
+      const embedding = await embed(owner, text, key);
+      query.embedding = embedding.vector;
+      const explicit = source.kind === "mcp" || source.kind === "web";
+      const mode = explicit ? "hash" : "full";
+      const row = /** @type {InsertRow} */ ({
+        kind, text, textHash: query.textHash, source, embedding, confidence: 1,
+        origin: explicit || source.kind === "import" ? "explicit" : "inferred",
+      });
+
+      const result = await uow.run(owner, { pauseLock: true }, async tx => {
+        const state = pauseResult(await pause.get(tx, owner));
+        if (state.paused || state.generation !== preflight.generation) return /** @type {const} */ ({ status: "paused" });
+        if (await withheld(tx, scope, source, passages, key)) return /** @type {const} */ ({ status: "suppressed" });
+        const policy = await memories.readWritePolicy(tx, scope, [query], source, mode);
+        const decision = decide(policy, capabilities.nearDuplicate === true);
+        if (decision.status === "suppressed") return decision;
+        if (decision.status === "saved") {
+          const { id, revision } = await memories.insert(tx, scope, row, [], clock.nowMs());
+          return { status: decision.status, id, revision };
+        }
+        const { id } = decision;
+        const current = await scopedRow(scope, id, tx);
+        const matched = policy.matches[0].some(match => match.kind === "stored" && match.id === id &&
+          match.revision === current?.revision);
+        if (current === null || !matched || !await visible(scope, id, tx)) {
+          return /** @type {const} */ ({ status: "suppressed" });
+        }
+        const { merge } = planDuplicateMerge(current, current);
+        const { revision } = await memories.touchDuplicate(tx, scope, id, [], merge, clock.nowMs());
+        return { status: decision.status, id, revision };
+      });
+
+      if (result.status === "paused" || result.status === "suppressed") return result;
+      const item = await deliver(scope, result.id, result.revision);
+      return item ? { status: result.status, item } : { status: "suppressed" };
+    }, invalid),
+
+    correct: entry(async (input, inputId, inputRevision, raw, inputSource) => {
+      const scope = scopeOf(input);
+      const id = identifier(inputId);
+      const expectedRevision = revision(inputRevision);
+      sourceOf(inputSource);
+      if (typeof raw !== "string") throw new CoreError("invalid_input");
+      const { owner } = scope;
+      const { state: preflight, previous } = await uow.run(owner, { pauseLock: true }, async tx => {
+        const state = pauseResult(await pause.get(tx, owner));
+        const row = state.paused ? null : await scopedRow(scope, id, tx);
+        const previous = row && await visible(scope, id, tx) ? row : null;
+        return { state, previous };
+      });
+      if (preflight.paused) return { status: "paused" };
+      if (!previous) return { status: "not_found" };
+      if (previous.revision !== expectedRevision || previous.historical) return { status: "conflict" };
+
+      await gate.assertOpen(owner, "pre-send");
+      const text = prepareCoreText(raw);
+      if (!text) throw new CoreError("invalid_text");
+      const key = await keys.userKey(owner);
+      if (key === null) throw new CoreError("fingerprint_unavailable");
+      const query = await hashesOf(raw);
+      const passages = await passagesOf(raw, text, key);
+      const unchanged = sameText(previous, query, text);
+      const embedding = unchanged ? null : await embed(owner, text, key);
+      query.embedding = embedding?.vector;
+      const source = previous.source;
+
+      /** @type {{fact: TextFact, incarnation: string} | undefined} */
+      let predecessor;
+      if (!unchanged) {
+        const oldText = prepareCoreText(previous.text);
+        const heldSecret = normalizeForHash(cleanContent(previous.text)) !== normalizeForHash(oldText);
+        const aliases = await allDigests(previous.text, key);
+        const digests = heldSecret ? aliases.filter(digest => digest.alg === "hmac") : aliases;
+        if (!heldSecret) {
+          const [canonical] = await allDigests(previous.text, null);
+          if (!digests.some(digest => digest.alg === canonical.alg && digest.value === canonical.value)) {
+            digests.push(canonical);
+          }
+        }
+        const fact = /** @satisfies {TextFact} */ ({
+          owner, namespace: scope.namespace, kind: "text", mode: "exact", origin: "edit",
+          actionId: "",
+          sourceMemory: { id, createdAtMs: previous.createdAtMs },
+          text: { digests, keyId: key.id },
+        });
+        const incarnation = await clock.sha256Hex(factIncarnationBody(fact));
+        fact.actionId = "edit:" + expectedRevision + ":" + incarnation;
+        validateSuppressionFact(fact);
+        predecessor = { fact, incarnation };
+      }
+
+      let result;
+      try {
+        result = await uow.run(owner, { pauseLock: true }, async tx => {
+          const state = pauseResult(await pause.get(tx, owner));
+          if (state.paused || state.generation !== preflight.generation) return /** @type {const} */ ({ status: "paused" });
+          const current = await scopedRow(scope, id, tx);
+          if (current === null || !await visible(scope, id, tx)) return /** @type {const} */ ({ status: "not_found" });
+          if (current.revision !== expectedRevision || current.textHash !== previous.textHash ||
+              current.text !== previous.text || current.createdAtMs !== previous.createdAtMs || current.historical) {
+            return /** @type {const} */ ({ status: "conflict" });
+          }
+          if (await withheld(tx, scope, source, passages, key)) return /** @type {const} */ ({ status: "suppressed" });
+          const policy = await memories.readWritePolicy(tx, scope, [query], source, "full", id);
+          const decision = decide(policy, false, id);
+          if (decision.status === "suppressed") return decision;
+          const plan = planCorrect(current, expectedRevision,
+            { textHash: unchanged ? current.textHash : query.textHash, kind: current.kind }, decision.status === "duplicate");
+          if (plan.outcome === "unchanged") return /** @type {const} */ ({ status: "unchanged", revision: plan.revision });
+          if (!predecessor) throw new CoreError("internal_error");
+          const { kind, origin, confidence, textHash } = plan;
+          const now = clock.nowMs();
+          await suppressions.writeFact(tx, predecessor.fact, predecessor.incarnation);
+          const replaced = await memories.replaceContent(tx, scope, id, expectedRevision,
+            { kind, origin, confidence, textHash, text, source, embedding }, null, now);
+          if (replaced.outcome !== "changed") throw new CoreError("internal_error");
+          return /** @type {const} */ ({ status: "saved", revision: replaced.revision });
+        });
+      } catch (error) {
+        const failure = entryError(error);
+        if (["revision_conflict", "memory_conflict", "memory_historical"].includes(failure.code)) return { status: "conflict" };
+        if (failure.code === "memory_not_found") return { status: "not_found" };
+        throw failure;
+      }
+
+      if (result.status !== "saved" && result.status !== "unchanged") return result;
+      const item = await deliver(scope, id, result.revision);
+      return item ? { status: result.status, item } : { status: "not_found" };
+    }),
+  };
+}

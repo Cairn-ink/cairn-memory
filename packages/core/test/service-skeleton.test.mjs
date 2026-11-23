@@ -57,15 +57,13 @@ test("services over different adapters keep independent state without optional c
   assert.deepEqual((await b.recent(hostedScope, { limit: 10, cursor: null })).items.map(row => row.id), ["second"]);
 });
 
-test("all ten placeholders reject with capability_unavailable before any port call", async () => {
+test("remaining placeholders reject with capability_unavailable before any port call", async () => {
   const { deps, calls } = serviceFake();
   const service = createMemoryService(deps);
   const source = { kind: "mcp", client: null, sessionId: null };
   const key = { client: "client", sessionId: "session", eventId: "event" };
   const page = { limit: 10, cursor: null };
   const entries = [
-    () => service.save(hostedScope, "text", source),
-    () => service.correct(hostedScope, "id", 1, "text", source),
     () => service.forget(hostedScope, "id", source),
     () => service.recall(hostedScope, "query", { ...page, mode: "search" }),
     () => service.captureStatus(hostedScope, "event"),
