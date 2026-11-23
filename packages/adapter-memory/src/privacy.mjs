@@ -229,5 +229,5 @@ export function createFingerprintProvider(enabled, config, rotateRowDigests) {
     }
   }
 
-  return { keys, ringKeys, setFingerprintSecret };
+  return { keys, ringKeys, labels, setFingerprintSecret };
 }
