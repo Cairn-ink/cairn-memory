@@ -1,4 +1,5 @@
 import { CoreError } from '../errors.mjs';
+import { withQuantityExtraction } from '../extraction/quantity-spec.mjs';
 import { QUALIFY_CANDIDATES_INLINE_PROMPT, QUALIFY_CANDIDATES_POOL_PROMPT } from './generated/prompts.mjs';
 import { snapshotQualificationTextCatalog } from './qualification-text-catalog.mjs';
 import { MODEL_OUTPUT_TOKENS } from './request-size.mjs';
@@ -64,7 +65,7 @@ function reportAdapterDiagnostic(method, report, reason) {
 /**
  * @param {Method} method
  * @param {Pick<ModelRequest, 'system' | 'input' | 'maxOutputTokens'>} args
- * @param {{qualificationInputMode?: QualificationInputMode, report?: Report}} [options]
+ * @param {{qualificationInputMode?: QualificationInputMode, quantities?: boolean, report?: Report}} [options]
  * @returns {BuiltRequest}
  */
 export function buildModelRequest(method, args, options = {}) {
@@ -105,6 +106,9 @@ export function buildModelRequest(method, args, options = {}) {
       const prevalidated = method === 'extract' && named ? snapshotIndexedExtractInput(input) : input;
       requestInput = JSON.parse(JSON.stringify(prevalidated));
       schema = schemasFor(method, requestInput);
+      if (method === 'extract' && options.quantities === true) {
+        ({ system: instructions, schema } = withQuantityExtraction(system, schema));
+      }
       validationSchema = schema;
       if (method === 'extract' && maxOutputTokens > extractionOutputTokens(requestInput.messages)) {
         throw new CoreError('invalid_input');

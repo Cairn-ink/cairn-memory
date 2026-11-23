@@ -21,5 +21,5 @@ export const FORGET_STEP_CAPABILITIES = Object.freeze({
   "session.fence": Object.freeze(/** @type {const} */ (["rawArchive"])),
   "raw.purge": Object.freeze(/** @type {const} */ (["rawArchive"])),
   "receipts.suppress": Object.freeze(/** @type {const} */ (["spanLineage"])),
-  "dependents.invalidate": Object.freeze(/** @type {const} */ (["cards", "placement", "conflictEdges", "stagedEvidence", "documentCards"])),
+  "dependents.invalidate": Object.freeze(/** @type {const} */ (["cards", "placement", "conflictEdges", "stagedEvidence", "documentCards", "quantityLedger"])),
 });
