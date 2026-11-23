@@ -81,6 +81,18 @@ The optional test hook `harness.advanceClock(ms)` moves the store clock forward
 by the requested milliseconds. The lease-expiry check reports a skip reason
 when the hook is unavailable. The abandon checks still run.
 
+### Raw archive cases
+
+Run `RAW_CASES` with `runCase(factory, testCase)`. The cases request `rawArchive`.
+Window and span cases also request `rawWindowHide` or `rawSpans`. Raw span fixtures
+use `harness.hashSessionKey(client, sessionId)` in either session profile. The optional
+`harness.seedClientlessRaw(scope, sessionId, message)` hook seeds a legacy row for
+the missing-client check. The runner reports a skip reason when a required fixture
+or capability is unavailable.
+
+Snapshots from `dump()` must reflect retained raw rows, including hidden ones.
+Raw key conflicts increment the content-free `rawKeyConflict` counter.
+
 ### Sticky write failures
 
 After a write port touches store state, the in-memory adapter records its first failure code.
