@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "d79f935d823d24545a1bda97c192363c2734db884173ca242245f906c20e0222",
-  "bytes": 1494482,
+  "sha256": "9abca8e52ec5514037e6a6c3f7e3e87e303a1144c68dbdbaa64491f47aeb85d2",
+  "bytes": 1494566,
   "files": [
     "LICENSE",
     "README.md",
@@ -629,8 +629,8 @@
     "integrations/client/control-state.mjs": "8664a54da21f5168b9168e8a76d902f8d1df59ee7e299e61ca4cfccd811e4be1",
     "integrations/client/file-lock.mjs": "42535bd8d6d96e89819e2669c7c671f1136fb753c3ffd2153919f3eb3c8e46b6",
     "integrations/client/source-time.mjs": "002acf215bd6b79b3e4ace3e9d181a89dbf8efc48093a6e980c8417df64b9401",
-    "integrations/client/hosted-contract.mjs": "07bb439a728f1be053cfa40f425d7e52e0a2b958a22dd72cd889f3f942fb12fd",
-    "integrations/client/hosted-schemas.mjs": "c9e2b4fc3e85e136594438ad58a24d15526296b12ab1d438ae930a91b8ec82d3",
+    "integrations/client/hosted-contract.mjs": "f44b7fb2595d367fd61f403a21d3698afa69db75dab0a3edb1e575a21c73168c",
+    "integrations/client/hosted-schemas.mjs": "18613252e07d4ccd2c5341bdb585ae9582d42cb285d43181ba736cafc91a543c",
     "integrations/client/pairing.mjs": "46a3cc1bb1e88ad1ab06c0096fb9c1dbee0d34b19b4c1435c9c07b496065af3c",
     "integrations/client/private-state.mjs": "14a576ec9f24c568e15cefff540f3771ecb2b974248ef73b4cee5124c83c365e",
     "integrations/client/raw/bounds.mjs": "0a59bb7b9655ab3fe8a90704c4cb2f6cb802beb7d5e70c19561eaaffc8ff61f2",
@@ -838,6 +838,6 @@
   "generatedHashes": {
     "package.json": "e255ff4d23e921de9bed8e058c64e57aed3e1bc6a8ed242cee52a716add2d69c",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8",
-    "engine-build.json": "62213c6350dc63c90bcf0550ce7bcc5f5fca1c796b27240a125e34c3e15cb54e"
+    "engine-build.json": "008b9dd5b07d02fcec7a30d7844c4769b07f67396d8fdab03c59c4ef9cd5e567"
   }
 }
