@@ -1,7 +1,7 @@
 import { CoreError } from "../errors.mjs";
 
 export const PRIVACY_REDACTION_VERSIONS = Object.freeze({ v1: 1, hostedCurrent: 2, core: 3 });
-export const REDACT_CORE_POLICY = "union-pending";
+export const REDACT_CORE_POLICY = "union";
 
 const REPLACEMENT = "[REDACTED]";
 const PEM = /-----BEGIN(?: [A-Z]+)? PRIVATE KEY-----[\s\S]*?-----END(?: [A-Z]+)? PRIVATE KEY-----/g;

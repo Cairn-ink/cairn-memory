@@ -3,10 +3,10 @@ import { test } from "node:test";
 import { redactV1, redactHostedCurrent, redactCore, PRIVACY_REDACTION_VERSIONS, REDACT_CORE_POLICY } from "../src/index.mjs";
 import { assertText, cases, coreRefusal, expected, inputOf } from "./privacy-vectors.mjs";
 
-test("redaction version numbers and pending policy are pinned", () => {
+test("redaction version numbers and union policy are pinned", () => {
   assert.deepEqual(PRIVACY_REDACTION_VERSIONS, { v1: 1, hostedCurrent: 2, core: 3 });
   assert.ok(Object.isFrozen(PRIVACY_REDACTION_VERSIONS));
-  assert.equal(REDACT_CORE_POLICY, "union-pending");
+  assert.equal(REDACT_CORE_POLICY, "union");
 });
 
 for (const vector of cases) {
