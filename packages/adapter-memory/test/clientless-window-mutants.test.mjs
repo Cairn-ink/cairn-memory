@@ -62,9 +62,13 @@ const mutants = [
       "const occurredAtMs = client == null ? undefined : candidates.occurredAtMs;"],
     ["blockedMessages: occurredAtMs ?", "blockedMessages: client != null && occurredAtMs ?"],
   ]],
-  ["K-SNAP-F5", "admits an ineligible client-specific match", /Client-specific window must block all times without a client/, [
+  ["K-SNAP-F5", "admits an ineligible client-specific match", /A client-specific window must block clientless times inside \[start, end\)/, [
     [`${windowMatch} !== false`, `${windowMatch} === true`],
   ]],
+  ["K-SNAP-F5", "blocks clientless times outside a client-specific window",
+    /A client-specific window must block clientless times inside \[start, end\)/, [
+      [`${windowMatch} !== false`, `(session === undefined && stored.fact.client !== null) || ${windowMatch} !== false`],
+    ]],
   ["K-SNAP-F4", "ignores unknown time", /Owner-wide window must block unknown time when enabled/, [
     ["of occurredAtMs.entries()) {", "of occurredAtMs.entries()) {\n        if (time === null) continue;"],
   ]],
