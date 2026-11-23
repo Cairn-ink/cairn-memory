@@ -126,6 +126,51 @@ Each addendum is additive unless it says what it supersedes. Adapters written ag
    - The adapter computes lineage and fork proofs over the entire batch, including the withheld positions. It never stores, indexes or returns a message at a withheld position. It counts that position once in `withheld` and applies the ordinary eligibility rules to the other positions, including fencing a proven fork.
    - It supersedes nothing.
 
+### Topics addendum 4 — Cards in topics
+
+The `placement` port files visible document cards into up to three existing L1 topics in the
+same owner and namespace. Card placement never creates topics. It uses the memory classifier's
+prompt, packer, and wire format with `title + "\n\n" + body`, in separate batches of at most five
+cards. Requests set `mapExhausted` to false and core discards any proposed new topics.
+
+- `pendingCards` selects the oldest unhidden, untombstoned cards without an outcome at their
+  current content hash. Cards in other scopes stay in their own queues. Failure receipts
+  follow the memory retry policy and are bound to the current hash.
+- Before model dispatch, the host's `VisibilityFence` checks card refs in the read snapshot.
+  The host uses `documentCardVisible` for the card and its sources, including the source-less
+  import and manual rules. A card excluded by the fence gets a `source_excluded` receipt.
+  Core rechecks hashes, visibility, and the catalog revision before and after the model call.
+- `applyCardPlacement` atomically replaces memberships. A changed index revision, missing
+  or invisible card, changed hash, noncurrent source memory, or parent outside the scope's
+  existing L1 topics fails with `revision_conflict` before any writes. An unchanged placement
+  is idempotent. An unfiled outcome alone leaves the index revision unchanged. A membership
+  change advances the owner index once.
+- Topic membership applies only at the recorded card content hash. Replacement makes the
+  card eligible for placement again. Hidden and tombstoned cards, and cards whose recorded
+  source revisions are historical, missing, or suppressed, are excluded from membership.
+- In the forget step `dependents.invalidate`, hosts must use `dropCard` as part of every
+  card hide or tombstone, in the same transaction. `forCard` returns an empty list immediately
+  after the hide in that transaction.
+- `members` mixes memory and card refs by placement time descending, then UTF-8 ID descending,
+  with memory before card when both keys tie. `list` includes topics with either kind of
+  visible member. `memberCount` and `newestMemberIds` count memories. `cardCount` is present
+  only with `documentCards` enabled and counts distinct visible cards across the L1 children
+  for an L2 topic. `pendingCards` returns an empty list without `documentCards`.
+
+The optional `forCards` batch lookup annotates placed cards with L1 topic IDs and titles.
+It copies the scope once at entry and snapshots 1–100 caller IDs before reading state.
+Duplicates count toward the limit, and other batch sizes raise `invalid_input`. Rows follow
+first occurrence and include only cards visible under `forCard` and `members` at the
+placement's recorded hash. A visible outcome without topics returns `topics: []`. Topic
+order follows `forCard`. A title is null when a title source is no longer current at its
+recorded revision.
+
+The memory adapter has no Raw archive. Its source-message predicate uses the capture session
+resolver (plain session ID by default or the configured session hash resolver) and the shared
+fact matcher. It withholds a message when an applicable session or window fact matches the
+stored source, a text fact matches the retained card text, or an identity fact matches a
+linked memory. An ineligible comparison with applicable evidence also withholds the source.
+
 ## Change requests
 
 Send the core lead the port, the method, and the reason. A request is

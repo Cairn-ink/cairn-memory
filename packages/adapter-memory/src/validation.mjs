@@ -190,9 +190,21 @@ export function writeNamespace({ namespace }) {
   return namespace;
 }
 
+/** @param {import("@cairn-ink/core/ports").Scope} scope */
+export function copyScope(scope) {
+  if (!scope) invalid();
+  return { owner: scope.owner, namespace: writeNamespace(scope) };
+}
+
 /** @param {string} id */
 export function validateMemoryId(id) {
   if (typeof id !== "string") invalid();
+}
+
+/** @param {unknown} id */
+export function validateCardId(id) {
+  if (typeof id !== "string" || !id) invalid();
+  return id;
 }
 
 /** @param {DuplicateMerge} merge */

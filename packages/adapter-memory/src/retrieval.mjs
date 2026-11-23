@@ -1,4 +1,5 @@
-import { CoreError, compareUtf8, createBM25, rankScores, scoreBM25, termFrequencies, tokenizeT1 } from "@cairn-ink/core";
+import { allDigests, coreDigest, CoreError, compareUtf8, createBM25, rankScores, scoreBM25, termFrequencies, tokenizeT1 } from "@cairn-ink/core";
+import { documentCardVisible } from "@cairn-ink/core/routing";
 import { cosineDistance } from "./cosine.mjs";
 import { decodePayload, decodeSortKey, encodePayload, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
@@ -13,6 +14,10 @@ import { copyReadScope, copyRefs, readEmbedding, validateLimit } from "./validat
 /** @typedef {import("@cairn-ink/core/ports").Receipt} Receipt */
 /** @typedef {import("./unit-of-work.mjs").State} State */
 /** @typedef {import("./unit-of-work.mjs").Row} Row */
+/** @import { DocumentCardMemoryState } from "@cairn-ink/core/routing" */
+/** @import { FingerprintKey } from "@cairn-ink/core" */
+/** @import { FingerprintKeyProvider, Scope } from "@cairn-ink/core/ports" */
+/** @import { CardWrite } from "./document-cards.mjs" */
 
 /** @param {Row} row @returns {ItemRef} */
 function memoryRef({ id, scope: { namespace } }) {
@@ -103,14 +108,64 @@ function sourceDates(receipts) {
   return { firstMs, lastMs };
 }
 
+/** @param {ReturnType<typeof createFactMatcher>} matchFacts @param {FingerprintKeyProvider} keys
+ * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>["sourceVisible"]} [rawSourceVisible] */
+export function createCardVisibility(matchFacts, keys, rawSourceVisible) {
+  /** @param {State} state @param {Scope} scope @param {CardWrite} card */
+  return async function cardVisible(state, scope, card) {
+    const policy = matchFacts(state.facts, scope);
+    const rows = state.rows.get(scope.namespace);
+    /** @type {Map<string, DocumentCardMemoryState>} */
+    const memoryStates = new Map();
+    for (const { id } of card.sourceMemories) {
+      const entry = rows?.get(id);
+      const forgotten = policy.factsFor(id, entry).some(({ fact }) => fact.kind === "identity");
+      if (forgotten) memoryStates.set(id, { status: "forgotten" });
+      else if (!entry) memoryStates.set(id, { status: "unknown" });
+      else if (policy.hides(entry)) memoryStates.set(id, { status: "suppressed" });
+      else memoryStates.set(id, { status: entry.row.historical ? "historical" : "visible", revision: entry.row.revision });
+    }
+    const { sourceMessage } = card;
+    let canonicalSessionKey = null;
+    let sourceWithheld = false;
+    /** @type {FingerprintKey | null} */
+    let fingerprintKey = null;
+    const { textFacts } = policy;
+    try {
+      if (textFacts.length) fingerprintKey = await keys.userKey(scope.owner);
+      if (sourceMessage) {
+        canonicalSessionKey = policy.canonicalSessionKey(sourceMessage);
+        sourceWithheld = rawSourceVisible !== undefined && !await rawSourceVisible(state, scope, sourceMessage);
+        if (!sourceWithheld) {
+          // The retained projection also checks identity facts against linked revisions.
+          const passages = textFacts.length ? await Promise.all([card.body, card.title].map(async (text) => {
+            const digests = await allDigests(text);
+            if (fingerprintKey) digests.push(await coreDigest(text, fingerprintKey));
+            return { digests };
+          })) : [];
+          sourceWithheld = policy.withholdsCardSource(card, passages);
+        }
+      }
+    } catch {
+      return false;
+    }
+    return (await documentCardVisible({
+      card: { ...card, canonicalSessionKey }, requestedScope: scope, memoryStates,
+      sourceWithheld, textFacts, fingerprintKey,
+    })).visible;
+  };
+}
+
 /**
  * @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>["port"]} port
  * @param {import("@cairn-ink/core").Capabilities} capabilities
  * @param {ReturnType<typeof createFactMatcher>} [matchFacts]
  * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>["visibleRawRefs"]} [visibleRawRefs]
+ * @param {ReturnType<typeof createCardVisibility>} [cardVisible]
  * @returns {Pick<StorageAdapter, "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent">}
  */
-export function createRetrievalPorts(port, capabilities, matchFacts = createFactMatcher(capabilities.vectorSuppression), visibleRawRefs) {
+export function createRetrievalPorts(port, capabilities, matchFacts = createFactMatcher(capabilities.vectorSuppression),
+  visibleRawRefs, cardVisible = createCardVisibility(matchFacts, { async userKey() { return null; } })) {
   /** @param {State} state @param {RetrievalScope} scope */
   function policies(state, scope) {
     return new Map(scope.namespaces.map((namespace) =>
@@ -225,9 +280,30 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
           const selection = copyReadScope(tx.owner, scope);
           const references = copyRefs(refs);
           const state = getState();
-          const visible = Array.from(visibleRefs(state, selection, references, intent === "read"), ({ ref }) => ref);
-          if (!visibleRawRefs || !references.some(({ type }) => type === "raw")) return visible;
-          return visibleRawRefs(state, selection, references).then(rawRefs => [...visible, ...rawRefs]);
+          const includeHistorical = intent === "read";
+          const rawFence = visibleRawRefs && references.some(({ type }) => type === "raw") ? visibleRawRefs : undefined;
+          if (!capabilities.documentCards || !references.some(({ type }) => type === "card")) {
+            const visible = Array.from(visibleRefs(state, selection, references, includeHistorical), ({ ref }) => ref);
+            if (!rawFence) return visible;
+            return rawFence(state, selection, references).then(rawRefs => [...visible, ...rawRefs]);
+          }
+          return (async () => {
+            const byNamespace = policies(state, selection);
+            const visible = [];
+            for (const ref of references) {
+              if (ref.type === "memory") {
+                // Memory refs keep the shared rule: read intent, source/time filters and fact policy.
+                for (const { ref: shown } of visibleRefs(state, selection, [ref], includeHistorical)) visible.push(shown);
+              } else if (ref.type === "card") {
+                const { namespace, id } = ref;
+                if (!byNamespace.get(namespace)) continue;
+                const card = state.documentCards.get(namespace)?.get(id)?.card;
+                if (card && await cardVisible(state, { owner: tx.owner, namespace }, card)) visible.push(ref);
+              }
+            }
+            if (!rawFence) return visible;
+            return [...visible, ...await rawFence(state, selection, references)];
+          })();
         });
       },
     },

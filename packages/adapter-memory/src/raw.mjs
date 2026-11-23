@@ -260,6 +260,17 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     };
   }
 
+  /** @param {State} state @param {Scope} scope
+   * @param {import("@cairn-ink/core/ports").DocumentCardSourceMessage} source */
+  async function sourceVisible(state, scope, source) {
+    const row = state.rawRows.get(rawId(scope, source, source.messageId));
+    if (!row || state.rawFences.has(sessionSlot(scope.namespace, source))) return false;
+    const facts = scopedFacts(state, scope);
+    if (!facts.length) return true;
+    const candidate = await readEvidence(scope, facts)(row);
+    return facts.every((stored) => factHidesRow(stored, candidate, policy) === false);
+  }
+
   /** @param {Pick<State, "facts" | "rawFences" | "rawRows">} state @param {RetrievalScope} selection */
   async function visibleRows(state, selection) {
     const byNamespace = new Map(selection.namespaces.map((namespace) => {
@@ -552,6 +563,6 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     }));
   }
 
-  return { raw, findVisibleSource, visibleRawRefs, captureProofs, lineageFenced, seedClientlessRaw,
+  return { raw, findVisibleSource, visibleRawRefs, captureProofs, lineageFenced, sourceVisible, seedClientlessRaw,
     counters: () => ({ rawKeyConflict, rawArchiveRefused }) };
 }

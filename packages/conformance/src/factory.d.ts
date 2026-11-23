@@ -1,5 +1,5 @@
 import type { Capabilities, ErrorCode, FactMatchPolicy, SuppressionFact } from "@cairn-ink/core";
-import type { CaptureMessage, Receipt, Scope, StorageAdapter } from "@cairn-ink/core/ports";
+import type { CaptureMessage, Receipt, Scope, StorageAdapter, StoredDocumentCardRecord } from "@cairn-ink/core/ports";
 
 export type AdapterFactory = {
   name: string;
@@ -8,9 +8,9 @@ export type AdapterFactory = {
 };
 
 export type OpenedAdapter = {
-  adapter: Pick<StorageAdapter, "capabilities" | "uow" | "memories" | "capture" |
+  adapter: Pick<StorageAdapter<StoredDocumentCardRecord>, "capabilities" | "uow" | "memories" | "capture" |
     "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "supersession" | "conflicts" |
-    "suppressions" | "pause" | "keys" | "placement" | "raw" | "rationale" | "rationaleSourceText">;
+    "suppressions" | "pause" | "keys" | "placement" | "raw" | "documentCards" | "rationale" | "rationaleSourceText">;
   sessionRefs: "plain" | "hashed";
   harness: TestHarness;
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;

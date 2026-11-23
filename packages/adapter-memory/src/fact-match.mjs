@@ -3,6 +3,7 @@ import { readEmbedding, snapshotArray } from "./validation.mjs";
 
 /** @import { FactMatchIncoming, FactMatchPolicy, FactMatchRow, StoredFact, SuppressionFact, TextDigest, TextFact } from "@cairn-ink/core" */
 /** @import { DuplicateQuery, Scope, SourceRef, SuppressionStore } from "@cairn-ink/core/ports" */
+/** @import { CardWrite } from "./document-cards.mjs" */
 /** @import { Entry, State } from "./unit-of-work.mjs" */
 /** @import { CanonicalQuery } from "./validation.mjs" */
 
@@ -107,8 +108,9 @@ function isKind(stored, kind) {
   return stored.fact.kind === kind;
 }
 
-/** @param {boolean} vectorSuppression @param {FactMatchPolicy["hashSessionKey"]} [hashSessionKey] */
-export function createFactMatcher(vectorSuppression, hashSessionKey) {
+/** @param {boolean} vectorSuppression @param {FactMatchPolicy["hashSessionKey"]} [hashSessionKey]
+ * @param {"plain" | "hashed"} [sessionRefs] */
+export function createFactMatcher(vectorSuppression, hashSessionKey, sessionRefs = "plain") {
   /** @type {FactMatchPolicy} */
   const policy = { vectorSuppression, rowShingles: false, hashSessionKey };
   const capture = /** @type {const} */ ({ ...policy, mode: "capture" });
@@ -195,6 +197,27 @@ export function createFactMatcher(vectorSuppression, hashSessionKey) {
 
       blocksSession,
       blockedMessages,
+
+      /** @param {NonNullable<CardWrite["sourceMessage"]>} source */
+      canonicalSessionKey({ client, sessionId }) {
+        return hashSessionKey ? hashSessionKey(client, sessionId) : sessionRefs === "plain" ? sessionId : null;
+      },
+
+      textFacts: texts.map(({ fact }) => fact),
+
+      /** @param {CardWrite} card @param {FactMatchIncoming["passages"]} passages */
+      withholdsCardSource({ sourceMessage, sourceMemories, date }, passages) {
+        if (!sourceMessage) return false;
+        const { client, sessionId } = sourceMessage;
+        return scoped.some((stored) => {
+          if (stored.fact.kind === "identity") {
+            return sourceMemories.some(({ id, revision }) => factHidesRow(stored,
+              { type: "memory", scope, memoryId: id, revision }, policy) !== false);
+          }
+          return factBlocksIncoming(stored, { scope, session: { client, sessionId }, occurredAtMs: date, passages },
+            capture) !== false;
+        });
+      },
 
       /** @param {ReturnType<typeof copySuppressionCandidates>} candidates */
       snapshot({ client, sessionId, occurredAtMs, passages: projected }) {

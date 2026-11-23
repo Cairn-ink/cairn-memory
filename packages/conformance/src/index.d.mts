@@ -44,5 +44,9 @@ export declare const RAW_CASES: readonly ConformanceCase[];
 export declare const IMPORT_ARCHIVE_CASES: readonly ConformanceCase[];
 export declare const PROVEN_FORK_CASES: readonly ConformanceCase[];
 export declare const RELATION_CASES: readonly ConformanceCase[];
+export declare const TOPIC_CARD_CASES: readonly ConformanceCase[];
+export declare const DOCUMENT_CARD_AMENDMENT_CASES: readonly ConformanceCase[];
+export declare const DOCUMENT_CARD_LINK_CASES: readonly ConformanceCase[];
+export declare const TOPICS_FOR_CARDS_CASES: readonly ConformanceCase[];
 /** Returns the skip reason, or null on success. Failures reject. */
 export declare function runCase(factory: AdapterFactory, testCase: ConformanceCase): Promise<string | null>;

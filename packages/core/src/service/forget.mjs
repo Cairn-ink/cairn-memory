@@ -21,7 +21,7 @@ function sourceId(value) {
   return isWellFormedText(value) && value.length > 0 && !value.includes("\0");
 }
 
-/** @param {StorageAdapter} storage @param {Tx} tx @param {Scope} scope @param {MemoryRow} row */
+/** @param {Pick<StorageAdapter, "memories" | "capabilities">} storage @param {Tx} tx @param {Scope} scope @param {MemoryRow} row */
 async function similarCount({ memories, capabilities }, tx, scope, row) {
   if (typeof memories.findDuplicates !== "function") return 0;
   const embedding = capabilities.vectorSuppression && capabilities.nearDuplicate ? row.embedding?.vector : undefined;
