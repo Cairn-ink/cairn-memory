@@ -9,6 +9,9 @@ import { check, equal, evidence, projectReceipt, rejects, row } from "./support.
 /** @typedef {import("@cairn-ink/core/ports").InsertRow} InsertRow */
 /** @typedef {[string, Scope["namespace"], bigint, string]} RecentProjection */
 
+// Float32 roundoff can move cosine distances slightly outside [0, 2].
+const COSINE_DISTANCE_TOLERANCE = 1e-6;
+
 /** @param {Scope} scope @param {string} id @returns {ItemRef} */
 const memoryRef = ({ namespace }, id) => ({ type: "memory", id, namespace });
 
@@ -169,7 +172,8 @@ export const retrievalCases = [
       const search = async (tx, queryVector, depth) => {
         const result = await vector.vector(tx, readSet, queryVector, "test", depth);
         for (const { distance } of result.rows) {
-          check(Number.isFinite(distance) && distance >= 0 && distance <= 2, "Vector distance must be finite and between 0 and 2");
+          check(Number.isFinite(distance) && distance >= -COSINE_DISTANCE_TOLERANCE && distance <= 2 + COSINE_DISTANCE_TOLERANCE,
+            "Vector distance must be finite and between 0 and 2 with float32 tolerance");
         }
         return result;
       };

@@ -444,14 +444,33 @@ function lexicalWithScore(opened, score, onlyDepth) {
   });
 }
 
-function vectorWithCappedNaNDistances(opened) {
+function vectorWithCappedDistances(opened, distance) {
   const { vector } = opened.adapter;
   return withPorts(opened, {
     vector: {
       async vector(tx, scope, query, model, depth) {
         const result = await vector.vector(tx, scope, query, model, depth);
         if (depth !== 2) return result;
-        return { ...result, rows: result.rows.map((row) => ({ ...row, distance: NaN })) };
+        return { ...result, rows: result.rows.map((row) => ({ ...row, distance })) };
+      },
+    },
+  });
+}
+
+function vectorWithIdenticalRoundoff(opened) {
+  const { memories, vector } = opened.adapter;
+  return withPorts(opened, {
+    vector: {
+      async vector(tx, scope, query, model, depth) {
+        const result = await vector.vector(tx, scope, query, model, depth);
+        if (depth !== 2) return result;
+        // Query with the nearest row's own embedding for the capped search.
+        const { id, namespace } = result.rows[0].ref;
+        const { embedding } = await memories.get(tx, { owner: scope.owner, namespace }, id);
+        const identical = await vector.vector(tx, scope, embedding.vector, model, depth);
+        const [nearest, ...rest] = identical.rows;
+        assert.equal(nearest.distance, 0);
+        return { ...identical, rows: [{ ...nearest, distance: -1.1920929e-7 }, ...rest] };
       },
     },
   });
@@ -775,7 +794,9 @@ const retrievalRegressions = [
   ["returns a NaN lexical score at depth one", "K-RET-1", (opened) => lexicalWithScore(opened, NaN, 1),
     /Lexical score must be finite/],
   ["reports matched for an empty lexical result", "K-RET-2", lexicalAlwaysMatches, /empty lexical result reported a match/],
-  ["returns NaN distances for capped vector results", "K-RET-3", vectorWithCappedNaNDistances,
+  ["returns NaN distances for capped vector results", "K-RET-3", (opened) => vectorWithCappedDistances(opened, NaN),
+    /Vector distance must be finite and between 0 and 2/],
+  ["returns a distance of 2.5 for capped vector results", "K-RET-3", (opened) => vectorWithCappedDistances(opened, 2.5),
     /Vector distance must be finite and between 0 and 2/],
   ["searches all namespaces of the owner for vectors", "K-RET-3", vectorSearchesAllOwnerNamespaces, /Complete vector coverage/],
   ["ignores the query width in vector search", "K-RET-3", vectorIgnoresLength, /Mismatched vector query coverage/],
@@ -812,6 +833,10 @@ test("K-RET-1 accepts lexical ties ordered by descending time and ID", async () 
 
 test("K-RET-3 accepts a store that writes only native-width vectors", async () => {
   assert.equal(await run("K-RET-3", storesNativeWidthOnly, { embeddingDimensions: 6 }), null);
+});
+
+test("K-RET-3 accepts float32 roundoff for identical vectors", async () => {
+  assert.equal(await run("K-RET-3", vectorWithIdenticalRoundoff), null);
 });
 
 test("K-RET-9 accepts namespace-descending order for equal recent keys", async () => {
