@@ -1,6 +1,6 @@
 import { CAPABILITIES } from "../capabilities.mjs";
 import { identifier, validateObject } from "../capture/validate.mjs";
-import { DEFAULT_FUSION_PRESET, FUSION_PRESETS, NEAR_DUPLICATE_DISTANCE } from "../decisions.mjs";
+import { FUSION_PRESETS, NEAR_DUPLICATE_DISTANCE } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
 import { pauseMethods } from "./pause.mjs";
@@ -21,7 +21,6 @@ function freezeConfig(input) {
     nearDuplicateDistance: NEAR_DUPLICATE_DISTANCE,
     lexicalWeight: FUSION_PRESETS.hosted.lexicalWeight,
     vectorWeight: FUSION_PRESETS.hosted.vectorWeight,
-    fusionPreset: DEFAULT_FUSION_PRESET.hosted,
     rowShingles: true,
   };
   validateObject(input, [...Object.keys(config), "leaseMs", "deadlines"]);
@@ -29,7 +28,6 @@ function freezeConfig(input) {
     nearDuplicateDistance = config.nearDuplicateDistance,
     lexicalWeight = config.lexicalWeight,
     vectorWeight = config.vectorWeight,
-    fusionPreset = config.fusionPreset,
     rowShingles = config.rowShingles,
     leaseMs,
     deadlines,
@@ -38,7 +36,6 @@ function freezeConfig(input) {
     if (!Number.isFinite(weight) || weight < 0) throw new CoreError("invalid_input");
   }
   if (nearDuplicateDistance > 2 || typeof rowShingles !== "boolean") throw new CoreError("invalid_input");
-  if (typeof fusionPreset !== "string" || !Object.hasOwn(FUSION_PRESETS, fusionPreset)) throw new CoreError("invalid_input");
   if (leaseMs !== undefined) positiveInteger(leaseMs);
   if (deadlines !== undefined) {
     validateObject(deadlines, ["extract", "qualify", "reconcile", "classify", "rationale"]);
@@ -47,7 +44,7 @@ function freezeConfig(input) {
   for (const duration of Object.values(stages)) positiveInteger(duration);
 
   return Object.freeze({
-    nearDuplicateDistance, lexicalWeight, vectorWeight, fusionPreset, rowShingles, leaseMs,
+    nearDuplicateDistance, lexicalWeight, vectorWeight, rowShingles, leaseMs,
     deadlines: Object.freeze(stages),
   });
 }

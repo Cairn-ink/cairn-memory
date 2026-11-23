@@ -71,6 +71,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         if (options.pauseLock) calls.push(["lock", "pause"]);
         if (!options.readOnly) calls.push(["lock", "owner-write"]);
         const state = ownerState(owner);
+        // Writes replace committedRows, so an open run retains its original rows and suppressions.
         const tx = {
           owner, options, rows: committedRows, revision: state.revision, facts: state.facts, runId: ++runId,
           forgotten: new Set(state.forgotten), pause: state.pause,
@@ -122,7 +123,9 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       async recent(tx, scope, page) {
         record(tx, scope.owner, "recent.recent", scope, page);
         assert.ok(tx.options.readOnly);
-        return readPage(candidates(tx, scope), page);
+        const result = readPage(candidates(tx, scope), page);
+        await hooks.afterRecentPage?.(result);
+        return result;
       },
     },
     memories: {
@@ -138,8 +141,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       async assertVisible(tx, scope, refs) {
         record(tx, scope.owner, "fence.assertVisible", scope, refs);
         assert.ok(tx.options.readOnly || (writes && tx.options.pauseLock));
-        return refs.filter(ref => !tx.forgotten.has(ref.id) &&
-          !(recall && ownerState(scope.owner).forgotten.has(ref.id)) && !hooks.hideAtFence?.(ref));
+        return refs.filter(ref => !tx.forgotten.has(ref.id) && !hooks.hideAtFence?.(ref));
       },
     },
   };
@@ -168,6 +170,12 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       const state = ownerState(owner);
       state.forgotten.add(id);
       state.revision++;
+    },
+    commitForget(row) {
+      fake.forget(row);
+      const { id, scope: { owner, namespace } } = row;
+      committedRows = committedRows.filter(candidate => candidate.id !== id ||
+        candidate.scope.owner !== owner || candidate.scope.namespace !== namespace);
     },
     insert(row) {
       committedRows = [...committedRows, row];

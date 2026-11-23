@@ -82,15 +82,13 @@ async function storePage({ uow, recent, memories, snapshot, fence }, route, scop
       if (position && failure.code === "invalid_cursor") throw new CoreError("cursor_stale");
       throw failure;
     }
-    const items = await visibleRows(result.items, readScope, tx, fence);
+    const items = route === "recent-v1" ? result.items : await visibleRows(result.items, readScope, tx, fence);
     // Use the store's last scanned position even if the fence drops a row.
     const nextCursor = result.nextCursor === null ? null : encodeCursor([...binding, token, result.nextCursor]);
     return { items, nextCursor, token };
   });
-  if (route === "recent-v1") return { items, nextCursor };
-
   return uow.run(scope.owner, { readOnly: true }, async tx => {
-    await snapshot.assertUnchanged(tx, readScope, token);
+    if (route === "export-v1") await snapshot.assertUnchanged(tx, readScope, token);
     const visible = await visibleRows(items, readScope, tx, fence);
     return { items: visible, nextCursor };
   });

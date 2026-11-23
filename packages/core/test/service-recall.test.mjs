@@ -12,14 +12,13 @@ const code = expected => error => error instanceof CoreError && error.code === e
 const ids = ({ items }) => items.map(row => row.id);
 const methods = ({ calls }) => calls.map(([method]) => method);
 
-function recallFixture({ lexical = golden.lexical, vector = golden.vector, semantic = true, preset } = {}) {
+function recallFixture({ lexical = golden.lexical, vector = golden.vector, semantic = true } = {}) {
   const rows = new Map([...lexical, ...vector].map(([id, , us]) => [id, memory(id, { updatedAtUs: BigInt(us) })]));
   const fake = serviceFake({ rows: [...rows.values()], recall: true, semantic });
   const scores = new Map(lexical.map(([id, score]) => [id, score]));
   const distances = new Map(vector.map(([id, distance]) => [id, distance]));
   fake.hooks.lexicalScore = row => scores.get(row.id);
   fake.hooks.vectorDistance = row => distances.get(row.id);
-  fake.deps.config = { fusionPreset: preset };
   return fake;
 }
 
@@ -29,7 +28,7 @@ function assertLexical(result) {
   assert.equal(result.nextCursor, null);
 }
 
-test("hosted recall fuses the golden pools and gates the send before a single read-only run", async () => {
+test("hosted recall fuses the golden pools and gates the send before its read-only runs", async () => {
   const fake = recallFixture();
   const service = createMemoryService(fake.deps);
   const result = await service.recall(hostedScope, "A Query", page);
@@ -40,15 +39,17 @@ test("hosted recall fuses the golden pools and gates the send before a single re
     (lexical === null ? 0 : 0.5 / (60 + lexical)) + (vector === null ? 0 : 1 / (60 + vector))));
   assert.equal(result.nextCursor, null);
   assert.deepEqual(methods(fake), [
-    "gate", "embedQuery", "run", "snapshot.stateToken", "lexical.lexical", "vector.vector", "hydrate.hydrate", "fence.assertVisible",
+    "gate", "embedQuery", "run", "snapshot.stateToken", "lexical.lexical", "vector.vector",
+    "run", "hydrate.hydrate", "fence.assertVisible",
   ]);
-  const [gate, embed, run, token, lexical, vector, hydrate, fence] = fake.calls;
+  const [gate, embed, run, token, lexical, vector, delivery, hydrate, fence] = fake.calls;
   assert.deepEqual(gate, ["gate", hostedScope.owner, "dispatch"]);
   assert.deepEqual(embed, ["embedQuery", hostedScope.owner, "a query", { budgetClass: "recall" }]);
   assert.deepEqual(run, ["run", hostedScope.owner, { readOnly: true }]);
   assert.deepEqual(token, ["snapshot.stateToken", readScope]);
   assert.deepEqual(lexical, ["lexical.lexical", readScope, "A Query", 50, {}]);
   assert.deepEqual(vector, ["vector.vector", readScope, Float32Array.of(1), "query-model", 50]);
+  assert.deepEqual(delivery, run);
   const refs = ids(result).map(id => ({ type: "memory", namespace: null, id }));
   assert.deepEqual(hydrate, ["hydrate.hydrate", readScope, refs, "recall"]);
   assert.deepEqual(fence, ["fence.assertVisible", readScope, refs]);
@@ -104,7 +105,7 @@ test("hosted offset pages cross the pool boundary and end at the 100-row fused u
 test("hosted lexical-only uses relevance and can page beyond the hybrid pool", async () => {
   const fake = recallFixture({ semantic: false });
   assertLexical(await createMemoryService(fake.deps).recall(hostedScope, "query", page));
-  assert.deepEqual(methods(fake), ["run", "snapshot.stateToken", "lexical.lexical", "hydrate.hydrate", "fence.assertVisible"]);
+  assert.deepEqual(methods(fake), ["run", "snapshot.stateToken", "lexical.lexical", "run", "hydrate.hydrate", "fence.assertVisible"]);
 
   // Hosted src/memory/search.ts:64–74. This route has no 50-row lexical cutoff.
   const { deps } = recallFixture({ lexical: longLexical, vector: [], semantic: false });
@@ -118,23 +119,11 @@ test("hosted lexical-only uses relevance and can page beyond the hybrid pool", a
   assert.equal(last.nextCursor, null);
 });
 
-test("engine preset keeps canonical ranking and applies the plugin floor after fusion", async () => {
-  const { deps, calls } = recallFixture({
-    preset: "rrf-k60-d12",
-    lexical: [["z", 3, 2000], ["a", 3, 1000]],
-    vector: [["z", 0.9, 2000], ["over", 0.46, 1000]],
-  });
-  const service = createMemoryService(deps);
-  // The engine preset gives z two rank-2 contributions and breaks the rank-1 tie by ID.
-  const search = await service.recall(hostedScope, "query", page);
-  assert.deepEqual(ids(search), ["z", "a", "over"]);
-  const rank1 = 0.45 * (1 / 61);
-  const rank2 = 0.45 * (1 / 62);
-  assert.deepEqual(search.scores, [rank2 + rank2, rank1, rank1]);
-  assert.equal(calls.find(([method]) => method === "vector.vector").at(-1), 12);
-  const plugin = await service.recall(hostedScope, "query", { ...page, mode: "plugin" });
-  assert.deepEqual(ids(plugin), ["z", "a"]);
-  assert.deepEqual(plugin.scores, [rank2 + rank2, rank1]);
+test("service construction rejects the removed fusionPreset config", () => {
+  const { deps } = recallFixture();
+  for (const fusionPreset of ["rrf-k60-d12", "hosted", undefined]) {
+    assert.throws(() => createMemoryService({ ...deps, config: { fusionPreset } }), code("invalid_input"));
+  }
 });
 
 test("incomplete semantic coverage discards the entire vector list", async () => {
@@ -155,7 +144,7 @@ test("missing query embedder or vector capability prevents semantic dispatch", a
     const fake = recallFixture();
     disable(fake);
     assertLexical(await createMemoryService(fake.deps).recall(hostedScope, "query", page));
-    assert.deepEqual(methods(fake), ["run", "snapshot.stateToken", "lexical.lexical", "hydrate.hydrate", "fence.assertVisible"]);
+    assert.deepEqual(methods(fake), ["run", "snapshot.stateToken", "lexical.lexical", "run", "hydrate.hydrate", "fence.assertVisible"]);
   }
 });
 
@@ -168,7 +157,7 @@ test("closed dispatch gate means lexical recall in both modes with zero query em
     assertLexical(await service.recall(hostedScope, "query", { ...page, mode }));
   }
   assert.deepEqual(methods(fake), Array.from({ length: 2 }, () =>
-    ["gate", "run", "snapshot.stateToken", "lexical.lexical", "hydrate.hydrate", "fence.assertVisible"]).flat());
+    ["gate", "run", "snapshot.stateToken", "lexical.lexical", "run", "hydrate.hydrate", "fence.assertVisible"]).flat());
 });
 
 test("query embed failure leaves lexical recall available", async () => {
@@ -176,11 +165,67 @@ test("query embed failure leaves lexical recall available", async () => {
   fake.hooks.embedQuery = () => { throw new Error("provider details"); };
   assertLexical(await createMemoryService(fake.deps).recall(hostedScope, "query", page));
   assert.deepEqual(methods(fake), [
-    "gate", "embedQuery", "run", "snapshot.stateToken", "lexical.lexical", "hydrate.hydrate", "fence.assertVisible",
+    "gate", "embedQuery", "run", "snapshot.stateToken", "lexical.lexical", "run", "hydrate.hydrate", "fence.assertVisible",
   ]);
 });
 
-test("candidate snapshot and final fence prevent delivery of forgotten and out-of-scope memories", async () => {
+function pagingFixture() {
+  return recallFixture({
+    lexical: [["A", 2, 1000], ["B", 1, 1000]],
+    vector: [["B", 0.1, 1000], ["A", 0.2, 1000]],
+  });
+}
+
+test("a hybrid cursor becomes stale when its next embed fails", async () => {
+  const fake = pagingFixture();
+  const service = createMemoryService(fake.deps);
+  const options = { ...page, limit: 1 };
+  const first = await service.recall(hostedScope, "query", options);
+  assert.deepEqual(ids(first), ["B"]);
+  assert.ok(first.nextCursor);
+  fake.hooks.embedQuery = () => { throw new Error("embed failed on continuation"); };
+  await assert.rejects(() => service.recall(hostedScope, "query", { ...options, cursor: first.nextCursor }),
+    code("cursor_stale"));
+});
+
+test("a hybrid cursor becomes stale if dispatch, capability or complete coverage is lost", async () => {
+  for (const disable of [
+    fake => { fake.hooks.gate = () => { throw new CoreError("capture_paused"); }; },
+    fake => { fake.storage.capabilities.semanticRetrieval = false; },
+    fake => { fake.hooks.coverage = { eligible: 2, embedded: 1, complete: false }; },
+  ]) {
+    const fake = pagingFixture();
+    const service = createMemoryService(fake.deps);
+    const options = { ...page, limit: 1 };
+    const first = await service.recall(hostedScope, "query", options);
+    assert.deepEqual(ids(first), ["B"]);
+    assert.ok(first.nextCursor);
+    disable(fake);
+    fake.calls.length = 0;
+    await assert.rejects(() => service.recall(hostedScope, "query", { ...options, cursor: first.nextCursor }),
+      code("cursor_stale"));
+    assert.ok(!methods(fake).includes("hydrate.hydrate"));
+  }
+});
+
+test("a lexical cursor continues without calling the gate or query embedder", async () => {
+  const fake = pagingFixture();
+  const service = createMemoryService(fake.deps);
+  const options = { ...page, limit: 1 };
+  fake.hooks.embedQuery = () => { throw new Error("embed failed on first page"); };
+  const first = await service.recall(hostedScope, "query", options);
+  assert.deepEqual(ids(first), ["A"]);
+  assert.ok(first.nextCursor);
+  delete fake.hooks.embedQuery;
+  fake.calls.length = 0;
+  const second = await service.recall(hostedScope, "query", { ...options, cursor: first.nextCursor });
+  assert.deepEqual(methods(fake).filter(method => method === "gate" || method === "embedQuery"), []);
+  assert.deepEqual(ids(second), ["B"]);
+  assert.deepEqual(second.scores, [1]);
+  assert.equal(second.nextCursor, null);
+});
+
+test("recall omits a forget committed after candidate collection and rejects out-of-scope hydration", async () => {
   const forgotten = memory("forgotten");
   const racing = memory("racing");
   const wrongOwner = memory("same-id", { scope: { owner: "other-owner", namespace: null } });
@@ -193,10 +238,9 @@ test("candidate snapshot and final fence prevent delivery of forgotten and out-o
   fake.hooks.vectorDistance = () => 0.2;
   fake.hooks.afterLexical = rows => {
     assert.deepEqual(rows.map(row => row.ref.id), ["same-id", "racing", "visible"]);
-    fake.forget(racing);
+    fake.commitForget(racing);
   };
   fake.hooks.hydrate = rows => {
-    assert.deepEqual(rows.map(({ ref }) => ref.id).sort(), ["racing", "same-id", "visible"]);
     return rows.map(result => result.memory === local ? { ...result, memory: wrongOwner } : result);
   };
   const result = await createMemoryService(fake.deps).recall(hostedScope, "query", page);
@@ -204,6 +248,25 @@ test("candidate snapshot and final fence prevent delivery of forgotten and out-o
   assert.deepEqual(result.scores, [0.5 / 63 + 1 / 61]);
   assert.equal(methods(fake).at(-1), "fence.assertVisible");
 });
+
+for (const route of ["recent", "blank recall"]) {
+  test(`${route} omits a forget committed after the recent page read`, async () => {
+    const gone = memory("gone", { updatedAtUs: 2000n });
+    const older = memory("older");
+    const fake = serviceFake({ rows: [gone, older] });
+    const service = createMemoryService(fake.deps);
+    fake.hooks.afterRecentPage = ({ items }) => {
+      assert.deepEqual(items, [gone]);
+      fake.commitForget(gone);
+    };
+    const result = route === "recent"
+      ? await service.recent(hostedScope, { cursor: null, limit: 1 })
+      : await service.recall(hostedScope, " \t", { ...page, limit: 1 });
+    assert.deepEqual(result.items, []);
+    assert.ok(result.nextCursor);
+    if (route === "blank recall") assert.deepEqual(result.scores, []);
+  });
+}
 
 test("a fence-dropped page still advances over the scanned ranks", async () => {
   const fake = recallFixture();
@@ -226,6 +289,8 @@ test("recall cursors bind request, route, and state with OS1 error classificatio
   const first = await service.recall(hostedScope, "query", options);
   assert.ok(first.nextCursor);
   const next = { ...options, cursor: first.nextCursor };
+  const [, owner, namespace, digest, mode, limit, token, offset] = decodeCursor(first.nextCursor);
+  const oldCursor = encodeCursor(["recall-v1", owner, namespace, digest, mode, limit, "hosted", token, offset]);
   const { nextCursor: recentCursor } = await service.recent(hostedScope, optionsForRecent(options));
   fake.calls.length = 0;
   for (const invoke of [
@@ -237,6 +302,7 @@ test("recall cursors bind request, route, and state with OS1 error classificatio
     () => service.recall(hostedScope, "", next),
     () => service.recent(hostedScope, optionsForRecent(next)),
     () => service.recall(hostedScope, "query", { ...next, cursor: recentCursor }),
+    () => service.recall(hostedScope, "query", { ...next, cursor: oldCursor }),
     () => service.recall(hostedScope, "query", { ...next, cursor: encodeCursor(1) }),
     () => service.recall(hostedScope, "query", { ...next, cursor: encodeCursor(["recall-v0"]) }),
   ]) await assert.rejects(invoke, code("cursor_stale"));
@@ -261,7 +327,7 @@ test("blank recall delegates to recent with zero scores and a bound cursor", asy
   assert.deepEqual(ids(first), ["a-newer"]);
   assert.deepEqual(first.scores, [0]);
   assert.ok(first.nextCursor);
-  assert.deepEqual(methods(fake), ["run", "snapshot.stateToken", "recent.recent", "fence.assertVisible"]);
+  assert.deepEqual(methods(fake), ["run", "snapshot.stateToken", "recent.recent", "run", "fence.assertVisible"]);
   const next = { ...options, cursor: first.nextCursor };
   await assert.rejects(() => service.recall(hostedScope, "query", next), code("cursor_stale"));
   await assert.rejects(() => service.recall(hostedScope, "", { ...next, mode: "plugin" }), code("cursor_stale"));
