@@ -1,4 +1,4 @@
-import { ledgerNamespace, ledgerSourceKey, rowsFrom } from './quantity-ledger.mjs';
+import { bindLedgerRows, ledgerNamespace, ledgerSourceKey, rowsFrom } from './quantity-ledger.mjs';
 import { captureSnapshot } from './capture-input.mjs';
 import { bindCommitRuntime, dispatchSynchronousCommit, withSynchronousCommitScope } from './commit-dispatch.mjs';
 import { captureDispatch, captureSourceBusy } from './capture-source-safety.mjs';
@@ -836,7 +836,7 @@ export function createMemoryRuntime(input, internal) {
       AND event_id=? AND role='user' ORDER BY rowid LIMIT 1`).get(memory.id, source.client, source.sessionId, source.eventId);
     if (!anchor) return;
     const sourceKey = ledgerSourceKey(source);
-    const boundRows = rows.map(row => ({ ...row, sourceKey, receiptId: anchor.id }));
+    const boundRows = bindLedgerRows(rows, sourceKey, anchor.id);
     publishLedger(() => ledgerPort.put(ledgerNamespace(ns), memory.id, memory.revision, boundRows));
   });
   const dropLedger = ledgerPort && ((ns, id) => publishLedger(() => ledgerPort.drop(ledgerNamespace(ns), id)));

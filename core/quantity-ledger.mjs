@@ -152,14 +152,17 @@ export function digest(rows, goals, window) {
 }
 
 /**
- * A synchronous port is scoped by the exact namespace. Each put inserts a
- * source message's amounts once per receipt incarnation, retaining all earlier
- * writes across revisions and failures. Revision remains write metadata.
- * drop removes all sources for a memory. list accepts optional inclusive UTC
- * date bounds and returns detached rows, including each row's receiptId.
+ * A synchronous port is scoped by the exact namespace. Each put inserts amounts
+ * once per receipt ID, measure, category, value, unit, period, comparator and
+ * ordinal, retaining earlier writes across revisions and failures. A missing
+ * ordinal counts as zero. Revision remains write metadata. drop removes all
+ * amounts for a memory. list accepts optional inclusive UTC date bounds and
+ * returns detached rows. terms optionally returns distinct stored measures,
+ * categories and groups across all dates.
  * @typedef {{put(namespace: object, memoryId: string, revision: number, rows: object[]): void,
  *   drop(namespace: object, memoryId: string): void,
- *   list(namespace: object, window: {from?: string, to?: string}): object[]}} LedgerPort
+ *   list(namespace: object, window: {from?: string, to?: string}): object[],
+ *   terms?(namespace: object): string[]}} LedgerPort
  */
 
 /** @returns {LedgerPort} */
@@ -167,23 +170,41 @@ export function createInMemoryLedgerPort() {
   const namespaces = new Map();
   return {
     put(namespace, memoryId, revision, rows) {
-      const id = namespaceKey(namespace), memories = namespaces.get(id) ?? new Map();
-      const sources = new Map(memories.get(memoryId));
-      for (const [source, entries] of by(rows, row => key(row.sourceKey, row.receiptId))) {
-        if (!sources.has(source)) sources.set(source, entries.map(row => ({ ...row, memoryId, revision })));
+      const id = namespaceKey(namespace);
+      const state = namespaces.get(id) ?? { memories: new Map(), terms: new Map() };
+      const memory = state.memories.get(memoryId) ?? { rows: new Map(), terms: new Set() };
+      for (const row of rows) {
+        const identity = ledgerRowKey(row);
+        if (memory.rows.has(identity)) continue;
+        memory.rows.set(identity, { ...row, memoryId, revision });
+        for (const term of [row.measure, row.category, row.group]) {
+          if (!term || memory.terms.has(term)) continue;
+          memory.terms.add(term);
+          state.terms.set(term, (state.terms.get(term) ?? 0) + 1);
+        }
       }
-      memories.set(memoryId, sources);
-      namespaces.set(id, memories);
+      state.memories.set(memoryId, memory);
+      namespaces.set(id, state);
     },
     drop(namespace, memoryId) {
-      const id = namespaceKey(namespace), memories = namespaces.get(id);
-      memories?.delete(memoryId);
-      if (memories?.size === 0) namespaces.delete(id);
+      const id = namespaceKey(namespace), state = namespaces.get(id);
+      const memory = state?.memories.get(memoryId);
+      if (!memory) return;
+      for (const term of memory.terms) {
+        const count = state.terms.get(term);
+        if (count === 1) state.terms.delete(term);
+        else state.terms.set(term, count - 1);
+      }
+      state.memories.delete(memoryId);
+      if (state.memories.size === 0) namespaces.delete(id);
     },
     list(namespace, { from = '', to = '9999-12-31' } = {}) {
-      return [...(namespaces.get(namespaceKey(namespace))?.values() ?? [])]
-        .flatMap(sources => [...sources.values()].flat()
+      return [...(namespaces.get(namespaceKey(namespace))?.memories.values() ?? [])]
+        .flatMap(memory => [...memory.rows.values()]
           .filter(row => inWindow(row, { from, to })).map(row => ({ ...row })));
+    },
+    terms(namespace) {
+      return [...(namespaces.get(namespaceKey(namespace))?.terms.keys() ?? [])];
     },
   };
 }
@@ -235,11 +256,21 @@ function matchesTerms(query, terms) {
 
 export const ledgerSourceKey = receipt => key(receipt.client, receipt.sessionId, receipt.eventId);
 
-const countTerms = new Set([...groups, 'spend', 'purchase', 'step', 'steps', 'sleep', 'hour', 'hours',
-  'weight', 'distance', 'calorie', 'record']);
+export const hasNonCountLedgerCue = query => hasLedgerCue(query.replace(/\bhow many\b/giu, ''));
 
-export function mayHaveLedgerIntent(query) {
-  // A bare count question needs a ledger measure or group to justify a scan.
-  return hasLedgerCue(query.replace(/\bhow many\b/giu, '')) ||
-    /\bhow many\b/iu.test(query) && matchesTerms(query, countTerms);
+export const matchesLedgerTerms = (query, terms) => matchesTerms(query, new Set(terms.flatMap(words)));
+
+export function bindLedgerRows(rows, sourceKey, receiptId) {
+  const nextOrdinal = new Map();
+  return rows.map(row => {
+    const bound = { ...row, sourceKey, receiptId };
+    const identity = ledgerRowKey(bound, 0);
+    const ordinal = nextOrdinal.get(identity) ?? 0;
+    nextOrdinal.set(identity, ordinal + 1);
+    return { ...bound, ordinal };
+  });
+}
+
+function ledgerRowKey(row, ordinal = row.ordinal ?? 0) {
+  return key(row.receiptId, row.measure, row.category, row.value, row.unit, row.period, row.comparator, ordinal);
 }

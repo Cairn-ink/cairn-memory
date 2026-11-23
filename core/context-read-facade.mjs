@@ -5,7 +5,7 @@ import { withContentSuppressionRequest, inContentSuppressionRequestInside, asser
 import { contentScopeEpochGuard, assertContentScopes, contentSafetyFacade, assertContentPort, contentAuthorityPort, inertContentPortValue } from './content-safety-boundary.mjs';
 import { receiptEventTimeEnabled, cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety, createContentReadMemo, receiptReadSafety } from './content-safety.mjs';
-import { digest, ledgerNamespace, ledgerSourceKey, mayHaveLedgerIntent, parseWindow, readIntent } from './quantity-ledger.mjs';
+import { digest, hasLedgerCue, hasNonCountLedgerCue, ledgerNamespace, ledgerSourceKey, matchesLedgerTerms, parseWindow, readIntent } from './quantity-ledger.mjs';
 import { resolveContentLayout } from './content-safety-layout.mjs';
 import { sampleLocalStatus } from './context-read-local-status.mjs';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
@@ -920,19 +920,26 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       // Preserve the completed ordinary pack if the optional probe or packing trial cannot deliver.
       let ledger;
       if (options.ledgerPort && input.types.includes('memory') &&
-          mayHaveLedgerIntent(input.query) && performance.now() < deadlineAt) {
+          hasLedgerCue(input.query) && performance.now() < deadlineAt) {
         const optional = collectLedgerChannel(db, read, options.ledgerPort, input, deadlineAt, canonicalFence);
         if (optional && performance.now() < deadlineAt) {
-          const { selected, validateRaw, ...trial } = assemble(packingRaw, optional.item, new WeakSet());
+          const { selected, validateRaw: validateTrialRaw, ...trial } = assemble(packingRaw, optional.item, new WeakSet());
           if (trial.metered.items.includes(optional.item) && !trial.diagnostics.stops.deadline &&
-              validateRaw() && performance.now() < deadlineAt) {
+              validateTrialRaw() && performance.now() < deadlineAt) {
             ledger = optional;
             delivered = selected;
+            validateRaw = validateTrialRaw;
             assembled = trial;
             decorate();
           }
         }
         access.check();
+        // The probe can revoke Raw access even when it leaves the ordinary pack
+        // selected. Check the grant without charging probe time to that pack.
+        if (!validateRaw({ checkDeadline: false })) {
+          ({ selected: delivered, validateRaw, ...assembled } = assemble({ items: [], coverage: 'partial' }, ledger?.item, new WeakSet()));
+          decorate(); access.check();
+        }
       }
       const result = deepFreeze(success(assembled));
       if (bytes(result) > CONTEXT_LIMITS.responseBytes) fail('context_item_too_large');
@@ -1094,6 +1101,12 @@ function collectLedgerChannel(db, read, port, input, deadlineAt, canonicalFence)
   const window = parseWindow(input.query, asOf);
   let partitions;
   try {
+    if (!hasNonCountLedgerCue(input.query)) {
+      const terms = assertContentPort({ invoke: () => typeof port.terms === 'function' ?
+        input.readSet.map(ns => inertContentPortValue(port.terms(ledgerNamespace(ns)))) : null });
+      if (performance.now() >= deadlineAt || terms && (!terms.every(Array.isArray) ||
+          !matchesLedgerTerms(input.query, terms.flat().filter(term => typeof term === 'string')))) return null;
+    }
     partitions = assertContentPort({ invoke: () => input.readSet.map(ns =>
       inertContentPortValue(port.list(ledgerNamespace(ns), { to: asOf.toISOString().slice(0, 10) }))) });
   } catch { return null; }

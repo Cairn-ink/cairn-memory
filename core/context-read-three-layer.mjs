@@ -372,8 +372,12 @@ export function assembleThreeLayerContext(args, raw = unavailable('unavailable')
     // handle is revalidated; a denial anywhere falls back to Memory-only.
     const handles = [...new Set(units.flatMap(unit => unit.evidence.map(item => item.handle)))];
     return { metered: value.metered, snapshot, selected: delivered, diagnostics: diagnostics(selected, value.used),
-      validateRaw() {
-        try { check(); port(() => raw.rawSearch.revalidate(handles)); return true; } catch { return false; }
+      validateRaw({ checkDeadline = true } = {}) {
+        try {
+          if (checkDeadline) check();
+          port(() => raw.rawSearch.revalidate(handles));
+          return true;
+        } catch { return false; }
       } };
   } catch (error) {
     if (['context_item_too_large', 'token_count_unavailable'].includes(error.code)) throw error;

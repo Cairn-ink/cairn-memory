@@ -286,10 +286,13 @@ function publishCaptureAmounts(ns, entries, activeRow, putLedger) {
     const memory = activeRow(ns, memoryId);
     if (memory.currentness === 'historical') continue;
     const sources = amountSources(item);
+    const usedByValue = new Map();
     for (const quantity of item.quantities) {
       const matching = sources.filter(source => source.values.includes(quantity.value));
-      const source = matching.length === 1 ? matching[0] : sources[0];
+      const used = usedByValue.get(quantity.value) ?? 0;
+      const source = matching[Math.min(used, matching.length - 1)] ?? sources[0];
       if (!source) continue;
+      usedByValue.set(quantity.value, used + 1);
       const key = JSON.stringify([memoryId, ledgerSourceKey(source.receipt)]);
       const write = writes.get(key) ?? { memory, receipt: source.receipt, rows: [] };
       write.rows.push(...rowsFrom(memory, memory.revision, quantity, source.time ?? now));
