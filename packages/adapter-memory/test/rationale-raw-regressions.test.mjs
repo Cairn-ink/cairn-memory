@@ -16,6 +16,7 @@ function fixture({ fingerprintKey = true } = {}) {
   const read = fn => uow.run(scope.owner, { readOnly: true }, fn);
   const write = fn => uow.run(scope.owner, { pauseLock: true }, fn);
   const sent = [];
+  let providerCalls = 0;
   const model = { model: "fixture", contextWindow: 8192, countTokens: () => 1 };
   const gate = { async assertOpen(owner) {
     await uow.run(owner, { pauseLock: true, readOnly: true }, async tx => {
@@ -31,6 +32,7 @@ function fixture({ fingerprintKey = true } = {}) {
   const options = { uow, scope, store, retrieval: adapter, gate };
   return {
     adapter, read, write, service, sent,
+    get providerCalls() { return providerCalls; },
     async capture(label, claim, content = claim, { eventId = label, archived = 1 } = {}) {
       const key = { scope, client: "test-client", sessionId: label, eventId, payloadDigest: await sha256Hex(content) };
       const message = { id: "message", role: "user", content, occurredAtMs: 1 };
@@ -51,6 +53,7 @@ function fixture({ fingerprintKey = true } = {}) {
     evidence: ref => read(tx => store.sourceEvidence(tx, scope, [ref])),
     review(refs, edges = []) {
       return relatePlaced({ ...options, refs, model: { ...model, async call(_stage, { input }) {
+        providerCalls++;
         sent.push(...input.memories.flatMap(({ receipts }) => receipts.map(({ excerpt }) => excerpt)));
         return { edges };
       } } });
@@ -102,8 +105,8 @@ async function assertWithheld(f, ref) {
     error => error.code,
   );
   const review = await f.review([ref]);
-  assert.deepEqual({ evidence, sent: f.sent, status: review.status, error: review.error?.code },
-    { evidence: "revision_conflict", sent: [], status: "failed", error: "revision_conflict" });
+  assert.deepEqual({ evidence, sent: f.sent, providerCalls: f.providerCalls, status: review.status, error: review.error?.code },
+    { evidence: "revision_conflict", sent: [], providerCalls: 0, status: "failed", error: "revision_conflict" });
 }
 
 test("a corrected claim embedded in a longer Raw message cannot return as evidence", async () => {
@@ -114,6 +117,16 @@ test("a corrected claim embedded in a longer Raw message cannot return as eviden
   const { ref } = await f.capture("source", claim, content);
   assert.equal((await f.evidence(ref))[0].receipts[0].excerpt, content);
   const result = await f.service.correct(scope, ref.memoryId, ref.revision, "File the catalog beside the register.", editor);
+  assert.equal(result.status, "saved");
+  await assertWithheld(f, { ...ref, revision: result.item.revision });
+});
+
+test("a corrected three-character claim in Raw is withheld from rationale", async () => {
+  const f = fixture();
+  const content = "Send the shipment through LAX";
+  const { ref } = await f.capture("source", "LAX", content);
+  assert.equal((await f.evidence(ref))[0].receipts[0].excerpt, content);
+  const result = await f.service.correct(scope, ref.memoryId, ref.revision, "SFO", editor);
   assert.equal(result.status, "saved");
   await assertWithheld(f, { ...ref, revision: result.item.revision });
 });

@@ -39,6 +39,8 @@ export interface RationaleEdgeStore {
    * Complete receipts in stable order (1–100 per current memory). Read each source message
    * through Raw visibility, including retired receipts, then cut to 800 UTF-16 units on a
    * code-point boundary and check the excerpt against text facts, including containment.
+   * Withhold the receipt when any applicable text fact is too short for containment or
+   * the comparison is otherwise unavailable or uncertain.
    * Missing memory: memory_not_found. Wrong revision or any missing, withheld or uncertain
    * receipt text (including a known Raw key conflict): revision_conflict.
    * More than 100: context_item_too_large.

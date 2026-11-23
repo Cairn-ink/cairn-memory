@@ -80,13 +80,17 @@ async function withholdsExcerpt(scope, facts, excerpt, keys) {
   for (const stored of facts) {
     const { fact } = stored;
     if (fact.kind !== "text") continue;
-    const key = fact.mode === "full" ? keys.find(key => key.id === fact.text.keyId) : undefined;
-    let shingles = key ? shingleCache.get(key.id) : undefined;
-    if (key && !shingles) {
+    // A digest miss alone cannot clear an excerpt for rationale.
+    if (fact.mode !== "full" || !fact.text.shingles?.length) return true;
+    const key = keys.find(key => key.id === fact.text.keyId);
+    if (!key) return true;
+    let shingles = shingleCache.get(key.id);
+    if (!shingles) {
       shingles = await passageShingles(excerpt, key, coreFingerprintLabels);
       shingleCache.set(key.id, shingles);
     }
-    const passage = { digests, keyId: key?.id ?? null, shingles: shingles ?? null };
+    if (!shingles.length) return true;
+    const passage = { digests, keyId: key.id, shingles };
     if (factBlocksIncoming(stored, { scope, passages: [passage] }, { mode: "capture" }) !== false) return true;
   }
   return false;
@@ -130,11 +134,14 @@ export function createRationaleStore(port, matchFacts, ringKeys, findVisibleSour
       const policy = matchFacts(state.facts, target);
       const textFacts = [...state.facts.values()].filter(({ fact }) =>
         fact.kind === "text" && fact.owner === target.owner && (fact.namespace ?? null) === namespace);
-      const keys = !findVisibleSource || textFacts.length ? await ringKeys(tx.owner) : [];
+      const keys = !findVisibleSource || textFacts.length ? await ringKeys(tx.owner).catch(error => {
+        if (textFacts.length) throw new CoreError("revision_conflict");
+        throw error;
+      }) : [];
       /** @param {string} text */
       const checkExcerpt = async text => {
         const excerpt = cutRationaleText(text, RATIONALE_LIMITS.excerptUnits);
-        if (textFacts.length && await withholdsExcerpt(target, textFacts, excerpt, keys)) {
+        if (textFacts.length && await withholdsExcerpt(target, textFacts, excerpt, keys).catch(() => true)) {
           throw new CoreError("revision_conflict");
         }
         return excerpt;

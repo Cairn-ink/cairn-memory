@@ -169,8 +169,10 @@ rules. It checks forget facts, session fences, text and window facts, retired re
 uncertain visibility at read time. It returns one to 100 receipts per memory. Each receipt
 has a stable digest of `(client, sessionId, messageId)`, its role and up to 800 UTF-16 units
 of the source message cut on a code-point boundary. The host applies text facts to that
-excerpt with containment. A missing, withheld or uncertain excerpt, including one from a
-conflicted Raw message key, fails the memory closed with `revision_conflict`. Excess
+excerpt with containment. If any applicable text fact is too short for containment or the
+comparison is otherwise unavailable or uncertain, the host withholds the receipt. A missing,
+withheld or uncertain excerpt, including one from a conflicted Raw message key, fails the
+memory closed with `revision_conflict`. Excess
 receipts or a snapshot over 24,000 serialized UTF-16 units fail before sending with
 `context_item_too_large`. Core uses the whole evidence set with no packing. The
 reference adapter's capture path retains receipt
