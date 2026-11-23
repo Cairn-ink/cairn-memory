@@ -107,7 +107,6 @@ export function createMemoryService(input) {
       listRawMessages: placeholder,
       importMemories: placeholder,
       importRawMessages: placeholder,
-      runCapture: placeholder,
     };
   } catch (error) {
     throw entryError(error);

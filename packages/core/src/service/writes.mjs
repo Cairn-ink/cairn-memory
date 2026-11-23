@@ -38,10 +38,16 @@ function sourceOf(value) {
 }
 
 /** @param {string} raw @returns {Promise<DuplicateQuery>} */
-async function hashesOf(raw) {
+export async function hashesOf(raw) {
   const [core, ...aliases] = await allDigests(raw, null);
   const legacy = aliases.at(-1);
   return { textHash: 'sha256:' + core.value, ...(legacy && { legacyHash: 'sha256:' + legacy.value }) };
+}
+
+/** @param {unknown} vector @param {number} dimensions @returns {vector is Float32Array} */
+export function validWriteEmbedding(vector, dimensions) {
+  return vector instanceof Float32Array && vector.length === dimensions &&
+    vector.every(Number.isFinite) && vector.some(component => component !== 0);
 }
 
 /** @param {WritePolicy} policy @param {boolean} near @param {string} [editId] */
@@ -100,8 +106,7 @@ export function writeMethods({ storage, embedder, gate, clock }) {
     await gate.assertOpen(owner, "dispatch");
     const vectors = await embedder.embed(texts, options);
     const vector = vectors?.[0];
-    if (!Array.isArray(vectors) || vectors.length !== 1 || !(vector instanceof Float32Array) || vector.length !== dimensions ||
-        !vector.every(Number.isFinite) || !vector.some(component => component !== 0)) {
+    if (!Array.isArray(vectors) || vectors.length !== 1 || !validWriteEmbedding(vector, dimensions)) {
       throw new CoreError("embedding_failed");
     }
     if ((await keys.userKey(owner))?.id !== key?.id) throw new CoreError("fingerprint_key_mismatch");
