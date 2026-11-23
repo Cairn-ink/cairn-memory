@@ -1,0 +1,357 @@
+import { CoreError, isErrorCode } from "../../core/src/index.mjs";
+import {
+  clockMs, copyKey, copyMessages, copyPositions, copyScope, identifier, readFailure,
+  readInput, readLease, readSelection, readToken,
+} from "./capture-input.mjs";
+import { createCaptureProofs, filterSources } from "./capture-source.mjs";
+import { toPostgresError } from "./errors.mjs";
+import { requireLiveRun, runOperation } from "./uow.mjs";
+
+/** @import { CaptureClaim, CaptureKey, FinishResult, SourceFilter } from "../../core/src/ports/capture.d.ts" */
+/** @import { CaptureMessage } from "../../core/src/ports/capture.d.ts" */
+/** @import { Tx } from "../../core/src/ports/unit-of-work.d.ts" */
+/** @import { CaptureOptions } from "./capture.d.mts" */
+/** @import { Connection } from "./driver.mjs" */
+/** @typedef {Required<CaptureClaim> & SourceFilter} CapturePorts */
+/** @typedef {Connection["query"]} Query */
+/** @typedef {{
+ *   session_id: string, status: string, core_namespace: string | null, core_payload_digest: string | null,
+ *   core_admitted: boolean | null, core_failure_code: string | null, core_result: FinishResult | null,
+ *   legacy_failed: boolean, raw_archive_from: number | null,
+ *   core_lease_expires_at_ms: string | null, core_lease_sources: {
+ *     times: (number | null)[], proofs: Awaited<ReturnType<ReturnType<typeof createCaptureProofs>>>
+ *   } | null
+ * }} CaptureRow */
+
+// The pause lock is acquired by the UnitOfWork before the owner write lock.
+// Inspect the lock held by this backend without acquiring it in reverse order.
+const HAS_PAUSE_LOCK = `SELECT EXISTS (
+  SELECT 1 FROM pg_catalog.pg_locks
+  CROSS JOIN (SELECT hashtextextended('cairn:memory-pause:' || $1, 0) AS key) AS pause
+  WHERE locktype = 'advisory' AND pid = pg_backend_pid() AND objsubid = 1 AND granted AND mode = 'ExclusiveLock'
+    AND classid::bigint = ((pause.key >> 32) & 4294967295)
+    AND objid::bigint = (pause.key & 4294967295)
+) AS held`;
+const IDENTITY = "user_id = $1 AND client = $2 AND event_id = $3";
+const TOKEN = "user_id = $1 AND core_lease_token = $2";
+// A failed attempt leaves the hosted event queued. Only its ingest job records the failure.
+const LEGACY_FAILED = `core_payload_digest IS NULL AND status <> 'completed' AND EXISTS (
+  SELECT 1 FROM jobs j WHERE j.user_id = capture_events.user_id AND j.kind = 'ingest' AND j.status = 'failed'
+    AND j.capture_id = CASE WHEN capture_events.client = 'mcp'
+      THEN '["mcp",' || to_json(capture_events.event_id)::text || ']'
+      ELSE capture_events.client || ':' || capture_events.event_id END
+)`;
+const SELECT_EVENT = `SELECT session_id, status, raw_archive_from, core_namespace, core_payload_digest, core_admitted,
+    core_failure_code, core_result, core_lease_expires_at_ms::text, core_lease_sources, ${LEGACY_FAILED} AS legacy_failed
+  FROM capture_events WHERE ${IDENTITY}`;
+const LOAD = `SELECT raw_request, core_payload_digest, core_outbox_metadata FROM capture_events
+  WHERE ${IDENTITY} AND session_id = $4 AND core_namespace IS NOT DISTINCT FROM $5 AND core_admitted`;
+const STATUS = `SELECT core_failure_code,
+    CASE WHEN status = 'completed' THEN 2
+      WHEN core_failure_code IS NOT NULL OR (${LEGACY_FAILED}) THEN 1 ELSE 0 END AS status_rank
+  FROM capture_events
+  WHERE user_id = $1 AND event_id = $2 AND core_namespace IS NOT DISTINCT FROM $3
+    AND (core_admitted OR core_payload_digest IS NULL) AND ($4::text IS NULL OR client = $4)
+  ORDER BY status_rank, arrival_order
+  LIMIT 1`;
+const INSERT_EVENT = `INSERT INTO capture_events
+    (user_id, client, event_id, session_id, core_namespace, core_payload_digest, received_at,
+     raw_request, core_admitted, core_outbox_metadata)
+  VALUES ($1, $2, $3, $4, $5, $6, clock_timestamp(), $7::jsonb, $8, $9::jsonb)
+  ON CONFLICT (user_id, client, event_id) DO NOTHING RETURNING 1`;
+const SET_LEASE = `UPDATE capture_events SET core_lease_token = $4, core_lease_expires_at_ms = $5,
+    core_lease_sources = $6::jsonb, core_dispatched = false WHERE ${IDENTITY}`;
+const WAS_ABANDONED = `SELECT 1 FROM capture_events WHERE user_id = $1 AND core_abandoned_tokens IS NOT NULL
+  AND core_abandoned_tokens @> ARRAY[$2::uuid] LIMIT 1`;
+const ABANDON = `UPDATE capture_events SET core_lease_token = NULL, core_lease_expires_at_ms = NULL,
+    core_lease_sources = NULL, core_dispatched = false, core_failure_code = $3,
+    core_abandoned_tokens = array_append(core_abandoned_tokens, $2::uuid) WHERE ${TOKEN}`;
+
+/** @param {Pick<CaptureKey, "scope" | "client" | "eventId">} key */
+function identity({ scope, client, eventId }) {
+  return [scope.owner, client, eventId];
+}
+
+/** @param {CaptureRow} row @param {CaptureKey} key */
+function assertSameEvent(row, key) {
+  if (row.core_payload_digest !== key.payloadDigest || row.session_id !== key.sessionId) {
+    throw new CoreError("event_payload_conflict");
+  }
+}
+
+/** @param {CaptureRow} row @param {CaptureKey} key */
+function storedRetry(row, key) {
+  // Hosted completion records the ledger status without a Core result.
+  if (row.status === "completed" && row.core_result === null) return /** @type {const} */ ({ status: "duplicate" });
+  if (row.core_payload_digest === null) {
+    const acknowledged = row.status === "completed" || (row.status === "queued" && row.legacy_failed);
+    return /** @type {const} */ ({ status: acknowledged ? "duplicate" : "processing" });
+  }
+  assertSameEvent(row, key);
+  if (row.status === "completed" && row.core_result !== null) {
+    return /** @type {const} */ ({ status: "rawReplay", result: row.core_result });
+  }
+  // Both writers start at pending. A persisted raw archive cut identifies work the hosted consumer has planned.
+  if (row.status === "queued" || (row.status === "pending" && row.raw_archive_from !== null)) {
+    return /** @type {const} */ ({ status: "processing" });
+  }
+}
+
+/** @param {CaptureRow} row @param {bigint} now */
+function hasLiveLease(row, now) {
+  return row.core_lease_expires_at_ms !== null && now < BigInt(row.core_lease_expires_at_ms);
+}
+
+/** @param {Query} query @param {CaptureKey} key @param {CaptureMessage[]} [batch]
+ * @returns {Promise<CaptureRow | undefined>}
+ */
+async function reserveEvent(query, key, batch) {
+  const params = identity(key);
+  const select = SELECT_EVENT + " FOR UPDATE";
+  const { rows: [existing] } = await query(select, params);
+  if (existing) return existing;
+  const { raw, metadata } = encodeRequest(key, batch ?? []);
+  const { rows } = await query(INSERT_EVENT, [
+    ...params, key.sessionId, key.scope.namespace, key.payloadDigest, raw, batch !== undefined, metadata,
+  ]);
+  if (rows.length) return undefined;
+  // The existing ledger can also be written by the hosted producer.
+  const { rows: [concurrent] } = await query(select, params);
+  if (!concurrent) throw new CoreError("storage_busy");
+  return concurrent;
+}
+
+/** @param {Query} query @param {string} owner @param {string} token @param {() => number} now */
+async function requireLiveToken(query, owner, token, now) {
+  const { rows: [row] } = await query(`SELECT core_lease_expires_at_ms::text, core_dispatched
+    FROM capture_events WHERE ${TOKEN} FOR UPDATE`, [owner, token]);
+  if (!row || !hasLiveLease(row, clockMs(now()))) throw new CoreError("stale_admission");
+  return row;
+}
+
+/**
+ * Prepare inputs synchronously, then check the pause lock before touching capture state.
+ * Guard and validation failures leave an otherwise usable run, as in the reference adapter.
+ * @template T @param {Tx} tx @param {() => (query: Query) => Promise<T>} prepare
+ */
+async function pauseLockedWrite(tx, prepare) {
+  requireLiveRun(tx, true);
+  /** @type {((query: Query) => Promise<T>) | undefined} */
+  let body;
+  /** @type {CoreError | undefined} */
+  let invalidInput;
+  try {
+    body = prepare();
+  } catch (error) {
+    invalidInput = toPostgresError(error);
+  }
+  const result = await runOperation(tx, async (query) => {
+    const { rows: [lock] } = await query(HAS_PAUSE_LOCK, [tx.owner]);
+    if (lock?.held !== true) return { error: new CoreError("internal_error") };
+    if (!body) return { error: invalidInput };
+    return { value: await body(query) };
+  });
+  if ("value" in result) return /** @type {T} */ (result.value);
+  throw result.error;
+}
+
+/** @param {CaptureOptions} options @returns {CapturePorts} */
+export function createPostgresCapturePorts(options) {
+  const { now = Date.now, lineageSecret, hashSessionKey } = options ?? {};
+  if (typeof lineageSecret !== "string" || lineageSecret.length === 0) throw new CoreError("invalid_input");
+  const captureProofs = createCaptureProofs(lineageSecret);
+
+  return {
+    async claim(tx, key, messages, options) {
+      return pauseLockedWrite(tx, () => {
+        const copy = copyKey(tx, key);
+        const batch = copyMessages(messages);
+        const leaseMs = readLease(options);
+        return async (query) => {
+          const row = await reserveEvent(query, copy);
+          if (row) {
+            const retry = storedRetry(row, copy);
+            if (retry) return retry;
+            if (row.core_failure_code !== null) return { status: "duplicate" };
+          }
+          const current = clockMs(now());
+          if (row && hasLiveLease(row, current)) return { status: "processing" };
+
+          const source = row?.core_admitted ? await loadAdmission(query, copy, row.core_namespace) : null;
+          if (row?.core_admitted && !source) throw new CoreError("internal_error");
+          const stored = source?.messages ?? batch;
+          const times = stored.map(({ occurredAtMs }) => occurredAtMs);
+          const proofs = await captureProofs(copy, stored);
+          const token = crypto.randomUUID();
+          await query(SET_LEASE, [
+            ...identity(copy), token, (current + BigInt(leaseMs)).toString(), JSON.stringify({ times, proofs }),
+          ]);
+          return { status: "claimed", token };
+        };
+      });
+    },
+
+    async beginDispatch(tx, token) {
+      return pauseLockedWrite(tx, () => {
+        const lease = readToken(token);
+        return async (query) => {
+          if (lease === null) throw new CoreError("stale_admission");
+          const row = await requireLiveToken(query, tx.owner, lease, now);
+          if (!row.core_dispatched) {
+            await query(`UPDATE capture_events SET core_dispatched = true WHERE ${TOKEN}`, [tx.owner, lease]);
+          }
+          return { token: lease };
+        };
+      });
+    },
+
+    async abandon(tx, token, failure) {
+      return pauseLockedWrite(tx, () => {
+        const lease = readToken(token);
+        const { code, retryable } = readFailure(failure);
+        return async (query) => {
+          if (lease === null) throw new CoreError("stale_admission");
+          const params = [tx.owner, lease];
+          const { rows } = await query(WAS_ABANDONED, params);
+          if (rows.length) return;
+          await requireLiveToken(query, tx.owner, lease, now);
+          await query(ABANDON, [...params, retryable ? null : code]);
+        };
+      });
+    },
+
+    async admit(tx, key, messages) {
+      return pauseLockedWrite(tx, () => {
+        const copy = copyKey(tx, key);
+        const batch = copyMessages(messages);
+        return async (query) => {
+          const row = await reserveEvent(query, copy, batch);
+          if (!row) return { status: "admitted" };
+          const retry = storedRetry(row, copy);
+          if (retry) return retry;
+          if (row.core_lease_expires_at_ms !== null && hasLiveLease(row, clockMs(now()))) {
+            return { status: "processing" };
+          }
+          return { status: "duplicate" };
+        };
+      });
+    },
+
+    async load(tx, selection) {
+      requireLiveRun(tx);
+      const copy = readInput(() => {
+        const scope = selection?.scope;
+        if (scope?.owner !== tx.owner) throw new CoreError("internal_error");
+        return readSelection(tx, selection);
+      });
+      return runOperation(tx, (query) => loadAdmission(query, copy, copy.scope.namespace));
+    },
+
+    async status(tx, scope, eventId, client) {
+      requireLiveRun(tx);
+      const [owner, event, namespace, selectedClient] = readInput(() => {
+        const { owner, namespace } = copyScope(tx, scope);
+        return [owner, identifier(eventId), namespace, client === undefined ? null : identifier(client)];
+      });
+      return runOperation(tx, async (query) => {
+        const { rows: [row] } = await query(STATUS, [owner, event, namespace, selectedClient]);
+        if (!row) return { status: "unknown" };
+        if (row.status_rank === 2) return { status: "done" };
+        if (row.core_failure_code !== null) {
+          if (!isErrorCode(row.core_failure_code)) throw new CoreError("internal_error");
+          return { status: "failed", code: row.core_failure_code };
+        }
+        return { status: row.status_rank === 1 ? "failed" : "pending" };
+      });
+    },
+
+    async eligible(tx, key, messages) {
+      requireLiveRun(tx);
+      const [copy, batch] = readInput(() => /** @type {const} */ ([copyKey(tx, key), copyMessages(messages)]));
+      return runOperation(tx, async (query) => filterSources(query, copy, batch.map(({ occurredAtMs }) => occurredAtMs),
+        await captureProofs(copy, batch), "read", hashSessionKey));
+    },
+
+    async assertEligible(tx, key, positions) {
+      requireLiveRun(tx, true);
+      const [copy, selected] = readInput(() => /** @type {const} */ ([copyKey(tx, key), copyPositions(positions)]));
+      return runOperation(tx, async (query) => {
+        /** @type {{rows: CaptureRow[]}} */
+        const { rows: [row] } = await query(SELECT_EVENT, identity(copy));
+        if (!row || row.core_namespace !== copy.scope.namespace || row.core_payload_digest === null) {
+          throw new CoreError("stale_admission");
+        }
+        assertSameEvent(row, copy);
+        if (!row.core_lease_sources || !hasLiveLease(row, clockMs(now()))) throw new CoreError("stale_admission");
+        const { times, proofs } = row.core_lease_sources;
+        const selectedTimes = selected.map((position) => {
+          if (position >= times.length) throw new CoreError("invalid_input");
+          return times[position];
+        });
+        await filterSources(query, copy, selectedTimes, proofs, "assert", hashSessionKey);
+      });
+    },
+  };
+}
+
+/** @param {string} value */
+function requestIdentifier(value) {
+  // Avoid cutting a surrogate pair at the stored-request length limit.
+  return value.slice(0, 200).replace(/[\uD800-\uDBFF]$/u, "");
+}
+
+/** @param {CaptureKey} key @param {CaptureMessage[]} batch */
+function encodeRequest(key, batch) {
+  if (batch.length > 24) throw new CoreError("invalid_input");
+  /** @type {Record<number, {id?: string, occurredAtMs?: number}>} */
+  const metadata = {};
+  const ids = new Set(batch.map(({ id }) => id));
+  const messages = batch.map(({ id, role, content, occurredAtMs }, index) => {
+    let storedId = id;
+    if (id.length === 0 || id.length > 200) {
+      storedId = `message-${index}`;
+      while (ids.has(storedId)) storedId += "-";
+      ids.add(storedId);
+      metadata[index] = { id };
+    }
+    const time = occurredAtMs !== null && Math.abs(occurredAtMs) <= 8.64e15
+      ? new Date(occurredAtMs).toISOString() : undefined;
+    const occurredAt = time?.length === 24 && !time.startsWith("0000") ? time : undefined;
+    if (occurredAt === undefined && occurredAtMs !== null) {
+      metadata[index] = { ...metadata[index], occurredAtMs };
+    }
+    return { id: storedId, role, content, ...(occurredAt === undefined ? {} : { occurred_at: occurredAt }) };
+  });
+  const request = {
+    client: requestIdentifier(key.client), event_id: requestIdentifier(key.eventId).padEnd(8, "-"),
+    session_id: requestIdentifier(key.sessionId), messages,
+    ...(messages.length ? {} : { boundary: "SessionEnd" }),
+  };
+  return {
+    raw: jsonbSource(request),
+    metadata: Object.keys(metadata).length ? jsonbSource(metadata) : null,
+  };
+}
+
+/** @param {object} value */
+function jsonbSource(value) {
+  const json = JSON.stringify(value);
+  // A free-form message ID may contain NUL or an unpaired surrogate, which JSONB cannot decode.
+  return /\\u(?:0000|d[89a-f][0-9a-f]{2})/iu.test(json) ? JSON.stringify(json) : json;
+}
+
+/** @param {Query} query @param {Omit<CaptureKey, "payloadDigest">} selection @param {string | null} namespace */
+async function loadAdmission(query, selection, namespace) {
+  const { rows: [row] } = await query(LOAD, [...identity(selection), selection.sessionId, namespace]);
+  if (!row) return null;
+  const { raw_request: raw, core_payload_digest: payloadDigest, core_outbox_metadata: extra } = row;
+  const { messages } = typeof raw === "string" ? JSON.parse(raw) : raw;
+  const metadata = typeof extra === "string" ? JSON.parse(extra) : extra;
+  // Older Core outboxes stored message times directly in milliseconds.
+  const batch = messages.map(({ id, role, content, occurred_at, occurredAtMs }, index) => ({
+    id, role, content, occurredAtMs: occurredAtMs ?? (occurred_at === undefined ? null : Date.parse(occurred_at)),
+    ...metadata?.[index],
+  }));
+  return { key: { ...selection, scope: { owner: selection.scope.owner, namespace }, payloadDigest },
+    messages: copyMessages(batch) };
+}

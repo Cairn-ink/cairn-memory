@@ -8,8 +8,8 @@ import * as kit from "@cairn-ink/conformance";
 import { capabilities, factIncarnationBody } from "@cairn-ink/core";
 import { toPostgresError } from "../src/errors.mjs";
 import {
-  applyMigrations, createPostgresDigestGate, createPostgresMemoryReads, createPostgresMemoryStore, createPostgresPauseStore,
-  createPostgresSupersessionStore, createPostgresSuppressionStore, createPostgresUnitOfWork, query,
+  applyMigrations, createPostgresCapturePorts, createPostgresDigestGate, createPostgresMemoryReads, createPostgresMemoryStore,
+  createPostgresPauseStore, createPostgresSupersessionStore, createPostgresSuppressionStore, createPostgresUnitOfWork, query,
 } from "../src/index.mjs";
 import { advanceIndex, timestampUs } from "../src/memory-rows.mjs";
 
@@ -22,7 +22,7 @@ const nativeCodes = [...busyNativeCodes, "57014", "08000", "57P01", "57P02", "57
 const nativeErrorMap = Object.fromEntries(nativeCodes.map((code) => [code, toPostgresError({ code }).code]));
 
 // Cast bigint counters and the vector projection to text before JSON decoding.
-// Read the fixture tables from the same committed snapshot.
+// One statement reads the tables from the same committed snapshot.
 const dumpSql = `SELECT jsonb_build_object(
   'facts', ARRAY(
     SELECT to_jsonb(f) || jsonb_build_object('epoch', f.epoch::text, 'embedding', f.embedding::text)
@@ -42,6 +42,9 @@ const dumpSql = `SELECT jsonb_build_object(
   'ownerState', ARRAY(
     SELECT to_jsonb(s) || jsonb_build_object('fact_epoch', s.fact_epoch::text, 'index_revision', s.index_revision::text)
     FROM core_owner_state s ORDER BY s.user_id
+  ),
+  'captureEvents', ARRAY(
+    SELECT to_jsonb(e) FROM capture_events e ORDER BY e.user_id, e.client, e.event_id
   )
 ) AS snapshot`;
 
@@ -109,6 +112,21 @@ const concurrentIndexes = {
     name: "memories_user_oldest_idx",
     table: "memories",
     definition: "CREATE INDEX memories_user_oldest_idx ON public.memories USING btree (user_id, created_at, id)",
+  },
+  "0018_core_capture_lease_idx.concurrent.sql": {
+    name: "capture_events_core_lease_idx",
+    table: "capture_events",
+    definition: "CREATE UNIQUE INDEX capture_events_core_lease_idx ON public.capture_events USING btree (user_id, core_lease_token) WHERE (core_lease_token IS NOT NULL)",
+  },
+  "0019_core_capture_status_idx.concurrent.sql": {
+    name: "capture_events_core_status_idx",
+    table: "capture_events",
+    definition: "CREATE INDEX capture_events_core_status_idx ON public.capture_events USING btree (user_id, event_id, core_namespace, client) WHERE (core_admitted OR (core_payload_digest IS NULL))",
+  },
+  "0020_core_capture_abandoned_idx.concurrent.sql": {
+    name: "capture_events_core_abandoned_idx",
+    table: "capture_events",
+    definition: "CREATE INDEX capture_events_core_abandoned_idx ON public.capture_events USING gin (core_abandoned_tokens) WHERE (core_abandoned_tokens IS NOT NULL)",
   },
 };
 
@@ -204,6 +222,7 @@ function postgresFactory(wrapSuppressions = (store) => store) {
       const suppressions = wrapSuppressions(createPostgresSuppressionStore());
       const { pool, source, close } = await openDatabase();
       const uow = createPostgresUnitOfWork(source);
+      const capture = createPostgresCapturePorts({ lineageSecret: randomUUID() });
       const nearDuplicate = requested.nearDuplicate !== false;
       const flags = capabilities({ embeddingRequiredOnInsert: true, nearDuplicate, vectorSuppression: true, supersession: true });
       const memoryReads = createPostgresMemoryReads();
@@ -249,7 +268,7 @@ function postgresFactory(wrapSuppressions = (store) => store) {
       };
       return {
         adapter: {
-          capabilities: flags, uow, suppressions, lexical, ...memoryReads,
+          capabilities: flags, uow, suppressions, capture, lexical, ...memoryReads,
           memories: createPostgresMemoryStore({ nearDuplicate, allowNonNullNamespace: true }),
           pause: createPostgresPauseStore(), supersession: createPostgresSupersessionStore({ allowNonNullNamespace: true }),
         },
@@ -273,6 +292,8 @@ const selected = new Set([
   "K-UOW-3", "K-UOW-3r", "K-ERR-1", "K-CAP-0", "K-CAP-2",
   "K-FACT-1", "K-FACT-2", "K-UOW-8a", "K-FACT-3", "K-FACT-4",
   "K-FACT-5", "K-FACT-6", "K-FACT-7", "K-SESS-1",
+  "K-ADM-1", "K-ADM-3", "K-ADM-4", "K-ADM-5", "K-ADM-9", "K-ADM-12", "K-ADM-13",
+  "K-SRC-1", "K-SRC-2", "K-SRC-3", "K-SRC-5",
   "K-UOW-1", "K-UOW-2", "K-UOW-4", "K-UOW-7", "K-UOW-8b",
   "K-MEM-1", "K-MEM-3", "K-CAP-1", "K-MEM-4", "K-MEM-4r", "K-MEM-5",
   "K-MEM-11", "K-MEM-12", "K-MEM-13",
@@ -293,12 +314,12 @@ const notApplicable = {
   keys: ["K-KEY-1", "K-KD-1", "K-KD-2", "K-KD-3", "K-KD-4", "K-KD-5", "K-KD-6"],
   "suppressions.snapshot": ["K-SNAP-F1", "K-SNAP-F3", "K-SNAP-F4", "K-SNAP-F5", "K-SNAP-F5u", "K-SNAP-F6", "K-SNAP-F7"],
   "suppressions.factsFor": ["K-FACTSFOR-1"],
-  capture: ["K-CLM-1", "K-CLM-2", "K-CLM-3", "K-CLM-4", "K-CLM-5",
-    "K-SRC-1", "K-SRC-2", "K-SRC-3", "K-SRC-4", "K-SRC-5"],
-  "capture.admit": [
-    "K-ADM-1", "K-ADM-2", "K-ADM-3", "K-ADM-4", "K-ADM-5", "K-ADM-6", "K-ADM-7",
-    "K-ADM-8", "K-ADM-9", "K-ADM-10", "K-ADM-11", "K-ADM-12", "K-ADM-13", "K-ADM-14",
+  "capture.finish": [
+    "K-CLM-1", "K-CLM-2", "K-CLM-3", "K-CLM-4", "K-CLM-5",
+    "K-ADM-2", "K-ADM-6", "K-ADM-8", "K-ADM-10", "K-ADM-11", "K-ADM-14",
   ],
+  "snapshot.stateToken": ["K-ADM-7"],
+  "suppressions.snapshot (capture text)": ["K-SRC-4"],
   raw: ["K-RAW-1", "K-RAW-2", "K-RAW-2s", "K-RAW-3", "K-RAW-3w", "K-RAW-3c", "K-RAW-3s",
     "K-RAW-4", "K-RAW-5", "K-RAW-6", "K-RAW-7", "K-RAW-8", "K-RAW-8w", "K-RAW-8s"],
   "raw.importArchive": ["K-IMP-RAW-1", "K-IMP-RAW-2", "K-IMP-RAW-3", "K-IMP-RAW-3s", "K-IMP-RAW-4", "K-IMP-RAW-4e", "K-IMP-RAW-4k",
