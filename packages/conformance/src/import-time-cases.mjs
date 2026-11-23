@@ -36,13 +36,12 @@ export const IMPORT_TIME_CASES = [
         expected.set(inserted.id, timestamps(inserted));
       }
       await uow.run(owner, { readOnly: true }, async tx => {
-        const scope = ctx.scope(null);
         for (const [id, times] of expected) {
-          const stored = await memories.get(tx, scope, id);
+          const stored = await memories.get(tx, ctx.scope(null), id);
           check(stored, "An imported memory must be readable");
           equal(timestamps(stored), times, "Read must preserve creation and update times");
         }
-        const exported = await memories.exportPage(tx, scope, { cursor: null, limit: 10 });
+        const exported = await memories.exportPage(tx, ctx.scope(null), { cursor: null, limit: 10 });
         equal(new Map(exported.items.map(item => [item.id, timestamps(item)])), expected,
           "Export must preserve creation and update times");
       });
@@ -65,12 +64,12 @@ export const IMPORT_TIME_CASES = [
       await importRow(ctx, "Notebook outside", 20);
       await harness.setWriteTime(ctx.scope(null), earlier, 3000n);
       await harness.setWriteTime(ctx.scope(null), later, 2000n);
-      const selection = { owner, namespaces: [null], window: { sinceMs: 10, untilMs: 20 } };
+      const selection = () => ({ owner, namespaces: [null], window: { sinceMs: 10, untilMs: 20 } });
       await uow.run(owner, { readOnly: true }, async tx => {
-        const words = await lexical.lexical(tx, selection, "Notebook", 10, {});
+        const words = await lexical.lexical(tx, selection(), "Notebook", 10, {});
         equal(new Set(words.rows.map(({ ref }) => ref.id)), new Set([earlier, later]),
           "Lexical window must include imports by stored creation time");
-        const page = await recent.recent(tx, selection, { cursor: null, limit: 10 });
+        const page = await recent.recent(tx, selection(), { cursor: null, limit: 10 });
         equal(page.items.map(({ id, createdAtMs }) => [id, createdAtMs]), [[earlier, 10], [later, 15]],
           "Recent window must use creation time with update time ordering");
       });

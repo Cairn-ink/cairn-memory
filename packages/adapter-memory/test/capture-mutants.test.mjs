@@ -317,7 +317,7 @@ test("capture cases accept SHA-256 claim identities", async () => {
     return withCapture(opened, {
       claim(tx, key, messages, options) {
         // Back the alternate identity with an opaque key in the transaction store.
-        const eventId = createHash("sha256").update(identity(key)).digest("hex");
+        const eventId = createHash("sha256").update(JSON.stringify([key.scope.owner, key.client, key.eventId])).digest("hex");
         return capture.claim(tx, { ...key, eventId }, messages, options);
       },
     });

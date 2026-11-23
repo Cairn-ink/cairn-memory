@@ -129,6 +129,13 @@ const mutants = [
   } }), /Expected operation to reject/],
   ["K-ADM-6", "status prioritizes terminal failures over pending work", failedBeforePending,
     /Pending must take precedence over failed/],
+  ["K-ADM-6", "status rewrites the caller's namespace in place", ({ capture }) => ({ capture: {
+    ...capture,
+    status(tx, scope, ...args) {
+      if (scope.namespace === null) scope.namespace = "changed";
+      return capture.status(tx, scope, ...args);
+    },
+  } }), /Unleased admission is pending/],
   ["K-ADM-6", "status exposes failure details", ({ capture }) => ({ capture: {
     ...capture,
     async status(...args) {
@@ -179,12 +186,32 @@ for (const [id, failure] of [
   ["K-ADM-11", /Admission must replay a standalone finish/],
   ["K-ADM-12", /Admission must honor a terminal standalone abandon/],
   ["K-ADM-13", /Expected operation to reject/],
-  ["K-ADM-14", /A live lease must take precedence over a finish/],
 ]) {
   test(`${id} detects when admit ignores standalone claims`, async () => {
     const mutant = await captureMutantFactory(
-      "if (row.key.client !== copy.client",
-      "if (!row.messages || row.key.client !== copy.client",
+      'const previous = state.claims.get(identity);\n          assertClaimKey(previous, copy);\n          if (previous?.status === "leased") {',
+      'const row = state.claims.get(identity);\n          const previous = row?.messages ? row : undefined;\n          assertClaimKey(previous, copy);\n          if (previous?.status === "leased") {',
+    );
+    const testCase = ADMISSION_CASES.find(candidate => candidate.id === id);
+    assert.ok(testCase);
+    await assert.rejects(runCase(mutant, testCase), failure);
+  });
+}
+
+for (const [id, failure] of [
+  ["K-ADM-10", /A standalone claim must report processing in another namespace/],
+  ["K-ADM-14", /Cross-namespace admission must not allow a second lease/],
+]) {
+  test(`${id} detects when a standalone claim keys by namespace`, async () => {
+    const mutant = await captureMutantFactory(
+      'const identity = captureIdentity(copy.client, copy.eventId);\n          const previous = state.claims.get(identity);\n          assertClaimKey(previous, copy);\n          if (previous?.status === "finished") {',
+      `const ownerIdentity = captureIdentity(copy.client, copy.eventId);
+          const stored = state.claims.get(ownerIdentity);
+          const identity = stored && stored.key.scope.namespace !== copy.scope.namespace
+            ? JSON.stringify([copy.scope.namespace, copy.client, copy.eventId]) : ownerIdentity;
+          const previous = state.claims.get(identity);
+          assertClaimKey(previous, copy);
+          if (previous?.status === "finished") {`,
     );
     const testCase = ADMISSION_CASES.find(candidate => candidate.id === id);
     assert.ok(testCase);

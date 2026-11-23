@@ -147,7 +147,7 @@ export const ADMISSION_CASES = [
       const pending = { ...done, client: "pending-client" };
       /** @param {string} [client] */
       const status = (client, scope = done.scope, eventId = done.eventId) =>
-        uow.run(owner, { readOnly: true }, tx => read(tx, scope, eventId, client));
+        uow.run(owner, { readOnly: true }, tx => read(tx, { ...scope }, eventId, client));
       const finish = (/** @type {string} */ token) =>
         uow.run(owner, { pauseLock: true }, tx => capture.finish(tx, token, []));
       equal(await status(), { status: "unknown" }, "Unknown event");
@@ -193,9 +193,9 @@ export const ADMISSION_CASES = [
       const beforeDump = structuredClone(await readDump(harness));
       const beforeToken = await observeToken();
       await uow.run(owner, { readOnly: true }, async tx => {
-        await read(tx, key.scope, key.eventId, key.client);
-        await read(tx, key.scope, key.eventId);
-        await read(tx, key.scope, "missing");
+        await read(tx, { ...key.scope }, key.eventId, key.client);
+        await read(tx, { ...key.scope }, key.eventId);
+        await read(tx, { ...key.scope }, "missing");
       });
       equal(await readDump(harness), beforeDump, "Status must leave the dump unchanged");
       equal(await observeToken(), beforeToken, "Status must leave the state token unchanged");
@@ -215,7 +215,8 @@ export const ADMISSION_CASES = [
         const admitted = await read(tx, selection(key));
         equal(admitted, { key, messages: withheld }, "Withheld positions must be preserved");
         check(admitted, "The all-withheld admission must load");
-        const claimed = await capture.claim(tx, admitted.key, admitted.messages, { leaseMs: 60_000 });
+        const { key: admittedKey, messages: admittedMessages } = structuredClone(admitted);
+        const claimed = await capture.claim(tx, admittedKey, admittedMessages, { leaseMs: 60_000 });
         check(claimed.status === "claimed", "The all-withheld admission must be claimable");
         return claimed.token;
       });
@@ -256,6 +257,9 @@ export const ADMISSION_CASES = [
       if (!capture?.admit) return "needs capture.admit";
       const key = event(ctx);
       const token = await claim(ctx, key);
+      const other = { ...key, scope: ctx.scope("other") };
+      equal(await claimEvent(ctx, other), { status: "processing" },
+        "A standalone claim must report processing in another namespace");
       const admission = await admit(ctx, key);
       equal(await claimEvent(ctx, key), { status: "processing" }, "Admission must not allow a second lease");
       equal(admission, { status: "processing" }, "Admission must see the existing standalone lease");
@@ -289,6 +293,8 @@ export const ADMISSION_CASES = [
       await uow.run(owner, { pauseLock: true }, tx =>
         capture.abandon(tx, token, { code: "invalid_input", retryable: false }));
       equal(await admit(ctx, key), { status: "duplicate" }, "Admission must honor a terminal standalone abandon");
+      equal(await claimEvent(ctx, { ...key, scope: ctx.scope("other") }), { status: "duplicate" },
+        "A terminal standalone abandon must deduplicate claims across namespaces");
       await rejects(() => admit(ctx, { ...key, payloadDigest: "b".repeat(64) }), "event_payload_conflict");
     },
   },
@@ -302,23 +308,36 @@ export const ADMISSION_CASES = [
     },
   },
   {
-    id: "K-ADM-14", title: "checks every namespace for conflicts before choosing a standalone replay", needs: [],
+    id: "K-ADM-14", title: "shares one lease and finish across namespaces", needs: [],
     async run(ctx) {
-      const { adapter: { capture, uow }, owner } = ctx;
+      const { adapter: { capture, memories, uow }, owner } = ctx;
       if (!capture?.admit) return "needs capture.admit";
       const key = event(ctx);
-      const { result } = await finishMemory(ctx, await claim(ctx, key));
       const other = { ...key, scope: ctx.scope("other") };
-      const request = { ...key, scope: ctx.scope("requested") };
-      const token = await claim(ctx, other);
-      equal(await admit(ctx, request), { status: "processing" }, "A live lease must take precedence over a finish");
-      await uow.run(owner, { pauseLock: true }, tx =>
-        capture.abandon(tx, token, { code: "storage_error", retryable: true }));
-      equal(await admit(ctx, request), { status: "rawReplay", result }, "A finish must take precedence over duplicate");
+      const token = await claim(ctx, key);
+      const admission = await admit(ctx, other);
+      equal(await claimEvent(ctx, other), { status: "processing" },
+        "Cross-namespace admission must not allow a second lease");
+      equal(admission, { status: "processing" }, "Cross-namespace admission must see the existing lease");
 
-      await claim(ctx, other);
-      await claim(ctx, { ...key, scope: ctx.scope("mismatch"), payloadDigest: "b".repeat(64) });
-      await rejects(() => admit(ctx, request), "event_payload_conflict");
+      const { result } = await finishMemory(ctx, token);
+      equal(await admit(ctx, other), { status: "rawReplay", result }, "Cross-namespace admission must replay the finish");
+      equal(await claimEvent(ctx, other), { status: "rawReplay", result }, "Cross-namespace claim must replay the finish");
+      for (const input of [key, other, { ...key, scope: ctx.scope("third") }]) {
+        const conflict = { ...input, payloadDigest: "b".repeat(64) };
+        await rejects(() => claimEvent(ctx, conflict), "event_payload_conflict");
+        await rejects(() => admit(ctx, conflict), "event_payload_conflict");
+      }
+      const otherSession = { ...other, sessionId: "other-session" };
+      await rejects(() => claimEvent(ctx, otherSession), "event_payload_conflict");
+      await rejects(() => admit(ctx, otherSession), "event_payload_conflict");
+
+      const ids = await uow.run(owner, { readOnly: true }, async tx => {
+        const original = await memories.exportPage(tx, ctx.scope(null), { cursor: null, limit: 10 });
+        const alternate = await memories.exportPage(tx, ctx.scope("other"), { cursor: null, limit: 10 });
+        return [...original.items, ...alternate.items].map(({ id }) => id);
+      });
+      equal(ids, [result.memories[0].id], "Cross-namespace redelivery must store exactly one memory");
     },
   },
 ];
