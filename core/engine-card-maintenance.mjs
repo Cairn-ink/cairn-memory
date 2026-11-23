@@ -252,7 +252,8 @@ export function createEngineCardMaintenance({ storage, model, relations, vectors
           result.modelCalls++;
           try {
             const output = await callModel(model, 'consolidate', CONSOLIDATE_PROMPT, request(), {
-              deadline, beforeDispatch: checkPause, validateFresh: () => { check(); storage.validate(ns, requestSources, check); }, failureCode: 'consolidation_failed' });
+              deadline, beforeDispatch: checkPause, beforeTransport: start => storage.startProviderRequest(ns, end, start),
+              validateFresh: () => { check(); storage.validate(ns, requestSources, check); }, failureCode: 'consolidation_failed' });
             const value = validateConsolidation(output, memories, model, cluster.memories); check();
             // Context can identify an old current line in another Card. Reuse
             // ordinary staling and its debounce; one generation ends this pass.
