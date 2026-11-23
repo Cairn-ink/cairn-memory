@@ -85,6 +85,10 @@ const cases = [
     'packaging/core-local/bridge.mjs': "export * from './host.mjs';" }, /invalid_core_local_host_edge/],
   ['core adapter import', { [coreEntry]: "import('../../../packaging/core-local/adapter-slot.mjs');" },
     /core_import_escapes_package/],
+  ['core static bare import', { [coreEntry]: "import 'fixture';" }, /unsupported_core_local_import/],
+  ['core dynamic bare import', { [coreEntry]: "import('fixture');" }, /unsupported_core_local_import/],
+  ['core static Node import', { [coreEntry]: "import 'node:fs';" }, /unsupported_core_local_import/],
+  ['core dynamic Node import', { [coreEntry]: "import('node:fs');" }, /unsupported_core_local_import/],
 ];
 for (const [label, overrides, error] of cases) {
   test(`closure rejects ${label}`, t => assert.throws(() => deriveRuntimeGraph(fixture(t, overrides)), error));
@@ -104,6 +108,12 @@ const capabilities = [
   ['ambient require', 'const load = require;'],
   ['ambient eval', 'const run = eval;'],
   ['aliased global', "const ambient = globalThis; const request = ambient['fe' + 'tch'];"],
+  ['computed crypto member', "crypto['getRandomValues'](new Uint8Array(1));"],
+  ['computed subtle method', "globalThis.crypto.subtle['digest']('SHA-256', new Uint8Array());"],
+  ['crypto object as an argument', 'Object.keys(globalThis.crypto);'],
+  ['subtle object assigned to a variable', 'const subtle = crypto.subtle;'],
+  ['crypto member write', 'crypto.randomUUID = () => "";'],
+  ['destructuring write to a subtle method', '({ digest: crypto.subtle.digest } = {});'],
   ['computed constructor', "const make = (() => {})['con' + 'structor'];"],
   ['out-of-scope shadow', '{ const fetch = 1; } const request = fetch;'],
   ['switch discriminant', 'switch (fetch) { default: let fetch; }'],
@@ -115,6 +125,70 @@ for (const [label, statement, error = /unsupported_core_local_capability/] of ca
     assert.throws(() => deriveRuntimeGraph(fixture(t, { [coreEntry]: statement })), error);
   });
 }
+
+const deniedCoreGlobals = [
+  'fetch', 'WebSocket', 'XMLHttpRequest', 'EventSource', 'Worker', 'SharedWorker',
+  'WebAssembly', 'eval', 'Function', 'require', 'module', 'process', 'Deno', 'Bun',
+  'importScripts', '__dirname', '__filename',
+];
+const ambientRoots = ['globalThis', 'self', 'window'];
+for (const name of deniedCoreGlobals) {
+  test(`core rejects ambient ${name} as a bare reference and as a global member`, t => {
+    const path = fixture(t);
+    for (const access of [name, ...ambientRoots.map(root => `${root}.${name}`)]) {
+      writeFileSync(join(path, coreEntry), `const value = ${access};`);
+      assert.throws(() => deriveRuntimeGraph(path), /unsupported_core_local_capability/, access);
+    }
+  });
+}
+
+test('core rejects computed global members and global objects used as values', t => {
+  const path = fixture(t);
+  for (const root of ambientRoots) {
+    for (const access of [`${root}['AbortController']`, `Object.keys(${root})`, `globalThis.${root}`]) {
+      writeFileSync(join(path, coreEntry), `const value = ${access};`);
+      assert.throws(() => deriveRuntimeGraph(path), /unsupported_core_local_capability/, access);
+    }
+  }
+});
+
+test('core permits portable globals while host and CLI retain their allowlist', t => {
+  const path = fixture(t, {
+    [coreEntry]: `export async function run() {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(new DOMException('timeout', 'TimeoutError')), 10);
+      try {
+        const url = new globalThis.URL('https://example.invalid');
+        const bytes = new TextEncoder().encode(url.href);
+        return await globalThis.crypto.subtle.digest('SHA-256', bytes);
+      } finally {
+        clearTimeout(timer);
+      }
+    }`,
+  });
+  assert.deepEqual(deriveRuntimeGraph(path), [coreEntry, slot, cliEntry, host]);
+  writeFileSync(join(path, cliEntry), "import { serveStdio } from './host.mjs'; new AbortController();");
+  assert.throws(() => deriveRuntimeGraph(path), /unsupported_core_local_capability.*cli\.mjs: AbortController/);
+  writeFileSync(join(path, cliEntry), "import { serveStdio } from './host.mjs';");
+  writeFileSync(join(path, host), deferredHost + 'new AbortController();');
+  assert.throws(() => deriveRuntimeGraph(path), /unsupported_core_local_capability.*host\.mjs: AbortController/);
+});
+
+test('core permits literal reads of Web Crypto methods and respects local bindings', t => {
+  const path = fixture(t, {
+    [coreEntry]: `export async function run() {
+      const bytes = crypto.getRandomValues(new Uint8Array(1));
+      const uuid = globalThis.crypto.randomUUID();
+      const hash = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+      return { uuid, hash };
+    }
+    export const digest = crypto.subtle.digest;
+    export function local(crypto) { return crypto['fixture']; }`,
+  });
+  assert.deepEqual(deriveRuntimeGraph(path), [coreEntry, slot, cliEntry, host]);
+  writeFileSync(join(path, host), deferredHost + "crypto.randomUUID();");
+  assert.throws(() => deriveRuntimeGraph(path), /unsupported_core_local_capability.*host\.mjs: crypto/);
+});
 
 test('closure permits injected capabilities and CLI stdio while refusing broader process access', t => {
   const path = fixture(t, {
@@ -177,6 +251,10 @@ test('builder checks installed help and handshake before publishing a candidate'
     'tools/testing/vendor/acorn/acorn.mjs']) {
     cpSync(new URL('../../' + file, import.meta.url), join(path, file), { recursive: true });
   }
+  const added = 'packages/core/src/added.mjs';
+  const addedSource = 'export const added = true;\n';
+  writeFileSync(join(path, added), addedSource);
+  writeFileSync(join(path, coreEntry), "export { added } from './added.mjs';\n", { flag: 'a' });
   // The installed slot can link SQLite when composed. Startup must never load it.
   writeFileSync(join(path, slot), "export { DatabaseSync } from 'node:sqlite';\n" + readFileSync(join(path, slot), 'utf8'));
   const cliSource = readFileSync(join(path, cliEntry), 'utf8');
@@ -187,6 +265,7 @@ test('builder checks installed help and handshake before publishing a candidate'
   const valid = run('valid');
   assert.ifError(valid.error);
   assert.equal(valid.status, 0, valid.stderr);
+  assert.equal(JSON.parse(valid.stdout).files[added], digest(addedSource));
   for (const [file, oldSource, from, to, error] of [
     [cliEntry, cliSource, 'Usage:', 'Broken:', /core_local_startup_help_mismatch/],
     [host, hostSource, 'reply.result = {};', 'reply.result = { broken: true };', /core_local_startup_handshake_mismatch/],
