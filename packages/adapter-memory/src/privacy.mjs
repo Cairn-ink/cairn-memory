@@ -95,8 +95,9 @@ function storeFact(getState, fact, incarnation, { newId = () => crypto.randomUUI
  * @param {UnitOfWork["port"]} port @param {UnitOfWork["runSeed"]} runSeed
  * @param {Pick<Options, "newId" | "now" | "sessionRefs" | "hashSessionKey">} options
  * @param {ReturnType<typeof createFactMatcher>} [matchFacts]
+ * @param {RingKeys} [ringKeys]
  */
-export function createFactStore(port, runSeed, options, matchFacts = createFactMatcher(false, options.hashSessionKey)) {
+export function createFactStore(port, runSeed, options, matchFacts = createFactMatcher(false, options.hashSessionKey), ringKeys) {
   /** @param {SuppressionFact} fact @param {string} incarnation */
   function prepareFactWrite(fact, incarnation) {
     if (typeof incarnation !== "string" ||
@@ -118,12 +119,14 @@ export function createFactStore(port, runSeed, options, matchFacts = createFactM
     async snapshot(tx, scope, candidates) {
       return port.read(tx, scope, (getState) => {
         const copy = copySuppressionCandidates(candidates);
-        return matchFacts(getState().facts, scope).snapshot(copy);
+        return matchFacts(getState().facts, { owner: tx.owner, namespace: scope.namespace }).snapshot(copy);
       });
     },
     async factsFor(tx, scope, { memoryId }) {
-      return port(tx, scope, false, (state) =>
-        matchFacts(state.facts, scope).factsFor(memoryId, state.rows.get(scope.namespace)?.get(memoryId)));
+      return port(tx, scope, false, (state) => {
+        const { namespace } = scope;
+        return matchFacts(state.facts, { owner: tx.owner, namespace }).factsFor(memoryId, state.rows.get(namespace)?.get(memoryId));
+      });
     },
     async epoch(tx, owner) {
       return port(tx, { owner }, false, (state) => state.epoch);
@@ -136,6 +139,12 @@ export function createFactStore(port, runSeed, options, matchFacts = createFactM
     if (validated.owner !== owner) throw new CoreError("invalid_input");
     const copy = structuredClone(validated);
     await runSeed(owner, async (tx) => {
+      if (ringKeys && copy.kind === "text" && copy.text.digests.some(({ alg }) => alg === "hmac")) {
+        const keys = await ringKeys(owner);
+        if (copy.text.digests.some(({ alg, keyId }) => alg === "hmac" && !keys.some(({ id }) => id === keyId))) {
+          throw new CoreError("invalid_input");
+        }
+      }
       const digest = await crypto.subtle.digest("SHA-256", encoder.encode(factIncarnationBody(copy)));
       const incarnation = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
       await port.write(tx, copy, true, () => prepareFactWrite(copy, incarnation));

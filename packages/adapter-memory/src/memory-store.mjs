@@ -166,11 +166,15 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
     readWritePolicy(tx, scope, prepareBatch, source, mode, editId) {
       return port.read(tx, scope, (getState) => {
         const batch = prepareBatch();
+        const selection = { owner: tx.owner, namespace: scope.namespace };
         const state = getState();
-        const policy = matchFacts(state.facts, scope);
-        const namespace = state.rows.get(scope.namespace);
+        const policy = matchFacts(state.facts, selection);
+        const namespace = state.rows.get(selection.namespace);
         const entries = entriesIn(namespace).filter(({ row }) => row.id !== editId);
+        // The synchronous scan processes only adapter-owned rows and queries.
+        const before = nearSkippedUnembedded;
         const duplicates = matches(entries.map(({ row }) => row), batch, NEAR_DUPLICATE_DISTANCE);
+        const counters = { nearSkippedUnembedded: nearSkippedUnembedded - before };
         const hidden = new Set(entries.filter(policy.hides).map(({ row }) => row.id));
         const hiddenIds = new Set();
         for (const group of duplicates) {
@@ -189,6 +193,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           hiddenIds: [...hiddenIds].sort(compareUtf8),
           blockedPositions,
           blockedSession: policy.blocksSession(source.client, source.sessionId),
+          counters,
         };
       });
     },
@@ -205,21 +210,23 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           (options.excludeId !== undefined && typeof options.excludeId !== "string")) throw new CoreError("invalid_input");
         const { nearDistance, excludeId } = options;
         const state = getState();
-        const policy = matchFacts(state.facts, scope);
-        const rows = entriesIn(state.rows.get(scope.namespace))
+        const selection = { owner: tx.owner, namespace: scope.namespace };
+        const policy = matchFacts(state.facts, selection);
+        const rows = entriesIn(state.rows.get(selection.namespace))
           .filter((entry) => entry.row.id !== excludeId && !policy.hides(entry)).map(({ row }) => row);
         return matches(rows, batch, nearDistance);
       });
     },
 
     async readWritePolicy(tx, scope, batch, source, mode, editId) {
-      return policyReads.readWritePolicy(tx, scope, () => {
+      const { counters: _counters, ...policy } = await policyReads.readWritePolicy(tx, scope, () => {
         const queries = copyDuplicateBatch(batch);
         validateSource(source);
         if ((mode !== "hash" && mode !== "full") ||
           (editId !== undefined && typeof editId !== "string")) throw new CoreError("invalid_input");
         return queries;
       }, source, mode, editId);
+      return policy;
     },
 
     async readRevision(tx, scope, id) {
@@ -288,8 +295,9 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
         const { cursor, limit } = page;
         validateLimit(limit);
         const after = cursor === null ? null : decodeCursor(cursor);
-        const policy = matchFacts(state.facts, scope);
-        const rows = entriesIn(state.rows.get(scope.namespace))
+        const selection = { owner: tx.owner, namespace: scope.namespace };
+        const policy = matchFacts(state.facts, selection);
+        const rows = entriesIn(state.rows.get(selection.namespace))
           .filter((entry) => (!after || newestFirst(entry.row, after) > 0) && !policy.hides(entry))
           .map(({ row }) => row).sort(newestFirst);
         const items = rows.slice(0, limit).map(copyPublicRow);

@@ -5,7 +5,7 @@ import { createMemoryStore } from "./memory-store.mjs";
 import { createFactStore, createFingerprintProvider, createPauseStore } from "./privacy.mjs";
 import { createRetrievalPorts } from "./retrieval.mjs";
 import { createTopicStore } from "./topics.mjs";
-import { createUnitOfWork } from "./unit-of-work.mjs";
+import { createUnitOfWork, handleWriteRejections } from "./unit-of-work.mjs";
 import { validateTime } from "./validation.mjs";
 
 export { TEST_FINGERPRINT_LABELS, TEST_FINGERPRINT_SECRET } from "./privacy.mjs";
@@ -30,19 +30,22 @@ export function createMemoryAdapter(options = {}) {
   const { keys, ringKeys, setFingerprintSecret } =
     createFingerprintProvider(flags.fingerprintKey, options.fingerprint, rotateRowDigests);
   const store = createMemoryStore(port, flags, newId, matchFacts, ringKeys);
-  const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts);
+  const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts,
+    flags.fingerprintKey ? ringKeys : undefined);
   /** @type {import("./index.d.mts").MemoryAdapter} */
   const adapter = {
     name: "memory",
     capabilities: flags,
     uow,
-    memories: store.memories,
-    capture: createCapturePorts(port, store, now, matchFacts, flags.embeddingRequiredOnInsert),
-    suppressions,
-    pause: createPauseStore(port),
+    memories: handleWriteRejections(store.memories, ["insert", "touchDuplicate", "replaceContent", "erase"]),
+    capture: handleWriteRejections(createCapturePorts(port, store, now, matchFacts, flags.embeddingRequiredOnInsert),
+      ["claim", "beginDispatch", "abandon", "finish", "assertEligible"]),
+    suppressions: handleWriteRejections(suppressions, ["writeFact"]),
+    pause: handleWriteRejections(createPauseStore(port), ["set"]),
     keys,
     ...createRetrievalPorts(port, flags, matchFacts),
-    ...(flags.placement && { placement: createTopicStore(port, flags, newId, now, matchFacts, options) }),
+    ...(flags.placement && { placement: handleWriteRejections(
+      createTopicStore(port, flags, newId, now, matchFacts, options), ["applyPlacement", "markFailed", "dropMemory"]) }),
     nativeErrorMap,
     harness: {
       async dump() { return dump(); },

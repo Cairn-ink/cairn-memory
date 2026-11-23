@@ -73,7 +73,10 @@ function projectPassages(passages) {
         for (const key of ["digests", "shingles", "keyId", "embedding"]) {
           const field = evidenceDescriptor(passage, key);
           if (!field) continue;
-          if (key === "embedding" && field.value != null) field.value = readEmbedding(field.value, "passage");
+          if (key === "embedding" && field.value != null) {
+            const embedding = readEmbedding(field.value, "passage");
+            field.value = embedding.length === 0 ? undefined : embedding;
+          }
           if (key === "digests" || key === "shingles") {
             if (Object.hasOwn(field, "value")) field.value = snapshotPassageList(field.value);
           }
@@ -87,11 +90,13 @@ function projectPassages(passages) {
 }
 
 /** @param {Parameters<SuppressionStore["snapshot"]>[2]} candidates */
-export function copySuppressionCandidates({ client, sessionId, occurredAtMs, passages }) {
+export function copySuppressionCandidates(candidates) {
+  const { client, sessionId, passages } = candidates;
+  const occurredAtMs = client == null ? undefined : candidates.occurredAtMs;
   return {
     client, sessionId,
     passages: passages === undefined ? undefined : projectPassages(passages),
-    occurredAtMs: occurredAtMs == null ? occurredAtMs : snapshotArray(occurredAtMs),
+    occurredAtMs: occurredAtMs == null ? occurredAtMs : snapshotArray(occurredAtMs, { allowEntries: true }),
   };
 }
 
