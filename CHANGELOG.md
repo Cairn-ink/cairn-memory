@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.10 — 2026-11-22: capture windows say where they start and end
+
+- Each capture request now also carries the byte range of the transcript window
+  it belongs to, whether it is the window's last slice, and the transcript
+  parser version. The range and parser are the same on every slice of a window
+  and on retries, so the service can check that a window arrived whole before
+  it uses it.
+- The shared capture schema accepts the four new keys as optional, so other
+  clients keep sending the same requests. Recall and the settings are unchanged.
+
 ## 0.3.9 — 2026-11-22: compact recall when the service offers it
 
 - When the Cairn service says it supports context-read, recall first asks it
