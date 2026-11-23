@@ -27,7 +27,7 @@ function insertMemory(connection, id, sourceKind = "plugin") {
 
 test("transactional capture migrations add no index", migrationDbTest, async (t) => {
   const { pool, source, migrations } = await migrationDatabase(t, { migrate: false });
-  const capture = migrations.findIndex(({ id }) => id === "0013_core_capture_claims.sql");
+  const capture = migrations.findIndex(({ id }) => id === "0016_core_capture_claims.sql");
   assert.notEqual(capture, -1);
   const readIndexes = `SELECT indexrelid FROM pg_index
     WHERE indrelid = 'capture_events'::regclass ORDER BY indexrelid`;

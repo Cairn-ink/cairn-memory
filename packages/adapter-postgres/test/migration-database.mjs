@@ -7,17 +7,17 @@ const url = process.env.CORE_PG_TEST_URL;
 export const migrationDbTest = { skip: !url, timeout: 20_000 };
 
 const captureIndexes = {
-  "0015_core_capture_lease_idx.concurrent.sql": {
+  "0018_core_capture_lease_idx.concurrent.sql": {
     name: "capture_events_core_lease_idx",
     table: "capture_events",
     definition: "CREATE UNIQUE INDEX capture_events_core_lease_idx ON public.capture_events USING btree (user_id, core_lease_token) WHERE (core_lease_token IS NOT NULL)",
   },
-  "0016_core_capture_status_idx.concurrent.sql": {
+  "0019_core_capture_status_idx.concurrent.sql": {
     name: "capture_events_core_status_idx",
     table: "capture_events",
     definition: "CREATE INDEX capture_events_core_status_idx ON public.capture_events USING btree (user_id, event_id, core_namespace, client) WHERE (core_admitted OR (core_payload_digest IS NULL))",
   },
-  "0017_core_capture_abandoned_idx.concurrent.sql": {
+  "0020_core_capture_abandoned_idx.concurrent.sql": {
     name: "capture_events_core_abandoned_idx",
     table: "capture_events",
     definition: "CREATE INDEX capture_events_core_abandoned_idx ON public.capture_events USING gin (core_abandoned_tokens) WHERE (core_abandoned_tokens IS NOT NULL)",
