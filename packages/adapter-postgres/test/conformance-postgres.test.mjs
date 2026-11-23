@@ -7,6 +7,7 @@ import { Pool } from "pg";
 import {
   CAPTURE_CASES, CASES, KEYED_DIGEST_CASES, PRIVACY_CASES, PRIVACY_MATCH_CASES,
   RAW_CASES, SOURCE_FILTER_CASES, TOPIC_CASES, runCase,
+  IMPORT_ARCHIVE_CASES, PROVEN_FORK_CASES,
 } from "@cairn-ink/conformance";
 import { capabilities, factIncarnationBody } from "@cairn-ink/core";
 import { toPostgresError } from "../src/errors.mjs";
@@ -256,6 +257,10 @@ const notApplicable = {
     "K-SRC-1", "K-SRC-2", "K-SRC-3", "K-SRC-4", "K-SRC-5"],
   raw: ["K-RAW-1", "K-RAW-2", "K-RAW-2s", "K-RAW-3", "K-RAW-3w", "K-RAW-3c", "K-RAW-3s",
     "K-RAW-4", "K-RAW-5", "K-RAW-6", "K-RAW-7", "K-RAW-8", "K-RAW-8w", "K-RAW-8s"],
+  "raw.importArchive": ["K-IMP-RAW-1", "K-IMP-RAW-2", "K-IMP-RAW-3", "K-IMP-RAW-3s", "K-IMP-RAW-4", "K-IMP-RAW-4k",
+    "K-IMP-RAW-5", "K-IMP-RAW-6"],
+  "raw.recordLineage": ["K-FORK-1", "K-FORK-2", "K-FORK-3", "K-FORK-4", "K-FORK-5",
+    "K-FORK-6", "K-FORK-7", "K-FORK-8", "K-FORK-9"],
   "rawSpans not declared": ["K-FACT-3r"],
   "hashed session refs required": ["K-HASH-1"],
   placement: ["T-TOP-1", "T-TOP-2", "T-TOP-3", "T-TOP-4", "T-TOP-5", "T-TOP-6", "T-TOP-7", "T-TOP-8",
@@ -265,6 +270,7 @@ const notApplicable = {
 const allCases = [
   ...CASES, ...PRIVACY_CASES, ...PRIVACY_MATCH_CASES, ...CAPTURE_CASES, ...SOURCE_FILTER_CASES,
   ...KEYED_DIGEST_CASES, ...RAW_CASES, ...TOPIC_CASES,
+  ...IMPORT_ARCHIVE_CASES, ...PROVEN_FORK_CASES,
 ];
 assert.deepEqual(
   [...selected, ...Object.values(notApplicable).flat()].sort(),

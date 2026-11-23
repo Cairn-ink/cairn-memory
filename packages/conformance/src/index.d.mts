@@ -37,6 +37,8 @@ export declare const RETRIEVAL_WINDOW_CASES: readonly ConformanceCase[];
 export declare const FENCE_INTENT_CASES: readonly ConformanceCase[];
 export declare const TOPIC_CASES: readonly ConformanceCase[];
 export declare const RAW_CASES: readonly ConformanceCase[];
+export declare const IMPORT_ARCHIVE_CASES: readonly ConformanceCase[];
+export declare const PROVEN_FORK_CASES: readonly ConformanceCase[];
 export declare const RELATION_CASES: readonly ConformanceCase[];
 /** Returns the skip reason, or null on success. Failures reject. */
 export declare function runCase(factory: AdapterFactory, testCase: ConformanceCase): Promise<string | null>;

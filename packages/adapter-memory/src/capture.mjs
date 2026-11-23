@@ -1,6 +1,6 @@
 import { CoreError, decideWrite, planDuplicateMerge } from "@cairn-ink/core";
 import { indexRevisionAfterRun } from "./unit-of-work.mjs";
-import { admissionScope, captureMessageTimes, copyCaptureFailure, copyFinishItems, snapshotArray,
+import { admissionScope, copyCaptureMessages, copyCaptureFailure, copyFinishItems, snapshotArray,
   validateTime } from "./validation.mjs";
 
 /** @typedef {import("@cairn-ink/core/ports").CaptureKey} CaptureKey */
@@ -8,8 +8,9 @@ import { admissionScope, captureMessageTimes, copyCaptureFailure, copyFinishItem
 /** @typedef {import("@cairn-ink/core/ports").SourceRef} SourceRef */
 /** @typedef {import("@cairn-ink/core/ports").Tx} Tx */
 /** @typedef {import("./unit-of-work.mjs").State} State */
+/** @typedef {Pick<ReturnType<typeof import("./raw.mjs").createRawPorts>, "captureProofs" | "lineageFenced">} RawLineage */
 /** @typedef {{status: "leased", expiresAtMs: number, token: string, dispatched: boolean,
- * occurredAtMs: ReadonlyArray<number | null>}} Lease */
+ * occurredAtMs: ReadonlyArray<number | null>, proofs?: readonly import("./raw.mjs").CaptureProof[] | null}} Lease */
 /** @typedef {{key: CaptureKey} & (Lease | {status: "finished", result: FinishResult} |
  * {status: "abandoned", failure: ReturnType<typeof copyCaptureFailure>})} ClaimRecord */
 
@@ -60,20 +61,23 @@ function copyResult(stored, pending) {
  * @param {() => number} now
  * @param {ReturnType<typeof import("./fact-match.mjs").createFactMatcher>} matchFacts
  * @param {boolean} embeddingRequiredOnInsert
+ * @param {RawLineage} [lineage]
  * @returns {import("@cairn-ink/core/ports").StorageAdapter["capture"]}
  */
-export function createCapturePorts(port, { memories, finishWrites, readWritePolicy }, now, matchFacts, embeddingRequiredOnInsert) {
+export function createCapturePorts(port, { memories, finishWrites, readWritePolicy }, now, matchFacts, embeddingRequiredOnInsert,
+  lineage) {
   return {
     async claim(tx, key, messages, options) {
       const scope = admissionScope(tx, key);
       return port.capture(tx, scope, () => {
         const copy = scope.copyKey();
-        const occurredAtMs = captureMessageTimes(messages);
+        const copied = copyCaptureMessages(messages);
+        const occurredAtMs = copied.map((message) => message.occurredAtMs);
         if (!options || typeof options !== "object" || Array.isArray(options)) throw new CoreError("invalid_input");
         const { leaseMs } = options;
         if (!Number.isSafeInteger(leaseMs) || leaseMs <= 0) throw new CoreError("invalid_input");
 
-        return (getState, run) => {
+        return async (getState, run) => {
           const identity = claimIdentity(copy);
           const state = getState();
           const previous = state.claims.get(identity);
@@ -88,9 +92,11 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
           if (previous?.status === "leased" && nowMs < previous.expiresAtMs) return { status: "processing" };
 
           const token = crypto.randomUUID();
+          const proofMetadata = lineage && { proofs: await lineage.captureProofs(copy.scope, copy.client, copied) };
           if (previous?.status === "leased") state.activeTokens.delete(previous.token);
           state.claims.set(identity, {
             key: copy, status: "leased", token, expiresAtMs: nowMs + leaseMs, dispatched: false, occurredAtMs,
+            ...proofMetadata,
           });
           state.activeTokens.set(token, identity);
           run.stateWritten = true;
@@ -194,12 +200,15 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
 
     async eligible(tx, key, messages) {
       const admission = admissionScope(tx, key);
-      return port.read(tx, admission, (getState) => {
-        const { scope, client, sessionId } = admission.copyKey();
-        const occurredAtMs = captureMessageTimes(messages);
+      return port.read(tx, admission, async (getState) => {
+        const key = admission.copyKey();
+        const { scope, client, sessionId } = key;
+        const copied = copyCaptureMessages(messages);
+        const occurredAtMs = copied.map((message) => message.occurredAtMs);
         const state = getState();
         const matcher = matchFacts(state.facts, scope);
         if (matcher.blocksSession(client, sessionId)) return [];
+        if (lineage && lineage.lineageFenced(state, scope, key, await lineage.captureProofs(scope, client, copied))) return [];
         const blocked = new Set(matcher.blockedMessages(client, sessionId, occurredAtMs));
         return Array.from(occurredAtMs.keys()).filter((position) => !blocked.has(position));
       });
@@ -235,6 +244,7 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
           if (matcher.blocksSession(client, sessionId) || matcher.blockedMessages(client, sessionId, occurredAtMs).length) {
             throw new CoreError("suppressed");
           }
+          if (lineage?.lineageFenced(state, scope, copy, claim.proofs)) throw new CoreError("lineage_fenced");
         };
       });
     },
