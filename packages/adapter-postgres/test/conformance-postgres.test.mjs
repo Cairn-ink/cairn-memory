@@ -7,7 +7,8 @@ import { Pool } from "pg";
 import * as kit from "@cairn-ink/conformance";
 import { capabilities, factIncarnationBody } from "@cairn-ink/core";
 import { toPostgresError } from "../src/errors.mjs";
-import { applyMigrations, createPostgresSuppressionStore, createPostgresUnitOfWork } from "../src/index.mjs";
+import { applyMigrations, createPostgresCapturePorts, createPostgresSuppressionStore,
+  createPostgresUnitOfWork } from "../src/index.mjs";
 
 /** @import { AdapterFactory, ConformanceCase, TestHarness } from "@cairn-ink/conformance" */
 
@@ -18,7 +19,7 @@ const nativeCodes = [...busyNativeCodes, "57014", "08000", "57P01", "57P02", "57
 const nativeErrorMap = Object.fromEntries(nativeCodes.map((code) => [code, toPostgresError({ code }).code]));
 
 // Cast bigint counters and the vector projection to text before JSON decoding.
-// One statement reads the three tables from the same committed snapshot.
+// One statement reads the tables from the same committed snapshot.
 const dumpSql = `SELECT jsonb_build_object(
   'facts', ARRAY(
     SELECT to_jsonb(f) || jsonb_build_object('epoch', f.epoch::text, 'embedding', f.embedding::text)
@@ -30,6 +31,9 @@ const dumpSql = `SELECT jsonb_build_object(
   'ownerState', ARRAY(
     SELECT to_jsonb(s) || jsonb_build_object('fact_epoch', s.fact_epoch::text, 'index_revision', s.index_revision::text)
     FROM core_owner_state s ORDER BY s.user_id
+  ),
+  'captureEvents', ARRAY(
+    SELECT to_jsonb(e) FROM capture_events e ORDER BY e.user_id, e.client, e.event_id
   )
 ) AS snapshot`;
 
@@ -113,7 +117,7 @@ async function readMigrations() {
 }
 
 function adminQuery(admin, label, sql, params) {
-  return beforeDeadline(label, 4_000, () => admin.pool.query(sql, params));
+  return beforeDeadline(label, 9_000, () => admin.pool.query(sql, params));
 }
 
 async function closeDatabase(database, admin, name) {
@@ -142,8 +146,9 @@ async function openDatabase() {
   url.pathname = `/${name}`;
   const admin = trackedPool(databaseUrl, {
     connectionTimeoutMillis: 1_000,
-    statement_timeout: 2_500,
-    query_timeout: 2_750,
+    // Creating and dropping a database can wait for checkpoints on a shared server.
+    statement_timeout: 8_000,
+    query_timeout: 8_500,
   });
   const database = trackedPool(url.href, {
     connectionTimeoutMillis: 3_000,
@@ -191,6 +196,7 @@ function postgresFactory(wrapSuppressions = (store) => store) {
       const suppressions = wrapSuppressions(createPostgresSuppressionStore());
       const { pool, source, close } = await openDatabase();
       const uow = createPostgresUnitOfWork(source);
+      const capture = createPostgresCapturePorts();
       /** @type {Pick<TestHarness, "dump" | "seedFact"> & {seedOwners(owner: string, otherOwner: string): Promise<void>}} */
       const harness = {
         async seedOwners(owner, otherOwner) {
@@ -207,7 +213,7 @@ function postgresFactory(wrapSuppressions = (store) => store) {
         },
       };
       return {
-        adapter: { capabilities: capabilities({ embeddingRequiredOnInsert: true }), uow, suppressions },
+        adapter: { capabilities: capabilities({ embeddingRequiredOnInsert: true }), uow, suppressions, capture },
         sessionRefs: /** @type {const} */ ("plain"),
         harness,
         nativeErrorMap,
@@ -228,6 +234,8 @@ const selected = new Set([
   "K-UOW-3", "K-UOW-3r", "K-ERR-1", "K-CAP-0", "K-CAP-2",
   "K-FACT-1", "K-FACT-2", "K-UOW-8a", "K-FACT-3", "K-FACT-4",
   "K-FACT-5", "K-FACT-6", "K-FACT-7", "K-SESS-1",
+  "K-ADM-1", "K-ADM-3", "K-ADM-4", "K-ADM-5", "K-ADM-9", "K-ADM-12", "K-ADM-13",
+  "K-SRC-1", "K-SRC-2", "K-SRC-3", "K-SRC-5",
 ]);
 
 // Each entry names a missing port, method, or capability.
@@ -252,12 +260,12 @@ const notApplicable = {
   keys: ["K-KEY-1", "K-KD-1", "K-KD-2", "K-KD-3", "K-KD-4", "K-KD-5", "K-KD-6"],
   "suppressions.snapshot": ["K-SNAP-F1", "K-SNAP-F3", "K-SNAP-F4", "K-SNAP-F5", "K-SNAP-F5u", "K-SNAP-F6", "K-SNAP-F7"],
   "suppressions.factsFor": ["K-FACTSFOR-1"],
-  capture: ["K-CLM-1", "K-CLM-2", "K-CLM-3", "K-CLM-4", "K-CLM-5",
-    "K-SRC-1", "K-SRC-2", "K-SRC-3", "K-SRC-4", "K-SRC-5"],
-  "capture.admit": [
-    "K-ADM-1", "K-ADM-2", "K-ADM-3", "K-ADM-4", "K-ADM-5", "K-ADM-6", "K-ADM-7",
-    "K-ADM-8", "K-ADM-9", "K-ADM-10", "K-ADM-11", "K-ADM-12", "K-ADM-13", "K-ADM-14",
+  "capture.finish": [
+    "K-CLM-1", "K-CLM-2", "K-CLM-3", "K-CLM-4", "K-CLM-5",
+    "K-ADM-2", "K-ADM-6", "K-ADM-8", "K-ADM-10", "K-ADM-11", "K-ADM-14",
   ],
+  "snapshot.stateToken": ["K-ADM-7"],
+  "suppressions.snapshot (capture text)": ["K-SRC-4"],
   "memories.insert": ["K-IMP-T1", "K-IMP-T2", "K-IMP-T3"],
   raw: ["K-RAW-1", "K-RAW-2", "K-RAW-2s", "K-RAW-3", "K-RAW-3w", "K-RAW-3c", "K-RAW-3s",
     "K-RAW-4", "K-RAW-5", "K-RAW-6", "K-RAW-7", "K-RAW-8", "K-RAW-8w", "K-RAW-8s"],
