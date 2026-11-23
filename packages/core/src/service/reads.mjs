@@ -6,7 +6,7 @@ import { packSessionStart } from "../retrieval/session-start.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
 import { hostedProjection } from "./session-wire.mjs";
 
-/** @typedef {import("../ports/index.d.ts").StorageAdapter} StorageAdapter */
+/** @typedef {import("./index.mjs").MemoryServiceDeps["storage"]} StorageAdapter */
 /** @typedef {import("../ports/common.d.ts").MemoryRow} MemoryRow */
 /** @typedef {import("../ports/common.d.ts").ItemRef} ItemRef */
 /** @typedef {import("../ports/common.d.ts").Scope} Scope */

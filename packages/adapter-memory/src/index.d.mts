@@ -1,5 +1,5 @@
 import type { Capability, ErrorCode, FactMatchPolicy, FingerprintLabels } from "@cairn-ink/core";
-import type { StorageAdapter } from "@cairn-ink/core/ports";
+import type { StorageAdapter, StoredDocumentCardRecord } from "@cairn-ink/core/ports";
 import type { TestHarness } from "@cairn-ink/conformance/factory";
 
 export type { CaptureClaim, CaptureFinish, CaptureKey, CaptureMessage, ClaimResult, FinishItem, FinishResult,
@@ -16,8 +16,9 @@ export interface MemoryAdapterOptions {
   fingerprint?: { secret: string; labels: FingerprintLabels } | null;
 }
 
-export type MemoryAdapter = Pick<StorageAdapter, "capabilities" | "uow" | "memories" | "capture" |
-  "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "suppressions" | "pause" | "keys" | "placement"> & {
+export type MemoryAdapter = Pick<StorageAdapter<StoredDocumentCardRecord>, "capabilities" | "uow" | "memories" | "capture" |
+  "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "suppressions" | "pause" | "keys" | "placement" |
+  "documentCards"> & {
   name: "memory";
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;
   harness: TestHarness & Required<Pick<TestHarness, "setFingerprintSecret" | "rowsMissingKeyedDigest" | "advanceClock">>;

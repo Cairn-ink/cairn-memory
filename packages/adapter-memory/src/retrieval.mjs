@@ -1,4 +1,5 @@
-import { CoreError, compareUtf8, createBM25, rankScores, scoreBM25, termFrequencies, tokenizeT1 } from "@cairn-ink/core";
+import { allDigests, coreDigest, CoreError, compareUtf8, createBM25, rankScores, scoreBM25, termFrequencies, tokenizeT1 } from "@cairn-ink/core";
+import { documentCardVisible } from "@cairn-ink/core/routing";
 import { cosineDistance } from "./cosine.mjs";
 import { decodePayload, decodeSortKey, encodePayload, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
@@ -12,6 +13,9 @@ import { copyReadScope, copyRefs, readEmbedding, validateLimit } from "./validat
 /** @typedef {import("@cairn-ink/core/ports").Receipt} Receipt */
 /** @typedef {import("./unit-of-work.mjs").State} State */
 /** @typedef {import("./unit-of-work.mjs").Row} Row */
+/** @import { DocumentCardMemoryState } from "@cairn-ink/core/routing" */
+/** @import { FingerprintKey } from "@cairn-ink/core" */
+/** @import { StoredDocumentCardRecord, FingerprintKeyProvider, Scope } from "@cairn-ink/core/ports" */
 
 /** @param {Row} row @returns {ItemRef} */
 function memoryRef({ id, scope: { namespace } }) {
@@ -80,13 +84,59 @@ function sourceDates(receipts) {
   return { firstMs, lastMs };
 }
 
+/** @param {ReturnType<typeof createFactMatcher>} matchFacts @param {FingerprintKeyProvider} keys */
+export function createCardVisibility(matchFacts, keys) {
+  /** @param {State} state @param {Scope} scope @param {StoredDocumentCardRecord} card */
+  return async function cardVisible(state, scope, card) {
+    const policy = matchFacts(state.facts, scope);
+    const rows = state.rows.get(scope.namespace);
+    /** @type {Map<string, DocumentCardMemoryState>} */
+    const memoryStates = new Map();
+    for (const { id } of card.sourceMemories) {
+      const entry = rows?.get(id);
+      const forgotten = policy.factsFor(id, entry).some(({ fact }) => fact.kind === "identity");
+      if (forgotten) memoryStates.set(id, { status: "forgotten" });
+      else if (!entry) memoryStates.set(id, { status: "unknown" });
+      else if (policy.hides(entry)) memoryStates.set(id, { status: "suppressed" });
+      else memoryStates.set(id, { status: entry.row.historical ? "historical" : "visible", revision: entry.row.revision });
+    }
+    const { sourceMessage } = card;
+    let canonicalSessionKey = null;
+    let sourceWithheld = false;
+    /** @type {FingerprintKey | null} */
+    let fingerprintKey = null;
+    const { textFacts } = policy;
+    try {
+      if (textFacts.length) fingerprintKey = await keys.userKey(scope.owner);
+      if (sourceMessage) {
+        canonicalSessionKey = policy.canonicalSessionKey(sourceMessage);
+        // Cards supply the retained text projection for the source message in this adapter.
+        const passages = textFacts.length ? await Promise.all([card.body, card.title].map(async (text) => {
+          const digests = await allDigests(text);
+          if (fingerprintKey) digests.push(await coreDigest(text, fingerprintKey));
+          return { digests };
+        })) : [];
+        sourceWithheld = policy.withholdsCardSource(card, passages);
+      }
+    } catch {
+      return false;
+    }
+    return (await documentCardVisible({
+      card: { ...card, canonicalSessionKey }, requestedScope: scope, memoryStates,
+      sourceWithheld, textFacts, fingerprintKey,
+    })).visible;
+  };
+}
+
 /**
  * @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>["port"]} port
  * @param {import("@cairn-ink/core").Capabilities} capabilities
  * @param {ReturnType<typeof createFactMatcher>} [matchFacts]
+ * @param {ReturnType<typeof createCardVisibility>} [cardVisible]
  * @returns {Pick<StorageAdapter, "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent">}
  */
-export function createRetrievalPorts(port, capabilities, matchFacts = createFactMatcher(capabilities.vectorSuppression)) {
+export function createRetrievalPorts(port, capabilities, matchFacts = createFactMatcher(capabilities.vectorSuppression),
+  cardVisible = createCardVisibility(matchFacts, { async userKey() { return null; } })) {
   /** @param {State} state @param {RetrievalScope} scope */
   function policies(state, scope) {
     return new Map(scope.namespaces.map((namespace) =>
@@ -206,7 +256,27 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
         return port.read(tx, scope, (getState) => {
           const selection = copyReadScope(tx.owner, scope);
           const references = copyRefs(refs);
-          return Array.from(visibleRefs(getState(), selection, references, false), ({ ref }) => ref);
+          const state = getState();
+          if (!capabilities.documentCards || !references.some(({ type }) => type === "card")) {
+            return Array.from(visibleRefs(state, selection, references, false), ({ ref }) => ref);
+          }
+          return (async () => {
+            const byNamespace = policies(state, selection);
+            const visible = [];
+            for (const ref of references) {
+              const { namespace, type, id } = ref;
+              const policy = byNamespace.get(namespace);
+              if (!policy) continue;
+              if (type === "memory") {
+                const entry = state.rows.get(namespace)?.get(id);
+                if (entry && !entry.row.historical && !policy.hides(entry)) visible.push(memoryRef(entry.row));
+              } else if (type === "card") {
+                const card = state.documentCards.get(namespace)?.get(id)?.card;
+                if (card && await cardVisible(state, { owner: tx.owner, namespace }, card)) visible.push(ref);
+              }
+            }
+            return visible;
+          })();
         });
       },
     },

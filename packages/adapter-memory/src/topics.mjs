@@ -1,22 +1,22 @@
 import {
   CoreError, ERROR_CODES, coalesceNewTopics, compareCatalogTopics, compareSortKey, compareUtf8, isErrorCode,
-  memoryGuards, placementProposal, titleKey,
+  memoryGuards, placementProposal, titleKey, uniqueIds,
 } from "@cairn-ink/core";
 import { decodePayload, encodePayload, newestFirst } from "./cursor.mjs";
 import { writeTime } from "./memory-store.mjs";
-import { snapshotArray, validateLimit, validateTime } from "./validation.mjs";
+import { snapshotArray, validateLimit, validateTime, writeNamespace } from "./validation.mjs";
 
 /** @import {PlacementProposal} from "@cairn-ink/core" */
 /** @import {Scope, Topic, TopicStore} from "@cairn-ink/core/ports" */
 /** @import {State} from "./unit-of-work.mjs" */
-/** @import {Outcome, StoredTopic, TopicState} from "./topics.d.mts" */
+/** @import {CardOutcome, Failure, Outcome, StoredTopic, TopicState} from "./topics.d.mts" */
 /** @typedef {{id: string, updatedAtUs: bigint}} Member */
 
 /** @param {State} state @param {Scope} scope */
 function ensureTopicState(state, scope) {
   let scoped = state.topics.get(scope.namespace);
   if (!scoped) {
-    scoped = { topics: new Map(), outcomes: new Map(), failures: new Map() };
+    scoped = { topics: new Map(), outcomes: new Map(), failures: new Map(), cardOutcomes: new Map(), cardFailures: new Map() };
     state.topics.set(scope.namespace, scoped);
   }
   return scoped;
@@ -41,14 +41,20 @@ function visibility(state, scope, matchFacts) {
   };
 }
 
-/** @param {TopicState} scoped @param {StoredTopic} topic @param {ReturnType<typeof visibility>['current']} current */
-function visibleMembers(scoped, topic, current) {
-  const children = topic.level === "L1" ? [topic.id] : [...scoped.topics.values()]
+/** @param {TopicState} scoped @param {StoredTopic} topic */
+function memberTopics(scoped, topic) {
+  return topic.level === "L1" ? [topic.id] : [...scoped.topics.values()]
     .filter(({ parentIds }) => parentIds.includes(topic.id)).map(({ id }) => id);
+}
+
+/** @template {Outcome | CardOutcome} T
+ * @param {Map<string, T>} outcomes @param {string[]} children @param {(id: string, outcome: T) => boolean} isVisible */
+function visibleMembers(outcomes, children, isVisible) {
   /** @type {Member[]} */
   const members = [];
-  for (const [id, { revision, memberships }] of scoped.outcomes) {
-    if (current(id)?.revision !== revision) continue;
+  for (const [id, outcome] of outcomes) {
+    if (!isVisible(id, outcome)) continue;
+    const { memberships } = outcome;
     let newest;
     for (const child of children) {
       const placedAt = memberships.get(child);
@@ -90,6 +96,22 @@ function checkParent(topics, id, level) {
 const placementBatchLimit = 5;
 const placementArrayOptions = { strictKeys: true };
 
+/** @param {State} state @param {Scope["namespace"]} namespace @param {string} cardId */
+export function dropCardMemberships(state, namespace, cardId) {
+  const memberships = state.topics.get(namespace)?.cardOutcomes.get(cardId)?.memberships;
+  const dropped = memberships?.size ?? 0;
+  memberships?.clear();
+  return dropped;
+}
+
+/** @param {readonly string[]} callerIds @param {import("@cairn-ink/core").ErrorCode} code */
+function failureIds(callerIds, code) {
+  if (!isErrorCode(code)) throw new CoreError("invalid_input");
+  const ids = snapshotArray(callerIds);
+  if (ids.some((id) => typeof id !== "string" || !id)) throw new CoreError("invalid_input");
+  return new Set(ids);
+}
+
 /** @template T @param {T} value @param {readonly string[]} allowed */
 function placementFields(value, allowed) {
   if (!value || typeof value !== "object" || Array.isArray(value) ||
@@ -114,11 +136,33 @@ function snapshotPlacementProposal(proposal) {
 }
 
 /** @type {typeof import("./topics.d.mts").createTopicStore} */
-export function createTopicStore(port, _flags, newId, now, matchFacts, {
+export function createTopicStore(port, flags, newId, now, matchFacts, {
   topicRetryAfterMs = 3_600_000, topicMaxAttempts = 3,
-}) {
+}, cardVisible) {
   /** @param {State} state @param {string} owner @param {Scope["namespace"]} namespace */
   const view = (state, owner, namespace) => visibility(state, { owner, namespace }, matchFacts);
+  /** @param {Failure} failure @param {() => number} readNow */
+  const mayRetry = (failure, readNow) => ERROR_CODES[failure.code] === "retryable" &&
+    failure.attempts < topicMaxAttempts && readNow() - failure.failedAtMs >= topicRetryAfterMs;
+
+  /** @param {State} state @param {Scope} scope @param {string} cardId @param {string} contentHash
+   * @param {ReturnType<typeof visibility>["current"]} current */
+  async function visibleCardAt(state, scope, cardId, contentHash, current) {
+    const card = state.documentCards.get(scope.namespace)?.get(cardId)?.card;
+    return card?.contentHash === contentHash &&
+      card.sourceMemories.every(({ id, revision }) => current(id)?.revision === revision) &&
+      await cardVisible(state, scope, card);
+  }
+
+  /** @param {State} state @param {Scope} scope @param {TopicState} scoped
+   * @param {ReturnType<typeof visibility>["current"]} current */
+  async function visibleFiledCards(state, scope, scoped, current) {
+    const ids = new Set();
+    for (const [id, { contentHash, memberships }] of scoped.cardOutcomes) {
+      if (memberships.size && await visibleCardAt(state, scope, id, contentHash, current)) ids.add(id);
+    }
+    return ids;
+  }
 
   return {
     async pending(tx, scope, { limit }) {
@@ -134,12 +178,31 @@ export function createTopicStore(port, _flags, newId, now, matchFacts, {
           .filter(({ id, revision }) => {
             if (!current(id) || scoped?.outcomes.get(id)?.revision === revision) return false;
             const failure = scoped?.failures.get(id);
-            return failure?.revision !== revision || (ERROR_CODES[failure.code] === "retryable" &&
-              failure.attempts < topicMaxAttempts && (nowMs ??= now()) - failure.failedAtMs >= topicRetryAfterMs);
+            return failure?.revision !== revision || mayRetry(failure, () => nowMs ??= now());
           })
           .sort((a, b) => compareSortKey(writeTime(a.createdAtMs).updatedAtUs, writeTime(b.createdAtMs).updatedAtUs) ||
             compareUtf8(a.id, b.id))
           .slice(0, limit).map(({ id, revision }) => ({ memoryId: id, revision }));
+      });
+    },
+
+    async pendingCards(tx, scope, { limit }) {
+      return port(tx, scope, false, (state) => {
+        validateLimit(limit);
+        if (limit > placementBatchLimit) throw new CoreError("invalid_input");
+        if (!flags.documentCards) return [];
+        const scoped = state.topics.get(scope.namespace);
+        /** @type {number | undefined} */
+        let nowMs;
+        return [...(state.documentCards.get(scope.namespace)?.values() ?? [])]
+          .flatMap(({ card, createdAtMs }) => {
+            if (!card || scoped?.cardOutcomes.get(card.id)?.contentHash === card.contentHash) return [];
+            const failure = scoped?.cardFailures.get(card.id);
+            return failure?.contentHash !== card.contentHash || mayRetry(failure, () => nowMs ??= now())
+              ? [{ cardId: card.id, contentHash: card.contentHash, createdAtMs }] : [];
+          })
+          .sort((a, b) => a.createdAtMs - b.createdAtMs || compareUtf8(a.cardId, b.cardId))
+          .slice(0, limit).map(({ cardId, contentHash }) => ({ cardId, contentHash }));
       });
     },
 
@@ -244,15 +307,13 @@ export function createTopicStore(port, _flags, newId, now, matchFacts, {
 
     async markFailed(tx, scope, memoryIds, code) {
       return port.write(tx, scope, "conditional", () => {
-        if (!isErrorCode(code)) throw new CoreError("invalid_input");
-        const ids = snapshotArray(memoryIds);
-        if (ids.some((id) => typeof id !== "string" || !id)) throw new CoreError("invalid_input");
+        const ids = failureIds(memoryIds, code);
         return (getState, _markDirty, run) => {
           const state = getState();
           const { current } = view(state, tx.owner, scope.namespace);
           /** @type {number | undefined} */
           let failedAtMs;
-          for (const id of new Set(ids)) {
+          for (const id of ids) {
             const row = current(id);
             if (!row) continue;
             const { failures } = ensureTopicState(state, scope);
@@ -265,17 +326,108 @@ export function createTopicStore(port, _flags, newId, now, matchFacts, {
       });
     },
 
+    async applyCardPlacement(tx, scope, basedOn, proposal) {
+      return port.write(tx, scope, "conditional", () => {
+        const namespace = writeNamespace(scope);
+        const selection = { owner: tx.owner, namespace };
+        const { items: input } = placementFields(proposal, ["items"]);
+        const items = snapshotArray(input, { ...placementArrayOptions, maxLength: placementBatchLimit }).map((item) => {
+          const { cardId, parentIds } = placementFields(item, ["cardId", "parentIds"]);
+          const parents = uniqueIds(snapshotArray(parentIds, { ...placementArrayOptions, maxLength: 3 }), 3);
+          return { cardId, topicIds: parents };
+        });
+        const ids = new Set(uniqueIds(items.map(({ cardId }) => cardId), placementBatchLimit, 1));
+        const indexRevision = basedOn?.indexRevision;
+        if (!Number.isSafeInteger(indexRevision) || indexRevision < 0) throw new CoreError("invalid_input");
+        const guards = snapshotArray(basedOn.cards, { ...placementArrayOptions, maxLength: ids.size }).map((guard) => {
+          const { cardId, contentHash } = placementFields(guard, ["cardId", "contentHash"]);
+          if (!ids.delete(cardId) || typeof contentHash !== "string" || !contentHash) throw new CoreError("invalid_input");
+          return /** @type {const} */ ([cardId, contentHash]);
+        });
+        if (ids.size) throw new CoreError("invalid_input");
+        const hashes = new Map(guards);
+        return async (getState, markDirty, run) => {
+          const state = getState();
+          if (indexRevision !== state.indexRevision) throw new CoreError("revision_conflict");
+          const previous = state.topics.get(namespace);
+          const { current } = view(state, tx.owner, namespace);
+          for (const [id, hash] of hashes) {
+            if (!await visibleCardAt(state, selection, id, hash, current)) throw new CoreError("revision_conflict");
+          }
+          for (const { topicIds } of items) {
+            if (topicIds.some((id) => previous?.topics.get(id)?.level !== "L1")) throw new CoreError("revision_conflict");
+          }
+
+          /** @type {Map<string, CardOutcome>} */
+          const updates = new Map();
+          let changed = false;
+          /** @type {bigint | undefined} */
+          let placedAtUs;
+          const readPlacementTime = () => {
+            if (placedAtUs === undefined) {
+              const nowMs = now();
+              validateTime(nowMs);
+              placedAtUs = writeTime(nowMs).updatedAtUs;
+            }
+            return placedAtUs;
+          };
+          for (const { cardId, topicIds } of items) {
+            const contentHash = /** @type {string} */ (hashes.get(cardId));
+            const before = previous?.cardOutcomes.get(cardId);
+            const existing = before?.contentHash === contentHash ? before.memberships : undefined;
+            if (existing?.size === topicIds.length && topicIds.every((id) => existing.has(id))) continue;
+            const memberships = new Map(topicIds.map((id) => [id, existing?.get(id) ?? readPlacementTime()]));
+            if (topicIds.length || existing?.size) changed = true;
+            updates.set(cardId, { contentHash, memberships });
+          }
+          if (updates.size) {
+            const { cardOutcomes } = ensureTopicState(state, selection);
+            for (const [id, outcome] of updates) cardOutcomes.set(id, outcome);
+            if (changed) markDirty();
+            else run.stateWritten = true;
+          }
+          return { placed: items };
+        };
+      });
+    },
+
+    async markCardsFailed(tx, scope, cardIds, code) {
+      return port.write(tx, scope, "conditional", () => {
+        const ids = failureIds(cardIds, code);
+        return (getState, _markDirty, run) => {
+          const state = getState();
+          const cards = state.documentCards.get(scope.namespace);
+          /** @type {number | undefined} */
+          let failedAtMs;
+          for (const id of ids) {
+            const card = cards?.get(id)?.card;
+            if (!card) continue;
+            const { contentHash } = card;
+            const { cardFailures } = ensureTopicState(state, scope);
+            const previous = cardFailures.get(id);
+            const attempts = previous?.contentHash === contentHash ? previous.attempts + 1 : 1;
+            cardFailures.set(id, { contentHash, code, attempts, failedAtMs: failedAtMs ??= now() });
+            run.stateWritten = true;
+          }
+        };
+      });
+    },
+
     async list(tx, scope, query) {
-      return port(tx, scope, false, (state) => {
+      return port(tx, scope, false, async (state) => {
         const { level } = query;
         if (level !== undefined && level !== "L1" && level !== "L2") throw new CoreError("invalid_input");
         const scoped = state.topics.get(scope.namespace);
         const { current, topic } = view(state, tx.owner, scope.namespace);
+        const cards = flags.documentCards && scoped ? await visibleFiledCards(state, scope, scoped, current) : null;
         const rows = scoped ? [...scoped.topics.values()].filter((row) => !level || row.level === level)
           .flatMap((row) => {
-            const members = visibleMembers(scoped, row, current);
-            return members.length ? [{
+            const children = memberTopics(scoped, row);
+            const members = visibleMembers(scoped.outcomes, children, (id, outcome) => current(id)?.revision === outcome.revision);
+            const cardCount = cards ? visibleMembers(scoped.cardOutcomes, children, (id) => cards.has(id)).length : 0;
+            return members.length || cardCount ? [{
               ...topic(row), memberCount: members.length, newestMemberIds: members.slice(0, 3).map(({ id }) => id),
+              ...(flags.documentCards && { cardCount }),
             }] : [];
           }).sort(compareCatalogTopics) : [];
         return page(rows, query, { owner: tx.owner, namespace: scope.namespace }, "list", level ?? null, state.indexRevision);
@@ -283,12 +435,44 @@ export function createTopicStore(port, _flags, newId, now, matchFacts, {
     },
 
     async members(tx, scope, topicId, query) {
-      return port(tx, scope, false, (state) => {
+      return port(tx, scope, false, async (state) => {
         const scoped = state.topics.get(scope.namespace);
         const topic = scoped?.topics.get(topicId);
-        const rows = scoped && topic ? visibleMembers(scoped, topic, view(state, tx.owner, scope.namespace).current) : [];
+        /** @type {Array<Member & {kind: "memory" | "card"}>} */
+        const rows = [];
+        if (scoped && topic) {
+          const { current } = view(state, tx.owner, scope.namespace);
+          const children = memberTopics(scoped, topic);
+          const memories = visibleMembers(scoped.outcomes, children, (id, outcome) => current(id)?.revision === outcome.revision);
+          for (const memory of memories) rows.push({ ...memory, kind: "memory" });
+          if (flags.documentCards) {
+            const cards = await visibleFiledCards(state, scope, scoped, current);
+            for (const card of visibleMembers(scoped.cardOutcomes, children, (id) => cards.has(id))) {
+              rows.push({ ...card, kind: "card" });
+            }
+            rows.sort((a, b) => newestFirst(a, b) || compareUtf8(b.kind, a.kind));
+          }
+        }
         const result = page(rows, query, { owner: tx.owner, namespace: scope.namespace }, "members", topicId, state.indexRevision);
-        return { ...result, items: result.items.map(({ id, updatedAtUs }) => ({ kind: "memory", id, placedAtUs: updatedAtUs })) };
+        return { ...result, items: result.items.map(({ kind, id, updatedAtUs }) => ({ kind, id, placedAtUs: updatedAtUs })) };
+      });
+    },
+
+    async forCard(tx, scope, cardId) {
+      return port(tx, scope, false, async (state) => {
+        const outcome = state.topics.get(scope.namespace)?.cardOutcomes.get(cardId);
+        if (!outcome?.memberships.size) return [];
+        const { current } = view(state, tx.owner, scope.namespace);
+        return await visibleCardAt(state, scope, cardId, outcome.contentHash, current)
+          ? [...outcome.memberships.keys()].sort(compareUtf8) : [];
+      });
+    },
+
+    async dropCard(tx, scope, cardId) {
+      return port.write(tx, scope, "conditional", () => (getState, markDirty) => {
+        const dropped = dropCardMemberships(getState(), scope.namespace, cardId);
+        if (dropped) markDirty();
+        return { dropped };
       });
     },
 

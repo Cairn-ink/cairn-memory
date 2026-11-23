@@ -1,9 +1,10 @@
 import { CoreError, assertAdapterCapabilities, capabilities, toCoreError } from "@cairn-ink/core";
 import { createCapturePorts } from "./capture.mjs";
+import { createDocumentCardStore } from "./document-cards.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
 import { createMemoryStore } from "./memory-store.mjs";
 import { createFactStore, createFingerprintProvider, createPauseStore } from "./privacy.mjs";
-import { createRetrievalPorts } from "./retrieval.mjs";
+import { createCardVisibility, createRetrievalPorts } from "./retrieval.mjs";
 import { createTopicStore } from "./topics.mjs";
 import { createUnitOfWork, handleWriteRejections } from "./unit-of-work.mjs";
 import { validateTime } from "./validation.mjs";
@@ -26,12 +27,13 @@ export function createMemoryAdapter(options = {}) {
   const now = () => clock() + clockOffset;
   const { uow, port, dump, runSeed, setWriteTime, rotateRowDigests, rowsMissingKeyedDigest } =
     createUnitOfWork(nativeErrorMap, now, flags.placement);
-  const matchFacts = createFactMatcher(flags.vectorSuppression, options.hashSessionKey);
+  const matchFacts = createFactMatcher(flags.vectorSuppression, options.hashSessionKey, sessionRefs);
   const { keys, ringKeys, setFingerprintSecret } =
     createFingerprintProvider(flags.fingerprintKey, options.fingerprint, rotateRowDigests);
   const store = createMemoryStore(port, flags, newId, matchFacts, ringKeys);
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts,
     flags.fingerprintKey ? ringKeys : undefined);
+  const cardVisible = createCardVisibility(matchFacts, keys);
   /** @type {import("./index.d.mts").MemoryAdapter} */
   const adapter = {
     name: "memory",
@@ -43,12 +45,15 @@ export function createMemoryAdapter(options = {}) {
     suppressions: handleWriteRejections(suppressions, ["writeFact"]),
     pause: handleWriteRejections(createPauseStore(port), ["set"]),
     keys,
-    ...createRetrievalPorts(port, flags, matchFacts),
+    ...createRetrievalPorts(port, flags, matchFacts, cardVisible),
     ...(flags.placement && { placement: handleWriteRejections(
-      createTopicStore(port, flags, newId, now, matchFacts, options), ["applyPlacement", "markFailed", "dropMemory"]) }),
+      createTopicStore(port, flags, newId, now, matchFacts, options, cardVisible),
+      ["applyPlacement", "markFailed", "dropMemory", "applyCardPlacement", "markCardsFailed", "dropCard"]) }),
+    ...(flags.documentCards && { documentCards: handleWriteRejections(
+      createDocumentCardStore(port, now), ["put", "hide", "hideWhere", "markStale"]) }),
     nativeErrorMap,
     harness: {
-      async dump() { return dump(); },
+      async dump() { return dump(flags.documentCards); },
       async seedFact(owner, fact) {
         try {
           await seedFact(owner, fact);

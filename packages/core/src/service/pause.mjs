@@ -11,7 +11,7 @@ export function pauseResult(state) {
 }
 
 /**
- * @param {import("../ports/index.d.ts").StorageAdapter} storage
+ * @param {Pick<import("../ports/index.d.ts").StorageAdapter, "uow" | "pause">} storage
  * @returns {Pick<import("../ports/host.d.ts").MemoryService, "pauseState" | "setPause">}
  */
 export function pauseMethods({ uow, pause }) {
