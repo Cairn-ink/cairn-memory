@@ -6,6 +6,7 @@ import { emitDiagnostic } from './model-diagnostics.mjs';
 // Internal cross-layer provenance only. There is deliberately no setter and
 // this predicate is not re-exported from the public core entry point.
 const coreDeadlineSignals = new WeakSet();
+const modelDispatchGuards = new WeakMap();
 const signalAborted=Object.getOwnPropertyDescriptor(AbortSignal.prototype,'aborted').get;
 const isAborted=signal=>Reflect.apply(signalAborted,signal,[]);
 export const isCoreModelDeadlineSignal = (signal) => coreDeadlineSignals.has(signal);
@@ -18,7 +19,7 @@ export const modelRequestText = (system, input) =>
 
 /** A bounded adapter call. No database transaction may surround this helper. */
 export async function callModel(model, method, system, input,
-  { validateFresh = () => {}, beforeDispatch = () => {}, failureCode = 'recall_failed', deadline, onHostWait } = {}) {
+  { validateFresh = () => {}, beforeDispatch = () => {}, beforeTransport, failureCode = 'recall_failed', deadline, onHostWait } = {}) {
   const legacyFreshness = hasLegacyContentReadBoundary();
   const protectedRead = hasContentPortBoundary();
   const reject = (code, reason = code) => { emitDiagnostic(model, method, 'core_call', reason); fail(code); };
@@ -66,7 +67,7 @@ export async function callModel(model, method, system, input,
   let output;
   const freshnessFailure = {};
   const serializationFailure = {};
-  let freshnessError, providerInvoked = false;
+  let freshnessError, transportRefusal, providerInvoked = false;
   try {
     try {
     output = await Promise.race([
@@ -85,6 +86,11 @@ export async function callModel(model, method, system, input,
         // provider call. Its errors keep their trusted storage provenance.
         try { beforeDispatch(); }
         catch (error) { freshnessError = error; return freshnessFailure; }
+        if (beforeTransport) modelDispatchGuards.set(controller.signal, start => {
+          if (transportRefusal) throw transportRefusal.error;
+          try { beforeTransport(start); }
+          catch (error) { transportRefusal = { error }; throw error; }
+        });
         providerInvoked = true;
         return assertContentPort({invoke:async()=>{
           try {
@@ -139,13 +145,14 @@ export async function callModel(model, method, system, input,
       if (providerInvoked) try { assertContentPort(); }
       catch (error) { freshnessError = error; throw freshnessFailure; }
     }
-    if (output === freshnessFailure) throw freshnessFailure;
+    if (output === freshnessFailure || transportRefusal) throw freshnessFailure;
     if (output.serializationError) output=serializationFailure;
     else {
       if (output.providerError) throw output.error;
       output = output.value;
     }
   } catch (error) {
+    if (transportRefusal) { check(); throw transportRefusal.error; }
     if (error === freshnessFailure) { check(); throw freshnessError; }
     check();
     if (aborted || error?.code === 'model_timeout') reject('model_timeout');
@@ -165,7 +172,7 @@ export async function callModel(model, method, system, input,
       throw error;
     }
     reject(failureCode, 'provider_failure');
-  } finally { clearTimeout(timer); }
+  } finally { modelDispatchGuards.delete(controller.signal); clearTimeout(timer); }
   check();
   if (output === freshnessFailure) throw freshnessError;
   // S2h captures this same S1 snapshot after serialization, immediately
@@ -183,4 +190,12 @@ export async function callModel(model, method, system, input,
   validateFresh();
   check();
   return output;
+}
+
+// The trusted engine guard encloses only transport initiation. Provider errors
+// cannot supply a trusted refusal.
+export function startModelDispatch(signal, start) {
+  const guard = modelDispatchGuards.get(signal);
+  if (guard) guard(start);
+  else start();
 }

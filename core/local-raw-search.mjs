@@ -219,7 +219,7 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}, { 
     /** Fixed read-set port for contextRead; credentials never enter tool input. */
     contextPort(readSet) {
       const entry = entryFor(readSet), handles = new WeakMap();
-      const port = Object.freeze({
+      const port = {
         async search(input) {
           if (closed) fail('store_closed');
           if (unsupported) return unsupportedSearch();
@@ -278,7 +278,9 @@ export function createLocalRawSearch(path, crypto, { embedder, policy } = {}, { 
           // entire set in one canonical snapshot, preserving input order.
           return validator.revalidate(selected);
         },
-      });
+      };
+      Object.defineProperty(port, 'supportsLexicalSearch', { value: true });
+      Object.freeze(port);
       owners.set(port, manager); return port;
     },
     methods: { searchRaw: input => call('search', input), maintainRawSearch: input => call('maintain', input),
