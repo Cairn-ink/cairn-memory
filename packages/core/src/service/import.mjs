@@ -112,7 +112,7 @@ export function importMethod(deps) {
           if (state.paused || state.generation !== before.generation) return null;
           const withheld = await fullWriteWithholds(suppressions, tx, scope, source, prepared);
           const queries = prepared.map(({ query }, i) => ({ ...query, embedding: embeddings[i]?.vector }));
-          const policy = await memories.readWritePolicy(tx, scope, queries, source, "full");
+          const policy = await memories.readWritePolicy(tx, scope, queries, source, "full", undefined, { nearDuplicate: false });
           const exactPolicy = {
             ...policy, matches: policy.matches.map(matches => matches.filter(match => match.match === "exact")),
           };

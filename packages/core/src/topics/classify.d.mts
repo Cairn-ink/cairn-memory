@@ -16,6 +16,8 @@ export interface ClassifyPlacementOptions {
   model?: ModelPort | null;
   snapshot: ClassificationSnapshot;
   catalog: ClassificationCatalog;
+  /** Defaults to true. Existing topics only when false. */
+  allowNewTopics?: boolean;
   validateFresh(): Promise<void>;
   deadline?: { check(): void; expired(): boolean; remainingMs(): number };
   gate?: ModelGate;

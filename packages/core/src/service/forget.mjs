@@ -21,7 +21,7 @@ function sourceId(value) {
   return isWellFormedText(value) && value.length > 0 && !value.includes("\0");
 }
 
-/** @param {StorageAdapter} storage @param {Tx} tx @param {Scope} scope @param {MemoryRow} row */
+/** @param {Pick<StorageAdapter, "memories" | "capabilities">} storage @param {Tx} tx @param {Scope} scope @param {MemoryRow} row */
 async function similarCount({ memories, capabilities }, tx, scope, row) {
   if (typeof memories.findDuplicates !== "function") return 0;
   const embedding = capabilities.vectorSuppression && capabilities.nearDuplicate ? row.embedding?.vector : undefined;
@@ -78,7 +78,7 @@ async function cardSources(hydrate, tx, scope, row, spans) {
  */
 export function forgetMethod({ storage, clock }) {
   const { uow, capabilities, keys, memories, suppressions, raw, sessionLineage, spanLineage, hydrate,
-    conflicts, documentCards, quantityLedger, forgetLog } = storage;
+    conflicts, rationale, documentCards, quantityLedger, forgetLog } = storage;
 
   return entry(async (input, id, inputSource) => {
     const scope = scopeOf(input);
@@ -179,6 +179,10 @@ export function forgetMethod({ storage, clock }) {
       if (enabled(capabilities, "dependents.invalidate", "conflictEdges")) {
         if (!conflicts) throw new CoreError("capability_unavailable");
         await conflicts.invalidate(tx, scope, id);
+      }
+      if (enabled(capabilities, "dependents.invalidate", "rationaleEdges")) {
+        if (!rationale) throw new CoreError("capability_unavailable");
+        await rationale.invalidate(tx, scope, id);
       }
       if (enabled(capabilities, "dependents.invalidate", "quantityLedger")) {
         if (!quantityLedger) throw new CoreError("capability_unavailable");

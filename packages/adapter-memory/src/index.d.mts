@@ -1,5 +1,5 @@
 import type { Capability, ErrorCode, FactMatchPolicy, FingerprintLabels } from "@cairn-ink/core";
-import type { StorageAdapter } from "@cairn-ink/core/ports";
+import type { StorageAdapter, StoredDocumentCardRecord } from "@cairn-ink/core/ports";
 import type { TestHarness } from "@cairn-ink/conformance/factory";
 
 export type { CaptureClaim, CaptureFinish, CaptureKey, CaptureMessage, ClaimResult, FinishItem, FinishResult,
@@ -18,9 +18,9 @@ export interface MemoryAdapterOptions {
 
 type CapturePorts = StorageAdapter["capture"];
 
-export type MemoryAdapter = Pick<StorageAdapter, "capabilities" | "uow" | "memories" |
+export type MemoryAdapter = Pick<StorageAdapter<StoredDocumentCardRecord>, "capabilities" | "uow" | "memories" |
   "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "suppressions" | "pause" | "keys" | "placement" | "raw" |
-  "supersession" | "conflicts"> & {
+  "supersession" | "conflicts" | "documentCards" | "rationale" | "rationaleSourceText"> & {
   readonly capture: CapturePorts & Required<Pick<CapturePorts, "admit" | "load" | "status">>;
   name: "memory";
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;
@@ -31,4 +31,7 @@ export type MemoryAdapter = Pick<StorageAdapter, "capabilities" | "uow" | "memor
 export declare const TEST_FINGERPRINT_SECRET: string;
 export declare const TEST_FINGERPRINT_LABELS: FingerprintLabels;
 
+export declare function createMemoryAdapter(options?: MemoryAdapterOptions & {
+  capabilities?: { documentCards?: false };
+}): Omit<MemoryAdapter, "documentCards"> & { documentCards?: undefined };
 export declare function createMemoryAdapter(options?: MemoryAdapterOptions): MemoryAdapter;
