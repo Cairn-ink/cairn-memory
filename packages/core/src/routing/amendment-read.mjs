@@ -5,6 +5,7 @@ const READ_LIMIT = 5;
 const PRECEDENCE = "These amendments are later changes and take precedence over the card text.";
 
 /**
+ * Equal dates retain the store's insertion order through the stable sort.
  * @template {Pick<import("../ports/document-card.d.ts").DocumentCardAmendment, "date">} T
  * @param {readonly T[]} amendments
  */

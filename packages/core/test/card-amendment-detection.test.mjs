@@ -5,6 +5,7 @@ import {
   SYS_DETECT, SYS_VERIFY, amendmentId, buildDetectRequest, buildVerifyRequest,
   checkChangeCandidates, detectCardAmendments,
 } from "@cairn-ink/core/routing";
+import { modelRequestText } from "../src/capture/request-size.mjs";
 
 const scope = { owner: "owner", namespace: "work" };
 const capture = {
@@ -58,7 +59,7 @@ test("detect uses the kit layout and lists the newest fitting cards in session o
     "", "[newest] date 2025-06-12", `first line: ${"😀".repeat(120)}`,
     `beginning: \u0085${"😀".repeat(121)}\n${"x".repeat(177)}`,
   ].join("\n");
-  const inputLimit = countTokens(SYS_DETECT) + countTokens(expected);
+  const inputLimit = countTokens(modelRequestText(SYS_DETECT, expected, 900));
   const { request, listedCards, counters } = buildDetectRequest({ ...detectInput, inputLimit });
   assert.deepEqual(listedCards, [middle, newest]);
   assert.deepEqual(counters, { detect_card_list_truncated: 1 });
@@ -73,8 +74,8 @@ test("detect uses the kit layout and lists the newest fitting cards in session o
 });
 
 test("detect skips an oversized first card and uses a 6,000-token default", () => {
-  assert.deepEqual(buildDetectRequest({ ...detectInput, countTokens: () => 3_000 }).listedCards, [old, middle, newest]);
-  assert.deepEqual(buildDetectRequest({ ...detectInput, countTokens: () => 3_001 }), {
+  assert.deepEqual(buildDetectRequest({ ...detectInput, countTokens: () => 6_000 }).listedCards, [old, middle, newest]);
+  assert.deepEqual(buildDetectRequest({ ...detectInput, countTokens: () => 6_001 }), {
     request: null, listedCards: [], counters: { detect_skipped_oversize: 1 },
   });
   assert.deepEqual(buildDetectRequest({ ...detectInput, inputLimit: 1 }).counters, { detect_skipped_oversize: 1 });
@@ -112,7 +113,7 @@ test("candidate checks count each drop and recover the verbatim user substring",
   });
   assert.deepEqual(candidates, [{
     card: old, quote: "Set [width] to 4.", verbatimQuote: "Set [width] to\u00854.",
-    newValue: "Width is now 4.",
+    newValue: " Width is now 4. ",
     sourceMessage: { client: capture.client, sessionId: capture.sessionId, messageId: "question" },
   }]);
 });

@@ -42,7 +42,7 @@ export interface DocumentCardRecord {
   sourceMemories: ReadonlyArray<{ id: string; revision: Revision }>;
   sentences: readonly DocumentCardSentence[];
   stale: readonly DocumentCardStaleEntry[];
-  /** Visible amendments in ascending date order. */
+  /** Visible amendments in ascending date order, then insertion order for equal dates. */
   amendments: readonly DocumentCardAmendment[];
 }
 
@@ -59,7 +59,7 @@ export interface DocumentCardEmbedding {
 
 /**
  * Optional (capability documentCards). All calls use the live Tx from UnitOfWork.
- * Each card insert or replacement, each hide call affecting at least one card,
+ * Each card insert or replacement, each hide call affecting at least one card or amendment,
  * and each markStale call advances the owner index revision once.
  */
 export interface DocumentCardStore {
@@ -83,12 +83,19 @@ export interface DocumentCardStore {
   hideAmendment(tx: Tx, scope: Scope, cardId: string, amendmentId: string, reason: string): Promise<void>;
   /** Hiding a card also hides all of its amendments. */
   hide(tx: Tx, scope: Scope, cardId: string, reason: string): Promise<void>;
-  /** A sourceMessage or session selector also hides amendments with a matching source. */
+  /**
+   * A sourceMessage or session selector also hides amendments with a matching source.
+   * `hidden` counts newly hidden cards plus newly hidden amendments. The owner index
+   * revision advances once if the call hides at least one card or amendment.
+   */
   hideWhere(tx: Tx, scope: Scope, selector: DocumentCardHideSelector, reason: string): Promise<{ hidden: number }>;
   /** Stores the ids of the changed memory and its replacement. */
   markStale(tx: Tx, scope: Scope, cardId: string, entry: DocumentCardStaleEntry): Promise<void>;
-  /** Same read snapshot as the final visibility check. Returns visible cards and amendments only. */
+  /**
+   * Same read snapshot as the final visibility check. Returns visible cards and amendments only,
+   * with amendments in ascending date order and insertion order for equal dates.
+   */
   get(tx: Tx, scope: Scope, cardId: string): Promise<DocumentCardRecord | null>;
-  /** Same read snapshot as get. */
+  /** Same read snapshot, visibility, and amendment ordering as get. */
   list(tx: Tx, scope: Scope): Promise<DocumentCardRecord[]>;
 }

@@ -39,7 +39,7 @@ export declare function buildDetectRequest(input: {
   conversation: AmendmentConversation;
   cards: readonly AmendmentDetectCard[];
   countTokens: CountTokens;
-  /** Defaults to 6,000 tokens, measured as system tokens plus input tokens. */
+  /** Serialized request token limit, capped at 6,000. */
   inputLimit?: number;
 }): {
   request: DetectChangesRequest | null;
@@ -48,14 +48,16 @@ export declare function buildDetectRequest(input: {
 };
 
 export type ChangeCandidateDropReason =
-  | "malformed" | "unknown_card" | "quote_not_verbatim" | "same_session" | "quote_from_assistant";
+  | "malformed" | "unknown_card" | "quote_not_verbatim" | "same_session" | "quote_from_assistant"
+  | "redaction_unavailable";
 
 export interface CheckedChange {
   card: AmendmentRequestCard;
-  /** Original detect output for the verify request. */
+  /** Detect quote after redaction, for the verify request. */
   quote: string;
-  /** Exact source substring to store. */
+  /** Matched source substring after redaction, for storage. */
   verbatimQuote: string;
+  /** Untrimmed, redacted new value for verification. */
   newValue: string;
   sourceMessage: DocumentCardSourceMessage;
 }
@@ -90,6 +92,7 @@ export declare function detectCardAmendments(input: {
   capture: AmendmentConversation;
   cards: readonly AmendmentDetectCard[];
   limits?: {
+    /** Serialized request token limit, capped at 6,000. */
     inputLimit?: number;
     /** Per-call deadline in milliseconds. Defaults to 30 seconds. */
     timeoutMs?: number;

@@ -1,7 +1,8 @@
-import { countTokens as checkedTokenCount, MODEL_INPUT_TOKENS } from "../capture/request-size.mjs";
+import { countTokens as checkedTokenCount, MODEL_INPUT_TOKENS, modelRequestText } from "../capture/request-size.mjs";
 import { compareUtf8 } from "../utf8.mjs";
 import { SYS_DETECT, SYS_VERIFY } from "./amendment-prompts.mjs";
-import { SPACE } from "./text.mjs";
+import { redactDocumentText } from "./redaction.mjs";
+import { normalizeDocumentText, SPACE } from "./text.mjs";
 
 export { SYS_DETECT, SYS_VERIFY };
 export { selectAmendmentsForRead, renderCardAmendments, documentCardAmendmentVisible } from "./amendment-read.mjs";
@@ -41,9 +42,9 @@ const sameSession = (left, right) => left.client === right.client && left.sessio
 /** @param {{date: string, sessionId: string}} left @param {{date: string, sessionId: string}} right */
 const sessionOrder = (left, right) => compareUtf8(left.date, right.date) || compareUtf8(left.sessionId, right.sessionId);
 
-/** @param {ModelRequest & {input: string}} request @param {(text: string) => number} countTokens */
-const requestTokens = ({ system, input }, countTokens) =>
-  checkedTokenCount({ countTokens }, system) + checkedTokenCount({ countTokens }, input);
+/** @param {ModelRequest & {input: string}} request @param {(text: string) => number} countTokens @param {number} limit */
+const requestFits = ({ system, input, maxOutputTokens }, countTokens, limit) =>
+  checkedTokenCount({ countTokens }, modelRequestText(system, input, maxOutputTokens)) <= Math.min(limit, MODEL_INPUT_TOKENS);
 
 /** @type {typeof import("./amendments.mjs").buildDetectRequest} */
 export function buildDetectRequest({ conversation, cards, countTokens, inputLimit = MODEL_INPUT_TOKENS }) {
@@ -76,14 +77,13 @@ export function buildDetectRequest({ conversation, cards, countTokens, inputLimi
   let blocks = "";
   let start = earlier.length;
   try {
-    const systemTokens = checkedTokenCount({ countTokens }, request.system);
     while (start > 0) {
       const { id, date, body } = earlier[start - 1];
       const firstLine = body.replace(EDGE_WHITESPACE, "").split("\n", 1)[0];
       const block = `[${id}] date ${date}\nfirst line: ${prefix(firstLine, 120)}\nbeginning: ${prefix(body, 300)}`;
       const next = blocks ? `${block}\n\n${blocks}` : block;
       const input = header + next;
-      if (systemTokens + checkedTokenCount({ countTokens }, input) > inputLimit) break;
+      if (!requestFits({ ...request, input }, countTokens, inputLimit)) break;
       blocks = next;
       request.input = input;
       start--;
@@ -115,6 +115,17 @@ function hasKeys(value, required, optional = []) {
 /** @param {unknown} value @returns {value is string} */
 const nonblank = (value) => typeof value === "string" && norm(value).length > 0;
 
+/** @param {string} text */
+function redactAmendmentText(text) {
+  try {
+    const redacted = redactDocumentText(text);
+    // Keep the original formatting when the card redactor only normalized the text.
+    return redacted === normalizeDocumentText(text) ? text : redacted;
+  } catch {
+    return null;
+  }
+}
+
 /** @param {string} normalizedQuote */
 function quotePattern(normalizedQuote) {
   const parts = normalizedQuote.split(" ").map(part => part.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"));
@@ -130,12 +141,16 @@ export function checkChangeCandidates({ changes, listedCards, captureMessages, c
   const drops = {};
 
   for (const change of changes) {
-    if (!record(change) || !hasKeys(change, ["card_id", "quote", "new_value"]) ||
-        !nonblank(change.card_id) || !nonblank(change.quote) || !nonblank(change.new_value)) {
+    if (!record(change) || !hasKeys(change, ["card_id", "quote", "new_value"])) {
       drops.malformed = (drops.malformed ?? 0) + 1;
       continue;
     }
-    const card = byId.get(change.card_id);
+    const { card_id: cardId, quote, new_value: value } = change;
+    if (!nonblank(cardId) || !nonblank(quote) || !nonblank(value)) {
+      drops.malformed = (drops.malformed ?? 0) + 1;
+      continue;
+    }
+    const card = byId.get(cardId);
     if (!card) {
       drops.unknown_card = (drops.unknown_card ?? 0) + 1;
       continue;
@@ -144,18 +159,25 @@ export function checkChangeCandidates({ changes, listedCards, captureMessages, c
       drops.same_session = (drops.same_session ?? 0) + 1;
       continue;
     }
-    const pattern = quotePattern(norm(change.quote));
+    const pattern = quotePattern(norm(quote));
     let assistantMatch = false;
     let accepted = false;
     for (const message of captureMessages) {
       const verbatimQuote = pattern.exec(message.content)?.[0];
       if (!verbatimQuote) continue;
       if (message.role === "user") {
-        candidates.push({
-          card, quote: change.quote, verbatimQuote, newValue: change.new_value.replace(EDGE_WHITESPACE, ""),
-          sourceMessage: { client: captureSession.client, sessionId: captureSession.sessionId, messageId: message.id },
-        });
         accepted = true;
+        const safeQuote = redactAmendmentText(quote);
+        const safeVerbatimQuote = redactAmendmentText(verbatimQuote);
+        const newValue = redactAmendmentText(value);
+        if (nonblank(safeQuote) && nonblank(safeVerbatimQuote) && nonblank(newValue)) {
+          candidates.push({
+            card, quote: safeQuote, verbatimQuote: safeVerbatimQuote, newValue,
+            sourceMessage: { client: captureSession.client, sessionId: captureSession.sessionId, messageId: message.id },
+          });
+        } else {
+          drops.redaction_unavailable = (drops.redaction_unavailable ?? 0) + 1;
+        }
         break;
       }
       assistantMatch = true;
@@ -216,7 +238,7 @@ function isTimeout(error) {
 }
 
 /** @type {typeof import("./amendments.mjs").detectCardAmendments} */
-export async function detectCardAmendments({ model, capture, cards, limits }) {
+export async function detectCardAmendments(options) {
   /** @type {AmendmentCounters} */
   const counters = {};
   /** @type {DetectedCardAmendment[]} */
@@ -227,21 +249,6 @@ export async function detectCardAmendments({ model, capture, cards, limits }) {
   const fail = (reason) => {
     count(reason);
     return { amendments: [], counters };
-  };
-
-  let timeoutMs = limits?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 2_147_483_647) timeoutMs = DEFAULT_TIMEOUT_MS;
-  const inputLimit = limits?.inputLimit ?? MODEL_INPUT_TOKENS;
-
-  /** @param {"detect" | "verify"} stage @param {(signal: AbortSignal) => Promise<unknown>} send */
-  const call = async (stage, send) => {
-    count(`${stage}_calls`);
-    try {
-      return { ok: true, output: await withTimeout(send, timeoutMs) };
-    } catch (error) {
-      count(isTimeout(error) ? `${stage}_timeout` : `${stage}_failed`);
-      return { ok: false };
-    }
   };
 
   /** @param {"detect" | "verify"} stage @param {unknown} usage */
@@ -259,6 +266,27 @@ export async function detectCardAmendments({ model, capture, cards, limits }) {
   /** @type {"detect" | "verify"} */
   let stage = "detect";
   try {
+    const { model, capture, cards, limits } = options;
+    const { client, sessionId, date, scope: { owner, namespace }, messages } = capture;
+    const conversation = {
+      client, sessionId, date, scope: { owner, namespace },
+      messages: Array.from(messages, ({ id, role, content, turn }) => ({ id, role, content, turn })),
+    };
+    let timeoutMs = limits?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 2_147_483_647) timeoutMs = DEFAULT_TIMEOUT_MS;
+    const inputLimit = limits?.inputLimit ?? MODEL_INPUT_TOKENS;
+
+    /** @param {"detect" | "verify"} stage @param {(signal: AbortSignal) => Promise<unknown>} send */
+    const call = async (stage, send) => {
+      count(`${stage}_calls`);
+      try {
+        return { ok: true, output: await withTimeout(send, timeoutMs) };
+      } catch (error) {
+        count(isTimeout(error) ? `${stage}_timeout` : `${stage}_failed`);
+        return { ok: false };
+      }
+    };
+
     const detect = model?.detectChanges;
     const verify = model?.verifyChange;
     if (!model || typeof detect !== "function" || typeof verify !== "function") {
@@ -268,7 +296,7 @@ export async function detectCardAmendments({ model, capture, cards, limits }) {
     /** @param {string} text */
     const countTokens = text => model.countTokens(text);
     const { request, listedCards, counters: planning } = buildDetectRequest({
-      conversation: capture, cards, countTokens, inputLimit,
+      conversation, cards, countTokens, inputLimit,
     });
     Object.assign(counters, planning);
     if (!request) return { amendments, counters };
@@ -280,7 +308,7 @@ export async function detectCardAmendments({ model, capture, cards, limits }) {
     meter("detect", output.usage);
     if (!hasKeys(output, ["changes"], ["usage"]) || !Array.isArray(output.changes)) return fail("detect_malformed_output");
     const { candidates, drops } = checkChangeCandidates({
-      changes: output.changes, listedCards, captureMessages: capture.messages, captureSession: capture,
+      changes: output.changes, listedCards, captureMessages: conversation.messages, captureSession: conversation,
     });
     Object.assign(counters, drops);
 
@@ -298,11 +326,11 @@ export async function detectCardAmendments({ model, capture, cards, limits }) {
         continue;
       }
 
-      const verifyRequest = buildVerifyRequest({ card, sessionDate: capture.date, quote, newValue });
-      let tokens;
-      try { tokens = requestTokens(verifyRequest, countTokens); }
+      const verifyRequest = buildVerifyRequest({ card, sessionDate: conversation.date, quote, newValue });
+      let fits;
+      try { fits = requestFits(verifyRequest, countTokens, inputLimit); }
       catch { return fail("verify_skipped_token_count_unavailable"); }
-      if (tokens > inputLimit) {
+      if (!fits) {
         count("verify_skipped_oversize");
         continue;
       }
@@ -321,7 +349,8 @@ export async function detectCardAmendments({ model, capture, cards, limits }) {
 
       const id = await amendmentId(card.id, sourceMessage, verbatimQuote);
       amendments.push({ cardId: card.id, amendment: {
-        amendmentId: id, date: capture.date, sentence: newValue, sourceMessage, quote: verbatimQuote,
+        amendmentId: id, date: conversation.date, sentence: newValue.replace(EDGE_WHITESPACE, ""),
+        sourceMessage, quote: verbatimQuote,
       } });
       appliedQuotes.add(normalizedQuote);
     }
