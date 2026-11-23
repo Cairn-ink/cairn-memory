@@ -296,3 +296,28 @@ for (const valid of [true, false]) {
     assert.equal(error.message, "index_unavailable");
   });
 }
+
+test('Postgres refuses a same-name index whose "C" collation only renders like the built-in one', migrationDbTest, async (t) => {
+  const { pool, source, migrations } = await migrationDatabase(t, { migrate: false });
+  await applyMigrations(source, migrations.filter(({ concurrent }) => !concurrent));
+  const { rows: applied } = await pool.query(readLedger);
+  await pool.query("CREATE SCHEMA lookalike");
+  await pool.query("CREATE COLLATION lookalike.\"C\" (provider = libc, locale = 'C')");
+  await pool.query('CREATE INDEX memories_user_recent_c ON memories (user_id, updated_at DESC, id COLLATE lookalike."C" DESC)');
+  // With the lookalike schema ahead of pg_catalog in the runner's session, its collation renders
+  // exactly as COLLATE "C", so only the catalog identity check can tell them apart.
+  const lookalikeFirst = {
+    async connect() {
+      const connection = await source.connect();
+      await connection.query("SET search_path = lookalike, pg_catalog, public");
+      return connection;
+    },
+  };
+  const readIndex = "SELECT indexrelid, indisvalid FROM pg_index WHERE indexrelid = 'public.memories_user_recent_c'::regclass";
+  const { rows: [lookalikeIndex] } = await pool.query(readIndex);
+  const error = await applyMigrations(lookalikeFirst, migrations).catch((error) => error);
+  assert.deepEqual((await pool.query(readIndex)).rows, [lookalikeIndex]);
+  assert.deepEqual((await pool.query("SELECT id FROM public.core_schema_migrations ORDER BY id")).rows.map(({ id }) => id), applied.map(({ id }) => id).sort());
+  assert.ok(error instanceof CoreError);
+  assert.equal(error.code, "index_unavailable");
+});

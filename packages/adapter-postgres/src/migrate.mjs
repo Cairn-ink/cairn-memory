@@ -20,7 +20,14 @@ const CONCURRENT_INDEX = new RegExp(
   "i",
 );
 const READ_INDEX = `SELECT i.indisvalid AS valid, n.nspname AS schema, idx.relname AS name,
-    pg_catalog.pg_get_indexdef(i.indexrelid) AS definition
+    pg_catalog.pg_get_indexdef(i.indexrelid) AS definition,
+    NOT EXISTS (
+      SELECT 1 FROM pg_catalog.unnest(i.indcollation::pg_catalog.oid[]) AS c(oid)
+      WHERE c.oid <> 0 AND NOT EXISTS (
+        SELECT 1 FROM pg_catalog.pg_collation pc
+        WHERE pc.oid = c.oid AND pc.collnamespace = 'pg_catalog'::pg_catalog.regnamespace
+      )
+    ) AS builtin_collations
   FROM pg_catalog.pg_index i
   JOIN pg_catalog.pg_class idx ON idx.oid = i.indexrelid
   JOIN pg_catalog.pg_namespace n ON n.oid = idx.relnamespace
@@ -74,6 +81,8 @@ async function applyConcurrent(connection, { id, sql, index }) {
   if (!state) throw failure ?? new CoreError("index_unavailable");
   // Compare the canonical SQL verbatim so quoted identifiers and literals keep their meaning.
   if (state.definition !== index.definition.trim()) throw new CoreError("index_unavailable");
+  // A same-named collation in another schema can render identically; require catalog identity.
+  if (state.builtin_collations !== true) throw new CoreError("index_unavailable");
   if (state.valid === false) {
     const qualifiedName = `${quoteIdentifier(state.schema)}.${quoteIdentifier(state.name)}`;
     await connection.query(`DROP INDEX CONCURRENTLY IF EXISTS ${qualifiedName}`);
@@ -112,6 +121,8 @@ export async function applyMigrations(source, migrations) {
     try {
       await connection.query("SET lock_timeout = '5s'");
       await connection.query("SET statement_timeout = '30s'");
+      // Index definitions are compared as text; keep their rendering independent of session quoting.
+      await connection.query("SET quote_all_identifiers = off");
       if ((await connection.query(MIGRATION_LOCK)).rows[0]?.locked !== true) {
         throw new CoreError("storage_busy");
       }

@@ -18,6 +18,7 @@ const last = { id: "last", sql: "CREATE TABLE last (id int)", concurrent: false 
 const setup = [
   "SET lock_timeout = '5s'",
   "SET statement_timeout = '30s'",
+  "SET quote_all_identifiers = off",
   "try migration lock",
   "create ledger",
   "read ledger",
@@ -27,7 +28,7 @@ function stub({
   applied = [],
   locked = true,
   fail,
-  index = { valid: true, schema: "public", name: recent.index.name, definition: recent.index.definition },
+  index = { valid: true, schema: "public", name: recent.index.name, definition: recent.index.definition, builtin_collations: true },
 } = {}) {
   const statements = [];
   const source = {
@@ -118,7 +119,7 @@ test("runner rejects duplicate IDs or invalid concurrent entries before connecti
 test("runner refuses a second migrator while the session lock is held", async () => {
   const { source, statements } = stub({ locked: false });
   await assert.rejects(applyMigrations(source, [first]), isCode("storage_busy"));
-  assert.deepEqual(statements, [...setup.slice(0, 3), ["release", true]]);
+  assert.deepEqual(statements, [...setup.slice(0, 4), ["release", true]]);
 });
 
 test("runner rolls back a failed transactional migration and maps the native code", async () => {
