@@ -254,6 +254,7 @@ async function rawSearch(ctx) {
   /** @param {RawSegment["ref"]} ref */
   const refKey = ({ namespace, type, id }) => JSON.stringify([namespace, type, id]);
   const scores = new Map(expected.map(({ ref, score }) => [refKey(ref), Math.fround(score)]));
+  const returnedScores = [];
   for (const limit of [1, 2, 20]) {
     const { segments, coverage } = await f.search(limit, scope);
     equal(coverage.complete, true, "A raw lexical search must be complete");
@@ -270,12 +271,17 @@ async function rawSearch(ctx) {
       check(rankScore >= cutoff, "Raw limit must apply after visibility and ranking");
       check(Number.isFinite(score) && score <= priorScore, "Raw store scores must be finite and non-increasing");
       check(rankScore <= priorRankScore, "Raw search must order strict BM25 ranks");
+      returnedScores.push({ score, expectedScore: rankScore });
       seen.add(id);
       priorScore = score;
       priorRankScore = rankScore;
     }
     check(expected.every(({ ref, score }) => Math.fround(score) <= cutoff || seen.has(refKey(ref))),
       "Raw limit must include all segments strictly above the cutoff");
+  }
+  for (const { score, expectedScore } of returnedScores) {
+    check(Math.fround(score) === expectedScore,
+      `Raw scores must use visible-corpus BM25 (expected ${expectedScore}, got ${score})`);
   }
   equal(messageIds((await f.search()).segments), ["tie-a", "tie-b", "weak"], "Raw search must isolate namespaces");
   const clients = { ...scope, clients: [otherClient] };
@@ -412,6 +418,11 @@ async function purgeSafety(ctx) {
   const session = sessionFact(ctx, sessionOnly.capture);
   await sessionOnly.archive([message("session-only", 2)]);
   const storedSession = await storeFact(ctx, session);
+  await f.archive([{ ...matching, id: "second-match" }]);
+  const deletedWithSession = await purge(f, [text]);
+  equal([deletedWithSession.rawDeleted, deletedWithSession.ledgerBlanked], [1, 0],
+    "Text purge must retain session-only-hidden rows");
+  await visible(f, [], "Session-only visibility after text purge");
   equal((await purge(f, [storedSession])).rawDeleted, 0, "Purge must retain session-only-hidden rows");
   await visible(f, [], "Session-only visibility after purge");
   equal((await sessionOnly.remove()).rawDeleted, 1, "A session-only-hidden row must remain physically stored");

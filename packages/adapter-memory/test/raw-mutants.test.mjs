@@ -243,6 +243,30 @@ for (const sessionRefs of ["plain", "hashed"]) {
     ], { sessionRefs });
     assert.equal(await runCase(factory, rawCase("K-RAW-4")), null);
   });
+
+  test(`K-RAW-4 rejects BM25 scores computed with fenced rows (${sessionRefs})`, async () => {
+    const factory = await variantFactory("fenced rows affect scores", [
+      [rawSearchRows, `const state = getState();
+        const visible = new Set((await visibleRows(state, selection)).map((row) => row.ref.id));
+        const rows = await visibleRows({ ...state, rawFences: new Set() }, selection);`],
+      [rawSearchRank, `rankLexical(documents, terms, documents.length)
+          .filter((row) => visible.has(row.ref.id)).slice(0, limit).map(publicSegment)`],
+    ], { sessionRefs });
+    await assert.rejects(runCase(factory, rawCase("K-RAW-4")), /Raw scores must use visible-corpus BM25/);
+  });
+
+  test(`K-RAW-8 rejects deletion of session-hidden rows during text purge (${sessionRefs})`, async () => {
+    const factory = await variantFactory("text purge deletes session-hidden rows", [
+      ["let rawDeleted = 0;\n          for (const [id, row] of state.rawRows)", `const purgeFacts = candidates.some(({ fact }) => fact.kind === "text")
+            ? [...candidates, ...scopedFacts(state, target).filter(({ fact }) => fact.kind === "session")]
+            : candidates;
+          let rawDeleted = 0;
+          for (const [id, row] of state.rawRows)`],
+      ["candidates.some((stored) => factHidesRow(stored, candidate, policy) === true)",
+        "purgeFacts.some((stored) => factHidesRow(stored, candidate, policy) === true)"],
+    ], { sessionRefs });
+    await assert.rejects(runCase(factory, rawCase("K-RAW-8")), /Text purge must retain session-only-hidden rows/);
+  });
 }
 
 test("Raw span admission refuses an ineligible identity", async () => {
