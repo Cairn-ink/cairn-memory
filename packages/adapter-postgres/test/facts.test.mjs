@@ -112,16 +112,12 @@ for (const [name, fact] of [
   ["an extra sourceMemory field", { ...text, sourceMemory: { ...text.sourceMemory, extra: "example" } }],
   ["a non-enumerable extra field", Object.defineProperty({ ...session }, "extra", { value: "example" })],
   ["a symbol field", { ...session, [Symbol("extra")]: "example" }],
-  ["a digest value passed as a one-element array", { ...text, text: { digests: [{ ...earlier, value: [hash] }] } }],
-  ["a hashed session ID passed as an array", { ...session, session: { client: "client", sessionKeyHash: [hash] } }],
   ["a non-plain fact", Object.assign(Object.create({}), session)],
   ["an array used as a window record", { ...window, window: Object.assign([], window.window) }],
   ["a declared accessor", Object.defineProperty({ ...session }, "owner", { get: () => "owner" })],
   ["a non-enumerable declared field", Object.defineProperty({ ...window }, "window", {
     value: window.window, enumerable: false,
   })],
-  ["a sparse embedding", { ...full, text: { ...full.text, embedding: full.text.embedding.slice(1).concat(Array(1)) } }],
-  ["sparse shingles", { ...text, text: { ...text.text, shingles: Array(1) } }],
   ["a custom array property", { ...text, text: { ...text.text, shingles: Object.assign(["abcd"], { extra: true }) } }],
   ["U+0000 in owner", { ...session, owner: "owner\u0000" }],
   ["U+0000 in a nested string", { ...text, sourceMemory: { ...text.sourceMemory, id: "source\u0000" } }],
@@ -137,6 +133,21 @@ for (const [name, fact] of [
   test(`storable facts reject ${name} after core validation`, () => {
     const validated = validateSuppressionFact(fact);
     assert.throws(() => factSlot(validated), invalidInput);
+  });
+}
+
+// Core validation rejects these shapes itself (own array data, no coercion of a
+// one-element array to a string). The storage preflight still rejects them on an
+// unvalidated fact, as defence in depth.
+for (const [name, fact] of [
+  ["a digest value passed as a one-element array", { ...text, text: { digests: [{ ...earlier, value: [hash] }] } }],
+  ["a hashed session ID passed as an array", { ...session, session: { client: "client", sessionKeyHash: [hash] } }],
+  ["a sparse embedding", { ...full, text: { ...full.text, embedding: full.text.embedding.slice(1).concat(Array(1)) } }],
+  ["sparse shingles", { ...text, text: { ...text.text, shingles: Array(1) } }],
+]) {
+  test(`core validation and storage preflight both reject ${name}`, () => {
+    assert.throws(() => validateSuppressionFact(fact), invalidInput);
+    assert.throws(() => factSlot(fact), invalidInput);
   });
 }
 

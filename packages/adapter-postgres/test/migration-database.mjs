@@ -12,10 +12,23 @@ export async function migrationDatabase(t, { migrate = true } = {}) {
   const databaseUrl = new URL(url);
   databaseUrl.pathname = `/${name}`;
   const pool = new Pool({ connectionString: databaseUrl.href, connectionTimeoutMillis: 3_000 });
+  // pool.end() resolves before removed clients finish closing; DROP ... WITH (FORCE) would
+  // terminate those backends and the pool would rethrow the error as uncaught. Wait for each
+  // connected client's own socket to end (bounded, so a stalled socket cannot hang teardown).
+  const socketsClosed = [];
+  pool.on("connect", (client) => {
+    socketsClosed.push(new Promise((resolve) => { client.once("end", resolve); }));
+  });
   let created = false;
   t.after(async () => {
     try {
       await pool.end();
+      let timer;
+      await Promise.race([
+        Promise.all(socketsClosed),
+        new Promise((resolve) => { timer = setTimeout(resolve, 5_000); }),
+      ]);
+      clearTimeout(timer);
     } finally {
       try {
         if (created) await admin.query(`DROP DATABASE ${name} WITH (FORCE)`);
