@@ -175,7 +175,7 @@ function vectorMatch(passage, fact, policy) {
   return Number.isFinite(distance) ? distance <= cutoff + SUPPRESSION_DISTANCE_TOLERANCE : "ineligible";
 }
 
-/** @param {TextFact} fact @param {FactMatchIncoming["sourceMemory"]} edit @param {number} count */
+/** @param {TextFact} fact @param {FactMatchIncoming["sourceMemory"]} edit @param {readonly TextCandidate[]} passages */
 function checksExplicitPassages(fact, edit, passages) {
   // Hosted compares a single ordinary passage by digest only. Core is stricter
   // after a key change: a passage fingerprinted under any other key than the

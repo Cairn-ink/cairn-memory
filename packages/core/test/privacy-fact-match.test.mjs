@@ -508,3 +508,43 @@ for (const vector of cases) {
     assert.equal(factBlocksIncoming(fact, { scope, passages: [await hostedPassage(inputOf(vector))] }, explicit), true);
   });
 }
+
+for (const [length, matcherResult, booleanResult] of [[64, false, false], [65, ineligible, true]]) {
+  test(`explicit edit with a ${length}-character stored shingle key`, () => {
+    const sourceMemory = { id: "m", createdAtMs: 42 };
+    const fact = store({ ...editFact, sourceMemory,
+      text: { digests: [digest("a")], shingles: ["aa"], keyId: "x".repeat(length) } });
+    const passages = [{ ...rotatedPassage, shingles: ["bb"] }];
+    const policy = { ...explicit, key: rotatedKey };
+    assert.equal(factBlocksIncoming(fact, { scope, passages, sourceMemory }, policy), matcherResult);
+    assert.equal(blocksMemoryPassage(passages, [fact.fact], rotatedKey, undefined, sourceMemory), booleanResult);
+  });
+}
+
+test("malformed stored text fields deny a comparable exact miss", async () => {
+  const { validateSuppressionFact, withholdsAnyPassage } = await import("../src/index.mjs");
+  const passages = [passage];
+  const row = { ...baseRow, ...passage };
+  const incoming = { scope, passages };
+  for (const [label, patch] of [
+    ["empty key ID", { text: { ...reference, keyId: "" } }],
+    ["non-string key ID", { text: { ...reference, keyId: 1 } }],
+    ["oversized key ID", { text: { ...reference, keyId: "x".repeat(65) } }],
+    ["non-hex shingle", { text: { ...reference, shingles: ["not-hex"] } }],
+    ["sparse shingles", { text: { ...reference, shingles: Array(1) } }],
+    ["non-finite embedding item", { text: { ...reference, embedding: [Infinity] } }],
+    ["sparse embedding", { text: { ...reference, embedding: Array(1) } }],
+    ["duplicate digests", { text: { ...reference, digests: [digest("a"), digest("a")] } }],
+    ["oversized source ID", { sourceMemory: { ...edit, id: "m".repeat(129) } }],
+    ["non-integer source timestamp", { sourceMemory: { ...edit, createdAtMs: 1.5 } }],
+  ]) {
+    const fact = store({ ...exact, ...patch });
+    assert.throws(() => validateSuppressionFact(fact.fact), { code: "invalid_input" }, label);
+    assert.equal(factHidesRow(fact, row), ineligible, label);
+    assert.equal(factBlocksIncoming(fact, incoming, capture), ineligible, label);
+    assert.equal(factBlocksIncoming(fact, incoming, explicit), ineligible, label);
+    assert.equal(withholdsPassage(passage, fact.fact), true, label);
+    assert.equal(withholdsAnyPassage(passages, [fact.fact]), true, label);
+    assert.equal(blocksMemoryPassage(passages, [fact.fact], null), true, label);
+  }
+});

@@ -1,5 +1,5 @@
 import { CONTAINMENT_THRESHOLD } from "../decisions.mjs";
-import { FACT_ORIGINS, validateSuppressionFact } from "../suppression-fact.mjs";
+import { validateSuppressionFact } from "../suppression-fact.mjs";
 
 /** @typedef {import("../suppression-fact.mjs").TextDigest} TextDigest */
 /** @typedef {import("../suppression-fact.mjs").TextFact} TextFact */
@@ -119,12 +119,17 @@ export function snapshotReader() {
   /** @param {unknown} input */
   function fact(input) {
     const data = record(input);
+    const text = record(field(data, "text"));
+    const embedding = field(text, "embedding");
     const sourceMemory = field(data, "sourceMemory");
     return Object.freeze({
       kind: string(field(data, "kind")),
       origin: string(field(data, "origin")),
       mode: string(field(data, "mode")),
-      text: fingerprint(field(data, "text")),
+      text: Object.freeze({
+        ...fingerprint(text),
+        embedding: embedding == null ? embedding : list(embedding, (item) => item),
+      }),
       sourceMemory: sourceMemory == null ? sourceMemory : source(sourceMemory),
     });
   }
@@ -172,9 +177,13 @@ const isValidSource = (source) => source.id.length > 0 && Number.isSafeInteger(s
 
 /** @param {FactSnapshot} fact */
 function isValidFact(fact) {
-  return fact.kind === "text" && FACT_ORIGINS.some((origin) => origin === fact.origin) &&
-    (fact.mode === "exact" || fact.mode === "full") && isValidFingerprint(fact.text) &&
-    (fact.sourceMemory == null || isValidSource(fact.sourceMemory));
+  if (fact.kind !== "text") return false;
+  try {
+    validateSuppressionFact({ owner: "validation", actionId: "validation", ...fact });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** @param {unknown} threshold @returns {threshold is number} */
