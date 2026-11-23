@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { CoreError, factBody, validateSuppressionFact } from "../../core/src/index.mjs";
-import { assertStorableFact, slotHash } from "../src/facts.mjs";
+import { CoreError, factBody } from "../../core/src/index.mjs";
+import { buildFactStorage, slotHash } from "../src/facts.mjs";
 import { applyMigrations, factSlot } from "../src/index.mjs";
 import { migrationDatabase, migrationDbTest } from "./migration-database.mjs";
 import { readCatalog } from "./catalog.mjs";
@@ -18,22 +18,19 @@ const exact = {
 };
 
 async function insertFact(pool, candidate, { id, epoch, legacyRef = null }) {
-  const fact = validateSuppressionFact(candidate);
-  assertStorableFact(fact);
-  const slot = factSlot(fact);
-  const mode = fact.kind === "text" ? fact.mode : null;
-  const lookup = fact.kind === "text" && fact.mode === "full" ? fact.text : null;
-  return pool.query(`
+  const fact = await buildFactStorage(candidate);
+  const inserted = await pool.query(`
     INSERT INTO core_suppression_facts (
       user_id, fact_id, slot, slot_hash, incarnation, action_id, epoch, origin, kind,
       mode, body, embedding, shingles, key_id, legacy_ref
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
     RETURNING body, embedding, shingles, key_id, created_at
   `, [
-    fact.owner, id, slot, await slotHash(slot), "0".repeat(64), fact.actionId, epoch, fact.origin, fact.kind,
-    mode, factBody(fact), lookup?.embedding == null ? null : JSON.stringify(lookup.embedding),
-    lookup?.shingles?.length ? lookup.shingles : null, lookup?.keyId ?? null, legacyRef,
+    fact.owner, id, fact.slot, fact.slotHash, "0".repeat(64), fact.actionId, epoch, fact.origin, fact.kind,
+    fact.mode, fact.body, fact.embedding, fact.shingles, fact.keyId, legacyRef,
   ]);
+  for (const digest of fact.digests) await insertDigest(pool, fact.owner, id, digest);
+  return inserted;
 }
 
 function insertDigest(pool, owner, factId, candidate) {
@@ -44,6 +41,76 @@ function insertDigest(pool, owner, factId, candidate) {
     owner, factId, candidate.alg, candidate.value, candidate.pipeline, candidate.redactionVersion, candidate.keyId,
   ]);
 }
+
+async function captureInsert(candidate) {
+  const parameters = [];
+  const pool = { query: (_sql, values) => parameters.push(values) };
+  await insertFact(pool, candidate, { id: "fact", epoch: 1 });
+  return parameters;
+}
+
+test("fact insert snapshots text before a later read can expose plaintext", async () => {
+  let reads = 0;
+  const candidate = new Proxy(exact, {
+    get(target, key, receiver) {
+      if (key === "text" && ++reads > 1) return { ...exact.text, plaintext: "example" };
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  const parameters = await captureInsert(candidate);
+  assert.doesNotMatch(JSON.stringify(parameters), /plaintext/u);
+  assert.deepEqual(parameters, await captureInsert(exact));
+});
+
+test("fact insert and slot snapshot a session ID before a later read can expose a lone surrogate", async () => {
+  const session = {
+    owner: "owner", actionId: "action", origin: "forget", kind: "session",
+    session: { client: "client", sessionId: "session" },
+  };
+  function candidate() {
+    let reads = 0;
+    return { ...session, session: new Proxy(session.session, {
+      get(target, key, receiver) {
+        if (key === "sessionId" && ++reads > 1) return "\uD800";
+        return Reflect.get(target, key, receiver);
+      },
+    }) };
+  }
+  const parameters = await captureInsert(candidate());
+  assert.doesNotMatch(JSON.stringify(parameters), /\\ud800/iu);
+  assert.deepEqual(parameters, await captureInsert(session));
+  assert.equal(factSlot(candidate()), factSlot(session));
+});
+
+test("slot and insert read each caller field and array element once", async () => {
+  const full = {
+    ...exact, mode: "full", namespace: null,
+    text: { ...exact.text, embedding: null, digests: [digest, { ...digest, value: "a".repeat(64) }] },
+  };
+  for (const derive of [factSlot, captureInsert]) {
+    const reads = {};
+    const expected = {};
+    function countReads(value, path) {
+      if (value === null || typeof value !== "object") return value;
+      const target = Array.isArray(value) ? [] : {};
+      for (const key of Object.keys(value)) target[key] = countReads(value[key], `${path}.${key}`);
+      for (const key of Object.getOwnPropertyNames(target)) expected[`${path}.${key}`] = 1;
+      return new Proxy(target, {
+        get(object, key, receiver) {
+          const field = `${path}.${String(key)}`;
+          reads[field] = (reads[field] ?? 0) + 1;
+          return Reflect.get(object, key, receiver);
+        },
+      });
+    }
+    assert.deepEqual(await derive(countReads(full, "fact")), await derive(full));
+    assert.deepEqual(reads, expected);
+  }
+  const [, ...digests] = await captureInsert(full);
+  assert.deepEqual(digests, full.text.digests.map(({ alg, value, pipeline, redactionVersion, keyId }) => [
+    "owner", "fact", alg, value, pipeline, redactionVersion, keyId,
+  ]));
+});
 
 test("suppression migrations upgrade the existing prefix and match the structural snapshot", migrationDbTest, async (t) => {
   const { pool, source, migrations } = await migrationDatabase(t, { migrate: false });
@@ -130,9 +197,7 @@ test("fact storage enforces owner, slot, epoch, legacy reference, and digest con
   await assert.rejects(insertDigest(pool, "owner", "fact", { ...digest, keyId: "unexpected" }), {
     code: "23514", constraint: "core_fact_digests_key_check",
   });
-  await insertDigest(pool, "owner", "fact", digest);
   await insertDigest(pool, "owner", "fact", { ...digest, alg: "hmac", keyId: "digest-key" });
-  await insertDigest(pool, "other-owner", "other-fact", digest);
 
   const full = { ...exact, mode: "full", text: { ...exact.text, embedding: [0.123456789, ...Array(1535).fill(0)] } };
   const withoutKey = { ...full, text: { ...full.text, keyId: null } };
@@ -189,7 +254,7 @@ test("a slot for maximum multibyte hosted session identifiers inserts and still 
   };
   await pool.query("INSERT INTO users (id) VALUES ($1)", [owner]);
   await insertFact(pool, fact, { id: "fact", epoch: 1 });
-  const slot = factSlot(validateSuppressionFact(fact));
+  const slot = factSlot(fact);
   assert.ok(Buffer.byteLength(owner) + Buffer.byteLength(slot) > 2704);
   assert.deepEqual((await pool.query("SELECT slot, slot_hash FROM core_suppression_facts")).rows, [
     { slot, slot_hash: await slotHash(slot) },

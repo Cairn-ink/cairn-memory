@@ -57,12 +57,13 @@ raw data, lineage, or facts. This is the value returned as
 must keep each non-null `legacy_ref` within 256 UTF-8 bytes so the owner and
 reference can be indexed together.
 
-Validate the fact with core's `validateSuppressionFact`, then call
-`assertStorableFact` from `src/facts.mjs` before deriving the stored values or
-executing SQL. The adapter requires plain records with only declared fields,
-the declared JavaScript types, and dense arrays. It rejects U+0000 and unpaired
-UTF-16 surrogates anywhere in the fact, digest redaction versions above
-2147483647, and slots over 8192 UTF-8 bytes with `CoreError("invalid_input")`.
+The slot helper and insert builder in `src/facts.mjs` snapshot the fact before
+running core validation and the adapter's storage checks. They derive all
+stored values from that snapshot. The adapter requires plain records with only
+declared fields, the declared JavaScript types, and dense arrays. It rejects
+U+0000 and unpaired UTF-16 surrogates anywhere in the fact, digest redaction
+versions above 2147483647, and slots over 8192 UTF-8 bytes with
+`CoreError("invalid_input")`.
 For full-mode text facts, a non-null embedding must contain exactly 1536 finite
 numbers in the float4 range, and non-empty shingles require a non-empty key ID.
 
@@ -79,12 +80,12 @@ numbers in the float4 range, and non-empty shingles require a non-empty key ID.
 A null window client selects all clients. `canonicalDigests(digests)` sorts a
 copy by pipeline, algorithm, and value in UTF-8 byte order. Each digest
 contributes only its algorithm and value to the target tuple. Reordering the
-same digests preserves the slot. Core's `factBody(fact)` preserves input array
+same digests preserves the slot. Core's `factBody(snapshot)` preserves input array
 order for the incarnation. Store the JSON slot for diagnostics and use
 `slotHash(slot)` for the lowercase SHA-256 of its UTF-8 bytes. The owner and
 hash form the unique key.
 
-Store core's canonical `factBody(fact)` in `body` and index every text digest
+Store core's canonical `factBody(snapshot)` in `body` and index every text digest
 in `core_fact_digests`. Populate the embedding and shingle lookup columns
 only for full-mode text facts. The `vector(1536)` column is a float4 projection
 used only for neighbour search, and `body` stays authoritative. In exact mode,

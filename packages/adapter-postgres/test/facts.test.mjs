@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 import { CoreError, validateSuppressionFact } from "../../core/src/index.mjs";
-import { assertStorableFact, slotHash } from "../src/facts.mjs";
+import { slotHash } from "../src/facts.mjs";
 import { canonicalDigests, factSlot } from "../src/index.mjs";
 
 const base = { owner: "owner", namespace: "namespace", actionId: "action", origin: "edit" };
@@ -20,8 +20,6 @@ const full = {
 const session = { ...base, kind: "session", session: { client: "client", sessionId: hash } };
 const window = { ...base, kind: "window", client: null, window: { startMs: -10, endMs: 20 } };
 const invalidInput = { name: CoreError.name, code: "invalid_input", message: "invalid_input" };
-const validatedSlot = (fact) => factSlot(validateSuppressionFact(fact));
-const assertStorable = (fact) => assertStorableFact(validateSuppressionFact(fact));
 
 for (const [name, fact, tuple] of [
   ["identity", { ...base, kind: "identity", memoryId: "memory" }, ["identity", "memory", null]],
@@ -40,8 +38,7 @@ for (const [name, fact, tuple] of [
   }, ["rawSpan", hash, "message", 5, 10]],
 ]) {
   test(`slot contains exactly the ${name} target tuple`, () => {
-    assertStorable(fact);
-    assert.equal(validatedSlot(fact), JSON.stringify(tuple));
+    assert.equal(factSlot(fact), JSON.stringify(tuple));
   });
 }
 
@@ -54,37 +51,56 @@ test("canonical digest ordering uses pipeline, algorithm, and value without chan
   assert.deepEqual(canonicalDigests(shuffled), order);
   assert.deepEqual(canonicalDigests(order), order);
   const expected = JSON.stringify(["text", "exact", order.map(({ alg, value }) => [alg, value])]);
-  assert.equal(validatedSlot({ ...text, text: { digests: shuffled } }), expected);
-  assert.equal(validatedSlot({ ...text, text: { digests: order } }), expected);
+  assert.equal(factSlot({ ...text, text: { digests: shuffled } }), expected);
+  assert.equal(factSlot({ ...text, text: { digests: order } }), expected);
 });
 
 test("text slots differ when digest sets share only the first canonical digest", () => {
   const withSecondDigest = (value) => ({
     ...text, text: { digests: [earlier, { ...earlier, value }] },
   });
-  assert.notEqual(validatedSlot(withSecondDigest("b".repeat(64))), validatedSlot(withSecondDigest("c".repeat(64))));
+  assert.notEqual(factSlot(withSecondDigest("b".repeat(64))), factSlot(withSecondDigest("c".repeat(64))));
 });
 
 test("an all-client window and a client named * have distinct slots", () => {
   const star = { ...window, client: "*" };
-  assert.equal(validatedSlot(star), JSON.stringify(["window", "*", -10, 20, false, null]));
-  assert.notEqual(validatedSlot(window), validatedSlot(star));
+  assert.equal(factSlot(star), JSON.stringify(["window", "*", -10, 20, false, null]));
+  assert.notEqual(factSlot(window), factSlot(star));
 });
 
 test("session tuple boundaries survive delimiters, quotes, and backslashes", () => {
   const left = { ...session, session: { client: "a", sessionId: 'b:c|"d\\' } };
   const right = { ...session, session: { client: "a:b", sessionId: 'c|"d\\' } };
-  assert.notEqual(validatedSlot(left), validatedSlot(right));
-  assert.deepEqual(JSON.parse(validatedSlot(left)), ["session", "a", "id", left.session.sessionId]);
-  assert.deepEqual(JSON.parse(validatedSlot(right)), ["session", "a:b", "id", right.session.sessionId]);
+  assert.notEqual(factSlot(left), factSlot(right));
+  assert.deepEqual(JSON.parse(factSlot(left)), ["session", "a", "id", left.session.sessionId]);
+  assert.deepEqual(JSON.parse(factSlot(right)), ["session", "a:b", "id", right.session.sessionId]);
 });
 
 test("core validation refuses invalid facts before slot derivation", () => {
-  assert.throws(() => validatedSlot({ ...text, text: { digests: [] } }), invalidInput);
-  assert.throws(() => validatedSlot({ ...session, session: { ...session.session, sessionKeyHash: hash } }), invalidInput);
-  assert.throws(() => validatedSlot({ ...window, window: { startMs: 20, endMs: 20 } }), {
+  assert.throws(() => factSlot({ ...text, text: { digests: [] } }), invalidInput);
+  assert.throws(() => factSlot({ ...session, session: { ...session.session, sessionKeyHash: hash } }), invalidInput);
+  assert.throws(() => factSlot({ ...window, window: { startMs: 20, endMs: 20 } }), {
     name: CoreError.name, code: "invalid_window",
   });
+});
+
+test("storage preflight rejects arrays with a custom prototype", () => {
+  const shingles = Object.setPrototypeOf(["abcd"], Object.create(Array.prototype));
+  const fact = { ...text, text: { ...text.text, shingles } };
+  assert.throws(() => factSlot(fact), invalidInput);
+});
+
+test("storage preflight rejects an array-index accessor without invoking it", () => {
+  let reads = 0;
+  const shingles = Object.defineProperty(["abcd"], "0", {
+    get() {
+      reads++;
+      return "abcd";
+    },
+  });
+  const fact = { ...text, text: { ...text.text, shingles } };
+  assert.throws(() => factSlot(fact), invalidInput);
+  assert.equal(reads, 0);
 });
 
 for (const [name, fact] of [
@@ -120,30 +136,30 @@ for (const [name, fact] of [
 ]) {
   test(`storable facts reject ${name} after core validation`, () => {
     const validated = validateSuppressionFact(fact);
-    assert.throws(() => assertStorableFact(validated), invalidInput);
+    assert.throws(() => factSlot(validated), invalidInput);
   });
 }
 
 test("storage preflight rejects a string in a numeric field", () => {
   const fact = { ...text, sourceMemory: { ...text.sourceMemory, createdAtMs: "123" } };
-  assert.throws(() => assertStorableFact(fact), invalidInput);
+  assert.throws(() => factSlot(fact), invalidInput);
 });
 
 test("storage preflight rejects non-finite embedding components", () => {
   const fact = { ...full, text: { ...full.text, embedding: [NaN, ...full.text.embedding.slice(1)] } };
-  assert.throws(() => assertStorableFact(fact), invalidInput);
+  assert.throws(() => factSlot(fact), invalidInput);
 });
 
 test("storage preflight rejects an unpaired surrogate in a shingle array element", () => {
   const fact = { ...text, text: { ...text.text, shingles: ["abcd\uD800"] } };
-  assert.throws(() => assertStorableFact(fact), invalidInput);
+  assert.throws(() => factSlot(fact), invalidInput);
 });
 
 test("storage preflight accepts valid supplementary characters and a literal Unicode escape", () => {
   const escape = { ...session, session: { ...session.session, sessionId: "literal\\u0000" } };
   const supplementary = { ...session, owner: "😀", session: { ...session.session, sessionId: "会話😀" } };
-  assert.doesNotThrow(() => assertStorable(escape));
-  assert.doesNotThrow(() => assertStorable(supplementary));
+  assert.doesNotThrow(() => factSlot(escape));
+  assert.doesNotThrow(() => factSlot(supplementary));
 });
 
 test("storage preflight enforces the integer ceiling for all digest redaction versions", () => {
@@ -151,9 +167,9 @@ test("storage preflight enforces the integer ceiling for all digest redaction ve
     ...text,
     text: { digests: [earlier, { ...earlier, value: "b".repeat(64), redactionVersion }] },
   });
-  assert.doesNotThrow(() => assertStorable(withVersion(2147483647)));
+  assert.doesNotThrow(() => factSlot(withVersion(2147483647)));
   const invalid = validateSuppressionFact(withVersion(2147483648));
-  assert.throws(() => assertStorableFact(invalid), invalidInput);
+  assert.throws(() => factSlot(invalid), invalidInput);
 });
 
 test("storage preflight enforces the slot's UTF-8 byte limit across all digests", () => {
@@ -167,23 +183,21 @@ test("storage preflight enforces the slot's UTF-8 byte limit across all digests"
   const atLimit = validateSuppressionFact(withDigests(21));
   const overLimit = validateSuppressionFact(withDigests(22));
   assert.equal(Buffer.byteLength(factSlot(atLimit)), 8192);
-  assert.equal(Buffer.byteLength(factSlot(overLimit)), 8194);
-  assert.doesNotThrow(() => assertStorableFact(atLimit));
-  assert.throws(() => assertStorableFact(overLimit), invalidInput);
+  assert.throws(() => factSlot(overLimit), invalidInput);
 });
 
 test("exact-mode embeddings and shingles can stay in the body without lookup constraints", () => {
   const bodyOnly = { ...text, text: { ...text.text, embedding: [1e100, 2], keyId: null } };
-  assert.doesNotThrow(() => assertStorable(bodyOnly));
+  assert.doesNotThrow(() => factSlot(bodyOnly));
 });
 
 test("full-mode lookup accepts float4 endpoints and empty shingles without a key", () => {
   const embedding = [3.4028234663852886e38, -3.4028234663852886e38, ...full.text.embedding.slice(2)];
   const withEndpoints = { ...full, text: { ...full.text, embedding, shingles: [], keyId: null } };
-  assert.doesNotThrow(() => assertStorable(withEndpoints));
+  assert.doesNotThrow(() => factSlot(withEndpoints));
 });
 
 test("slot hash is the lowercase SHA-256 of the JSON slot's UTF-8 bytes", async () => {
-  const slot = validatedSlot({ ...session, session: { client: "用戶", sessionId: "会話😀" } });
+  const slot = factSlot({ ...session, session: { client: "用戶", sessionId: "会話😀" } });
   assert.equal(await slotHash(slot), createHash("sha256").update(slot, "utf8").digest("hex"));
 });
