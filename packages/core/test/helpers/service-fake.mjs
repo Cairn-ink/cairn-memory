@@ -28,7 +28,8 @@ function readPage(rows, { cursor, limit }) {
   };
 }
 
-export function serviceFake({ rows = [], leakForgotten = false, writes = false, near = false, hasKey = true } = {}) {
+export function serviceFake({ rows = [], leakForgotten = false, writes = false, near = false, hasKey = true,
+  capture = false, rawArchive = false, sessionLineage = false } = {}) {
   let committedRows = [...rows];
   const calls = [];
   const mutations = [];
@@ -40,7 +41,8 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
   let nowMs = 100;
   function ownerState(owner) {
     if (!owners.has(owner)) {
-      owners.set(owner, { forgotten: new Set(), revision: 0, pause: { paused: false, generation: 0 }, facts: [] });
+      owners.set(owner, { forgotten: new Set(), revision: 0, pause: { paused: false, generation: 0 }, facts: [],
+        admissions: new Map() });
     }
     return owners.get(owner);
   }
@@ -72,7 +74,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         const state = ownerState(owner);
         const tx = {
           owner, options, rows: committedRows, revision: state.revision, facts: state.facts, runId: ++runId,
-          forgotten: new Set(state.forgotten), pause: state.pause,
+          forgotten: new Set(state.forgotten), pause: state.pause, admissions: state.admissions,
         };
         active.add(tx);
         try {
@@ -81,6 +83,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
             state.pause = tx.pause;
             state.facts = tx.facts;
             state.revision = tx.revision;
+            state.admissions = tx.admissions;
             committedRows = tx.rows;
           }
           return result;
@@ -283,8 +286,10 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       async snapshot(tx, scope, candidates) {
         record(tx, scope.owner, "suppressions.snapshot", scope, candidates);
         await hooks.snapshot?.();
-        return { blockedSession: false, blockedMessages: [],
-          passages: tx.facts.filter(({ fact }) => (fact.namespace ?? null) === scope.namespace) };
+        const facts = tx.facts.filter(({ fact }) => (fact.namespace ?? null) === scope.namespace);
+        const blockedSession = facts.some(({ fact }) => fact.kind === "session" &&
+          fact.session.client === candidates.client && fact.session.sessionId === candidates.sessionId);
+        return { blockedSession, blockedMessages: [], passages: facts };
       },
       async writeFact(tx, fact, incarnation) {
         mutate(tx, fact.owner, "suppressions.writeFact", fact, incarnation);
@@ -298,6 +303,74 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       const state = ownerState(fact.owner);
       state.facts = [...state.facts, { fact, factId: "seed-fact", epoch: 1n, createdAtMs: nowMs, incarnation: "fixture" }];
     };
+  }
+  if (capture) {
+    const admissionId = ({ scope, client, eventId }) => JSON.stringify([scope.namespace, client, eventId]);
+    storage.capture = {
+      claim: unexpected,
+      async admit(tx, key, messages) {
+        record(tx, key.scope.owner, "capture.admit", key, messages);
+        assert.ok(tx.options.pauseLock && !tx.options.readOnly);
+        const id = admissionId(key);
+        const row = tx.admissions.get(id);
+        if (row) {
+          if (row.key.payloadDigest !== key.payloadDigest) throw new CoreError("event_payload_conflict");
+          if (row.processing) return { status: "processing" };
+          if (row.result) return { status: "rawReplay", result: row.result };
+          return { status: "duplicate" };
+        }
+        mutations.push({ method: "capture.admit", run: tx.runId, args: [key, messages] });
+        tx.admissions = new Map(tx.admissions).set(id, {
+          key: { ...key, scope: { ...key.scope } }, messages: messages.map(message => ({ ...message })), status: "pending",
+        });
+        return { status: "admitted" };
+      },
+      async load(tx, selection) {
+        record(tx, selection.scope.owner, "capture.load", selection);
+        const row = tx.admissions.get(admissionId(selection));
+        if (row?.key.sessionId !== selection.sessionId) return null;
+        const { key, messages } = row;
+        return structuredClone({ key, messages });
+      },
+      async status(tx, scope, eventId, client) {
+        record(tx, scope.owner, "capture.status", scope, eventId, client);
+        assert.ok(tx.options.readOnly);
+        const rows = [...tx.admissions.values()].filter(({ key }) => key.scope.namespace === scope.namespace &&
+          key.eventId === eventId && (client === undefined || key.client === client));
+        if (rows.some(row => row.status === "pending")) return { status: "pending" };
+        const failed = rows.find(row => row.status === "failed");
+        if (failed) return failed.code === undefined ? { status: "failed" } : { status: "failed", code: failed.code };
+        return { status: rows.length ? "done" : "unknown" };
+      },
+    };
+    fake.setCaptureResult = (selection, result) => {
+      const rows = ownerState(selection.scope.owner).admissions;
+      const id = admissionId(selection);
+      assert.ok(rows.has(id));
+      rows.set(id, { ...rows.get(id), ...result });
+    };
+    if (rawArchive) {
+      storage.capabilities.rawArchive = true;
+      storage.raw = {
+        async recordLineage(tx, key, messages) {
+          record(tx, key.scope.owner, "raw.recordLineage", key, messages);
+          assert.ok(tx.options.pauseLock && !tx.options.readOnly);
+          assert.ok(tx.admissions.has(admissionId(key)));
+          mutations.push({ method: "raw.recordLineage", run: tx.runId, args: [key, messages] });
+          await hooks.recordLineage?.();
+        },
+      };
+    }
+    if (sessionLineage) {
+      storage.capabilities.sessionLineage = true;
+      storage.sessionLineage = {
+        async isFenced(tx, scope, session) {
+          record(tx, scope.owner, "sessionLineage.isFenced", scope, session);
+          assert.ok(tx.options.pauseLock && !tx.options.readOnly);
+          return hooks.isFenced?.(session) ?? { fenced: false, proof: "proven" };
+        },
+      };
+    }
   }
   return fake;
 }

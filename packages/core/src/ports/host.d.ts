@@ -58,7 +58,7 @@ export interface MemoryService {
   recent(scope: Scope, options: { limit: number; cursor: string | null }): Promise<{ items: MemoryRow[]; nextCursor: string | null }>;
   /** maxTokens ≤ 2000, maxChars ≤ 8000; projectId selects the engine project namespace. */
   sessionStart(scope: Scope, options: { maxTokens: number; maxChars: number; projectId?: string | null }): Promise<SessionContext>;
-  captureStatus(scope: Scope, eventId: string): Promise<{ status: "pending" | "done" | "failed" | "unknown"; code?: string }>;
+  captureStatus(scope: Scope, eventId: string, options?: { client?: string }): Promise<{ status: "pending" | "done" | "failed" | "unknown"; code?: string }>;
   pauseState(owner: OwnerId): Promise<{ paused: boolean; generation: number }>;
   setPause(owner: OwnerId, paused: boolean): Promise<{ paused: boolean; generation: number }>;
   /** Paged export of visible memories (download, migration). */

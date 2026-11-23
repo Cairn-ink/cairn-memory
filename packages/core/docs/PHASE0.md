@@ -100,6 +100,15 @@ Each addendum is additive unless it says what it supersedes. Adapters written ag
    - Core write paths fill query digests before core-backed writes. A query without digests is blocked while an HMAC-only text fact applies.
    - It supersedes nothing.
 
+6. **Capture admission, status and Raw import.** The four new port methods are optional. Core raises `capability_unavailable` when a needed method is missing.
+   - `CaptureClaim.admit(tx, key, messages)` stores the redacted messages as the admission row, which is the outbox. It runs under the pause lock without taking a lease. It returns `admitted`, `duplicate`, `processing`, or `rawReplay` with the stored `FinishResult`. A different `payloadDigest` for the same event in the same scope and client throws `event_payload_conflict`. Core never falls back to `claim` for admission.
+   - `CaptureClaim.load(tx, { scope, client, sessionId, eventId })` returns the stored `{ key, messages }` for the runner, or null if absent.
+   - `CaptureClaim.status(tx, scope, eventId, client?)` reads a single event without writing. It returns `unknown` for an absent event. With no client, any pending row yields `pending`, otherwise any failed row yields `failed` with its code, otherwise the event is `done`. Failures expose only codes. `MemoryService.captureStatus(scope, eventId, options?)` accepts an optional `{ client?: string }`.
+   - `RawCapture.importArchive(tx, scope, { client, sessionId }, messages)` returns `{ archived, existing, withheld }`. It checks session, window, lineage and text eligibility internally and fails closed. It counts refusals per message without storing them. Existing message ids are conflict-ignored.
+   - It supersedes nothing.
+
+   The conformance kit adds cases for these methods; the reference adapter implements them.
+
 ## Change requests
 
 Send the core lead the port, the method, and the reason. A request is

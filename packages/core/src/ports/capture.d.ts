@@ -30,6 +30,14 @@ export type ClaimResult =
 
 /** Admission and lease of one capture. Runs inside UnitOfWork with pauseLock. */
 export interface CaptureClaim {
+  /** Stores the redacted messages as the admission row and outbox, under the pause lock and without taking a lease. A different digest for the same event throws event_payload_conflict. */
+  admit?(tx: Tx, key: CaptureKey, messages: readonly CaptureMessage[]): Promise<
+    { status: "admitted" | "duplicate" | "processing" } | { status: "rawReplay"; result: FinishResult }
+  >;
+  /** Loads the stored admission for the runner. */
+  load?(tx: Tx, selection: Pick<CaptureKey, "scope" | "client" | "sessionId" | "eventId">): Promise<{ key: CaptureKey; messages: CaptureMessage[] } | null>;
+  /** Read-only, per event. Without client, pending takes precedence over failed (with its code), then done. No row means unknown. */
+  status?(tx: Tx, scope: Scope, eventId: string, client?: string): Promise<{ status: "pending" | "done" | "failed" | "unknown"; code?: string }>;
   claim(tx: Tx, key: CaptureKey, messages: readonly CaptureMessage[], options: { leaseMs: number }): Promise<ClaimResult>;
   /** Releases a claim. retryable=false records a terminal code-only failure. */
   abandon(tx: Tx, token: string, failure: { code: string; retryable: boolean }): Promise<void>;
@@ -81,6 +89,8 @@ export interface RawCapture {
   /** False when the session is fenced (or lineage cannot be checked). */
   archiveAllowed(tx: Tx, key: CaptureKey): Promise<boolean>;
   archive(tx: Tx, key: CaptureKey, messages: readonly CaptureMessage[]): Promise<{ archived: number }>;
+  /** Checks session, window, lineage and text eligibility, failing closed. Counts refused messages without storing them and ignores existing message ids. */
+  importArchive?(tx: Tx, scope: Scope, session: Pick<CaptureKey, "client" | "sessionId">, messages: readonly CaptureMessage[]): Promise<{ archived: number; existing: number; withheld: number }>;
 }
 
 /** Optional (capability stagedEvidence). */
