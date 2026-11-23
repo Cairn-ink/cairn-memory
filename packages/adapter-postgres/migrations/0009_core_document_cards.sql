@@ -53,7 +53,16 @@ BEGIN
 END;
 $$;
 
-CREATE INDEX IF NOT EXISTS document_cards_user_created_idx
-  ON document_cards (user_id, created_at DESC NULLS LAST, id);
-CREATE INDEX IF NOT EXISTS document_cards_source_memories_idx
-  ON document_cards USING gin (source_memories jsonb_path_ops) WHERE hidden_reason IS NULL AND NOT tombstoned;
+-- CREATE INDEX locks the table before its IF NOT EXISTS check.
+DO $$
+BEGIN
+  IF pg_catalog.to_regclass('public.document_cards_user_created_idx') IS NULL THEN
+    EXECUTE $index$CREATE INDEX IF NOT EXISTS document_cards_user_created_idx
+      ON document_cards (user_id, created_at DESC NULLS LAST, id)$index$;
+  END IF;
+  IF pg_catalog.to_regclass('public.document_cards_source_memories_idx') IS NULL THEN
+    EXECUTE $index$CREATE INDEX IF NOT EXISTS document_cards_source_memories_idx
+      ON document_cards USING gin (source_memories jsonb_path_ops) WHERE hidden_reason IS NULL AND NOT tombstoned$index$;
+  END IF;
+END;
+$$;

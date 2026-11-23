@@ -168,6 +168,51 @@ test("Postgres topics and cards match the hosted schema and record migrations on
   }
 });
 
+test("Postgres records preexisting topics and cards while writes are open", migrationDbTest, async (t) => {
+  const { pool, source, migrations } = await migrationDatabase(t, { migrate: false });
+  const query = (client, text, values) => client.query({ text, values, query_timeout: 8_000 });
+  const boundedSource = {
+    async connect() {
+      const connection = await source.connect();
+      return {
+        query: (sql, values) => query(connection, sql, values),
+        release: (destroy) => connection.release(destroy),
+      };
+    },
+  };
+
+  await query(pool, hostedDDL);
+  await applyMigrations(boundedSource, migrations.slice(0, 6));
+  await query(pool, `
+    INSERT INTO users (id) VALUES ('owner');
+    INSERT INTO memory_placements (user_id, memory_id, memory_revision, status) VALUES ('owner', 'memory', 1, 'filed');
+    INSERT INTO document_cards (user_id, id, content_hash, title, body, origin, source_memories, sentences, stale)
+    VALUES ('owner', 'card', 'hash', 'Title', 'Body', 'manual', '[]', '[]', '[]');
+  `);
+
+  const writer = await pool.connect();
+  try {
+    await query(writer, "BEGIN");
+    assert.equal((await query(writer, `
+      UPDATE memory_placements SET attempts = 1 WHERE user_id = 'owner' AND memory_id = 'memory'
+    `)).rowCount, 1);
+    assert.equal((await query(writer, `
+      UPDATE document_cards SET body = 'Updated' WHERE user_id = 'owner' AND id = 'card'
+    `)).rowCount, 1);
+
+    // The runner must commit the ledger while both write locks are still held.
+    await applyMigrations(boundedSource, migrations);
+    const { rows } = await query(writer, readLedger);
+    assert.deepEqual(rows.map(({ id }) => id), migrations.map(({ id }) => id));
+  } finally {
+    try {
+      await query(writer, "ROLLBACK");
+    } finally {
+      writer.release(true);
+    }
+  }
+});
+
 test("Postgres topics and cards reject invalid rows and cascade when an owner is deleted", migrationDbTest, async (t) => {
   const { pool } = await migrationDatabase(t);
   const client = await pool.connect();

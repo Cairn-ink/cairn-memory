@@ -212,10 +212,25 @@ BEGIN
 END;
 $$;
 
-CREATE INDEX IF NOT EXISTS memory_placements_memory_idx ON memory_placements (memory_id);
-CREATE INDEX IF NOT EXISTS memory_placements_retry_idx
-  ON memory_placements (user_id, placed_at) WHERE status = 'failed';
-CREATE INDEX IF NOT EXISTS memory_topics_memory_idx ON memory_topics (memory_id);
-CREATE INDEX IF NOT EXISTS memory_topics_newest_idx
-  ON memory_topics (user_id, topic_id, placed_at DESC NULLS LAST, memory_id DESC NULLS LAST);
-CREATE INDEX IF NOT EXISTS topic_edges_child_idx ON topic_edges (user_id, child_id, parent_id);
+-- CREATE INDEX locks the table before its IF NOT EXISTS check.
+DO $$
+BEGIN
+  IF pg_catalog.to_regclass('public.memory_placements_memory_idx') IS NULL THEN
+    EXECUTE $index$CREATE INDEX IF NOT EXISTS memory_placements_memory_idx ON memory_placements (memory_id)$index$;
+  END IF;
+  IF pg_catalog.to_regclass('public.memory_placements_retry_idx') IS NULL THEN
+    EXECUTE $index$CREATE INDEX IF NOT EXISTS memory_placements_retry_idx
+      ON memory_placements (user_id, placed_at) WHERE status = 'failed'$index$;
+  END IF;
+  IF pg_catalog.to_regclass('public.memory_topics_memory_idx') IS NULL THEN
+    EXECUTE $index$CREATE INDEX IF NOT EXISTS memory_topics_memory_idx ON memory_topics (memory_id)$index$;
+  END IF;
+  IF pg_catalog.to_regclass('public.memory_topics_newest_idx') IS NULL THEN
+    EXECUTE $index$CREATE INDEX IF NOT EXISTS memory_topics_newest_idx
+      ON memory_topics (user_id, topic_id, placed_at DESC NULLS LAST, memory_id DESC NULLS LAST)$index$;
+  END IF;
+  IF pg_catalog.to_regclass('public.topic_edges_child_idx') IS NULL THEN
+    EXECUTE $index$CREATE INDEX IF NOT EXISTS topic_edges_child_idx ON topic_edges (user_id, child_id, parent_id)$index$;
+  END IF;
+END;
+$$;
