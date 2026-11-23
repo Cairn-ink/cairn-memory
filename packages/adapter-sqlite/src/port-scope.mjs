@@ -1,11 +1,17 @@
 import { CoreError } from "@cairn-ink/core";
 
-/** @import { DatabaseSync, StatementSync, SQLInputValue, SQLOutputValue } from "node:sqlite" */
+/** @import { DatabaseSync, StatementSync, SQLOutputValue } from "node:sqlite" */
 /** @typedef {NodeJS.Iterator<Record<string, SQLOutputValue>>} RowIterator */
-/** @typedef {SQLInputValue | Record<string, SQLInputValue>} Binding */
+/** @typedef {StatementSync & {
+ *   setReturnArrays(enabled: boolean): void,
+ *   close?(): void,
+ *   [Symbol.dispose]?(): void,
+ * }} PortStatement */
 
-const leadingTrivia = /^(?:[\t\n\v\f\r ;\uFEFF]+|--[^\n]*(?:\n|$)|\/\*[\s\S]*?(?:\*\/|$))*/;
-const transactionControl = /^(?:BEGIN|COMMIT|END|ROLLBACK|SAVEPOINT|RELEASE)\b/i;
+const sqlTrivia = String.raw`(?:[\t\n\v\f\r \uFEFF]|--[^\n]*(?:\n|$)|\/\*(?:[^*]|\*(?!\/))*(?:\*\/|$))`;
+const leadingTrivia = new RegExp(`^(?:;|${sqlTrivia})*`);
+const outerTransactionControl = /^(?:BEGIN|COMMIT|END|ROLLBACK)\b/i;
+const rollbackToSavepoint = new RegExp(`^ROLLBACK${sqlTrivia}+(?:TRANSACTION${sqlTrivia}+)?TO\\b`, "i");
 
 /** @param {string} sql */
 function withoutTrivia(sql) {
@@ -19,8 +25,8 @@ function withoutTrivia(sql) {
  */
 export function sqlitePortScope(db, execute) {
   let active = true;
-  /** @type {Set<RowIterator>} */
-  const iterators = new Set();
+  /** @type {Map<RowIterator, StatementSync>} */
+  const iterators = new Map();
 
   /** @template T @param {() => T} operation */
   function use(operation) {
@@ -28,22 +34,21 @@ export function sqlitePortScope(db, execute) {
     return execute(operation);
   }
 
-  /** @template {(...args: never[]) => unknown} Method @param {Method} method @returns {Method} */
-  function guard(method) {
-    return /** @type {Method} */ ((.../** @type {Parameters<Method>} */ args) => use(() => method(...args)));
-  }
-
   /** @param {string} sql */
   function prepare(sql) {
     return use(() => {
-      if (transactionControl.test(withoutTrivia(sql))) throw new CoreError("internal_error");
+      const statement = withoutTrivia(sql);
+      // The outer transaction starts with BEGIN. A RELEASE can only remove nested savepoints.
+      if (outerTransactionControl.test(statement) && !rollbackToSavepoint.test(statement)) {
+        throw new CoreError("internal_error");
+      }
       return db.prepare(sql);
     });
   }
 
-  /** @param {RowIterator} iterator */
-  function scopedIterator(iterator) {
-    iterators.add(iterator);
+  /** @param {RowIterator} iterator @param {StatementSync} statement */
+  function scopedIterator(iterator, statement) {
+    iterators.set(iterator, statement);
     return Object.freeze({
       next() {
         const result = use(() => iterator.next());
@@ -61,23 +66,39 @@ export function sqlitePortScope(db, execute) {
 
   /** @param {StatementSync} statement */
   function scopedStatement(statement) {
-    /** @param {Binding[]} args */
-    function iterate(...args) {
-      return scopedIterator(use(() => Reflect.apply(statement.iterate, statement, args)));
+    const scoped = {};
+    // Runtime statement methods vary by Node version and include symbol keys.
+    for (let object = statement; object && object !== Object.prototype; object = Object.getPrototypeOf(object)) {
+      for (const key of Reflect.ownKeys(object)) {
+        if (key === "constructor" || Object.hasOwn(scoped, key)) continue;
+        const descriptor = Object.getOwnPropertyDescriptor(object, key);
+        if (typeof descriptor?.value === "function") {
+          const method = descriptor.value;
+          /** @param {unknown[]} args */
+          const invoke = (...args) => use(() => {
+            const result = Reflect.apply(method, statement, args);
+            if (key === "iterate") return scopedIterator(result, statement);
+            if (key === "close" || key === Symbol.dispose) {
+              // Finalization invalidates the native iterators immediately.
+              for (const [iterator, owner] of iterators) {
+                if (owner === statement) iterators.delete(iterator);
+              }
+            }
+            return result;
+          });
+          Object.defineProperty(scoped, key, {
+            enumerable: descriptor.enumerable,
+            value: invoke,
+          });
+        } else if (descriptor?.get) {
+          Object.defineProperty(scoped, key, {
+            enumerable: descriptor.enumerable,
+            get: () => use(() => Reflect.get(statement, key)),
+          });
+        }
+      }
     }
-
-    return Object.freeze({
-      all: guard(statement.all.bind(statement)),
-      get: guard(statement.get.bind(statement)),
-      run: guard(statement.run.bind(statement)),
-      iterate,
-      columns: guard(statement.columns.bind(statement)),
-      setAllowBareNamedParameters: guard(statement.setAllowBareNamedParameters.bind(statement)),
-      setAllowUnknownNamedParameters: guard(statement.setAllowUnknownNamedParameters.bind(statement)),
-      setReadBigInts: guard(statement.setReadBigInts.bind(statement)),
-      get sourceSQL() { return use(() => statement.sourceSQL); },
-      get expandedSQL() { return use(() => statement.expandedSQL); },
-    });
+    return /** @type {PortStatement} */ (Object.freeze(scoped));
   }
 
   const connection = Object.freeze({
@@ -98,7 +119,7 @@ export function sqlitePortScope(db, execute) {
     connection,
     revoke() {
       active = false;
-      for (const iterator of iterators) iterator.return?.();
+      for (const iterator of iterators.keys()) iterator.return?.();
       iterators.clear();
     },
   };
