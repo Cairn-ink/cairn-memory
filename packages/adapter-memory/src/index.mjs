@@ -1,10 +1,12 @@
 import { CoreError, assertAdapterCapabilities, capabilities, toCoreError } from "@cairn-ink/core";
 import { createCapturePorts } from "./capture.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
+import { createRelationStores } from "./memory-relations.mjs";
 import { createMemoryStore } from "./memory-store.mjs";
 import { createFactStore, createFingerprintProvider, createPauseStore } from "./privacy.mjs";
 import { createRationaleStore } from "./rationale.mjs";
 import { createRationaleHarness } from "./rationale-harness.mjs";
+import { createRawPorts } from "./raw.mjs";
 import { createRetrievalPorts } from "./retrieval.mjs";
 import { createTopicStore } from "./topics.mjs";
 import { createUnitOfWork, handleWriteRejections } from "./unit-of-work.mjs";
@@ -26,12 +28,14 @@ export function createMemoryAdapter(options = {}) {
   const clock = options.now ?? Date.now;
   let clockOffset = 0;
   const now = () => clock() + clockOffset;
-  const { uow, port, dump, runSeed, setWriteTime, rotateRowDigests, rowsMissingKeyedDigest } =
-    createUnitOfWork(nativeErrorMap, now, flags.placement);
+  const work = createUnitOfWork(nativeErrorMap, now, flags.placement);
+  const { uow, port, dump, runSeed, setWriteTime, rotateRowDigests, rowsMissingKeyedDigest } = work;
   const matchFacts = createFactMatcher(flags.vectorSuppression, options.hashSessionKey);
   const { keys, ringKeys, setFingerprintSecret } =
     createFingerprintProvider(flags.fingerprintKey, options.fingerprint, rotateRowDigests);
+  const archive = flags.rawArchive ? createRawPorts(work, ringKeys, options.hashSessionKey) : undefined;
   const store = createMemoryStore(port, flags, newId, matchFacts, ringKeys);
+  const { supersession, conflicts } = createRelationStores(port, matchFacts);
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts,
     flags.fingerprintKey ? ringKeys : undefined);
   const rationale = flags.rationaleEdges ? createRationaleStore(port, matchFacts, ringKeys) : undefined;
@@ -47,12 +51,17 @@ export function createMemoryAdapter(options = {}) {
     pause: handleWriteRejections(createPauseStore(port), ["set"]),
     keys,
     ...createRetrievalPorts(port, flags, matchFacts),
+    ...(archive && { raw: handleWriteRejections(archive.raw,
+      ["recordLineage", "archive", "fenceSession", "purgeWithheld", "eraseSessions", "deleteConversation"]) }),
+    ...(flags.supersession && { supersession: handleWriteRejections(supersession, ["record", "markHistorical"]) }),
+    ...(flags.conflictEdges && { conflicts: handleWriteRejections(conflicts, ["insert", "invalidate"]) }),
     ...(rationale && { ...rationale, rationale: handleWriteRejections(rationale.rationale, ["insert", "invalidate"]) }),
     ...(flags.placement && { placement: handleWriteRejections(
       createTopicStore(port, flags, newId, now, matchFacts, options), ["applyPlacement", "markFailed", "dropMemory"]) }),
     nativeErrorMap,
     harness: {
-      async dump() { return dump(); },
+      async dump() { return dump(flags.rawArchive); },
+      ...(archive && { seedClientlessRaw: archive.seedClientlessRaw }),
       async seedFact(owner, fact) {
         try {
           await seedFact(owner, fact);
@@ -69,7 +78,7 @@ export function createMemoryAdapter(options = {}) {
         validateTime(clock() + clockOffset + ms);
         clockOffset += ms;
       },
-      async counters() { return store.counters(); },
+      async counters() { return { ...store.counters(), ...archive?.counters() }; },
     },
   };
   assertAdapterCapabilities(adapter);

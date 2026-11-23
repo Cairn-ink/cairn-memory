@@ -14,6 +14,8 @@ export const FORGET_STEPS = Object.freeze([
 
 /**
  * Unlisted steps are unconditional. Each dependent facility gates its own invalidation.
+ * For document cards, the host runs hideWhere(tx, scope, { sourceMemoryId }, reason)
+ * for each forgotten memory during dependents.invalidate. Reads also check linked memory states.
  * @type {Readonly<Partial<Record<import("./forget-steps.mjs").ForgetStep, readonly import("../capabilities.mjs").Capability[]>>>}
  */
 export const FORGET_STEP_CAPABILITIES = Object.freeze({

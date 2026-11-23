@@ -10,6 +10,8 @@ export { SOURCE_FILTER_CASES } from "./source-filter-cases.mjs";
 export { KEYED_DIGEST_CASES } from "./keyed-digest-cases.mjs";
 export { RATIONALE_CASES } from "./rationale-cases.mjs";
 export { topicCases as TOPIC_CASES } from "./topics-cases.mjs";
+export { RAW_CASES } from "./raw-cases.mjs";
+export { relationCases as RELATION_CASES } from "./relation-cases.mjs";
 
 /** @type {readonly import("./index.d.mts").ConformanceCase[]} */
 export const CASES = [...unitOfWorkCases, ...memoryCases, ...retrievalCases];
