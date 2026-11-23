@@ -1,6 +1,7 @@
 import type { Tx, UnitOfWork } from "../../core/src/index.mjs";
 import type { SourceRef } from "../../core/src/ports/common.d.ts";
 import type { InsertRow } from "../../core/src/ports/memory-store.d.ts";
+import type { SuppressionFact, TextDigest } from "../../core/src/suppression-fact.mjs";
 import type { ConnectionSource, QueryResult } from "./driver.mjs";
 
 export type { Connection, ConnectionSource, QueryResult } from "./driver.mjs";
@@ -24,3 +25,6 @@ export type Migration = MigrationBase & (
 );
 
 export function applyMigrations(source: ConnectionSource, migrations: readonly Migration[]): Promise<void>;
+export function canonicalDigests(digests: readonly TextDigest[]): TextDigest[];
+/** Snapshot and validate a suppression fact before computing its storage slot. */
+export function factSlot(fact: SuppressionFact): string;
