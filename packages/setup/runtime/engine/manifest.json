@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "d943a20b1a2a49c399cf939da4e1168b2a19f854400730623e859c04f95e3bbd",
-  "bytes": 1501095,
+  "sha256": "adeadae20bd8981fe18fdaea867c6f50ba99122d0d55f5dd66bec1cf69d2ca7b",
+  "bytes": 1502005,
   "files": [
     "LICENSE",
     "README.md",
@@ -427,7 +427,7 @@
   "sourceHashes": {
     "core/content-write-context.mjs": "520f9a5c638321336c32bb0f9e8a1f6dc5cbfe451800a304f23b6c12d2e14027",
     "core/content-write-changes.mjs": "876f6fa7bc67c69031ef8ccc645eab9b321713803b77f9203ac30ca783e88caa",
-    "core/content-write-safety.mjs": "18f535d1ebcfa4c6261ee65416e84dd61fd6765eacbe2d9be83bda2f5db5ab6b",
+    "core/content-write-safety.mjs": "72a00cb00058ab94280b9317ed20bda6d31914978ca349912bd2f65dca5ce32d",
     "core/admission-storage.mjs": "ab396e5df214322abadf881e802011c615c70dfc0703832c7265e52a165d7c69",
     "core/local-authority-input.mjs": "bfce603a1081956e8d4dd790d09e8e394c0b06b20cca987980217d2e4d85a988",
     "core/local-authority-schema.mjs": "b1ff2de1a829c503dff18f425ac57942b52e3b90e9ef01aa209e06863945a3d3",
@@ -472,7 +472,7 @@
     "core/private-evidence-storage.mjs": "e7096f3376b8648e056bb6d3b5917ff2a59c53c1cd9f6917fd33ea9a0041ad16",
     "core/private-organization-input.mjs": "0850ebf916a064bced8966e1510d2476d32a52ac3c2bfd8aa6fb4fc6687ead84",
     "core/private-organization-schema.mjs": "384df00afd9fff4e652a0ef65bd88df36b64c87eac745d7902e5eaa174e916f7",
-    "core/private-organization-storage.mjs": "9b0c78115df4317e7a591c498a21fe8a075893fa6d9477b67b64ebf5ff6c686e",
+    "core/private-organization-storage.mjs": "a7fff9aae01ba8c27ec6849b59ecff66196606ebe9ef01c983622a9bb0ba97e0",
     "core/staged-evidence-schema.mjs": "7da2c038d9cc03ece4efbf703937ff8d0093dcf30150fa79a4c73641cf24f2bc",
     "core/staged-evidence-storage.mjs": "188aa8dd6e264381ad932b0f64706b030918a976e18d049f25c06189f4e6f442",
     "core/automatic-qualification.mjs": "7f291382971628750697b5fbfdcced87227f2e53a36cb873b80b8d639e797857",
@@ -641,7 +641,7 @@
     "integrations/client/raw/local-process.mjs": "644e65560c883018244c4fee126cb92a399128c1c62116ad68bb79574abcb764",
     "integrations/client/raw/local-reply.mjs": "ec1cd9df94a594e2a31adc4ab7e00abd92697fab5f6f6ccf34a15e65e1b10a91",
     "integrations/client/raw/local-transport.mjs": "4667b69cc9a8cf4ae84aee3fe837be8cf6c5f5a3199bbfdae7caf38369a01b16",
-    "integrations/client/raw/local-worker.mjs": "93f6d79668695fb22dc24643abaf6985f05b30caf0c94dddfe9fcdadc986ffe0",
+    "integrations/client/raw/local-worker.mjs": "6e3f1db3e913d579084ff33310f6b5ab55fe5eea1eae4b68ffbb287490609c85",
     "integrations/client/raw/local-worker-input.mjs": "4bed6dd911c34a1feb6a7cd3678b3c631256bee1dc013ddefb3847aa4d1c5649",
     "integrations/client/raw/local-worker-progress.mjs": "81f264adf0349919fed015b9fd4c3c8effd9af1b160119c33e954828955445e2",
     "integrations/client/raw/local-worker-source.mjs": "8fa56d11c8db15b2397f5e60648725dc69285310169e4e189fa36da76746934e",
@@ -656,7 +656,7 @@
     "integrations/client/raw/local-setup-init.mjs": "30c3b1b5d996ad5ef443dc596964d9979d1e0177092fd9934795fdc00a8bd67c",
     "integrations/client/raw/local-hook.mjs": "a2db2f3b3f019bff48c7052805fd8d1dc419823748af0a22b4dd9a26a2a6ae79",
     "integrations/client/raw/local-codex-qualification.mjs": "96fae8a0e3821d08a7d2347c5e4e42570a5e15378f74aa25120d93dfe404bdac",
-    "integrations/client/raw/local-session-start.mjs": "65d071ce9a430b47f7a9a5797dc3564a82a652bf2ff66e6d9fbfb4a5f2419aba",
+    "integrations/client/raw/local-session-start.mjs": "d211165978cd6c8026e4fc52694cb7a3ab287b3e7c52648c310d389ec46e9f78",
     "integrations/client/raw/local-session-fence.mjs": "ec0a9ea5e45158423f70fdb1a8cf0df1a8b1b4424df452b8cde671436bbbea39",
     "integrations/client/raw/local-host-profile.mjs": "4dd9e8cd5a022c1802e5a62470b8584ab93ebb399b59f4993b6eca99e64413c6",
     "integrations/client/raw/local-host-permission.mjs": "7ab595da6af438cd33a9ff063c7085bdc53c47d9775386a4eeb8ef523e4e6de6",
@@ -687,7 +687,7 @@
     "docs/raw-local-journal.md": "db3f26c4e4273628efa44b9cf169e10d979b1eba0b8b7b359ccf36e802f4a7c0",
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
     "docs/context-read-local.md": "27e575a10ddb2b4c1f694884894223804110028ca894a063d7356875b9af7bae",
-    "docs/defaults.md": "b58e61e9b6c16bb59981a0a460b8235f3055f3c20a5b6579b4074cb0ab6f019c",
+    "docs/defaults.md": "680d3e628caf604e38f53818c483e47c3b4d2f8fab1cfdcea8161ed80e4562c4",
     "docs/method-packages-local.md": "3912f7d95956e74be91d031c6eeba1ead4ca194fdb15854d0ded05de196a3815",
     "docs/assets-local.md": "4553ca1854b9d4862ac76ae25ce90e451c6ee875d806b84c51d4c00e6b828c5c",
     "docs/v1-preview-integration.md": "d5e5e95fb971224ff1e6b530f7fbb91b8e523dd200729454ded02eaaa07b03b9",
@@ -755,7 +755,7 @@
     "core/context-product-worker.mjs": "6aed6b6b2870281ba6806cee47d6af32789671b4ea6a0057ab06193b5914b69f",
     "core/context-read-supervisor.mjs": "6edba6ca75fb7c7b4d8babec670dba43dc97c802cd26182d05989d925d6180cb",
     "core/reader-worker-lifecycle.mjs": "ce12e0d18a3a0d5274989a088afd2fd2cd93f40529c7cfbae1156e8295f99ddf",
-    "docs/context-read-product.md": "62a461255e97efe06c90ebe83b818d004237d13029dcc194fbd8f96b4ca5524f",
+    "docs/context-read-product.md": "57f4a9fdfce9664c3d7a400578d913a8ac6695a7a2b68fb1a4a2431d3eca3a12",
     "docs/plans/context-read-maintenance-turn.md": "3acd820c1a966406592c2d53af3cac1cfb365452b5aff32b5a3b450ab5b94be1",
     "docs/plans/context-read-p2a-impl.md": "257e2fb1f4db706b5a0d55df18a6a033613957fb6094e78fbc2cc248c348835a",
     "core/context-product-validation.mjs": "1e4433bbc9978c89e5ea46d640038c190e002f16f960eef463ddd406e8b96a88",
@@ -842,6 +842,6 @@
   "generatedHashes": {
     "package.json": "2f6b26708f5832f7ed14af9b15f695d49f4b3f862509afc82163702948d6c91e",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8",
-    "engine-build.json": "8b1b4dd465136ec7ddb01fc0622d223dd949e97e68e0310e7481a9547c39f250"
+    "engine-build.json": "b287570e826891d2309b7d4c5410c705f5a196b492d1ad2be27857ed3ab6dbd8"
   }
 }

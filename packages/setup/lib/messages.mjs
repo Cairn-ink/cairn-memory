@@ -285,6 +285,7 @@ export const messages = {
       "npx @cairn-ink/memory <指令> [選項]\n" +
       "\n" +
       "常用指令：setup、status、pause、resume、uninstall、config\n" +
+      "  daemon status|stop --local  查看或停止共用伺服器（Linux）\n" +
       "  --client claude|codex  只操作其中一個工具\n" +
       "  --endpoint URL        指定 Cairn 網址（預設 {defaultEndpoint}）\n" +
       "  --codex-daily-cap N    Codex 每日自動記憶上限（1–100000）\n" +
@@ -306,6 +307,7 @@ export const messages = {
       "npx @cairn-ink/memory <command> [options]\n" +
       "\n" +
       "Commands: setup, status, pause, resume, uninstall, config\n" +
+      "  daemon status|stop --local  Inspect or stop shared servers (Linux)\n" +
       "  --client claude|codex  Act on one tool only\n" +
       "  --endpoint URL        Cairn URL (default {defaultEndpoint})\n" +
       "  --codex-daily-cap N    Codex daily automatic memory limit (1-100000)\n" +
@@ -1593,7 +1595,7 @@ Object.assign(messages, {
   "mode_cloud_description": {"zh": "2. 雲端：記憶可跨電腦和工具共用，需要登入 cairn.ink。", "en": "2. Cloud: memory is shared across computers and tools, with cairn.ink sign-in."},
   "mode_required": {"zh": "請選擇本機或雲端，再重新執行安裝。", "en": "Choose local or cloud storage and run setup again."},
   "mode_conflict": {"zh": "--local 和 --cloud 只能選一個。", "en": "Choose either --local or --cloud."},
-  "mode_option_scope": {"zh": "--local 只適用於 setup、uninstall；--cloud 只適用於 setup。", "en": "--local is for setup and uninstall; --cloud is for setup only."},
+  "mode_option_scope": {"zh": "--local 適用於 setup、uninstall 與 daemon。--cloud 只適用於 setup。", "en": "--local is for setup, uninstall and daemon. --cloud is for setup only."},
   "mode_conflict_cloud": {"zh": "這台電腦已有雲端記憶設定，請依序解除連接後再安裝本機記憶。", "en": "Cloud memory is configured. Detach it in this order before local setup."},
   "mode_conflict_local": {"zh": "這台電腦已有本機記憶設定，請先解除連接再安裝雲端記憶。", "en": "Local memory is configured. Detach it before cloud setup."},
   "mode_mixed": {"zh": "找到本機和雲端兩種記憶設定，請先解除連接。", "en": "Both local and cloud memory are configured. Detach them first."},
