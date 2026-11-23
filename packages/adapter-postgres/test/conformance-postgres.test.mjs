@@ -5,7 +5,7 @@ import { Socket } from "node:net";
 import test from "node:test";
 import { Pool } from "pg";
 import {
-  CAPTURE_CASES, CASES, KEYED_DIGEST_CASES, PRIVACY_CASES, PRIVACY_MATCH_CASES,
+  ADMISSION_CASES, CAPTURE_CASES, CASES, IMPORT_TIME_CASES, KEYED_DIGEST_CASES, PRIVACY_CASES, PRIVACY_MATCH_CASES,
   RAW_CASES, SOURCE_FILTER_CASES, TOPIC_CASES, runCase,
 } from "@cairn-ink/conformance";
 import { capabilities, factIncarnationBody } from "@cairn-ink/core";
@@ -254,6 +254,8 @@ const notApplicable = {
   "suppressions.factsFor": ["K-FACTSFOR-1"],
   capture: ["K-CLM-1", "K-CLM-2", "K-CLM-3", "K-CLM-4", "K-CLM-5",
     "K-SRC-1", "K-SRC-2", "K-SRC-3", "K-SRC-4", "K-SRC-5"],
+  "capture.admit": ["K-ADM-1", "K-ADM-2", "K-ADM-3", "K-ADM-4", "K-ADM-5", "K-ADM-6", "K-ADM-7", "K-ADM-8", "K-ADM-9"],
+  "memories.insert": ["K-IMP-T1", "K-IMP-T2", "K-IMP-T3"],
   raw: ["K-RAW-1", "K-RAW-2", "K-RAW-2s", "K-RAW-3", "K-RAW-3w", "K-RAW-3c", "K-RAW-3s",
     "K-RAW-4", "K-RAW-5", "K-RAW-6", "K-RAW-7", "K-RAW-8", "K-RAW-8w", "K-RAW-8s"],
   "rawSpans not declared": ["K-FACT-3r"],
@@ -263,7 +265,8 @@ const notApplicable = {
 };
 
 const allCases = [
-  ...CASES, ...PRIVACY_CASES, ...PRIVACY_MATCH_CASES, ...CAPTURE_CASES, ...SOURCE_FILTER_CASES,
+  ...CASES, ...PRIVACY_CASES, ...PRIVACY_MATCH_CASES, ...CAPTURE_CASES, ...ADMISSION_CASES, ...IMPORT_TIME_CASES,
+  ...SOURCE_FILTER_CASES,
   ...KEYED_DIGEST_CASES, ...RAW_CASES, ...TOPIC_CASES,
 ];
 assert.deepEqual(

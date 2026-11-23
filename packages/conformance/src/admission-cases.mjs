@@ -1,0 +1,237 @@
+import { check, equal, readDump, rejects, row } from "./support.mjs";
+
+/** @import { CaptureKey, CaptureMessage, Tx } from "@cairn-ink/core/ports" */
+/** @typedef {import("./index.d.mts").CaseContext} Context */
+
+/** @type {readonly CaptureMessage[]} */
+const messages = [
+  { id: "first", role: "user", content: "The orchard opens in spring.", occurredAtMs: 20 },
+  { id: "second", role: "assistant", content: "I will mark the calendar.", occurredAtMs: null },
+];
+
+/** @param {Context} ctx @returns {CaptureKey} */
+function event(ctx) {
+  return { scope: ctx.scope(null), client: "first-client", sessionId: "session", eventId: "event",
+    payloadDigest: "a".repeat(64) };
+}
+
+/** @param {CaptureKey} key */
+function selection({ scope, client, sessionId, eventId }) {
+  return { scope, client, sessionId, eventId };
+}
+
+/** @param {Context} ctx @param {CaptureKey} key @param {readonly CaptureMessage[]} [batch] */
+function admit({ adapter: { uow, capture } }, key, batch = messages) {
+  const enqueue = capture.admit?.bind(capture);
+  check(enqueue, "Expected capture.admit");
+  return uow.run(key.scope.owner, { pauseLock: true }, tx => enqueue(tx, key, batch));
+}
+
+/** @param {Context} ctx @param {CaptureKey} key */
+function load({ adapter: { uow, capture } }, key) {
+  const read = capture.load?.bind(capture);
+  check(read, "Expected capture.load");
+  return uow.run(key.scope.owner, { readOnly: true }, tx => read(tx, selection(key)));
+}
+
+/** @param {Context} ctx @param {CaptureKey} key @param {readonly CaptureMessage[]} [batch] */
+async function claim({ adapter: { uow, capture } }, key, batch = messages) {
+  const claimed = await uow.run(key.scope.owner, { pauseLock: true }, tx =>
+    capture.claim(tx, key, batch, { leaseMs: 60_000 }));
+  check(claimed.status === "claimed", "An admission must be claimable");
+  return claimed.token;
+}
+
+/** @type {readonly import("./index.d.mts").ConformanceCase[]} */
+export const ADMISSION_CASES = [
+  {
+    id: "K-ADM-1", title: "loads the first admission in its original scope and session", needs: [],
+    async run(ctx) {
+      const { adapter: { capture } } = ctx;
+      if (!capture?.admit) return "needs capture.admit";
+      if (!capture.load) return "needs capture.load";
+      const key = event(ctx);
+      equal(await load(ctx, key), null, "Missing admission must load as null");
+      equal(await admit(ctx, key), { status: "admitted" }, "First admission must be accepted");
+      equal(await load(ctx, key), { key, messages }, "Load must return the admitted key and ordered messages");
+      const withheld = messages.map(message => ({ ...message, content: "" }));
+      equal(await admit(ctx, key, withheld), { status: "duplicate" }, "Redelivery must preserve the first admission");
+      equal(await load(ctx, key), { key, messages }, "Redelivery must preserve the first admitted messages");
+      equal(await load(ctx, { ...key, sessionId: "other" }), null, "Load must respect the selected session");
+      equal(await load(ctx, { ...key, scope: ctx.scope("other") }), null, "Load must respect the selected namespace");
+    },
+  },
+  {
+    id: "K-ADM-2", title: "replays a pending, leased, or finished admission", needs: [],
+    async run(ctx) {
+      const { adapter: { capture, uow }, owner } = ctx;
+      if (!capture?.admit) return "needs capture.admit";
+      const key = event(ctx);
+      equal(await admit(ctx, key), { status: "admitted" }, "First admission must be accepted");
+      equal(await admit(ctx, key), { status: "duplicate" }, "The first admission must not take a lease");
+      const token = await claim(ctx, key);
+      equal(await admit(ctx, key), { status: "processing" }, "Redelivery during a live lease must report processing");
+      const memory = await row(ctx, "The orchard opens in spring.");
+      const item = { content: memory.text, kind: memory.kind, confidence: memory.confidence, textHash: memory.textHash,
+        embedding: memory.embedding && { model: memory.embedding.model, vector: new Float32Array(memory.embedding.vector) },
+        receipts: [] };
+      const dispatch = await uow.run(owner, { pauseLock: true }, tx => capture.beginDispatch(tx, token));
+      const result = await uow.run(owner, { pauseLock: true }, tx => capture.finish(tx, dispatch.token, [item]));
+      check(result.memories.length === 1, "The fixture must finish with a stored memory");
+      equal(await admit(ctx, key), { status: "rawReplay", result }, "Redelivery must return the stored finish result");
+    },
+  },
+  {
+    id: "K-ADM-3", title: "rejects a changed payload digest for an admitted event", needs: [],
+    async run(ctx) {
+      if (!ctx.adapter.capture?.admit) return "needs capture.admit";
+      const key = event(ctx);
+      await admit(ctx, key);
+      const changed = [{ ...messages[0], content: "The orchard opens in summer." }, messages[1]];
+      await rejects(() => admit(ctx, { ...key, payloadDigest: "b".repeat(64) }, changed), "event_payload_conflict");
+      equal(await admit(ctx, key), { status: "duplicate" }, "Conflict must preserve the original admission");
+    },
+  },
+  {
+    id: "K-ADM-4", title: "deduplicates across namespaces but scopes identity to owner and client", needs: [],
+    async run(ctx) {
+      if (!ctx.adapter.capture?.admit) return "needs capture.admit";
+      const key = event(ctx);
+      const cross = { ...key, scope: ctx.scope("other") };
+      equal(await admit(ctx, key), { status: "admitted" }, "First admission must be accepted");
+      equal(await admit(ctx, cross), { status: "duplicate" }, "The namespace must not partition admission identity");
+      await rejects(() => admit(ctx, { ...cross, payloadDigest: "b".repeat(64) }), "event_payload_conflict");
+      equal(await admit(ctx, { ...cross, client: "other-client" }), { status: "admitted" },
+        "Another client must have an independent event");
+      equal(await admit(ctx, { ...key, scope: { ...key.scope, owner: ctx.otherOwner } }), { status: "admitted" },
+        "Another owner must have an independent event");
+    },
+  },
+  {
+    id: "K-ADM-5", title: "requires a pause-locked write run for admission", needs: [],
+    async run(ctx) {
+      const { adapter: { uow, capture }, owner } = ctx;
+      const enqueue = capture?.admit?.bind(capture);
+      if (!enqueue) return "needs capture.admit";
+      const key = event(ctx);
+      const run = (/** @type {Tx} */ tx) => enqueue(tx, key, messages);
+      await rejects(() => uow.run(owner, {}, run), "internal_error");
+      await rejects(() => uow.run(owner, { readOnly: true, pauseLock: true }, run), "internal_error");
+      equal(await admit(ctx, key), { status: "admitted" }, "Refused calls must not reserve admission identity");
+    },
+  },
+  {
+    id: "K-ADM-6", title: "reports per-client states and aggregates pending before failed before done", needs: [],
+    async run(ctx) {
+      const { adapter: { uow, capture }, owner } = ctx;
+      if (!capture?.admit) return "needs capture.admit";
+      const read = capture.status?.bind(capture);
+      if (!read) return "needs capture.status";
+      const done = event(ctx);
+      const failed = { ...done, client: "failed-client" };
+      const pending = { ...done, client: "pending-client" };
+      /** @param {string} [client] */
+      const status = (client, scope = done.scope, eventId = done.eventId) =>
+        uow.run(owner, { readOnly: true }, tx => read(tx, scope, eventId, client));
+      const finish = (/** @type {string} */ token) =>
+        uow.run(owner, { pauseLock: true }, tx => capture.finish(tx, token, []));
+      equal(await status(), { status: "unknown" }, "Unknown event");
+      equal(await status(done.client), { status: "unknown" }, "Unknown event for a client");
+      await admit(ctx, done);
+      equal(await status(), { status: "pending" }, "Unleased admission is pending");
+      const token = await claim(ctx, done);
+      equal(await status(done.client), { status: "pending" }, "Leased admission is pending");
+      await finish(token);
+      equal(await status(), { status: "done" }, "Finished event");
+      await admit(ctx, failed);
+      const failedToken = await claim(ctx, failed);
+      const failure = { code: "invalid_input", retryable: false, message: "Private error detail." };
+      await uow.run(owner, { pauseLock: true }, tx => capture.abandon(tx, failedToken, failure));
+      const codeOnly = { status: "failed", code: failure.code };
+      equal(await status(), codeOnly, "Failed must take precedence over done and expose only the code");
+      equal(await status(failed.client), codeOnly, "A terminal failure must expose only its code");
+      equal(await admit(ctx, failed), { status: "duplicate" }, "Terminal failure must preserve admission identity");
+      equal(await status(done.client), { status: "done" }, "Another client's failure must not replace done");
+      equal(await status(pending.client), { status: "unknown" }, "An absent client must be unknown");
+      await admit(ctx, pending);
+      const pendingToken = await claim(ctx, pending);
+      await uow.run(owner, { pauseLock: true }, tx =>
+        capture.abandon(tx, pendingToken, { code: "storage_error", retryable: true }));
+      equal(await status(), { status: "pending" }, "Pending must take precedence over failed");
+      equal(await status(pending.client), { status: "pending" }, "Retryable abandon must return to pending");
+      equal(await status(failed.client), codeOnly, "Pending for another client must not replace failure");
+      equal(await status(undefined, ctx.scope("other")), { status: "unknown" }, "Status must respect the selected namespace");
+      equal(await status(undefined, done.scope, "other"), { status: "unknown" }, "Status must respect the selected event");
+    },
+  },
+  {
+    id: "K-ADM-7", title: "reads status without changing the dump or state token", needs: [],
+    async run(ctx) {
+      const { adapter: { uow, capture, snapshot }, owner, harness } = ctx;
+      if (!capture?.admit) return "needs capture.admit";
+      const read = capture.status?.bind(capture);
+      if (!read) return "needs capture.status";
+      const key = event(ctx);
+      await admit(ctx, key);
+      const observeToken = () => uow.run(owner, { readOnly: true },
+        tx => snapshot.stateToken(tx, { owner, namespaces: [key.scope.namespace] }));
+      const beforeDump = await readDump(harness);
+      const beforeToken = await observeToken();
+      await uow.run(owner, { readOnly: true }, async tx => {
+        await read(tx, key.scope, key.eventId, key.client);
+        await read(tx, key.scope, key.eventId);
+        await read(tx, key.scope, "missing");
+      });
+      equal(await readDump(harness), beforeDump, "Status must leave the dump unchanged");
+      equal(await observeToken(), beforeToken, "Status must leave the state token unchanged");
+    },
+  },
+  {
+    id: "K-ADM-8", title: "admits and finishes a fully withheld batch", needs: [],
+    async run(ctx) {
+      const { adapter: { uow, capture }, owner } = ctx;
+      if (!capture?.admit) return "needs capture.admit";
+      const read = capture.load?.bind(capture);
+      if (!read) return "needs capture.load";
+      const key = event(ctx);
+      const withheld = messages.map(message => ({ ...message, content: "" }));
+      equal(await admit(ctx, key, withheld), { status: "admitted" }, "An all-withheld batch must be admitted");
+      const token = await uow.run(owner, { pauseLock: true }, async tx => {
+        const admitted = await read(tx, selection(key));
+        equal(admitted, { key, messages: withheld }, "Withheld positions must be preserved");
+        check(admitted, "The all-withheld admission must load");
+        const claimed = await capture.claim(tx, admitted.key, admitted.messages, { leaseMs: 60_000 });
+        check(claimed.status === "claimed", "The all-withheld admission must be claimable");
+        return claimed.token;
+      });
+      const result = await uow.run(owner, { pauseLock: true }, tx => capture.finish(tx, token, []));
+      equal(result.memories, [], "An all-withheld finish must write no memories");
+      equal(await admit(ctx, key, withheld), { status: "rawReplay", result }, "The empty finish must be replayable");
+    },
+  },
+  {
+    id: "K-ADM-9", title: "detaches the loaded key and each message from stored admission data", needs: [],
+    async run(ctx) {
+      const { adapter: { uow, capture }, owner } = ctx;
+      if (!capture?.admit) return "needs capture.admit";
+      const read = capture.load?.bind(capture);
+      if (!read) return "needs capture.load";
+      const key = event(ctx);
+      await admit(ctx, key);
+      await uow.run(owner, { readOnly: true }, async tx => {
+        const loaded = await read(tx, selection(key));
+        check(loaded, "Expected a stored admission");
+        Reflect.set(loaded.key.scope, "namespace", "changed");
+        Reflect.set(loaded.key, "sessionId", "changed");
+        Reflect.set(loaded.messages[0], "content", "changed");
+        Reflect.set(loaded.messages, "length", 1);
+        const reread = await read(tx, selection(key));
+        equal(reread, { key, messages }, "Load output must not mutate the admission");
+        check(reread && reread.key !== loaded.key && reread.key.scope !== loaded.key.scope &&
+          reread.messages !== loaded.messages && reread.messages.every((message, offset) => message !== loaded.messages[offset]),
+        "Each load must return fresh copies");
+      });
+      equal(await load(ctx, key), { key, messages }, "The committed admission must preserve the stored values");
+    },
+  },
+];

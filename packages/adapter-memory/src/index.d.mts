@@ -16,9 +16,12 @@ export interface MemoryAdapterOptions {
   fingerprint?: { secret: string; labels: FingerprintLabels } | null;
 }
 
-export type MemoryAdapter = Pick<StorageAdapter, "capabilities" | "uow" | "memories" | "capture" |
+type CapturePorts = StorageAdapter["capture"];
+
+export type MemoryAdapter = Pick<StorageAdapter, "capabilities" | "uow" | "memories" |
   "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "suppressions" | "pause" | "keys" | "placement" | "raw" |
   "supersession" | "conflicts"> & {
+  readonly capture: CapturePorts & Required<Pick<CapturePorts, "admit" | "load" | "status">>;
   name: "memory";
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;
   harness: TestHarness & Required<Pick<TestHarness, "setFingerprintSecret" | "rowsMissingKeyedDigest" | "advanceClock">>;
