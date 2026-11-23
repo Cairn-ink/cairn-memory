@@ -5,17 +5,17 @@ import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
 import { CASES, runCase } from "@cairn-ink/conformance";
 import { CoreError, compareSortKey, compareUtf8 } from "@cairn-ink/core";
 
-function factory(wrap) {
+function factory(wrap, { newId, embeddingDimensions = null } = {}) {
   return {
     name: "memory mutant",
     async open({ capabilities }) {
-      const adapter = createMemoryAdapter({ capabilities });
+      const adapter = createMemoryAdapter({ capabilities, newId });
       return wrap({
         adapter,
         harness: adapter.harness,
         nativeErrorMap: adapter.nativeErrorMap,
         busyNativeCodes: [],
-        embeddingDimensions: null,
+        embeddingDimensions,
         async close() {},
       });
     },
@@ -322,10 +322,10 @@ const regressions = [
   ["loses another owner's committed write", "K-UOW-2", losesConcurrentOwnerWrite, /Another owner's committed row was lost/],
 ];
 
-function run(id, wrap) {
+function run(id, wrap, options) {
   const testCase = CASES.find((candidate) => candidate.id === id);
   assert.ok(testCase, `Unknown conformance case ${id}`);
-  return runCase(factory(wrap), testCase);
+  return runCase(factory(wrap, options), testCase);
 }
 
 for (const [description, id, wrap, failure] of regressions) {
@@ -402,15 +402,22 @@ function lexicalOutsideReadSet(opened) {
   });
 }
 
-function lexicalUtf16Ties(opened) {
+function newestFirst(a, b) {
+  return compareSortKey(b.updatedAtUs, a.updatedAtUs) || compareUtf8(b.id, a.id);
+}
+
+function namespaceDescending(a, b) {
+  return a === b ? 0 : a === null ? 1 : b === null ? -1 : compareUtf8(b, a);
+}
+
+function lexicalNewestTies(opened) {
   const { lexical } = opened.adapter;
-  const compare = (a, b) => a === b ? 0 : a === null || (b !== null && a < b) ? -1 : 1;
   return withPorts(opened, {
     lexical: {
       async lexical(tx, scope, query, depth, options) {
         const result = await lexical.lexical(tx, scope, query, Number.MAX_SAFE_INTEGER, options);
         const rows = result.rows.sort((a, b) => b.score - a.score ||
-          compare(a.ref.namespace, b.ref.namespace) || compare(a.ref.id, b.ref.id));
+          newestFirst({ ...a, id: a.ref.id }, { ...b, id: b.ref.id }));
         return { ...result, rows: rows.slice(0, depth) };
       },
     },
@@ -421,6 +428,56 @@ function lexicalAlwaysMatches(opened) {
   const { lexical } = opened.adapter;
   return withPorts(opened, {
     lexical: { async lexical(...args) { return { ...await lexical.lexical(...args), matched: true }; } },
+  });
+}
+
+function vectorSearchesAllOwnerNamespaces(opened) {
+  const { memories, vector } = opened.adapter;
+  const namespacesByOwner = new Map();
+  return withPorts(opened, {
+    memories: {
+      ...memories,
+      async insert(tx, scope, ...args) {
+        const result = await memories.insert(tx, scope, ...args);
+        if (!namespacesByOwner.has(scope.owner)) namespacesByOwner.set(scope.owner, new Set());
+        namespacesByOwner.get(scope.owner).add(scope.namespace);
+        return result;
+      },
+    },
+    vector: {
+      vector: (tx, scope, ...args) => vector.vector(tx, {
+        ...scope, namespaces: [...namespacesByOwner.get(scope.owner)],
+      }, ...args),
+    },
+  });
+}
+
+function vectorIgnoresLength(opened) {
+  const { vector } = opened.adapter;
+  const dimensions = opened.embeddingDimensions ?? 4;
+  return withPorts(opened, {
+    vector: {
+      vector(tx, scope, query, ...args) {
+        const resized = new Float32Array(dimensions);
+        resized.set(query.subarray(0, dimensions));
+        return vector.vector(tx, scope, resized, ...args);
+      },
+    },
+  });
+}
+
+function storesNativeWidthOnly(opened) {
+  const { memories } = opened.adapter;
+  return withPorts(opened, {
+    memories: {
+      ...memories,
+      async insert(tx, scope, content, ...args) {
+        if (content.embedding && content.embedding.vector.length !== opened.embeddingDimensions) {
+          throw new CoreError("invalid_input");
+        }
+        return memories.insert(tx, scope, content, ...args);
+      },
+    },
   });
 }
 
@@ -447,6 +504,42 @@ function vectorIgnoresModel(opened) {
           compareSortKey(b.updatedAtUs, a.updatedAtUs) || compareUtf8(b.ref.id, a.ref.id));
         const total = embedded + other.coverage.embedded;
         return { rows: combined.slice(0, depth), coverage: { eligible, embedded: total, complete: total === eligible } };
+      },
+    },
+  });
+}
+
+function recentUsesRunLocalCursors(opened) {
+  const { recent } = opened.adapter;
+  const issuedBy = new Map();
+  return withPorts(opened, {
+    recent: {
+      async recent(tx, scope, page) {
+        if (page.cursor !== null && issuedBy.get(page.cursor) !== tx) throw new CoreError("invalid_cursor");
+        const result = await recent.recent(tx, scope, page);
+        if (result.nextCursor !== null) issuedBy.set(result.nextCursor, tx);
+        return result;
+      },
+    },
+  });
+}
+
+function recentNamespaceDescending(opened) {
+  const { recent } = opened.adapter;
+  const positions = new Map();
+  const order = (a, b) => newestFirst(a, b) || namespaceDescending(a.scope.namespace, b.scope.namespace);
+  return withPorts(opened, {
+    recent: {
+      async recent(tx, scope, { cursor, limit }) {
+        if (limit < 1 || (cursor !== null && !positions.has(cursor))) {
+          return recent.recent(tx, scope, { cursor, limit });
+        }
+        const { items } = await recent.recent(tx, scope, { cursor: null, limit: Number.MAX_SAFE_INTEGER });
+        const remaining = (cursor === null ? items : items.filter((row) => order(row, positions.get(cursor)) > 0)).sort(order);
+        const page = remaining.slice(0, limit);
+        const nextCursor = remaining.length > limit ? String(positions.size) : null;
+        if (nextCursor !== null) positions.set(nextCursor, page.at(-1));
+        return { items: page, nextCursor };
       },
     },
   });
@@ -495,6 +588,20 @@ function recentLeaksHiddenRow(opened) {
       },
     },
   };
+}
+
+function snapshotReturnsInitialToken(opened) {
+  const { snapshot } = opened.adapter;
+  let initialToken;
+  return withPorts(opened, {
+    snapshot: {
+      ...snapshot,
+      async stateToken(tx, scope) {
+        initialToken ??= await snapshot.stateToken(tx, scope);
+        return initialToken;
+      },
+    },
+  });
 }
 
 function snapshotIgnoresRevision(opened) {
@@ -556,6 +663,17 @@ function hydrateThrowsOnHidden(opened) {
   }));
 }
 
+function hydrateSortsByNamespace(opened) {
+  const { hydrate } = opened.adapter;
+  return withPorts(opened, {
+    hydrate: {
+      async hydrate(...args) {
+        return (await hydrate.hydrate(...args)).sort((a, b) => namespaceDescending(a.ref.namespace, b.ref.namespace));
+      },
+    },
+  });
+}
+
 function hydrateReorders(opened) {
   const { hydrate } = opened.adapter;
   return withPorts(opened, {
@@ -575,6 +693,17 @@ function hydrateOmitsExportReceipts(opened) {
   });
 }
 
+function fenceSortsByNamespace(opened) {
+  const { fence } = opened.adapter;
+  return withPorts(opened, {
+    fence: {
+      async assertVisible(...args) {
+        return (await fence.assertVisible(...args)).sort((a, b) => namespaceDescending(a.namespace, b.namespace));
+      },
+    },
+  });
+}
+
 function fenceLeaksHiddenRef(opened) {
   const { fence } = opened.adapter;
   return recordsHiddenRef(opened, (hidden) => withPorts(opened, {
@@ -588,21 +717,33 @@ function fenceLeaksHiddenRef(opened) {
   }));
 }
 
+function keepsVectorWhenOff(opened) {
+  if (opened.adapter.capabilities.semanticRetrieval) return opened;
+  const { vector } = createMemoryAdapter({ capabilities: { semanticRetrieval: true } });
+  return withPorts(opened, { vector });
+}
+
 const retrievalRegressions = [
   ["widens the lexical read set", "K-RET-1", lexicalOutsideReadSet, /Lexical returned the wrong refs/],
-  ["orders lexical ties by UTF-16", "K-RET-1", lexicalUtf16Ties, /Lexical ties were not in canonical order/],
   ["reports matched for an empty lexical result", "K-RET-2", lexicalAlwaysMatches, /empty lexical result reported a match/],
+  ["searches all namespaces of the owner for vectors", "K-RET-3", vectorSearchesAllOwnerNamespaces, /Complete vector coverage/],
+  ["ignores the query width in vector search", "K-RET-3", vectorIgnoresLength, /Mismatched vector query coverage/],
   ["reports complete vector coverage with missing embeddings", "K-RET-3", vectorAlwaysComplete,
     /Incomplete vector coverage was reported complete/],
   ["ignores the query model in vector search", "K-RET-3", vectorIgnoresModel, /Vector eligible and embedded counts/],
   ["pages recent rows without an ID tie-break", "K-RET-9", recentTimeOnlyCursor, /Missing recent second-page continuation/],
+  ["rejects recent cursors from another run", "K-RET-9", recentUsesRunLocalCursors, { code: "invalid_cursor" }],
   ["includes a hidden recent row", "K-RET-9", recentLeaksHiddenRow, /Recent pages did not contain exactly the visible rows in order/],
   ["ignores the owner revision in state tokens", "K-SNAP-1", snapshotIgnoresRevision, /Expected operation to reject/],
+  ["always issues the initial state token", "K-SNAP-1", snapshotReturnsInitialToken, { code: "cursor_stale" }],
   ["ignores the read set in state tokens", "K-SNAP-1", snapshotIgnoresReadSet, /Expected operation to reject/],
   ["throws when asked to hydrate a hidden ref", "K-HYD-1", hydrateThrowsOnHidden, { code: "memory_not_found" }],
   ["reorders hydrated refs", "K-HYD-1", hydrateReorders, /Hydrate refs did not preserve the visible input order/],
+  ["sorts hydrated refs by namespace descending", "K-HYD-1", hydrateSortsByNamespace, /Hydrate refs did not preserve the visible input order/],
   ["omits receipts from export hydration", "K-HYD-1", hydrateOmitsExportReceipts, /Hydrate receipts were missing or changed/],
   ["lets hidden refs pass the fence", "K-FEN-1", fenceLeaksHiddenRef, /Fence did not return exactly the visible refs in input order/],
+  ["sorts fenced refs by namespace descending", "K-FEN-1", fenceSortsByNamespace, /Fence did not return exactly the visible refs in input order/],
+  ["keeps the vector port when asked to disable it", "K-CAP-2", keepsVectorWhenOff, { code: "capability_unavailable" }],
 ];
 
 for (const [description, id, wrap, failure] of retrievalRegressions) {
@@ -610,6 +751,39 @@ for (const [description, id, wrap, failure] of retrievalRegressions) {
     await assert.rejects(() => run(id, wrap), failure);
   });
 }
+
+test("K-RET-1 accepts lexical ties ordered by descending time and ID", async () => {
+  const ids = ["z", "a"];
+  let index = 0;
+  assert.equal(await run("K-RET-1", lexicalNewestTies, { newId: () => ids[index++] ?? `id-${index}` }), null);
+});
+
+test("K-RET-3 accepts a store that writes only native-width vectors", async () => {
+  assert.equal(await run("K-RET-3", storesNativeWidthOnly, { embeddingDimensions: 6 }), null);
+});
+
+test("K-RET-9 accepts namespace-descending order for equal recent keys", async () => {
+  const ids = ["oldest", "same", "same", "other", "newest"];
+  let index = 0;
+  assert.equal(await run("K-RET-9", recentNamespaceDescending, { newId: () => ids[index++] ?? `id-${index}` }), null);
+});
+
+test("K-CAP-2 accepts an undefined vector port when asked off", async () => {
+  assert.equal(await run("K-CAP-2", (opened) => opened.adapter.capabilities.semanticRetrieval ?
+    opened : withPorts(opened, { vector: undefined })), null);
+});
+
+test("K-CAP-2 accepts a factory that only offers semantic retrieval off", async () => {
+  assert.equal(await run("K-CAP-2", (opened) => withPorts(opened, {
+    capabilities: { ...opened.adapter.capabilities, semanticRetrieval: false }, vector: undefined,
+  })), null);
+});
+
+test("K-CAP-2 skips when the factory keeps semantic retrieval enabled", async () => {
+  const alwaysOn = factory((opened) => opened);
+  assert.equal(await runCase({ ...alwaysOn, open: () => alwaysOn.open({ capabilities: { semanticRetrieval: true } }) },
+    CASES.find(({ id }) => id === "K-CAP-2")), "needs semanticRetrieval off");
+});
 
 function returnsRetrievalInstances(opened) {
   const { adapter: { lexical, vector, hydrate, recent, fence } } = opened;

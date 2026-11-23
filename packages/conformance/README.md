@@ -28,11 +28,12 @@ defineConformanceTests(factory);
 - `needsOff` requests disabled flags and skips with `needs <flag> off` if any are on.
 - `requests` supplies optional flags at open. Skips depend on the explicit requirements, which override requests.
 - `pending` skips with the given reason before opening an adapter.
+- `followUp` runs a second check with its own capability requests and adapter after the first check passes and closes.
 
 Cases treat the store as the authority for write times. To create fixed times, including ties, call `harness.setWriteTime` after the write run closes. Derive the expected order from the forced microsecond times and the IDs the adapter returned.
 
 Cases compare port results by projecting the fields they need into plain tuples or objects, such as `[id, updatedAtUs]`. This lets adapters return rows and matches as class instances or with extra fields. Cases can compare documented plain shapes whole when they assert every field, such as `{ outcome, revision }` or `[[]]` for an empty match batch. Snapshots from `dump()` must be JSON-safe.
 
-Retrieval cases check membership, score order and canonical ties for lexical results. Lexical score magnitudes are store-specific. Vector cases check cosine distance and coverage for the query model and dimensions. Hydration and fence cases check visibility and input order, and hydration checks receipts and source dates. The historical-row case awaits the supersession suite.
+Retrieval cases check membership and non-increasing scores for lexical results. Lexical scores and equal-score ordering are store-specific. Vector cases check cosine distance and coverage for the query model and dimensions. Hydration and fence cases check visibility and input order, and hydration checks receipts and source dates. The historical-row case awaits the supersession suite.
 
-Page cursors are opaque. Stable re-reads compare the projected items reached by each cursor. State tokens must be stable without writes and bind to the read set and owner revision. A committed write in any namespace for the owner invalidates an earlier token.
+Page cursors are opaque. Recent pages use separate read-only runs. Stable re-reads compare projected items, treating rows with the same timestamp and ID in different namespaces as an unordered group. State tokens must be valid when issued, stable without writes, and bound to the read set and owner revision. A committed write in any namespace for the owner invalidates an earlier token.

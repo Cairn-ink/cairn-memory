@@ -41,7 +41,9 @@ export function validateSource(source) {
 
 /** @param {number[] | Float32Array} vector */
 export function validateVector(vector) {
-  if (!(Array.isArray(vector) || vector instanceof Float32Array) || vector.length === 0) invalid();
+  const float32 = ArrayBuffer.isView(vector) && !(vector instanceof DataView) &&
+    Object.prototype.toString.call(vector) === "[object Float32Array]";
+  if (!(Array.isArray(vector) || float32) || vector.length === 0) invalid();
   for (const component of vector) {
     if (!Number.isFinite(component)) invalid();
   }

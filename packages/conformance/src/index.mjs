@@ -20,7 +20,16 @@ async function hash(text) {
  */
 export async function runCase(factory, testCase) {
   if (testCase.pending !== undefined) return testCase.pending;
+  const reason = await runOpenedCase(factory, testCase);
+  if (reason !== null || !testCase.followUp) return reason;
+  return runOpenedCase(factory, testCase.followUp);
+}
 
+/**
+ * @param {import("./factory.d.ts").AdapterFactory} factory
+ * @param {Pick<import("./index.d.mts").ConformanceCase, "needs" | "needsOff" | "requests" | "run">} testCase
+ */
+async function runOpenedCase(factory, testCase) {
   const needsOff = testCase.needsOff ?? [];
   /** @type {Partial<import("@cairn-ink/core").Capabilities>} */
   const capabilities = {

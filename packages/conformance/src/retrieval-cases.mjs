@@ -1,4 +1,4 @@
-import { assertAdapterCapabilities, compareCanonical, compareSortKey, compareUtf8 } from "@cairn-ink/core";
+import { assertAdapterCapabilities, compareSortKey, compareUtf8 } from "@cairn-ink/core";
 import { check, equal, evidence, projectReceipt, rejects, row } from "./support.mjs";
 
 /** @typedef {import("./index.d.mts").CaseContext} Context */
@@ -7,6 +7,7 @@ import { check, equal, evidence, projectReceipt, rejects, row } from "./support.
 /** @typedef {import("@cairn-ink/core/ports").Receipt} Receipt */
 /** @typedef {import("@cairn-ink/core/ports").Scope} Scope */
 /** @typedef {import("@cairn-ink/core/ports").InsertRow} InsertRow */
+/** @typedef {[string, Scope["namespace"], bigint, string]} RecentProjection */
 
 /** @param {Scope} scope @param {string} id @returns {ItemRef} */
 const memoryRef = ({ namespace }, id) => ({ type: "memory", id, namespace });
@@ -14,8 +15,23 @@ const memoryRef = ({ namespace }, id) => ({ type: "memory", id, namespace });
 /** @param {ItemRef} ref */
 const projectRef = ({ type, id, namespace }) => [type, id, namespace];
 
-/** @param {MemoryRow} row */
+/** @param {MemoryRow} row @returns {RecentProjection} */
 const projectRecent = ({ id, scope, updatedAtUs, text }) => [id, scope.namespace, updatedAtUs, text];
+
+/** @param {RecentProjection[]} rows */
+function groupRecent(rows) {
+  /** @type {Set<RecentProjection>[]} */
+  const groups = [];
+  for (const [i, current] of rows.entries()) {
+    const previous = rows[i - 1];
+    if (previous && current[0] === previous[0] && current[2] === previous[2]) {
+      groups[groups.length - 1].add(current);
+    } else {
+      groups.push(new Set([current]));
+    }
+  }
+  return groups;
+}
 
 /** @param {Context} ctx @param {Scope} scope @param {InsertRow} content @param {bigint} time @param {Receipt[]} [receipts] */
 async function insert(ctx, scope, content, time, receipts = []) {
@@ -66,7 +82,6 @@ export const retrievalCases = [
     id: "K-RET-1", title: "ranks lexical matches in the visible read set", needs: [],
     async run(ctx) {
       const { adapter: { uow, memories, lexical }, owner } = ctx;
-      // These two namespaces sort in opposite orders by UTF-8 bytes and UTF-16 code units.
       const second = ctx.scope("\u{10000}");
       const first = ctx.scope("\uE000");
       const third = ctx.scope("outside");
@@ -84,25 +99,31 @@ export const retrievalCases = [
       await erase(ctx, first, erased.ref);
 
       await uow.run(owner, { readOnly: true }, async (tx) => {
-        const result = await lexical.lexical(tx, readSet, "orchard", 10, {});
-        equal(result.matched, true, "Lexical did not report matches");
-        equal(result.rows.map(({ ref }) => ref).sort(compareCanonical).map(projectRef),
-          [a.ref, b.ref, c.ref].sort(compareCanonical).map(projectRef), "Lexical returned the wrong refs");
-        for (const [i, { ref, score, updatedAtUs }] of result.rows.entries()) {
-          const stored = await memories.get(tx, ctx.scope(ref.namespace), ref.id);
-          check(stored, "A lexical ref did not resolve in its namespace");
-          equal([ref.namespace, updatedAtUs], [stored.scope.namespace, stored.updatedAtUs], "Lexical row metadata");
-          check(Number.isFinite(score), "Lexical score was not finite");
-          if (i === 0) continue;
-          const previous = result.rows[i - 1];
-          check(previous.score >= score, "Lexical scores increased");
-          if (previous.score === score) {
-            check(compareCanonical(previous.ref, ref) <= 0, "Lexical ties were not in canonical order");
+        const refKey = (/** @type {ItemRef} */ ref) => JSON.stringify(projectRef(ref));
+        const expected = new Set([a.ref, b.ref, c.ref].map(refKey));
+        const full = await lexical.lexical(tx, readSet, "orchard", 10, {});
+        const capped = await lexical.lexical(tx, readSet, "orchard", 2, {});
+        for (const [depth, { rows, matched }] of /** @type {const} */ ([[10, full], [2, capped]])) {
+          equal(matched, true, "Lexical did not report matches");
+          const refs = new Set(rows.map(({ ref }) => refKey(ref)));
+          if (depth === 10) {
+            equal(refs, expected, "Lexical returned the wrong refs");
+          } else {
+            equal(rows.length, depth, "Lexical depth did not return two matches");
+            const cutoff = full.rows[depth - 1].score;
+            const top = new Set(full.rows.filter(({ score }) => score >= cutoff).map(({ ref }) => refKey(ref)));
+            check([...refs].every((ref) => top.has(ref)), "Lexical depth returned a ref below its score cutoff");
+            check(full.rows.every(({ ref, score }) => score <= cutoff || refs.has(refKey(ref))),
+              "Lexical depth skipped a ref above its score cutoff");
+          }
+          equal(refs.size, rows.length, "Lexical repeated a ref");
+          for (const [i, { ref, score, updatedAtUs }] of rows.entries()) {
+            const stored = await memories.get(tx, ctx.scope(ref.namespace), ref.id);
+            check(stored, "A lexical ref did not resolve in its namespace");
+            equal([ref.namespace, updatedAtUs], [stored.scope.namespace, stored.updatedAtUs], "Lexical row metadata");
+            if (i > 0) check(rows[i - 1].score >= score, "Lexical scores increased");
           }
         }
-        const capped = await lexical.lexical(tx, readSet, "orchard", 2, {});
-        equal(capped.rows.map(({ ref }) => projectRef(ref)), result.rows.slice(0, 2).map(({ ref }) => projectRef(ref)),
-          "Lexical depth did not return the first two matches");
       });
     },
   },
@@ -138,26 +159,27 @@ export const retrievalCases = [
       const far = await insert(ctx, second, await row(ctx, "far", 1.2), 6003n);
       const hidden = await insert(ctx, first, await row(ctx, "hidden", 0.01), 6004n);
       const erased = await insert(ctx, second, await row(ctx, "erased", 0.02), 6005n);
+      await insert(ctx, ctx.scope("outside"), await row(ctx, "elsewhere", 0), 6006n);
+      await insert(ctx, { ...first, owner: ctx.otherOwner }, await row(ctx, "other owner", 0), 6007n);
       await hide(ctx, first, hidden.ref);
       await erase(ctx, second, erased.ref);
       const query = new Float32Array(ctx.vec(0));
 
       await uow.run(owner, { readOnly: true }, async (tx) => {
-        const { coverage } = await vector.vector(tx, readSet, query, "test", 10);
+        const { rows, coverage } = await vector.vector(tx, readSet, query, "test", 10);
         equal([coverage.eligible, coverage.embedded, coverage.complete], [5, 5, true], "Complete vector coverage");
+        equal(rows.map(({ ref }) => projectRef(ref)), [near, ...tied, far].map(({ ref }) => projectRef(ref)),
+          "Complete vector coverage returned the wrong refs");
       });
 
-      await insert(ctx, first, await row(ctx, "missing vector"), 6006n);
-      await insert(ctx, second, {
-        ...await row(ctx, "wrong dimensions"), embedding: { model: "test", vector: [...query, 0] },
-      }, 6007n);
+      await insert(ctx, first, await row(ctx, "missing vector"), 6008n);
       await insert(ctx, second, {
         ...await row(ctx, "other model"), embedding: { model: "other", vector: ctx.vec(0.03) },
-      }, 6008n);
+      }, 6009n);
 
       await uow.run(owner, { readOnly: true }, async (tx) => {
         const result = await vector.vector(tx, readSet, query, "test", 10);
-        equal([result.coverage.eligible, result.coverage.embedded], [8, 5], "Vector eligible and embedded counts");
+        equal([result.coverage.eligible, result.coverage.embedded], [7, 5], "Vector eligible and embedded counts");
         equal(result.coverage.complete, false, "Incomplete vector coverage was reported complete");
         const expected = [near, ...tied, far];
         equal(result.rows.map(({ ref, updatedAtUs }) => [projectRef(ref), updatedAtUs]),
@@ -169,8 +191,14 @@ export const retrievalCases = [
         const capped = await vector.vector(tx, readSet, query, "test", 2);
         equal(capped.rows.map(({ ref }) => projectRef(ref)), expected.slice(0, 2).map(({ ref }) => projectRef(ref)),
           "Vector depth did not return the first two candidates");
-        equal([capped.coverage.eligible, capped.coverage.embedded, capped.coverage.complete], [8, 5, false],
+        equal([capped.coverage.eligible, capped.coverage.embedded, capped.coverage.complete], [7, 5, false],
           "Vector depth changed coverage");
+        const wider = new Float32Array(query.length + 1);
+        wider.set(query);
+        const mismatch = await vector.vector(tx, readSet, wider, "test", 10);
+        equal([mismatch.coverage.eligible, mismatch.coverage.embedded, mismatch.coverage.complete], [7, 0, false],
+          "Mismatched vector query coverage");
+        equal(mismatch.rows.length, 0, "Mismatched vector query returned rows");
       });
     },
   },
@@ -194,28 +222,27 @@ export const retrievalCases = [
       await hide(ctx, second, hidden.ref);
       await erase(ctx, first, erased.ref);
 
-      await uow.run(owner, { readOnly: true }, async (tx) => {
-        /** @param {string | null} cursor */
-        const read = (cursor) => recent.recent(tx, readSet, { cursor, limit: 2 });
+      /** @param {string | null} cursor */
+      const read = (cursor) => uow.run(owner, { readOnly: true }, (tx) => recent.recent(tx, readSet, { cursor, limit: 2 }));
+      const collect = async () => {
         const firstPage = await read(null);
-        const again = await read(null);
-        equal(again.items.map(projectRecent), firstPage.items.map(projectRecent), "Recent first-page re-read changed items");
-        check(firstPage.nextCursor !== null && again.nextCursor !== null, "Missing recent first-page continuation");
+        check(firstPage.nextCursor !== null, "Missing recent first-page continuation");
         const secondPage = await read(firstPage.nextCursor);
-        equal((await read(again.nextCursor)).items.map(projectRecent), secondPage.items.map(projectRecent),
-          "Recent cursors for the same position reached different items");
         check(secondPage.nextCursor !== null, "Missing recent second-page continuation");
         const lastPage = await read(secondPage.nextCursor);
         equal(lastPage.nextCursor, null, "Final recent page had a continuation");
         const pages = [firstPage, secondPage, lastPage];
         equal(pages.map(({ items }) => items.length), [2, 2, 1], "Recent page sizes");
-        equal(pages.flatMap(({ items }) => items.map(projectRecent)),
-          visible.map(({ ref, updatedAtUs, text }) => [ref.id, ref.namespace, updatedAtUs, text]),
-          "Recent pages did not contain exactly the visible rows in order");
-        await rejects(() => read(""), "invalid_cursor");
-        await rejects(() => read("%%%"), "invalid_cursor");
-        await rejects(() => recent.recent(tx, readSet, { cursor: null, limit: 0 }), "invalid_input");
-      });
+        return groupRecent(pages.flatMap(({ items }) => items.map(projectRecent)));
+      };
+      const expected = groupRecent(visible.map(({ ref, updatedAtUs, text }) => [ref.id, ref.namespace, updatedAtUs, text]));
+      const seen = await collect();
+      equal(seen, expected, "Recent pages did not contain exactly the visible rows in order");
+      equal(await collect(), seen, "Recent re-read changed items");
+      await rejects(() => read(""), "invalid_cursor");
+      await rejects(() => read("%%%"), "invalid_cursor");
+      await rejects(() => uow.run(owner, { readOnly: true }, (tx) =>
+        recent.recent(tx, readSet, { cursor: null, limit: 0 })), "invalid_input");
     },
   },
   {
@@ -223,7 +250,11 @@ export const retrievalCases = [
     async run(ctx) {
       const { adapter: { uow, memories, snapshot }, owner, otherOwner } = ctx;
       const readSet = { owner, namespaces: [null, "shared"], clients: ["one", "two"] };
-      const capture = () => uow.run(owner, { readOnly: true }, (tx) => snapshot.stateToken(tx, readSet));
+      const capture = () => uow.run(owner, { readOnly: true }, async (tx) => {
+        const token = await snapshot.stateToken(tx, readSet);
+        await snapshot.assertUnchanged(tx, readSet, token);
+        return token;
+      });
       /** @param {string} token @param {import("@cairn-ink/core/ports").RetrievalScope} [scope] */
       const confirm = (token, scope = readSet) =>
         uow.run(owner, { readOnly: true }, (tx) => snapshot.assertUnchanged(tx, scope, token));
@@ -246,17 +277,19 @@ export const retrievalCases = [
       }
       await confirm(token);
       await uow.run(otherOwner, {}, (tx) => memories.insert(tx, { ...other, owner: otherOwner }, content, [], 1));
+      equal(await capture(), token, "State token changed after another owner's write");
       await confirm(token);
       await rejects(() => confirm(token, { ...readSet, namespaces: [null] }), "cursor_stale");
       await rejects(() => confirm(token, { ...readSet, clients: ["one"] }), "cursor_stale");
       await rejects(() => confirm("%%%"), "invalid_cursor");
       const { id } = await uow.run(owner, {}, (tx) => memories.insert(tx, other, content, [], 1));
-      await rejects(() => confirm(token), "cursor_stale");
       const afterInsert = await capture();
+      await rejects(() => confirm(token), "cursor_stale");
       await ctx.harness.setWriteTime(other, id, 8001n);
-      await rejects(() => confirm(afterInsert), "cursor_stale");
       const afterTime = await capture();
+      await rejects(() => confirm(afterInsert), "cursor_stale");
       await hide(ctx, other, memoryRef(other, id));
+      await capture();
       await rejects(() => confirm(afterTime), "cursor_stale");
     },
   },
@@ -265,17 +298,27 @@ export const retrievalCases = [
     async run(ctx) {
       const { adapter: { uow, hydrate }, owner } = ctx;
       const { readSet, refs, visible, dated } = await refFixture(ctx);
+      const expected = [
+        { ref: projectRef(visible[0]), memory: [visible[0].id, visible[0].namespace, "referenced"],
+          receipts: new Set(dated.map(projectReceipt)), sourceDates: [20, 90] },
+        { ref: projectRef(visible[1]), memory: [visible[1].id, visible[1].namespace, "unreferenced"],
+          receipts: new Set(), sourceDates: [null, null] },
+      ];
       await uow.run(owner, { readOnly: true }, async (tx) => {
-        for (const intent of /** @type {const} */ (["recall", "read", "export"])) {
-          const items = await hydrate.hydrate(tx, readSet, refs, intent);
-          equal(items.map(({ ref }) => projectRef(ref)), visible.map(projectRef), "Hydrate refs did not preserve the visible input order");
-          equal(items.map(({ memory }) => memory && [memory.id, memory.scope.namespace, memory.text]),
-            [[visible[0].id, visible[0].namespace, "referenced"], [visible[1].id, visible[1].namespace, "unreferenced"]],
-            "Hydrate did not return the referenced memories");
-          equal(items.map(({ receipts }) => receipts && new Set(receipts.map(projectReceipt))),
-            [new Set(dated.map(projectReceipt)), new Set()], "Hydrate receipts were missing or changed");
-          equal(items.map(({ sourceDates }) => sourceDates && [sourceDates.firstMs, sourceDates.lastMs]),
-            [[20, 90], [null, null]], "Hydrate source dates");
+        for (const [input, ordered] of /** @type {const} */ ([
+          [refs, expected], [refs.slice().reverse(), expected.slice().reverse()],
+        ])) {
+          for (const intent of /** @type {const} */ (["recall", "read", "export"])) {
+            const items = await hydrate.hydrate(tx, readSet, input, intent);
+            equal(items.map(({ ref }) => projectRef(ref)), ordered.map(({ ref }) => ref),
+              "Hydrate refs did not preserve the visible input order");
+            equal(items.map(({ memory }) => memory && [memory.id, memory.scope.namespace, memory.text]),
+              ordered.map(({ memory }) => memory), "Hydrate did not return the referenced memories");
+            equal(items.map(({ receipts }) => receipts && new Set(receipts.map(projectReceipt))),
+              ordered.map(({ receipts }) => receipts), "Hydrate receipts were missing or changed");
+            equal(items.map(({ sourceDates }) => sourceDates && [sourceDates.firstMs, sourceDates.lastMs]),
+              ordered.map(({ sourceDates }) => sourceDates), "Hydrate source dates");
+          }
         }
       });
     },
@@ -309,8 +352,10 @@ export const retrievalCases = [
       const { adapter: { uow, fence }, owner } = ctx;
       const { readSet, refs, visible } = await refFixture(ctx);
       await uow.run(owner, { readOnly: true }, async (tx) => {
-        equal((await fence.assertVisible(tx, readSet, refs)).map(projectRef), visible.map(projectRef),
-          "Fence did not return exactly the visible refs in input order");
+        for (const [input, ordered] of [[refs, visible], [refs.slice().reverse(), visible.slice().reverse()]]) {
+          equal((await fence.assertVisible(tx, readSet, input)).map(projectRef), ordered.map(projectRef),
+            "Fence did not return exactly the visible refs in input order");
+        }
       });
     },
   },
@@ -319,8 +364,15 @@ export const retrievalCases = [
     requests: { semanticRetrieval: true },
     async run({ adapter }) {
       assertAdapterCapabilities(adapter);
-      if (adapter.capabilities.semanticRetrieval) check(adapter.vector, "Vector port was missing");
-      else check(!("vector" in adapter), "Vector port was present with its flag off");
+      if (adapter.capabilities.semanticRetrieval) check(adapter.vector != null, "Vector port was missing");
+      else check(adapter.vector == null, "Vector port was present with its flag off");
+    },
+    followUp: {
+      needs: [], needsOff: ["semanticRetrieval"],
+      async run({ adapter }) {
+        assertAdapterCapabilities(adapter);
+        check(adapter.vector == null, "Vector port was present with its flag off");
+      },
     },
   },
 ];

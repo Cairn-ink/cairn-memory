@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { runInNewContext } from "node:vm";
 import { CoreError, capabilities } from "@cairn-ink/core";
 import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
 import { createMemoryStore } from "../src/memory-store.mjs";
@@ -76,6 +77,45 @@ test("lexical honors depths above the core search helper limit", async () => {
     assert.equal(all.rows.length, 30);
     assert.deepEqual(capped.rows, all.rows.slice(0, 26));
   });
+});
+
+test("memory lexical ties follow canonical UTF-8 order", async () => {
+  // Both the namespace and ID pairs sort differently by UTF-8 and UTF-16.
+  const earlier = { ...scope, namespace: "\uE000" };
+  const later = { ...scope, namespace: "\u{10000}" };
+  const ids = ["z", "\u{10000}", "\uE000"];
+  const { uow, memories, lexical } = createMemoryAdapter({ newId: () => ids.shift() });
+  const both = { ...readSet, namespaces: [later.namespace, earlier.namespace] };
+  await uow.run(scope.owner, {}, async (tx) => {
+    await memories.insert(tx, later, content, [], 1);
+    await memories.insert(tx, earlier, content, [], 1);
+    await memories.insert(tx, earlier, content, [], 1);
+  });
+  const { rows } = await uow.run(scope.owner, { readOnly: true }, (tx) =>
+    lexical.lexical(tx, both, "orchard", 3, {}));
+  assert.equal(new Set(rows.map(({ score }) => score)).size, 1, "Fixture scores must tie");
+  const assertCanonical = (results) => assert.deepEqual(results.map(({ ref }) => [ref.namespace, ref.id]),
+    [[earlier.namespace, "\uE000"], [earlier.namespace, "\u{10000}"], [later.namespace, "z"]],
+    "Lexical ties were not in canonical order");
+  assertCanonical(rows);
+
+  const compareUtf16 = (a, b) => a < b ? -1 : a > b ? 1 : 0;
+  const utf16Ties = rows.slice().sort((a, b) => b.score - a.score ||
+    compareUtf16(a.ref.namespace, b.ref.namespace) || compareUtf16(a.ref.id, b.ref.id));
+  assert.throws(() => assertCanonical(utf16Ties), /Lexical ties were not in canonical order/);
+});
+
+test("vector accepts a Float32Array query from another realm", async () => {
+  const { uow, memories, vector } = createMemoryAdapter({ capabilities: { semanticRetrieval: true } });
+  const query = runInNewContext("new Float32Array([1, 0])");
+  assert.equal(query instanceof Float32Array, false);
+  const { id } = await uow.run(scope.owner, {}, (tx) => memories.insert(tx, scope, {
+    ...content, embedding: { model: "embed", vector: [1, 0] },
+  }, [], 1));
+  const result = await uow.run(scope.owner, { readOnly: true }, (tx) =>
+    vector.vector(tx, readSet, query, "embed", 1));
+  assert.deepEqual(result.coverage, { eligible: 1, embedded: 1, complete: true });
+  assert.deepEqual(result.rows.map(({ ref, distance }) => [ref.id, distance]), [[id, 0]]);
 });
 
 test("recent pages past equal times and ids in different namespaces", async () => {
