@@ -127,3 +127,23 @@ Each addendum is additive unless it says what it supersedes. Adapters written ag
 
 Send the core lead the port, the method, and the reason. A request is
 accepted only if it keeps every adapter able to implement it, or it adds a capability flag.
+
+## Addendum 3a: TopicStore.forMemories
+
+The optional `forMemories(tx, scope, memoryIds)` returns L1 topic annotations as
+`Array<{ memoryId: string; topics: Array<{ id: string; title: string | null }> }>` in one query.
+Callers skip annotations when the adapter omits the method.
+
+- A row requires a placement outcome and a memory that is current and visible in scope at the
+  outcome's recorded revision, using the same rule as `forMemory` and `list`. A qualifying filed
+  or unfiled outcome with no topics yields `topics: []`.
+- Unknown ids and ids from other owners or namespaces yield no row. A duplicate yields at most
+  one row, and the rows follow the first occurrence of each id in the input.
+- Topics follow `forMemory` order. A title is null when any title source is no longer current at
+  its recorded revision, as in `list` and `catalog`.
+- The input must contain 1–100 ids, counting duplicates. Other batch sizes throw `invalid_input`.
+
+`dropMemory` advances the owner's index revision once when it drops at least one membership or
+retires at least one title source. A title becoming null can reorder `list` and `catalog`, so
+their earlier cursors become stale. Memory erase covers the same changes through its existing
+index revision advance.

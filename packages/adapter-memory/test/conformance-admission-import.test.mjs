@@ -93,6 +93,11 @@ test("expired and retryably abandoned leases are replaced in the original scope"
   await assert.rejects(write(tx => capture.beginDispatch(tx, initial.token)), { code: "stale_admission" });
   await write(tx => capture.assertEligible(tx, structuredClone(key), [0]));
   await assert.rejects(write(tx => capture.assertEligible(tx, alternate(), [0])), { code: "stale_admission" });
+  // A different digest or session from another namespace must not reveal the live lease as a conflict.
+  await assert.rejects(write(tx => capture.assertEligible(tx, { ...alternate(), payloadDigest: "b".repeat(64) }, [0])),
+    { code: "stale_admission" });
+  await assert.rejects(write(tx => capture.assertEligible(tx, { ...alternate(), sessionId: "other-session" }, [0])),
+    { code: "stale_admission" });
   assert.deepEqual(await read(tx => capture.load(tx, structuredClone(key))), { key, messages: [message] });
   assert.equal(await read(tx => capture.load(tx, alternate())), null);
   await write(tx => capture.abandon(tx, renewed.token, { code: "storage_error", retryable: true }));

@@ -250,7 +250,7 @@ const notApplicable = {
   conflictEdges: ["K-REL-4", "K-REL-5", "K-REL-8"],
   pause: ["K-PAUSE-1"],
   keys: ["K-KEY-1", "K-KD-1", "K-KD-2", "K-KD-3", "K-KD-4", "K-KD-5", "K-KD-6"],
-  "suppressions.snapshot": ["K-SNAP-F1", "K-SNAP-F3", "K-SNAP-F4", "K-SNAP-F5", "K-SNAP-F6", "K-SNAP-F7"],
+  "suppressions.snapshot": ["K-SNAP-F1", "K-SNAP-F3", "K-SNAP-F4", "K-SNAP-F5", "K-SNAP-F5u", "K-SNAP-F6", "K-SNAP-F7"],
   "suppressions.factsFor": ["K-FACTSFOR-1"],
   capture: ["K-CLM-1", "K-CLM-2", "K-CLM-3", "K-CLM-4", "K-CLM-5",
     "K-SRC-1", "K-SRC-2", "K-SRC-3", "K-SRC-4", "K-SRC-5"],
@@ -267,6 +267,7 @@ const notApplicable = {
     "K-FORK-6", "K-FORK-7", "K-FORK-8", "K-FORK-9", "K-FORK-10"],
   "rawSpans not declared": ["K-FACT-3r"],
   "hashed session refs required": ["K-HASH-1"],
+  "topics.forMemories": ["T-TFM-1", "T-TFM-2", "T-TFM-3", "T-TFM-4", "T-TFM-5", "T-TFM-6", "T-TFM-7", "T-TFM-8"],
   placement: ["T-TOP-1", "T-TOP-2", "T-TOP-3", "T-TOP-4", "T-TOP-5", "T-TOP-6", "T-TOP-7", "T-TOP-8",
     "T-TOP-9", "T-TOP-10", "T-TOP-11", "T-TOP-12", "T-TOP-13", "T-TOP-14", "T-TOP-15"],
 };

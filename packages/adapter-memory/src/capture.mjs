@@ -236,10 +236,11 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
         return (getState) => {
           const state = getState();
           const claim = state.claims.get(captureIdentity(copy.client, copy.eventId));
+          // Another namespace never holds this lease. Reject it before comparing the key, so the
+          // answer does not reveal whether the event exists elsewhere.
+          if (claim && claim.key.scope.namespace !== copy.scope.namespace) throw new CoreError("stale_admission");
           assertClaimKey(claim, copy);
-          if (claim?.status !== "leased" || claim.key.scope.namespace !== copy.scope.namespace) {
-            throw new CoreError("stale_admission");
-          }
+          if (claim?.status !== "leased") throw new CoreError("stale_admission");
           const nowMs = now();
           validateTime(nowMs);
           if (!(nowMs < claim.expiresAtMs)) throw new CoreError("stale_admission");

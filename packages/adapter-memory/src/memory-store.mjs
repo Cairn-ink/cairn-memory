@@ -4,7 +4,7 @@ import { decodeCursor, encodeCursor, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
 import { eraseRelations } from "./memory-relations.mjs";
 import { addKeyedDigest } from "./privacy.mjs";
-import { copyPublicRow } from "./unit-of-work.mjs";
+import { copyPublicRow, dropMemoryPlacement } from "./unit-of-work.mjs";
 import {
   attachReceipts, copyContent, copyDuplicateBatch, copyMerge, copyReceipts, validateLimit, validateMemoryId,
   validateSource, validateTime, writeNamespace, writeTime,
@@ -292,6 +292,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           const entries = state.rows.get(namespace);
           if (!entries?.delete(id)) return false;
           if (!entries.size) state.rows.delete(namespace);
+          dropMemoryPlacement(state.topics.get(namespace), id, { erase: true });
           return true;
         };
       });
