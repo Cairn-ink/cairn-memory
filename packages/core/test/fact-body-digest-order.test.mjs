@@ -34,3 +34,9 @@ test("factBody order is deterministic even for unvalidated duplicate digest keys
   const b = { ...a, pipeline: "hosted-v1" };
   assert.equal(factBody(text([a, b])), factBody(text([b, a])));
 });
+
+test("factBody order is total even for lone surrogates that share UTF-8 bytes", () => {
+  const a = { ...digest("hmac", "a"), keyId: "\uD800" };
+  const b = { ...a, keyId: "\uD801" };
+  assert.equal(factBody(text([a, b])), factBody(text([b, a])));
+});

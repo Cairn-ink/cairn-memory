@@ -124,7 +124,13 @@ function compareDigests(x, y) {
   return compareUtf8(String(x.alg), String(y.alg)) || compareUtf8(String(x.value), String(y.value)) ||
     compareUtf8(String(x.pipeline), String(y.pipeline)) ||
     compareUtf8(String(x.redactionVersion), String(y.redactionVersion)) ||
-    compareUtf8(String(x.keyId), String(y.keyId));
+    compareUtf8(String(x.keyId), String(y.keyId)) ||
+    compareCodeUnits(JSON.stringify(x), JSON.stringify(y));
+}
+
+/** Last-resort total order (UTF-16 code units), e.g. for lone surrogates that share UTF-8 bytes. */
+function compareCodeUnits(/** @type {string} */ a, /** @type {string} */ b) {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /**
@@ -149,7 +155,10 @@ export function factBody(fact) {
  * @param {import("./suppression-fact.mjs").SuppressionFact} fact
  */
 export function factIncarnationBody(fact) {
-  if (fact.kind !== "text") return factBody(fact);
-  const { embedding: _embedding, ...text } = /** @type {Record<string, unknown>} */ (fact.text);
-  return factBody(/** @type {import("./suppression-fact.mjs").SuppressionFact} */ ({ ...fact, text }));
+  // Derived from factBody's own canonical output, so it sees exactly what factBody saw.
+  const body = factBody(fact);
+  const parsed = JSON.parse(body);
+  if (parsed.kind !== "text" || !parsed.text || typeof parsed.text !== "object") return body;
+  delete parsed.text.embedding;
+  return JSON.stringify(parsed);
 }

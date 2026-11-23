@@ -37,3 +37,16 @@ test("the incarnation body equals factBody for every non-text kind and leaves th
   factIncarnationBody(fact);
   assert.deepEqual(fact.text.embedding, [1, 2]);
 });
+
+test("the incarnation body keeps fields that factBody reads through getters", () => {
+  const digests = [{ alg: "hmac", value: "a".repeat(64), pipeline: "core", redactionVersion: 1, keyId: "k" }];
+  const withGetter = (redactionVersion) => {
+    const textPart = Object.create({ get digests() { return [{ ...digests[0], redactionVersion }]; } });
+    textPart.embedding = [1];
+    return { owner: "o", actionId: "a", origin: "forget", kind: "text", mode: "full", text: textPart };
+  };
+  const plain = { owner: "o", actionId: "a", origin: "forget", kind: "text", mode: "full", text: { digests, embedding: [2] } };
+  assert.equal(factIncarnationBody(withGetter(1)), factIncarnationBody(plain));
+  assert.notEqual(factIncarnationBody(withGetter(1)), factIncarnationBody(withGetter(2)));
+  assert.equal(JSON.parse(factIncarnationBody(withGetter(1))).text.digests.length, 1);
+});
