@@ -7,21 +7,25 @@ const numbers = new Intl.NumberFormat('en-US', { maximumSignificantDigits: 6 });
 const currencyNumbers = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const currencyCodes = new Set(Intl.supportedValuesOf('currency'));
 
-/** @param {string} unit */
-const amountFormatter = unit => currencyCodes.has(unit) ? currencyNumbers : numbers;
+/** @param {number} value @param {boolean} currency */
+function formatNumber(value, currency) {
+  if (!currency) return numbers.format(value);
+  const formatted = currencyNumbers.format(value);
+  return value !== 0 && (formatted === '0.00' || formatted === '-0.00') ? numbers.format(value) : formatted;
+}
 
 /** @param {number} value @param {string} unit */
 function amount(value, unit) {
-  const formatter = amountFormatter(unit);
-  const formatted = formatter.format(value);
+  const currency = currencyCodes.has(unit);
+  const formatted = formatNumber(value, currency);
   if (unit === 'USD') return '$' + formatted;
-  if (formatter === currencyNumbers) return unit + ' ' + formatted;
+  if (currency) return unit + ' ' + formatted;
   return formatted + (unit && unit !== 'steps' ? ' ' + unit : '');
 }
 
 /** @param {number} value @param {string} unit */
 function displayedValue(value, unit) {
-  return Number.isFinite(value) ? Number(amountFormatter(unit).format(value).replaceAll(',', '')) : value;
+  return Number.isFinite(value) ? Number(formatNumber(value, currencyCodes.has(unit)).replaceAll(',', '')) : value;
 }
 
 /** @param {string} text */

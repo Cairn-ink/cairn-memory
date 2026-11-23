@@ -48,12 +48,12 @@ function orderSources(receipts) {
 
 /** @typedef {ReturnType<typeof orderSources>} Sources */
 
-/** @param {Sources} sources @param {ExtractedQuantity} quantity @param {boolean} standalone */
-function candidatesFor(sources, quantity, standalone) {
+/** @param {Sources} sources @param {Sources} fallback @param {ExtractedQuantity} quantity @param {boolean} standalone */
+function candidatesFor(sources, fallback, quantity, standalone) {
   const terms = [quantity.measure, quantity.category];
   const values = sources.filter(source => source.sentences.some(sentence => sentence.values.has(quantity.value)));
-  const local = values.filter(source => source.sentences.some(sentence =>
-    sentence.values.has(quantity.value) && receiptMatchesTerms(sentence.text, terms)));
+  const local = standalone ? values.filter(source => source.sentences.some(sentence =>
+    sentence.values.has(quantity.value) && receiptMatchesTerms(sentence.text, terms))) : [];
   const matching = local.length ? local : values.filter(source => receiptMatchesTerms(source.receipt.content, terms));
   if (matching.length) {
     // A standalone attribution has no saved rows to tell it whether a reply repeats evidence.
@@ -64,35 +64,41 @@ function candidatesFor(sources, quantity, standalone) {
     }
     return matching;
   }
-  return values.length ? values : sources.slice(0, 1);
+  return values.length ? values : fallback;
 }
 
 /**
- * @param {Pick<LedgerReconciliation, 'memoryId' | 'quantities' | 'citedReceipts' | 'captureTimeMs' | 'existingRows'>} capture
+ * @param {Omit<LedgerReconciliation, 'textHash'> & { textHash?: string }} capture
  * @param {boolean} standalone
  * @returns {LedgerRowAttribution[]}
  */
-function additionalAttributions({ memoryId, quantities, citedReceipts, captureTimeMs, existingRows }, standalone) {
+function additionalAttributions({ memoryId, textHash, quantities, citedReceipts, captureTimeMs, existingRows }, standalone) {
   const sources = orderSources(citedReceipts);
   if (!sources.length) return [];
 
   const cited = new Set(sources.map(source => source.receipt.receiptId));
-  const occupied = new Set();
+  const memoryRows = existingRows.filter(row => row.memoryId === memoryId);
+  const occupied = new Set(memoryRows.filter(row => row.textHash === textHash).map(row => row.receiptId));
+  const newSources = sources.filter(source => !occupied.has(source.receipt.receiptId));
+  const preferred = [...newSources, ...sources.filter(source => occupied.has(source.receipt.receiptId))];
+  const fallback = sources.slice(0, 1);
   const covered = new Map();
   /** @type {Map<string, Map<string, number>>} */
   const nextOrdinals = new Map();
-  for (const row of existingRows) {
-    if (row.memoryId !== memoryId || !cited.has(row.receiptId)) continue;
-    occupied.add(row.receiptId);
+  for (const row of memoryRows) {
     const key = JSON.stringify(identity(row));
-    covered.set(key, (covered.get(key) ?? 0) + 1);
+    const onCitedReceipt = cited.has(row.receiptId);
+    if (row.textHash === textHash && (onCitedReceipt || !newSources.length)) {
+      covered.set(key, (covered.get(key) ?? 0) + 1);
+    }
+    if (!onCitedReceipt) continue;
+
+    // A retained old-hash row still occupies its storage key.
     let ordinals = nextOrdinals.get(key);
     if (!ordinals) nextOrdinals.set(key, ordinals = new Map());
     ordinals.set(row.receiptId, Math.max(ordinals.get(row.receiptId) ?? 0, row.ordinal + 1));
   }
 
-  const unused = sources.filter(source => !occupied.has(source.receipt.receiptId));
-  const eligible = unused.length ? unused : sources;
   /** @type {Map<string, { candidates: Sources, assigned: number, ordinals: Map<string, number> }>} */
   const assignments = new Map();
   const rows = [];
@@ -106,7 +112,7 @@ function additionalAttributions({ memoryId, quantities, citedReceipts, captureTi
 
     let assignment = assignments.get(key);
     if (!assignment) {
-      assignment = { candidates: candidatesFor(eligible, quantity, standalone), assigned: 0,
+      assignment = { candidates: candidatesFor(preferred, fallback, quantity, standalone), assigned: 0,
         ordinals: nextOrdinals.get(key) ?? new Map() };
       assignments.set(key, assignment);
     }

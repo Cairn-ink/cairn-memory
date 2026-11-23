@@ -55,7 +55,7 @@ test('superset and subset extractions preserve the original coffee and date the 
   const coffee = quantity('coffee');
   const cake = quantity('cake');
   assert.deepEqual(bindings(reconcile([coffee, cake], [a, b])),
-    [['coffee', 'A', 0, yesterday], ['cake', 'B', 0, today]]);
+    [['coffee', 'A', 0, yesterday], ['cake', 'A', 0, yesterday]]);
   const first = reconcile([coffee], [a, b]);
   assert.deepEqual(bindings(first), [['coffee', 'A', 0, yesterday]]);
   const inserted = reconcile([cake, coffee], [b, a], first);
@@ -65,12 +65,12 @@ test('superset and subset extractions preserve the original coffee and date the 
   assert.deepEqual(reconcile([coffee], [a, b], [...first, ...inserted]), []);
 });
 
-test('reconciliation favors receipts with no saved row even when an occupied receipt matches the term', () => {
+test('reconciliation prefers an occupied value-and-term match over an unused value-only receipt', () => {
   const a = receipt('A', 'Coffee cost 6 USD. Cake cost 6 USD.');
   const b = receipt('B', 'It cost 6 USD.', today);
   const first = reconcile([quantity('coffee')], [a]);
   const inserted = reconcile([quantity('cake')], [a, b], first);
-  assert.deepEqual(bindings(inserted), [['cake', 'B', 0, today]]);
+  assert.deepEqual(bindings(inserted), [['cake', 'A', 0, yesterday]]);
 });
 
 test('a second equal purchase citing only a new receipt adds $6 and replay inserts nothing', () => {
@@ -196,7 +196,7 @@ test('small non-currency totals and averages retain their non-zero values', () =
     assert.equal(Number(displayed[1].replaceAll(',', '')), value, body);
     assert.equal(Number(displayed[2].replaceAll(',', '')), value, body);
   }
-  assert.match(ledger.digest([row({ value: 0.004 })], [], window).body, /Spend: total \$0\.00/);
+  assert.match(ledger.digest([row({ value: 0.004 })], [], window).body, /Spend: total \$0\.004 in/);
   const speed = row({ measure: 'speed', unit: 'MPH', value: 0.004 });
   assert.match(ledger.digest([speed], [], window).body, /Speed: total 0\.004 MPH/);
 });
