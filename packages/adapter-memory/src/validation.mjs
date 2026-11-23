@@ -39,9 +39,9 @@ export function copyCaptureKey(key) {
 }
 
 /** Read indexed data once and ignore caller-provided traversal methods.
- * @template T @param {readonly T[]} values @returns {T[]}
+ * @template T @param {readonly T[]} values @param {{checkKeyCount?: boolean}} [options] @returns {T[]}
  */
-export function snapshotArray(values) {
+export function snapshotArray(values, { checkKeyCount = false } = {}) {
   const snapshot = [];
   try {
     if (!Array.isArray(values)) invalid();
@@ -50,6 +50,7 @@ export function snapshotArray(values) {
     const length = descriptor.value;
     if (!Number.isSafeInteger(length) || length < 0 || length > 0xffff_ffff ||
         !Object.is(length, Reflect.get(values, "length"))) invalid();
+    if (checkKeyCount && Object.keys(values).length !== length) invalid();
     for (let index = 0; index < length; index++) {
       const slot = Object.getOwnPropertyDescriptor(values, index);
       // The property read only checks for conflicting proxy traps.

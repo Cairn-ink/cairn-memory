@@ -29,6 +29,68 @@ function hydrate(adapter, refs) {
   return read(adapter, (tx) => adapter.hydrate.hydrate(tx, readScope, refs, "read"));
 }
 
+test("markFailed uses the indexed memory ID despite a different iterator result", async () => {
+  const adapter = createMemoryAdapter({ capabilities: { placement: true } });
+  const { memories, placement } = adapter;
+  const [firstMemory, secondMemory] = await write(adapter, async (tx) => [
+    await memories.insert(tx, scope, row, [], 0),
+    await memories.insert(tx, scope, row, [], 1),
+  ]);
+  const ids = Object.defineProperty([firstMemory.id], Symbol.iterator, {
+    value: function* () { yield secondMemory.id; },
+  });
+  await write(adapter, (tx) => placement.markFailed(tx, scope, ids, "invalid_model_output"));
+  const pending = await read(adapter, (tx) => placement.pending(tx, scope, { limit: 5 }));
+  assert.deepEqual(pending, [{ memoryId: secondMemory.id, revision: secondMemory.revision }]);
+});
+
+test("applyPlacement rejects an accessor guard before accessing state or committing", async () => {
+  const adapter = createMemoryAdapter({ capabilities: { placement: true } });
+  const { memories, placement, harness } = adapter;
+  const { id: memoryId, revision } = await write(adapter, (tx) => memories.insert(tx, scope, row, [], 0));
+  const { indexRevision } = await read(adapter, (tx) => placement.catalog(tx, scope, { cursor: null, limit: 5 }));
+  const proposal = { items: [{ memoryId, parentIds: [] }] };
+  let reads = 0;
+  const memoryRevisions = Object.defineProperty([], "0", {
+    enumerable: true,
+    get() { reads++; return { memoryId, revision }; },
+  });
+  const before = await harness.dump();
+  await assert.rejects(write(adapter, (tx) =>
+    placement.applyPlacement(tx, scope, { indexRevision, memoryRevisions }, proposal)), invalid);
+  // Catch the rejection inside the run. A write failure after state access poisons the run.
+  await write(adapter, async (tx) => {
+    await assert.rejects(
+      placement.applyPlacement(tx, scope, { indexRevision: indexRevision + 1, memoryRevisions }, proposal), invalid);
+  });
+  assert.equal(reads, 0);
+  assert.deepEqual(await harness.dump(), before);
+});
+
+test("applyPlacement rejects malformed proposal arrays before checking the index revision", async () => {
+  const adapter = createMemoryAdapter({ capabilities: { placement: true } });
+  const { memories, placement, harness } = adapter;
+  const { id: memoryId, revision } = await write(adapter, (tx) => memories.insert(tx, scope, row, [], 0));
+  const { indexRevision } = await read(adapter, (tx) => placement.catalog(tx, scope, { cursor: null, limit: 5 }));
+  const proposalItem = { memoryId, parentIds: [] };
+  const accessorItems = Object.defineProperty([], "0", { enumerable: true, get: () => proposalItem });
+  const lyingIds = new Proxy(["parent"], { get: (target, key) => key === "0" ? "other" : target[key] });
+  const accessorParentIds = Object.defineProperty([], "0", { enumerable: true, get: () => "parent" });
+  const before = await harness.dump();
+  await write(adapter, async (tx) => {
+    for (const items of [
+      accessorItems,
+      [{ ...proposalItem, parentIds: lyingIds }],
+      [{ ...proposalItem, newL1: { title: "Child", parentL2Ids: accessorParentIds } }],
+      Array(1),
+    ]) {
+      const basedOn = { indexRevision: indexRevision + 1, memoryRevisions: [{ memoryId, revision }] };
+      await assert.rejects(placement.applyPlacement(tx, scope, basedOn, { items }), invalid);
+    }
+  });
+  assert.deepEqual(await harness.dump(), before);
+});
+
 test("finish commits and replays the indexed item despite an empty iterator", async () => {
   const adapter = createMemoryAdapter({ now: () => 0 });
   const { token } = await claim(adapter);
