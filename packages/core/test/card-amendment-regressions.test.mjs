@@ -150,3 +150,29 @@ test("six same-day amendments keep the five latest insertions in insertion order
   assert.deepEqual(shown.amendments, amendments.slice(1));
   assert.deepEqual(shown.text.split("\n").slice(0, 5), amendments.slice(1).map(a => `${date}: ${a.sentence}`));
 });
+
+for (const [description, candidate, capture] of [
+  ["a NUL in the model value", change('"refresh_\u0000token":"sensitive-prefix password=long-password"'), makeCapture()],
+  ["a lone surrogate in the model value", change("Width is \uD8004."), makeCapture()],
+  ["a lone surrogate in the model quote", change("Width is 4.", `${quote}\uD800`), makeCapture(`${quote}\uD800`)],
+]) {
+  test(`amendment detection drops ${description} before verification`, async () => {
+    const model = makeModel([candidate]);
+    const { amendments, counters } = await detectCardAmendments({ model, capture, cards: [card] });
+
+    assert.equal(model.verifies.length, 0);
+    assert.deepEqual(amendments, []);
+    assert.equal(counters.ill_formed_model_text, 1);
+  });
+}
+
+test("amendment detection verifies and returns a well-formed model value", async () => {
+  const value = "Width is 4.";
+  const model = makeModel([change(value)]);
+  const { amendments, counters } = await detectCardAmendments({ model, capture: makeCapture(), cards: [card] });
+
+  assert.equal(model.verifies.length, 1);
+  assert.equal(amendments.length, 1);
+  assert.equal(amendments[0].amendment.sentence, value);
+  assert.equal(counters.ill_formed_model_text, undefined);
+});

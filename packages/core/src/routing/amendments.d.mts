@@ -49,7 +49,7 @@ export declare function buildDetectRequest(input: {
 
 export type ChangeCandidateDropReason =
   | "malformed" | "unknown_card" | "quote_not_verbatim" | "same_session" | "quote_from_assistant"
-  | "redaction_unavailable";
+  | "redaction_unavailable" | "ill_formed_model_text";
 
 export interface CheckedChange {
   card: AmendmentRequestCard;

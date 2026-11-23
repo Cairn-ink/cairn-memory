@@ -1,4 +1,5 @@
 import { countTokens as checkedTokenCount, MODEL_INPUT_TOKENS, modelRequestText } from "../capture/request-size.mjs";
+import { cleanContent } from "../privacy/text.mjs";
 import { compareUtf8 } from "../utf8.mjs";
 import { SYS_DETECT, SYS_VERIFY } from "./amendment-prompts.mjs";
 import { redactDocumentText } from "./redaction.mjs";
@@ -148,6 +149,10 @@ export function checkChangeCandidates({ changes, listedCards, captureMessages, c
     const { card_id: cardId, quote, new_value: value } = change;
     if (!nonblank(cardId) || !nonblank(quote) || !nonblank(value)) {
       drops.malformed = (drops.malformed ?? 0) + 1;
+      continue;
+    }
+    if (cleanContent(value) !== value || cleanContent(quote) !== quote) {
+      drops.ill_formed_model_text = (drops.ill_formed_model_text ?? 0) + 1;
       continue;
     }
     const card = byId.get(cardId);
