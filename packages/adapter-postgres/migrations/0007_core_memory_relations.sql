@@ -16,6 +16,7 @@ BEGIN
 END;
 $$;
 
+-- No foreign keys into memories (hosted convention): hosts remove relation rows in the same transaction that deletes a memory.
 CREATE TABLE IF NOT EXISTS memory_supersessions (
   user_id text NOT NULL,
   previous_memory_id text NOT NULL,
@@ -27,10 +28,6 @@ CREATE TABLE IF NOT EXISTS memory_supersessions (
   CONSTRAINT memory_supersessions_pkey PRIMARY KEY (previous_memory_id),
   CONSTRAINT memory_supersessions_user_id_users_id_fk
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  CONSTRAINT memory_supersessions_previous_memory_id_memories_id_fk
-    FOREIGN KEY (previous_memory_id) REFERENCES memories(id) ON DELETE CASCADE,
-  CONSTRAINT memory_supersessions_replacement_memory_id_memories_id_fk
-    FOREIGN KEY (replacement_memory_id) REFERENCES memories(id) ON DELETE CASCADE,
   CONSTRAINT memory_supersessions_distinct_check CHECK (previous_memory_id <> replacement_memory_id),
   CONSTRAINT memory_supersessions_revision_check CHECK (previous_revision >= 1 AND replacement_revision >= 1),
   CONSTRAINT memory_supersessions_receipts_check CHECK (cardinality(receipt_ids) <= 4)
@@ -52,10 +49,6 @@ CREATE TABLE IF NOT EXISTS memory_conflicts (
     PRIMARY KEY (left_memory_id, left_revision, right_memory_id, right_revision, relation, source),
   CONSTRAINT memory_conflicts_user_id_users_id_fk
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  CONSTRAINT memory_conflicts_left_memory_id_memories_id_fk
-    FOREIGN KEY (left_memory_id) REFERENCES memories(id) ON DELETE CASCADE,
-  CONSTRAINT memory_conflicts_right_memory_id_memories_id_fk
-    FOREIGN KEY (right_memory_id) REFERENCES memories(id) ON DELETE CASCADE,
   CONSTRAINT memory_conflicts_relation_check CHECK (relation = 'contradicts'),
   CONSTRAINT memory_conflicts_source_check CHECK (source IN ('explicit-hint', 'inferred-hint')),
   CONSTRAINT memory_conflicts_order_check CHECK ((left_memory_id COLLATE "C") < right_memory_id),
