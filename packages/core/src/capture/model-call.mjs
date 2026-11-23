@@ -186,6 +186,10 @@ async function call(model, method, request, options) {
   if (gate) {
     try { await gate.assertOpen(gateOwner, 'dispatch'); }
     catch (error) { throw modelError(error, failureCode); }
+    // The gate await is the only await after the engine's last pre-dispatch deadline read, so a
+    // deadline that expired during it must stop the send. Synchronous: nothing may await between
+    // this check and the provider invocation. Without a gate the engine's read sequence is kept.
+    checkDispatch();
   }
   checkAbort();
   try {

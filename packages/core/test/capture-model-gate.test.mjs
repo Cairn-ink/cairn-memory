@@ -118,3 +118,19 @@ test('post-send gate also fences a rejected provider call', async () => {
   await assert.rejects(callModel(model, 'extract', request, { owner, gate }), { code: 'capture_evidence_closed' });
   assert.deepEqual(trace, ['pre-send', 'count', 'dispatch', 'call', 'post-send']);
 });
+
+test('a deadline that expires during the dispatch gate stops the send with zero provider calls', async () => {
+  let now = 0;
+  let outbound = 0;
+  const diagnostics = [];
+  const { createCaptureDeadline } = await import('../src/capture/deadline.mjs');
+  const deadline = createCaptureDeadline(10, { monotonicMs: () => now });
+  const gate = { async assertOpen(givenOwner, phase) {
+    assert.equal(givenOwner, owner);
+    if (phase === 'dispatch') now = 10;
+  } };
+  const model = { contextWindow: 8192, countTokens: () => 1, async call() { outbound++; return { items: [] }; } };
+  await assert.rejects(callModel(model, 'extract', request, { owner, gate, deadline,
+    onDiagnostic: event => diagnostics.push(event) }), { code: 'model_timeout' });
+  assert.equal(outbound, 0);
+});
