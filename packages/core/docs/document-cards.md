@@ -121,3 +121,55 @@ nonempty, and add the returned amendments' source messages to that item's
 sources. The suffix keeps up to five amendments in ascending date order
 and drops the oldest first when the item is short of space. The precedence
 sentence is part of the suffix budget.
+
+## Find
+
+Enable `documentCardSearch` with `documentCards` and implement the optional
+`documentCardCandidates` port. Its `lexical` and `vector` methods use the
+ordinary candidate signatures. Return only visible cards in the
+`RetrievalScope` and its read snapshot. Exclude hidden and tombstoned cards.
+Set `ref.type` to `"card"` and `ref.namespace` to the card's namespace. Order
+vector rows by distance ascending, then `updatedAtUs` descending, then ID
+descending by UTF-8 bytes. Pass `null` for a vector channel when it is
+unavailable or its `coverage.complete` is false.
+
+Index and embed exactly `documentCardSearchText(card)`. It is the stored title,
+two newlines, and the body. A null or empty title yields the body alone. The
+stored fields are already redacted. Use `DOCUMENT_CARD_SEARCH_TEXT_VERSION`
+(currently `1`) to gate lexical reindexing and re-embedding when the text
+format changes.
+
+Run `visibleDocumentCardRows` on each card candidate list before fusion so
+only visible cards contribute ranks and scores. Its loader supplies a
+`DocumentCardVisibilityInput` for the ref from the same read snapshot. The
+helper preserves row order and counts drops by reason. It drops non-card
+refs, missing inputs, loader failures, identity mismatches, and hidden or
+uncertain verdicts. Run the final visibility check before delivery in the
+same snapshot.
+
+Use `fuseHostedWithCards` as the reference ranking function. It sorts each
+memory or card lexical list by score descending and each vector list by
+distance ascending. Ties use `updatedAtUs` descending and ID descending by
+UTF-8 bytes. In hybrid mode, each of the four lists contributes at most
+50 candidates. For each item, add `0.5 / (60 + lexicalRank)` and
+`1 / (60 + vectorRank)` for its available ranks, counted from one in its
+own lists. With the floor enabled, vector-only items survive at distance
+`0.45` or closer. The function orders the union by score and the same
+tie-break, then applies offset paging. A null card vector channel leaves
+memories' vector scores intact. Empty card lists produce exactly
+`fuseHosted` output.
+
+With both vector channels null, the function merges both full lexical lists
+by `0.5 / (60 + lexicalRank)` using the rank within each list and the same
+tie-break. It preserves the original rows and counts all merged rows in
+`total` before paging. Memory and card store scores are incomparable.
+Callers must preserve the returned ranking order as-is. An empty card list
+produces exactly `fuseHostedLexicalOnly` output. Adding cards preserves the
+relative order of memories.
+
+For a visible card in the page, return `documentCardFindItem(card, query)`
+alongside typed memory items. It returns `type: "card"`, `id`, `title`,
+`date`, `excerpt`, and `truncated`. The excerpt uses the same line scoring as
+`selectDocumentPiece`, breaks ties by first nonblank line, and clips the
+selected line to `maxChars` Unicode code points (default 240). `truncated`
+indicates that the line was clipped.

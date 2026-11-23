@@ -1,3 +1,4 @@
+import { CoreError } from "../errors.mjs";
 import { caseInsensitiveWords, SPACE, WORD } from "./text.mjs";
 
 const WHOLE = new RegExp(
@@ -27,6 +28,20 @@ function overlap(line, query) {
     if (query.has(pair)) count++;
   }
   return count;
+}
+
+/** @param {string[]} lines @param {Set<string>} queryBigrams */
+function bestDocumentLine(lines, queryBigrams) {
+  let best = 0;
+  let score = 0;
+  for (const [index, line] of lines.entries()) {
+    const candidateScore = overlap(line, queryBigrams);
+    if (candidateScore > score) {
+      best = index;
+      score = candidateScore;
+    }
+  }
+  return { best, score };
 }
 
 /** @param {string} text @param {number} budget @param {(text: string) => number} countTokens */
@@ -196,9 +211,8 @@ export function selectDocumentPiece({ body }, query, { maxTokens, countTokens })
 
   const lines = body.split("\n");
   const queryBigrams = bigrams(query);
-  const scores = lines.map(line => overlap(line, queryBigrams));
-  const best = scores.indexOf(Math.max(...scores));
-  if (scores[best] > 0 && countTokens(lines[best]) > WINDOW_LIMIT) {
+  const { best, score } = bestDocumentLine(lines, queryBigrams);
+  if (score > 0 && countTokens(lines[best]) > WINDOW_LIMIT) {
     const window = oversizedWindow(lines[best], queryBigrams, countTokens);
     return { body: withHeading(lines, best, window, countTokens), kind: "excerpt" };
   }
@@ -225,4 +239,26 @@ export function selectDocumentPiece({ body }, query, { maxTokens, countTokens })
     window = tokenPrefix(window, WINDOW_LIMIT, countTokens) || Array.from(window)[0] || "";
   }
   return { body: withHeading(lines, lo, window), kind: "excerpt" };
+}
+
+/**
+ * @param {Pick<import("./index.mjs").DocumentCardFindItem, "id" | "title" | "date"> & { body: string }} card
+ * @param {string} query
+ * @param {{ maxChars?: number }} [options]
+ * @returns {import("./index.mjs").DocumentCardFindItem}
+ */
+export function documentCardFindItem({ id, title, date, body }, query, { maxChars = 240 } = {}) {
+  if (!Number.isSafeInteger(maxChars) || maxChars < 1) throw new CoreError("invalid_input");
+
+  const lines = body.split("\n").filter(line => line.trim());
+  const { best } = bestDocumentLine(lines, bigrams(query));
+  const line = lines[best] ?? body;
+  let end = 0;
+  let chars = 0;
+  for (const point of line) {
+    if (chars === maxChars) break;
+    end += point.length;
+    chars++;
+  }
+  return { type: "card", id, title, date, excerpt: line.slice(0, end), truncated: end < line.length };
 }

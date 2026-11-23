@@ -1,6 +1,6 @@
 import { CoreError, decideWrite, planDuplicateMerge } from "@cairn-ink/core";
 import { indexRevisionAfterRun } from "./unit-of-work.mjs";
-import { captureMessageTimes, copyCaptureFailure, copyCaptureKey, copyFinishItems, snapshotArray,
+import { admissionScope, captureMessageTimes, copyCaptureFailure, copyFinishItems, snapshotArray,
   validateTime } from "./validation.mjs";
 
 /** @typedef {import("@cairn-ink/core/ports").CaptureKey} CaptureKey */
@@ -38,23 +38,6 @@ function liveClaim(state, token, nowMs) {
 /** @param {string} token */
 function validateToken(token) {
   if (typeof token !== "string") throw new CoreError("invalid_input");
-}
-
-/** @param {Tx} tx @param {CaptureKey} key */
-function admissionScope(tx, key) {
-  /** @type {CaptureKey["scope"] | undefined} */
-  let scope;
-  /** @type {string | undefined} */
-  let owner;
-  return {
-    get owner() {
-      scope = key?.scope;
-      owner = scope?.owner;
-      // Leave missing or malformed owners to input validation after the transaction guard.
-      return typeof owner === "string" && owner ? owner : tx.owner;
-    },
-    copyKey: () => copyCaptureKey(key, owner, scope?.namespace),
-  };
 }
 
 /** @param {FinishResult} stored @param {boolean} pending */
