@@ -343,10 +343,82 @@ export const PRIVACY_MATCH_CASES = [
         equal(other.blockedMessages, [4, 5], "All-client window must block inside and unknown times");
         equal(other.blockedSession, false, "Window matching without a session must leave the session open");
         const noClient = await suppressions.snapshot(tx, scope, { occurredAtMs });
-        equal(noClient.blockedMessages, [], "Snapshot window matching requires a client");
+        equal(noClient.blockedMessages, [0, 1, 2, 3, 4, 5], "Client-specific window must block every position without a client");
         const incomparable = await suppressions.snapshot(tx, scope, { passages });
         equal(new Set(incomparable.passages.map(({ fact }) => fact.actionId)), new Set(["matching-text", "incomparable"]),
           "Snapshot must retain an ineligible passage fact");
+      });
+    },
+  },
+  {
+    id: "K-SNAP-F3", title: "applies owner-wide window bounds without a client", needs: [],
+    async run(ctx) {
+      await ctx.harness.seedFact(ctx.owner, {
+        ...factBase(ctx, "window"), kind: "window", client: null, window: { startMs: 10, endMs: 20 },
+      });
+      const { uow, suppressions } = ctx.adapter;
+      const scope = ctx.scope(null);
+      await uow.run(ctx.owner, { readOnly: true }, async (tx) => {
+        const result = await suppressions.snapshot(tx, scope, { occurredAtMs: [9, 10, 15, 20, 21] });
+        equal(result.blockedMessages, [1, 2], "Owner-wide window must use half-open bounds without a client");
+      });
+    },
+  },
+  {
+    id: "K-SNAP-F4", title: "applies the unknown time flag without a client", needs: [],
+    async run(ctx) {
+      await ctx.harness.seedFact(ctx.owner, {
+        ...factBase(ctx, "window"), kind: "window", client: null, window: { startMs: 10, endMs: 20 },
+      });
+      const { uow, suppressions } = ctx.adapter;
+      const scope = ctx.scope(null);
+      const candidates = { occurredAtMs: [null] };
+      const snapshot = () => uow.run(ctx.owner, { readOnly: true }, (tx) => suppressions.snapshot(tx, scope, candidates));
+      equal((await snapshot()).blockedMessages, [], "Owner-wide window must admit unknown time by default");
+      await ctx.harness.seedFact(ctx.owner, {
+        ...factBase(ctx, "unknown-window"), kind: "window", client: null, window: { startMs: 30, endMs: 40 }, unknownTime: true,
+      });
+      equal((await snapshot()).blockedMessages, [0], "Owner-wide window must block unknown time when enabled");
+    },
+  },
+  {
+    id: "K-SNAP-F5", title: "blocks every position without a client against a client-specific window", needs: [],
+    async run(ctx) {
+      await ctx.harness.seedFact(ctx.owner, {
+        ...factBase(ctx, "window"), kind: "window", client, window: { startMs: 10, endMs: 20 },
+      });
+      const { uow, suppressions } = ctx.adapter;
+      const scope = ctx.scope(null);
+      await uow.run(ctx.owner, { readOnly: true }, async (tx) => {
+        const result = await suppressions.snapshot(tx, scope, { occurredAtMs: [9, 10, 15, 20, 21, null] });
+        equal(result.blockedMessages, [0, 1, 2, 3, 4, 5], "Client-specific window must block all times without a client");
+      });
+    },
+  },
+  {
+    id: "K-SNAP-F6", title: "admits a known client outside the window's client scope", needs: [],
+    async run(ctx) {
+      await ctx.harness.seedFact(ctx.owner, {
+        ...factBase(ctx, "window"), kind: "window", client, window: { startMs: 10, endMs: 20 }, unknownTime: true,
+      });
+      const { uow, suppressions } = ctx.adapter;
+      const scope = ctx.scope(null);
+      await uow.run(ctx.owner, { readOnly: true }, async (tx) => {
+        const result = await suppressions.snapshot(tx, scope, { client: otherClient, occurredAtMs: [15, null] });
+        equal(result.blockedMessages, [], "Client-specific window must admit a different client");
+      });
+    },
+  },
+  {
+    id: "K-SNAP-F7", title: "admits clientless messages when no window facts apply", needs: [],
+    async run(ctx) {
+      await seedSession(ctx);
+      const { uow, suppressions } = ctx.adapter;
+      const scope = ctx.scope(null);
+      await uow.run(ctx.owner, { readOnly: true }, async (tx) => {
+        const result = await suppressions.snapshot(tx, scope, { sessionId, occurredAtMs: [15, null] });
+        equal(result.blockedMessages, [], "A snapshot without window facts must have no blocked messages");
+        equal(result.blockedSession, false, "A snapshot without a client must have no session block");
       });
     },
   },
