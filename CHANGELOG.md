@@ -1,11 +1,22 @@
 # Changelog
 
+## 0.3.11 — 2026-11-23: turn off capture for one session or project
+
+- Setting `CAIRN_MEMORY_CAPTURE=off` stops the plugin from capturing that
+  session: the Stop and PreCompact hooks and the session-start boundary exit
+  before reading the transcript, writing capture state or sending anything.
+  Set it with a shell export, or per project in `.claude/settings.local.json`
+  under `env`. Only the exact value `off` counts.
+- Recall still works and writes no capture state; the optional start telemetry
+  is unchanged. `/cairn-memory:status` says when capture is off for the
+  session; otherwise its output is unchanged.
+
 ## 0.6.11 — 2026-11-23
 
 - **On Linux, `daemon status --local` and `daemon stop --local` show and stop the store’s shared background servers.** The stop command can report that a server is still running. Setup records a capture identity for each connected tool, even with `--no-capture`, and uninstall keeps the engine while one is retained. A shared server normally exits about 30 seconds after its last session closes. To request an earlier stop, run `daemon stop --local` after closing the sessions and before uninstalling. When uninstall does remove the engine, it first asks these servers to stop, best effort. Uninstall keeps memory data.
 - **The bundled local engine records interrupted Claude Code session starts separately and preserves completed starts during recovery.** When this engine runs the capture hooks, a later save can recover an eligible start attempt recorded by installer 0.6.10. When capture stays enabled, rerunning setup keeps the existing hooks on their pinned engine.
 
-## 0.3.10 — 2026-11-22: capture windows say where they start and end
+## 0.3.10 — 2026-11-23: capture windows say where they start and end
 
 - Each capture request now also carries the byte range of the transcript window
   it belongs to, whether it is the window's last slice, and the transcript

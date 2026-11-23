@@ -12,7 +12,7 @@ let dataDir;
 let workerEnv;
 const token = process.env.CLAUDE_PLUGIN_OPTION_API_TOKEN ?? "";
 
-if (!token) process.exit(0);
+if (!token || process.env.CAIRN_MEMORY_CAPTURE === "off") process.exit(0);
 try {
   normalizeEndpoint(
     process.env.CLAUDE_PLUGIN_OPTION_API_ENDPOINT ?? "https://cairn.ink",
