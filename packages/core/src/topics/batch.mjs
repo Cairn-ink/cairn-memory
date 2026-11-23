@@ -15,6 +15,7 @@ export async function placePendingBatch({ uow, scope, placement, memories, class
 
 /** @param {PlacePendingOptions} options @returns {Promise<PlacePendingBatchResult>} */
 export async function placePending({ uow, scope, placement, memories, model, gate, deadline, signal, onDiagnostic }) {
+  if (typeof gate?.assertOpen !== 'function') throw new CoreError('invalid_input');
   return runPendingBatch({ uow, scope, placement, memories }, async (snapshot, catalog, validateFresh) => {
     const { proposal } = await classifyPlacement({
       model, snapshot, catalog, validateFresh, gate, deadline, owner: scope.owner, signal, onDiagnostic,
@@ -74,12 +75,15 @@ async function runPendingBatch({ uow, scope, placement, memories }, classify) {
     return { status: 'applied', ...result };
   } catch (error) {
     if (!isCoreError(error)) throw error;
-    const ids = basedOn.memoryRevisions.map(({ memoryId }) => memoryId);
-    try {
-      await uow.run(scope.owner, {}, (tx) => placement.markFailed(tx, scope, ids, error.code));
-    } catch {
-      // A failed receipt write cannot replace the original error.
+    const { code, kind, retryable } = error;
+    if (kind !== 'paused' && !retryable) {
+      const ids = basedOn.memoryRevisions.map(({ memoryId }) => memoryId);
+      try {
+        await uow.run(scope.owner, {}, (tx) => placement.markFailed(tx, scope, ids, code));
+      } catch {
+        // A failed receipt write cannot replace the original error.
+      }
     }
-    return { status: 'failed', error: { code: error.code, retryable: error.code === 'storage_busy' } };
+    return { status: 'failed', error: { code, retryable } };
   }
 }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CoreError, placePendingBatch } from '../src/index.mjs';
+import { CoreError, placePending, placePendingBatch } from '../src/index.mjs';
 
 const scope = { owner: 'owner', namespace: 'notes' };
 const a = { id: 'a', revision: 7, kind: 'fact', text: 'First note' };
@@ -82,10 +82,28 @@ function fixture({ rows = [a, b], pending = guards, topics = [topic('existing')]
   };
   return {
     run: () => placePendingBatch(options), calls, runModes, catalogRequests,
+    runWithModel: (modelOptions) => placePending({ ...options, ...modelOptions }),
     forget(id) { stored.delete(id); indexRevision++; },
     changeIndex() { indexRevision++; },
     changeMemory(id) { stored.set(id, { ...stored.get(id), revision: stored.get(id).revision + 1 }); },
   };
+}
+
+for (const [name, gateOptions] of [['omitted', {}], ['missing assertOpen', { gate: {} }]]) {
+  test(`placePending rejects a gate that is ${name} before reading or calling the model`, async () => {
+    const f = fixture({ topics: [] });
+    let modelCalls = 0;
+    const model = {
+      model: 'scripted', contextWindow: 8192, countTokens: () => 1,
+      async call() {
+        modelCalls++;
+        return { items: ['m0', 'm1'].map((memoryId) => ({ memoryId, parentIds: [] })) };
+      },
+    };
+    await assert.rejects(f.runWithModel({ model, ...gateOptions }), { code: 'invalid_input' });
+    assert.deepEqual(f.runModes, []);
+    assert.equal(modelCalls, 0);
+  });
 }
 
 test('idle skips catalog and classification', async () => {
@@ -123,12 +141,15 @@ test('missing and changed pending entries are excluded before classification', a
   assert.deepEqual(empty.calls, []);
 });
 
-test('CoreError produces a code-only failure receipt and reports the engine retry rule', async () => {
-  for (const [code, retryable] of [['invalid_model_output', false], ['storage_busy', true], ['provider_error', false]]) {
+test('CoreError reports retryability and records only failures that are neither paused nor retryable', async () => {
+  for (const [code, retryable, recorded] of [
+    ['storage_busy', true, false], ['provider_error', true, false],
+    ['capture_evidence_closed', false, false], ['invalid_model_output', false, true],
+  ]) {
     const f = fixture({ classify: () => { throw new CoreError(code); } });
     assert.deepEqual(await f.run(), { status: 'failed', error: { code, retryable } });
-    assert.deepEqual(f.calls.slice(1), [{ method: 'markFailed', memoryIds: [a.id, b.id], code }]);
-    assert.deepEqual(f.runModes, ['read', 'write']);
+    assert.deepEqual(f.calls.slice(1), recorded ? [{ method: 'markFailed', memoryIds: [a.id, b.id], code }] : [], code);
+    assert.deepEqual(f.runModes, recorded ? ['read', 'write'] : ['read'], code);
   }
 });
 

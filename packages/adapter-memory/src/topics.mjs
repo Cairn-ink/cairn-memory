@@ -149,18 +149,15 @@ export function createTopicStore(port, capabilities, newId, now) {
         const { newL1, newL2 } = coalesceNewTopics(items);
 
         const allocated = new Set([...state.topics.values()].flatMap(({ topics }) => [...topics.keys()]));
-        /** @param {Topic["level"]} level @param {{title: string, sourceIds: Set<string>}} plan @param {string[]} parentIds */
-        function create(level, { title, sourceIds }, parentIds) {
+        /** @param {Topic["level"]} level @param {string} title @param {string[]} parentIds @returns {StoredTopic} */
+        function create(level, title, parentIds) {
           const id = newId();
           if (typeof id !== "string" || !id || allocated.has(id)) throw new CoreError("internal_error");
           allocated.add(id);
-          /** @type {StoredTopic} */
-          const created = { id, level, title, parentIds, sources: [...sourceIds].map((memoryId) =>
-            ({ memoryId, revision: /** @type {number} */ (revisions.get(memoryId)) })) };
-          return created;
+          return { id, level, title, parentIds, sources: guards };
         }
-        const l2s = new Map([...newL2].map(([key, plan]) => [key, create("L2", plan, [])]));
-        const l1s = new Map([...newL1].map(([key, plan]) => [key, create("L1", plan, [
+        const l2s = new Map([...newL2].map(([key, plan]) => [key, create("L2", plan.title, [])]));
+        const l1s = new Map([...newL1].map(([key, plan]) => [key, create("L1", plan.title, [
           ...plan.parentL2Ids, ...[...plan.newParentKeys].map((parent) => /** @type {StoredTopic} */ (l2s.get(parent)).id),
         ])]));
         const created = [...l2s.values(), ...l1s.values()];

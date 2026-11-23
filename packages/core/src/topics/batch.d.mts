@@ -16,7 +16,8 @@ export interface PlacePendingBatchOptions {
 }
 
 export type PlacePendingOptions = Omit<PlacePendingBatchOptions, 'classify'> &
-  Pick<ClassifyPlacementOptions, 'model' | 'gate' | 'deadline' | 'signal' | 'onDiagnostic'>;
+  Pick<ClassifyPlacementOptions, 'model' | 'deadline' | 'signal' | 'onDiagnostic'> &
+  Required<Pick<ClassifyPlacementOptions, 'gate'>>;
 
 export type PlacePendingBatchResult =
   | { status: 'idle' }

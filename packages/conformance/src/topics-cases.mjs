@@ -295,4 +295,33 @@ export const topicCases = [
     equal((await store.catalog()).indexRevision, indexRevision, "Replay preserves the index revision");
     equal(await readDump(ctx.harness), before, "A full no-op writes nothing");
   }),
+
+  topicCase(14, "titles depend on every guarded memory in the placement batch", async (ctx) => {
+    const observed = [];
+    for (const change of ["erase", "correct"]) {
+      const store = setup(ctx, ctx.scope(change));
+      const proposer = await store.seed("A memory that proposes both topics");
+      const other = await store.seed("A second memory with title material");
+      const { createdTopics } = await store.apply([proposer, other], [
+        item(proposer, [], topic("Title material", [], "Title context")), item(other),
+      ]);
+      check(createdTopics.length === 2 && createdTopics.every(({ title }) => title !== null),
+        "The first memory proposes two topics with visible titles");
+      const titles = async () => {
+        const { items: catalog } = await store.catalog();
+        const { items: list } = await store.list();
+        return createdTopics.map(({ id }) => [catalog.find((entry) => entry.id === id)?.title,
+          list.find((entry) => entry.id === id)?.title]);
+      };
+      equal(await titles(), createdTopics.map(({ title }) => [title, title]), "Both titles are initially visible");
+      if (change === "erase") await store.erase(other);
+      else {
+        const corrected = await store.correct(other, "Corrected second memory");
+        check(corrected.revision !== other.revision, "Correcting the second memory must change its revision");
+      }
+      observed.push(await titles());
+    }
+    equal(observed, [[[null, null], [null, null]], [[null, null], [null, null]]],
+      "Catalog and list must hide both titles after erasing or correcting the non-proposing memory");
+  }),
 ];

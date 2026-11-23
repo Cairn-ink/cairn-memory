@@ -86,6 +86,7 @@ Each addendum is additive unless it says what it supersedes. Adapters written ag
 3. **TopicStore** replaces PlacementJournal under the `placement` capability. Titles read as null when any
    source is gone, forgotten, or off its recorded revision. A classified-unfiled outcome is excluded from
    pending work until the memory revision changes. The new error code is `moc_title_conflict` (kind `conflict`).
+   For privacy, `applyPlacement` binds every new topic title to all memory ids and guarded revisions in `basedOn.memoryRevisions`.
 
 ## Change requests
 

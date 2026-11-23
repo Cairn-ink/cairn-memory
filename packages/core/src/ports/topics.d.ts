@@ -33,7 +33,10 @@ export interface TopicStore {
     exhausted: boolean;
     indexRevision: number;
   }>;
-  /** Replaces memberships atomically and records unfiled outcomes at the guarded revision. */
+  /**
+   * Replaces memberships atomically and records unfiled outcomes at the guarded revision.
+   * Each new topic binds its title to every memory id and guarded revision in `basedOn.memoryRevisions`.
+   */
   applyPlacement(tx: Tx, scope: Scope, basedOn: { memoryRevisions: MemoryGuard[]; indexRevision: number },
     proposal: PlacementProposal): Promise<{
       placed: Array<{ memoryId: string; topicIds: string[] }>;
