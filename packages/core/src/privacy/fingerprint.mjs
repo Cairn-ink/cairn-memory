@@ -44,6 +44,18 @@ function sign(key, text) {
   return globalThis.crypto.subtle.sign("HMAC", key, encoder.encode(text));
 }
 
+/** @param {unknown} value @returns {Promise<CryptoKey>} */
+export async function validateFingerprintSigningKey(value) {
+  const key = /** @type {CryptoKey | null | undefined} */ (value);
+  if (key?.type !== "secret" || !key.usages.includes("sign")) throw new CoreError("invalid_input");
+  const algorithm = /** @type {HmacKeyAlgorithm} */ (key.algorithm);
+  if (algorithm.name !== "HMAC" || algorithm.hash.name !== "SHA-256" || algorithm.length !== 256) {
+    throw new CoreError("invalid_input");
+  }
+  await sign(key, "");
+  return key;
+}
+
 /** @param {object} labels @param {keyof FingerprintLabels} name */
 function labelValue(labels, name) {
   /** @type {unknown} */

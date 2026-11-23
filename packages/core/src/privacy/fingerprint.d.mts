@@ -20,6 +20,8 @@ export interface LegacyCaptureFingerprint {
 
 /** Validates a frozen record of non-empty string labels and returns a frozen snapshot. */
 export declare function validateFingerprintLabels(labels: unknown): FingerprintLabels;
+/** @internal Verifies signing with an empty input and returns the usable HMAC-SHA-256 key. */
+export declare function validateFingerprintSigningKey(value: unknown): Promise<CryptoKey>;
 /** Derives the key ID and per-user signing key using the supplied domains. Prefixes include their delimiters. */
 export declare function userFingerprintKey(secret: string | null, userId: string, labels: FingerprintLabels): Promise<FingerprintKey | null>;
 export declare function legacyExactMac(text: string, key: FingerprintKey, labels: FingerprintLabels): Promise<string>;

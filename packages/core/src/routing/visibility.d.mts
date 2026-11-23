@@ -1,7 +1,7 @@
 import type { ItemRef, Revision, Scope } from "../ports/common.d.ts";
 import type { DocumentCardRecord } from "../ports/document-card.d.ts";
 import type { FactMatchPolicy, FactMatchRow } from "../privacy/fact-match.mjs";
-import type { FingerprintKey } from "../privacy/fingerprint.mjs";
+import type { FingerprintKey, FingerprintLabels } from "../privacy/fingerprint.mjs";
 import type { StoredFact, TextFact } from "../suppression-fact.mjs";
 
 export type DocumentCardMemoryState =
@@ -28,8 +28,14 @@ export interface DocumentCardVisibilityInput {
   sourceWithheld?: boolean | null;
   /** Complete applicable text facts from the same scope and read snapshot for import and manual cards. */
   textFacts?: readonly TextFact[] | null;
-  /** The scope owner's memory fingerprint key. Null or omission means the key is unavailable. */
+  /** The scope owner's memory fingerprint key, derived with Core labels. Null or omission means the key is unavailable. */
   fingerprintKey?: FingerprintKey | null;
+  /**
+   * Evidence for legacy MAC aliases on import and manual cards. Derive the owner's key with these adapter labels.
+   * Pass both fingerprintKey and legacyFingerprint when the host holds both kinds of facts.
+   * Omitting either leaves facts that require that key fail-closed.
+   */
+  legacyFingerprint?: { key: FingerprintKey; labels: FingerprintLabels };
 }
 
 export type DocumentCardHiddenReason =

@@ -75,8 +75,8 @@ export const unitOfWorkCases = [
     },
   },
   {
-    id: "K-UOW-3", title: "takes the pause lock before the write lock", needs: [],
-    async run({ adapter: { uow }, owner, otherOwner, settleMs = 100, timeoutMs = DEFAULT_TIMEOUT_MS }) {
+    id: "K-UOW-3r", title: "takes the pause lock for read-only runs", needs: [],
+    async run({ adapter: { uow }, owner, settleMs = 100, timeoutMs = DEFAULT_TIMEOUT_MS }) {
       const phaseMs = timeoutMs + settleMs;
       const readerStarted = gate();
       const releaseReader = gate();
@@ -103,7 +103,12 @@ export const unitOfWorkCases = [
       } finally {
         releaseReader.release(undefined);
       }
-
+    },
+  },
+  {
+    id: "K-UOW-3", title: "serializes writers with the pause and write locks", needs: [],
+    async run({ adapter: { uow }, owner, otherOwner, settleMs = 100, timeoutMs = DEFAULT_TIMEOUT_MS }) {
+      const phaseMs = timeoutMs + settleMs;
       const started = gate();
       const release = gate();
       try {

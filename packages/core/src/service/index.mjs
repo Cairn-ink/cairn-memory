@@ -2,8 +2,11 @@ import { CAPABILITIES } from "../capabilities.mjs";
 import { identifier, validateObject } from "../capture/validate.mjs";
 import { FUSION_PRESETS, NEAR_DUPLICATE_DISTANCE } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
+import { captureMethods } from "./capture.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
+import { findMethod, readMethod } from "./find.mjs";
 import { forgetMethod } from "./forget.mjs";
+import { importMethod } from "./import.mjs";
 import { pauseMethods } from "./pause.mjs";
 import { recallMethod } from "./recall.mjs";
 import { readMethods } from "./reads.mjs";
@@ -42,7 +45,11 @@ function freezeConfig(input) {
     validateObject(deadlines, ["extract", "qualify", "reconcile", "classify", "rationale"]);
   }
   const stages = { ...deadlines };
-  for (const duration of Object.values(stages)) positiveInteger(duration);
+  for (const duration of Object.values(stages)) {
+    positiveInteger(duration);
+    // Match the capture runner's deadline range.
+    if (duration > 120_000) throw new CoreError("invalid_input");
+  }
 
   return Object.freeze({
     nearDuplicateDistance, lexicalWeight, vectorWeight, rowShingles, leaseMs,
@@ -102,14 +109,14 @@ export function createMemoryService(input) {
       ...pauseMethods(deps.storage),
       ...readMethods(deps.storage, deps.tokens),
       ...writeMethods(deps),
+      ...captureMethods(deps),
       forget: forgetMethod(deps),
       recall: recallMethod(deps),
-      captureStatus: placeholder,
+      find: findMethod(deps),
+      read: readMethod(deps.storage),
       listRawMessages: placeholder,
-      importMemories: placeholder,
+      importMemories: importMethod(deps),
       importRawMessages: placeholder,
-      enqueueCapture: placeholder,
-      runCapture: placeholder,
     };
   } catch (error) {
     throw entryError(error);
