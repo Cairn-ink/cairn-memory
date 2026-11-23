@@ -1,4 +1,5 @@
-import { caseInsensitiveWords, normalizeDocumentText, NONSPACE, SPACE, WORD } from "./text.mjs";
+import { redactDocumentText } from "./redaction.mjs";
+import { caseInsensitiveWords, NONSPACE, SPACE, WORD } from "./text.mjs";
 
 const LINE_START = String.raw`(?<![^\n])`;
 const LINE_END = String.raw`(?![^\n])`;
@@ -40,7 +41,11 @@ export function routeDocumentMessages(messages) {
   let extractOnly = 0;
 
   for (const [position, message] of messages.entries()) {
-    const content = normalizeDocumentText(message.content);
+    const content = redactDocumentText(message.content);
+    if (content === null) {
+      extractOnly++;
+      continue;
+    }
     const assistant = message.role === "assistant";
     const explicit = message.role === "user" && content.length >= 200 && REMEMBER.test(content);
     const weighted = content.length + 2 * (content.match(CJK)?.length ?? 0);

@@ -75,9 +75,10 @@ export interface DocumentPiece {
 }
 
 /**
- * Uses complete lines for a truncated head when possible. An oversized first line or
- * matching line uses the longest code-point prefix that fits its token limit.
- * An excerpt may add the preceding heading and an ellipsis outside the window limit.
+ * Uses complete lines for a truncated head when possible, with a code-point prefix
+ * for an oversized first line. An oversized matching line is excerpted around the
+ * match, with a preceding heading when the combined excerpt fits. Excerpts made
+ * from complete lines may add the heading and ellipsis outside the window limit.
  */
 export declare function selectDocumentPiece(
   card: Pick<DocumentCard, "body">,
