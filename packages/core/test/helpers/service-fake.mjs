@@ -78,7 +78,12 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         type: "memory", scope: row.scope, memoryId: row.id, revision: row.revision,
         digests: [{ alg: "sha256", value: row.textHash.slice(7), pipeline: "core", redactionVersion: 3, keyId: null }],
         embedding: row.embedding?.vector,
-      }, { rowShingles: false, vectorSuppression: storage.capabilities.vectorSuppression === true }) !== false));
+      }, {
+        rowShingles: false,
+        // Hosted src/memory/suppressions.ts:127–136 exempts later explicit saves from distance.
+        vectorSuppression: storage.capabilities.vectorSuppression === true &&
+          !(["mcp", "web"].includes(row.source.kind) && row.createdAtMs > stored.createdAtMs),
+      }) !== false));
   }
 
   function candidates(tx, { owner, namespaces }) {
@@ -226,8 +231,8 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       calls.push(["embed", [...texts]]);
       assert.equal(active.size, 0, "embed outside the UoW");
       assert.ok(dispatchReady, "embed starts in the dispatch continuation");
-      await hooks.embed?.();
-      return [Float32Array.of(1)];
+      const vector = await hooks.embed?.(texts);
+      return [vector ?? Float32Array.of(1)];
     };
     fake.deps.clock.nowMs = () => ++nowMs;
     fake.deps.clock.sha256Hex = async value => {
@@ -338,7 +343,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
     storage.suppressions = {
       async snapshot(tx, scope, candidates) {
         record(tx, scope.owner, "suppressions.snapshot", scope, candidates);
-        await hooks.snapshot?.();
+        await hooks.snapshot?.(candidates);
         return { blockedSession: false, blockedMessages: [],
           passages: tx.facts.filter(stored => {
             const { fact } = stored;

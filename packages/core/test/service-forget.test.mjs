@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
 import {
-  allDigests, CoreError, factIncarnationBody, normalizeForHash, redactHostedCurrent, SUPPRESSION_DISTANCE,
+  allDigests, CoreError, factIncarnationBody, normalizeForHash, SUPPRESSION_DISTANCE,
 } from "@cairn-ink/core";
 import { createMemoryService } from "@cairn-ink/core/service";
 import { hostedScope as scope, memory, serviceFake } from "./helpers/service-fake.mjs";
@@ -53,30 +53,81 @@ test("forget erases the target and keeps an identical row hidden in recent, sess
   assert.deepEqual(await visibleIds(service), Array(3).fill(["other"]));
 });
 
-test("OW1 refuses exact and prefixed re-saves of forgotten wording and admits different wording", async () => {
-  const { service } = setup({ rows: [row("target")] });
+const cosine = 0.85;
+const nearVector = Float32Array.of(cosine, Math.sqrt(1 - cosine ** 2));
+
+for (const kind of ["mcp", "web"]) {
+  test(`an explicit ${kind} rephrase at distance 0.15 is saved after forget`, async () => {
+    // Hosted test/memory/explicit-save-suppression.test.ts:7–17,87–100.
+    const original = "My synthetic test preference is jasmine tea.";
+    const correction = "My synthetic test preference is oolong tea.";
+    const explicitSource = { ...source, kind };
+    const { service, deps, hooks } = setup({
+      near: true, forgetting: { capabilities: { vectorSuppression: true } },
+    });
+    deps.embedder.dimensions = 2;
+    hooks.embed = ([text]) => text === correction.toLowerCase() ? nearVector : Float32Array.of(1, 0);
+    const saved = await service.save(scope, original, explicitSource);
+    assert.equal(saved.status, "saved");
+    assert.deepEqual(await service.forget(scope, saved.item.id, explicitSource), {
+      status: "forgotten", removedSimilar: 0,
+    });
+    const updated = await service.save(scope, correction, explicitSource);
+    assert.equal(updated.status, "saved");
+    assert.deepEqual(updated.item.embedding.vector, nearVector);
+    assert.deepEqual(await visibleIds(service), Array(3).fill([updated.item.id]));
+  });
+}
+
+test("explicit save admits a new favorite color after forgetting the old color", async () => {
+  // Hosted src/memory/suppressions.ts:131–149 and web/src/pages/legal/memory-privacy.tsx:157.
+  const { service } = setup({ rows: [row("target", "My favorite color is blue.")] });
   await service.forget(scope, "target", source);
-  for (const replay of [wording, "Earlier note for reference: " + wording]) {
-    assert.deepEqual(await service.save(scope, replay, source), { status: "suppressed" });
-  }
-  assert.equal((await service.save(scope, "Use the blue notebook for inventory.", source)).status, "saved");
+  assert.equal((await service.save(scope, "My favorite color is red.", source)).status, "saved");
 });
 
-test("a secret-bearing legacy row leaves keyed aliases for the original and hosted spellings", async () => {
-  const original = 'The fixture field is {"client_secret":"example-only-value"}.';
-  const hosted = redactHostedCurrent(original);
-  assert.notEqual(hosted, original);
-  const { service, committed } = setup({ rows: [row("target", original)] });
-  assert.deepEqual(await service.forget(scope, "target", source), { status: "forgotten", removedSimilar: 0 });
-  const [{ fact }] = committed(scope.owner).facts;
-  assert.ok(fact.text.digests.every(({ alg, keyId }) => alg === "hmac" && keyId === "fixture-key"));
-  assert.ok(fact.text.digests.some(({ redactionVersion }) => redactionVersion === 1));
-  assert.ok(fact.text.digests.some(({ redactionVersion }) => redactionVersion === 2));
-  assert.ok(!JSON.stringify(fact).includes("example-only-value"));
-  for (const variant of [original, hosted]) {
-    assert.deepEqual(await service.save(scope, variant, source), { status: "suppressed" });
+for (const operation of ["save", "correct"]) {
+  test(`${operation} succeeds with zero forget facts when only candidate snapshots are bounded`, async () => {
+    // Hosted src/memory/index.ts:193–198,213–226 and src/memory/suppressions.ts:152–164.
+    const target = row("target");
+    const { service, hooks, committed } = setup({ rows: [target] });
+    assert.deepEqual(committed(scope.owner).facts, []);
+    hooks.snapshot = candidates => {
+      if (candidates.passages === undefined) throw new CoreError("ineligible");
+    };
+    const text = "Use the blue notebook for inventory.";
+    const result = operation === "save" ? await service.save(scope, text, source)
+      : await service.correct(scope, target.id, target.revision, text, source);
+    assert.equal(result.status, "saved");
+  });
+}
+
+test("a forgotten exact paste is suppressed and a prefixed single passage is saved", async () => {
+  // Hosted test/memory/explicit-save-suppression.test.ts:140–145 and src/memory/suppressions.ts:138–149.
+  for (const [original, prefix] of [[wording, "Earlier note for reference: "], ["tea", "Drink of choice: "]]) {
+    const { service } = setup({ rows: [row("target", original)] });
+    await service.forget(scope, "target", source);
+    assert.deepEqual(await service.save(scope, original, source), { status: "suppressed" });
+    assert.equal((await service.save(scope, prefix + original, source)).status, "saved");
   }
 });
+
+for (const origin of ["forget", "edit"]) {
+  test(`${origin} detects the synthetic credential in raw text before NFKC`, async () => {
+    const target = row("target", "Ｘsk-0123456789abcdef");
+    // Use the OW1 fixture for edit to inspect the fact independently of the adapter's MAC-only row filtering.
+    const { service, committed } = setup({ rows: [target], ...(origin === "edit" && { forgetting: undefined }) });
+    if (origin === "forget") {
+      assert.deepEqual(await service.forget(scope, target.id, source), { status: "forgotten", removedSimilar: 0 });
+    } else {
+      assert.equal((await service.correct(scope, target.id, target.revision, "Use the blue notebook.", source)).status, "saved");
+    }
+    const [{ fact }] = committed(scope.owner).facts;
+    assert.equal(fact.origin, origin);
+    assert.ok(fact.text.digests.length > 0);
+    assert.ok(fact.text.digests.every(({ alg, keyId }) => alg === "hmac" && keyId === "fixture-key"));
+  });
+}
 
 test("an absent row takes precedence over a missing or failing key and writes nothing", async () => {
   const { service, hooks, mutations, calls } = setup({ hasKey: false });
@@ -131,21 +182,46 @@ test("removedSimilar counts visible exact and inclusive distance neighbours befo
   assert.equal(calls.filter(([method]) => method === "embed" || method === "gate").length, 0);
 });
 
+for (const vectorSuppression of [true, false]) {
+  const nearDuplicate = !vectorSuppression;
+  test(`forget counts exact matches with vectorSuppression=${vectorSuppression}, nearDuplicate=${nearDuplicate}`, async () => {
+    const target = row("target", wording, embedded([1, 0]));
+    const { service, calls } = setup({
+      rows: [target, row("exact"), row("neighbor", "A close match", embedded(nearVector))],
+      near: nearDuplicate, forgetting: { capabilities: { vectorSuppression } },
+    });
+    assert.deepEqual(await service.forget(scope, target.id, source), { status: "forgotten", removedSimilar: 1 });
+    assert.deepEqual(calls.find(([method]) => method === "memories.findDuplicates"), [
+      "memories.findDuplicates", scope, { textHash: target.textHash, embedding: undefined },
+      { nearDistance: SUPPRESSION_DISTANCE, excludeId: target.id },
+    ]);
+    assert.deepEqual(await visibleIds(service), Array(3).fill(vectorSuppression ? [] : ["neighbor"]));
+  });
+}
+
 const root = { client: "capture-client", sessionId: "root" };
 const fork = { ...root, sessionId: "fork" };
 const firstMessage = { ...root, messageId: "message-one" };
 const secondMessage = { ...fork, messageId: "message-two" };
 
+function spanReceipt(sourceMessage, sessionKeyHash) {
+  return { ...sourceMessage, sessionKeyHash, messageKey: sourceMessage.messageId, role: "user", occurredAtMs: null };
+}
+
+function rawSpan({ sessionKeyHash, messageKey }) {
+  return {
+    ...scope, kind: "rawSpan", origin: "forget", actionId: "span-fixture", messageKey, sessionKeyHash,
+    contentDigest: "b".repeat(64), startUtf16: 0, endUtf16: 8,
+  };
+}
+
 function lineageSetup(overrides = {}) {
   const target = row("target", wording, { source: { kind: "capture", ...root } });
   const closure = [root, fork];
-  const receipts = [firstMessage, secondMessage, firstMessage].map(message => ({
-    ...message, role: "user", occurredAtMs: null,
-  }));
-  const spans = [{
-    ...scope, kind: "rawSpan", origin: "forget", actionId: "span-fixture", messageKey: firstMessage.messageId,
-    sessionKeyHash: "a".repeat(64), contentDigest: "b".repeat(64), startUtf16: 0, endUtf16: 8,
-  }];
+  const first = spanReceipt(firstMessage, "a".repeat(64));
+  const second = spanReceipt(secondMessage, "b".repeat(64));
+  const receipts = [first, second, first];
+  const spans = [rawSpan(first)];
   const capabilities = {
     spanLineage: true, rawSpans: true, sessionLineage: true, rawArchive: true, conflictEdges: true,
     documentCards: true, quantityLedger: true, forgetLog: true, ...overrides,
@@ -180,6 +256,41 @@ test("forget writes and cascades in order on one transaction, hiding every resol
   assert.deepEqual(effects.invalidatedConflicts, ["target"]);
   assert.deepEqual(effects.quantityDrops, [{ by: "memoryId", id: "target" }]);
   assert.deepEqual(facts.map(({ fact, epoch }) => [fact.kind, epoch]), [["text", 1n], ["rawSpan", 2n]]);
+});
+
+test("card lineage requires both session and message identity for every span", async () => {
+  const first = { client: root.client, sessionId: "A", messageId: "1" };
+  const second = { ...first, sessionId: "B" };
+  const receiptA = spanReceipt(first, "a".repeat(64));
+  const receiptB = spanReceipt(second, "b".repeat(64));
+  const capabilities = { documentCards: true, spanLineage: true, rawSpans: true };
+  const matched = setup({
+    rows: [row("target")],
+    forgetting: { capabilities, receipts: [receiptA, receiptB], spans: [rawSpan(receiptA), rawSpan(receiptB)] },
+  });
+  assert.deepEqual(await matched.service.forget(scope, "target", source), { status: "forgotten", removedSimilar: 0 });
+  assert.deepEqual(matched.committed(scope.owner).effects.hiddenCards, [
+    { sourceMemoryId: "target" }, { sourceMessage: first }, { sourceMessage: second },
+  ]);
+
+  const mismatched = setup({
+    rows: [row("target")], forgetting: { capabilities, receipts: [receiptB], spans: [rawSpan(receiptA)] },
+  });
+  const before = mismatched.committed(scope.owner);
+  await assert.rejects(() => mismatched.service.forget(scope, "target", source), code("raw_lineage_unavailable"));
+  assert.deepEqual(mismatched.committed(scope.owner), before);
+  assert.deepEqual(mismatched.mutations, []);
+});
+
+test("resolved spans must be written and a store refusal rolls back the entire forget", async () => {
+  const { service, hooks, committed, mutations } = lineageSetup({ rawSpans: false });
+  const before = committed(scope.owner);
+  hooks.fault = method => {
+    if (method === "suppressions.writeSpan") throw new CoreError("capability_unavailable");
+  };
+  await assert.rejects(() => service.forget(scope, "target", source), code("capability_unavailable"));
+  assert.deepEqual(committed(scope.owner), before);
+  assert.ok(mutations.some(({ method, args }) => method === "suppressions.writeFact" && args[0].kind === "rawSpan"));
 });
 
 for (const [port, selector] of [
@@ -223,7 +334,7 @@ test("missing Raw and span capabilities skip only their steps", async () => {
 });
 
 test("forget fences a direct source without lineage proof and purges only by text", async () => {
-  const { service, committed } = lineageSetup({ sessionLineage: false, rawSpans: false });
+  const { service, committed } = lineageSetup({ sessionLineage: false });
   await service.forget(scope, "target", source);
   const { effects, facts } = committed(scope.owner);
   assert.deepEqual(effects.fences, [root]);
@@ -231,19 +342,12 @@ test("forget fences a direct source without lineage proof and purges only by tex
   assert.deepEqual(effects.purges, [[facts[0]]]);
 });
 
-test("missing clear card lineage and missing vector count support fail closed", async () => {
-  const fixtures = [
-    [setup({
-      rows: [row("target")], forgetting: { capabilities: { documentCards: true }, receipts: null },
-    }), "raw_lineage_unavailable"],
-    [setup({
-      rows: [row("target", wording, embedded([1, 0]))], forgetting: { capabilities: { vectorSuppression: true } },
-    }), "capability_unavailable"],
-  ];
-  for (const [{ service, mutations }, expected] of fixtures) {
-    await assert.rejects(() => service.forget(scope, "target", source), code(expected));
-    assert.deepEqual(mutations, []);
-  }
+test("missing clear card lineage fails closed", async () => {
+  const { service, mutations } = setup({
+    rows: [row("target")], forgetting: { capabilities: { documentCards: true }, receipts: null },
+  });
+  await assert.rejects(() => service.forget(scope, "target", source), code("raw_lineage_unavailable"));
+  assert.deepEqual(mutations, []);
 });
 
 test("repeated forget reuses the same fact, but an incarnation conflict rolls back", async () => {

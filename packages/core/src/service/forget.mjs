@@ -9,6 +9,7 @@ import { predecessorFact, scopedRow, sourceOf } from "./writes.mjs";
 /** @import {Capability, Capabilities} from "../capabilities.mjs" */
 /** @import {ForgetStep} from "../privacy/forget-steps.mjs" */
 /** @import {DocumentCardSession, DocumentCardSourceMessage, MemoryRow, ProvenClosure, Scope, StorageAdapter, Tx} from "../ports/index.d.ts" */
+/** @import {RawSpanFact} from "../suppression-fact.mjs" */
 
 /** @param {Capabilities} flags @param {ForgetStep} step @param {Capability} capability */
 function enabled(flags, step, capability) {
@@ -22,11 +23,8 @@ function sourceId(value) {
 
 /** @param {StorageAdapter} storage @param {Tx} tx @param {Scope} scope @param {MemoryRow} row */
 async function similarCount({ memories, capabilities }, tx, scope, row) {
-  if (typeof memories.findDuplicates !== "function" ||
-      (row.embedding && capabilities.vectorSuppression && !capabilities.nearDuplicate)) {
-    throw new CoreError("capability_unavailable");
-  }
-  const embedding = capabilities.nearDuplicate ? row.embedding?.vector : undefined;
+  if (typeof memories.findDuplicates !== "function") return 0;
+  const embedding = capabilities.vectorSuppression && capabilities.nearDuplicate ? row.embedding?.vector : undefined;
   const [matches] = await memories.findDuplicates(tx, scope, [{ textHash: row.textHash, embedding }],
     { nearDistance: SUPPRESSION_DISTANCE, excludeId: row.id });
   const ids = new Set();
@@ -38,8 +36,10 @@ async function similarCount({ memories, capabilities }, tx, scope, row) {
   return ids.size;
 }
 
-/** @param {StorageAdapter["hydrate"]} hydrate @param {Tx} tx @param {Scope} scope @param {MemoryRow} row */
-async function cardSources(hydrate, tx, scope, row) {
+/** @param {StorageAdapter["hydrate"]} hydrate @param {Tx} tx @param {Scope} scope @param {MemoryRow} row
+ * @param {readonly RawSpanFact[]} spans
+ */
+async function cardSources(hydrate, tx, scope, row, spans) {
   if (typeof hydrate?.hydrate !== "function") throw new CoreError("raw_lineage_unavailable");
   const items = await hydrate.hydrate(tx, { owner: scope.owner, namespaces: [scope.namespace] },
     [{ type: "memory", id: row.id, namespace: scope.namespace }], "read");
@@ -47,11 +47,29 @@ async function cardSources(hydrate, tx, scope, row) {
   if (!Array.isArray(source?.receipts)) throw new CoreError("raw_lineage_unavailable");
   /** @type {Map<string, DocumentCardSourceMessage>} */
   const messages = new Map();
-  for (const { client, sessionId, messageId } of source.receipts) {
+  /** @type {Map<string, string>} */
+  const clearBySpan = new Map();
+  for (const receipt of source.receipts) {
+    const { client, sessionId, messageId } = receipt;
     if (!sourceId(client) || !sourceId(sessionId) || !sourceId(messageId)) throw new CoreError("raw_lineage_unavailable");
-    messages.set(JSON.stringify([client, sessionId, messageId]), { client, sessionId, messageId });
+    const clearId = JSON.stringify([client, sessionId, messageId]);
+    messages.set(clearId, { client, sessionId, messageId });
+    // The adapter owns the opaque span keys. A receipt may project both keys alongside its clear identity.
+    if ("sessionKeyHash" in receipt && "messageKey" in receipt &&
+        typeof receipt.sessionKeyHash === "string" && /^[0-9a-f]{64}$/u.test(receipt.sessionKeyHash) &&
+        sourceId(receipt.messageKey)) {
+      const spanId = JSON.stringify([receipt.sessionKeyHash, receipt.messageKey]);
+      const previous = clearBySpan.get(spanId);
+      if (previous !== undefined && previous !== clearId) throw new CoreError("raw_lineage_unavailable");
+      clearBySpan.set(spanId, clearId);
+    }
   }
-  return messages;
+  for (const { sessionKeyHash, messageKey } of spans) {
+    if (!clearBySpan.has(JSON.stringify([sessionKeyHash, messageKey]))) {
+      throw new CoreError("raw_lineage_unavailable");
+    }
+  }
+  return messages.values();
 }
 
 /**
@@ -92,11 +110,7 @@ export function forgetMethod({ storage, clock }) {
         ? await spanLineage?.resolveSpans(tx, scope, id) : [];
       if (!Array.isArray(spans)) throw new CoreError("raw_lineage_unavailable");
       const hideCards = enabled(capabilities, "dependents.invalidate", "documentCards");
-      const messages = hideCards ? await cardSources(hydrate, tx, scope, row) : new Map();
-      const messageIds = new Set(Array.from(messages.values(), ({ messageId }) => messageId));
-      if (hideCards && spans.some(span => !messageIds.has(span.messageKey))) {
-        throw new CoreError("raw_lineage_unavailable");
-      }
+      const messages = hideCards ? await cardSources(hydrate, tx, scope, row, spans) : [];
 
       const fenceRaw = enabled(capabilities, "session.fence", "rawArchive");
       /** @type {Map<string, DocumentCardSession>} */
@@ -141,7 +155,7 @@ export function forgetMethod({ storage, clock }) {
       }
 
       // receipts.suppress
-      if (enabled(capabilities, "receipts.suppress", "spanLineage") && capabilities.rawSpans) {
+      if (enabled(capabilities, "receipts.suppress", "spanLineage")) {
         for (const resolved of spans) {
           if (resolved.kind !== "rawSpan" || resolved.owner !== owner || (resolved.namespace ?? null) !== namespace) {
             throw new CoreError("raw_lineage_unavailable");
@@ -156,7 +170,7 @@ export function forgetMethod({ storage, clock }) {
       if (hideCards) {
         if (typeof documentCards?.hideWhere !== "function") throw new CoreError("capability_unavailable");
         await documentCards.hideWhere(tx, scope, { sourceMemoryId: id }, "forget");
-        for (const sourceMessage of messages.values()) {
+        for (const sourceMessage of messages) {
           await documentCards.hideWhere(tx, scope, { sourceMessage }, "forget");
         }
         for (const session of sessions.values()) await documentCards.hideWhere(tx, scope, { session }, "forget");

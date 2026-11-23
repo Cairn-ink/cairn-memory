@@ -2,10 +2,10 @@ import { identifier, isWellFormedText, revision, validateObject } from "../captu
 import { NEAR_DUPLICATE_DISTANCE } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
 import { decideWrite, planCorrect, planDuplicateMerge } from "../memory-policy/index.mjs";
-import { allDigests, fingerprintLegacyCapture, legacyExactMac, passageShingles } from "../privacy/fingerprint.mjs";
-import { PRIVACY_REDACTION_VERSIONS, redactHostedCurrent, redactV1 } from "../privacy/redact.mjs";
+import { allDigests, coreDigest, fingerprintLegacyCapture, legacyExactMac, passageShingles } from "../privacy/fingerprint.mjs";
+import { PRIVACY_REDACTION_VERSIONS, redactCore, redactHostedCurrent, redactV1 } from "../privacy/redact.mjs";
 import { cleanContent, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
-import { blocksMemoryPassage, withholdsAnyPassage } from "../privacy/withholds.mjs";
+import { blocksMemoryPassage } from "../privacy/withholds.mjs";
 import { factIncarnationBody, validateSuppressionFact } from "../suppression-fact.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
 import { pauseResult } from "./pause.mjs";
@@ -97,13 +97,13 @@ async function passagesOf(raw, text, key, clock) {
  */
 export async function predecessorFact({ owner, namespace }, row, key, clock, origin) {
   const oldText = prepareCoreText(row.text);
-  const heldSecret = normalizeForHash(cleanContent(row.text)) !== normalizeForHash(oldText);
-  const [aliases, legacyMac, shingles] = await Promise.all([
-    allDigests(row.text, key),
+  const heldSecret = [row.text, cleanContent(row.text).normalize("NFKC")].some(text =>
+    redactCore(text) !== text || redactV1(text) !== text || redactHostedCurrent(text) !== text);
+  const [digests, legacyMac, shingles] = await Promise.all([
+    heldSecret ? coreDigest(row.text, key).then(digest => [digest]) : allDigests(row.text, key),
     legacyExactMac(row.text, key, coreLabels),
     passageShingles(row.text, key, coreLabels),
   ]);
-  const digests = heldSecret ? aliases.filter(digest => digest.alg === "hmac") : aliases;
   const { v1, core } = PRIVACY_REDACTION_VERSIONS;
   addDigest(digests, {
     alg: "hmac", value: legacyMac, pipeline: "core",
@@ -219,16 +219,7 @@ export function writeMethods({ storage, embedder, gate, clock }) {
     // Legacy domains are adapter-owned. A MAC-only fact without comparable evidence cannot prove a miss.
     if (facts.some(({ text }) => text.digests.every(digest => digest.alg === "hmac") &&
         text.digests.some(digest => digest.pipeline !== "core"))) return true;
-    if (blocksMemoryPassage(passages, facts, key, undefined, edit ?? undefined)) return true;
-    // Some adapters prefilter candidates without shingles. Check forget facts
-    // without that filter in the same Tx to catch longer passages that replay
-    // the forgotten wording. Edit facts retain their existing exemption.
-    const complete = await suppressions.snapshot(tx, scope, {
-      client: source.client ?? undefined, sessionId: source.sessionId ?? undefined,
-    });
-    return complete.blockedSession || complete.blockedMessages.length > 0 ||
-      withholdsAnyPassage(passages, complete.passages.map(({ fact }) => fact).filter(fact =>
-        fact.origin === "forget" && fact.owner === scope.owner && (fact.namespace ?? null) === scope.namespace));
+    return blocksMemoryPassage(passages, facts, key, undefined, edit ?? undefined);
   }
 
   return {
