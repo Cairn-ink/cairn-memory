@@ -30,11 +30,24 @@ capture resolver. A missing key, state, or Raw verdict hides the card.
 
 Source-less cards have stored origin `"import"` or `"manual"` and
 `sourceMessage: null`. An unknown origin or a source message that conflicts
-with the stored origin hides the card. The Raw verdict is optional for
-source-less cards. Every linked memory must be visible at its recorded
-revision in the same snapshot. To forget a card with zero linked memories,
-call the store's scoped `hide(tx, scope, cardId, reason)` by ID. Hidden and
-tombstoned IDs are excluded from reads and stay tombstoned on replay.
+with the stored origin hides the card. Every linked memory must be present,
+current and visible at its recorded revision in the same snapshot. An empty
+source set is valid and can use an empty `memoryStates` map.
+
+For a source-less card, pass the stored `card.title` and `card.body` to
+`documentCardVisible`. Use `null` if the stored title is absent. Supply
+`textFacts` as the complete applicable set of unwrapped `TextFact` objects
+from that scope and read snapshot. Use `[]` when there are no applicable
+facts. Pass the owner's memory `fingerprintKey` when available. Core checks
+the title and body separately with memory fingerprints, exact digests and
+keyed shingle containment at the shared 0.6 threshold. A match in either
+field returns `text_withheld`. Unknown or malformed facts and unavailable
+key evidence needed for comparison withhold the card.
+
+To forget a source-less card, use the store's scoped
+`hide(tx, scope, cardId, reason)` by ID and apply text withholding as for
+memories. The store excludes hidden and tombstoned IDs from reads and keeps
+them tombstoned on replay.
 
 For `documentCardSourceWithheld`, supply the complete Raw match projections
 for the card's source message, plus all applicable facts and the Raw matching
