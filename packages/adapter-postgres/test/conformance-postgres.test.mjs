@@ -4,10 +4,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { Socket } from "node:net";
 import test from "node:test";
 import { Pool } from "pg";
-import {
-  ADMISSION_CASES, CAPTURE_CASES, CASES, IMPORT_TIME_CASES, KEYED_DIGEST_CASES, PRIVACY_CASES, PRIVACY_MATCH_CASES,
-  RAW_CASES, SOURCE_FILTER_CASES, TOPIC_CASES, runCase,
-} from "@cairn-ink/conformance";
+import * as kit from "@cairn-ink/conformance";
 import { capabilities, factIncarnationBody } from "@cairn-ink/core";
 import { toPostgresError } from "../src/errors.mjs";
 import { applyMigrations, createPostgresSuppressionStore, createPostgresUnitOfWork } from "../src/index.mjs";
@@ -247,7 +244,10 @@ const notApplicable = {
   snapshot: ["K-SNAP-1"],
   hydrate: ["K-HYD-1"],
   supersession: ["K-MEM-5h", "K-HYD-2"],
-  fence: ["K-FEN-1"],
+  fence: ["K-FEN-1", "K-FEN-I1", "K-FEN-I2", "K-FEN-I3"],
+  "retrieval window": ["K-RET-W1", "K-RET-W2", "K-SNAP-W1", "K-RAW-W1"],
+  supersessionEdges: ["K-REL-1", "K-REL-2", "K-REL-3", "K-REL-6", "K-REL-7", "K-REL-9", "K-REL-10", "K-REL-11", "K-REL-12"],
+  conflictEdges: ["K-REL-4", "K-REL-5", "K-REL-8"],
   pause: ["K-PAUSE-1"],
   keys: ["K-KEY-1", "K-KD-1", "K-KD-2", "K-KD-3", "K-KD-4", "K-KD-5", "K-KD-6"],
   "suppressions.snapshot": ["K-SNAP-F1", "K-SNAP-F3", "K-SNAP-F4", "K-SNAP-F5", "K-SNAP-F6", "K-SNAP-F7"],
@@ -264,11 +264,11 @@ const notApplicable = {
     "T-TOP-9", "T-TOP-10", "T-TOP-11", "T-TOP-12", "T-TOP-13", "T-TOP-14", "T-TOP-15"],
 };
 
-const allCases = [
-  ...CASES, ...PRIVACY_CASES, ...PRIVACY_MATCH_CASES, ...CAPTURE_CASES, ...ADMISSION_CASES, ...IMPORT_TIME_CASES,
-  ...SOURCE_FILTER_CASES,
-  ...KEYED_DIGEST_CASES, ...RAW_CASES, ...TOPIC_CASES,
-];
+const { PRIVACY_CASES, runCase } = kit;
+// Every exported case list, so a new kit export cannot escape the inventory below.
+/** @type {ConformanceCase[]} */
+const allCases = Object.values(kit).filter((value) => Array.isArray(value) && value.length > 0 &&
+  value.every((entry) => typeof entry?.id === "string" && typeof entry?.run === "function")).flat();
 assert.deepEqual(
   [...selected, ...Object.values(notApplicable).flat()].sort(),
   allCases.map(({ id }) => id).sort(),
