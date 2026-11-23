@@ -1,0 +1,128 @@
+capture_events	column	arrival_order	bigint NOT NULL
+capture_events	column	client	text NOT NULL
+capture_events	column	event_id	text NOT NULL
+capture_events	column	memory_count	integer NOT NULL
+capture_events	column	raw_archive_from	integer NULL
+capture_events	column	raw_lineage_key_id	text NULL
+capture_events	column	raw_request	jsonb NOT NULL
+capture_events	column	raw_window_messages	jsonb NULL
+capture_events	column	received_at	timestamp with time zone NOT NULL
+capture_events	column	session_id	text NOT NULL
+capture_events	column	status	text NOT NULL
+capture_events	column	user_id	text NOT NULL
+capture_events	column	window	jsonb NULL
+capture_events	constraint	capture_events_status	CHECK ((status = ANY (ARRAY['pending'::text, 'queued'::text, 'completed'::text])))
+capture_events	constraint	capture_events_user_id_client_event_id_pk	PRIMARY KEY (user_id, client, event_id)
+capture_events	constraint	capture_events_user_id_users_id_fk	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+capture_events	index	capture_events_session_arrival_idx	CREATE INDEX capture_events_session_arrival_idx ON public.capture_events USING btree (user_id, client, session_id, arrival_order)
+capture_events	index	capture_events_user_id_client_event_id_pk	CREATE UNIQUE INDEX capture_events_user_id_client_event_id_pk ON public.capture_events USING btree (user_id, client, event_id)
+capture_raw_fences	column	client	text NOT NULL
+capture_raw_fences	column	session_id	text NOT NULL
+capture_raw_fences	column	user_id	text NOT NULL
+capture_raw_fences	constraint	capture_raw_fences_user_id_client_session_id_pk	PRIMARY KEY (user_id, client, session_id)
+capture_raw_fences	constraint	capture_raw_fences_user_id_users_id_fk	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+capture_raw_fences	index	capture_raw_fences_user_id_client_session_id_pk	CREATE UNIQUE INDEX capture_raw_fences_user_id_client_session_id_pk ON public.capture_raw_fences USING btree (user_id, client, session_id)
+capture_raw_lineage	column	client	text NOT NULL
+capture_raw_lineage	column	content_mac	text NULL
+capture_raw_lineage	column	message_mac	text NOT NULL
+capture_raw_lineage	column	session_id	text NOT NULL
+capture_raw_lineage	column	user_id	text NOT NULL
+capture_raw_lineage	constraint	capture_raw_lineage_session_message_proof	UNIQUE NULLS NOT DISTINCT (user_id, client, session_id, message_mac, content_mac)
+capture_raw_lineage	constraint	capture_raw_lineage_user_id_users_id_fk	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+capture_raw_lineage	index	capture_raw_lineage_message_idx	CREATE INDEX capture_raw_lineage_message_idx ON public.capture_raw_lineage USING btree (user_id, client, message_mac, content_mac, session_id)
+capture_raw_lineage	index	capture_raw_lineage_session_message_proof	CREATE UNIQUE INDEX capture_raw_lineage_session_message_proof ON public.capture_raw_lineage USING btree (user_id, client, session_id, message_mac, content_mac) NULLS NOT DISTINCT
+jobs	column	attempts	integer NOT NULL
+jobs	column	capture_id	text NOT NULL
+jobs	column	created_at	timestamp with time zone NOT NULL
+jobs	column	error_code	text NULL
+jobs	column	id	text NOT NULL
+jobs	column	kind	text NOT NULL
+jobs	column	status	text NOT NULL
+jobs	column	updated_at	timestamp with time zone NOT NULL
+jobs	column	user_id	text NOT NULL
+jobs	constraint	jobs_kind_check	CHECK ((kind = ANY (ARRAY['ingest'::text, 'import'::text])))
+jobs	constraint	jobs_pkey	PRIMARY KEY (id)
+jobs	constraint	jobs_status_check	CHECK ((status = ANY (ARRAY['queued'::text, 'running'::text, 'done'::text, 'failed'::text])))
+jobs	constraint	jobs_user_capture_unique	UNIQUE (user_id, capture_id)
+jobs	constraint	jobs_user_id_users_id_fk	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+jobs	index	jobs_pkey	CREATE UNIQUE INDEX jobs_pkey ON public.jobs USING btree (id)
+jobs	index	jobs_user_capture_unique	CREATE UNIQUE INDEX jobs_user_capture_unique ON public.jobs USING btree (user_id, capture_id)
+memories	column	created_at	timestamp with time zone NOT NULL
+memories	column	embedding	vector(1536) NOT NULL
+memories	column	embedding_model	text NOT NULL
+memories	column	id	text NOT NULL
+memories	column	kind	text NOT NULL
+memories	column	source_client	text NULL
+memories	column	source_kind	text NOT NULL
+memories	column	source_session_id	text NULL
+memories	column	text	text NOT NULL
+memories	column	text_hash	text NOT NULL
+memories	column	updated_at	timestamp with time zone NOT NULL
+memories	column	user_id	text NOT NULL
+memories	constraint	memories_kind_check	CHECK ((kind = ANY (ARRAY['fact'::text, 'preference'::text, 'decision'::text, 'instruction'::text, 'context'::text])))
+memories	constraint	memories_pkey	PRIMARY KEY (id)
+memories	constraint	memories_source_kind_check	CHECK ((source_kind = ANY (ARRAY['mcp'::text, 'plugin'::text, 'import'::text, 'web'::text])))
+memories	constraint	memories_user_id_users_id_fk	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+memories	constraint	memories_user_text_hash_unique	UNIQUE (user_id, text_hash)
+memories	index	memories_embedding_idx	CREATE INDEX memories_embedding_idx ON public.memories USING hnsw (embedding vector_cosine_ops)
+memories	index	memories_pkey	CREATE UNIQUE INDEX memories_pkey ON public.memories USING btree (id)
+memories	index	memories_text_idx	CREATE INDEX memories_text_idx ON public.memories USING pgroonga (text)
+memories	index	memories_user_recent_idx	CREATE INDEX memories_user_recent_idx ON public.memories USING btree (user_id, updated_at DESC, id DESC)
+memories	index	memories_user_text_hash_unique	CREATE UNIQUE INDEX memories_user_text_hash_unique ON public.memories USING btree (user_id, text_hash)
+memory_forget_log	column	forgotten_at	timestamp with time zone NOT NULL
+memory_forget_log	column	memory_id	text NOT NULL
+memory_forget_log	column	user_id	text NOT NULL
+memory_forget_log	constraint	memory_forget_log_user_id_memory_id_pk	PRIMARY KEY (user_id, memory_id)
+memory_forget_log	constraint	memory_forget_log_user_id_users_id_fk	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+memory_forget_log	index	memory_forget_log_forgotten_at_idx	CREATE INDEX memory_forget_log_forgotten_at_idx ON public.memory_forget_log USING btree (forgotten_at)
+memory_forget_log	index	memory_forget_log_user_id_memory_id_pk	CREATE UNIQUE INDEX memory_forget_log_user_id_memory_id_pk ON public.memory_forget_log USING btree (user_id, memory_id)
+memory_pause	column	generation	integer NOT NULL
+memory_pause	column	paused	boolean NOT NULL
+memory_pause	column	user_id	text NOT NULL
+memory_pause	constraint	memory_pause_generation	CHECK ((generation >= 0))
+memory_pause	constraint	memory_pause_pkey	PRIMARY KEY (user_id)
+memory_pause	constraint	memory_pause_user_id_users_id_fk	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+memory_pause	index	memory_pause_pkey	CREATE UNIQUE INDEX memory_pause_pkey ON public.memory_pause USING btree (user_id)
+raw_messages	column	client	text NOT NULL
+raw_messages	column	content	text NOT NULL
+raw_messages	column	created_at	timestamp with time zone NOT NULL
+raw_messages	column	id	text NOT NULL
+raw_messages	column	message_id	text NOT NULL
+raw_messages	column	occurred_at	timestamp with time zone NULL
+raw_messages	column	role	text NOT NULL
+raw_messages	column	seq	integer NULL
+raw_messages	column	session_id	text NOT NULL
+raw_messages	column	user_id	text NOT NULL
+raw_messages	constraint	raw_messages_pkey	PRIMARY KEY (id)
+raw_messages	constraint	raw_messages_role_check	CHECK ((role = ANY (ARRAY['user'::text, 'assistant'::text])))
+raw_messages	constraint	raw_messages_user_id_users_id_fk	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+raw_messages	constraint	raw_messages_user_message_unique	UNIQUE (user_id, client, session_id, message_id)
+raw_messages	index	raw_messages_content_idx	CREATE INDEX raw_messages_content_idx ON public.raw_messages USING pgroonga (content)
+raw_messages	index	raw_messages_pkey	CREATE UNIQUE INDEX raw_messages_pkey ON public.raw_messages USING btree (id)
+raw_messages	index	raw_messages_user_message_unique	CREATE UNIQUE INDEX raw_messages_user_message_unique ON public.raw_messages USING btree (user_id, client, session_id, message_id)
+raw_messages	index	raw_messages_user_session_idx	CREATE INDEX raw_messages_user_session_idx ON public.raw_messages USING btree (user_id, client, session_id, occurred_at, seq)
+suppressions	column	client	text NULL
+suppressions	column	created_at	timestamp with time zone NOT NULL
+suppressions	column	embedding	vector(1536) NULL
+suppressions	column	id	text NOT NULL
+suppressions	column	key_id	text NULL
+suppressions	column	kind	text NOT NULL
+suppressions	column	origin	text NULL
+suppressions	column	redaction_version	integer NOT NULL
+suppressions	column	session_id	text NULL
+suppressions	column	shingles	text[] NULL
+suppressions	column	text_hash	text NULL
+suppressions	column	text_hmac	text NULL
+suppressions	column	user_id	text NOT NULL
+suppressions	column	window_end	timestamp with time zone NULL
+suppressions	column	window_start	timestamp with time zone NULL
+suppressions	constraint	suppressions_key_id_check	CHECK (((shingles IS NULL) OR ((key_id IS NOT NULL) AND (key_id ~ '^[0-9a-f]{16}$'::text))))
+suppressions	constraint	suppressions_kind_check	CHECK ((((kind = 'text'::text) AND (text_hash IS NOT NULL) AND (embedding IS NOT NULL)) OR ((kind = 'session'::text) AND (client IS NOT NULL) AND (session_id IS NOT NULL)) OR ((kind = 'window'::text) AND (window_start IS NOT NULL) AND (window_end IS NOT NULL) AND (window_start < window_end))))
+suppressions	constraint	suppressions_origin_check	CHECK ((origin = ANY (ARRAY['forget'::text, 'correct'::text, 'backfill'::text, 'edit'::text])))
+suppressions	constraint	suppressions_pkey	PRIMARY KEY (id)
+suppressions	constraint	suppressions_user_id_users_id_fk	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+suppressions	index	suppressions_pkey	CREATE UNIQUE INDEX suppressions_pkey ON public.suppressions USING btree (id)
+suppressions	index	suppressions_user_kind_idx	CREATE INDEX suppressions_user_kind_idx ON public.suppressions USING btree (user_id, kind)
+users	column	id	text NOT NULL
+users	constraint	users_pkey	PRIMARY KEY (id)
+users	index	users_pkey	CREATE UNIQUE INDEX users_pkey ON public.users USING btree (id)
