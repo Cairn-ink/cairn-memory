@@ -9,7 +9,7 @@ export type AdapterFactory = {
 
 export type OpenedAdapter = {
   adapter: Pick<StorageAdapter, "capabilities" | "uow" | "memories" | "capture" |
-    "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "supersession" |
+    "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "supersession" | "conflicts" |
     "suppressions" | "pause" | "keys" | "placement" | "raw">;
   sessionRefs: "plain" | "hashed";
   harness: TestHarness;

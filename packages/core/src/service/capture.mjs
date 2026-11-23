@@ -4,7 +4,7 @@ import { countTokens, MODEL_OUTPUT_TOKENS, modelRequestText } from "../capture/r
 import { detach, identifier, isWellFormedText, validateDenseArray, validateObject } from "../capture/validate.mjs";
 import { CoreError, isErrorCode } from "../errors.mjs";
 import { plainExtractionSpec, validatePlainCandidates } from "../extraction/extraction.mjs";
-import { allDigests, fingerprintMemoryPassages } from "../privacy/fingerprint.mjs";
+import { fingerprintMemoryPassages } from "../privacy/fingerprint.mjs";
 import { redactCore } from "../privacy/redact.mjs";
 import { cleanContent, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
 import { requiresLegacyMacDomain, withholdsAnyPassage } from "../privacy/withholds.mjs";
@@ -118,9 +118,8 @@ function prepareCaptureCandidates(candidates, messages, { client, sessionId }, f
     const { rawContent: raw, kind, confidence } = candidate;
     const content = prepareCoreText(raw);
     if (!content || content === "[REDACTED]" || content.length > 600) throw new CoreError("invalid_model_output");
-    const [{ textHash }, digests, passages] = await Promise.all([
-      hashesOf(raw),
-      fingerprintKey ? allDigests(content, fingerprintKey) : undefined,
+    const [{ textHash, digests }, passages] = await Promise.all([
+      hashesOf(raw, content, fingerprintKey),
       fingerprintMemoryPassages(raw, content, fingerprintKey, text => clock.sha256Hex(text)),
     ]);
     const receipts = candidate.sourceIndices.map(index => {

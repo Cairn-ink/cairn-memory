@@ -1,11 +1,15 @@
 import { factHidesRow } from "../privacy/fact-match.mjs";
-import { fingerprintMemoryPassages } from "../privacy/fingerprint.mjs";
-import { prepareCoreText } from "../privacy/text.mjs";
+import {
+  fingerprintLegacyCapture, fingerprintMemoryPassages, validateFingerprintLabels, validateFingerprintSigningKey,
+} from "../privacy/fingerprint.mjs";
+import { PRIVACY_REDACTION_VERSIONS, redactHostedCurrent, redactV1 } from "../privacy/redact.mjs";
+import { cleanContent, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
 import { requiresLegacyMacDomain, snapshotReader, withholdsAnyPassage } from "../privacy/withholds.mjs";
 import { validateSuppressionFact } from "../suppression-fact.mjs";
 import { buildDocumentCard } from "./card.mjs";
 
 /** @import { ItemRef, Scope } from "../ports/common.d.ts" */
+/** @import { TextDigest } from "../suppression-fact.mjs" */
 /** @import { DocumentCardHiddenReason, DocumentCardRowDropReason, DocumentCardSourceWithheldInput, DocumentCardStalenessInput, DocumentCardVisibility, DocumentCardVisibilityInput, LoadDocumentCardVisibility, StaleReplacement, StaleReplacementInput } from "./visibility.mjs" */
 
 /** @param {unknown} value @returns {value is string} */
@@ -19,6 +23,39 @@ const natural = (value) => typeof value === "number" && Number.isSafeInteger(val
 
 /** @param {DocumentCardHiddenReason} reason @returns {DocumentCardVisibility} */
 const hidden = (reason) => ({ visible: false, reason });
+
+/** @typedef {NonNullable<DocumentCardVisibilityInput["legacyFingerprint"]>} LegacyFingerprint */
+
+/** @param {TextDigest} digest */
+const isLegacyMac = (digest) => digest.alg === "hmac" && digest.pipeline !== "core";
+
+/** @param {LegacyFingerprint} input @returns {Promise<LegacyFingerprint | null>} */
+async function readLegacyFingerprint(input) {
+  const { field } = snapshotReader();
+  const labels = validateFingerprintLabels(field(input, "labels"));
+  const key = field(input, "key");
+  if (!key || typeof key !== "object" || Array.isArray(key)) return null;
+  const id = field(key, "id");
+  if (typeof id !== "string" || !/^[0-9a-f]{16}$/u.test(id)) return null;
+  const signingKey = await validateFingerprintSigningKey(field(key, "signingKey"));
+  return { key: { id, signingKey }, labels };
+}
+
+/** @param {string} text @param {LegacyFingerprint} legacy
+ * @returns {Promise<import("../ports/privacy.d.ts").PassageFingerprint[]>} */
+function legacyCardPassages(text, { key, labels }) {
+  const original = cleanContent(text);
+  const { v1, hostedCurrent } = PRIVACY_REDACTION_VERSIONS;
+  const variants = new Map([
+    [normalizeForHash(original), v1],
+    [normalizeForHash(redactV1(original)), v1],
+    [normalizeForHash(redactHostedCurrent(original)), hostedCurrent],
+  ]);
+  return Promise.all(Array.from(variants, async ([variant, redactionVersion]) => {
+    const { text_hmac, shingles, key_id: keyId } = await fingerprintLegacyCapture(variant, key, labels);
+    return { digests: [{ alg: "hmac", value: text_hmac, pipeline: "hosted-v1", redactionVersion, keyId }], shingles, keyId };
+  }));
+}
 
 /** @param {DocumentCardVisibilityInput} input @returns {Promise<DocumentCardVisibility>} */
 export async function documentCardVisible(input) {
@@ -54,28 +91,79 @@ export async function documentCardVisible(input) {
     for (const source of card.sourceMemories) {
       if (!nonempty(source?.id) || !natural(source.revision)) return hidden("uncertain");
       const state = memoryStates.get(source.id);
+      if (messageBacked) {
+        if (state === undefined) return hidden("source_memory_missing");
+        if (state === null || typeof state !== "object" || Array.isArray(state)) return hidden("uncertain");
+        switch (state.status) {
+          case "forgotten":
+            return hidden("source_memory_forgotten");
+          case "suppressed":
+          case "unknown":
+            return hidden("source_memory_not_visible");
+          case "historical":
+          case "visible":
+            if (!natural(state.revision)) return hidden("uncertain");
+            break;
+          default:
+            return hidden("uncertain");
+        }
+        continue;
+      }
       if (!state) return hidden("source_memory_missing");
       if (state.status === "forgotten") return hidden("source_memory_forgotten");
       if (state.status !== "visible") return hidden("source_memory_not_visible");
       if (!natural(state.revision)) return hidden("uncertain");
-      if (!messageBacked && state.revision !== source.revision) return hidden("source_memory_not_visible");
+      if (state.revision !== source.revision) return hidden("source_memory_not_visible");
     }
 
     if (!messageBacked) {
       const { title, body } = card;
-      const { textFacts, fingerprintKey = null } = input;
+      const { textFacts, fingerprintKey = null, legacyFingerprint } = input;
       if ((title !== null && typeof title !== "string") || typeof body !== "string") return hidden("uncertain");
       const facts = snapshotReader().array(textFacts, validateSuppressionFact);
       if (!facts?.every(fact => fact.kind === "text") ||
           facts.some(fact => fact.owner !== card.scope.owner || (fact.namespace ?? null) !== card.scope.namespace)) {
         return hidden("uncertain");
       }
+      let legacy;
+      if (legacyFingerprint !== undefined) {
+        legacy = await readLegacyFingerprint(legacyFingerprint);
+        if (!legacy) return hidden("uncertain");
+      }
       if (facts.length > 0) {
-        if (facts.some(requiresLegacyMacDomain)) return hidden("text_withheld");
+        if (!legacy && facts.some(requiresLegacyMacDomain)) return hidden("text_withheld");
         const texts = title === null ? [body] : [title, body];
-        const fingerprints = await Promise.all(texts.map(text =>
-          fingerprintMemoryPassages(text, prepareCoreText(text), fingerprintKey)));
-        if (withholdsAnyPassage(fingerprints.flat(), facts)) return hidden("text_withheld");
+        let memoryFacts = facts;
+        if (legacy) {
+          const legacyFacts = [];
+          const coreFacts = [];
+          for (const fact of facts) {
+            const legacyDigests = fact.text.digests.filter(isLegacyMac);
+            if (legacyDigests.length === 0) {
+              coreFacts.push(fact);
+              continue;
+            }
+            if (legacyDigests.some(digest => digest.keyId !== legacy.key.id)) {
+              return hidden("text_withheld");
+            }
+            // A fact with aliases in both domains participates in both comparisons.
+            legacyFacts.push({ ...fact, text: { ...fact.text, digests: legacyDigests } });
+            const coreDigests = fact.text.digests.filter(digest => !isLegacyMac(digest));
+            if (coreDigests.length > 0) {
+              coreFacts.push({ ...fact, text: { ...fact.text, digests: coreDigests } });
+            }
+          }
+          memoryFacts = coreFacts;
+          if (legacyFacts.length > 0) {
+            const fingerprints = await Promise.all(texts.map(text => legacyCardPassages(text, legacy)));
+            if (withholdsAnyPassage(fingerprints.flat(), legacyFacts)) return hidden("text_withheld");
+          }
+        }
+        if (memoryFacts.length > 0) {
+          const fingerprints = await Promise.all(texts.map(text =>
+            fingerprintMemoryPassages(text, prepareCoreText(text), fingerprintKey)));
+          if (withholdsAnyPassage(fingerprints.flat(), memoryFacts)) return hidden("text_withheld");
+        }
       }
     }
     return { visible: true, reason: null };
