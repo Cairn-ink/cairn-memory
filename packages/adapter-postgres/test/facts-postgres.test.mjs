@@ -4,7 +4,8 @@ import test from "node:test";
 import { CoreError, factBody, validateSuppressionFact } from "../../core/src/index.mjs";
 import { assertStorableFact, slotHash } from "../src/facts.mjs";
 import { applyMigrations, factSlot } from "../src/index.mjs";
-import { migrationDatabase, migrationDbTest, readCatalog } from "./migration-database.mjs";
+import { migrationDatabase, migrationDbTest } from "./migration-database.mjs";
+import { readCatalog } from "./catalog.mjs";
 
 const factsTables = ["core_owner_state", "core_suppression_facts", "core_fact_digests"];
 const readFactsCatalog = (connection) => readCatalog(connection, factsTables, { includeDefaults: true });
