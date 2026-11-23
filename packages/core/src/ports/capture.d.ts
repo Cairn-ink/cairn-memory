@@ -1,3 +1,4 @@
+import type { TextDigest } from "../suppression-fact.mjs";
 import type { Counters, MemoryKind, Receipt, Revision, Role, Scope } from "./common.d.ts";
 import type { Tx } from "./unit-of-work.d.ts";
 
@@ -45,6 +46,8 @@ export interface FinishItem {
   kind: MemoryKind;
   confidence: number;
   textHash: string;
+  /** Core's allDigests(text, key) under the owner's current key. Stores persist row digests. */
+  digests?: TextDigest[];
   /** null when not embedded at write time (rule 10). */
   embedding: { model: string; vector: Float32Array } | null;
   receipts: Receipt[];

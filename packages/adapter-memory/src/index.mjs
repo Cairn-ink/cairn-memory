@@ -24,11 +24,13 @@ export function createMemoryAdapter(options = {}) {
   const clock = options.now ?? Date.now;
   let clockOffset = 0;
   const now = () => clock() + clockOffset;
-  const { uow, port, dump, runSeed, setWriteTime } = createUnitOfWork(nativeErrorMap, now, flags.placement);
+  const { uow, port, dump, runSeed, setWriteTime, rotateRowDigests, rowsMissingKeyedDigest } =
+    createUnitOfWork(nativeErrorMap, now, flags.placement);
   const matchFacts = createFactMatcher(flags.vectorSuppression, options.hashSessionKey);
-  const store = createMemoryStore(port, flags, newId, matchFacts);
+  const { keys, ringKeys, setFingerprintSecret } =
+    createFingerprintProvider(flags.fingerprintKey, options.fingerprint, rotateRowDigests);
+  const store = createMemoryStore(port, flags, newId, matchFacts, ringKeys);
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts);
-  const { keys, setFingerprintSecret } = createFingerprintProvider(flags.fingerprintKey, options.fingerprint);
   /** @type {import("./index.d.mts").MemoryAdapter} */
   const adapter = {
     name: "memory",
@@ -53,6 +55,7 @@ export function createMemoryAdapter(options = {}) {
       },
       setWriteTime,
       setFingerprintSecret,
+      rowsMissingKeyedDigest(owner) { return rowsMissingKeyedDigest(owner, ringKeys); },
       async advanceClock(ms) {
         validateTime(ms);
         validateTime(clock() + clockOffset + ms);

@@ -141,7 +141,9 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
           const { scope, client, sessionId } = claim.key;
           /** @type {SourceRef} */
           const source = { kind: "capture", client, sessionId };
-          const queries = batch.map(({ row }) => ({ textHash: row.textHash, embedding: row.embedding?.vector }));
+          const queries = batch.map(({ row }) => ({
+            textHash: row.textHash, digests: row.digests, embedding: row.embedding?.vector,
+          }));
           const policy = await readWritePolicy(tx, scope, queries, source, "full");
           const progress = { inserted: new Map(), writeTimes: new Map() };
           /** @type {FinishResult["memories"]} */
