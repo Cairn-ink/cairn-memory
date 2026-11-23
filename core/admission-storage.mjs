@@ -5,10 +5,10 @@ import { inContentSuppressionRequestInside } from './content-suppression-storage
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety } from './content-safety.mjs';
 import { randomUUID } from "node:crypto";
-import { transaction, isStorageBusy, afterTransactionCommit } from "./database.mjs";
+import { transaction, isStorageBusy } from "./database.mjs";
 import { fail, identifier } from "./validation.mjs";
 import { localAuthorityGuard } from './local-authority-guard.mjs';
-import { ledgerNamespace, rowsFrom } from './quantity-ledger.mjs';
+import { ledgerSourceKey, rowsFrom } from './quantity-ledger.mjs';
 
 // The stored and reported suppressed_count saturates at five (the existing bound);
 // five means five or more. No extra rows are written for larger captures.
@@ -17,7 +17,7 @@ const key = (ns, input) => [ns.ownerId, ns.scope, ns.projectId, input.client, in
 
 /** Content-free job state around the shared admission mutation transaction. */
 export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes, isSuppressed, activeRow, epoch,
-  conflictStorage, stagedEvidence, classificationJournal, episodes, proceduralStorage, ledgerPort, assertSources, sourceRoots, memoryAncestry = () => '', privacyMemoryDenied = row => {
+  conflictStorage, stagedEvidence, classificationJournal, episodes, proceduralStorage, putLedger, assertSources, sourceRoots, memoryAncestry = () => '', privacyMemoryDenied = row => {
     if(!cachedContentLayout(db)?.suppressionRevision)return false;
     const namespace={ownerId:row.owner_id,scope:row.scope,projectId:row.project_id};
     return !contentReadSafety(db,{namespace,selectedMemory:row,intent:'history',ref:{type:'memory',namespace,memoryId:row.id,revision:row.revision}}).allowed;
@@ -217,21 +217,7 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
         return { memoryId, hints: item.conflictHints, item,
           insertedReceiptIds: result.insertedReceiptIds };
       });
-      if (ledgerPort) {
-        const amounts = new Map();
-        for (const { memoryId, item } of entries) {
-          if (!item.quantities?.length || !item.receipts.some(receipt => receipt.role === 'user')) continue;
-          const memory = activeRow(ns, memoryId);
-          if (memory.currentness === 'historical') continue;
-          const times = item.receiptTimes?.filter((time, index) => time && item.receipts[index].role === 'user') ?? [];
-          const eventTime = times.sort().at(-1) ?? memory.updated_at;
-          const rows = amounts.get(memoryId) ?? [];
-          rows.push(...item.quantities.flatMap(quantity => rowsFrom(memory, memory.revision, quantity, eventTime)));
-          amounts.set(memoryId, rows);
-        }
-        for (const [memoryId, rows] of amounts) afterTransactionCommit(db, () =>
-          ledgerPort.put(ledgerNamespace(ns), memoryId, rows[0].revision, rows));
-      }
+      if (putLedger) publishCaptureAmounts(ns, entries, activeRow, putLedger);
       conflictStorage.insertBatch(ns, entries, "inferred-hint");
       const extra = hooks?.admitted?.(entries);
       const memoryIds = [...ids];
@@ -290,4 +276,34 @@ export function createAdmissionStorage({ db, admitMutation, validateReceiptTimes
   }
 
   return { claimAdmission, beginCaptureDispatch, finishAdmission, abandonAdmission, assertCaptureEvidence, inspectAdmission };
+}
+
+function publishCaptureAmounts(ns, entries, activeRow, putLedger) {
+  const writes = new Map();
+  for (const { memoryId, item } of entries) {
+    if (!item.quantities?.length) continue;
+    const source = amountSource(item);
+    if (!source) continue;
+    const memory = activeRow(ns, memoryId);
+    if (memory.currentness === 'historical') continue;
+    const sourceKey = ledgerSourceKey(source.receipt);
+    const key = JSON.stringify([memoryId, sourceKey]);
+    const write = writes.get(key) ?? { memoryId, revision: memory.revision, rows: [] };
+    for (const quantity of item.quantities) {
+      const rows = rowsFrom(memory, memory.revision, quantity, source.time ?? memory.updated_at);
+      write.rows.push(...rows.map(row => ({ ...row, sourceKey })));
+    }
+    writes.set(key, write);
+  }
+  for (const { memoryId, revision, rows } of writes.values()) putLedger(ns, memoryId, revision, rows);
+}
+
+function amountSource(item) {
+  let source;
+  for (const [index, receipt] of item.receipts.entries()) {
+    if (receipt.role !== 'user') continue;
+    const time = item.ledgerEventTimes?.[index] ?? null;
+    if (!source || time && (!source.time || time > source.time)) source = { receipt, time };
+  }
+  return source;
 }

@@ -9,7 +9,7 @@ export function decisionReviewOption(input) {
   return input.decisionReview === 'required-v1';
 }
 
-export function createConfirmationStorage({ db, enabled, activeRow, attach, forgetMutation, advanceEpoch, resolveHeld, assertConfirm = () => {} }) {
+export function createConfirmationStorage({ db, enabled, activeRow, attach, forgetMutation, advanceEpoch, resolveHeld, rebindLedger, assertConfirm = () => {} }) {
   return function resolve(ns, action, input) {
     if (!enabled) fail('decision_review_required');
     const key = [ns.ownerId, ns.scope, ns.projectId, input.actionId];
@@ -41,6 +41,7 @@ export function createConfirmationStorage({ db, enabled, activeRow, attach, forg
         if (!attach(row.id, input.receipt, now, insertedReceiptIds)) fail('invalid_receipt');
         db.prepare(`UPDATE memories SET review_state='confirmed',revision=revision+1,updated_at=? WHERE id=?`)
           .run(now, row.id);
+        rebindLedger?.(ns, row.id, row.revision, row.revision + 1);
         const reviewEffects = resolveHeld(ns, row);
         result = { memory: { id: row.id, revision: row.revision + 1 },
           confirmationReceiptId: insertedReceiptIds[0], reviewEffects, indexRevision: advanceEpoch(ns) };

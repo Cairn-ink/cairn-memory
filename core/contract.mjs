@@ -313,7 +313,7 @@ export function createMemoryCore(input, internal) {
     ...(assets ? { assets } : {}),
     ...(roleProfiles ? { roleProfiles } : {}),
     ...(privateCards ? { privateCards } : {}), ...(decisionReview ? { decisionReview: 'required-v1' } : {}), ...(sessionEpisodes ? { sessionEpisodes } : {}) },
-    { engineCards: typeof model?.consolidate === 'function', ...(ledgerPort ? { ledgerPort } : {}) });
+    { engineCards: typeof model?.consolidate === 'function', ...(ledgerPort ? { ledgerPort, ledgerWriteFailed: () => emitDiagnostic(model, 'extract', 'core_call', 'ledger_write_failed') } : {}) });
   try {
   const { storeId, cursorSecret } = runtime.identity;
   let engineCards, engineCardsLoading;
@@ -657,7 +657,7 @@ export function createMemoryCore(input, internal) {
   function admissionItems(input, episode = false, limit = 5, captured = false) {
     return denseArray(input, 0, limit).map((item) => {
       object(item, ['content', 'kind', 'confidence', 'receipts', 'conflictHints', 'qualification', ...(episode ? ['procedural'] : []),
-        ...(captured && ledgerPort ? ['quantities'] : [])]);
+        ...(captured && ledgerPort ? ['quantities', 'ledgerEventTimes'] : [])]);
       if (typeof item.confidence !== 'number' || !Number.isFinite(item.confidence) ||
           item.confidence < 0 || item.confidence > 1) throw new MemoryStoreError('invalid_input');
       const memory = contractMemory({ content: item.content, kind: item.kind }, 600);
@@ -668,7 +668,7 @@ export function createMemoryCore(input, internal) {
       return { ...memory, origin: 'agent-inferred', confidence: item.confidence, receipts, receiptTimes: item.receipts.map(receipt => receiptEventTime(receipt.occurredAt)), ...(episode ? { optionalReceiptTimes: true } : {}), conflictHints, qualification,
         ...(episode && Object.hasOwn(item, 'procedural') ? { procedural: item.procedural } : {}),
         ...(captured && ledgerPort && Object.hasOwn(item, 'quantities')
-          ? { quantities: admittedQuantities(item.quantities, input.length) } : {}) };
+          ? { quantities: admittedQuantities(item.quantities, input.length), ledgerEventTimes: item.ledgerEventTimes } : {}) };
     });
   }
 

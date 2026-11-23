@@ -88,10 +88,7 @@ const aliases = [
 
 export function readIntent(query, rows) {
   if (!hasLedgerCue(query)) return false;
-  const terms = new Set(rows.flatMap(row => words([row.measure, row.category, row.group].join(' '))));
-  const prefixes = [...terms].filter(term => term.length >= 4);
-  return words(query).some(word => terms.has(word) || prefixes.some(term => word.startsWith(term))) ||
-    aliases.some(([pattern, term]) => terms.has(term) && pattern.test(query));
+  return matchesTerms(query, new Set(rows.flatMap(rowTerms)));
 }
 
 const key = (...parts) => JSON.stringify(parts);
@@ -130,7 +127,7 @@ export function digest(rows, goals, window) {
     ...latest(records.filter(row => row.measure === 'steps'), row => key(row.unit, row.date))];
   const used = distinct.filter(row => inWindow(row, window));
   const targets = latest(goals.filter(row => row.kind === 'goal' && row.date <= window.to),
-    row => key(row.measure, row.unit, row.group, row.category, row.period));
+    row => key(row.measure, row.unit, row.group, row.category, row.period, row.comparator));
   if (!used.length && !targets.length) return null;
   const parts = [`Computed ledger for ${window.from} to ${window.to} (${window.label}), from the dated records you mentioned.`];
   for (const records of by(used, row => key(row.measure, row.unit)).values()) {
@@ -155,10 +152,12 @@ export function digest(rows, goals, window) {
 }
 
 /**
- * A synchronous port is scoped by the exact namespace. put replaces the
- * memory's rows at a revision, drop removes all its rows, and list accepts
- * optional inclusive UTC date bounds. Implementations return detached rows.
- * @typedef {{put(namespace: object, memoryId: string, revision: number, rows: object[]): void,
+ * A synchronous port is scoped by the exact namespace. At a revision, put
+ * adds each source message only once. A new revision starts empty unless
+ * fromRevision names the stored revision to carry forward. A carry with a
+ * mismatched fromRevision is ignored. drop removes all sources for a memory.
+ * list accepts optional inclusive UTC date bounds and returns detached rows.
+ * @typedef {{put(namespace: object, memoryId: string, revision: number, rows: object[], fromRevision?: number): void,
  *   drop(namespace: object, memoryId: string): void,
  *   list(namespace: object, window: {from?: string, to?: string}): object[]}} LedgerPort
  */
@@ -166,12 +165,13 @@ export function digest(rows, goals, window) {
 /** @returns {LedgerPort} */
 export function createInMemoryLedgerPort() {
   const namespaces = new Map();
-  const namespaceKey = ns => key(ns.ownerId, ns.scope, ns.projectId ?? '');
   return {
-    put(namespace, memoryId, revision, rows) {
+    put(namespace, memoryId, revision, rows, fromRevision) {
       const id = namespaceKey(namespace), memories = namespaces.get(id) ?? new Map();
-      if ((memories.get(memoryId)?.revision ?? 0) > revision) return;
-      memories.set(memoryId, { revision, rows: rows.map(row => ({ ...row, memoryId, revision })) });
+      const entry = addSources(memories.get(memoryId), revision, rows, fromRevision,
+        sourceRows => sourceRows.map(row => ({ ...row, memoryId })));
+      if (!entry) return;
+      memories.set(memoryId, entry);
       namespaces.set(id, memories);
     },
     drop(namespace, memoryId) {
@@ -181,7 +181,8 @@ export function createInMemoryLedgerPort() {
     },
     list(namespace, { from = '', to = '9999-12-31' } = {}) {
       return [...(namespaces.get(namespaceKey(namespace))?.values() ?? [])]
-        .flatMap(({ rows }) => rows.filter(row => inWindow(row, { from, to })).map(row => ({ ...row })));
+        .flatMap(({ revision, sources }) => [...sources.values()].flat()
+          .filter(row => inWindow(row, { from, to })).map(row => ({ ...row, revision })));
     },
   };
 }
@@ -204,15 +205,85 @@ function compareGoal(goal, rows, window) {
     period === 'year' ? window.to.slice(0, 4) + '-01-01' : window.from;
   const matching = rows.filter(row => row.measure === measure && row.unit === unit && row.date >= start &&
     (measure === 'steps' || row.group === group && (!category || row.category === category)));
-  const actual = period === 'day' ? total(matching) / (measure === 'steps' ? matching.length || 1 : daysIn(window.from, window.to)) : total(matching);
+  const label = measure === 'spend' ? `${category || group} budget` : (category || measure).replaceAll('_', ' ');
+  const target = `${label} goal ${amount(value, unit)} per ${period}`;
+  if (!matching.some(row => inWindow(row, window))) return { rows: [], text: `${target}: no records in this window` };
+  const actual = period === 'day' ? total(matching) / (measure === 'steps' ? matching.length : daysIn(window.from, window.to)) : total(matching);
   const difference = actual - value;
   const status = (comparator === 'at_least' ? difference >= 0 : difference <= 0) ? 'goal met' : 'goal missed';
   const delta = difference === 0 ? '' : `, ${difference > 0 ? 'over' : 'under'} by ${amount(Math.abs(difference), unit)}`;
-  const label = measure === 'spend' ? `${category || group} budget` : (category || measure).replaceAll('_', ' ');
-  return { rows: matching,
-    text: `${label} goal ${amount(value, unit)} per ${period}: actual ${amount(actual, unit)} per ${period}, ${status}${delta}` };
+  return { rows: matching, text: `${target}: actual ${amount(actual, unit)} per ${period}, ${status}${delta}` };
 }
 
 export const ledgerNamespace = ns => ({ ownerId: ns.ownerId, scope: ns.scope, projectId: ns.projectId || null });
 
 export const hasLedgerCue = query => cues.test(query);
+
+const namespaceKey = ns => key(ns.ownerId, ns.scope, ns.projectId ?? '');
+const rowTerms = row => words([row.measure, row.category, row.group].join(' '));
+const termIndexes = new WeakMap();
+
+function matchesTerms(query, terms) {
+  return words(query).some(word => {
+    if (terms.has(word)) return true;
+    for (let length = 4; length < word.length; length++) {
+      if (terms.has(word.slice(0, length))) return true;
+    }
+    return false;
+  }) || aliases.some(([pattern, term]) => terms.has(term) && pattern.test(query));
+}
+
+function addSources(current, revision, rows, fromRevision, project) {
+  if (current?.revision > revision || fromRevision !== undefined && current?.revision !== fromRevision) return current;
+  const previous = current?.revision === (fromRevision ?? revision) ? current.sources : new Map();
+  const sources = new Map(previous);
+  for (const [source, entries] of by(rows, row => row.sourceKey)) {
+    if (!sources.has(source)) sources.set(source, project(entries));
+  }
+  return { revision, sources };
+}
+
+// Build the vocabulary when writes succeed, so query preflight never reads the port.
+export function indexLedgerWrite(port, ns, memoryId, revision, rows, fromRevision) {
+  const id = namespaceKey(ns), namespaces = termIndexes.get(port) ?? new Map();
+  const index = namespaces.get(id) ?? { memories: new Map(), terms: new Map() };
+  const previous = index.memories.get(memoryId);
+  const next = addSources(previous, revision, rows, fromRevision, entries => [...new Set(entries.flatMap(rowTerms))]);
+  if (next === previous) return;
+  changeTermCounts(index.terms, previous, -1);
+  changeTermCounts(index.terms, next, 1);
+  index.memories.set(memoryId, next);
+  namespaces.set(id, index);
+  termIndexes.set(port, namespaces);
+}
+
+export function hasLedgerRevision(port, ns, memoryId, revision) {
+  return termIndexes.get(port)?.get(namespaceKey(ns))?.memories.get(memoryId)?.revision === revision;
+}
+
+export function unindexLedgerMemory(port, ns, memoryId) {
+  const id = namespaceKey(ns), namespaces = termIndexes.get(port), index = namespaces?.get(id);
+  if (!index) return;
+  changeTermCounts(index.terms, index.memories.get(memoryId), -1);
+  index.memories.delete(memoryId);
+  if (!index.memories.size) namespaces.delete(id);
+}
+
+function changeTermCounts(counts, entry, delta) {
+  for (const terms of entry?.sources.values() ?? []) for (const term of terms) {
+    const count = (counts.get(term) ?? 0) + delta;
+    if (count) counts.set(term, count);
+    else counts.delete(term);
+  }
+}
+
+export function hasLedgerIntent(port, readSet, query) {
+  if (!hasLedgerCue(query)) return false;
+  const namespaces = termIndexes.get(port);
+  return readSet.some(ns => {
+    const terms = namespaces?.get(namespaceKey(ns))?.terms;
+    return terms && matchesTerms(query, terms);
+  });
+}
+
+export const ledgerSourceKey = receipt => key(receipt.client, receipt.sessionId, receipt.eventId);

@@ -5,7 +5,7 @@ const stages = new Set(['interpretEpisode', 'extract', 'classify', 'select', 'ra
 const reasons = {
   core_call: new Set(['model_not_configured', 'context_budget_exceeded', 'token_count_unavailable',
     'model_timeout', 'model_cancelled', 'provider_failure', 'adapter_output_invalid',
-    'output_serialization', 'output_bounds']),
+    'output_serialization', 'output_bounds', 'ledger_write_failed']),
   core_validation: new Set(['invalid_extraction', 'invalid_extraction_output_shape',
     'invalid_extraction_item_shape', 'invalid_extraction_text', 'invalid_extraction_value',
     'invalid_extraction_source_shape', 'invalid_extraction_source_duplicate',

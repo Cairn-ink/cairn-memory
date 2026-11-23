@@ -116,6 +116,8 @@ the memory is true. [All tools and parameters](docs/standalone-mcp.md#tools)
 
 Without a model key there are no extracted memories or quantity ledger. Keyword search still finds saved conversations and manually saved memories.
 
+A durable ledger adapter must write quantity rows in the same transaction as the memory, because SQLite does not store the quantities and a lost row cannot be replayed.
+
 ## How it works
 
 Cairn.ink Memory keeps what your agents learn in three layers, like the three

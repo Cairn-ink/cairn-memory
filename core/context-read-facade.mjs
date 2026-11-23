@@ -1,11 +1,11 @@
 import { bindCommitRuntime, dispatchCommit, dispatchSynchronousCommit, hasCommitDispatcher, withCommitBinding } from './commit-dispatch.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { cardLineageItemInside, cardLineageNamespaceInside } from './card-lineage.mjs';
-import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, cachedContentSuppressionRequestInside, hasContentSuppressionRequestInside, contentSuppressionMayMatchInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
+import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, cachedContentSuppressionRequestInside, hasContentSuppressionRequestInside, contentSuppressionMayMatchInside } from './content-suppression-storage.mjs';
 import { contentScopeEpochGuard, assertContentScopes, contentSafetyFacade, assertContentPort, contentAuthorityPort, inertContentPortValue } from './content-safety-boundary.mjs';
 import { receiptEventTimeEnabled, cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety, createContentReadMemo } from './content-safety.mjs';
-import { digest, hasLedgerCue, ledgerNamespace, parseWindow, readIntent } from './quantity-ledger.mjs';
+import { digest, hasLedgerIntent, ledgerNamespace, parseWindow, readIntent } from './quantity-ledger.mjs';
 import { resolveContentLayout } from './content-safety-layout.mjs';
 import { sampleLocalStatus } from './context-read-local-status.mjs';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
@@ -781,7 +781,8 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       const rawChannel = options.rawSearch && input.raw
         ? await readRawChannel(options.rawSearch, input, token, deadlineAt) : { items: [], coverage: 'unavailable' };
       if (options.rawSearch && input.raw) access.check();
-      const ledger = options.ledgerPort && input.types.includes('memory') && hasLedgerCue(input.query) && performance.now() < deadlineAt
+      const ledger = options.ledgerPort && input.types.includes('memory') &&
+        hasLedgerIntent(options.ledgerPort, input.readSet, input.query) && performance.now() < deadlineAt
         ? collectLedgerChannel(db, read, options.ledgerPort, input, deadlineAt, canonicalFence) : null;
       candidates = searched.horizon;
       searched.check(); // The horizon's search fences also cross the outer await.
@@ -1083,7 +1084,7 @@ function collectLedgerChannel(db, read, port, input, deadlineAt, canonicalFence)
   if (performance.now() >= deadlineAt || !partitions.every(Array.isArray) ||
       !readIntent(input.query, partitions.flat())) return null;
   return read(() => {
-    const current = db.prepare('SELECT revision FROM memories WHERE owner_id=? AND scope=? AND project_id=? AND id=?');
+    const current = db.prepare('SELECT id, revision FROM memories WHERE owner_id=? AND scope=? AND project_id=? AND id=?');
     const safetyMemo = createContentReadMemo(db);
     const rows = [];
     for (const [index, partition] of partitions.entries()) {
@@ -1094,11 +1095,8 @@ function collectLedgerChannel(db, read, port, input, deadlineAt, canonicalFence)
         if (!checked.has(key)) {
           const memory = current.get(ns.ownerId, ns.scope, ns.projectId ?? '', row.memoryId);
           const ref = { type: 'memory', namespace: ns, memoryId: row.memoryId, revision: memory?.revision };
-          checked.set(key, memory && memory.revision >= row.revision &&
-            (memory.revision === row.revision || !contentSuppressionReasonInside(db, ns, {
-              kind: 'memory', key: row.memoryId, revision: row.revision,
-              version: JSON.stringify(['memory-revision-v1', row.revision]),
-            })) && contentReadSafety(db, { namespace: ns, ref, memo: safetyMemo }).allowed);
+          checked.set(key, memory?.id === row.memoryId && memory.revision === row.revision &&
+            contentReadSafety(db, { namespace: ns, ref, memo: safetyMemo }).allowed);
         }
         if (checked.get(key)) rows.push(row);
       }

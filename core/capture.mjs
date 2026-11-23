@@ -139,6 +139,8 @@ export async function captureMessages({ model, input, operations, captureQualifi
   // The default Raw capture registration already supplies each message's
   // explicit or receive time; captureRaw and Raw-free captures keep their input.
   let snapshot = episodeRun?.snapshot ?? captureSnapshot(input, captureQualification, captureSourcePolicy);
+  // Older layouts omit receipt dates from the storage snapshot.
+  const ledgerMessages = ledger ? snapshot.messages : null;
   if (!episodeRun && snapshot.messages.some(message => message.occurredAt !== undefined)) {
     snapshot = runtime.captureSnapshot(ns, snapshot, captureQualification, captureSourcePolicy);
   }
@@ -223,6 +225,8 @@ export async function captureMessages({ model, input, operations, captureQualifi
       const times = item.receipts.map(receipt =>
         snapshot.messages.find(message => message.id === receipt.eventId)?.occurredAt ?? null);
       if (times.some(time => time !== null)) item.receiptTimes = times;
+      if (item.quantities?.length) item.ledgerEventTimes = item.receipts.map(receipt =>
+        ledgerMessages.find(message => message.id === receipt.eventId)?.occurredAt ?? null);
     }
     deadline?.check();
     if (snapshot.causal) {

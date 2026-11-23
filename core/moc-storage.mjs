@@ -24,7 +24,7 @@ const label = (content) => [...content].slice(0, 120).join("");
 
 /** Persistence for revision-bound MOC placement in the shared SQLite store. */
 export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidateConflicts,
-  assertIndexAvailable, rationaleStorage, receiptKey, classificationJournal }) {
+  assertIndexAvailable, rationaleStorage, receiptKey, classificationJournal, rebindLedger }) {
   // Read authority is generation-owned; writes below continue targeting declarations.
   // Title validity deliberately consults every original source binding.
   function projectSQL(sql) {
@@ -274,7 +274,10 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         const memory = memories.get(item.memoryId);
         const revision = nextRevision.get(item.memoryId);
         const filed = desiredByMemory.get(item.memoryId).size ? "filed" : "unfiled";
-        if (revision !== memory.revision) invalidateConflicts(item.memoryId, { preserveHeld: true });
+        if (revision !== memory.revision) {
+          invalidateConflicts(item.memoryId, { preserveHeld: true });
+          rebindLedger?.(ns, item.memoryId, memory.revision, revision);
+        }
         updateMemory.run(filed, revision, revision, now, item.memoryId);
         deleteRefs.run(item.memoryId);
         for (const mocId of desiredByMemory.get(item.memoryId))
