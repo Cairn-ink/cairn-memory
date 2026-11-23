@@ -155,8 +155,10 @@ export function copyCaptureMessages(messages) {
 
 /** @param {{code: string, retryable: boolean}} failure */
 export function copyCaptureFailure(failure) {
-  if (!failure || !isErrorCode(failure.code) || typeof failure.retryable !== "boolean") invalid();
-  return { code: failure.code, retryable: failure.retryable };
+  if (!failure) invalid();
+  const { code, retryable } = failure;
+  if (!isErrorCode(code) || typeof retryable !== "boolean") invalid();
+  return { code, retryable };
 }
 
 /** @param {readonly import("@cairn-ink/core/ports").FinishItem[]} items @param {boolean} embeddingRequiredOnInsert */

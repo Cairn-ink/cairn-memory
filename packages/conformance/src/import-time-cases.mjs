@@ -60,18 +60,18 @@ export const IMPORT_TIME_CASES = [
     id: "K-IMP-T3", title: "filters import retrieval by creation time and orders recent by update time", needs: [],
     async run(ctx) {
       const { adapter: { uow, lexical, recent }, owner, harness } = ctx;
-      const earlier = await importRow(ctx, "Notebook first", 10);
-      const later = await importRow(ctx, "Notebook second", 15);
+      const { id: earlier } = await importRow(ctx, "Notebook first", 10);
+      const { id: later } = await importRow(ctx, "Notebook second", 15);
       await importRow(ctx, "Notebook outside", 20);
-      await harness.setWriteTime(ctx.scope(null), earlier.id, 3000n);
-      await harness.setWriteTime(ctx.scope(null), later.id, 2000n);
+      await harness.setWriteTime(ctx.scope(null), earlier, 3000n);
+      await harness.setWriteTime(ctx.scope(null), later, 2000n);
       const selection = { owner, namespaces: [null], window: { sinceMs: 10, untilMs: 20 } };
       await uow.run(owner, { readOnly: true }, async tx => {
         const words = await lexical.lexical(tx, selection, "Notebook", 10, {});
-        equal(new Set(words.rows.map(({ ref }) => ref.id)), new Set([earlier.id, later.id]),
+        equal(new Set(words.rows.map(({ ref }) => ref.id)), new Set([earlier, later]),
           "Lexical window must include imports by stored creation time");
         const page = await recent.recent(tx, selection, { cursor: null, limit: 10 });
-        equal(page.items.map(({ id, createdAtMs }) => [id, createdAtMs]), [[earlier.id, 10], [later.id, 15]],
+        equal(page.items.map(({ id, createdAtMs }) => [id, createdAtMs]), [[earlier, 10], [later, 15]],
           "Recent window must use creation time with update time ordering");
       });
     },

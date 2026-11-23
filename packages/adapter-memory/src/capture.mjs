@@ -271,19 +271,27 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
         return (getState, run) => {
           const state = getState();
           const identity = admissionIdentity(copy.client, copy.eventId);
-          const previous = state.claims.get(identity);
-          if (previous) {
-            if (previous.key.payloadDigest !== copy.payloadDigest) throw new CoreError("event_payload_conflict");
-            if (previous.status === "finished") {
-              return { status: "rawReplay", result: copyResult(previous.result, run.finishes.has(previous.result)) };
-            }
-            if (previous.status === "leased") {
-              const nowMs = now();
-              validateTime(nowMs);
-              if (nowMs < previous.expiresAtMs) return { status: "processing" };
-            }
-            return { status: "duplicate" };
+          let exists = false;
+          let latestLease;
+          let finished;
+          for (const row of state.claims.values()) {
+            if (row.key.client !== copy.client || row.key.eventId !== copy.eventId) continue;
+            if (row.key.payloadDigest !== copy.payloadDigest) throw new CoreError("event_payload_conflict");
+            exists = true;
+            if (row.status === "leased" && (!latestLease || row.expiresAtMs > latestLease.expiresAtMs)) latestLease = row;
+            if (row.status === "finished") finished ??= row;
           }
+          // Across namespaces, any digest conflict wins. Then prefer a live lease, the first finish
+          // in claim insertion order, or duplicate for any other existing state.
+          if (latestLease) {
+            const nowMs = now();
+            validateTime(nowMs);
+            if (nowMs < latestLease.expiresAtMs) return { status: "processing" };
+          }
+          if (finished) {
+            return { status: "rawReplay", result: copyResult(finished.result, run.finishes.has(finished.result)) };
+          }
+          if (exists) return { status: "duplicate" };
           state.claims.set(identity, { key: copy, messages: batch, status: "pending" });
           run.stateWritten = true;
           return { status: "admitted" };

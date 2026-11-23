@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { registerHooks } from "node:module";
 import { test } from "node:test";
 import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
 import { ADMISSION_CASES, IMPORT_TIME_CASES, runCase } from "@cairn-ink/conformance";
 
-function factory(mutate) {
+function factory(mutate = () => ({}), createAdapter = createMemoryAdapter) {
   return {
     async open({ capabilities }) {
-      const original = createMemoryAdapter({ capabilities, now: () => 0 });
+      const original = createAdapter({ capabilities, now: () => 0 });
       const adapter = { ...original, ...mutate(original) };
       return {
         adapter, harness: original.harness, nativeErrorMap: original.nativeErrorMap,
@@ -15,6 +17,29 @@ function factory(mutate) {
       };
     },
   };
+}
+
+async function captureMutantFactory(before, after) {
+  const entry = new URL("../src/index.mjs", import.meta.url);
+  const capture = new URL("./capture.mjs", entry);
+  entry.searchParams.set("mutation", after);
+  capture.search = entry.search;
+  const original = await readFile(capture, "utf8");
+  assert.equal(original.split(before).length, 2, "Expected one capture mutation site");
+  const source = original.replace(before, () => after);
+  const hooks = registerHooks({
+    resolve(request, context, nextResolve) {
+      return nextResolve(context.parentURL === entry.href && request === "./capture.mjs" ? capture.href : request, context);
+    },
+    load(url, context, nextLoad) {
+      return url === capture.href ? { format: "module", source, shortCircuit: true } : nextLoad(url, context);
+    },
+  });
+  try {
+    return factory(undefined, (await import(entry.href)).createMemoryAdapter);
+  } finally {
+    hooks.deregister();
+  }
 }
 
 function changeAdmit(change) {
@@ -81,6 +106,10 @@ function acceptsInvalidTime(accept) {
 }
 
 const mutants = [
+  ["K-ADM-1", "admit reverses the input in place before saving", changeAdmit((capture, tx, key, messages) => {
+    messages.reverse();
+    return capture.admit(tx, key, messages);
+  }), /Load must return the admitted key and ordered messages/],
   ["K-ADM-1", "load reverses message order", changeLoad(async (capture, tx, selection) => {
     const loaded = await capture.load(tx, selection);
     if (loaded) loaded.messages.reverse();
@@ -142,5 +171,23 @@ for (const [id, defect, mutate, failure] of mutants) {
     const testCase = [...ADMISSION_CASES, ...IMPORT_TIME_CASES].find(candidate => candidate.id === id);
     assert.ok(testCase);
     await assert.rejects(runCase(factory(mutate), testCase), failure);
+  });
+}
+
+for (const [id, failure] of [
+  ["K-ADM-10", /Admission must not allow a second lease/],
+  ["K-ADM-11", /Admission must replay a standalone finish/],
+  ["K-ADM-12", /Admission must honor a terminal standalone abandon/],
+  ["K-ADM-13", /Expected operation to reject/],
+  ["K-ADM-14", /A live lease must take precedence over a finish/],
+]) {
+  test(`${id} detects when admit ignores standalone claims`, async () => {
+    const mutant = await captureMutantFactory(
+      "if (row.key.client !== copy.client",
+      "if (!row.messages || row.key.client !== copy.client",
+    );
+    const testCase = ADMISSION_CASES.find(candidate => candidate.id === id);
+    assert.ok(testCase);
+    await assert.rejects(runCase(mutant, testCase), failure);
   });
 }
