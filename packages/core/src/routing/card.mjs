@@ -31,11 +31,16 @@ function sentenceSources(body, source) {
   return sentences;
 }
 
+/** @param {readonly (string | number | null)[]} identity @returns {Promise<string>} */
+export async function identityDigest(identity) {
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", encoder.encode(JSON.stringify(identity)));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
 /** @param {import("./index.mjs").DocumentMessageRef} source */
 async function cardId({ scope, client, canonicalSessionKey, messageId }) {
   const identity = ["document-card", scope.owner, scope.namespace, client, canonicalSessionKey, messageId, REVISION];
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", encoder.encode(JSON.stringify(identity)));
-  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+  return identityDigest(identity);
 }
 
 /** @param {import("./index.mjs").DocumentCardDropReason} reason
