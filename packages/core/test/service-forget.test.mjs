@@ -5,6 +5,7 @@ import {
   allDigests, CoreError, factIncarnationBody, normalizeForHash, SUPPRESSION_DISTANCE,
 } from "@cairn-ink/core";
 import { createMemoryService } from "@cairn-ink/core/service";
+import { validateSuppressionFact } from "../src/suppression-fact.mjs";
 import { hostedScope as scope, memory, serviceFake } from "./helpers/service-fake.mjs";
 
 const source = { kind: "mcp", client: null, sessionId: null };
@@ -90,7 +91,7 @@ for (const operation of ["save", "correct"]) {
   test(`${operation} succeeds with zero forget facts when only candidate snapshots are bounded`, async () => {
     // Hosted src/memory/index.ts:193–198,213–226 and src/memory/suppressions.ts:152–164.
     const target = row("target");
-    const { service, hooks, committed } = setup({ rows: [target] });
+    const { service, calls, hooks, committed } = setup({ rows: [target] });
     assert.deepEqual(committed(scope.owner).facts, []);
     hooks.snapshot = candidates => {
       if (candidates.passages === undefined) throw new CoreError("ineligible");
@@ -99,6 +100,9 @@ for (const operation of ["save", "correct"]) {
     const result = operation === "save" ? await service.save(scope, text, source)
       : await service.correct(scope, target.id, target.revision, text, source);
     assert.equal(result.status, "saved");
+    const snapshots = calls.filter(([method]) => method === "suppressions.snapshot");
+    assert.equal(snapshots.length, 1);
+    assert.equal(snapshots[0][2].passages.length, 1);
   });
 }
 
@@ -110,6 +114,55 @@ test("a forgotten exact paste is suppressed and a prefixed single passage is sav
     assert.deepEqual(await service.save(scope, original, source), { status: "suppressed" });
     assert.equal((await service.save(scope, prefix + original, source)).status, "saved");
   }
+});
+
+const multiPassageReplay = "Earlier note for reference: " + wording + " Sample key sk-0123456789abcdef.";
+
+test("a multi-passage lantern replay is suppressed when the candidate snapshot omits the forget fact", async () => {
+  // Hosted src/memory/suppressions.ts:138–149 checks forget containment for multiple passages.
+  const { service, storage, mutations } = setup({ rows: [row("target")] });
+  await service.forget(scope, "target", source);
+  const snapshot = storage.suppressions.snapshot;
+  const reads = [];
+  storage.suppressions.snapshot = async (tx, scoped, candidates) => {
+    const result = await snapshot(tx, scoped, candidates);
+    reads.push([tx, scoped, candidates, result.passages.length]);
+    return result;
+  };
+
+  assert.deepEqual(await service.save(scope, multiPassageReplay, source), { status: "suppressed" });
+  assert.equal(reads.length, 2);
+  assert.equal(reads[0][0], reads[1][0]);
+  assert.deepEqual(reads.map(([, scoped, candidates, facts]) => [scoped, candidates.passages?.length, facts]), [
+    [scope, 2, 0], [scope, undefined, 1],
+  ]);
+  assert.equal(mutations.some(({ method }) => method === "memories.insert"), false);
+});
+
+test("a multi-passage write fails closed when the scoped forget snapshot is refused", async () => {
+  const { service, hooks, mutations } = setup();
+  hooks.snapshot = candidates => {
+    if (candidates.passages === undefined) throw new CoreError("ineligible");
+  };
+  await assert.rejects(service.save(scope, multiPassageReplay, source), code("ineligible"));
+  assert.deepEqual(mutations, []);
+});
+
+for (const length of [129, 512]) {
+  test(`forget erases a stored row with a ${length}-character ID`, async () => {
+    const target = row("m".repeat(length));
+    const { service, committed } = setup({ rows: [target] });
+    assert.deepEqual(await service.forget(scope, target.id, source), { status: "forgotten", removedSimilar: 0 });
+    assert.deepEqual(committed(scope.owner).rows, []);
+    assert.equal(committed(scope.owner).facts[0].fact.sourceMemory.id, target.id);
+    assert.deepEqual(await visibleIds(service), Array(3).fill([]));
+  });
+}
+
+test("a suppression identity accepts a 512-character memory ID and rejects 513", () => {
+  const fact = { ...scope, kind: "identity", actionId: "identity-fixture", origin: "forget" };
+  assert.doesNotThrow(() => validateSuppressionFact({ ...fact, memoryId: "m".repeat(512) }));
+  assert.throws(() => validateSuppressionFact({ ...fact, memoryId: "m".repeat(513) }), code("invalid_input"));
 });
 
 for (const origin of ["forget", "edit"]) {

@@ -23,7 +23,7 @@ function readPage(rows, { cursor, limit }) {
   const items = remaining.slice(0, limit);
   const last = items.at(-1);
   return {
-    items,
+    items: items.map(publicRow),
     nextCursor: remaining.length > limit ? JSON.stringify([last.updatedAtUs.toString(), last.id]) : null,
   };
 }
@@ -40,6 +40,16 @@ function factSlot(fact) {
     fact.startUtf16, fact.endUtf16]);
   const digests = fact.text.digests.map(({ alg, value }) => alg + ":" + value).sort();
   return JSON.stringify([kind, namespace, fact.mode, fact.sourceMemory?.id, digests]);
+}
+
+function digestsWithHash({ digests = [], textHash }) {
+  const value = textHash.slice(7);
+  return digests.some(digest => digest.alg === "sha256" && digest.value === value) ? digests :
+    [...digests, { alg: "sha256", value, pipeline: "core", redactionVersion: 3, keyId: null }];
+}
+
+function publicRow({ digests: _digests, ...row }) {
+  return row;
 }
 
 export function serviceFake({ rows = [], leakForgotten = false, writes = false, near = false, hasKey = true, forgetting } = {}) {
@@ -76,7 +86,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
     return tx.forgotten.has(row.id) || (forgetting && tx.facts.some(stored =>
       factHidesRow(stored, {
         type: "memory", scope: row.scope, memoryId: row.id, revision: row.revision,
-        digests: [{ alg: "sha256", value: row.textHash.slice(7), pipeline: "core", redactionVersion: 3, keyId: null }],
+        digests: digestsWithHash(row),
         embedding: row.embedding?.vector,
       }, {
         rowShingles: false,
@@ -276,7 +286,9 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       async get(tx, scope, id) {
         record(tx, scope.owner, "memories.get", scope, id);
         await hooks.fault?.("memories.get");
-        return hooks.get ? hooks.get(tx, scope, id) : getRow(tx, scope, id);
+        if (hooks.get) return hooks.get(tx, scope, id);
+        const row = getRow(tx, scope, id);
+        return row === null ? null : publicRow(row);
       },
       async findDuplicates(tx, scope, [query], options) {
         record(tx, scope.owner, "memories.findDuplicates", scope, query, options);
@@ -313,7 +325,14 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
           if (hidesRow(tx, row)) hiddenIds.push(row.id);
         }
         matches.sort((a, b) => a.distance - b.distance);
-        return { matches: [matches], hiddenIds, blockedSession: false, blockedPositions: [] };
+        const blocked = forgetting && tx.facts.some(stored => {
+          const { fact } = stored;
+          if (fact.kind !== "text" || !fact.text.digests.every(({ alg }) => alg === "hmac")) return false;
+          const passages = [{ digests: digestsWithHash(query), shingles: null, keyId: null }];
+          return factBlocksIncoming(stored, { scope, passages },
+            { mode: mode === "hash" ? "explicitSave" : "capture", rowShingles: false }) !== false;
+        });
+        return { matches: [matches], hiddenIds, blockedSession: false, blockedPositions: blocked ? [0] : [] };
       },
       async insert(tx, scope, content, receipts, timestamp) {
         mutate(tx, scope.owner, "memories.insert", content, receipts);

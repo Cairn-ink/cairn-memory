@@ -99,6 +99,7 @@ Each addendum is additive unless it says what it supersedes. Adapters written ag
    - A key may be dropped only when no live fact holds a digest under it.
    - Core write paths fill query digests before core-backed writes. A query without digests is blocked while an HMAC-only text fact applies.
    - It supersedes nothing.
+6. SuppressionFact identity `memoryId` and `sourceMemory.id` accept up to 512 characters (was 128), so a forget never fails on an id the store already holds. Stores refuse ids over 512 at import. It supersedes the 128 bound.
 
 ## Change requests
 

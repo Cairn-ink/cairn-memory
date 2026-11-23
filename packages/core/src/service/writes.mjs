@@ -37,11 +37,14 @@ export function sourceOf(value) {
   return { kind: enumValue(kind, sourceKinds), client: sourceText(client), sessionId: sourceText(sessionId) };
 }
 
-/** @param {string} raw @returns {Promise<DuplicateQuery>} */
-async function hashesOf(raw) {
-  const [core, ...aliases] = await allDigests(raw, null);
+/** @param {string} raw @param {string} text @param {FingerprintKey | null} key @returns {Promise<DuplicateQuery>} */
+async function hashesOf(raw, text, key) {
+  const [[core, ...aliases], digests] = await Promise.all([
+    allDigests(raw, null), key && allDigests(text, key),
+  ]);
   const legacy = aliases.at(-1);
-  return { textHash: 'sha256:' + core.value, ...(legacy && { legacyHash: 'sha256:' + legacy.value }) };
+  return { textHash: 'sha256:' + core.value, ...(legacy && { legacyHash: 'sha256:' + legacy.value }),
+    ...(digests && { digests }) };
 }
 
 /** @param {string} raw @param {string} text */
@@ -163,7 +166,13 @@ export function writeMethods({ storage, embedder, gate, clock }) {
     const texts = [normalizeForHash(text)];
     const { model, dimensions } = embedder;
     await gate.assertOpen(owner, "dispatch");
-    const vectors = await embedder.embed(texts, options);
+    let vectors;
+    try {
+      vectors = await embedder.embed(texts, options);
+    } catch (error) {
+      if (capabilities.embeddingRequiredOnInsert === true) throw new CoreError("embedding_failed");
+      throw error;
+    }
     const vector = vectors?.[0];
     if (!Array.isArray(vectors) || vectors.length !== 1 || !(vector instanceof Float32Array) || vector.length !== dimensions ||
         !vector.every(Number.isFinite) || !vector.some(component => component !== 0)) {
@@ -184,6 +193,13 @@ export function writeMethods({ storage, embedder, gate, clock }) {
     });
     if (snapshot.blockedSession || snapshot.blockedMessages.length) return true;
     const passagesInSnapshot = snapshot.passages.map(({ fact }) => fact);
+    if (passages.length > 1) {
+      // The candidate snapshot may omit forget facts needed for multi-passage containment.
+      const scoped = await suppressions.snapshot(tx, scope, {});
+      for (const { fact } of scoped.passages) {
+        if (fact?.origin === "forget") passagesInSnapshot.push(fact);
+      }
+    }
     if (passagesInSnapshot.some(fact => typeof fact?.owner !== "string")) return true;
     const facts = passagesInSnapshot.filter(fact => fact.owner === scope.owner && (fact.namespace ?? null) === scope.namespace);
     if (facts.some(requiresLegacyMacDomain)) return true;
@@ -209,7 +225,7 @@ export function writeMethods({ storage, embedder, gate, clock }) {
       const text = prepareCoreText(raw);
       if (!text) return invalid();
       const key = await keys.userKey(owner);
-      const query = await hashesOf(raw);
+      const query = await hashesOf(raw, text, key);
       const passages = await fingerprintMemoryPassages(raw, text, key, sha256Hex);
       const embedding = await embed(owner, text, key);
       query.embedding = embedding.vector;
@@ -217,6 +233,7 @@ export function writeMethods({ storage, embedder, gate, clock }) {
       const mode = explicit ? "hash" : "full";
       const row = /** @type {InsertRow} */ ({
         kind, text, textHash: query.textHash, source, embedding, confidence: 1,
+        ...(query.digests && { digests: query.digests }),
         origin: explicit || source.kind === "import" ? "explicit" : "inferred",
       });
 
@@ -271,7 +288,7 @@ export function writeMethods({ storage, embedder, gate, clock }) {
       if (!text) throw new CoreError("invalid_text");
       const key = await keys.userKey(owner);
       if (key === null) throw new CoreError("fingerprint_unavailable");
-      const query = await hashesOf(raw);
+      const query = await hashesOf(raw, text, key);
       const passages = await fingerprintMemoryPassages(raw, text, key, sha256Hex);
       const unchanged = sameText(previous, query, text);
       const embedding = unchanged ? null : await embed(owner, text, key);
@@ -306,7 +323,7 @@ export function writeMethods({ storage, embedder, gate, clock }) {
           const now = clock.nowMs();
           await suppressions.writeFact(tx, predecessor.fact, predecessor.incarnation);
           const replaced = await memories.replaceContent(tx, scope, id, expectedRevision,
-            { kind, origin, confidence, textHash, text, source, embedding }, null, now);
+            { kind, origin, confidence, textHash, text, source, embedding, digests: query.digests }, null, now);
           if (replaced.outcome !== "changed") throw new CoreError("internal_error");
           return /** @type {const} */ ({ status: "saved", revision: replaced.revision });
         });

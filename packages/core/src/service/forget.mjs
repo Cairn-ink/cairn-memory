@@ -1,4 +1,4 @@
-import { identifier, isWellFormedText } from "../capture/validate.mjs";
+import { isWellFormedText } from "../capture/validate.mjs";
 import { SUPPRESSION_DISTANCE } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
 import { FORGET_STEP_CAPABILITIES } from "../privacy/forget-steps.mjs";
@@ -80,10 +80,11 @@ export function forgetMethod({ storage, clock }) {
   const { uow, capabilities, keys, memories, suppressions, raw, sessionLineage, spanLineage, hydrate,
     conflicts, documentCards, quantityLedger, forgetLog } = storage;
 
-  return entry(async (input, inputId, inputSource) => {
+  return entry(async (input, id, inputSource) => {
     const scope = scopeOf(input);
     const { owner, namespace } = scope;
-    const id = identifier(inputId);
+    if (!isWellFormedText(id) || !id || id.length > 512 ||
+        id.trim() !== id || /[\x00-\x1f\x7f]/.test(id)) throw new CoreError("invalid_input");
     sourceOf(inputSource);
     if (typeof memories.get !== "function") throw new CoreError("capability_unavailable");
 
