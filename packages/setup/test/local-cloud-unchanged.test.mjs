@@ -198,14 +198,14 @@ const captureRuntimeChanges = new Map([
     "integrations/client/hosted-contract.mjs",
     {
       "historical": "39ce7dcb60b91ab7bf815bd0085f278e9cc5d0f9798b9b5d27e7b7655fd217d1",
-      "current": "07bb439a728f1be053cfa40f425d7e52e0a2b958a22dd72cd889f3f942fb12fd"
+      "current": "f44b7fb2595d367fd61f403a21d3698afa69db75dab0a3edb1e575a21c73168c"
     }
   ],
   [
     "integrations/client/hosted-schemas.mjs",
     {
       "historical": "fda2e6b4f6feda316300819e1a199dd25f7462b9f47e33bff950c3c4f95ba8ce",
-      "current": "c9e2b4fc3e85e136594438ad58a24d15526296b12ab1d438ae930a91b8ec82d3"
+      "current": "18613252e07d4ccd2c5341bdb585ae9582d42cb285d43181ba736cafc91a543c"
     }
   ],
   // Reuse the durability object's historical/before/current pins: one worker,
