@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { CoreError } from "@cairn-ink/core";
 import { createMemoryService } from "@cairn-ink/core/service";
-import { decodeCursor } from "../src/retrieval/hosted-paging.mjs";
+import { decodeCursor, encodeCursor } from "../src/retrieval/hosted-paging.mjs";
 import { hostedScope, memory, serviceFake } from "./helpers/service-fake.mjs";
 
 const readSet = { owner: hostedScope.owner, namespaces: [null] };
@@ -60,7 +60,14 @@ test("recent clamps limits and refuses malformed, out-of-scope or stale cursors"
   for (const scope of [{ owner: "other", namespace: null }, { ...hostedScope, namespace: "project\u0000other" }]) {
     await assert.rejects(() => service.recent(scope, { limit: 1, cursor: first.nextCursor }), code("cursor_stale"));
   }
+  // A foreign route's cursor and the hosted pre-core cursors are stale (versioned cursors), not malformed.
   await assert.rejects(() => service.exportMemories(hostedScope, { limit: 1, cursor: first.nextCursor }),
+    code("cursor_stale"));
+  for (const legacy of [encodeCursor(["2026-11-23T00:00:00.123456Z", "memory-1"]), encodeCursor(10)]) {
+    await assert.rejects(() => service.recent(hostedScope, { limit: 1, cursor: legacy }), code("cursor_stale"));
+    await assert.rejects(() => service.exportMemories(hostedScope, { limit: 1, cursor: legacy }), code("cursor_stale"));
+  }
+  await assert.rejects(() => service.recent(hostedScope, { limit: 1, cursor: encodeCursor({ other: 1 }) }),
     code("invalid_cursor"));
   assert.deepEqual(calls, []);
 

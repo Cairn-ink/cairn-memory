@@ -27,6 +27,14 @@ async function visibleRows(rows, scope, tx, fence) {
   return scoped.filter(row => keys.has(JSON.stringify([row.scope.namespace, row.id])));
 }
 
+const CURSOR_ROUTES = Object.freeze(["recent-v1", "export-v1"]);
+
+/** Hosted's pre-core cursors: recent [timestamp, id] and search offsets. @param {unknown} value */
+function isLegacyHostedCursor(value) {
+  return (Array.isArray(value) && value.length === 2 && typeof value[0] === "string" && typeof value[1] === "string") ||
+    (typeof value === "number" && Number.isSafeInteger(value) && value >= 0);
+}
+
 /** @param {unknown} options @param {Scope} scope @param {"recent-v1" | "export-v1"} route */
 function readPage(options, { owner, namespace }, route) {
   const { cursor, limit } = validateObject(options === undefined ? {} : options, ["cursor", "limit"]);
@@ -34,6 +42,12 @@ function readPage(options, { owner, namespace }, route) {
   if (cursor == null) return { position: null, limit: pageLimit(limit) };
   if (typeof cursor !== "string") throw new CoreError("invalid_cursor");
   const value = decodeCursor(cursor);
+  // Versioned cursors: an old (hosted timestamp/id or offset) or foreign (other route) cursor is
+  // stale, not malformed, so a client restarts its listing.
+  if (isLegacyHostedCursor(value) || (Array.isArray(value) && value.length === 5 &&
+      CURSOR_ROUTES.includes(value[0]) && value[0] !== route)) {
+    throw new CoreError("cursor_stale");
+  }
   if (!Array.isArray(value) || value.length !== 5 || value[0] !== route ||
       typeof value[1] !== "string" || (value[2] !== null && typeof value[2] !== "string") ||
       typeof value[3] !== "string" || !value[3] || typeof value[4] !== "string" || !value[4]) {
