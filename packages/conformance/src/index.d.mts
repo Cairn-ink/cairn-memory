@@ -34,5 +34,6 @@ export declare const PRIVACY_MATCH_CASES: readonly ConformanceCase[];
 export declare const SOURCE_FILTER_CASES: readonly ConformanceCase[];
 export declare const KEYED_DIGEST_CASES: readonly ConformanceCase[];
 export declare const TOPIC_CASES: readonly ConformanceCase[];
+export declare const RAW_CASES: readonly ConformanceCase[];
 /** Returns the skip reason, or null on success. Failures reject. */
 export declare function runCase(factory: AdapterFactory, testCase: ConformanceCase): Promise<string | null>;

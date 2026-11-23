@@ -17,6 +17,7 @@ import { addKeyedDigest, createFactStore } from "./privacy.mjs";
 /** @typedef {import("@cairn-ink/core/ports").FinishResult} FinishResult */
 /** @typedef {import("./topics.mjs").TopicState} TopicState */
 /** @typedef {{topics: Map<Namespace, TopicState>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
+ * rawRows: Map<string, import("./raw.mjs").RawEntry>, rawFences: Set<string>,
  * claims: Map<string, ClaimRecord>, activeTokens: Map<string, string>, abandonedTokens: Set<string>}} State */
 /** @typedef {{state: State, run: {readonly ended: boolean}, indexDirty: boolean, stateWritten: boolean, pauseLock: boolean,
  * poisoned: boolean, writeErrorCode: ErrorCode, finishes: Set<FinishResult>, writingFinishes: number,
@@ -78,7 +79,7 @@ class Owner {
   /** @type {State} */
   committed = {
     topics: new Map(), rows: new Map(), facts: new Map(), epoch: null, pause: { paused: false, generation: 0 }, indexRevision: 0,
-    claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(),
+    claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(), rawRows: new Map(), rawFences: new Set(),
   };
   pause = new Mutex();
   write = new Mutex();
@@ -288,11 +289,12 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
     return (getState, _markDirty, run) => body(getState, run);
   }, true);
 
-  function dump() {
+  function dump(includeRaw = false) {
     const snapshot = [...owners]
       .filter(([, { committed }]) => committed.rows.size > 0 || committed.facts.size > 0 ||
         committed.pause.generation > 0 || committed.claims.size > 0 ||
-        (includeTopics && (committed.topics.size > 0 || committed.indexRevision > 0)))
+        (includeTopics && (committed.topics.size > 0 || committed.indexRevision > 0)) ||
+        (includeRaw && (committed.rawRows.size > 0 || committed.rawFences.size > 0 || committed.indexRevision > 0)))
       .sort(([a], [b]) => compareUtf8(a, b))
       .map(([owner, { committed }]) => ({
         owner,
@@ -305,8 +307,12 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
           }),
         facts: [...committed.facts.values()],
         pause: committed.pause,
+        ...(includeRaw && {
+          rawRows: [...committed.rawRows.values()].sort((a, b) => compareUtf8(a.ref.id, b.ref.id)),
+          rawFences: [...committed.rawFences].sort(compareUtf8),
+        }),
+        ...((includeRaw || includeTopics) && { indexRevision: committed.indexRevision }),
         ...(includeTopics && {
-          indexRevision: committed.indexRevision,
           topics: [...committed.topics].map(([namespace, { topics, outcomes, failures }]) => ({
             namespace,
             topics: [...topics.values()],

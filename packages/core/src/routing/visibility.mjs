@@ -5,8 +5,8 @@ import { requiresLegacyMacDomain, snapshotReader, withholdsAnyPassage } from "..
 import { validateSuppressionFact } from "../suppression-fact.mjs";
 import { buildDocumentCard } from "./card.mjs";
 
-/** @import { Scope } from "../ports/common.d.ts" */
-/** @import { DocumentCardHiddenReason, DocumentCardSourceWithheldInput, DocumentCardStalenessInput, DocumentCardVisibility, DocumentCardVisibilityInput, StaleReplacement, StaleReplacementInput } from "./visibility.mjs" */
+/** @import { ItemRef, Scope } from "../ports/common.d.ts" */
+/** @import { DocumentCardHiddenReason, DocumentCardRowDropReason, DocumentCardSourceWithheldInput, DocumentCardStalenessInput, DocumentCardVisibility, DocumentCardVisibilityInput, LoadDocumentCardVisibility, StaleReplacement, StaleReplacementInput } from "./visibility.mjs" */
 
 /** @param {unknown} value @returns {value is string} */
 const nonempty = (value) => typeof value === "string" && value.length > 0;
@@ -82,6 +82,45 @@ export async function documentCardVisible(input) {
   } catch {
     return hidden("uncertain");
   }
+}
+
+/**
+ * @template {{ ref: ItemRef }} T
+ * @param {readonly T[]} rows
+ * @param {LoadDocumentCardVisibility} loadInput
+ */
+export async function visibleDocumentCardRows(rows, loadInput) {
+  /** @type {T[]} */
+  const visible = [];
+  /** @type {Partial<Record<DocumentCardRowDropReason, number>>} */
+  const drops = {};
+  /** @param {DocumentCardRowDropReason} reason */
+  const drop = (reason) => { drops[reason] = (drops[reason] ?? 0) + 1; };
+
+  for (const row of rows) {
+    const { ref } = row;
+    if (ref?.type !== "card") {
+      drop("invalid_ref");
+      continue;
+    }
+    let input;
+    try {
+      input = await loadInput(ref);
+    } catch {
+      drop("load_failed");
+      continue;
+    }
+    if (input === null) {
+      drop("missing_input");
+      continue;
+    }
+    const verdict = await documentCardVisible(input);
+    if (!verdict.visible) drop(verdict.reason);
+    else if (input.card.id !== ref.id) drop("id_mismatch");
+    else if (input.card.scope.namespace !== ref.namespace) drop("scope_mismatch");
+    else visible.push(row);
+  }
+  return { rows: visible, drops };
 }
 
 /** @param {DocumentCardStalenessInput} input */

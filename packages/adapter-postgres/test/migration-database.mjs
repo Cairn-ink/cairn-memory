@@ -66,6 +66,18 @@ export async function migrationDatabase(t, { migrate = true } = {}) {
         },
       };
     }
+    if (name === "0008_core_memories_oldest_idx.concurrent.sql") {
+      return {
+        id: name,
+        sql,
+        concurrent: true,
+        index: {
+          name: "memories_user_oldest_idx",
+          table: "memories",
+          definition: "CREATE INDEX memories_user_oldest_idx ON public.memories USING btree (user_id, created_at, id)",
+        },
+      };
+    }
     if (name.endsWith(".concurrent.sql")) throw new Error(`Missing index definition for ${name}`);
     return { id: name, sql, concurrent: false };
   }));
