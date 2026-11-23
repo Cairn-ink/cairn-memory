@@ -56,12 +56,27 @@ export interface DocumentCardEmbedding {
 export interface DocumentCardStore {
   /**
    * Runs inside the capture finish transaction. Idempotent on (id, contentHash).
+   * Bind sourceMemories for a router card to the memories that capture wrote or
+   * touched for its source message, or use documentCardMemoryLinks with receipts.
+   * On recapture, union these bindings by id, keeping the highest revision.
+   * Use linkMemories to add bindings for the same content, or implement it within put.
    * Preserve the stored origin on replacement.
    * A hidden or tombstoned id returns "tombstoned" without writing anything.
    * Vectors supplied with a write are keyed by model.
    */
   put(tx: Tx, scope: Scope, card: DocumentCardRecord, embedding?: DocumentCardEmbedding): Promise<{
     status: "inserted" | "unchanged" | "replaced" | "tombstoned";
+  }>;
+  /**
+   * Uses the live Tx to union links into sourceMemories by id, keeping the highest revision.
+   * A change returns "linked" and advances the owner index revision once. A union
+   * with no change returns "unchanged". A hidden or tombstoned card returns
+   * "tombstoned" without writing. An unknown id returns "not_found".
+   * Allows a later capture to add links for receipts citing the same message
+   * while put stays idempotent on (id, contentHash). A host may implement this in put.
+   */
+  linkMemories(tx: Tx, scope: Scope, cardId: string, links: DocumentCardRecord["sourceMemories"]): Promise<{
+    status: "linked" | "unchanged" | "tombstoned" | "not_found";
   }>;
   hide(tx: Tx, scope: Scope, cardId: string, reason: string): Promise<void>;
   hideWhere(tx: Tx, scope: Scope, selector: DocumentCardHideSelector, reason: string): Promise<{ hidden: number }>;

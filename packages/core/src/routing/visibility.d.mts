@@ -40,6 +40,7 @@ export type DocumentCardVisibility =
   | { visible: true; reason: null }
   | { visible: false; reason: DocumentCardHiddenReason };
 
+/** Message-backed cards can remain visible with historical links. Import and manual cards require exact visible revisions. */
 export declare function documentCardVisible(input: DocumentCardVisibilityInput): Promise<DocumentCardVisibility>;
 
 export interface DocumentCardStalenessInput {
