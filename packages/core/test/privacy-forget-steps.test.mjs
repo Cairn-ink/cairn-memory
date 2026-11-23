@@ -16,7 +16,7 @@ test("forget gates use the registered capabilities for each optional effect", ()
     "session.fence": ["rawArchive"],
     "raw.purge": ["rawArchive"],
     "receipts.suppress": ["spanLineage"],
-    "dependents.invalidate": ["cards", "placement", "conflictEdges", "stagedEvidence"],
+    "dependents.invalidate": ["cards", "placement", "conflictEdges", "stagedEvidence", "documentCards"],
   });
   assert.ok(Object.isFrozen(FORGET_STEP_CAPABILITIES));
   for (const [step, gates] of Object.entries(FORGET_STEP_CAPABILITIES)) {
