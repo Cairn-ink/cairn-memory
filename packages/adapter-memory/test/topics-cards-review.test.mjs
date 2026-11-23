@@ -1,14 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createMemoryAdapter } from '@cairn-ink/adapter-memory';
-import { coreDigest, placePendingBatch, placePendingCards, placePendingCardsBatch } from '@cairn-ink/core';
+import { coreDigest, placePendingCards, placePendingCardsBatch } from '@cairn-ink/core';
 import { buildDocumentCard } from '@cairn-ink/core/routing';
 
 const personal = { owner: 'owner', namespace: null };
 const team = { ...personal, namespace: 'team' };
 const page = { cursor: null, limit: 10 };
 const gate = { async assertOpen() {} };
-const conflict = { status: 'failed', error: { code: 'revision_conflict', retryable: false } };
 const guard = ({ id: cardId, contentHash }) => ({ cardId, contentHash });
 const imported = (id, scope = personal) => ({
   id, scope, origin: 'import', title: 'Imported note', body: 'An imported note about diagrams.',
@@ -114,58 +113,6 @@ test('topic list and members check card visibility in the membership namespace',
     cardCount: listed.items.find(({ id }) => id === topicId)?.cardCount,
     cards: members.items.filter(({ kind }) => kind === 'card'),
   }, { cardCount: 0, cards: [] });
-});
-
-test('a memory apply conflict leaves both items pending for a fresh batch', async () => {
-  const f = fixture();
-  const changing = await f.insert('Memory before revision', 'b');
-  const healthy = await f.insert('Unchanged memory', 'c');
-  let first = true;
-  const run = () => placePendingBatch({
-    ...f,
-    async classify({ memories }, _catalog, { validateFresh }) {
-      await validateFresh();
-      if (first) {
-        first = false;
-        assert.equal(memories.length, 2);
-        await f.write((tx) => f.memories.replaceContent(tx, personal, changing.id, changing.revision,
-          memoryInput('Memory after revision', 'd'), null, 2));
-      }
-      return { items: memories.map(({ id: memoryId }) => ({ memoryId, parentIds: [] })) };
-    },
-  });
-  assert.deepEqual(await run(), conflict);
-  const second = await run();
-  assert.equal(second.status, 'applied', 'The next run must place the fresh batch');
-  assert.deepEqual(new Set(second.placed.map(({ memoryId }) => memoryId)), new Set([healthy.id, changing.id]));
-  assert.deepEqual((await f.harness.dump())[0].topics[0].failures, []);
-});
-
-test('a card apply conflict leaves both items pending for a fresh batch', async () => {
-  const f = fixture();
-  const changing = imported('changing');
-  const healthy = imported('healthy');
-  await f.put(changing);
-  await f.put(healthy);
-  let first = true;
-  const run = () => placePendingCardsBatch({
-    ...f,
-    async classify({ cards }, _catalog, { validateFresh }) {
-      await validateFresh();
-      if (first) {
-        first = false;
-        assert.deepEqual(cards.map(({ cardId }) => cardId), [changing.id, healthy.id]);
-        await f.put(revised(changing));
-      }
-      return { items: cards.map(({ cardId }) => ({ cardId, parentIds: [] })) };
-    },
-  });
-  assert.deepEqual(await run(), conflict);
-  const second = await run();
-  assert.deepEqual(second, {
-    status: 'applied', placed: [changing, healthy].map(({ id: cardId }) => ({ cardId, topicIds: [] })),
-  });
-  assert.deepEqual((await f.harness.dump())[0].topics[0].cardFailures, []);
 });
 
 test('a router card with a historical source is skipped so a healthy import can be placed', async () => {

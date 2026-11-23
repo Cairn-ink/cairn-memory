@@ -1,8 +1,9 @@
 import { CoreError, isCoreError } from '../errors.mjs';
-import { readClassificationCatalog } from './catalog.mjs';
+import { CLASSIFICATION_CATALOG_LIMIT } from './catalog.mjs';
 import { classifyPlacement } from './classify.mjs';
 
 /** @import { PlacePendingBatchOptions, PlacePendingBatchResult, PlacePendingOptions } from './batch.mjs' */
+/** @import { ClassificationCatalogItem } from './catalog.mjs' */
 /** @import { ClassificationCatalog, ClassificationSnapshot } from './classify.mjs' */
 /** @import { PlacementProposal } from './proposal.mjs' */
 
@@ -34,7 +35,15 @@ async function runPendingBatch({ uow, scope, placement, memories }, classify) {
     const pending = await placement.pending(tx, scope, { limit: 5 });
     if (!pending.length) return null;
 
-    const { indexRevision, catalogView } = await readClassificationCatalog(placement, tx, scope);
+    /** @type {ClassificationCatalogItem[]} */
+    const map = [];
+    let page = await placement.catalog(tx, scope, { cursor: null, limit: CLASSIFICATION_CATALOG_LIMIT });
+    const { indexRevision } = page;
+    while (true) {
+      for (const { id, level, title } of page.items) map.push({ type: 'moc', moc: { id, level, title } });
+      if (page.exhausted || map.length === CLASSIFICATION_CATALOG_LIMIT) break;
+      page = await placement.catalog(tx, scope, { cursor: page.nextCursor, limit: CLASSIFICATION_CATALOG_LIMIT - map.length });
+    }
 
     const snapshot = [];
     for (const { memoryId, revision } of pending) {
@@ -44,7 +53,7 @@ async function runPendingBatch({ uow, scope, placement, memories }, classify) {
       }
     }
     if (!snapshot.length) return null;
-    return { snapshot: { memories: snapshot, indexRevision }, catalogView,
+    return { snapshot: { memories: snapshot, indexRevision }, catalogView: { map, mapExhausted: page.exhausted },
       basedOn: { indexRevision, memoryRevisions: snapshot.map(({ id, revision }) => ({ memoryId: id, revision })) } };
   });
   if (!batch) return { status: 'idle' };
@@ -67,7 +76,7 @@ async function runPendingBatch({ uow, scope, placement, memories }, classify) {
   } catch (error) {
     if (!isCoreError(error)) throw error;
     const { code, kind, retryable } = error;
-    if (kind !== 'paused' && kind !== 'conflict') {
+    if (kind !== 'paused') {
       const ids = basedOn.memoryRevisions.map(({ memoryId }) => memoryId);
       try {
         await uow.run(scope.owner, {}, (tx) => placement.markFailed(tx, scope, ids, code));

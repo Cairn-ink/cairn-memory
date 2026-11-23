@@ -106,7 +106,7 @@ async function runPendingCards({ uow, scope: { owner, namespace }, placement, do
   } catch (error) {
     if (!isCoreError(error)) throw error;
     const { code, kind, retryable } = error;
-    if (kind !== 'paused' && kind !== 'conflict') {
+    if (kind !== 'paused') {
       try {
         if (newlyExcluded.length) await markFailed(newlyExcluded, 'source_excluded');
         const remaining = basedOn.cards.filter(({ cardId }) => !newlyExcluded.some((guard) => guard.cardId === cardId));
