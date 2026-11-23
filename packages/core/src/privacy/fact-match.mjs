@@ -81,12 +81,13 @@ function matchReader() {
   const incarnation = (value) => record(value, ["id", "createdAtMs"]);
   /** @param {unknown} value */
   const digest = (value) => record(value, ["alg", "value", "pipeline", "redactionVersion", "keyId"]);
-  const fingerprintLists = {
+  const fingerprintDigests = {
     digests: (/** @type {unknown} */ value) => list(value, digest),
+  };
+  const fingerprintLists = {
+    ...fingerprintDigests,
     shingles: (/** @type {unknown} */ value) => list(value, scalar),
   };
-  /** @param {unknown} value */
-  const passage = (value) => record(value, ["keyId"], { ...fingerprintLists, embedding: candidateEmbedding });
 
   return {
     /** @param {StoredFact} stored */
@@ -104,14 +105,25 @@ function matchReader() {
       });
       return body?.fact;
     },
-    /** @param {FactMatchRow} row */
-    row(row) {
-      return /** @type {FactMatchRow} */ (/** @type {unknown} */ (record(row, [
-        "type", "memoryId", "revision", "sessionKeyHash", "messageKey", "startUtf16", "endUtf16", "keyId",
-      ], { scope, source, ...fingerprintLists, embedding: candidateEmbedding })));
+    /** @param {SuppressionFact} fact @param {FactMatchPolicy} policy */
+    useCandidateShingles(fact, policy) {
+      // Stored evidence is always captured for validation. Only candidate evidence can be omitted.
+      return !(fact.kind === "text" && fact.mode === "full" && policy && typeof policy === "object" &&
+        !Array.isArray(policy) && field(policy, "rowShingles") === false);
     },
-    /** @param {FactMatchIncoming} incoming */
-    incoming(incoming) {
+    /** @param {FactMatchRow} row @param {boolean} useShingles */
+    row(row, useShingles) {
+      return /** @type {FactMatchRow} */ (/** @type {unknown} */ (record(row, [
+        "type", "memoryId", "revision", "sessionKeyHash", "messageKey", "startUtf16", "endUtf16",
+        ...(useShingles ? ["keyId"] : []),
+      ], { scope, source, ...(useShingles ? fingerprintLists : fingerprintDigests), embedding: candidateEmbedding })));
+    },
+    /** @param {FactMatchIncoming} incoming @param {boolean} useShingles */
+    incoming(incoming, useShingles) {
+      /** @param {unknown} value */
+      const passage = (value) => record(value, useShingles ? ["keyId"] : [], {
+        ...(useShingles ? fingerprintLists : fingerprintDigests), embedding: candidateEmbedding,
+      });
       return /** @type {FactMatchIncoming} */ (/** @type {unknown} */ (record(incoming, ["occurredAtMs"], {
         scope, passages: (value) => list(value, passage, true), session: source, sourceMemory: incarnation,
       })));
@@ -119,7 +131,7 @@ function matchReader() {
     /** @template {FactMatchPolicy} T @param {T} policy */
     policy(policy) {
       return /** @type {T} */ (/** @type {unknown} */ (record(policy, [
-        "mode", "containmentThreshold", "vectorSuppression", "suppressionDistance",
+        "mode", "containmentThreshold", "vectorSuppression", "suppressionDistance", "rowShingles",
       ], {
         key: (value) => record(value, ["id"]),
         hashSessionKey: (value) => typeof value === "function" ? value : undefined,
@@ -159,7 +171,8 @@ function cosineDistance(a, b) {
 }
 
 /** @param {FactMatchPolicy} policy */
-function isValidVectorPolicy(policy) {
+function isValidPolicy(policy) {
+  if (policy.rowShingles !== undefined && typeof policy.rowShingles !== "boolean") return false;
   if (!Object.hasOwn(policy, "vectorSuppression") || policy.vectorSuppression === false) return true;
   if (policy.vectorSuppression !== true) return false;
   if (!Object.hasOwn(policy, "suppressionDistance")) return true;
@@ -214,13 +227,15 @@ function matchPassages(passages, fact, policy, explicit, edit) {
   }
   if (fact.mode === "exact") return result;
 
-  const checkContainment = !explicit || checksExplicitPassages(fact, edit, passages);
+  const useShingles = policy.rowShingles !== false;
+  const checkContainment = useShingles && (!explicit || checksExplicitPassages(fact, edit, passages));
   const containmentKeyUnavailable = explicit != null && checkContainment &&
     (explicit.key !== undefined || passages.length === 0) && (!explicit.key || explicit.key.id !== fact.text.keyId);
   if (containmentKeyUnavailable && passages.length === 0) return "ineligible";
 
   for (const passage of candidates) {
-    const shingles = shingleContainmentMatch(passage, fact.text, threshold, checkContainment, containmentKeyUnavailable);
+    const shingles = useShingles &&
+      shingleContainmentMatch(passage, fact.text, threshold, checkContainment, containmentKeyUnavailable);
     if (shingles === true) return true;
     const vector = explicit ? false : vectorMatch(passage, fact, policy);
     if (vector === true) return true;
@@ -307,29 +322,37 @@ function blocksIncoming(fact, incoming, policy) {
   }
 }
 
-/** @param {StoredFact} storedFact @param {FactMatchRow} row @param {FactMatchPolicy} [policy] @returns {FactMatchResult} */
+/**
+ * `rowShingles` defaults to true. Set it to false for stores without row shingles to use
+ * exact digests and enabled vectors for full text facts. Paraphrases that miss both can stay visible.
+ * @param {StoredFact} storedFact @param {FactMatchRow} row @param {FactMatchPolicy} [policy] @returns {FactMatchResult}
+ */
 export function factHidesRow(storedFact, row, policy = {}) {
   try {
     const snapshot = matchReader();
-    const fact = snapshot.fact(storedFact);
-    const candidate = snapshot.row(row);
+    const fact = validateSuppressionFact(snapshot.fact(storedFact));
+    const candidate = snapshot.row(row, snapshot.useCandidateShingles(fact, policy));
     const rules = snapshot.policy(policy);
-    if (!isValidVectorPolicy(rules)) return "ineligible";
-    return hidesRow(validateSuppressionFact(fact), candidate, rules);
+    if (!isValidPolicy(rules)) return "ineligible";
+    return hidesRow(fact, candidate, rules);
   } catch {
     return "ineligible";
   }
 }
 
-/** @param {StoredFact} storedFact @param {FactMatchIncoming} incoming @param {IncomingFactMatchPolicy} policy @returns {FactMatchResult} */
+/**
+ * `rowShingles` defaults to true. Set it to false to skip containment for full text facts.
+ * Enabled vectors still apply in capture mode. Explicit saves use exact digests.
+ * @param {StoredFact} storedFact @param {FactMatchIncoming} incoming @param {IncomingFactMatchPolicy} policy @returns {FactMatchResult}
+ */
 export function factBlocksIncoming(storedFact, incoming, policy) {
   try {
     const snapshot = matchReader();
-    const fact = snapshot.fact(storedFact);
-    const candidate = snapshot.incoming(incoming);
+    const fact = validateSuppressionFact(snapshot.fact(storedFact));
+    const candidate = snapshot.incoming(incoming, snapshot.useCandidateShingles(fact, policy));
     const rules = snapshot.policy(policy);
-    if (!isValidVectorPolicy(rules)) return "ineligible";
-    return blocksIncoming(validateSuppressionFact(fact), candidate, rules);
+    if (!isValidPolicy(rules)) return "ineligible";
+    return blocksIncoming(fact, candidate, rules);
   } catch {
     return "ineligible";
   }

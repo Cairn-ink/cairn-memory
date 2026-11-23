@@ -1,5 +1,4 @@
 import type { Scope } from "../ports/common.d.ts";
-import type { PassageFingerprint } from "../ports/privacy.d.ts";
 import type { SessionRef, StoredFact, TextDigest } from "../suppression-fact.mjs";
 
 export { NEAR_DUPLICATE_DISTANCE, SUPPRESSION_DISTANCE } from "../decisions.mjs";
@@ -12,6 +11,11 @@ export type FactMatchEmbedding = readonly number[] | Float32Array | Float64Array
 
 export interface FactMatchPolicy {
   containmentThreshold?: number;
+  /**
+   * Defaults to true. Set to false to skip full-text shingle containment for stores without row shingles.
+   * Row reads can keep paraphrases visible when both exact digests and enabled vectors miss.
+   */
+  rowShingles?: boolean | undefined;
   /** Omit to disable vector suppression. */
   vectorSuppression?: boolean;
   /** For enabled vector suppression, a finite distance in [0, 2]. Omit to use the default. */
@@ -49,7 +53,9 @@ export type FactMatchRow = FactMatchRowFields & (
 
 export interface FactMatchIncoming {
   scope: Scope;
-  passages: readonly (PassageFingerprint & { embedding?: FactMatchEmbedding | null })[];
+  passages: readonly (Pick<FactMatchRowFields, "shingles" | "keyId" | "embedding"> & {
+    digests: readonly TextDigest[];
+  })[];
   session?: SessionRef;
   occurredAtMs?: number | null;
   /** Memory incarnation being edited, if this is an explicit edit. */
