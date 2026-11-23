@@ -3,14 +3,25 @@ import { DAY_MS, dayLabel, dayStart, ledgerRowInRange, monthStart, weekStart, ye
 
 /** @import { LedgerDigest, LedgerWindow, QuantityLedgerRow } from './index.mjs' */
 
-const numbers = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
+const numbers = new Intl.NumberFormat('en-US', { maximumSignificantDigits: 6 });
 const currencyNumbers = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const currencyCodes = new Set(Intl.supportedValuesOf('currency'));
+
+/** @param {string} unit */
+const amountFormatter = unit => currencyCodes.has(unit) ? currencyNumbers : numbers;
 
 /** @param {number} value @param {string} unit */
 function amount(value, unit) {
-  if (unit === 'USD') return '$' + currencyNumbers.format(value);
-  if (/^[A-Z]{3}$/u.test(unit)) return unit + ' ' + currencyNumbers.format(value);
-  return numbers.format(value) + (unit && unit !== 'steps' ? ' ' + unit : '');
+  const formatter = amountFormatter(unit);
+  const formatted = formatter.format(value);
+  if (unit === 'USD') return '$' + formatted;
+  if (formatter === currencyNumbers) return unit + ' ' + formatted;
+  return formatted + (unit && unit !== 'steps' ? ' ' + unit : '');
+}
+
+/** @param {number} value @param {string} unit */
+function displayedValue(value, unit) {
+  return Number.isFinite(value) ? Number(amountFormatter(unit).format(value).replaceAll(',', '')) : value;
 }
 
 /** @param {string} text */
@@ -88,7 +99,7 @@ function compareGoal(goal, records, window) {
   }
   const divisor = period === 'day' ? measure === 'steps' ? matching.length : daysIn(window) : 1;
   const actual = total(matching) / divisor;
-  const difference = actual - value;
+  const difference = displayedValue(actual, unit) - displayedValue(value, unit);
   const met = comparator === 'at_least' ? difference >= 0 : difference <= 0;
   const delta = difference === 0 ? '' : `, ${difference > 0 ? 'over' : 'under'} by ${amount(Math.abs(difference), unit)}`;
   return { rows: matching, text: `${target}: actual ${amount(actual, unit)} per ${period}, goal ${met ? 'met' : 'missed'}${delta}.` };

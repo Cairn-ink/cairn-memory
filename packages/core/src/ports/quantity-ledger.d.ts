@@ -20,6 +20,8 @@ export type Quantity = {
 
 export type QuantityLedgerRow = Quantity & {
   memoryId: string;
+  /** The memory's core text hash at the time this row was written. */
+  textHash: string;
   /** Canonical retained receipt for this memory. */
   receiptId: string;
   /** Event time in integer milliseconds since the epoch. */
@@ -33,8 +35,8 @@ export interface QuantityLedgerRange {
 }
 
 export type QuantityLedgerDropSelector =
-  | { memoryId: string; receiptId?: never }
-  | { receiptId: string; memoryId?: never };
+  | { by: "memoryId"; id: string }
+  | { by: "receiptId"; id: string };
 
 /**
  * Optional (capability quantityLedger). Every call uses the live Tx from UnitOfWork.
@@ -47,7 +49,10 @@ export interface QuantityLedgerStore {
    * A replay leaves the original row intact. Rows have no revision binding.
    */
   put(tx: Tx, scope: Scope, rows: readonly QuantityLedgerRow[]): Promise<{ inserted: number }>;
+  /** Adapters must validate the selector with ledgerDropSelector from @cairn-ink/core/ledger. */
   dropWhere(tx: Tx, scope: Scope, selector: QuantityLedgerDropSelector): Promise<{ dropped: number }>;
+  /** Read existing rows in the capture finish transaction without advancing the index revision. */
+  listForMemory(tx: Tx, scope: Scope, memoryId: string): Promise<QuantityLedgerRow[]>;
   /** Read snapshot, integer-ms half-open [fromMs, toMs) over the row's date. */
   list(tx: Tx, scope: Scope, range: QuantityLedgerRange): Promise<QuantityLedgerRow[]>;
   /** Distinct measure, category and group terms from rows whose memory is current in the read snapshot. */

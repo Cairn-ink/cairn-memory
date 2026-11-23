@@ -5,7 +5,7 @@ import { digest, ledgerRowDeliverable, ledgerRowInRange, parseWindow, readIntent
 
 const at = date => Date.parse(date);
 const record = (id, date, fields = {}) => ({
-  memoryId: id, receiptId: 'receipt-' + id, date: typeof date === 'string' ? at(date) : date,
+  memoryId: id, textHash: 'hash-' + id, receiptId: 'receipt-' + id, date: typeof date === 'string' ? at(date) : date,
   ordinal: 0, kind: 'record', measure: 'spend', value: 6, unit: 'USD', group: 'food',
   category: 'coffee', period: 'none', comparator: 'none', ...fields,
 });
@@ -25,18 +25,19 @@ test('the optional ledger port and capability must be configured together', () =
 test('delivery requires positive current visibility and receipt retention for the same memory', () => {
   const row = record('memory', '2026-01-05');
   const retainedReceipts = new Map([[row.memoryId, new Set([row.receiptId])]]);
+  const memoryTextHashes = new Map([[row.memoryId, row.textHash]]);
   const visibility = status => new Map([[row.memoryId, status]]);
   const memoryStates = visibility('current_visible');
-  assert.equal(ledgerRowDeliverable(row, { memoryStates, retainedReceipts }), true);
+  assert.equal(ledgerRowDeliverable(row, { memoryStates, retainedReceipts, memoryTextHashes }), true);
   for (const state of ['forgotten', 'superseded', 'hidden', 'unknown']) {
-    assert.equal(ledgerRowDeliverable(row, { memoryStates: visibility(state), retainedReceipts }), false, state);
+    assert.equal(ledgerRowDeliverable(row, { memoryStates: visibility(state), retainedReceipts, memoryTextHashes }), false, state);
   }
   for (const absent of [null, new Map()]) {
-    assert.equal(ledgerRowDeliverable(row, { memoryStates: absent, retainedReceipts }), false);
-    assert.equal(ledgerRowDeliverable(row, { memoryStates, retainedReceipts: absent }), false);
+    assert.equal(ledgerRowDeliverable(row, { memoryStates: absent, retainedReceipts, memoryTextHashes }), false);
+    assert.equal(ledgerRowDeliverable(row, { memoryStates, retainedReceipts: absent, memoryTextHashes }), false);
   }
   const retired = new Map([['other-memory', new Set([row.receiptId])], [row.memoryId, new Set(['replacement'])]]);
-  assert.equal(ledgerRowDeliverable(row, { memoryStates, retainedReceipts: retired }), false);
+  assert.equal(ledgerRowDeliverable(row, { memoryStates, retainedReceipts: retired, memoryTextHashes }), false);
 });
 
 test('intent needs a cue and matching terms, including count questions and CJK aliases', () => {

@@ -41,7 +41,8 @@ const fail = (code) => { throw Object.assign(new Error(code), { code }); };
 
 function object(value, allowed) {
   if (!value || typeof value !== 'object' || Array.isArray(value) ||
-      Object.keys(value).some(key => !allowed.includes(key))) fail('invalid_input');
+      Object.getOwnPropertyNames(value).some(key =>
+        !allowed.includes(key) && Object.getOwnPropertyDescriptor(value, key)?.enumerable)) fail('invalid_input');
   return value;
 }
 
@@ -76,8 +77,13 @@ export function validatePlainCandidates(output, policy) {
 export function validatePlainExtraction(output, policy, options = {}) {
   const enabled = options.quantities === true;
   const items = validateCandidates(output, policy, enabled ? ['items', 'quantities'] : ['items']);
-  const descriptor = enabled ? Object.getOwnPropertyDescriptor(output, 'quantities') : undefined;
-  const value = descriptor && (Object.hasOwn(descriptor, 'value') ? descriptor.value : null);
+  let value;
+  try {
+    const descriptor = enabled ? Object.getOwnPropertyDescriptor(output, 'quantities') : undefined;
+    value = descriptor && (Object.hasOwn(descriptor, 'value') ? descriptor.value : null);
+  } catch {
+    value = null;
+  }
   return { items, ...validateQuantities(value, items.length) };
 }
 

@@ -57,18 +57,23 @@ function readQuantity(value, itemCount) {
 export function validateQuantities(value, itemCount) {
   const quantities = [];
   let dropped = 0;
-  if (Array.isArray(value)) {
-    for (let index = 0; index < value.length; index++) {
-      let quantity = null;
-      try {
+  try {
+    if (Array.isArray(value)) {
+      const length = value.length;
+      if (!Number.isInteger(length) || length < 0 || length > 0xffffffff) {
+        return { quantities: [], dropped: { invalid_extraction_quantity: 1 } };
+      }
+      for (let index = 0; index < length; index++) {
         const entry = Object.getOwnPropertyDescriptor(value, index);
-        if (entry?.enumerable && Object.hasOwn(entry, 'value')) quantity = readQuantity(entry.value, itemCount);
-      } catch { /* Reject only this entry. */ }
-      if (quantity) quantities.push(quantity);
-      else dropped++;
+        const quantity = entry?.enumerable && Object.hasOwn(entry, 'value') ? readQuantity(entry.value, itemCount) : null;
+        if (quantity) quantities.push(quantity);
+        else dropped++;
+      }
+    } else if (value !== undefined) {
+      dropped++;
     }
-  } else if (value !== undefined) {
-    dropped++;
+  } catch {
+    return { quantities: [], dropped: { invalid_extraction_quantity: 1 } };
   }
   return { quantities, dropped: { invalid_extraction_quantity: dropped } };
 }

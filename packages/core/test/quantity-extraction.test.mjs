@@ -35,7 +35,7 @@ test('plain extraction pins the original system, input and schema bytes', () => 
 });
 
 function assertEnabled({ system, input, schema }, base) {
-  assert.equal(system, base.system + frozenParagraph);
+  assert.equal(system, base.system + '\n' + frozenParagraph);
   assert.equal(JSON.stringify(input), JSON.stringify(base.input));
   assert.deepEqual(Object.keys(schema.properties), ['items', 'quantities']);
   assert.deepEqual(schema.required, ['items', 'quantities']);

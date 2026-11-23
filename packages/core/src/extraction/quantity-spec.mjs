@@ -6,9 +6,8 @@ import { EXTRACT_QUANTITIES_PARAGRAPH } from './generated/extract-memories-promp
  * @param {string} system @param {T} schema
  */
 export function withQuantityExtraction(system, schema) {
-  const separator = system.endsWith('\n') ? '' : '\n';
   return {
-    system: system + separator + EXTRACT_QUANTITIES_PARAGRAPH,
+    system: system + '\n' + EXTRACT_QUANTITIES_PARAGRAPH,
     schema: {
       ...schema,
       properties: { ...schema.properties, quantities: quantitySchema() },
