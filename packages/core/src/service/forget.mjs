@@ -78,7 +78,7 @@ async function cardSources(hydrate, tx, scope, row, spans) {
  */
 export function forgetMethod({ storage, clock }) {
   const { uow, capabilities, keys, memories, suppressions, raw, sessionLineage, spanLineage, hydrate,
-    conflicts, documentCards, quantityLedger, forgetLog } = storage;
+    conflicts, rationale, documentCards, quantityLedger, forgetLog } = storage;
 
   return entry(async (input, id, inputSource) => {
     const scope = scopeOf(input);
@@ -179,6 +179,10 @@ export function forgetMethod({ storage, clock }) {
       if (enabled(capabilities, "dependents.invalidate", "conflictEdges")) {
         if (!conflicts) throw new CoreError("capability_unavailable");
         await conflicts.invalidate(tx, scope, id);
+      }
+      if (enabled(capabilities, "dependents.invalidate", "rationaleEdges")) {
+        if (!rationale) throw new CoreError("capability_unavailable");
+        await rationale.invalidate(tx, scope, id);
       }
       if (enabled(capabilities, "dependents.invalidate", "quantityLedger")) {
         if (!quantityLedger) throw new CoreError("capability_unavailable");

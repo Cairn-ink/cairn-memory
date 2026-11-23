@@ -4,6 +4,8 @@ import { createFactMatcher } from "./fact-match.mjs";
 import { createRelationStores } from "./memory-relations.mjs";
 import { createMemoryStore } from "./memory-store.mjs";
 import { createFactStore, createFingerprintProvider, createPauseStore } from "./privacy.mjs";
+import { createRationaleStore } from "./rationale.mjs";
+import { createRationaleHarness } from "./rationale-harness.mjs";
 import { createRawPorts } from "./raw.mjs";
 import { createRetrievalPorts } from "./retrieval.mjs";
 import { createTopicStore } from "./topics.mjs";
@@ -31,11 +33,13 @@ export function createMemoryAdapter(options = {}) {
   const matchFacts = createFactMatcher(flags.vectorSuppression, options.hashSessionKey);
   const { keys, ringKeys, labels, setFingerprintSecret } =
     createFingerprintProvider(flags.fingerprintKey, options.fingerprint, rotateRowDigests);
-  const archive = flags.rawArchive ? createRawPorts(work, keys, ringKeys, labels, options.hashSessionKey) : undefined;
+  const archive = flags.rawArchive ?
+    createRawPorts(work, keys, ringKeys, labels, options.hashSessionKey, flags.rationaleEdges) : undefined;
   const store = createMemoryStore(port, flags, newId, matchFacts, ringKeys);
   const { supersession, conflicts } = createRelationStores(port, matchFacts);
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts,
     flags.fingerprintKey ? ringKeys : undefined);
+  const rationale = flags.rationaleEdges ? createRationaleStore(port, matchFacts, ringKeys, archive?.findVisibleSource) : undefined;
   /** @type {import("./index.d.mts").MemoryAdapter} */
   const adapter = {
     name: "memory",
@@ -52,6 +56,7 @@ export function createMemoryAdapter(options = {}) {
       ["recordLineage", "archive", "importArchive", "fenceSession", "purgeWithheld", "eraseSessions", "deleteConversation"]) }),
     ...(flags.supersession && { supersession: handleWriteRejections(supersession, ["record", "markHistorical"]) }),
     ...(flags.conflictEdges && { conflicts: handleWriteRejections(conflicts, ["insert", "invalidate"]) }),
+    ...(rationale && { ...rationale, rationale: handleWriteRejections(rationale.rationale, ["insert", "invalidate"]) }),
     ...(flags.placement && { placement: handleWriteRejections(
       createTopicStore(port, flags, newId, now, matchFacts, options), ["applyPlacement", "markFailed", "dropMemory"]) }),
     nativeErrorMap,
@@ -65,6 +70,7 @@ export function createMemoryAdapter(options = {}) {
           throw toCoreError(error, nativeErrorMap);
         }
       },
+      ...(rationale && createRationaleHarness(port, runSeed)),
       setWriteTime,
       setFingerprintSecret,
       rowsMissingKeyedDigest(owner) { return rowsMissingKeyedDigest(owner, ringKeys); },

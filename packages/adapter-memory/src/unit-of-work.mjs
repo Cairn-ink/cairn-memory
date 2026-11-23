@@ -16,9 +16,12 @@ import { addKeyedDigest, createFactStore } from "./privacy.mjs";
 /** @typedef {import("./capture.mjs").ClaimRecord} ClaimRecord */
 /** @typedef {import("@cairn-ink/core/ports").FinishResult} FinishResult */
 /** @typedef {import("./topics.mjs").TopicState} TopicState */
+/** @typedef {{text: string, role: import("@cairn-ink/core/ports").Role, occurredAtMs: number | null}} RationaleMessage */
 /** @typedef {import("./memory-relations.mjs").RelationState} RelationState */
 /** @typedef {{topics: Map<Namespace, TopicState>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
- * rawRows: Map<string, import("./raw.mjs").RawEntry>, rawFences: Set<string>,
+ * rationale: Map<Namespace, Map<string, import("@cairn-ink/core/ports").RationaleEdge>>,
+ * rationaleMessages: Map<Namespace, Map<string, RationaleMessage>>,
+ * rawRows: Map<string, import("./raw.mjs").RawEntry>, rawFences: Set<string>, rawConflicts: Set<string>,
  * rawAnchors: Map<string, Map<string, import("./raw.mjs").AnchorSession>>,
  * claims: Map<string, ClaimRecord>, activeTokens: Map<string, string>, abandonedTokens: Set<string>, relations: Map<Namespace, RelationState>}} State */
 /** @typedef {{state: State, run: {readonly ended: boolean}, indexDirty: boolean, stateWritten: boolean, pauseLock: boolean,
@@ -107,6 +110,7 @@ class Owner {
     topics: new Map(), rows: new Map(), facts: new Map(), epoch: null, pause: { paused: false, generation: 0 }, indexRevision: 0,
     claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(), rawRows: new Map(), rawFences: new Set(),
     rawAnchors: new Map(), relations: new Map(),
+    rawConflicts: new Set(), rationale: new Map(), rationaleMessages: new Map(),
   };
   pause = new Mutex();
   write = new Mutex();

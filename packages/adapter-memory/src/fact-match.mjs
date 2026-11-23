@@ -184,6 +184,15 @@ export function createFactMatcher(vectorSuppression, hashSessionKey) {
         });
       },
 
+      /** @param {import("@cairn-ink/core/ports").Receipt} receipt @param {readonly TextDigest[]} digests */
+      withholdsRaw(receipt, digests) {
+        // A RawSpan fact without span-lineage proof is uncertain in this adapter.
+        return scoped.some(stored => stored.fact.kind === "rawSpan") ||
+          blocksSession(receipt.client, receipt.sessionId) ||
+          blockedMessages(receipt.client, receipt.sessionId, [receipt.occurredAtMs]).length > 0 ||
+          matchingPassages(texts, [{ digests, shingles: null, keyId: null }]).length > 0;
+      },
+
       blocksSession,
       blockedMessages,
 
