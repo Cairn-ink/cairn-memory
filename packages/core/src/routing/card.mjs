@@ -1,5 +1,5 @@
 import { cleanContent } from "../privacy/text.mjs";
-import { redactDocumentText } from "./redaction.mjs";
+import { isMarkerOnly, redactDocumentText } from "./redaction.mjs";
 
 const REVISION = 1;
 const BODY_LIMIT = 4_000;
@@ -54,6 +54,7 @@ export async function buildDocumentCard(message, { scope, client, canonicalSessi
   if (typeof canonicalSessionKey !== "string" || !canonicalSessionKey) return dropped("missing_session_key");
   const body = redactDocumentText(message.content, true);
   if (body === null) return dropped("unmappable_redaction");
+  if (isMarkerOnly(body)) return dropped("marker_only");
   if (body.length > BODY_LIMIT) return dropped("oversize");
   const firstLine = body.split("\n").find(line => line.trim());
   if (firstLine === undefined) return dropped("empty_body");

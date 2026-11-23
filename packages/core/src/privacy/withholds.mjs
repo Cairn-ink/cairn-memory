@@ -274,6 +274,13 @@ export function withholdsPassage(passage, fact, threshold = CONTAINMENT_THRESHOL
   return withholdsAnyPassage([passage], [fact], threshold);
 }
 
+/** @param {TextFact} fact */
+export function requiresLegacyMacDomain({ text }) {
+  // Legacy MAC labels are adapter-owned. With only keyed digests, core cannot prove a miss.
+  return text.digests.every(digest => digest.alg === "hmac") &&
+    text.digests.some(digest => digest.pipeline !== "core");
+}
+
 /**
  * @param {readonly PassageFingerprint[]} passages
  * @param {readonly TextFact[]} facts
