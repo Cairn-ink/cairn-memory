@@ -1,0 +1,22 @@
+{
+  "name": "@cairn-ink/conformance",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": { "types": "./src/index.d.mts", "default": "./src/index.mjs" },
+    "./factory": { "types": "./src/factory.d.ts" },
+    "./node-test": { "types": "./src/node-test.d.mts", "default": "./src/node-test.mjs" }
+  },
+  "files": ["src"],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@cairn-ink/core": "file:../core"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
+  }
+}

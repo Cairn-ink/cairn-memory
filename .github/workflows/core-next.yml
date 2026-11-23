@@ -31,6 +31,17 @@ jobs:
         working-directory: packages/adapter-postgres
       - run: npm run typecheck
         working-directory: packages/adapter-postgres
+      - run: npm ci --ignore-scripts
+        working-directory: packages/adapter-memory
+      # The conformance kit's own cases and regression mutants run here, against the memory adapter.
+      - run: npm test
+        working-directory: packages/adapter-memory
+      - run: npm run typecheck
+        working-directory: packages/adapter-memory
+      - run: npm ci --ignore-scripts
+        working-directory: packages/conformance
+      - run: npm run typecheck
+        working-directory: packages/conformance
   adapter-postgres-db:
     runs-on: ubuntu-latest
     strategy:
