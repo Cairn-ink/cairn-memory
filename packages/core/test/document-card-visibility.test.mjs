@@ -143,7 +143,7 @@ const rawRows = [
   rawRow,
   { ...rawRow, startUtf16: 4, endUtf16: 8, digests: [matchingDigest] },
 ];
-const raw = { rawRows, sourceExcluded: false };
+const raw = { rawRows, sourceExcluded: false, sourceLengthUtf16: 8 };
 
 for (const [name, fact] of [
   ["session", { kind: "session", session: { client: rawRow.source.client, sessionId: rawRow.source.sessionId } }],
