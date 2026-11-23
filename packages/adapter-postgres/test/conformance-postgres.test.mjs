@@ -4,11 +4,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { Socket } from "node:net";
 import test from "node:test";
 import { Pool } from "pg";
-import {
-  CAPTURE_CASES, CASES, KEYED_DIGEST_CASES, PRIVACY_CASES, PRIVACY_MATCH_CASES,
-  RAW_CASES, SOURCE_FILTER_CASES, TOPIC_CASES, runCase,
-  IMPORT_ARCHIVE_CASES, PROVEN_FORK_CASES,
-} from "@cairn-ink/conformance";
+import * as kit from "@cairn-ink/conformance";
 import { capabilities, factIncarnationBody } from "@cairn-ink/core";
 import { toPostgresError } from "../src/errors.mjs";
 import { applyMigrations, createPostgresSuppressionStore, createPostgresUnitOfWork } from "../src/index.mjs";
@@ -248,13 +244,18 @@ const notApplicable = {
   snapshot: ["K-SNAP-1"],
   hydrate: ["K-HYD-1"],
   supersession: ["K-MEM-5h", "K-HYD-2"],
-  fence: ["K-FEN-1"],
+  fence: ["K-FEN-1", "K-FEN-I1", "K-FEN-I2", "K-FEN-I3"],
+  "retrieval window": ["K-RET-W1", "K-RET-W2", "K-SNAP-W1", "K-RAW-W1"],
+  supersessionEdges: ["K-REL-1", "K-REL-2", "K-REL-3", "K-REL-6", "K-REL-7", "K-REL-9", "K-REL-10", "K-REL-11", "K-REL-12"],
+  conflictEdges: ["K-REL-4", "K-REL-5", "K-REL-8"],
   pause: ["K-PAUSE-1"],
   keys: ["K-KEY-1", "K-KD-1", "K-KD-2", "K-KD-3", "K-KD-4", "K-KD-5", "K-KD-6"],
-  "suppressions.snapshot": ["K-SNAP-F1"],
+  "suppressions.snapshot": ["K-SNAP-F1", "K-SNAP-F3", "K-SNAP-F4", "K-SNAP-F5", "K-SNAP-F6", "K-SNAP-F7"],
   "suppressions.factsFor": ["K-FACTSFOR-1"],
   capture: ["K-CLM-1", "K-CLM-2", "K-CLM-3", "K-CLM-4", "K-CLM-5",
     "K-SRC-1", "K-SRC-2", "K-SRC-3", "K-SRC-4", "K-SRC-5"],
+  "capture.admit": ["K-ADM-1", "K-ADM-2", "K-ADM-3", "K-ADM-4", "K-ADM-5", "K-ADM-6", "K-ADM-7", "K-ADM-8", "K-ADM-9"],
+  "memories.insert": ["K-IMP-T1", "K-IMP-T2", "K-IMP-T3"],
   raw: ["K-RAW-1", "K-RAW-2", "K-RAW-2s", "K-RAW-3", "K-RAW-3w", "K-RAW-3c", "K-RAW-3s",
     "K-RAW-4", "K-RAW-5", "K-RAW-6", "K-RAW-7", "K-RAW-8", "K-RAW-8w", "K-RAW-8s"],
   "raw.importArchive": ["K-IMP-RAW-1", "K-IMP-RAW-2", "K-IMP-RAW-3", "K-IMP-RAW-3s", "K-IMP-RAW-4", "K-IMP-RAW-4k",
@@ -267,42 +268,29 @@ const notApplicable = {
     "T-TOP-9", "T-TOP-10", "T-TOP-11", "T-TOP-12", "T-TOP-13", "T-TOP-14", "T-TOP-15"],
 };
 
-const allCases = [
-  ...CASES, ...PRIVACY_CASES, ...PRIVACY_MATCH_CASES, ...CAPTURE_CASES, ...SOURCE_FILTER_CASES,
-  ...KEYED_DIGEST_CASES, ...RAW_CASES, ...TOPIC_CASES,
-  ...IMPORT_ARCHIVE_CASES, ...PROVEN_FORK_CASES,
-];
+const { PRIVACY_CASES, runCase } = kit;
+// Every exported case list, so a new kit export cannot escape the inventory below.
+/** @type {ConformanceCase[]} */
+const allCases = Object.values(kit).filter((value) => Array.isArray(value) && value.length > 0 &&
+  value.every((entry) => typeof entry?.id === "string" && typeof entry?.run === "function")).flat();
 assert.deepEqual(
   [...selected, ...Object.values(notApplicable).flat()].sort(),
   allCases.map(({ id }) => id).sort(),
   "Every conformance case must be selected or have a reason it is not applicable",
 );
 
-const pauseLockFailure = "Pause-lock writer entered while the reader held the pause lock";
-const pauseLockTodo = "known store bug: read-only pauseLock runs do not yet exclude pauseLock writers (store fix pending)";
-
 /** @param {ConformanceCase} testCase */
 async function runPreparedCase(factory, testCase, t, execute = runCase) {
-  let knownFailure = false;
   const prepare = (run) => async (ctx) => {
     // runCase generates these IDs after open(), so seed both together at the case entry point.
     await ctx.harness.seedOwners(ctx.owner, ctx.otherOwner);
-    return beforeDeadline("Conformance case", 40_000, async () => {
-      try {
-        return await run(ctx);
-      } catch (error) {
-        if (testCase.id !== "K-UOW-3r" || !(error instanceof Error) || error.message !== pauseLockFailure) throw error;
-        knownFailure = true;
-      }
-    });
+    return beforeDeadline("Conformance case", 40_000, () => run(ctx));
   };
   const prepared = { ...testCase, run: prepare(testCase.run) };
   if (testCase.followUp) prepared.followUp = { ...testCase.followUp, run: prepare(testCase.followUp.run) };
   // The factory type describes the full kit. The selected cases define this driver's subset.
   const reason = await execute(/** @type {AdapterFactory} */ (/** @type {unknown} */ (factory)), prepared);
   if (reason !== null) t.skip(reason);
-  // The runner has closed the database successfully before this can mark the test todo.
-  else if (knownFailure) t.todo(pauseLockTodo);
   return reason;
 }
 
@@ -327,29 +315,6 @@ test("Postgres conformance K-FACT-6 detects a bypassed foreign-owner guard", opt
   }));
   await assert.rejects(runPreparedCase(mutant, testCase, t), { message: "Expected operation to reject" });
   assert.equal(wroteFact, true);
-});
-
-test("Postgres conformance classifies only the exact read-only pause-lock failure as todo", async () => {
-  const todos = [];
-  const t = { todo: (reason) => todos.push(reason) };
-  const ctx = { owner: "owner", otherOwner: "other-owner", harness: { async seedOwners() {} } };
-  const phase = (run) => ({ id: "K-UOW-3r", title: "", needs: [], run });
-  const runStub = async (_factory, testCase) => (await testCase.run(ctx)) ?? null;
-  const exact = phase(async () => { throw new Error(pauseLockFailure); });
-  const unrelated = new Error(`${pauseLockFailure} (unexpected)`);
-
-  await assert.rejects(runPreparedCase(factory, phase(async () => { throw unrelated; }), t, runStub),
-    (error) => error === unrelated);
-  await assert.rejects(runPreparedCase(factory, exact, t, async () => { throw new Error(pauseLockFailure); }),
-    { message: pauseLockFailure });
-  await assert.rejects(runPreparedCase(factory, exact, t, async (_factory, testCase) => {
-    await testCase.run(ctx);
-    throw new Error(pauseLockFailure);
-  }), { message: pauseLockFailure });
-  await runPreparedCase(factory, phase(async () => {}), t, runStub);
-  assert.deepEqual(todos, []);
-  await runPreparedCase(factory, exact, t, runStub);
-  assert.deepEqual(todos, [pauseLockTodo]);
 });
 
 test("Postgres conformance tears down the database after a stalled pool drain", { timeout: 5_000 }, async (t) => {

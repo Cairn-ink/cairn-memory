@@ -108,10 +108,6 @@ Each addendum is additive unless it says what it supersedes. Adapters written ag
 8. **Retrieval scope window and memory clients (2026-11-24).** The optional `window` is a half-open range `[sinceMs, untilMs)` over store-entry time. It uses memory `createdAtMs`, card creation time, and raw `occurredAtMs`. Either bound may be omitted. A raw segment with null `occurredAtMs` is excluded whenever a window is set. With no window, time is unrestricted.
    - When `clients` is set, memories must have a matching `source.client`. A null memory client never matches. Raw keeps its client filter.
    - Adapters must apply the window and client filters inside the lexical, vector, recent, and raw candidate queries before any depth or pool cut. State tokens bind the window as they bind clients.
-9. **Visibility fence read intent (2026-11-24).** `VisibilityFence.assertVisible` accepts an optional fourth argument `"read"` to include historical memories. The fence still drops forgotten, suppressed, and out-of-scope rows. With the argument omitted, the fence drops historical memories.
-   - `MemoryService.read` supplies `"read"` to the fence in the same snapshot as delivery hydration. Recall, find, recent, and export omit the argument.
-   - Adapters that ignore the argument still satisfy the default cases.
-
 9. **Capture admission, status and Raw import.** The four new port methods are optional. Core raises `capability_unavailable` when a needed method is missing.
    - `CaptureClaim.admit(tx, key, messages)` stores the prepared messages as the admission row, which is the outbox. It runs under the pause lock without taking a lease. It returns `admitted`, `duplicate`, `processing`, or `rawReplay` with the stored `FinishResult`. The dedupe identity is `(owner, client, eventId)` across namespaces. The same `payloadDigest` replays the first admission. A different digest throws `event_payload_conflict`. Core never falls back to `claim` for admission.
    - Admission validates 1–24 messages, with ids of 1–200 UTF-16 units and content of 1–20,000 UTF-16 units per message before preparation. Core normalizes content and applies union redaction before computing the payload digest. Inside the pause-locked write, core checks source eligibility with the message times and matches the suppression snapshot's text facts. Each withheld message keeps its original position as `{ id, role, content: "", occurredAtMs }` in both the outbox and the lineage call. An all-withheld batch still gets an admission row so `runCapture` can finish it with no items and clear the pending event.
@@ -123,6 +119,9 @@ Each addendum is additive unless it says what it supersedes. Adapters written ag
    The conformance kit adds cases for these methods; the reference adapter implements them.
 10. **Import progress and creation times.** A paused `MemoryService.importMemories` returns `{ status: "paused" }` with all four `ImportResult` counts from the batches that committed and any invalid-only batches already processed. The batch that stopped contributes no counts.
    - `InsertRow.createdAtMs` is optional and supplied only on import. An insert validates that a supplied creation time is an integer in milliseconds at or before `nowMs` and stores it as the creation time. If omitted, creation time defaults to `nowMs`. The update time uses `nowMs` in both cases. Core counts a future creation time as an invalid import item.
+11. **Visibility fence read intent (2026-11-24).** `VisibilityFence.assertVisible` accepts an optional fourth argument `"read"` to include historical memories. The fence still drops forgotten, suppressed, and out-of-scope rows. With the argument omitted, the fence drops historical memories.
+   - `MemoryService.read` supplies `"read"` to the fence in the same snapshot as delivery hydration. Recall, find, recent, and export omit the argument.
+   - Adapters that ignore the argument still satisfy the default cases.
 
 ## Change requests
 

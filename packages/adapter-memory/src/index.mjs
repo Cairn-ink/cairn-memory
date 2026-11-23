@@ -43,7 +43,7 @@ export function createMemoryAdapter(options = {}) {
     uow,
     memories: handleWriteRejections(store.memories, ["insert", "touchDuplicate", "replaceContent", "erase"]),
     capture: handleWriteRejections(createCapturePorts(port, store, now, matchFacts, flags.embeddingRequiredOnInsert, archive),
-      ["claim", "beginDispatch", "abandon", "finish", "assertEligible"]),
+      ["admit", "claim", "beginDispatch", "abandon", "finish", "assertEligible"]),
     suppressions: handleWriteRejections(suppressions, ["writeFact"]),
     pause: handleWriteRejections(createPauseStore(port), ["set"]),
     keys,
