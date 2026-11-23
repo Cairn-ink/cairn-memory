@@ -267,13 +267,14 @@ function sessionMatches(session, source, policy) {
 
 /** @param {WindowFact} fact @param {string | undefined} client @param {number | null | undefined} time @returns {FactMatchResult} */
 function windowMatches(fact, client, time) {
-  if (fact.client !== null) {
-    if (!nonempty(client)) return "ineligible";
-    if (fact.client !== client) return false;
-  }
-  if (time === null) return fact.unknownTime === true;
-  if (!integer(time)) return "ineligible";
-  return time >= fact.window.startMs && time < fact.window.endMs;
+  if (fact.client !== null && nonempty(client) && fact.client !== client) return false;
+  let inside;
+  if (time === null) inside = fact.unknownTime === true;
+  else if (!integer(time)) return "ineligible";
+  else inside = time >= fact.window.startMs && time < fact.window.endMs;
+  if (!inside) return false;
+  // Inside a client-specific window, an item whose client is unknown cannot be ruled out (fail closed).
+  return fact.client !== null && !nonempty(client) ? "ineligible" : true;
 }
 
 /** @param {SuppressionFact} fact @param {FactMatchRow} row @param {FactMatchPolicy} policy @returns {FactMatchResult} */

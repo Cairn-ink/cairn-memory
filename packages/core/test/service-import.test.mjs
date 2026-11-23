@@ -136,7 +136,7 @@ test("the source and per-item times reach suppression, which takes precedence ov
   assert.deepEqual(candidates, { client: source.client, sessionId: source.sessionId, occurredAtMs: [10, null, null] });
 });
 
-test("owner-wide windows block clientless imports by time, and a client-specific window blocks every clientless import", async () => {
+test("windows block clientless imports by time, failing closed inside a client-specific window", async () => {
   const { service, seedFact } = setup();
   seedFact({ ...scope, kind: "window", origin: "forget", actionId: "owner-window", client: null,
     window: { startMs: 10, endMs: 20 } });
@@ -151,13 +151,12 @@ test("owner-wide windows block clientless imports by time, and a client-specific
 
   const end = { ...item("At end of owner window"), createdAtMs: 20 };
   assert.deepEqual(await service.importMemories(scope, [end], source), counts(0, 0, 1));
-  // Owner ruling B: a client-specific window cannot be ruled out without a client, at any time.
+  // Ruling B, time-bounded: inside the client-specific window [20, 30) a clientless item cannot be ruled out.
   assert.deepEqual(await service.importMemories(scope, [end], withoutClient), counts(0, 0, 1));
   const after = { ...item("After every window"), createdAtMs: 30 };
-  assert.deepEqual(await service.importMemories(scope, [after], withoutClient), counts(0, 0, 1));
-  assert.deepEqual(await service.importMemories(scope, [after], source), counts(1));
+  assert.deepEqual(await service.importMemories(scope, [after], withoutClient), counts(1));
   const { items } = await service.recent(scope, { limit: 10, cursor: null });
-  assert.deepEqual(items.map(({ text, source }) => ({ text, source })), [{ text: after.text, source }]);
+  assert.deepEqual(items.map(({ text, source }) => ({ text, source })), [{ text: after.text, source: withoutClient }]);
 });
 
 test("with only owner-wide windows, a clientless import outside them is imported", async () => {

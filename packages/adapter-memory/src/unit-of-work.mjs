@@ -21,6 +21,7 @@ import { addKeyedDigest, createFactStore } from "./privacy.mjs";
 /** @typedef {import("./memory-relations.mjs").RelationState} RelationState */
 /** @typedef {{topics: Map<Namespace, TopicState>, documentCards: Map<Namespace, Map<string, CardEntry>>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
  * rawRows: Map<string, import("./raw.mjs").RawEntry>, rawFences: Set<string>,
+ * rawAnchors: Map<string, Map<string, import("./raw.mjs").AnchorSession>>,
  * claims: Map<string, ClaimRecord>, activeTokens: Map<string, string>, abandonedTokens: Set<string>, relations: Map<Namespace, RelationState>}} State */
 /** @typedef {{state: State, run: {readonly ended: boolean}, indexDirty: boolean, stateWritten: boolean, pauseLock: boolean,
  * poisoned: boolean, writeErrorCode: ErrorCode, finishes: Set<FinishResult>, writingFinishes: number, cardWrites: number,
@@ -37,6 +38,30 @@ export function indexRevisionAfterRun(run) {
 /** @param {Row} row */
 export function copyPublicRow({ digests: _digests, ...row }) {
   return structuredClone(row);
+}
+
+/** @param {TopicState | undefined} scoped @param {string} memoryId @param {{erase?: boolean}} [options] */
+export function dropMemoryPlacement(scoped, memoryId, { erase = false } = {}) {
+  if (!scoped) return { dropped: 0, retired: false };
+  const memberships = scoped.outcomes.get(memoryId)?.memberships;
+  const dropped = memberships?.size ?? 0;
+  if (erase) {
+    scoped.outcomes.delete(memoryId);
+    scoped.failures.delete(memoryId);
+  } else {
+    memberships?.clear();
+  }
+
+  let retired = false;
+  for (const { sources } of scoped.topics.values()) {
+    const source = sources.find((entry) => entry.memoryId === memoryId);
+    if (source && source.revision !== 0) {
+      // Memory revisions start at 1, even when an ID is reused.
+      source.revision = 0;
+      retired = true;
+    }
+  }
+  return { dropped, retired };
 }
 
 /**
@@ -83,7 +108,7 @@ class Owner {
   committed = {
     topics: new Map(), documentCards: new Map(), rows: new Map(), facts: new Map(), epoch: null, pause: { paused: false, generation: 0 }, indexRevision: 0,
     claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(), rawRows: new Map(), rawFences: new Set(),
-    relations: new Map(),
+    rawAnchors: new Map(), relations: new Map(),
   };
   pause = new Mutex();
   write = new Mutex();
@@ -298,7 +323,8 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
       .filter(([, { committed }]) => committed.rows.size > 0 || committed.facts.size > 0 ||
         committed.pause.generation > 0 || committed.claims.size > 0 ||
         (includeTopics && (committed.topics.size > 0 || committed.indexRevision > 0)) ||
-        (includeRaw && (committed.rawRows.size > 0 || committed.rawFences.size > 0 || committed.indexRevision > 0)) ||
+        (includeRaw && (committed.rawRows.size > 0 || committed.rawFences.size > 0 ||
+          committed.rawAnchors.size > 0 || committed.indexRevision > 0)) ||
         (includeDocumentCards && committed.documentCards.size > 0))
       .sort(([a], [b]) => compareUtf8(a, b))
       .map(([owner, { committed }]) => ({
@@ -315,6 +341,15 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
         ...(includeRaw && {
           rawRows: [...committed.rawRows.values()].sort((a, b) => compareUtf8(a.ref.id, b.ref.id)),
           rawFences: [...committed.rawFences].sort(compareUtf8),
+        }),
+        ...(includeRaw && committed.rawAnchors.size > 0 && {
+          rawAnchors: [...committed.rawAnchors].sort(([a], [b]) => compareUtf8(a, b)).flatMap(([client, sessions]) =>
+            [...sessions].sort(([a], [b]) => compareUtf8(a, b)).map(([, { namespace, sessionId, messages }]) => ({
+              client, namespace, sessionId,
+              messages: [...messages].sort(([a], [b]) => compareUtf8(a, b)).map(([id, digests]) => ({
+                id, digests: [...digests].sort((a, b) => compareUtf8(a ?? "", b ?? "")),
+              })),
+            }))),
         }),
         ...((includeRaw || includeTopics || includeDocumentCards) && { indexRevision: committed.indexRevision }),
         ...(includeTopics && {

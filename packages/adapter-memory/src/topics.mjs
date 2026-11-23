@@ -4,7 +4,8 @@ import {
 } from "@cairn-ink/core";
 import { decodePayload, encodePayload, newestFirst } from "./cursor.mjs";
 import { writeTime } from "./memory-store.mjs";
-import { copyScope, snapshotArray, validateCardId, validateLimit, validateTime } from "./validation.mjs";
+import { dropMemoryPlacement } from "./unit-of-work.mjs";
+import { snapshotArray, validateCardId, validateLimit, validateMemoryId, validateTime, writeNamespace } from "./validation.mjs";
 
 /** @import {PlacementProposal} from "@cairn-ink/core" */
 /** @import {Scope, StoredDocumentCardRecord, Topic, TopicStore} from "@cairn-ink/core/ports" */
@@ -12,12 +13,12 @@ import { copyScope, snapshotArray, validateCardId, validateLimit, validateTime }
 /** @import {CardOutcome, Failure, Outcome, StoredTopic, TopicState} from "./topics.d.mts" */
 /** @typedef {{id: string, updatedAtUs: bigint}} Member */
 
-/** @param {State} state @param {Scope} scope */
-function ensureTopicState(state, scope) {
-  let scoped = state.topics.get(scope.namespace);
+/** @param {State} state @param {Scope["namespace"]} namespace */
+function ensureTopicState(state, namespace) {
+  let scoped = state.topics.get(namespace);
   if (!scoped) {
     scoped = { topics: new Map(), outcomes: new Map(), failures: new Map(), cardOutcomes: new Map(), cardFailures: new Map() };
-    state.topics.set(scope.namespace, scoped);
+    state.topics.set(namespace, scoped);
   }
   return scoped;
 }
@@ -188,14 +189,16 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
 
   return {
     async pending(tx, scope, { limit }) {
-      return port(tx, scope, false, (state) => {
+      return port.read(tx, scope, (getState) => {
+        const namespace = writeNamespace(scope);
         validateLimit(limit);
         if (limit > placementBatchLimit) throw new CoreError("invalid_input");
-        const scoped = state.topics.get(scope.namespace);
-        const { current } = view(state, tx.owner, scope.namespace);
+        const state = getState();
+        const scoped = state.topics.get(namespace);
+        const { current } = view(state, tx.owner, namespace);
         /** @type {number | undefined} */
         let nowMs;
-        return [...(state.rows.get(scope.namespace)?.values() ?? [])]
+        return [...(state.rows.get(namespace)?.values() ?? [])]
           .map(({ row }) => row)
           .filter(({ id, revision }) => {
             if (!current(id) || scoped?.outcomes.get(id)?.revision === revision) return false;
@@ -208,19 +211,19 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
       });
     },
 
-    async pendingCards(tx, callerScope, query) {
-      const scope = copyScope(callerScope);
+    async pendingCards(tx, scope, query) {
       return port.read(tx, scope, (getState) => {
+        const namespace = writeNamespace(scope);
         const { limit } = query;
         validateLimit(limit);
         if (limit > placementBatchLimit) throw new CoreError("invalid_input");
         if (!flags.documentCards) return [];
         const state = getState();
-        const scoped = state.topics.get(scope.namespace);
-        const { current } = visibility(state, scope, matchFacts);
+        const scoped = state.topics.get(namespace);
+        const { current } = view(state, tx.owner, namespace);
         /** @type {number | undefined} */
         let nowMs;
-        return [...(state.documentCards.get(scope.namespace)?.values() ?? [])]
+        return [...(state.documentCards.get(namespace)?.values() ?? [])]
           .flatMap(({ card, createdAtMs }) => {
             if (!card || scoped?.cardOutcomes.get(card.id)?.contentHash === card.contentHash ||
                 !cardSourcesAreCurrent(card, current)) return [];
@@ -234,17 +237,20 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
     },
 
     async catalog(tx, scope, query) {
-      return port(tx, scope, false, (state) => {
+      return port.read(tx, scope, (getState) => {
+        const namespace = writeNamespace(scope);
+        const state = getState();
         const { indexRevision } = state;
-        const { topic } = view(state, tx.owner, scope.namespace);
-        const topics = [...(state.topics.get(scope.namespace)?.topics.values() ?? [])].map(topic).sort(compareCatalogTopics);
-        const result = page(topics, query, { owner: tx.owner, namespace: scope.namespace }, "catalog", null, indexRevision);
+        const { topic } = view(state, tx.owner, namespace);
+        const topics = [...(state.topics.get(namespace)?.topics.values() ?? [])].map(topic).sort(compareCatalogTopics);
+        const result = page(topics, query, { owner: tx.owner, namespace }, "catalog", null, indexRevision);
         return { ...result, exhausted: result.nextCursor === null, indexRevision };
       });
     },
 
     async applyPlacement(tx, scope, basedOn, proposal) {
       return port.write(tx, scope, "conditional", () => {
+        const namespace = writeNamespace(scope);
         const { items } = placementProposal(snapshotPlacementProposal(proposal), undefined, placementBatchLimit);
         const indexRevision = basedOn?.indexRevision;
         if (!Number.isSafeInteger(indexRevision) || indexRevision < 0) throw new CoreError("invalid_input");
@@ -254,12 +260,12 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
           const state = getState();
           if (indexRevision !== state.indexRevision) throw new CoreError("revision_conflict");
           const revisions = new Map(guards.map(({ memoryId, revision }) => [memoryId, revision]));
-          const { current, topic } = view(state, tx.owner, scope.namespace);
+          const { current, topic } = view(state, tx.owner, namespace);
           for (const { memoryId, revision } of guards) {
             if (current(memoryId)?.revision !== revision) throw new CoreError("revision_conflict");
           }
 
-          const previous = state.topics.get(scope.namespace);
+          const previous = state.topics.get(namespace);
           const existing = previous?.topics;
           for (const { parentIds, newL1 } of items) {
             for (const id of parentIds) checkParent(existing, id, "L1");
@@ -321,7 +327,7 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
           }
 
           if (changed || updates.size) {
-            const scoped = ensureTopicState(state, scope);
+            const scoped = ensureTopicState(state, namespace);
             for (const row of created) scoped.topics.set(row.id, row);
             for (const [id, outcome] of updates) scoped.outcomes.set(id, outcome);
             if (changed) markDirty();
@@ -334,16 +340,19 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
 
     async markFailed(tx, scope, memoryIds, code) {
       return port.write(tx, scope, "conditional", () => {
-        const ids = failureIds(memoryIds, code);
+        const namespace = writeNamespace(scope);
+        if (!isErrorCode(code)) throw new CoreError("invalid_input");
+        const ids = snapshotArray(memoryIds);
+        if (ids.some((id) => typeof id !== "string" || !id)) throw new CoreError("invalid_input");
         return (getState, _markDirty, run) => {
           const state = getState();
-          const { current } = view(state, tx.owner, scope.namespace);
+          const { current } = view(state, tx.owner, namespace);
           /** @type {number | undefined} */
           let failedAtMs;
-          for (const id of ids) {
+          for (const id of new Set(ids)) {
             const row = current(id);
             if (!row) continue;
-            const { failures } = ensureTopicState(state, scope);
+            const { failures } = ensureTopicState(state, namespace);
             const previous = failures.get(id);
             const attempts = previous?.revision === row.revision ? previous.attempts + 1 : 1;
             failures.set(id, { revision: row.revision, code, attempts, failedAtMs: failedAtMs ??= now() });
@@ -353,10 +362,10 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
       });
     },
 
-    async applyCardPlacement(tx, callerScope, basedOn, proposal) {
-      const scope = copyScope(callerScope);
-      const { namespace } = scope;
+    async applyCardPlacement(tx, scope, basedOn, proposal) {
       return port.write(tx, scope, "conditional", () => {
+        const namespace = writeNamespace(scope);
+        const selection = { owner: tx.owner, namespace };
         const { items: input } = placementFields(proposal, ["items"]);
         const items = snapshotArray(input, { ...placementArrayOptions, maxLength: placementBatchLimit }).map((item) => {
           const { cardId, parentIds } = placementFields(item, ["cardId", "parentIds"]);
@@ -380,7 +389,7 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
           const previous = state.topics.get(namespace);
           const { current } = view(state, tx.owner, namespace);
           for (const [id, hash] of hashes) {
-            if (!await visibleCardAt(state, scope, id, hash, current)) throw new CoreError("revision_conflict");
+            if (!await visibleCardAt(state, selection, id, hash, current)) throw new CoreError("revision_conflict");
           }
           for (const { topicIds } of items) {
             if (topicIds.some((id) => previous?.topics.get(id)?.level !== "L1")) throw new CoreError("revision_conflict");
@@ -409,7 +418,7 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
             updates.set(cardId, { contentHash, memberships });
           }
           if (updates.size) {
-            const { cardOutcomes } = ensureTopicState(state, scope);
+            const { cardOutcomes } = ensureTopicState(state, namespace);
             for (const [id, outcome] of updates) cardOutcomes.set(id, outcome);
             if (changed) markDirty();
             else run.stateWritten = true;
@@ -419,20 +428,20 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
       });
     },
 
-    async markCardsFailed(tx, callerScope, cardIds, code) {
-      const scope = copyScope(callerScope);
+    async markCardsFailed(tx, scope, cardIds, code) {
       return port.write(tx, scope, "conditional", () => {
+        const namespace = writeNamespace(scope);
         const ids = failureIds(cardIds, code);
         return (getState, _markDirty, run) => {
           const state = getState();
-          const cards = state.documentCards.get(scope.namespace);
+          const cards = state.documentCards.get(namespace);
           /** @type {number | undefined} */
           let failedAtMs;
           for (const id of ids) {
             const card = cards?.get(id)?.card;
             if (!card) continue;
             const { contentHash } = card;
-            const { cardFailures } = ensureTopicState(state, scope);
+            const { cardFailures } = ensureTopicState(state, namespace);
             const previous = cardFailures.get(id);
             const attempts = previous?.contentHash === contentHash ? previous.attempts + 1 : 1;
             cardFailures.set(id, { contentHash, code, attempts, failedAtMs: failedAtMs ??= now() });
@@ -443,12 +452,13 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
     },
 
     async list(tx, scope, query) {
-      return port(tx, scope, false, async (state) => {
+      return port.read(tx, scope, async (getState) => {
+        const namespace = writeNamespace(scope);
         const { level } = query;
         if (level !== undefined && level !== "L1" && level !== "L2") throw new CoreError("invalid_input");
-        const namespace = scope.namespace;
+        const state = getState();
         const scoped = state.topics.get(namespace);
-        const { current, topic } = view(state, tx.owner, scope.namespace);
+        const { current, topic } = view(state, tx.owner, namespace);
         const cards = flags.documentCards && scoped ? await visibleFiledCards(state, { owner: tx.owner, namespace }, scoped) : null;
         const rows = scoped ? [...scoped.topics.values()].filter((row) => !level || row.level === level)
           .flatMap((row) => {
@@ -460,19 +470,20 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
               ...(flags.documentCards && { cardCount }),
             }] : [];
           }).sort(compareCatalogTopics) : [];
-        return page(rows, query, { owner: tx.owner, namespace: scope.namespace }, "list", level ?? null, state.indexRevision);
+        return page(rows, query, { owner: tx.owner, namespace }, "list", level ?? null, state.indexRevision);
       });
     },
 
     async members(tx, scope, topicId, query) {
-      return port(tx, scope, false, async (state) => {
-        const namespace = scope.namespace;
+      return port.read(tx, scope, async (getState) => {
+        const namespace = writeNamespace(scope);
+        const state = getState();
         const scoped = state.topics.get(namespace);
         const topic = scoped?.topics.get(topicId);
         /** @type {Array<Member & {kind: "memory" | "card"}>} */
         const rows = [];
         if (scoped && topic) {
-          const { current } = view(state, tx.owner, scope.namespace);
+          const { current } = view(state, tx.owner, namespace);
           const children = memberTopics(scoped, topic);
           const memories = visibleMembers(scoped.outcomes, children, (id, outcome) => current(id)?.revision === outcome.revision);
           for (const memory of memories) rows.push({ ...memory, kind: "memory" });
@@ -484,39 +495,41 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
             rows.sort((a, b) => newestFirst(a, b) || compareUtf8(b.kind, a.kind));
           }
         }
-        const result = page(rows, query, { owner: tx.owner, namespace: scope.namespace }, "members", topicId, state.indexRevision);
+        const result = page(rows, query, { owner: tx.owner, namespace }, "members", topicId, state.indexRevision);
         return { ...result, items: result.items.map(({ kind, id, updatedAtUs }) => ({ kind, id, placedAtUs: updatedAtUs })) };
       });
     },
 
-    async forCard(tx, callerScope, cardId) {
-      const scope = copyScope(callerScope);
-      return port(tx, scope, false, async (state) => {
+    async forCard(tx, scope, cardId) {
+      return port.read(tx, scope, async (getState) => {
+        const namespace = writeNamespace(scope);
         validateCardId(cardId);
-        const scoped = state.topics.get(scope.namespace);
+        const state = getState();
+        const scoped = state.topics.get(namespace);
         const outcome = scoped?.cardOutcomes.get(cardId);
         if (!scoped || !outcome?.memberships.size) return [];
-        const { current } = view(state, tx.owner, scope.namespace);
-        return await visibleCardAt(state, scope, cardId, outcome.contentHash, current)
+        const { current } = view(state, tx.owner, namespace);
+        return await visibleCardAt(state, { owner: tx.owner, namespace }, cardId, outcome.contentHash, current)
           ? cardTopics(scoped, outcome).map(({ id }) => id) : [];
       });
     },
 
-    async forCards(tx, callerScope, cardIds) {
-      const scope = copyScope(callerScope);
+    async forCards(tx, scope, cardIds) {
       return port.read(tx, scope, async (getState) => {
+        const namespace = writeNamespace(scope);
+        const selection = { owner: tx.owner, namespace };
         const ids = snapshotArray(cardIds, { strictKeys: true, maxLength: 100 });
         validateLimit(ids.length);
         ids.forEach(validateCardId);
 
         const state = getState();
-        const scoped = state.topics.get(scope.namespace);
+        const scoped = state.topics.get(namespace);
         if (!scoped) return [];
-        const { current, topic } = view(state, scope.owner, scope.namespace);
+        const { current, topic } = view(state, tx.owner, namespace);
         const rows = [];
         for (const cardId of new Set(ids)) {
           const outcome = scoped.cardOutcomes.get(cardId);
-          if (!outcome || !await visibleCardAt(state, scope, cardId, outcome.contentHash, current)) continue;
+          if (!outcome || !await visibleCardAt(state, selection, cardId, outcome.contentHash, current)) continue;
           const topics = cardTopics(scoped, outcome).map((stored) => ({ id: stored.id, title: topic(stored).title }));
           rows.push({ cardId, topics });
         }
@@ -524,12 +537,12 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
       });
     },
 
-    async dropCard(tx, callerScope, cardId) {
-      const scope = copyScope(callerScope);
+    async dropCard(tx, scope, cardId) {
       return port.write(tx, scope, "conditional", () => {
+        const namespace = writeNamespace(scope);
         validateCardId(cardId);
         return (getState, markDirty) => {
-          const dropped = dropCardMemberships(getState(), scope.namespace, cardId);
+          const dropped = dropCardMemberships(getState(), namespace, cardId);
           if (dropped) markDirty();
           return { dropped };
         };
@@ -537,22 +550,43 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
     },
 
     async forMemory(tx, scope, memoryId) {
-      return port(tx, scope, false, (state) => {
-        const outcome = state.topics.get(scope.namespace)?.outcomes.get(memoryId);
-        return outcome && outcome.revision === view(state, tx.owner, scope.namespace).current(memoryId)?.revision
+      return port.read(tx, scope, (getState) => {
+        const namespace = writeNamespace(scope);
+        const state = getState();
+        const outcome = state.topics.get(namespace)?.outcomes.get(memoryId);
+        return outcome && outcome.revision === view(state, tx.owner, namespace).current(memoryId)?.revision
           ? [...outcome.memberships.keys()].sort(compareUtf8) : [];
+      });
+    },
+
+    async forMemories(tx, scope, memoryIds) {
+      return port.read(tx, scope, (getState) => {
+        const namespace = writeNamespace(scope);
+        const ids = snapshotArray(memoryIds, { strictKeys: true, maxLength: 100 });
+        validateLimit(ids.length);
+        ids.forEach(validateMemoryId);
+
+        const state = getState();
+        const scoped = state.topics.get(namespace);
+        if (!scoped) return [];
+        const { current, topic } = view(state, tx.owner, namespace);
+        return [...new Set(ids)].flatMap((memoryId) => {
+          const outcome = scoped.outcomes.get(memoryId);
+          if (!outcome || current(memoryId)?.revision !== outcome.revision) return [];
+          const topics = [...outcome.memberships.keys()].sort(compareUtf8).flatMap((id) => {
+            const stored = scoped.topics.get(id);
+            return stored?.level === "L1" ? [{ id, title: topic(stored).title }] : [];
+          });
+          return [{ memoryId, topics }];
+        });
       });
     },
 
     async dropMemory(tx, scope, memoryId) {
       return port.write(tx, scope, "conditional", () => (getState, markDirty) => {
-        const state = getState();
-        const memberships = state.topics.get(scope.namespace)?.outcomes.get(memoryId)?.memberships;
-        const dropped = memberships?.size ?? 0;
-        if (memberships?.size) {
-          memberships.clear();
-          markDirty();
-        }
+        const scoped = getState().topics.get(scope.namespace);
+        const { dropped, retired } = dropMemoryPlacement(scoped, memoryId);
+        if (dropped || retired) markDirty();
         return { dropped };
       });
     },

@@ -4,7 +4,7 @@ import { decodeCursor, encodeCursor, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
 import { eraseRelations } from "./memory-relations.mjs";
 import { addKeyedDigest } from "./privacy.mjs";
-import { copyPublicRow } from "./unit-of-work.mjs";
+import { copyPublicRow, dropMemoryPlacement } from "./unit-of-work.mjs";
 import {
   attachReceipts, copyContent, copyDuplicateBatch, copyMerge, copyReceipts, validateLimit, validateMemoryId,
   validateSource, validateTime, writeNamespace, writeTime,
@@ -114,6 +114,9 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           const content = prepareContent(row);
           const evidence = attachReceipts([], copyReceipts(receipts));
           validateTime(nowMs);
+          const suppliedCreationTime = row.createdAtMs;
+          const createdAtMs = suppliedCreationTime === undefined ? nowMs : suppliedCreationTime;
+          if (!Number.isSafeInteger(createdAtMs) || createdAtMs > nowMs) throw new CoreError("invalid_input");
           const namespace = writeNamespace(scope);
           return async (getState, markDirty) => {
             const id = newId();
@@ -123,7 +126,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
             let entries = rows.get(namespace);
             if (entries?.has(id)) throw new CoreError("internal_error");
             if (!entries) rows.set(namespace, entries = new Map());
-            const created = { id, revision: 1, createdAtMs: nowMs, ...writeTime(nowMs) };
+            const created = { id, revision: 1, createdAtMs, ...writeTime(nowMs) };
             entries.set(id, {
               row: { ...content, digests, ...created, scope: { owner: tx.owner, namespace }, historical: false },
               receipts: evidence,
@@ -289,6 +292,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           const entries = state.rows.get(namespace);
           if (!entries?.delete(id)) return false;
           if (!entries.size) state.rows.delete(namespace);
+          dropMemoryPlacement(state.topics.get(namespace), id, { erase: true });
           return true;
         };
       });

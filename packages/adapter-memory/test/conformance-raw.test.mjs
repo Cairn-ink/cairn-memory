@@ -70,9 +70,19 @@ test("Raw archive guards transactions and validates lineage before state access"
     await assert.rejects(raw.eraseSessions(tx, scope, new Array(1)), errorCode("invalid_input"));
     await assert.rejects(raw.raw(tx, { ...readScope, namespaces: new Array(1) }, "cedar", "search", { limit: 1 }),
       errorCode("invalid_input"));
-    await raw.recordLineage(tx, key, [message]);
   });
-  assert.deepEqual(await harness.dump(), before);
+  assert.equal(JSON.stringify(await harness.dump()), JSON.stringify(before));
+  await uow.run(scope.owner, {}, (tx) => raw.recordLineage(tx, key, [message]));
+  const after = await harness.dump();
+  const digest = after[0]?.rawAnchors?.[0]?.messages?.[0]?.digests?.[0];
+  assert.match(digest, /^[a-f0-9]{64}$/u);
+  assert.deepEqual(after, [...before, {
+    owner: scope.owner, rows: [], facts: [], pause: { paused: false, generation: 0 },
+    rawRows: [], rawFences: [], rawAnchors: [{
+      client: key.client, namespace: scope.namespace, sessionId: key.sessionId,
+      messages: [{ id: message.id, digests: [digest] }],
+    }], indexRevision: 0,
+  }]);
 });
 
 test("Raw writes copy their inputs at entry and execute in FIFO order", async () => {

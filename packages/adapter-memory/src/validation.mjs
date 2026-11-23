@@ -2,6 +2,7 @@ import { CoreError, isErrorCode, validateSuppressionFact } from "@cairn-ink/core
 import { copyWindow } from "./retrieval-window.mjs";
 
 /** @typedef {import("@cairn-ink/core/ports").InsertRow} InsertRow */
+/** @typedef {import("@cairn-ink/core/ports").CaptureKey} CaptureKey */
 /** @typedef {import("@cairn-ink/core/ports").Receipt} Receipt */
 /** @typedef {import("@cairn-ink/core/ports").DuplicateMerge} DuplicateMerge */
 /** @typedef {import("@cairn-ink/core/ports").DuplicateQuery} DuplicateQuery */
@@ -30,32 +31,57 @@ function invalid() {
   throw new CoreError("invalid_input");
 }
 
-/** @param {import("@cairn-ink/core/ports").CaptureKey} key @param {string | undefined} owner
+/** @param {Omit<CaptureKey, "payloadDigest">} key @param {string | undefined} owner
  * @param {string | null | undefined} namespace
  */
-export function copyCaptureKey(key, owner, namespace) {
+export function copyCaptureSelection(key, owner, namespace) {
   if (!key) invalid();
-  const { client, sessionId, eventId, payloadDigest } = key;
+  const { client, sessionId, eventId } = key;
   if (typeof owner !== "string" || owner.length === 0 || !nullableString(namespace ?? null) || !nonempty(client) ||
-      !nonempty(sessionId) || !nonempty(eventId) || typeof payloadDigest !== "string" ||
-      !/^[0-9a-f]{64}$/.test(payloadDigest)) invalid();
-  return { scope: { owner, namespace: namespace ?? null }, client, sessionId, eventId, payloadDigest };
+      !nonempty(sessionId) || !nonempty(eventId)) invalid();
+  return { scope: { owner, namespace: namespace ?? null }, client, sessionId, eventId };
 }
 
-/** @param {import("@cairn-ink/core/ports").Tx} tx @param {import("@cairn-ink/core/ports").CaptureKey} key */
-export function admissionScope(tx, key) {
+/** @param {CaptureKey} key @param {string | undefined} owner @param {string | null | undefined} namespace */
+export function copyCaptureKey(key, owner, namespace) {
+  const selection = copyCaptureSelection(key, owner, namespace);
+  const { payloadDigest } = key;
+  if (typeof payloadDigest !== "string" || !/^[0-9a-f]{64}$/.test(payloadDigest)) invalid();
+  return { ...selection, payloadDigest };
+}
+
+/** @param {import("@cairn-ink/core/ports").Tx} tx
+ * @param {() => import("@cairn-ink/core/ports").Scope | undefined} readScope
+ */
+export function guardCaptureScope(tx, readScope) {
   /** @type {import("@cairn-ink/core/ports").Scope | undefined} */
   let scope;
   /** @type {string | undefined} */
   let owner;
   return {
     get owner() {
-      scope = key?.scope;
+      scope = readScope();
       owner = scope?.owner;
       // Leave missing or malformed owners to input validation after the transaction guard.
       return typeof owner === "string" && owner ? owner : tx.owner;
     },
-    copyKey: () => copyCaptureKey(key, owner, scope?.namespace),
+    copyScope() {
+      const namespace = scope?.namespace ?? null;
+      if (typeof owner !== "string" || !owner || !nullableString(namespace)) invalid();
+      return { owner, namespace };
+    },
+  };
+}
+
+/** @param {import("@cairn-ink/core/ports").Tx} tx @param {import("@cairn-ink/core/ports").CaptureKey} key */
+export function admissionScope(tx, key) {
+  const guarded = guardCaptureScope(tx, () => key?.scope);
+  return {
+    get owner() { return guarded.owner; },
+    copyKey() {
+      const { owner, namespace } = guarded.copyScope();
+      return copyCaptureKey(key, owner, namespace);
+    },
   };
 }
 
@@ -127,15 +153,12 @@ export function copyCaptureMessages(messages) {
   });
 }
 
-/** @param {readonly import("@cairn-ink/core/ports").CaptureMessage[]} messages */
-export function captureMessageTimes(messages) {
-  return copyCaptureMessages(messages).map(({ occurredAtMs }) => occurredAtMs);
-}
-
 /** @param {{code: string, retryable: boolean}} failure */
 export function copyCaptureFailure(failure) {
-  if (!failure || !isErrorCode(failure.code) || typeof failure.retryable !== "boolean") invalid();
-  return { code: failure.code, retryable: failure.retryable };
+  if (!failure) invalid();
+  const { code, retryable } = failure;
+  if (!isErrorCode(code) || typeof retryable !== "boolean") invalid();
+  return { code, retryable };
 }
 
 /** @param {readonly import("@cairn-ink/core/ports").FinishItem[]} items @param {boolean} embeddingRequiredOnInsert */

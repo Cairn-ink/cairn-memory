@@ -94,7 +94,7 @@ export const captureCases = [
       await rejects(() => claim(ctx, conflict), "event_payload_conflict");
       await rejects(() => claim(ctx, { ...key, sessionId: "another-session" }), "event_payload_conflict");
       claimedToken(await claim(ctx, { ...key, client: "another-client" }));
-      claimedToken(await claim(ctx, { ...key, scope: ctx.scope("another-namespace") }));
+      equal(await claim(ctx, { ...key, scope: ctx.scope("another-namespace") }), { status: "processing" }, "A live claim must report processing across namespaces");
       claimedToken(await claim(ctx, { ...key, scope: { owner: ctx.otherOwner, namespace: null } }));
 
       const completed = await finish(ctx, token, [await itemFor(ctx, "Completed memory")]);

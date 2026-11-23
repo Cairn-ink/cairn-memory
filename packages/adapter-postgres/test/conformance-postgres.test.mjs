@@ -4,10 +4,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { Socket } from "node:net";
 import test from "node:test";
 import { Pool } from "pg";
-import {
-  CAPTURE_CASES, CASES, KEYED_DIGEST_CASES, PRIVACY_CASES, PRIVACY_MATCH_CASES,
-  RAW_CASES, SOURCE_FILTER_CASES, TOPIC_CASES, runCase,
-} from "@cairn-ink/conformance";
+import * as kit from "@cairn-ink/conformance";
 import { capabilities, factIncarnationBody } from "@cairn-ink/core";
 import { toPostgresError } from "../src/errors.mjs";
 import { applyMigrations, createPostgresSuppressionStore, createPostgresUnitOfWork } from "../src/index.mjs";
@@ -247,30 +244,70 @@ const notApplicable = {
   snapshot: ["K-SNAP-1"],
   hydrate: ["K-HYD-1"],
   supersession: ["K-MEM-5h", "K-HYD-2"],
-  fence: ["K-FEN-1"],
+  fence: ["K-FEN-1", "K-FEN-I1", "K-FEN-I2", "K-FEN-I3"],
+  "retrieval window": ["K-RET-W1", "K-RET-W2", "K-SNAP-W1", "K-RAW-W1"],
+  supersessionEdges: ["K-REL-1", "K-REL-2", "K-REL-3", "K-REL-6", "K-REL-7", "K-REL-9", "K-REL-10", "K-REL-11", "K-REL-12"],
+  conflictEdges: ["K-REL-4", "K-REL-5", "K-REL-8"],
   pause: ["K-PAUSE-1"],
   keys: ["K-KEY-1", "K-KD-1", "K-KD-2", "K-KD-3", "K-KD-4", "K-KD-5", "K-KD-6"],
-  "suppressions.snapshot": ["K-SNAP-F1", "K-SNAP-F3", "K-SNAP-F4", "K-SNAP-F5", "K-SNAP-F6", "K-SNAP-F7"],
+  "suppressions.snapshot": ["K-SNAP-F1", "K-SNAP-F3", "K-SNAP-F4", "K-SNAP-F5", "K-SNAP-F5u", "K-SNAP-F6", "K-SNAP-F7"],
   "suppressions.factsFor": ["K-FACTSFOR-1"],
   capture: ["K-CLM-1", "K-CLM-2", "K-CLM-3", "K-CLM-4", "K-CLM-5",
     "K-SRC-1", "K-SRC-2", "K-SRC-3", "K-SRC-4", "K-SRC-5"],
+  "capture.admit": [
+    "K-ADM-1", "K-ADM-2", "K-ADM-3", "K-ADM-4", "K-ADM-5", "K-ADM-6", "K-ADM-7",
+    "K-ADM-8", "K-ADM-9", "K-ADM-10", "K-ADM-11", "K-ADM-12", "K-ADM-13", "K-ADM-14",
+  ],
+  "memories.insert": ["K-IMP-T1", "K-IMP-T2", "K-IMP-T3"],
   raw: ["K-RAW-1", "K-RAW-2", "K-RAW-2s", "K-RAW-3", "K-RAW-3w", "K-RAW-3c", "K-RAW-3s",
     "K-RAW-4", "K-RAW-5", "K-RAW-6", "K-RAW-7", "K-RAW-8", "K-RAW-8w", "K-RAW-8s"],
+  "raw.importArchive": ["K-IMP-RAW-1", "K-IMP-RAW-2", "K-IMP-RAW-3", "K-IMP-RAW-3s", "K-IMP-RAW-4", "K-IMP-RAW-4e", "K-IMP-RAW-4k",
+    "K-IMP-RAW-5", "K-IMP-RAW-6"],
+  "raw.recordLineage": ["K-FORK-1", "K-FORK-2", "K-FORK-3", "K-FORK-4", "K-FORK-5",
+    "K-FORK-6", "K-FORK-7", "K-FORK-8", "K-FORK-9", "K-FORK-10"],
   "rawSpans not declared": ["K-FACT-3r"],
   "hashed session refs required": ["K-HASH-1"],
+  "topics.forMemories": ["T-TFM-1", "T-TFM-2", "T-TFM-3", "T-TFM-4", "T-TFM-5", "T-TFM-6", "T-TFM-7", "T-TFM-8"],
   placement: ["T-TOP-1", "T-TOP-2", "T-TOP-3", "T-TOP-4", "T-TOP-5", "T-TOP-6", "T-TOP-7", "T-TOP-8",
     "T-TOP-9", "T-TOP-10", "T-TOP-11", "T-TOP-12", "T-TOP-13", "T-TOP-14", "T-TOP-15"],
 };
 
-const allCases = [
-  ...CASES, ...PRIVACY_CASES, ...PRIVACY_MATCH_CASES, ...CAPTURE_CASES, ...SOURCE_FILTER_CASES,
-  ...KEYED_DIGEST_CASES, ...RAW_CASES, ...TOPIC_CASES,
-];
+const { PRIVACY_CASES, runCase } = kit;
+
+/** @param {unknown} entry @returns {entry is ConformanceCase} */
+function isCase(entry) {
+  const candidate = /** @type {Partial<ConformanceCase> | null | undefined} */ (entry);
+  return typeof candidate?.id === "string" && typeof candidate?.run === "function";
+}
+
+/** @param {Readonly<Record<string, unknown>>} exports @returns {ConformanceCase[]} */
+function discoverCases(exports) {
+  const cases = [];
+  for (const [name, value] of Object.entries(exports)) {
+    if (!name.endsWith("CASES") && !(Array.isArray(value) && value.some(isCase))) continue;
+    assert.ok(Array.isArray(value), `${name} must export an array of conformance cases`);
+    for (let index = 0; index < value.length; index++) {
+      const entry = value[index];
+      assert.ok(isCase(entry), `${name}[${index}] must have a string id and a run function`);
+      cases.push(entry);
+    }
+  }
+  return cases;
+}
+
+const allCases = discoverCases(kit);
 assert.deepEqual(
   [...selected, ...Object.values(notApplicable).flat()].sort(),
   allCases.map(({ id }) => id).sort(),
   "Every conformance case must be selected or have a reason it is not applicable",
 );
+
+test("conformance inventory rejects malformed case exports offline", () => {
+  const valid = { id: "case", async run() {} };
+  assert.throws(() => discoverCases({ FUTURE_CASES: [valid, undefined] }), /FUTURE_CASES\[1\]/);
+  assert.throws(() => discoverCases({ future: [valid, undefined] }), /future\[1\]/);
+  assert.throws(() => discoverCases({ FUTURE_CASES: [undefined] }), /FUTURE_CASES\[0\]/);
+});
 
 /** @param {ConformanceCase} testCase */
 async function runPreparedCase(factory, testCase, t, execute = runCase) {

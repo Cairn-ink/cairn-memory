@@ -30,9 +30,9 @@ export function createMemoryAdapter(options = {}) {
   const work = createUnitOfWork(nativeErrorMap, now, flags.placement);
   const { uow, port, dump, runSeed, setWriteTime, rotateRowDigests, rowsMissingKeyedDigest } = work;
   const matchFacts = createFactMatcher(flags.vectorSuppression, options.hashSessionKey, sessionRefs);
-  const { keys, ringKeys, setFingerprintSecret } =
+  const { keys, ringKeys, labels, setFingerprintSecret } =
     createFingerprintProvider(flags.fingerprintKey, options.fingerprint, rotateRowDigests);
-  const archive = flags.rawArchive ? createRawPorts(work, ringKeys, options.hashSessionKey) : undefined;
+  const archive = flags.rawArchive ? createRawPorts(work, keys, ringKeys, labels, options.hashSessionKey) : undefined;
   const store = createMemoryStore(port, flags, newId, matchFacts, ringKeys);
   const { supersession, conflicts } = createRelationStores(port, matchFacts);
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts,
@@ -44,14 +44,14 @@ export function createMemoryAdapter(options = {}) {
     capabilities: flags,
     uow,
     memories: handleWriteRejections(store.memories, ["insert", "touchDuplicate", "replaceContent", "erase"]),
-    capture: handleWriteRejections(createCapturePorts(port, store, now, matchFacts, flags.embeddingRequiredOnInsert),
-      ["claim", "beginDispatch", "abandon", "finish", "assertEligible"]),
+    capture: handleWriteRejections(createCapturePorts(port, store, now, matchFacts, flags.embeddingRequiredOnInsert, archive),
+      ["admit", "claim", "beginDispatch", "abandon", "finish", "assertEligible"]),
     suppressions: handleWriteRejections(suppressions, ["writeFact"]),
     pause: handleWriteRejections(createPauseStore(port), ["set"]),
     keys,
     ...createRetrievalPorts(port, flags, matchFacts, cardVisible),
     ...(archive && { raw: handleWriteRejections(archive.raw,
-      ["recordLineage", "archive", "fenceSession", "purgeWithheld", "eraseSessions", "deleteConversation"]) }),
+      ["recordLineage", "archive", "importArchive", "fenceSession", "purgeWithheld", "eraseSessions", "deleteConversation"]) }),
     ...(flags.supersession && { supersession: handleWriteRejections(supersession, ["record", "markHistorical"]) }),
     ...(flags.conflictEdges && { conflicts: handleWriteRejections(conflicts, ["insert", "invalidate"]) }),
     ...(flags.placement && { placement: handleWriteRejections(

@@ -216,9 +216,11 @@ async function clientlessReads(ctx) {
   const f = fixture(ctx);
   await f.archive([message("known", 5)]);
   await seedClientlessRaw(f.capture.scope, f.capture.sessionId, message("clientless", 5));
-  await visible(f, ["clientless", "known"], "Visibility before a client-specific fact");
+  await seedClientlessRaw(f.capture.scope, f.capture.sessionId, message("clientless-inside", 0));
+  await visible(f, ["clientless", "clientless-inside", "known"], "Visibility before a client-specific fact");
   await ctx.harness.seedFact(ctx.owner, windowFact(f.capture));
-  await visible(f, ["known"], "Ineligible client-specific window visibility");
+  // Without client provenance, a client-specific window hides rows inside its range and keeps rows outside it.
+  await visible(f, ["clientless", "known"], "Ineligible client-specific window visibility");
 }
 
 /** @param {CaseContext} ctx */
