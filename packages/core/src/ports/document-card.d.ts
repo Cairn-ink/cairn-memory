@@ -24,6 +24,8 @@ export interface DocumentCardStaleEntry {
 export interface DocumentCardRecord {
   id: string;
   scope: Scope;
+  /** Provenance recorded on insert and preserved on replacement. Omitted on legacy records. */
+  readonly origin?: "router" | "import" | "manual";
   title: string;
   body: string;
   contentHash: string;
@@ -54,6 +56,7 @@ export interface DocumentCardEmbedding {
 export interface DocumentCardStore {
   /**
    * Runs inside the capture finish transaction. Idempotent on (id, contentHash).
+   * Preserve the stored origin on replacement.
    * A hidden or tombstoned id returns "tombstoned" without writing anything.
    * Vectors supplied with a write are keyed by model.
    */

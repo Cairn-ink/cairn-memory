@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildDocumentCard, routeDocumentMessages } from "@cairn-ink/core/routing";
+import { buildDocumentCard, routeDocumentMessages } from "../src/routing/index.mjs";
 
 const session = { scope: { owner: "owner", namespace: null }, client: "client", canonicalSessionKey: "key" };
 const message = (content, id = "message") => ({ id, role: "assistant", content });
@@ -34,3 +34,14 @@ for (const content of ["園藝", "٢"]) {
     assert.deepEqual(drops, {});
   });
 }
+
+test("punctuation without any marker follows the usual routing rules", async () => {
+  const input = message("!".repeat(800));
+  assert.deepEqual(routeDocumentMessages([input]), {
+    chosen: [{ position: 0, reason: "long_assistant" }],
+    drops: { extract_only: 0, capture_limit: 0 },
+  });
+  const { card, drops } = await buildDocumentCard(input, session);
+  assert.equal(card?.body, input.content);
+  assert.deepEqual(drops, {});
+});

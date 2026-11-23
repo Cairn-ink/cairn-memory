@@ -1,14 +1,23 @@
-import { documentCardVisible } from "@cairn-ink/core/routing";
-import type { DocumentCardMemoryStates } from "@cairn-ink/core/routing";
-import type { DocumentCardRecord } from "@cairn-ink/core/ports";
+import { documentCardVisible } from "../src/routing/index.mjs";
+import type { DocumentCardMemoryStates, DocumentCardVisibilityInput } from "../src/routing/index.mjs";
+import type { DocumentCardRecord } from "../src/ports/index.d.ts";
+
+interface HostVisibilityInput extends DocumentCardVisibilityInput {
+  snapshotId: string;
+}
 
 declare const record: DocumentCardRecord;
 declare const memoryStates: DocumentCardMemoryStates;
 const snapshot = { requestedScope: record.scope, memoryStates };
 
-await documentCardVisible({ ...snapshot, card: { ...record, sourceMessage: null } });
+const authored: HostVisibilityInput = {
+  ...snapshot, snapshotId: "read", card: { ...record, origin: "manual", sourceMessage: null },
+};
+await documentCardVisible(authored);
 
 const sourced = { ...record, canonicalSessionKey: "key" };
 await documentCardVisible({ ...snapshot, card: sourced, sourceWithheld: false });
-// @ts-expect-error A message-backed card requires a Raw verdict.
 await documentCardVisible({ ...snapshot, card: sourced });
+
+// @ts-expect-error Stored origin is immutable.
+record.origin = "import";

@@ -11,26 +11,18 @@ export type DocumentCardMemoryState =
 /** Current states for one scope, from the card's read snapshot. Absent means missing. */
 export type DocumentCardMemoryStates = ReadonlyMap<string, DocumentCardMemoryState>;
 
-type VisibilityCard = Pick<DocumentCardRecord, "id" | "scope" | "sourceMemories">;
-
-export type DocumentCardVisibilityInput = {
+export interface DocumentCardVisibilityInput {
+  card: Pick<DocumentCardRecord, "id" | "scope" | "origin" | "sourceMemories"> & {
+    /** The stored source. Import and manual cards require an explicit null. */
+    sourceMessage?: DocumentCardRecord["sourceMessage"] | null;
+    /** Resolved by the host from the plain source, with the same resolver used at capture. */
+    canonicalSessionKey?: string | null;
+  };
   requestedScope: Scope;
   memoryStates: DocumentCardMemoryStates;
-} & (
-  | {
-      card: VisibilityCard & Pick<DocumentCardRecord, "sourceMessage"> & {
-        /** Resolved by the host from the plain source, with the same resolver used at capture. */
-        canonicalSessionKey: string | null;
-      };
-      /** A definite false is required to deliver a message-backed card. */
-      sourceWithheld: boolean | null;
-    }
-  | {
-      /** An authored or imported card with no source message. */
-      card: VisibilityCard & { sourceMessage: null; canonicalSessionKey?: null };
-      sourceWithheld?: boolean | null;
-    }
-);
+  /** The runtime check requires a definite false for message-backed cards. */
+  sourceWithheld?: boolean | null;
+}
 
 export type DocumentCardHiddenReason =
   | "scope_mismatch" | "id_mismatch" | "source_withheld" | "source_memory_missing"

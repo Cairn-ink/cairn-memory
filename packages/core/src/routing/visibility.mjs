@@ -20,20 +20,22 @@ const hidden = (reason) => ({ visible: false, reason });
 export async function documentCardVisible(input) {
   try {
     const { card, requestedScope, memoryStates, sourceWithheld } = input;
-    if (!validScope(card?.scope) || !validScope(requestedScope)) return hidden("uncertain");
+    if (!nonempty(card?.id) || !validScope(card.scope) || !validScope(requestedScope)) return hidden("uncertain");
     if (card.scope.owner !== requestedScope.owner || card.scope.namespace !== requestedScope.namespace) {
       return hidden("scope_mismatch");
     }
-    const { sourceMessage, canonicalSessionKey } = card;
-    const hasSourceMessage = sourceMessage !== null;
-    if (hasSourceMessage && sourceWithheld === true) return hidden("source_withheld");
-    if ((hasSourceMessage && sourceWithheld !== false) || typeof memoryStates?.get !== "function" ||
-        !Array.isArray(card.sourceMemories)) {
+    const { origin, sourceMessage, canonicalSessionKey } = card;
+    const messageBacked = origin === "router" || origin === undefined;
+    if (!messageBacked && ((origin !== "import" && origin !== "manual") || sourceMessage !== null)) {
+      return hidden("uncertain");
+    }
+    if (messageBacked && sourceWithheld === true) return hidden("source_withheld");
+    if (typeof memoryStates?.get !== "function" || !Array.isArray(card.sourceMemories)) {
       return hidden("uncertain");
     }
 
-    if (hasSourceMessage) {
-      if (!nonempty(card.id) || !nonempty(sourceMessage?.client) || !nonempty(sourceMessage.sessionId) ||
+    if (messageBacked) {
+      if (sourceWithheld !== false || !nonempty(sourceMessage?.client) || !nonempty(sourceMessage.sessionId) ||
           !nonempty(sourceMessage.messageId) || !nonempty(canonicalSessionKey)) return hidden("uncertain");
       // The builder owns the ID recipe. A fixed body lets it compute the ID without reading stored text.
       const expected = await buildDocumentCard(
@@ -51,7 +53,7 @@ export async function documentCardVisible(input) {
       if (state.status === "forgotten") return hidden("source_memory_forgotten");
       if (state.status !== "visible") return hidden("source_memory_not_visible");
       if (!natural(state.revision)) return hidden("uncertain");
-      if (!hasSourceMessage && state.revision !== source.revision) return hidden("source_memory_not_visible");
+      if (!messageBacked && state.revision !== source.revision) return hidden("source_memory_not_visible");
     }
     return { visible: true, reason: null };
   } catch {

@@ -13,22 +13,28 @@ owner index revision once per call. Store only memory IDs in stale entries.
 Pass an embedding with its model key to index a vector. Without a model key,
 use lexical matching only.
 
+Text is marker-only when it contains at least one `[REDACTED]` marker and no
+Unicode letter or number remains after removing all markers. Punctuation-only
+text without a marker follows the usual routing rules.
+
 Read with one snapshot. The store excludes hidden cards in `get` and `list`.
 Before delivery, the host's `VisibilityFence` uses `documentCardVisible` to
-verify owner and namespace and each source memory's current visibility. For
-message-backed cards it also verifies the deterministic ID and that Raw would
-expose the entire source message.
+verify a nonempty card ID, owner and namespace, and each source memory's
+current visibility. Pass the immutable `origin` from the stored record in
+that snapshot. Keep it unchanged on replacement. Router cards (`"router"`)
+and legacy cards with no origin require a source message. The helper verifies
+the deterministic ID and that Raw would expose the entire source message.
 The ID check uses the canonical session key supplied on the helper's card
 input. The host must resolve it from the record's plain source with the
 capture resolver. A missing key, state, or Raw verdict hides the card.
 
-For authored or imported cards, pass `sourceMessage: null` to
-`documentCardVisible`. The helper checks the stored scope and accepts the
-stored ID as supplied. The Raw verdict is optional. Every linked memory must
-be visible at its recorded revision in the same snapshot. With zero linked
-memories, the card stays visible within its scope until it is hidden or
-deleted directly via `forgetCard`. The store excludes hidden and tombstoned
-IDs from reads.
+Source-less cards have stored origin `"import"` or `"manual"` and
+`sourceMessage: null`. An unknown origin or a source message that conflicts
+with the stored origin hides the card. The Raw verdict is optional for
+source-less cards. Every linked memory must be visible at its recorded
+revision in the same snapshot. To forget a card with zero linked memories,
+call the store's scoped `hide(tx, scope, cardId, reason)` by ID. Hidden and
+tombstoned IDs are excluded from reads and stay tombstoned on replay.
 
 For `documentCardSourceWithheld`, supply the complete Raw match projections
 for the card's source message, plus all applicable facts and the Raw matching
