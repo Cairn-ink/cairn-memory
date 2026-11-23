@@ -37,6 +37,13 @@ export interface ModelPort {
   readonly contextWindow: number;
   call(stage: ModelStage, request: ModelRequest, options: CallOptions): Promise<unknown>;
   countTokens(text: string): number;
+  /**
+   * Optional (Phase 0 addendum 1). Whether the adapter's full provider request for this exact
+   * `request` fits its own limits, measured on the body it would send (provider framing, model
+   * id, schema). Synchronous, content-free, never logs. Core plans by its own count AND this
+   * hook when present; when absent, core plans by its own count alone. A throw counts as false.
+   */
+  fits?(stage: ModelStage, request: ModelRequest): boolean;
 }
 
 /** Core helper over ModelPort.call for the plain extract stage (prompt, spec and validation from core). */

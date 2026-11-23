@@ -71,6 +71,16 @@ change request to the core lead, answered on the same day.
 - The capture rationale stage is not in core until a keep/drop decision; `ModelStage` reserves its name only.
 - One id order in all of core: UTF-8 bytes (`compareUtf8`). Where the hosted service compares ids differently today (SQL collation, JS UTF-16 string order in in-batch ties), the difference is listed for the shadow comparison.
 
+## Addenda
+
+Each addendum is additive unless it says what it supersedes. Adapters written against an earlier version stay valid.
+
+1. **`ModelPort.fits?` (optional).** `fits?(stage: ModelStage, request: ModelRequest): boolean`, synchronous and content-free. It reports whether the adapter's full provider request for this exact `request` fits the adapter's own limits, measured on the body it would actually send, including provider framing, model id and strict schema, none of which core can see.
+   - Core plans a batched stage, for example candidate qualification, with its own count (sizing text ≤ 6000 tokens) AND `fits()` when the hook is present. When the hook is absent, core plans by its own count alone, as the engine does for an adapter without the hook.
+   - A throw from `fits()` counts as `false`: the group splits smaller and nothing is sent.
+   - It supersedes nothing. The conformance kit must accept adapters without it.
+   - Reason: core's sizing text undercounts the provider body. Five inline qualification items with four 180-character CJK excerpts each measured 5,857 tokens by core's sizing text and 7,512 by the serialized provider body. The engine rejects that group and accepts each item alone. Without the hook, a verbatim adapter would plan differently.
+
 ## Change requests
 
 Send the core lead the port, the method, and the reason. A request is
