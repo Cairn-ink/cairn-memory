@@ -54,8 +54,8 @@ export function copyCaptureFailure(failure) {
   return { code: failure.code, retryable: failure.retryable };
 }
 
-/** @param {readonly import("@cairn-ink/core/ports").FinishItem[]} items */
-export function copyFinishItems(items) {
+/** @param {readonly import("@cairn-ink/core/ports").FinishItem[]} items @param {boolean} embeddingRequiredOnInsert */
+export function copyFinishItems(items, embeddingRequiredOnInsert) {
   if (!Array.isArray(items)) invalid();
   return Array.from(items, (item) => {
     if (!item) invalid();
@@ -63,7 +63,7 @@ export function copyFinishItems(items) {
       kind: item.kind, origin: "inferred", text: item.content, textHash: item.textHash,
       confidence: item.confidence, source: { kind: "capture", client: null, sessionId: null },
       embedding: item.embedding,
-    }, "capture");
+    }, "capture", embeddingRequiredOnInsert);
     return { row, receipts: copyReceipts(item.receipts) };
   });
 }
@@ -187,10 +187,11 @@ export function copyDuplicateBatch(batch) {
   return copy;
 }
 
-/** @param {InsertRow} row @param {"memory" | "capture"} [format] */
-export function copyContent(row, format = "memory") {
+/** @param {InsertRow} row @param {"memory" | "capture"} format @param {boolean} embeddingRequiredOnInsert */
+export function copyContent(row, format, embeddingRequiredOnInsert) {
   validateMerge(row);
   const { kind, origin, text, textHash, confidence, source, embedding } = row;
+  if (embeddingRequiredOnInsert && embedding === null) invalid();
   if (!kinds.includes(kind) || !origins.includes(origin) || !nonempty(text) ||
     !isTextHash(textHash)) invalid();
   validateSource(source);

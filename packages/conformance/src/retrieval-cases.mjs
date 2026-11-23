@@ -90,8 +90,9 @@ export const retrievalCases = [
       const third = ctx.scope("outside");
       const readSet = { owner, namespaces: [second.namespace, first.namespace] };
       const tied = await row(ctx, "orchard apple");
+      const otherTied = ctx.adapter.capabilities.embeddingRequiredOnInsert ? await row(ctx, tied.text) : tied;
       const a = await insert(ctx, second, tied, 5002n);
-      const b = await insert(ctx, first, tied, 5002n);
+      const b = await insert(ctx, first, otherTied, 5002n);
       const c = await insert(ctx, first, await row(ctx, "orchard orchard pear"), 5001n);
       await insert(ctx, first, await row(ctx, "copper kettle"), 5003n);
       await insert(ctx, third, await row(ctx, "orchard plum"), 5005n);
@@ -185,6 +186,7 @@ export const retrievalCases = [
           "Complete vector coverage returned the wrong refs");
       });
 
+      if (ctx.adapter.capabilities.embeddingRequiredOnInsert) return "requires an unembedded row for incomplete vector coverage";
       await insert(ctx, first, await row(ctx, "missing vector"), 6008n);
       await insert(ctx, second, {
         ...await row(ctx, "other model"), embedding: { model: "other", vector: ctx.vec(0.03) },
@@ -280,6 +282,7 @@ export const retrievalCases = [
 
       const other = ctx.scope("outside");
       const content = await row(ctx, "snapshot write");
+      const otherContent = ctx.adapter.capabilities.embeddingRequiredOnInsert ? await row(ctx, content.text) : content;
       const rolledBack = new Error("rollback");
       try {
         await uow.run(owner, {}, async (tx) => {
@@ -291,7 +294,7 @@ export const retrievalCases = [
         equal(error === rolledBack, true, "Unexpected rollback error");
       }
       await confirm(token);
-      await uow.run(otherOwner, {}, (tx) => memories.insert(tx, { ...other, owner: otherOwner }, content, [], 1));
+      await uow.run(otherOwner, {}, (tx) => memories.insert(tx, { ...other, owner: otherOwner }, otherContent, [], 1));
       equal(await capture(), token, "State token changed after another owner's write");
       await confirm(token);
       await rejects(() => confirm(token, { ...readSet, namespaces: [null] }), "cursor_stale");

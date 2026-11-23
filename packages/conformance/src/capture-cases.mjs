@@ -1,5 +1,5 @@
 import { CoreError } from "@cairn-ink/core";
-import { caught, check, equal, readDump, rejects } from "./support.mjs";
+import { caught, check, equal, fixtureEmbedding, readDump, rejects } from "./support.mjs";
 
 /** @typedef {import("./index.d.mts").CaseContext} CaseContext */
 /** @typedef {import("@cairn-ink/core/ports").CaptureKey} CaptureKey */
@@ -32,9 +32,11 @@ function claimedToken(result) {
   return result.token;
 }
 
-/** @param {CaseContext} ctx @param {string} content @returns {Promise<FinishItem>} */
-async function itemFor(ctx, content) {
-  return { content, kind: "fact", confidence: 0.4, textHash: await ctx.hash(content), embedding: null, receipts: [] };
+/** @param {CaseContext} ctx @param {string} content @param {boolean} [needsFixtureEmbedding] @returns {Promise<FinishItem>} */
+async function itemFor(ctx, content, needsFixtureEmbedding = true) {
+  const fixture = needsFixtureEmbedding ? fixtureEmbedding(ctx) : null;
+  const embedding = fixture && { model: fixture.model, vector: new Float32Array(fixture.vector) };
+  return { content, kind: "fact", confidence: 0.4, textHash: await ctx.hash(content), embedding, receipts: [] };
 }
 
 /** @param {CaseContext} ctx @param {string} token @param {readonly FinishItem[]} items */
@@ -261,7 +263,7 @@ export const captureCases = [
       async run(ctx) {
         const { harness, owner } = ctx;
         const forgottenHash = await ctx.hash("Forgotten vector memory");
-        const nearby = await itemFor(ctx, "Nearby vector memory");
+        const nearby = await itemFor(ctx, "Nearby vector memory", false);
         nearby.embedding = { model: "test", vector: new Float32Array(ctx.vec(0.15)) };
         await harness.seedFact(owner, {
           owner, actionId: "forget-vector", origin: "forget", kind: "text", mode: "full",

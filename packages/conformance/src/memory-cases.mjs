@@ -213,6 +213,7 @@ export const memoryCases = [
     requests: { nearDuplicate: true },
     async run(ctx) {
       const { adapter: { uow, memories, capabilities }, harness, owner } = ctx;
+      if (capabilities.embeddingRequiredOnInsert) return "requires an unembedded row for exact and near-skip checks";
       const scope = ctx.scope(null);
       const content = await row(ctx, "unembedded");
       const query = { textHash: await ctx.hash("different"), embedding: ctx.vec(0) };

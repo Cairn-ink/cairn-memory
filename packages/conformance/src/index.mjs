@@ -1,6 +1,6 @@
 import { memoryCases } from "./memory-cases.mjs";
 import { retrievalCases } from "./retrieval-cases.mjs";
-import { bounded, check, DEFAULT_TIMEOUT_MS } from "./support.mjs";
+import { bounded, check, DEFAULT_EMBEDDING_DIMENSIONS, DEFAULT_TIMEOUT_MS, FixtureEmbeddingUnavailable } from "./support.mjs";
 import { unitOfWorkCases } from "./unit-of-work-cases.mjs";
 
 export { privacyCases as PRIVACY_CASES } from "./privacy-cases.mjs";
@@ -59,6 +59,7 @@ async function runOpenedCase(factory, testCase) {
     const owner = crypto.randomUUID();
     const skipReason = await testCase.run({
       adapter,
+      embeddingDimensions,
       harness,
       nativeErrorMap,
       busyNativeCodes,
@@ -70,8 +71,12 @@ async function runOpenedCase(factory, testCase) {
       scope: (namespace) => ({ owner, namespace }),
       hash,
       vec(distance) {
-        const dimensions = embeddingDimensions ?? 4;
-        if (!Number.isSafeInteger(dimensions) || dimensions < 2) throw new Error("At least two embedding dimensions are needed");
+        const dimensions = embeddingDimensions ?? DEFAULT_EMBEDDING_DIMENSIONS;
+        if (!Number.isSafeInteger(dimensions) || dimensions < 2) {
+          const message = "At least two embedding dimensions are needed";
+          if (adapter.capabilities.embeddingRequiredOnInsert) throw new FixtureEmbeddingUnavailable(message);
+          throw new Error(message);
+        }
         const cosine = 1 - distance;
         const vector = Array(dimensions).fill(0);
         vector[0] = cosine;
@@ -81,6 +86,7 @@ async function runOpenedCase(factory, testCase) {
     });
     return skipReason ?? null;
   } catch (error) {
+    if (error instanceof FixtureEmbeddingUnavailable) return error.message;
     caseFailure = { error };
     throw error;
   } finally {
