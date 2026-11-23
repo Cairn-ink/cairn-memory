@@ -24,6 +24,7 @@ export interface MemoryServiceDeps {
   readonly tokens: TokenCounter;
   readonly embedQuery?: EmbedQuery;
   readonly config: MemoryServiceConfig;
+  /** Capture emits extract/core_finish/candidate_withheld once per core-filtered candidate after commit. */
   readonly diagnostics?: (e: DiagnosticEvent) => void;
 }
 

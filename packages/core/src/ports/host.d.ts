@@ -1,4 +1,5 @@
-import type { MemoryKind, MemoryRow, Namespace, OwnerId, Revision, Scope, SourceRef } from "./common.d.ts";
+import type { ErrorCode } from "../errors.mjs";
+import type { MemoryKind, MemoryRow, Namespace, OwnerId, Receipt, Revision, Scope, SourceRef } from "./common.d.ts";
 import type { CaptureMessage } from "./capture.d.ts";
 import type { RawSegment } from "./retrieval.d.ts";
 
@@ -44,6 +45,12 @@ export interface ImportResult {
   invalid: number;
 }
 
+export interface Layer {
+  status: "ok" | "not_searched" | "unavailable";
+  count: number;
+  code?: ErrorCode;
+}
+
 /** The facade every host (MCP, plugin, web, hosted service) talks to. Template: cloud port.ts. */
 export interface MemoryService {
   enqueueCapture(scope: Scope, capture: { client: string; sessionId: string; eventId: string; messages: CaptureMessage[] }): Promise<{ status: "accepted" | "duplicate" | "paused" | "blocked" }>;
@@ -55,10 +62,21 @@ export interface MemoryService {
   >;
   forget(scope: Scope, id: string, source: SourceRef): Promise<{ status: "forgotten"; removedSimilar: number } | { status: "not_found" }>;
   recall(scope: Scope, query: string, options: { limit: number; cursor: string | null; mode: "search" | "plugin" }): Promise<{ items: MemoryRow[]; nextCursor: string | null; scores?: number[] }>;
+  find(scope: Scope, query: string | null, options: {
+    limit?: number;
+    kinds?: ("memory" | "card" | "raw")[];
+    clients?: string[];
+    sinceMs?: number;
+    untilMs?: number;
+  }): Promise<{ memories: MemoryRow[]; cards: []; raw: []; layers: { memory: Layer; card: Layer; raw: Layer } }>;
+  read(scope: Scope, ref: { type: "memory" | "card"; id: string }): Promise<
+    { status: "found"; item: MemoryRow; receipts: Receipt[]; sourceDates: { firstMs: number | null; lastMs: number | null } | null } |
+    { status: "not_found" }
+  >;
   recent(scope: Scope, options: { limit: number; cursor: string | null }): Promise<{ items: MemoryRow[]; nextCursor: string | null }>;
   /** maxTokens ≤ 2000, maxChars ≤ 8000; projectId selects the engine project namespace. */
   sessionStart(scope: Scope, options: { maxTokens: number; maxChars: number; projectId?: string | null }): Promise<SessionContext>;
-  captureStatus(scope: Scope, eventId: string): Promise<{ status: "pending" | "done" | "failed" | "unknown"; code?: string }>;
+  captureStatus(scope: Scope, eventId: string, options?: { client?: string }): Promise<{ status: "pending" | "done" | "failed" | "unknown"; code?: string }>;
   pauseState(owner: OwnerId): Promise<{ paused: boolean; generation: number }>;
   setPause(owner: OwnerId, paused: boolean): Promise<{ paused: boolean; generation: number }>;
   /** Paged export of visible memories (download, migration). */
@@ -66,7 +84,7 @@ export interface MemoryService {
   /** Paged export of visible raw messages (download, migration). */
   listRawMessages(scope: Scope, page: { cursor: string | null; limit: number }): Promise<{ items: RawSegment[]; nextCursor: string | null }>;
   /** Import goes through the FULL capture suppression policy and the pause check. */
-  importMemories(scope: Scope, items: readonly ImportMemory[], source: SourceRef): Promise<ImportResult | { status: "paused" }>;
+  importMemories(scope: Scope, items: readonly ImportMemory[], source: SourceRef): Promise<ImportResult | ({ status: "paused" } & ImportResult)>;
   /** Raw import goes through the full capture suppression (session, window, lineage, text) and pause. */
   importRawMessages(scope: Scope, sessions: readonly ImportRawSession[]): Promise<ImportResult | { status: "paused" }>;
 }
