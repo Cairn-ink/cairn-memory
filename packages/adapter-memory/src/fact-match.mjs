@@ -109,10 +109,13 @@ export function createFactMatcher(vectorSuppression, hashSessionKey) {
 
     /** @param {Entry} entry */
     function rowMatcher({ row, receipts }) {
+      const aliases = digestsFor(row);
+      const stored = row.digests?.filter(({ alg, value }) =>
+        !aliases.some((alias) => alias.alg === alg && alias.value === value)) ?? [];
       /** @type {FactMatchRow} */
       const candidate = {
         type: "memory", scope, memoryId: row.id, revision: row.revision,
-        digests: digestsFor(row), embedding: row.embedding?.vector,
+        digests: [...aliases, ...stored], embedding: row.embedding?.vector,
       };
       /** @param {StoredFact} stored */
       return (stored) => {
@@ -163,7 +166,7 @@ export function createFactMatcher(vectorSuppression, hashSessionKey) {
        */
       blocks(query, mode, sourceMemory) {
         if (texts.length === 0) return false;
-        const passages = [{ digests: digestsFor(query), shingles: null, keyId: null, embedding: query.embedding }];
+        const passages = [{ digests: query.digests ?? digestsFor(query), shingles: null, keyId: null, embedding: query.embedding }];
         return texts.some((stored) => factBlocksIncoming(stored, { scope, passages, sourceMemory },
           { ...policy, mode: mode === "hash" ? "explicitSave" : "capture" }) !== false);
       },

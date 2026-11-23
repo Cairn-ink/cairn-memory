@@ -158,8 +158,10 @@ export function createPauseStore(port) {
   };
 }
 
-/** @param {boolean} enabled @param {Options["fingerprint"]} config */
-export function createFingerprintProvider(enabled, config) {
+/** @param {boolean} enabled @param {Options["fingerprint"]} config
+ * @param {UnitOfWork["rotateRowDigests"]} rotateRowDigests
+ */
+export function createFingerprintProvider(enabled, config, rotateRowDigests) {
   if (!enabled && config != null) throw new CoreError("capability_unavailable");
   const labels = config == null ? TEST_FINGERPRINT_LABELS : validateFingerprintLabels(config.labels);
   let secret = enabled ? (config == null ? TEST_FINGERPRINT_SECRET : config.secret) : null;
@@ -176,7 +178,7 @@ export function createFingerprintProvider(enabled, config) {
   async function setFingerprintSecret(next) {
     if (!enabled) throw new CoreError("capability_unavailable");
     if (typeof next !== "string" || next.length === 0) throw new CoreError("invalid_input");
-    secret = next;
+    await rotateRowDigests((owner) => userFingerprintKey(next, owner, labels), () => { secret = next; });
   }
 
   return { keys, setFingerprintSecret };

@@ -1,4 +1,4 @@
-import { CoreError, compareUtf8, isErrorCode, toCoreError } from "@cairn-ink/core";
+import { allDigests, CoreError, compareUtf8, isErrorCode, toCoreError } from "@cairn-ink/core";
 import { createFactStore } from "./privacy.mjs";
 
 /** @typedef {import("@cairn-ink/core").ErrorCode} ErrorCode */
@@ -6,9 +6,11 @@ import { createFactStore } from "./privacy.mjs";
 /** @typedef {import("@cairn-ink/core/ports").Scope} Scope */
 /** @typedef {import("@cairn-ink/core/ports").Namespace} Namespace */
 /** @typedef {import("@cairn-ink/core/ports").MemoryRow & {
- *   embedding: {model: string, vector: number[]} | null, historical: boolean, legacyHash?: string
+ *   embedding: {model: string, vector: number[]} | null, historical: boolean, legacyHash?: string,
+ *   digests: import("@cairn-ink/core").TextDigest[]
  * }} Row */
 /** @typedef {{row: Row, receipts: import("@cairn-ink/core/ports").Receipt[]}} Entry */
+/** @typedef {import("@cairn-ink/core/ports").FingerprintKeyProvider["userKey"]} UserKey */
 /** @typedef {import("@cairn-ink/core").StoredFact} StoredFact */
 /** @typedef {import("@cairn-ink/core/ports").PauseState} PauseState */
 /** @typedef {import("./capture.mjs").ClaimRecord} ClaimRecord */
@@ -26,6 +28,11 @@ export function indexRevisionAfterRun(run) {
   const revision = run.state.indexRevision + Number(run.indexDirty) + run.writingFinishes;
   if (!Number.isSafeInteger(revision)) throw new CoreError("internal_error");
   return revision;
+}
+
+/** @param {Row} row */
+export function copyPublicRow({ digests: _digests, ...row }) {
+  return structuredClone(row);
 }
 
 class Mutex {
@@ -75,6 +82,8 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
   const owners = new Map();
   /** @type {WeakMap<Tx, IssuedRun>} */
   const issued = new WeakMap();
+  /** @type {Promise<void> | undefined} */
+  let rotation;
 
   /** @param {string} owner */
   function ownerState(owner) {
@@ -93,6 +102,7 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
       const pauseLock = options.pauseLock === true;
       const current = ownerState(owner);
       if (current.fixtureWrite) await current.fixtureWrite;
+      while (!readOnly && rotation) await rotation;
       current.open++;
       let ended = false;
       /** @type {Tx | undefined} */
@@ -308,6 +318,7 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
 
   /** @param {Scope} scope @param {string} id @param {bigint} updatedAtUs */
   async function setWriteTime(scope, id, updatedAtUs) {
+    while (rotation) await rotation;
     const current = owners.get(scope.owner);
     if ((current && current.open > 0) || typeof updatedAtUs !== "bigint" || updatedAtUs < 0n) {
       throw new CoreError("invalid_input");
@@ -323,5 +334,68 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
     current.committed = { ...current.committed, rows, indexRevision: current.committed.indexRevision + 1 };
   }
 
-  return { uow, port, dump, appendFact, runSeed, setWriteTime };
+  /** @param {UserKey} userKey @param {() => void} publishKey */
+  async function rotateRowDigests(userKey, publishKey) {
+    const previous = rotation;
+    const change = Promise.resolve(previous).then(async () => {
+      const affected = [...owners];
+      const releases = await Promise.all(affected.map(([, current]) => current.write.acquire()));
+      try {
+        /** @type {Map<Owner, State>} */
+        const updates = new Map();
+        for (const [owner, current] of affected) {
+          const committed = current.committed;
+          if (committed.rows.size === 0) continue;
+          const key = await userKey(owner);
+          /** @type {State["rows"]} */
+          const rows = new Map();
+          for (const [namespace, entries] of committed.rows) {
+            const refreshed = new Map();
+            for (const [id, entry] of entries) {
+              const { row } = entry;
+              const digests = await allDigests(row.text, key);
+              for (const alias of row.digests ?? []) {
+                if (alias.alg === "sha256" && !digests.some(({ alg, value }) => alg === alias.alg && value === alias.value)) {
+                  digests.push(alias);
+                }
+              }
+              refreshed.set(id, { ...entry, row: { ...row, digests } });
+            }
+            rows.set(namespace, refreshed);
+          }
+          const indexRevision = committed.indexRevision + 1;
+          if (!Number.isSafeInteger(indexRevision)) throw new CoreError("internal_error");
+          updates.set(current, { ...committed, rows, indexRevision });
+        }
+        // Publish the prepared snapshots and key without yielding to readers or writers.
+        for (const [current, state] of updates) current.committed = state;
+        publishKey();
+      } finally {
+        for (const release of releases) release();
+      }
+    });
+    const tail = change.then(() => {}, () => {});
+    rotation = tail;
+    try {
+      await change;
+    } finally {
+      if (rotation === tail) rotation = undefined;
+    }
+  }
+
+  /** @param {string} owner @param {UserKey} userKey */
+  async function rowsMissingKeyedDigest(owner, userKey) {
+    const rows = owners.get(owner)?.committed.rows;
+    const key = await userKey(owner);
+    if (!key || !rows) return 0;
+    let count = 0;
+    for (const entries of rows.values()) {
+      for (const { row: { digests } } of entries.values()) {
+        if (!digests?.some(({ alg, keyId }) => alg === "hmac" && keyId === key.id)) count++;
+      }
+    }
+    return count;
+  }
+
+  return { uow, port, dump, appendFact, runSeed, setWriteTime, rotateRowDigests, rowsMissingKeyedDigest };
 }

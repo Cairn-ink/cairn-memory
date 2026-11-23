@@ -1,4 +1,4 @@
-import { CoreError, isErrorCode } from "@cairn-ink/core";
+import { CoreError, isErrorCode, validateSuppressionFact } from "@cairn-ink/core";
 
 /** @typedef {import("@cairn-ink/core/ports").InsertRow} InsertRow */
 /** @typedef {import("@cairn-ink/core/ports").Receipt} Receipt */
@@ -64,6 +64,29 @@ export function snapshotArray(values, { checkKeyCount = false } = {}) {
   return snapshot;
 }
 
+/** @param {import("@cairn-ink/core").TextDigest[] | undefined} digests */
+function copyDigests(digests) {
+  if (digests === undefined) return undefined;
+  try {
+    const copy = snapshotArray(digests).map((digest) => {
+      if (!digest || typeof digest !== "object" || Array.isArray(digest)) invalid();
+      /** @param {keyof typeof digest} key */
+      const field = (key) => Object.getOwnPropertyDescriptor(digest, key)?.value;
+      return {
+        alg: field("alg"), value: field("value"), pipeline: field("pipeline"),
+        redactionVersion: field("redactionVersion"), keyId: field("keyId"),
+      };
+    });
+    validateSuppressionFact({
+      kind: "text", mode: "exact", origin: "forget", owner: "validation", actionId: "validation",
+      text: { digests: copy },
+    });
+    return copy;
+  } catch {
+    invalid();
+  }
+}
+
 /** @param {readonly import("@cairn-ink/core/ports").CaptureMessage[]} messages */
 export function captureMessageTimes(messages) {
   /** @type {Array<number | null>} */
@@ -91,7 +114,7 @@ export function copyFinishItems(items, embeddingRequiredOnInsert) {
     const row = copyContent({
       kind: item.kind, origin: "inferred", text: item.content, textHash: item.textHash,
       confidence: item.confidence, source: { kind: "capture", client: null, sessionId: null },
-      embedding: item.embedding,
+      embedding: item.embedding, digests: item.digests,
     }, "capture", embeddingRequiredOnInsert);
     return { row, receipts: copyReceipts(item.receipts) };
   });
@@ -198,16 +221,17 @@ export function copyRefs(refs) {
 export function copyDuplicateBatch(batch) {
   return snapshotArray(batch).map((query) => {
     if (!query || typeof query !== "object") invalid();
-    const { textHash, legacyHash, embedding } = query;
+    const { textHash, legacyHash, embedding, digests } = query;
     if (!isTextHash(textHash) || (legacyHash !== undefined && !isTextHash(legacyHash))) invalid();
-    return { textHash, legacyHash, embedding: embedding == null ? embedding : readEmbedding(embedding) };
+    return { textHash, legacyHash, digests: copyDigests(digests),
+      embedding: embedding == null ? embedding : readEmbedding(embedding) };
   });
 }
 
 /** @param {InsertRow} row @param {"memory" | "capture"} format @param {boolean} embeddingRequiredOnInsert */
 export function copyContent(row, format, embeddingRequiredOnInsert) {
   validateMerge(row);
-  const { kind, origin, text, textHash, confidence, source, embedding } = row;
+  const { kind, origin, text, textHash, confidence, source, embedding, digests } = row;
   if (embeddingRequiredOnInsert && embedding === null) invalid();
   if (!kinds.includes(kind) || !origins.includes(origin) || !nonempty(text) ||
     !isTextHash(textHash)) invalid();
@@ -221,7 +245,7 @@ export function copyContent(row, format, embeddingRequiredOnInsert) {
     if (!nonempty(model)) invalid();
     copy = { model, vector: readEmbedding(vector, format) };
   }
-  return { kind, origin, text, textHash, confidence,
+  return { kind, origin, text, textHash, confidence, digests: copyDigests(digests),
     source: { kind: source.kind, client: source.client, sessionId: source.sessionId }, embedding: copy };
 }
 

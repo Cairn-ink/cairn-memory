@@ -2,6 +2,7 @@ import { CoreError, compareUtf8, createBM25, rankScores, scoreBM25, termFrequenc
 import { cosineDistance } from "./cosine.mjs";
 import { decodePayload, decodeSortKey, encodePayload, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
+import { copyPublicRow } from "./unit-of-work.mjs";
 import { copyReadScope, copyRefs, readEmbedding, validateLimit } from "./validation.mjs";
 
 /** @typedef {import("@cairn-ink/core/ports").StorageAdapter} StorageAdapter */
@@ -194,7 +195,7 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
           if (intent !== "recall" && intent !== "read" && intent !== "export") throw new CoreError("invalid_input");
           const references = copyRefs(refs);
           return Array.from(visibleRefs(getState(), selection, references, intent !== "recall"), ({ ref, entry }) => ({
-            ref, memory: structuredClone(entry.row), receipts: structuredClone(entry.receipts),
+            ref, memory: copyPublicRow(entry.row), receipts: structuredClone(entry.receipts),
             sourceDates: sourceDates(entry.receipts),
           }));
         });
@@ -218,7 +219,7 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
           validateLimit(limit);
           const after = cursor === null ? null : recentAfter(cursor);
           const rows = visibleRows(getState(), selection).filter((row) => !after || recentOrder(row, after) > 0).sort(recentOrder);
-          const items = rows.slice(0, limit).map((row) => structuredClone(row));
+          const items = rows.slice(0, limit).map(copyPublicRow);
           const last = items.at(-1);
           return {
             items,

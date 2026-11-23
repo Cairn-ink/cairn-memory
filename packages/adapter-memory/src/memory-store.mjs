@@ -1,7 +1,8 @@
-import { CoreError, NEAR_DUPLICATE_DISTANCE, compareUtf8 } from "@cairn-ink/core";
+import { allDigests, CoreError, NEAR_DUPLICATE_DISTANCE, compareUtf8 } from "@cairn-ink/core";
 import { cosineDistance } from "./cosine.mjs";
 import { decodeCursor, encodeCursor, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
+import { copyPublicRow } from "./unit-of-work.mjs";
 import {
   attachReceipts, copyContent, copyDuplicateBatch, copyMerge, copyReceipts, validateLimit, validateMemoryId,
   validateSource, validateTime, writeNamespace,
@@ -36,8 +37,10 @@ export function writeTime(nowMs) {
  * @param {import("@cairn-ink/core").Capabilities} capabilities
  * @param {() => string} newId
  * @param {ReturnType<typeof createFactMatcher>} [matchFacts]
+ * @param {import("@cairn-ink/core/ports").FingerprintKeyProvider["userKey"]} [userKey]
  */
-export function createMemoryStore(port, capabilities, newId, matchFacts = createFactMatcher(capabilities.vectorSuppression)) {
+export function createMemoryStore(port, capabilities, newId, matchFacts = createFactMatcher(capabilities.vectorSuppression),
+  userKey = async () => null) {
   let nearSkippedUnembedded = 0;
 
   /** @param {InsertRow} row */
@@ -99,16 +102,17 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           const evidence = attachReceipts([], copyReceipts(receipts));
           validateTime(nowMs);
           const namespace = writeNamespace(scope);
-          return (getState) => {
+          return async (getState) => {
             const id = newId();
             if (typeof id !== "string" || !id) throw new CoreError("internal_error");
             const { rows } = getState();
+            const digests = content.digests ?? await allDigests(content.text, await userKey(tx.owner));
             let entries = rows.get(namespace);
             if (entries?.has(id)) throw new CoreError("internal_error");
             if (!entries) rows.set(namespace, entries = new Map());
             const created = { id, revision: 1, createdAtMs: nowMs, ...writeTime(nowMs) };
             entries.set(id, {
-              row: { ...content, ...created, scope: { owner: tx.owner, namespace }, historical: false },
+              row: { ...content, digests, ...created, scope: { owner: tx.owner, namespace }, historical: false },
               receipts: evidence,
             });
             return created;
@@ -218,7 +222,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
         validateMemoryId(id);
         if (!Number.isInteger(expectedRevision)) throw new CoreError("invalid_input");
         const namespace = writeNamespace(scope);
-        return (getState) => {
+        return async (getState) => {
           const state = getState();
           const entries = state.rows.get(namespace);
           const entry = entries?.get(id);
@@ -228,13 +232,14 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           if (row.historical) throw new CoreError("memory_historical");
           if (content.textHash === row.textHash) return { outcome: "unchanged", revision: row.revision };
 
+          const digests = content.digests ?? await allDigests(content.text, await userKey(tx.owner));
           const policy = matchFacts(state.facts, { owner: tx.owner, namespace });
           if (entriesIn(entries).some((other) => other.row.id !== id && other.row.textHash === content.textHash &&
             !policy.hides(other))) {
             throw new CoreError("memory_conflict");
           }
           const revision = row.revision + 1;
-          Object.assign(row, content, { revision, ...writeTime(nowMs) });
+          Object.assign(row, content, { digests, revision, ...writeTime(nowMs) });
           delete row.legacyHash;
           if (evidence !== null) entry.receipts = evidence;
           return { outcome: "changed", revision };
@@ -245,7 +250,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
     async get(tx, scope, id) {
       return port(tx, scope, false, (state) => {
         const row = state.rows.get(scope.namespace)?.get(id)?.row;
-        return row ? structuredClone(row) : null;
+        return row ? copyPublicRow(row) : null;
       });
     },
 
@@ -272,7 +277,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
         const rows = entriesIn(state.rows.get(scope.namespace))
           .filter((entry) => (!after || newestFirst(entry.row, after) > 0) && !policy.hides(entry))
           .map(({ row }) => row).sort(newestFirst);
-        const items = rows.slice(0, limit).map((row) => structuredClone(row));
+        const items = rows.slice(0, limit).map(copyPublicRow);
         const last = items.at(-1);
         return {
           items,
