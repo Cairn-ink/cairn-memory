@@ -2,6 +2,7 @@ import {
   CoreError, compareUtf8, factIncarnationBody, pauseGenerationAfter, userFingerprintKey,
   validateFingerprintLabels, validateSuppressionFact,
 } from "@cairn-ink/core";
+import { createFactMatcher } from "./fact-match.mjs";
 
 /** @typedef {import("./index.d.mts").MemoryAdapterOptions} Options */
 /** @typedef {import("@cairn-ink/core").SuppressionFact} SuppressionFact */
@@ -64,9 +65,10 @@ function storeFact(getState, fact, incarnation, { newId = () => crypto.randomUUI
 
 /**
  * @param {UnitOfWork["port"]} port @param {UnitOfWork["runSeed"]} runSeed
- * @param {Pick<Options, "newId" | "now" | "sessionRefs">} options
+ * @param {Pick<Options, "newId" | "now" | "sessionRefs" | "hashSessionKey">} options
+ * @param {ReturnType<typeof createFactMatcher>} [matchFacts]
  */
-export function createFactStore(port, runSeed, options) {
+export function createFactStore(port, runSeed, options, matchFacts = createFactMatcher(false, options.hashSessionKey)) {
   /** @type {import("@cairn-ink/core/ports").SuppressionStore} */
   const suppressions = {
     async writeFact(tx, fact, incarnation) {
@@ -78,9 +80,13 @@ export function createFactStore(port, runSeed, options) {
         return storeFact(getState, validated, incarnation, options);
       });
     },
-    // The privacy module's fact-match functions will back these reads in part b.
-    async snapshot() { throw new CoreError("capability_unavailable"); },
-    async factsFor() { throw new CoreError("capability_unavailable"); },
+    async snapshot(tx, scope, candidates) {
+      return port(tx, scope, false, (state) => matchFacts(state.facts, scope).snapshot(candidates));
+    },
+    async factsFor(tx, scope, { memoryId }) {
+      return port(tx, scope, false, (state) =>
+        matchFacts(state.facts, scope).factsFor(memoryId, state.rows.get(scope.namespace)?.get(memoryId)));
+    },
     async epoch(tx, owner) {
       return port(tx, { owner }, false, (state) => state.epoch);
     },

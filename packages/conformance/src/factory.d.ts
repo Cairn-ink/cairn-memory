@@ -1,4 +1,4 @@
-import type { Capabilities, ErrorCode, SuppressionFact } from "@cairn-ink/core";
+import type { Capabilities, ErrorCode, FactMatchPolicy, SuppressionFact } from "@cairn-ink/core";
 import type { Scope, StorageAdapter } from "@cairn-ink/core/ports";
 
 export type AdapterFactory = {
@@ -31,6 +31,8 @@ export type TestHarness = {
   seedFact(owner: string, fact: SuppressionFact): Promise<void>;
   setWriteTime(scope: Scope, id: string, updatedAtUs: bigint): Promise<void>;
   setFingerprintSecret?(secret: string): Promise<void>;
+  /** Required for privacy matching cases under the hashed session profile. */
+  hashSessionKey?: FactMatchPolicy["hashSessionKey"];
   counters(): Promise<Readonly<Record<string, number>>>;
   // TODO: Named-step fault injection.
   // TODO: Coverage control.

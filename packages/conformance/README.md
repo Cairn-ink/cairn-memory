@@ -58,6 +58,19 @@ The in-memory reference adapter uses the public fixture `TEST_FINGERPRINT_SECRET
 (`"test-secret-a"`) and `TEST_FINGERPRINT_LABELS` when `fingerprintKey` is enabled with
 no configuration. Use these fixtures for tests only.
 
+### Privacy matching cases
+
+Run the entries in `PRIVACY_MATCH_CASES` with `runCase(factory, testCase)`. These
+cases seed facts with `harness.seedFact` and check visibility, write policy and
+suppression reads through the ports. The general `CASES` export is unchanged.
+
+Factories that declare `sessionRefs: "hashed"` supply a synchronous
+`harness.hashSessionKey(client, sessionId)` using the same conversion as their
+adapter. The hashed receipt check reports `needs hashed session refs` on the
+plain profile. The vector follow-ups request `vectorSuppression` and
+`semanticRetrieval` and report the missing flag when skipped. Their exact-digest
+checks run on either profile with or without those flags.
+
 ### Sticky write failures
 
 After a write port touches store state, the in-memory adapter records its first failure code.

@@ -1,7 +1,7 @@
 import { CoreError, compareUtf8, createBM25, rankScores, scoreBM25, termFrequencies, tokenizeT1 } from "@cairn-ink/core";
 import { cosineDistance } from "./cosine.mjs";
 import { decodePayload, decodeSortKey, encodePayload, newestFirst } from "./cursor.mjs";
-import { factPolicy } from "./fact-match.mjs";
+import { createFactMatcher } from "./fact-match.mjs";
 import { validateLimit, validateReadSet, validateRefs, validateVector } from "./validation.mjs";
 
 /** @typedef {import("@cairn-ink/core/ports").StorageAdapter} StorageAdapter */
@@ -81,13 +81,14 @@ function sourceDates(receipts) {
 /**
  * @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>["port"]} port
  * @param {import("@cairn-ink/core").Capabilities} capabilities
+ * @param {ReturnType<typeof createFactMatcher>} [matchFacts]
  * @returns {Pick<StorageAdapter, "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent">}
  */
-export function createRetrievalPorts(port, capabilities) {
+export function createRetrievalPorts(port, capabilities, matchFacts = createFactMatcher(capabilities.vectorSuppression)) {
   /** @param {State} state @param {RetrievalScope} scope */
   function policies(state, scope) {
     return new Map(scope.namespaces.map((namespace) =>
-      [namespace, factPolicy(state.facts, { owner: scope.owner, namespace }, capabilities.vectorSuppression)]));
+      [namespace, matchFacts(state.facts, { owner: scope.owner, namespace })]));
   }
 
   /** @param {State} state @param {RetrievalScope} scope */
@@ -97,8 +98,8 @@ export function createRetrievalPorts(port, capabilities) {
     for (const [namespace, policy] of policies(state, scope)) {
       const entries = state.rows.get(namespace);
       if (!entries) continue;
-      for (const { row } of entries.values()) {
-        if (!row.historical && !policy.hides(row)) rows.push(row);
+      for (const entry of entries.values()) {
+        if (!entry.row.historical && !policy.hides(entry)) rows.push(entry.row);
       }
     }
     return rows;
@@ -112,7 +113,7 @@ export function createRetrievalPorts(port, capabilities) {
       const policy = byNamespace.get(ref.namespace);
       if (ref.type !== "memory" || !policy) continue;
       const entry = state.rows.get(ref.namespace)?.get(ref.id);
-      if (entry && (includeHistorical || !entry.row.historical) && !policy.hides(entry.row)) {
+      if (entry && (includeHistorical || !entry.row.historical) && !policy.hides(entry)) {
         yield { ref: memoryRef(entry.row), entry };
       }
     }
