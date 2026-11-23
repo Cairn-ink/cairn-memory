@@ -33,6 +33,6 @@ export declare function engineLegacyDigest(raw: string, max?: number, rawMax?: n
 /**
  * Lookup candidates deduped by algorithm and value, keeping the first pipeline.
  * An engine refusal omits its alias. Legacy SHA candidates are for matching
- * historical facts. Facts for passages that held secrets require keyed digests.
+ * historical facts. Facts for passages that held secrets need keyed digests.
  */
 export declare function allDigests(raw: string, key?: FingerprintKey | null): Promise<TextDigest[]>;

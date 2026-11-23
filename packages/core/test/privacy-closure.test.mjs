@@ -6,24 +6,20 @@ import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
-// Static, dynamic and side-effect `node:` specifiers in any quote style, plus
-// CommonJS require calls. Comments are blanked first so that a comment between
-// tokens cannot hide a form. A line comment starts only at a line start or after
-// whitespace, so "https://…" inside a string is never treated as a comment.
-const NODE_SPECIFIER = /(?:\bfrom|\bimport)\s*(?:\(\s*)?["'`]node:/u;
-const REQUIRE_CALL = /\brequire\s*\(/u;
-
-function withoutComments(source) {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//gu, " ")
-    .replace(/(^|\s)\/\/[^\n]*/gu, "$1");
-}
+// A regex cannot parse JavaScript, so this check does not try to tell code from
+// comments or strings. Shipped core files may not contain the text `node:` or
+// the word `require` anywhere, in code, comments or strings. Every literal
+// import or require form is caught that way, however it is spaced or quoted.
+// A specifier assembled at run time (for example "no" + "de:fs") is out of
+// reach of any static scan; the closure rule in phase0.test.mjs and review
+// cover that.
+const NODE_TEXT = /node:/u;
+const REQUIRE_WORD = /\brequire\b/u;
 
 function violations(source) {
-  const code = withoutComments(source);
   const found = [];
-  if (NODE_SPECIFIER.test(code)) found.push("node: specifier");
-  if (REQUIRE_CALL.test(code)) found.push("require");
+  if (NODE_TEXT.test(source)) found.push("node: specifier");
+  if (REQUIRE_WORD.test(source)) found.push("require");
   return found;
 }
 
@@ -61,6 +57,16 @@ test("the shipped-file scan catches each banned form (negative control)", () => 
   assert.deepEqual(violations('const fs = require /* comment */ ("fs");'), ["require"]);
   assert.deepEqual(violations('const fs = require // comment\n("fs");'), ["require"]);
   assert.deepEqual(violations('const u = "https://example.test"; await import("node:fs");'), ["node: specifier"]);
+  assert.deepEqual(violations('const note = " // sample"; await import("node:path");'), ["node: specifier"]);
+  assert.deepEqual(violations('const fs = require// attached\n("fs");'), ["require"]);
+  assert.deepEqual(violations('const fs = await import(// attached\n"node:fs"\n);'), ["node: specifier"]);
+  assert.deepEqual(violations('import { types } from// attached\n"node:util";'), ["node: specifier"]);
+  assert.deepEqual(violations("const n = `outer ${`inner // sample ${await import(\"node:path\")}`}`;"), ["node: specifier"]);
+  assert.deepEqual(violations("const m = await import(`${`node:fs`}`);"), ["node: specifier"]);
+  assert.deepEqual(violations('module["require"]("path");'), ["require"]);
+  assert.deepEqual(violations('module.require?.("path");'), ["require"]);
+  assert.deepEqual(violations('const start = "/*";\nawait import("node:fs");'), ["node: specifier"]);
   assert.deepEqual(violations('import { redactV1 } from "./privacy/redact.mjs";'), []);
-  assert.deepEqual(violations('// import "node:fs" in a comment only'), []);
+  // Comments and strings count too: the text itself is banned.
+  assert.deepEqual(violations('// import "node:fs" in a comment only'), ["node: specifier"]);
 });
