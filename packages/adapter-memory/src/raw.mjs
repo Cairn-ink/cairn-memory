@@ -33,6 +33,13 @@ function rawEntry({ owner, namespace }, { client, sessionId }, { id, role, conte
   };
 }
 
+/** @param {readonly CaptureMessage[]} messages */
+function copyRawMessages(messages) {
+  const copied = copyCaptureMessages(messages);
+  if (copied.some(({ id }) => id.length === 0)) throw new CoreError("invalid_input");
+  return copied;
+}
+
 /** @param {PageKey} a @param {PageKey} b */
 function pageOrder(a, b) {
   const x = a.occurredAtMs;
@@ -315,7 +322,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
       return port.write(tx, guarded, "conditional", () => {
         const admission = guarded.copyKey();
         const { scope } = admission;
-        const entries = copyCaptureMessages(messages).map((message) => rawEntry(scope, admission, message));
+        const entries = copyRawMessages(messages).map((message) => rawEntry(scope, admission, message));
         return async (getState, _markDirty, run) => {
           if (!entries.length) return { archived: 0 };
           const state = getState();
@@ -352,7 +359,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
       return port.write(tx, guarded, "conditional", () => {
         const selection = guarded.copyScope();
         const admission = copySession(session);
-        const copied = copyCaptureMessages(messages);
+        const copied = copyRawMessages(messages);
         return async (getState, _markDirty, run) => {
           const counts = { archived: 0, existing: 0, withheld: 0 };
           if (!copied.length) return counts;
