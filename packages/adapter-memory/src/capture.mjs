@@ -17,16 +17,9 @@ import { admissionScope, copyCaptureFailure, copyCaptureMessages, copyCaptureSel
  * {status: "abandoned", failure: ReturnType<typeof copyCaptureFailure>})} ClaimRecord */
 
 /** @param {string} client @param {string} eventId */
-function admissionIdentity(client, eventId) {
+function captureIdentity(client, eventId) {
+  // Claim records are already partitioned by owner.
   return JSON.stringify([client, eventId]);
-}
-
-/** @param {State} state @param {CaptureKey} key */
-function claimIdentity(state, { scope: { owner, namespace }, client, eventId }) {
-  const identity = admissionIdentity(client, eventId);
-  if (state.claims.get(identity)?.key.scope.namespace === namespace) return identity;
-  // Standalone claims retain their namespace-scoped identity.
-  return JSON.stringify([owner, namespace, client, eventId]);
 }
 
 /** @param {ClaimRecord | undefined} claim @param {CaptureKey} key */
@@ -89,7 +82,7 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
 
         return async (getState, run) => {
           const state = getState();
-          const identity = claimIdentity(state, copy);
+          const identity = captureIdentity(copy.client, copy.eventId);
           const previous = state.claims.get(identity);
           assertClaimKey(previous, copy);
           if (previous?.status === "finished") {
@@ -232,7 +225,6 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
       const scope = admissionScope(tx, key);
       return port.write(tx, scope, "conditional", () => {
         const copy = scope.copyKey();
-        const { scope: selection, client, sessionId } = copy;
         /** @type {Set<number>} */
         const selected = new Set();
         for (const position of snapshotArray(positions)) {
@@ -243,10 +235,11 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
         }
         return (getState) => {
           const state = getState();
-          const scope = selection;
-          const claim = state.claims.get(claimIdentity(state, copy));
+          const claim = state.claims.get(captureIdentity(copy.client, copy.eventId));
           assertClaimKey(claim, copy);
-          if (claim?.status !== "leased") throw new CoreError("stale_admission");
+          if (claim?.status !== "leased" || claim.key.scope.namespace !== copy.scope.namespace) {
+            throw new CoreError("stale_admission");
+          }
           const nowMs = now();
           validateTime(nowMs);
           if (!(nowMs < claim.expiresAtMs)) throw new CoreError("stale_admission");
@@ -254,6 +247,7 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
             if (position >= claim.occurredAtMs.length) throw new CoreError("invalid_input");
             return claim.occurredAtMs[position];
           });
+          const { scope, client, sessionId } = claim.key;
           const matcher = matchFacts(state.facts, scope);
           if (matcher.blocksSession(client, sessionId) || matcher.blockedMessages(client, sessionId, occurredAtMs).length) {
             throw new CoreError("suppressed");
@@ -270,28 +264,18 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
         const batch = copyCaptureMessages(messages);
         return (getState, run) => {
           const state = getState();
-          const identity = admissionIdentity(copy.client, copy.eventId);
-          let exists = false;
-          let latestLease;
-          let finished;
-          for (const row of state.claims.values()) {
-            if (row.key.client !== copy.client || row.key.eventId !== copy.eventId) continue;
-            if (row.key.payloadDigest !== copy.payloadDigest) throw new CoreError("event_payload_conflict");
-            exists = true;
-            if (row.status === "leased" && (!latestLease || row.expiresAtMs > latestLease.expiresAtMs)) latestLease = row;
-            if (row.status === "finished") finished ??= row;
-          }
-          // Across namespaces, any digest conflict wins. Then prefer a live lease, the first finish
-          // in claim insertion order, or duplicate for any other existing state.
-          if (latestLease) {
+          const identity = captureIdentity(copy.client, copy.eventId);
+          const previous = state.claims.get(identity);
+          assertClaimKey(previous, copy);
+          if (previous?.status === "leased") {
             const nowMs = now();
             validateTime(nowMs);
-            if (nowMs < latestLease.expiresAtMs) return { status: "processing" };
+            if (nowMs < previous.expiresAtMs) return { status: "processing" };
           }
-          if (finished) {
-            return { status: "rawReplay", result: copyResult(finished.result, run.finishes.has(finished.result)) };
+          if (previous?.status === "finished") {
+            return { status: "rawReplay", result: copyResult(previous.result, run.finishes.has(previous.result)) };
           }
-          if (exists) return { status: "duplicate" };
+          if (previous) return { status: "duplicate" };
           state.claims.set(identity, { key: copy, messages: batch, status: "pending" });
           run.stateWritten = true;
           return { status: "admitted" };
@@ -303,7 +287,7 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
       const scope = selection?.scope;
       return port.read(tx, scope, (getState) => {
         const { scope: { namespace }, client, eventId, sessionId } = copyCaptureSelection(selection, tx.owner, scope.namespace);
-        const row = getState().claims.get(admissionIdentity(client, eventId));
+        const row = getState().claims.get(captureIdentity(client, eventId));
         if (!row?.messages || row.key.scope.namespace !== namespace || row.key.sessionId !== sessionId) return null;
         return structuredClone({ key: row.key, messages: row.messages });
       });
@@ -316,7 +300,7 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
           throw new CoreError("invalid_input");
         }
         const { claims } = getState();
-        const rows = client === undefined ? claims.values() : [claims.get(admissionIdentity(client, eventId))];
+        const rows = client === undefined ? claims.values() : [claims.get(captureIdentity(client, eventId))];
         let done = false;
         let failureCode;
         for (const row of rows) {
