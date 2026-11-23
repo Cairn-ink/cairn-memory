@@ -45,7 +45,7 @@ function copyResult(stored, pending) {
  * @param {() => number} now
  * @returns {import("@cairn-ink/core/ports").StorageAdapter["capture"]}
  */
-export function createCapturePorts(port, { memories, counters }, now) {
+export function createCapturePorts(port, { memories, finishWrites, counters }, now) {
   return {
     async claim(tx, key, messages, options) {
       return port.capture(tx, { owner: tx?.owner }, (getState, run) => {
@@ -134,7 +134,7 @@ export function createCapturePorts(port, { memories, counters }, now) {
               suppressedCount++;
               break;
             case "saved": {
-              const { id, revision, updatedAtUs } = await memories.insert(tx, scope, { ...row, source }, receipts, nowMs);
+              const { id, revision, updatedAtUs } = await finishWrites.insert(tx, scope, { ...row, source }, receipts, nowMs);
               progress.inserted.set(position, id);
               progress.writeTimes.set(id, updatedAtUs);
               written.push({ id, revision, outcome: "inserted" });
@@ -145,7 +145,7 @@ export function createCapturePorts(port, { memories, counters }, now) {
               const existing = await memories.get(tx, scope, id);
               if (!existing) throw new CoreError("internal_error");
               const { merge } = planDuplicateMerge(existing, row);
-              const { outcome, revision } = await memories.touchDuplicate(tx, scope, id, receipts, merge, nowMs);
+              const { outcome, revision } = await finishWrites.touchDuplicate(tx, scope, id, receipts, merge, nowMs);
               progress.writeTimes.set(id, writeTimeUs);
               written.push({ id, revision, outcome });
               duplicateCount++;
@@ -154,8 +154,6 @@ export function createCapturePorts(port, { memories, counters }, now) {
           }
         }
 
-        // Port calls in the same run may have retired this token while finish awaited writes.
-        if (!state.activeTokens.has(token)) throw new CoreError("stale_admission");
         if (written.length > 0) run.writingFinishes++;
         const stored = { indexRevision: indexRevisionAfterRun(run), memories: written, suppressedCount, duplicateCount,
           counters: counters() };
@@ -165,7 +163,7 @@ export function createCapturePorts(port, { memories, counters }, now) {
         run.finishes.add(stored);
         run.stateWritten = true;
         return result;
-      });
+      }, true);
     },
 
     // The privacy module's factBlocksIncoming will back these checks.

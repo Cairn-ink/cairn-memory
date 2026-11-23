@@ -1,18 +1,21 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { registerHooks } from "node:module";
 import { test } from "node:test";
 import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
 import { CAPTURE_CASES, runCase } from "@cairn-ink/conformance";
+import { CoreError } from "@cairn-ink/core";
 
 const leaseMs = 60_000;
 const retryable = { code: "storage_error", retryable: true };
 const terminal = { code: "invalid_input", retryable: false };
 
-function factory(mutant = (opened) => opened) {
+function factory(mutant = (opened) => opened, createAdapter = createMemoryAdapter) {
   return {
     name: "memory capture",
     async open({ capabilities }) {
-      const adapter = createMemoryAdapter({ capabilities, now: () => 0 });
+      const adapter = createAdapter({ capabilities, now: () => 0 });
       return mutant({
         adapter, harness: adapter.harness, nativeErrorMap: adapter.nativeErrorMap,
         sessionRefs: "plain", busyNativeCodes: [], embeddingDimensions: null,
@@ -332,4 +335,142 @@ test("lease expiry reports a skip after the abandon checks run when clock contro
   const testCase = CAPTURE_CASES.find(({ id }) => id === "K-CLM-2");
   assert.equal(await runCase(control, testCase), "lease expiry requires harness.advanceClock");
   assert.equal(abandons, 4);
+});
+
+function changesDispatchToken(opened, staged = false) {
+  const { adapter: { capture, capabilities } } = opened;
+  const rotated = new Map();
+  const originals = new Map();
+  const candidate = withCapture(opened, {
+    async beginDispatch(tx, token) {
+      await capture.beginDispatch(tx, token);
+      if (!rotated.has(token)) {
+        const next = crypto.randomUUID();
+        rotated.set(token, next);
+        originals.set(next, token);
+      }
+      return { token: staged ? rotated.get(token) : token };
+    },
+    async finish(tx, token, items) {
+      if (rotated.has(token)) throw new CoreError("stale_admission");
+      return capture.finish(tx, originals.get(token) ?? token, items);
+    },
+  });
+  return { ...candidate, adapter: { ...candidate.adapter, capabilities: { ...capabilities, stagedEvidence: staged } } };
+}
+
+function resolvesTokensAcrossOwners(opened) {
+  const { adapter: { capture, uow } } = opened;
+  const owners = new Map();
+  function useToken(method, tx, token, ...args) {
+    const owner = owners.get(token);
+    return owner && owner !== tx.owner
+      ? uow.run(owner, { pauseLock: true }, (ownerTx) => capture[method](ownerTx, token, ...args))
+      : capture[method](tx, token, ...args);
+  }
+  return withCapture(opened, {
+    async claim(tx, key, messages, options) {
+      const result = await capture.claim(tx, key, messages, options);
+      if (result.status === "claimed") owners.set(result.token, tx.owner);
+      return result;
+    },
+    finish: (...args) => useToken("finish", ...args),
+    abandon: (...args) => useToken("abandon", ...args),
+    beginDispatch: (...args) => useToken("beginDispatch", ...args),
+  });
+}
+
+function advancesOnBookkeeping(opened) {
+  const { adapter: { capture, memories } } = opened;
+  return withCapture(opened, {
+    async abandon(tx, ...args) {
+      await capture.abandon(tx, ...args);
+      await bumpIndex(memories, tx);
+    },
+    async beginDispatch(tx, ...args) {
+      const result = await capture.beginDispatch(tx, ...args);
+      await bumpIndex(memories, tx);
+      return result;
+    },
+  });
+}
+
+let mutationId = 0;
+
+async function sourceMutant(file, original, replacement) {
+  const entry = import.meta.resolve("@cairn-ink/adapter-memory");
+  const target = new URL(file, entry).href;
+  const source = await readFile(new URL(target), "utf8");
+  assert.equal(source.split(original).length, 2, "Expected exactly one mutation site");
+  const suffix = `?mutation=${++mutationId}`;
+  const mutantEntry = entry + suffix;
+  const mutantTarget = target + suffix;
+  const hooks = registerHooks({
+    resolve(specifier, context, next) {
+      const resolved = next(specifier, context);
+      return context.parentURL === mutantEntry && resolved.url === target
+        ? { ...resolved, url: mutantTarget }
+        : resolved;
+    },
+    load(url, context, next) {
+      return url === mutantTarget
+        ? { format: "module", source: source.replace(original, replacement), shortCircuit: true }
+        : next(url, context);
+    },
+  });
+  try {
+    const mutant = await import(mutantEntry);
+    return factory(undefined, mutant.createMemoryAdapter);
+  } finally {
+    hooks.deregister();
+  }
+}
+
+const regressions = [
+  ["K-CLM-4", "dispatch returns an unusable token", () => factory(changesDispatchToken), /stale_admission/],
+  ["K-CLM-3", "finish writes a row it reports as suppressed", () => sourceMutant("capture.mjs",
+    'case "suppressed":\n              suppressedCount++;',
+    'case "suppressed":\n              await finishWrites.insert(tx, scope, { ...row, source }, receipts, nowMs);\n              suppressedCount++;'),
+    /A suppressed item must not appear in the committed dump/],
+  ["K-CLM-3", "finish uses hash policy", () => sourceMutant("capture.mjs",
+    'readWritePolicy(tx, scope, queries, source, "full")', 'readWritePolicy(tx, scope, queries, source, "hash")'),
+    /Full capture policy must suppress a vector match with a different digest/],
+  ["K-CLM-3", "finish omits in-batch progress", () => sourceMutant("capture.mjs",
+    "decideWrite(policy, position, progress)", "decideWrite(policy, position)"), /The in-batch copy must count as a duplicate/],
+  ["K-CLM-5", "capture resolves tokens across owners", () => factory(resolvesTokensAcrossOwners),
+    /Expected operation to reject/],
+  ["K-CLM-1", "capture returns the stored result by reference", () => sourceMutant("capture.mjs",
+    "function copyResult(stored, pending) {", "function copyResult(stored, pending) {\n  return stored;"),
+    /Replay must preserve the finish result after caller mutation/],
+  ["K-CLM-3", "capture failures do not poison the run", () => sourceMutant("unit-of-work.mjs",
+    "(getState, _markDirty, run) => body(getState, run)", "(_getState, _markDirty, run) => body(() => run.state, run)"),
+    /A caught stale_admission must still reject the run with that code/],
+  ["K-CLM-2", "abandon advances the index", () => factory(advancesOnBookkeeping),
+    /Retryable abandon must preserve the state token/],
+  ["K-CLM-4", "dispatch advances the index", () => factory(advancesOnBookkeeping),
+    /Dispatch must preserve the state token/],
+];
+
+for (const [id, defect, candidate, failure] of regressions) {
+  test(`${id} capture regression detects when ${defect}`, async () => {
+    const testCase = CAPTURE_CASES.find((entry) => entry.id === id);
+    assert.ok(testCase);
+    await assert.rejects(runCase(await candidate(), testCase), failure);
+  });
+}
+
+test("the dispatch case accepts a staged replacement token", async () => {
+  const testCase = CAPTURE_CASES.find(({ id }) => id === "K-CLM-4");
+  const control = factory((opened) => changesDispatchToken(opened, true));
+  assert.equal(await runCase(control, testCase), null);
+});
+
+test("the vector suppression follow-up records each missing capability", async () => {
+  const testCase = CAPTURE_CASES.find(({ id }) => id === "K-CLM-3");
+  for (const flag of ["vectorSuppression", "semanticRetrieval"]) {
+    const control = factory(undefined, (options) => createMemoryAdapter({
+      ...options, capabilities: { ...options.capabilities, [flag]: false },
+    }));
+    assert.equal(await runCase(control, testCase), `needs ${flag}`);
+  }
 });

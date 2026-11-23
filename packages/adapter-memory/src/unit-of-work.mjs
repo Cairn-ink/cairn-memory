@@ -14,12 +14,13 @@ import { createFactStore } from "./privacy.mjs";
 /** @typedef {{rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
  * claims: Map<string, ClaimRecord>, activeTokens: Map<string, string>, abandonedTokens: Set<string>}} State */
 /** @typedef {{state: State, run: {readonly ended: boolean}, indexDirty: boolean, stateWritten: boolean, pauseLock: boolean,
- * poisoned: boolean, writeErrorCode: ErrorCode, finishes: Set<FinishResult>, writingFinishes: number}} IssuedRun */
+ * poisoned: boolean, writeErrorCode: ErrorCode, finishes: Set<FinishResult>, writingFinishes: number,
+ * writeTail?: Promise<void>}} IssuedRun */
 
 /** @param {IssuedRun} run */
 export function indexRevisionAfterRun(run) {
   // Ordinary writes share one revision advance. Each finish with writes contributes one.
-  const revision = run.state.indexRevision + Math.max(Number(run.indexDirty), run.writingFinishes);
+  const revision = run.state.indexRevision + Number(run.indexDirty) + run.writingFinishes;
   if (!Number.isSafeInteger(revision)) throw new CoreError("internal_error");
   return revision;
 }
@@ -146,7 +147,8 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now) {
    * @param {boolean} [pauseLock]
    */
   function port(tx, scope, write, body, pauseLock = false) {
-    return accessPort(tx, scope, write, (getState) => body(getState()), pauseLock);
+    const access = write ? writePort : accessPort;
+    return access(tx, scope, write, (getState) => body(getState()), pauseLock);
   }
 
   /**
@@ -182,16 +184,51 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now) {
     }
   }
 
+  /**
+   * @template T
+   * @param {Tx} tx @param {Pick<Scope, "owner">} scope @param {boolean | "conditional"} write
+   * @param {(getState: () => State, markDirty: () => void, run: IssuedRun) => T} body
+   * @param {boolean} [pauseLock] @param {boolean} [exclusive]
+   */
+  async function writePort(tx, scope, write, body, pauseLock = false, exclusive = false) {
+    const run = issued.get(tx);
+    if (!run || (!exclusive && !run.writeTail)) return accessPort(tx, scope, write, body, pauseLock);
+
+    // A finish holds the queue from policy read through claim completion. Ordinary writes
+    // still run immediately when there is no finish or queued write ahead of them.
+    const previous = run.writeTail;
+    /** @type {() => void} */
+    let release = () => {};
+    /** @type {Promise<void>} */
+    const tail = new Promise((resolve) => { release = resolve; });
+    run.writeTail = tail;
+    try {
+      if (previous) await previous;
+      return await accessPort(tx, scope, write, body, pauseLock);
+    } finally {
+      if (run.writeTail === tail) run.writeTail = undefined;
+      release();
+    }
+  }
+
   // Write ports validate arguments before requesting the owner state.
-  port.write = accessPort;
+  port.write = writePort;
+
+  /**
+   * Memory operations invoked by the finish that already holds the queue.
+   * @template T
+   * @param {Tx} tx @param {Pick<Scope, "owner">} scope @param {(getState: () => State) => T} body
+   */
+  port.writeFromFinish = (tx, scope, body) => accessPort(tx, scope, "conditional", body);
 
   /**
    * @template T
    * @param {Tx} tx @param {Pick<Scope, "owner">} scope
    * @param {(getState: () => State, run: IssuedRun) => T} body
+   * @param {boolean} [exclusive]
    */
-  port.capture = (tx, scope, body) =>
-    accessPort(tx, scope, "conditional", (getState, _markDirty, run) => body(getState, run), true);
+  port.capture = (tx, scope, body, exclusive = false) =>
+    writePort(tx, scope, "conditional", (getState, _markDirty, run) => body(getState, run), true, exclusive);
 
   function dump() {
     const snapshot = [...owners]

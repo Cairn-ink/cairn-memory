@@ -1,3 +1,4 @@
+import { CoreError } from "@cairn-ink/core";
 import { caught, check, equal, readDump, rejects } from "./support.mjs";
 
 /** @typedef {import("./index.d.mts").CaseContext} CaseContext */
@@ -5,6 +6,7 @@ import { caught, check, equal, readDump, rejects } from "./support.mjs";
 /** @typedef {import("@cairn-ink/core/ports").ClaimResult} ClaimResult */
 /** @typedef {import("@cairn-ink/core/ports").FinishItem} FinishItem */
 /** @typedef {import("@cairn-ink/core/ports").FinishResult} FinishResult */
+/** @typedef {import("./factory.d.ts").JsonValue} JsonValue */
 
 const leaseMs = 60_000;
 const terminal = { code: "invalid_input", retryable: false };
@@ -50,10 +52,43 @@ function dispatch({ adapter: { uow, capture }, owner }, token) {
   return uow.run(owner, { pauseLock: true }, (tx) => capture.beginDispatch(tx, token));
 }
 
+/** @param {CaseContext} ctx */
+function stateToken({ adapter: { uow, snapshot }, owner }) {
+  return uow.run(owner, { readOnly: true }, (tx) => snapshot.stateToken(tx, { owner, namespaces: [null] }));
+}
+
 /** @param {FinishResult} result */
 function projectFinish({ indexRevision, memories, suppressedCount, duplicateCount, counters }) {
   return { indexRevision, memories: memories.map(({ id, revision, outcome }) => [id, revision, outcome]),
     suppressedCount, duplicateCount, counters: Object.fromEntries(Object.entries(counters)) };
+}
+
+/** @param {FinishResult} result */
+function mutateResult(result) {
+  Reflect.set(result.memories[0], "id", `${result.memories[0].id}-edited`);
+  const counter = Object.keys(result.counters)[0] ?? "test-counter";
+  Reflect.set(result.counters, counter, (result.counters[counter] ?? 0) + 1);
+  Reflect.set(result, "duplicateCount", result.duplicateCount + 1);
+  Reflect.set(result, "suppressedCount", result.suppressedCount + 1);
+  Reflect.set(result.memories, "length", 0);
+}
+
+/** @param {JsonValue} dump @param {string} value @returns {number} */
+function countInDump(dump, value) {
+  if (dump === value) return 1;
+  if (dump === null || typeof dump !== "object") return 0;
+  let count = 0;
+  for (const entry of Object.values(dump)) count += countInDump(entry, value);
+  return count;
+}
+
+/** @param {CaseContext["harness"]} harness @param {JsonValue} before @param {FinishItem} item */
+async function checkSuppressedDump(harness, before, item) {
+  const after = await readDump(harness);
+  for (const value of [item.content, item.textHash]) {
+    equal(countInDump(after, value), countInDump(before, value),
+      "A suppressed item must not appear in the committed dump");
+  }
 }
 
 /** @type {readonly import("./index.d.mts").ConformanceCase[]} */
@@ -72,9 +107,16 @@ export const captureCases = [
       claimedToken(await claim(ctx, { ...key, scope: { owner: ctx.otherOwner, namespace: null } }));
 
       const completed = await finish(ctx, token, [await itemFor(ctx, "Completed memory")]);
+      check(completed.memories.length === 1, "Finish must return the completed memory");
+      const expected = projectFinish(completed);
+      mutateResult(completed);
       const replay = await claim(ctx, key);
       check(replay.status === "rawReplay", "A finished claim must return rawReplay");
-      equal(projectFinish(replay.result), projectFinish(completed), "Replay must preserve the finish result");
+      equal(projectFinish(replay.result), expected, "Replay must preserve the finish result after caller mutation");
+      mutateResult(replay.result);
+      const later = await claim(ctx, key);
+      check(later.status === "rawReplay", "A repeated claim must return rawReplay");
+      equal(projectFinish(later.result), expected, "Replay must survive mutation of an earlier replay");
       await rejects(() => claim(ctx, conflict), "event_payload_conflict");
 
       const terminalKey = keyFor(ctx, "terminal-conflict");
@@ -87,19 +129,26 @@ export const captureCases = [
     async run(ctx) {
       const key = keyFor(ctx, "retryable");
       const first = claimedToken(await claim(ctx, key));
+      const beforeRetryable = await stateToken(ctx);
       await abandon(ctx, first, retryable);
+      equal(await stateToken(ctx), beforeRetryable, "Retryable abandon must preserve the state token");
       await rejects(() => claim(ctx, { ...key, payloadDigest: "b".repeat(64) }), "event_payload_conflict");
       const second = claimedToken(await claim(ctx, key));
       check(second !== first, "Retryable abandon must issue a new token");
+      const beforeRepeat = await stateToken(ctx);
       await abandon(ctx, first, terminal);
+      equal(await stateToken(ctx), beforeRepeat, "Repeat abandon must preserve the state token");
       await rejects(() => dispatch(ctx, first), "stale_admission");
       await rejects(() => finish(ctx, first, []), "stale_admission");
       equal((await claim(ctx, key)).status, "processing", "Repeating abandon must preserve the new claim");
 
       const terminalKey = keyFor(ctx, "terminal");
       const terminalToken = claimedToken(await claim(ctx, terminalKey));
+      const beforeTerminal = await stateToken(ctx);
       await abandon(ctx, terminalToken, terminal);
+      equal(await stateToken(ctx), beforeTerminal, "Terminal abandon must preserve the state token");
       await abandon(ctx, terminalToken, retryable);
+      equal(await stateToken(ctx), beforeTerminal, "Repeat terminal abandon must preserve the state token");
       equal((await claim(ctx, terminalKey)).status, "duplicate", "Terminal abandon must return duplicate");
     },
     followUp: {
@@ -125,10 +174,10 @@ export const captureCases = [
   {
     id: "K-CLM-3", title: "finish decisions, index revisions, and rollback", needs: [],
     async run(ctx) {
-      const { adapter: { uow, capture, memories, snapshot }, owner, harness } = ctx;
+      const { adapter: { uow, capture, memories }, owner, harness } = ctx;
       const scope = ctx.scope(null);
-      const readSet = { owner, namespaces: [scope.namespace] };
-      const stateToken = () => uow.run(owner, { readOnly: true }, (tx) => snapshot.stateToken(tx, readSet));
+      const readPage = () => uow.run(owner, { readOnly: true },
+        (tx) => memories.exportPage(tx, scope, { cursor: null, limit: 10 }));
       /** @param {string} eventId @param {FinishItem[]} items */
       const finishNew = async (eventId, items) =>
         finish(ctx, claimedToken(await claim(ctx, keyFor(ctx, eventId))), items);
@@ -143,7 +192,8 @@ export const captureCases = [
       });
       const seed = await finishNew("seed", [stored]);
       check(seed.memories.length === 1, "The seed finish must produce one memory");
-      const beforeA = await stateToken();
+      const beforeA = await stateToken(ctx);
+      const beforeSuppression = await readDump(harness);
       const a = await finishNew("mixed", [inserted, stored, blocked]);
       check(Number.isSafeInteger(a.indexRevision), "Finish must return a safe integer index revision");
       equal(a.indexRevision, seed.indexRevision + 1, "A finish with multiple writes must advance the index once");
@@ -154,31 +204,44 @@ export const captureCases = [
       const duplicate = a.memories[1];
       equal(duplicate.id, seed.memories[0].id, "The duplicate must refer to the stored row");
       check(duplicate.outcome === "touched" || duplicate.outcome === "changed", "The duplicate must report a touch or change");
-      const scopeRows = await uow.run(owner, { readOnly: true },
-        (tx) => memories.exportPage(tx, scope, { cursor: null, limit: 10 }));
+      const scopeRows = await readPage();
       equal(scopeRows.items.map(({ text }) => text).sort(), [inserted.content, stored.content].sort(),
         "The write batch must leave only the stored and new rows visible");
-      const afterA = await stateToken();
+      await checkSuppressedDump(harness, beforeSuppression, blocked);
+      const afterA = await stateToken(ctx);
       check(afterA !== beforeA, "A finish with writes must invalidate the old state token");
 
       const b = await finishNew("suppressed-only", [blocked]);
       equal(b.suppressedCount, 1, "A suppressed-only finish must count the blocked item");
       equal(b.memories.length, 0, "A suppressed-only finish must return no memories");
       equal(b.indexRevision, a.indexRevision, "A suppressed-only finish must preserve the index revision");
-      equal(await stateToken(), afterA, "A suppressed-only finish must preserve the state token");
+      equal(await stateToken(ctx), afterA, "A suppressed-only finish must preserve the state token");
+      await checkSuppressedDump(harness, beforeSuppression, blocked);
 
       const empty = await finishNew("empty", []);
       equal(empty.memories.length, 0, "An empty finish must return no memories");
       equal(empty.indexRevision, a.indexRevision, "An empty finish must preserve the index revision");
-      equal(await stateToken(), afterA, "An empty finish must preserve the state token");
+      equal(await stateToken(ctx), afterA, "An empty finish must preserve the state token");
       const c = await finishNew("later", [laterA, laterB]);
       equal(c.indexRevision, a.indexRevision + 1, "The next finish with writes must advance the index once");
+
+      const repeated = await itemFor(ctx, "Repeated memory");
+      const batch = await finishNew("in-batch-duplicate", [repeated, repeated]);
+      equal(batch.duplicateCount, 1, "The in-batch copy must count as a duplicate");
+      equal(batch.memories.length, 2, "Both in-batch positions must be reported");
+      const [first, copy] = batch.memories;
+      equal(first.outcome, "inserted", "The first in-batch position must be inserted");
+      equal(copy.id, first.id, "The in-batch copy must refer to the inserted row");
+      check(copy.outcome === "touched" || copy.outcome === "changed", "The in-batch copy must report a touch or change");
+      const repeatedRows = (await readPage()).items.filter(({ text, textHash }) =>
+        text === repeated.content || textHash === repeated.textHash);
+      equal(repeatedRows.map(({ id }) => id), [first.id], "The in-batch copies must leave exactly one row");
 
       const rollbackKey = keyFor(ctx, "rollback");
       const token = claimedToken(await claim(ctx, rollbackKey));
       const rolledBack = await itemFor(ctx, "Rolled back memory");
       const before = await readDump(harness);
-      const beforeRollback = await stateToken();
+      const beforeRollback = await stateToken(ctx);
       const abort = new Error("abort capture finish");
       const rollbackError = await caught(() => uow.run(owner, { pauseLock: true }, async (tx) => {
         const result = await capture.finish(tx, token, [rolledBack]);
@@ -188,16 +251,59 @@ export const captureCases = [
       check(rollbackError === abort, "The run must propagate the rollback error");
       equal((await claim(ctx, rollbackKey)).status, "processing", "Rollback must restore the live claim");
       equal(await readDump(harness), before, "Rollback must preserve the committed dump");
-      equal(await stateToken(), beforeRollback, "Rollback must preserve the state token");
+      equal(await stateToken(ctx), beforeRollback, "Rollback must preserve the state token");
+
+      let caughtStale = false;
+      const failure = await uow.run(owner, { pauseLock: true }, async (tx) => {
+        const result = await capture.finish(tx, token, [rolledBack]);
+        equal(result.memories.length, 1, "Finish must write before the retired token is reused");
+        await rejects(() => capture.finish(tx, token, []), "stale_admission");
+        caughtStale = true;
+      }).then(() => null, (error) => error);
+      check(caughtStale && failure instanceof CoreError && failure.code === "stale_admission",
+        "A caught stale_admission must still reject the run with that code");
+      equal(await readDump(harness), before, "A caught finish failure must roll back the committed dump");
+      equal(await stateToken(ctx), beforeRollback, "A caught finish failure must preserve the state token");
+      equal((await claim(ctx, rollbackKey)).status, "processing", "A caught finish failure must restore the live claim");
+    },
+    followUp: {
+      needs: ["vectorSuppression", "semanticRetrieval"],
+      async run(ctx) {
+        const { harness, owner } = ctx;
+        const forgottenHash = await ctx.hash("Forgotten vector memory");
+        const nearby = await itemFor(ctx, "Nearby vector memory");
+        nearby.embedding = { model: "test", vector: new Float32Array(ctx.vec(0.15)) };
+        await harness.seedFact(owner, {
+          owner, actionId: "forget-vector", origin: "forget", kind: "text", mode: "full",
+          text: {
+            digests: [{ alg: "sha256", value: forgottenHash.slice(7), pipeline: "core",
+              redactionVersion: 1, keyId: null }],
+            embedding: ctx.vec(0),
+          },
+        });
+        const token = claimedToken(await claim(ctx, keyFor(ctx, "near-forgotten")));
+        const before = await readDump(harness);
+        const result = await finish(ctx, token, [nearby]);
+        equal(result.suppressedCount, 1, "Full capture policy must suppress a vector match with a different digest");
+        equal(result.memories.length, 0, "A vector-suppressed item must return no memory");
+        await checkSuppressedDump(harness, before, nearby);
+      },
     },
   },
   {
-    id: "K-CLM-4", title: "dispatch is idempotent and rejects unknown tokens", needs: [],
+    id: "K-CLM-4", title: "dispatch returns a usable token and rejects unknown tokens", needs: [],
     async run(ctx) {
       const token = claimedToken(await claim(ctx, keyFor(ctx, "dispatch")));
-      equal((await dispatch(ctx, token)).token, token, "Dispatch must preserve the token");
-      equal((await dispatch(ctx, token)).token, token, "Repeated dispatch must preserve the token");
+      const before = await stateToken(ctx);
+      const dispatched = await dispatch(ctx, token);
+      equal(await stateToken(ctx), before, "Dispatch must preserve the state token");
+      if (!ctx.adapter.capabilities.stagedEvidence) {
+        equal(dispatched.token, token, "Dispatch must preserve the token without staged evidence");
+        equal((await dispatch(ctx, token)).token, token, "Repeated dispatch must preserve the token");
+        equal(await stateToken(ctx), before, "Repeated dispatch must preserve the state token");
+      }
       await rejects(() => dispatch(ctx, crypto.randomUUID()), "stale_admission");
+      await finish(ctx, dispatched.token, []);
     },
   },
   {
@@ -206,13 +312,14 @@ export const captureCases = [
       const { adapter: { uow, capture }, owner, otherOwner, harness } = ctx;
       const key = keyFor(ctx, "guards");
       const token = claimedToken(await claim(ctx, key));
+      const memory = await itemFor(ctx, "Owner memory");
       const before = await readDump(harness);
       /** @type {Array<(tx: import("@cairn-ink/core/ports").Tx) => Promise<unknown>>} */
       const commands = [
         (tx) => capture.claim(tx, key, messages, { leaseMs }),
         (tx) => capture.beginDispatch(tx, token),
         (tx) => capture.abandon(tx, token, terminal),
-        (tx) => capture.finish(tx, token, []),
+        (tx) => capture.finish(tx, token, [memory]),
       ];
       for (const command of commands) {
         await rejects(() => uow.run(owner, { readOnly: true, pauseLock: true }, command), "internal_error");
@@ -222,6 +329,13 @@ export const captureCases = [
       await rejects(() => claim(ctx, key, 0), "invalid_input");
       await rejects(() => claim(ctx, { ...key, payloadDigest: "invalid" }), "invalid_input");
       equal(await readDump(harness), before, "Refused capture calls must preserve the committed dump");
+
+      for (const command of commands.slice(1).reverse()) {
+        await rejects(() => uow.run(otherOwner, { pauseLock: true }, command), "stale_admission");
+      }
+      equal(await readDump(harness), before, "Foreign token calls must preserve the committed dump");
+      const completed = await finish(ctx, token, [memory]);
+      equal(completed.memories.length, 1, "The rightful owner must still be able to finish the claim");
     },
   },
 ];

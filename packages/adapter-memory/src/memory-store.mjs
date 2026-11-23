@@ -75,8 +75,55 @@ export function createMemoryStore(port, capabilities, newId) {
     return namespace ? [...namespace.values()].map(({ row }) => row) : [];
   }
 
+  /** @param {typeof port.writeFromFinish} write @returns {Pick<MemoryStore, "insert" | "touchDuplicate">} */
+  function memoryWrites(write) {
+    return {
+      async insert(tx, scope, row, receipts, nowMs) {
+        return write(tx, scope, (getState) => {
+          const content = copyContent(row);
+          const evidence = attachReceipts([], copyReceipts(receipts));
+          validateTime(nowMs);
+          const id = newId();
+          if (typeof id !== "string" || !id) throw new CoreError("internal_error");
+          const { namespace } = scope;
+          const { rows } = getState();
+          let entries = rows.get(namespace);
+          if (entries?.has(id)) throw new CoreError("internal_error");
+          if (!entries) rows.set(namespace, entries = new Map());
+          const created = { id, revision: 1, createdAtMs: nowMs, ...writeTime(nowMs) };
+          entries.set(id, {
+            row: { ...content, ...created, scope: { owner: tx.owner, namespace }, historical: false },
+            receipts: evidence,
+          });
+          return created;
+        });
+      },
+
+      async touchDuplicate(tx, scope, id, receipts, merge, nowMs) {
+        return write(tx, scope, (getState) => {
+          validateMerge(merge);
+          validateTime(nowMs);
+          const incoming = copyReceipts(receipts);
+          const { namespace } = scope;
+          const entry = getState().rows.get(namespace)?.get(id);
+          if (!entry) throw new CoreError("memory_not_found");
+          const evidence = attachReceipts(entry.receipts, incoming);
+          const { row } = entry;
+          const { confidence, kind = row.kind, origin = row.origin } = merge;
+          const changed = confidence !== row.confidence || kind !== row.kind || origin !== row.origin;
+          const revision = row.revision + Number(changed);
+          Object.assign(row, { confidence, kind, origin, revision, ...writeTime(nowMs) });
+          entry.receipts = evidence;
+          return { outcome: changed ? "changed" : "touched", revision };
+        });
+      },
+    };
+  }
+
   /** @type {MemoryStore} */
   const memories = {
+    ...memoryWrites((tx, scope, body) => port.write(tx, scope, true, body)),
+
     async findDuplicates(tx, scope, batch, options) {
       return port(tx, scope, false, (state) => {
         validateDuplicateBatch(batch);
@@ -116,46 +163,6 @@ export function createMemoryStore(port, capabilities, newId) {
           blockedPositions,
           blockedSession: policy.blocksSession(source),
         };
-      });
-    },
-
-    async insert(tx, scope, row, receipts, nowMs) {
-      return port.write(tx, scope, true, (getState) => {
-        const content = copyContent(row);
-        const evidence = attachReceipts([], copyReceipts(receipts));
-        validateTime(nowMs);
-        const id = newId();
-        if (typeof id !== "string" || !id) throw new CoreError("internal_error");
-        const { namespace } = scope;
-        const { rows } = getState();
-        let entries = rows.get(namespace);
-        if (entries?.has(id)) throw new CoreError("internal_error");
-        if (!entries) rows.set(namespace, entries = new Map());
-        const created = { id, revision: 1, createdAtMs: nowMs, ...writeTime(nowMs) };
-        entries.set(id, {
-          row: { ...content, ...created, scope: { owner: tx.owner, namespace }, historical: false },
-          receipts: evidence,
-        });
-        return created;
-      });
-    },
-
-    async touchDuplicate(tx, scope, id, receipts, merge, nowMs) {
-      return port.write(tx, scope, true, (getState) => {
-        validateMerge(merge);
-        validateTime(nowMs);
-        const incoming = copyReceipts(receipts);
-        const { namespace } = scope;
-        const entry = getState().rows.get(namespace)?.get(id);
-        if (!entry) throw new CoreError("memory_not_found");
-        const evidence = attachReceipts(entry.receipts, incoming);
-        const { row } = entry;
-        const { confidence, kind = row.kind, origin = row.origin } = merge;
-        const changed = confidence !== row.confidence || kind !== row.kind || origin !== row.origin;
-        const revision = row.revision + Number(changed);
-        Object.assign(row, { confidence, kind, origin, revision, ...writeTime(nowMs) });
-        entry.receipts = evidence;
-        return { outcome: changed ? "changed" : "touched", revision };
       });
     },
 
@@ -229,5 +236,5 @@ export function createMemoryStore(port, capabilities, newId) {
     },
   };
 
-  return { memories, counters: () => ({ nearSkippedUnembedded }) };
+  return { memories, finishWrites: memoryWrites(port.writeFromFinish), counters: () => ({ nearSkippedUnembedded }) };
 }

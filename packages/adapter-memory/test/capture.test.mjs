@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
 import { CoreError } from "@cairn-ink/core";
+import { decodePayload } from "../src/cursor.mjs";
 
 const owner = "test-owner";
 const scope = { owner, namespace: null };
@@ -234,6 +235,75 @@ test("all finishes in one run report its committed index revision", async () => 
   assert.notEqual(await stateToken(adapter), before);
   assert.deepEqual(replay, { status: "rawReplay", result: first });
   assert.deepEqual(await claim(adapter, "empty"), { status: "rawReplay", result: first });
+});
+
+test("overlapping finishes make the same decisions as sequential finishes", async () => {
+  async function complete(overlap) {
+    const adapter = createMemoryAdapter({ now: () => 0 });
+    const { capture, memories } = adapter;
+    const first = await claim(adapter, "first");
+    const second = await claim(adapter, "second");
+    const results = await write(adapter, async (tx) => overlap
+      ? Promise.all([capture.finish(tx, first.token, [item()]), capture.finish(tx, second.token, [item()])])
+      : [await capture.finish(tx, first.token, [item()]), await capture.finish(tx, second.token, [item()])]);
+    const page = await read(adapter, (tx) => memories.exportPage(tx, scope, { cursor: null, limit: 10 }));
+    return {
+      outcomes: results.map(({ memories: [entry] }) => entry.outcome),
+      duplicateCounts: results.map(({ duplicateCount }) => duplicateCount),
+      sameId: results[0].memories[0].id === results[1].memories[0].id,
+      rows: page.items.length,
+    };
+  }
+  const sequential = await complete(false);
+  assert.deepEqual(sequential, { outcomes: ["inserted", "touched"], duplicateCounts: [0, 1], sameId: true, rows: 1 });
+  assert.deepEqual(await complete(true), sequential);
+});
+
+test("an ordinary write begun during a finish runs after the whole finish", async () => {
+  const id = "test-row";
+  const adapter = createMemoryAdapter({ now: () => 0, newId: () => id });
+  const { capture, memories } = adapter;
+  const { token } = await claim(adapter, "finish");
+  const [result, erased] = await write(adapter, (tx) =>
+    Promise.all([capture.finish(tx, token, [item()]), memories.erase(tx, scope, id)]));
+  assert.equal(result.memories[0].id, id);
+  assert.equal(erased, true);
+  assert.equal(await read(adapter, (tx) => memories.get(tx, scope, id)), null);
+});
+
+test("ordinary writes and writing finishes each contribute to the committed revision", async (t) => {
+  for (const [label, ordinary, secondItem, delta] of [
+    ["ordinary insert and writing finish", true, null, 2],
+    ["two writing finishes", false, item("b"), 2],
+    ["writing finish and suppressed-only finish", false, item("c"), 1],
+  ]) {
+    await t.test(label, async () => {
+      const adapter = createMemoryAdapter({ now: () => 0 });
+      const { capture, memories, harness } = adapter;
+      await harness.seedFact(owner, {
+        owner, actionId: "blocked", origin: "forget", kind: "text", mode: "exact",
+        text: { digests: [{ alg: "sha256", value: item("c").textHash.slice(7), pipeline: "core",
+          redactionVersion: 1, keyId: null }] },
+      });
+      const first = await claim(adapter, "first");
+      const second = secondItem && await claim(adapter, "second");
+      const [, before] = decodePayload(await stateToken(adapter));
+      const results = await write(adapter, async (tx) => {
+        if (ordinary) {
+          const { content, kind, confidence, textHash, embedding } = item("d");
+          await memories.insert(tx, scope, { text: content, kind, confidence, textHash, embedding,
+            origin: "explicit", source: { kind: "mcp", client: null, sessionId: null } }, [], 0);
+        }
+        const results = [await capture.finish(tx, first.token, [item()])];
+        if (second) results.push(await capture.finish(tx, second.token, [secondItem]));
+        return results;
+      });
+      if (secondItem) assert.equal(results[1].suppressedCount, Number(delta === 1));
+      const [, after] = decodePayload(await stateToken(adapter));
+      assert.equal(after, before + delta);
+      for (const result of results) assert.equal(result.indexRevision, after);
+    });
+  }
 });
 
 test("a caught finish failure after reading state rolls back earlier writes and the claim", async () => {
