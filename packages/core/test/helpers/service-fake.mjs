@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { compareSortKey, compareUtf8, CoreError } from "@cairn-ink/core";
+import { compareSortKey, compareUtf8, CoreError, factBlocksIncoming, factHidesRow } from "@cairn-ink/core";
 
 export const hostedScope = Object.freeze({ owner: "owner", namespace: null });
 
@@ -23,13 +23,37 @@ function readPage(rows, { cursor, limit }) {
   const items = remaining.slice(0, limit);
   const last = items.at(-1);
   return {
-    items,
+    items: items.map(publicRow),
     nextCursor: remaining.length > limit ? JSON.stringify([last.updatedAtUs.toString(), last.id]) : null,
   };
 }
 
-export function serviceFake({ rows = [], leakForgotten = false, writes = false, near = false, hasKey = true,
-  capture = false, rawArchive = false, sessionLineage = false } = {}) {
+function cosineDistance(a, b) {
+  if (!a || !b || a.length !== b.length) return undefined;
+  const product = a.reduce((sum, value, i) => sum + value * b[i], 0);
+  return 1 - product / (Math.hypot(...a) * Math.hypot(...b));
+}
+
+function factSlot(fact) {
+  const { kind, namespace } = fact;
+  if (kind === "rawSpan") return JSON.stringify([kind, namespace, fact.sessionKeyHash, fact.messageKey,
+    fact.startUtf16, fact.endUtf16]);
+  const digests = fact.text.digests.map(({ alg, value }) => alg + ":" + value).sort();
+  return JSON.stringify([kind, namespace, fact.mode, fact.sourceMemory?.id, digests]);
+}
+
+function digestsWithHash({ digests = [], textHash }) {
+  const value = textHash.slice(7);
+  return digests.some(digest => digest.alg === "sha256" && digest.value === value) ? digests :
+    [...digests, { alg: "sha256", value, pipeline: "core", redactionVersion: 3, keyId: null }];
+}
+
+function publicRow({ digests: _digests, ...row }) {
+  return row;
+}
+
+export function serviceFake({ rows = [], leakForgotten = false, writes = false, near = false, hasKey = true, forgetting,
+  recall = false, semantic = false, capture = false, rawArchive = false, sessionLineage = false } = {}) {
   let committedRows = [...rows];
   const calls = [];
   const mutations = [];
@@ -41,8 +65,11 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
   let nowMs = 100;
   function ownerState(owner) {
     if (!owners.has(owner)) {
-      owners.set(owner, { forgotten: new Set(), revision: 0, pause: { paused: false, generation: 0 }, facts: [],
-        admissions: new Map() });
+      owners.set(owner, {
+        forgotten: new Set(), revision: 0, pause: { paused: false, generation: 0 }, facts: [],
+        effects: { fences: [], closures: [], purges: [], hiddenCards: [], logs: [], invalidatedConflicts: [], quantityDrops: [] },
+        admissions: new Map(),
+      });
     }
     return owners.get(owner);
   }
@@ -57,9 +84,23 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
     return JSON.stringify([owner, namespaces, tx.revision]);
   }
 
+  function hidesRow(tx, row) {
+    return tx.forgotten.has(row.id) || (forgetting && tx.facts.some(stored =>
+      factHidesRow(stored, {
+        type: "memory", scope: row.scope, memoryId: row.id, revision: row.revision,
+        digests: digestsWithHash(row),
+        embedding: row.embedding?.vector,
+      }, {
+        rowShingles: false,
+        // Hosted src/memory/suppressions.ts:127–136 exempts later explicit saves from distance.
+        vectorSuppression: storage.capabilities.vectorSuppression === true &&
+          !(["mcp", "web"].includes(row.source.kind) && row.createdAtMs > stored.createdAtMs),
+      }) !== false));
+  }
+
   function candidates(tx, { owner, namespaces }) {
     return tx.rows.filter(row => row.scope.owner === owner && namespaces.includes(row.scope.namespace) &&
-      (leakForgotten || !tx.forgotten.has(row.id)));
+      (leakForgotten || !hidesRow(tx, row)));
   }
 
   const storage = {
@@ -72,18 +113,22 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         if (options.pauseLock) calls.push(["lock", "pause"]);
         if (!options.readOnly) calls.push(["lock", "owner-write"]);
         const state = ownerState(owner);
+        // Writes replace committedRows, so an open run retains its original rows and suppressions.
         const tx = {
           owner, options, rows: committedRows, revision: state.revision, facts: state.facts, runId: ++runId,
           forgotten: new Set(state.forgotten), pause: state.pause, admissions: state.admissions,
+          effects: Object.fromEntries(Object.entries(state.effects).map(([field, items]) => [field, [...items]])),
         };
         active.add(tx);
         try {
           const result = await run(tx);
           if (!options.readOnly) {
+            if (forgetting) await hooks.fault?.("commit");
             state.pause = tx.pause;
             state.facts = tx.facts;
             state.revision = tx.revision;
             state.admissions = tx.admissions;
+            state.effects = tx.effects;
             committedRows = tx.rows;
           }
           return result;
@@ -124,7 +169,9 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       async recent(tx, scope, page) {
         record(tx, scope.owner, "recent.recent", scope, page);
         assert.ok(tx.options.readOnly);
-        return readPage(candidates(tx, scope), page);
+        const result = readPage(candidates(tx, scope), page);
+        await hooks.afterRecentPage?.(result);
+        return result;
       },
     },
     memories: {
@@ -140,7 +187,8 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       async assertVisible(tx, scope, refs) {
         record(tx, scope.owner, "fence.assertVisible", scope, refs);
         assert.ok(tx.options.readOnly || (writes && tx.options.pauseLock));
-        return refs.filter(ref => !tx.forgotten.has(ref.id) && !hooks.hideAtFence?.(ref));
+        return refs.filter(ref => !tx.forgotten.has(ref.id) && !hooks.hideAtFence?.(ref) &&
+          (!forgetting || candidates(tx, scope).some(row => row.id === ref.id && row.scope.namespace === ref.namespace)));
       },
     },
   };
@@ -170,20 +218,27 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       state.forgotten.add(id);
       state.revision++;
     },
+    commitForget(row) {
+      fake.forget(row);
+      const { id, scope: { owner, namespace } } = row;
+      committedRows = committedRows.filter(candidate => candidate.id !== id ||
+        candidate.scope.owner !== owner || candidate.scope.namespace !== namespace);
+    },
     insert(row) {
       committedRows = [...committedRows, row];
       ownerState(row.scope.owner).revision++;
     },
     committed(owner) {
-      return { rows: committedRows.filter(row => row.scope.owner === owner), facts: ownerState(owner).facts };
+      const { facts, effects, revision } = ownerState(owner);
+      return { rows: committedRows.filter(row => row.scope.owner === owner), facts,
+        ...(forgetting && { effects, revision }) };
     },
     mutations,
   };
 
-  if (writes) {
-    const encoding = new TextEncoder();
+  let dispatchReady = false;
+  if (writes || recall) {
     // The gate's marker expires after the first continuation gets a chance to start the send.
-    let dispatchReady = false;
     fake.deps.gate.assertOpen = async (owner, phase) => {
       assert.equal(active.size, 0, "gate outside the UoW");
       calls.push(["gate", owner, phase]);
@@ -193,16 +248,78 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         queueMicrotask(() => queueMicrotask(() => { dispatchReady = false; }));
       }
     };
+  }
+
+  if (recall) {
+    fake.deps.clock.sha256Hex = async value => {
+      assert.equal(active.size, 0, "hash outside the UoW");
+      return createHash("sha256").update(value).digest("hex");
+    };
+    const refOf = row => ({ type: "memory", id: row.id, namespace: row.scope.namespace });
+    storage.lexical = {
+      async lexical(tx, scope, query, depth, options) {
+        record(tx, scope.owner, "lexical.lexical", scope, query, depth, options);
+        assert.ok(tx.options.readOnly);
+        const ranked = candidates(tx, scope).flatMap(row => {
+          const score = hooks.lexicalScore?.(row, query);
+          return score === undefined ? [] : [{ ref: refOf(row), score, updatedAtUs: row.updatedAtUs }];
+        }).sort((a, b) => b.score - a.score || newestFirst({ ...a, id: a.ref.id }, { ...b, id: b.ref.id }));
+        const rows = ranked.slice(0, depth);
+        hooks.afterLexical?.(rows);
+        return { rows, matched: ranked.length > 0 };
+      },
+    };
+    storage.hydrate = {
+      async hydrate(tx, scope, refs, intent) {
+        record(tx, scope.owner, "hydrate.hydrate", scope, refs, intent);
+        assert.ok(tx.options.readOnly);
+        const rows = candidates(tx, scope);
+        const result = refs.flatMap(ref => {
+          const memory = rows.find(row => row.id === ref.id && row.scope.namespace === ref.namespace);
+          return memory ? [{ ref, memory }] : [];
+        }).reverse();
+        return hooks.hydrate?.(result) ?? result;
+      },
+    };
+    fake.deps.embedQuery = {
+      async embedQuery(owner, query, options) {
+        calls.push(["embedQuery", owner, query, options]);
+        assert.equal(active.size, 0, "query embed outside the UoW");
+        assert.ok(dispatchReady, "query embed starts in the dispatch continuation");
+        await hooks.embedQuery?.();
+        return { vector: Float32Array.of(1), model: "query-model" };
+      },
+    };
+    if (semantic) {
+      storage.capabilities.semanticRetrieval = true;
+      storage.vector = {
+        async vector(tx, scope, query, model, depth) {
+          record(tx, scope.owner, "vector.vector", scope, query, model, depth);
+          assert.ok(tx.options.readOnly);
+          const ranked = candidates(tx, scope).flatMap(row => {
+            const distance = hooks.vectorDistance?.(row);
+            return distance === undefined ? [] : [{ ref: refOf(row), distance, updatedAtUs: row.updatedAtUs }];
+          }).sort((a, b) => a.distance - b.distance || newestFirst({ ...a, id: a.ref.id }, { ...b, id: b.ref.id }));
+          return { rows: ranked.slice(0, depth),
+            coverage: hooks.coverage ?? { eligible: ranked.length, embedded: ranked.length, complete: true } };
+        },
+      };
+    }
+  }
+
+  if (writes) {
+    const encoding = new TextEncoder();
     fake.deps.embedder.embed = async texts => {
       calls.push(["embed", [...texts]]);
       assert.equal(active.size, 0, "embed outside the UoW");
       assert.ok(dispatchReady, "embed starts in the dispatch continuation");
-      await hooks.embed?.();
-      return [Float32Array.of(1)];
+      const vector = await hooks.embed?.(texts);
+      return [vector ?? Float32Array.of(1)];
     };
     fake.deps.clock.nowMs = () => ++nowMs;
     fake.deps.clock.sha256Hex = async value => {
-      assert.equal(active.size, 0, "hash outside the UoW");
+      if (!forgetting) assert.equal(active.size, 0, "OW1 hashes outside the UoW");
+      await hooks.fault?.("clock.sha256Hex");
       return createHash("sha256").update(value).digest("hex");
     };
     storage.capabilities.nearDuplicate = near;
@@ -210,6 +327,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       async userKey(owner) {
         assert.equal(active.size, 0, "key lookup outside the UoW");
         calls.push(["keys.userKey", owner]);
+        await hooks.fault?.("keys.userKey");
         if (!hasKey) return null;
         if (hooks.userKey) return hooks.userKey(owner);
         const signingKey = await crypto.subtle.importKey("raw", encoding.encode("fixture key for " + owner),
@@ -239,7 +357,31 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
     Object.assign(storage.memories, {
       async get(tx, scope, id) {
         record(tx, scope.owner, "memories.get", scope, id);
-        return hooks.get ? hooks.get(tx, scope, id) : getRow(tx, scope, id);
+        await hooks.fault?.("memories.get");
+        if (hooks.get) return hooks.get(tx, scope, id);
+        const row = getRow(tx, scope, id);
+        return row === null ? null : publicRow(row);
+      },
+      async findDuplicates(tx, scope, [query], options) {
+        record(tx, scope.owner, "memories.findDuplicates", scope, query, options);
+        await hooks.fault?.("memories.findDuplicates");
+        const matches = [];
+        for (const row of candidates(tx, { owner: scope.owner, namespaces: [scope.namespace] })) {
+          if (row.id === options.excludeId) continue;
+          const exact = [query.textHash, query.legacyHash].includes(row.textHash);
+          const distance = exact ? 0 : near && cosineDistance(query.embedding, row.embedding?.vector);
+          if (!exact && (typeof distance !== "number" || !(distance <= options.nearDistance))) continue;
+          matches.push({ id: row.id, kind: "stored", match: exact ? "exact" : "near",
+            revision: row.revision, writeTimeUs: row.updatedAtUs, distance });
+        }
+        return [matches];
+      },
+      async erase(tx, scope, id) {
+        mutate(tx, scope.owner, "memories.erase", id);
+        const row = getRow(tx, scope, id);
+        tx.rows = tx.rows.filter(candidate => candidate !== row);
+        await hooks.fault?.("memories.erase");
+        return Boolean(row);
       },
       async readWritePolicy(tx, scope, [query], source, mode, editId) {
         record(tx, scope.owner, "memories.readWritePolicy", scope, query, source, mode, editId);
@@ -252,10 +394,17 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
           if (distance === undefined) continue;
           matches.push({ id: row.id, kind: "stored", match: exact ? "exact" : "near",
             revision: row.revision, writeTimeUs: row.updatedAtUs, distance });
-          if (tx.forgotten.has(row.id)) hiddenIds.push(row.id);
+          if (hidesRow(tx, row)) hiddenIds.push(row.id);
         }
         matches.sort((a, b) => a.distance - b.distance);
-        return { matches: [matches], hiddenIds, blockedSession: false, blockedPositions: [] };
+        const blocked = forgetting && tx.facts.some(stored => {
+          const { fact } = stored;
+          if (fact.kind !== "text" || !fact.text.digests.every(({ alg }) => alg === "hmac")) return false;
+          const passages = [{ digests: digestsWithHash(query), shingles: null, keyId: null }];
+          return factBlocksIncoming(stored, { scope, passages },
+            { mode: mode === "hash" ? "explicitSave" : "capture", rowShingles: false }) !== false;
+        });
+        return { matches: [matches], hiddenIds, blockedSession: false, blockedPositions: blocked ? [0] : [] };
       },
       async insert(tx, scope, content, receipts, timestamp) {
         mutate(tx, scope.owner, "memories.insert", content, receipts);
@@ -285,24 +434,109 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
     storage.suppressions = {
       async snapshot(tx, scope, candidates) {
         record(tx, scope.owner, "suppressions.snapshot", scope, candidates);
-        await hooks.snapshot?.();
+        await hooks.snapshot?.(candidates);
         const facts = tx.facts.filter(({ fact }) => (fact.namespace ?? null) === scope.namespace);
         const blockedSession = facts.some(({ fact }) => fact.kind === "session" &&
           fact.session.client === candidates.client && fact.session.sessionId === candidates.sessionId);
-        return { blockedSession, blockedMessages: [], passages: facts.filter(({ fact }) => fact.kind === "text") };
+        return { blockedSession, blockedMessages: [],
+          passages: facts.filter(stored => {
+            const { fact } = stored;
+            return fact.kind === "text" &&
+              (!forgetting || candidates.passages === undefined ||
+                factBlocksIncoming(stored, { scope, passages: candidates.passages },
+                  { mode: "capture", rowShingles: false }) !== false);
+          }) };
       },
       async writeFact(tx, fact, incarnation) {
+        const previous = tx.facts.find(stored => factSlot(stored.fact) === factSlot(fact));
+        if (previous) {
+          record(tx, fact.owner, "suppressions.writeFact", fact, incarnation);
+          if (previous.incarnation !== incarnation) throw new CoreError("fact_conflict");
+          return { ...previous, created: false };
+        }
         mutate(tx, fact.owner, "suppressions.writeFact", fact, incarnation);
         const stored = { fact, incarnation, factId: "fact-" + (tx.facts.length + 1),
           epoch: BigInt(tx.facts.length + 1), createdAtMs: nowMs };
         tx.facts = [...tx.facts, stored];
+        await hooks.fault?.(fact.kind === "rawSpan" ? "suppressions.writeSpan" : "suppressions.writeFact");
         return { ...stored, created: true };
       },
+      async factsFor(tx, scope, { memoryId }) {
+        record(tx, scope.owner, "suppressions.factsFor", scope, memoryId);
+        return tx.facts.filter(({ fact }) => (fact.namespace ?? null) === scope.namespace &&
+          fact.sourceMemory?.id === memoryId);
+      },
     };
-    fake.seedFact = fact => {
+    fake.seedFact = (fact, incarnation = "fixture") => {
       const state = ownerState(fact.owner);
-      state.facts = [...state.facts, { fact, factId: "seed-fact", epoch: 1n, createdAtMs: nowMs, incarnation: "fixture" }];
+      state.facts = [...state.facts, { fact, factId: "seed-fact", epoch: 1n, createdAtMs: nowMs, incarnation }];
     };
+
+    if (forgetting) {
+      const { capabilities = {}, spans = [], receipts = [], closure = [] } = forgetting;
+      Object.assign(storage.capabilities, capabilities);
+      storage.hydrate = {
+        async hydrate(tx, scope, refs) {
+          record(tx, scope.owner, "hydrate.hydrate", scope, refs);
+          await hooks.fault?.("hydrate.hydrate");
+          return refs.map(ref => ({ ref, receipts }));
+        },
+      };
+      storage.spanLineage = {
+        async resolveSpans(tx, scope, id) {
+          record(tx, scope.owner, "spanLineage.resolveSpans", scope, id);
+          await hooks.fault?.("spanLineage.resolveSpans");
+          return spans;
+        },
+      };
+      storage.sessionLineage = {
+        async provenClosure(tx, scope, roots) {
+          record(tx, scope.owner, "sessionLineage.provenClosure", scope, roots);
+          await hooks.fault?.("sessionLineage.provenClosure");
+          return closure;
+        },
+      };
+      async function effect(tx, owner, method, field, value, ...args) {
+        mutate(tx, owner, method, ...args);
+        tx.effects[field].push(value);
+        await hooks.fault?.(method, ...args);
+      }
+      storage.raw = {
+        async fenceSession(tx, scope, session) {
+          await effect(tx, scope.owner, "raw.fenceSession", "fences", session, session);
+        },
+        async eraseSessions(tx, scope, proven) {
+          assert.equal(proven, closure, "eraseSessions receives only the branded closure");
+          await effect(tx, scope.owner, "raw.eraseSessions", "closures", proven, proven);
+        },
+        async purgeWithheld(tx, scope, facts) {
+          assert.ok(facts.every(({ factId }) => tx.facts.some(stored => stored.factId === factId)));
+          await effect(tx, scope.owner, "raw.purgeWithheld", "purges", facts, facts);
+        },
+      };
+      storage.documentCards = {
+        async hideWhere(tx, scope, selector, reason) {
+          await effect(tx, scope.owner, "documentCards.hideWhere", "hiddenCards", selector, scope, selector, reason);
+          return { hidden: 1 };
+        },
+      };
+      storage.conflicts = {
+        async invalidate(tx, scope, id) {
+          await effect(tx, scope.owner, "conflicts.invalidate", "invalidatedConflicts", id, id);
+        },
+      };
+      storage.quantityLedger = {
+        async dropWhere(tx, scope, selector) {
+          await effect(tx, scope.owner, "quantityLedger.dropWhere", "quantityDrops", selector, selector);
+        },
+      };
+      storage.forgetLog = {
+        async record(tx, owner, id, atMs) {
+          if (tx.effects.logs.includes(id)) return;
+          await effect(tx, owner, "forgetLog.record", "logs", id, id, atMs);
+        },
+      };
+    }
   }
   if (capture) {
     const admissionId = ({ client, eventId }) => JSON.stringify([client, eventId]);

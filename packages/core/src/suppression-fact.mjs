@@ -74,7 +74,7 @@ export function validateSuppressionFact(fact) {
   if (f.namespace !== undefined && f.namespace !== null && !str(f.namespace)) fail();
   switch (f.kind) {
     case "identity":
-      if (!str(f.memoryId, 128)) fail();
+      if (!str(f.memoryId, 512)) fail();
       if (f.throughRevision !== undefined && !nat(f.throughRevision)) fail();
       break;
     case "text": {
@@ -87,7 +87,7 @@ export function validateSuppressionFact(fact) {
       if (embedding != null) validateArrayItems(embedding, Number.isFinite);
       if (t.keyId !== undefined && t.keyId !== null && !str(t.keyId, 64)) fail();
       if (f.sourceMemory !== undefined && f.sourceMemory !== null &&
-        (!str(f.sourceMemory.id, 128) || !ms(f.sourceMemory.createdAtMs))) fail();
+        (!str(f.sourceMemory.id, 512) || !ms(f.sourceMemory.createdAtMs))) fail();
       break;
     }
     case "session":

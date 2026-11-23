@@ -54,11 +54,29 @@ export async function documentCardVisible(input) {
     for (const source of card.sourceMemories) {
       if (!nonempty(source?.id) || !natural(source.revision)) return hidden("uncertain");
       const state = memoryStates.get(source.id);
+      if (messageBacked) {
+        if (state === undefined) return hidden("source_memory_missing");
+        if (state === null || typeof state !== "object" || Array.isArray(state)) return hidden("uncertain");
+        switch (state.status) {
+          case "forgotten":
+            return hidden("source_memory_forgotten");
+          case "suppressed":
+          case "unknown":
+            return hidden("source_memory_not_visible");
+          case "historical":
+          case "visible":
+            if (!natural(state.revision)) return hidden("uncertain");
+            break;
+          default:
+            return hidden("uncertain");
+        }
+        continue;
+      }
       if (!state) return hidden("source_memory_missing");
       if (state.status === "forgotten") return hidden("source_memory_forgotten");
       if (state.status !== "visible") return hidden("source_memory_not_visible");
       if (!natural(state.revision)) return hidden("uncertain");
-      if (!messageBacked && state.revision !== source.revision) return hidden("source_memory_not_visible");
+      if (state.revision !== source.revision) return hidden("source_memory_not_visible");
     }
 
     if (!messageBacked) {

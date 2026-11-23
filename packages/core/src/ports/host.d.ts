@@ -54,7 +54,7 @@ export interface MemoryService {
     { status: "saved" | "unchanged"; item: MemoryRow } | { status: "suppressed" | "paused" | "not_found" | "conflict" }
   >;
   forget(scope: Scope, id: string, source: SourceRef): Promise<{ status: "forgotten"; removedSimilar: number } | { status: "not_found" }>;
-  recall(scope: Scope, query: string, options: { limit: number; cursor: string | null; mode: "search" | "plugin" }): Promise<{ items: MemoryRow[]; nextCursor: string | null }>;
+  recall(scope: Scope, query: string, options: { limit: number; cursor: string | null; mode: "search" | "plugin" }): Promise<{ items: MemoryRow[]; nextCursor: string | null; scores?: number[] }>;
   recent(scope: Scope, options: { limit: number; cursor: string | null }): Promise<{ items: MemoryRow[]; nextCursor: string | null }>;
   /** maxTokens ≤ 2000, maxChars ≤ 8000; projectId selects the engine project namespace. */
   sessionStart(scope: Scope, options: { maxTokens: number; maxChars: number; projectId?: string | null }): Promise<SessionContext>;

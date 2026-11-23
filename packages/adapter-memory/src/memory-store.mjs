@@ -2,12 +2,15 @@ import { allDigests, coreDigest, CoreError, NEAR_DUPLICATE_DISTANCE, compareUtf8
 import { cosineDistance } from "./cosine.mjs";
 import { decodeCursor, encodeCursor, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
+import { eraseRelations } from "./memory-relations.mjs";
 import { addKeyedDigest } from "./privacy.mjs";
 import { copyPublicRow } from "./unit-of-work.mjs";
 import {
   attachReceipts, copyContent, copyDuplicateBatch, copyMerge, copyReceipts, validateLimit, validateMemoryId,
-  validateSource, validateTime, writeNamespace,
+  validateSource, validateTime, writeNamespace, writeTime,
 } from "./validation.mjs";
+
+export { writeTime };
 
 /** @typedef {import("@cairn-ink/core/ports").DuplicateQuery} DuplicateQuery */
 /** @typedef {import("@cairn-ink/core/ports").MemoryMatch} MemoryMatch */
@@ -26,11 +29,6 @@ function matchOrder(a, b) {
   if (a.kind === "prior") return b.kind === "prior" ? b.batchIndex - a.batchIndex : -1;
   if (b.kind === "prior") return 1;
   return newestFirst({ id: a.id, updatedAtUs: a.writeTimeUs }, { id: b.id, updatedAtUs: b.writeTimeUs });
-}
-
-/** @param {number} nowMs */
-export function writeTime(nowMs) {
-  return { updatedAtMs: nowMs, updatedAtUs: BigInt(nowMs) * 1000n };
 }
 
 /**
@@ -60,12 +58,12 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
   }
 
   /**
-   * @param {DuplicateQuery} query @param {DuplicateQuery} candidate @param {number} nearDistance
+   * @param {DuplicateQuery} query @param {DuplicateQuery & {historical?: boolean}} candidate @param {number} nearDistance
    * @returns {MatchQuality | undefined}
    */
   function classify(query, candidate, nearDistance) {
     const exact = candidate.textHash === query.textHash || candidate.textHash === query.legacyHash;
-    if (!exact && !capabilities.nearDuplicate) return undefined;
+    if (!exact && (candidate.historical || !capabilities.nearDuplicate)) return undefined;
     const a = query.embedding;
     const b = candidate.embedding;
     if (!a || !b || a.length !== b.length) {
@@ -84,7 +82,9 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
       /** @type {(MemoryMatch & MatchQuality)[]} */
       const result = [];
       for (const row of rows) {
-        const quality = classify(query, { textHash: row.textHash, embedding: row.embedding?.vector }, nearDistance);
+        const quality = classify(query, {
+          textHash: row.textHash, embedding: row.embedding?.vector, historical: row.historical,
+        }, nearDistance);
         if (quality) result.push({ kind: "stored", ...quality, id: row.id, revision: row.revision, writeTimeUs: row.updatedAtUs });
       }
       for (let j = 0; j < i; j++) {
@@ -146,13 +146,16 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
             if (!entry) throw new CoreError("memory_not_found");
             const evidence = attachReceipts(entry.receipts, incoming);
             const { row } = entry;
-            const { confidence, kind = row.kind, origin = row.origin } = copy;
-            const changed = confidence !== row.confidence || kind !== row.kind || origin !== row.origin;
-            const revision = row.revision + Number(changed);
-            Object.assign(row, { confidence, kind, origin, revision, ...writeTime(nowMs) });
+            let changed = false;
+            if (!row.historical) {
+              const { confidence, kind = row.kind, origin = row.origin } = copy;
+              changed = confidence !== row.confidence || kind !== row.kind || origin !== row.origin;
+              Object.assign(row, { confidence, kind, origin, revision: row.revision + Number(changed) });
+            }
+            Object.assign(row, writeTime(nowMs));
             entry.receipts = evidence;
             markDirty();
-            return { outcome: changed ? "changed" : "touched", revision };
+            return { outcome: changed ? "changed" : "touched", revision: row.revision };
           };
         });
       },
@@ -281,10 +284,11 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
         validateMemoryId(id);
         const namespace = writeNamespace(scope);
         return (getState) => {
-          const { rows } = getState();
-          const entries = rows.get(namespace);
+          const state = getState();
+          eraseRelations(state, namespace, id);
+          const entries = state.rows.get(namespace);
           if (!entries?.delete(id)) return false;
-          if (!entries.size) rows.delete(namespace);
+          if (!entries.size) state.rows.delete(namespace);
           return true;
         };
       });

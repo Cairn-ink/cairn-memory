@@ -535,7 +535,7 @@ test("malformed stored text fields affect withholding by mode", async () => {
     ["non-finite embedding item", { text: { ...reference, embedding: [Infinity] } }],
     ["sparse embedding", { text: { ...reference, embedding: Array(1) } }],
     ["duplicate digests", { text: { ...reference, digests: [digest("a"), digest("a")] } }, true],
-    ["oversized source ID", { sourceMemory: { ...edit, id: "m".repeat(129) } }, true],
+    ["oversized source ID", { sourceMemory: { ...edit, id: "m".repeat(513) } }, true],
     ["non-integer source timestamp", { sourceMemory: { ...edit, createdAtMs: 1.5 } }, true],
   ]) {
     for (const [mode, denies] of [["full", true], ["exact", exactDenies]]) {
