@@ -30,18 +30,28 @@ const HOSTED_EXTRACT_OUTPUT_TOKENS = 32_768;
 const EXTRACT_FRAMING_TOKENS = 1024;
 const MAX_EXTRACT_OUTPUT_UNITS = 80_000;
 
-/** @param {unknown} raw
- * @returns {{ message: import("../ports/capture.d.ts").CaptureMessage, originalContent: string }}
- */
-function prepareMessage(raw) {
+/** @param {unknown} raw @returns {CaptureMessage} */
+export function validateMessage(raw) {
   const { id, role, content, occurredAtMs } = validateObject(raw, ["id", "role", "content", "occurredAtMs"]);
   if (!isWellFormedText(id) || !id || id.length > 200 ||
-      (role !== "user" && role !== "assistant") || !isWellFormedText(content) || !content || content.length > 20_000 ||
+      (role !== "user" && role !== "assistant") || typeof content !== "string" || !content || content.length > 20_000 ||
       (occurredAtMs !== null && (typeof occurredAtMs !== "number" || !Number.isSafeInteger(occurredAtMs)))) {
     throw new CoreError("invalid_input");
   }
-  const redacted = redactCore(cleanContent(content).normalize("NFKC"));
-  return { message: { id, role, content: redacted, occurredAtMs }, originalContent: content };
+  return { id, role, content, occurredAtMs };
+}
+
+/** @param {string} content */
+export function prepareMessageContent(content) {
+  return redactCore(cleanContent(content).normalize("NFKC"));
+}
+
+/** @param {unknown} raw */
+function prepareMessage(raw) {
+  const message = validateMessage(raw);
+  const originalContent = message.content;
+  if (!isWellFormedText(originalContent)) throw new CoreError("invalid_input");
+  return { message: { ...message, content: prepareMessageContent(originalContent) }, originalContent };
 }
 
 /** @param {AbortSignal | undefined} signal @param {CaptureDeadline} deadline */

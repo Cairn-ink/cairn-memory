@@ -71,7 +71,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       owners.set(owner, {
         forgotten: new Set(), revision: 0, pause: { paused: false, generation: 0 }, facts: [],
         effects: { fences: [], closures: [], purges: [], hiddenCards: [], logs: [], invalidatedConflicts: [], quantityDrops: [] },
-        admissions: new Map(), archived: [],
+        admissions: new Map(), archived: [], archivedIds: new Set(),
       });
     }
     return owners.get(owner);
@@ -120,6 +120,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         const tx = {
           owner, options, rows: committedRows, revision: state.revision, facts: state.facts, runId: ++runId,
           forgotten: new Set(state.forgotten), pause: state.pause, admissions: state.admissions, archived: state.archived,
+          archivedIds: state.archivedIds,
           effects: Object.fromEntries(Object.entries(state.effects).map(([field, items]) => [field, [...items]])),
         };
         active.add(tx);
@@ -132,6 +133,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
             state.revision = tx.revision;
             state.admissions = tx.admissions;
             state.archived = tx.archived;
+            state.archivedIds = tx.archivedIds;
             state.effects = tx.effects;
             committedRows = tx.rows;
             hooks.afterCommit?.(tx);
@@ -747,6 +749,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
     if (rawArchive) {
       storage.capabilities.rawArchive = true;
       fake.archived = owner => ownerState(owner).archived;
+      const rawId = (scope, { client, sessionId }, id) => JSON.stringify([scope.namespace, client, sessionId, id]);
       storage.raw = {
         ...storage.raw,
         async recordLineage(tx, key, messages) {
@@ -766,7 +769,34 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
           claimWrite(tx, "raw.archive", key, messages);
           await hooks.archive?.();
           tx.archived = [...tx.archived, ...messages];
+          tx.archivedIds = new Set([...tx.archivedIds, ...messages.map(({ id }) => rawId(key.scope, key, id))]);
           return { archived: messages.length };
+        },
+        async importArchive(tx, scope, session, messages) {
+          record(tx, scope.owner, "raw.importArchive", scope, session, messages);
+          assert.ok(tx.options.pauseLock && !tx.options.readOnly);
+          const fenced = hooks.isFenced?.(session)?.fenced || hooks.archiveAllowed?.() === false ||
+            tx.effects.fences.some(fence => fence.client === session.client && fence.sessionId === session.sessionId);
+          const eligible = fenced ? [] : await eligiblePositions(tx, { scope, ...session }, messages);
+          const ids = new Set(tx.archivedIds);
+          const added = [];
+          let existing = 0;
+          for (const position of eligible) {
+            const message = messages[position];
+            const id = rawId(scope, session, message.id);
+            if (ids.has(id)) {
+              existing++;
+            } else {
+              ids.add(id);
+              added.push(message);
+            }
+          }
+          if (added.length) {
+            tx.archivedIds = ids;
+            tx.archived = [...tx.archived, ...added];
+            mutations.push({ method: "raw.importArchive", run: tx.runId, args: [scope, session, added] });
+          }
+          return { archived: added.length, existing, withheld: messages.length - eligible.length };
         },
       };
     }

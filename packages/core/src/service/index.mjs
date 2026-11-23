@@ -6,7 +6,7 @@ import { captureMethods } from "./capture.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
 import { findMethod, readMethod } from "./find.mjs";
 import { forgetMethod } from "./forget.mjs";
-import { importMethod } from "./import.mjs";
+import { importMethod, importRawMethod } from "./import.mjs";
 import { pauseMethods } from "./pause.mjs";
 import { recallMethod } from "./recall.mjs";
 import { readMethods } from "./reads.mjs";
@@ -116,7 +116,7 @@ export function createMemoryService(input) {
       read: readMethod(deps.storage),
       listRawMessages: placeholder,
       importMemories: importMethod(deps),
-      importRawMessages: placeholder,
+      importRawMessages: importRawMethod(deps),
     };
   } catch (error) {
     throw entryError(error);
