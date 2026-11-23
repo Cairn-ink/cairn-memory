@@ -60,20 +60,35 @@ test("recent clamps limits and refuses malformed, out-of-scope or stale cursors"
   for (const scope of [{ owner: "other", namespace: null }, { ...hostedScope, namespace: "project\u0000other" }]) {
     await assert.rejects(() => service.recent(scope, { limit: 1, cursor: first.nextCursor }), code("cursor_stale"));
   }
-  // A foreign route's cursor and the hosted pre-core cursors are stale (versioned cursors), not malformed.
+  // Hosted search.ts:101–118 and raw.ts:325–337. These positions require restarting on a core route.
   await assert.rejects(() => service.exportMemories(hostedScope, { limit: 1, cursor: first.nextCursor }),
     code("cursor_stale"));
-  for (const legacy of [encodeCursor(["2026-11-23T00:00:00.123456Z", "memory-1"]), encodeCursor(10)]) {
-    await assert.rejects(() => service.recent(hostedScope, { limit: 1, cursor: legacy }), code("cursor_stale"));
-    await assert.rejects(() => service.exportMemories(hostedScope, { limit: 1, cursor: legacy }), code("cursor_stale"));
+  const foreignPositions = [
+    ["2026-11-23T00:00:00.123456Z", "memory-1"], 10,
+    ["terminal", "session-1", "2026-11-23T00:00:00.123456Z", 3, "message-1"],
+    [], ["recent-v1", "owner", null, "", "position"],
+  ];
+  for (const page of [service.recent, service.exportMemories]) {
+    for (const position of foreignPositions) {
+      await assert.rejects(() => page(hostedScope, { limit: 1, cursor: encodeCursor(position) }), code("cursor_stale"));
+    }
+    for (const value of [{ other: 1 }, null, true, "position", -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      await assert.rejects(() => page(hostedScope, { limit: 1, cursor: encodeCursor(value) }), code("invalid_cursor"));
+    }
   }
-  await assert.rejects(() => service.recent(hostedScope, { limit: 1, cursor: encodeCursor({ other: 1 }) }),
-    code("invalid_cursor"));
   assert.deepEqual(calls, []);
 
   forget(rows[0]);
   await assert.rejects(() => service.recent(hostedScope, { limit: 1, cursor: first.nextCursor }), code("cursor_stale"));
   assert.deepEqual(calls, [read, ["snapshot.assertUnchanged", readSet, decodeCursor(first.nextCursor)[3]]]);
+});
+
+test("a route cursor whose opaque position the store rejects is stale", async () => {
+  const { deps, storage } = serviceFake({ rows: [memory("a"), memory("b")] });
+  const service = createMemoryService(deps);
+  const first = await service.recent(hostedScope, { limit: 1 });
+  storage.recent.recent = async () => { throw new CoreError("invalid_cursor"); };
+  await assert.rejects(() => service.recent(hostedScope, { cursor: first.nextCursor }), code("cursor_stale"));
 });
 
 test("sessionStart fills the hosted groups from multiple pages and rechecks before delivery", async () => {
@@ -101,12 +116,11 @@ test("sessionStart fills the hosted groups from multiple pages and rechecks befo
     enabled: true, complete: false, budgetExhausted: true, returned: 6, items: rows.slice(46, 52),
   });
   assert.deepEqual(calls.map(([method]) => method), [
-    "run", "snapshot.stateToken", "recent.recent", "fence.assertVisible", "recent.recent", "fence.assertVisible",
-    "run", "snapshot.assertUnchanged", "fence.assertVisible",
+    "run", "recent.recent", "fence.assertVisible", "recent.recent", "fence.assertVisible", "run", "fence.assertVisible",
   ]);
   assert.deepEqual(calls.filter(([method]) => method === "run"), [read, read]);
-  assert.deepEqual(calls[2], ["recent.recent", readSet, { cursor: null, limit: 50 }]);
-  assert.deepEqual(calls[4], ["recent.recent", readSet, { cursor: '["17997","instruction-3"]', limit: 50 }]);
+  assert.deepEqual(calls[1], ["recent.recent", readSet, { cursor: null, limit: 50 }]);
+  assert.deepEqual(calls[3], ["recent.recent", readSet, { cursor: '["17997","instruction-3"]', limit: 50 }]);
   assert.deepEqual(calls.at(-1), callsFor(readSet, "fact", "context",
     ...Array.from({ length: 6 }, (_, i) => "instruction-" + i)));
 });
@@ -132,9 +146,11 @@ test("sessionStart enforces input ceilings and refuses an oversized empty wire e
   assert.deepEqual(wire.namespace, { ownerId: hostedScope.owner, scope: "project", projectId });
   assert.equal(wire.groups.commitments.status, "disabled");
   assert.equal(wire.version, 1);
-  const maxChars = serialized.length;
+  // Hosted port.ts:83–99 and session-start reader:62–67 (the hosted read route).
+  // JSON.stringify of the empty project context for these IDs is 809 UTF-16 units. The limit is inclusive.
+  const maxChars = 809;
   assert.deepEqual(await service.sessionStart(hostedScope, { maxChars, maxTokens: 5, projectId }), context);
-  await assert.rejects(() => service.sessionStart(hostedScope, { maxChars: maxChars - 1, maxTokens: 5, projectId }),
+  await assert.rejects(() => service.sessionStart(hostedScope, { maxChars: 808, maxTokens: 5, projectId }),
     code("context_item_too_large"));
   await assert.rejects(() => service.sessionStart(hostedScope, { maxChars, maxTokens: 4, projectId }),
     code("context_item_too_large"));
@@ -166,37 +182,92 @@ test("sessionStart masks hosted text and budgets the hosted projection outside t
   assert.equal(item.semanticSupport, "unassessed");
 });
 
-test("sessionStart refuses delivery if forget commits while tokens are counted", async () => {
-  const row = memory("forgotten");
-  const { deps, hooks, forget, calls } = serviceFake({ rows: [row] });
-  const service = createMemoryService(deps);
-  hooks.countTokens = text => {
-    if (text.includes('"id":"forgotten"')) forget(row);
-    return 1;
-  };
-
-  await assert.rejects(() => service.sessionStart(hostedScope, limits), code("cursor_stale"));
-  assert.equal(calls.at(-1)[0], "snapshot.assertUnchanged");
+test("sessionStart succeeds after an unrelated insert between collection and delivery", async () => {
+  const row = memory("visible");
+  for (const namespace of ["other", null]) {
+    const { deps, hooks, insert, calls } = serviceFake({ rows: [row] });
+    const service = createMemoryService(deps);
+    hooks.beforeRun = () => {
+      if (calls.filter(([method]) => method === "run").length === 2) {
+        insert(memory("new", { scope: { ...hostedScope, namespace } }));
+      }
+    };
+    const context = await service.sessionStart(hostedScope, limits);
+    assert.deepEqual(context.groups.background.items, [row]);
+    assert.deepEqual(calls.at(-1), callsFor(readSet, row.id));
+  }
 });
 
-test("export pages the memory-store route inside one read-only snapshot per page", async () => {
+test("sessionStart drops a row forgotten between collection and delivery and repacks", async () => {
+  const gone = memory("forgotten");
+  const remaining = memory("visible");
+  const { deps, hooks, forget, calls } = serviceFake({ rows: [gone, remaining] });
+  const service = createMemoryService(deps);
+  hooks.beforeRun = () => {
+    if (calls.filter(([method]) => method === "run").length === 2) forget(gone);
+  };
+
+  const { groups } = await service.sessionStart(hostedScope, limits);
+  assert.deepEqual(groups.background, {
+    enabled: true, returned: 1, complete: true, budgetExhausted: false, items: [remaining],
+  });
+  assert.deepEqual(calls.at(-1), callsFor(readSet, remaining.id, gone.id));
+});
+
+test("export uses a fresh delivery snapshot for every memory-store page", async () => {
   const rows = [memory("b"), memory("a")];
   const { deps, calls } = serviceFake({ rows });
   const service = createMemoryService(deps);
   // Hosted src/export/index.ts:65–89 and src/memory/index.ts:92–108 use the same descending order.
   const first = await service.exportMemories(hostedScope, { limit: 1, cursor: null });
   assert.deepEqual(ids(first), ["b"]);
+  const [, , , token, inner] = decodeCursor(first.nextCursor);
+  const assertUnchanged = ["snapshot.assertUnchanged", readSet, token];
   assert.deepEqual(calls.splice(0), [
     read, snapshot, ["memories.exportPage", hostedScope, { cursor: null, limit: 1 }], callsFor(readSet, "b"),
+    read, assertUnchanged, callsFor(readSet, "b"),
   ]);
 
-  const [, , , token, inner] = decodeCursor(first.nextCursor);
   const second = await service.exportMemories(hostedScope, { limit: 1, cursor: first.nextCursor });
   assert.deepEqual(second, { items: [rows[1]], nextCursor: null });
   assert.deepEqual(calls, [
-    read, ["snapshot.assertUnchanged", readSet, token],
-    ["memories.exportPage", hostedScope, { cursor: inner, limit: 1 }], callsFor(readSet, "a"),
+    read, assertUnchanged, ["memories.exportPage", hostedScope, { cursor: inner, limit: 1 }], callsFor(readSet, "a"),
+    read, assertUnchanged, callsFor(readSet, "a"),
   ]);
+});
+
+test("export rejects the last page if a forget commits after its candidates are read", async () => {
+  const gone = memory("a");
+  const { deps, calls, hooks, forget } = serviceFake({ rows: [memory("c"), memory("b"), gone] });
+  const service = createMemoryService(deps);
+  const first = await service.exportMemories(hostedScope, { limit: 1 });
+  const second = await service.exportMemories(hostedScope, { limit: 1, cursor: first.nextCursor });
+  assert.deepEqual(ids(first), ["c"]);
+  assert.deepEqual(ids(second), ["b"]);
+  const [, , , token, inner] = decodeCursor(second.nextCursor);
+  calls.length = 0;
+  hooks.afterExportPage = result => {
+    assert.deepEqual(result, { items: [gone], nextCursor: null });
+    forget(gone);
+  };
+
+  await assert.rejects(() => service.exportMemories(hostedScope, { limit: 1, cursor: second.nextCursor }),
+    code("cursor_stale"));
+  const assertUnchanged = ["snapshot.assertUnchanged", readSet, token];
+  assert.deepEqual(calls, [
+    read, assertUnchanged, ["memories.exportPage", hostedScope, { cursor: inner, limit: 1 }], callsFor(readSet, "a"),
+    read, assertUnchanged,
+  ]);
+});
+
+test("export omits a row hidden by the delivery fence while its token remains unchanged", async () => {
+  const row = memory("hidden");
+  const { deps, hooks, calls } = serviceFake({ rows: [row] });
+  const service = createMemoryService(deps);
+  hooks.beforeRun = () => {
+    if (calls.filter(([method]) => method === "run").length === 2) hooks.hideAtFence = () => true;
+  };
+  assert.deepEqual(await service.exportMemories(hostedScope, { limit: 1 }), { items: [], nextCursor: null });
 });
 
 test("export aborts before querying another page when a forget changes the first-page state", async () => {
@@ -232,12 +303,15 @@ test("the visibility fence drops forgotten rows in all three read routes and kee
   assert.deepEqual((await service.sessionStart(hostedScope, limits)).groups.background.items, [remaining]);
 });
 
-test("sessionStart refuses delivery if the final fence drops a selected row", async () => {
+test("sessionStart returns an empty group if the final fence drops its only selected row", async () => {
   const { deps, hooks } = serviceFake({ rows: [memory("hidden")] });
   const service = createMemoryService(deps);
   hooks.countTokens = text => {
     if (text.includes('"id":"hidden"')) hooks.hideAtFence = () => true;
     return 1;
   };
-  await assert.rejects(() => service.sessionStart(hostedScope, limits), code("cursor_stale"));
+  const { groups } = await service.sessionStart(hostedScope, limits);
+  assert.deepEqual(groups.background, {
+    enabled: true, returned: 0, complete: true, budgetExhausted: false, items: [],
+  });
 });

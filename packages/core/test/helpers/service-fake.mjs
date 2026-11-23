@@ -28,6 +28,7 @@ function readPage(rows, { cursor, limit }) {
 }
 
 export function serviceFake({ rows = [], leakForgotten = false } = {}) {
+  let committedRows = [...rows];
   const calls = [];
   const owners = new Map();
   const active = new Set();
@@ -50,7 +51,7 @@ export function serviceFake({ rows = [], leakForgotten = false } = {}) {
   }
 
   function candidates(tx, { owner, namespaces }) {
-    return rows.filter(row => row.scope.owner === owner && namespaces.includes(row.scope.namespace) &&
+    return tx.rows.filter(row => row.scope.owner === owner && namespaces.includes(row.scope.namespace) &&
       (leakForgotten || !tx.forgotten.has(row.id)));
   }
 
@@ -64,7 +65,10 @@ export function serviceFake({ rows = [], leakForgotten = false } = {}) {
         if (options.pauseLock) calls.push(["lock", "pause"]);
         if (!options.readOnly) calls.push(["lock", "owner-write"]);
         const state = ownerState(owner);
-        const tx = { owner, options, revision: state.revision, forgotten: new Set(state.forgotten), pause: state.pause };
+        const tx = {
+          owner, options, rows: committedRows, revision: state.revision,
+          forgotten: new Set(state.forgotten), pause: state.pause,
+        };
         active.add(tx);
         try {
           const result = await run(tx);
@@ -114,7 +118,9 @@ export function serviceFake({ rows = [], leakForgotten = false } = {}) {
       async exportPage(tx, scope, page) {
         record(tx, scope.owner, "memories.exportPage", scope, page);
         assert.ok(tx.options.readOnly);
-        return readPage(candidates(tx, { owner: scope.owner, namespaces: [scope.namespace] }), page);
+        const result = readPage(candidates(tx, { owner: scope.owner, namespaces: [scope.namespace] }), page);
+        await hooks.afterExportPage?.(result);
+        return result;
       },
     },
     fence: {
@@ -150,6 +156,10 @@ export function serviceFake({ rows = [], leakForgotten = false } = {}) {
       const state = ownerState(owner);
       state.forgotten.add(id);
       state.revision++;
+    },
+    insert(row) {
+      committedRows = [...committedRows, row];
+      ownerState(row.scope.owner).revision++;
     },
   };
 }

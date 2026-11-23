@@ -1,12 +1,15 @@
 import { detach, identifier, isWellFormedText, validateObject } from "../capture/validate.mjs";
-import { CoreError, isCoreError } from "../errors.mjs";
+import { CoreError, isErrorCode } from "../errors.mjs";
 
 /** @param {unknown} error */
 export function entryError(error) {
   try {
-    if (isCoreError(error)) return error;
+    if (error instanceof CoreError) {
+      const code = error.code;
+      if (isErrorCode(code)) return new CoreError(code);
+    }
   } catch {
-    // Inspecting the prototype of a thrown Proxy can itself throw.
+    // Prototype inspection and code access can themselves throw.
   }
   return new CoreError("internal_error");
 }

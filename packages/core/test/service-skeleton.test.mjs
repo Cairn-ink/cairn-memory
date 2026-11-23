@@ -79,7 +79,7 @@ test("all ten placeholders reject with capability_unavailable before any port ca
   assert.deepEqual(calls, []);
 });
 
-test("port failures crossing an entry map to internal_error or preserve an existing CoreError", async () => {
+test("port failures crossing an entry map to internal_error or a fresh CoreError", async () => {
   const { deps, hooks, storage } = serviceFake();
   const service = createMemoryService(deps);
   const native = Object.assign(new Error("private port error"), { code: "storage_busy" });
@@ -91,11 +91,35 @@ test("port failures crossing an entry map to internal_error or preserve an exist
 
   hooks.beforeRun = undefined;
   const mapped = new CoreError("storage_busy");
+  mapped.message = "private port error";
   storage.pause.get = async () => { throw mapped; };
-  await assert.rejects(() => service.pauseState(hostedScope.owner), error => error === mapped);
+  await assert.rejects(() => service.pauseState(hostedScope.owner), error => error !== mapped && code("storage_busy")(error));
 
   hooks.countTokens = () => { throw native; };
   await assert.rejects(() => service.sessionStart(hostedScope, { maxChars: 8000, maxTokens: 2000 }), code("internal_error"));
+});
+
+test("entry rejects prototype-only and invalid codes and reads a code getter once", async () => {
+  const { deps, hooks } = serviceFake();
+  const service = createMemoryService(deps);
+  const pauseState = () => service.pauseState(hostedScope.owner);
+  const prototypeOnly = Object.create(CoreError.prototype);
+  const invalidCode = Object.assign(new CoreError("storage_busy"), { code: "foreign_code" });
+  const throwingGetter = Object.defineProperty(new CoreError("storage_busy"), "code", {
+    get() { throw new Error("private inspection error"); },
+  });
+  for (const foreign of [prototypeOnly, invalidCode, throwingGetter]) {
+    hooks.beforeRun = () => { throw foreign; };
+    await assert.rejects(pauseState, error => error !== foreign && code("internal_error")(error));
+  }
+
+  let reads = 0;
+  const changingGetter = Object.defineProperty(new CoreError("storage_busy"), "code", {
+    get: () => ++reads === 1 ? "storage_busy" : "foreign_code",
+  });
+  hooks.beforeRun = () => { throw changingGetter; };
+  await assert.rejects(pauseState, error => error !== changingGetter && code("storage_busy")(error));
+  assert.equal(reads, 1);
 });
 
 test("invalid input and failed snapshots are refused before storage access", async () => {

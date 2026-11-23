@@ -27,14 +27,6 @@ async function visibleRows(rows, scope, tx, fence) {
   return scoped.filter(row => keys.has(JSON.stringify([row.scope.namespace, row.id])));
 }
 
-const CURSOR_ROUTES = Object.freeze(["recent-v1", "export-v1"]);
-
-/** Hosted's pre-core cursors: recent [timestamp, id] and search offsets. @param {unknown} value */
-function isLegacyHostedCursor(value) {
-  return (Array.isArray(value) && value.length === 2 && typeof value[0] === "string" && typeof value[1] === "string") ||
-    (typeof value === "number" && Number.isSafeInteger(value) && value >= 0);
-}
-
 /** @param {unknown} options @param {Scope} scope @param {"recent-v1" | "export-v1"} route */
 function readPage(options, { owner, namespace }, route) {
   const { cursor, limit } = validateObject(options === undefined ? {} : options, ["cursor", "limit"]);
@@ -42,19 +34,16 @@ function readPage(options, { owner, namespace }, route) {
   if (cursor == null) return { position: null, limit: pageLimit(limit) };
   if (typeof cursor !== "string") throw new CoreError("invalid_cursor");
   const value = decodeCursor(cursor);
-  // Versioned cursors: an old (hosted timestamp/id or offset) or foreign (other route) cursor is
-  // stale, not malformed, so a client restarts its listing.
-  if (isLegacyHostedCursor(value) || (Array.isArray(value) && value.length === 5 &&
-      CURSOR_ROUTES.includes(value[0]) && value[0] !== route)) {
+  // Cursors are unsigned. Request scope and the visibility fence still restrict every page to the caller's visible rows.
+  if (!Array.isArray(value)) {
+    const isOffset = typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+    throw new CoreError(isOffset ? "cursor_stale" : "invalid_cursor");
+  }
+  const [cursorRoute, cursorOwner, cursorNamespace, token, inner] = value;
+  if (value.length !== 5 || cursorRoute !== route || cursorOwner !== owner || cursorNamespace !== namespace ||
+      typeof token !== "string" || !token || typeof inner !== "string" || !inner) {
     throw new CoreError("cursor_stale");
   }
-  if (!Array.isArray(value) || value.length !== 5 || value[0] !== route ||
-      typeof value[1] !== "string" || (value[2] !== null && typeof value[2] !== "string") ||
-      typeof value[3] !== "string" || !value[3] || typeof value[4] !== "string" || !value[4]) {
-    throw new CoreError("invalid_cursor");
-  }
-  const [, cursorOwner, cursorNamespace, token, inner] = value;
-  if (cursorOwner !== owner || cursorNamespace !== namespace) throw new CoreError("cursor_stale");
   return { position: { token, inner }, limit: pageLimit(limit) };
 }
 
@@ -95,18 +84,32 @@ export function readMethods({ uow, recent, memories, snapshot, fence }, tokens) 
     const scope = scopeOf(input);
     const readScope = readSet(scope);
     const { position, limit } = readPage(options, scope, route);
-    return uow.run(scope.owner, { readOnly: true }, async tx => {
+    const { items, nextCursor, token } = await uow.run(scope.owner, { readOnly: true }, async tx => {
       const token = position ? position.token : await stateToken(tx, readScope);
       if (position) await snapshot.assertUnchanged(tx, readScope, token);
       const page = { cursor: position?.inner ?? null, limit };
-      const result = route === "recent-v1"
-        ? await recent.recent(tx, readScope, page)
-        : await memories.exportPage(tx, scope, page);
+      let result;
+      try {
+        result = route === "recent-v1"
+          ? await recent.recent(tx, readScope, page)
+          : await memories.exportPage(tx, scope, page);
+      } catch (error) {
+        const failure = entryError(error);
+        if (position && failure.code === "invalid_cursor") throw new CoreError("cursor_stale");
+        throw failure;
+      }
       const items = await visibleRows(result.items, readScope, tx, fence);
       // Use the store's last scanned position even if the fence drops a row.
       const nextCursor = result.nextCursor === null ? null
         : encodeCursor([route, scope.owner, scope.namespace, token, result.nextCursor]);
-      return { items, nextCursor };
+      return { items, nextCursor, token };
+    });
+    if (route === "recent-v1") return { items, nextCursor };
+
+    return uow.run(scope.owner, { readOnly: true }, async tx => {
+      await snapshot.assertUnchanged(tx, readScope, token);
+      const visible = await visibleRows(items, readScope, tx, fence);
+      return { items: visible, nextCursor };
     });
   });
 
@@ -125,8 +128,7 @@ export function readMethods({ uow, recent, memories, snapshot, fence }, tokens) 
       if (projectId != null) return empty;
 
       const readScope = readSet(scope);
-      const { rows, token } = await uow.run(scope.owner, { readOnly: true }, async tx => {
-        const token = await stateToken(tx, readScope);
+      const rows = await uow.run(scope.owner, { readOnly: true }, async tx => {
         /** @type {MemoryRow[]} */
         const rows = [];
         let background = 0;
@@ -146,7 +148,7 @@ export function readMethods({ uow, recent, memories, snapshot, fence }, tokens) 
           }
           cursor = page.nextCursor;
         } while (cursor !== null && (background < 7 || procedural < 7));
-        return { rows, token };
+        return rows;
       });
 
       if (!rows.length) return empty;
@@ -155,14 +157,9 @@ export function readMethods({ uow, recent, memories, snapshot, fence }, tokens) 
         return text === row.text ? row : { ...row, text };
       }), packing, countTokens);
       const selected = [...context.groups.background.items, ...context.groups.procedural.items];
-      if (selected.length) {
-        await uow.run(scope.owner, { readOnly: true }, async tx => {
-          await snapshot.assertUnchanged(tx, readScope, token);
-          const visible = await visibleRows(selected, readScope, tx, fence);
-          if (visible.length !== selected.length) throw new CoreError("cursor_stale");
-        });
-      }
-      return context;
+      if (!selected.length) return context;
+      const visible = await uow.run(scope.owner, { readOnly: true }, tx => visibleRows(selected, readScope, tx, fence));
+      return visible.length === selected.length ? context : packSessionStart(visible, packing, countTokens);
     }),
   };
 }
