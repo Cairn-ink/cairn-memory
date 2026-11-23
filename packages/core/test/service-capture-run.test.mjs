@@ -70,14 +70,12 @@ test("capture runs the leased plain extraction outside transactions and binds tr
     ...locked, "capture.load", "capture.claim", "capture.eligible",
     ...locked, "capture.assertEligible", "capture.beginDispatch",
     "gate", ...locked, "gate", "model.call", "gate", "keys.userKey",
-    "run", "suppressions.snapshot", ...locked, "gate", "embed",
+    ...locked, "capture.eligible", "suppressions.snapshot", "gate", "embed",
     ...locked, "capture.assertEligible", "suppressions.snapshot", "keys.userKey", "capture.finish",
   ]);
   const runs = f.calls.filter(([method]) => method === "run");
   assert.deepEqual(runs.map(([, owner]) => owner), Array(runs.length).fill(scope.owner));
-  assert.deepEqual(runs.map(([, , options]) => options), [
-    ...Array(4).fill({ pauseLock: true }), { readOnly: true }, { pauseLock: true }, { pauseLock: true },
-  ]);
+  assert.deepEqual(runs.map(([, , options]) => options), Array(6).fill({ pauseLock: true }));
   assert.deepEqual(f.calls.filter(([method]) => method === "gate").map(([, , phase]) => phase),
     ["pre-send", "dispatch", "post-send", "dispatch"]);
   const [, stage, request] = f.calls.find(([method]) => method === "model.call");
@@ -578,6 +576,28 @@ const compass = "The spare compass is in the cedar drawer.";
 const compassSource = user("m", "Look for the backup navigation instrument in the cabinet.", 100);
 const orchids = user("other", "Water the orchids on Mondays.", 200);
 
+for (const keepUnrelated of [false, true]) {
+  test(`J1 a window committed during extraction with ${keepUnrelated ? "mixed" : "only windowed"} evidence`, async () => {
+    const f = setup({ rawArchive: true });
+    await f.admit(scope, keepUnrelated ? [compassSource, orchids] : [compassSource]);
+    f.hooks.model = async () => {
+      const forgotten = { ...scope, kind: "window", origin: "forget", actionId: "forget-window",
+        client: selection.client, window: { startMs: 90, endMs: 110 } };
+      await f.storage.uow.run(scope.owner, { pauseLock: true },
+        tx => f.storage.suppressions.writeFact(tx, forgotten, "forget-fixture"));
+      return { items: keepUnrelated
+        ? [fact(compass), fact("Look up the cabinet and watering schedule.", [0, 1]), fact(orchids.content, [1])]
+        : [fact(compass)] };
+    };
+    const result = await f.run();
+    assert.deepEqual(f.calls.filter(([method]) => method === "embed"),
+      keepUnrelated ? [["embed", [orchids.content.toLowerCase()]]] : []);
+    assert.equal(result.status, "done");
+    assert.deepEqual(f.committed(scope.owner).rows.map(row => row.text), keepUnrelated ? [orchids.content] : []);
+    assert.deepEqual(f.archived(scope.owner), keepUnrelated ? [orchids] : []);
+  });
+}
+
 test("H3 a compass HMAC-only forget fact keeps the wording out of embedding", async () => {
   const f = setup();
   const key = await f.storage.keys.userKey(scope.owner);
@@ -634,6 +654,34 @@ test("H6 an admitted source expanded by NFKC can be cited by index", async () =>
   assert.equal((await f.run()).status, "done");
   assert.equal(f.calls.find(([method]) => method === "model.call")[2].input.messages[0].content.length, 20_800);
   assert.equal(mutation(f, "capture.finish").args[1][0].receipts[0].messageId, source.id);
+});
+
+test("J2 an 8,192-token model completes a small capture with a fitting output budget", async () => {
+  const f = setup();
+  const inputTokens = 512;
+  const framingTokens = 1024;
+  f.deps.model.countTokens = () => inputTokens;
+  const available = 8192 - inputTokens - framingTokens;
+  f.hooks.model = (_stage, request) => {
+    if (request.maxOutputTokens > available) throw new CoreError("context_budget_exceeded");
+    return { items: [candidate()] };
+  };
+  await f.admit();
+  const result = await f.run();
+  assert.equal(result.status, "done");
+  assert.equal(result.result.memories.length, 1);
+  assert.equal(f.calls.find(([method]) => method === "model.call")[2].maxOutputTokens, available);
+});
+
+test("J2 an input leaving fewer than 1,024 output tokens fails before beginDispatch", async () => {
+  const f = setup();
+  f.deps.model.countTokens = () => 6145;
+  f.hooks.model = () => { throw new CoreError("context_budget_exceeded"); };
+  await f.admit();
+  assert.deepEqual(await f.run(), { status: "failed", code: "context_budget_exceeded" });
+  assert.equal(mutation(f, "capture.beginDispatch"), undefined);
+  assert.deepEqual(sends(f), []);
+  assertAbandoned(f, "context_budget_exceeded", false);
 });
 
 test("H7 the hosted 24-message and 7,296-token batch reaches extraction", async () => {

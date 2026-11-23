@@ -1,5 +1,6 @@
 import { createCaptureDeadline } from "../capture/deadline.mjs";
 import { emitDiagnostic } from "../capture/model-call.mjs";
+import { countTokens, MODEL_OUTPUT_TOKENS, modelRequestText } from "../capture/request-size.mjs";
 import { detach, identifier, isWellFormedText, validateDenseArray, validateObject } from "../capture/validate.mjs";
 import { CoreError, isErrorCode } from "../errors.mjs";
 import { plainExtractionSpec, validatePlainCandidates } from "../extraction/extraction.mjs";
@@ -25,6 +26,8 @@ const DEFAULT_EXTRACT_MS = 30_000;
 // The port requires an explicit budget. The serialized bound also allows JSON escaping
 // of 20 candidates with 600 units each, plus fields and source indices.
 const HOSTED_EXTRACT_OUTPUT_TOKENS = 32_768;
+// The provider budget allows 1,024 tokens for schema and framing above the local count.
+const EXTRACT_FRAMING_TOKENS = 1024;
 const MAX_EXTRACT_OUTPUT_UNITS = 80_000;
 
 /** @param {unknown} raw
@@ -154,18 +157,16 @@ function filterCaptureCandidates(candidates, snapshot, scope, excludedSources) {
  * @param {PreparedCandidate[]} prepared
  * @param {CaptureKey["scope"]["owner"]} owner
  * @param {Deps} deps
- * @param {() => Promise<void>} assertSendGeneration
  * @param {CaptureDeadline} deadline
  * @param {AbortSignal | undefined} caller
  */
-async function embedCaptureCandidates(prepared, owner, { storage, gate, embedder }, assertSendGeneration, deadline, caller) {
+async function embedCaptureCandidates(prepared, owner, { storage, gate, embedder }, deadline, caller) {
   if (prepared.length === 0) return [];
   const texts = prepared.map(({ item }) => normalizeForHash(item.content));
   const { model, dimensions } = embedder;
   const { signal, check } = captureTransport(caller, deadline);
   /** @type {Float32Array[]} */
   let vectors;
-  await assertSendGeneration();
   await gate.assertOpen(owner, "dispatch");
   try {
     check();
@@ -299,6 +300,16 @@ export function captureMethods(deps) {
       const lock = { pauseLock: true };
       /** @param {Tx} tx */
       const readPause = async tx => pauseResult(await pause.get(tx, owner));
+      /** @param {Tx} tx @param {CaptureKey} key @param {readonly CaptureMessage[]} messages */
+      const readEligible = async (tx, key, messages) => {
+        const eligible = await capture.eligible(tx, key, messages);
+        const positions = /** @type {number[]} */ (validateDenseArray(eligible, 0, messages.length));
+        if (new Set(positions).size !== positions.length ||
+            positions.some(position => !Number.isSafeInteger(position) || position < 0 || position >= messages.length)) {
+          throw new CoreError("internal_error");
+        }
+        return positions;
+      };
       const preflight = await uow.run(owner, lock, readPause);
       if (preflight.paused) return { status: "paused" };
 
@@ -328,14 +339,10 @@ export function captureMethods(deps) {
             case "rawReplay": return /** @type {const} */ ({ status: "done", result: claim.result });
             case "duplicate": case "processing": return { status: claim.status };
             case "claimed": {
-              const eligible = await capture.eligible(tx, key, messages);
-              const positions = /** @type {number[]} */ (validateDenseArray(eligible, 0, messages.length));
-              if (new Set(positions).size !== positions.length ||
-                  positions.some(position => !Number.isSafeInteger(position) || position < 0 || position >= messages.length)) {
-                throw new CoreError("internal_error");
-              }
+              const positions = await readEligible(tx, key, messages);
               const selected = positions.filter(position => messages[position].content !== "");
-              return { ...claim, key, positions: selected, messages: selected.map(position => messages[position]) };
+              return { ...claim, key, positions: selected, admittedMessages: messages,
+                messages: selected.map(position => messages[position]) };
             }
             default: throw new CoreError("internal_error");
           }
@@ -346,7 +353,7 @@ export function captureMethods(deps) {
         throw failure;
       }
       if (claimed.status !== "claimed") return claimed;
-      const { key, positions, messages } = claimed;
+      const { key, positions, messages, admittedMessages } = claimed;
       let { token } = claimed;
 
       /** @param {Tx} tx */
@@ -378,8 +385,12 @@ export function captureMethods(deps) {
         }
 
         const { system, input, schema } = plainExtractionSpec(messages);
+        const inputTokens = countTokens(model, modelRequestText(system, input, HOSTED_EXTRACT_OUTPUT_TOKENS));
+        const maxOutputTokens = Math.min(HOSTED_EXTRACT_OUTPUT_TOKENS,
+          model.contextWindow - inputTokens - EXTRACT_FRAMING_TOKENS);
+        if (maxOutputTokens < MODEL_OUTPUT_TOKENS) throw new CoreError("context_budget_exceeded");
         /** @type {ModelRequest} */
-        const request = { system, input, schema, schemaName: "extract_memories", maxOutputTokens: HOSTED_EXTRACT_OUTPUT_TOKENS };
+        const request = { system, input, schema, schemaName: "extract_memories", maxOutputTokens };
         const { properties } = /** @type {{properties: {items: {maxItems: number}}}} */ (schema);
         const policy = { sourceCount: messages.length, itemLimit: properties.items.maxItems };
         const dispatch = await runAtGeneration(async tx => {
@@ -424,13 +435,22 @@ export function captureMethods(deps) {
         const readFacts = (tx, batch) => suppressions.snapshot(tx, scope, {
           client, sessionId, passages: batch.flatMap(candidate => candidate.passages),
         });
-        const survivors = prepared.length ? await uow.run(owner, { readOnly: true }, async tx =>
-          filterCaptureCandidates(prepared, await readFacts(tx, prepared), scope, excludedSources)) : prepared;
-        const embedded = await embedCaptureCandidates(survivors, owner, deps, assertSendGeneration, deadline, signal);
+        const preEmbed = await runAtGeneration(async tx => {
+          const eligible = new Set(await readEligible(tx, key, admittedMessages));
+          const stillEligible = positions.filter(position => eligible.has(position));
+          const eligibleIds = new Set(stillEligible.map(position => admittedMessages[position].id));
+          const allowedByPassage = prepared.length
+            ? filterCaptureCandidates(prepared, await readFacts(tx, prepared), scope, excludedSources) : prepared;
+          const survivors = allowedByPassage.filter(({ item }) =>
+            item.receipts.every(({ messageId }) => eligibleIds.has(messageId)));
+          return { stillEligible, survivors };
+        });
+        if (preEmbed === null) return { status: "paused" };
+        const embedded = await embedCaptureCandidates(preEmbed.survivors, owner, deps, deadline, signal);
 
         const completed = await runAtGeneration(async tx => {
           checkCaptureAbort(signal, deadline);
-          await capture.assertEligible(tx, key, positions);
+          await capture.assertEligible(tx, key, preEmbed.stillEligible);
           const snapshot = await readFacts(tx, embedded);
           if (prepared.length && (await keys.userKey(owner))?.id !== fingerprintKey?.id) {
             await capture.abandon(tx, token, { code: "fingerprint_key_mismatch", retryable: true });
@@ -439,7 +459,8 @@ export function captureMethods(deps) {
           const items = filterCaptureCandidates(embedded, snapshot, scope, excludedSources).map(candidate => candidate.item);
           checkCaptureAbort(signal, deadline);
           const result = await capture.finish(tx, token, items);
-          const rawMessages = messages.filter(({ id }) => !excludedSources.has(id));
+          const rawMessages = preEmbed.stillEligible.map(position => admittedMessages[position])
+            .filter(({ id }) => !excludedSources.has(id));
           if (archive && rawMessages.length && await archive.archiveAllowed(tx, key) === true) {
             await archive.archive(tx, key, rawMessages);
           }
