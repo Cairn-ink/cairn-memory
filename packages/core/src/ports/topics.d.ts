@@ -54,5 +54,18 @@ export interface TopicStore {
     nextCursor: string | null;
   }>;
   forMemory(tx: Tx, scope: Scope, memoryId: string): Promise<string[]>;
+  /**
+   * One batch query for L1 topic annotations. Callers skip annotations if this method is absent.
+   * A row requires a placement outcome and a current, visible memory in scope at the outcome's
+   * recorded revision, using the same visibility rule as `forMemory` and `list`. A filed or
+   * unfiled outcome without topics returns `topics: []` if it meets that rule.
+   * Unknown ids and ids from other owners or namespaces yield no row. Each id yields at most
+   * one row, in first-occurrence input order. Topics follow `forMemory` order, and a title is
+   * null when any title source is no longer current at its recorded revision, as in `list` and `catalog`.
+   * Accepts 1–100 ids, including duplicates in the limit. Other batch sizes throw `invalid_input`.
+   */
+  forMemories?(tx: Tx, scope: Scope, memoryIds: readonly string[]): Promise<
+    Array<{ memoryId: string; topics: Array<{ id: string; title: string | null }> }>
+  >;
   dropMemory(tx: Tx, scope: Scope, memoryId: string): Promise<{ dropped: number }>;
 }

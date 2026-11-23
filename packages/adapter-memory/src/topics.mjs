@@ -4,7 +4,7 @@ import {
 } from "@cairn-ink/core";
 import { decodePayload, encodePayload, newestFirst } from "./cursor.mjs";
 import { writeTime } from "./memory-store.mjs";
-import { snapshotArray, validateLimit, validateTime } from "./validation.mjs";
+import { snapshotArray, validateLimit, validateMemoryId, validateTime } from "./validation.mjs";
 
 /** @import {PlacementProposal} from "@cairn-ink/core" */
 /** @import {Scope, Topic, TopicStore} from "@cairn-ink/core/ports" */
@@ -297,6 +297,28 @@ export function createTopicStore(port, _flags, newId, now, matchFacts, {
         const outcome = state.topics.get(scope.namespace)?.outcomes.get(memoryId);
         return outcome && outcome.revision === view(state, tx.owner, scope.namespace).current(memoryId)?.revision
           ? [...outcome.memberships.keys()].sort(compareUtf8) : [];
+      });
+    },
+
+    async forMemories(tx, scope, memoryIds) {
+      return port.read(tx, scope, (getState) => {
+        const ids = snapshotArray(memoryIds, { strictKeys: true, maxLength: 100 });
+        validateLimit(ids.length);
+        ids.forEach(validateMemoryId);
+
+        const state = getState();
+        const scoped = state.topics.get(scope.namespace);
+        if (!scoped) return [];
+        const { current, topic } = view(state, tx.owner, scope.namespace);
+        return [...new Set(ids)].flatMap((memoryId) => {
+          const outcome = scoped.outcomes.get(memoryId);
+          if (!outcome || current(memoryId)?.revision !== outcome.revision) return [];
+          const topics = [...outcome.memberships.keys()].sort(compareUtf8).flatMap((id) => {
+            const stored = scoped.topics.get(id);
+            return stored?.level === "L1" ? [{ id, title: topic(stored).title }] : [];
+          });
+          return [{ memoryId, topics }];
+        });
       });
     },
 
