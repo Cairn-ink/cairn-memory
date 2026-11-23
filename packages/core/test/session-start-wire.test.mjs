@@ -17,7 +17,7 @@ function memory(id, kind, text = "short") {
   };
 }
 
-// Hosted w3-reads.ts:16–28. The fixture rows already contain redacted text.
+// Hosted session-start reader:16–28. The fixture rows already contain redacted text.
 // Adapt the core millisecond fields to the hosted MemoryItem dates (types.ts:3).
 function contextItem(row) {
   const { id, kind, text, source, createdAtMs, updatedAtMs } = row;
@@ -37,7 +37,7 @@ function wireNamespace(projectId) {
   return projectId ? { ownerId, scope: "project", projectId } : { ownerId, scope: "personal", projectId: null };
 }
 
-// Hosted port.ts:50–66, 83–98 and w3-reads.ts:30–34. Retain wire property order for JSON.stringify.
+// Hosted port.ts:50–66, 83–98 and session-start reader:30–34. Retain wire property order for JSON.stringify.
 function wireGroup({ enabled, returned, complete, budgetExhausted, items }) {
   return { enabled, returned, complete, budget_exhausted: budgetExhausted,
     status: budgetExhausted ? "budget_exhausted" : enabled ? "complete" : "disabled", items: items.map(contextItem) };
@@ -70,7 +70,7 @@ function emptyWireContext(projectId) {
   };
 }
 
-// Hosted w3-reads.ts:36–40, with truncate from lines 30–34 inlined.
+// Hosted session-start reader:36–40, with truncate from lines 30–34 inlined.
 function removeLast(group) {
   group.items.pop();
   group.returned = group.items.length;
@@ -79,11 +79,11 @@ function removeLast(group) {
   group.status = "budget_exhausted";
 }
 
-// Hosted w3-reads.ts:10–14, 63–67, 75–79, 84–100, using one preordered page.
+// Hosted session-start reader:10–14, 63–67, 75–79, 84–100, using one preordered page.
 function hostedSessionStart(rows, { maxChars, maxTokens, projectId }, countTokens) {
   const context = emptyWireContext(projectId);
   const fitsContext = () => {
-    // Hosted session-tokenizer.ts:109–112, called on wire JSON by w3-reads.ts:65.
+    // Hosted session-tokenizer.ts:109–112, called on wire JSON by session-start reader:65.
     const serialized = JSON.stringify(context);
     return serialized.length <= maxChars && encoder.encode(serialized).length <= 24000 &&
       countTokens(serialized) <= maxTokens;
