@@ -167,9 +167,6 @@ export function isValidFingerprint(passage) {
   return Array.isArray(passage?.digests) && hasValidDigests(passage.digests);
 }
 
-/** @param {FingerprintSnapshot["shingles"]} shingles */
-const isValidShingleList = (shingles) => shingles == null || (Array.isArray(shingles) && shingles.every(isHex));
-
 /** @param {{ id: string, createdAtMs: number }} source */
 const isValidSource = (source) => source.id.length > 0 && Number.isSafeInteger(source.createdAtMs);
 
@@ -224,15 +221,15 @@ export function compareValidatedDigests(a, b) {
  * @param {boolean} [containmentKeyUnavailable]
  */
 export function shingleContainmentMatch(passage, reference, threshold, checkContainment, containmentKeyUnavailable = false) {
-  if (!isValidShingleList(passage.shingles) || !isValidShingleList(reference.shingles)) return "ineligible";
-  if (passage.shingles?.length === 0 || reference.shingles?.length === 0) return false;
-  if (containmentKeyUnavailable || !isKeyId(passage.keyId) || reference.keyId !== passage.keyId ||
-      !passage.shingles || !reference.shingles) return "ineligible";
-  if (!checkContainment) return false;
+  if (!Array.isArray(passage.shingles) || !Array.isArray(reference.shingles) ||
+      !passage.shingles.every(isHex) || !reference.shingles.every(isHex)) return "ineligible";
+  if (containmentKeyUnavailable || !isKeyId(passage.keyId) || reference.keyId !== passage.keyId) return "ineligible";
+  if (!checkContainment || passage.shingles.length === 0 || reference.shingles.length === 0) return false;
 
   const shingles = new Set(passage.shingles);
   const shared = reference.shingles.filter((shingle) => shingles.has(shingle)).length;
-  return shared >= threshold * reference.shingles.length;
+  // Round toward withholding at the threshold.
+  return shared / reference.shingles.length >= threshold - 1e-12;
 }
 
 /**

@@ -85,7 +85,7 @@ checkRows("text", [
   ["exact SHA can establish a miss without a key", { ...exact, text: { digests: [digest("a")] } },
     { shingles: null, keyId: null }, false],
   ["empty stored shingles fall back to a comparable digest miss", { ...text, text: { ...reference, shingles: [] } }, {}, false],
-  ["empty candidate shingles fall back to a comparable digest miss", text, { shingles: [], keyId: null }, false],
+  ["empty candidate shingles need a comparable shingle key", text, { shingles: [], keyId: null }, ineligible],
   ["empty candidate shingles need comparable digests", text, { digests: [digest("b", "hmac")], shingles: [] }, ineligible],
   ["empty stored shingles still require a valid candidate list", { ...text, text: { ...reference, shingles: [] } },
     { shingles: ["not-hex"] }, ineligible],
@@ -303,10 +303,10 @@ for (const [label, fact, input, policy, want] of [
   ["explicit edit with invalid incarnation", editFact, { passages: [contained], sourceMemory: { id: memoryId } }, explicit, ineligible],
   ["explicit active key unavailable", editFact, { passages: [contained] }, { ...explicit, key: null }, ineligible],
   ["explicit active key mismatch", editFact, { passages: [contained] }, { ...explicit, key: { id: "different" } }, ineligible],
-  ["explicit empty candidate shingles fall back without an active key", editFact,
-    { passages: [{ ...passage, shingles: [], keyId: null }] }, { ...explicit, key: null }, false],
-  ["explicit empty stored shingles fall back under a different active key",
-    { ...editFact, text: { ...reference, shingles: [] } }, { passages: [passage] }, { ...explicit, key: { id: "different" } }, false],
+  ["explicit empty candidate shingles still need an active key", editFact,
+    { passages: [{ ...passage, shingles: [], keyId: null }] }, { ...explicit, key: null }, ineligible],
+  ["explicit empty stored shingles still need a matching active key",
+    { ...editFact, text: { ...reference, shingles: [] } }, { passages: [passage] }, { ...explicit, key: { id: "different" } }, ineligible],
   ["explicit fallback cannot clear another alias with unavailable containment evidence", editFact,
     { passages: [{ ...passage, shingles: [] }, contained] }, { ...explicit, key: null }, ineligible],
 ]) {
@@ -321,6 +321,43 @@ test("vector suppression and near-duplicate distances are separate exports", asy
   assert.equal(NEAR_DUPLICATE_DISTANCE, 0.08);
   assert.equal(direct.SUPPRESSION_DISTANCE, SUPPRESSION_DISTANCE);
   assert.equal(direct.NEAR_DUPLICATE_DISTANCE, NEAR_DUPLICATE_DISTANCE);
+});
+
+for (const [label, stored, candidate, key] of [
+  ["rotated active key with empty stored shingles", { keyId: "old", shingles: [] },
+    { keyId: "new", shingles: ["aa"] }, { id: "new" }],
+  ["null active key with empty candidate shingles", { keyId: "k", shingles: ["aa"] },
+    { keyId: "k", shingles: [] }, null],
+]) {
+  test(`explicit save denies ${label}`, () => {
+    const fact = store({ ...editFact, sourceMemory: { id: "m", createdAtMs: 42 }, text: { ...reference, ...stored } });
+    const incoming = { scope, passages: [{ ...passage, ...candidate }] };
+    assert.equal(factBlocksIncoming(fact, incoming, { ...explicit, key }), ineligible);
+  });
+}
+
+for (const [label, unavailable] of [["null", { shingles: null }], ["missing", {}]]) {
+  for (const [side, stored, candidate] of [
+    ["stored", unavailable, { shingles: [] }],
+    ["candidate", { shingles: [] }, unavailable],
+  ]) {
+    test(`full comparison denies ${label} ${side} shingles against an empty list`, () => {
+      const fact = store({ ...text, text: { digests: reference.digests, keyId: "k", ...stored } });
+      const candidatePassage = { digests: passage.digests, keyId: "k", ...candidate };
+      assert.equal(factHidesRow(store(text), { ...baseRow, ...passage, shingles: [] }), false);
+      assert.deepEqual([
+        factHidesRow(fact, { ...baseRow, ...candidatePassage }),
+        factBlocksIncoming(fact, { scope, passages: [candidatePassage] }, capture),
+      ], [ineligible, ineligible]);
+    });
+  }
+}
+
+test("containment includes seven of a hundred shingles at a 0.07 threshold", () => {
+  const candidate = { ...passage, shingles: shingles.slice(0, 7) };
+  const policy = { containmentThreshold: 0.07 };
+  assert.equal(factHidesRow(store(text), { ...baseRow, ...passage, shingles: shingles.slice(0, 6) }, policy), false);
+  assert.equal(factHidesRow(store(text), { ...baseRow, ...candidate }, policy), true);
 });
 
 function recordedPassage({ sha, mac, taggedMac, ...fields }) {
