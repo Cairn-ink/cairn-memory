@@ -63,7 +63,7 @@ test("Postgres applies all migrations to the empty hosted baseline", migrationDb
       )
   `);
   assert.deepEqual(tables.tables, [
-    "capture_events", "capture_raw_fences", "capture_raw_lineage", "core_fact_digests",
+    "capture_events", "capture_raw_fences", "capture_raw_lineage", "card_placements", "card_topics", "core_fact_digests",
     "core_memory_receipts", "core_owner_state", "core_schema_migrations", "core_suppression_facts",
     "document_cards", "jobs", "memories", "memory_conflicts", "memory_forget_log", "memory_pause", "memory_placements", "memory_supersessions", "memory_topics",
     "raw_messages", "suppressions", "topic_edges", "topic_index_state", "topic_title_sources", "topics", "users",

@@ -102,9 +102,11 @@ absent or empty shingles. A populated shingles column requires `key_id`.
 ## Topics and document cards
 
 Migration 0007 defines the topic store, 0008 adds the concurrent oldest-first
-index on `memories`, and 0009 defines `document_cards`. These migrations skip
-objects already created by the hosted service. Make subsequent changes to
-these tables through adapter-postgres migrations.
+index on `memories`, and 0009 defines `document_cards`. Migration 0011 adds
+`card_placements` and `card_topics`. These migrations skip objects already
+created by the hosted service. The hosted service applies a byte-identical
+copy of `0011_core_topic_cards.sql` as a Drizzle migration. Make subsequent
+changes to these tables through adapter-postgres migrations.
 
 ## Database tests
 
