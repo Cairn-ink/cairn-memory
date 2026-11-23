@@ -2,6 +2,8 @@ import { CoreError } from "../errors.mjs";
 import { compareSortKey, compareUtf8 } from "../utf8.mjs";
 import { RELATION_LIMIT } from "./relation-limits.mjs";
 
+export { RELATION_LIMIT };
+
 /** @typedef {import("../ports/common.d.ts").MemoryRow} MemoryRow */
 /** @typedef {import("../ports/common.d.ts").Revision} Revision */
 /** @typedef {import("../ports/common.d.ts").SortKeyUs} SortKeyUs */
