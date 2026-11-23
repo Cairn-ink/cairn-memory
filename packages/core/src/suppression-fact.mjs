@@ -1,8 +1,12 @@
 import { CoreError } from "./errors.mjs";
+import { compareUtf8 } from "./utf8.mjs";
 
 // One SuppressionFact union for every store. Facts are permanent. A retry of the same fact
-// (same canonical body = incarnation) returns the original; a different body for the same
-// fact slot is fact_conflict (hard error, the whole transaction rolls back).
+// (same incarnation) returns the original; a different incarnation for the same fact slot is
+// fact_conflict (hard error, the whole transaction rolls back). The incarnation hashes
+// factIncarnationBody: the canonical body without a text fact's embedding, because provider
+// embeddings are not bit-for-bit repeatable and a second forget of the same text must not
+// conflict. Stores keep the full factBody.
 export const FACT_KINDS = Object.freeze(["identity", "text", "session", "window", "rawSpan"]);
 export const FACT_ORIGINS = Object.freeze(["forget", "correct", "edit", "backfill", "import"]);
 // exact: digest match only. full: digests + shingles + vector neighbours (where capable).
@@ -124,11 +128,49 @@ function canonical(value) {
 }
 
 /**
- * Canonical JSON of the fact body without owner and actionId. Core hashes it (ClockAndHash)
- * into the incarnation passed to SuppressionStore.writeFact.
+ * Order of a text fact's digests in its body: alg, then value (the set key), then the
+ * remaining fields, so the order is deterministic even for input that skipped validation.
+ * @param {any} x @param {any} y
+ */
+function compareDigests(x, y) {
+  return compareUtf8(String(x.alg), String(y.alg)) || compareUtf8(String(x.value), String(y.value)) ||
+    compareUtf8(String(x.pipeline), String(y.pipeline)) ||
+    compareUtf8(String(x.redactionVersion), String(y.redactionVersion)) ||
+    compareUtf8(String(x.keyId), String(y.keyId)) ||
+    compareCodeUnits(JSON.stringify(x), JSON.stringify(y));
+}
+
+/** Last-resort total order (UTF-16 code units), e.g. for lone surrogates that share UTF-8 bytes. */
+function compareCodeUnits(/** @type {string} */ a, /** @type {string} */ b) {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * Canonical JSON of the full fact body without owner and actionId: what a store keeps.
  * @param {import("./suppression-fact.mjs").SuppressionFact} fact
  */
 export function factBody(fact) {
   const { owner: _owner, actionId: _actionId, ...body } = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (fact));
+  // A text fact's digests are a set: order them by (alg, value) so the same set always
+  // yields the same incarnation. Other arrays keep their given order.
+  const text = /** @type {{ digests?: unknown } | undefined} */ (body.text);
+  if (body.kind === "text" && text && Array.isArray(text.digests)) {
+    body.text = { ...text, digests: [...text.digests].sort(compareDigests) };
+  }
   return JSON.stringify(canonical(body));
+}
+
+/**
+ * Canonical JSON that the incarnation hashes (ClockAndHash) before SuppressionStore.writeFact:
+ * factBody without a text fact's `text.embedding`. Everything else in a text body is
+ * deterministic for a given text and key; the stored fact keeps its original embedding.
+ * @param {import("./suppression-fact.mjs").SuppressionFact} fact
+ */
+export function factIncarnationBody(fact) {
+  // Derived from factBody's own canonical output, so it sees exactly what factBody saw.
+  const body = factBody(fact);
+  const parsed = JSON.parse(body);
+  if (parsed.kind !== "text" || !parsed.text || typeof parsed.text !== "object") return body;
+  delete parsed.text.embedding;
+  return JSON.stringify(parsed);
 }

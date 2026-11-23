@@ -12,16 +12,22 @@ export type CaseContext = Omit<OpenedAdapter, "close" | "embeddingDimensions"> &
   scope(namespace: Namespace): Scope;
 };
 
-export type ConformanceCase = {
-  id: string;
-  title: string;
+type CaseRun = {
   needs: Capability[];
   needsOff?: Capability[];
   requests?: Partial<Capabilities>;
+  /** A returned string is the reason an optional check was skipped. */
+  run(ctx: CaseContext): Promise<void | string>;
+};
+
+export type ConformanceCase = CaseRun & {
+  id: string;
+  title: string;
   pending?: string;
-  run(ctx: CaseContext): Promise<void>;
+  followUp?: CaseRun;
 };
 
 export declare const CASES: readonly ConformanceCase[];
+export declare const PRIVACY_CASES: readonly ConformanceCase[];
 /** Returns the skip reason, or null on success. Failures reject. */
 export declare function runCase(factory: AdapterFactory, testCase: ConformanceCase): Promise<string | null>;

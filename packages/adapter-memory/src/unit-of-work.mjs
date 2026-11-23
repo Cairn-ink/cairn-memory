@@ -1,5 +1,5 @@
-import { CoreError, compareUtf8, toCoreError } from "@cairn-ink/core";
-import { copyFact } from "./fact-match.mjs";
+import { CoreError, compareUtf8, isErrorCode, toCoreError } from "@cairn-ink/core";
+import { createFactStore } from "./privacy.mjs";
 
 /** @typedef {import("@cairn-ink/core").ErrorCode} ErrorCode */
 /** @typedef {import("@cairn-ink/core/ports").Tx} Tx */
@@ -7,8 +7,10 @@ import { copyFact } from "./fact-match.mjs";
 /** @typedef {import("@cairn-ink/core/ports").Namespace} Namespace */
 /** @typedef {import("@cairn-ink/core/ports").MemoryRow & {embedding: {model: string, vector: number[]} | null, historical: boolean}} Row */
 /** @typedef {{row: Row, receipts: import("@cairn-ink/core/ports").Receipt[]}} Entry */
-/** @typedef {import("@cairn-ink/core").SuppressionFact} SuppressionFact */
-/** @typedef {{rows: Map<Namespace, Map<string, Entry>>, facts: SuppressionFact[]}} State */
+/** @typedef {import("@cairn-ink/core").StoredFact} StoredFact */
+/** @typedef {import("@cairn-ink/core/ports").PauseState} PauseState */
+/** @typedef {{rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number}} State */
+/** @typedef {{state: State, run: {readonly ended: boolean}, dirty: boolean, pauseLock: boolean, poisoned: boolean, writeErrorCode: ErrorCode}} IssuedRun */
 
 class Mutex {
   #tail = Promise.resolve();
@@ -25,10 +27,14 @@ class Mutex {
 
 class Owner {
   /** @type {State} */
-  committed = { rows: new Map(), facts: [] };
+  committed = {
+    rows: new Map(), facts: new Map(), epoch: null, pause: { paused: false, generation: 0 }, indexRevision: 0,
+  };
   pause = new Mutex();
   write = new Mutex();
   open = 0;
+  /** @type {Promise<void> | undefined} */
+  fixtureWrite;
 }
 
 /** @param {unknown} value @returns {import("@cairn-ink/conformance/factory").JsonValue} */
@@ -50,7 +56,7 @@ function jsonSafe(value) {
 export function createUnitOfWork(nativeErrorMap) {
   /** @type {Map<string, Owner>} */
   const owners = new Map();
-  /** @type {WeakMap<Tx, {state: State, run: {readonly ended: boolean}}>} */
+  /** @type {WeakMap<Tx, IssuedRun>} */
   const issued = new WeakMap();
 
   /** @param {string} owner */
@@ -69,6 +75,7 @@ export function createUnitOfWork(nativeErrorMap) {
       const readOnly = options.readOnly === true;
       const pauseLock = options.pauseLock === true;
       const current = ownerState(owner);
+      if (current.fixtureWrite) await current.fixtureWrite;
       current.open++;
       let ended = false;
       /** @type {Tx | undefined} */
@@ -91,9 +98,15 @@ export function createUnitOfWork(nativeErrorMap) {
         }
         const run = Object.freeze({ get ended() { return ended; } });
         tx = Object.freeze({ owner, readOnly, __adapter: run });
-        issued.set(tx, { run, state });
+        /** @type {IssuedRun} */
+        const issuedRun = { run, state, dirty: false, pauseLock, poisoned: false, writeErrorCode: "internal_error" };
+        issued.set(tx, issuedRun);
         const result = await fn(tx);
-        if (!readOnly) current.committed = state;
+        if (issuedRun.poisoned) throw new CoreError(issuedRun.writeErrorCode);
+        if (issuedRun.dirty) {
+          state.indexRevision++;
+          current.committed = state;
+        }
         return result;
       } finally {
         ended = true;
@@ -107,24 +120,53 @@ export function createUnitOfWork(nativeErrorMap) {
 
   /**
    * @template T
-   * @param {Tx} tx @param {Scope} scope @param {boolean} write
+   * @param {Tx} tx @param {Pick<Scope, "owner">} scope @param {boolean} write
    * @param {(state: State) => T} body
+   * @param {boolean} [pauseLock]
    */
-  function port(tx, scope, write, body) {
+  function port(tx, scope, write, body, pauseLock = false) {
+    return accessPort(tx, scope, write, (getState) => body(getState()), pauseLock);
+  }
+
+  /**
+   * @template T
+   * @param {Tx} tx @param {Pick<Scope, "owner">} scope @param {boolean | "conditional"} write
+   * @param {(getState: () => State, markDirty: () => void) => T} body
+   * @param {boolean} [pauseLock]
+   */
+  function accessPort(tx, scope, write, body, pauseLock = false) {
+    const issuedRun = issued.get(tx);
+    let touchedState = false;
     try {
-      const issuedRun = issued.get(tx);
-      if (!issuedRun || issuedRun.run.ended || (write && tx.readOnly) || scope?.owner !== tx.owner) {
+      if (!issuedRun || issuedRun.run.ended || (write && tx.readOnly) || scope?.owner !== tx.owner ||
+          (pauseLock && !issuedRun.pauseLock)) {
         throw new CoreError("internal_error");
       }
-      return body(issuedRun.state);
+      const result = body(() => {
+        touchedState = true;
+        return issuedRun.state;
+      }, () => { issuedRun.dirty = true; });
+      if (write === true) issuedRun.dirty = true;
+      return result;
     } catch (error) {
-      throw toCoreError(error, nativeErrorMap);
+      const firstFailure = write && touchedState && issuedRun && !issuedRun.poisoned;
+      // Poison the run even if inspecting the thrown value fails.
+      if (firstFailure) issuedRun.poisoned = true;
+      const mapped = toCoreError(error, nativeErrorMap);
+      if (firstFailure) {
+        const code = mapped.code;
+        issuedRun.writeErrorCode = isErrorCode(code) ? code : "internal_error";
+      }
+      throw mapped;
     }
   }
 
+  // Write ports validate arguments before requesting the owner state.
+  port.write = accessPort;
+
   function dump() {
     const snapshot = [...owners]
-      .filter(([, { committed }]) => committed.rows.size > 0 || committed.facts.length > 0)
+      .filter(([, { committed }]) => committed.rows.size > 0 || committed.facts.size > 0 || committed.pause.generation > 0)
       .sort(([a], [b]) => compareUtf8(a, b))
       .map(([owner, { committed }]) => ({
         owner,
@@ -135,19 +177,28 @@ export function createUnitOfWork(nativeErrorMap) {
             if (x !== y) return x === null ? -1 : y === null ? 1 : compareUtf8(x, y);
             return compareUtf8(a.id, b.id);
           }),
-        facts: committed.facts,
+        facts: [...committed.facts.values()],
+        pause: committed.pause,
       }));
     return jsonSafe(snapshot);
   }
 
-  /** @param {string} owner @param {SuppressionFact} fact */
+  /** @param {string} owner @param {(tx: Tx) => Promise<void>} fn */
+  async function runSeed(owner, fn) {
+    if (owners.get(owner)?.open) throw new CoreError("invalid_input");
+    await uow.run(owner, {}, fn);
+  }
+
+  /**
+   * Unit-of-work tests can start a fixture write and observe it from their next run.
+   * @param {string} owner @param {import("@cairn-ink/core").SuppressionFact} fact
+   */
   function appendFact(owner, fact) {
     const current = ownerState(owner);
     if (current.open > 0) throw new CoreError("invalid_input");
-    current.committed = {
-      rows: current.committed.rows,
-      facts: [...current.committed.facts, copyFact(owner, fact)],
-    };
+    const { seedFact } = createFactStore(port, runSeed, {});
+    current.fixtureWrite = seedFact(owner, fact).finally(() => { current.fixtureWrite = undefined; });
+    return current.fixtureWrite;
   }
 
   /** @param {Scope} scope @param {string} id @param {bigint} updatedAtUs */
@@ -164,8 +215,8 @@ export function createUnitOfWork(nativeErrorMap) {
     const updated = new Map(namespace);
     updated.set(id, { ...entry, row: { ...entry.row, updatedAtUs, updatedAtMs: Number(updatedAtUs / 1000n) } });
     rows.set(scope.namespace, updated);
-    current.committed = { ...current.committed, rows };
+    current.committed = { ...current.committed, rows, indexRevision: current.committed.indexRevision + 1 };
   }
 
-  return { uow, port, dump, appendFact, setWriteTime };
+  return { uow, port, dump, appendFact, runSeed, setWriteTime };
 }
