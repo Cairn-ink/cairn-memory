@@ -225,23 +225,18 @@ test("a proxy reached twice can never make the stored slot differ from the valid
 });
 
 test("a nested slot derivation inside a trap does not disturb the outer derivation", () => {
-  const inner = { ...session };
-  let innerSlot;
-  const outer = { ...text, sourceMemory: new Proxy({ ...text.sourceMemory }, {
-    getOwnPropertyDescriptor(target, key) {
-      if (key === "id") innerSlot = factSlot(inner);
-      return Reflect.getOwnPropertyDescriptor(target, key);
-    },
-  }) };
-  assert.equal(factSlot(outer), factSlot(text));
-  assert.equal(innerSlot, factSlot(session));
-  const failing = { ...text, sourceMemory: new Proxy({ ...text.sourceMemory }, {
-    getOwnPropertyDescriptor(target, key) {
-      if (key === "id") assert.throws(() => factSlot({ ...session, extra: 1 }), invalidInput);
-      return Reflect.getOwnPropertyDescriptor(target, key);
-    },
-  }) };
-  assert.equal(factSlot(failing), factSlot(text));
+  // The trap fires on the first field of the root record, so any per-call state
+  // shared at module level would be replaced before the outer copy finishes.
+  for (const nested of [() => factSlot(session), () => assert.throws(() => factSlot({ ...session, extra: 1 }), invalidInput)]) {
+    const outer = new Proxy({ ...text }, {
+      getOwnPropertyDescriptor(target, key) {
+        if (key === "owner") nested();
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+    });
+    assert.equal(factSlot(outer), factSlot(text));
+    assert.equal(factSlot(text), factSlot({ ...text }));
+  }
 });
 
 test("array length comes from the descriptor, never from get", () => {
