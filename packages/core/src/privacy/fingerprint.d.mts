@@ -1,0 +1,38 @@
+import type { TextDigest } from "../suppression-fact.mjs";
+
+export interface FingerprintKey {
+  id: string;
+  signingKey: CryptoKey;
+}
+
+export interface FingerprintLabels {
+  readonly keyIdDomain: string;
+  readonly shingleKeyPrefix: string;
+  readonly legacyExactPrefix: string;
+}
+
+export interface LegacyCaptureFingerprint {
+  text_hmac: string;
+  shingles: string[];
+  key_id: string;
+}
+
+/** Validates a frozen record of non-empty string labels and returns a frozen snapshot. */
+export declare function validateFingerprintLabels(labels: unknown): FingerprintLabels;
+/** Derives the key ID and per-user signing key using the supplied domains. Prefixes include their delimiters. */
+export declare function userFingerprintKey(secret: string | null, userId: string, labels: FingerprintLabels): Promise<FingerprintKey | null>;
+export declare function legacyExactMac(text: string, key: FingerprintKey, labels: FingerprintLabels): Promise<string>;
+/** Signs raw shingles with the key derived using the supplied labels. */
+export declare function passageShingles(text: string, key: FingerprintKey, labels: FingerprintLabels): Promise<string[]>;
+export declare function fingerprintLegacyCapture(text: string, key: FingerprintKey, labels: FingerprintLabels): Promise<LegacyCaptureFingerprint>;
+
+export declare function coreDigest(raw: string, key?: FingerprintKey | null): Promise<TextDigest>;
+export declare function hostedV1Digest(raw: string): Promise<TextDigest>;
+/** Throws invalid_input for refusals from the engine suppression input bounds. */
+export declare function engineLegacyDigest(raw: string, max?: number, rawMax?: number): Promise<TextDigest>;
+/**
+ * Lookup candidates deduped by algorithm and value, keeping the first pipeline.
+ * An engine refusal omits its alias. Legacy SHA candidates are for matching
+ * historical facts. Facts for passages that held secrets need keyed digests.
+ */
+export declare function allDigests(raw: string, key?: FingerprintKey | null): Promise<TextDigest[]>;
