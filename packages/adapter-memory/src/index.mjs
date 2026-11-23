@@ -3,6 +3,8 @@ import { createCapturePorts } from "./capture.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
 import { createMemoryStore } from "./memory-store.mjs";
 import { createFactStore, createFingerprintProvider, createPauseStore } from "./privacy.mjs";
+import { createRationaleStore } from "./rationale.mjs";
+import { createRationaleHarness } from "./rationale-harness.mjs";
 import { createRetrievalPorts } from "./retrieval.mjs";
 import { createTopicStore } from "./topics.mjs";
 import { createUnitOfWork, handleWriteRejections } from "./unit-of-work.mjs";
@@ -32,6 +34,7 @@ export function createMemoryAdapter(options = {}) {
   const store = createMemoryStore(port, flags, newId, matchFacts, ringKeys);
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts,
     flags.fingerprintKey ? ringKeys : undefined);
+  const rationale = flags.rationaleEdges ? createRationaleStore(port, matchFacts, ringKeys) : undefined;
   /** @type {import("./index.d.mts").MemoryAdapter} */
   const adapter = {
     name: "memory",
@@ -44,6 +47,7 @@ export function createMemoryAdapter(options = {}) {
     pause: handleWriteRejections(createPauseStore(port), ["set"]),
     keys,
     ...createRetrievalPorts(port, flags, matchFacts),
+    ...(rationale && { ...rationale, rationale: handleWriteRejections(rationale.rationale, ["insert", "invalidate"]) }),
     ...(flags.placement && { placement: handleWriteRejections(
       createTopicStore(port, flags, newId, now, matchFacts, options), ["applyPlacement", "markFailed", "dropMemory"]) }),
     nativeErrorMap,
@@ -56,6 +60,7 @@ export function createMemoryAdapter(options = {}) {
           throw toCoreError(error, nativeErrorMap);
         }
       },
+      ...(rationale && createRationaleHarness(port, runSeed)),
       setWriteTime,
       setFingerprintSecret,
       rowsMissingKeyedDigest(owner) { return rowsMissingKeyedDigest(owner, ringKeys); },

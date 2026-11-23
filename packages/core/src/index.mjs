@@ -20,3 +20,4 @@ export { exactDigestMatch, withholdsPassage, withholdsAnyPassage, blocksMemoryPa
 export * from "./privacy/forget-steps.mjs";
 export * from "./privacy/pause.mjs";
 export * from "./topics/index.mjs";
+export * from "./rationale/index.mjs";

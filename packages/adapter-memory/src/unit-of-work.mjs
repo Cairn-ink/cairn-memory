@@ -16,7 +16,9 @@ import { addKeyedDigest, createFactStore } from "./privacy.mjs";
 /** @typedef {import("./capture.mjs").ClaimRecord} ClaimRecord */
 /** @typedef {import("@cairn-ink/core/ports").FinishResult} FinishResult */
 /** @typedef {import("./topics.mjs").TopicState} TopicState */
-/** @typedef {{topics: Map<Namespace, TopicState>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
+/** @typedef {{text: string, role: import("@cairn-ink/core/ports").Role, occurredAtMs: number | null}} RationaleMessage */
+/** @typedef {{rationale: Map<Namespace, Map<string, import("@cairn-ink/core/ports").RationaleEdge>>,
+ * rationaleMessages: Map<Namespace, Map<string, RationaleMessage>>, topics: Map<Namespace, TopicState>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
  * claims: Map<string, ClaimRecord>, activeTokens: Map<string, string>, abandonedTokens: Set<string>}} State */
 /** @typedef {{state: State, run: {readonly ended: boolean}, indexDirty: boolean, stateWritten: boolean, pauseLock: boolean,
  * poisoned: boolean, writeErrorCode: ErrorCode, finishes: Set<FinishResult>, writingFinishes: number,
@@ -77,7 +79,7 @@ class Mutex {
 class Owner {
   /** @type {State} */
   committed = {
-    topics: new Map(), rows: new Map(), facts: new Map(), epoch: null, pause: { paused: false, generation: 0 }, indexRevision: 0,
+    rationale: new Map(), rationaleMessages: new Map(), topics: new Map(), rows: new Map(), facts: new Map(), epoch: null, pause: { paused: false, generation: 0 }, indexRevision: 0,
     claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(),
   };
   pause = new Mutex();

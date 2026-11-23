@@ -11,6 +11,7 @@ export const CAPABILITIES = Object.freeze([
   "fingerprintKey", // a per-owner fingerprint key is configured (HMAC facts, shingles)
   "orderedCapture", // causal stream + reconcile (supersede/correct from capture)
   "stagedEvidence", // staged capture evidence claims
+  "rationaleEdges", // receipt-anchored rationale proposals
   "placement", // MOC placement journal
   "relations", // card relations and MOC rank
   "cards", // cards and card lineage
@@ -54,6 +55,7 @@ export const OPTIONAL_PORTS = Object.freeze({
   raw: "rawArchive",
   staged: "stagedEvidence",
   placement: "placement",
+  rationale: "rationaleEdges",
   relations: "relations",
   causal: "orderedCapture",
   supersession: "supersession",

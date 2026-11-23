@@ -2,6 +2,7 @@ import { allDigests, coreDigest, CoreError, NEAR_DUPLICATE_DISTANCE, compareUtf8
 import { cosineDistance } from "./cosine.mjs";
 import { decodeCursor, encodeCursor, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
+import { invalidateRationale } from "./rationale.mjs";
 import { addKeyedDigest } from "./privacy.mjs";
 import { copyPublicRow } from "./unit-of-work.mjs";
 import {
@@ -142,7 +143,8 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           const incoming = copyReceipts(receipts);
           const namespace = writeNamespace(scope);
           return (getState, markDirty) => {
-            const entry = getState().rows.get(namespace)?.get(id);
+            const state = getState();
+            const entry = state.rows.get(namespace)?.get(id);
             if (!entry) throw new CoreError("memory_not_found");
             const evidence = attachReceipts(entry.receipts, incoming);
             const { row } = entry;
@@ -151,6 +153,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
             const revision = row.revision + Number(changed);
             Object.assign(row, { confidence, kind, origin, revision, ...writeTime(nowMs) });
             entry.receipts = evidence;
+            if (changed || incoming.length) invalidateRationale(state, namespace, id);
             markDirty();
             return { outcome: changed ? "changed" : "touched", revision };
           };
@@ -264,6 +267,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           Object.assign(row, content, { digests, revision, ...writeTime(nowMs) });
           delete row.legacyHash;
           if (evidence !== null) entry.receipts = evidence;
+          invalidateRationale(state, namespace, id);
           return { outcome: "changed", revision };
         };
       });
@@ -281,9 +285,11 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
         validateMemoryId(id);
         const namespace = writeNamespace(scope);
         return (getState) => {
-          const { rows } = getState();
+          const state = getState();
+          const { rows } = state;
           const entries = rows.get(namespace);
           if (!entries?.delete(id)) return false;
+          invalidateRationale(state, namespace, id);
           if (!entries.size) rows.delete(namespace);
           return true;
         };
