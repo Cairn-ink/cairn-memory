@@ -272,5 +272,46 @@ export function bindLedgerRows(rows, sourceKey, receiptId) {
 }
 
 function ledgerRowKey(row, ordinal = row.ordinal ?? 0) {
-  return key(row.receiptId, row.measure, row.category, row.value, row.unit, row.period, row.comparator, ordinal);
+  return key(row.receiptId, ...quantityIdentity(row), ordinal);
+}
+
+function quantityIdentity({ measure, category, value, unit, period, comparator }) {
+  return [measure, category, value, unit, period, comparator];
+}
+
+/**
+ * Assign each identity independently across the item's time-ordered user
+ * receipts. Binding gives repeat amounts on the same receipt their ordinals.
+ * If extraction later changes the measure or category for the same purchase,
+ * the changed identity can produce another row.
+ */
+export function attributeLedgerQuantities(quantities, sources) {
+  if (!sources.length) return [];
+  const assignments = new Map();
+  return quantities.map(quantity => {
+    const identity = key(...quantityIdentity(quantity));
+    let assignment = assignments.get(identity);
+    if (!assignment) {
+      const valueMatches = sources.filter(source => source.values.includes(quantity.value));
+      const termMatches = valueMatches.filter(source => receiptMatchesQuantity(source.receipt.excerpt, quantity));
+      const candidates = termMatches.length ? termMatches : valueMatches.length ? valueMatches : sources.slice(0, 1);
+      assignment = { candidates, used: 0 };
+      assignments.set(identity, assignment);
+    }
+    const { candidates, used } = assignment;
+    assignment.used++;
+    return { quantity, source: candidates[Math.min(used, candidates.length - 1)] };
+  });
+}
+
+function receiptMatchesQuantity(text, { measure, category }) {
+  const phrase = ' ' + attributionPhrase(text) + ' ';
+  return [measure, category].map(attributionPhrase).some(term => term !== '' && (
+    phrase.includes(' ' + term + ' ') || phrase.includes(' ' + term + 's ') || phrase.includes(' ' + term + 'es ') ||
+    aliases.some(([pattern, alias]) => alias === term && pattern.test(text))
+  ));
+}
+
+function attributionPhrase(text) {
+  return (text.normalize('NFKC').toLowerCase().match(/\p{Script=Han}|(?:(?!\p{Script=Han})[\p{L}\p{M}])+|\p{N}+/gu) ?? []).join(' ');
 }

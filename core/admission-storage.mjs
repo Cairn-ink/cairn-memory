@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { transaction, isStorageBusy } from "./database.mjs";
 import { fail, identifier } from "./validation.mjs";
 import { localAuthorityGuard } from './local-authority-guard.mjs';
-import { ledgerSourceKey, rowsFrom } from './quantity-ledger.mjs';
+import { attributeLedgerQuantities, ledgerSourceKey, rowsFrom } from './quantity-ledger.mjs';
 
 // The stored and reported suppressed_count saturates at five (the existing bound);
 // five means five or more. No extra rows are written for larger captures.
@@ -286,13 +286,7 @@ function publishCaptureAmounts(ns, entries, activeRow, putLedger) {
     const memory = activeRow(ns, memoryId);
     if (memory.currentness === 'historical') continue;
     const sources = amountSources(item);
-    const usedByValue = new Map();
-    for (const quantity of item.quantities) {
-      const matching = sources.filter(source => source.values.includes(quantity.value));
-      const used = usedByValue.get(quantity.value) ?? 0;
-      const source = matching[Math.min(used, matching.length - 1)] ?? sources[0];
-      if (!source) continue;
-      usedByValue.set(quantity.value, used + 1);
+    for (const { quantity, source } of attributeLedgerQuantities(item.quantities, sources)) {
       const key = JSON.stringify([memoryId, ledgerSourceKey(source.receipt)]);
       const write = writes.get(key) ?? { memory, receipt: source.receipt, rows: [] };
       write.rows.push(...rowsFrom(memory, memory.revision, quantity, source.time ?? now));

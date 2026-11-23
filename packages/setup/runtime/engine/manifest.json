@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "f4c3e91859d4c0dd5b7e23b831bf4b7965028b54674e328ef2765c5ac4fcdf26",
-  "bytes": 1496820,
+  "sha256": "294629511e635aac15a7c39a34f9cb0d85b26a149338ada6001c077aaf7a1e2f",
+  "bytes": 1497430,
   "files": [
     "LICENSE",
     "README.md",
@@ -427,7 +427,7 @@
     "core/content-write-context.mjs": "01ee9d2c14d57ed99069fe026c619d5a8bf0b537de328bf20e2da5f3b19b9999",
     "core/content-write-changes.mjs": "876f6fa7bc67c69031ef8ccc645eab9b321713803b77f9203ac30ca783e88caa",
     "core/content-write-safety.mjs": "72a00cb00058ab94280b9317ed20bda6d31914978ca349912bd2f65dca5ce32d",
-    "core/admission-storage.mjs": "cdf95910ca1eaa0f4bc3b7d1b38fc9d84567d7b2964375f80b8d548137b421df",
+    "core/admission-storage.mjs": "3436afdd29879e6f9616d3f630227c31a9c9ec75d0331e359bf3245b6785f44d",
     "core/local-authority-input.mjs": "bfce603a1081956e8d4dd790d09e8e394c0b06b20cca987980217d2e4d85a988",
     "core/local-authority-schema.mjs": "b1ff2de1a829c503dff18f425ac57942b52e3b90e9ef01aa209e06863945a3d3",
     "core/local-authority-storage.mjs": "08e66e391fa3dad257b478e335d35a5a4415dbcd8e83bc0871b4f86511347b50",
@@ -549,7 +549,7 @@
     "core/qualification-candidates.mjs": "12f52ec66fbe12e99a258525dcfe8750f4e4c7bcef5bc3ea02ce555970ce06f2",
     "core/qualification-candidates-prompt.mjs": "3aaf3527643a728da8ff2090fcfefc61a12ae2a815d6195adb57c72558f23ea7",
     "core/qualification-text-catalog.mjs": "d4593f67661ad790ccb79b875b26ebfd87da416c4b5fdba9c06650043098e965",
-    "core/quantity-ledger.mjs": "becacba1445acabe89e6fed5e367d5050f9ec9853ea9bd390eb537b87558b173",
+    "core/quantity-ledger.mjs": "d4fe12dffa0d12feb5e3517f3fa371945f8cb8582e205d8ac8733a1440e71bc8",
     "core/query-candidates.mjs": "9564d53daea476ac0b83839ea039ca8554a6bc584046023b626a3a38c5f9cf65",
     "core/query-excerpt.mjs": "952cdc3ff88f3a57181188565ce1bbe89b6ff1f5eaa2870d7ef4a295739a4265",
     "core/qualified-transition-schema.mjs": "acbc489570626d41409c89321f2a48ad600603aa11dab775c3d7e440951b3f58",
@@ -840,6 +840,6 @@
   "generatedHashes": {
     "package.json": "981551a6c99e5f8c55b8e3a44d71240280eba4f0913fe0917b3b43f5c622586b",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8",
-    "engine-build.json": "0248b9af81c4a07067fc729357fae1cf396c7dadb0e6be838cf89c05d311e7bd"
+    "engine-build.json": "13c579ccf19049d5b3b17d1001934c1a7076329b172097305182d7471f0f71c4"
   }
 }
