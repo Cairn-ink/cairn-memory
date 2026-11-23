@@ -1,20 +1,18 @@
 import {
-  CoreError, ERROR_CODES, coalesceNewTopics, isErrorCode, memoryGuards, placementProposal, titleKey,
+  CoreError, ERROR_CODES, coalesceNewTopics, compareUtf8, isErrorCode, memoryGuards, placementProposal, titleKey,
 } from "../../core/src/index.mjs";
 import { decodeCursor, encodeCursor } from "../../core/src/retrieval/hosted-paging.mjs";
-import { memoryNamespace, visibleTopicMemory } from "./topic-visibility.mjs";
+import { visibleTopicMemory } from "./topic-visibility.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
 /** @import { PlacementProposal } from "../../core/src/index.mjs" */
 /** @import { Scope, Topic, TopicStore, Tx } from "../../core/src/ports/index.d.ts" */
 /** @typedef {import("./driver.mjs").Connection["query"]} Query */
 /** @typedef {Required<TopicStore>} Placement */
-/** @typedef {[owner: string, namespace: string | null]} ScopeKey */
 
 const BATCH_LIMIT = 5;
 const RETRYABLE_CODES = Object.keys(ERROR_CODES).filter((code) =>
   isErrorCode(code) && ERROR_CODES[code] === "retryable");
-const memoryInScope = `${memoryNamespace("m")} IS NOT DISTINCT FROM $2`;
 
 const currentPlacementJoin = `
   LEFT JOIN memory_placements p ON p.user_id = m.user_id AND p.memory_id = m.id
@@ -29,34 +27,31 @@ const visibleTopicTitle = `CASE WHEN EXISTS (
   ) AND NOT EXISTS (
     SELECT 1 FROM topic_title_sources s
     LEFT JOIN memories source ON source.user_id = s.user_id AND source.id = s.memory_id
-      AND ${memoryNamespace("source")} IS NOT DISTINCT FROM t.core_namespace
       AND source.revision = s.memory_revision AND ${visibleTopicMemory("source")}
     WHERE s.user_id = t.user_id AND s.topic_id = t.id AND source.id IS NULL
   ) THEN t.title END`;
 const topicColumns = `t.id, t.level, ${visibleTopicTitle} AS title,
   ARRAY(SELECT e.parent_id FROM topic_edges e
-    JOIN topics parent ON parent.user_id = e.user_id AND parent.id = e.parent_id
-      AND parent.core_namespace IS NOT DISTINCT FROM t.core_namespace AND parent.level = 2
+    JOIN topics parent ON parent.user_id = e.user_id AND parent.id = e.parent_id AND parent.level = 2
     WHERE e.user_id = t.user_id AND e.child_id = t.id AND t.level = 1
-    ORDER BY e.core_parent_position, e.parent_id COLLATE "C") AS parent_ids`;
+    ORDER BY e.parent_id COLLATE "C") AS parent_ids`;
 const topicOrder = `level, coalesce(title, '') COLLATE "C", id COLLATE "C"`;
 const newestFirst = `placed_at DESC, memory_id COLLATE "C" DESC`;
-const topicScope = `t.user_id = $1 AND t.core_namespace IS NOT DISTINCT FROM $2`;
 
 /** @param {unknown} value @returns {value is string} */
 function sqlText(value) {
   return typeof value === "string" && !value.includes("\0") && !/[\uD800-\uDFFF]/u.test(value);
 }
 
-/** @param {Tx} tx @param {Scope} scope @param {boolean} [write] @returns {ScopeKey} */
-function scoped(tx, scope, write) {
-  requireLiveRun(tx, write);
+/** @param {Tx} tx @param {Scope} scope @param {boolean} [write] */
+function personalOwner(tx, scope, write) {
   const owner = scope?.owner;
+  const namespace = scope?.namespace;
+  if (namespace != null) throw new CoreError("capability_unavailable");
+  requireLiveRun(tx, write);
   if (owner !== tx.owner) throw new CoreError("internal_error");
-  const { namespace } = scope;
-  if (namespace !== null && typeof namespace !== "string") throw new CoreError("invalid_input");
-  // JSON encoding also supports the NUL separator used by engine namespaces.
-  return [owner, namespace === null ? null : JSON.stringify(namespace)];
+  if (namespace !== null) throw new CoreError("invalid_input");
+  return owner;
 }
 
 /**
@@ -127,16 +122,16 @@ async function advanceTopicIndex(query, owner) {
 }
 
 /**
- * @param {Query} query @param {ScopeKey} scope @param {string} view @param {string | null} filter
+ * @param {Query} query @param {string} owner @param {string} view @param {string | null} filter
  * @param {number} limit @param {string | null} cursor
  */
-async function readPage(query, scope, view, filter, limit, cursor) {
-  const indexRevision = await readIndexRevision(query, scope[0]);
+async function readPage(query, owner, view, filter, limit, cursor) {
+  const indexRevision = await readIndexRevision(query, owner);
   let offset = 0;
   if (cursor !== null) {
     const decoded = decodeCursor(cursor);
     if (!Array.isArray(decoded) || encodeCursor(decoded) !== cursor || decoded.length !== 6 ||
-        decoded[0] !== view || decoded[1] !== scope[0] || decoded[2] !== scope[1] || decoded[3] !== filter ||
+        decoded[0] !== view || decoded[1] !== owner || decoded[2] !== null || decoded[3] !== filter ||
         !Number.isSafeInteger(decoded[4]) || decoded[4] < 0 ||
         !Number.isSafeInteger(decoded[5]) || decoded[5] < 1) throw new CoreError("invalid_cursor");
     if (decoded[4] !== indexRevision) throw new CoreError("cursor_stale");
@@ -148,7 +143,7 @@ async function readPage(query, scope, view, filter, limit, cursor) {
     slice(rows) {
       return {
         items: rows.slice(0, limit),
-        nextCursor: rows.length <= limit ? null : encodeCursor([view, ...scope, filter, indexRevision, offset + limit]),
+        nextCursor: rows.length <= limit ? null : encodeCursor([view, owner, null, filter, indexRevision, offset + limit]),
       };
     },
   };
@@ -159,14 +154,14 @@ function toTopic(row) {
   return { id: row.id, level: row.level === 1 ? "L1" : "L2", title: row.title, parentIds: row.parent_ids };
 }
 
-/** @param {Query} query @param {ScopeKey} scope @param {PlacementProposal["items"]} items */
-async function checkReferences(query, scope, items) {
+/** @param {Query} query @param {string} owner @param {PlacementProposal["items"]} items */
+async function checkReferences(query, owner, items) {
   const l1Ids = items.flatMap(({ parentIds }) => parentIds);
   const l2Ids = items.flatMap(({ newL1 }) => newL1?.parentL2Ids ?? []);
   if (!l1Ids.length && !l2Ids.length) return;
   const { rows } = await query(`
-    SELECT t.id, t.level FROM topics t WHERE ${topicScope} AND t.id = ANY($3::text[])`,
-  [...scope, [...l1Ids, ...l2Ids]]);
+    SELECT id, level FROM topics WHERE user_id = $1 AND id = ANY($2::text[])`,
+  [owner, [...l1Ids, ...l2Ids]]);
   const found = new Map(rows.map(({ id, level }) => [id, level]));
   for (const [ids, level] of /** @type {const} */ ([[l1Ids, 1], [l2Ids, 2]])) {
     for (const id of ids) {
@@ -177,22 +172,22 @@ async function checkReferences(query, scope, items) {
 }
 
 /**
- * @param {Query} query @param {ScopeKey} scope @param {Topic & { title: string }} topic
+ * @param {Query} query @param {string} owner @param {Topic & { title: string }} topic
  * @param {string[]} ids @param {number[]} revisions
  */
-async function insertTopic(query, scope, topic, ids, revisions) {
+async function insertTopic(query, owner, topic, ids, revisions) {
   await query(`
-    INSERT INTO topics (user_id, core_namespace, id, level, title, title_key) VALUES ($1, $2, $3, $4, $5, $6)`,
-  [...scope, topic.id, topic.level === "L1" ? 1 : 2, topic.title, titleKey(topic.title)]);
+    INSERT INTO topics (user_id, id, level, title, title_key) VALUES ($1, $2, $3, $4, $5)`,
+  [owner, topic.id, topic.level === "L1" ? 1 : 2, topic.title, titleKey(topic.title)]);
   await query(`
     INSERT INTO topic_title_sources (user_id, topic_id, memory_id, memory_revision)
     SELECT $1, $2, memory_id, revision FROM unnest($3::text[], $4::integer[]) AS batch(memory_id, revision)`,
-  [scope[0], topic.id, ids, revisions]);
+  [owner, topic.id, ids, revisions]);
   if (topic.parentIds.length) {
     await query(`
-      INSERT INTO topic_edges (user_id, parent_id, child_id, core_parent_position)
-      SELECT $1, parent, $2, position FROM unnest($3::text[]) WITH ORDINALITY AS edge(parent, position)`,
-    [scope[0], topic.id, topic.parentIds]);
+      INSERT INTO topic_edges (user_id, parent_id, child_id)
+      SELECT $1, parent, $2 FROM unnest($3::text[]) AS edge(parent)`,
+    [owner, topic.id, topic.parentIds]);
   }
 }
 
@@ -231,43 +226,44 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
   if (!Number.isSafeInteger(topicRetryAfterMs) || topicRetryAfterMs < 0) throw new CoreError("invalid_input");
 
   return {
-    async pending(tx, scope, { limit }) {
-      const target = scoped(tx, scope);
+    async pending(tx, scope, options) {
+      const owner = personalOwner(tx, scope);
+      const { limit } = options;
       validateLimit(limit, BATCH_LIMIT);
       return runOperation(tx, async (query) => {
         const { rows } = await query(`
           SELECT m.id AS "memoryId", m.revision
           FROM memories m ${currentPlacementJoin}
-          WHERE m.user_id = $1 AND ${memoryInScope} AND ${visibleTopicMemory("m")}
-            AND (p.memory_id IS NULL OR (p.status = 'failed' AND p.code = ANY($3::text[])
-              AND p.attempts < $4 AND p.placed_at <= $5))
-          ORDER BY m.created_at, m.id COLLATE "C" LIMIT $6`,
-        [...target, RETRYABLE_CODES, topicMaxAttempts, new Date(now() - topicRetryAfterMs), limit]);
+          WHERE m.user_id = $1 AND ${visibleTopicMemory("m")}
+            AND (p.memory_id IS NULL OR (p.status = 'failed' AND p.code = ANY($2::text[])
+              AND p.attempts < $3 AND p.placed_at <= $4))
+          ORDER BY m.created_at, m.id COLLATE "C" LIMIT $5`,
+        [owner, RETRYABLE_CODES, topicMaxAttempts, new Date(now() - topicRetryAfterMs), limit]);
         return rows;
       });
     },
 
-    async catalog(tx, scope, { cursor, limit }) {
-      const target = scoped(tx, scope);
+    async catalog(tx, scope, options) {
+      const owner = personalOwner(tx, scope);
+      const { cursor, limit } = options;
       validateLimit(limit);
       return runOperation(tx, async (query) => {
-        const page = await readPage(query, target, "catalog", null, limit, cursor);
+        const page = await readPage(query, owner, "catalog", null, limit, cursor);
         const { rows } = await query(`
-          SELECT * FROM (SELECT ${topicColumns} FROM topics t WHERE ${topicScope}) catalog
-          ORDER BY ${topicOrder} LIMIT $3 OFFSET $4`, [...target, limit + 1, page.offset]);
+          SELECT * FROM (SELECT ${topicColumns} FROM topics t WHERE t.user_id = $1) catalog
+          ORDER BY ${topicOrder} LIMIT $2 OFFSET $3`, [owner, limit + 1, page.offset]);
         const { items, nextCursor } = page.slice(rows);
         return { items: items.map(toTopic), nextCursor, exhausted: nextCursor === null, indexRevision: page.indexRevision };
       });
     },
 
     async applyPlacement(tx, scope, basedOn, proposal) {
-      const target = scoped(tx, scope, true);
+      const owner = personalOwner(tx, scope, true);
       const { items } = snapshotProposal(proposal);
       const indexRevision = basedOn?.indexRevision;
       if (!Number.isSafeInteger(indexRevision) || indexRevision < 0) throw new CoreError("invalid_input");
       const ids = items.map(({ memoryId }) => memoryId);
       const guards = memoryGuards(snapshotArray(basedOn.memoryRevisions, ids.length), ids);
-      const [owner] = target;
       const revisions = new Map(guards.map(({ memoryId, revision }) => [memoryId, revision]));
 
       return runOperation(tx, async (query) => {
@@ -278,30 +274,29 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
             WHERE mt.user_id = m.user_id AND mt.memory_id = m.id AND mt.memory_revision = m.revision
           ) AS topic_ids
           FROM memories m ${currentPlacementJoin}
-          WHERE m.user_id = $1 AND ${memoryInScope}
-            AND m.id = ANY($3::text[]) AND ${visibleTopicMemory("m")}
-          ORDER BY m.id COLLATE "C" FOR UPDATE OF m`, [...target, ids]);
+          WHERE m.user_id = $1 AND m.id = ANY($2::text[]) AND ${visibleTopicMemory("m")}
+          ORDER BY m.id COLLATE "C" FOR UPDATE OF m`, [owner, ids]);
         if (rows.length !== ids.length || rows.some(({ id, revision }) => revisions.get(id) !== revision)) {
           throw new CoreError("revision_conflict");
         }
 
-        await checkReferences(query, target, items);
+        await checkReferences(query, owner, items);
         const { newL1, newL2 } = coalesceNewTopics(items);
         if (newL1.size) {
           const { rows: conflicts } = await query(`
-            SELECT 1 FROM topics t WHERE ${topicScope} AND
-              ((t.level = 1 AND t.title_key = ANY($3::text[])) OR (t.level = 2 AND t.title_key = ANY($4::text[])))
-            LIMIT 1`, [...target, [...newL1.keys()], [...newL2.keys()]]);
+            SELECT 1 FROM topics WHERE user_id = $1 AND
+              ((level = 1 AND title_key = ANY($2::text[])) OR (level = 2 AND title_key = ANY($3::text[])))
+            LIMIT 1`, [owner, [...newL1.keys()], [...newL2.keys()]]);
           if (conflicts.length) throw new CoreError("moc_title_conflict");
         }
 
         const parents = new Map([...newL2].map(([key, { title }]) => [key, newTopic("L2", title)]));
         const children = new Map([...newL1].map(([key, plan]) => [key, newTopic("L1", plan.title, [
           ...plan.parentL2Ids, ...[...plan.newParentKeys].map((key) => /** @type {Topic} */ (parents.get(key)).id),
-        ])]));
+        ].sort(compareUtf8))]));
         const createdTopics = [...parents.values(), ...children.values()];
         for (const topic of createdTopics) {
-          await insertTopic(query, target, topic, [...revisions.keys()], [...revisions.values()]);
+          await insertTopic(query, owner, topic, [...revisions.keys()], [...revisions.values()]);
         }
 
         const placed = items.map(({ memoryId, parentIds, newL1 }) => ({
@@ -326,43 +321,43 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
     },
 
     async markFailed(tx, scope, memoryIds, code) {
-      const target = scoped(tx, scope, true);
+      const owner = personalOwner(tx, scope, true);
       if (!isErrorCode(code)) throw new CoreError("invalid_input");
       const ids = snapshotArray(memoryIds, undefined, false);
       if (ids.some((id) => typeof id !== "string" || !id)) throw new CoreError("invalid_input");
       return runOperation(tx, async (query) => {
         await query(`
           INSERT INTO memory_placements (user_id, memory_id, memory_revision, status, code, attempts, placed_at)
-          SELECT m.user_id, m.id, m.revision, 'failed', $4, 1, $5
-          FROM memories m WHERE m.user_id = $1 AND ${memoryInScope}
-            AND m.id = ANY($3::text[]) AND ${visibleTopicMemory("m")}
+          SELECT m.user_id, m.id, m.revision, 'failed', $3, 1, $4
+          FROM memories m WHERE m.user_id = $1 AND m.id = ANY($2::text[]) AND ${visibleTopicMemory("m")}
           ON CONFLICT (user_id, memory_id) DO UPDATE SET
             memory_revision = EXCLUDED.memory_revision, code = EXCLUDED.code, placed_at = EXCLUDED.placed_at,
             attempts = CASE WHEN memory_placements.memory_revision = EXCLUDED.memory_revision
               THEN least(memory_placements.attempts + 1, 3) ELSE 1 END,
             status = CASE WHEN memory_placements.memory_revision = EXCLUDED.memory_revision
               THEN memory_placements.status ELSE 'failed' END`,
-        [...target, ids.filter(sqlText), code, new Date(now())]);
+        [owner, ids.filter(sqlText), code, new Date(now())]);
       });
     },
 
-    async list(tx, scope, { level, cursor, limit }) {
-      const target = scoped(tx, scope);
+    async list(tx, scope, options) {
+      const owner = personalOwner(tx, scope);
+      const { level, cursor, limit } = options;
       validateLimit(limit);
       if (level !== undefined && level !== "L1" && level !== "L2") throw new CoreError("invalid_input");
       return runOperation(tx, async (query) => {
-        const page = await readPage(query, target, "list", level ?? null, limit, cursor);
+        const page = await readPage(query, owner, "list", level ?? null, limit, cursor);
         const { rows } = await query(`
           WITH direct AS (
             SELECT mt.topic_id, mt.memory_id, mt.placed_at FROM memory_topics mt
             ${currentMemberJoin}
-            WHERE mt.user_id = $1 AND ${memoryInScope}
+            WHERE mt.user_id = $1
           ), effective AS (
-            SELECT topic_id, memory_id, placed_at FROM direct WHERE $3::smallint IS DISTINCT FROM 2
+            SELECT topic_id, memory_id, placed_at FROM direct WHERE $2::smallint IS DISTINCT FROM 2
             UNION ALL
             SELECT e.parent_id, d.memory_id, max(d.placed_at) FROM direct d
             JOIN topic_edges e ON e.user_id = $1 AND e.child_id = d.topic_id
-            WHERE $3::smallint IS DISTINCT FROM 1 GROUP BY e.parent_id, d.memory_id
+            WHERE $2::smallint IS DISTINCT FROM 1 GROUP BY e.parent_id, d.memory_id
           ), ranked AS (
             SELECT topic_id, memory_id, row_number() OVER (
               PARTITION BY topic_id ORDER BY ${newestFirst}
@@ -375,9 +370,9 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
           SELECT * FROM (
             SELECT ${topicColumns}, s.member_count, s.newest_member_ids
             FROM summary s JOIN topics t ON t.user_id = $1 AND t.id = s.topic_id
-            WHERE ${topicScope} AND ($3::smallint IS NULL OR t.level = $3)
-          ) listed ORDER BY ${topicOrder} LIMIT $4 OFFSET $5`,
-        [...target, level === undefined ? null : level === "L1" ? 1 : 2, limit + 1, page.offset]);
+            WHERE $2::smallint IS NULL OR t.level = $2
+          ) listed ORDER BY ${topicOrder} LIMIT $3 OFFSET $4`,
+        [owner, level === undefined ? null : level === "L1" ? 1 : 2, limit + 1, page.offset]);
         const { items, nextCursor } = page.slice(rows);
         return { items: items.map((row) => ({
           ...toTopic(row), memberCount: Number(row.member_count), newestMemberIds: row.newest_member_ids,
@@ -385,45 +380,46 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
       });
     },
 
-    async members(tx, scope, topicId, { cursor, limit }) {
-      const target = scoped(tx, scope);
+    async members(tx, scope, topicId, options) {
+      const owner = personalOwner(tx, scope);
+      const { cursor, limit } = options;
       validateLimit(limit);
       return runOperation(tx, async (query) => {
-        const page = await readPage(query, target, "members", topicId, limit, cursor);
+        const page = await readPage(query, owner, "members", topicId, limit, cursor);
         if (!sqlText(topicId)) return { items: [], nextCursor: null };
         const { rows } = await query(`
           WITH child_topics AS (
-            SELECT t.id FROM topics t WHERE ${topicScope} AND t.id = $3 AND t.level = 1
+            SELECT t.id FROM topics t WHERE t.user_id = $1 AND t.id = $2 AND t.level = 1
             UNION ALL
             SELECT e.child_id FROM topics t JOIN topic_edges e ON e.user_id = t.user_id AND e.parent_id = t.id
-            WHERE ${topicScope} AND t.id = $3 AND t.level = 2
+            WHERE t.user_id = $1 AND t.id = $2 AND t.level = 2
           ), current_members AS (
             SELECT mt.memory_id, max(mt.placed_at) AS placed_at
             FROM child_topics c JOIN memory_topics mt ON mt.topic_id = c.id ${currentMemberJoin}
-            WHERE mt.user_id = $1 AND ${memoryInScope} GROUP BY mt.memory_id
+            WHERE mt.user_id = $1 GROUP BY mt.memory_id
           )
           SELECT memory_id, (extract(epoch FROM placed_at) * 1000000)::bigint::text AS placed_at_us
-          FROM current_members ORDER BY ${newestFirst} LIMIT $4 OFFSET $5`, [...target, topicId, limit + 1, page.offset]);
+          FROM current_members ORDER BY ${newestFirst} LIMIT $3 OFFSET $4`, [owner, topicId, limit + 1, page.offset]);
         const { items, nextCursor } = page.slice(rows);
         return { items: items.map((row) => ({ kind: "memory", id: row.memory_id, placedAtUs: BigInt(row.placed_at_us) })), nextCursor };
       });
     },
 
     async forMemory(tx, scope, memoryId) {
-      const target = scoped(tx, scope);
+      const owner = personalOwner(tx, scope);
       if (!sqlText(memoryId)) return [];
       return runOperation(tx, async (query) => {
         const { rows } = await query(`
           SELECT mt.topic_id FROM memory_topics mt ${currentMemberJoin}
           JOIN topics t ON t.user_id = mt.user_id AND t.id = mt.topic_id
-          WHERE ${topicScope} AND ${memoryInScope} AND mt.memory_id = $3
-          ORDER BY mt.topic_id COLLATE "C"`, [...target, memoryId]);
+          WHERE mt.user_id = $1 AND mt.memory_id = $2
+          ORDER BY mt.topic_id COLLATE "C"`, [owner, memoryId]);
         return rows.map(({ topic_id }) => topic_id);
       });
     },
 
     async forMemories(tx, scope, memoryIds) {
-      const target = scoped(tx, scope);
+      const owner = personalOwner(tx, scope);
       const ids = snapshotArray(memoryIds, 100);
       validateLimit(ids.length);
       if (ids.some((id) => typeof id !== "string")) throw new CoreError("invalid_input");
@@ -431,45 +427,41 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
         const { rows } = await query(`
           WITH requested AS (
             SELECT id, min(position) AS position
-            FROM unnest($3::text[]) WITH ORDINALITY AS input(id, position) GROUP BY id
+            FROM unnest($2::text[]) WITH ORDINALITY AS input(id, position) GROUP BY id
           )
           SELECT m.id AS "memoryId", COALESCE((
             SELECT jsonb_agg(jsonb_build_object('id', t.id, 'title', ${visibleTopicTitle}) ORDER BY t.id COLLATE "C")
             FROM memory_topics mt JOIN topics t ON t.user_id = mt.user_id AND t.id = mt.topic_id
-            WHERE ${topicScope} AND t.level = 1 AND mt.memory_id = m.id AND mt.memory_revision = p.memory_revision
+            WHERE mt.user_id = m.user_id AND t.level = 1 AND mt.memory_id = m.id AND mt.memory_revision = p.memory_revision
               AND p.status = 'filed'
           ), '[]'::jsonb) AS topics
           FROM requested r JOIN memories m ON m.id = r.id
           JOIN memory_placements p ON p.user_id = m.user_id AND p.memory_id = m.id AND p.memory_revision = m.revision
-          WHERE m.user_id = $1 AND ${memoryInScope} AND ${visibleTopicMemory("m")}
+          WHERE m.user_id = $1 AND ${visibleTopicMemory("m")}
             AND p.status IN ('filed', 'unfiled')
-          ORDER BY r.position`, [...target, ids.filter(sqlText)]);
+          ORDER BY r.position`, [owner, ids.filter(sqlText)]);
         return rows;
       });
     },
 
     async dropMemory(tx, scope, memoryId) {
-      const target = scoped(tx, scope, true);
+      const owner = personalOwner(tx, scope, true);
       if (!sqlText(memoryId)) return { dropped: 0 };
       return runOperation(tx, async (query) => {
         // A drop keeps the outcome. Memory erase owns removal of outcomes and
         // retires the same sources as part of its owner index advance.
         const { rows: [result] } = await query(`
-          WITH scoped_topics AS (
-            SELECT t.id FROM topics t WHERE ${topicScope} AND NOT EXISTS (
-              SELECT 1 FROM memories m WHERE m.user_id = $1 AND m.id = $3 AND ${memoryNamespace("m")} IS DISTINCT FROM $2
-            )
-          ), refs AS (
-            DELETE FROM memory_topics mt USING scoped_topics t
-            WHERE mt.user_id = $1 AND mt.memory_id = $3 AND mt.topic_id = t.id RETURNING 1
+          WITH refs AS (
+            DELETE FROM memory_topics
+            WHERE user_id = $1 AND memory_id = $2 RETURNING 1
           ), sources AS (
-            UPDATE topic_title_sources s SET memory_revision = 0 FROM scoped_topics t
-            WHERE s.user_id = $1 AND s.memory_id = $3 AND s.topic_id = t.id AND s.memory_revision <> 0 RETURNING 1
+            UPDATE topic_title_sources SET memory_revision = 0
+            WHERE user_id = $1 AND memory_id = $2 AND memory_revision <> 0 RETURNING 1
           )
           SELECT (SELECT count(*) FROM refs) AS dropped, EXISTS (SELECT 1 FROM sources) AS retired`,
-        [...target, memoryId]);
+        [owner, memoryId]);
         const dropped = Number(result.dropped);
-        if (dropped || result.retired) await advanceTopicIndex(query, target[0]);
+        if (dropped || result.retired) await advanceTopicIndex(query, owner);
         return { dropped };
       });
     },

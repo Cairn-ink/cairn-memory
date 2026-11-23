@@ -113,10 +113,23 @@ Register `createPostgresTopicStore()` as the `placement` port with
 supports single-memory and batch annotations. Its cursors incorporate both the
 hosted topic revision and the core owner index revision.
 
-Migration 0014 uses the core memory namespace encoding for topics and preserves
-the order of new L1 parent edges. Hosted rows have a null namespace. Deployments
-that share the topic tables with the hosted worker should use the null namespace,
-since the hosted worker's topic queries scope rows by owner.
+The Postgres TopicStore uses the hosted topic schema and supports personal scope
+(`namespace: null`). Every method throws `capability_unavailable` for a non-null
+namespace. Hosted scope mapping is deferred to scopes step 2.
+
+As a P2 difference, Postgres returns L1 `parentIds` in UTF-8 parent ID order.
+The in-memory store preserves placement order.
+
+When the Postgres conformance driver can seed core memories, split the namespace
+half of `T-TFM-4` into a sub-case with ID `T-TFM-4-namespace` and use this
+`notApplicable` entry.
+
+```js
+"topics.forMemories requires personal scope": ["T-TFM-4-namespace"],
+```
+
+The namespace half requires named-namespace placement, which the hosted TopicStore
+rejects with `capability_unavailable`. Run the owner-isolation half as `T-TFM-4`.
 
 ## Database tests
 

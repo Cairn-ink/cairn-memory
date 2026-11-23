@@ -24,8 +24,8 @@ async function setup(t) {
   const suppressions = createPostgresSuppressionStore();
   await pool.query("INSERT INTO users (id) VALUES ('owner'), ('other')");
 
-  function lane(owner = "owner", namespace = null) {
-    const scope = { owner, namespace };
+  function lane(owner = "owner") {
+    const scope = { owner, namespace: null };
     const read = (method, ...args) => uow.run(owner, { readOnly: true }, (tx) => placement[method](tx, scope, ...args));
     const write = (method, ...args) => uow.run(owner, {}, (tx) => placement[method](tx, scope, ...args));
     return {
@@ -36,9 +36,6 @@ async function setup(t) {
             embedding_model, source_kind, created_at, updated_at)
           VALUES ($1, $2, $1, 'fact', $3, $4, 'fixture', $5, $6, $6)`,
         [id, owner, digest(id), embedding, kind, created]);
-        if (namespace !== null) {
-          await pool.query("UPDATE memories SET core_namespace = $1 WHERE id = $2", [JSON.stringify(namespace), id]);
-        }
         return { memoryId: id, revision: 1 };
       },
       async apply(memoryRevisions, items, indexRevision) {
@@ -50,7 +47,7 @@ async function setup(t) {
       async fact(fact) {
         const incarnation = digest(JSON.stringify(fact));
         return uow.run(owner, {}, (tx) => suppressions.writeFact(tx,
-          { ...fact, ...scope, origin: "forget", actionId: "fixture" }, incarnation));
+          { ...scope, ...fact, origin: "forget", actionId: "fixture" }, incarnation));
       },
     };
   }
@@ -139,6 +136,8 @@ test("Postgres topic visibility follows guarded revisions and hosted and core su
     item(member, [], topic("Shared title")), item(source), item(old), item(updated),
   ]);
   assert.deepEqual(await store.read("forMemories", [source.memoryId]), [{ memoryId: source.memoryId, topics: [] }]);
+  await store.fact({ kind: "identity", memoryId: member.memoryId, namespace: "project" });
+  assert.deepEqual(await store.read("forMemory", member.memoryId), [child.id]);
   await store.fact({ kind: "identity", memoryId: source.memoryId });
   await pool.query("UPDATE memories SET revision = 2 WHERE id = $1", [updated.memoryId]);
   await pool.query("UPDATE memories SET currentness = 'historical' WHERE id = $1", [old.memoryId]);
@@ -177,17 +176,13 @@ test("Postgres topic visibility follows guarded revisions and hosted and core su
   assert.deepEqual((await store.read("members", child.id, firstPage)).items.map(({ id }) => id), [member.memoryId]);
 });
 
-test("Postgres topic placement isolates owners and namespaces", migrationDbTest, async (t) => {
-  const { pool, lane, uow, placement } = await setup(t);
-  // Supply the G-A namespace column as fixture schema. Other tests use the hosted memory schema.
-  await pool.query('ALTER TABLE memories ADD COLUMN IF NOT EXISTS core_namespace text COLLATE "C"');
+test("Postgres topic placement isolates owners", migrationDbTest, async (t) => {
+  const { lane, uow, placement } = await setup(t);
   const home = lane();
-  const project = lane("owner", "project\0notes");
   const other = lane("other");
   const a = await home.seed("home");
-  const b = await project.seed("project");
-  const c = await other.seed("other");
-  const choices = [[home, a], [project, b], [other, c]];
+  const b = await other.seed("other");
+  const choices = [[home, a], [other, b]];
   const topics = [];
   for (const [store, memory] of choices) {
     const result = await store.apply([memory], [item(memory, [], topic("Shared name", [], "Shared parent"))]);
@@ -195,7 +190,7 @@ test("Postgres topic placement isolates owners and namespaces", migrationDbTest,
   }
   for (const [i, [store, memory]] of choices.entries()) {
     assert.deepEqual((await store.read("list", { ...firstPage, level: "L1" })).items.map(({ id }) => id), [topics[i].id]);
-    assert.deepEqual(await store.read("forMemories", [a.memoryId, b.memoryId, c.memoryId]),
+    assert.deepEqual(await store.read("forMemories", [a.memoryId, b.memoryId]),
       [{ memoryId: memory.memoryId, topics: [{ id: topics[i].id, title: "Shared name" }] }]);
     for (const [j, foreign] of topics.entries()) {
       if (i === j) continue;
@@ -206,7 +201,6 @@ test("Postgres topic placement isolates owners and namespaces", migrationDbTest,
   const { nextCursor, indexRevision } = await home.read("catalog", one);
   assert.ok(nextCursor);
   await assert.rejects(other.read("catalog", { cursor: nextCursor, limit: 1 }), { code: "invalid_cursor" });
-  await assert.rejects(project.read("catalog", { cursor: nextCursor, limit: 1 }), { code: "invalid_cursor" });
   await assert.rejects(home.apply([b], [item(b)]), { code: "revision_conflict" });
   assert.deepEqual(await home.write("dropMemory", b.memoryId), { dropped: 0 });
   assert.equal((await home.read("catalog", one)).indexRevision, indexRevision);
@@ -218,6 +212,50 @@ test("Postgres topic placement isolates owners and namespaces", migrationDbTest,
   await home.fact({ kind: "identity", memoryId: a.memoryId });
   await assert.rejects(home.read("catalog", { cursor: nextCursor, limit: 1 }), { code: "cursor_stale" });
   assert.equal((await other.read("catalog", one)).indexRevision, otherRevision);
+});
+
+test("every Postgres TopicStore method rejects a non-null namespace", migrationDbTest, async (t) => {
+  const { uow, placement } = await setup(t);
+  const reads = {
+    pending: [{ limit: 5 }],
+    catalog: [firstPage],
+    list: [firstPage],
+    members: ["topic", firstPage],
+    forMemory: ["memory"],
+    forMemories: [["memory"]],
+  };
+  const writes = {
+    applyPlacement: [
+      { indexRevision: 0, memoryRevisions: [{ memoryId: "memory", revision: 1 }] },
+      { items: [{ memoryId: "memory", parentIds: [] }] },
+    ],
+    markFailed: [["memory"], "storage_busy"],
+    dropMemory: ["memory"],
+  };
+  assert.deepEqual(Object.keys(placement).sort(), [...Object.keys(reads), ...Object.keys(writes)].sort());
+  for (const [readOnly, methods] of [[true, reads], [false, writes]]) {
+    for (const [method, args] of Object.entries(methods)) {
+      for (const namespace of ["project\0notes", ""]) {
+        const scope = { owner: "owner", namespace };
+        await assert.rejects(uow.run(scope.owner, { readOnly }, (tx) => placement[method](tx, scope, ...args)),
+          { code: "capability_unavailable" }, method);
+      }
+    }
+  }
+});
+
+test("Postgres reports L1 parent ids in UTF-8 id order", migrationDbTest, async (t) => {
+  const { pool, lane } = await setup(t);
+  const store = lane();
+  const member = await store.seed("member");
+  await pool.query(`
+    INSERT INTO topics (user_id, id, level, title, title_key)
+    VALUES ('owner', $1, 2, 'First parent', 'first parent'), ('owner', $2, 2, 'Second parent', 'second parent')`,
+  ["😀", "\uE000"]);
+  const { createdTopics: [child] } = await store.apply([member], [item(member, [], topic("Child", ["😀", "\uE000"]))]);
+  assert.deepEqual(child.parentIds, ["\uE000", "😀"]);
+  assert.deepEqual((await store.read("catalog", firstPage)).items[0], child);
+  assert.deepEqual((await store.read("list", { ...firstPage, level: "L1" })).items[0].parentIds, child.parentIds);
 });
 
 test("Postgres title retirement and membership changes stale pages once; outcomes and failures do not", migrationDbTest, async (t) => {

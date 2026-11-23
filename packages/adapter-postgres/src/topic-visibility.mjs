@@ -1,9 +1,3 @@
-// Read optional G-A metadata without requiring the memory store migration.
-/** @param {string} memory */
-export function memoryNamespace(memory) {
-  return `(to_jsonb(${memory})->>'core_namespace') COLLATE "C"`;
-}
-
 // Port the hosted worker's text suppression predicate, including its exact
 // hash check and its vector exemption for later explicit saves.
 /** @param {string} memory */
@@ -48,7 +42,7 @@ export function visibleTopicMemory(memory) {
     AND NOT EXISTS (
       SELECT 1 FROM core_suppression_facts s
       WHERE s.user_id = ${memory}.user_id
-        AND to_jsonb(s.body->>'namespace')::text IS NOT DISTINCT FROM ${memoryNamespace(memory)}
+        AND s.body->>'namespace' IS NULL
         AND CASE s.kind
           WHEN 'identity' THEN s.body->>'memoryId' = ${memory}.id
             AND (s.body->>'throughRevision' IS NULL OR ${memory}.revision <= (s.body->>'throughRevision')::bigint)
