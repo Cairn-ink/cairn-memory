@@ -1,5 +1,6 @@
 import { chmodSync, copyFileSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync,
   realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -10,6 +11,7 @@ import { cliEntry, coreManifest, coreRuntimeManifest, deriveRuntimeGraph } from 
 
 const repo = realpathSync(fileURLToPath(new URL('../', import.meta.url)));
 const name = 'cairn-memory-core-local-candidate';
+const bin = 'cairn-memory-core-local';
 const version = '0.0.0';
 const filename = `${name}-${version}.tgz`;
 const readJSON = path => JSON.parse(readFileSync(path, 'utf8'));
@@ -31,6 +33,53 @@ function treeDigests(root) {
   return Object.fromEntries(files.sort().map(path => [path, sha256(readFileSync(join(root, path)))]));
 }
 
+function verifyInstalledStartup(install, installed, scratch) {
+  const preload = 'data:text/javascript,' + encodeURIComponent(`
+    import { registerHooks } from 'node:module';
+    const banned = /^(?:node:)?(?:sqlite|net|http|https|http2|tls|dns|dgram|child_process|worker_threads)(?:\\/|$)/u;
+    const stop = () => process.exit(88);
+    const builtin = process.getBuiltinModule;
+    if (builtin('node:sqlite') !== undefined) stop();
+    process.getBuiltinModule = name => banned.test(name) ? stop() : builtin(name);
+    globalThis.fetch = globalThis.WebSocket = stop;
+    registerHooks({ resolve(specifier, context, next) {
+      if (banned.test(specifier) || specifier.endsWith('/adapter-slot.mjs')) stop();
+      return next(specifier, context);
+    } });
+  `);
+  const executable = process.platform === 'win32' ? join(installed, cliEntry)
+    : join(install, 'node_modules', '.bin', bin);
+  function run(mode, input) {
+    const child = spawnSync(process.execPath, ['--no-experimental-sqlite', '--import', preload, executable, mode], {
+      cwd: install, env: { HOME: scratch, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}) },
+      input, encoding: 'utf8', timeout: 10_000,
+    });
+    if (child.error || child.status !== 0 || child.stderr !== '') {
+      throw new Error(`core_local_sqlite_denied_startup_failed: ${mode}`);
+    }
+    return child.stdout;
+  }
+  if (!run('--help', '').startsWith(`Usage: ${bin} `)) throw new Error('core_local_startup_help_mismatch');
+  const protocolVersion = '2025-11-25';
+  const requests = [
+    { id: 1, method: 'initialize', params: { protocolVersion, capabilities: {},
+      clientInfo: { name: 'synthetic', version: '1' } } },
+    { method: 'notifications/initialized' },
+    { id: 2, method: 'ping' },
+  ].map(request => JSON.stringify({ jsonrpc: '2.0', ...request }) + '\n').join('');
+  const replies = run('--stdio', requests).trim().split('\n');
+  const expected = [
+    { jsonrpc: '2.0', id: 1, result: { protocolVersion, capabilities: {}, serverInfo: { name, version } } },
+    { jsonrpc: '2.0', id: 2, result: {} },
+  ];
+  try {
+    if (isDeepStrictEqual(replies.map(line => JSON.parse(line)), expected)) return;
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+  }
+  throw new Error('core_local_startup_handshake_mismatch');
+}
+
 export function buildCoreLocalCandidate(output) {
   const dest = resolve(output);
   const runtime = readJSON(join(repo, 'packaging/core-local-files.json'));
@@ -42,7 +91,7 @@ export function buildCoreLocalCandidate(output) {
     'package.json': json({
       name, version, private: true, type: 'module', license: 'Apache-2.0',
       engines: { node: '>=22.16.0' },
-      bin: { 'cairn-memory-core-local': cliEntry },
+      bin: { [bin]: cliEntry },
       files,
     }),
     [coreManifest]: json(coreRuntimeManifest(repo)),
@@ -90,6 +139,7 @@ export function buildCoreLocalCandidate(output) {
     const installedDigests = treeDigests(installed);
     if (!isDeepStrictEqual(installedDigests, archiveDigests)) throw new Error('core_local_install_digest_mismatch');
     if (!isDeepStrictEqual(deriveRuntimeGraph(installed), graph)) throw new Error('core_local_install_graph_mismatch');
+    verifyInstalledStartup(install, installed, scratch);
 
     const archiveBytes = readFileSync(archive);
     const manifest = {
