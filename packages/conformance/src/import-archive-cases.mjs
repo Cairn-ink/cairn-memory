@@ -285,4 +285,108 @@ export const IMPORT_ARCHIVE_CASES = [
       equal(await readDump(ctx.harness), before, "Rolled-back imports must leave the committed state unchanged");
     },
   },
+  {
+    id: "K-IMP-RAW-7", title: "a withheld anchor fences the entire imported fork", needs: ["rawArchive"],
+    async run(ctx) {
+      const { put, importArchive, raw, key, scope, session, page, write } = fixture(ctx);
+      if (!importArchive || !put) return missingImport;
+      const anchor = message("anchor", "cedar marker");
+      const turn = message("turn", "maple grove");
+      equal(await put([anchor, turn]), { archived: 2, existing: 0, withheld: 0 }, "Fixture must import both source rows");
+      await write(async (tx) => {
+        await raw.recordLineage(tx, key, [anchor]);
+        await raw.fenceSession(tx, scope, session);
+        await raw.deleteConversation(tx, scope, session);
+      });
+      const fork = { ...session, sessionId: "fork" };
+      const batch = [turn, anchor];
+      const before = await readDump(ctx.harness);
+      equal(await write((tx) => importArchive(tx, scope, fork, batch, { withheld: [1] })),
+        { archived: 0, existing: 0, withheld: batch.length }, "A withheld anchor must fence the whole fork");
+      equal((await page()).items, [], "A fenced fork must not re-archive either deleted row");
+      equal(await readDump(ctx.harness), before, "Importing a proven fork must leave no new rows or proofs");
+    },
+  },
+  {
+    id: "K-IMP-RAW-8", title: "withheld positions stay out of raw lists, search and storage", needs: ["rawArchive"],
+    async run(ctx) {
+      const { importArchive, raw, scope, session, page, uow, write } = fixture(ctx);
+      if (!importArchive) return missingImport;
+      const first = message("first", "cedar");
+      const blocked = message("excluded", "quartz");
+      const last = message("last", "maple");
+      const visible = [first, last];
+      equal(await write((tx) => importArchive(tx, scope, session, [first, blocked, last], { withheld: [1] })),
+        { archived: 2, existing: 0, withheld: 1 }, "Import must archive only the positions outside the withheld list");
+      equal((await page()).items.map(({ messageId, content }) => [messageId, content]).sort(),
+        visible.map(({ id, content }) => [id, content]), "Raw list must contain only the eligible rows");
+      const committed = JSON.stringify(await readDump(ctx.harness));
+      check(!committed.includes(JSON.stringify(blocked.id)) && !committed.includes(blocked.content),
+        "Committed state must exclude the withheld row");
+      for (const { id, content } of visible) {
+        check(committed.includes(JSON.stringify(id)) && committed.includes(content), "Committed state must include each eligible row");
+      }
+      const selection = { owner: ctx.owner, namespaces: [scope.namespace] };
+      await uow.run(ctx.owner, { readOnly: true }, async (tx) => {
+        equal((await raw.raw(tx, selection, blocked.content, "search", { limit: 20 })).segments, [],
+          "Raw search must exclude the withheld row");
+        for (const { id, content } of visible) {
+          const result = await raw.raw(tx, selection, content, "search", { limit: 20 });
+          equal(result.segments.map(({ messageId }) => messageId), [id], "Raw search must return each eligible row");
+        }
+      });
+    },
+  },
+  {
+    id: "K-IMP-RAW-9", title: "counts each position once across overlapping import refusals and existing IDs",
+    needs: ["rawArchive", "rawWindowHide"],
+    async run(ctx) {
+      const { put, importArchive, scope, session, page, write } = fixture(ctx);
+      if (!importArchive || !put) return missingImport;
+      const existing = message("existing", "cedar", 20);
+      equal(await put([existing]), { archived: 1, existing: 0, withheld: 0 }, "Fixture must store the existing row");
+      const forgotten = "quartz";
+      await ctx.harness.seedFact(ctx.owner, {
+        ...factBase(ctx, "window"), kind: "window", client, window: { startMs: 10, endMs: 20 },
+      });
+      await ctx.harness.seedFact(ctx.owner, {
+        ...factBase(ctx, "text"), kind: "text", mode: "exact", text: { digests: [await coreDigest(forgotten)] },
+      });
+      const fresh = message("fresh", "maple", 20);
+      const batch = [
+        fresh,
+        message(existing.id, forgotten, 10),
+        existing,
+        message("window-only", "willow", 15),
+        message("text-only", forgotten, 20),
+        message(existing.id, "ash", 20),
+        message(fresh.id, "birch", 20),
+      ];
+      equal(await write((tx) => importArchive(tx, scope, session, batch, { withheld: [5, 1, 6] })),
+        { archived: 1, existing: 1, withheld: 5 }, "Every import position must contribute exactly one outcome");
+      equal((await page()).items.map(({ messageId, content }) => [messageId, content]).sort(),
+        [existing, fresh].map(({ id, content }) => [id, content]), "Only eligible positions may determine stored rows");
+    },
+  },
+  {
+    id: "K-IMP-RAW-10", title: "validates withheld positions before writes and accepts omitted options", needs: ["rawArchive"],
+    async run(ctx) {
+      const { put, importArchive, scope, session, write } = fixture(ctx);
+      if (!importArchive || !put) return missingImport;
+      const batch = [message("first", "cedar"), message("second", "maple")];
+      const before = await readDump(ctx.harness);
+      await write(async (tx) => {
+        for (const withheld of [[0, 0], [2], [-1], [0.5], [Number.MAX_SAFE_INTEGER + 1], ["0"], new Array(1), null, undefined]) {
+          const invalid = /** @type {{withheld: number[]}} */ (/** @type {unknown} */ ({ withheld }));
+          await rejects(() => importArchive(tx, scope, session, batch, invalid), "invalid_input");
+        }
+        await rejects(() => importArchive(tx, scope, session, [], { withheld: [0] }), "invalid_input");
+      });
+      equal(await readDump(ctx.harness), before, "Invalid options must leave committed state unchanged");
+      equal(await put(batch), { archived: 2, existing: 0, withheld: 0 }, "Omitting options must archive eligible rows");
+      equal(await put(batch), { archived: 0, existing: 2, withheld: 0 }, "Omitting options must still count existing IDs");
+      equal(await write((tx) => importArchive(tx, scope, session, batch, {})),
+        { archived: 0, existing: 2, withheld: 0 }, "An empty options object must behave like omitted options");
+    },
+  },
 ];
