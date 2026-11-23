@@ -51,6 +51,21 @@ export interface Layer {
   code?: ErrorCode;
 }
 
+interface FindOptions {
+  limit?: number;
+  kinds?: ("memory" | "card" | "raw")[];
+  clients?: string[];
+  sinceMs?: number;
+  untilMs?: number;
+}
+
+interface FindResult {
+  memories: MemoryRow[];
+  cards: [];
+  raw: RawSegment[];
+  layers: { memory: Layer; card: Layer; raw: Layer };
+}
+
 /** The facade every host (MCP, plugin, web, hosted service) talks to. Template: cloud port.ts. */
 export interface MemoryService {
   enqueueCapture(scope: Scope, capture: { client: string; sessionId: string; eventId: string; messages: CaptureMessage[] }): Promise<{ status: "accepted" | "duplicate" | "paused" | "blocked" }>;
@@ -62,13 +77,9 @@ export interface MemoryService {
   >;
   forget(scope: Scope, id: string, source: SourceRef): Promise<{ status: "forgotten"; removedSimilar: number } | { status: "not_found" }>;
   recall(scope: Scope, query: string, options: { limit: number; cursor: string | null; mode: "search" | "plugin" }): Promise<{ items: MemoryRow[]; nextCursor: string | null; scores?: number[] }>;
-  find(scope: Scope, query: string | null, options: {
-    limit?: number;
-    kinds?: ("memory" | "card" | "raw")[];
-    clients?: string[];
-    sinceMs?: number;
-    untilMs?: number;
-  }): Promise<{ memories: MemoryRow[]; cards: []; raw: []; layers: { memory: Layer; card: Layer; raw: Layer } }>;
+  /** A null query leaves the raw layer empty. */
+  find(scope: Scope, query: null, options: FindOptions): Promise<Omit<FindResult, "raw"> & { raw: [] }>;
+  find(scope: Scope, query: string | null, options: FindOptions): Promise<FindResult>;
   read(scope: Scope, ref: { type: "memory" | "card"; id: string }): Promise<
     { status: "found"; item: MemoryRow; receipts: Receipt[]; sourceDates: { firstMs: number | null; lastMs: number | null } | null } |
     { status: "not_found" }
