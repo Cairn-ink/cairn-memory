@@ -245,21 +245,19 @@ export async function amendmentId(cardId, { client, sessionId, messageId }, quot
 
 /** @param {(signal: AbortSignal) => Promise<unknown>} send @param {number} timeoutMs */
 async function withTimeout(send, timeoutMs) {
-  const controller = new AbortController();
-  const reason = new DOMException("Model deadline exceeded", "TimeoutError");
-  /** @type {ReturnType<typeof setTimeout> | undefined} */
-  let timer;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => {
-      reject(reason);
-      controller.abort(reason);
-    }, timeoutMs);
+  const signal = AbortSignal.timeout(timeoutMs);
+  /** @type {() => void} */
+  let onAbort = () => {};
+  const abort = new Promise((_, reject) => {
+    onAbort = () => reject(signal.reason);
+    if (signal.aborted) onAbort();
+    else signal.addEventListener("abort", onAbort, { once: true });
   });
   try {
-    const pending = Promise.resolve().then(() => send(controller.signal));
-    return await Promise.race([pending, timeout]);
+    const pending = Promise.resolve().then(() => send(signal));
+    return await Promise.race([abort, pending]);
   } finally {
-    clearTimeout(timer);
+    signal.removeEventListener("abort", onAbort);
   }
 }
 
