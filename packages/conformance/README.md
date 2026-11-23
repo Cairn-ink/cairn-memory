@@ -90,7 +90,7 @@ import { CASES, PRIVACY_CASES, runCase } from "@cairn-ink/conformance";
 
 export default function (factory) {
   const cases = [...CASES, ...PRIVACY_CASES].filter(({ id }) =>
-    ["K-UOW-3", "K-FACT-1", "K-FACT-2", "K-FACT-3r"].includes(id));
+    ["K-UOW-3", "K-UOW-3r", "K-FACT-1", "K-FACT-2", "K-FACT-3r"].includes(id));
 
   for (const testCase of cases) {
     test(`${factory.name} ${testCase.id} ${testCase.title}`, async (t) => {

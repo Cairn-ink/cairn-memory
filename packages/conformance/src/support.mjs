@@ -1,4 +1,4 @@
-import { isErrorCode, NEAR_DUPLICATE_DISTANCE, SUPPRESSION_DISTANCE, VECTOR_ONLY_FLOOR } from "@cairn-ink/core";
+import { CoreError, ERROR_CODES, isErrorCode, NEAR_DUPLICATE_DISTANCE, SUPPRESSION_DISTANCE, VECTOR_ONLY_FLOOR } from "@cairn-ink/core";
 
 export const DEFAULT_TIMEOUT_MS = 5000;
 export const DEFAULT_EMBEDDING_DIMENSIONS = 4;
@@ -119,9 +119,11 @@ export async function caught(action) {
 
 /** @param {unknown} error @returns {error is Error & { code: import("@cairn-ink/core").ErrorCode }} */
 export function isCoreErrorShape(error) {
-  if (!(error instanceof Error) || !Object.hasOwn(error, "code")) return false;
-  const { code } = /** @type {Error & { code: unknown }} */ (error);
-  return isErrorCode(code) && error.message === code;
+  if (!(error instanceof Error) || error.name !== "CoreError" ||
+    !Object.hasOwn(error, "code") || !Object.hasOwn(error, "kind") || !Object.hasOwn(error, "retryable")) return false;
+  const { code, kind, retryable } = /** @type {Error & { code: unknown, kind: unknown, retryable: unknown }} */ (error);
+  return isErrorCode(code) && error.message === code && kind === ERROR_CODES[code] &&
+    retryable === new CoreError(code).retryable;
 }
 
 /** @param {() => Promise<unknown>} action @param {import("@cairn-ink/core").ErrorCode} code */
