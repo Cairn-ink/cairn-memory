@@ -1,4 +1,5 @@
-import type { Role, Scope } from "../ports/common.d.ts";
+import type { Receipt, Revision, Role, Scope } from "../ports/common.d.ts";
+import type { DocumentCardSourceMessage } from "../ports/document-card.d.ts";
 
 export interface DocumentMessage {
   id: string;
@@ -144,3 +145,14 @@ export declare function rankDocumentCards(
 
 export * from "./visibility.mjs";
 export * from "./amendments.mjs";
+
+/**
+ * Optional fallback for hosts with receipts and no capture-time set of touched
+ * memories. Keep capture-time binding when available. Matches client, plain
+ * sessionId and messageId, ignores role for matching, keeps the highest matching
+ * revision per id and sorts by UTF-8 id order. Malformed input throws invalid_input.
+ */
+export declare function documentCardMemoryLinks(
+  sourceMessage: DocumentCardSourceMessage,
+  memories: ReadonlyArray<{ id: string; revision: Revision; receipts: readonly Receipt[] }>,
+): { id: string; revision: Revision }[];

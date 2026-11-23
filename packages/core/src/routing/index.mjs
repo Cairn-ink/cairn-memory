@@ -4,3 +4,4 @@ export { selectDocumentPiece, documentCardFindItem } from "./piece.mjs";
 export { rankDocumentCards } from "./rank.mjs";
 export { documentCardVisible, visibleDocumentCardRows, documentCardStaleness, resolveStaleReplacement, documentCardSourceWithheld } from "./visibility.mjs";
 export * from "./amendments.mjs";
+export { documentCardMemoryLinks } from "./memory-links.mjs";
