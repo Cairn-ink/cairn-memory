@@ -41,6 +41,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
   let runId = 0;
   let nextId = 0;
   let nowMs = 100;
+  let dispatchReady = false;
   function ownerState(owner) {
     if (!owners.has(owner)) {
       owners.set(owner, { forgotten: new Set(), revision: 0, pause: { paused: false, generation: 0 }, facts: [],
@@ -194,7 +195,6 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
 
   if (writes) {
     // The gate's marker expires after the first continuation gets a chance to start the send.
-    let dispatchReady = false;
     fake.deps.gate.assertOpen = async (owner, phase) => {
       assert.equal(active.size, 0, "gate outside the UoW");
       calls.push(["gate", owner, phase]);
@@ -218,7 +218,11 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
     storage.capabilities.nearDuplicate = near;
     storage.keys = {
       async userKey(owner) {
-        assert.equal(active.size, 0, "key lookup outside the UoW");
+        if (active.size > 0) {
+          const [tx] = active;
+          assert.ok(capture && active.size === 1 && tx.owner === owner && tx.options.pauseLock && !tx.options.readOnly,
+            "capture may recheck the key under the owner pause lock");
+        }
         calls.push(["keys.userKey", owner]);
         return fixtureUserKey(owner);
       },
@@ -367,6 +371,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
     fake.deps.model.call = async (stage, request, options) => {
       calls.push(["model.call", stage, request]);
       assert.equal(active.size, 0, "model call outside the UoW");
+      assert.ok(dispatchReady, "model call starts in the dispatch continuation");
       return await hooks.model?.(stage, request, options) ?? { items: [] };
     };
     fake.deps.clock.monotonicMs = () => hooks.monotonicMs?.() ?? performance.now();

@@ -1,22 +1,31 @@
-import { extractedItems, extractionOutputTokens } from "../capture/capture-input.mjs";
 import { createCaptureDeadline } from "../capture/deadline.mjs";
-import { callModel, emitDiagnostic } from "../capture/model-call.mjs";
+import { emitDiagnostic } from "../capture/model-call.mjs";
 import { detach, identifier, isWellFormedText, validateDenseArray, validateObject } from "../capture/validate.mjs";
 import { CoreError, isErrorCode } from "../errors.mjs";
-import { plainExtractionSpec } from "../extraction/extraction.mjs";
+import { plainExtractionSpec, validatePlainCandidates } from "../extraction/extraction.mjs";
 import { allDigests, fingerprintMemoryPassages } from "../privacy/fingerprint.mjs";
-import { normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
+import { redactCore } from "../privacy/redact.mjs";
+import { cleanContent, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
 import { requiresLegacyMacDomain, withholdsAnyPassage } from "../privacy/withholds.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
 import { pauseResult } from "./pause.mjs";
 import { hashesOf, validWriteEmbedding } from "./writes.mjs";
 
-/** @import {CaptureKey, CaptureMessage, FinishItem, Tx} from "../ports/index.d.ts" */
+/** @import {CaptureKey, CaptureMessage, Tx} from "../ports/index.d.ts" */
+/** @import {CallOptions} from "../ports/common.d.ts" */
+/** @import {ModelRequest} from "../ports/model.d.ts" */
 /** @typedef {ReturnType<typeof createCaptureDeadline>} CaptureDeadline */
+/** @typedef {Awaited<ReturnType<import("../ports/privacy.d.ts").FingerprintKeyProvider["userKey"]>>} FingerprintKey */
+/** @typedef {import("./index.d.mts").MemoryServiceDeps} Deps */
 
 // Engine core/capture.mjs:144 gives a plain capture a 125-second admission lease.
 const DEFAULT_LEASE_MS = 125_000;
 const DEFAULT_EXTRACT_MS = 30_000;
+// Hosted openai.ts:83–91 leaves the output budget at the default model's 32,768 tokens.
+// The port requires an explicit budget. The serialized bound also allows JSON escaping
+// of 20 candidates with 600 units each, plus fields and source indices.
+const HOSTED_EXTRACT_OUTPUT_TOKENS = 32_768;
+const MAX_EXTRACT_OUTPUT_UNITS = 80_000;
 
 /** @param {unknown} raw
  * @returns {{ message: import("../ports/capture.d.ts").CaptureMessage, originalContent: string }}
@@ -28,8 +37,8 @@ function prepareMessage(raw) {
       (occurredAtMs !== null && (typeof occurredAtMs !== "number" || !Number.isSafeInteger(occurredAtMs)))) {
     throw new CoreError("invalid_input");
   }
-  // Keep capture's NFKC and whitespace normalization with the union of v1 and hosted masking.
-  return { message: { id, role, content: prepareCoreText(content), occurredAtMs }, originalContent: content };
+  const redacted = redactCore(cleanContent(content).normalize("NFKC"));
+  return { message: { id, role, content: redacted, occurredAtMs }, originalContent: content };
 }
 
 /** @param {AbortSignal | undefined} signal @param {CaptureDeadline} deadline */
@@ -38,22 +47,71 @@ function checkCaptureAbort(signal, deadline) {
   if (signal?.aborted) throw new CoreError("model_cancelled");
 }
 
+/** @param {AbortSignal | undefined} caller @param {CaptureDeadline} deadline */
+function captureTransport(caller, deadline) {
+  checkCaptureAbort(caller, deadline);
+  const timeout = AbortSignal.timeout(deadline.remainingMs());
+  const signal = caller ? AbortSignal.any([caller, timeout]) : timeout;
+  function check() {
+    if (timeout.aborted && signal.reason === timeout.reason) throw new CoreError("model_timeout");
+    checkCaptureAbort(caller, deadline);
+  }
+  return { signal, check };
+}
+
+/** @template T @param {AbortSignal} signal @param {Promise<T>} pending */
+async function untilAborted(signal, pending) {
+  let onAbort = () => {};
+  const aborted = new Promise((_, reject) => {
+    onAbort = () => reject(signal.reason);
+    if (signal.aborted) onAbort();
+    else signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try { return await Promise.race([pending, aborted]); }
+  finally { signal.removeEventListener("abort", onAbort); }
+}
+
 /**
- * Post-validation INTAKE seam. Convert validated extraction into finish candidates.
- * @param {Array<ReturnType<typeof extractedItems>[number] & {rawContent: string}>} candidates
+ * @param {unknown} raw
+ * @param {{sourceCount: number, itemLimit: number}} policy
+ * @param {CallOptions["onDiagnostic"]} diagnostics
+ */
+function hostedCandidates(raw, policy, diagnostics) {
+  let output;
+  try {
+    output = structuredClone(raw);
+    const serialized = JSON.stringify(output);
+    if (typeof serialized !== "string" || serialized.length > MAX_EXTRACT_OUTPUT_UNITS) {
+      throw new CoreError("invalid_model_output");
+    }
+  } catch {
+    emitDiagnostic(diagnostics, "extract", "core_call", "output_bounds");
+    throw new CoreError("invalid_model_output");
+  }
+  try {
+    // Hosted openai.ts:101–109 checks distinct, non-empty, in-range indices.
+    // Hosted ingest.ts:122–125 and index.ts:37 apply the inclusive confidence floor.
+    const validated = validatePlainCandidates(output, policy);
+    const { items } = /** @type {{items: Array<{content: string}>}} */ (output);
+    return validated
+      .map((candidate, index) => ({ ...candidate, rawContent: items[index].content }))
+      .filter(candidate => candidate.confidence >= 0.5);
+  } catch (error) {
+    const { code } = /** @type {{code: string}} */ (error);
+    emitDiagnostic(diagnostics, "extract", "core_validation", code);
+    throw new CoreError("invalid_model_output");
+  }
+}
+
+/**
+ * @param {ReturnType<typeof hostedCandidates>} candidates
  * @param {readonly CaptureMessage[]} messages
  * @param {CaptureKey} key
- * @param {import("./index.d.mts").MemoryServiceDeps} deps
- * @param {CaptureDeadline} deadline
- * @param {AbortSignal} [signal]
+ * @param {FingerprintKey} fingerprintKey
+ * @param {Deps["clock"]} clock
  */
-async function prepareCaptureCandidatesForFinish(candidates, messages, key, deps, deadline, signal) {
-  if (candidates.length === 0) return [];
-  const { storage, clock, gate, embedder } = deps;
-  const { owner } = key.scope;
-  const fingerprintKey = await storage.keys.userKey(owner);
-  const sources = new Map(messages.map(message => [message.id, message]));
-  const prepared = await Promise.all(candidates.map(async candidate => {
+function prepareCaptureCandidates(candidates, messages, { client, sessionId }, fingerprintKey, clock) {
+  return Promise.all(candidates.map(async candidate => {
     const { rawContent: raw, kind, confidence } = candidate;
     const content = prepareCoreText(raw);
     if (!content || content === "[REDACTED]" || content.length > 600) throw new CoreError("invalid_model_output");
@@ -62,34 +120,61 @@ async function prepareCaptureCandidatesForFinish(candidates, messages, key, deps
       fingerprintKey ? allDigests(content, fingerprintKey) : undefined,
       fingerprintMemoryPassages(raw, content, fingerprintKey, text => clock.sha256Hex(text)),
     ]);
-    const receipts = candidate.receipts.map(({ client, sessionId, eventId: messageId }) => {
-      const message = sources.get(messageId);
-      if (!message) throw new CoreError("internal_error");
-      return { client, sessionId, messageId, role: message.role, occurredAtMs: message.occurredAtMs };
+    const receipts = candidate.sourceIndices.map(index => {
+      const { id: messageId, role, occurredAtMs } = messages[index];
+      return { client, sessionId, messageId, role, occurredAtMs };
     });
     return { item: { content, kind, confidence, textHash, ...(digests && { digests }), receipts }, passages };
   }));
+}
 
+/** @typedef {Awaited<ReturnType<typeof prepareCaptureCandidates>>[number]} PreparedCandidate */
+/**
+ * @template {PreparedCandidate} T
+ * @param {T[]} candidates
+ * @param {import("../ports/privacy.d.ts").SuppressionSnapshot} snapshot
+ * @param {CaptureKey["scope"]} scope
+ * @param {Set<string>} excludedSources
+ */
+function filterCaptureCandidates(candidates, snapshot, scope, excludedSources) {
+  if (snapshot.blockedSession !== false || snapshot.blockedMessages.length) throw new CoreError("suppressed");
+  const facts = snapshot.passages.map(({ fact }) => fact);
+  if (facts.some(fact => fact?.owner !== scope.owner || (fact.namespace ?? null) !== scope.namespace)) {
+    throw new CoreError("internal_error");
+  }
+  const legacyMac = facts.some(requiresLegacyMacDomain);
+  return candidates.filter(candidate => {
+    if (!legacyMac && !withholdsAnyPassage(candidate.passages, facts)) return true;
+    for (const { messageId } of candidate.item.receipts) excludedSources.add(messageId);
+    return false;
+  });
+}
+
+/**
+ * @param {PreparedCandidate[]} prepared
+ * @param {CaptureKey["scope"]["owner"]} owner
+ * @param {Deps} deps
+ * @param {() => Promise<void>} assertSendGeneration
+ * @param {CaptureDeadline} deadline
+ * @param {AbortSignal | undefined} caller
+ */
+async function embedCaptureCandidates(prepared, owner, { storage, gate, embedder }, assertSendGeneration, deadline, caller) {
+  if (prepared.length === 0) return [];
   const texts = prepared.map(({ item }) => normalizeForHash(item.content));
   const { model, dimensions } = embedder;
-  checkCaptureAbort(signal, deadline);
-  const timeout = AbortSignal.timeout(deadline.remainingMs());
-  const options = { signal: signal ? AbortSignal.any([signal, timeout]) : timeout };
+  const { signal, check } = captureTransport(caller, deadline);
   /** @type {Float32Array[]} */
   let vectors;
+  await assertSendGeneration();
   await gate.assertOpen(owner, "dispatch");
   try {
-    if (timeout.aborted) throw new CoreError("model_timeout");
-    checkCaptureAbort(signal, deadline);
-    vectors = await embedder.embed(texts, options);
+    check();
+    vectors = await untilAborted(signal, embedder.embed(texts, { signal }));
   } catch (error) {
-    if (timeout.aborted) throw new CoreError("model_timeout");
-    checkCaptureAbort(signal, deadline);
+    check();
     throw error;
   }
-  if (timeout.aborted) throw new CoreError("model_timeout");
-  checkCaptureAbort(signal, deadline);
-  if ((await storage.keys.userKey(owner))?.id !== fingerprintKey?.id) throw new CoreError("fingerprint_key_mismatch");
+  check();
 
   return prepared.map(({ item, passages }, index) => {
     const vector = Array.isArray(vectors) && vectors.length <= prepared.length ? vectors[index] : undefined;
@@ -121,9 +206,9 @@ export function captureMethods(deps) {
       if (new Set(prepared.map(message => message.id)).size !== prepared.length) {
         throw new CoreError("invalid_input");
       }
-      // Canonical JSON is [client, sessionId, eventId, [[id, role, redactedContent, occurredAtMs], ...]] in message order.
+      // Keep the established digest canonicalization for redelivery of existing admissions.
       const payloadDigest = await clock.sha256Hex(JSON.stringify([client, sessionId, eventId,
-        prepared.map(({ id, role, content, occurredAtMs }) => [id, role, content, occurredAtMs])]));
+        prepared.map(({ id, role, content, occurredAtMs }) => [id, role, content.replace(/\s+/gu, " ").trim(), occurredAtMs])]));
       const key = { scope, client, sessionId, eventId, payloadDigest };
       const fingerprintKey = capabilities.fingerprintKey ? await keys.userKey(scope.owner) : null;
       return uow.run(scope.owner, { pauseLock: true }, async tx => {
@@ -212,7 +297,9 @@ export function captureMethods(deps) {
       }
       const readLedgerStatus = readStatus.bind(capture);
       const lock = { pauseLock: true };
-      const preflight = await uow.run(owner, lock, async tx => pauseResult(await pause.get(tx, owner)));
+      /** @param {Tx} tx */
+      const readPause = async tx => pauseResult(await pause.get(tx, owner));
+      const preflight = await uow.run(owner, lock, readPause);
       if (preflight.paused) return { status: "paused" };
 
       // Status has no FinishResult. A later invocation can obtain it by rawReplay.
@@ -228,10 +315,14 @@ export function captureMethods(deps) {
       let claimed;
       try {
         claimed = await uow.run(owner, lock, async tx => {
-          if (pauseResult(await pause.get(tx, owner)).paused) return /** @type {const} */ ({ status: "paused" });
+          if ((await readPause(tx)).paused) return /** @type {const} */ ({ status: "paused" });
           const admission = await load.call(capture, tx, { scope, client, sessionId, eventId });
           if (admission === null) return /** @type {const} */ ({ status: "failed", code: "not_found" });
           const { key, messages } = admission;
+          if (key?.scope?.owner !== owner || key.scope.namespace !== scope.namespace ||
+              key.client !== client || key.sessionId !== sessionId || key.eventId !== eventId) {
+            return /** @type {const} */ ({ status: "failed", code: "internal_error" });
+          }
           const claim = await capture.claim(tx, key, messages, { leaseMs: config.leaseMs ?? DEFAULT_LEASE_MS });
           switch (claim.status) {
             case "rawReplay": return /** @type {const} */ ({ status: "done", result: claim.result });
@@ -260,8 +351,14 @@ export function captureMethods(deps) {
 
       /** @param {Tx} tx */
       async function pauseChanged(tx) {
-        const state = pauseResult(await pause.get(tx, owner));
+        const state = await readPause(tx);
         return state.paused || state.generation !== preflight.generation;
+      }
+
+      async function assertSendGeneration() {
+        // Releasing the pause lock before the transport gate leaves a window for a pause
+        // and resume between this committed read and the gate's open check.
+        if (await uow.run(owner, lock, pauseChanged)) throw new CoreError("capture_paused");
       }
 
       /** @template T @param {(tx: Tx) => Promise<T>} work */
@@ -273,52 +370,83 @@ export function captureMethods(deps) {
         });
       }
 
+      let retryableExtraction = false;
       try {
         if (positions.length === 0) {
           const result = await runAtGeneration(tx => capture.finish(tx, token, []));
           return result === null ? { status: "paused" } : { status: "done", result };
         }
 
-        const dispatch = await runAtGeneration(tx => capture.beginDispatch(tx, token));
+        const { system, input, schema } = plainExtractionSpec(messages);
+        /** @type {ModelRequest} */
+        const request = { system, input, schema, schemaName: "extract_memories", maxOutputTokens: HOSTED_EXTRACT_OUTPUT_TOKENS };
+        const { properties } = /** @type {{properties: {items: {maxItems: number}}}} */ (schema);
+        const policy = { sourceCount: messages.length, itemLimit: properties.items.maxItems };
+        const dispatch = await runAtGeneration(async tx => {
+          await capture.assertEligible(tx, key, positions);
+          return capture.beginDispatch(tx, token);
+        });
         if (dispatch === null) return { status: "paused" };
         token = dispatch.token;
         const signal = options?.signal;
         const deadline = createCaptureDeadline(config.deadlines?.extract ?? DEFAULT_EXTRACT_MS, clock);
-        const { system, input } = plainExtractionSpec(messages);
-        const output = await callModel(model, "extract", { system, input, maxOutputTokens: extractionOutputTokens(input.messages) },
-          { owner, gate, deadline, signal, onDiagnostic: diagnostics });
-        // Hosted ingest.ts:123–125 and index.ts:37. extractedItems validates non-empty source indices.
-        const validated = extractedItems(output, { client, sessionId, messages },
-          undefined, reason => emitDiagnostic(diagnostics, "extract", "core_validation", reason));
-        // The validator preserves order. Keep the original spelling for the historical digests.
-        const rawCandidates = /** @type {{items: Array<{content: string}>}} */ (output).items;
-        const candidates = validated.map((candidate, index) => ({ ...candidate, rawContent: rawCandidates[index].content }))
-          .filter(candidate => candidate.confidence >= 0.5);
-        const prepared = await prepareCaptureCandidatesForFinish(candidates, messages, key, deps, deadline, signal);
+        await gate.assertOpen(owner, "pre-send");
+        const transport = captureTransport(signal, deadline);
+        /** @type {CallOptions} */
+        const portOptions = {
+          signal: transport.signal,
+          onDiagnostic: diagnostics && (event => emitDiagnostic(diagnostics, event.stage, event.layer, event.reason)),
+        };
+        await assertSendGeneration();
+        await gate.assertOpen(owner, "dispatch");
+        let output;
+        try {
+          transport.check();
+          output = await untilAborted(transport.signal, model.call("extract", request, portOptions));
+        } catch (error) {
+          transport.check();
+          const failure = entryError(error);
+          if (failure.code === "model_timeout" || failure.code === "model_cancelled" ||
+              failure.code === "context_budget_exceeded" || failure.code === "token_count_unavailable" ||
+              failure.code === "invalid_model_output") throw failure;
+          retryableExtraction = failure.kind === "retryable";
+          emitDiagnostic(diagnostics, "extract", "core_call", "provider_failure");
+          throw new CoreError("extraction_failed");
+        } finally {
+          await gate.assertOpen(owner, "post-send");
+        }
+        transport.check();
+        const candidates = hostedCandidates(output, policy, diagnostics);
+        const fingerprintKey = candidates.length ? await keys.userKey(owner) : null;
+        const prepared = await prepareCaptureCandidates(candidates, messages, key, fingerprintKey, clock);
+        const excludedSources = new Set();
+        /** @param {Tx} tx @param {PreparedCandidate[]} batch */
+        const readFacts = (tx, batch) => suppressions.snapshot(tx, scope, {
+          client, sessionId, passages: batch.flatMap(candidate => candidate.passages),
+        });
+        const survivors = prepared.length ? await uow.run(owner, { readOnly: true }, async tx =>
+          filterCaptureCandidates(prepared, await readFacts(tx, prepared), scope, excludedSources)) : prepared;
+        const embedded = await embedCaptureCandidates(survivors, owner, deps, assertSendGeneration, deadline, signal);
 
         const completed = await runAtGeneration(async tx => {
           checkCaptureAbort(signal, deadline);
           await capture.assertEligible(tx, key, positions);
-          const snapshot = await suppressions.snapshot(tx, scope, {
-            client, sessionId, passages: prepared.flatMap(candidate => candidate.passages),
-          });
-          if (snapshot.blockedSession !== false || snapshot.blockedMessages.length) throw new CoreError("suppressed");
-          const facts = snapshot.passages.map(({ fact }) => fact);
-          if (facts.some(fact => fact?.owner !== owner || (fact.namespace ?? null) !== scope.namespace)) {
-            throw new CoreError("internal_error");
+          const snapshot = await readFacts(tx, embedded);
+          if (prepared.length && (await keys.userKey(owner))?.id !== fingerprintKey?.id) {
+            await capture.abandon(tx, token, { code: "fingerprint_key_mismatch", retryable: true });
+            return /** @type {const} */ ({ status: "failed", code: "fingerprint_key_mismatch" });
           }
-          const legacyMac = facts.some(requiresLegacyMacDomain);
-          /** @type {FinishItem[]} */
-          const items = [];
-          for (const candidate of prepared) {
-            if (!legacyMac && !withholdsAnyPassage(candidate.passages, facts)) items.push(candidate.item);
-          }
+          const items = filterCaptureCandidates(embedded, snapshot, scope, excludedSources).map(candidate => candidate.item);
           checkCaptureAbort(signal, deadline);
           const result = await capture.finish(tx, token, items);
-          if (archive && await archive.archiveAllowed(tx, key) === true) await archive.archive(tx, key, messages);
-          return { result, withheld: prepared.length - items.length };
+          const rawMessages = messages.filter(({ id }) => !excludedSources.has(id));
+          if (archive && rawMessages.length && await archive.archiveAllowed(tx, key) === true) {
+            await archive.archive(tx, key, rawMessages);
+          }
+          return /** @type {const} */ ({ status: "done", result, withheld: prepared.length - items.length });
         });
         if (completed === null) return { status: "paused" };
+        if (completed.status === "failed") return completed;
         for (let i = 0; i < completed.withheld; i++) emitDiagnostic(diagnostics, "extract", "core_finish", "candidate_withheld");
         return { status: "done", result: completed.result };
       } catch (error) {
@@ -329,7 +457,8 @@ export function captureMethods(deps) {
           await uow.run(owner, lock, async tx => {
             paused = await pauseChanged(tx) || paused;
             await capture.abandon(tx, token, paused ? { code: "capture_paused", retryable: false }
-              : { code: failure.code, retryable: failure.kind === "retryable" });
+              : { code: failure.code, retryable: failure.kind === "retryable" ||
+                  (failure.code === "extraction_failed" && retryableExtraction) });
           });
         } catch (cleanupError) {
           if (entryError(cleanupError).code === "commit_outcome_unknown") return resolveUnknownCommit();

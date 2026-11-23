@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
-import { CoreError } from "@cairn-ink/core";
+import { coreDigest, CoreError } from "@cairn-ink/core";
 import { createMemoryService } from "@cairn-ink/core/service";
 import { allDigests, coreFingerprintLabels, fingerprintLegacyCapture } from "../src/privacy/fingerprint.mjs";
 import { hostedScope as scope, serviceFake } from "./helpers/service-fake.mjs";
@@ -16,6 +16,11 @@ const candidate = (content = "I prefer black tea.", sourceIndices = [0], confide
   ({ content, kind: "preference", confidence, sourceIndices });
 const validCode = expected => error => error instanceof CoreError && error.code === expected && error.message === expected;
 const sha = text => createHash("sha256").update(text).digest("hex");
+const user = (id, content, occurredAtMs = 800) => ({ id, role: "user", content, occurredAtMs });
+const fact = (content, sourceIndices = [0], confidence = 0.9) =>
+  ({ content, kind: "fact", confidence, sourceIndices });
+const exactForget = digest => ({ ...scope, kind: "text", origin: "forget", actionId: "forget",
+  mode: "exact", text: { digests: [digest] } });
 
 function setup({ required = false, config = {}, ...fakeOptions } = {}) {
   const fake = serviceFake({ writes: true, capture: true, ...fakeOptions });
@@ -25,8 +30,8 @@ function setup({ required = false, config = {}, ...fakeOptions } = {}) {
   fake.storage.capabilities.embeddingRequiredOnInsert = required;
   fake.hooks.model = () => ({ items: [candidate()] });
   const service = createMemoryService(fake.deps);
-  async function admit(target = scope) {
-    assert.deepEqual(await service.enqueueCapture(target, { ...selection, messages }), { status: "accepted" });
+  async function admit(target = scope, incoming = messages) {
+    assert.deepEqual(await service.enqueueCapture(target, { ...selection, messages: incoming }), { status: "accepted" });
     fake.calls.length = 0;
     fake.mutations.length = 0;
   }
@@ -63,19 +68,23 @@ test("capture runs the leased plain extraction outside transactions and binds tr
   assert.deepEqual(methods(f), [
     ...locked,
     ...locked, "capture.load", "capture.claim", "capture.eligible",
-    ...locked, "capture.beginDispatch",
-    "gate", "gate", "model.call", "gate", "keys.userKey", "gate", "embed", "keys.userKey",
-    ...locked, "capture.assertEligible", "suppressions.snapshot", "capture.finish",
+    ...locked, "capture.assertEligible", "capture.beginDispatch",
+    "gate", ...locked, "gate", "model.call", "gate", "keys.userKey",
+    "run", "suppressions.snapshot", ...locked, "gate", "embed",
+    ...locked, "capture.assertEligible", "suppressions.snapshot", "keys.userKey", "capture.finish",
   ]);
-  assert.ok(f.calls.filter(([method]) => method === "run")
-    .every(([, owner, options]) => owner === scope.owner && options.pauseLock && !options.readOnly));
+  const runs = f.calls.filter(([method]) => method === "run");
+  assert.deepEqual(runs.map(([, owner]) => owner), Array(runs.length).fill(scope.owner));
+  assert.deepEqual(runs.map(([, , options]) => options), [
+    ...Array(4).fill({ pauseLock: true }), { readOnly: true }, { pauseLock: true }, { pauseLock: true },
+  ]);
   assert.deepEqual(f.calls.filter(([method]) => method === "gate").map(([, , phase]) => phase),
     ["pre-send", "dispatch", "post-send", "dispatch"]);
   const [, stage, request] = f.calls.find(([method]) => method === "model.call");
   assert.equal(stage, "extract");
-  assert.equal(request.schemaName, "cairn_extract");
+  assert.equal(request.schemaName, "extract_memories");
   assert.deepEqual(request.input, { messages: [
-    { index: 0, role: "user", content: "I prefer black tea." },
+    { index: 0, role: "user", content: "I prefer  black tea." },
     { index: 1, role: "assistant", content: messages[2].content },
   ] });
   assert.deepEqual(f.calls.find(([method]) => method === "capture.claim")[3], { leaseMs: 125_000 });
@@ -308,7 +317,9 @@ test("the empty finish still abandons on a generation change", async () => {
 test("eligibility lost at finish abandons and returns the code only", async () => {
   const f = setup();
   await f.admit();
-  f.hooks.assertEligible = () => { throw new CoreError("lineage_fenced"); };
+  f.hooks.assertEligible = () => {
+    if (mutation(f, "capture.beginDispatch")) throw new CoreError("lineage_fenced");
+  };
   assert.deepEqual(await f.run(), { status: "failed", code: "lineage_fenced" });
   assert.equal(mutation(f, "capture.finish"), undefined);
   assertAbandoned(f, "lineage_fenced", false);
@@ -342,7 +353,7 @@ test("capture withholds forgotten wording, a prefixed copy, and a hosted spellin
   assert.deepEqual(f.diagnostics, Array.from({ length: 3 }, () => ({
     version: 1, stage: "extract", layer: "core_finish", reason: "candidate_withheld",
   })));
-  assert.deepEqual(f.calls.find(([method]) => method === "embed")[1].slice(2), ["label [redacted]", unrelated.toLowerCase()]);
+  assert.deepEqual(f.calls.find(([method]) => method === "embed")[1], [unrelated.toLowerCase()]);
   assert.deepEqual(await f.run(), done);
   assert.equal(f.diagnostics.length, 3);
 });
@@ -494,4 +505,249 @@ test("a Raw archive failure rolls back finish before retryable abandon", async (
   assert.deepEqual(f.archived(scope.owner), []);
   assertAbandoned(f, "storage_busy", true);
   assert.notEqual(mutation(f, "capture.finish").run, mutation(f, "capture.abandon").run);
+});
+
+test("H1 pause and resume after dispatch prevents extraction", async () => {
+  const f = setup({ rawArchive: true });
+  const content = "The west gate opens at noon.";
+  await f.admit(scope, [user("m", content, 100)]);
+  f.hooks.model = () => ({ items: [fact(content)] });
+  const assertOpen = f.deps.gate.assertOpen;
+  f.deps.gate.assertOpen = async (owner, phase) => {
+    if (phase === "pre-send") {
+      assert.ok(mutation(f, "capture.beginDispatch"));
+      await f.service.setPause(owner, true);
+      await f.service.setPause(owner, false);
+    }
+    await assertOpen(owner, phase);
+  };
+  assert.deepEqual(await f.run(), { status: "paused" });
+  assert.deepEqual(sends(f), []);
+  assert.equal(mutation(f, "capture.finish"), undefined);
+  assertAbandoned(f, "capture_paused", false);
+});
+
+test("H1 pause and resume during extraction prevents embedding", async () => {
+  const f = setup();
+  const content = "The collection opens on Fridays.";
+  await f.admit(scope, [user("m", content)]);
+  f.hooks.model = async () => {
+    await f.service.setPause(scope.owner, true);
+    await f.service.setPause(scope.owner, false);
+    return { items: [fact(content)] };
+  };
+  assert.deepEqual(await f.run(), { status: "paused" });
+  assert.deepEqual(sends(f), ["model.call"]);
+  assert.equal(mutation(f, "capture.finish"), undefined);
+  assertAbandoned(f, "capture_paused", false);
+});
+
+test("H2 a forget window committed after claim prevents dispatch", async () => {
+  const f = setup({ rawArchive: true });
+  await f.admit(scope, [user("m", "The brass key is under the third planter.", 100)]);
+  f.hooks.model = () => ({ items: [] });
+  f.hooks.beforeRun = async () => {
+    if (!mutation(f, "capture.claim")) return;
+    f.hooks.beforeRun = undefined;
+    const forgotten = { ...scope, kind: "window", origin: "forget", actionId: "forget-window",
+      client: selection.client, window: { startMs: 90, endMs: 110 } };
+    await f.storage.uow.run(scope.owner, { pauseLock: true },
+      tx => f.storage.suppressions.writeFact(tx, forgotten, "forget-fixture"));
+  };
+  assert.deepEqual(await f.run(), { status: "failed", code: "suppressed" });
+  assert.deepEqual(sends(f), []);
+  assert.equal(mutation(f, "capture.beginDispatch"), undefined);
+  assert.deepEqual(f.archived(scope.owner), []);
+  assertAbandoned(f, "suppressed", false);
+});
+
+test("H3 the forgotten lock code is absent from the embedding batch", async () => {
+  const f = setup({ rawArchive: true });
+  const forgotten = "The lock code is 4916.";
+  const other = "Log the appointment separately.";
+  await f.admit(scope, [user("m", "The keypad takes four nine one six."), user("m2", other)]);
+  f.seedFact(exactForget({
+    alg: "sha256", value: sha(forgotten.toLowerCase()), pipeline: "hosted-v1", redactionVersion: 1, keyId: null,
+  }));
+  f.hooks.model = () => ({ items: [fact(forgotten), fact(other, [1])] });
+  assert.equal((await f.run()).status, "done");
+  assert.deepEqual(f.calls.filter(([method]) => method === "embed"), [["embed", [other.toLowerCase()]]]);
+});
+
+const compass = "The spare compass is in the cedar drawer.";
+const compassSource = user("m", "Look for the backup navigation instrument in the cabinet.", 100);
+const orchids = user("other", "Water the orchids on Mondays.", 200);
+
+test("H3 a compass HMAC-only forget fact keeps the wording out of embedding", async () => {
+  const f = setup();
+  const key = await f.storage.keys.userKey(scope.owner);
+  f.seedFact(exactForget(await coreDigest(compass, key)));
+  await f.admit(scope, [compassSource]);
+  f.hooks.model = () => ({ items: [fact(compass)] });
+  assert.equal((await f.run()).status, "done");
+  assert.deepEqual(sends(f), ["model.call"]);
+  assert.deepEqual(mutation(f, "capture.finish").args[1], []);
+});
+
+for (const stage of ["pre-embed", "finish"]) {
+  test(`H4 Raw drops compass evidence withheld at ${stage} and archives only orchids`, async () => {
+    const f = setup({ rawArchive: true });
+    const key = await f.storage.keys.userKey(scope.owner);
+    const forgotten = exactForget(await coreDigest(compass, key));
+    if (stage === "pre-embed") f.seedFact(forgotten);
+    else f.hooks.embed = () => { f.seedFact(forgotten); };
+    await f.admit(scope, [compassSource, orchids]);
+    f.hooks.model = () => ({ items: [fact(compass), fact(orchids.content, [1])] });
+    const result = await f.run();
+    assert.equal(result.status, "done");
+    assert.deepEqual(f.committed(scope.owner).rows.map(row => row.text), [orchids.content]);
+    assert.deepEqual(f.archived(scope.owner), [orchids]);
+  });
+}
+
+test("H5 a retryable provider error keeps extraction_failed and permits redelivery", async () => {
+  const f = setup();
+  const content = "The collection opens on Fridays.";
+  await f.admit(scope, [user("m", content)]);
+  f.hooks.model = () => { throw new CoreError("provider_error"); };
+  assert.deepEqual(await f.run(), { status: "failed", code: "extraction_failed" });
+  assertAbandoned(f, "extraction_failed", true);
+  f.hooks.model = () => ({ items: [fact(content)] });
+  assert.equal((await f.run()).status, "done");
+});
+
+test("H6 a confidence-0.5 candidate can cite a redacted and an ordinary source", async () => {
+  const f = setup();
+  const normal = user("normal", "The collection opens on Fridays.");
+  await f.admit(scope, [user("m", "sk-" + "synth".repeat(8)), normal]);
+  f.hooks.model = () => ({ items: [fact(normal.content, [0, 1], 0.5)] });
+  assert.equal((await f.run()).status, "done");
+  assert.equal(f.calls.find(([method]) => method === "model.call")[2].input.messages[0].content, "[REDACTED]");
+  assert.deepEqual(mutation(f, "capture.finish").args[1][0].receipts.map(receipt => receipt.messageId), ["m", "normal"]);
+});
+
+test("H6 an admitted source expanded by NFKC can be cited by index", async () => {
+  const f = setup();
+  const source = user("m", "㍿".repeat(5200));
+  await f.admit(scope, [source]);
+  f.hooks.model = () => ({ items: [fact("The source mentions a corporation.")] });
+  assert.equal((await f.run()).status, "done");
+  assert.equal(f.calls.find(([method]) => method === "model.call")[2].input.messages[0].content.length, 20_800);
+  assert.equal(mutation(f, "capture.finish").args[1][0].receipts[0].messageId, source.id);
+});
+
+test("H7 the hosted 24-message and 7,296-token batch reaches extraction", async () => {
+  const f = setup();
+  const incoming = Array.from({ length: 24 }, (_, index) => user("m" + index,
+    (`Inspect the north entrance, check the sign, log the reading and inspect rack ${index}. `).repeat(15).trim()));
+  f.deps.model.contextWindow = 128_000;
+  f.deps.model.countTokens = text => JSON.parse(text).input ? 7296 : 100;
+  await f.admit(scope, incoming);
+  f.hooks.model = () => ({ items: [fact("Log the readings after checking the north entrance.")] });
+  assert.equal((await f.run()).status, "done");
+  const [, , request] = f.calls.find(([method]) => method === "model.call");
+  assert.deepEqual(request.input.messages, incoming.map(({ role, content }, index) => ({ index, role, content })));
+  assert.equal(request.schema.properties.items.maxItems, 20);
+});
+
+test("H7 a hosted ten-item and 1,315-token response is accepted intact", async () => {
+  const f = setup();
+  const incoming = Array.from({ length: 10 }, (_, index) => user("m" + index, `Record timetable update ${index}.`));
+  const items = incoming.map((_, index) => fact(
+    (`An operating note for update ${index}: start after the early signal and set status to ready. `).repeat(6).trim(),
+    [index],
+  ));
+  f.deps.model.contextWindow = 128_000;
+  f.deps.model.countTokens = text => JSON.parse(text).input ? 722 : 1315;
+  await f.admit(scope, incoming);
+  f.hooks.model = (_stage, request) => {
+    assert.ok(request.maxOutputTokens >= 1315);
+    return { items };
+  };
+  const result = await f.run();
+  assert.equal(result.status, "done");
+  assert.equal(result.result.memories.length, 10);
+});
+
+test("H8 extraction receives the admitted indentation and newline verbatim", async () => {
+  const f = setup();
+  const content = "Indent with two spaces:\n  code";
+  await f.admit(scope, [user("id", content)]);
+  f.hooks.model = () => ({ items: [fact("Use exactly two spaces for the code-block example.")] });
+  assert.equal((await f.run()).status, "done");
+  assert.equal(f.calls.find(([method]) => method === "model.call")[2].input.messages[0].content, content);
+  assert.deepEqual(await f.service.enqueueCapture(scope, { ...selection, messages: [user("id", content)] }),
+    { status: "duplicate" });
+});
+
+test("H9 rotation and an unrelated HMAC-only fact before finish require a retry", async () => {
+  const f = setup({ rawArchive: true });
+  const content = "Send a reminder at noon.";
+  const signingKey = await crypto.subtle.importKey("raw", new TextEncoder().encode("fixture key after rotation"),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const rotated = { id: "rotated", signingKey };
+  const unrelated = exactForget(await coreDigest("never log the vault code", rotated));
+  await f.admit(scope, [user("m", content, 1234)]);
+  f.hooks.model = () => ({ items: [{ ...fact(content), kind: "instruction" }] });
+  f.hooks.beforeRun = () => {
+    if (!sends(f).includes("embed")) return;
+    f.hooks.beforeRun = undefined;
+    f.hooks.userKey = () => rotated;
+    f.seedFact(unrelated);
+  };
+  assert.deepEqual(await f.run(), { status: "failed", code: "fingerprint_key_mismatch" });
+  assert.equal(mutation(f, "capture.finish"), undefined);
+  assertAbandoned(f, "fingerprint_key_mismatch", true);
+  assert.equal((await f.run()).status, "done");
+  assert.equal(f.committed(scope.owner).rows.length, 1);
+});
+
+test("H10 an embedder that ignores abort cannot keep the runner pending", async () => {
+  const f = setup({ config: { deadlines: { extract: 100 } } });
+  await f.admit(scope, [user("m", "The collection opens on Fridays.")]);
+  const hung = Promise.withResolvers();
+  let signal;
+  f.hooks.embed = (_texts, options) => {
+    signal = options.signal;
+    return hung.promise;
+  };
+  let limit;
+  const pending = f.run();
+  try {
+    const result = await Promise.race([
+      pending,
+      new Promise((_, reject) => { limit = setTimeout(() => reject(new Error("runner still pending at 200 ms")), 200); }),
+    ]);
+    assert.deepEqual(result, { status: "failed", code: "model_timeout" });
+    assert.equal(signal?.aborted, true);
+    assertAbandoned(f, "model_timeout", false);
+  } finally {
+    clearTimeout(limit);
+    hung.resolve([]);
+    await pending;
+  }
+});
+
+test("H10 construction rejects extraction deadlines above the runner maximum", () => {
+  assert.throws(() => setup({ config: { deadlines: { extract: 120001 } } }), validCode("invalid_input"));
+});
+
+test("H11 a load identity mismatch fails without a claim, send or write", async () => {
+  const otherScope = { ...scope, namespace: "other-namespace" };
+  for (const requested of [
+    { scope: otherScope, selection },
+    { scope: { ...scope, owner: "other-owner" }, selection },
+    ...["client", "sessionId", "eventId"].map(field => ({ scope, selection: { ...selection, [field]: "other" } })),
+  ]) {
+    const f = setup();
+    await f.admit();
+    const admission = await f.storage.uow.run(scope.owner, { readOnly: true },
+      tx => f.storage.capture.load(tx, { scope, ...selection }));
+    f.storage.capture.load = async () => admission;
+    assert.deepEqual(await f.service.runCapture(requested.scope, requested.selection),
+      { status: "failed", code: "internal_error" });
+    assert.equal(methods(f).includes("capture.claim"), false);
+    assert.deepEqual(sends(f), []);
+    assert.deepEqual(f.mutations, []);
+  }
 });
