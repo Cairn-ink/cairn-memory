@@ -521,12 +521,12 @@ for (const [length, matcherResult, booleanResult] of [[64, false, false], [65, i
   });
 }
 
-test("malformed stored text fields deny a comparable exact miss", async () => {
+test("malformed stored text fields affect withholding by mode", async () => {
   const { validateSuppressionFact, withholdsAnyPassage } = await import("../src/index.mjs");
   const passages = [passage];
   const row = { ...baseRow, ...passage };
   const incoming = { scope, passages };
-  for (const [label, patch] of [
+  for (const [label, patch, exactDenies = false] of [
     ["empty key ID", { text: { ...reference, keyId: "" } }],
     ["non-string key ID", { text: { ...reference, keyId: 1 } }],
     ["oversized key ID", { text: { ...reference, keyId: "x".repeat(65) } }],
@@ -534,17 +534,20 @@ test("malformed stored text fields deny a comparable exact miss", async () => {
     ["sparse shingles", { text: { ...reference, shingles: Array(1) } }],
     ["non-finite embedding item", { text: { ...reference, embedding: [Infinity] } }],
     ["sparse embedding", { text: { ...reference, embedding: Array(1) } }],
-    ["duplicate digests", { text: { ...reference, digests: [digest("a"), digest("a")] } }],
-    ["oversized source ID", { sourceMemory: { ...edit, id: "m".repeat(129) } }],
-    ["non-integer source timestamp", { sourceMemory: { ...edit, createdAtMs: 1.5 } }],
+    ["duplicate digests", { text: { ...reference, digests: [digest("a"), digest("a")] } }, true],
+    ["oversized source ID", { sourceMemory: { ...edit, id: "m".repeat(129) } }, true],
+    ["non-integer source timestamp", { sourceMemory: { ...edit, createdAtMs: 1.5 } }, true],
   ]) {
-    const fact = store({ ...exact, ...patch });
-    assert.throws(() => validateSuppressionFact(fact.fact), { code: "invalid_input" }, label);
-    assert.equal(factHidesRow(fact, row), ineligible, label);
-    assert.equal(factBlocksIncoming(fact, incoming, capture), ineligible, label);
-    assert.equal(factBlocksIncoming(fact, incoming, explicit), ineligible, label);
-    assert.equal(withholdsPassage(passage, fact.fact), true, label);
-    assert.equal(withholdsAnyPassage(passages, [fact.fact]), true, label);
-    assert.equal(blocksMemoryPassage(passages, [fact.fact], null), true, label);
+    for (const [mode, denies] of [["full", true], ["exact", exactDenies]]) {
+      const fact = store({ ...text, ...patch, mode });
+      const description = `${mode}: ${label}`;
+      assert.throws(() => validateSuppressionFact(fact.fact), { code: "invalid_input" }, description);
+      assert.equal(factHidesRow(fact, row), ineligible, description);
+      assert.equal(factBlocksIncoming(fact, incoming, capture), ineligible, description);
+      assert.equal(factBlocksIncoming(fact, incoming, explicit), ineligible, description);
+      assert.equal(withholdsPassage(passage, fact.fact), denies, description);
+      assert.equal(withholdsAnyPassage(passages, [fact.fact]), denies, description);
+      assert.equal(blocksMemoryPassage(passages, [fact.fact], null), denies, description);
+    }
   }
 });

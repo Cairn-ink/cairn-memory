@@ -120,16 +120,24 @@ export function snapshotReader() {
   function fact(input) {
     const data = record(input);
     const text = record(field(data, "text"));
-    const embedding = field(text, "embedding");
+    const mode = string(field(data, "mode"));
+    let textSnapshot;
+    if (mode === "exact") {
+      // Exact matching only uses digests, so skip the other text fields.
+      textSnapshot = { digests: digests(field(text, "digests")) };
+    } else {
+      const embedding = field(text, "embedding");
+      textSnapshot = {
+        ...fingerprint(text),
+        embedding: embedding == null ? embedding : list(embedding, (item) => item),
+      };
+    }
     const sourceMemory = field(data, "sourceMemory");
     return Object.freeze({
       kind: string(field(data, "kind")),
       origin: string(field(data, "origin")),
-      mode: string(field(data, "mode")),
-      text: Object.freeze({
-        ...fingerprint(text),
-        embedding: embedding == null ? embedding : list(embedding, (item) => item),
-      }),
+      mode,
+      text: Object.freeze(textSnapshot),
       sourceMemory: sourceMemory == null ? sourceMemory : source(sourceMemory),
     });
   }
@@ -224,7 +232,7 @@ export function compareValidatedDigests(a, b) {
 
 /**
  * @param {Pick<FingerprintSnapshot, "shingles" | "keyId">} passage
- * @param {Pick<FingerprintSnapshot, "shingles" | "keyId">} reference
+ * @param {Partial<Pick<FingerprintSnapshot, "shingles" | "keyId">>} reference
  * @param {number} threshold
  * @param {boolean} checkContainment
  * @param {boolean} [containmentKeyUnavailable]
