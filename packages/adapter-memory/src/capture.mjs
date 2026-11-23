@@ -58,9 +58,10 @@ function copyResult(stored, pending) {
  * @param {ReturnType<typeof import("./memory-store.mjs").createMemoryStore>} store
  * @param {() => number} now
  * @param {ReturnType<typeof import("./fact-match.mjs").createFactMatcher>} matchFacts
+ * @param {boolean} embeddingRequiredOnInsert
  * @returns {import("@cairn-ink/core/ports").StorageAdapter["capture"]}
  */
-export function createCapturePorts(port, { memories, finishWrites, readWritePolicy, counters }, now, matchFacts) {
+export function createCapturePorts(port, { memories, finishWrites, readWritePolicy, counters }, now, matchFacts, embeddingRequiredOnInsert) {
   return {
     async claim(tx, key, messages, options) {
       return port.capture(tx, { owner: tx?.owner }, () => {
@@ -130,7 +131,7 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
     async finish(tx, token, items) {
       return port.capture(tx, { owner: tx?.owner }, () => {
         validateToken(token);
-        const batch = copyFinishItems(items);
+        const batch = copyFinishItems(items, embeddingRequiredOnInsert);
         return async (getState, run) => {
           const nowMs = now();
           validateTime(nowMs);

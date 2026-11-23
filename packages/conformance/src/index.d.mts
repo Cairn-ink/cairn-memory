@@ -4,7 +4,7 @@ import type { AdapterFactory, OpenedAdapter } from "./factory.d.ts";
 
 export type { AdapterFactory, JsonValue, OpenedAdapter, TestHarness } from "./factory.d.ts";
 
-export type CaseContext = Omit<OpenedAdapter, "close" | "embeddingDimensions"> & {
+export type CaseContext = Omit<OpenedAdapter, "close"> & {
   vec(distance: number): number[];
   hash(text: string): Promise<string>;
   owner: string;
@@ -32,5 +32,6 @@ export declare const PRIVACY_CASES: readonly ConformanceCase[];
 export declare const CAPTURE_CASES: readonly ConformanceCase[];
 export declare const PRIVACY_MATCH_CASES: readonly ConformanceCase[];
 export declare const SOURCE_FILTER_CASES: readonly ConformanceCase[];
+export declare const TOPIC_CASES: readonly ConformanceCase[];
 /** Returns the skip reason, or null on success. Failures reject. */
 export declare function runCase(factory: AdapterFactory, testCase: ConformanceCase): Promise<string | null>;

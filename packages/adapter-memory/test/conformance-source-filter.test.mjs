@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
 import { runCase, SOURCE_FILTER_CASES } from "@cairn-ink/conformance";
 import { CoreError } from "@cairn-ink/core";
+import { embeddingRequiredFactory } from "./fixtures/embedding-required.mjs";
 
 function hashSessionKey(client, sessionId) {
   return createHash("sha256").update(JSON.stringify([client, sessionId])).digest("hex");
@@ -31,6 +32,19 @@ for (const sessionRefs of ["plain", "hashed"]) {
     test(`${factory.name} ${testCase.id} ${testCase.title}`, async () => {
       assert.equal(await runCase(factory, testCase), null);
     });
+  }
+
+  for (const vectors of [true, false]) {
+    const required = embeddingRequiredFactory({ vectors, sessionRefs });
+    for (const testCase of SOURCE_FILTER_CASES) {
+      test(`${required.name} (${sessionRefs}) ${testCase.id} ${testCase.title}`, async (t) => {
+        const reason = await runCase(required, testCase);
+        if (reason !== null) {
+          assert.match(reason, /\S/);
+          t.skip(reason);
+        }
+      });
+    }
   }
 }
 

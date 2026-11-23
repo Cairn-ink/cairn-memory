@@ -44,6 +44,7 @@ export const unitOfWorkCases = [
       const scope = ctx.scope(null);
       const otherScope = { ...scope, owner: otherOwner };
       const content = await row(ctx, "serialized");
+      const otherContent = ctx.adapter.capabilities.embeddingRequiredOnInsert ? await row(ctx, content.text) : content;
       /** @type {ReturnType<typeof gate<string>>} */
       const inserted = gate();
       const release = gate();
@@ -60,7 +61,7 @@ export const unitOfWorkCases = [
             entered = true;
             return memories.get(tx, scope, id);
           }));
-          const other = await uow.run(otherOwner, {}, (tx) => memories.insert(tx, otherScope, content, [], 1));
+          const other = await uow.run(otherOwner, {}, (tx) => memories.insert(tx, otherScope, otherContent, [], 1));
           check(!entered, "Second writer entered before the first writer released");
           release.release(undefined);
           await first;
