@@ -1,8 +1,9 @@
-import { coreDigest, legacyExactMac, passageShingles } from "@cairn-ink/core";
+import { coreDigest, legacyExactMac, passageShingles, PRIVACY_REDACTION_VERSIONS } from "@cairn-ink/core";
 import { coreFingerprintLabels } from "../../core/src/privacy/fingerprint.mjs";
 import { caught, check, equal, readDump, rejects } from "./support.mjs";
 
 /** @import { CaptureKey, CaptureMessage, Tx } from "@cairn-ink/core/ports" */
+/** @import { TextFact } from "@cairn-ink/core" */
 /** @import { CaseContext, ConformanceCase } from "./index.d.mts" */
 
 const missingImport = "needs raw.importArchive";
@@ -14,11 +15,11 @@ function message(id, content, occurredAtMs = 10) {
   return { id, role: "user", content, occurredAtMs };
 }
 
-/** @param {CaseContext} ctx */
-function fixture(ctx) {
+/** @param {CaseContext} ctx @param {string | null} [namespace] */
+function fixture(ctx, namespace = null) {
   const { raw, uow } = ctx.adapter;
   check(raw, "rawArchive requires the raw port");
-  const scope = ctx.scope(null);
+  const scope = ctx.scope(namespace);
   const session = { client, sessionId };
   const { owner } = scope;
   /** @type {CaptureKey} */
@@ -46,6 +47,28 @@ function sessionRef(ctx, session) {
   const hash = ctx.harness.hashSessionKey?.(session.client, session.sessionId);
   check(typeof hash === "string" && /^[a-f0-9]{64}$/u.test(hash), "Hashed sessions require harness.hashSessionKey");
   return { client: session.client, sessionKeyHash: hash };
+}
+
+/** @param {CaseContext} ctx @param {string | null} namespace @param {Pick<TextFact, "mode" | "text">} fact
+ * @param {string} matchingContent @param {readonly string[]} withheldIds
+ */
+async function checkTextImport(ctx, namespace, fact, matchingContent, withheldIds) {
+  const { put, scope } = fixture(ctx, namespace);
+  check(put, "Text matching requires raw.importArchive");
+  await ctx.harness.seedFact(ctx.owner, {
+    ...factBase(ctx, "text-import"), ...scope, kind: "text", ...fact,
+  });
+  const matching = message("matching", matchingContent);
+  const unrelated = message("unrelated", "Copper conducts electricity.");
+  for (const item of [matching, unrelated]) {
+    const before = await readDump(ctx.harness);
+    const withheld = withheldIds.includes(item.id);
+    equal(await put([item]), { archived: Number(!withheld), existing: 0, withheld: Number(withheld) },
+      `Import must match capture admission for the ${item.id} message`);
+    if (withheld) {
+      equal(await readDump(ctx.harness), before, "Text refusal must leave the committed state unchanged");
+    }
+  }
 }
 
 /** @type {readonly ConformanceCase[]} */
@@ -149,7 +172,7 @@ export const IMPORT_ARCHIVE_CASES = [
     },
   },
   {
-    id: "K-IMP-RAW-4", title: "fails closed when text evidence cannot be compared", needs: ["rawArchive"],
+    id: "K-IMP-RAW-4", title: "matches canonical text digests and fails closed on unavailable evidence", needs: ["rawArchive"],
     async run(ctx) {
       const { put } = fixture(ctx);
       if (!put) return missingImport;
@@ -167,28 +190,39 @@ export const IMPORT_ARCHIVE_CASES = [
       const before = await readDump(ctx.harness);
       equal(await put([item]), { archived: 0, existing: 0, withheld: 1 }, "Uncomparable text fact must refuse import");
       equal(await readDump(ctx.harness), before, "Uncomparable text fact must leave the committed state unchanged");
+      await checkTextImport(ctx, "canonical", {
+        mode: "exact", text: { digests: [await coreDigest(item.content)] },
+      }, item.content, ["matching"]);
     },
   },
   {
-    id: "K-IMP-RAW-4e", title: "refuses an exact core-domain keyed text match", needs: ["rawArchive", "fingerprintKey"],
+    id: "K-IMP-RAW-4e", title: "matches capture admission for core and adapter text MAC domains", needs: ["rawArchive", "fingerprintKey"],
     async run(ctx) {
       const { put } = fixture(ctx);
       if (!put) return missingImport;
       const key = await ctx.adapter.keys.userKey(ctx.owner);
       check(key, "fingerprintKey requires an owner key");
-      const item = message("exact", "cedar garden");
-      const digest = await coreDigest(item.content, key);
-      const alias = await legacyExactMac(item.content, key, coreFingerprintLabels);
-      check(alias !== digest.value, "Fixture must isolate the core-domain alias");
-      await ctx.harness.seedFact(ctx.owner, {
-        ...factBase(ctx, "keyed-exact"), kind: "text", mode: "exact",
-        text: { digests: [{ ...digest, value: alias }], keyId: key.id },
+      const content = "cedar garden";
+      const digest = await coreDigest(content, key);
+      const coreMac = await legacyExactMac(content, key, coreFingerprintLabels);
+      const adapterMac = await legacyExactMac(content, key, Object.freeze({
+        ...coreFingerprintLabels, legacyExactPrefix: "test-exact:",
+      }));
+      check(coreMac !== digest.value && adapterMac !== digest.value && adapterMac !== coreMac,
+        "Fixture must isolate the two MAC domains");
+      await checkTextImport(ctx, null, {
+        mode: "exact", text: { digests: [{ ...digest, value: coreMac }], keyId: key.id },
+      }, content, ["matching"]);
+      const legacy = /** @satisfies {TextFact["text"]["digests"][number]} */ ({
+        ...digest, value: adapterMac, pipeline: "engine-legacy", redactionVersion: PRIVACY_REDACTION_VERSIONS.v1,
       });
-      const before = await readDump(ctx.harness);
-      const counts = await put([item]);
-      const after = await readDump(ctx.harness);
-      equal({ counts, dump: after }, { counts: { archived: 0, existing: 0, withheld: 1 }, dump: before },
-        "The core-domain exact match must refuse import without storing the message");
+      await checkTextImport(ctx, "adapter-mac", {
+        mode: "exact", text: { digests: [legacy], keyId: key.id },
+      }, content, ["matching", "unrelated"]);
+      // Capture can compare the SHA-256 alias, which misses both messages.
+      await checkTextImport(ctx, "adapter-mac-with-alias", {
+        mode: "exact", text: { digests: [legacy, await coreDigest("A different passage.")], keyId: key.id },
+      }, content, []);
     },
   },
   {
@@ -200,19 +234,10 @@ export const IMPORT_ARCHIVE_CASES = [
       const key = await ctx.adapter.keys.userKey(ctx.owner);
       check(key, "fingerprintKey requires an owner key");
       const target = "the orchard has a cedar gate and a path lined with rosemary";
-      const shingles = await passageShingles(target, key, Object.freeze({
-        keyIdDomain: "test-key-id", shingleKeyPrefix: "test-shingle:", legacyExactPrefix: "test-exact:",
-      }));
-      await ctx.harness.seedFact(ctx.owner, {
-        ...factBase(ctx, "containment"), kind: "text", mode: "full",
-        text: { digests: [await coreDigest(target, key)], shingles, keyId: key.id },
-      });
-      const contained = message("contained", `At the trailhead, ${target} next to the creek.`);
-      const different = message("different", "Copper conducts electricity.");
-      equal(await put([contained, different]), { archived: 1, existing: 0, withheld: 1 },
-        "Text containment must refuse the matching import and allow unrelated text");
-      check(!JSON.stringify(await readDump(ctx.harness)).includes(contained.content),
-        "Import must never store text containment refusals");
+      const shingles = await passageShingles(target, key, coreFingerprintLabels);
+      await checkTextImport(ctx, null, {
+        mode: "full", text: { digests: [await coreDigest(target, key)], shingles, keyId: key.id },
+      }, `At the trailhead, ${target} next to the creek.`, ["matching"]);
     },
   },
   {
