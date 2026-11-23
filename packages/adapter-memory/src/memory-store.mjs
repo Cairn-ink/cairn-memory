@@ -1,20 +1,14 @@
-import { CoreError, NEAR_DUPLICATE_DISTANCE, compareSortKey, compareUtf8 } from "@cairn-ink/core";
+import { CoreError, NEAR_DUPLICATE_DISTANCE, compareUtf8 } from "@cairn-ink/core";
 import { cosineDistance } from "./cosine.mjs";
-import { decodeCursor, encodeCursor } from "./cursor.mjs";
+import { decodeCursor, encodeCursor, newestFirst } from "./cursor.mjs";
 import { factPolicy } from "./fact-match.mjs";
-import { attachReceipts, copyContent, validateDuplicateBatch, validateMerge, validateSource, validateTime } from "./validation.mjs";
+import { attachReceipts, copyContent, validateDuplicateBatch, validateLimit, validateMerge, validateSource, validateTime } from "./validation.mjs";
 
 /** @typedef {import("@cairn-ink/core/ports").DuplicateQuery} DuplicateQuery */
 /** @typedef {import("@cairn-ink/core/ports").MemoryMatch} MemoryMatch */
 /** @typedef {import("@cairn-ink/core/ports").MemoryStore} MemoryStore */
 /** @typedef {import("./unit-of-work.mjs").Row} Row */
-/** @typedef {{id: string, updatedAtUs: bigint}} SortKey */
 /** @typedef {{match: "exact" | "near", distance: number}} MatchQuality */
-
-/** @param {SortKey} a @param {SortKey} b */
-function newestFirst(a, b) {
-  return compareSortKey(b.updatedAtUs, a.updatedAtUs) || compareUtf8(b.id, a.id);
-}
 
 /** @param {MemoryMatch & MatchQuality} a @param {MemoryMatch & MatchQuality} b */
 function matchOrder(a, b) {
@@ -208,7 +202,7 @@ export function createMemoryStore(port, capabilities, newId) {
     async exportPage(tx, scope, page) {
       return port(tx, scope, false, (state) => {
         const { cursor, limit } = page;
-        if (!Number.isSafeInteger(limit) || limit < 1) throw new CoreError("invalid_input");
+        validateLimit(limit);
         const after = cursor === null ? null : decodeCursor(cursor);
         const policy = factPolicy(state.facts, scope, capabilities.vectorSuppression);
         const rows = rowsIn(state.rows.get(scope.namespace))

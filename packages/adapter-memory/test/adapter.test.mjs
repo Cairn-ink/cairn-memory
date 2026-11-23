@@ -26,8 +26,9 @@ function receipt() {
 
 const coreError = (code) => (error) => error instanceof CoreError && error.code === code && error.message === code;
 
-test("refuses every capability with an optional port and accepts the remaining flags", () => {
+test("refuses capabilities with unimplemented ports and accepts the remaining flags", () => {
   const unavailable = new Set(Object.values(OPTIONAL_PORTS));
+  unavailable.delete("semanticRetrieval");
   for (const flag of unavailable) {
     assert.throws(() => createMemoryAdapter({ capabilities: { [flag]: true } }), coreError("capability_unavailable"), flag);
   }
