@@ -12,8 +12,6 @@ const firstPage = { cursor: null, limit: 100 };
 function setup(ctx, scope = ctx.scope(null)) {
   const { uow, memories, placement } = ctx.adapter;
   check(placement, "placement port is required");
-  const forMemories = placement.forMemories;
-  check(forMemories, "forMemories is required for this case");
   return {
     /** @param {string} text @returns {Promise<Guard>} */
     async seed(text) {
@@ -32,13 +30,19 @@ function setup(ctx, scope = ctx.scope(null)) {
     forget: ({ memoryId }) => ctx.harness.seedFact(scope.owner, {
       ...scope, kind: "identity", origin: "forget", actionId: crypto.randomUUID(), memoryId,
     }),
+    /** @param {Guard} guard */
+    drop: ({ memoryId }) => uow.run(scope.owner, {}, (tx) => placement.dropMemory(tx, scope, memoryId)),
     /** @param {Guard[]} memoryRevisions @param {PlacementItem[]} items */
     apply: (memoryRevisions, items) => uow.run(scope.owner, {}, async (tx) => {
       const { indexRevision } = await placement.catalog(tx, scope, firstPage);
       return placement.applyPlacement(tx, scope, { memoryRevisions, indexRevision }, { items });
     }),
     /** @param {readonly string[]} ids */
-    lookup: (ids) => uow.run(scope.owner, { readOnly: true }, (tx) => forMemories.call(placement, tx, scope, ids)),
+    lookup: (ids) => {
+      const forMemories = placement.forMemories;
+      check(forMemories, "forMemories is required for this case");
+      return uow.run(scope.owner, { readOnly: true }, (tx) => forMemories.call(placement, tx, scope, ids));
+    },
     /** @template T @param {(tx: Tx, scope: Scope, placement: TopicStore) => Promise<T>} fn */
     read: (fn) => uow.run(scope.owner, { readOnly: true }, (tx) => fn(tx, scope, placement)),
   };
@@ -60,6 +64,7 @@ function batchCase(number, title, run) {
   };
 }
 
+/** @type {ConformanceCase[]} */
 export const TOPIC_FOR_MEMORIES_CASES = [
   batchCase(1, "mixed batches include only placed memories in first-occurrence order", async (ctx) => {
     const store = setup(ctx);
@@ -169,4 +174,34 @@ export const TOPIC_FOR_MEMORIES_CASES = [
     equal(rows.map(({ memoryId }) => memoryId), ids, "All placed memories appear in input order");
     equal(rows.map(({ topics }) => topics.map(({ id }) => id)), expected, "Each row matches its single-memory result in order");
   }),
+
+  {
+    id: "T-TFM-8",
+    title: "a title-only drop advances the index once and invalidates catalog cursors",
+    needs: ["placement"],
+    async run(ctx) {
+      const store = setup(ctx);
+      const alpha = await store.seed("Alpha member");
+      const zulu = await store.seed("Zulu member");
+      const source = await store.seed("Second Zulu title source");
+      await store.apply([alpha], [item(alpha, [], { title: "Alpha", parentL2Ids: [] })]);
+      const { createdTopics: [zuluTopic] } = await store.apply([zulu, source], [
+        item(zulu, [], { title: "Zulu", parentL2Ids: [] }), item(source),
+      ]);
+
+      /** @param {{cursor: string | null, limit: number}} query */
+      const catalog = (query) => store.read((tx, scope, placement) => placement.catalog(tx, scope, query));
+      const { nextCursor, indexRevision } = await catalog({ cursor: null, limit: 1 });
+      check(nextCursor, "Two topics must produce a catalog cursor");
+
+      equal(await store.drop(source), { dropped: 0 }, "The title source has no memberships to drop");
+      const after = await catalog(firstPage);
+      equal(after.items.find(({ id }) => id === zuluTopic.id)?.title, null, "The drop retires the Zulu title source");
+      equal(after.indexRevision, indexRevision + 1, "A title-only drop must advance the index revision by exactly one");
+      await rejects(() => catalog({ cursor: nextCursor, limit: 1 }), "cursor_stale");
+
+      equal(await store.drop(source), { dropped: 0 }, "The repeated drop removes no memberships");
+      equal((await catalog(firstPage)).indexRevision, after.indexRevision, "A repeated drop must preserve the index revision");
+    },
+  },
 ];
