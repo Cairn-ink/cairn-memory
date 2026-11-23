@@ -56,10 +56,10 @@ function validateToken(token) {
     typeof revision !== "number" || !Number.isSafeInteger(revision) || revision < 0) {
     throw new CoreError("invalid_cursor");
   }
-  const scope = /** @type {RetrievalScope} */ ({ owner, namespaces, clients: clients === null ? undefined : clients });
+  const scope = /** @type {Omit<RetrievalScope, "owner">} */ ({ namespaces, clients: clients === null ? undefined : clients });
   let selection;
   try {
-    selection = copyReadScope(scope);
+    selection = copyReadScope(owner, scope);
   } catch {
     throw new CoreError("invalid_cursor");
   }
@@ -124,7 +124,7 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
   const vector = {
     async vector(tx, scope, query, model, depth) {
       return port.read(tx, scope, (getState) => {
-        const selection = copyReadScope(scope);
+        const selection = copyReadScope(tx.owner, scope);
         validateLimit(depth);
         const queryVector = readEmbedding(query);
         if (typeof model !== "string" || !model) throw new CoreError("invalid_input");
@@ -152,7 +152,7 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
     lexical: {
       async lexical(tx, scope, query, depth) {
         return port.read(tx, scope, (getState) => {
-          const selection = copyReadScope(scope);
+          const selection = copyReadScope(tx.owner, scope);
           validateLimit(depth);
           if (typeof query !== "string") throw new CoreError("invalid_input");
           const terms = tokenizeT1(query);
@@ -176,13 +176,13 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
     snapshot: {
       async stateToken(tx, scope) {
         return port.read(tx, scope, (getState) => {
-          const selection = copyReadScope(scope);
+          const selection = copyReadScope(tx.owner, scope);
           return stateToken(selection, getState().indexRevision);
         });
       },
       async assertUnchanged(tx, scope, token) {
         return port.read(tx, scope, (getState) => {
-          const selection = copyReadScope(scope);
+          const selection = copyReadScope(tx.owner, scope);
           validateToken(token);
           if (token !== stateToken(selection, getState().indexRevision)) throw new CoreError("cursor_stale");
         });
@@ -191,7 +191,7 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
     hydrate: {
       async hydrate(tx, scope, refs, intent) {
         return port.read(tx, scope, (getState) => {
-          const selection = copyReadScope(scope);
+          const selection = copyReadScope(tx.owner, scope);
           if (intent !== "recall" && intent !== "read" && intent !== "export") throw new CoreError("invalid_input");
           const references = copyRefs(refs);
           return Array.from(visibleRefs(getState(), selection, references, intent !== "recall"), ({ ref, entry }) => ({
@@ -204,7 +204,7 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
     fence: {
       async assertVisible(tx, scope, refs) {
         return port.read(tx, scope, (getState) => {
-          const selection = copyReadScope(scope);
+          const selection = copyReadScope(tx.owner, scope);
           const references = copyRefs(refs);
           return Array.from(visibleRefs(getState(), selection, references, false), ({ ref }) => ref);
         });
@@ -213,7 +213,7 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
     recent: {
       async recent(tx, scope, page) {
         return port.read(tx, scope, (getState) => {
-          const selection = copyReadScope(scope);
+          const selection = copyReadScope(tx.owner, scope);
           if (!page || typeof page !== "object") throw new CoreError("invalid_input");
           const { cursor, limit } = page;
           validateLimit(limit);

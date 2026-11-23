@@ -340,12 +340,20 @@ export const memoryCases = [
       const hashed = await ctx.hash("withheld digest");
       const distantDigest = await ctx.hash("withheld vector");
       const sessionSource = { ...source, client: "test-client", sessionId: "test-origin" };
+      const { client, sessionId } = sessionSource;
+      /** @type {import("@cairn-ink/core").SessionRef} */
+      let session = { client, sessionId };
+      if (ctx.sessionRefs === "hashed") {
+        if (!harness.hashSessionKey) return "hashed session fixtures require harness.hashSessionKey";
+        const sessionKeyHash = harness.hashSessionKey(client, sessionId);
+        check(typeof sessionKeyHash === "string", "Harness must return a session hash for the fixture");
+        session = { client, sessionKeyHash };
+      }
       const id = await uow.run(owner, {}, async (tx) => (await memories.insert(tx, scope, owned, [], 1)).id);
       const factBase = { owner, origin: /** @type {const} */ ("forget") };
       await harness.seedFact(owner, { ...factBase, actionId: "identity", kind: "identity", memoryId: id, namespace: null });
       await harness.seedFact(owner, {
-        ...factBase, actionId: "source", kind: "session",
-        session: { client: sessionSource.client, sessionId: sessionSource.sessionId },
+        ...factBase, actionId: "source", kind: "session", session,
       });
       await harness.seedFact(owner, {
         ...factBase, actionId: "digest", kind: "text", mode: "exact",

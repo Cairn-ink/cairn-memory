@@ -35,6 +35,25 @@ export function copyPublicRow({ digests: _digests, ...row }) {
   return structuredClone(row);
 }
 
+/**
+ * Handle the promise exposed by each queued write, including async wrappers around the queue.
+ * The caller still observes the rejection and the run retains the first state-level error.
+ * @template {PropertyKey} K
+ * @template {Record<K, (...args: any[]) => Promise<unknown>>} P
+ * @param {P} ports @param {readonly K[]} names
+ */
+export function handleWriteRejections(ports, names) {
+  for (const name of names) {
+    const write = ports[name];
+    ports[name] = /** @type {P[K]} */ ((/** @type {any[]} */ ...args) => {
+      const pending = write.apply(ports, args);
+      void pending.catch(() => {});
+      return pending;
+    });
+  }
+  return ports;
+}
+
 class Mutex {
   #tail = Promise.resolve();
   #locked = false;

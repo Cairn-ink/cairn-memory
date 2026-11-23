@@ -1,4 +1,4 @@
-import { allDigests, CoreError, passageShingles, withholdsAnyPassage } from "@cairn-ink/core";
+import { allDigests, CoreError, factIncarnationBody, passageShingles, withholdsAnyPassage } from "@cairn-ink/core";
 import { check, equal, readDump, rejects } from "./support.mjs";
 
 /** @import { FingerprintKey, SuppressionFact } from "@cairn-ink/core" */
@@ -171,8 +171,10 @@ export const SOURCE_FILTER_CASES = [
       const before = await readDump(harness);
       let factWritten = false;
       let recheckSuppressed = false;
+      const fact = sessionFact(ctx);
+      const incarnation = (await ctx.hash(factIncarnationBody(fact))).slice("sha256:".length);
       await rejects(() => uow.run(owner, { pauseLock: true }, async (tx) => {
-        const written = await suppressions.writeFact(tx, sessionFact(ctx), "c".repeat(64));
+        const written = await suppressions.writeFact(tx, fact, incarnation);
         check(written.created === true, "writeFact must create the fact in the write run");
         factWritten = true;
         try {

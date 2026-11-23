@@ -6,6 +6,7 @@ import { captureMessageTimes, copyCaptureFailure, copyCaptureKey, copyFinishItem
 /** @typedef {import("@cairn-ink/core/ports").CaptureKey} CaptureKey */
 /** @typedef {import("@cairn-ink/core/ports").FinishResult} FinishResult */
 /** @typedef {import("@cairn-ink/core/ports").SourceRef} SourceRef */
+/** @typedef {import("@cairn-ink/core/ports").Tx} Tx */
 /** @typedef {import("./unit-of-work.mjs").State} State */
 /** @typedef {{status: "leased", expiresAtMs: number, token: string, dispatched: boolean,
  * occurredAtMs: ReadonlyArray<number | null>}} Lease */
@@ -39,6 +40,23 @@ function validateToken(token) {
   if (typeof token !== "string") throw new CoreError("invalid_input");
 }
 
+/** @param {Tx} tx @param {CaptureKey} key */
+function admissionScope(tx, key) {
+  /** @type {CaptureKey["scope"] | undefined} */
+  let scope;
+  /** @type {string | undefined} */
+  let owner;
+  return {
+    get owner() {
+      scope = key?.scope;
+      owner = scope?.owner;
+      // Leave missing or malformed owners to input validation after the transaction guard.
+      return typeof owner === "string" && owner ? owner : tx.owner;
+    },
+    copyKey: () => copyCaptureKey(key, owner, scope?.namespace),
+  };
+}
+
 /** @param {FinishResult} stored @param {boolean} pending */
 function copyResult(stored, pending) {
   const copy = structuredClone(stored);
@@ -61,12 +79,12 @@ function copyResult(stored, pending) {
  * @param {boolean} embeddingRequiredOnInsert
  * @returns {import("@cairn-ink/core/ports").StorageAdapter["capture"]}
  */
-export function createCapturePorts(port, { memories, finishWrites, readWritePolicy, counters }, now, matchFacts, embeddingRequiredOnInsert) {
+export function createCapturePorts(port, { memories, finishWrites, readWritePolicy }, now, matchFacts, embeddingRequiredOnInsert) {
   return {
     async claim(tx, key, messages, options) {
-      return port.capture(tx, { owner: tx?.owner }, () => {
-        const copy = copyCaptureKey(key);
-        if (copy.scope.owner !== tx.owner) throw new CoreError("internal_error");
+      const scope = admissionScope(tx, key);
+      return port.capture(tx, scope, () => {
+        const copy = scope.copyKey();
         const occurredAtMs = captureMessageTimes(messages);
         if (!options || typeof options !== "object" || Array.isArray(options)) throw new CoreError("invalid_input");
         const { leaseMs } = options;
@@ -180,7 +198,7 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
 
           if (written.length > 0) run.writingFinishes++;
           const stored = { indexRevision: indexRevisionAfterRun(run), memories: written, suppressedCount, duplicateCount,
-            counters: counters() };
+            counters: policy.counters };
           const result = copyResult(stored, true);
           state.claims.set(identity, { key: claim.key, status: "finished", result: stored });
           state.activeTokens.delete(token);
@@ -192,9 +210,11 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
     },
 
     async eligible(tx, key, messages) {
-      const { scope, client, sessionId } = copyCaptureKey(key);
-      const occurredAtMs = captureMessageTimes(messages);
-      return port(tx, scope, false, (state) => {
+      const admission = admissionScope(tx, key);
+      return port.read(tx, admission, (getState) => {
+        const { scope, client, sessionId } = admission.copyKey();
+        const occurredAtMs = captureMessageTimes(messages);
+        const state = getState();
         const matcher = matchFacts(state.facts, scope);
         if (matcher.blocksSession(client, sessionId)) return [];
         const blocked = new Set(matcher.blockedMessages(client, sessionId, occurredAtMs));
@@ -203,9 +223,10 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
     },
 
     async assertEligible(tx, key, positions) {
-      const copy = copyCaptureKey(key);
-      const { scope, client, sessionId } = copy;
+      const scope = admissionScope(tx, key);
       return port.write(tx, scope, "conditional", () => {
+        const copy = scope.copyKey();
+        const { scope: selection, client, sessionId } = copy;
         /** @type {Set<number>} */
         const selected = new Set();
         for (const position of snapshotArray(positions)) {
@@ -216,6 +237,7 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
         }
         return (getState) => {
           const state = getState();
+          const scope = selection;
           const claim = state.claims.get(claimIdentity(copy));
           assertClaimKey(claim, copy);
           if (claim?.status !== "leased") throw new CoreError("stale_admission");
