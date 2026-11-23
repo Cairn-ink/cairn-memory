@@ -45,6 +45,7 @@
   "packages/core/src/routing/text.mjs",
   "packages/core/src/routing/visibility.mjs",
   "packages/core/src/service/entry.mjs",
+  "packages/core/src/service/forget.mjs",
   "packages/core/src/service/index.mjs",
   "packages/core/src/service/pause.mjs",
   "packages/core/src/service/reads.mjs",
