@@ -1,5 +1,6 @@
 import { allDigests, cleanContent, compareUtf8, CoreError, coreDigest, factHidesRow, tokenizeT1,
   legacyExactMac, PRIVACY_REDACTION_VERSIONS, redactCore, withholdsAnyPassage } from "@cairn-ink/core";
+import { identifier } from "../../core/src/capture/validate.mjs";
 import { fingerprintMemoryPassages } from "../../core/src/privacy/fingerprint.mjs";
 import { requiresLegacyMacDomain } from "../../core/src/privacy/withholds.mjs";
 import { decodePayload, encodePayload } from "./cursor.mjs";
@@ -31,6 +32,20 @@ function rawEntry({ owner, namespace }, { client, sessionId }, { id, role, conte
     ref: { type: "raw", namespace, id: JSON.stringify([owner, namespace, client, sessionId, id]) },
     client, sessionId, messageId: id, role, content, occurredAtMs,
   };
+}
+
+/** @param {readonly CaptureMessage[]} messages */
+function copyRawMessages(messages) {
+  const copied = copyCaptureMessages(messages);
+  for (const { id } of copied) identifier(id);
+  return copied;
+}
+
+/** @param {State["rawAnchors"]} index @param {string} client */
+function anchorsForClient(index, client) {
+  let anchors = index.get(client);
+  if (!anchors) index.set(client, anchors = new Map());
+  return anchors;
 }
 
 /** @param {PageKey} a @param {PageKey} b */
@@ -145,12 +160,51 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
       messageKey: messageId, startUtf16: 0, endUtf16: content.length, digests };
   }
 
+  /** @param {StoredFact} stored @param {Scope} scope @param {Session} session */
+  function sessionFactBlocks(stored, scope, session) {
+    const row = { type: /** @type {const} */ ("raw"), scope, source: session,
+      sessionKeyHash: "", messageKey: "", startUtf16: 0, endUtf16: 0 };
+    return factHidesRow(stored, row, policy) !== false;
+  }
+
   /** @param {State} state @param {Scope} scope @param {Session} session @param {StoredFact[]} facts */
   function allowsArchive(state, scope, session, facts) {
     if (state.rawFences.has(sessionSlot(scope.namespace, session))) return false;
-    const row = { type: /** @type {const} */ ("raw"), scope, source: session,
-      sessionKeyHash: "", messageKey: "", startUtf16: 0, endUtf16: 0 };
-    return !facts.some((stored) => stored.fact.kind === "session" && factHidesRow(stored, row, policy) !== false);
+    return !facts.some((stored) => stored.fact.kind === "session" && sessionFactBlocks(stored, scope, session));
+  }
+
+  /** @param {State} state @param {string} owner @param {Session} session */
+  function* anchorsBlockedByFacts(state, owner, session) {
+    const anchors = state.rawUnfencedAnchors.get(session.client);
+    if (!anchors) return;
+    const checked = new Set();
+    for (const stored of state.facts.values()) {
+      const { fact } = stored;
+      if (fact.kind !== "session" || fact.owner !== owner || fact.session.client !== session.client) continue;
+      const namespace = fact.namespace ?? null;
+      if ("sessionId" in fact.session) {
+        const slot = sessionSlot(namespace, fact.session);
+        if (fact.session.sessionId === session.sessionId || checked.has(slot)) continue;
+        const anchor = anchors.get(slot);
+        if (anchor) {
+          checked.add(slot);
+          yield anchor;
+        }
+      } else {
+        // Resolve hashed facts against scoped session identities before reading any proofs.
+        for (const slot of anchors.keys()) {
+          if (checked.has(slot)) continue;
+          const [anchorNamespace, , sessionId] = JSON.parse(slot);
+          if (anchorNamespace !== namespace || sessionId === session.sessionId) continue;
+          const source = { client: session.client, sessionId };
+          if (sessionFactBlocks(stored, { owner, namespace }, source)) {
+            checked.add(slot);
+            const anchor = anchors.get(slot);
+            if (anchor) yield anchor;
+          }
+        }
+      }
+    }
   }
 
   /** @param {State} state @param {Scope} scope @param {Session} session
@@ -158,20 +212,24 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
    */
   function lineageFenced(state, scope, session, proofs) {
     if (proofs == null || state.rawFences.has(sessionSlot(scope.namespace, session))) return true;
+    if (!proofs.length) return false;
+    /** @param {AnchorSession} anchor */
+    const matches = (anchor) => proofs.some(({ id, digest }) => {
+      const recorded = anchor.messages.get(id);
+      // Either scrubbed slot leaves only its ID available for comparison.
+      return recorded !== undefined && (digest === null || recorded.has(null) || recorded.has(digest));
+    });
+    // Only explicit fences promote retained proofs into this index.
     const sessions = state.rawAnchors.get(session.client);
-    if (!sessions) return false;
-    for (const anchor of sessions.values()) {
-      if (anchor.sessionId === session.sessionId) continue;
-      const matches = proofs.some(({ id, digest }) => {
-        const recorded = anchor.messages.get(id);
-        // Either scrubbed slot leaves only its ID available for comparison.
-        return recorded !== undefined && (digest === null || recorded.has(null) || recorded.has(digest));
-      });
-      if (matches) {
-        const sourceScope = { owner: scope.owner, namespace: anchor.namespace };
+    if (sessions) {
+      for (const anchor of sessions.values()) {
         const source = { client: session.client, sessionId: anchor.sessionId };
-        if (!allowsArchive(state, sourceScope, source, scopedFacts(state, sourceScope))) return true;
+        if (source.sessionId !== session.sessionId &&
+            state.rawFences.has(sessionSlot(anchor.namespace, source)) && matches(anchor)) return true;
       }
+    }
+    for (const anchor of anchorsBlockedByFacts(state, scope.owner, session)) {
+      if (matches(anchor)) return true;
     }
     return false;
   }
@@ -269,11 +327,12 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
         const copied = copyCaptureMessages(messages);
         return async (getState, _markDirty, run) => {
           if (!copied.length) return;
-          const { rawAnchors } = getState();
+          const state = getState();
           const proofs = await captureProofs(selection, client, copied);
           if (proofs === null) throw new CoreError("fingerprint_unavailable");
-          const sessions = rawAnchors.get(client) ?? new Map();
           const slot = sessionSlot(selection.namespace, { client, sessionId });
+          const index = state.rawFences.has(slot) ? state.rawAnchors : state.rawUnfencedAnchors;
+          const sessions = anchorsForClient(index, client);
           const anchor = sessions.get(slot) ?? { namespace: selection.namespace, sessionId, messages: new Map() };
           for (const { id, digest } of proofs) {
             const recorded = anchor.messages.get(id) ?? new Set();
@@ -283,7 +342,6 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
             run.stateWritten = true;
           }
           sessions.set(slot, anchor);
-          rawAnchors.set(client, sessions);
         };
       });
     },
@@ -300,7 +358,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
       return port.write(tx, guarded, "conditional", () => {
         const admission = guarded.copyKey();
         const { scope } = admission;
-        const entries = copyCaptureMessages(messages).map((message) => rawEntry(scope, admission, message));
+        const entries = copyRawMessages(messages).map((message) => rawEntry(scope, admission, message));
         return async (getState, _markDirty, run) => {
           if (!entries.length) return { archived: 0 };
           const state = getState();
@@ -337,7 +395,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
       return port.write(tx, guarded, "conditional", () => {
         const selection = guarded.copyScope();
         const admission = copySession(session);
-        const copied = copyCaptureMessages(messages);
+        const copied = copyRawMessages(messages);
         return async (getState, _markDirty, run) => {
           const counts = { archived: 0, existing: 0, withheld: 0 };
           if (!copied.length) return counts;
@@ -407,11 +465,20 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     },
     async fenceSession(tx, scope, session) {
       return port.write(tx, scope, "conditional", () => {
-        const slot = sessionSlot(writeNamespace(scope), copySession(session));
+        const namespace = writeNamespace(scope);
+        const source = copySession(session);
+        const slot = sessionSlot(namespace, source);
         return (getState, _markDirty, run) => {
-          const { rawFences } = getState();
+          const { rawFences, rawAnchors, rawUnfencedAnchors } = getState();
           if (rawFences.has(slot)) return;
           rawFences.add(slot);
+          const unfenced = rawUnfencedAnchors.get(source.client);
+          const anchor = unfenced?.get(slot);
+          if (unfenced && anchor) {
+            unfenced.delete(slot);
+            if (!unfenced.size) rawUnfencedAnchors.delete(source.client);
+            anchorsForClient(rawAnchors, source.client).set(slot, anchor);
+          }
           advanceRevision(run);
         };
       });
@@ -453,7 +520,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
   async function seedClientlessRaw(scope, sessionId, message) {
     await runSeed(scope.owner, (tx) => port.write(tx, scope, "conditional", () => {
       const target = { owner: tx.owner, namespace: writeNamespace(scope) };
-      const [copy] = copyCaptureMessages([message]);
+      const [copy] = copyRawMessages([message]);
       const row = rawEntry(target, { client: "", sessionId }, copy);
       return (getState, _markDirty, run) => {
         getState().rawRows.set(row.ref.id, row);
