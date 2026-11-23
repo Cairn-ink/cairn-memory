@@ -2046,8 +2046,12 @@ attached to Memory is dated inside `evidence`; identical body text uses
 Saved text remains untrusted data. Signed snapshots cover the selected canonical
 Memories/Cards; Raw evidence is inline and does not expand snapshot fetch.
 
-`diagnostics.coverage.raw` reports `included`, `unavailable`, `unsupported_store`
-or `partial`. Incomplete search and preparation cutoffs retain the validated
+`diagnostics.coverage.raw` reports `included`, `unavailable`, `unsupported_store`,
+`lexical_unsupported` or `partial`. For an explicit `semantic: false` read, a
+host's `rawSearch` port must declare `supportsLexicalSearch: true` and honor the
+`semantic: false` selector on `search`. Without that declaration, the read skips
+Raw search and reports `lexical_unsupported`. Both built-in Raw ports declare
+support. Incomplete search and preparation cutoffs retain the validated
 candidate prefix with `partial` coverage, including its Raw evidence and dates.
 Invalid or failed candidates are skipped individually. The first 24 search
 candidates use the optional batch method when present, with the existing

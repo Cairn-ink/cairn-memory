@@ -203,6 +203,7 @@ export function contextInput(method, value, supportedTypes, enabledSources, prof
         result.policy = { id: policy.id };
         if (selected.raw !== undefined && typeof selected.raw !== 'boolean') fail('invalid_input');
         result.raw = selected.raw ?? true;
+        result.rawSemantic = selected.semantic !== false;
         result.representation = representation;
         if (!ASSEMBLY_REPRESENTATIONS.includes(representation) && !compact) fail('invalid_input');
         if (compact && (profile === 'context-read-product-v1.1' || result.types.length !== 1 || result.types[0] !== 'memory' ||
