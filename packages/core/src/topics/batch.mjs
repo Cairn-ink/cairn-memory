@@ -1,11 +1,35 @@
 import { CoreError, isCoreError } from '../errors.mjs';
 import { CLASSIFICATION_CATALOG_LIMIT } from './catalog.mjs';
+import { classifyPlacement } from './classify.mjs';
 
-/** @import { PlacePendingBatchOptions, PlacePendingBatchResult } from './batch.mjs' */
+/** @import { PlacePendingBatchOptions, PlacePendingBatchResult, PlacePendingOptions } from './batch.mjs' */
 /** @import { ClassificationCatalogItem } from './catalog.mjs' */
+/** @import { ClassificationCatalog, ClassificationSnapshot } from './classify.mjs' */
+/** @import { PlacementProposal } from './proposal.mjs' */
 
 /** @param {PlacePendingBatchOptions} options @returns {Promise<PlacePendingBatchResult>} */
 export async function placePendingBatch({ uow, scope, placement, memories, classify }) {
+  return runPendingBatch({ uow, scope, placement, memories }, (snapshot, catalog, validateFresh) =>
+    classify({ memories: snapshot.memories }, catalog, { validateFresh }));
+}
+
+/** @param {PlacePendingOptions} options @returns {Promise<PlacePendingBatchResult>} */
+export async function placePending({ uow, scope, placement, memories, model, gate, deadline, signal, onDiagnostic }) {
+  return runPendingBatch({ uow, scope, placement, memories }, async (snapshot, catalog, validateFresh) => {
+    const { proposal } = await classifyPlacement({
+      model, snapshot, catalog, validateFresh, gate, deadline, owner: scope.owner, signal, onDiagnostic,
+    });
+    return proposal;
+  });
+}
+
+/**
+ * @param {Omit<PlacePendingBatchOptions, 'classify'>} options
+ * @param {(snapshot: ClassificationSnapshot, catalog: ClassificationCatalog, validateFresh: () => Promise<void>) =>
+ *   Promise<PlacementProposal>} classify
+ * @returns {Promise<PlacePendingBatchResult>}
+ */
+async function runPendingBatch({ uow, scope, placement, memories }, classify) {
   const batch = await uow.run(scope.owner, { readOnly: true }, async (tx) => {
     const pending = await placement.pending(tx, scope, { limit: 5 });
     if (!pending.length) return null;
@@ -28,7 +52,7 @@ export async function placePendingBatch({ uow, scope, placement, memories, class
       }
     }
     if (!snapshot.length) return null;
-    return { snapshot: { memories: snapshot }, catalogView: { map, mapExhausted: page.exhausted },
+    return { snapshot: { memories: snapshot, indexRevision }, catalogView: { map, mapExhausted: page.exhausted },
       basedOn: { indexRevision, memoryRevisions: snapshot.map(({ id, revision }) => ({ memoryId: id, revision })) } };
   });
   if (!batch) return { status: 'idle' };
@@ -45,7 +69,7 @@ export async function placePendingBatch({ uow, scope, placement, memories, class
   });
 
   try {
-    const proposal = await classify(snapshot, catalogView, { validateFresh });
+    const proposal = await classify(snapshot, catalogView, validateFresh);
     const result = await uow.run(scope.owner, {}, (tx) => placement.applyPlacement(tx, scope, basedOn, proposal));
     return { status: 'applied', ...result };
   } catch (error) {

@@ -20,3 +20,4 @@ export interface ClassificationWire {
 
 export function classifySchema(input: unknown): ClassificationSchema;
 export function classificationWire(input: ClassificationInput): ClassificationWire;
+export function schemaAccepts(schema: ClassificationSchema, value: unknown): boolean;

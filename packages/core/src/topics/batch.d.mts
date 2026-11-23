@@ -1,26 +1,22 @@
 import type { ErrorCode } from '../errors.mjs';
-import type { MemoryKind, MemoryStore, Revision, Scope, TopicStore, UnitOfWork } from '../ports/index.d.ts';
-import type { ClassificationCatalogItem } from './catalog.mjs';
+import type { MemoryStore, Scope, TopicStore, UnitOfWork } from '../ports/index.d.ts';
+import type { ClassificationCatalog, ClassificationSnapshot, ClassifyPlacementOptions } from './classify.mjs';
 import type { PlacementProposal } from './proposal.mjs';
 
-interface BatchSnapshot {
-  memories: Array<{ id: string; revision: Revision; kind: MemoryKind; content: string }>;
-}
-
-interface CatalogView {
-  map: ClassificationCatalogItem[];
-  mapExhausted: boolean;
-}
+type BatchSnapshot = Pick<ClassificationSnapshot, 'memories'>;
 
 export interface PlacePendingBatchOptions {
   uow: UnitOfWork;
   scope: Scope;
   placement: TopicStore;
   memories: Pick<MemoryStore, 'get' | 'readRevision'>;
-  classify(snapshot: BatchSnapshot, catalogView: CatalogView, options: {
+  classify(snapshot: BatchSnapshot, catalogView: ClassificationCatalog, options: {
     validateFresh(): Promise<void>;
   }): Promise<PlacementProposal>;
 }
+
+export type PlacePendingOptions = Omit<PlacePendingBatchOptions, 'classify'> &
+  Pick<ClassifyPlacementOptions, 'model' | 'gate' | 'deadline' | 'signal' | 'onDiagnostic'>;
 
 export type PlacePendingBatchResult =
   | { status: 'idle' }
@@ -28,3 +24,4 @@ export type PlacePendingBatchResult =
   | { status: 'failed'; error: { code: ErrorCode; retryable: boolean } };
 
 export function placePendingBatch(options: PlacePendingBatchOptions): Promise<PlacePendingBatchResult>;
+export function placePending(options: PlacePendingOptions): Promise<PlacePendingBatchResult>;

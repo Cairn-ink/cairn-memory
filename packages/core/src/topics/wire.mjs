@@ -51,6 +51,29 @@ export function classifySchema(input) {
   return object({ items: { ...array({ anyOf: variants }, memoryIds.length), minItems: memoryIds.length } });
 }
 
+/** Validate the strict schema subset produced by classifySchema.
+ * @param {ClassificationSchema} schema @param {unknown} value @returns {boolean}
+ */
+export function schemaAccepts(schema, value) {
+  if (schema.anyOf) return schema.anyOf.some((child) => schemaAccepts(child, value));
+  if (schema.enum && (typeof value !== 'string' || !schema.enum.includes(value))) return false;
+  if (schema.type === 'object') {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+    const fields = /** @type {Record<string, unknown>} */ (value);
+    const { required, properties } = schema;
+    return !!required && !!properties && required.every((key) => Object.hasOwn(fields, key))
+      && (schema.additionalProperties !== false || Object.keys(fields).every((key) => Object.hasOwn(properties, key)))
+      && Object.entries(properties).every(([key, child]) => schemaAccepts(child, fields[key]));
+  }
+  if (schema.type === 'array') {
+    const { items, minItems, maxItems } = schema;
+    return !!items && Array.isArray(value) && maxItems !== undefined && value.length <= maxItems
+      && (minItems === undefined || value.length >= minItems)
+      && value.every((child) => schemaAccepts(items, child));
+  }
+  return schema.type === 'string' && typeof value === 'string';
+}
+
 /** @param {Iterable<string>} values @param {'m' | 'c'} role */
 function roleMap(values, role) {
   /** @type {Map<string, string>} */
