@@ -219,11 +219,11 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
       },
     },
     fence: {
-      async assertVisible(tx, scope, refs) {
+      async assertVisible(tx, scope, refs, intent) {
         return port.read(tx, scope, (getState) => {
           const selection = copyReadScope(tx.owner, scope);
           const references = copyRefs(refs);
-          return Array.from(visibleRefs(getState(), selection, references, false), ({ ref }) => ref);
+          return Array.from(visibleRefs(getState(), selection, references, intent === "read"), ({ ref }) => ref);
         });
       },
     },

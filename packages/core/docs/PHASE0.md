@@ -108,6 +108,9 @@ Each addendum is additive unless it says what it supersedes. Adapters written ag
 8. **Retrieval scope window and memory clients (2026-11-24).** The optional `window` is a half-open range `[sinceMs, untilMs)` over store-entry time. It uses memory `createdAtMs`, card creation time, and raw `occurredAtMs`. Either bound may be omitted. A raw segment with null `occurredAtMs` is excluded whenever a window is set. With no window, time is unrestricted.
    - When `clients` is set, memories must have a matching `source.client`. A null memory client never matches. Raw keeps its client filter.
    - Adapters must apply the window and client filters inside the lexical, vector, recent, and raw candidate queries before any depth or pool cut. State tokens bind the window as they bind clients.
+9. **Visibility fence read intent (2026-11-24).** `VisibilityFence.assertVisible` accepts an optional fourth argument `"read"` to include historical memories. The fence still drops forgotten, suppressed, and out-of-scope rows. With the argument omitted, the fence drops historical memories.
+   - `MemoryService.read` supplies `"read"` to the fence in the same snapshot as delivery hydration. Recall, find, recent, and export omit the argument.
+   - Adapters that ignore the argument still satisfy the default cases.
 
 ## Change requests
 
