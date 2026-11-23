@@ -3,7 +3,7 @@
 // Cases never assume a store's write time equals nowMs. Fixed write times come only from
 // harness.setWriteTime. Expected orders use those forced times and the actual ids.
 import { compareSortKey, compareUtf8, NEAR_DUPLICATE_DISTANCE } from "@cairn-ink/core";
-import { check, equal, evidence, projectReceipt, readDump, rejects, row, source } from "./support.mjs";
+import { check, equal, evidence, fixtureEmbedding, projectReceipt, readDump, rejects, row, source } from "./support.mjs";
 
 const near = { nearDistance: NEAR_DUPLICATE_DISTANCE };
 
@@ -40,10 +40,12 @@ export const memoryCases = [
     id: "K-MEM-3", title: "orders exact, near, prior and stored matches", needs: ["nearDuplicate"],
     async run(ctx) {
       const { adapter: { uow, memories }, harness, owner } = ctx;
+      const { embeddingRequiredOnInsert } = ctx.adapter.capabilities;
+      const legacyDistance = embeddingRequiredOnInsert ? 2 : 0.11;
       const scope = ctx.scope(null);
       const contents = await Promise.all([
-        row(ctx, "exact", 0),
-        row(ctx, "legacy", 0.11),
+        row(ctx, "exact", embeddingRequiredOnInsert ? null : 0),
+        row(ctx, "legacy", legacyDistance),
         row(ctx, "closest", 0.02),
         row(ctx, "older", 0.05),
         row(ctx, "tie one", 0.05),
@@ -65,12 +67,14 @@ export const memoryCases = [
       for (const { id, updatedAtUs } of forced) await harness.setWriteTime(scope, id, updatedAtUs);
       const [exactRow, legacyRow, closestRow, olderRow, firstTie, secondTie, excludedRow] = forced;
       const tiedMatches = [olderRow, firstTie, secondTie].sort(newestFirst);
+      const firstExactVector = fixtureEmbedding(ctx)?.vector ?? ctx.vec(0);
+      const secondExactVector = fixtureEmbedding(ctx)?.vector ?? ctx.vec(0);
       await uow.run(owner, { readOnly: true }, async (tx) => {
         const batch = [
-          { textHash: contents[0].textHash, embedding: ctx.vec(0) },
+          { textHash: contents[0].textHash, embedding: firstExactVector },
           { textHash: priorOne, embedding: ctx.vec(0.05) },
           { textHash: priorTwo, embedding: ctx.vec(0.05) },
-          { textHash: contents[0].textHash, embedding: ctx.vec(0) },
+          { textHash: contents[0].textHash, embedding: secondExactVector },
           { textHash: contents[0].textHash, legacyHash: contents[1].textHash, embedding: ctx.vec(0) },
         ];
         const results = await memories.findDuplicates(tx, scope, batch, { ...near, excludeId: excludedRow.id });
@@ -81,7 +85,8 @@ export const memoryCases = [
           ["near", "stored", closestRow.id], ["near", "prior", 2], ["near", "prior", 1],
           ...tiedMatches.map(({ id }) => ["near", "stored", id]),
         ], "Duplicate order, exclusion, or threshold");
-        const distances = [0, 0, 0, 0.11, 0.02, 0.05, 0.05, 0.05, 0.05, 0.05];
+        const exactDistance = embeddingRequiredOnInsert ? 1 : 0;
+        const distances = [exactDistance, exactDistance, exactDistance, legacyDistance, 0.02, 0.05, 0.05, 0.05, 0.05, 0.05];
         for (const [i, match] of matches.entries()) {
           check(match.distance !== undefined && Math.abs(match.distance - distances[i]) < 1e-6,
             "Unexpected cosine distance");
@@ -175,6 +180,12 @@ export const memoryCases = [
       const first = await row(ctx, "original");
       const other = await row(ctx, "collision");
       const next = { ...await row(ctx, "replacement"), kind: /** @type {const} */ ("instruction") };
+      const unchanged = { ...first, kind: /** @type {const} */ ("context") };
+      const collision = { ...other };
+      if (unchanged.embedding && collision.embedding) {
+        unchanged.embedding = { ...unchanged.embedding, vector: ctx.vec(0) };
+        collision.embedding = { ...collision.embedding, vector: ctx.vec(1) };
+      }
       const id = await uow.run(owner, {}, async (tx) => {
         const { id } = await memories.insert(tx, scope, first, [], 1);
         await memories.insert(tx, scope, other, [], 1);
@@ -182,13 +193,13 @@ export const memoryCases = [
       });
       const before = await readDump(harness);
       await uow.run(owner, {}, async (tx) => {
-        equal(await memories.replaceContent(tx, scope, id, 1, { ...first, kind: "context" }, [], 2),
+        equal(await memories.replaceContent(tx, scope, id, 1, unchanged, [], 2),
           { outcome: "unchanged", revision: 1 }, "Identical hash should leave the row unchanged");
       });
       equal(await readDump(harness), before, "Identical hash wrote state");
       await rejects(() => uow.run(owner, {}, (tx) => memories.replaceContent(tx, scope, id, 2, first, null, 2)),
         "revision_conflict");
-      await rejects(() => uow.run(owner, {}, (tx) => memories.replaceContent(tx, scope, id, 1, other, null, 2)),
+      await rejects(() => uow.run(owner, {}, (tx) => memories.replaceContent(tx, scope, id, 1, collision, null, 2)),
         "memory_conflict");
       await rejects(() => uow.run(owner, {}, (tx) => memories.replaceContent(tx, ctx.scope("other"), id, 1, next, null, 2)),
         "memory_not_found");

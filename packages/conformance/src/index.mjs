@@ -1,6 +1,6 @@
 import { memoryCases } from "./memory-cases.mjs";
 import { retrievalCases } from "./retrieval-cases.mjs";
-import { bounded, check, DEFAULT_EMBEDDING_DIMENSIONS, DEFAULT_TIMEOUT_MS, FixtureEmbeddingUnavailable } from "./support.mjs";
+import { bounded, check, DEFAULT_TIMEOUT_MS, isFixtureEmbeddingExhaustion, referenceVector } from "./support.mjs";
 import { unitOfWorkCases } from "./unit-of-work-cases.mjs";
 
 export { privacyCases as PRIVACY_CASES } from "./privacy-cases.mjs";
@@ -47,6 +47,8 @@ async function runOpenedCase(factory, testCase) {
   const validTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0;
   /** @type {{ error: unknown } | undefined} */
   let caseFailure;
+  /** @type {import("./index.d.mts").CaseContext | undefined} */
+  let ctx;
   try {
     check(validTimeout, "timeoutMs must be a finite number greater than 0");
     check(settleMs === undefined || (Number.isFinite(settleMs) && settleMs > 0),
@@ -57,7 +59,8 @@ async function runOpenedCase(factory, testCase) {
     if (enabled) return `needs ${enabled} off`;
 
     const owner = crypto.randomUUID();
-    const skipReason = await testCase.run({
+    /** @type {import("./index.d.mts").CaseContext} */
+    const context = {
       adapter,
       embeddingDimensions,
       harness,
@@ -71,22 +74,14 @@ async function runOpenedCase(factory, testCase) {
       scope: (namespace) => ({ owner, namespace }),
       hash,
       vec(distance) {
-        const dimensions = embeddingDimensions ?? DEFAULT_EMBEDDING_DIMENSIONS;
-        if (!Number.isSafeInteger(dimensions) || dimensions < 2) {
-          const message = "At least two embedding dimensions are needed";
-          if (adapter.capabilities.embeddingRequiredOnInsert) throw new FixtureEmbeddingUnavailable(message);
-          throw new Error(message);
-        }
-        const cosine = 1 - distance;
-        const vector = Array(dimensions).fill(0);
-        vector[0] = cosine;
-        vector[1] = Math.sqrt(1 - cosine * cosine);
-        return vector;
+        return referenceVector(context, distance);
       },
-    });
+    };
+    ctx = context;
+    const skipReason = await testCase.run(context);
     return skipReason ?? null;
   } catch (error) {
-    if (error instanceof FixtureEmbeddingUnavailable) return error.message;
+    if (ctx && isFixtureEmbeddingExhaustion(error, ctx) && ctx.adapter.capabilities.embeddingRequiredOnInsert) return error.message;
     caseFailure = { error };
     throw error;
   } finally {

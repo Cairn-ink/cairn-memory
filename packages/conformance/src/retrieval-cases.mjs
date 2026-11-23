@@ -186,15 +186,18 @@ export const retrievalCases = [
           "Complete vector coverage returned the wrong refs");
       });
 
-      if (ctx.adapter.capabilities.embeddingRequiredOnInsert) return "requires an unembedded row for incomplete vector coverage";
-      await insert(ctx, first, await row(ctx, "missing vector"), 6008n);
+      const requiresEmbedding = ctx.adapter.capabilities.embeddingRequiredOnInsert;
+      if (!requiresEmbedding) await insert(ctx, first, await row(ctx, "missing vector"), 6008n);
+      const eligible = requiresEmbedding ? 6 : 7;
+      const otherModel = await row(ctx, "other model", 0.03);
+      check(otherModel.embedding, "Wrong-model fixture must have a vector");
       await insert(ctx, second, {
-        ...await row(ctx, "other model"), embedding: { model: "other", vector: ctx.vec(0.03) },
+        ...otherModel, embedding: { ...otherModel.embedding, model: "other" },
       }, 6009n);
 
       await uow.run(owner, { readOnly: true }, async (tx) => {
         const result = await search(tx, query, 10);
-        equal([result.coverage.eligible, result.coverage.embedded], [7, 5], "Vector eligible and embedded counts");
+        equal([result.coverage.eligible, result.coverage.embedded], [eligible, 5], "Vector eligible and embedded counts");
         equal(result.coverage.complete, false, "Incomplete vector coverage was reported complete");
         const expected = [near, ...tied, far];
         equal(result.rows.map(({ ref, updatedAtUs }) => [projectRef(ref), updatedAtUs]),
@@ -206,12 +209,12 @@ export const retrievalCases = [
         const capped = await search(tx, query, 2);
         equal(capped.rows.map(({ ref }) => projectRef(ref)), expected.slice(0, 2).map(({ ref }) => projectRef(ref)),
           "Vector depth did not return the first two candidates");
-        equal([capped.coverage.eligible, capped.coverage.embedded, capped.coverage.complete], [7, 5, false],
+        equal([capped.coverage.eligible, capped.coverage.embedded, capped.coverage.complete], [eligible, 5, false],
           "Vector depth changed coverage");
         const wider = new Float32Array(query.length + 1);
         wider.set(query);
         const mismatch = await search(tx, wider, 10);
-        equal([mismatch.coverage.eligible, mismatch.coverage.embedded, mismatch.coverage.complete], [7, 0, false],
+        equal([mismatch.coverage.eligible, mismatch.coverage.embedded, mismatch.coverage.complete], [eligible, 0, false],
           "Mismatched vector query coverage");
         equal(mismatch.rows.length, 0, "Mismatched vector query returned rows");
       });

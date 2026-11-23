@@ -134,7 +134,33 @@ export const projectReceipt = ({ client, sessionId, messageId, role, occurredAtM
 export const evidence = (messageId, occurredAtMs) =>
   ({ client: "test-client", sessionId: "test-origin", messageId, role: "user", occurredAtMs });
 
-export class FixtureEmbeddingUnavailable extends Error {}
+/** @type {WeakMap<Error, CaseContext>} */
+const fixtureExhaustions = new WeakMap();
+
+/** @param {unknown} error @param {CaseContext} ctx @returns {error is Error} */
+export function isFixtureEmbeddingExhaustion(error, ctx) {
+  return error instanceof Error && fixtureExhaustions.get(error) === ctx;
+}
+
+/** @param {CaseContext} ctx @param {number} axis @param {string} message */
+function allocateFixtureVector(ctx, axis, message) {
+  const dimensions = ctx.embeddingDimensions ?? DEFAULT_EMBEDDING_DIMENSIONS;
+  if (!Number.isSafeInteger(dimensions) || axis >= dimensions) {
+    const error = new Error(message);
+    if (ctx.adapter.capabilities.embeddingRequiredOnInsert) fixtureExhaustions.set(error, ctx);
+    throw error;
+  }
+  return Array(dimensions).fill(0);
+}
+
+/** @param {CaseContext} ctx @param {number} distance */
+export function referenceVector(ctx, distance) {
+  const vector = allocateFixtureVector(ctx, 1, "At least two embedding dimensions are needed");
+  const cosine = 1 - distance;
+  vector[0] = cosine;
+  vector[1] = Math.sqrt(1 - cosine * cosine);
+  return vector;
+}
 
 /** @type {WeakMap<CaseContext, number>} */
 const nextFixtureVector = new WeakMap();
@@ -143,18 +169,14 @@ const nextFixtureVector = new WeakMap();
 export function fixtureEmbedding(ctx) {
   if (!ctx.adapter.capabilities.embeddingRequiredOnInsert) return null;
 
-  const dimensions = ctx.embeddingDimensions ?? DEFAULT_EMBEDDING_DIMENSIONS;
   const index = nextFixtureVector.get(ctx) ?? 0;
   // Reference vectors use axes 0 and 1. The signed unit vectors on the remaining
   // axes are at cosine distance 1 or 2 from one another and 1 from the references.
   const axis = 2 + Math.floor(index / 2);
-  if (!Number.isSafeInteger(dimensions) || axis >= dimensions) {
-    throw new FixtureEmbeddingUnavailable(
-      `embeddingRequiredOnInsert needs at least ${axis + 1} dimensions for separated fixture vectors`);
-  }
+  const vector = allocateFixtureVector(ctx, axis,
+    `embeddingRequiredOnInsert needs at least ${axis + 1} dimensions for separated fixture vectors`);
   check(1 > Math.max(NEAR_DUPLICATE_DISTANCE, SUPPRESSION_DISTANCE, VECTOR_ONLY_FLOOR) + 1e-6,
     "Fixture vectors must be farther apart than the vector thresholds");
-  const vector = Array(dimensions).fill(0);
   vector[axis] = index % 2 === 0 ? 1 : -1;
   nextFixtureVector.set(ctx, index + 1);
   // Vector retrieval filters by model even when it ranks candidates without a cutoff.
