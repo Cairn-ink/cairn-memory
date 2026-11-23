@@ -112,22 +112,29 @@ export function copyContent(row) {
     source: { kind: source.kind, client: source.client, sessionId: source.sessionId }, embedding: copy };
 }
 
+/** @param {readonly Receipt[]} receipts */
+export function copyReceipts(receipts) {
+  if (!Array.isArray(receipts)) invalid();
+  return Array.from(receipts, (receipt) => {
+    if (!receipt || !nonempty(receipt.client) || !nonempty(receipt.sessionId) ||
+      !nonempty(receipt.messageId) || !roles.includes(receipt.role) ||
+      (receipt.occurredAtMs !== null && !Number.isFinite(receipt.occurredAtMs))) invalid();
+    const { client, sessionId, messageId, role, occurredAtMs } = receipt;
+    return { client, sessionId, messageId, role, occurredAtMs };
+  });
+}
+
 /** @param {readonly Receipt[]} previous @param {readonly Receipt[]} receipts */
 export function attachReceipts(previous, receipts) {
-  if (!Array.isArray(receipts)) invalid();
   /** @param {Receipt} receipt */
   const key = (receipt) => JSON.stringify([receipt.client, receipt.sessionId, receipt.messageId]);
   const seen = new Set(previous.map(key));
   const result = [...previous];
   for (const receipt of receipts) {
-    if (!receipt || !nonempty(receipt.client) || !nonempty(receipt.sessionId) ||
-      !nonempty(receipt.messageId) || !roles.includes(receipt.role) ||
-      (receipt.occurredAtMs !== null && !Number.isFinite(receipt.occurredAtMs))) invalid();
-    const { client, sessionId, messageId, role, occurredAtMs } = receipt;
     const id = key(receipt);
     if (!seen.has(id)) {
       seen.add(id);
-      result.push({ client, sessionId, messageId, role, occurredAtMs });
+      result.push(receipt);
     }
   }
   return result;

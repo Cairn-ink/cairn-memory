@@ -10,7 +10,7 @@ import { createFactStore } from "./privacy.mjs";
 /** @typedef {import("@cairn-ink/core").StoredFact} StoredFact */
 /** @typedef {import("@cairn-ink/core/ports").PauseState} PauseState */
 /** @typedef {{rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number}} State */
-/** @typedef {{state: State, run: {readonly ended: boolean}, dirty: boolean, pauseLock: boolean, conflict?: CoreError}} IssuedRun */
+/** @typedef {{state: State, run: {readonly ended: boolean}, dirty: boolean, pauseLock: boolean, writeError?: CoreError}} IssuedRun */
 
 class Mutex {
   #tail = Promise.resolve();
@@ -102,7 +102,7 @@ export function createUnitOfWork(nativeErrorMap) {
         const issuedRun = { run, state, dirty: false, pauseLock };
         issued.set(tx, issuedRun);
         const result = await fn(tx);
-        if (issuedRun.conflict) throw issuedRun.conflict;
+        if (issuedRun.writeError) throw issuedRun.writeError;
         if (issuedRun.dirty) {
           state.indexRevision++;
           current.committed = state;
@@ -125,21 +125,38 @@ export function createUnitOfWork(nativeErrorMap) {
    * @param {boolean} [pauseLock]
    */
   function port(tx, scope, write, body, pauseLock = false) {
+    return accessPort(tx, scope, write, (getState) => body(getState()), pauseLock);
+  }
+
+  /**
+   * @template T
+   * @param {Tx} tx @param {Pick<Scope, "owner">} scope @param {boolean | "conditional"} write
+   * @param {(getState: () => State, markDirty: () => void) => T} body
+   * @param {boolean} [pauseLock]
+   */
+  function accessPort(tx, scope, write, body, pauseLock = false) {
     const issuedRun = issued.get(tx);
+    let touchedState = false;
     try {
       if (!issuedRun || issuedRun.run.ended || (write && tx.readOnly) || scope?.owner !== tx.owner ||
           (pauseLock && !issuedRun.pauseLock)) {
         throw new CoreError("internal_error");
       }
-      if (write) issuedRun.dirty = true;
-      return body(issuedRun.state);
+      const result = body(() => {
+        touchedState = true;
+        return issuedRun.state;
+      }, () => { issuedRun.dirty = true; });
+      if (write === true) issuedRun.dirty = true;
+      return result;
     } catch (error) {
       const mapped = toCoreError(error, nativeErrorMap);
-      // A fact conflict aborts the run even if the caller catches the port error.
-      if (issuedRun && mapped.code === "fact_conflict") issuedRun.conflict = mapped;
+      if (write && touchedState && issuedRun) issuedRun.writeError ??= mapped;
       throw mapped;
     }
   }
+
+  // Write ports validate arguments before requesting the owner state.
+  port.write = accessPort;
 
   function dump() {
     const snapshot = [...owners]

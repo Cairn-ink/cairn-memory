@@ -174,6 +174,68 @@ test("caught fact refusals preserve the retrieval token and epoch", async () => 
   }
 });
 
+test("caught write argument errors allow other writes to commit", async () => {
+  const { uow, memories } = createMemoryAdapter();
+  const memoryScope = { owner, namespace: null };
+  const row = {
+    kind: "fact", origin: "explicit", text: "test memory", textHash: `sha256:${a}`,
+    confidence: 1, source: { kind: "mcp", client: null, sessionId: null }, embedding: null,
+  };
+  const next = { ...row, text: "test replacement", textHash: `sha256:${b}` };
+  const id = await uow.run(owner, {}, async (tx) => {
+    const { id, revision } = await memories.insert(tx, memoryScope, row, [], clockStart);
+    await assert.rejects(memories.touchDuplicate(tx, memoryScope, "test-missing", [], { confidence: -1 }, clockStart),
+      coreError("invalid_input"));
+    await assert.rejects(memories.touchDuplicate(tx, memoryScope, id, [{}], { confidence: 1 }, clockStart),
+      coreError("invalid_input"));
+    await assert.rejects(memories.replaceContent(tx, memoryScope, id, revision + 1, { ...next, text: "" }, null, clockStart),
+      coreError("invalid_input"));
+    await assert.rejects(memories.replaceContent(tx, memoryScope, id, revision, row, [{}], clockStart),
+      coreError("invalid_input"));
+    await memories.replaceContent(tx, memoryScope, id, revision, next, null, clockStart + 1);
+    return id;
+  });
+  const saved = await uow.run(owner, { readOnly: true }, (tx) => memories.get(tx, memoryScope, id));
+  assert.equal(saved.text, next.text);
+  assert.equal(saved.revision, 2);
+});
+
+test("a caught store clock failure after fact lookup aborts the run", async () => {
+  let readClock = true;
+  const adapter = createMemoryAdapter({
+    now() {
+      if (!readClock) throw new Error("clock failure");
+      return clockStart;
+    },
+  });
+  const { uow, suppressions, harness } = adapter;
+  const before = await token(adapter);
+  await assert.rejects(uow.run(owner, {}, async (tx) => {
+    await suppressions.writeFact(tx, identity("test-rollback"), a);
+    readClock = false;
+    await assert.rejects(suppressions.writeFact(tx, identity("test-clock"), b), coreError("internal_error"));
+  }), coreError("internal_error"));
+  assert.deepEqual(await harness.dump(), []);
+  assert.equal(await epoch(adapter), null);
+  assert.equal(await token(adapter), before);
+});
+
+test("a callback rejection takes precedence over a caught write failure", async () => {
+  const adapter = createMemoryAdapter();
+  const { uow, suppressions, harness } = adapter;
+  const before = await token(adapter);
+  const committed = await harness.dump();
+  const fact = identity("test-rollback");
+  const callbackError = new Error("callback failure");
+  await assert.rejects(uow.run(owner, {}, async (tx) => {
+    await suppressions.writeFact(tx, fact, a);
+    await assert.rejects(suppressions.writeFact(tx, fact, b), coreError("fact_conflict"));
+    throw callbackError;
+  }), (error) => error === callbackError);
+  assert.deepEqual(await harness.dump(), committed);
+  assert.equal(await token(adapter), before);
+});
+
 test("reports matching reads as unavailable", async () => {
   const { uow, suppressions } = createMemoryAdapter();
   await uow.run(owner, { readOnly: true }, async (tx) => {

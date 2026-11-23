@@ -1,5 +1,5 @@
 import { CoreError, factIncarnationBody } from "@cairn-ink/core";
-import { caught, check, equal, readDump, rejects } from "./support.mjs";
+import { check, equal, readDump, rejects, row } from "./support.mjs";
 
 /** @typedef {import("./index.d.mts").CaseContext} Context */
 /** @typedef {import("@cairn-ink/core").SuppressionFact} Fact */
@@ -122,18 +122,53 @@ export const privacyCases = [
       }), "fact_conflict");
       equal(await readDump(harness), before, "A fact conflict must roll back earlier writes in the same run");
       equal(await epoch(ctx), beforeEpoch, "A fact conflict must leave the owner epoch unchanged");
+    },
+  },
+  {
+    id: "K-UOW-8a", title: "rolls back after a caught fact conflict", needs: [],
+    async run(ctx) {
+      const { adapter: { uow, suppressions }, owner, harness } = ctx;
+      const fact = identity(owner, "test-existing");
+      await write(ctx, fact);
+      const conflicting = { ...fact, origin: /** @type {const} */ ("edit") };
+      const other = identity(owner, "test-new");
+      const [conflictingVersion, otherVersion] = await Promise.all([incarnation(ctx, conflicting), incarnation(ctx, other)]);
+      const before = await readDump(harness);
+      const beforeEpoch = await epoch(ctx);
 
       let callbackReturned = false;
-      const error = await caught(() => uow.run(owner, {}, async (tx) => {
+      await rejects(() => uow.run(owner, {}, async (tx) => {
         const added = await suppressions.writeFact(tx, other, otherVersion);
         check(added.created === true, "The run must create a new fact before the conflict");
         await rejects(() => suppressions.writeFact(tx, conflicting, conflictingVersion), "fact_conflict");
         callbackReturned = true;
-      }));
+      }), "fact_conflict");
       check(callbackReturned, "The callback must catch the fact conflict and return normally");
-      check(error instanceof CoreError, "A caught fact conflict must reject the run with a CoreError");
       equal(await readDump(harness), before, "A caught fact conflict must roll back earlier writes in the same run");
       equal(await epoch(ctx), beforeEpoch, "A caught fact conflict must leave the owner epoch unchanged");
+    },
+  },
+  {
+    id: "K-UOW-8b", title: "rolls back with the first caught write failure", needs: [],
+    async run(ctx) {
+      const { adapter: { uow, memories }, owner, harness } = ctx;
+      const scope = ctx.scope(null);
+      const first = await row(ctx, "original");
+      const next = await row(ctx, "replacement");
+      const before = await readDump(harness);
+      /** @type {string | undefined} */
+      let insertedId;
+      await rejects(() => uow.run(owner, {}, async (tx) => {
+        const { id, revision } = await memories.insert(tx, scope, first, [], 1);
+        await rejects(() => memories.replaceContent(tx, scope, id, revision + 1, next, null, 2), "revision_conflict");
+        await rejects(() => memories.replaceContent(tx, ctx.scope("other"), id, revision, next, null, 2), "memory_not_found");
+        insertedId = id;
+      }), "revision_conflict");
+      check(insertedId !== undefined, "The callback must catch both write failures and return normally");
+      const id = insertedId;
+      equal(await readDump(harness), before, "A caught revision conflict must roll back the inserted row");
+      equal(await uow.run(owner, { readOnly: true }, (tx) => memories.get(tx, scope, id)), null,
+        "The inserted row must be absent after the run rejects");
     },
   },
   {

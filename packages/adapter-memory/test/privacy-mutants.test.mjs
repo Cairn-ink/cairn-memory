@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
-import { PRIVACY_CASES, runCase } from "@cairn-ink/conformance";
+import { CASES, PRIVACY_CASES, runCase } from "@cairn-ink/conformance";
 import { CoreError, compareUtf8, factBody, validateSuppressionFact } from "@cairn-ink/core";
 import { createFactStore } from "../src/privacy.mjs";
 import { createUnitOfWork } from "../src/unit-of-work.mjs";
@@ -142,6 +142,53 @@ function leaksWritesOnConflict(opened, caughtOnly = false) {
       },
     },
   });
+}
+
+function withRememberedMemoryFailure(opened, wrapMemories, failureForRun) {
+  const { uow, memories } = opened.adapter;
+  const failures = new WeakMap();
+  return withPorts(opened, {
+    memories: wrapMemories(memories, (tx, error) => failures.set(tx, error)),
+    uow: {
+      run(owner, options, fn) {
+        return uow.run(owner, options, async (tx) => {
+          const result = await fn(tx);
+          if (failures.has(tx)) throw failureForRun(failures.get(tx));
+          return result;
+        });
+      },
+    },
+  });
+}
+
+function replacesCaughtWriteError(opened, failureForRun) {
+  return withRememberedMemoryFailure(opened, (memories, remember) => ({
+    ...memories,
+    async replaceContent(tx, ...args) {
+      try {
+        return await memories.replaceContent(tx, ...args);
+      } catch (error) {
+        remember(tx, error);
+        throw error;
+      }
+    },
+  }), failureForRun);
+}
+
+const unreadableId = "test-unreadable";
+
+function stickyStoreReads(opened) {
+  return withRememberedMemoryFailure(opened, (memories, remember) => ({
+    ...memories,
+    async get(tx, scope, id) {
+      const row = await memories.get(tx, scope, id);
+      if (id !== unreadableId) return row;
+      // Inject a backing-store fault after the adapter accepts the Tx and lookup.
+      const error = new CoreError("internal_error");
+      remember(tx, error);
+      throw error;
+    },
+  }), (error) => error);
 }
 
 function advancesEpochOnRetry(opened) {
@@ -391,6 +438,8 @@ const naive = {
       assert.deepEqual(await ctx.harness.dump(), before);
     },
   },
+  "K-UOW-8a": { run: PRIVACY_CASES.find(({ id }) => id === "K-FACT-2").run },
+  "K-UOW-8b": { run: acceptsAnyCaughtWriteError },
   "K-FACT-3": {
     async run(ctx) {
       for (const id of ["test-one", "test-two"]) {
@@ -471,7 +520,31 @@ const mutants = [
   ["hashed profile accepts plaintext", "K-SESS-1", factory(undefined, "hashed", "plain"), /Expected operation to reject/],
   ["incarnation includes the text embedding", "K-FACT-7", factory(hashesFullFactBody), { code: "fact_conflict" }],
   ["retry overwrites the stored embedding", "K-FACT-7", factory(overwritesRetryEmbedding), /must preserve the original stored fact and embedding/],
+  ["a caught write failure commits earlier writes", "K-UOW-8a", factory((opened) =>
+    leaksWritesOnConflict(opened, true)), /Expected operation to reject/],
+  ["the run substitutes internal_error", "K-UOW-8b", factory((opened) =>
+    replacesCaughtWriteError(opened, () => new CoreError("internal_error"))), /Expected CoreError revision_conflict/],
+  ["the last caught write error replaces the first", "K-UOW-8b", factory((opened) =>
+    replacesCaughtWriteError(opened, (error) => error)), /Expected CoreError revision_conflict/],
 ];
+
+async function acceptsAnyCaughtWriteError(ctx) {
+  const { adapter: { uow, memories }, owner, harness } = ctx;
+  const scope = ctx.scope(null);
+  const content = {
+    kind: "fact", origin: "explicit", text: "test memory", textHash: await ctx.hash("test memory"),
+    confidence: 1, source: { kind: "mcp", client: null, sessionId: null }, embedding: null,
+  };
+  const before = await harness.dump();
+  await assert.rejects(uow.run(owner, {}, async (tx) => {
+    const { id, revision } = await memories.insert(tx, scope, content, [], 1);
+    await assert.rejects(memories.replaceContent(tx, scope, id, revision + 1, content, null, 2),
+      { code: "revision_conflict" });
+    await assert.rejects(memories.replaceContent(tx, ctx.scope("other"), id, revision, content, null, 2),
+      { code: "memory_not_found" });
+  }), CoreError);
+  assert.deepEqual(await harness.dump(), before);
+}
 
 for (const [label, id, mutant, failure] of mutants) {
   test(`${id} detects ${label} after the naive case passes`, async () => {
@@ -484,7 +557,6 @@ for (const [label, id, mutant, failure] of mutants) {
 
 const roundOneMutants = [
   ["retry returns the current owner epoch", "K-FACT-1", factory(returnsCurrentEpochOnRetry), /original fact ID, epoch and creation time/],
-  ["a caught conflict commits earlier writes", "K-FACT-2", factory((opened) => leaksWritesOnConflict(opened, true)), /Expected operation to reject/],
   ["NUL-joined identity slot conflates targets", "K-FACT-3", factory(joinsSlotWithNul("identity")), { code: "fact_conflict" }],
   ["NUL-joined session slot conflates targets", "K-FACT-3", factory(joinsSlotWithNul("session")), { code: "fact_conflict" }],
   ["NUL-joined raw span slot conflates targets", "K-FACT-3r", factory(joinsSlotWithNul("rawSpan")), { code: "fact_conflict" }],
@@ -513,6 +585,29 @@ for (const profile of ["plain", "hashed"]) {
     const control = factory(hashesSlots, profile);
     for (const testCase of PRIVACY_CASES) {
       assert.equal(await runCase(control, testCase), null, testCase.id);
+    }
+  });
+
+  test(`kit cases accept sticky store read failures under the ${profile} profile`, async () => {
+    const control = factory(stickyStoreReads, profile);
+    const owner = "test-owner";
+    const { adapter: { uow, memories }, close } = await control.open({ capabilities: {} });
+    try {
+      await assert.rejects(uow.run(owner, { readOnly: true }, async (tx) => {
+        await assert.rejects(memories.get(tx, { owner, namespace: null }, unreadableId), { code: "internal_error" });
+      }), { code: "internal_error" });
+    } finally {
+      await close();
+    }
+
+    const expectedSkips = new Map([
+      ["K-MEM-5h", "awaiting the supersession suite"],
+      ["K-HYD-2", "awaiting the supersession suite"],
+    ]);
+    // The base kit uses plaintext session fixtures.
+    const cases = profile === "plain" ? [...CASES, ...PRIVACY_CASES] : PRIVACY_CASES;
+    for (const testCase of cases) {
+      assert.equal(await runCase(control, testCase), expectedSkips.get(testCase.id) ?? null, testCase.id);
     }
   });
 }

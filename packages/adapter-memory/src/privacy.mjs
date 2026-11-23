@@ -42,11 +42,12 @@ function factSlot(fact) {
 }
 
 /**
- * @param {import("./unit-of-work.mjs").State} state @param {SuppressionFact} fact
+ * @param {() => import("./unit-of-work.mjs").State} getState @param {SuppressionFact} fact
  * @param {string} incarnation @param {Pick<Options, "newId" | "now">} [options]
  */
-export function storeFact(state, fact, incarnation, { newId = () => crypto.randomUUID(), now = Date.now } = {}) {
+function storeFact(getState, fact, incarnation, { newId = () => crypto.randomUUID(), now = Date.now } = {}) {
   const slot = factSlot(fact);
+  const state = getState();
   const previous = state.facts.get(slot);
   if (previous) {
     if (previous.incarnation !== incarnation) throw new CoreError("fact_conflict");
@@ -69,14 +70,12 @@ export function createFactStore(port, runSeed, options) {
   /** @type {import("@cairn-ink/core/ports").SuppressionStore} */
   const suppressions = {
     async writeFact(tx, fact, incarnation) {
-      const scope = { owner: fact?.owner };
-      return port(tx, scope, false, () => {
-        if (tx.readOnly) throw new CoreError("internal_error");
+      return port.write(tx, { owner: fact?.owner }, true, (getState) => {
         const validated = validateSuppressionFact(fact);
         if (options.sessionRefs === "hashed" && validated.kind === "session" && "sessionId" in validated.session) {
           throw new CoreError("invalid_input");
         }
-        return port(tx, scope, true, (state) => storeFact(state, validated, incarnation, options));
+        return storeFact(getState, validated, incarnation, options);
       });
     },
     // The privacy module's fact-match functions will back these reads in part b.
@@ -109,15 +108,13 @@ export function createPauseStore(port) {
       return port(tx, { owner }, false, (state) => ({ ...state.pause }), true);
     },
     async set(tx, owner, paused) {
-      const scope = { owner };
-      return port(tx, scope, false, (state) => {
-        if (tx.readOnly) throw new CoreError("internal_error");
+      return port.write(tx, { owner }, "conditional", (getState, markDirty) => {
+        const state = getState();
         if (!paused && !state.pause.paused) return { ...state.pause };
-        return port(tx, scope, true, () => {
-          const generation = pauseGenerationAfter(state.pause.generation, paused ? "pause" : "resume");
-          state.pause = { paused, generation };
-          return { ...state.pause };
-        });
+        const generation = pauseGenerationAfter(state.pause.generation, paused ? "pause" : "resume");
+        state.pause = { paused, generation };
+        markDirty();
+        return { ...state.pause };
       }, true);
     },
   };
