@@ -1,4 +1,5 @@
 export { createPostgresUnitOfWork, query } from "./uow.mjs";
+export { createPostgresFingerprintKeyProvider } from "./fingerprint-keys.mjs";
 export { HOSTED_FINGERPRINT_LABELS } from "./fingerprint-labels.mjs";
 export { readSourceKind, requireEmbedding, storedSourceKind } from "./memory-metadata.mjs";
 export { applyMigrations } from "./migrate.mjs";
@@ -6,7 +7,7 @@ export { canonicalDigests, factSlot } from "./facts.mjs";
 export { createPostgresSuppressionStore } from "./suppression-store.mjs";
 export { createPostgresCapturePorts } from "./capture.mjs";
 export { createPostgresMemoryStore } from "./memory-store.mjs";
-export { backfillPostgresHostedDigests, createPostgresDigestGate } from "./digest-gate.mjs";
+export { assertPostgresFingerprintRotation, backfillPostgresHostedDigests, createPostgresDigestGate } from "./digest-gate.mjs";
 export { createPostgresMemoryReads } from "./memory-read.mjs";
 export { createPostgresPauseStore } from "./pause-store.mjs";
 export { createPostgresSupersessionStore } from "./supersession-store.mjs";

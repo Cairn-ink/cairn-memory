@@ -3,13 +3,10 @@ import {
 } from "../../core/src/index.mjs";
 import { CREATED_MS, floorMillis, MATCH_COLUMNS, readReceipts, TEXT_HASH } from "./memory-rows.mjs";
 
-/** @import { FactMatchIncoming, FactMatchRow, StoredFact, TextDigest } from "../../core/src/index.mjs" */
+/** @import { FactMatchIncoming, FactMatchPolicy, FactMatchRow, StoredFact, TextDigest } from "../../core/src/index.mjs" */
+/** @import { IncomingFactMatchPolicy } from "../../core/src/privacy/fact-match.d.mts" */
 /** @import { DuplicateQuery, Receipt, Scope, SourceRef } from "../../core/src/ports/index.d.ts" */
 /** @import { CandidateEntry, MemoryEntry, Query } from "./memory-rows.mjs" */
-
-const policy = { vectorSuppression: true, rowShingles: false };
-const capture = /** @type {const} */ ({ ...policy, mode: "capture" });
-const explicitSave = /** @type {const} */ ({ ...policy, mode: "explicitSave" });
 
 /** @param {string} value */
 function digestValue(value) {
@@ -58,8 +55,9 @@ function usesSource({ fact }) {
   return fact.kind === "session" || fact.kind === "window";
 }
 
-/** @param {Query} query @param {string} owner @param {boolean} [textOnly] */
-export async function readVisibilityFacts(query, owner, textOnly = false) {
+/** @param {Query} query @param {string} owner
+ * @param {{ textOnly?: boolean, legacyOnly?: boolean, allowPendingLegacy?: boolean, limit?: number }} [options] */
+export async function readVisibilityFacts(query, owner, { textOnly = false, legacyOnly = false, allowPendingLegacy = false, limit } = {}) {
   // Both halves see the same statement snapshot while legacy writers are still active.
   const { rows } = await query(`WITH owner_state AS (
     SELECT legacy_facts_ready AS ready, legacy_writes_reconciled AS reconciled
@@ -68,7 +66,7 @@ export async function readVisibilityFacts(query, owner, textOnly = false) {
   SELECT false AS legacy, false AS pending, fact_id, action_id, incarnation, epoch::text, body,
     (EXTRACT(EPOCH FROM created_at) * 1000000)::bigint::text AS created_us
     FROM core_suppression_facts WHERE user_id = $1 AND kind IN ('identity', 'text', 'session', 'window')
-      AND (NOT $2::boolean OR kind = 'text')
+      AND (NOT $2::boolean OR kind = 'text') AND NOT $3::boolean
   UNION ALL
   SELECT true, NOT COALESCE((SELECT ready FROM owner_state), false), id, NULL, NULL, NULL,
     jsonb_build_object('id', id, 'kind', kind, 'origin', origin, 'client', client, 'session_id', session_id,
@@ -77,9 +75,10 @@ export async function readVisibilityFacts(query, owner, textOnly = false) {
       'text_hash', text_hash, 'text_hmac', text_hmac, 'key_id', key_id,
       'embedding', embedding::text, 'redaction_version', redaction_version), NULL
     FROM suppressions WHERE user_id = $1
-      AND (NOT $2::boolean OR kind = 'text')
-      AND NOT COALESCE((SELECT ready AND reconciled FROM owner_state), false)`, [owner, textOnly]);
-  if (!textOnly && rows.some(row => row.pending)) throw new CoreError("ineligible");
+      AND (NOT $2::boolean OR kind = 'text' OR (NOT $5::boolean AND NOT COALESCE((SELECT ready FROM owner_state), false)))
+      AND NOT COALESCE((SELECT ready AND reconciled FROM owner_state), false)
+    LIMIT $4`, [owner, textOnly, legacyOnly, limit ?? null, allowPendingLegacy]);
+  if (!allowPendingLegacy && rows.some(row => row.pending)) throw new CoreError("ineligible");
   return rows.map(row => row.legacy ? legacyFact(row.body, owner) : {
     fact: validateSuppressionFact({ ...row.body, owner, actionId: row.action_id }),
     factId: row.fact_id, incarnation: row.incarnation, epoch: BigInt(row.epoch),
@@ -87,8 +86,50 @@ export async function readVisibilityFacts(query, owner, textOnly = false) {
   });
 }
 
-/** @param {Query} query @param {string} owner */
-export async function readVisibility(query, owner) {
+/** @param {MemoryEntry | CandidateEntry} entry @param {readonly StoredFact[]} facts @returns {Promise<FactMatchRow>} */
+export async function rowFactCandidate({ memory, digests }, facts) {
+  const { scope, id, revision, text, textHash, embedding } = memory;
+  /** @type {FactMatchRow} */
+  const candidate = { type: "memory", scope, memoryId: id, revision, embedding: embedding?.vector };
+  if (facts.some(({ fact }) => fact.kind === "text")) {
+    // Backfilled hosted rows still need the aliases previously derived from their text.
+    const onlyHostedMacs = digests?.every(d => d.alg === "hmac" && d.pipeline === "hosted-v1") ?? true;
+    const aliases = text !== undefined && onlyHostedMacs &&
+      facts.some(({ fact }) => fact.kind === "text" && fact.text.digests.some(d => d.alg === "sha256"));
+    const evidence = digests ?? [];
+    candidate.digests = digestAliases({ textHash, digests: aliases ? [...evidence, ...await allDigests(text)] : evidence });
+  }
+  return candidate;
+}
+
+/** @param {StoredFact} stored @param {FactMatchRow} row @param {readonly Pick<Receipt, "client" | "sessionId">[]} receipts
+ * @param {FactMatchPolicy} policy @param {Pick<CandidateEntry["memory"], "source" | "createdAtMs" | "updatedAtMs">} [legacySource] */
+export function matchesRowFact(stored, row, receipts, policy, legacySource) {
+  if (stored.fact.kind === "session") {
+    const { client, sessionId } = legacySource?.source ?? {};
+    const sources = receipts.length || client == null || sessionId == null ? receipts : [{ client, sessionId }];
+    return sources.some(({ client, sessionId }) =>
+      factHidesRow(stored, { ...row, source: { client, sessionId } }, policy) !== false);
+  }
+  if (stored.fact.kind !== "window") return factHidesRow(stored, row, policy) !== false;
+  // On receipt-backed memories, windows govern admission only.
+  if (!legacySource || receipts.length) return false;
+  const { source: { client, sessionId }, createdAtMs, updatedAtMs } = legacySource;
+  return [createdAtMs, updatedAtMs].some(occurredAtMs =>
+    factHidesRow(stored, { ...row, source: { client: client ?? "", sessionId, occurredAtMs } }, policy) !== false);
+}
+
+/** @param {StoredFact} stored @param {Scope} scope @param {NonNullable<FactMatchIncoming["session"]>} session
+ * @param {IncomingFactMatchPolicy} policy */
+export function sessionBlocksIncoming(stored, scope, session, policy) {
+  return stored.fact.kind === "session" && factBlocksIncoming(stored, { scope, passages: [], session }, policy) !== false;
+}
+
+/** @param {Query} query @param {string} owner @param {FactMatchPolicy["hashSessionKey"]} [hashSessionKey] */
+export async function readVisibility(query, owner, hashSessionKey) {
+  const policy = { vectorSuppression: true, rowShingles: false, hashSessionKey };
+  const capture = /** @type {const} */ ({ ...policy, mode: "capture" });
+  const explicitSave = /** @type {const} */ ({ ...policy, mode: "explicitSave" });
   const facts = await readVisibilityFacts(query, owner);
   /** @type {Map<Scope["namespace"], StoredFact[]>} */
   const byNamespace = new Map();
@@ -118,37 +159,11 @@ export async function readVisibility(query, owner) {
   }
 
   /** @param {MemoryEntry | CandidateEntry} entry @param {readonly Receipt[]} evidence */
-  async function hides({ memory, digests }, evidence) {
-    const { scope, id, revision, text, textHash, embedding } = memory;
-    const facts = byNamespace.get(scope.namespace);
+  async function hides(entry, evidence) {
+    const facts = byNamespace.get(entry.memory.scope.namespace);
     if (!facts?.length) return false;
-    /** @type {FactMatchRow} */
-    const candidate = { type: "memory", scope, memoryId: id, revision, embedding: embedding?.vector };
-    if (facts.some(({ fact }) => fact.kind === "text")) {
-      // Backfilled hosted rows still need the aliases previously derived from their text.
-      const onlyHostedMacs = digests?.every(d => d.alg === "hmac" && d.pipeline === "hosted-v1") ?? true;
-      const aliases = text !== undefined && onlyHostedMacs &&
-        facts.some(({ fact }) => fact.kind === "text" && fact.text.digests.some(d => d.alg === "sha256"));
-      const evidence = digests ?? [];
-      candidate.digests = digestAliases({ textHash, digests: aliases ? [...evidence, ...await allDigests(text)] : evidence });
-    }
-    return facts.some((stored) => {
-      if (usesSource(stored)) {
-        if (evidence.length) {
-          // On receipt-backed memories, windows govern admission. Session facts also fence reads.
-          return stored.fact.kind === "session" && evidence.some(({ client, sessionId }) =>
-            factHidesRow(stored, { ...candidate, source: { client, sessionId } }, policy) !== false);
-        }
-        const { source: { client, sessionId }, createdAtMs, updatedAtMs } = memory;
-        if (stored.fact.kind === "session") {
-          return client !== null && sessionId !== null &&
-            factHidesRow(stored, { ...candidate, source: { client, sessionId } }, policy) !== false;
-        }
-        return [createdAtMs, updatedAtMs].some(occurredAtMs =>
-          factHidesRow(stored, { ...candidate, source: { client: client ?? "", sessionId, occurredAtMs } }, policy) !== false);
-      }
-      return factHidesRow(stored, candidate, policy) !== false;
-    });
+    const candidate = await rowFactCandidate(entry, facts);
+    return facts.some(stored => matchesRowFact(stored, candidate, evidence, policy, entry.memory));
   }
 
   /** @template {MemoryEntry | CandidateEntry} T @param {readonly T[]} entries @param {boolean} [includeReceipts] */
@@ -173,8 +188,8 @@ export async function readVisibility(query, owner) {
   /** @param {Scope} scope @param {Pick<SourceRef, "client" | "sessionId">} source */
   function blocksSession(scope, { client, sessionId }) {
     if (client === null || sessionId === null) return false;
-    return byNamespace.get(scope.namespace)?.some((stored) => stored.fact.kind === "session" &&
-      factBlocksIncoming(stored, { scope, passages: [], session: { client, sessionId } }, capture) !== false) ?? false;
+    return byNamespace.get(scope.namespace)?.some(stored =>
+      sessionBlocksIncoming(stored, scope, { client, sessionId }, capture)) ?? false;
   }
 
   return { check, blocks, blocksSession, candidateColumns };

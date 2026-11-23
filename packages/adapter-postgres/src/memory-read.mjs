@@ -5,6 +5,7 @@ import { readVisibility } from "./memory-visibility.mjs";
 import { runOperation } from "./uow.mjs";
 
 /** @import { HydrateItems, ListRecent, ReadSnapshot, Receipt, Tx, VisibilityFence } from "../../core/src/ports/index.d.ts" */
+/** @import { FactMatchPolicy } from "../../core/src/index.mjs" */
 /** @import { Query } from "./memory-rows.mjs" */
 /** @typedef {ReturnType<typeof copyReadScope>} ReadSet */
 /** @typedef {{cursor: string | null, limit: number}} Page */
@@ -54,8 +55,9 @@ function scopeParams({ owner, keys, clients, since, until }, historical) {
   return [owner, keys, clients, since, until, historical];
 }
 
-/** @param {Tx} tx @param {ReadSet} scope @param {Page} page @param {boolean} historical */
-export function memoryPage(tx, scope, page, historical) {
+/** @param {Tx} tx @param {ReadSet} scope @param {Page} page @param {boolean} historical
+ * @param {FactMatchPolicy["hashSessionKey"]} [hashSessionKey] */
+export function memoryPage(tx, scope, page, historical, hashSessionKey) {
   if (!page || typeof page !== "object") invalid();
   const { cursor, limit } = page;
   if (!Number.isSafeInteger(limit) || limit < 1) invalid();
@@ -64,7 +66,7 @@ export function memoryPage(tx, scope, page, historical) {
   return runOperation(tx, async (query) => {
     let after = start;
     const items = [];
-    const visibility = await readVisibility(query, scope.owner);
+    const visibility = await readVisibility(query, scope.owner, hashSessionKey);
     while (items.length <= limit) {
       const batchSize = Math.min(PAGE_BATCH_SIZE, Math.max(16, limit - items.length + 1));
       const { rows } = await query(`SELECT ${MEMORY_COLUMNS} FROM memories WHERE ${FILTER}
@@ -89,14 +91,14 @@ export function memoryPage(tx, scope, page, historical) {
 }
 
 /** @param {Query} query @param {ReadSet} scope @param {ReturnType<typeof copyRefs>} refs
- * @param {boolean} historical @param {boolean} includeReceipts */
-async function visibleRefs(query, scope, refs, historical, includeReceipts) {
+ * @param {boolean} historical @param {boolean} includeReceipts @param {FactMatchPolicy["hashSessionKey"]} hashSessionKey */
+async function visibleRefs(query, scope, refs, historical, includeReceipts, hashSessionKey) {
   const keys = new Set(scope.keys);
   const selected = refs.filter(({ ref, key }) => ref.type === "memory" && keys.has(key));
   if (!selected.length) return [];
   const { rows } = await query(`SELECT ${MEMORY_COLUMNS} FROM memories WHERE ${FILTER} AND id = ANY($7::text[])`,
     [...scopeParams(scope, historical), [...new Set(selected.map(({ ref }) => ref.id))]]);
-  const visibility = await readVisibility(query, scope.owner);
+  const visibility = await readVisibility(query, scope.owner, hashSessionKey);
   const checked = await visibility.check(rows.map(row => readEntry(row, scope.owner)), includeReceipts);
   const byId = new Map(checked.map(entry => [entry.memory.id, entry]));
   return selected.flatMap(({ ref }) => {
@@ -152,13 +154,14 @@ function stateToken(tx, scope) {
   });
 }
 
-/** @returns {{ recent: ListRecent, snapshot: ReadSnapshot, hydrate: HydrateItems, fence: VisibilityFence }} */
-export function createPostgresMemoryReads() {
+/** @param {Pick<FactMatchPolicy, "hashSessionKey">} [options]
+ * @returns {{ recent: ListRecent, snapshot: ReadSnapshot, hydrate: HydrateItems, fence: VisibilityFence }} */
+export function createPostgresMemoryReads({ hashSessionKey } = {}) {
   return {
     recent: {
       async recent(tx, scope, page) {
         guardOwner(tx, scope);
-        return memoryPage(tx, copyReadScope(tx.owner, scope), page, false);
+        return memoryPage(tx, copyReadScope(tx.owner, scope), page, false, hashSessionKey);
       },
     },
     snapshot: {
@@ -180,7 +183,7 @@ export function createPostgresMemoryReads() {
         const references = copyRefs(refs);
         if (intent !== "recall" && intent !== "read" && intent !== "export") invalid();
         return runOperation(tx, async (query) => {
-          const rows = await visibleRefs(query, selection, references, intent !== "recall", true);
+          const rows = await visibleRefs(query, selection, references, intent !== "recall", true, hashSessionKey);
           return rows.map(item => ({ ...structuredClone(item), sourceDates: sourceDates(item.receipts) }));
         });
       },
@@ -192,7 +195,7 @@ export function createPostgresMemoryReads() {
         const references = copyRefs(refs);
         if (intent !== undefined && intent !== "read") invalid();
         return runOperation(tx, async (query) =>
-          (await visibleRefs(query, selection, references, intent === "read", false)).map(({ ref }) => ref));
+          (await visibleRefs(query, selection, references, intent === "read", false, hashSessionKey)).map(({ ref }) => ref));
       },
     },
   };

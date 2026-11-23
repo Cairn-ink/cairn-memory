@@ -1,4 +1,4 @@
-import type { Tx, UnitOfWork } from "../../core/src/index.mjs";
+import type { FactMatchPolicy, FingerprintKeyProvider, Tx, UnitOfWork } from "../../core/src/index.mjs";
 import type { SourceRef } from "../../core/src/ports/common.d.ts";
 import type {
   HydrateItems, InsertRow, ListRecent, MemoryStore, PauseStore, ReadSnapshot,
@@ -9,6 +9,8 @@ import type { ConnectionSource, QueryResult } from "./driver.mjs";
 
 export type { Connection, ConnectionSource, QueryResult } from "./driver.mjs";
 export { HOSTED_FINGERPRINT_LABELS } from "./fingerprint-labels.mjs";
+export function createPostgresFingerprintKeyProvider(secret?: string | null): FingerprintKeyProvider;
+export function assertPostgresFingerprintRotation(tx: Tx, currentKeyId: string, nextKeyId: string): Promise<void>;
 
 export function createPostgresUnitOfWork(source: ConnectionSource): UnitOfWork;
 export function query(tx: Tx, text: string, values?: unknown[]): Promise<QueryResult>;
@@ -31,10 +33,15 @@ export function applyMigrations(source: ConnectionSource, migrations: readonly M
 export function canonicalDigests(digests: readonly TextDigest[]): TextDigest[];
 /** Snapshot and validate a suppression fact before computing its storage slot. */
 export function factSlot(fact: SuppressionFact): string;
-export function createPostgresSuppressionStore(): Pick<SuppressionStore, "writeFact" | "epoch">;
+type SessionHashOptions = Pick<FactMatchPolicy, "hashSessionKey">;
+export function createPostgresSuppressionStore(
+  options?: SessionHashOptions & Pick<FactMatchPolicy, "vectorSuppression"> & { sessionRefs?: "plain" | "hashed" },
+): SuppressionStore;
 export { createPostgresCapturePorts, type CaptureOptions } from "./capture.mjs";
 
-export function createPostgresMemoryStore(options?: { nearDuplicate?: boolean; allowNonNullNamespace?: boolean }): MemoryStore;
+export function createPostgresMemoryStore(
+  options?: SessionHashOptions & { nearDuplicate?: boolean; allowNonNullNamespace?: boolean },
+): MemoryStore;
 export function createPostgresDigestGate(uow: UnitOfWork,
   keyIdsForOwner: (owner: string) => readonly string[] | Promise<readonly string[]>): (owner: string) => Promise<number>;
 /** Append missing hosted-v1 MACs for one owner's existing rows. Returns the number updated. */
@@ -43,7 +50,7 @@ export function backfillPostgresHostedDigests(uow: UnitOfWork, owner: string, op
   redactionVersion: number;
   macForText: (text: string) => string | Promise<string>;
 }): Promise<number>;
-export function createPostgresMemoryReads(): {
+export function createPostgresMemoryReads(options?: SessionHashOptions): {
   recent: ListRecent;
   snapshot: ReadSnapshot;
   hydrate: HydrateItems;
