@@ -26,9 +26,9 @@ test("admission prepares and hashes one snapshot before a single pause-locked wr
     get() { reads++; return "  ＡＰＩ＿ＫＥＹ＝" + secret + "\n  keep this  "; },
   });
   raw.messages[0].occurredAtMs = 1234;
-  const prepared = { ...fixtureMessage, content: "API_KEY=[REDACTED] keep this", occurredAtMs: 1234 };
+  const prepared = { ...fixtureMessage, content: "  API_KEY=[REDACTED]\n  keep this  ", occurredAtMs: 1234 };
   const payload = JSON.stringify([selection.client, selection.sessionId, selection.eventId,
-    [[prepared.id, prepared.role, prepared.content, prepared.occurredAtMs]]]);
+    [[prepared.id, prepared.role, "API_KEY=[REDACTED] keep this", prepared.occurredAtMs]]]);
   const key = { scope, ...selection, payloadDigest: createHash("sha256").update(payload).digest("hex") };
 
   const clone = t.mock.method(globalThis, "structuredClone", structuredClone);
