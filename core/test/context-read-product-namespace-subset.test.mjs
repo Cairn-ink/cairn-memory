@@ -89,7 +89,7 @@ test('cursor continuation binds personal, either project, full, and semantic mod
 test('scoped assembly forces implicit Raw off and refuses explicit raw true before provider work',async t=>{
   let rawCalls=0;
   const trap=()=>{rawCalls++;throw Error('broad Raw called');};
-  const s=subsetFixture(t,{rawSearch:{search:trap,prepare:trap,revalidate:trap}});
+  const s=subsetFixture(t,{rawSearch:{supportsLexicalSearch:true,search:trap,prepare:trap,revalidate:trap}});
   for(const patch of [{},{raw:false}])scoped(ok(await s.run('contextRead',{namespaces:[personal],...patch})),[personal]);
   assert.deepEqual(await s.run('contextRead',{namespaces:[personal],raw:true}),bare('invalid_input'));
   assert.equal(rawCalls,0);

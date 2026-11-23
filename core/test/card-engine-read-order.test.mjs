@@ -104,6 +104,7 @@ for (const mixed of [false, true]) for (const change of ['revision', 'forget', '
     const value = fixture().raw.items[0].value, handle = { value };
     reader = openMemoryCore({ path: f.path, contextRead: { version: 'context-read-v1', authority: f.trusted.authority,
       counter: { id: 'o200k_base', countTokens: f.model.countTokens }, rawSearch: {
+        supportsLexicalSearch: true,
         search: () => ({ candidates: [{ namespace: ns, conversationId: value.conversationId, messageId: value.messageId }], coverage: { status: 'complete' } }),
         prepare: () => handle, revalidate: handles => handles.map(() => value) } } });
     f.workspace.defer(() => reader.close());
