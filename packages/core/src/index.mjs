@@ -2,6 +2,7 @@ export * from "./errors.mjs";
 export * from "./capabilities.mjs";
 export * from "./suppression-fact.mjs";
 export * from "./decisions.mjs";
+export * from "./memory-policy/index.mjs";
 export * from "./utf8.mjs";
 export * from "./retrieval/tokenize.mjs";
 export * from "./retrieval/bm25.mjs";
