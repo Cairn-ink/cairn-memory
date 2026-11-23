@@ -6,18 +6,18 @@ import { caught, check, equal, readDump, rejects } from "./support.mjs";
 /** @typedef {import("@cairn-ink/core/ports").ClaimResult} ClaimResult */
 /** @typedef {import("@cairn-ink/core/ports").FinishItem} FinishItem */
 /** @typedef {import("@cairn-ink/core/ports").FinishResult} FinishResult */
-/** @typedef {import("./factory.d.ts").JsonValue} JsonValue */
 
 const leaseMs = 60_000;
 const terminal = { code: "invalid_input", retryable: false };
 const retryable = { code: "storage_error", retryable: true };
+const captureSource = /** @type {const} */ ({ kind: "capture", client: "test-client", sessionId: "test-session" });
 /** @type {readonly import("@cairn-ink/core/ports").CaptureMessage[]} */
 const messages = [{ id: "message", role: "user", content: "A captured message.", occurredAtMs: null }];
 
 /** @param {CaseContext} ctx @param {string} eventId @returns {CaptureKey} */
 function keyFor(ctx, eventId) {
-  return { scope: ctx.scope(null), client: "test-client", sessionId: "test-session", eventId,
-    payloadDigest: "a".repeat(64) };
+  const { client, sessionId } = captureSource;
+  return { scope: ctx.scope(null), client, sessionId, eventId, payloadDigest: "a".repeat(64) };
 }
 
 /** @param {CaseContext} ctx @param {CaptureKey} key @param {number} [duration] */
@@ -73,22 +73,12 @@ function mutateResult(result) {
   Reflect.set(result.memories, "length", 0);
 }
 
-/** @param {JsonValue} dump @param {string} value @returns {number} */
-function countInDump(dump, value) {
-  if (dump === value) return 1;
-  if (dump === null || typeof dump !== "object") return 0;
-  let count = 0;
-  for (const entry of Object.values(dump)) count += countInDump(entry, value);
-  return count;
-}
-
-/** @param {CaseContext["harness"]} harness @param {JsonValue} before @param {FinishItem} item */
-async function checkSuppressedDump(harness, before, item) {
-  const after = await readDump(harness);
-  for (const value of [item.content, item.textHash]) {
-    equal(countInDump(after, value), countInDump(before, value),
-      "A suppressed item must not appear in the committed dump");
-  }
+/** @param {CaseContext} ctx @param {FinishItem} item */
+async function storedExactMatches({ adapter: { uow, memories }, owner, scope }, { textHash }) {
+  const { matches } = await uow.run(owner, { readOnly: true }, (tx) =>
+    memories.readWritePolicy(tx, scope(null), [{ textHash }], captureSource, "full"));
+  // Full write policy includes hidden rows that export omits.
+  return matches[0].flatMap((match) => match.kind === "stored" && match.match === "exact" ? [match.id] : []).sort();
 }
 
 /** @type {readonly import("./index.d.mts").ConformanceCase[]} */
@@ -193,7 +183,7 @@ export const captureCases = [
       const seed = await finishNew("seed", [stored]);
       check(seed.memories.length === 1, "The seed finish must produce one memory");
       const beforeA = await stateToken(ctx);
-      const beforeSuppression = await readDump(harness);
+      const beforeSuppression = await storedExactMatches(ctx, blocked);
       const a = await finishNew("mixed", [inserted, stored, blocked]);
       check(Number.isSafeInteger(a.indexRevision), "Finish must return a safe integer index revision");
       equal(a.indexRevision, seed.indexRevision + 1, "A finish with multiple writes must advance the index once");
@@ -207,7 +197,7 @@ export const captureCases = [
       const scopeRows = await readPage();
       equal(scopeRows.items.map(({ text }) => text).sort(), [inserted.content, stored.content].sort(),
         "The write batch must leave only the stored and new rows visible");
-      await checkSuppressedDump(harness, beforeSuppression, blocked);
+      equal(await storedExactMatches(ctx, blocked), beforeSuppression, "A suppressed item must leave the same stored exact matches");
       const afterA = await stateToken(ctx);
       check(afterA !== beforeA, "A finish with writes must invalidate the old state token");
 
@@ -216,7 +206,7 @@ export const captureCases = [
       equal(b.memories.length, 0, "A suppressed-only finish must return no memories");
       equal(b.indexRevision, a.indexRevision, "A suppressed-only finish must preserve the index revision");
       equal(await stateToken(ctx), afterA, "A suppressed-only finish must preserve the state token");
-      await checkSuppressedDump(harness, beforeSuppression, blocked);
+      equal(await storedExactMatches(ctx, blocked), beforeSuppression, "A suppressed item must leave the same stored exact matches");
 
       const empty = await finishNew("empty", []);
       equal(empty.memories.length, 0, "An empty finish must return no memories");
@@ -282,11 +272,11 @@ export const captureCases = [
           },
         });
         const token = claimedToken(await claim(ctx, keyFor(ctx, "near-forgotten")));
-        const before = await readDump(harness);
+        const before = await storedExactMatches(ctx, nearby);
         const result = await finish(ctx, token, [nearby]);
         equal(result.suppressedCount, 1, "Full capture policy must suppress a vector match with a different digest");
         equal(result.memories.length, 0, "A vector-suppressed item must return no memory");
-        await checkSuppressedDump(harness, before, nearby);
+        equal(await storedExactMatches(ctx, nearby), before, "A suppressed item must leave the same stored exact matches");
       },
     },
   },

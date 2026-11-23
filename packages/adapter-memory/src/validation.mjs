@@ -73,11 +73,29 @@ export function validateTime(nowMs) {
   if (!Number.isSafeInteger(nowMs) || nowMs < 0) invalid();
 }
 
+/** @param {import("@cairn-ink/core/ports").Scope} scope */
+export function writeNamespace({ namespace }) {
+  if (!nullableString(namespace)) invalid();
+  return namespace;
+}
+
+/** @param {string} id */
+export function validateMemoryId(id) {
+  if (typeof id !== "string") invalid();
+}
+
 /** @param {DuplicateMerge} merge */
-export function validateMerge(merge) {
+function validateMerge(merge) {
   if (!merge || !Number.isFinite(merge.confidence) || merge.confidence < 0 || merge.confidence > 1 ||
     (merge.kind !== undefined && !kinds.includes(merge.kind)) ||
     (merge.origin !== undefined && !origins.includes(merge.origin))) invalid();
+}
+
+/** @param {DuplicateMerge} merge */
+export function copyMerge(merge) {
+  validateMerge(merge);
+  const { confidence, kind, origin } = merge;
+  return { confidence, kind, origin };
 }
 
 /** @param {import("@cairn-ink/core/ports").SourceRef} source */

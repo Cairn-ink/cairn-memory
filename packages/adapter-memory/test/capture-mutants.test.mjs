@@ -29,6 +29,11 @@ function withCapture(opened, changes) {
   return { ...opened, adapter: { ...opened.adapter, capture: { ...opened.adapter.capture, ...changes } } };
 }
 
+function stringDump(opened) {
+  const { harness } = opened;
+  return { ...opened, harness: { ...harness, async dump() { return JSON.stringify(await harness.dump()); } } };
+}
+
 function identity({ scope, client, eventId }) {
   return JSON.stringify([scope.owner, scope.namespace ?? null, client, eventId]);
 }
@@ -397,7 +402,7 @@ function advancesOnBookkeeping(opened) {
 
 let mutationId = 0;
 
-async function sourceMutant(file, original, replacement) {
+async function sourceMutant(file, original, replacement, wrap) {
   const entry = import.meta.resolve("@cairn-ink/adapter-memory");
   const target = new URL(file, entry).href;
   const source = await readFile(new URL(target), "utf8");
@@ -420,7 +425,7 @@ async function sourceMutant(file, original, replacement) {
   });
   try {
     const mutant = await import(mutantEntry);
-    return factory(undefined, mutant.createMemoryAdapter);
+    return factory(wrap, mutant.createMemoryAdapter);
   } finally {
     hooks.deregister();
   }
@@ -428,10 +433,10 @@ async function sourceMutant(file, original, replacement) {
 
 const regressions = [
   ["K-CLM-4", "dispatch returns an unusable token", () => factory(changesDispatchToken), /stale_admission/],
-  ["K-CLM-3", "finish writes a row it reports as suppressed", () => sourceMutant("capture.mjs",
-    'case "suppressed":\n              suppressedCount++;',
-    'case "suppressed":\n              await finishWrites.insert(tx, scope, { ...row, source }, receipts, nowMs);\n              suppressedCount++;'),
-    /A suppressed item must not appear in the committed dump/],
+  ["K-CLM-3", "finish writes a hidden row with a string dump", () => sourceMutant("capture.mjs",
+    'case "suppressed":',
+    'case "suppressed":\n                await finishWrites.insert(tx, scope, { ...row, source }, receipts, nowMs);',
+    stringDump), /A suppressed item must leave the same stored exact matches/],
   ["K-CLM-3", "finish uses hash policy", () => sourceMutant("capture.mjs",
     'readWritePolicy(tx, scope, queries, source, "full")', 'readWritePolicy(tx, scope, queries, source, "hash")'),
     /Full capture policy must suppress a vector match with a different digest/],
@@ -458,6 +463,11 @@ for (const [id, defect, candidate, failure] of regressions) {
     await assert.rejects(runCase(await candidate(), testCase), failure);
   });
 }
+
+test("finish conformance accepts a JSON-safe string dump", async () => {
+  const testCase = CAPTURE_CASES.find(({ id }) => id === "K-CLM-3");
+  assert.equal(await runCase(factory(stringDump), testCase), null);
+});
 
 test("the dispatch case accepts a staged replacement token", async () => {
   const testCase = CAPTURE_CASES.find(({ id }) => id === "K-CLM-4");

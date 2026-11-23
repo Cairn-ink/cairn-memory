@@ -14,6 +14,15 @@ const item = (digest = "a") => ({
   content: `Memory ${digest}`, kind: "fact", confidence: 0.4,
   textHash: `sha256:${digest.repeat(64)}`, embedding: null, receipts: [],
 });
+const insertRow = ({ content, kind, confidence, textHash, embedding }) => ({
+  text: content, kind, confidence, textHash, embedding, origin: "explicit",
+  source: { kind: "mcp", client: null, sessionId: null },
+});
+const exactFact = ({ textHash }) => ({
+  owner, actionId: "forget-item", origin: "forget", kind: "text", mode: "exact",
+  text: { digests: [{ alg: "sha256", value: textHash.slice(7), pipeline: "core",
+    redactionVersion: 1, keyId: null }] },
+});
 const options = { leaseMs: 100 };
 const failure = { code: "storage_error", retryable: true };
 const errorCode = (code) => (error) => error instanceof CoreError && error.code === code;
@@ -264,11 +273,166 @@ test("an ordinary write begun during a finish runs after the whole finish", asyn
   const adapter = createMemoryAdapter({ now: () => 0, newId: () => id });
   const { capture, memories } = adapter;
   const { token } = await claim(adapter, "finish");
-  const [result, erased] = await write(adapter, (tx) =>
-    Promise.all([capture.finish(tx, token, [item()]), memories.erase(tx, scope, id)]));
+  const [result, erased, duringFinish] = await write(adapter, (tx) =>
+    Promise.all([capture.finish(tx, token, [item()]), memories.erase(tx, scope, id), memories.get(tx, scope, id)]));
   assert.equal(result.memories[0].id, id);
   assert.equal(erased, true);
+  assert.equal(duringFinish, null);
   assert.equal(await read(adapter, (tx) => memories.get(tx, scope, id)), null);
+});
+
+test("queued inserts copy a reused row when submitted", async () => {
+  const adapter = createMemoryAdapter({ now: () => 0 });
+  const { capture, memories } = adapter;
+  const { token } = await claim(adapter, "queue");
+  const row = insertRow(item("a"));
+  const [, first, second] = await write(adapter, (tx) => {
+    const active = capture.finish(tx, token, []);
+    const first = memories.insert(tx, scope, row, [], 1);
+    Object.assign(row, insertRow(item("b")));
+    const second = memories.insert(tx, scope, row, [], 2);
+    return Promise.all([active, first, second]);
+  });
+  const rows = await read(adapter, (tx) => Promise.all([first, second].map(({ id }) => memories.get(tx, scope, id))));
+  assert.deepEqual(rows.map(({ text }) => text), [item("a").content, item("b").content]);
+});
+
+test("a queued fact suppresses the digest submitted by the caller", async () => {
+  const adapter = createMemoryAdapter({ now: () => 0 });
+  const { capture, suppressions } = adapter;
+  const { token } = await claim(adapter, "queue");
+  const next = await claim(adapter, "blocked");
+  const blocked = item("a");
+  const fact = exactFact(blocked);
+  const [, , result] = await write(adapter, (tx) => {
+    const active = capture.finish(tx, token, []);
+    const written = suppressions.writeFact(tx, fact, "a".repeat(64));
+    fact.text.digests[0].value = "b".repeat(64);
+    return Promise.all([active, written, capture.finish(tx, next.token, [blocked])]);
+  });
+  assert.equal(result.suppressedCount, 1);
+  assert.deepEqual(result.memories, []);
+});
+
+test("queued edits retain their scope, merge, and replacement values", async () => {
+  const adapter = createMemoryAdapter({ now: () => 0 });
+  const { capture, memories } = adapter;
+  const { token } = await claim(adapter, "queue");
+  const [row, removed] = await write(adapter, (tx) => Promise.all([
+    memories.insert(tx, scope, insertRow(item("a")), [], 0),
+    memories.insert(tx, scope, insertRow(item("b")), [], 0),
+  ]));
+  const target = { ...scope };
+  const merge = { confidence: 0.8 };
+  const next = insertRow({ ...item("c"), embedding: { model: "test", vector: new Float32Array([1, 0]) } });
+  const [, touched, replaced, erased] = await write(adapter, (tx) => {
+    const active = capture.finish(tx, token, []);
+    const touch = memories.touchDuplicate(tx, target, row.id, [], merge, 1);
+    const replace = memories.replaceContent(tx, target, row.id, 2, next, null, 2);
+    const erase = memories.erase(tx, target, removed.id);
+    target.namespace = "changed";
+    merge.confidence = 0.4;
+    next.embedding.vector[0] = 0;
+    return Promise.all([active, touch, replace, erase]);
+  });
+  assert.deepEqual([touched, replaced, erased], [
+    { outcome: "changed", revision: 2 }, { outcome: "changed", revision: 3 }, true,
+  ]);
+  const saved = await read(adapter, (tx) => memories.get(tx, scope, row.id));
+  assert.deepEqual([saved.text, saved.embedding.vector], [item("c").content, [1, 0]]);
+});
+
+test("queued capture calls validate and copy their arguments on entry", async () => {
+  const adapter = createMemoryAdapter({ now: () => 0 });
+  const { capture, memories } = adapter;
+  const active = await claim(adapter, "queue");
+  const next = await claim(adapter, "finish");
+  const retry = await claim(adapter, "retry");
+  const admissionKey = { ...key("submitted"), scope: { ...scope } };
+  const lease = { leaseMs: 100 };
+  const invalid = item("a");
+  invalid.content = "";
+  const valid = item("b");
+  const release = { ...failure };
+  const [, , , , result] = await write(adapter, (tx) => {
+    const pending = capture.finish(tx, active.token, []);
+    const admission = capture.claim(tx, admissionKey, [], lease);
+    const abandon = capture.abandon(tx, retry.token, release);
+    const invalidFinish = assert.rejects(capture.finish(tx, next.token, [invalid]), errorCode("invalid_input"));
+    const finish = capture.finish(tx, next.token, [valid]);
+    admissionKey.scope.namespace = "changed";
+    lease.leaseMs = 1;
+    release.retryable = false;
+    invalid.content = "Repaired after submission";
+    valid.content = "Changed after submission";
+    return Promise.all([pending, admission, abandon, invalidFinish, finish]);
+  });
+  await adapter.harness.advanceClock(2);
+  assert.equal((await claim(adapter, "submitted")).status, "processing");
+  assert.equal((await claim(adapter, "retry")).status, "claimed");
+  const row = await read(adapter, (tx) => memories.get(tx, scope, result.memories[0].id));
+  assert.equal(row.text, item("b").content);
+});
+
+test("finish started by an insert ID callback sees the inserted row", async () => {
+  let nextId = 0;
+  let onId;
+  const adapter = createMemoryAdapter({ now: () => 9, newId() {
+    const id = `row-${++nextId}`;
+    onId?.();
+    return id;
+  } });
+  const { capture, memories } = adapter;
+  const { token } = await claim(adapter, "reentrant");
+  let finishing;
+  const inserted = await write(adapter, (tx) => {
+    onId = () => {
+      onId = undefined;
+      finishing = capture.finish(tx, token, [item()]);
+    };
+    return memories.insert(tx, scope, insertRow(item()), [], 0);
+  });
+  const page = await read(adapter, (tx) => memories.exportPage(tx, scope, { cursor: null, limit: 10 }));
+  const finished = await finishing;
+  assert.deepEqual(finished.memories, [{ id: inserted.id, revision: 1, outcome: "touched" }]);
+  assert.deepEqual(page.items.map(({ id, updatedAtMs }) => [id, updatedAtMs]), [[inserted.id, 9]]);
+});
+
+test("interleaved insert, finish, and fact writes match FIFO sequential execution", async () => {
+  async function complete(interleave) {
+    let onId;
+    let nextId = 0;
+    const adapter = createMemoryAdapter({ now: () => 0, newId() {
+      const id = `row-${++nextId}`;
+      onId?.();
+      return id;
+    } });
+    const { capture, memories, suppressions } = adapter;
+    const { token } = await claim(adapter, "finish");
+    const second = item("b");
+    const results = await write(adapter, async (tx) => {
+      const insert = () => memories.insert(tx, scope, insertRow(item()), [], 0);
+      const finish = () => capture.finish(tx, token, [item(), second]);
+      const block = () => suppressions.writeFact(tx, exactFact(second), "a".repeat(64));
+      if (!interleave) return [await insert(), await finish(), await block()];
+
+      let finishing;
+      let blocking;
+      onId = () => {
+        onId = undefined;
+        finishing = finish();
+        blocking = block();
+      };
+      const inserting = insert();
+      return Promise.all([inserting, finishing, blocking]);
+    });
+    const page = await read(adapter, (tx) => memories.exportPage(tx, scope, { cursor: null, limit: 10 }));
+    return { results, visibleIds: page.items.map(({ id }) => id) };
+  }
+  const sequential = await complete(false);
+  assert.deepEqual(sequential.results[1].memories.map(({ outcome }) => outcome), ["touched", "inserted"]);
+  assert.deepEqual(sequential.visibleIds, [sequential.results[0].id]);
+  assert.deepEqual(await complete(true), sequential);
 });
 
 test("ordinary writes and writing finishes each contribute to the committed revision", async (t) => {

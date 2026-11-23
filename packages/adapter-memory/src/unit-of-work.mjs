@@ -119,6 +119,8 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now) {
         };
         issued.set(tx, issuedRun);
         const result = await fn(tx);
+        // A write callback can submit another write before the run callback returns.
+        while (issuedRun.writeTail) await issuedRun.writeTail;
         if (issuedRun.poisoned) throw new CoreError(issuedRun.writeErrorCode);
         if (issuedRun.indexDirty || issuedRun.stateWritten) {
           const revision = indexRevisionAfterRun(issuedRun);
@@ -147,8 +149,8 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now) {
    * @param {boolean} [pauseLock]
    */
   function port(tx, scope, write, body, pauseLock = false) {
-    const access = write ? writePort : accessPort;
-    return access(tx, scope, write, (getState) => body(getState()), pauseLock);
+    if (write) return writePort(tx, scope, true, () => (getState) => body(getState()), pauseLock);
+    return accessPort(tx, scope, false, (getState) => body(getState()), pauseLock);
   }
 
   /**
@@ -169,7 +171,6 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now) {
         touchedState = true;
         return issuedRun.state;
       }, () => { issuedRun.indexDirty = true; }, issuedRun);
-      if (write === true) issuedRun.indexDirty = true;
       return await result;
     } catch (error) {
       const firstFailure = write && touchedState && issuedRun && !issuedRun.poisoned;
@@ -187,26 +188,36 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now) {
   /**
    * @template T
    * @param {Tx} tx @param {Pick<Scope, "owner">} scope @param {boolean | "conditional"} write
-   * @param {(getState: () => State, markDirty: () => void, run: IssuedRun) => T} body
-   * @param {boolean} [pauseLock] @param {boolean} [exclusive]
+   * @param {() => (getState: () => State, markDirty: () => void, run: IssuedRun) => T} prepare
+   * @param {boolean} [pauseLock]
    */
-  async function writePort(tx, scope, write, body, pauseLock = false, exclusive = false) {
+  async function writePort(tx, scope, write, prepare, pauseLock = false) {
     const run = issued.get(tx);
-    if (!run || (!exclusive && !run.writeTail)) return accessPort(tx, scope, write, body, pauseLock);
+    if (!run) throw new CoreError("internal_error");
 
-    // A finish holds the queue from policy read through claim completion. Ordinary writes
-    // still run immediately when there is no finish or queued write ahead of them.
+    // Reserve the slot before preparation or execution can call back into another port.
     const previous = run.writeTail;
     /** @type {() => void} */
     let release = () => {};
-    /** @type {Promise<void>} */
-    const tail = new Promise((resolve) => { release = resolve; });
+    const complete = new Promise((resolve) => { release = () => resolve(undefined); });
+    // Failed preparation can release its slot early. Later writes still wait for its predecessor.
+    const tail = previous ? previous.then(() => complete) : complete;
     run.writeTail = tail;
-    try {
-      if (previous) await previous;
-      return await accessPort(tx, scope, write, body, pauseLock);
-    } finally {
+    void tail.then(() => {
       if (run.writeTail === tail) run.writeTail = undefined;
+    });
+    try {
+      return await accessPort(tx, scope, write, (getState, markDirty, run) => {
+        const body = prepare();
+        const execute = () => {
+          if (run.run.ended) throw new CoreError("internal_error");
+          const result = body(getState, markDirty, run);
+          if (write === true) markDirty();
+          return result;
+        };
+        return previous ? previous.then(execute) : execute();
+      }, pauseLock);
+    } finally {
       release();
     }
   }
@@ -217,18 +228,19 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now) {
   /**
    * Memory operations invoked by the finish that already holds the queue.
    * @template T
-   * @param {Tx} tx @param {Pick<Scope, "owner">} scope @param {(getState: () => State) => T} body
+   * @param {Tx} tx @param {Pick<Scope, "owner">} scope @param {() => (getState: () => State) => T} prepare
    */
-  port.writeFromFinish = (tx, scope, body) => accessPort(tx, scope, "conditional", body);
+  port.writeFromFinish = (tx, scope, prepare) => accessPort(tx, scope, "conditional", (getState) => prepare()(getState));
 
   /**
    * @template T
    * @param {Tx} tx @param {Pick<Scope, "owner">} scope
-   * @param {(getState: () => State, run: IssuedRun) => T} body
-   * @param {boolean} [exclusive]
+   * @param {() => (getState: () => State, run: IssuedRun) => T} prepare
    */
-  port.capture = (tx, scope, body, exclusive = false) =>
-    writePort(tx, scope, "conditional", (getState, _markDirty, run) => body(getState, run), true, exclusive);
+  port.capture = (tx, scope, prepare) => writePort(tx, scope, "conditional", () => {
+    const body = prepare();
+    return (getState, _markDirty, run) => body(getState, run);
+  }, true);
 
   function dump() {
     const snapshot = [...owners]
