@@ -1,7 +1,7 @@
 import type { Revision, Scope } from "../ports/common.d.ts";
 import type { DocumentCardRecord } from "../ports/document-card.d.ts";
 import type { FactMatchPolicy, FactMatchRow } from "../privacy/fact-match.mjs";
-import type { FingerprintKey } from "../privacy/fingerprint.mjs";
+import type { FingerprintKey, FingerprintLabels } from "../privacy/fingerprint.mjs";
 import type { StoredFact, TextFact } from "../suppression-fact.mjs";
 
 export type DocumentCardMemoryState =
@@ -30,6 +30,8 @@ export interface DocumentCardVisibilityInput {
   textFacts?: readonly TextFact[] | null;
   /** The scope owner's memory fingerprint key. Null or omission means the key is unavailable. */
   fingerprintKey?: FingerprintKey | null;
+  /** Optional evidence for legacy MAC-only facts on import and manual cards. Derive the owner's key with these adapter labels. */
+  legacyFingerprint?: { key: FingerprintKey; labels: FingerprintLabels };
 }
 
 export type DocumentCardHiddenReason =
