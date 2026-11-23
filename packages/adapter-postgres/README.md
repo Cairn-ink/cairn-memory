@@ -108,6 +108,16 @@ created by the hosted service. The hosted service applies a byte-identical
 copy of `0011_core_topic_cards.sql` as a Drizzle migration. Make subsequent
 changes to these tables through adapter-postgres migrations.
 
+Register `createPostgresTopicStore()` as the `placement` port with
+`capabilities({ placement: true })` when composing the adapter. The topic store
+supports single-memory and batch annotations. Its cursors incorporate both the
+hosted topic revision and the core owner index revision.
+
+Migration 0014 uses the core memory namespace encoding for topics and preserves
+the order of new L1 parent edges. Hosted rows have a null namespace. Deployments
+that share the topic tables with the hosted worker should use the null namespace,
+since the hosted worker's topic queries scope rows by owner.
+
 ## Database tests
 
 Database tests use `CORE_PG_TEST_URL` to reach a PostgreSQL instance with

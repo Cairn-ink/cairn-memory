@@ -1,0 +1,477 @@
+import {
+  CoreError, ERROR_CODES, coalesceNewTopics, isErrorCode, memoryGuards, placementProposal, titleKey,
+} from "../../core/src/index.mjs";
+import { decodeCursor, encodeCursor } from "../../core/src/retrieval/hosted-paging.mjs";
+import { memoryNamespace, visibleTopicMemory } from "./topic-visibility.mjs";
+import { requireLiveRun, runOperation } from "./uow.mjs";
+
+/** @import { PlacementProposal } from "../../core/src/index.mjs" */
+/** @import { Scope, Topic, TopicStore, Tx } from "../../core/src/ports/index.d.ts" */
+/** @typedef {import("./driver.mjs").Connection["query"]} Query */
+/** @typedef {Required<TopicStore>} Placement */
+/** @typedef {[owner: string, namespace: string | null]} ScopeKey */
+
+const BATCH_LIMIT = 5;
+const RETRYABLE_CODES = Object.keys(ERROR_CODES).filter((code) =>
+  isErrorCode(code) && ERROR_CODES[code] === "retryable");
+const memoryInScope = `${memoryNamespace("m")} IS NOT DISTINCT FROM $2`;
+
+const currentPlacementJoin = `
+  LEFT JOIN memory_placements p ON p.user_id = m.user_id AND p.memory_id = m.id
+    AND p.memory_revision = m.revision`;
+const currentMemberJoin = `
+  JOIN memory_placements p ON p.user_id = mt.user_id AND p.memory_id = mt.memory_id
+    AND p.memory_revision = mt.memory_revision AND p.status = 'filed'
+  JOIN memories m ON m.user_id = mt.user_id AND m.id = mt.memory_id
+    AND m.revision = mt.memory_revision AND ${visibleTopicMemory("m")}`;
+const visibleTopicTitle = `CASE WHEN EXISTS (
+    SELECT 1 FROM topic_title_sources s WHERE s.user_id = t.user_id AND s.topic_id = t.id
+  ) AND NOT EXISTS (
+    SELECT 1 FROM topic_title_sources s
+    LEFT JOIN memories source ON source.user_id = s.user_id AND source.id = s.memory_id
+      AND ${memoryNamespace("source")} IS NOT DISTINCT FROM t.core_namespace
+      AND source.revision = s.memory_revision AND ${visibleTopicMemory("source")}
+    WHERE s.user_id = t.user_id AND s.topic_id = t.id AND source.id IS NULL
+  ) THEN t.title END`;
+const topicColumns = `t.id, t.level, ${visibleTopicTitle} AS title,
+  ARRAY(SELECT e.parent_id FROM topic_edges e
+    JOIN topics parent ON parent.user_id = e.user_id AND parent.id = e.parent_id
+      AND parent.core_namespace IS NOT DISTINCT FROM t.core_namespace AND parent.level = 2
+    WHERE e.user_id = t.user_id AND e.child_id = t.id AND t.level = 1
+    ORDER BY e.core_parent_position, e.parent_id COLLATE "C") AS parent_ids`;
+const topicOrder = `level, coalesce(title, '') COLLATE "C", id COLLATE "C"`;
+const newestFirst = `placed_at DESC, memory_id COLLATE "C" DESC`;
+const topicScope = `t.user_id = $1 AND t.core_namespace IS NOT DISTINCT FROM $2`;
+
+/** @param {unknown} value @returns {value is string} */
+function sqlText(value) {
+  return typeof value === "string" && !value.includes("\0") && !/[\uD800-\uDFFF]/u.test(value);
+}
+
+/** @param {Tx} tx @param {Scope} scope @param {boolean} [write] @returns {ScopeKey} */
+function scoped(tx, scope, write) {
+  requireLiveRun(tx, write);
+  const owner = scope?.owner;
+  if (owner !== tx.owner) throw new CoreError("internal_error");
+  const { namespace } = scope;
+  if (namespace !== null && typeof namespace !== "string") throw new CoreError("invalid_input");
+  // JSON encoding also supports the NUL separator used by engine namespaces.
+  return [owner, namespace === null ? null : JSON.stringify(namespace)];
+}
+
+/**
+ * Snapshot dense arrays without calling custom iterators or element getters.
+ * @template T @param {readonly T[]} values @param {number} [max] @param {boolean} [strict] @returns {T[]}
+ */
+function snapshotArray(values, max = 0xffff_ffff, strict = true) {
+  try {
+    if (!Array.isArray(values)) throw new CoreError("invalid_input");
+    const length = Object.getOwnPropertyDescriptor(values, "length")?.value;
+    const keys = new Set(Reflect.ownKeys(values));
+    if (!strict) keys.delete(Symbol.iterator);
+    if (!Number.isSafeInteger(length) || length < 0 || length > max || values.length !== length ||
+        !keys.delete("length") || keys.size !== length) throw new CoreError("invalid_input");
+    const copy = [];
+    for (let i = 0; i < length; i++) {
+      const field = Object.getOwnPropertyDescriptor(values, i);
+      if (!keys.has(String(i)) || !(i in values) || !field || !Object.hasOwn(field, "value") ||
+          (strict && !field.enumerable) || !Object.is(field.value, values[i])) throw new CoreError("invalid_input");
+      copy.push(field.value);
+    }
+    return copy;
+  } catch {
+    throw new CoreError("invalid_input");
+  }
+}
+
+/** @template T @param {T} value @param {string[]} allowed */
+function placementFields(value, allowed) {
+  if (!value || typeof value !== "object" || Array.isArray(value) ||
+      Object.keys(value).some((key) => !allowed.includes(key))) throw new CoreError("invalid_input");
+  return value;
+}
+
+/** @param {PlacementProposal} proposal */
+function snapshotProposal(proposal) {
+  const { items } = placementFields(proposal, ["items"]);
+  return placementProposal({ items: snapshotArray(items, BATCH_LIMIT).map((item) => {
+    const { memoryId, parentIds, newL1 } = placementFields(item, ["memoryId", "parentIds", "newL1"]);
+    const parents = snapshotArray(parentIds, 3);
+    if (newL1 === undefined) return { memoryId, parentIds: parents };
+    const { title, parentL2Ids, newL2Title } = placementFields(newL1, ["title", "parentL2Ids", "newL2Title"]);
+    return { memoryId, parentIds: parents, newL1: { title, parentL2Ids: snapshotArray(parentL2Ids, 3), newL2Title } };
+  }) }, undefined, BATCH_LIMIT);
+}
+
+/** @param {number} limit @param {number} [max] */
+function validateLimit(limit, max = Number.MAX_SAFE_INTEGER) {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > max) throw new CoreError("invalid_input");
+}
+
+/** @param {Query} query @param {string} owner */
+async function readIndexRevision(query, owner) {
+  // Hosted topic changes and core memory/fact changes both invalidate a page.
+  const { rows: [row] } = await query(`
+    SELECT (COALESCE((SELECT revision FROM topic_index_state WHERE user_id = $1), 0) +
+      COALESCE((SELECT index_revision FROM core_owner_state WHERE user_id = $1), 0))::text AS revision`, [owner]);
+  const revision = Number(row.revision);
+  if (!Number.isSafeInteger(revision) || revision < 0) throw new CoreError("internal_error");
+  return revision;
+}
+
+/** @param {Query} query @param {string} owner */
+async function advanceTopicIndex(query, owner) {
+  await query(`
+    INSERT INTO topic_index_state (user_id, revision) VALUES ($1, 1)
+    ON CONFLICT (user_id) DO UPDATE SET revision = topic_index_state.revision + 1`, [owner]);
+}
+
+/**
+ * @param {Query} query @param {ScopeKey} scope @param {string} view @param {string | null} filter
+ * @param {number} limit @param {string | null} cursor
+ */
+async function readPage(query, scope, view, filter, limit, cursor) {
+  const indexRevision = await readIndexRevision(query, scope[0]);
+  let offset = 0;
+  if (cursor !== null) {
+    const decoded = decodeCursor(cursor);
+    if (!Array.isArray(decoded) || encodeCursor(decoded) !== cursor || decoded.length !== 6 ||
+        decoded[0] !== view || decoded[1] !== scope[0] || decoded[2] !== scope[1] || decoded[3] !== filter ||
+        !Number.isSafeInteger(decoded[4]) || decoded[4] < 0 ||
+        !Number.isSafeInteger(decoded[5]) || decoded[5] < 1) throw new CoreError("invalid_cursor");
+    if (decoded[4] !== indexRevision) throw new CoreError("cursor_stale");
+    offset = decoded[5];
+  }
+  return {
+    indexRevision, offset,
+    /** @template T @param {T[]} rows */
+    slice(rows) {
+      return {
+        items: rows.slice(0, limit),
+        nextCursor: rows.length <= limit ? null : encodeCursor([view, ...scope, filter, indexRevision, offset + limit]),
+      };
+    },
+  };
+}
+
+/** @param {{id: string, level: 1 | 2, title: string | null, parent_ids: string[]}} row @returns {Topic} */
+function toTopic(row) {
+  return { id: row.id, level: row.level === 1 ? "L1" : "L2", title: row.title, parentIds: row.parent_ids };
+}
+
+/** @param {Query} query @param {ScopeKey} scope @param {PlacementProposal["items"]} items */
+async function checkReferences(query, scope, items) {
+  const l1Ids = items.flatMap(({ parentIds }) => parentIds);
+  const l2Ids = items.flatMap(({ newL1 }) => newL1?.parentL2Ids ?? []);
+  if (!l1Ids.length && !l2Ids.length) return;
+  const { rows } = await query(`
+    SELECT t.id, t.level FROM topics t WHERE ${topicScope} AND t.id = ANY($3::text[])`,
+  [...scope, [...l1Ids, ...l2Ids]]);
+  const found = new Map(rows.map(({ id, level }) => [id, level]));
+  for (const [ids, level] of /** @type {const} */ ([[l1Ids, 1], [l2Ids, 2]])) {
+    for (const id of ids) {
+      if (!found.has(id)) throw new CoreError("not_found");
+      if (found.get(id) !== level) throw new CoreError("invalid_ref");
+    }
+  }
+}
+
+/**
+ * @param {Query} query @param {ScopeKey} scope @param {Topic & { title: string }} topic
+ * @param {string[]} ids @param {number[]} revisions
+ */
+async function insertTopic(query, scope, topic, ids, revisions) {
+  await query(`
+    INSERT INTO topics (user_id, core_namespace, id, level, title, title_key) VALUES ($1, $2, $3, $4, $5, $6)`,
+  [...scope, topic.id, topic.level === "L1" ? 1 : 2, topic.title, titleKey(topic.title)]);
+  await query(`
+    INSERT INTO topic_title_sources (user_id, topic_id, memory_id, memory_revision)
+    SELECT $1, $2, memory_id, revision FROM unnest($3::text[], $4::integer[]) AS batch(memory_id, revision)`,
+  [scope[0], topic.id, ids, revisions]);
+  if (topic.parentIds.length) {
+    await query(`
+      INSERT INTO topic_edges (user_id, parent_id, child_id, core_parent_position)
+      SELECT $1, parent, $2, position FROM unnest($3::text[]) WITH ORDINALITY AS edge(parent, position)`,
+    [scope[0], topic.id, topic.parentIds]);
+  }
+}
+
+/** @param {Topic["level"]} level @param {string} title @param {string[]} [parentIds] */
+function newTopic(level, title, parentIds = []) {
+  return { id: crypto.randomUUID(), level, title, parentIds };
+}
+
+/**
+ * @param {Query} query @param {string} owner @param {string} id @param {number} revision
+ * @param {string[]} topicIds @param {string[]} retained @param {() => Date} placementTime
+ */
+async function replaceMemberships(query, owner, id, revision, topicIds, retained, placementTime) {
+  await query(`
+    INSERT INTO memory_placements (user_id, memory_id, memory_revision, status) VALUES ($1, $2, $3, $4)
+    ON CONFLICT (user_id, memory_id) DO UPDATE SET memory_revision = EXCLUDED.memory_revision,
+      status = EXCLUDED.status, code = NULL, attempts = 0, placed_at = EXCLUDED.placed_at`,
+  [owner, id, revision, topicIds.length ? "filed" : "unfiled"]);
+  await query(`DELETE FROM memory_topics WHERE user_id = $1 AND memory_id = $2
+    AND (memory_revision <> $3 OR NOT (topic_id = ANY($4::text[])))`, [owner, id, revision, topicIds]);
+  const added = topicIds.filter((topicId) => !retained.includes(topicId));
+  if (added.length) {
+    await query(`
+      INSERT INTO memory_topics (user_id, memory_id, topic_id, memory_revision, placed_at)
+      SELECT $1, $2, topic_id, $3, $5 FROM unnest($4::text[]) AS topic_id`,
+    [owner, id, revision, added, placementTime()]);
+  }
+}
+
+/**
+ * @param {{now?: () => number, topicRetryAfterMs?: number, topicMaxAttempts?: number}} [options]
+ * @returns {Placement}
+ */
+export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3_600_000, topicMaxAttempts = 3 } = {}) {
+  validateLimit(topicMaxAttempts, 3);
+  if (!Number.isSafeInteger(topicRetryAfterMs) || topicRetryAfterMs < 0) throw new CoreError("invalid_input");
+
+  return {
+    async pending(tx, scope, { limit }) {
+      const target = scoped(tx, scope);
+      validateLimit(limit, BATCH_LIMIT);
+      return runOperation(tx, async (query) => {
+        const { rows } = await query(`
+          SELECT m.id AS "memoryId", m.revision
+          FROM memories m ${currentPlacementJoin}
+          WHERE m.user_id = $1 AND ${memoryInScope} AND ${visibleTopicMemory("m")}
+            AND (p.memory_id IS NULL OR (p.status = 'failed' AND p.code = ANY($3::text[])
+              AND p.attempts < $4 AND p.placed_at <= $5))
+          ORDER BY m.created_at, m.id COLLATE "C" LIMIT $6`,
+        [...target, RETRYABLE_CODES, topicMaxAttempts, new Date(now() - topicRetryAfterMs), limit]);
+        return rows;
+      });
+    },
+
+    async catalog(tx, scope, { cursor, limit }) {
+      const target = scoped(tx, scope);
+      validateLimit(limit);
+      return runOperation(tx, async (query) => {
+        const page = await readPage(query, target, "catalog", null, limit, cursor);
+        const { rows } = await query(`
+          SELECT * FROM (SELECT ${topicColumns} FROM topics t WHERE ${topicScope}) catalog
+          ORDER BY ${topicOrder} LIMIT $3 OFFSET $4`, [...target, limit + 1, page.offset]);
+        const { items, nextCursor } = page.slice(rows);
+        return { items: items.map(toTopic), nextCursor, exhausted: nextCursor === null, indexRevision: page.indexRevision };
+      });
+    },
+
+    async applyPlacement(tx, scope, basedOn, proposal) {
+      const target = scoped(tx, scope, true);
+      const { items } = snapshotProposal(proposal);
+      const indexRevision = basedOn?.indexRevision;
+      if (!Number.isSafeInteger(indexRevision) || indexRevision < 0) throw new CoreError("invalid_input");
+      const ids = items.map(({ memoryId }) => memoryId);
+      const guards = memoryGuards(snapshotArray(basedOn.memoryRevisions, ids.length), ids);
+      const [owner] = target;
+      const revisions = new Map(guards.map(({ memoryId, revision }) => [memoryId, revision]));
+
+      return runOperation(tx, async (query) => {
+        if (await readIndexRevision(query, owner) !== indexRevision) throw new CoreError("revision_conflict");
+        const { rows } = await query(`
+          SELECT m.id, m.revision, p.status, ARRAY(
+            SELECT mt.topic_id FROM memory_topics mt
+            WHERE mt.user_id = m.user_id AND mt.memory_id = m.id AND mt.memory_revision = m.revision
+          ) AS topic_ids
+          FROM memories m ${currentPlacementJoin}
+          WHERE m.user_id = $1 AND ${memoryInScope}
+            AND m.id = ANY($3::text[]) AND ${visibleTopicMemory("m")}
+          ORDER BY m.id COLLATE "C" FOR UPDATE OF m`, [...target, ids]);
+        if (rows.length !== ids.length || rows.some(({ id, revision }) => revisions.get(id) !== revision)) {
+          throw new CoreError("revision_conflict");
+        }
+
+        await checkReferences(query, target, items);
+        const { newL1, newL2 } = coalesceNewTopics(items);
+        if (newL1.size) {
+          const { rows: conflicts } = await query(`
+            SELECT 1 FROM topics t WHERE ${topicScope} AND
+              ((t.level = 1 AND t.title_key = ANY($3::text[])) OR (t.level = 2 AND t.title_key = ANY($4::text[])))
+            LIMIT 1`, [...target, [...newL1.keys()], [...newL2.keys()]]);
+          if (conflicts.length) throw new CoreError("moc_title_conflict");
+        }
+
+        const parents = new Map([...newL2].map(([key, { title }]) => [key, newTopic("L2", title)]));
+        const children = new Map([...newL1].map(([key, plan]) => [key, newTopic("L1", plan.title, [
+          ...plan.parentL2Ids, ...[...plan.newParentKeys].map((key) => /** @type {Topic} */ (parents.get(key)).id),
+        ])]));
+        const createdTopics = [...parents.values(), ...children.values()];
+        for (const topic of createdTopics) {
+          await insertTopic(query, target, topic, [...revisions.keys()], [...revisions.values()]);
+        }
+
+        const placed = items.map(({ memoryId, parentIds, newL1 }) => ({
+          memoryId, topicIds: newL1
+            ? [...parentIds, /** @type {Topic} */ (children.get(titleKey(newL1.title))).id] : parentIds,
+        }));
+        const existing = new Map(rows.map((row) => [row.id, row]));
+        let changed = createdTopics.length > 0;
+        /** @type {Date | undefined} */
+        let placedAt;
+        for (const { memoryId, topicIds } of placed) {
+          const before = existing.get(memoryId);
+          const hasOutcome = before.status === "filed" || before.status === "unfiled";
+          const retained = before.status === "filed" ? before.topic_ids : [];
+          if (hasOutcome && retained.length === topicIds.length && topicIds.every((id) => retained.includes(id))) continue;
+          if (retained.length || topicIds.length) changed = true;
+          await replaceMemberships(query, owner, memoryId, before.revision, topicIds, retained, () => placedAt ??= new Date(now()));
+        }
+        if (changed) await advanceTopicIndex(query, owner);
+        return { placed, createdTopics };
+      });
+    },
+
+    async markFailed(tx, scope, memoryIds, code) {
+      const target = scoped(tx, scope, true);
+      if (!isErrorCode(code)) throw new CoreError("invalid_input");
+      const ids = snapshotArray(memoryIds, undefined, false);
+      if (ids.some((id) => typeof id !== "string" || !id)) throw new CoreError("invalid_input");
+      return runOperation(tx, async (query) => {
+        await query(`
+          INSERT INTO memory_placements (user_id, memory_id, memory_revision, status, code, attempts, placed_at)
+          SELECT m.user_id, m.id, m.revision, 'failed', $4, 1, $5
+          FROM memories m WHERE m.user_id = $1 AND ${memoryInScope}
+            AND m.id = ANY($3::text[]) AND ${visibleTopicMemory("m")}
+          ON CONFLICT (user_id, memory_id) DO UPDATE SET
+            memory_revision = EXCLUDED.memory_revision, code = EXCLUDED.code, placed_at = EXCLUDED.placed_at,
+            attempts = CASE WHEN memory_placements.memory_revision = EXCLUDED.memory_revision
+              THEN least(memory_placements.attempts + 1, 3) ELSE 1 END,
+            status = CASE WHEN memory_placements.memory_revision = EXCLUDED.memory_revision
+              THEN memory_placements.status ELSE 'failed' END`,
+        [...target, ids.filter(sqlText), code, new Date(now())]);
+      });
+    },
+
+    async list(tx, scope, { level, cursor, limit }) {
+      const target = scoped(tx, scope);
+      validateLimit(limit);
+      if (level !== undefined && level !== "L1" && level !== "L2") throw new CoreError("invalid_input");
+      return runOperation(tx, async (query) => {
+        const page = await readPage(query, target, "list", level ?? null, limit, cursor);
+        const { rows } = await query(`
+          WITH direct AS (
+            SELECT mt.topic_id, mt.memory_id, mt.placed_at FROM memory_topics mt
+            ${currentMemberJoin}
+            WHERE mt.user_id = $1 AND ${memoryInScope}
+          ), effective AS (
+            SELECT topic_id, memory_id, placed_at FROM direct WHERE $3::smallint IS DISTINCT FROM 2
+            UNION ALL
+            SELECT e.parent_id, d.memory_id, max(d.placed_at) FROM direct d
+            JOIN topic_edges e ON e.user_id = $1 AND e.child_id = d.topic_id
+            WHERE $3::smallint IS DISTINCT FROM 1 GROUP BY e.parent_id, d.memory_id
+          ), ranked AS (
+            SELECT topic_id, memory_id, row_number() OVER (
+              PARTITION BY topic_id ORDER BY ${newestFirst}
+            ) AS member_rank FROM effective
+          ), summary AS (
+            SELECT topic_id, count(*) AS member_count,
+              array_agg(memory_id ORDER BY member_rank) FILTER (WHERE member_rank <= 3) AS newest_member_ids
+            FROM ranked GROUP BY topic_id
+          )
+          SELECT * FROM (
+            SELECT ${topicColumns}, s.member_count, s.newest_member_ids
+            FROM summary s JOIN topics t ON t.user_id = $1 AND t.id = s.topic_id
+            WHERE ${topicScope} AND ($3::smallint IS NULL OR t.level = $3)
+          ) listed ORDER BY ${topicOrder} LIMIT $4 OFFSET $5`,
+        [...target, level === undefined ? null : level === "L1" ? 1 : 2, limit + 1, page.offset]);
+        const { items, nextCursor } = page.slice(rows);
+        return { items: items.map((row) => ({
+          ...toTopic(row), memberCount: Number(row.member_count), newestMemberIds: row.newest_member_ids,
+        })), nextCursor };
+      });
+    },
+
+    async members(tx, scope, topicId, { cursor, limit }) {
+      const target = scoped(tx, scope);
+      validateLimit(limit);
+      return runOperation(tx, async (query) => {
+        const page = await readPage(query, target, "members", topicId, limit, cursor);
+        if (!sqlText(topicId)) return { items: [], nextCursor: null };
+        const { rows } = await query(`
+          WITH child_topics AS (
+            SELECT t.id FROM topics t WHERE ${topicScope} AND t.id = $3 AND t.level = 1
+            UNION ALL
+            SELECT e.child_id FROM topics t JOIN topic_edges e ON e.user_id = t.user_id AND e.parent_id = t.id
+            WHERE ${topicScope} AND t.id = $3 AND t.level = 2
+          ), current_members AS (
+            SELECT mt.memory_id, max(mt.placed_at) AS placed_at
+            FROM child_topics c JOIN memory_topics mt ON mt.topic_id = c.id ${currentMemberJoin}
+            WHERE mt.user_id = $1 AND ${memoryInScope} GROUP BY mt.memory_id
+          )
+          SELECT memory_id, (extract(epoch FROM placed_at) * 1000000)::bigint::text AS placed_at_us
+          FROM current_members ORDER BY ${newestFirst} LIMIT $4 OFFSET $5`, [...target, topicId, limit + 1, page.offset]);
+        const { items, nextCursor } = page.slice(rows);
+        return { items: items.map((row) => ({ kind: "memory", id: row.memory_id, placedAtUs: BigInt(row.placed_at_us) })), nextCursor };
+      });
+    },
+
+    async forMemory(tx, scope, memoryId) {
+      const target = scoped(tx, scope);
+      if (!sqlText(memoryId)) return [];
+      return runOperation(tx, async (query) => {
+        const { rows } = await query(`
+          SELECT mt.topic_id FROM memory_topics mt ${currentMemberJoin}
+          JOIN topics t ON t.user_id = mt.user_id AND t.id = mt.topic_id
+          WHERE ${topicScope} AND ${memoryInScope} AND mt.memory_id = $3
+          ORDER BY mt.topic_id COLLATE "C"`, [...target, memoryId]);
+        return rows.map(({ topic_id }) => topic_id);
+      });
+    },
+
+    async forMemories(tx, scope, memoryIds) {
+      const target = scoped(tx, scope);
+      const ids = snapshotArray(memoryIds, 100);
+      validateLimit(ids.length);
+      if (ids.some((id) => typeof id !== "string")) throw new CoreError("invalid_input");
+      return runOperation(tx, async (query) => {
+        const { rows } = await query(`
+          WITH requested AS (
+            SELECT id, min(position) AS position
+            FROM unnest($3::text[]) WITH ORDINALITY AS input(id, position) GROUP BY id
+          )
+          SELECT m.id AS "memoryId", COALESCE((
+            SELECT jsonb_agg(jsonb_build_object('id', t.id, 'title', ${visibleTopicTitle}) ORDER BY t.id COLLATE "C")
+            FROM memory_topics mt JOIN topics t ON t.user_id = mt.user_id AND t.id = mt.topic_id
+            WHERE ${topicScope} AND t.level = 1 AND mt.memory_id = m.id AND mt.memory_revision = p.memory_revision
+              AND p.status = 'filed'
+          ), '[]'::jsonb) AS topics
+          FROM requested r JOIN memories m ON m.id = r.id
+          JOIN memory_placements p ON p.user_id = m.user_id AND p.memory_id = m.id AND p.memory_revision = m.revision
+          WHERE m.user_id = $1 AND ${memoryInScope} AND ${visibleTopicMemory("m")}
+            AND p.status IN ('filed', 'unfiled')
+          ORDER BY r.position`, [...target, ids.filter(sqlText)]);
+        return rows;
+      });
+    },
+
+    async dropMemory(tx, scope, memoryId) {
+      const target = scoped(tx, scope, true);
+      if (!sqlText(memoryId)) return { dropped: 0 };
+      return runOperation(tx, async (query) => {
+        // A drop keeps the outcome. Memory erase owns removal of outcomes and
+        // retires the same sources as part of its owner index advance.
+        const { rows: [result] } = await query(`
+          WITH scoped_topics AS (
+            SELECT t.id FROM topics t WHERE ${topicScope} AND NOT EXISTS (
+              SELECT 1 FROM memories m WHERE m.user_id = $1 AND m.id = $3 AND ${memoryNamespace("m")} IS DISTINCT FROM $2
+            )
+          ), refs AS (
+            DELETE FROM memory_topics mt USING scoped_topics t
+            WHERE mt.user_id = $1 AND mt.memory_id = $3 AND mt.topic_id = t.id RETURNING 1
+          ), sources AS (
+            UPDATE topic_title_sources s SET memory_revision = 0 FROM scoped_topics t
+            WHERE s.user_id = $1 AND s.memory_id = $3 AND s.topic_id = t.id AND s.memory_revision <> 0 RETURNING 1
+          )
+          SELECT (SELECT count(*) FROM refs) AS dropped, EXISTS (SELECT 1 FROM sources) AS retired`,
+        [...target, memoryId]);
+        const dropped = Number(result.dropped);
+        if (dropped || result.retired) await advanceTopicIndex(query, target[0]);
+        return { dropped };
+      });
+    },
+  };
+}
