@@ -250,7 +250,7 @@ const notApplicable = {
   fence: ["K-FEN-1"],
   pause: ["K-PAUSE-1"],
   keys: ["K-KEY-1", "K-KD-1", "K-KD-2", "K-KD-3", "K-KD-4", "K-KD-5", "K-KD-6"],
-  "suppressions.snapshot": ["K-SNAP-F1", "K-SNAP-F3", "K-SNAP-F4", "K-SNAP-F5", "K-SNAP-F6", "K-SNAP-F7"],
+  "suppressions.snapshot": ["K-SNAP-F1", "K-SNAP-F3", "K-SNAP-F4", "K-SNAP-F5", "K-SNAP-F5u", "K-SNAP-F6", "K-SNAP-F7"],
   "suppressions.factsFor": ["K-FACTSFOR-1"],
   capture: ["K-CLM-1", "K-CLM-2", "K-CLM-3", "K-CLM-4", "K-CLM-5",
     "K-SRC-1", "K-SRC-2", "K-SRC-3", "K-SRC-4", "K-SRC-5"],

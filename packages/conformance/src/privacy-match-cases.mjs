@@ -343,7 +343,8 @@ export const PRIVACY_MATCH_CASES = [
         equal(other.blockedMessages, [4, 5], "All-client window must block inside and unknown times");
         equal(other.blockedSession, false, "Window matching without a session must leave the session open");
         const noClient = await suppressions.snapshot(tx, scope, { occurredAtMs });
-        equal(noClient.blockedMessages, [0, 1, 2, 3, 4, 5], "Client-specific window must block every position without a client");
+        equal(noClient.blockedMessages, [1, 2, 4, 5],
+          "Without a client, a client-specific window must block only inside its range, and an all-client window inside and unknown times");
         const incomparable = await suppressions.snapshot(tx, scope, { passages });
         equal(new Set(incomparable.passages.map(({ fact }) => fact.actionId)), new Set(["matching-text", "incomparable"]),
           "Snapshot must retain an ineligible passage fact");
