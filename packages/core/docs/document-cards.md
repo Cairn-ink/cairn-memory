@@ -103,16 +103,22 @@ same snapshot.
 Use `fuseHostedWithCards` as the reference ranking function. It sorts each
 memory or card lexical list by score descending and each vector list by
 distance ascending. Ties use `updatedAtUs` descending and ID descending by
-UTF-8 bytes. Each of the four lists contributes at most 50 candidates. For
-each item, add `0.5 / (60 + lexicalRank)` and `1 / (60 + vectorRank)` for
-its available ranks, counted from one in its own lists. With the floor
-enabled, vector-only items survive at distance `0.45` or closer. The function
-orders the union by score and the same tie-break, then applies offset paging.
-A null card vector channel leaves memories' vector scores intact. With both
-vector channels null and cards present, the two lexical lists mix by rank.
-Empty card lists produce exactly `fuseHosted` output, or exactly
-`fuseHostedLexicalOnly` output when both vector channels are null. Adding
-cards never changes the relative order of memories in the ranking.
+UTF-8 bytes. In hybrid mode, each of the four lists contributes at most
+50 candidates. For each item, add `0.5 / (60 + lexicalRank)` and
+`1 / (60 + vectorRank)` for its available ranks, counted from one in its
+own lists. With the floor enabled, vector-only items survive at distance
+`0.45` or closer. The function orders the union by score and the same
+tie-break, then applies offset paging. A null card vector channel leaves
+memories' vector scores intact. Empty card lists produce exactly
+`fuseHosted` output.
+
+With both vector channels null, the function merges both full lexical lists
+by `0.5 / (60 + lexicalRank)` using the rank within each list and the same
+tie-break. It preserves the original rows and counts all merged rows in
+`total` before paging. Memory and card store scores are incomparable.
+Callers must preserve the returned ranking order as-is. An empty card list
+produces exactly `fuseHostedLexicalOnly` output. Adding cards preserves the
+relative order of memories.
 
 For a visible card in the page, return `documentCardFindItem(card, query)`
 alongside typed memory items. It returns `type: "card"`, `id`, `title`,

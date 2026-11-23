@@ -62,7 +62,12 @@ export function fuseHostedWithCards(
   opts: Page & { floor?: boolean },
 ): ReturnType<typeof fuseHosted>;
 
-/** With both vector channels null and no card candidates, returns the legacy lexical page. */
+/**
+ * With both vector channels null, orders the original lexical rows by rank within
+ * each list, then by hosted ties. Memory and card store scores are incomparable.
+ * Callers must preserve the returned ranking order as-is. With no card
+ * candidates, returns the same page as fuseHostedLexicalOnly.
+ */
 export function fuseHostedWithCards(
   channels: HostedCardChannels,
   opts: Page & { floor?: boolean },

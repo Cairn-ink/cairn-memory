@@ -157,17 +157,26 @@ test("hosted fusion cuts each list to its own pool and rejects misplaced rows be
   }
 });
 
+test("lexical-only fusion preserves a memory score with and without a card", () => {
+  const memoryLexical = [lexical("memory", "memory", 100)];
+  const card = lexical("card", "card", 1);
+  for (const cardLexical of [[], [card]]) {
+    const { rows } = fuseHostedWithCards({ memoryLexical, memoryVector: null, cardLexical, cardVector: null }, page);
+    assert.equal(rows.find(row => row.ref.type === "memory").score, 100, `with ${cardLexical.length} cards`);
+  }
+});
+
 test("lexical-only card fusion mixes ranks with hosted weights and ties", () => {
+  const memoryLexical = [lexical("memory", "m", 99, 2n), lexical("memory", "z", 100)];
+  const cardLexical = [lexical("card", "c", 0.001, 2n), lexical("card", "a", 0.01, 1n)];
   const channels = {
-    memoryLexical: [lexical("memory", "z", 100), lexical("memory", "m", 99, 2n)], memoryVector: null,
-    cardLexical: [lexical("card", "a", 0.01, 1n), lexical("card", "c", 0.001, 2n)], cardVector: null,
+    memoryLexical, memoryVector: null,
+    cardLexical, cardVector: null,
   };
   const { rows, total } = fuseHostedWithCards(channels, { ...page, floor: true });
   assert.equal(total, 4);
-  assert.deepEqual(rows.map(row => [row.ref.id, row.lexicalRank, row.vectorRank, row.score]), [
-    ["a", 1, null, 0.5 / 61], ["z", 1, null, 0.5 / 61],
-    ["m", 2, null, 0.5 / 62], ["c", 2, null, 0.5 / 62],
-  ]);
+  assert.deepEqual(rows, [cardLexical[1], memoryLexical[1], memoryLexical[0], cardLexical[0]]);
+  assert.deepEqual(fuseHostedWithCards(channels, { offset: 1, limit: 2 }), { rows: rows.slice(1, 3), total });
 });
 
 function randomGenerator(seed) {
@@ -204,10 +213,15 @@ test("random card channels preserve the hosted identity and memory ordering prop
         assert.ok(mixed.rows.filter(row => row.ref.type === "card").every(row => row.vectorRank === null));
       }
     }
-    const lexicalOnly = fuseHostedWithCards({ memoryLexical, memoryVector: null, cardLexical, cardVector: null }, all);
-    const expected = fuseHostedLexicalOnly(memoryLexical, { offset: 0, limit: cardLexical.length ? 50 : all.limit });
-    assert.deepEqual(lexicalOnly.rows.filter(row => row.ref.type === "memory").map(row => row.ref),
-      expected.rows.map(row => row.ref));
+    const lexicalPage = { offset: 0, limit: memoryLexical.length + cardLexical.length, floor: opts.floor };
+    const lexicalOnly = fuseHostedWithCards(
+      { memoryLexical, memoryVector: null, cardLexical, cardVector: null }, lexicalPage,
+    );
+    assert.equal(lexicalOnly.total, lexicalPage.limit);
+    assert.deepEqual(lexicalOnly.rows.filter(row => row.ref.type === "memory"),
+      fuseHostedLexicalOnly(memoryLexical, lexicalPage).rows);
+    assert.deepEqual(lexicalOnly.rows.filter(row => row.ref.type === "card"),
+      fuseHostedLexicalOnly(cardLexical, lexicalPage).rows);
   }
 });
 
