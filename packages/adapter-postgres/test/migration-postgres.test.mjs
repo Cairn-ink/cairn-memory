@@ -63,8 +63,9 @@ test("Postgres applies all migrations to the empty hosted baseline", migrationDb
       )
   `);
   assert.deepEqual(tables.tables, [
-    "capture_events", "capture_raw_fences", "capture_raw_lineage", "core_memory_receipts",
-    "core_schema_migrations", "jobs", "memories", "memory_forget_log", "memory_pause",
+    "capture_events", "capture_raw_fences", "capture_raw_lineage", "core_fact_digests",
+    "core_memory_receipts", "core_owner_state", "core_schema_migrations", "core_suppression_facts",
+    "jobs", "memories", "memory_forget_log", "memory_pause",
     "raw_messages", "suppressions", "users",
   ]);
 
@@ -267,7 +268,7 @@ test("Postgres removes only the failed concurrent index and can retry it", migra
 for (const valid of [true, false]) {
   test(`Postgres leaves ${valid ? "a valid" : "an invalid"} same-name index with a foreign definition untouched`, migrationDbTest, async (t) => {
     const { pool, source, migrations } = await migrationDatabase(t, { migrate: false });
-    const transactional = migrations.filter(({ concurrent }) => !concurrent);
+    const transactional = migrations.slice(0, 3);
     await applyMigrations(source, transactional);
     const { rows: applied } = await pool.query(readLedger);
     if (valid) {
@@ -299,7 +300,7 @@ for (const valid of [true, false]) {
 
 test('Postgres refuses a same-name index whose "C" collation only renders like the built-in one', migrationDbTest, async (t) => {
   const { pool, source, migrations } = await migrationDatabase(t, { migrate: false });
-  await applyMigrations(source, migrations.filter(({ concurrent }) => !concurrent));
+  await applyMigrations(source, migrations.slice(0, 3));
   const { rows: applied } = await pool.query(readLedger);
   await pool.query("CREATE SCHEMA lookalike");
   await pool.query("CREATE COLLATION lookalike.\"C\" (provider = libc, locale = 'C')");
