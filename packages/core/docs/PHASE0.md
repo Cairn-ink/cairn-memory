@@ -99,6 +99,12 @@ Each addendum is additive unless it says what it supersedes. Adapters written ag
    - A key may be dropped only when no live fact holds a digest under it.
    - Core write paths fill query digests before core-backed writes. A query without digests is blocked while an HMAC-only text fact applies.
    - It supersedes nothing.
+6. **Recall scores and the lexical fallback.** `MemoryService.recall` may return `scores?: number[]`.
+   - When present, `scores` has the same length and order as `items` after hydration and the visibility fence: one score per returned memory. Hybrid recall returns the hosted preset's fused scores, lexical-only recall returns store relevance, and blank-query recall returns zeros. Hosts may project the scores onto their wire items. Consumers that read only `items` and `nextCursor` stay valid.
+   - When a first page cannot rank semantically, recall ranks lexical-only instead of failing, and emits one content-free `DiagnosticEvent` `{ stage: "recall", layer: "core_retrieval", reason }` through the service `diagnostics` observer. `reason` is one of `semantic_unavailable`, `dispatch_closed`, `embed_failed` or `coverage_incomplete`. This is a declared difference from hosted, whose hybrid search fails on an embedding error.
+   - A cursor binds the ranking path of its first page. A hybrid continuation that cannot rank semantically is `cursor_stale`, and a lexical continuation never embeds.
+   - It supersedes nothing.
+7. **SuppressionFact ids up to 512.** SuppressionFact identity `memoryId` and `sourceMemory.id` accept up to 512 characters (was 128), so a forget never fails on an id the store already holds. Stores refuse ids over 512 at import. It supersedes the 128 bound.
 
 ## Change requests
 

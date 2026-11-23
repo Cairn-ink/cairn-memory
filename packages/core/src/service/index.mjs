@@ -3,7 +3,9 @@ import { identifier, validateObject } from "../capture/validate.mjs";
 import { FUSION_PRESETS, NEAR_DUPLICATE_DISTANCE } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
+import { forgetMethod } from "./forget.mjs";
 import { pauseMethods } from "./pause.mjs";
+import { recallMethod } from "./recall.mjs";
 import { readMethods } from "./reads.mjs";
 import { writeMethods } from "./writes.mjs";
 
@@ -100,8 +102,8 @@ export function createMemoryService(input) {
       ...pauseMethods(deps.storage),
       ...readMethods(deps.storage, deps.tokens),
       ...writeMethods(deps),
-      forget: placeholder,
-      recall: placeholder,
+      forget: forgetMethod(deps),
+      recall: recallMethod(deps),
       captureStatus: placeholder,
       listRawMessages: placeholder,
       importMemories: placeholder,

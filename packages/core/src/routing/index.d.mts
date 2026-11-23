@@ -1,4 +1,5 @@
-import type { Role, Scope } from "../ports/common.d.ts";
+import type { Receipt, Revision, Role, Scope } from "../ports/common.d.ts";
+import type { DocumentCardSourceMessage } from "../ports/document-card.d.ts";
 
 export interface DocumentMessage {
   id: string;
@@ -72,6 +73,29 @@ export type DocumentCardBuild =
 
 export declare function buildDocumentCard(message: DocumentMessage, session: DocumentSession): Promise<DocumentCardBuild>;
 
+/** Bump when the search text changes to invalidate indexes and embeddings. */
+export declare const DOCUMENT_CARD_SEARCH_TEXT_VERSION: 1;
+
+/** Exact text for indexing and embedding. The stored title and body are already redacted. */
+export declare function documentCardSearchText(card: { title: string | null; body: string }): string;
+
+export interface DocumentCardFindItem {
+  type: "card";
+  id: string;
+  title: string | null;
+  date: number | null;
+  excerpt: string;
+  /** True when the selected line was clipped. */
+  truncated: boolean;
+}
+
+/** Selects a matching line and clips it to maxChars Unicode code points (positive integer, default 240). */
+export declare function documentCardFindItem(
+  card: Pick<DocumentCardFindItem, "id" | "title" | "date"> & { body: string },
+  query: string,
+  options?: { maxChars?: number },
+): DocumentCardFindItem;
+
 export interface DocumentPieceOptions {
   maxTokens: number;
   countTokens: (text: string) => number;
@@ -121,3 +145,14 @@ export declare function rankDocumentCards(
 
 export * from "./visibility.mjs";
 export * from "./amendments.mjs";
+
+/**
+ * Optional fallback for hosts with receipts and no capture-time set of touched
+ * memories. Keep capture-time binding when available. Matches client, plain
+ * sessionId and messageId, ignores role for matching, keeps the highest matching
+ * revision per id and sorts by UTF-8 id order. Malformed input throws invalid_input.
+ */
+export declare function documentCardMemoryLinks(
+  sourceMessage: DocumentCardSourceMessage,
+  memories: ReadonlyArray<{ id: string; revision: Revision; receipts: readonly Receipt[] }>,
+): { id: string; revision: Revision }[];

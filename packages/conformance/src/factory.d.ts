@@ -1,5 +1,5 @@
 import type { Capabilities, ErrorCode, FactMatchPolicy, SuppressionFact } from "@cairn-ink/core";
-import type { Scope, StorageAdapter } from "@cairn-ink/core/ports";
+import type { CaptureMessage, Scope, StorageAdapter } from "@cairn-ink/core/ports";
 
 export type AdapterFactory = {
   name: string;
@@ -9,8 +9,8 @@ export type AdapterFactory = {
 
 export type OpenedAdapter = {
   adapter: Pick<StorageAdapter, "capabilities" | "uow" | "memories" | "capture" |
-    "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "supersession" |
-    "suppressions" | "pause" | "keys" | "placement">;
+    "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "supersession" | "conflicts" |
+    "suppressions" | "pause" | "keys" | "placement" | "raw">;
   sessionRefs: "plain" | "hashed";
   harness: TestHarness;
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;
@@ -36,6 +36,8 @@ export type TestHarness = {
   advanceClock?(ms: number): Promise<void>;
   /** Required for privacy matching cases under the hashed session profile. */
   hashSessionKey?: FactMatchPolicy["hashSessionKey"];
+  /** Seeds a legacy raw message whose client provenance is missing. */
+  seedClientlessRaw?(scope: Scope, sessionId: string, message: CaptureMessage): Promise<void>;
   counters(): Promise<Readonly<Record<string, number>>>;
   // TODO: Named-step fault injection.
   // TODO: Coverage control.
