@@ -8,7 +8,7 @@ import { copyFact } from "./fact-match.mjs";
 /** @typedef {import("@cairn-ink/core/ports").MemoryRow & {embedding: {model: string, vector: number[]} | null, historical: boolean}} Row */
 /** @typedef {{row: Row, receipts: import("@cairn-ink/core/ports").Receipt[]}} Entry */
 /** @typedef {import("@cairn-ink/core").SuppressionFact} SuppressionFact */
-/** @typedef {{rows: Map<Namespace, Map<string, Entry>>, facts: SuppressionFact[]}} State */
+/** @typedef {{rows: Map<Namespace, Map<string, Entry>>, facts: SuppressionFact[], indexRevision: number}} State */
 
 class Mutex {
   #tail = Promise.resolve();
@@ -25,7 +25,7 @@ class Mutex {
 
 class Owner {
   /** @type {State} */
-  committed = { rows: new Map(), facts: [] };
+  committed = { rows: new Map(), facts: [], indexRevision: 0 };
   pause = new Mutex();
   write = new Mutex();
   open = 0;
@@ -50,7 +50,7 @@ function jsonSafe(value) {
 export function createUnitOfWork(nativeErrorMap) {
   /** @type {Map<string, Owner>} */
   const owners = new Map();
-  /** @type {WeakMap<Tx, {state: State, run: {readonly ended: boolean}}>} */
+  /** @type {WeakMap<Tx, {state: State, run: {readonly ended: boolean}, dirty: boolean}>} */
   const issued = new WeakMap();
 
   /** @param {string} owner */
@@ -91,9 +91,13 @@ export function createUnitOfWork(nativeErrorMap) {
         }
         const run = Object.freeze({ get ended() { return ended; } });
         tx = Object.freeze({ owner, readOnly, __adapter: run });
-        issued.set(tx, { run, state });
+        const issuedRun = { run, state, dirty: false };
+        issued.set(tx, issuedRun);
         const result = await fn(tx);
-        if (!readOnly) current.committed = state;
+        if (issuedRun.dirty) {
+          state.indexRevision++;
+          current.committed = state;
+        }
         return result;
       } finally {
         ended = true;
@@ -107,7 +111,7 @@ export function createUnitOfWork(nativeErrorMap) {
 
   /**
    * @template T
-   * @param {Tx} tx @param {Scope} scope @param {boolean} write
+   * @param {Tx} tx @param {Pick<Scope, "owner">} scope @param {boolean} write
    * @param {(state: State) => T} body
    */
   function port(tx, scope, write, body) {
@@ -116,6 +120,7 @@ export function createUnitOfWork(nativeErrorMap) {
       if (!issuedRun || issuedRun.run.ended || (write && tx.readOnly) || scope?.owner !== tx.owner) {
         throw new CoreError("internal_error");
       }
+      if (write) issuedRun.dirty = true;
       return body(issuedRun.state);
     } catch (error) {
       throw toCoreError(error, nativeErrorMap);
@@ -145,8 +150,9 @@ export function createUnitOfWork(nativeErrorMap) {
     const current = ownerState(owner);
     if (current.open > 0) throw new CoreError("invalid_input");
     current.committed = {
-      rows: current.committed.rows,
+      ...current.committed,
       facts: [...current.committed.facts, copyFact(owner, fact)],
+      indexRevision: current.committed.indexRevision + 1,
     };
   }
 
@@ -164,7 +170,7 @@ export function createUnitOfWork(nativeErrorMap) {
     const updated = new Map(namespace);
     updated.set(id, { ...entry, row: { ...entry.row, updatedAtUs, updatedAtMs: Number(updatedAtUs / 1000n) } });
     rows.set(scope.namespace, updated);
-    current.committed = { ...current.committed, rows };
+    current.committed = { ...current.committed, rows, indexRevision: current.committed.indexRevision + 1 };
   }
 
   return { uow, port, dump, appendFact, setWriteTime };

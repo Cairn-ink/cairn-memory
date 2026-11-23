@@ -12,14 +12,18 @@ export type CaseContext = Omit<OpenedAdapter, "close" | "embeddingDimensions"> &
   scope(namespace: Namespace): Scope;
 };
 
-export type ConformanceCase = {
-  id: string;
-  title: string;
+type CaseRun = {
   needs: Capability[];
   needsOff?: Capability[];
   requests?: Partial<Capabilities>;
-  pending?: string;
   run(ctx: CaseContext): Promise<void>;
+};
+
+export type ConformanceCase = CaseRun & {
+  id: string;
+  title: string;
+  pending?: string;
+  followUp?: CaseRun;
 };
 
 export declare const CASES: readonly ConformanceCase[];

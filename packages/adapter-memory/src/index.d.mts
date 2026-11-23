@@ -7,7 +7,8 @@ export interface MemoryAdapterOptions {
   newId?: () => string;
 }
 
-export type MemoryAdapter = Pick<StorageAdapter, "capabilities" | "uow" | "memories"> & {
+export type MemoryAdapter = Pick<StorageAdapter, "capabilities" | "uow" | "memories" |
+  "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent"> & {
   name: "memory";
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;
   harness: TestHarness;

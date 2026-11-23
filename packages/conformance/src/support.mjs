@@ -125,6 +125,14 @@ export async function rejects(action, code) {
 /** @type {import("@cairn-ink/core/ports").SourceRef} */
 export const source = { kind: "mcp", client: null, sessionId: null };
 
+/** @param {import("@cairn-ink/core/ports").Receipt} receipt */
+export const projectReceipt = ({ client, sessionId, messageId, role, occurredAtMs }) =>
+  [client, sessionId, messageId, role, occurredAtMs];
+
+/** @param {string} messageId @param {number | null} occurredAtMs @returns {import("@cairn-ink/core/ports").Receipt} */
+export const evidence = (messageId, occurredAtMs) =>
+  ({ client: "test-client", sessionId: "test-origin", messageId, role: "user", occurredAtMs });
+
 /**
  * @param {CaseContext} ctx @param {string} text @param {number | null} [distance]
  * @returns {Promise<import("@cairn-ink/core/ports").InsertRow>}

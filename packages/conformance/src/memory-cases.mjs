@@ -3,7 +3,7 @@
 // Cases never assume a store's write time equals nowMs. Fixed write times come only from
 // harness.setWriteTime. Expected orders use those forced times and the actual ids.
 import { compareSortKey, compareUtf8, NEAR_DUPLICATE_DISTANCE } from "@cairn-ink/core";
-import { check, equal, readDump, rejects, row, source } from "./support.mjs";
+import { check, equal, evidence, projectReceipt, readDump, rejects, row, source } from "./support.mjs";
 
 const near = { nearDistance: NEAR_DUPLICATE_DISTANCE };
 
@@ -148,8 +148,24 @@ export const memoryCases = [
   },
   {
     id: "K-MEM-4r", title: "touch attaches receipts, visible through hydrate", needs: [],
-    pending: "awaiting the retrieval suite",
-    async run() {},
+    async run(ctx) {
+      const { adapter: { uow, memories, hydrate }, owner } = ctx;
+      const scope = ctx.scope(null);
+      const content = await row(ctx, "receipt evidence");
+      const first = evidence("first", 20);
+      const second = evidence("second", 30);
+      const id = await uow.run(owner, {}, async (tx) => {
+        const { id } = await memories.insert(tx, scope, content, [first], 1);
+        await memories.touchDuplicate(tx, scope, id, [second], { confidence: content.confidence }, 2);
+        return id;
+      });
+      await uow.run(owner, { readOnly: true }, async (tx) => {
+        const items = await hydrate.hydrate(tx, { owner, namespaces: [scope.namespace] },
+          [{ type: "memory", namespace: scope.namespace, id }], "read");
+        equal(items.map(({ ref, receipts }) => [ref.id, receipts && new Set(receipts.map(projectReceipt))]),
+          [[id, new Set([first, second].map(projectReceipt))]], "Touch did not preserve both receipts");
+      });
+    },
   },
   {
     id: "K-MEM-5", title: "replaces content with revision and collision checks", needs: [],
