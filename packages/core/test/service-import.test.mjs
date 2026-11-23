@@ -170,7 +170,7 @@ test("with only owner-wide windows, a clientless import outside them is imported
   assert.deepEqual(await service.importMemories(scope, [inside], withoutClient), counts(0, 0, 1));
   assert.deepEqual(await service.importMemories(scope, [end], withoutClient), counts(1));
   const { items } = await service.recent(scope, { limit: 10, cursor: null });
-  assert.deepEqual(items.map(({ text }) => text), [end.text]);
+  assert.deepEqual(items.map(({ text, source }) => ({ text, source })), [{ text: end.text, source: withoutClient }]);
 });
 
 test("an identity forget on a hosted-v1 alias suppresses import just as it suppresses save", async () => {
