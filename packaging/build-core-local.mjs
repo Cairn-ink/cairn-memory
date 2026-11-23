@@ -101,7 +101,7 @@ export function buildCoreLocalCandidate(output) {
     throw error;
   }
   const copied = [...inventory, ...graph.filter(path => path.startsWith(coreSource))];
-  const files = [...copied, 'package.json', coreManifest].sort();
+  const files = [...new Set([...copied, 'package.json', coreManifest])].sort();
   const generated = {
     'package.json': json({
       name, version, private: true, type: 'module', license: 'Apache-2.0',
