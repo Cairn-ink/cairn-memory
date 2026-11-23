@@ -31,3 +31,65 @@ jobs:
         working-directory: packages/adapter-postgres
       - run: npm run typecheck
         working-directory: packages/adapter-postgres
+      - run: npm ci --ignore-scripts
+        working-directory: packages/adapter-memory
+      # The conformance kit's own cases and regression mutants run here, against the memory adapter.
+      - run: npm test
+        working-directory: packages/adapter-memory
+      - run: npm run typecheck
+        working-directory: packages/adapter-memory
+      - run: npm ci --ignore-scripts
+        working-directory: packages/conformance
+      - run: npm run typecheck
+        working-directory: packages/conformance
+  adapter-postgres-db:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["22.16.0", "24.22.1"]
+    services:
+      postgres:
+        # The hosted service's Postgres flavour: PostgreSQL 17 with pgvector 0.8.x and PGroonga 3.2.5.
+        image: supabase/postgres:17.12.0.002
+        env:
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -h 127.0.0.1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGUSER: supabase_admin
+      PGPASSWORD: ci-only-password
+      CORE_PG_TEST_URL: postgres://supabase_admin@127.0.0.1:5432/core_adapter_test
+    defaults:
+      run:
+        working-directory: packages/adapter-postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Create the test database and check extension versions
+        run: |
+          set -euo pipefail
+          psql -X -v ON_ERROR_STOP=1 -d postgres -c 'CREATE DATABASE core_adapter_test'
+          psql -X -v ON_ERROR_STOP=1 -d core_adapter_test -c 'CREATE EXTENSION IF NOT EXISTS vector' -c 'CREATE EXTENSION IF NOT EXISTS pgroonga'
+          versions=$(psql -X -At -d core_adapter_test -c "SELECT string_agg(extname || '=' || extversion, ' ' ORDER BY extname) FROM pg_extension WHERE extname IN ('pgroonga', 'vector')")
+          echo "extensions: $versions"
+          echo "server: $(psql -X -At -d postgres -c 'SHOW server_version')"
+          case "$versions" in
+            "pgroonga=3.2.5 vector=0.8."*) ;;
+            *) echo "unexpected extension versions" >&2; exit 1 ;;
+          esac
+      - run: npm ci --ignore-scripts
+      - name: Adapter tests with a real database (none may skip)
+        run: |
+          set -euo pipefail
+          npm test 2>&1 | tee "$RUNNER_TEMP/adapter.log"
+          if grep -Eq '^(# |ℹ )skipped [1-9]' "$RUNNER_TEMP/adapter.log"; then echo "database tests skipped" >&2; exit 1; fi

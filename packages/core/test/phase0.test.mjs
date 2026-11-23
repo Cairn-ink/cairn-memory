@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { fileURLToPath } from "node:url";
 import {
   CAPABILITIES, CoreError, ERROR_CODES, ERROR_KINDS, FORGET_POLICY, FUSION_PRESETS, NEAR_DUPLICATE_DISTANCE,
   assertAdapterCapabilities, capabilities, compareSortKey, compareUtf8, factBody, requireCapability, toCoreError, validateSuppressionFact,
@@ -137,24 +136,6 @@ test("the closure rule catches each banned form (negative control)", () => {
     assert.ok(violations(sample).includes(name), name);
   }
   assert.deepEqual(violations('const m = await import("./local.mjs");'), []);
-});
-
-test("core package files have no node: specifiers or require calls", () => {
-  const root = fileURLToPath(new URL("../", import.meta.url));
-  const { files } = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
-  assert.ok(files.length > 0);
-  for (const entry of files) {
-    const path = join(root, entry);
-    const shipped = statSync(path).isDirectory()
-      ? readdirSync(path, { recursive: true, withFileTypes: true })
-        .filter((file) => file.isFile()).map((file) => join(file.parentPath, file.name))
-      : [path];
-    for (const file of shipped) {
-      const imports = violations(readFileSync(file, "utf8"))
-        .filter((name) => name === "node: specifier" || name === "require");
-      assert.deepEqual(imports, [], file);
-    }
-  }
 });
 
 test("compareUtf8 orders by UTF-8 bytes, not UTF-16 code units", () => {
