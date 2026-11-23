@@ -83,6 +83,8 @@ export const ERROR_CODES = Object.freeze({
   conflict_limit: "limit",
   supersession_limit: "limit",
   invalid_ref: "invalid_input",
+  // Topics
+  moc_title_conflict: "conflict",
 });
 
 /** @param {unknown} code @returns {code is keyof typeof ERROR_CODES} */

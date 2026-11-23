@@ -9,13 +9,15 @@ export interface MemoryAdapterOptions {
   capabilities?: Partial<Record<Capability, boolean>>;
   newId?: () => string;
   now?: () => number;
+  topicRetryAfterMs?: number;
+  topicMaxAttempts?: number;
   sessionRefs?: "plain" | "hashed";
   hashSessionKey?: FactMatchPolicy["hashSessionKey"];
   fingerprint?: { secret: string; labels: FingerprintLabels } | null;
 }
 
 export type MemoryAdapter = Pick<StorageAdapter, "capabilities" | "uow" | "memories" | "capture" |
-  "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "suppressions" | "pause" | "keys"> & {
+  "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "suppressions" | "pause" | "keys" | "placement"> & {
   name: "memory";
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;
   harness: TestHarness & Required<Pick<TestHarness, "setFingerprintSecret" | "advanceClock">>;

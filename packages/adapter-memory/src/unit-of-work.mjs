@@ -13,7 +13,8 @@ import { createFactStore } from "./privacy.mjs";
 /** @typedef {import("@cairn-ink/core/ports").PauseState} PauseState */
 /** @typedef {import("./capture.mjs").ClaimRecord} ClaimRecord */
 /** @typedef {import("@cairn-ink/core/ports").FinishResult} FinishResult */
-/** @typedef {{rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
+/** @typedef {import("./topics.mjs").TopicState} TopicState */
+/** @typedef {{topics: Map<Namespace, TopicState>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
  * claims: Map<string, ClaimRecord>, activeTokens: Map<string, string>, abandonedTokens: Set<string>}} State */
 /** @typedef {{state: State, run: {readonly ended: boolean}, indexDirty: boolean, stateWritten: boolean, pauseLock: boolean,
  * poisoned: boolean, writeErrorCode: ErrorCode, finishes: Set<FinishResult>, writingFinishes: number,
@@ -43,7 +44,7 @@ class Mutex {
 class Owner {
   /** @type {State} */
   committed = {
-    rows: new Map(), facts: new Map(), epoch: null, pause: { paused: false, generation: 0 }, indexRevision: 0,
+    topics: new Map(), rows: new Map(), facts: new Map(), epoch: null, pause: { paused: false, generation: 0 }, indexRevision: 0,
     claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(),
   };
   pause = new Mutex();
@@ -68,8 +69,8 @@ function jsonSafe(value) {
   throw new TypeError("Unsupported value in memory snapshot");
 }
 
-/** @param {Readonly<Record<string, ErrorCode>>} nativeErrorMap @param {() => number} [now] */
-export function createUnitOfWork(nativeErrorMap, now = Date.now) {
+/** @param {Readonly<Record<string, ErrorCode>>} nativeErrorMap @param {() => number} [now] @param {boolean} [includeTopics] */
+export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics = false) {
   /** @type {Map<string, Owner>} */
   const owners = new Map();
   /** @type {WeakMap<Tx, IssuedRun>} */
@@ -247,7 +248,8 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now) {
   function dump() {
     const snapshot = [...owners]
       .filter(([, { committed }]) => committed.rows.size > 0 || committed.facts.size > 0 ||
-        committed.pause.generation > 0 || committed.claims.size > 0)
+        committed.pause.generation > 0 || committed.claims.size > 0 ||
+        (includeTopics && (committed.topics.size > 0 || committed.indexRevision > 0)))
       .sort(([a], [b]) => compareUtf8(a, b))
       .map(([owner, { committed }]) => ({
         owner,
@@ -260,6 +262,15 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now) {
           }),
         facts: [...committed.facts.values()],
         pause: committed.pause,
+        ...(includeTopics && {
+          indexRevision: committed.indexRevision,
+          topics: [...committed.topics].map(([namespace, { topics, outcomes, failures }]) => ({
+            namespace,
+            topics: [...topics.values()],
+            outcomes: [...outcomes].map(([id, { revision, memberships }]) => ({ id, revision, memberships: [...memberships] })),
+            failures: [...failures],
+          })),
+        }),
         ...(committed.claims.size ? {
           claims: [...committed.claims.values()],
           abandonedTokens: [...committed.abandonedTokens],

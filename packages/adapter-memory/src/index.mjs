@@ -4,6 +4,7 @@ import { createFactMatcher } from "./fact-match.mjs";
 import { createMemoryStore } from "./memory-store.mjs";
 import { createFactStore, createFingerprintProvider, createPauseStore } from "./privacy.mjs";
 import { createRetrievalPorts } from "./retrieval.mjs";
+import { createTopicStore } from "./topics.mjs";
 import { createUnitOfWork } from "./unit-of-work.mjs";
 import { validateTime } from "./validation.mjs";
 
@@ -23,7 +24,7 @@ export function createMemoryAdapter(options = {}) {
   const clock = options.now ?? Date.now;
   let clockOffset = 0;
   const now = () => clock() + clockOffset;
-  const { uow, port, dump, runSeed, setWriteTime } = createUnitOfWork(nativeErrorMap, now);
+  const { uow, port, dump, runSeed, setWriteTime } = createUnitOfWork(nativeErrorMap, now, flags.placement);
   const matchFacts = createFactMatcher(flags.vectorSuppression, options.hashSessionKey);
   const store = createMemoryStore(port, flags, newId, matchFacts);
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts);
@@ -39,6 +40,7 @@ export function createMemoryAdapter(options = {}) {
     pause: createPauseStore(port),
     keys,
     ...createRetrievalPorts(port, flags, matchFacts),
+    ...(flags.placement && { placement: createTopicStore(port, flags, newId, now, matchFacts, options) }),
     nativeErrorMap,
     harness: {
       async dump() { return dump(); },
