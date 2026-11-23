@@ -1,5 +1,12 @@
+// Capture boundaries read accessor-backed fields once through a snapshot and refuse Proxies,
+// functions and symbol values with the entry's invalid code. The engine may reread fields or accept stable Proxies.
+// Indexed wire input has its own property descriptor checks.
 import { CoreError } from '../errors.mjs';
+import { extractionLimit, extractionOutputTokens } from './capture-input.mjs';
 import { snapshotQualificationTextCatalog } from './qualification-text-catalog.mjs';
+import { validateDenseArray } from './validate.mjs';
+
+export { extractionOutputTokens };
 
 /** @returns {never} */
 function invalid() { throw new CoreError('invalid_input'); }
@@ -54,30 +61,6 @@ export const schemas = {
   }), 5) }),
 };
 
-/** Count distinct user messages, grouping windows. Engine core/capture-input.mjs:4–11.
- * @param {ReadonlyArray<unknown>} messages
- */
-function extractionLimit(messages) {
-  const userMessages = messages.filter(message => fieldValue(message, 'role') === 'user');
-  return Math.max(5, Math.min(20, new Set(userMessages.map((message, position) => {
-    const messageIndex = fieldValue(message, 'messageIndex');
-    return Number.isInteger(messageIndex) ? `w${messageIndex}` : `m${position}`;
-  })).size));
-}
-
-/** @param {ReadonlyArray<unknown>} messages */
-export const extractionOutputTokens = (messages) => Math.ceil(1024 * extractionLimit(messages) / 5);
-
-/** @param {unknown} value @param {number} min @param {number} max */
-function denseArray(value, min, max) {
-  if (!Array.isArray(value) || value.length < min || value.length > max ||
-      Object.keys(value).length !== value.length) throw new CoreError('invalid_input');
-  for (let index = 0; index < value.length; index++) {
-    if (!Object.hasOwn(value, index)) throw new CoreError('invalid_input');
-  }
-  return value;
-}
-
 /** @param {unknown} value @param {string[]} fields */
 function exactData(value, fields) {
   if (!record(value) || ![Object.prototype, null].includes(Object.getPrototypeOf(value)) ||
@@ -96,7 +79,7 @@ export function snapshotIndexedExtractInput(input) {
   const { inputMode, messages } = exactData(input, ['inputMode', 'messages']);
   if (inputMode !== 'indexed-windows-v1') invalid();
   let windows;
-  try { windows = denseArray(messages, 1, 64); } catch { invalid(); }
+  try { windows = validateDenseArray(messages, 1, 64); } catch { invalid(); }
   if (Reflect.ownKeys(windows).length !== windows.length + 1) invalid();
   const copied = [];
   let messageIndex = -1, groupUnits = 0, totalUnits = 0;
