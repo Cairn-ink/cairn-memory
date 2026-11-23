@@ -57,3 +57,10 @@ secret and checks that both the key ID and signature change after rotation.
 The in-memory reference adapter uses the public fixture `TEST_FINGERPRINT_SECRET`
 (`"test-secret-a"`) and `TEST_FINGERPRINT_LABELS` when `fingerprintKey` is enabled with
 no configuration. Use these fixtures for tests only.
+
+### Sticky write failures
+
+After a write port touches store state, the in-memory adapter records its first failure code.
+If the callback returns normally, the run rolls back and rejects with a fresh `CoreError` for that code.
+
+Write ports validate arguments before reading state; argument failures are never sticky.

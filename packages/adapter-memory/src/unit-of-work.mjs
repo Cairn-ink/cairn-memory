@@ -10,7 +10,7 @@ import { createFactStore } from "./privacy.mjs";
 /** @typedef {import("@cairn-ink/core").StoredFact} StoredFact */
 /** @typedef {import("@cairn-ink/core/ports").PauseState} PauseState */
 /** @typedef {{rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number}} State */
-/** @typedef {{state: State, run: {readonly ended: boolean}, dirty: boolean, pauseLock: boolean, writeError?: CoreError}} IssuedRun */
+/** @typedef {{state: State, run: {readonly ended: boolean}, dirty: boolean, pauseLock: boolean, writeErrorCode?: ErrorCode}} IssuedRun */
 
 class Mutex {
   #tail = Promise.resolve();
@@ -102,7 +102,7 @@ export function createUnitOfWork(nativeErrorMap) {
         const issuedRun = { run, state, dirty: false, pauseLock };
         issued.set(tx, issuedRun);
         const result = await fn(tx);
-        if (issuedRun.writeError) throw issuedRun.writeError;
+        if (issuedRun.writeErrorCode !== undefined) throw new CoreError(issuedRun.writeErrorCode);
         if (issuedRun.dirty) {
           state.indexRevision++;
           current.committed = state;
@@ -150,7 +150,7 @@ export function createUnitOfWork(nativeErrorMap) {
       return result;
     } catch (error) {
       const mapped = toCoreError(error, nativeErrorMap);
-      if (write && touchedState && issuedRun) issuedRun.writeError ??= mapped;
+      if (write && touchedState && issuedRun) issuedRun.writeErrorCode ??= mapped.code;
       throw mapped;
     }
   }

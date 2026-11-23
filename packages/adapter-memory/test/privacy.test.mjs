@@ -174,6 +174,61 @@ test("caught fact refusals preserve the retrieval token and epoch", async () => 
   }
 });
 
+test("mutating a caught write error leaves the recorded failure intact", async () => {
+  const adapter = createMemoryAdapter();
+  const { uow, memories, harness } = adapter;
+  const memoryScope = { owner, namespace: null };
+  const row = {
+    kind: "fact", origin: "explicit", text: "test memory", textHash: `sha256:${a}`,
+    confidence: 1, source: { kind: "mcp", client: null, sessionId: null }, embedding: null,
+  };
+  const before = await token(adapter);
+  let caught;
+  await assert.rejects(uow.run(owner, {}, async (tx) => {
+    const { id, revision } = await memories.insert(tx, memoryScope, row, [], clockStart);
+    try {
+      await memories.replaceContent(tx, memoryScope, id, revision + 1, row, null, clockStart);
+    } catch (error) {
+      assert.ok(error instanceof CoreError);
+      assert.equal(error.code, "revision_conflict");
+      caught = error;
+      error.code = "internal_error";
+      error.message = "changed by the callback";
+    }
+  }), (error) => {
+    assert.ok(error instanceof CoreError);
+    assert.equal(error.code, "revision_conflict");
+    assert.notEqual(error, caught);
+    assert.equal(error.message, new CoreError("revision_conflict").message);
+    return true;
+  });
+  assert.deepEqual(await harness.dump(), []);
+  assert.equal(await token(adapter), before);
+});
+
+test("replaceContent validates malformed content before checking a stale revision", async () => {
+  const { uow, memories } = createMemoryAdapter();
+  const memoryScope = { owner, namespace: null };
+  const row = {
+    kind: "fact", origin: "explicit", text: "test memory", textHash: `sha256:${a}`,
+    confidence: 1, source: { kind: "mcp", client: null, sessionId: null }, embedding: null,
+  };
+  await uow.run(owner, {}, async (tx) => {
+    const { id, revision } = await memories.insert(tx, memoryScope, row, [], clockStart);
+    await assert.rejects(memories.replaceContent(tx, memoryScope, id, revision + 1, { ...row, text: "" }, null, clockStart),
+      coreError("invalid_input"));
+  });
+});
+
+test("touchDuplicate validates an invalid merge before looking up a missing row", async () => {
+  const { uow, memories } = createMemoryAdapter();
+  const memoryScope = { owner, namespace: null };
+  await uow.run(owner, {}, async (tx) => {
+    await assert.rejects(memories.touchDuplicate(tx, memoryScope, "test-missing", [], { confidence: -1 }, clockStart),
+      coreError("invalid_input"));
+  });
+});
+
 test("caught write argument errors allow other writes to commit", async () => {
   const { uow, memories } = createMemoryAdapter();
   const memoryScope = { owner, namespace: null };
