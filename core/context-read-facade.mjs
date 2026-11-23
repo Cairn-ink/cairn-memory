@@ -779,7 +779,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       const access = authorize('contextRead', input, payload, token);
       if (!options.counter) return failure(new MemoryStoreError('invalid_input'), { counter: 'absent' });
       let queryVector;
-      const cardChannel = documentChannel && input.types.includes('memory') ? documentChannel : null;
+      const cardChannel = options.cardPort && input.types.includes('memory') ? documentChannel : null;
       const searched = cardChannel ? await searchCandidates(input, access, deadlineAt, true, vector => { queryVector = vector; })
         : await searchCandidates(input, access, deadlineAt, true);
       access.check();
