@@ -95,7 +95,7 @@ export type SuppressionFact = IdentityFact | TextFact | SessionFact | WindowFact
 export interface StoredFact<F extends SuppressionFact = SuppressionFact> {
   fact: F;
   factId: string;
-  /** Canonical digest of the fact body (without owner/actionId), computed by core. */
+  /** Canonical digest of factIncarnationBody (the body without owner/actionId and without a text embedding), computed by core. */
   incarnation: string;
   /** Owner epoch after this fact; advances by exactly 1 per new fact. */
   epoch: bigint;
@@ -106,3 +106,5 @@ export interface StoredFact<F extends SuppressionFact = SuppressionFact> {
 export declare function validateSuppressionFact(fact: unknown): SuppressionFact;
 /** Canonical JSON of the fact body without owner and actionId (keys sorted; text digests sorted by alg then value as UTF-8 bytes; other arrays as given). */
 export declare function factBody(fact: SuppressionFact): string;
+/** What the incarnation hashes: factBody without a text fact's embedding (not repeatable across providers). */
+export declare function factIncarnationBody(fact: SuppressionFact): string;

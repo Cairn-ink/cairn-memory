@@ -2,8 +2,11 @@ import { CoreError } from "./errors.mjs";
 import { compareUtf8 } from "./utf8.mjs";
 
 // One SuppressionFact union for every store. Facts are permanent. A retry of the same fact
-// (same canonical body = incarnation) returns the original; a different body for the same
-// fact slot is fact_conflict (hard error, the whole transaction rolls back).
+// (same incarnation) returns the original; a different incarnation for the same fact slot is
+// fact_conflict (hard error, the whole transaction rolls back). The incarnation hashes
+// factIncarnationBody: the canonical body without a text fact's embedding, because provider
+// embeddings are not bit-for-bit repeatable and a second forget of the same text must not
+// conflict. Stores keep the full factBody.
 export const FACT_KINDS = Object.freeze(["identity", "text", "session", "window", "rawSpan"]);
 export const FACT_ORIGINS = Object.freeze(["forget", "correct", "edit", "backfill", "import"]);
 // exact: digest match only. full: digests + shingles + vector neighbours (where capable).
@@ -125,8 +128,7 @@ function compareDigests(x, y) {
 }
 
 /**
- * Canonical JSON of the fact body without owner and actionId. Core hashes it (ClockAndHash)
- * into the incarnation passed to SuppressionStore.writeFact.
+ * Canonical JSON of the full fact body without owner and actionId: what a store keeps.
  * @param {import("./suppression-fact.mjs").SuppressionFact} fact
  */
 export function factBody(fact) {
@@ -138,4 +140,16 @@ export function factBody(fact) {
     body.text = { ...text, digests: [...text.digests].sort(compareDigests) };
   }
   return JSON.stringify(canonical(body));
+}
+
+/**
+ * Canonical JSON that the incarnation hashes (ClockAndHash) before SuppressionStore.writeFact:
+ * factBody without a text fact's `text.embedding`. Everything else in a text body is
+ * deterministic for a given text and key; the stored fact keeps its original embedding.
+ * @param {import("./suppression-fact.mjs").SuppressionFact} fact
+ */
+export function factIncarnationBody(fact) {
+  if (fact.kind !== "text") return factBody(fact);
+  const { embedding: _embedding, ...text } = /** @type {Record<string, unknown>} */ (fact.text);
+  return factBody(/** @type {import("./suppression-fact.mjs").SuppressionFact} */ ({ ...fact, text }));
 }
