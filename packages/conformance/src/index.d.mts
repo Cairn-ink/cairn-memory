@@ -4,7 +4,7 @@ import type { AdapterFactory, OpenedAdapter } from "./factory.d.ts";
 
 export type { AdapterFactory, JsonValue, OpenedAdapter, TestHarness } from "./factory.d.ts";
 
-export type CaseContext = Omit<OpenedAdapter, "close" | "embeddingDimensions"> & {
+export type CaseContext = Omit<OpenedAdapter, "close"> & {
   vec(distance: number): number[];
   hash(text: string): Promise<string>;
   owner: string;
