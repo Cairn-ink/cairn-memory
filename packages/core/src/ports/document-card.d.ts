@@ -12,6 +12,15 @@ export interface DocumentCardSourceMessage extends DocumentCardSession {
   messageId: string;
 }
 
+export interface DocumentCardAmendment {
+  amendmentId: string;
+  /** Capture session date in YYYY-MM-DD format. */
+  date: string;
+  sentence: string;
+  sourceMessage: DocumentCardSourceMessage;
+  quote: string;
+}
+
 export interface DocumentCardSentence extends Pick<DocumentSentence, "start" | "end"> {
   source: DocumentCardSourceMessage;
 }
@@ -35,16 +44,21 @@ export interface DocumentCardRecord {
   sourceMemories: ReadonlyArray<{ id: string; revision: Revision }>;
   sentences: readonly DocumentCardSentence[];
   stale: readonly DocumentCardStaleEntry[];
+  /** Visible amendments in ascending date order, then insertion order for equal dates. */
+  amendments: readonly DocumentCardAmendment[];
 }
 
-/** Authored cards can be stored without a source message. */
-export interface SourceLessDocumentCardRecord extends Omit<DocumentCardRecord, "origin" | "sourceMessage"> {
+/** Authored cards can be written without a source message. Amendment history is managed by the store. */
+export interface SourceLessDocumentCardRecord extends Omit<DocumentCardRecord, "origin" | "sourceMessage" | "amendments"> {
   readonly origin: "import" | "manual";
   sourceMessage: null;
 }
 
 /** The record set for stores that support both message-backed and source-less cards. */
-export type StoredDocumentCardRecord = DocumentCardRecord | SourceLessDocumentCardRecord;
+export type StoredDocumentCardRecord = DocumentCardRecord |
+  (SourceLessDocumentCardRecord & Pick<DocumentCardRecord, "amendments">);
+
+type DocumentCardWrite<Card> = Card extends StoredDocumentCardRecord ? Omit<Card, "amendments"> : never;
 
 /** Select exactly one kind of source. All selectors are confined to the call's scope. */
 export type DocumentCardHideSelector =
@@ -59,8 +73,8 @@ export interface DocumentCardEmbedding {
 
 /**
  * Optional (capability documentCards). All calls use the live Tx from UnitOfWork.
- * Each insert or replacement, each hide call affecting at least one card, and each
- * markStale call advances the owner index revision once.
+ * Each card insert or replacement, each hide call affecting at least one card or amendment,
+ * and each markStale call advances the owner index revision once.
  * With placement enabled, the host drops topic memberships in the same transaction
  * as every hide or tombstone.
  */
@@ -69,17 +83,36 @@ export interface DocumentCardStore<Card extends StoredDocumentCardRecord = Docum
    * Runs inside the capture finish transaction. Idempotent on (id, contentHash).
    * Preserve the stored origin on replacement.
    * A hidden or tombstoned id returns "tombstoned" without writing anything.
-   * Vectors supplied with a write are keyed by model.
+   * Vectors supplied with a write are keyed by model. Amendment history is managed
+   * through the amendment operations.
    */
-  put(tx: Tx, scope: Scope, card: Card, embedding?: DocumentCardEmbedding): Promise<{
+  put(tx: Tx, scope: Scope, card: DocumentCardWrite<Card>, embedding?: DocumentCardEmbedding): Promise<{
     status: "inserted" | "unchanged" | "replaced" | "tombstoned";
   }>;
+  /**
+   * Insert in a short transaction after rechecking card and source visibility and pause generation.
+   * An amendment id already recorded (including a hidden one) is unchanged. A hidden or
+   * tombstoned card returns "hidden_card". Only insertion advances the owner index revision.
+   */
+  amend(tx: Tx, scope: Scope, cardId: string, amendment: DocumentCardAmendment): Promise<{
+    status: "inserted" | "unchanged" | "hidden_card";
+  }>;
+  hideAmendment(tx: Tx, scope: Scope, cardId: string, amendmentId: string, reason: string): Promise<void>;
+  /** Hiding a card also hides all of its amendments. */
   hide(tx: Tx, scope: Scope, cardId: string, reason: string): Promise<void>;
+  /**
+   * A sourceMessage or session selector also hides amendments with a matching source.
+   * `hidden` counts newly hidden cards plus newly hidden amendments. The owner index
+   * revision advances once if the call hides at least one card or amendment.
+   */
   hideWhere(tx: Tx, scope: Scope, selector: DocumentCardHideSelector, reason: string): Promise<{ hidden: number }>;
   /** Stores the ids of the changed memory and its replacement. */
   markStale(tx: Tx, scope: Scope, cardId: string, entry: DocumentCardStaleEntry): Promise<void>;
-  /** Same read snapshot as the final visibility check. Hidden and tombstoned cards are excluded. */
+  /**
+   * Same read snapshot as the final visibility check. Returns visible cards and amendments only,
+   * with amendments in ascending date order and insertion order for equal dates.
+   */
   get(tx: Tx, scope: Scope, cardId: string): Promise<Card | null>;
-  /** Same read snapshot as get. */
+  /** Same read snapshot, visibility, and amendment ordering as get. */
   list(tx: Tx, scope: Scope): Promise<Card[]>;
 }

@@ -120,3 +120,4 @@ export declare function rankDocumentCards(
 ): DocumentCardMatch | null;
 
 export * from "./visibility.mjs";
+export * from "./amendments.mjs";

@@ -23,6 +23,46 @@ export interface ModelRequest {
   maxOutputTokens: number;
 }
 
+export interface DetectChangesRequest extends ModelRequest {
+  input: string;
+  schema: object;
+  schemaName: string;
+  temperature: 0;
+  maxOutputTokens: 900;
+}
+
+export interface VerifyChangeRequest extends ModelRequest {
+  input: string;
+  schema: object;
+  schemaName: string;
+  temperature: 0;
+  maxOutputTokens: 400;
+}
+
+export interface ModelTokenUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+}
+
+export interface DetectedChange {
+  card_id: string;
+  quote: string;
+  new_value: string;
+}
+
+export interface DetectChangesResponse {
+  changes: DetectedChange[];
+  /** Optional adapter metadata outside the provider's strict output schema. */
+  usage?: ModelTokenUsage;
+}
+
+export interface VerifyChangeResponse {
+  applies: boolean;
+  line: string;
+  /** Optional adapter metadata outside the provider's strict output schema. */
+  usage?: ModelTokenUsage;
+}
+
 export type ModelStage = "extract" | "qualify" | "reconcile" | "classify" | "rationale";
 
 /**
@@ -45,6 +85,10 @@ export interface ModelPort {
    * when present; when absent, its own count alone. A throw counts as false.
    */
   fits?(stage: ModelStage, request: ModelRequest): boolean;
+  /** Send the strict amendment request as supplied and return the parsed object. */
+  detectChanges?(request: DetectChangesRequest, options?: CallOptions): Promise<DetectChangesResponse>;
+  /** Send the strict amendment request as supplied and return the parsed object. */
+  verifyChange?(request: VerifyChangeRequest, options?: CallOptions): Promise<VerifyChangeResponse>;
 }
 
 /** Core helper over ModelPort.call for the plain extract stage (prompt, spec and validation from core). */
