@@ -223,13 +223,15 @@ export function compareValidatedDigests(a, b) {
 export function shingleContainmentMatch(passage, reference, threshold, checkContainment, containmentKeyUnavailable = false) {
   if (!Array.isArray(passage.shingles) || !Array.isArray(reference.shingles) ||
       !passage.shingles.every(isHex) || !reference.shingles.every(isHex)) return "ineligible";
-  if (containmentKeyUnavailable || !isKeyId(passage.keyId) || reference.keyId !== passage.keyId) return "ineligible";
-  if (!checkContainment || passage.shingles.length === 0 || reference.shingles.length === 0) return false;
+  if (!isKeyId(passage.keyId) || !isKeyId(reference.keyId)) return "ineligible";
+  if (!checkContainment) return false;
+  if (containmentKeyUnavailable || reference.keyId !== passage.keyId) return "ineligible";
+  if (passage.shingles.length === 0 || reference.shingles.length === 0) return false;
 
   const shingles = new Set(passage.shingles);
   const shared = reference.shingles.filter((shingle) => shingles.has(shingle)).length;
   // Round toward withholding at the threshold.
-  return shared / reference.shingles.length >= threshold - 1e-12;
+  return shared > 0 && shared / reference.shingles.length >= threshold - 1e-12;
 }
 
 /**

@@ -40,10 +40,14 @@ test("package root exposes both redaction version constants", () => {
   assert.deepEqual(PRIVACY_REDACTION_VERSIONS, { v1: 1, hostedCurrent: 2, core: 3 });
 });
 
-test("full facts withhold when candidate shingles are unavailable or signed under another key", () => {
+test("full containment withholds when candidate shingles are unavailable or signed under another key", () => {
   const fact = textFact(reference);
   assertWithholds({ ...disjoint, shingles: null, keyId: null }, fact, null);
-  assertWithholds({ ...disjoint, keyId: keyB.id }, fact, keyB);
+  const rotated = { ...disjoint, keyId: keyB.id };
+  assert.equal(withholdsPassage(rotated, fact), true);
+  assert.equal(withholdsAnyPassage([rotated], [fact]), true);
+  assert.equal(blocksMemoryPassage([rotated], [fact], keyB), false);
+  assert.equal(blocksMemoryPassage([rotated, rotated], [fact], keyB), true);
 });
 
 test("HMAC-only exact facts require a comparable keyed digest to decide a miss", () => {

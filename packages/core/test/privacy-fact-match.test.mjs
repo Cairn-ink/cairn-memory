@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
 import {
-  cleanContent, factBlocksIncoming, factHidesRow, fingerprintLegacyCapture, NEAR_DUPLICATE_DISTANCE,
-  normalizeForHash, redactHostedCurrent, redactV1, SUPPRESSION_DISTANCE, userFingerprintKey,
+  blocksMemoryPassage, cleanContent, factBlocksIncoming, factHidesRow, fingerprintLegacyCapture, NEAR_DUPLICATE_DISTANCE,
+  normalizeForHash, redactHostedCurrent, redactV1, SUPPRESSION_DISTANCE, userFingerprintKey, withholdsPassage,
 } from "../src/index.mjs";
 import {
   cases, decodeUtf16, expected, FAKE_MASTER, inputOf, OWNERS, withholding, TEST_FINGERPRINT_LABELS as labels,
@@ -333,8 +333,8 @@ for (const [label, fact, input, policy, want] of [
   ["capture recognizes an edit's old wording by containment", editFact, { passages: [contained], sourceMemory: edit }, capture, true],
   ["explicit single passage uses exact matching", text, { passages: [contained] }, explicit, false],
   ["explicit single passage needs shingles", text, { passages: [{ ...passage, shingles: null }] }, explicit, ineligible],
-  ["explicit single passage needs the same shingle key", text,
-    { passages: [{ ...passage, keyId: "fake-rotated-key" }] }, explicit, ineligible],
+  ["explicit single passage permits different known shingle keys", text,
+    { passages: [{ ...passage, keyId: "fake-rotated-key" }] }, explicit, false],
   ["explicit aliases can match containment", text, { passages: [passage, contained] }, explicit, true],
   ["explicit aliases skip vector comparisons", text, { passages: [passage, near] }, { ...explicit, ...vectorPolicy }, false],
   ["explicit own edit exempts paraphrase", editFact, { passages: [contained], sourceMemory: edit }, explicit, false],
@@ -377,6 +377,29 @@ for (const [label, stored, candidate, key] of [
   });
 }
 
+const rotatedReference = { ...reference, keyId: "old", shingles: [] };
+const rotatedPassage = { ...passage, keyId: "new", shingles: ["aa"] };
+const rotatedKey = { id: "new" };
+
+test("an exempt edit clears a comparable digest miss after key rotation", () => {
+  const sourceMemory = { id: "m", createdAtMs: 42 };
+  const fact = store({ ...editFact, sourceMemory, text: rotatedReference });
+  const passages = [rotatedPassage];
+  assert.deepEqual([
+    factBlocksIncoming(fact, { scope, passages, sourceMemory }, { ...explicit, key: rotatedKey }),
+    blocksMemoryPassage(passages, [fact.fact], rotatedKey, undefined, sourceMemory),
+  ], [false, false]);
+});
+
+test("a single-passage explicit save clears a comparable digest miss against a forget fact after key rotation", () => {
+  const fact = store({ ...text, text: rotatedReference });
+  const passages = [rotatedPassage];
+  assert.deepEqual([
+    factBlocksIncoming(fact, { scope, passages }, { ...explicit, key: rotatedKey }),
+    blocksMemoryPassage(passages, [fact.fact], rotatedKey),
+  ], [false, false]);
+});
+
 for (const [label, unavailable] of [["null", { shingles: null }], ["missing", {}]]) {
   for (const [side, stored, candidate] of [
     ["stored", unavailable, { shingles: [] }],
@@ -399,6 +422,17 @@ test("containment includes seven of a hundred shingles at a 0.07 threshold", () 
   const policy = { containmentThreshold: 0.07 };
   assert.equal(factHidesRow(store(text), { ...baseRow, ...passage, shingles: shingles.slice(0, 6) }, policy), false);
   assert.equal(factHidesRow(store(text), { ...baseRow, ...candidate }, policy), true);
+});
+
+test("a tiny positive containment threshold still misses disjoint shingles", () => {
+  const fact = store({ ...text, text: { ...reference, shingles: ["aa"] } });
+  const candidate = { ...passage, shingles: ["bb"] };
+  const containmentThreshold = 1e-13;
+  assert.deepEqual([
+    factHidesRow(fact, { ...baseRow, ...candidate }, { containmentThreshold }),
+    factBlocksIncoming(fact, { scope, passages: [candidate] }, { ...capture, containmentThreshold }),
+    withholdsPassage(candidate, fact.fact, containmentThreshold),
+  ], [false, false, false]);
 });
 
 function recordedPassage({ sha, mac, taggedMac, ...fields }) {
