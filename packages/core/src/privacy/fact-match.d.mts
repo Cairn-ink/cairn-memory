@@ -4,12 +4,17 @@ import type { SessionRef, StoredFact, TextDigest } from "../suppression-fact.mjs
 
 export { NEAR_DUPLICATE_DISTANCE, SUPPRESSION_DISTANCE } from "../decisions.mjs";
 
+/** One-sided cutoff tolerance for pgvector's float32 storage. */
+export declare const SUPPRESSION_DISTANCE_TOLERANCE: 1e-6;
+
 export type FactMatchResult = boolean | "ineligible";
 export type FactMatchEmbedding = readonly number[] | Float32Array | Float64Array;
 
 export interface FactMatchPolicy {
   containmentThreshold?: number;
+  /** Omit to disable vector suppression. */
   vectorSuppression?: boolean;
+  /** For enabled vector suppression, a finite distance in [0, 2]. Omit to use the default. */
   suppressionDistance?: number;
   /** Synchronous hash of a plain session reference. Null means the hash is unavailable. */
   hashSessionKey?: (client: string, id: string) => string | null;

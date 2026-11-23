@@ -115,6 +115,37 @@ checkRows("text", [
     {}, ineligible],
 ], { ...baseRow, ...passage });
 
+test("float32 storage gets a one-sided vector cutoff tolerance", async () => {
+  const embedding = Array(1536).fill(0);
+  embedding[0] = 1;
+  const fact = store({ ...text, text: { ...reference, embedding } });
+  const candidate = new Float32Array(1536);
+  candidate.set(vectorAt(0.20001));
+  assert.equal(factHidesRow(fact, { ...baseRow, ...passage, embedding: candidate }, vectorPolicy), false);
+  candidate.set(new Float32Array([0.8, 0.6]));
+  assert.equal(factHidesRow(fact, { ...baseRow, ...passage, embedding: candidate }, vectorPolicy), true);
+  const root = await import("../src/index.mjs");
+  const direct = await import("../src/privacy/fact-match.mjs");
+  assert.equal(root.SUPPRESSION_DISTANCE_TOLERANCE, 1e-6);
+  assert.equal(direct.SUPPRESSION_DISTANCE_TOLERANCE, root.SUPPRESSION_DISTANCE_TOLERANCE);
+});
+
+for (const [label, policy, embedding] of [
+  ["nonboolean switch", { vectorSuppression: 0 }, [1, 0]],
+  ["null cutoff", { vectorSuppression: true, suppressionDistance: null }, [0, 1]],
+  ["explicitly undefined switch", { vectorSuppression: undefined }, [1, 0]],
+  ["explicitly undefined cutoff", { vectorSuppression: true, suppressionDistance: undefined }, [0, 1]],
+  ["out-of-range cutoff without a candidate vector", { vectorSuppression: true, suppressionDistance: -1 }, undefined],
+]) {
+  test(`invalid vector policy denies comparison: ${label}`, () => {
+    const candidate = { ...passage, embedding };
+    assert.deepEqual([
+      factHidesRow(store(text), { ...baseRow, ...candidate }, policy),
+      factBlocksIncoming(store(text), { scope, passages: [candidate] }, { ...capture, ...policy }),
+    ], [ineligible, ineligible]);
+  });
+}
+
 const session = { kind: "session", session: source };
 const hashSession = { kind: "session", session: hashed };
 const hashSessionKey = (matchedClient, id) => {
@@ -169,7 +200,7 @@ checkRows("raw span", [
   ["adjacent after", span, { startUtf16: 6, endUtf16: 8 }, false],
   ["different message", span, { messageKey: "different" }, false],
   ["different session hash", span, { sessionKeyHash: hex("a") }, false],
-  ["ordinary memory", span, { type: "memory" }, false],
+  ["ordinary memory", span, { type: "memory", memoryId }, false],
   ["unknown row type", span, { type: "different" }, ineligible],
   ["unbound message", span, { messageKey: undefined }, ineligible],
   ["unbound session hash", span, { sessionKeyHash: undefined }, ineligible],
@@ -178,6 +209,16 @@ checkRows("raw span", [
   ["invalid range", span, { startUtf16: 6 }, ineligible],
   ["malformed fact", { ...span, contentDigest: [span.contentDigest] }, {}, ineligible],
 ], raw);
+
+test("an overlapping raw span requires a row tag or a tagged memory with an ID", () => {
+  const overlap = { scope, sessionKeyHash: span.sessionKeyHash, messageKey: span.messageKey, startUtf16: 5, endUtf16: 8 };
+  assert.equal(factHidesRow(store(span), { ...overlap, type: "raw" }), true);
+  assert.equal(factHidesRow(store(span), { ...baseRow, type: "memory" }), false);
+  assert.deepEqual([
+    factHidesRow(store(span), overlap),
+    factHidesRow(store(span), { ...overlap, type: "memory" }),
+  ], [ineligible, ineligible]);
+});
 
 test("a fact needs a valid body and a bound candidate scope", () => {
   const incoming = { scope, passages: [] };

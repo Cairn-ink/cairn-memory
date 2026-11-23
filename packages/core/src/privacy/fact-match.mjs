@@ -6,6 +6,9 @@ import {
 
 export { NEAR_DUPLICATE_DISTANCE, SUPPRESSION_DISTANCE } from "../decisions.mjs";
 
+// Widen the hiding cutoff to cover rounding from pgvector's float32 storage.
+export const SUPPRESSION_DISTANCE_TOLERANCE = 1e-6;
+
 /** @import { FactMatchEmbedding, FactMatchIncoming, FactMatchPolicy, FactMatchResult, FactMatchRow, FactMatchSource, IncomingFactMatchPolicy } from "./fact-match.mjs" */
 /** @import { Scope } from "../ports/common.d.ts" */
 /** @import { SessionRef, StoredFact, SuppressionFact, TextFact, WindowFact } from "../suppression-fact.mjs" */
@@ -133,7 +136,7 @@ function scopeMatches(fact, scope) {
 
 /**
  * pgvector's cosine distance is 1 minus cosine similarity, clamped to [0, 2].
- * Core accumulates in float64. A native query may round differently at a cutoff.
+ * Core accumulates in float64 over the available inputs.
  * @param {FactMatchEmbedding} a @param {FactMatchEmbedding} b
  */
 function cosineDistance(a, b) {
@@ -155,13 +158,21 @@ function cosineDistance(a, b) {
   return 1 - Math.max(-1, Math.min(1, similarity));
 }
 
+/** @param {FactMatchPolicy} policy */
+function isValidVectorPolicy(policy) {
+  if (!Object.hasOwn(policy, "vectorSuppression") || policy.vectorSuppression === false) return true;
+  if (policy.vectorSuppression !== true) return false;
+  if (!Object.hasOwn(policy, "suppressionDistance")) return true;
+  const cutoff = policy.suppressionDistance;
+  return typeof cutoff === "number" && Number.isFinite(cutoff) && cutoff >= 0 && cutoff <= 2;
+}
+
 /** @param {TextCandidate} passage @param {TextFact} fact @param {FactMatchPolicy} policy @returns {FactMatchResult} */
 function vectorMatch(passage, fact, policy) {
-  if (!policy.vectorSuppression || fact.text.embedding == null || passage.embedding == null) return false;
+  if (policy.vectorSuppression !== true || fact.text.embedding == null || passage.embedding == null) return false;
   const cutoff = policy.suppressionDistance ?? SUPPRESSION_DISTANCE;
   const distance = cosineDistance(fact.text.embedding, passage.embedding);
-  if (!Number.isFinite(cutoff) || cutoff < 0 || cutoff > 2 || !Number.isFinite(distance)) return "ineligible";
-  return distance <= cutoff;
+  return Number.isFinite(distance) ? distance <= cutoff + SUPPRESSION_DISTANCE_TOLERANCE : "ineligible";
 }
 
 /** @param {TextFact} fact @param {FactMatchIncoming["sourceMemory"]} edit @param {number} count */
@@ -265,7 +276,7 @@ function hidesRow(fact, row, policy) {
     case "window":
       return windowMatches(fact, row.source?.client, row.source?.occurredAtMs);
     case "rawSpan":
-      if (row.type === undefined || row.type === "memory") return false;
+      if (row.type === "memory" && nonempty(row.memoryId)) return false;
       if (row.type !== "raw") return "ineligible";
       if (!hash(row.sessionKeyHash) || !nonempty(row.messageKey) || !natural(row.startUtf16) ||
           !natural(row.endUtf16) || row.endUtf16 <= row.startUtf16) return "ineligible";
@@ -300,6 +311,7 @@ export function factHidesRow(storedFact, row, policy = {}) {
     const fact = snapshot.fact(storedFact);
     const candidate = snapshot.row(row);
     const rules = snapshot.policy(policy);
+    if (!isValidVectorPolicy(rules)) return "ineligible";
     return hidesRow(validateSuppressionFact(fact), candidate, rules);
   } catch {
     return "ineligible";
@@ -313,6 +325,7 @@ export function factBlocksIncoming(storedFact, incoming, policy) {
     const fact = snapshot.fact(storedFact);
     const candidate = snapshot.incoming(incoming);
     const rules = snapshot.policy(policy);
+    if (!isValidVectorPolicy(rules)) return "ineligible";
     return blocksIncoming(validateSuppressionFact(fact), candidate, rules);
   } catch {
     return "ineligible";
