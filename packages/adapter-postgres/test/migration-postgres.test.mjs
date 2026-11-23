@@ -7,6 +7,8 @@ import { applyMigrations, storedSourceKind } from "../src/index.mjs";
 import { migrationDatabase, migrationDbTest } from "./migration-database.mjs";
 
 const readLedger = "SELECT id, applied_at::text FROM core_schema_migrations ORDER BY id";
+const readCaptureDigestCheck = `SELECT convalidated FROM pg_constraint
+  WHERE conrelid = 'capture_events'::regclass AND conname = 'capture_events_core_payload_digest_check'`;
 const readMetadataValidation = `
   SELECT convalidated FROM pg_constraint WHERE conrelid = 'memories'::regclass
     AND conname = 'memories_core_metadata_check'
@@ -22,6 +24,22 @@ function insertMemory(connection, id, sourceKind = "plugin") {
             TIMESTAMPTZ 'epoch' + INTERVAL '1 microsecond')
   `, [id, sourceKind]);
 }
+
+test("transactional capture migrations add no index", migrationDbTest, async (t) => {
+  const { pool, source, migrations } = await migrationDatabase(t, { migrate: false });
+  const capture = migrations.findIndex(({ id }) => id === "0013_core_capture_claims.sql");
+  assert.notEqual(capture, -1);
+  const readIndexes = `SELECT indexrelid FROM pg_index
+    WHERE indrelid = 'capture_events'::regclass ORDER BY indexrelid`;
+  const { rows: initialIndexes } = await pool.query(readIndexes);
+  await applyMigrations(source, migrations.slice(0, capture + 1));
+  assert.deepEqual((await pool.query(readIndexes)).rows, initialIndexes);
+  assert.deepEqual((await pool.query(readCaptureDigestCheck)).rows, [{ convalidated: false }]);
+  assert.equal(migrations[capture + 1].concurrent, false);
+  await applyMigrations(source, migrations.slice(0, capture + 2));
+  assert.deepEqual((await pool.query(readIndexes)).rows, initialIndexes);
+  assert.deepEqual((await pool.query(readCaptureDigestCheck)).rows, [{ convalidated: true }]);
+});
 
 test("Postgres hosted baseline matches the expected catalog structure", migrationDbTest, async (t) => {
   const { pool } = await migrationDatabase(t, { migrate: false });

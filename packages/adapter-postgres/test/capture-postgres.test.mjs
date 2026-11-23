@@ -20,7 +20,7 @@ const event = {
 };
 const terminal = { code: "invalid_input", retryable: false };
 
-async function database(t, captureOptions) {
+async function database(t, captureOptions, afterQuery) {
   const { pool } = await migrationDatabase(t);
   await pool.query("INSERT INTO users (id) VALUES ($1), ($2)", [owner, otherOwner]);
   const backends = [];
@@ -29,7 +29,11 @@ async function database(t, captureOptions) {
       const client = await pool.connect();
       backends.push(client.processID);
       return {
-        query: (sql, params) => client.query(sql, params),
+        async query(sql, params) {
+          const result = await client.query(sql, params);
+          afterQuery?.(sql);
+          return result;
+        },
         release: (destroy) => client.release(destroy),
       };
     },
@@ -234,7 +238,7 @@ test("source filter rechecks admitted times and requires both MACs for a fork", 
     [owner, event.client, original]);
   await pool.query(`INSERT INTO capture_raw_lineage (user_id, client, session_id, message_mac, content_mac)
     VALUES ($1, $2, $3, $4, NULL), ($1, $2, $3, $5, $6)`,
-  [owner, event.client, original, messageMac, mac("another-id"), contentMac]);
+  [owner, event.client, original, mac("id-only"), mac("another-id"), contentMac]);
   const eligible = (batch, key = event) => uow.run(owner, read, (tx) => capture.eligible(tx, key, batch));
   const seedFact = (fact) => {
     const incarnation = createHash("sha256").update(factIncarnationBody(fact)).digest("hex");
@@ -264,16 +268,165 @@ test("source filter rechecks admitted times and requires both MACs for a fork", 
   assert.deepEqual(await uow.run(owner, read, (tx) => unkeyed.eligible(tx, event, [{ ...message, occurredAtMs: 20 }])), []);
 });
 
-test("legacy capture rows reserve identity without being changed or loaded as a new outbox", migrationDbTest, async (t) => {
+for (const [legacyState, ledgerState, retryStatus, eventStatus] of [
+  ["completed", "completed", "duplicate", "done"],
+  ["pending", "pending", "processing", "pending"],
+  ["queued", "queued", "processing", "pending"],
+  ["failed", "queued", "duplicate", "failed"],
+]) {
+  test(`legacy retry preserves a ${legacyState} capture`, migrationDbTest, async (t) => {
+    const { pool, uow, capture } = await database(t);
+    const key = { ...event, eventId: "capture-event" };
+    const raw = { client: key.client, event_id: key.eventId, session_id: key.sessionId,
+      messages: [{ id: messages[0].id, role: messages[0].role, content: messages[0].content }] };
+    const { rows: before } = await pool.query(`INSERT INTO capture_events
+      (user_id, client, event_id, session_id, received_at, raw_request, status, memory_count)
+      VALUES ($1, $2, $3, $4, clock_timestamp(), $5, $6, $7) RETURNING *`,
+    [owner, key.client, key.eventId, key.sessionId, raw, ledgerState, ledgerState === "completed" ? 2 : 0]);
+    if (legacyState === "failed") {
+      await pool.query(`INSERT INTO jobs (id, user_id, capture_id, kind, status, attempts, error_code)
+        VALUES ($1, $2, $3, 'ingest', 'failed', 1, 'extraction_failed')`,
+      [crypto.randomUUID(), owner, `${key.client}:${key.eventId}`]);
+    }
+    assert.deepEqual(await uow.run(owner, write, (tx) => capture.admit(tx, key, messages)), { status: retryStatus });
+    assert.deepEqual(await uow.run(owner, write, (tx) => capture.claim(tx, key, messages, options)), { status: retryStatus });
+    assert.equal(await uow.run(owner, read, (tx) => capture.load(tx, key)), null);
+    assert.deepEqual(await uow.run(owner, read, (tx) => capture.status(tx, key.scope, key.eventId, key.client)),
+      { status: eventStatus });
+    assert.deepEqual((await pool.query("SELECT * FROM capture_events WHERE user_id = $1", [owner])).rows, before);
+  });
+}
+
+// Mirror the stored request fields that the parser and scrubber consume.
+function storedRequest(raw) {
+  const request = typeof raw === "string" ? JSON.parse(raw) : raw;
+  assert.match(request.client, /^[\s\S]{1,200}$/u);
+  assert.match(request.event_id, /^[\s\S]{8,200}$/u);
+  assert.match(request.session_id, /^[\s\S]{1,200}$/u);
+  assert.ok(Array.isArray(request.messages) && request.messages.length <= 24);
+  if (request.boundary !== undefined) assert.ok(["PreCompact", "SessionEnd"].includes(request.boundary));
+  assert.ok(request.messages.length || request.boundary);
+  for (const message of request.messages) {
+    assert.deepEqual(Object.keys(message).sort(), [
+      "content", "id", ...(message.occurred_at === undefined ? [] : ["occurred_at"]), "role",
+    ]);
+    assert.match(message.id, /^[\s\S]{1,200}$/u);
+    assert.ok(["user", "assistant"].includes(message.role));
+    assert.equal(typeof message.content, "string");
+    if (message.occurred_at !== undefined) {
+      assert.equal(message.occurred_at, new Date(message.occurred_at).toISOString());
+    }
+  }
+  return request;
+}
+
+test("a Core admission stores a parseable prepared request", migrationDbTest, async (t) => {
   const { pool, uow, capture } = await database(t);
-  const raw = { client: event.client, event_id: event.eventId, session_id: event.sessionId, messages: [] };
-  const { rows: before } = await pool.query(`INSERT INTO capture_events
-    (user_id, client, event_id, session_id, received_at, raw_request)
-    VALUES ($1, $2, $3, $4, clock_timestamp(), $5) RETURNING *`,
-  [owner, event.client, event.eventId, event.sessionId, raw]);
-  await assert.rejects(uow.run(owner, write, (tx) => capture.admit(tx, event, messages)), { code: "event_payload_conflict" });
-  await assert.rejects(uow.run(owner, write, (tx) => capture.claim(tx, event, messages, options)),
-    { code: "event_payload_conflict" });
-  assert.equal(await uow.run(owner, read, (tx) => capture.load(tx, event)), null);
-  assert.deepEqual((await pool.query("SELECT * FROM capture_events WHERE user_id = $1", [owner])).rows, before);
+  const key = { ...event, eventId: "capture-event", scope: { owner, namespace: "private" } };
+  const batch = [messages[0], { id: "blank", role: "assistant", content: "", occurredAtMs: null }];
+  assert.deepEqual(await uow.run(owner, write, (tx) => capture.admit(tx, key, batch)), { status: "admitted" });
+  const { rows: [{ raw_request: raw }] } = await pool.query("SELECT raw_request FROM capture_events");
+  assert.deepEqual(storedRequest(raw), {
+    client: key.client, event_id: key.eventId, session_id: key.sessionId,
+    messages: [
+      { id: batch[0].id, role: batch[0].role, content: batch[0].content,
+        occurred_at: new Date(batch[0].occurredAtMs).toISOString() },
+      { id: batch[1].id, role: batch[1].role, content: batch[1].content },
+    ],
+  });
+  assert.deepEqual(await uow.run(owner, read, (tx) => capture.load(tx, key)), { key, messages: batch });
 });
+
+test("a standalone claim stores a parseable request with no messages", migrationDbTest, async (t) => {
+  const { pool, uow, capture } = await database(t);
+  const key = { ...event, eventId: "capture-event" };
+  assert.equal((await uow.run(owner, write, (tx) => capture.claim(tx, key, messages, options))).status, "claimed");
+  const { rows: [{ raw_request: raw }] } = await pool.query("SELECT raw_request FROM capture_events");
+  assert.deepEqual(storedRequest(raw), {
+    client: key.client, event_id: key.eventId, session_id: key.sessionId, boundary: "SessionEnd", messages: [],
+  });
+  assert.equal(await uow.run(owner, read, (tx) => capture.load(tx, key)), null);
+});
+
+test("Core message metadata round-trips when it exceeds stored request bounds", migrationDbTest, async (t) => {
+  const { pool, uow, capture } = await database(t);
+  const key = { ...event, client: "c".repeat(201) };
+  const batch = [{ ...messages[0], id: "\u0000".repeat(201), occurredAtMs: Number.MAX_SAFE_INTEGER }];
+  await uow.run(owner, write, (tx) => capture.admit(tx, key, batch));
+  const { rows: [{ raw_request: raw }] } = await pool.query("SELECT raw_request FROM capture_events");
+  assert.deepEqual(storedRequest(raw), {
+    client: key.client.slice(0, 200), event_id: "event---", session_id: key.sessionId,
+    messages: [{ id: "message-0", role: batch[0].role, content: batch[0].content }],
+  });
+  await pool.query(`UPDATE capture_events SET raw_request = jsonb_set(raw_request, '{messages,0,content}', '""')`);
+  assert.deepEqual(await uow.run(owner, read, (tx) => capture.load(tx, key)),
+    { key, messages: [{ ...batch[0], content: "" }] });
+});
+
+test("a proven fork rechecks the ancestor's namespace on read and write", migrationDbTest, async (t) => {
+  const secret = randomBytes(32).toString("hex");
+  const { pool, uow, capture } = await database(t, { lineageSecret: secret });
+  const ancestor = { ...event, scope: { owner, namespace: "work" }, sessionId: "ancestor-session" };
+  const replay = { ...event, scope: { owner, namespace: "personal" } };
+  const { id, content } = messages[0];
+  const mac = (value) => createHmac("sha256", secret).update(value).digest("hex");
+  await pool.query(`INSERT INTO capture_raw_lineage (user_id, client, session_id, message_mac, content_mac)
+    VALUES ($1, $2, $3, $4, $5)`, [owner, ancestor.client, ancestor.sessionId, mac(id),
+    mac("\0cairn:raw-lineage-content:" + JSON.stringify([owner, ancestor.client, id, content]))]);
+  await uow.run(owner, write, (tx) => capture.claim(tx, replay, messages, options));
+  const eligible = () => uow.run(owner, read, (tx) => capture.eligible(tx, replay, messages));
+  const suppress = (sessionId) => {
+    const fact = { owner, namespace: ancestor.scope.namespace, actionId: sessionId, origin: "forget",
+      kind: "session", session: { client: ancestor.client, sessionId } };
+    const incarnation = createHash("sha256").update(factIncarnationBody(fact)).digest("hex");
+    return uow.run(owner, write, (tx) => createPostgresSuppressionStore().writeFact(tx, fact, incarnation));
+  };
+  await suppress(replay.sessionId);
+  assert.deepEqual(await eligible(), [0]);
+  await suppress(ancestor.sessionId);
+  assert.deepEqual(await eligible(), []);
+  await assert.rejects(uow.run(owner, {}, (tx) => capture.assertEligible(tx, replay, [0])), { code: "lineage_fenced" });
+});
+
+for (const keyed of [true, false]) {
+  test(`an ID-only anchor withholds a replay ${keyed ? "with" : "without"} a signing secret`, migrationDbTest, async (t) => {
+    const secret = randomBytes(32).toString("hex");
+    const { pool, uow, capture } = await database(t, keyed ? { lineageSecret: secret } : undefined);
+    const ancestor = "ancestor-session";
+    const messageMac = createHmac("sha256", secret).update(messages[0].id).digest("hex");
+    await pool.query("INSERT INTO capture_raw_fences (user_id, client, session_id) VALUES ($1, $2, $3)",
+      [owner, event.client, ancestor]);
+    await pool.query(`INSERT INTO capture_raw_lineage (user_id, client, session_id, message_mac, content_mac)
+      VALUES ($1, $2, $3, $4, NULL)`, [owner, event.client, ancestor, messageMac]);
+    const eligible = (batch) => uow.run(owner, read, (tx) => capture.eligible(tx, event, batch));
+    await uow.run(owner, write, (tx) => capture.claim(tx, event, messages, options));
+    assert.deepEqual(await eligible(messages), []);
+    assert.deepEqual(await eligible([{ ...messages[0], content: "" }]), []);
+    if (keyed) assert.deepEqual(await eligible([{ ...messages[0], id: "unrelated" }]), [0]);
+    await assert.rejects(uow.run(owner, {}, (tx) => capture.assertEligible(tx, event, [0])), { code: "lineage_fenced" });
+  });
+}
+
+for (const operation of ["beginDispatch", "abandon"]) {
+  test(`${operation} refuses a lease that expires at token lock acquisition`, migrationDbTest, async (t) => {
+    let now = 0;
+    let locks = 0;
+    const { pool, uow, capture } = await database(t, { now: () => now }, (sql) => {
+      if (sql.includes("core_lease_token = $2 FOR UPDATE")) {
+        locks++;
+        now = options.leaseMs + 1;
+      }
+    });
+    const { token } = await uow.run(owner, write, (tx) => capture.claim(tx, event, messages, options));
+    now = options.leaseMs - 1;
+    await assert.rejects(uow.run(owner, write, (tx) =>
+      operation === "abandon" ? capture.abandon(tx, token, terminal) : capture.beginDispatch(tx, token)),
+    { code: "stale_admission" });
+    assert.equal(locks, 1);
+    assert.deepEqual((await pool.query("SELECT core_dispatched, core_failure_code FROM capture_events")).rows,
+      [{ core_dispatched: false, core_failure_code: null }]);
+    const retry = await uow.run(owner, write, (tx) => capture.claim(tx, event, messages, options));
+    assert.equal(retry.status, "claimed");
+    assert.notEqual(retry.token, token);
+  });
+}

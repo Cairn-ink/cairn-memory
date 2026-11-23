@@ -3,10 +3,13 @@ import { CoreError, factBlocksIncoming } from "../../core/src/index.mjs";
 /** @import { CaptureKey, CaptureMessage } from "../../core/src/ports/capture.d.ts" */
 /** @import { StoredFact } from "../../core/src/suppression-fact.mjs" */
 /** @import { Connection } from "./driver.mjs" */
-/** @typedef {{message_mac: string, content_mac: string}} Proof */
+/** @typedef {{message_mac: string, content_mac: string | null}} Proof */
 
 const SOURCE_FACTS = `SELECT kind, body, action_id FROM core_suppression_facts
-  WHERE user_id = $1 AND kind IN ('session', 'window') AND (body ->> 'namespace') IS NOT DISTINCT FROM $2`;
+  WHERE user_id = $1 AND (
+    kind IN ('session', 'window') AND (body ->> 'namespace') IS NOT DISTINCT FROM $2
+    OR kind = 'session' AND body #>> '{session,client}' = $3 AND body #>> '{session,sessionId}' <> $4
+  )`;
 
 const MAX_LINEAGE_SESSIONS = 1_000;
 const MAX_LINEAGE_VERTICES = 20_000;
@@ -14,12 +17,13 @@ const MAX_LINEAGE_VERTICES = 20_000;
 const CHECK_LINEAGE = `WITH RECURSIVE fences(session_id) AS MATERIALIZED (
     SELECT session_id FROM capture_raw_fences WHERE user_id = $1 AND client = $2
     UNION SELECT unnest($4::text[])
+  ), incoming AS (
+    SELECT * FROM jsonb_to_recordset($5::jsonb) AS proof(message_mac text, content_mac text)
   ), roots(session_id, message_mac, content_mac) AS (
     SELECT $3::text, NULL::text, NULL::text WHERE EXISTS (SELECT 1 FROM fences)
     UNION ALL
     SELECT NULL::text, incoming.message_mac, incoming.content_mac
-    FROM jsonb_to_recordset($5::jsonb) AS incoming(message_mac text, content_mac text)
-    WHERE EXISTS (SELECT 1 FROM fences)
+    FROM incoming WHERE incoming.content_mac IS NOT NULL AND EXISTS (SELECT 1 FROM fences)
   ), vertices(session_id, message_mac, content_mac) AS (
     SELECT session_id, message_mac, content_mac FROM roots
     UNION
@@ -38,10 +42,13 @@ const CHECK_LINEAGE = `WITH RECURSIVE fences(session_id) AS MATERIALIZED (
   SELECT EXISTS (SELECT 1 FROM bounded JOIN fences USING (session_id)) AS fenced,
     (SELECT count(*) FROM bounded) > ${MAX_LINEAGE_VERTICES}
       OR (SELECT count(session_id) FROM bounded) > ${MAX_LINEAGE_SESSIONS} AS exceeded,
-    $6::boolean AND EXISTS (
+    EXISTS (
       SELECT 1 FROM capture_raw_lineage l JOIN fences USING (session_id)
-      WHERE l.user_id = $1 AND l.client = $2 AND l.content_mac IS NOT NULL
-    ) AS unavailable`;
+      WHERE l.user_id = $1 AND l.client = $2 AND ($6::boolean OR EXISTS (
+        SELECT 1 FROM incoming WHERE incoming.message_mac = l.message_mac
+          AND (incoming.content_mac IS NULL OR l.content_mac IS NULL)
+      ))
+    ) AS withheld`;
 
 const encoder = new TextEncoder();
 
@@ -59,13 +66,13 @@ export function createCaptureProofs(secret) {
 
   /** @param {CaptureKey} capture @param {readonly CaptureMessage[]} messages @returns {Promise<Proof[] | null>} */
   return async ({ scope: { owner }, client }, messages) => {
-    const withContent = messages.filter(({ content }) => content !== "");
-    if (!withContent.length) return [];
+    if (!messages.length) return [];
     if (!secret) return null;
     try {
-      return await Promise.all(withContent.map(async ({ id, content }) => ({
+      return await Promise.all(messages.map(async ({ id, content }) => ({
         message_mac: await sign(id),
-        content_mac: await sign("\0cairn:raw-lineage-content:" + JSON.stringify([owner, client, id, content])),
+        content_mac: content === "" ? null :
+          await sign("\0cairn:raw-lineage-content:" + JSON.stringify([owner, client, id, content])),
       })));
     } catch {
       return null;
@@ -79,7 +86,7 @@ export function createCaptureProofs(secret) {
  */
 export async function filterSources(query, key, times, proofs, mode) {
   const { scope, client, sessionId } = key;
-  const { rows } = await query(SOURCE_FACTS, [scope.owner, scope.namespace]);
+  const { rows } = await query(SOURCE_FACTS, [scope.owner, scope.namespace, client, sessionId]);
   /** @type {StoredFact[]} */
   const windows = [];
   /** @type {Set<string>} */
@@ -97,8 +104,14 @@ export async function filterSources(query, key, times, proofs, mode) {
         if (mode === "assert") throw new CoreError("suppressed");
         return [];
       }
-      if (fact.session.client === client && typeof fact.session.sessionId === "string") {
-        fencedSessions.add(fact.session.sessionId);
+      const ancestor = fact.session;
+      // Shared lineage identifies ancestors by owner, client and session. Test the
+      // session facts in their own scope, keeping direct checks in the incoming scope.
+      if (ancestor.client === client && typeof ancestor.sessionId === "string" && ancestor.sessionId !== sessionId &&
+          factBlocksIncoming(stored, {
+            ...candidate, scope: { owner: scope.owner, namespace: fact.namespace ?? null }, session: ancestor,
+          }, policy) !== false) {
+        fencedSessions.add(ancestor.sessionId);
       }
     }
   }
@@ -110,7 +123,7 @@ export async function filterSources(query, key, times, proofs, mode) {
   const { rows: [lineage] } = await query(CHECK_LINEAGE, [
     scope.owner, client, sessionId, [...fencedSessions], JSON.stringify(proofs ?? []), proofs === null,
   ]);
-  if (lineage?.fenced !== false || lineage.exceeded !== false || lineage.unavailable !== false) {
+  if (lineage?.fenced !== false || lineage.exceeded !== false || lineage.withheld !== false) {
     if (mode === "assert") throw new CoreError("lineage_fenced");
     return [];
   }

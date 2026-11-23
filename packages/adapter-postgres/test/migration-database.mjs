@@ -6,6 +6,24 @@ import { applyMigrations } from "../src/index.mjs";
 const url = process.env.CORE_PG_TEST_URL;
 export const migrationDbTest = { skip: !url, timeout: 20_000 };
 
+const captureIndexes = {
+  "0015_core_capture_lease_idx.concurrent.sql": {
+    name: "capture_events_core_lease_idx",
+    table: "capture_events",
+    definition: "CREATE UNIQUE INDEX capture_events_core_lease_idx ON public.capture_events USING btree (user_id, core_lease_token) WHERE (core_lease_token IS NOT NULL)",
+  },
+  "0016_core_capture_status_idx.concurrent.sql": {
+    name: "capture_events_core_status_idx",
+    table: "capture_events",
+    definition: "CREATE INDEX capture_events_core_status_idx ON public.capture_events USING btree (user_id, event_id, core_namespace, client) WHERE (core_admitted OR (core_payload_digest IS NULL))",
+  },
+  "0017_core_capture_abandoned_idx.concurrent.sql": {
+    name: "capture_events_core_abandoned_idx",
+    table: "capture_events",
+    definition: "CREATE INDEX capture_events_core_abandoned_idx ON public.capture_events USING gin (core_abandoned_tokens) WHERE (core_abandoned_tokens IS NOT NULL)",
+  },
+};
+
 export async function migrationDatabase(t, { migrate = true } = {}) {
   const name = `core_migration_test_${randomUUID().replaceAll("-", "")}`;
   const admin = new Pool({ connectionString: url, connectionTimeoutMillis: 3_000 });
@@ -78,7 +96,11 @@ export async function migrationDatabase(t, { migrate = true } = {}) {
         },
       };
     }
-    if (name.endsWith(".concurrent.sql")) throw new Error(`Missing index definition for ${name}`);
+    if (name.endsWith(".concurrent.sql")) {
+      const index = captureIndexes[name];
+      if (!index) throw new Error(`Missing index definition for ${name}`);
+      return { id: name, sql, concurrent: true, index };
+    }
     return { id: name, sql, concurrent: false };
   }));
   await pool.query(baseline);

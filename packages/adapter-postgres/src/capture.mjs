@@ -8,6 +8,7 @@ import { toPostgresError } from "./errors.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
 /** @import { CaptureClaim, CaptureKey, FinishResult, SourceFilter } from "../../core/src/ports/capture.d.ts" */
+/** @import { CaptureMessage } from "../../core/src/ports/capture.d.ts" */
 /** @import { Tx } from "../../core/src/ports/unit-of-work.d.ts" */
 /** @import { Connection } from "./driver.mjs" */
 /** @typedef {Required<CaptureClaim> & SourceFilter} CapturePorts */
@@ -15,7 +16,8 @@ import { requireLiveRun, runOperation } from "./uow.mjs";
 /** @typedef {Connection["query"]} Query */
 /** @typedef {{
  *   session_id: string, status: string, core_namespace: string | null, core_payload_digest: string | null,
- *   core_admitted: boolean, core_failure_code: string | null, core_result: FinishResult | null,
+ *   core_admitted: boolean | null, core_failure_code: string | null, core_result: FinishResult | null,
+ *   legacy_failed: boolean,
  *   core_lease_expires_at_ms: string | null, core_lease_sources: {
  *     times: (number | null)[], proofs: Awaited<ReturnType<ReturnType<typeof createCaptureProofs>>>
  *   } | null
@@ -32,19 +34,30 @@ const HAS_PAUSE_LOCK = `SELECT EXISTS (
 ) AS held`;
 const IDENTITY = "user_id = $1 AND client = $2 AND event_id = $3";
 const TOKEN = "user_id = $1 AND core_lease_token = $2";
+// A failed attempt leaves the hosted event queued. Only its ingest job records the failure.
+const LEGACY_FAILED = `core_payload_digest IS NULL AND status <> 'completed' AND EXISTS (
+  SELECT 1 FROM jobs j WHERE j.user_id = capture_events.user_id AND j.kind = 'ingest' AND j.status = 'failed'
+    AND j.capture_id = CASE WHEN capture_events.client = 'mcp'
+      THEN '["mcp",' || to_json(capture_events.event_id)::text || ']'
+      ELSE capture_events.client || ':' || capture_events.event_id END
+)`;
 const SELECT_EVENT = `SELECT session_id, status, core_namespace, core_payload_digest, core_admitted,
-    core_failure_code, core_result, core_lease_expires_at_ms::text, core_lease_sources
+    core_failure_code, core_result, core_lease_expires_at_ms::text, core_lease_sources, ${LEGACY_FAILED} AS legacy_failed
   FROM capture_events WHERE ${IDENTITY}`;
-const LOAD = `SELECT raw_request, core_payload_digest FROM capture_events
+const LOAD = `SELECT raw_request, core_payload_digest, core_outbox_metadata FROM capture_events
   WHERE ${IDENTITY} AND session_id = $4 AND core_namespace IS NOT DISTINCT FROM $5 AND core_admitted`;
-const STATUS = `SELECT status, core_failure_code FROM capture_events
-  WHERE user_id = $1 AND event_id = $2 AND core_namespace IS NOT DISTINCT FROM $3 AND core_admitted
-    AND ($4::text IS NULL OR client = $4)
-  ORDER BY CASE WHEN core_failure_code IS NOT NULL THEN 1 WHEN status = 'completed' THEN 2 ELSE 0 END, arrival_order
+const STATUS = `SELECT core_failure_code,
+    CASE WHEN core_failure_code IS NOT NULL OR (${LEGACY_FAILED}) THEN 1
+      WHEN status = 'completed' THEN 2 ELSE 0 END AS status_rank
+  FROM capture_events
+  WHERE user_id = $1 AND event_id = $2 AND core_namespace IS NOT DISTINCT FROM $3
+    AND (core_admitted OR core_payload_digest IS NULL) AND ($4::text IS NULL OR client = $4)
+  ORDER BY status_rank, arrival_order
   LIMIT 1`;
 const INSERT_EVENT = `INSERT INTO capture_events
-    (user_id, client, event_id, session_id, core_namespace, core_payload_digest, received_at, raw_request, core_admitted)
-  VALUES ($1, $2, $3, $4, $5, $6, clock_timestamp(), $7::jsonb, $8)
+    (user_id, client, event_id, session_id, core_namespace, core_payload_digest, received_at,
+     raw_request, core_admitted, core_outbox_metadata)
+  VALUES ($1, $2, $3, $4, $5, $6, clock_timestamp(), $7::jsonb, $8, $9::jsonb)
   ON CONFLICT (user_id, client, event_id) DO NOTHING RETURNING 1`;
 const SET_LEASE = `UPDATE capture_events SET core_lease_token = $4, core_lease_expires_at_ms = $5,
     core_lease_sources = $6::jsonb, core_dispatched = false WHERE ${IDENTITY}`;
@@ -67,6 +80,13 @@ function assertSameEvent(row, key) {
 }
 
 /** @param {CaptureRow} row */
+function legacyRetry(row) {
+  // The cutover drains the hosted queue. A retry must leave that work with its original consumer.
+  const acknowledged = row.status === "completed" || (row.status === "queued" && row.legacy_failed);
+  return /** @type {const} */ ({ status: acknowledged ? "duplicate" : "processing" });
+}
+
+/** @param {CaptureRow} row */
 function replay(row) {
   if (!row.core_result) throw new CoreError("internal_error");
   return /** @type {const} */ ({ status: "rawReplay", result: row.core_result });
@@ -77,14 +97,17 @@ function hasLiveLease(row, now) {
   return row.core_lease_expires_at_ms !== null && now < BigInt(row.core_lease_expires_at_ms);
 }
 
-/** @param {Query} query @param {CaptureKey} key @param {string} [outbox] @returns {Promise<CaptureRow | undefined>} */
-async function reserveEvent(query, key, outbox) {
+/** @param {Query} query @param {CaptureKey} key @param {CaptureMessage[]} [batch]
+ * @returns {Promise<CaptureRow | undefined>}
+ */
+async function reserveEvent(query, key, batch) {
   const params = identity(key);
   const select = SELECT_EVENT + " FOR UPDATE";
   const { rows: [existing] } = await query(select, params);
   if (existing) return existing;
+  const { raw, metadata } = encodeRequest(key, batch ?? []);
   const { rows } = await query(INSERT_EVENT, [
-    ...params, key.sessionId, key.scope.namespace, key.payloadDigest, outbox ?? "{}", outbox !== undefined,
+    ...params, key.sessionId, key.scope.namespace, key.payloadDigest, raw, batch !== undefined, metadata,
   ]);
   if (rows.length) return undefined;
   // The existing ledger can also be written by the hosted producer.
@@ -93,11 +116,11 @@ async function reserveEvent(query, key, outbox) {
   return concurrent;
 }
 
-/** @param {Query} query @param {string} owner @param {string} token @param {bigint} now */
+/** @param {Query} query @param {string} owner @param {string} token @param {() => number} now */
 async function requireLiveToken(query, owner, token, now) {
   const { rows: [row] } = await query(`SELECT core_lease_expires_at_ms::text, core_dispatched
     FROM capture_events WHERE ${TOKEN} FOR UPDATE`, [owner, token]);
-  if (!row || !hasLiveLease(row, now)) throw new CoreError("stale_admission");
+  if (!row || !hasLiveLease(row, clockMs(now()))) throw new CoreError("stale_admission");
   return row;
 }
 
@@ -140,6 +163,7 @@ export function createPostgresCapturePorts({ now = Date.now, lineageSecret } = {
         return async (query) => {
           const row = await reserveEvent(query, copy);
           if (row) {
+            if (row.core_payload_digest === null) return legacyRetry(row);
             assertSameEvent(row, copy);
             if (row.status === "completed") return replay(row);
             if (row.core_failure_code !== null) return { status: "duplicate" };
@@ -166,7 +190,7 @@ export function createPostgresCapturePorts({ now = Date.now, lineageSecret } = {
         const lease = readToken(token);
         return async (query) => {
           if (lease === null) throw new CoreError("stale_admission");
-          const row = await requireLiveToken(query, tx.owner, lease, clockMs(now()));
+          const row = await requireLiveToken(query, tx.owner, lease, now);
           if (!row.core_dispatched) {
             await query(`UPDATE capture_events SET core_dispatched = true WHERE ${TOKEN}`, [tx.owner, lease]);
           }
@@ -184,7 +208,7 @@ export function createPostgresCapturePorts({ now = Date.now, lineageSecret } = {
           const params = [tx.owner, lease];
           const { rows } = await query(WAS_ABANDONED, params);
           if (rows.length) return;
-          await requireLiveToken(query, tx.owner, lease, clockMs(now()));
+          await requireLiveToken(query, tx.owner, lease, now);
           await query(ABANDON, [...params, retryable ? null : code]);
         };
       });
@@ -193,10 +217,11 @@ export function createPostgresCapturePorts({ now = Date.now, lineageSecret } = {
     async admit(tx, key, messages) {
       return pauseLockedWrite(tx, () => {
         const copy = copyKey(tx, key);
-        const outbox = encodeOutbox(copyMessages(messages));
+        const batch = copyMessages(messages);
         return async (query) => {
-          const row = await reserveEvent(query, copy, outbox);
+          const row = await reserveEvent(query, copy, batch);
           if (!row) return { status: "admitted" };
+          if (row.core_payload_digest === null) return legacyRetry(row);
           assertSameEvent(row, copy);
           if (row.status === "completed") return replay(row);
           if (row.core_lease_expires_at_ms !== null && hasLiveLease(row, clockMs(now()))) {
@@ -230,7 +255,7 @@ export function createPostgresCapturePorts({ now = Date.now, lineageSecret } = {
           if (!isErrorCode(row.core_failure_code)) throw new CoreError("internal_error");
           return { status: "failed", code: row.core_failure_code };
         }
-        return { status: row.status === "completed" ? "done" : "pending" };
+        return { status: row.status_rank === 2 ? "done" : row.status_rank === 1 ? "failed" : "pending" };
       });
     },
 
@@ -263,9 +288,48 @@ export function createPostgresCapturePorts({ now = Date.now, lineageSecret } = {
   };
 }
 
-/** @param {import("../../core/src/ports/capture.d.ts").CaptureMessage[]} messages */
-function encodeOutbox(messages) {
-  const json = JSON.stringify({ messages });
+/** @param {string} value */
+function requestIdentifier(value) {
+  // Avoid cutting a surrogate pair at the stored-request length limit.
+  return value.slice(0, 200).replace(/[\uD800-\uDBFF]$/u, "");
+}
+
+/** @param {CaptureKey} key @param {CaptureMessage[]} batch */
+function encodeRequest(key, batch) {
+  if (batch.length > 24) throw new CoreError("invalid_input");
+  /** @type {Record<number, {id?: string, occurredAtMs?: number}>} */
+  const metadata = {};
+  const ids = new Set(batch.map(({ id }) => id));
+  const messages = batch.map(({ id, role, content, occurredAtMs }, index) => {
+    let storedId = id;
+    if (id.length === 0 || id.length > 200) {
+      storedId = `message-${index}`;
+      while (ids.has(storedId)) storedId += "-";
+      ids.add(storedId);
+      metadata[index] = { id };
+    }
+    const time = occurredAtMs !== null && Math.abs(occurredAtMs) <= 8.64e15
+      ? new Date(occurredAtMs).toISOString() : undefined;
+    const occurredAt = time?.length === 24 && !time.startsWith("0000") ? time : undefined;
+    if (occurredAt === undefined && occurredAtMs !== null) {
+      metadata[index] = { ...metadata[index], occurredAtMs };
+    }
+    return { id: storedId, role, content, ...(occurredAt === undefined ? {} : { occurred_at: occurredAt }) };
+  });
+  const request = {
+    client: requestIdentifier(key.client), event_id: requestIdentifier(key.eventId).padEnd(8, "-"),
+    session_id: requestIdentifier(key.sessionId), messages,
+    ...(messages.length ? {} : { boundary: "SessionEnd" }),
+  };
+  return {
+    raw: jsonbSource(request),
+    metadata: Object.keys(metadata).length ? jsonbSource(metadata) : null,
+  };
+}
+
+/** @param {object} value */
+function jsonbSource(value) {
+  const json = JSON.stringify(value);
   // A free-form message ID may contain NUL or an unpaired surrogate, which JSONB cannot decode.
   return /\\u(?:0000|d[89a-f][0-9a-f]{2})/iu.test(json) ? JSON.stringify(json) : json;
 }
@@ -274,8 +338,14 @@ function encodeOutbox(messages) {
 async function loadAdmission(query, selection, namespace) {
   const { rows: [row] } = await query(LOAD, [...identity(selection), selection.sessionId, namespace]);
   if (!row) return null;
-  const { raw_request: raw, core_payload_digest: payloadDigest } = row;
+  const { raw_request: raw, core_payload_digest: payloadDigest, core_outbox_metadata: extra } = row;
   const { messages } = typeof raw === "string" ? JSON.parse(raw) : raw;
+  const metadata = typeof extra === "string" ? JSON.parse(extra) : extra;
+  // Older Core outboxes stored message times directly in milliseconds.
+  const batch = messages.map(({ id, role, content, occurred_at, occurredAtMs }, index) => ({
+    id, role, content, occurredAtMs: occurredAtMs ?? (occurred_at === undefined ? null : Date.parse(occurred_at)),
+    ...metadata?.[index],
+  }));
   return { key: { ...selection, scope: { owner: selection.scope.owner, namespace }, payloadDigest },
-    messages: copyMessages(messages) };
+    messages: copyMessages(batch) };
 }
