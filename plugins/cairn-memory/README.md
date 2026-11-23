@@ -170,6 +170,18 @@ pairing-record option; it does not carry conversation text. See the repository s
 before reporting a possible privacy issue. Unpaired hooks ignore that state-directory value; only
 paired launcher handoffs validate it.
 
+### Turn off capture for a session
+
+Run `export CAIRN_MEMORY_CAPTURE=off` in your shell before starting Claude Code.
+For a per-project opt-out, put the following `env` setting in the project's `.claude/settings.local.json`.
+
+```json
+{"env": {"CAIRN_MEMORY_CAPTURE": "off"}}
+```
+
+Nothing from those sessions is sent for capture. Recall still works. Only the exact
+value `off` turns capture off, and `/cairn-memory:status` shows when it is off for the session.
+
 ## Explicit pairing (0.1.2)
 
 Standalone Claude keeps its existing key and root. Leave `pairing_record` unset unless you have

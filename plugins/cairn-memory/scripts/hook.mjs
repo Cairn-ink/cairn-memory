@@ -5,9 +5,15 @@ import { createHash, randomUUID, scrypt } from "node:crypto";
 import { platform } from "node:os";
 import { dirname, isAbsolute, resolve, join } from "node:path";
 import { promisify } from "node:util";
+
+const action = process.argv[2] ?? "status";
+const captureDisabled = process.env.CAIRN_MEMORY_CAPTURE === "off";
+if (captureDisabled && ["capture", "capture-detached", "start-boundary"].includes(action)) process.exit(0);
+const captureStatusNote = action === "status" && captureDisabled
+  ? "; capture is off for this session (CAIRN_MEMORY_CAPTURE=off)" : "";
+
 // Arm before loading the client graph or resolving a binding. performance.now()
 // counts Node startup too; an exhausted startup budget exits before local work.
-const action = process.argv[2] ?? "status";
 const START_BOUNDARY_BUDGET_MS = 1000;
 function checkStartBoundary() {
   if (action === 'start-boundary' && performance.now() >= START_BOUNDARY_BUDGET_MS) process.exit(0);
@@ -925,7 +931,7 @@ async function control() {
     `Cairn automatic memory: ${state.paused ? "paused" : "active"}${note}${quotaNote}${policyNote}` +
     `${binding.detail ? "; " + binding.detail : ""}; ` +
     `telemetry: ${telemetryEnabled ? "on" : "off"}; endpoint: ${statusEndpoint}; ` +
-    `credential: ${credentialDescription(statusCredential, { hasToken: Boolean(token) })}.\n`,
+    `credential: ${credentialDescription(statusCredential, { hasToken: Boolean(token) })}${captureStatusNote}.\n`,
   );
 }
 
@@ -950,7 +956,7 @@ try {
     if (["status", "pause", "resume"].includes(action)) {
       process.stdout.write(
         `Cairn automatic memory: ${binding.status}` +
-        `${binding.detail ? "; " + binding.detail : ""}.\n`,
+        `${binding.detail ? "; " + binding.detail : ""}${captureStatusNote}.\n`,
       );
       if (action !== "status") process.exitCode = 1;
     }
@@ -1019,7 +1025,7 @@ try {
   // Hooks are deliberately fail-open. Never emit an error or non-zero status
   // that could block a prompt or make normal Claude Code work noisy.
   if (["status", "pause", "resume"].includes(action)) {
-    process.stderr.write(`Cairn automatic memory control failed (${error?.message ?? "unknown"}).\n`);
+    process.stderr.write(`Cairn automatic memory control failed (${error?.message ?? "unknown"})${captureStatusNote}.\n`);
     process.exitCode = 1;
   }
 } finally {
