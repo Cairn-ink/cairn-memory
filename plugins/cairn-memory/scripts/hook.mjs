@@ -999,7 +999,7 @@ try {
       else if (action === "start") await telemetry("plugin_started");
       else if (action === "recall") {
         recallMarkerInput = hookInput;
-        if (hostedConfig && !hostedPauseMode(hostedConfig).barrier) {
+        if (!captureDisabled && hostedConfig && !hostedPauseMode(hostedConfig).barrier) {
           // One metadata-only read at prompt entry; no transcript read or write
           // precedes recall. A failed stat leaves first-turn capture conservative.
           try { recallPromptOffset = (await stat(hookInput.transcript_path)).size; }
@@ -1036,7 +1036,7 @@ try {
   // Two diagnostic publications can wait on slow fsyncs. Start this optional
   // cleanup only with its own 250 ms headroom; it never reserves fetch/output
   // time. Near the cap, leave diagnostics for the next hook instead.
-  if (recallMarkerInput && performance.now() < recallEnd - 250)
+  if (!captureDisabled && recallMarkerInput && performance.now() < recallEnd - 250)
     await recordFirstPrompt(recallMarkerInput).catch(() => {});
   if (!recallController || performance.now() < recallEnd - 250) {
     await recallAuthPending?.();

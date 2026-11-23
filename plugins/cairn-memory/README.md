@@ -179,8 +179,13 @@ For a per-project opt-out, put the following `env` setting in the project's `.cl
 {"env": {"CAIRN_MEMORY_CAPTURE": "off"}}
 ```
 
-Nothing from those sessions is sent for capture. Recall still works. Only the exact
-value `off` turns capture off, and `/cairn-memory:status` shows when it is off for the session.
+The project setting reaches hooks only when Claude Code loads the project's settings in a trusted
+folder. A shell export always reaches the hooks.
+
+Cairn sends no turns for capture while the setting is in effect. Recall still works. Keep the setting
+in place for the whole session, including when you resume it. If you resume without it, Cairn can
+capture turns written while it was off.
+Only the exact value `off` turns capture off, and `/cairn-memory:status` shows when it is off.
 
 ## Explicit pairing (0.1.2)
 
