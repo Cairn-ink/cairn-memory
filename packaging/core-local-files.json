@@ -49,6 +49,7 @@
   "packages/core/src/service/index.mjs",
   "packages/core/src/service/pause.mjs",
   "packages/core/src/service/reads.mjs",
+  "packages/core/src/service/recall.mjs",
   "packages/core/src/service/session-wire.mjs",
   "packages/core/src/service/writes.mjs",
   "packages/core/src/suppression-fact.mjs",
