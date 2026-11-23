@@ -1,6 +1,9 @@
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '30s';
 
+/* Topic tables omit foreign keys to content tables so their migrations avoid locking content tables.
+ * A card hide writes a tombstone, and dropCard clears the card's memberships in the same transaction.
+ */
 CREATE TABLE IF NOT EXISTS card_placements (
   user_id text NOT NULL,
   card_id text NOT NULL,
@@ -46,13 +49,6 @@ BEGIN
     ALTER TABLE card_placements ADD CONSTRAINT card_placements_user_id_users_id_fk
       FOREIGN KEY (user_id) REFERENCES public.users (id) ON DELETE CASCADE;
   END IF;
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_catalog.pg_constraint
-    WHERE conrelid = 'card_placements'::regclass AND conname = 'card_placements_user_id_card_id_document_cards_user_id_id_fk'
-  ) THEN
-    ALTER TABLE card_placements ADD CONSTRAINT card_placements_user_id_card_id_document_cards_user_id_id_fk
-      FOREIGN KEY (user_id, card_id) REFERENCES public.document_cards (user_id, id) ON DELETE CASCADE;
-  END IF;
 
   IF NOT EXISTS (
     SELECT 1 FROM pg_catalog.pg_constraint
@@ -73,13 +69,6 @@ BEGIN
   ) THEN
     ALTER TABLE card_topics ADD CONSTRAINT card_topics_user_id_topic_id_topics_user_id_id_fk
       FOREIGN KEY (user_id, topic_id) REFERENCES public.topics (user_id, id) ON DELETE CASCADE;
-  END IF;
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_catalog.pg_constraint
-    WHERE conrelid = 'card_topics'::regclass AND conname = 'card_topics_user_id_card_id_document_cards_user_id_id_fk'
-  ) THEN
-    ALTER TABLE card_topics ADD CONSTRAINT card_topics_user_id_card_id_document_cards_user_id_id_fk
-      FOREIGN KEY (user_id, card_id) REFERENCES public.document_cards (user_id, id) ON DELETE CASCADE;
   END IF;
 END;
 $$;
