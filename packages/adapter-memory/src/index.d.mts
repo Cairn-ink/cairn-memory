@@ -2,6 +2,9 @@ import type { Capability, ErrorCode, FactMatchPolicy, FingerprintLabels } from "
 import type { StorageAdapter } from "@cairn-ink/core/ports";
 import type { TestHarness } from "@cairn-ink/conformance/factory";
 
+export type { CaptureClaim, CaptureFinish, CaptureKey, CaptureMessage, ClaimResult, FinishItem, FinishResult,
+  SourceFilter } from "@cairn-ink/core/ports";
+
 export interface MemoryAdapterOptions {
   capabilities?: Partial<Record<Capability, boolean>>;
   newId?: () => string;
@@ -11,11 +14,11 @@ export interface MemoryAdapterOptions {
   fingerprint?: { secret: string; labels: FingerprintLabels } | null;
 }
 
-export type MemoryAdapter = Pick<StorageAdapter, "capabilities" | "uow" | "memories" |
+export type MemoryAdapter = Pick<StorageAdapter, "capabilities" | "uow" | "memories" | "capture" |
   "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "suppressions" | "pause" | "keys"> & {
   name: "memory";
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;
-  harness: TestHarness & Required<Pick<TestHarness, "setFingerprintSecret">>;
+  harness: TestHarness & Required<Pick<TestHarness, "setFingerprintSecret" | "advanceClock">>;
 };
 
 /** Public fixtures for the reference adapter's tests. Unsuitable for production. */

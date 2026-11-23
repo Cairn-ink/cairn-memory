@@ -1,4 +1,4 @@
-import { CoreError } from "@cairn-ink/core";
+import { CoreError, isErrorCode } from "@cairn-ink/core";
 
 /** @typedef {import("@cairn-ink/core/ports").InsertRow} InsertRow */
 /** @typedef {import("@cairn-ink/core/ports").Receipt} Receipt */
@@ -26,16 +26,73 @@ function invalid() {
   throw new CoreError("invalid_input");
 }
 
+/** @param {import("@cairn-ink/core/ports").CaptureKey} key */
+export function copyCaptureKey(key) {
+  if (!key || !key.scope || !nonempty(key.scope.owner) || !nullableString(key.scope.namespace ?? null) ||
+    !nonempty(key.client) || !nonempty(key.sessionId) || !nonempty(key.eventId) ||
+    typeof key.payloadDigest !== "string" || !/^[0-9a-f]{64}$/.test(key.payloadDigest)) invalid();
+  const { scope: { owner, namespace }, client, sessionId, eventId, payloadDigest } = key;
+  return { scope: { owner, namespace: namespace ?? null }, client, sessionId, eventId, payloadDigest };
+}
+
+/** @param {readonly import("@cairn-ink/core/ports").CaptureMessage[]} messages */
+export function validateCaptureMessages(messages) {
+  if (!Array.isArray(messages)) invalid();
+  for (const message of messages) {
+    if (!message || typeof message.id !== "string" || message.id.length > 512 || !roles.includes(message.role) ||
+      typeof message.content !== "string" ||
+      (message.occurredAtMs !== null && !Number.isSafeInteger(message.occurredAtMs))) invalid();
+  }
+}
+
+/** @param {{code: string, retryable: boolean}} failure */
+export function copyCaptureFailure(failure) {
+  if (!failure || !isErrorCode(failure.code) || typeof failure.retryable !== "boolean") invalid();
+  return { code: failure.code, retryable: failure.retryable };
+}
+
+/** @param {readonly import("@cairn-ink/core/ports").FinishItem[]} items */
+export function copyFinishItems(items) {
+  if (!Array.isArray(items)) invalid();
+  return Array.from(items, (item) => {
+    if (!item || (item.embedding !== null && !isFloat32Vector(item.embedding?.vector))) invalid();
+    const row = copyContent({
+      kind: item.kind, origin: "inferred", text: item.content, textHash: item.textHash,
+      confidence: item.confidence, source: { kind: "capture", client: null, sessionId: null },
+      embedding: item.embedding,
+    });
+    return { row, receipts: copyReceipts(item.receipts) };
+  });
+}
+
 /** @param {number} nowMs */
 export function validateTime(nowMs) {
   if (!Number.isSafeInteger(nowMs) || nowMs < 0) invalid();
 }
 
+/** @param {import("@cairn-ink/core/ports").Scope} scope */
+export function writeNamespace({ namespace }) {
+  if (!nullableString(namespace)) invalid();
+  return namespace;
+}
+
+/** @param {string} id */
+export function validateMemoryId(id) {
+  if (typeof id !== "string") invalid();
+}
+
 /** @param {DuplicateMerge} merge */
-export function validateMerge(merge) {
+function validateMerge(merge) {
   if (!merge || !Number.isFinite(merge.confidence) || merge.confidence < 0 || merge.confidence > 1 ||
     (merge.kind !== undefined && !kinds.includes(merge.kind)) ||
     (merge.origin !== undefined && !origins.includes(merge.origin))) invalid();
+}
+
+/** @param {DuplicateMerge} merge */
+export function copyMerge(merge) {
+  validateMerge(merge);
+  const { confidence, kind, origin } = merge;
+  return { confidence, kind, origin };
 }
 
 /** @param {import("@cairn-ink/core/ports").SourceRef} source */

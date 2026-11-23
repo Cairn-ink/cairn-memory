@@ -17,6 +17,33 @@ const receipt = { client, sessionId, messageId: "test-message", role: "user", oc
 const sessionKeyHash = "b".repeat(64);
 const factBase = { owner, origin: "forget" };
 
+test("capture finish and full write policy suppress the same exact digest", async () => {
+  const { capture, harness, memories, uow } = createMemoryAdapter({ now: () => 1 });
+  const item = { content: content.text, kind: content.kind, confidence: content.confidence,
+    textHash, embedding: null, receipts: [] };
+  await harness.seedFact(owner, {
+    ...factBase, kind: "text", actionId: "test-exact", mode: "exact",
+    text: { digests: [{ alg: "sha256", value: item.textHash.slice(7), pipeline: "core",
+      redactionVersion: PRIVACY_REDACTION_VERSIONS.core, keyId: null }] },
+  });
+
+  const result = await uow.run(owner, { pauseLock: true }, async (tx) => {
+    const claim = await capture.claim(tx, {
+      scope, client, sessionId, eventId: "test-event", payloadDigest: "d".repeat(64),
+    }, [], { leaseMs: 100 });
+    assert.equal(claim.status, "claimed");
+    return capture.finish(tx, claim.token, [item]);
+  });
+  assert.equal(result.suppressedCount, 1);
+  assert.deepEqual(result.memories, []);
+
+  await uow.run(owner, { readOnly: true }, async (tx) => {
+    const policy = await memories.readWritePolicy(tx, scope, [{ textHash: item.textHash }], source, "full");
+    assert.deepEqual(policy.blockedPositions, [0]);
+    assert.deepEqual(policy.matches, [[]]);
+  });
+});
+
 const distantEmbeddings = [
   ["array", [0, 1]],
   ["local Float32Array", new Float32Array([0, 1])],

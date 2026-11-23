@@ -2,7 +2,7 @@
 
 `@cairn-ink/conformance` runs shared tests for storage adapters. The suite covers transactions, error mapping, capabilities, memory storage, and retrieval.
 
-An `AdapterFactory` supplies a `name` and an `open({ capabilities })` method that returns an `OpenedAdapter`. The result exposes `adapter` with its actual capabilities, `uow`, `memories`, `lexical`, `snapshot`, `hydrate`, `fence`, and `recent`. The `vector` port is present exactly when `semanticRetrieval` is enabled. The factory also returns `harness`, `nativeErrorMap`, `busyNativeCodes`, `embeddingDimensions` (`null` uses four), and an async `close()` method.
+An `AdapterFactory` supplies a `name` and an `open({ capabilities })` method that returns an `OpenedAdapter`. The result exposes `adapter` with its actual capabilities, `uow`, `memories`, `capture`, `lexical`, `snapshot`, `hydrate`, `fence`, and `recent`. The `vector` port is present exactly when `semanticRetrieval` is enabled. The factory also returns `harness`, `nativeErrorMap`, `busyNativeCodes`, `embeddingDimensions` (`null` uses four), and an async `close()` method.
 
 Optional `settleMs` gives a started run time to reach its lock waits. The default is 100 ms. Raise it for stores with slow transaction start.
 
@@ -70,6 +70,16 @@ adapter. The hashed receipt check reports `needs hashed session refs` on the
 plain profile. The vector follow-ups request `vectorSuppression` and
 `semanticRetrieval` and report the missing flag when skipped. Their exact-digest
 checks run on either profile with or without those flags.
+
+### Capture cases
+
+Run each entry in `CAPTURE_CASES` with `runCase(factory, testCase)`. The cases
+exercise claim identity, dispatch, finish, and rollback through the adapter
+ports. They compare relative index revisions and treat tokens as opaque.
+
+The optional test hook `harness.advanceClock(ms)` moves the store clock forward
+by the requested milliseconds. The lease-expiry check reports a skip reason
+when the hook is unavailable. The abandon checks still run.
 
 ### Sticky write failures
 

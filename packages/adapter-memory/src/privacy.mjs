@@ -57,7 +57,7 @@ function storeFact(getState, fact, incarnation, { newId = () => crypto.randomUUI
   }
 
   const epoch = (state.epoch ?? 0n) + 1n;
-  const stored = { fact: structuredClone(fact), factId: newId(), incarnation, epoch, createdAtMs: now() };
+  const stored = { fact, factId: newId(), incarnation, epoch, createdAtMs: now() };
   state.facts.set(slot, stored);
   state.epoch = epoch;
   return { factId: stored.factId, epoch, createdAtMs: stored.createdAtMs, created: true };
@@ -72,12 +72,14 @@ export function createFactStore(port, runSeed, options, matchFacts = createFactM
   /** @type {import("@cairn-ink/core/ports").SuppressionStore} */
   const suppressions = {
     async writeFact(tx, fact, incarnation) {
-      return port.write(tx, { owner: fact?.owner }, true, (getState) => {
+      return port.write(tx, fact, true, () => {
         const validated = validateSuppressionFact(fact);
-        if (options.sessionRefs === "hashed" && validated.kind === "session" && "sessionId" in validated.session) {
+        if (typeof incarnation !== "string" ||
+            (options.sessionRefs === "hashed" && validated.kind === "session" && "sessionId" in validated.session)) {
           throw new CoreError("invalid_input");
         }
-        return storeFact(getState, validated, incarnation, options);
+        const copy = structuredClone(validated);
+        return (getState) => storeFact(getState, copy, incarnation, options);
       });
     },
     async snapshot(tx, scope, candidates) {
@@ -114,14 +116,16 @@ export function createPauseStore(port) {
       return port(tx, { owner }, false, (state) => ({ ...state.pause }), true);
     },
     async set(tx, owner, paused) {
-      return port.write(tx, { owner }, "conditional", (getState, markDirty) => {
+      return port.write(tx, { owner }, "conditional", () => {
         if (typeof paused !== "boolean") throw new CoreError("invalid_input");
-        const state = getState();
-        if (!paused && !state.pause.paused) return { ...state.pause };
-        const generation = pauseGenerationAfter(state.pause.generation, paused ? "pause" : "resume");
-        state.pause = { paused, generation };
-        markDirty();
-        return { ...state.pause };
+        return (getState, markDirty) => {
+          const state = getState();
+          if (!paused && !state.pause.paused) return { ...state.pause };
+          const generation = pauseGenerationAfter(state.pause.generation, paused ? "pause" : "resume");
+          state.pause = { paused, generation };
+          markDirty();
+          return { ...state.pause };
+        };
       }, true);
     },
   };

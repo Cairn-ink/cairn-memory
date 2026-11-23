@@ -11,9 +11,9 @@ export const TEXT_FLOOR = 120;
 /** @type {ReadonlySet<ModelStage>} */
 const diagnosticStages = new Set(['extract', 'qualify', 'reconcile', 'classify', 'rationale']);
 
-/** @param {string} system @param {unknown} input */
-export const modelRequestText = (system, input) =>
-  JSON.stringify({ system, input, maxOutputTokens: MODEL_OUTPUT_TOKENS });
+/** @param {string} system @param {unknown} input @param {number} [maxOutputTokens] */
+export const modelRequestText = (system, input, maxOutputTokens = MODEL_OUTPUT_TOKENS) =>
+  JSON.stringify({ system, input, maxOutputTokens });
 
 /**
  * @param {Pick<ModelPort, 'countTokens'>} model
