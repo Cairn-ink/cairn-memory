@@ -1,5 +1,7 @@
 import { allDigests, compareUtf8, CoreError, coreDigest, factHidesRow, tokenizeT1,
-  legacyExactMac, passageShingles, PRIVACY_REDACTION_VERSIONS, withholdsAnyPassage } from "@cairn-ink/core";
+  factBlocksIncoming, legacyExactMac, prepareCoreText, PRIVACY_REDACTION_VERSIONS } from "@cairn-ink/core";
+import { fingerprintMemoryPassages } from "../../core/src/privacy/fingerprint.mjs";
+import { requiresLegacyMacDomain } from "../../core/src/privacy/withholds.mjs";
 import { decodePayload, encodePayload } from "./cursor.mjs";
 import { addKeyedDigest, validateFact } from "./privacy.mjs";
 import { withinWindow } from "./retrieval-window.mjs";
@@ -161,8 +163,8 @@ export function createRawPorts({ port, runSeed }, ringKeys, labels, hashSessionK
       if (anchor.sessionId === session.sessionId) continue;
       const matches = proofs.some(({ id, digest }) => {
         const recorded = anchor.messages.get(id);
-        // A scrubbed anchor has only its ID. A differing known digest leaves the message eligible.
-        return recorded?.has(null) || (digest !== null && recorded?.has(digest));
+        // Either scrubbed slot leaves only its ID available for comparison.
+        return recorded !== undefined && (digest === null || recorded.has(null) || recorded.has(digest));
       });
       if (matches) {
         const sourceScope = { owner: scope.owner, namespace: anchor.namespace };
@@ -173,32 +175,27 @@ export function createRawPorts({ port, runSeed }, ringKeys, labels, hashSessionK
     return false;
   }
 
-  /** @param {Scope} scope @param {TextFact[]} facts */
+  /** @param {Scope} scope @param {StoredFact<TextFact>[]} facts */
   function importTextFilter(scope, facts) {
-    const shingleKeys = new Set(facts.filter((fact) => fact.mode === "full").map((fact) => fact.text.keyId));
+    const capturePolicy = /** @type {const} */ ({ mode: "capture" });
+    const legacyKeyUnavailable = facts.some(({ fact }) => requiresLegacyMacDomain(fact));
     /** @type {ReturnType<typeof ringKeys> | undefined} */
     let keys;
-    return async (/** @type {RawEntry} */ row) => {
+    return async (/** @type {string} */ content) => {
       if (!facts.length) return false;
+      if (legacyKeyUnavailable) return true;
       try {
-        const [digests, ownerKeys] = await Promise.all([
-          allDigests(row.content, null), keys ??= ringKeys(scope.owner),
-        ]);
-        const keyed = await Promise.all(ownerKeys.map(async (key) => {
-          const [digest, legacy, shingles] = await Promise.all([
-            coreDigest(row.content, key), legacyExactMac(row.content, key, labels),
-            shingleKeys.has(key.id) ? passageShingles(row.content, key, labels) : null,
-          ]);
-          return { digest, legacy, shingles, keyId: key.id };
-        }));
-        for (const { digest, legacy, keyId } of keyed) {
-          addKeyedDigest(digests, digest);
-          addKeyedDigest(digests, { alg: "hmac", value: legacy, pipeline: "engine-legacy",
-            keyId, redactionVersion: PRIVACY_REDACTION_VERSIONS.v1 });
-        }
-        return facts.some((fact) => {
-          const evidence = keyed.find(({ keyId }) => keyId === fact.text.keyId);
-          return withholdsAnyPassage([{ digests, shingles: evidence?.shingles ?? null, keyId: evidence?.keyId ?? null }], [fact]);
+        const prepared = prepareCoreText(content);
+        const ownerKeys = await (keys ??= ringKeys(scope.owner));
+        const evidence = await Promise.all([null, ...ownerKeys].map((key) =>
+          fingerprintMemoryPassages(content, prepared, key)));
+        // Core produces the same passage variants for every key. Keep all exact aliases for
+        // each variant, and use only the fact's key for its containment comparison.
+        const digests = evidence[0].map((_, index) => evidence.flatMap((passages) => passages[index].digests));
+        return facts.some((stored) => {
+          const matchingKey = evidence.find(([passage]) => passage.keyId === stored.fact.text.keyId) ?? evidence[0];
+          const passages = matchingKey.map((passage, index) => ({ ...passage, digests: digests[index] }));
+          return factBlocksIncoming(stored, { scope, passages }, capturePolicy) !== false;
         });
       } catch {
         return true;
@@ -359,7 +356,10 @@ export function createRawPorts({ port, runSeed }, ringKeys, labels, hashSessionK
           }
           const windows = facts.filter(({ fact }) => fact.kind === "window");
           const spans = facts.filter(({ fact }) => fact.kind === "rawSpan");
-          const textBlocked = importTextFilter(selection, facts.flatMap(({ fact }) => fact.kind === "text" ? [fact] : []));
+          const texts = facts.filter(
+            /** @returns {stored is StoredFact<TextFact>} */
+            (stored) => stored.fact.kind === "text");
+          const textBlocked = importTextFilter(selection, texts);
           const hash = spans.length ? await spanSessionHash(admission).catch(() => "") : "";
           for (const message of copied) {
             const entry = rawEntry(selection, admission, message);
@@ -368,7 +368,7 @@ export function createRawPorts({ port, runSeed }, ringKeys, labels, hashSessionK
             if (windows.some((stored) => factHidesRow(stored, candidate, policy) !== false) ||
                 spans.some((stored) => stored.fact.kind === "rawSpan" && factHidesRow(stored, {
                   ...candidate, startUtf16: stored.fact.startUtf16, endUtf16: stored.fact.endUtf16,
-                }, policy) !== false) || await textBlocked(entry)) {
+                }, policy) !== false) || await textBlocked(entry.content)) {
               counts.withheld++;
             } else if (state.rawRows.has(id)) {
               counts.existing++;

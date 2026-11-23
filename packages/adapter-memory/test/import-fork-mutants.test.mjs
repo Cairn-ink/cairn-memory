@@ -38,13 +38,17 @@ async function variantFactory(name, replacements) {
 }
 
 const sameClient = "const sessions = state.rawAnchors.get(session.client);";
+const compareProof = "return recorded !== undefined && (digest === null || recorded.has(null) || recorded.has(digest));";
 const wholeFork = /A proven fork must block the matching message and every new turn/;
 const mutants = [
   ["omits the fork check", "K-FORK-1", wholeFork, [
     [sameClient, "const sessions = undefined;"],
   ]],
   ["uses ID alone even with a known digest", "K-FORK-2", /Different content must leave a reused ID eligible/, [
-    ["return recorded?.has(null) || (digest !== null && recorded?.has(digest));", "return recorded !== undefined;"],
+    [compareProof, "return recorded !== undefined;"],
+  ]],
+  ["treats a scrubbed incoming slot as a digest mismatch", "K-FORK-10", /Both outbox eligibility checks must refuse/, [
+    [compareProof, "return recorded?.has(null) || (digest !== null && recorded?.has(digest));"],
   ]],
   ["compares anchors from other clients", "K-FORK-4", /Another client must remain eligible/, [
     ['["raw-lineage-content-v1", owner, client, id, content]', '["raw-lineage-content-v1", owner, id, content]'],
@@ -55,6 +59,13 @@ const mutants = [
   ]],
   ["stores withheld messages", "K-IMP-RAW-1", /Import must never store withheld content/, [
     ["counts.withheld++;", "state.rawRows.set(id, entry); counts.withheld++; run.stateWritten = true;"],
+  ]],
+  ["stores a client-window refusal", "K-IMP-RAW-3", /Import must never store window refusal client-start/, [
+    ["counts.withheld++;", `counts.withheld++;
+              if (entry.messageId === "client-start") {
+                state.rawRows.set(id, entry);
+                run.stateWritten = true;
+              }`],
   ]],
   ["counts existing IDs as archived", "K-IMP-RAW-1", /Import must count each outcome/, [
     ["counts.existing++;", "counts.archived++;"],

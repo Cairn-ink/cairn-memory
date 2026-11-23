@@ -1,5 +1,5 @@
 import { coreDigest, factIncarnationBody } from "@cairn-ink/core";
-import { caught, check, equal, readDump, rejects } from "./support.mjs";
+import { caught, check, equal, isCoreErrorShape, readDump, rejects } from "./support.mjs";
 
 /** @import { CaptureKey, CaptureMessage, Tx } from "@cairn-ink/core/ports" */
 /** @import { CaseContext, ConformanceCase } from "./index.d.mts" */
@@ -9,6 +9,8 @@ const anchor = { id: "anchor", role: "user", content: "cedar marker", occurredAt
 /** @type {CaptureMessage} */
 const turn = { id: "new-turn", role: "assistant", content: "maple grove", occurredAtMs: 20 };
 const messages = [anchor, turn];
+// Leave room for clock movement between the committed claim and the fence re-checks.
+const leaseMs = 24 * 60 * 60 * 1000;
 
 /** @param {CaseContext} ctx */
 function fixture(ctx) {
@@ -77,7 +79,7 @@ export const PROVEN_FORK_CASES = [
     id: "K-FORK-5", title: "a direct fence blocks a session even without a matching ID", needs: ["rawArchive"],
     async run(ctx) {
       const { capture, fence, eligible, write, root } = fixture(ctx);
-      const claim = await write((tx) => capture.claim(tx, root, [turn], { leaseMs: 60_000 }));
+      const claim = await write((tx) => capture.claim(tx, root, [turn], { leaseMs }));
       equal(claim.status, "claimed", "Fixture must acquire a live claim");
       await fence();
       equal(await eligible(root, [turn]), [], "Directly fenced session must be ineligible");
@@ -89,7 +91,7 @@ export const PROVEN_FORK_CASES = [
     async run(ctx) {
       const { raw, capture, record, eligible, write, root, fork } = fixture(ctx);
       await record();
-      const claim = await write((tx) => capture.claim(tx, fork, messages, { leaseMs: 60_000 }));
+      const claim = await write((tx) => capture.claim(tx, fork, messages, { leaseMs }));
       equal(claim.status, "claimed", "Fixture must acquire a live claim");
       equal(await eligible(fork, messages), [0, 1], "The entire batch must be eligible before the fence");
       await write((tx) => capture.assertEligible(tx, fork, [1]));
@@ -174,6 +176,43 @@ export const PROVEN_FORK_CASES = [
           { limit: 10, cursor: null });
         equal(items, [], "Lineage alone must never write raw rows");
       });
+    },
+  },
+  {
+    id: "K-FORK-10", title: "a scrubbed outbox slot still proves a fork after the source is fenced",
+    needs: ["rawArchive", "rawWindowHide"],
+    async run(ctx) {
+      const { raw, capture, record, fence, eligible, write, fork } = fixture(ctx);
+      const admit = capture.admit?.bind(capture);
+      const load = capture.load?.bind(capture);
+      if (!admit) return "needs capture.admit for a stored outbox";
+      if (!load) return "needs capture.load for a stored outbox";
+      await record();
+      await ctx.harness.seedFact(ctx.owner, {
+        owner: ctx.owner, actionId: "scrub-anchor", origin: "forget", kind: "window",
+        client: fork.client, window: { startMs: 10, endMs: 20 },
+      });
+      const positions = await eligible(fork, messages);
+      equal(positions, [1], "The window must leave only the new turn eligible");
+      const outbox = messages.map((item, index) => positions.includes(index) ? item : { ...item, content: "" });
+      await write(async (tx) => {
+        equal((await admit(tx, fork, outbox)).status, "admitted", "Fixture must store the scrubbed outbox");
+        await raw.recordLineage(tx, fork, outbox);
+      });
+      const stored = await ctx.adapter.uow.run(ctx.owner, { readOnly: true }, (tx) => load(tx, fork));
+      check(stored, "Fixture must load the committed outbox");
+      equal(stored.messages, outbox, "The stored outbox must retain the scrubbed slot and the new turn");
+      equal(await eligible(stored.key, stored.messages), [1], "The outbox must remain eligible before the source fence");
+      const claim = await write((tx) => capture.claim(tx, stored.key, stored.messages, { leaseMs }));
+      equal(claim.status, "claimed", "Fixture must acquire a live claim");
+      await write((tx) => capture.assertEligible(tx, stored.key, [1]));
+      await fence();
+      equal(await eligible(fork, messages), [], "The original batch must be refused after the source fence");
+      const outboxPositions = await eligible(stored.key, stored.messages);
+      const error = await write((tx) => capture.assertEligible(tx, stored.key, [1])).then(() => null, (error) => error);
+      equal({ positions: outboxPositions, code: isCoreErrorShape(error) ? error.code : null },
+        { positions: [], code: "lineage_fenced" },
+        "Both outbox eligibility checks must refuse the proven fork after the source fence");
     },
   },
 ];

@@ -1,4 +1,5 @@
-import { coreDigest, passageShingles } from "@cairn-ink/core";
+import { coreDigest, legacyExactMac, passageShingles } from "@cairn-ink/core";
+import { coreFingerprintLabels } from "../../core/src/privacy/fingerprint.mjs";
 import { caught, check, equal, readDump, rejects } from "./support.mjs";
 
 /** @import { CaptureKey, CaptureMessage, Tx } from "@cairn-ink/core/ports" */
@@ -109,12 +110,18 @@ export const IMPORT_ARCHIVE_CASES = [
       const unknown = message("unknown", "missing event time", null);
       const batch = [ownerStart, ownerEnd, clientStart, clientEnd, unknown];
       equal(await put(batch), { archived: 2, existing: 0, withheld: 3 }, "Import must apply both half-open windows");
+      const committed = JSON.stringify(await readDump(ctx.harness));
+      for (const { id, content } of [ownerStart, clientStart, unknown]) {
+        check(!committed.includes(JSON.stringify(id)) && !committed.includes(content),
+          `Import must never store window refusal ${id}`);
+      }
       equal(await put(batch, { ...session, client: "other-client" }),
         { archived: 4, existing: 0, withheld: 1 }, "Client window must apply only to its own client");
       const { items } = await page();
       equal(items.filter((item) => item.client === client).map(({ messageId }) => messageId).sort(),
         [clientEnd.id, ownerEnd.id], "Only the messages outside both windows may be stored for this client");
-      check(!JSON.stringify(await readDump(ctx.harness)).includes(ownerStart.content),
+      const otherCommitted = JSON.stringify(await readDump(ctx.harness));
+      check(!otherCommitted.includes(JSON.stringify(ownerStart.id)) && !otherCommitted.includes(ownerStart.content),
         "Import must never store owner-window refusals");
     },
   },
@@ -147,14 +154,41 @@ export const IMPORT_ARCHIVE_CASES = [
       const { put } = fixture(ctx);
       if (!put) return missingImport;
       const item = message("first", "cedar garden");
+      const key = ctx.adapter.capabilities.fingerprintKey ? await ctx.adapter.keys.userKey(ctx.owner) : null;
+      check(key || !ctx.adapter.capabilities.fingerprintKey, "fingerprintKey requires an owner key");
+      const unrelated = await coreDigest("maple grove", key);
+      // With a key, an exact miss still requires containment evidence in full mode.
       await ctx.harness.seedFact(ctx.owner, {
-        ...factBase(ctx, "unknown-key"), kind: "text", mode: "exact",
-        text: { digests: [{ alg: "hmac", pipeline: "core", redactionVersion: (await coreDigest(item.content)).redactionVersion,
-          keyId: "a".repeat(64), value: "b".repeat(64) }] },
+        ...factBase(ctx, "incomparable"), kind: "text", mode: key ? "full" : "exact",
+        text: key ? { digests: [unrelated], keyId: key.id } : {
+          digests: [{ ...unrelated, alg: "hmac", keyId: "test-key" }],
+        },
       });
       const before = await readDump(ctx.harness);
       equal(await put([item]), { archived: 0, existing: 0, withheld: 1 }, "Uncomparable text fact must refuse import");
       equal(await readDump(ctx.harness), before, "Uncomparable text fact must leave the committed state unchanged");
+    },
+  },
+  {
+    id: "K-IMP-RAW-4e", title: "refuses an exact core-domain keyed text match", needs: ["rawArchive", "fingerprintKey"],
+    async run(ctx) {
+      const { put } = fixture(ctx);
+      if (!put) return missingImport;
+      const key = await ctx.adapter.keys.userKey(ctx.owner);
+      check(key, "fingerprintKey requires an owner key");
+      const item = message("exact", "cedar garden");
+      const digest = await coreDigest(item.content, key);
+      const alias = await legacyExactMac(item.content, key, coreFingerprintLabels);
+      check(alias !== digest.value, "Fixture must isolate the core-domain alias");
+      await ctx.harness.seedFact(ctx.owner, {
+        ...factBase(ctx, "keyed-exact"), kind: "text", mode: "exact",
+        text: { digests: [{ ...digest, value: alias }], keyId: key.id },
+      });
+      const before = await readDump(ctx.harness);
+      const counts = await put([item]);
+      const after = await readDump(ctx.harness);
+      equal({ counts, dump: after }, { counts: { archived: 0, existing: 0, withheld: 1 }, dump: before },
+        "The core-domain exact match must refuse import without storing the message");
     },
   },
   {

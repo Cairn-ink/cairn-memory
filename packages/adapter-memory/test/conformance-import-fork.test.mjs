@@ -26,7 +26,7 @@ for (const flag of ["rawArchive", "rawWindowHide", "rawSpans", "fingerprintKey",
   });
 }
 
-test("All import cases skip when the optional method is absent", async () => {
+test("Only import cases skip when the optional import method is absent", async () => {
   const factory = rawFactory({ create(options) {
     const adapter = createMemoryAdapter(options);
     delete adapter.raw.importArchive;
@@ -34,6 +34,35 @@ test("All import cases skip when the optional method is absent", async () => {
   } });
   for (const testCase of IMPORT_ARCHIVE_CASES) {
     assert.equal(await runCase(factory, testCase), "needs raw.importArchive", testCase.id);
+  }
+  for (const testCase of PROVEN_FORK_CASES) {
+    assert.equal(await runCase(factory, testCase), null, testCase.id);
+  }
+});
+
+for (const fingerprintKey of [false, true]) {
+  test(`K-IMP-RAW-4 with fingerprintKey ${fingerprintKey}`, async () => {
+    const testCase = IMPORT_ARCHIVE_CASES.find(({ id }) => id === "K-IMP-RAW-4");
+    assert.ok(testCase);
+    assert.equal(await runCase(rawFactory({ flags: { fingerprintKey } }), testCase), null);
+  });
+}
+
+test("K-FORK-5 and K-FORK-6 tolerate store clock advances between runs", async () => {
+  const factory = rawFactory({ create(options) {
+    let timeMs = 0;
+    const adapter = createMemoryAdapter({ ...options, now: () => timeMs });
+    const { run } = adapter.uow;
+    adapter.uow.run = (...args) => {
+      timeMs += 60_001;
+      return run(...args);
+    };
+    return adapter;
+  } });
+  for (const id of ["K-FORK-5", "K-FORK-6"]) {
+    const testCase = PROVEN_FORK_CASES.find((candidate) => candidate.id === id);
+    assert.ok(testCase);
+    assert.equal(await runCase(factory, testCase), null, id);
   }
 });
 
