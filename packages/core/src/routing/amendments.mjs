@@ -2,6 +2,7 @@ import { countTokens as checkedTokenCount, MODEL_INPUT_TOKENS, modelRequestText 
 import { cleanContent } from "../privacy/text.mjs";
 import { compareUtf8 } from "../utf8.mjs";
 import { SYS_DETECT, SYS_VERIFY } from "./amendment-prompts.mjs";
+import { identityDigest } from "./card.mjs";
 import { redactAmendmentText } from "./redaction.mjs";
 import { SPACE } from "./text.mjs";
 
@@ -16,7 +17,6 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const VERIFY_LIMIT = 4;
 const WHITESPACE = new RegExp(`${SPACE}+`, "gu");
 const EDGE_WHITESPACE = new RegExp(`^${SPACE}+|(?<!${SPACE})${SPACE}+(?![\\s\\S])`, "gu");
-const encoder = new TextEncoder();
 
 /** @param {Record<string, object>} properties */
 function strictObject(properties) {
@@ -240,8 +240,7 @@ export function buildVerifyRequest({ card, sessionDate, quote, newValue }) {
 /** @param {string} cardId @param {DocumentCardSourceMessage} sourceMessage @param {string} quote */
 export async function amendmentId(cardId, { client, sessionId, messageId }, quote) {
   const identity = ["document-card-amendment", cardId, client, sessionId, messageId, norm(quote)];
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", encoder.encode(JSON.stringify(identity)));
-  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+  return identityDigest(identity);
 }
 
 /** @param {(signal: AbortSignal) => Promise<unknown>} send @param {number} timeoutMs */
