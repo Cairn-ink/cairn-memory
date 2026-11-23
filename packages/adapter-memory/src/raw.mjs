@@ -1,16 +1,22 @@
-import { allDigests, compareUtf8, CoreError, coreDigest, factHidesRow, tokenizeT1 } from "@cairn-ink/core";
+import { allDigests, cleanContent, compareUtf8, CoreError, coreDigest, factHidesRow, tokenizeT1,
+  legacyExactMac, PRIVACY_REDACTION_VERSIONS, redactCore, withholdsAnyPassage } from "@cairn-ink/core";
+import { fingerprintMemoryPassages } from "../../core/src/privacy/fingerprint.mjs";
+import { requiresLegacyMacDomain } from "../../core/src/privacy/withholds.mjs";
 import { decodePayload, encodePayload } from "./cursor.mjs";
 import { addKeyedDigest, validateFact } from "./privacy.mjs";
 import { withinWindow } from "./retrieval-window.mjs";
 import { rankLexical, stateToken, validateToken } from "./retrieval.mjs";
-import { admissionScope, copyCaptureMessages, copyReadScope, snapshotArray, validateLimit, writeNamespace } from "./validation.mjs";
+import { admissionScope, copyCaptureMessages, copyReadScope, guardCaptureScope, snapshotArray, validateLimit,
+  writeNamespace } from "./validation.mjs";
 
-/** @import { FactMatchPolicy, FactMatchRow, StoredFact, TextDigest } from "@cairn-ink/core" */
-/** @import { CaptureMessage, ItemRef, Namespace, RawSegment, RetrievalScope, Scope, StorageAdapter, Tx } from "@cairn-ink/core/ports" */
+/** @import { FactMatchPolicy, FactMatchRow, StoredFact, TextDigest, TextFact } from "@cairn-ink/core" */
+/** @import { CaptureMessage, FingerprintKeyProvider, ItemRef, Namespace, RawSegment, RetrievalScope, Scope, StorageAdapter, Tx } from "@cairn-ink/core/ports" */
 /** @import { IssuedRun, State } from "./unit-of-work.mjs" */
 /** @typedef {Omit<RawSegment, "score">} RawEntry */
 /** @typedef {Pick<RawEntry, "client" | "sessionId">} Session */
 /** @typedef {Pick<RawEntry, "occurredAtMs"> & {ref: {id: string}}} PageKey */
+/** @typedef {{id: string, digest: string | null}} CaptureProof */
+/** @typedef {{namespace: Namespace, sessionId: string, messages: Map<string, Set<CaptureProof["digest"]>>}} AnchorSession */
 
 const encoder = new TextEncoder();
 
@@ -77,14 +83,40 @@ function publicSegment(segment) {
 
 /**
  * @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>} work
+ * @param {FingerprintKeyProvider} keys
  * @param {import("./privacy.mjs").RingKeys} ringKeys
+ * @param {import("@cairn-ink/core").FingerprintLabels} labels
  * @param {FactMatchPolicy["hashSessionKey"]} [hashSessionKey]
  */
-export function createRawPorts({ port, runSeed }, ringKeys, hashSessionKey) {
+export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSessionKey) {
   const cursorBinding = crypto.randomUUID();
   const policy = { hashSessionKey, rowShingles: false };
   let rawKeyConflict = 0;
   let rawArchiveRefused = 0;
+  const proofSecret = crypto.getRandomValues(new Uint8Array(32));
+  /** @type {CryptoKey | undefined} */
+  let proofKey;
+
+  /** @param {Scope} scope @param {string} client @param {readonly Pick<CaptureMessage, "id" | "content">[]} messages
+   * @returns {Promise<CaptureProof[] | null>}
+   */
+  async function captureProofs({ owner }, client, messages) {
+    try {
+      const key = messages.some(({ content }) => content !== "") ?
+        proofKey ??= await crypto.subtle.importKey("raw", proofSecret,
+          { name: "HMAC", hash: "SHA-256" }, false, ["sign"]) : undefined;
+      return await Promise.all(messages.map(async ({ id, content }) => {
+        if (content === "") return { id, digest: null };
+        if (!key) throw new CoreError("fingerprint_unavailable");
+        const input = encoder.encode(JSON.stringify(["raw-lineage-content-v1", owner, client, id, content]));
+        const bytes = await crypto.subtle.sign("HMAC", key, input);
+        const digest = Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
+        return { id, digest };
+      }));
+    } catch {
+      return null;
+    }
+  }
 
   /** @param {Session} session */
   async function spanSessionHash({ client, sessionId }) {
@@ -119,6 +151,49 @@ export function createRawPorts({ port, runSeed }, ringKeys, hashSessionKey) {
     const row = { type: /** @type {const} */ ("raw"), scope, source: session,
       sessionKeyHash: "", messageKey: "", startUtf16: 0, endUtf16: 0 };
     return !facts.some((stored) => stored.fact.kind === "session" && factHidesRow(stored, row, policy) !== false);
+  }
+
+  /** @param {State} state @param {Scope} scope @param {Session} session
+   * @param {readonly CaptureProof[] | null | undefined} proofs
+   */
+  function lineageFenced(state, scope, session, proofs) {
+    if (proofs == null || state.rawFences.has(sessionSlot(scope.namespace, session))) return true;
+    const sessions = state.rawAnchors.get(session.client);
+    if (!sessions) return false;
+    for (const anchor of sessions.values()) {
+      if (anchor.sessionId === session.sessionId) continue;
+      const matches = proofs.some(({ id, digest }) => {
+        const recorded = anchor.messages.get(id);
+        // Either scrubbed slot leaves only its ID available for comparison.
+        return recorded !== undefined && (digest === null || recorded.has(null) || recorded.has(digest));
+      });
+      if (matches) {
+        const sourceScope = { owner: scope.owner, namespace: anchor.namespace };
+        const source = { client: session.client, sessionId: anchor.sessionId };
+        if (!allowsArchive(state, sourceScope, source, scopedFacts(state, sourceScope))) return true;
+      }
+    }
+    return false;
+  }
+
+  /** @param {Scope} scope @param {TextFact[]} facts */
+  function importTextFilter(scope, facts) {
+    const legacyKeyUnavailable = facts.some(requiresLegacyMacDomain);
+    /** @type {ReturnType<FingerprintKeyProvider["userKey"]> | undefined} */
+    let key;
+    return async (/** @type {string} */ content) => {
+      if (legacyKeyUnavailable) return true;
+      if (!facts.length) return false;
+      try {
+        // Use capture admission's preparation and active owner key.
+        const prepared = redactCore(cleanContent(content).normalize("NFKC"));
+        if (!prepared) return false;
+        const activeKey = await (key ??= keys.userKey(scope.owner));
+        return withholdsAnyPassage(await fingerprintMemoryPassages(content, prepared, activeKey), facts);
+      } catch {
+        return true;
+      }
+    };
   }
 
   /** @param {Scope} scope @param {StoredFact[]} facts */
@@ -200,14 +275,31 @@ export function createRawPorts({ port, runSeed }, ringKeys, hashSessionKey) {
     });
   }
 
-  /** @type {NonNullable<StorageAdapter["raw"]>} */
+  /** @satisfies {NonNullable<StorageAdapter["raw"]>} */
   const raw = {
     async recordLineage(tx, key, messages) {
       const scope = admissionScope(tx, key);
       return port.write(tx, scope, "conditional", () => {
-        scope.copyKey();
-        copyCaptureMessages(messages);
-        return () => {};
+        const { scope: selection, client, sessionId } = scope.copyKey();
+        const copied = copyCaptureMessages(messages);
+        return async (getState, _markDirty, run) => {
+          if (!copied.length) return;
+          const { rawAnchors } = getState();
+          const proofs = await captureProofs(selection, client, copied);
+          if (proofs === null) throw new CoreError("fingerprint_unavailable");
+          const sessions = rawAnchors.get(client) ?? new Map();
+          const slot = sessionSlot(selection.namespace, { client, sessionId });
+          const anchor = sessions.get(slot) ?? { namespace: selection.namespace, sessionId, messages: new Map() };
+          for (const { id, digest } of proofs) {
+            const recorded = anchor.messages.get(id) ?? new Set();
+            if (recorded.has(digest)) continue;
+            recorded.add(digest);
+            anchor.messages.set(id, recorded);
+            run.stateWritten = true;
+          }
+          sessions.set(slot, anchor);
+          rawAnchors.set(client, sessions);
+        };
       });
     },
     async archiveAllowed(tx, key) {
@@ -252,6 +344,47 @@ export function createRawPorts({ port, runSeed }, ringKeys, hashSessionKey) {
           }
           if (archived) advanceRevision(run);
           return { archived };
+        };
+      });
+    },
+    async importArchive(tx, scope, session, messages) {
+      const guarded = guardCaptureScope(tx, () => scope);
+      return port.write(tx, guarded, "conditional", () => {
+        const selection = guarded.copyScope();
+        const admission = copySession(session);
+        const copied = copyCaptureMessages(messages);
+        return async (getState, _markDirty, run) => {
+          const counts = { archived: 0, existing: 0, withheld: 0 };
+          if (!copied.length) return counts;
+          const state = getState();
+          const facts = scopedFacts(state, selection);
+          if (!allowsArchive(state, selection, admission, facts) ||
+              lineageFenced(state, selection, admission, await captureProofs(selection, admission.client, copied))) {
+            return { ...counts, withheld: copied.length };
+          }
+          const windows = facts.filter(({ fact }) => fact.kind === "window");
+          const spans = facts.filter(({ fact }) => fact.kind === "rawSpan");
+          const texts = facts.map(({ fact }) => fact).filter((fact) => fact.kind === "text");
+          const textBlocked = importTextFilter(selection, texts);
+          const hash = spans.length ? await spanSessionHash(admission).catch(() => "") : "";
+          for (const message of copied) {
+            const entry = rawEntry(selection, admission, message);
+            const { id } = entry.ref;
+            const candidate = evidence(entry, selection, hash);
+            if (windows.some((stored) => factHidesRow(stored, candidate, policy) !== false) ||
+                spans.some((stored) => stored.fact.kind === "rawSpan" && factHidesRow(stored, {
+                  ...candidate, startUtf16: stored.fact.startUtf16, endUtf16: stored.fact.endUtf16,
+                }, policy) !== false) || await textBlocked(entry.content)) {
+              counts.withheld++;
+            } else if (state.rawRows.has(id)) {
+              counts.existing++;
+            } else {
+              state.rawRows.set(id, entry);
+              counts.archived++;
+            }
+          }
+          if (counts.archived) advanceRevision(run);
+          return counts;
         };
       });
     },
@@ -344,5 +477,6 @@ export function createRawPorts({ port, runSeed }, ringKeys, hashSessionKey) {
     }));
   }
 
-  return { raw, visibleRawRefs, seedClientlessRaw, counters: () => ({ rawKeyConflict, rawArchiveRefused }) };
+  return { raw, visibleRawRefs, captureProofs, lineageFenced, seedClientlessRaw,
+    counters: () => ({ rawKeyConflict, rawArchiveRefused }) };
 }

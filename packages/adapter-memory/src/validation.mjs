@@ -50,20 +50,38 @@ export function copyCaptureKey(key, owner, namespace) {
   return { ...selection, payloadDigest };
 }
 
-/** @param {import("@cairn-ink/core/ports").Tx} tx @param {import("@cairn-ink/core/ports").CaptureKey} key */
-export function admissionScope(tx, key) {
+/** @param {import("@cairn-ink/core/ports").Tx} tx
+ * @param {() => import("@cairn-ink/core/ports").Scope | undefined} readScope
+ */
+export function guardCaptureScope(tx, readScope) {
   /** @type {import("@cairn-ink/core/ports").Scope | undefined} */
   let scope;
   /** @type {string | undefined} */
   let owner;
   return {
     get owner() {
-      scope = key?.scope;
+      scope = readScope();
       owner = scope?.owner;
       // Leave missing or malformed owners to input validation after the transaction guard.
       return typeof owner === "string" && owner ? owner : tx.owner;
     },
-    copyKey: () => copyCaptureKey(key, owner, scope?.namespace),
+    copyScope() {
+      const namespace = scope?.namespace ?? null;
+      if (typeof owner !== "string" || !owner || !nullableString(namespace)) invalid();
+      return { owner, namespace };
+    },
+  };
+}
+
+/** @param {import("@cairn-ink/core/ports").Tx} tx @param {import("@cairn-ink/core/ports").CaptureKey} key */
+export function admissionScope(tx, key) {
+  const guarded = guardCaptureScope(tx, () => key?.scope);
+  return {
+    get owner() { return guarded.owner; },
+    copyKey() {
+      const { owner, namespace } = guarded.copyScope();
+      return copyCaptureKey(key, owner, namespace);
+    },
   };
 }
 
@@ -133,11 +151,6 @@ export function copyCaptureMessages(messages) {
     if (occurredAtMs !== null && !Number.isSafeInteger(occurredAtMs)) invalid();
     return { id, role, content, occurredAtMs };
   });
-}
-
-/** @param {readonly import("@cairn-ink/core/ports").CaptureMessage[]} messages */
-export function captureMessageTimes(messages) {
-  return copyCaptureMessages(messages).map(({ occurredAtMs }) => occurredAtMs);
 }
 
 /** @param {{code: string, retryable: boolean}} failure */
