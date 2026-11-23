@@ -105,17 +105,27 @@ test("memory lexical ties follow canonical UTF-8 order", async () => {
   assert.throws(() => assertCanonical(utf16Ties), /Lexical ties were not in canonical order/);
 });
 
-test("vector accepts a Float32Array query from another realm", async () => {
+test("vector validates the Float32Array brand across realms and custom tags", async () => {
   const { uow, memories, vector } = createMemoryAdapter({ capabilities: { semanticRetrieval: true } });
-  const query = runInNewContext("new Float32Array([1, 0])");
-  assert.equal(query instanceof Float32Array, false);
+  const crossRealm = runInNewContext("new Float32Array([1, 0])");
+  assert.equal(crossRealm instanceof Float32Array, false);
+  class TaggedFloat32Array extends Float32Array {
+    get [Symbol.toStringTag]() { return "CustomVector"; }
+  }
+  const taggedFloat64 = Object.defineProperty(new Float64Array([1, 0]), Symbol.toStringTag, { value: "Float32Array" });
   const { id } = await uow.run(scope.owner, {}, (tx) => memories.insert(tx, scope, {
     ...content, embedding: { model: "embed", vector: [1, 0] },
   }, [], 1));
-  const result = await uow.run(scope.owner, { readOnly: true }, (tx) =>
-    vector.vector(tx, readSet, query, "embed", 1));
-  assert.deepEqual(result.coverage, { eligible: 1, embedded: 1, complete: true });
-  assert.deepEqual(result.rows.map(({ ref, distance }) => [ref.id, distance]), [[id, 0]]);
+  await uow.run(scope.owner, { readOnly: true }, async (tx) => {
+    for (const query of [[1, 0], crossRealm, new TaggedFloat32Array([1, 0])]) {
+      const result = await vector.vector(tx, readSet, query, "embed", 1);
+      assert.deepEqual(result.coverage, { eligible: 1, embedded: 1, complete: true });
+      assert.deepEqual(result.rows.map(({ ref, distance }) => [ref.id, distance]), [[id, 0]]);
+    }
+    for (const query of [taggedFloat64, new Int32Array([1, 0]), new Uint32Array([1, 0])]) {
+      await assert.rejects(vector.vector(tx, readSet, query, "embed", 1), errorCode("invalid_input"));
+    }
+  });
 });
 
 test("recent pages past equal times and ids in different namespaces", async () => {

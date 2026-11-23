@@ -102,14 +102,15 @@ export const retrievalCases = [
         const refKey = (/** @type {ItemRef} */ ref) => JSON.stringify(projectRef(ref));
         const expected = new Set([a.ref, b.ref, c.ref].map(refKey));
         const full = await lexical.lexical(tx, readSet, "orchard", 10, {});
-        const capped = await lexical.lexical(tx, readSet, "orchard", 2, {});
-        for (const [depth, { rows, matched }] of /** @type {const} */ ([[10, full], [2, capped]])) {
+        for (const depth of [10, 2, 1]) {
+          const { rows, matched } = depth === 10 ? full : await lexical.lexical(tx, readSet, "orchard", depth, {});
           equal(matched, true, "Lexical did not report matches");
+          for (const { score } of rows) check(Number.isFinite(score), "Lexical score must be finite");
           const refs = new Set(rows.map(({ ref }) => refKey(ref)));
           if (depth === 10) {
             equal(refs, expected, "Lexical returned the wrong refs");
           } else {
-            equal(rows.length, depth, "Lexical depth did not return two matches");
+            equal(rows.length, depth, "Lexical depth returned the wrong number of matches");
             const cutoff = full.rows[depth - 1].score;
             const top = new Set(full.rows.filter(({ score }) => score >= cutoff).map(({ ref }) => refKey(ref)));
             check([...refs].every((ref) => top.has(ref)), "Lexical depth returned a ref below its score cutoff");
@@ -164,9 +165,17 @@ export const retrievalCases = [
       await hide(ctx, first, hidden.ref);
       await erase(ctx, second, erased.ref);
       const query = new Float32Array(ctx.vec(0));
+      /** @param {import("@cairn-ink/core/ports").Tx} tx @param {Float32Array} queryVector @param {number} depth */
+      const search = async (tx, queryVector, depth) => {
+        const result = await vector.vector(tx, readSet, queryVector, "test", depth);
+        for (const { distance } of result.rows) {
+          check(Number.isFinite(distance) && distance >= 0 && distance <= 2, "Vector distance must be finite and between 0 and 2");
+        }
+        return result;
+      };
 
       await uow.run(owner, { readOnly: true }, async (tx) => {
-        const { rows, coverage } = await vector.vector(tx, readSet, query, "test", 10);
+        const { rows, coverage } = await search(tx, query, 10);
         equal([coverage.eligible, coverage.embedded, coverage.complete], [5, 5, true], "Complete vector coverage");
         equal(rows.map(({ ref }) => projectRef(ref)), [near, ...tied, far].map(({ ref }) => projectRef(ref)),
           "Complete vector coverage returned the wrong refs");
@@ -178,7 +187,7 @@ export const retrievalCases = [
       }, 6009n);
 
       await uow.run(owner, { readOnly: true }, async (tx) => {
-        const result = await vector.vector(tx, readSet, query, "test", 10);
+        const result = await search(tx, query, 10);
         equal([result.coverage.eligible, result.coverage.embedded], [7, 5], "Vector eligible and embedded counts");
         equal(result.coverage.complete, false, "Incomplete vector coverage was reported complete");
         const expected = [near, ...tied, far];
@@ -188,14 +197,14 @@ export const retrievalCases = [
         for (const [i, candidate] of result.rows.entries()) {
           check(Math.abs(candidate.distance - distances[i]) < 1e-6, "Unexpected cosine distance");
         }
-        const capped = await vector.vector(tx, readSet, query, "test", 2);
+        const capped = await search(tx, query, 2);
         equal(capped.rows.map(({ ref }) => projectRef(ref)), expected.slice(0, 2).map(({ ref }) => projectRef(ref)),
           "Vector depth did not return the first two candidates");
         equal([capped.coverage.eligible, capped.coverage.embedded, capped.coverage.complete], [7, 5, false],
           "Vector depth changed coverage");
         const wider = new Float32Array(query.length + 1);
         wider.set(query);
-        const mismatch = await vector.vector(tx, readSet, wider, "test", 10);
+        const mismatch = await search(tx, wider, 10);
         equal([mismatch.coverage.eligible, mismatch.coverage.embedded, mismatch.coverage.complete], [7, 0, false],
           "Mismatched vector query coverage");
         equal(mismatch.rows.length, 0, "Mismatched vector query returned rows");
@@ -224,21 +233,23 @@ export const retrievalCases = [
 
       /** @param {string | null} cursor */
       const read = (cursor) => uow.run(owner, { readOnly: true }, (tx) => recent.recent(tx, readSet, { cursor, limit: 2 }));
-      const collect = async () => {
-        const firstPage = await read(null);
-        check(firstPage.nextCursor !== null, "Missing recent first-page continuation");
-        const secondPage = await read(firstPage.nextCursor);
-        check(secondPage.nextCursor !== null, "Missing recent second-page continuation");
-        const lastPage = await read(secondPage.nextCursor);
-        equal(lastPage.nextCursor, null, "Final recent page had a continuation");
-        const pages = [firstPage, secondPage, lastPage];
-        equal(pages.map(({ items }) => items.length), [2, 2, 1], "Recent page sizes");
-        return groupRecent(pages.flatMap(({ items }) => items.map(projectRecent)));
-      };
+      const readers = [[await read(null)], [await read(null)]];
+      for (const [index, missingCursor] of [
+        "Missing recent first-page continuation", "Missing recent second-page continuation",
+      ].entries()) {
+        for (const pages of readers) {
+          const { nextCursor } = pages[index];
+          check(nextCursor !== null, missingCursor);
+          pages.push(await read(nextCursor));
+        }
+      }
       const expected = groupRecent(visible.map(({ ref, updatedAtUs, text }) => [ref.id, ref.namespace, updatedAtUs, text]));
-      const seen = await collect();
-      equal(seen, expected, "Recent pages did not contain exactly the visible rows in order");
-      equal(await collect(), seen, "Recent re-read changed items");
+      for (const pages of readers) {
+        equal(pages[2].nextCursor, null, "Final recent page had a continuation");
+        equal(pages.map(({ items }) => items.length), [2, 2, 1], "Recent page sizes");
+        const seen = groupRecent(pages.flatMap(({ items }) => items.map(projectRecent)));
+        equal(seen, expected, "Recent pages did not contain exactly the visible rows in order");
+      }
       await rejects(() => read(""), "invalid_cursor");
       await rejects(() => read("%%%"), "invalid_cursor");
       await rejects(() => uow.run(owner, { readOnly: true }, (tx) =>

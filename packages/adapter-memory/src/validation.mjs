@@ -10,6 +10,11 @@ const origins = ["explicit", "inferred"];
 const sources = ["capture", "mcp", "web", "import", "plugin"];
 const roles = ["user", "assistant"];
 
+// The intrinsic getter reads the typed-array brand across realms and ignores custom tags.
+const typedArrayTag = Object.getOwnPropertyDescriptor(
+  Object.getPrototypeOf(Float32Array.prototype), Symbol.toStringTag,
+)?.get;
+
 /** @param {unknown} value */
 const nonempty = (value) => typeof value === "string" && value.length > 0;
 /** @param {unknown} value */
@@ -41,8 +46,7 @@ export function validateSource(source) {
 
 /** @param {number[] | Float32Array} vector */
 export function validateVector(vector) {
-  const float32 = ArrayBuffer.isView(vector) && !(vector instanceof DataView) &&
-    Object.prototype.toString.call(vector) === "[object Float32Array]";
+  const float32 = ArrayBuffer.isView(vector) && typedArrayTag?.call(vector) === "Float32Array";
   if (!(Array.isArray(vector) || float32) || vector.length === 0) invalid();
   for (const component of vector) {
     if (!Number.isFinite(component)) invalid();

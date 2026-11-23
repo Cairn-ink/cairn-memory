@@ -431,6 +431,32 @@ function lexicalAlwaysMatches(opened) {
   });
 }
 
+function lexicalWithScore(opened, score, onlyDepth) {
+  const { lexical } = opened.adapter;
+  return withPorts(opened, {
+    lexical: {
+      async lexical(tx, scope, query, depth, options) {
+        const result = await lexical.lexical(tx, scope, query, depth, options);
+        if (onlyDepth !== undefined && depth !== onlyDepth) return result;
+        return { ...result, rows: result.rows.map((row) => ({ ...row, score })) };
+      },
+    },
+  });
+}
+
+function vectorWithCappedNaNDistances(opened) {
+  const { vector } = opened.adapter;
+  return withPorts(opened, {
+    vector: {
+      async vector(tx, scope, query, model, depth) {
+        const result = await vector.vector(tx, scope, query, model, depth);
+        if (depth !== 2) return result;
+        return { ...result, rows: result.rows.map((row) => ({ ...row, distance: NaN })) };
+      },
+    },
+  });
+}
+
 function vectorSearchesAllOwnerNamespaces(opened) {
   const { memories, vector } = opened.adapter;
   const namespacesByOwner = new Map();
@@ -519,6 +545,25 @@ function recentUsesRunLocalCursors(opened) {
         const result = await recent.recent(tx, scope, page);
         if (result.nextCursor !== null) issuedBy.set(result.nextCursor, tx);
         return result;
+      },
+    },
+  });
+}
+
+function recentKeepsLatestCursor(opened) {
+  const { recent } = opened.adapter;
+  const latestByOwner = new Map();
+  let sequence = 0;
+  return withPorts(opened, {
+    recent: {
+      async recent(tx, scope, { cursor, limit }) {
+        const latest = latestByOwner.get(scope.owner);
+        if (cursor !== null && cursor !== latest?.issued) throw new CoreError("invalid_cursor");
+        const result = await recent.recent(tx, scope, { cursor: cursor === null ? null : latest.cursor, limit });
+        if (result.nextCursor === null) return result;
+        const issued = String(++sequence);
+        latestByOwner.set(scope.owner, { issued, cursor: result.nextCursor });
+        return { ...result, nextCursor: issued };
       },
     },
   });
@@ -725,7 +770,13 @@ function keepsVectorWhenOff(opened) {
 
 const retrievalRegressions = [
   ["widens the lexical read set", "K-RET-1", lexicalOutsideReadSet, /Lexical returned the wrong refs/],
+  ["returns infinite lexical scores", "K-RET-1", (opened) => lexicalWithScore(opened, Infinity),
+    /Lexical score must be finite/],
+  ["returns a NaN lexical score at depth one", "K-RET-1", (opened) => lexicalWithScore(opened, NaN, 1),
+    /Lexical score must be finite/],
   ["reports matched for an empty lexical result", "K-RET-2", lexicalAlwaysMatches, /empty lexical result reported a match/],
+  ["returns NaN distances for capped vector results", "K-RET-3", vectorWithCappedNaNDistances,
+    /Vector distance must be finite and between 0 and 2/],
   ["searches all namespaces of the owner for vectors", "K-RET-3", vectorSearchesAllOwnerNamespaces, /Complete vector coverage/],
   ["ignores the query width in vector search", "K-RET-3", vectorIgnoresLength, /Mismatched vector query coverage/],
   ["reports complete vector coverage with missing embeddings", "K-RET-3", vectorAlwaysComplete,
@@ -733,6 +784,7 @@ const retrievalRegressions = [
   ["ignores the query model in vector search", "K-RET-3", vectorIgnoresModel, /Vector eligible and embedded counts/],
   ["pages recent rows without an ID tie-break", "K-RET-9", recentTimeOnlyCursor, /Missing recent second-page continuation/],
   ["rejects recent cursors from another run", "K-RET-9", recentUsesRunLocalCursors, { code: "invalid_cursor" }],
+  ["keeps only the latest recent cursor per owner", "K-RET-9", recentKeepsLatestCursor, { code: "invalid_cursor" }],
   ["includes a hidden recent row", "K-RET-9", recentLeaksHiddenRow, /Recent pages did not contain exactly the visible rows in order/],
   ["ignores the owner revision in state tokens", "K-SNAP-1", snapshotIgnoresRevision, /Expected operation to reject/],
   ["always issues the initial state token", "K-SNAP-1", snapshotReturnsInitialToken, { code: "cursor_stale" }],
