@@ -146,8 +146,10 @@ test("full mode falls back to comparable digests when either shingle list is emp
   const incomparable = { ...disjoint, digests: [digest("hmac", "b", keyA.id)] };
   assertMiss(disjoint, textFact(short), keyA);
   assertMiss(short, textFact(disjoint), keyA);
-  assertMiss(disjoint, textFact(short), null);
-  assertMiss(short, textFact(disjoint), keyB);
+  for (const [candidate, fact, activeKey] of [[disjoint, textFact(short), null], [short, textFact(disjoint), keyB]]) {
+    assert.equal(blocksMemoryPassage([candidate], [fact], activeKey), false);
+    assert.equal(blocksMemoryPassage([candidate, candidate], [fact], activeKey), true);
+  }
   assertWithholds(reference, textFact(short), keyA);
   assertWithholds(short, textFact(reference), keyA);
   assertWithholds(incomparable, textFact(short), keyA);

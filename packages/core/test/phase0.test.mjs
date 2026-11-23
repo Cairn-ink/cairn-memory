@@ -91,6 +91,18 @@ test("factBody excludes owner and actionId and is key-order independent", () => 
   assert.ok(!a.includes("u1") && !a.includes("a1"));
 });
 
+for (const [field, value] of [["shingles", "aa"], ["embedding", 1]]) {
+  test(`SuppressionFact validation refuses inherited ${field} indices`, () => {
+    const text = { digests: [sha()], [field]: Object.setPrototypeOf(Array(1), [value]) };
+    const fact = { ...base, kind: "text", mode: "full", text };
+    assert.throws(() => validateSuppressionFact(fact), { code: "invalid_input" });
+    let reads = 0;
+    const accessor = Object.defineProperty(Array(1), 0, { get() { reads++; return value; } });
+    assert.throws(() => validateSuppressionFact({ ...fact, text: { ...text, [field]: accessor } }), { code: "invalid_input" });
+    assert.equal(reads, 0);
+  });
+}
+
 test("pinned decisions match the recorded product decisions", () => {
   assert.equal(NEAR_DUPLICATE_DISTANCE, 0.08);
   assert.deepEqual([...FORGET_POLICY.withoutKey], ["exact", "lineage"]);
