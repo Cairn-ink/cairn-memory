@@ -2,15 +2,16 @@
 // Proxies, functions and symbol values are refused with the entry's invalid code. Some engine entries accept stable Proxies.
 import { CoreError } from '../errors.mjs';
 import { QUALIFY_CANDIDATES_INLINE_PROMPT as system } from './generated/prompts.mjs';
-import { adapterFits, callModel, emitDiagnostic, MIN_CONTEXT_WINDOW } from './model-call.mjs';
+import { callModel, emitDiagnostic, MIN_CONTEXT_WINDOW, modelError } from './model-call.mjs';
 import { createQualificationTextCatalog } from './qualification-text-catalog.mjs';
 import { countTokens, fittingCap, MODEL_INPUT_TOKENS, MODEL_OUTPUT_TOKENS, modelRequestText, prefixUnits } from './request-size.mjs';
 import { boundedText } from '../privacy/text.mjs';
 import { validateQualificationInput, validateQualificationSources } from './claim-qualification-input.mjs';
 import { detach, fail, isWellFormedText, validateDenseArray, validateObject } from './validate.mjs';
+import { buildModelRequest } from './wire.mjs';
 
 /** @import { Role } from '../ports/common.d.ts' */
-/** @import { ModelPort } from '../ports/model.d.ts' */
+/** @import { ModelPort, ModelRequest, ModelStage } from '../ports/model.d.ts' */
 /** @import { QualificationItem, QualificationReport } from './automatic-qualification.mjs' */
 /** @import { Deadline, ModelCallOptions } from './model-call.mjs' */
 /** @typedef {ReturnType<typeof createQualificationCandidateSnapshot>} Snapshot */
@@ -231,23 +232,42 @@ function plan(model, snapshot, deadline, { onDiagnostic, qualificationInputMode 
   const all = snapshot.items.map((_, index) => index);
   const whole = { groups: [{ indices: all, snapshot, input: snapshot.input }], itemsShortened: 0, itemsUnqualified: 0 };
   deadline?.check();
-  if (typeof model?.call !== 'function' || !Number.isSafeInteger(model.contextWindow) ||
-      model.contextWindow < MIN_CONTEXT_WINDOW) return whole;
+  if (model == null || (typeof model !== 'object' && typeof model !== 'function')) return whole;
+  /** @type {((stage: ModelStage, request: ModelRequest) => unknown) | undefined} */
+  let adapterFit;
+  try {
+    adapterFit = /** @type {ModelPort & {fits?: typeof adapterFit}} */ (model).fits;
+  } catch { adapterFit = () => false; }
+  deadline?.check();
+  if (adapterFit === undefined && (typeof model.call !== 'function' ||
+      !Number.isSafeInteger(model.contextWindow) || model.contextWindow < MIN_CONTEXT_WINDOW)) return whole;
 
+  const rejectCount = () => {
+    deadline?.check();
+    emitDiagnostic(onDiagnostic, 'qualifyCandidates', 'core_call', 'token_count_unavailable');
+    fail('token_count_unavailable');
+  };
   /** @param {unknown} input */
   function fits(input) {
     deadline?.check();
     let logical;
     try { logical = countTokens(/** @type {ModelPort} */ (model), modelRequestText(system, input)); }
-    catch {
-      deadline?.check();
-      emitDiagnostic(onDiagnostic, 'qualifyCandidates', 'core_call', 'token_count_unavailable');
-      fail('token_count_unavailable');
-    } finally { deadline?.check(); }
+    catch { return rejectCount(); }
+    finally { deadline?.check(); }
     if (logical > MODEL_INPUT_TOKENS) return false;
-    const fitting = adapterFits(/** @type {ModelPort} */ (model), 'qualifyCandidates', request(input), qualificationInputMode);
-    deadline?.check();
-    return fitting;
+    if (adapterFit === undefined) return true;
+    try {
+      deadline?.check();
+      try {
+        const built = buildModelRequest('qualifyCandidates', request(input), { qualificationInputMode });
+        const result = adapterFit.call(model, built.stage, built.request);
+        if (typeof result === 'boolean') return result;
+        // Observe a rejected native promise if the adapter violates the sync contract.
+        if (result instanceof Promise) Promise.prototype.then.call(result, undefined, () => {});
+      } catch { /* Unavailable adapter sizing means the request does not fit. */ }
+      return false;
+    } catch { return rejectCount(); }
+    finally { deadline?.check(); }
   }
 
   if (fits(snapshot.input)) return whole;
@@ -255,6 +275,7 @@ function plan(model, snapshot, deadline, { onDiagnostic, qualificationInputMode 
   deadline?.check();
   if (useCatalog) {
     const catalog = catalogOf(snapshot.input, deadline);
+    deadline?.check();
     if (fits(catalog)) return { ...whole, groups: [{ indices: all, snapshot, input: catalog }] };
   }
 
@@ -271,6 +292,7 @@ function plan(model, snapshot, deadline, { onDiagnostic, qualificationInputMode 
     }
     if (useCatalog) {
       const catalog = catalogOf(local.input, deadline);
+      deadline?.check();
       if (fits(catalog)) {
         groups.push({ indices: [index], snapshot: local, input: catalog });
         continue;
@@ -301,12 +323,7 @@ async function qualifyBatch(model, items, deadline, report, options) {
   deadline?.check();
   const snapshot = createSnapshot(items);
   deadline?.check();
-  let planned;
-  try { planned = plan(model, snapshot, deadline, options); }
-  catch (error) {
-    if (error instanceof CoreError) throw error;
-    fail('invalid_model_output');
-  }
+  const planned = plan(model, snapshot, deadline, options);
   /** @type {Map<number, ReturnType<typeof compileSnapshot<Item>>[number]>} */
   const compiled = new Map();
   for (const group of planned.groups) {
@@ -349,22 +366,26 @@ async function qualifyBatch(model, items, deadline, report, options) {
  * @param {ModelCallOptions} [callOptions]
  */
 export async function qualifyCandidateItems(model, items, deadline, validateFresh, report = {}, callOptions = {}) {
-  const copied = detach(items, 'invalid_model_output');
-  /** @type {ModelCallOptions} */
-  const options = { ...callOptions, qualificationInputMode: callOptions.qualificationInputMode ?? 'adaptive-text-catalog-v1',
-    failureCode: 'qualification_failed', deadline,
-    validateFresh: validateFresh ?? callOptions.validateFresh };
-  if (!Array.isArray(copied)) fail('invalid_model_output');
-  if (copied.length <= 5) return qualifyBatch(model, copied, deadline, report, options);
-  validateDenseArray(copied, 1, 20);
-  const result = [];
-  report.itemsShortened = 0;
-  report.itemsUnqualified = 0;
-  for (let start = 0; start < copied.length; start += 5) {
-    const part = { itemsShortened: 0, itemsUnqualified: 0 };
-    result.push(...await qualifyBatch(model, copied.slice(start, start + 5), deadline, part, options));
-    report.itemsShortened += part.itemsShortened;
-    report.itemsUnqualified += part.itemsUnqualified;
+  try {
+    const copied = detach(items, 'invalid_model_output');
+    /** @type {ModelCallOptions} */
+    const options = { ...callOptions, qualificationInputMode: callOptions.qualificationInputMode ?? 'adaptive-text-catalog-v1',
+      failureCode: 'qualification_failed', deadline,
+      validateFresh: validateFresh ?? callOptions.validateFresh };
+    if (!Array.isArray(copied)) fail('invalid_model_output');
+    if (copied.length <= 5) return await qualifyBatch(model, copied, deadline, report, options);
+    validateDenseArray(copied, 1, 20);
+    const result = [];
+    report.itemsShortened = 0;
+    report.itemsUnqualified = 0;
+    for (let start = 0; start < copied.length; start += 5) {
+      const part = { itemsShortened: 0, itemsUnqualified: 0 };
+      result.push(...await qualifyBatch(model, copied.slice(start, start + 5), deadline, part, options));
+      report.itemsShortened += part.itemsShortened;
+      report.itemsUnqualified += part.itemsUnqualified;
+    }
+    return result;
+  } catch (error) {
+    throw modelError(error);
   }
-  return result;
 }

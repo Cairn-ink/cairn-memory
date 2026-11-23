@@ -4,7 +4,7 @@ import { detach } from './validate.mjs';
 import { buildModelRequest, decodeModelOutput } from './wire.mjs';
 
 /** @import { CallOptions, DiagnosticEvent, OwnerId } from '../ports/common.d.ts' */
-/** @import { ModelGate, ModelPort, ModelRequest, ModelStage } from '../ports/model.d.ts' */
+/** @import { ModelGate, ModelPort } from '../ports/model.d.ts' */
 /** @import { createCaptureDeadline } from './deadline.mjs' */
 /** @typedef {Parameters<typeof buildModelRequest>[0]} Method */
 /** @typedef {Parameters<typeof buildModelRequest>[1]} Request */
@@ -42,23 +42,24 @@ function callSignal(deadline, caller) {
   return { signal, timedOut };
 }
 
-/** @param {AbortSignal} signal @param {() => Promise<unknown>} invoke */
-async function untilAborted(signal, invoke) {
-  if (signal.aborted) throw signal.reason;
+/** @param {AbortSignal} signal @param {Promise<unknown>} pending */
+async function untilAborted(signal, pending) {
   /** @type {() => void} */
   let onAbort = () => {};
   const abort = new Promise((_, reject) => {
     onAbort = () => reject(signal.reason);
-    signal.addEventListener('abort', onAbort, { once: true });
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
   });
-  try { return await Promise.race([abort, invoke()]); }
+  try { return await Promise.race([abort, pending]); }
   finally { signal.removeEventListener('abort', onAbort); }
 }
 
-/** @param {unknown} error @param {ErrorCode} failureCode @returns {never} */
-function trustedFailure(error, failureCode) {
-  if (error instanceof CoreError) throw error;
-  throw new CoreError(failureCode);
+/** @param {unknown} error @param {ErrorCode} fallback */
+export function modelError(error, fallback = 'internal_error') {
+  try { if (error instanceof CoreError) return error; }
+  catch { /* A thrown proxy may trap the prototype lookup. */ }
+  return new CoreError(fallback);
 }
 
 /**
@@ -69,6 +70,12 @@ function trustedFailure(error, failureCode) {
  * @param {ModelCallOptions} [options]
  */
 export async function callModel(model, method, request, options = {}) {
+  try { return await call(model, method, request, options); }
+  catch (error) { throw modelError(error); }
+}
+
+/** @param {ModelPort | null | undefined} model @param {Method} method @param {Request} request @param {ModelCallOptions} options */
+async function call(model, method, request, options) {
   const { failureCode = method === 'extract' ? 'extraction_failed' : 'qualification_failed',
     deadline, validateFresh, beforeDispatch, gate, owner, signal: caller, onDiagnostic,
     qualificationInputMode } = options;
@@ -79,11 +86,35 @@ export async function callModel(model, method, request, options = {}) {
     report(method, 'core_call', reason);
     throw new CoreError(code);
   }
-  const check = () => { if (deadline?.expired()) reject('model_timeout'); };
+  let deadlineReported = false;
+  const check = () => {
+    if (!deadline?.expired()) return;
+    if (!deadlineReported) {
+      deadlineReported = true;
+      reject('model_timeout');
+    }
+    throw new CoreError('model_timeout');
+  };
   /** @param {(() => void) | undefined} hook */
   const runHook = (hook) => {
     try { hook?.(); }
-    catch (error) { check(); trustedFailure(error, failureCode); }
+    catch (error) { throw modelError(error, failureCode); }
+  };
+  // The engine rechecks the deadline when a dispatch-path clock read fails.
+  /** @param {unknown} error @returns {never} */
+  function dispatchFailure(error) {
+    check();
+    if (error instanceof CoreError && error.code === 'model_timeout') throw error;
+    return reject(failureCode, 'provider_failure');
+  }
+  const checkDispatch = () => {
+    try { check(); }
+    catch (error) { dispatchFailure(error); }
+  };
+  /** @param {(() => void) | undefined} hook */
+  const runDispatchHook = (hook) => {
+    try { runHook(hook); }
+    catch (error) { check(); throw error; }
   };
   /** @param {string} text */
   const tokens = (text) => {
@@ -95,14 +126,9 @@ export async function callModel(model, method, request, options = {}) {
       throw new CoreError('token_count_unavailable');
     } finally { check(); }
   };
-  /** @param {Parameters<ModelGate['assertOpen']>[1]} phase */
-  const assertOpen = async (phase) => {
-    try { await gate?.assertOpen(/** @type {OwnerId} */ (owner), phase); }
-    catch (error) { trustedFailure(error, failureCode); }
-  };
-
   check();
   const args = detach(request, 'invalid_input');
+  if (args == null) throw new CoreError('invalid_input');
   /** @type {ModelPort['call'] | undefined} */
   let provider;
   try { provider = model?.call; }
@@ -116,28 +142,26 @@ export async function callModel(model, method, request, options = {}) {
     reject('context_budget_exceeded');
   }
 
-  if (gate) await assertOpen('pre-send');
+  const gateOwner = /** @type {OwnerId} */ (owner);
+  if (gate) {
+    try { await gate.assertOpen(gateOwner, 'pre-send'); }
+    catch (error) { throw modelError(error, failureCode); }
+  }
   const { system, input, maxOutputTokens } = args;
   let sizingText;
   try { sizingText = modelRequestText(system, input, maxOutputTokens); }
   catch { throw new CoreError('invalid_input'); }
   if (tokens(sizingText) > MODEL_INPUT_TOKENS) reject('context_budget_exceeded');
   check();
-  const built = buildModelRequest(method, args, { qualificationInputMode, report });
-
-  // A counter can queue a freshness change before the provider invocation.
-  await Promise.resolve();
-  check();
-  runHook(validateFresh);
-  check();
-  runHook(beforeDispatch);
-  check();
 
   let boundary;
   try { boundary = callSignal(deadline, caller); }
   catch (error) {
-    if (error instanceof CoreError && error.code === 'model_timeout') return reject('model_timeout');
-    return trustedFailure(error, failureCode);
+    if (error instanceof CoreError && error.code === 'model_timeout') {
+      check();
+      return reject('model_timeout');
+    }
+    return dispatchFailure(error);
   }
   const { signal, timedOut } = boundary;
   const checkAbort = () => {
@@ -145,28 +169,41 @@ export async function callModel(model, method, request, options = {}) {
     // The cancellation diagnostic is stable while the error code is pending.
     if (signal.aborted) reject('internal_error', 'model_cancelled');
   };
-  if (gate) {
-    await assertOpen('dispatch');
-    check();
-  }
-  checkAbort();
+  // A counter can queue a freshness change before the provider invocation.
+  await Promise.resolve();
+  checkDispatch();
+  const built = buildModelRequest(method, args, { qualificationInputMode, report });
+  checkDispatch();
+  runDispatchHook(validateFresh);
+  checkDispatch();
+  runDispatchHook(beforeDispatch);
 
   let output;
   let providerError;
   let failed = false;
+  /** @type {CallOptions} */
+  const portOptions = { signal, onDiagnostic: onDiagnostic && (event => notify(onDiagnostic, event)) };
+  if (gate) {
+    try { await gate.assertOpen(gateOwner, 'dispatch'); }
+    catch (error) { throw modelError(error, failureCode); }
+  }
+  checkAbort();
   try {
-    output = await untilAborted(signal, async () => provider.call(model, built.stage, built.request,
-      { signal, onDiagnostic: onDiagnostic && (event => notify(onDiagnostic, event)) }));
+    const pending = Reflect.apply(provider, model, [built.stage, built.request, portOptions]);
+    output = await untilAborted(signal, pending);
   } catch (error) {
     failed = true;
     providerError = error;
   } finally {
-    if (gate) await assertOpen('post-send');
+    if (gate) {
+      try { await gate.assertOpen(gateOwner, 'post-send'); }
+      catch (error) { throw modelError(error, failureCode); }
+    }
   }
 
-  check();
-  checkAbort();
   if (failed) {
+    check();
+    checkAbort();
     let code, name;
     let adapterError;
     try {
@@ -185,11 +222,20 @@ export async function callModel(model, method, request, options = {}) {
     reject(failureCode, 'provider_failure');
   }
 
-  let text;
+  checkAbort();
   try {
     output = structuredClone(output);
-    text = JSON.stringify(output);
   } catch {
+    check();
+    runHook(validateFresh);
+    check();
+    return reject('invalid_model_output', 'output_serialization');
+  }
+  check(); // Provider result materialized.
+  check(); // Next, the engine fences serialization.
+  let text;
+  try { text = JSON.stringify(output); }
+  catch {
     check();
     runHook(validateFresh);
     return reject('invalid_model_output', 'output_serialization');
@@ -212,24 +258,4 @@ export async function callModel(model, method, request, options = {}) {
   runHook(validateFresh);
   check();
   return decoded;
-}
-
-/**
- * The optional synchronous adapter hook sees the request it would send.
- * @param {ModelPort} model
- * @param {Method} method
- * @param {Request} request
- * @param {InputMode} qualificationInputMode
- */
-export function adapterFits(model, method, request, qualificationInputMode) {
-  try {
-    const fit = /** @type {ModelPort & {fits?: (stage: ModelStage, request: ModelRequest) => boolean}} */ (model).fits;
-    if (fit === undefined) return true;
-    const built = buildModelRequest(method, request, { qualificationInputMode });
-    const result = /** @type {unknown} */ (fit.call(model, built.stage, built.request));
-    if (typeof result === 'boolean') return result;
-    // A port that violates the synchronous contract can still reject.
-    if (result instanceof Promise) Promise.prototype.then.call(result, undefined, () => {});
-  } catch { /* Unavailable adapter sizing means the request does not fit. */ }
-  return false;
 }

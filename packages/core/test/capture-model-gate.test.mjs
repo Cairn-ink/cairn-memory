@@ -40,6 +40,39 @@ test('gate fences request sizing, dispatch and output use in order', async () =>
     'post-send', 'fresh', 'count', 'fresh']);
 });
 
+for (const [pauseFrom, expected, calls] of [
+  ['pre-send', ['pre-send:open', 'paused', 'dispatch:closed'], 0],
+  ['dispatch', ['pre-send:open', 'dispatch:open', 'call:open', 'paused', 'post-send:closed'], 1],
+]) {
+  test('a two-microtask pause queued at ' + pauseFrom + ' cannot slip between dispatch and call', async () => {
+    const trace = [];
+    let open = true;
+    let outbound = 0;
+    let inspections = 0;
+    const observe = phase => trace.push(phase + (open ? ':open' : ':closed'));
+    const gate = { async assertOpen(givenOwner, phase) {
+      assert.equal(givenOwner, owner);
+      observe(phase);
+      if (!open) throw new CoreError('capture_evidence_closed');
+      if (phase === pauseFrom) queueMicrotask(() => queueMicrotask(() => {
+        open = false;
+        trace.push('paused');
+      }));
+    } };
+    const model = { contextWindow: 8192, countTokens: () => 1, async call() {
+      outbound++;
+      observe('call');
+      return { get items() { inspections++; return []; } };
+    } };
+    await assert.rejects(callModel(model, 'extract', request, { owner, gate }), {
+      code: 'capture_evidence_closed',
+    });
+    assert.deepEqual(trace, expected);
+    assert.equal(outbound, calls);
+    assert.equal(inspections, 0);
+  });
+}
+
 for (const [phase, expected, calls] of [
   ['pre-send', ['pre-send'], 0],
   ['dispatch', ['pre-send', 'count', 'dispatch'], 0],

@@ -1,7 +1,6 @@
-import { CoreError } from '../errors.mjs';
 import { validateQualificationInput, validateQualificationSources } from './claim-qualification-input.mjs';
 import { QUALIFY_MEMORIES_PROMPT as system } from './generated/prompts.mjs';
-import { adapterFits, callModel, emitDiagnostic, MIN_CONTEXT_WINDOW } from './model-call.mjs';
+import { callModel, emitDiagnostic, MIN_CONTEXT_WINDOW, modelError } from './model-call.mjs';
 import { fittingCap, MODEL_OUTPUT_TOKENS, prefixUnits, requestFits } from './request-size.mjs';
 import { detach, fail, validateDenseArray, validateObject } from './validate.mjs';
 
@@ -14,13 +13,15 @@ import { detach, fail, validateDenseArray, validateObject } from './validate.mjs
 
 /** @param {readonly Entry<QualificationItem>[]} group */
 function request(group) {
-  return { system, maxOutputTokens: MODEL_OUTPUT_TOKENS, input: { items: group.map(({ item, cap }, itemIndex) => ({
-    itemIndex, content: item.content, kind: item.kind,
-    sources: item.receipts.map(({ role, excerpt }, receiptIndex) => {
-      const shown = prefixUnits(excerpt, cap);
-      return { receiptIndex, role, excerpt: shown, ...(shown === excerpt ? {} : { excerptShortened: true }) };
-    }),
-  })) } };
+  try {
+    return { system, maxOutputTokens: MODEL_OUTPUT_TOKENS, input: { items: group.map(({ item, cap }, itemIndex) => ({
+      itemIndex, content: item.content, kind: item.kind,
+      sources: item.receipts.map(({ role, excerpt }, receiptIndex) => {
+        const shown = prefixUnits(excerpt, cap);
+        return { receiptIndex, role, excerpt: shown, ...(shown === excerpt ? {} : { excerptShortened: true }) };
+      }),
+    })) } };
+  } catch { fail('invalid_model_output'); }
 }
 
 /**
@@ -30,8 +31,7 @@ function request(group) {
  * @param {Deadline | undefined} deadline
  * @param {ModelCallOptions} options
  */
-function plan(model, items, deadline, options) {
-  const { onDiagnostic, qualificationInputMode } = options;
+function plan(model, items, deadline, { onDiagnostic }) {
   const all = items.map((item, index) => ({ index, item, cap: Infinity }));
   if (typeof model?.call !== 'function' || !Number.isSafeInteger(model.contextWindow) ||
       model.contextWindow < MIN_CONTEXT_WINDOW) return { groups: [all], itemsUnqualified: 0 };
@@ -41,10 +41,7 @@ function plan(model, items, deadline, options) {
   /** @param {Entry<Item>[]} group */
   const fits = (group) => {
     const args = request(group);
-    if (!countFits(args.system, args.input)) return false;
-    const result = adapterFits(model, 'qualify', args, qualificationInputMode);
-    deadline?.check();
-    return result;
+    return countFits(args.system, args.input);
   };
   if (fits(all)) return { groups: [all], itemsUnqualified: 0 };
   const groups = [];
@@ -70,20 +67,11 @@ function plan(model, items, deadline, options) {
  */
 async function qualifyBatch(model, items, deadline, report, options) {
   deadline?.check();
-  let planned;
-  try { planned = plan(model, items, deadline, options); }
-  catch (error) {
-    if (error instanceof CoreError) throw error;
-    fail('invalid_model_output');
-  }
-  const { groups, itemsUnqualified } = planned;
+  const { groups, itemsUnqualified } = plan(model, items, deadline, options);
   /** @type {Map<number, ReturnType<typeof validateQualificationInput>>} */
   const qualifications = new Map();
   for (const group of groups) {
-    let args;
-    try { args = request(group); }
-    catch { fail('invalid_model_output'); }
-    const output = await callModel(model, 'qualify', args, options);
+    const output = await callModel(model, 'qualify', request(group), options);
     try {
       const { qualifications: raw } = validateObject(output, ['qualifications']);
       const entries = validateDenseArray(raw, group.length, group.length);
@@ -122,19 +110,25 @@ async function qualifyBatch(model, items, deadline, report, options) {
  * @param {ModelCallOptions} [callOptions]
  */
 export async function qualifyExtractedItems(model, items, deadline, report = {}, validateFresh, callOptions = {}) {
-  const copied = detach(items, 'invalid_input');
-  const options = { ...callOptions, failureCode: /** @type {const} */ ('qualification_failed'), deadline, validateFresh: validateFresh ?? callOptions.validateFresh };
-  if (!Array.isArray(copied)) fail('invalid_input');
-  if (copied.length <= 5) return qualifyBatch(model, copied, deadline, report, options);
-  validateDenseArray(copied, 1, 20);
-  const result = [];
-  report.itemsShortened = 0;
-  report.itemsUnqualified = 0;
-  for (let start = 0; start < copied.length; start += 5) {
-    const part = { itemsShortened: 0, itemsUnqualified: 0 };
-    result.push(...await qualifyBatch(model, copied.slice(start, start + 5), deadline, part, options));
-    report.itemsShortened += part.itemsShortened;
-    report.itemsUnqualified += part.itemsUnqualified;
+  try {
+    const copied = detach(items, 'invalid_input');
+    /** @type {ModelCallOptions} */
+    const options = { ...callOptions, failureCode: 'qualification_failed', deadline,
+      validateFresh: validateFresh ?? callOptions.validateFresh };
+    if (!Array.isArray(copied)) fail('invalid_input');
+    if (copied.length <= 5) return await qualifyBatch(model, copied, deadline, report, options);
+    validateDenseArray(copied, 1, 20);
+    const result = [];
+    report.itemsShortened = 0;
+    report.itemsUnqualified = 0;
+    for (let start = 0; start < copied.length; start += 5) {
+      const part = { itemsShortened: 0, itemsUnqualified: 0 };
+      result.push(...await qualifyBatch(model, copied.slice(start, start + 5), deadline, part, options));
+      report.itemsShortened += part.itemsShortened;
+      report.itemsUnqualified += part.itemsUnqualified;
+    }
+    return result;
+  } catch (error) {
+    throw modelError(error);
   }
-  return result;
 }

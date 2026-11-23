@@ -11,11 +11,16 @@ if (!engineDir) {
 }
 
 const load = path => import(pathToFileURL(resolve(engineDir, path)));
-const [{ callModel }, { qualifyExtractedItems }, { qualifyCandidateItems }, { MemoryStoreError }] = await Promise.all([
+const [
+  { callModel }, { qualifyExtractedItems }, { qualifyCandidateItems }, { MemoryStoreError },
+  { createOpenAIModel }, { extractionOutputTokens },
+] = await Promise.all([
   load('core/model-call.mjs'),
   load('core/automatic-qualification.mjs'),
   load('core/qualification-candidates.mjs'),
   load('core/validation.mjs'),
+  load('adapters/openai/index.mjs'),
+  load('core/capture-input.mjs'),
 ]);
 
 const extractRequest = { system: 'Extract synthetic facts.', input: { messages: [
@@ -49,6 +54,39 @@ const six = Array.from({ length: 6 }, (_, i) => item(i, 'Cedar tea is good.'));
 const duplicate = structuredClone(short);
 duplicate[0].receipts.push(structuredClone(duplicate[0].receipts[0]));
 const cases = [];
+
+async function recordWire(method, request) {
+  const bodies = [];
+  const model = createOpenAIModel({
+    apiKey: 'synthetic',
+    async fetchImpl(url, { body }) {
+      const parsed = JSON.parse(body);
+      bodies.push(body);
+      if (new URL(url).pathname.endsWith('/input_tokens')) {
+        return Response.json({ object: 'response.input_tokens', input_tokens: 1 });
+      }
+      return Response.json({
+        object: 'response', model: parsed.model, status: 'completed', error: null, incomplete_details: null,
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+        output: [{ type: 'message', role: 'assistant', status: 'completed',
+          content: [{ type: 'output_text', text: '{}' }] }],
+      });
+    },
+  });
+  await model[method]({ ...request, signal: new AbortController().signal });
+  assert.equal(bodies.length, 2);
+  const body = JSON.parse(bodies[1]);
+  return { request: { system: body.instructions, input: JSON.parse(body.input[0].content[0].text),
+    schema: body.text.format.schema, schemaName: body.text.format.name, maxOutputTokens: body.max_output_tokens },
+  logicalTokens: model.countTokens(JSON.stringify(request)), countBodyTokens: model.countTokens(bodies[0]) };
+}
+
+// The guarded engine call sends 1024. The engine adapter also accepts the
+// allowance derived from the message count. Record that wire request directly.
+const sixMessages = Array.from({ length: 6 }, (_, index) => ({ ...extractRequest.input.messages[0], index }));
+const extractionAllowance = await recordWire('extract', { system: extractRequest.system,
+  input: { messages: sixMessages }, maxOutputTokens: extractionOutputTokens(sixMessages) });
+assert.equal(extractionAllowance.request.maxOutputTokens, 1229);
 
 function runCall(name, script, expectedCode) {
   cases.push({ name, operation: 'call', method: 'extract', request: extractRequest, script, expectedCode });
@@ -87,8 +125,13 @@ runCall('deferred freshness refuses', { freshFailsAt: 2 }, 'capture_evidence_clo
 runCall('durable dispatch refuses', { dispatchFails: true }, 'capture_evidence_closed');
 runCall('output freshness refuses', { freshFailsAt: 3 }, 'capture_evidence_closed');
 runCall('final freshness refuses', { freshFailsAt: 4 }, 'capture_evidence_closed');
+for (const position of [1, 2, 3, 4]) {
+  runCall('freshness refuses and expires the deadline at check ' + position,
+    { freshFailsAt: position, expireWithFresh: true }, position === 2 ? 'model_timeout' : 'capture_evidence_closed');
+}
 
 automatic('one group', short, {});
+automatic('adapter fit refusal is ignored', short, { fit: 'false' });
 automatic('split whole request into singletons', pair, { itemLimit: 1 });
 automatic('shorten excerpt across a surrogate pair', pair, { textLimit: 141 });
 automatic('item below the minimum fit stays unqualified', pair, { textLimit: 119 });
@@ -99,6 +142,23 @@ automatic('partial counters survive a second-batch failure', six,
 automatic('stage validation rejects distant anchors', short, { output: 'wrong anchor' }, 'invalid_model_output');
 automatic('planner cannot count tokens', short, { counter: 'input throw' }, 'token_count_unavailable');
 automatic('missing adapter reaches the guard', short, { provider: 'missing' }, 'model_not_configured');
+
+for (const [itemsCount, receiptsCount, units, logicalTokens, countBodyTokens] of [
+  [3, 3, 250, 4940, 6240],
+  [1, 4, 652, 5499, 6005],
+]) {
+  const excerpt = Array.from({ length: units }, (_, i) => String.fromCharCode(0x4e00 + (i * 7919) % 20000)).join('');
+  const items = Array.from({ length: itemsCount }, (_, i) => item(i, excerpt, 'Sample ' + i, receiptsCount));
+  const name = 'CJK ' + itemsCount + ' × ' + receiptsCount + ' receipts of ' + units + ' units';
+  // Use the engine's sent request to measure the real adapter envelope once.
+  const { requests, report } = await observe({ name, operation: 'automatic', method: 'qualify', items, script: {} });
+  assert.equal(requests.length, 1);
+  assert.deepEqual(report, { itemsShortened: 0, itemsUnqualified: 0 });
+  const wire = await recordWire('qualify', requests[0]);
+  assert.equal(wire.logicalTokens, logicalTokens);
+  assert.equal(wire.countBodyTokens, countBodyTokens);
+  automatic(name, items, { fit: 'false', inputCount: logicalTokens, countBodyTokens });
+}
 
 candidates('fits accepts inline', short, { fit: 'true' });
 candidates('absent fits uses the logical count', short, {});
@@ -162,13 +222,20 @@ function valueFor(method, input, script) {
   }) };
 }
 
-async function observe({ expectedCode, ...golden }) {
+async function observe({ expectedCode, ...golden }, clockFaultAt) {
   const { operation, method, request, items, script, name } = golden;
   const requests = [], outputs = [], diagnostics = [], trace = [], sizing = [];
   let expired = script.expireAt === 'entry';
   let freshCalls = 0;
-  const deadline = { expired: () => expired, remainingMs: () => 30_000,
-    check() { if (expired) throw new MemoryStoreError('model_timeout'); } };
+  let clockReads = 0;
+  const clockFault = new Error('synthetic clock fault');
+  const readClock = phase => {
+    if (script.expireWithFresh) trace.push('deadline ' + phase);
+    if (++clockReads === clockFaultAt) throw clockFault;
+    return expired;
+  };
+  const deadline = { expired: () => readClock('expired'), remainingMs: () => { readClock('remaining'); return 30_000; },
+    check() { if (readClock('check')) throw new MemoryStoreError('model_timeout'); } };
   const model = {
     contextWindow: script.contextWindow ?? 8192,
     onDiagnostic({ version, stage, layer, reason }) {
@@ -208,7 +275,10 @@ async function observe({ expectedCode, ...golden }) {
   const report = {};
   const validateFresh = () => {
     trace.push('fresh');
-    if (++freshCalls === script.freshFailsAt) throw new MemoryStoreError('capture_evidence_closed');
+    if (++freshCalls === script.freshFailsAt) {
+      if (script.expireWithFresh) expired = true;
+      throw new MemoryStoreError('capture_evidence_closed');
+    }
   };
   const beforeDispatch = () => {
     trace.push('before dispatch');
@@ -223,15 +293,39 @@ async function observe({ expectedCode, ...golden }) {
     else result = await qualifyCandidateItems(model, items, deadline, validateFresh, false, report);
     expected = { result };
   } catch (error) {
-    assert.ok(error instanceof MemoryStoreError, name);
-    expected = { errorCode: error.code };
+    if (clockFaultAt && error === clockFault) expected = { foreignClockFault: true };
+    else {
+      assert.ok(error instanceof MemoryStoreError, name);
+      expected = { errorCode: error.code };
+    }
   }
+  if (clockFaultAt !== undefined) return { clockReads, ...expected, diagnostics };
   assert.equal(expected.errorCode, expectedCode, name);
   return { ...golden, requests, outputs, callCount: requests.length, diagnostics, expected, report, trace, sizing };
 }
 
 const results = [];
 for (const golden of cases) results.push(await observe(golden));
-const serialized = JSON.stringify({ cases: results }, null, 2) + '\n';
+const clockFaults = [];
+for (const name of [
+  'success at both token limits',
+  'one group',
+  'shorten excerpt across a surrogate pair',
+  'absent fits uses the logical count',
+  'fits accepts inline',
+  'adapter fit selects singleton text catalogs',
+  'shorten candidates across a surrogate pair',
+]) {
+  const golden = cases.find(entry => entry.name === name);
+  const { clockReads } = await observe(golden, 0);
+  const faults = [];
+  for (let read = 1; read <= clockReads; read++) {
+    const { errorCode, foreignClockFault, diagnostics } = await observe(golden, read);
+    assert.ok(errorCode || foreignClockFault);
+    faults.push({ errorCode, foreignClockFault, diagnostics });
+  }
+  clockFaults.push({ name, operation: golden.operation, faults });
+}
+const serialized = JSON.stringify({ cases: results, extractionAllowance: extractionAllowance.request, clockFaults }, null, 2) + '\n';
 assert.ok(Buffer.byteLength(serialized) < 1_000_000);
 writeFileSync(new URL('../../packages/core/test/fixtures/capture/engine-model-goldens.json', import.meta.url), serialized);

@@ -3,13 +3,15 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { qualifyExtractedItems } from '../src/capture/automatic-qualification.mjs';
+import { createCaptureDeadline } from '../src/capture/deadline.mjs';
 import { callModel } from '../src/capture/model-call.mjs';
 import { qualifyCandidateItems } from '../src/capture/qualification-candidates.mjs';
 import { buildModelRequest } from '../src/capture/wire.mjs';
 import { CoreError } from '../src/errors.mjs';
 
-const { cases } = JSON.parse(readFileSync(new URL('./fixtures/capture/engine-model-goldens.json', import.meta.url), 'utf8'));
-assert.equal(cases.length, 53);
+const { cases, extractionAllowance, clockFaults } =
+  JSON.parse(readFileSync(new URL('./fixtures/capture/engine-model-goldens.json', import.meta.url), 'utf8'));
+assert.equal(cases.length, 60);
 const catalogMode = 'adaptive-text-catalog-v1';
 
 function outputFor(method, script, logical) {
@@ -83,19 +85,34 @@ function scriptedModel(golden, trace, state, calls) {
   return model;
 }
 
+function runGolden(golden, model, deadline, report, validateFresh, options) {
+  const { operation, method, request, items } = golden;
+  if (operation === 'call') return callModel(model, method, request,
+    { ...options, failureCode: 'extraction_failed', deadline, validateFresh });
+  if (operation === 'automatic') return qualifyExtractedItems(model, items, deadline, report, validateFresh, options);
+  return qualifyCandidateItems(model, items, deadline, validateFresh, report, options);
+}
+
 for (const golden of cases) {
   test(golden.operation + ' / ' + golden.name, async () => {
-    const { operation, method, request, items, script } = golden;
+    const { method, items, script } = golden;
     const trace = [], diagnostics = [], report = {};
     const calls = { requests: [], options: [], fitChecks: [], sizing: [] };
     const state = { expired: script.expireAt === 'entry' };
-    const deadline = { expired: () => state.expired, remainingMs: () => 30_000,
+    const readClock = phase => {
+      if (script.expireWithFresh) trace.push('deadline ' + phase);
+      return state.expired;
+    };
+    const deadline = { expired: () => readClock('expired'), remainingMs: () => { readClock('remaining'); return 30_000; },
       check() { if (state.expired) throw new CoreError('model_timeout'); } };
     const model = scriptedModel(golden, trace, state, calls);
     let freshCalls = 0;
     const validateFresh = () => {
       trace.push('fresh');
-      if (++freshCalls === script.freshFailsAt) throw new CoreError('capture_evidence_closed');
+      if (++freshCalls === script.freshFailsAt) {
+        if (script.expireWithFresh) state.expired = true;
+        throw new CoreError('capture_evidence_closed');
+      }
     };
     const beforeDispatch = () => {
       trace.push('before dispatch');
@@ -104,13 +121,9 @@ for (const golden of cases) {
     const onDiagnostic = event => {
       diagnostics.push(event);
     };
-    const options = { onDiagnostic, qualificationInputMode: catalogMode };
-    const run = () => {
-      if (operation === 'call') return callModel(model, method, request,
-        { ...options, failureCode: 'extraction_failed', deadline, validateFresh, beforeDispatch });
-      if (operation === 'automatic') return qualifyExtractedItems(model, items, deadline, report, validateFresh, options);
-      return qualifyCandidateItems(model, items, deadline, validateFresh, report, options);
-    };
+    const options = { onDiagnostic, qualificationInputMode: catalogMode,
+      beforeDispatch: golden.operation === 'call' ? beforeDispatch : undefined };
+    const run = () => runGolden(golden, model, deadline, report, validateFresh, options);
 
     let expectedDiagnostics = golden.diagnostics;
     let expectedTrace = golden.trace;
@@ -157,6 +170,59 @@ for (const golden of cases) {
     assert.deepEqual(calls.fitChecks, trace.filter(step => step === 'fits').map(() => ({
       stage: 'qualify', schemaName: 'cairn_qualifyCandidates', hasSchema: true,
     })));
+    if (golden.operation === 'automatic' && script.fit === 'false') {
+      assert.equal(calls.fitChecks.length, 0);
+      assert.equal(calls.requests.length, 1);
+      assert.deepEqual(calls.requests.map(({ request: { system, input, maxOutputTokens } }) =>
+        ({ system, input, maxOutputTokens })), golden.requests);
+      assert.deepEqual(report, { itemsShortened: 0, itemsUnqualified: 0 });
+    }
+  });
+}
+
+for (const { name, operation, faults } of clockFaults) {
+  test(operation + ' / clock faults at every deadline read in ' + name, async () => {
+    const golden = cases.find(entry => entry.name === name && entry.operation === operation);
+    let reads;
+    function run(faultAt, diagnostics) {
+      reads = -1; // The timestamp used to create the deadline precedes the entry.
+      const deadline = createCaptureDeadline(30_000, { monotonicMs() {
+        if (++reads === faultAt) throw new Error('synthetic clock fault');
+        return 0;
+      } });
+      const calls = { requests: [], options: [], fitChecks: [], sizing: [] };
+      const model = scriptedModel(golden, [], {}, calls);
+      return runGolden(golden, model, deadline, {}, undefined, {
+        onDiagnostic: event => diagnostics.push(event), qualificationInputMode: catalogMode,
+      });
+    }
+    assert.deepEqual(await run(-1, []), golden.expected.result);
+    assert.equal(reads, faults.length);
+    for (const [index, { errorCode, foreignClockFault, diagnostics }] of faults.entries()) {
+      const actualDiagnostics = [];
+      const code = foreignClockFault ? 'internal_error' : errorCode;
+      await assert.rejects(run(index + 1, actualDiagnostics),
+        error => error instanceof CoreError && error.code === code && error.message === code, 'deadline read ' + (index + 1));
+      assert.deepEqual(actualDiagnostics, diagnostics.map(event => ({ version: 1, ...event })), 'deadline read ' + (index + 1));
+    }
+  });
+}
+
+for (const [operation, invalidCode] of [
+  ['call', 'invalid_input'], ['automatic', 'invalid_input'], ['candidates', 'invalid_model_output'],
+]) {
+  test(operation + ' / malformed request and unavailable counter produce CoreError', async () => {
+    const golden = cases.find(entry => entry.operation === operation);
+    let outbound = 0;
+    const model = { contextWindow: 8192, countTokens() { throw new Error('synthetic counter fault'); },
+      async call() { outbound++; } };
+    for (const invalid of [null, undefined]) {
+      await assert.rejects(runGolden({ ...golden, request: invalid, items: invalid }, model),
+        error => error instanceof CoreError && error.code === invalidCode);
+    }
+    await assert.rejects(runGolden(golden, model),
+      error => error instanceof CoreError && error.code === 'token_count_unavailable');
+    assert.equal(outbound, 0);
   });
 }
 
@@ -220,45 +286,25 @@ test('qualification entry snapshots all batches before the first provider call',
   }
 });
 
-test('extraction sizes the supplied output allowance and keeps the engine output cap', async () => {
-  const { request } = cases[0];
-  const messages = Array.from({ length: 6 }, (_, index) => ({ ...request.input.messages[0], index }));
-  const args = { ...request, input: { messages }, maxOutputTokens: 1229 };
+test('1,229-token extraction matches the recorded engine wire and keeps the engine output cap', async () => {
+  const { system, input, maxOutputTokens } = extractionAllowance;
+  assert.equal(maxOutputTokens, 1229);
+  const args = structuredClone({ system, input, maxOutputTokens });
   const texts = [];
+  const sent = [];
   const model = {
     contextWindow: 8192,
     countTokens(text) { texts.push(text); return texts.length === 1 ? 1 : 1025; },
-    async call(_stage, built) {
-      assert.deepEqual(built, buildModelRequest('extract', args).request);
+    async call(stage, built) {
+      sent.push({ stage, request: built });
+      args.input.messages[0].content = 'Changed after dispatch.';
       return { items: [] };
     },
   };
   await assert.rejects(callModel(model, 'extract', args), { code: 'invalid_model_output' });
-  assert.deepEqual(texts, [JSON.stringify(args), '{"items":[]}']);
-});
-
-test('automatic qualification also requires an optional adapter fit after core sizing', async () => {
-  const { items } = cases.find(entry => entry.operation === 'automatic');
-  const report = {};
-  let counted = 0;
-  let fits = 0;
-  let outbound = 0;
-  const model = {
-    contextWindow: 8192,
-    countTokens() { counted++; return 1; },
-    fits(stage, request) {
-      fits++;
-      assert.equal(stage, 'qualify');
-      assert.equal(request.schemaName, 'cairn_qualify');
-      return false;
-    },
-    async call() { outbound++; },
-  };
-  assert.deepEqual(await qualifyExtractedItems(model, items, undefined, report), items);
-  assert.equal(counted, 3);
-  assert.equal(fits, counted);
-  assert.equal(outbound, 0);
-  assert.deepEqual(report, { itemsShortened: 0, itemsUnqualified: 1 });
+  assert.equal(sent[0]?.request.schemaName, extractionAllowance.schemaName);
+  assert.deepEqual(sent, [{ stage: 'extract', request: extractionAllowance }]);
+  assert.deepEqual(texts, [JSON.stringify({ system, input, maxOutputTokens }), '{"items":[]}']);
 });
 
 test('freshness rechecks an invalidation queued by the input counter before dispatch', async () => {
