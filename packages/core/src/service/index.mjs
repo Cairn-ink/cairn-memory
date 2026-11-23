@@ -5,6 +5,7 @@ import { CoreError } from "../errors.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
 import { forgetMethod } from "./forget.mjs";
 import { pauseMethods } from "./pause.mjs";
+import { recallMethod } from "./recall.mjs";
 import { readMethods } from "./reads.mjs";
 import { writeMethods } from "./writes.mjs";
 
@@ -102,7 +103,7 @@ export function createMemoryService(input) {
       ...readMethods(deps.storage, deps.tokens),
       ...writeMethods(deps),
       forget: forgetMethod(deps),
-      recall: placeholder,
+      recall: recallMethod(deps),
       captureStatus: placeholder,
       listRawMessages: placeholder,
       importMemories: placeholder,

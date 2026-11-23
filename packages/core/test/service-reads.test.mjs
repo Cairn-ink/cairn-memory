@@ -29,18 +29,16 @@ test("recent pages by exact microseconds and descending ID in one read-only snap
   const first = await service.recent(hostedScope, { limit: 2.9, cursor: null });
   assert.deepEqual(ids(first), ["new", "b"]);
   assert.ok(first.nextCursor);
-  assert.deepEqual(calls.splice(0), [
-    read, snapshot, ["recent.recent", readSet, { cursor: null, limit: 2 }], callsFor(readSet, "new", "b"),
-  ]);
 
   const [, , , token, inner] = decodeCursor(first.nextCursor);
   assert.deepEqual(JSON.parse(inner), ["1001", "b"]);
   const second = await service.recent(hostedScope, { limit: 50, cursor: first.nextCursor });
   assert.deepEqual(ids(second), ["a", "old"]);
   assert.equal(second.nextCursor, null);
-  assert.deepEqual(calls.splice(0), [
+  assert.deepEqual(calls, [
+    read, snapshot, ["recent.recent", readSet, { cursor: null, limit: 2 }], read, callsFor(readSet, "new", "b"),
     read, ["snapshot.assertUnchanged", readSet, token],
-    ["recent.recent", readSet, { cursor: inner, limit: 50 }], callsFor(readSet, "a", "old"),
+    ["recent.recent", readSet, { cursor: inner, limit: 50 }], read, callsFor(readSet, "a", "old"),
   ]);
 });
 
