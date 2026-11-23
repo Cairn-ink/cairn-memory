@@ -1,4 +1,4 @@
-import type { Revision, Scope } from "../ports/common.d.ts";
+import type { ItemRef, Revision, Scope } from "../ports/common.d.ts";
 import type { DocumentCardRecord } from "../ports/document-card.d.ts";
 import type { FactMatchPolicy, FactMatchRow } from "../privacy/fact-match.mjs";
 import type { FingerprintKey, FingerprintLabels } from "../privacy/fingerprint.mjs";
@@ -42,7 +42,20 @@ export type DocumentCardVisibility =
   | { visible: true; reason: null }
   | { visible: false; reason: DocumentCardHiddenReason };
 
+/** Message-backed cards can remain visible with historical links. Import and manual cards require exact visible revisions. */
 export declare function documentCardVisible(input: DocumentCardVisibilityInput): Promise<DocumentCardVisibility>;
+
+export type DocumentCardRowDropReason = DocumentCardHiddenReason | "invalid_ref" | "load_failed" | "missing_input";
+
+/** Resolve the card's visibility input in the candidate read snapshot, or return null if it is unavailable. */
+export type LoadDocumentCardVisibility = (ref: ItemRef) =>
+  DocumentCardVisibilityInput | null | Promise<DocumentCardVisibilityInput | null>;
+
+/** Keeps only visible card rows in input order and counts drops by reason without including content. */
+export declare function visibleDocumentCardRows<T extends { ref: ItemRef }>(
+  rows: readonly T[],
+  loadInput: LoadDocumentCardVisibility,
+): Promise<{ rows: T[]; drops: Partial<Record<DocumentCardRowDropReason, number>> }>;
 
 export interface DocumentCardStalenessInput {
   card: Pick<DocumentCardRecord, "sourceMemories" | "stale">;

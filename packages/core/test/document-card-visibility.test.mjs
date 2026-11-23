@@ -53,7 +53,6 @@ test("every linked memory must be known and currently visible", async () => {
     [undefined, "source_memory_missing"],
     [{ status: "forgotten" }, "source_memory_forgotten"],
     [{ status: "suppressed" }, "source_memory_not_visible"],
-    [historical, "source_memory_not_visible"],
     [{ status: "unknown" }, "source_memory_not_visible"],
   ]) {
     const states = new Map(memoryStates);
