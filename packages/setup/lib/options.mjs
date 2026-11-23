@@ -73,7 +73,7 @@ export function parseOptions(argv) {
     if (noCapture && (!local || remaining[0] !== 'setup')) throw new SetupError('local_option_invalid', 2);
     if (localCapture !== undefined && (remaining[0] !== 'config' || dailyCap !== undefined || captureExec !== undefined)) throw new SetupError('local_option_invalid', 2);
     if (local && cloud) throw new SetupError('mode_conflict', 2);
-    if ((local && !['setup', 'uninstall'].includes(remaining[0])) || (cloud && remaining[0] !== 'setup')) throw new SetupError('mode_option_scope', 2);
+    if ((local && !['setup', 'uninstall', 'daemon'].includes(remaining[0])) || (cloud && remaining[0] !== 'setup')) throw new SetupError('mode_option_scope', 2);
     if ((owner !== undefined || db !== undefined || project !== undefined) && (!local || remaining[0] !== 'setup')) throw new SetupError('local_option_invalid', 2);
     if (yes && !(local && remaining[0] === 'uninstall') && !(remaining[0] === 'raw' && remaining[1] === 'delete')) throw new SetupError('local_option_invalid', 2);
     if (purgeConfig && (!local || remaining[0] !== 'uninstall')) throw new SetupError('local_option_invalid', 2);
