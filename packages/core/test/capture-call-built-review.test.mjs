@@ -126,3 +126,35 @@ test('both model call entries throw synchronously when used as constructors', ()
   assert.throws(() => new callBuiltModel(model, 'classify', classifyBuilt()), TypeError);
   assert.equal(providerCalls, 0);
 });
+
+function plainModel(output) {
+  return { contextWindow: 8192, countTokens: () => 1, async call() { return output; } };
+}
+
+test('a decoder result is delivered as plain data, so a late then or toJSON cannot be adopted', { timeout: 2000 }, async () => {
+  let reads = 0;
+  const lateThen = { topic: 'tea', get then() { reads++; return reads > 1 ? (resolve) => resolve('hijacked') : undefined; } };
+  const result = await callBuiltModel(plainModel({ topic: 'tea' }), 'classify', { ...classifyBuilt(), decode: () => lateThen });
+  assert.deepEqual(result, { topic: 'tea' });
+  assert.equal(typeof result.then, 'undefined');
+
+  const installsThen = { topic: 'tea', toJSON() {
+    this.then = (_resolve, reject) => reject(new CoreError('capture_evidence_closed'));
+    return { topic: 'tea' };
+  } };
+  const second = await callBuiltModel(plainModel({ topic: 'tea' }), 'classify', { ...classifyBuilt(), decode: () => installsThen });
+  assert.deepEqual(second, { topic: 'tea' });
+  assert.equal(Object.getPrototypeOf(second), Object.prototype);
+});
+
+test('a binary view is refused whatever its prototype', async () => {
+  let calls = 0;
+  const model = { contextWindow: 8192, countTokens: () => 1, async call() { calls++; return { topic: 'tea' }; } };
+  for (const view of [new Uint8Array(new SharedArrayBuffer(1)), new Uint8Array(1), new DataView(new ArrayBuffer(1))]) {
+    Object.setPrototypeOf(view, null);
+    const built = classifyBuilt();
+    await assert.rejects(callBuiltModel(model, 'classify', { ...built, request: { ...built.request, input: view } }),
+      errorCode('invalid_input'));
+  }
+  assert.equal(calls, 0);
+});

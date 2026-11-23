@@ -76,6 +76,9 @@ function assertJSONData(value) {
   if (value === null || typeof value === 'string' || typeof value === 'boolean' ||
       (typeof value === 'number' && Number.isFinite(value) && !Object.is(value, -0))) return;
   if (typeof value !== 'object') throw new CoreError('invalid_input');
+  // Typed arrays and DataViews are binary views (possibly over shared memory), never JSON data,
+  // whatever their prototype says.
+  if (ArrayBuffer.isView(value)) throw new CoreError('invalid_input');
 
   const prototype = Object.getPrototypeOf(value);
   const keys = Reflect.ownKeys(value);
@@ -355,6 +358,9 @@ async function call(model, method, request, options, capture) {
       if (typeof decodedText !== 'string' || decodedText.length > MAX_OUTPUT_UNITS) {
         throw new CoreError('invalid_model_output');
       }
+      // Deliver plain data only: the decoder's own object (getters, toJSON, a late `then`) never
+      // leaves, so the async return cannot adopt a thenable or rerun caller code.
+      decoded = JSON.parse(decodedText);
     }
   } catch { return reject('invalid_model_output', 'adapter_output_invalid'); }
   if (capture) {
