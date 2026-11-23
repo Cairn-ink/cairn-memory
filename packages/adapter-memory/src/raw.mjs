@@ -18,10 +18,16 @@ function sessionSlot(namespace, { client, sessionId }) {
   return JSON.stringify([namespace, client, sessionId]);
 }
 
+/** @param {Scope} scope @param {Session} session @param {string} id */
+function rawId({ owner, namespace }, { client, sessionId }, id) {
+  return JSON.stringify([owner, namespace, client, sessionId, id]);
+}
+
 /** @param {Scope} scope @param {Session} session @param {CaptureMessage} message @returns {RawEntry} */
-function rawEntry({ owner, namespace }, { client, sessionId }, { id, role, content, occurredAtMs }) {
+function rawEntry(scope, session, { id, role, content, occurredAtMs }) {
+  const { client, sessionId } = session;
   return {
-    ref: { type: "raw", namespace, id: JSON.stringify([owner, namespace, client, sessionId, id]) },
+    ref: { type: "raw", namespace: scope.namespace, id: rawId(scope, session, id) },
     client, sessionId, messageId: id, role, content, occurredAtMs,
   };
 }
@@ -137,6 +143,17 @@ export function createRawPorts({ port, runSeed }, ringKeys, hashSessionKey) {
       }
       return evidence(row, scope, hash, digests);
     };
+  }
+
+  /** @param {State} state @param {Scope} scope
+   * @param {import("@cairn-ink/core/ports").DocumentCardSourceMessage} source */
+  async function sourceVisible(state, scope, source) {
+    const row = state.rawRows.get(rawId(scope, source, source.messageId));
+    if (!row || state.rawFences.has(sessionSlot(scope.namespace, source))) return false;
+    const facts = scopedFacts(state, scope);
+    if (!facts.length) return true;
+    const candidate = await readEvidence(scope, facts)(row);
+    return facts.every((stored) => factHidesRow(stored, candidate, policy) === false);
   }
 
   /** @param {State} state @param {RetrievalScope} selection */
@@ -327,5 +344,5 @@ export function createRawPorts({ port, runSeed }, ringKeys, hashSessionKey) {
     }));
   }
 
-  return { raw, seedClientlessRaw, counters: () => ({ rawKeyConflict, rawArchiveRefused }) };
+  return { raw, sourceVisible, seedClientlessRaw, counters: () => ({ rawKeyConflict, rawArchiveRefused }) };
 }

@@ -1,11 +1,12 @@
 import { CoreError, compareUtf8 } from "@cairn-ink/core";
 import { dropCardMemberships } from "./topics.mjs";
-import { copyScope, validateTime, writeNamespace } from "./validation.mjs";
+import { copyScope, snapshotArray, validateTime, writeNamespace } from "./validation.mjs";
 
 /** @import { DocumentCardAmendment, DocumentCardHideSelector, DocumentCardSourceMessage,
  * DocumentCardStore, Scope, StoredDocumentCardRecord, Tx } from "@cairn-ink/core/ports" */
 /** @typedef {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>["port"]} Port */
 /** @typedef {Parameters<DocumentCardStore<StoredDocumentCardRecord>["put"]>[2]} CardWrite */
+/** @typedef {CardWrite["sourceMemories"]} MemoryLinks */
 /** @typedef {import("./unit-of-work.mjs").CardEntry} CardEntry */
 /** @typedef {{ card: (card: CardWrite) => boolean,
  * amendment?: (amendment: DocumentCardAmendment) => boolean }} HideMatcher */
@@ -13,6 +14,17 @@ import { copyScope, validateTime, writeNamespace } from "./validation.mjs";
 /** @param {unknown} value */
 function requireString(value) {
   if (typeof value !== "string" || !value) throw new CoreError("invalid_input");
+}
+
+/** @param {MemoryLinks} existing @param {MemoryLinks} links */
+function unionMemoryLinks(existing, links) {
+  /** @type {Map<string, number>} */
+  const revisions = new Map();
+  for (const { id, revision } of [...existing, ...links]) {
+    const previous = revisions.get(id);
+    if (previous === undefined || revision > previous) revisions.set(id, revision);
+  }
+  return [...revisions].map(([id, revision]) => ({ id, revision }));
 }
 
 /** @param {DocumentCardHideSelector} selector @returns {HideMatcher} */
@@ -98,6 +110,9 @@ export function createDocumentCardStore(port, now) {
           if (previous?.card) {
             if (previous.card.origin === undefined) Reflect.deleteProperty(copy, "origin");
             else Object.assign(copy, { origin: previous.card.origin });
+            if (previous.card.sourceMessage && copy.sourceMessage) {
+              copy.sourceMemories = unionMemoryLinks(previous.card.sourceMemories, copy.sourceMemories);
+            }
           }
           const createdAtMs = previous?.createdAtMs ?? now();
           validateTime(createdAtMs);
@@ -105,6 +120,32 @@ export function createDocumentCardStore(port, now) {
           state.documentCards.set(namespace, cards);
           run.cardWrites++;
           return { status: previous ? "replaced" : "inserted" };
+        };
+      });
+    },
+
+    async linkMemories(tx, callerScope, cardId, links) {
+      const scope = copyScope(callerScope);
+      return port.write(tx, scope, "conditional", () => {
+        requireString(cardId);
+        const incoming = snapshotArray(links).map((link) => {
+          if (!link || typeof link !== "object") throw new CoreError("invalid_input");
+          const { id, revision } = link;
+          requireString(id);
+          if (!Number.isSafeInteger(revision) || revision < 0) throw new CoreError("invalid_input");
+          return { id, revision };
+        });
+        return (getState, _markDirty, run) => {
+          const entry = getState().documentCards.get(scope.namespace)?.get(cardId);
+          if (!entry) return { status: "not_found" };
+          if (!entry.card) return { status: "tombstoned" };
+          const existing = entry.card.sourceMemories;
+          const sourceMemories = unionMemoryLinks(existing, incoming);
+          if (sourceMemories.length === existing.length && sourceMemories.every(({ id, revision }, index) =>
+            id === existing[index].id && revision === existing[index].revision)) return { status: "unchanged" };
+          entry.card = { ...entry.card, sourceMemories };
+          run.cardWrites++;
+          return { status: "linked" };
         };
       });
     },

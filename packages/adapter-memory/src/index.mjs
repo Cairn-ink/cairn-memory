@@ -37,7 +37,7 @@ export function createMemoryAdapter(options = {}) {
   const { supersession, conflicts } = createRelationStores(port, matchFacts);
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts,
     flags.fingerprintKey ? ringKeys : undefined);
-  const cardVisible = createCardVisibility(matchFacts, keys);
+  const cardVisible = createCardVisibility(matchFacts, keys, archive?.sourceVisible);
   /** @type {import("./index.d.mts").MemoryAdapter} */
   const adapter = {
     name: "memory",
@@ -58,7 +58,7 @@ export function createMemoryAdapter(options = {}) {
       createTopicStore(port, flags, newId, now, matchFacts, options, cardVisible),
       ["applyPlacement", "markFailed", "dropMemory", "applyCardPlacement", "markCardsFailed", "dropCard"]) }),
     ...(flags.documentCards && { documentCards: handleWriteRejections(
-      createDocumentCardStore(port, now), ["put", "amend", "hideAmendment", "hide", "hideWhere", "markStale"]) }),
+      createDocumentCardStore(port, now), ["put", "linkMemories", "amend", "hideAmendment", "hide", "hideWhere", "markStale"]) }),
     nativeErrorMap,
     harness: {
       async dump() { return dump(flags.rawArchive, flags.documentCards); },

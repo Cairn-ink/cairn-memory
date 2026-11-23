@@ -55,6 +55,7 @@
   "packages/core/src/service/writes.mjs",
   "packages/core/src/suppression-fact.mjs",
   "packages/core/src/topics/batch.mjs",
+  "packages/core/src/topics/cards.mjs",
   "packages/core/src/topics/catalog.mjs",
   "packages/core/src/topics/classify.mjs",
   "packages/core/src/topics/generated/prompt.mjs",

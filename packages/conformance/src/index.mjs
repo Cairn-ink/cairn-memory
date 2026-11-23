@@ -13,6 +13,7 @@ export { RAW_CASES } from "./raw-cases.mjs";
 export { relationCases as RELATION_CASES } from "./relation-cases.mjs";
 export { TOPIC_CARD_CASES } from "./topics-cards-cases.mjs";
 export { DOCUMENT_CARD_AMENDMENT_CASES } from "./document-card-amendment-cases.mjs";
+export { DOCUMENT_CARD_LINK_CASES } from "./document-card-link-cases.mjs";
 export { TOPICS_FOR_CARDS_CASES } from "./topics-for-cards-cases.mjs";
 
 /** @type {readonly import("./index.d.mts").ConformanceCase[]} */

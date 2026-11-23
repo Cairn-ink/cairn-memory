@@ -100,8 +100,9 @@ function sourceDates(receipts) {
   return { firstMs, lastMs };
 }
 
-/** @param {ReturnType<typeof createFactMatcher>} matchFacts @param {FingerprintKeyProvider} keys */
-export function createCardVisibility(matchFacts, keys) {
+/** @param {ReturnType<typeof createFactMatcher>} matchFacts @param {FingerprintKeyProvider} keys
+ * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>["sourceVisible"]} [rawSourceVisible] */
+export function createCardVisibility(matchFacts, keys, rawSourceVisible) {
   /** @param {State} state @param {Scope} scope @param {CardWrite} card */
   return async function cardVisible(state, scope, card) {
     const policy = matchFacts(state.facts, scope);
@@ -126,13 +127,16 @@ export function createCardVisibility(matchFacts, keys) {
       if (textFacts.length) fingerprintKey = await keys.userKey(scope.owner);
       if (sourceMessage) {
         canonicalSessionKey = policy.canonicalSessionKey(sourceMessage);
-        // Cards supply the retained text projection for the source message in this adapter.
-        const passages = textFacts.length ? await Promise.all([card.body, card.title].map(async (text) => {
-          const digests = await allDigests(text);
-          if (fingerprintKey) digests.push(await coreDigest(text, fingerprintKey));
-          return { digests };
-        })) : [];
-        sourceWithheld = policy.withholdsCardSource(card, passages);
+        sourceWithheld = rawSourceVisible !== undefined && !await rawSourceVisible(state, scope, sourceMessage);
+        if (!sourceWithheld) {
+          // The retained projection also checks identity facts against linked revisions.
+          const passages = textFacts.length ? await Promise.all([card.body, card.title].map(async (text) => {
+            const digests = await allDigests(text);
+            if (fingerprintKey) digests.push(await coreDigest(text, fingerprintKey));
+            return { digests };
+          })) : [];
+          sourceWithheld = policy.withholdsCardSource(card, passages);
+        }
       }
     } catch {
       return false;
