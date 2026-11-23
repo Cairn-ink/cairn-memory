@@ -202,15 +202,15 @@ test("slot hash is the lowercase SHA-256 of the JSON slot's UTF-8 bytes", async 
   assert.equal(await slotHash(slot), createHash("sha256").update(slot, "utf8").digest("hex"));
 });
 
-test("storage preflight refuses an array shared by two fields of one fact", () => {
+test("an array shared by two fields of one fact yields two validated copies", () => {
   const shared = [];
   const fact = { ...text, text: { ...text.text, shingles: shared, embedding: shared } };
-  assert.throws(() => factSlot(fact), invalidInput);
+  assert.equal(factSlot(fact), factSlot({ ...text, text: { ...text.text, shingles: [], embedding: [] } }));
 });
 
-test("storage preflight refuses an object reached twice within one fact", () => {
-  // A proxy that shows a different digest value on each read would yield two distinct
-  // copies if the snapshot visited it twice; reaching any object twice is refused.
+test("a proxy reached twice can never make the stored slot differ from the validated copy", () => {
+  // The proxy shows a different digest value on each read; each visit is copied and
+  // validated on its own, and the slot is derived from those validated copies only.
   let reads = 0;
   const digest = new Proxy({ ...earlier }, {
     getOwnPropertyDescriptor(target, key) {
@@ -220,7 +220,41 @@ test("storage preflight refuses an object reached twice within one fact", () => 
     },
   });
   const fact = { ...text, text: { ...text.text, digests: [digest, digest] } };
-  assert.throws(() => factSlot(fact), invalidInput);
+  const copies = [{ ...earlier, value: hash }, { ...earlier, value: "c".repeat(64) }];
+  assert.equal(factSlot(fact), factSlot({ ...text, text: { ...text.text, digests: copies } }));
+});
+
+test("a nested slot derivation inside a trap does not disturb the outer derivation", () => {
+  const inner = { ...session };
+  let innerSlot;
+  const outer = { ...text, sourceMemory: new Proxy({ ...text.sourceMemory }, {
+    getOwnPropertyDescriptor(target, key) {
+      if (key === "id") innerSlot = factSlot(inner);
+      return Reflect.getOwnPropertyDescriptor(target, key);
+    },
+  }) };
+  assert.equal(factSlot(outer), factSlot(text));
+  assert.equal(innerSlot, factSlot(session));
+  const failing = { ...text, sourceMemory: new Proxy({ ...text.sourceMemory }, {
+    getOwnPropertyDescriptor(target, key) {
+      if (key === "id") assert.throws(() => factSlot({ ...session, extra: 1 }), invalidInput);
+      return Reflect.getOwnPropertyDescriptor(target, key);
+    },
+  }) };
+  assert.equal(factSlot(failing), factSlot(text));
+});
+
+test("array length comes from the descriptor, never from get", () => {
+  let lengthGets = 0;
+  const shingles = new Proxy(["abcd"], {
+    get(target, key, receiver) {
+      if (key === "length") lengthGets++;
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  const fact = { ...text, text: { ...text.text, shingles } };
+  assert.equal(factSlot(fact), factSlot(text));
+  assert.equal(lengthGets, 0);
 });
 
 test("the snapshot reads each field through one descriptor lookup and never through get", () => {
