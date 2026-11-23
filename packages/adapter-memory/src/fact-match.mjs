@@ -93,7 +93,7 @@ function projectPassages(passages) {
 /** @param {Parameters<SuppressionStore["snapshot"]>[2]} candidates */
 export function copySuppressionCandidates(candidates) {
   const { client, sessionId, passages } = candidates;
-  const occurredAtMs = client == null ? undefined : candidates.occurredAtMs;
+  const occurredAtMs = candidates.occurredAtMs;
   return {
     client, sessionId,
     passages: passages === undefined ? undefined : projectPassages(passages),
@@ -150,14 +150,14 @@ export function createFactMatcher(vectorSuppression, hashSessionKey, sessionRefs
         factBlocksIncoming(stored, { scope, passages: [], session: { client, sessionId } }, capture) !== false);
     }
 
-    /** @param {string} client @param {string | undefined} sessionId
+    /** @param {string | null | undefined} client @param {string | undefined} sessionId
      * @param {ReadonlyArray<number | null>} occurredAtMs
      */
     function blockedMessages(client, sessionId, occurredAtMs) {
       const blocked = [];
       const windows = scoped.filter((stored) => isKind(stored, "window"));
       // Core's window comparison reads the client and time, including for messages without a session ID.
-      const session = { client, sessionId: sessionId ?? "" };
+      const session = client == null ? undefined : { client, sessionId: sessionId ?? "" };
       for (const [index, time] of occurredAtMs.entries()) {
         if (windows.some((stored) => factBlocksIncoming(stored,
           { scope, passages: [], session, occurredAtMs: time }, capture) !== false)) {
@@ -214,7 +214,7 @@ export function createFactMatcher(vectorSuppression, hashSessionKey, sessionRefs
       snapshot({ client, sessionId, occurredAtMs, passages: projected }) {
         return {
           blockedSession: blocksSession(client ?? null, sessionId ?? null),
-          blockedMessages: client != null && occurredAtMs ? blockedMessages(client, sessionId, occurredAtMs) : [],
+          blockedMessages: occurredAtMs ? blockedMessages(client, sessionId, occurredAtMs) : [],
           passages: structuredClone(projected === undefined ? texts : matchingPassages(texts, projected)),
         };
       },

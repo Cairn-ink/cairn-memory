@@ -3,6 +3,7 @@ import { documentCardVisible } from "@cairn-ink/core/routing";
 import { cosineDistance } from "./cosine.mjs";
 import { decodePayload, decodeSortKey, encodePayload, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
+import { matchesMemoryFilters } from "./retrieval-window.mjs";
 import { copyPublicRow } from "./unit-of-work.mjs";
 import { copyReadScope, copyRefs, readEmbedding, validateLimit } from "./validation.mjs";
 
@@ -50,18 +51,25 @@ function recentAfter(cursor) {
 }
 
 /** @param {RetrievalScope} scope @param {number} revision */
-export function stateToken({ owner, namespaces, clients }, revision) {
-  return encodePayload([owner, revision, [...namespaces].sort(compareNamespaces), clients ? [...clients].sort(compareStrings) : null]);
+export function stateToken({ owner, namespaces, clients, window }, revision) {
+  /** @type {unknown[]} */
+  const payload = [owner, revision, [...namespaces].sort(compareNamespaces), clients ? [...clients].sort(compareStrings) : null];
+  if (window) payload.push([window.sinceMs ?? null, window.untilMs ?? null]);
+  return encodePayload(payload);
 }
 
 /** @param {string} token */
 export function validateToken(token) {
-  const [owner, revision, namespaces, clients, ...extra] = decodePayload(token);
+  const [owner, revision, namespaces, clients, bounds, ...extra] = decodePayload(token);
   if (extra.length || typeof owner !== "string" || !owner ||
     typeof revision !== "number" || !Number.isSafeInteger(revision) || revision < 0) {
     throw new CoreError("invalid_cursor");
   }
-  const scope = /** @type {Omit<RetrievalScope, "owner">} */ ({ namespaces, clients: clients === null ? undefined : clients });
+  if (bounds !== undefined && (!Array.isArray(bounds) || bounds.length !== 2)) throw new CoreError("invalid_cursor");
+  const window = bounds === undefined ? undefined : { sinceMs: bounds[0] ?? undefined, untilMs: bounds[1] ?? undefined };
+  const scope = /** @type {Omit<RetrievalScope, "owner">} */ ({
+    namespaces, clients: clients === null ? undefined : clients, window,
+  });
   let selection;
   try {
     selection = copyReadScope(owner, scope);
@@ -171,7 +179,7 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
       const entries = state.rows.get(namespace);
       if (!entries) continue;
       for (const entry of entries.values()) {
-        if (!entry.row.historical && !policy.hides(entry)) rows.push(entry.row);
+        if (!entry.row.historical && matchesMemoryFilters(scope, entry.row) && !policy.hides(entry)) rows.push(entry.row);
       }
     }
     return rows;
@@ -184,7 +192,8 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
       const policy = byNamespace.get(ref.namespace);
       if (ref.type !== "memory" || !policy) continue;
       const entry = state.rows.get(ref.namespace)?.get(ref.id);
-      if (entry && (includeHistorical || !entry.row.historical) && !policy.hides(entry)) {
+      if (entry && (includeHistorical || !entry.row.historical) &&
+          matchesMemoryFilters(scope, entry.row) && !policy.hides(entry)) {
         yield { ref: memoryRef(entry.row), entry };
       }
     }
@@ -265,25 +274,25 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
       },
     },
     fence: {
-      async assertVisible(tx, scope, refs) {
+      async assertVisible(tx, scope, refs, intent) {
         return port.read(tx, scope, (getState) => {
           const selection = copyReadScope(tx.owner, scope);
           const references = copyRefs(refs);
           const state = getState();
+          const includeHistorical = intent === "read";
           if (!capabilities.documentCards || !references.some(({ type }) => type === "card")) {
-            return Array.from(visibleRefs(state, selection, references, false), ({ ref }) => ref);
+            return Array.from(visibleRefs(state, selection, references, includeHistorical), ({ ref }) => ref);
           }
           return (async () => {
             const byNamespace = policies(state, selection);
             const visible = [];
             for (const ref of references) {
-              const { namespace, type, id } = ref;
-              const policy = byNamespace.get(namespace);
-              if (!policy) continue;
-              if (type === "memory") {
-                const entry = state.rows.get(namespace)?.get(id);
-                if (entry && !entry.row.historical && !policy.hides(entry)) visible.push(memoryRef(entry.row));
-              } else if (type === "card") {
+              if (ref.type === "memory") {
+                // Memory refs keep the shared rule: read intent, source/time filters and fact policy.
+                for (const { ref: shown } of visibleRefs(state, selection, [ref], includeHistorical)) visible.push(shown);
+              } else if (ref.type === "card") {
+                const { namespace, id } = ref;
+                if (!byNamespace.get(namespace)) continue;
                 const card = state.documentCards.get(namespace)?.get(id)?.card;
                 if (card && await cardVisible(state, { owner: tx.owner, namespace }, card)) visible.push(ref);
               }

@@ -20,15 +20,16 @@ export function entryError(error) {
  * @template [Invalid=never]
  * @param {(...args: Args) => Promise<Result>} run
  * @param {() => Invalid} [invalid]
+ * @param {(args: Args) => Args} [snapshot]
  */
-export function entry(run, invalid) {
+export function entry(run, invalid, snapshot = args => detach(args, "invalid_input")) {
   /** @param {Args} args */
   return async (...args) => {
     try {
       /** @type {Args} */
       let input;
       try {
-        input = detach(args, "invalid_input");
+        input = snapshot(args);
       } catch (error) {
         if (invalid) return invalid();
         throw error;

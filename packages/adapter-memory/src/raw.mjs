@@ -1,6 +1,7 @@
 import { allDigests, compareUtf8, CoreError, coreDigest, factHidesRow, tokenizeT1 } from "@cairn-ink/core";
 import { decodePayload, encodePayload } from "./cursor.mjs";
 import { addKeyedDigest, validateFact } from "./privacy.mjs";
+import { withinWindow } from "./retrieval-window.mjs";
 import { rankLexical, stateToken, validateToken } from "./retrieval.mjs";
 import { admissionScope, copyCaptureMessages, copyReadScope, snapshotArray, validateLimit, writeNamespace } from "./validation.mjs";
 
@@ -166,6 +167,7 @@ export function createRawPorts({ port, runSeed }, ringKeys, hashSessionKey) {
     const clients = selection.clients && new Set(selection.clients);
     const eligible = [...state.rawRows.values()].filter((row) =>
       byNamespace.has(row.ref.namespace) && (!clients || clients.has(row.client)) &&
+      withinWindow(selection.window, row.occurredAtMs) &&
       !state.rawFences.has(sessionSlot(row.ref.namespace, row)));
     const rows = [];
     for (const row of eligible) {

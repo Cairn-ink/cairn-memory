@@ -1,6 +1,7 @@
 import { isWellFormedText, validateObject } from "../capture/validate.mjs";
 import { CoreError } from "../errors.mjs";
 import { redactHostedCurrent } from "../privacy/redact.mjs";
+import { canonicalKey } from "../retrieval/bm25.mjs";
 import { decodeCursor, encodeCursor, pageLimit } from "../retrieval/hosted-paging.mjs";
 import { packSessionStart } from "../retrieval/session-start.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
@@ -13,18 +14,44 @@ import { hostedProjection } from "./session-wire.mjs";
 /** @typedef {import("../ports/retrieval.d.ts").RetrievalScope} RetrievalScope */
 /** @typedef {import("../ports/unit-of-work.d.ts").Tx} Tx */
 
-/** @param {Scope} scope @returns {RetrievalScope} */
-export function readSet({ owner, namespace }) {
-  return { owner, namespaces: [namespace] };
+/** @param {Scope} scope @param {Pick<RetrievalScope, "clients" | "window">} [filters] @returns {RetrievalScope} */
+export function readSet({ owner, namespace }, filters) {
+  return { owner, namespaces: [namespace], ...filters };
+}
+
+/** @param {MemoryRow} row @returns {ItemRef} */
+function memoryRef({ id, scope: { namespace } }) {
+  return { type: "memory", id, namespace };
+}
+
+/** @param {MemoryRow[]} rows @param {RetrievalScope} scope */
+function scopedRows(rows, scope) {
+  return rows.filter(row => row.scope.owner === scope.owner && scope.namespaces.includes(row.scope.namespace));
 }
 
 /** @param {MemoryRow[]} rows @param {RetrievalScope} scope @param {Tx} tx @param {StorageAdapter["fence"]} fence */
 async function visibleRows(rows, scope, tx, fence) {
-  const scoped = rows.filter(row => row.scope.owner === scope.owner && scope.namespaces.includes(row.scope.namespace));
-  const refs = scoped.map(({ id, scope: { namespace } }) => /** @type {ItemRef} */ ({ type: "memory", id, namespace }));
-  const visible = await fence.assertVisible(tx, scope, refs);
-  const keys = new Set(visible.filter(ref => ref.type === "memory").map(ref => JSON.stringify([ref.namespace, ref.id])));
-  return scoped.filter(row => keys.has(JSON.stringify([row.scope.namespace, row.id])));
+  const scoped = scopedRows(rows, scope);
+  const visible = await fence.assertVisible(tx, scope, scoped.map(memoryRef));
+  const keys = new Set(visible.map(canonicalKey));
+  return scoped.filter(row => keys.has(canonicalKey(memoryRef(row))));
+}
+
+/** @param {StorageAdapter["hydrate"]} hydrate @param {Tx} tx @param {RetrievalScope} scope
+ * @param {ItemRef[]} refs @param {"recall" | "export"} intent
+ */
+export async function hydrateMemoryRows(hydrate, tx, scope, refs, intent) {
+  /** @type {Map<string, MemoryRow>} */
+  const rows = new Map();
+  if (refs.length) {
+    for (const { ref, memory } of await hydrate.hydrate(tx, scope, refs, intent)) {
+      if (ref.type === "memory" && scope.namespaces.includes(ref.namespace) && memory?.id === ref.id &&
+          memory.scope.owner === scope.owner && memory.scope.namespace === ref.namespace) {
+        rows.set(canonicalKey(ref), memory);
+      }
+    }
+  }
+  return rows;
 }
 
 /** @param {unknown} cursor @param {readonly unknown[]} binding @param {number} tailLength */
@@ -57,10 +84,10 @@ export async function readStateToken(snapshot, tx, scope, positionToken) {
 }
 
 /** @param {StorageAdapter} storage @param {"recent-v1" | "export-v1"} route
- * @param {Scope} scope @param {unknown} options
+ * @param {Scope} scope @param {unknown} options @param {Pick<RetrievalScope, "clients" | "window">} [filters]
  */
-async function storePage({ uow, recent, memories, snapshot, fence }, route, scope, options) {
-  const readScope = readSet(scope);
+async function storePage({ uow, recent, memories, snapshot, hydrate, fence }, route, scope, options, filters) {
+  const readScope = readSet(scope, filters);
   const { cursor, limit } = validateObject(options === undefined ? {} : options, ["cursor", "limit"]);
   if (limit !== undefined && typeof limit !== "number") throw new CoreError("invalid_input");
   const binding = [route, scope.owner, scope.namespace];
@@ -89,14 +116,24 @@ async function storePage({ uow, recent, memories, snapshot, fence }, route, scop
   });
   return uow.run(scope.owner, { readOnly: true }, async tx => {
     if (route === "export-v1") await snapshot.assertUnchanged(tx, readScope, token);
-    const visible = await visibleRows(items, readScope, tx, fence);
-    return { items: visible, nextCursor };
+    const candidates = scopedRows(items, readScope);
+    const refs = candidates.map(memoryRef);
+    const current = await hydrateMemoryRows(hydrate, tx, readScope, refs, route === "export-v1" ? "export" : "recall");
+    const visible = new Set((await fence.assertVisible(tx, readScope, refs)).map(canonicalKey));
+    const delivered = candidates.flatMap(row => {
+      const key = canonicalKey(memoryRef(row));
+      const memory = current.get(key);
+      return memory && memory.revision === row.revision && visible.has(key) ? [memory] : [];
+    });
+    return { items: delivered, nextCursor };
   });
 }
 
-/** @param {StorageAdapter} storage @param {Scope} scope @param {unknown} options */
-export function recentPage(storage, scope, options) {
-  return storePage(storage, "recent-v1", scope, options);
+/** @param {StorageAdapter} storage @param {Scope} scope @param {unknown} options
+ * @param {Pick<RetrievalScope, "clients" | "window">} [filters]
+ */
+export function recentPage(storage, scope, options, filters) {
+  return storePage(storage, "recent-v1", scope, options, filters);
 }
 
 /** @param {unknown} value @param {number} max */

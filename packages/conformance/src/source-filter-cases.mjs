@@ -1,5 +1,5 @@
-import { allDigests, CoreError, factIncarnationBody, passageShingles, withholdsAnyPassage } from "@cairn-ink/core";
-import { check, equal, readDump, rejects } from "./support.mjs";
+import { allDigests, factIncarnationBody, passageShingles, withholdsAnyPassage } from "@cairn-ink/core";
+import { check, equal, isCoreErrorShape, readDump, rejects } from "./support.mjs";
 
 /** @import { FingerprintKey, SuppressionFact } from "@cairn-ink/core" */
 /** @import { CaptureKey, CaptureMessage } from "@cairn-ink/core/ports" */
@@ -180,7 +180,7 @@ export const SOURCE_FILTER_CASES = [
         try {
           await capture.assertEligible(tx, key, positions);
         } catch (error) {
-          check(error instanceof CoreError && error.code === "suppressed", "assertEligible must reject with suppressed");
+          check(isCoreErrorShape(error) && error.code === "suppressed", "assertEligible must reject with suppressed");
           recheckSuppressed = true;
           throw error;
         }

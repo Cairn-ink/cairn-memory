@@ -1,4 +1,5 @@
 import { CoreError, isErrorCode, validateSuppressionFact } from "@cairn-ink/core";
+import { copyWindow } from "./retrieval-window.mjs";
 
 /** @typedef {import("@cairn-ink/core/ports").InsertRow} InsertRow */
 /** @typedef {import("@cairn-ink/core/ports").Receipt} Receipt */
@@ -241,7 +242,7 @@ export function validateLimit(limit) {
 }
 
 /** @param {string} owner @param {Omit<import("@cairn-ink/core/ports").RetrievalScope, "owner">} scope */
-export function copyReadScope(owner, { namespaces, clients }) {
+export function copyReadScope(owner, { namespaces, clients, window }) {
   const namespaceList = snapshotArray(namespaces);
   if (namespaceList.length === 0) invalid();
   const seen = new Set();
@@ -251,7 +252,7 @@ export function copyReadScope(owner, { namespaces, clients }) {
   }
   const clientList = clients === undefined ? undefined : snapshotArray(clients);
   if (clientList?.some((client) => typeof client !== "string")) invalid();
-  return { owner, namespaces: namespaceList, clients: clientList };
+  return { owner, namespaces: namespaceList, clients: clientList, window: copyWindow(window) };
 }
 
 /** @param {readonly import("@cairn-ink/core/ports").ItemRef[]} refs */
