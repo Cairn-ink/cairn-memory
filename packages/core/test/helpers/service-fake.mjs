@@ -183,6 +183,20 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         return result;
       },
     },
+    hydrate: {
+      async hydrate(tx, scope, refs, intent) {
+        record(tx, scope.owner, "hydrate.hydrate", scope, refs, intent);
+        assert.ok(tx.options.readOnly);
+        const rows = candidates(tx, scope);
+        const result = refs.flatMap(ref => {
+          const memory = rows.find(row => row.id === ref.id && row.scope.namespace === ref.namespace);
+          return memory ? [{ ref, memory: tx.ranked ? memory : publicRow(memory) }] : [];
+        }).reverse();
+        // Recall hooks act on the ranking snapshot. Delivery reads its own rows.
+        if (intent === "recall" && !tx.ranked) return result;
+        return hooks.hydrate?.(result) ?? result;
+      },
+    },
     fence: {
       async assertVisible(tx, scope, refs) {
         record(tx, scope.owner, "fence.assertVisible", scope, refs);
@@ -260,6 +274,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       async lexical(tx, scope, query, depth, options) {
         record(tx, scope.owner, "lexical.lexical", scope, query, depth, options);
         assert.ok(tx.options.readOnly);
+        tx.ranked = true;
         const ranked = candidates(tx, scope).flatMap(row => {
           const score = hooks.lexicalScore?.(row, query);
           return score === undefined ? [] : [{ ref: refOf(row), score, updatedAtUs: row.updatedAtUs }];
@@ -267,18 +282,6 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         const rows = ranked.slice(0, depth);
         hooks.afterLexical?.(rows);
         return { rows, matched: ranked.length > 0 };
-      },
-    };
-    storage.hydrate = {
-      async hydrate(tx, scope, refs, intent) {
-        record(tx, scope.owner, "hydrate.hydrate", scope, refs, intent);
-        assert.ok(tx.options.readOnly);
-        const rows = candidates(tx, scope);
-        const result = refs.flatMap(ref => {
-          const memory = rows.find(row => row.id === ref.id && row.scope.namespace === ref.namespace);
-          return memory ? [{ ref, memory }] : [];
-        }).reverse();
-        return hooks.hydrate?.(result) ?? result;
       },
     };
     fake.deps.embedQuery = {
@@ -475,8 +478,10 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
     if (forgetting) {
       const { capabilities = {}, spans = [], receipts = [], closure = [] } = forgetting;
       Object.assign(storage.capabilities, capabilities);
+      const readHydrate = storage.hydrate.hydrate;
       storage.hydrate = {
-        async hydrate(tx, scope, refs) {
+        async hydrate(tx, scope, refs, intent) {
+          if (tx.options.readOnly) return readHydrate(tx, scope, refs, intent);
           record(tx, scope.owner, "hydrate.hydrate", scope, refs);
           await hooks.fault?.("hydrate.hydrate");
           return refs.map(ref => ({ ref, receipts }));
