@@ -289,7 +289,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
         const facts = tx.facts.filter(({ fact }) => (fact.namespace ?? null) === scope.namespace);
         const blockedSession = facts.some(({ fact }) => fact.kind === "session" &&
           fact.session.client === candidates.client && fact.session.sessionId === candidates.sessionId);
-        return { blockedSession, blockedMessages: [], passages: facts };
+        return { blockedSession, blockedMessages: [], passages: facts.filter(({ fact }) => fact.kind === "text") };
       },
       async writeFact(tx, fact, incarnation) {
         mutate(tx, fact.owner, "suppressions.writeFact", fact, incarnation);
@@ -305,9 +305,19 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
     };
   }
   if (capture) {
-    const admissionId = ({ scope, client, eventId }) => JSON.stringify([scope.namespace, client, eventId]);
+    const admissionId = ({ client, eventId }) => JSON.stringify([client, eventId]);
     storage.capture = {
       claim: unexpected,
+      async eligible(tx, key, messages) {
+        record(tx, key.scope.owner, "capture.eligible", key, messages);
+        assert.ok(tx.options.pauseLock && !tx.options.readOnly);
+        const windows = tx.facts.map(({ fact }) => fact).filter(fact =>
+          fact.kind === "window" && (fact.namespace ?? null) === key.scope.namespace &&
+          (fact.client === null || fact.client === key.client));
+        return messages.flatMap(({ occurredAtMs }, index) => windows.some(({ window, unknownTime }) =>
+          occurredAtMs === null ? unknownTime === true : occurredAtMs >= window.startMs && occurredAtMs < window.endMs)
+          ? [] : [index]);
+      },
       async admit(tx, key, messages) {
         record(tx, key.scope.owner, "capture.admit", key, messages);
         assert.ok(tx.options.pauseLock && !tx.options.readOnly);
@@ -328,7 +338,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
       async load(tx, selection) {
         record(tx, selection.scope.owner, "capture.load", selection);
         const row = tx.admissions.get(admissionId(selection));
-        if (row?.key.sessionId !== selection.sessionId) return null;
+        if (!row || row.key.scope.namespace !== selection.scope.namespace || row.key.sessionId !== selection.sessionId) return null;
         const { key, messages } = row;
         return structuredClone({ key, messages });
       },
