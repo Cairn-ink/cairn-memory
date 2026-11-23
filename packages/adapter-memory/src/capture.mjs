@@ -1,6 +1,6 @@
 import { CoreError, decideWrite, planDuplicateMerge } from "@cairn-ink/core";
 import { indexRevisionAfterRun } from "./unit-of-work.mjs";
-import { admissionScope, captureMessageTimes, copyCaptureFailure, copyCaptureMessages, copyCaptureSelection,
+import { admissionScope, copyCaptureFailure, copyCaptureMessages, copyCaptureSelection,
   copyFinishItems, snapshotArray, validateTime, writeNamespace } from "./validation.mjs";
 
 /** @import { CaptureMessage } from "@cairn-ink/core/ports" */
