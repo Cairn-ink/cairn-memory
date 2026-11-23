@@ -1,101 +1,127 @@
 # Storage adapter conformance
 
-`@cairn-ink/conformance` runs shared tests for storage adapters. The suite covers transactions, error mapping, capabilities, memory storage, and retrieval.
+`@cairn-ink/conformance` runs shared tests for storage adapters. The kit covers transactions, error mapping, capabilities, memory storage, retrieval, privacy, capture, raw archives, and topic placement.
 
-An `AdapterFactory` supplies a `name` and an `open({ capabilities })` method that returns an `OpenedAdapter`. The result exposes `adapter` with its actual capabilities, `uow`, `memories`, `capture`, `lexical`, `snapshot`, `hydrate`, `fence`, and `recent`. The `vector` port is present exactly when `semanticRetrieval` is enabled. The factory also returns `harness`, `nativeErrorMap`, `busyNativeCodes`, `embeddingDimensions` (`null` uses four), and an async `close()` method.
+## Writing an adapter factory
 
-Optional `settleMs` gives a started run time to reach its lock waits. The default is 100 ms. Raise it for stores with slow transaction start.
+### Factory shape
 
-Optional `timeoutMs` bounds one concurrency phase, excluding settle waits. The default is 5000 ms. Raise it for slow stores. The same bound applies to `close()`. Both timing options must be finite positive numbers when supplied.
+An `AdapterFactory` has a `name` used in test names and an async `open({ capabilities })` that returns an `OpenedAdapter`. Open an isolated test instance. Each run gets fresh fixture owners, and a follow-up calls `open` again. The returned object contains these fields.
 
-The `TestHarness` provides four async hooks. Harness hooks belong in test builds only.
+| Field | Contract |
+| --- | --- |
+| `adapter` | The storage ports and their actual `capabilities`. The suite map lists the ports the cases call. Optional ports are present exactly when their corresponding flags are enabled. |
+| `harness` | A `TestHarness` with the test-only hooks in the table below. |
+| `nativeErrorMap` | Maps native error codes to core error codes. |
+| `busyNativeCodes` | Lists native codes for contention that the map must classify as retryable. Use an empty list when there are none. |
+| `embeddingDimensions` | The dimension of generated fixture vectors. Use `null` for the default of four, or supply the test store's dimension. |
+| `sessionRefs` | The store's suppression fact profile, `"plain"` or `"hashed"`. |
+| `settleMs` | Optional delay for a started run to reach its lock waits. Defaults to 100 ms. |
+| `timeoutMs` | Optional bound for each timed concurrency phase, excluding settle waits, and for `close()`. Defaults to 5000 ms. |
+| `close()` | Asynchronously release the instance's resources. The runner calls it after each successful open, including when the case skips or fails. |
 
-- `dump()` returns a JSON-safe snapshot of committed state for equality checks. Use `JsonValue` data: null, booleans, finite numbers, strings, arrays, and plain objects with string keys. Encode bigints as strings.
-- `seedFact(owner, fact)` inserts a test fact and advances the owner's index revision.
-- `setWriteTime(scope, id, updatedAtUs)` sets the committed row's write time and advances the owner's index revision. It rejects with `invalid_input` for an open run for the owner or a time other than a nonnegative bigint, and with `memory_not_found` if the row is outside the scope or missing.
-- `counters()` returns diagnostic counters. With near matching enabled, `nearSkippedUnembedded` counts non-exact comparisons skipped because a vector is missing or the lengths differ.
+Both timing options must be finite and greater than zero when supplied. Increase them as needed for slow transaction starts or concurrency phases.
 
-Register the suite in a Node test file and run it with `node --test`.
+### Capability handshake
+
+Honor a requested flag setting when the store supports it. To decline a setting and let the kit report a skip where appropriate, return the adapter with the actual flag value. A rejected `open` fails the test.
+
+- `needs` requests flags on. The runner returns `needs <flag>` for the first required flag that is off.
+- `needsOff` requests flags off. The runner returns `needs <flag> off` for the first required-off flag that is on, after checking `needs`.
+- `requests` supplies additional preferences at open. The runner applies `requests`, then `needs`, then `needsOff`. It checks only explicit requirements for automatic capability skips. A case can branch on the actual flags or return its own reason.
+- `pending` returns the given skip reason before opening an adapter. `followUp` runs with its own requests on a fresh open after the first run succeeds and closes.
+
+`runCase` returns `null` on success, a reason string on a skip, and rejects on failure. Pass the string to `t.skip(reason)` so `node:test` reports a skipped test with its reason. Treat a skip as missing coverage, even if an earlier check ran successfully. `defineConformanceTests(factory)` from `@cairn-ink/conformance/node-test` does this for all of `CASES`.
+
+### Test harness hooks
+
+Hooks are async except for `hashSessionKey`. An absent required hook fails the case when reached. The optional hooks affect specific checks as follows.
+
+| Hook | Required | Used by and behavior |
+| --- | --- | --- |
+| `dump()` | Yes | `CASES`, `PRIVACY_CASES`, `CAPTURE_CASES`, `SOURCE_FILTER_CASES`, `KEYED_DIGEST_CASES`, `RAW_CASES`, `TOPIC_CASES`. Return a comparable snapshot of committed state, including retained raw rows even when hidden. Use `JsonValue` data with finite numbers, dense arrays, and plain objects with enumerable string keys. Encode bigints as strings. |
+| `seedFact(owner, fact)` | Yes | `CASES`, `PRIVACY_MATCH_CASES`, `CAPTURE_CASES`, `SOURCE_FILTER_CASES`, `KEYED_DIGEST_CASES`, `RAW_CASES`, `TOPIC_CASES`. Insert a committed test fact and advance the owner's index revision. |
+| `setWriteTime(scope, id, updatedAtUs)` | Yes | `CASES`. Set the committed row's write time and advance the owner's index revision. Reject with `invalid_input` for an open run for that owner or a time other than a nonnegative bigint, and with `memory_not_found` for a missing or out-of-scope row. |
+| `counters()` | Yes | `CASES`, `RAW_CASES`. Return numeric diagnostics. `nearSkippedUnembedded` counts non-exact comparisons skipped because a vector is missing or the lengths differ when near matching is on. `rawKeyConflict` counts raw key conflicts without logging content. |
+| `setFingerprintSecret(secret)` | Optional | Rotate the fingerprint secret. `PRIVACY_CASES` checks signing key stability and owner isolation, then skips rotation with a reason if the hook is absent. `KEYED_DIGEST_CASES` skips the affected rotation and retained-key checks with a reason. |
+| `rowsMissingKeyedDigest(owner)` | Optional | `KEYED_DIGEST_CASES` skips its rotation coverage and refusal checks with a reason if the hook is absent. Count rows missing a digest under any key in the owner's ring. Return zero when no key is enabled. |
+| `advanceClock(ms)` | Optional | `CAPTURE_CASES` skips the lease-expiry follow-up with a reason if the hook is absent. The initial abandon checks still run. Advance the store clock by the requested milliseconds. |
+| `hashSessionKey(client, sessionId)` | For hashed session fixtures and raw spans | A missing hook fails hashed fixture checks in `PRIVACY_MATCH_CASES`, `SOURCE_FILTER_CASES`, `RAW_CASES`, and `TOPIC_CASES`. The provisional policy case in `CASES` returns a skip reason instead. In the plain profile, a missing hook skips raw span fixtures with a reason and makes the source filter case check how the store handles a hashed fact it cannot compare. |
+| `seedClientlessRaw(scope, sessionId, message)` | Optional | `RAW_CASES` skips the missing-client check with a reason if the hook is absent. Seed a legacy raw message with missing client provenance. |
+
+### Store clock, opaque values, and comparisons
+
+The store is the authority on write times. Cases check write times independently of the `nowMs` argument. To force exact microsecond times, including ties, the cases call `setWriteTime` after the write run closes and use the IDs the store returned.
+
+IDs, tokens, and cursors are opaque. Cases use returned IDs to check ordering where the port specifies it. Lexical scores and equal-score order are store-defined under [PHASE0](../core/docs/PHASE0.md). The lexical cases check membership and non-increasing scores. The vector cases check cosine distances with float32 tolerance, order, and coverage for the query model and dimensions. Raw search compares expected scores at float32 precision and allows any candidate tied at the cutoff.
+
+Cases generally project port results into the tuples or objects they need, such as `[id, updatedAtUs]`. They can compare a documented plain shape whole when they assert every field, such as `{ outcome, revision }` or `[[]]` for an empty match batch. Hydration and fence cases check visibility and input order. Hydration also checks receipts and source dates.
+
+Recent pages use separate read-only runs. Stable re-reads treat rows sharing a timestamp and ID across namespaces as an unordered group. State tokens must be valid when issued, stable without writes, and bound to the read set and owner revision. A committed write in any namespace for the owner invalidates an earlier token.
+
+### Profiles
+
+- `sessionRefs` controls session references in suppression facts. The `"plain"` profile accepts plaintext and hashed references. The `"hashed"` profile accepts hashed references and rejects plaintext ones. Supply a synchronous `hashSessionKey` for hashed fixtures, using the adapter's own conversion and returning 64 lowercase hexadecimal characters for fixture inputs. The hashed receipt check fails without the hook on a hashed factory and skips with `needs hashed session refs` on the plain profile. Raw span fixtures need the hook in either profile.
+- `embeddingRequiredOnInsert` makes the kit give ordinarily unembedded fixtures separated vectors under the `"fixture-only"` model. Reference vectors need at least two dimensions and use the first two axes. The generator packs two separated fixtures per additional axis using opposite signs. For *n* separated fixture vectors in one run, the minimum `embeddingDimensions` is 2 + ceil(n / 2). The largest current run allocates nine, so use at least seven to avoid dimension skips across suites when embeddings are required.
+- The runner recognizes a fixture-allocation error marked by the generator for that run and returns its message as a skip when `embeddingRequiredOnInsert` is enabled. Other errors, including dimension errors from the adapter, fail. The unembedded-row diagnostic also skips in an embedding-required profile.
+
+### Suite map
+
+Each row lists the ports used across the export, including those used only in a conditional case or follow-up. Missing required flags skip the affected run with a reason. Missing called ports fail when reached. The capability-alignment check in `CASES` also checks whether optional ports are present for the flags the adapter reports.
+
+| Export | Ports | Capability gates and requests | Required hooks when reached |
+| --- | --- | --- | --- |
+| `CASES` | `uow`, `memories`, `lexical`, `snapshot`, `hydrate`, `fence`, `recent`, `vector` for semantic retrieval, `supersession` in a pending case | `nearDuplicate` on and off in distinct checks, `semanticRetrieval` on for vector retrieval and off in a follow-up. Other cases request `nearDuplicate`, `vectorSuppression`, or `semanticRetrieval` as preferences. Two `supersession` cases are pending. | `dump`, `seedFact`, `setWriteTime`, `counters`. The provisional policy case skips on the hashed profile without `hashSessionKey`. |
+| `PRIVACY_CASES` | `uow`, `suppressions`, `memories`, `pause`, `keys` | `rawSpans` for distinct span targets. `fingerprintKey` off for the initial key check and on for its follow-up. | `dump`. |
+| `PRIVACY_MATCH_CASES` | `uow`, `memories`, `fence`, `hydrate`, `lexical`, `recent`, `suppressions`, `vector` in a follow-up. One check can consult `keys` when `fingerprintKey` is on. | No initial gate. Vector follow-ups need `semanticRetrieval`, with `vectorSuppression` also required for the vector text suppression and write policy checks. | `seedFact`, plus `hashSessionKey` for hashed fixtures. |
+| `CAPTURE_CASES` | `uow`, `capture`, `memories`, `snapshot` | No initial gate. The vector suppression follow-up needs `vectorSuppression` and `semanticRetrieval`. The dispatch check branches on `stagedEvidence`. | `dump`, `seedFact`. |
+| `SOURCE_FILTER_CASES` | `uow`, `capture`, `suppressions`, `keys` for keyed text | No initial gate. The text case requests `fingerprintKey` off and reports a reason if that path is unavailable. Its follow-up requires the flag on and skips if the provider returns no owner key. | `dump`, `seedFact`, plus `hashSessionKey` for hashed fixtures. |
+| `KEYED_DIGEST_CASES` | `uow`, `memories`, `keys`, `capture`, `lexical`, `recent`, `hydrate` | All cases need `fingerprintKey`. An enabled provider that returns no owner key fails when the case requests one. | `seedFact`, `dump` in the rotation refusal check. |
+| `RAW_CASES` | `uow`, `raw`, `suppressions`, `capture`, `keys` | All need `rawArchive`. Window cases also need `rawWindowHide`. Span cases also need `rawSpans`. The session and text visibility case requests `fingerprintKey` as a preference. | `dump`, `seedFact`, `counters`, plus `hashSessionKey` for hashed session or raw span fixtures as described above. |
+| `TOPIC_CASES` | `uow`, `memories`, `placement` | All cases need `placement`. | `dump`, `seedFact`, plus `hashSessionKey` for the hashed session fixture. |
+
+### Minimal driver
+
+The typed factory contract describes the full port shape. For a store with only `uow` and `suppressions`, this JavaScript driver registers selected cases from `CASES` and `PRIVACY_CASES`. Pass your factory to this function from a test file and run it with `node --test`. The rollback check uses `dump()`. The span case reports a skip if the store declines `rawSpans`.
 
 ```js
-import { defineConformanceTests } from "@cairn-ink/conformance/node-test";
-import { factory } from "./factory.mjs";
+import { test } from "node:test";
+import { CASES, PRIVACY_CASES, runCase } from "@cairn-ink/conformance";
 
-defineConformanceTests(factory);
+export default function (factory) {
+  const cases = [...CASES, ...PRIVACY_CASES].filter(({ id }) =>
+    ["K-UOW-3", "K-UOW-3r", "K-FACT-1", "K-FACT-2", "K-FACT-3r"].includes(id));
+
+  for (const testCase of cases) {
+    test(`${factory.name} ${testCase.id} ${testCase.title}`, async (t) => {
+      const reason = await runCase(factory, testCase);
+      if (reason !== null) t.skip(reason);
+    });
+  }
+}
 ```
 
-- `needs` requests enabled flags and skips with `needs <flag>` if any are off.
-- `needsOff` requests disabled flags and skips with `needs <flag> off` if any are on.
-- `requests` supplies optional flags at open. Skips depend on the explicit requirements, which override requests.
-- `pending` skips with the given reason before opening an adapter.
-- `followUp` runs a second check with its own capability requests and adapter after the first check passes and closes.
+### Reporting a failure
 
-Cases treat the store as the authority for write times. To create fixed times, including ties, call `harness.setWriteTime` after the write run closes. Derive the expected order from the forced microsecond times and the IDs the adapter returned.
-
-Cases compare port results by projecting the fields they need into plain tuples or objects, such as `[id, updatedAtUs]`. This lets adapters return rows and matches as class instances or with extra fields. Cases can compare documented plain shapes whole when they assert every field, such as `{ outcome, revision }` or `[[]]` for an empty match batch. Snapshots from `dump()` must be JSON-safe.
-
-Retrieval cases check membership and non-increasing scores for lexical results. Lexical scores and equal-score ordering are store-specific. Vector cases check cosine distance and coverage for the query model and dimensions. Hydration and fence cases check visibility and input order, and hydration checks receipts and source dates. The historical-row case awaits the supersession suite.
-
-Page cursors are opaque. Recent pages use separate read-only runs. Stable re-reads compare projected items, treating rows with the same timestamp and ID in different namespaces as an unordered group. State tokens must be valid when issued, stable without writes, and bound to the read set and owner revision. A committed write in any namespace for the owner invalidates an earlier token.
+The kit asserts the port contract. Raise a kit or contract question with the kit owners and include the failing case ID, requested and actual capabilities, profile, and error. Keep the assertions and adapter behavior intact while the discrepancy is investigated.
 
 ### Privacy cases
 
-Run each entry in `PRIVACY_CASES` with `runCase(factory, testCase)`. The factory supplies
-`suppressions`, `pause`, and `keys` on the adapter and declares `OpenedAdapter.sessionRefs`
-as `"plain"` or `"hashed"`. The plain profile accepts both forms. The hashed profile
-rejects plaintext session IDs.
+Signing key stability and owner isolation are checked with signatures over a fixed test message. When the rotation hook is present, the check sets a known initial secret and checks that both the key ID and signature change after rotation.
 
-The distinct-target raw span case, `K-FACT-3r`, requests `rawSpans` and reports
-`needs rawSpans` when the adapter does not provide it.
-
-The optional test hook `harness.setFingerprintSecret(secret)` rotates the fingerprint
-secret. The runner reports a skip reason for the rotation check when the hook is
-unavailable. Signing key stability and owner isolation are checked with signatures
-over a fixed test message. With the hook, the rotation check sets a known initial
-secret and checks that both the key ID and signature change after rotation.
-
-The in-memory reference adapter uses the public fixture `TEST_FINGERPRINT_SECRET`
-(`"test-secret-a"`) and `TEST_FINGERPRINT_LABELS` when `fingerprintKey` is enabled with
-no configuration. Use these fixtures for tests only.
+The in-memory reference adapter uses the public fixtures `TEST_FINGERPRINT_SECRET` and `TEST_FINGERPRINT_LABELS` when `fingerprintKey` is enabled with no configuration. Use these fixtures for tests only.
 
 ### Privacy matching cases
 
-Run the entries in `PRIVACY_MATCH_CASES` with `runCase(factory, testCase)`. These
-cases seed facts with `harness.seedFact` and check visibility, write policy and
-suppression reads through the ports. The general `CASES` export is unchanged.
-
-Factories that declare `sessionRefs: "hashed"` supply a synchronous
-`harness.hashSessionKey(client, sessionId)` using the same conversion as their
-adapter. The hashed receipt check reports `needs hashed session refs` on the
-plain profile. The vector follow-ups request `vectorSuppression` and
-`semanticRetrieval` and report the missing flag when skipped. Their exact-digest
-checks run on either profile with or without those flags.
+The cases seed facts and check visibility, write policy, and suppression reads through the ports. Exact-digest checks run on either session profile with or without the vector flags.
 
 ### Capture cases
 
-Run each entry in `CAPTURE_CASES` with `runCase(factory, testCase)`. The cases
-exercise claim identity, dispatch, finish, and rollback through the adapter
-ports. They compare relative index revisions and treat tokens as opaque.
-
-The optional test hook `harness.advanceClock(ms)` moves the store clock forward
-by the requested milliseconds. The lease-expiry check reports a skip reason
-when the hook is unavailable. The abandon checks still run.
-
-### Raw archive cases
-
-Run `RAW_CASES` with `runCase(factory, testCase)`. The cases request `rawArchive`.
-Window and span cases also request `rawWindowHide` or `rawSpans`. Raw span fixtures
-use `harness.hashSessionKey(client, sessionId)` in either session profile. The optional
-`harness.seedClientlessRaw(scope, sessionId, message)` hook seeds a legacy row for
-the missing-client check. The runner reports a skip reason when a required fixture
-or capability is unavailable.
-
-Snapshots from `dump()` must reflect retained raw rows, including hidden ones.
-Raw key conflicts increment the content-free `rawKeyConflict` counter.
+The cases exercise claim identity, dispatch, finish, and rollback through the adapter ports. They compare relative index revisions and treat tokens as opaque.
 
 ### Sticky write failures
 
 After a write port touches store state, the in-memory adapter records its first failure code.
 If the callback returns normally, the run rolls back and rejects with a fresh `CoreError` for that code.
 
-Write ports validate arguments before reading state; argument failures are never sticky.
+Write ports validate arguments before reading state. Argument failures are never sticky.

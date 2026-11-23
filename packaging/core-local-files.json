@@ -49,6 +49,7 @@
   "packages/core/src/service/entry.mjs",
   "packages/core/src/service/find.mjs",
   "packages/core/src/service/forget.mjs",
+  "packages/core/src/service/import.mjs",
   "packages/core/src/service/index.mjs",
   "packages/core/src/service/pause.mjs",
   "packages/core/src/service/reads.mjs",

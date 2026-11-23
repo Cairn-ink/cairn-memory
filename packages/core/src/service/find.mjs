@@ -105,7 +105,7 @@ export function readMethod({ uow, hydrate, fence }) {
       hydrate.hydrate(tx, readScope, [ref], "read"));
     return uow.run(scope.owner, { readOnly: true }, async tx => {
       const hydrated = await hydrate.hydrate(tx, readScope, [ref], "read");
-      const visible = await fence.assertVisible(tx, readScope, [ref]);
+      const visible = await fence.assertVisible(tx, readScope, [ref], "read");
       const result = hydrated.find(matches);
       if (!result?.memory || !visible.some(isRequested) || !initial.some(matches)) return { status: "not_found" };
       return {
