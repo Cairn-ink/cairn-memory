@@ -1,5 +1,5 @@
 // Provisional fact matching. This module will call the privacy module's policy functions when they exist.
-import { CoreError, SUPPRESSION_DISTANCE, validateSuppressionFact } from "@cairn-ink/core";
+import { SUPPRESSION_DISTANCE } from "@cairn-ink/core";
 import { cosineDistance } from "./cosine.mjs";
 
 /** @typedef {import("@cairn-ink/core").SuppressionFact} SuppressionFact */
@@ -9,16 +9,13 @@ import { cosineDistance } from "./cosine.mjs";
 /** @typedef {import("@cairn-ink/core/ports").MemoryRow} MemoryRow */
 /** @typedef {import("@cairn-ink/core/ports").SourceRef} SourceRef */
 
-/** @param {string} owner @param {SuppressionFact} fact */
-export function copyFact(owner, fact) {
-  const validated = validateSuppressionFact(fact);
-  if (validated.owner !== owner) throw new CoreError("invalid_input");
-  return structuredClone(validated);
-}
-
-/** @param {SuppressionFact[]} facts @param {Scope} scope @param {boolean} vectorSuppression */
+/** @param {ReadonlyMap<string, import("@cairn-ink/core").StoredFact>} facts @param {Scope} scope @param {boolean} vectorSuppression */
 export function factPolicy(facts, scope, vectorSuppression) {
-  const scoped = facts.filter((fact) => fact.namespace === undefined || fact.namespace === scope.namespace);
+  /** @type {SuppressionFact[]} */
+  const scoped = [];
+  for (const { fact } of facts.values()) {
+    if (fact.namespace === undefined || fact.namespace === scope.namespace) scoped.push(fact);
+  }
   const texts = scoped.filter((fact) => fact.kind === "text");
 
   /** @param {TextFact} fact @param {DuplicateQuery} query @param {"hash" | "full"} mode */

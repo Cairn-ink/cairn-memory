@@ -16,7 +16,8 @@ type CaseRun = {
   needs: Capability[];
   needsOff?: Capability[];
   requests?: Partial<Capabilities>;
-  run(ctx: CaseContext): Promise<void>;
+  /** A returned string is the reason an optional check was skipped. */
+  run(ctx: CaseContext): Promise<void | string>;
 };
 
 export type ConformanceCase = CaseRun & {
@@ -27,5 +28,6 @@ export type ConformanceCase = CaseRun & {
 };
 
 export declare const CASES: readonly ConformanceCase[];
+export declare const PRIVACY_CASES: readonly ConformanceCase[];
 /** Returns the skip reason, or null on success. Failures reject. */
 export declare function runCase(factory: AdapterFactory, testCase: ConformanceCase): Promise<string | null>;

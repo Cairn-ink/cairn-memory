@@ -1,5 +1,5 @@
-import { CoreError, compareUtf8, toCoreError } from "@cairn-ink/core";
-import { copyFact } from "./fact-match.mjs";
+import { CoreError, compareUtf8, factBody, toCoreError, validateSuppressionFact } from "@cairn-ink/core";
+import { storeFact } from "./privacy.mjs";
 
 /** @typedef {import("@cairn-ink/core").ErrorCode} ErrorCode */
 /** @typedef {import("@cairn-ink/core/ports").Tx} Tx */
@@ -7,8 +7,10 @@ import { copyFact } from "./fact-match.mjs";
 /** @typedef {import("@cairn-ink/core/ports").Namespace} Namespace */
 /** @typedef {import("@cairn-ink/core/ports").MemoryRow & {embedding: {model: string, vector: number[]} | null, historical: boolean}} Row */
 /** @typedef {{row: Row, receipts: import("@cairn-ink/core/ports").Receipt[]}} Entry */
-/** @typedef {import("@cairn-ink/core").SuppressionFact} SuppressionFact */
-/** @typedef {{rows: Map<Namespace, Map<string, Entry>>, facts: SuppressionFact[], indexRevision: number}} State */
+/** @typedef {import("@cairn-ink/core").StoredFact} StoredFact */
+/** @typedef {import("@cairn-ink/core/ports").PauseState} PauseState */
+/** @typedef {{rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number}} State */
+/** @typedef {{state: State, run: {readonly ended: boolean}, dirty: boolean, pauseLock: boolean, conflict?: CoreError}} IssuedRun */
 
 class Mutex {
   #tail = Promise.resolve();
@@ -25,7 +27,9 @@ class Mutex {
 
 class Owner {
   /** @type {State} */
-  committed = { rows: new Map(), facts: [], indexRevision: 0 };
+  committed = {
+    rows: new Map(), facts: new Map(), epoch: null, pause: { paused: false, generation: 0 }, indexRevision: 0,
+  };
   pause = new Mutex();
   write = new Mutex();
   open = 0;
@@ -50,7 +54,7 @@ function jsonSafe(value) {
 export function createUnitOfWork(nativeErrorMap) {
   /** @type {Map<string, Owner>} */
   const owners = new Map();
-  /** @type {WeakMap<Tx, {state: State, run: {readonly ended: boolean}, dirty: boolean}>} */
+  /** @type {WeakMap<Tx, IssuedRun>} */
   const issued = new WeakMap();
 
   /** @param {string} owner */
@@ -91,9 +95,11 @@ export function createUnitOfWork(nativeErrorMap) {
         }
         const run = Object.freeze({ get ended() { return ended; } });
         tx = Object.freeze({ owner, readOnly, __adapter: run });
-        const issuedRun = { run, state, dirty: false };
+        /** @type {IssuedRun} */
+        const issuedRun = { run, state, dirty: false, pauseLock };
         issued.set(tx, issuedRun);
         const result = await fn(tx);
+        if (issuedRun.conflict) throw issuedRun.conflict;
         if (issuedRun.dirty) {
           state.indexRevision++;
           current.committed = state;
@@ -113,23 +119,28 @@ export function createUnitOfWork(nativeErrorMap) {
    * @template T
    * @param {Tx} tx @param {Pick<Scope, "owner">} scope @param {boolean} write
    * @param {(state: State) => T} body
+   * @param {boolean} [pauseLock]
    */
-  function port(tx, scope, write, body) {
+  function port(tx, scope, write, body, pauseLock = false) {
+    const issuedRun = issued.get(tx);
     try {
-      const issuedRun = issued.get(tx);
-      if (!issuedRun || issuedRun.run.ended || (write && tx.readOnly) || scope?.owner !== tx.owner) {
+      if (!issuedRun || issuedRun.run.ended || (write && tx.readOnly) || scope?.owner !== tx.owner ||
+          (pauseLock && !issuedRun.pauseLock)) {
         throw new CoreError("internal_error");
       }
       if (write) issuedRun.dirty = true;
       return body(issuedRun.state);
     } catch (error) {
-      throw toCoreError(error, nativeErrorMap);
+      const mapped = toCoreError(error, nativeErrorMap);
+      // A fact conflict aborts the run even if the caller catches the port error.
+      if (issuedRun && mapped.code === "fact_conflict") issuedRun.conflict = mapped;
+      throw mapped;
     }
   }
 
   function dump() {
     const snapshot = [...owners]
-      .filter(([, { committed }]) => committed.rows.size > 0 || committed.facts.length > 0)
+      .filter(([, { committed }]) => committed.rows.size > 0 || committed.facts.size > 0 || committed.pause.generation > 0)
       .sort(([a], [b]) => compareUtf8(a, b))
       .map(([owner, { committed }]) => ({
         owner,
@@ -140,20 +151,32 @@ export function createUnitOfWork(nativeErrorMap) {
             if (x !== y) return x === null ? -1 : y === null ? 1 : compareUtf8(x, y);
             return compareUtf8(a.id, b.id);
           }),
-        facts: committed.facts,
+        facts: [...committed.facts.values()],
+        pause: committed.pause,
       }));
     return jsonSafe(snapshot);
   }
 
-  /** @param {string} owner @param {SuppressionFact} fact */
+  /** @param {string} owner @param {(tx: Tx) => Promise<void>} fn */
+  async function runSeed(owner, fn) {
+    if (owners.get(owner)?.open) throw new CoreError("invalid_input");
+    await uow.run(owner, {}, fn);
+  }
+
+  /**
+   * Synchronous fixture entry point for unit-of-work tests, using the canonical body as its
+   * retry token. The adapter harness computes a WebCrypto incarnation before calling writeFact.
+   * @param {string} owner @param {import("@cairn-ink/core").SuppressionFact} fact
+   */
   function appendFact(owner, fact) {
     const current = ownerState(owner);
     if (current.open > 0) throw new CoreError("invalid_input");
-    current.committed = {
-      ...current.committed,
-      facts: [...current.committed.facts, copyFact(owner, fact)],
-      indexRevision: current.committed.indexRevision + 1,
-    };
+    const validated = validateSuppressionFact(fact);
+    if (validated.owner !== owner) throw new CoreError("invalid_input");
+    const state = { ...current.committed, facts: new Map(current.committed.facts) };
+    storeFact(state, validated, factBody(validated));
+    state.indexRevision++;
+    current.committed = state;
   }
 
   /** @param {Scope} scope @param {string} id @param {bigint} updatedAtUs */
@@ -173,5 +196,5 @@ export function createUnitOfWork(nativeErrorMap) {
     current.committed = { ...current.committed, rows, indexRevision: current.committed.indexRevision + 1 };
   }
 
-  return { uow, port, dump, appendFact, setWriteTime };
+  return { uow, port, dump, appendFact, runSeed, setWriteTime };
 }

@@ -3,6 +3,8 @@ import { retrievalCases } from "./retrieval-cases.mjs";
 import { bounded, check, DEFAULT_TIMEOUT_MS } from "./support.mjs";
 import { unitOfWorkCases } from "./unit-of-work-cases.mjs";
 
+export { privacyCases as PRIVACY_CASES } from "./privacy-cases.mjs";
+
 /** @type {readonly import("./index.d.mts").ConformanceCase[]} */
 export const CASES = [...unitOfWorkCases, ...memoryCases, ...retrievalCases];
 
@@ -38,7 +40,7 @@ async function runOpenedCase(factory, testCase) {
     ...Object.fromEntries(needsOff.map((flag) => [flag, false])),
   };
   const opened = await factory.open({ capabilities });
-  const { adapter, embeddingDimensions, harness, nativeErrorMap, busyNativeCodes, settleMs,
+  const { adapter, embeddingDimensions, harness, nativeErrorMap, busyNativeCodes, sessionRefs, settleMs,
     timeoutMs = DEFAULT_TIMEOUT_MS } = opened;
   const validTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0;
   /** @type {{ error: unknown } | undefined} */
@@ -53,11 +55,12 @@ async function runOpenedCase(factory, testCase) {
     if (enabled) return `needs ${enabled} off`;
 
     const owner = crypto.randomUUID();
-    await testCase.run({
+    const skipReason = await testCase.run({
       adapter,
       harness,
       nativeErrorMap,
       busyNativeCodes,
+      sessionRefs,
       settleMs,
       timeoutMs,
       owner,
@@ -74,7 +77,7 @@ async function runOpenedCase(factory, testCase) {
         return vector;
       },
     });
-    return null;
+    return skipReason ?? null;
   } catch (error) {
     caseFailure = { error };
     throw error;
