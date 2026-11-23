@@ -119,6 +119,14 @@ function traceMasks(text, rules) {
   return masks;
 }
 
+/** One pass of the core policy, with positions in the original text.
+ * @param {string} text
+ * @returns {Mask[]}
+ */
+export function coreRedactionMasks(text) {
+  return mergeMasks([...traceMasks(text, V1_RULES), ...traceMasks(text, HOSTED_RULES)]);
+}
+
 /** @param {unknown} text */
 export function redactCore(text) {
   if (typeof text !== "string") throw new CoreError("invalid_input");
@@ -127,8 +135,7 @@ export function redactCore(text) {
   // Repeat because replacements can expose new boundaries in the combined output.
   let value = text;
   while (true) {
-    const masks = mergeMasks([...traceMasks(value, V1_RULES), ...traceMasks(value, HOSTED_RULES)]);
-    const masked = applyMasks(value, masks);
+    const masked = applyMasks(value, coreRedactionMasks(value));
     if (masked === value) return masked;
     value = masked;
   }

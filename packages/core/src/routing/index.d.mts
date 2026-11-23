@@ -1,0 +1,111 @@
+import type { Role, Scope } from "../ports/common.d.ts";
+
+export interface DocumentMessage {
+  id: string;
+  role: Role;
+  /** Incoming content before capture collapses whitespace. */
+  content: string;
+  occurredAtMs?: number | null;
+}
+
+export type DocumentCardReason =
+  | "long_assistant" | "long_any" | "explicit"
+  | "structured:list" | "structured:table" | "structured:code"
+  | "structured:list+table" | "structured:list+code" | "structured:table+code"
+  | "structured:list+table+code";
+
+export interface DocumentRouteChoice {
+  position: number;
+  reason: DocumentCardReason;
+}
+
+export interface DocumentRoutingDecision {
+  /** In admission priority order; positions index the original messages. */
+  chosen: DocumentRouteChoice[];
+  drops: { extract_only: number; capture_limit: number };
+}
+
+/** Determines eligible cards. All messages remain eligible for the existing extraction flow. */
+export declare function routeDocumentMessages(messages: readonly DocumentMessage[]): DocumentRoutingDecision;
+
+export interface DocumentSession {
+  scope: Scope;
+  client: string;
+  /** The resolved raw lineage session key shared by both capture paths. */
+  canonicalSessionKey: string;
+}
+
+export interface DocumentMessageRef extends DocumentSession {
+  messageId: string;
+}
+
+export interface DocumentSentence {
+  /** Inclusive UTF-16 offset in the card body. */
+  start: number;
+  /** Exclusive UTF-16 offset in the card body. */
+  end: number;
+  source: DocumentMessageRef;
+}
+
+export interface DocumentCard {
+  id: string;
+  revision: 1;
+  title: string;
+  date: number | null;
+  body: string;
+  source: DocumentMessageRef;
+  sentences: DocumentSentence[];
+}
+
+export type DocumentCardDropReason = "oversize" | "unmappable_redaction" | "empty_body" | "missing_session_key";
+export type DocumentCardBuild =
+  | { card: DocumentCard; drops: Readonly<Record<string, never>> }
+  | { card: null; drops: Partial<Record<DocumentCardDropReason, 1>> };
+
+export declare function buildDocumentCard(message: DocumentMessage, session: DocumentSession): Promise<DocumentCardBuild>;
+
+export interface DocumentPieceOptions {
+  maxTokens: number;
+  countTokens: (text: string) => number;
+}
+
+export interface DocumentPiece {
+  body: string;
+  kind: "whole" | "truncated" | "excerpt";
+}
+
+/**
+ * Uses complete lines for a truncated head when possible. An oversized first line or
+ * matching line uses the longest code-point prefix that fits its token limit.
+ * An excerpt may add the preceding heading and an ellipsis outside the window limit.
+ */
+export declare function selectDocumentPiece(
+  card: Pick<DocumentCard, "body">,
+  query: string,
+  options: DocumentPieceOptions,
+): DocumentPiece;
+
+export type DocumentVector = readonly number[] | Float32Array | Float64Array;
+
+export interface DocumentRankingOptions {
+  queryVector?: DocumentVector;
+  /** Card ids mapped to vectors computed over the first 2,000 characters of each body. */
+  cardVectors?: ReadonlyMap<string, DocumentVector>;
+}
+
+export interface DocumentCardMatch {
+  card: DocumentCard;
+  score: number;
+  method: "vector" | "lexical";
+}
+
+/**
+ * Returns one card with cosine at least 0.35 when both vector inputs are supplied.
+ * Otherwise requires coverage of at least half of the query's distinct term tokens
+ * in the card's title and body. Ties follow input order.
+ */
+export declare function rankDocumentCards(
+  query: string,
+  cards: readonly DocumentCard[],
+  options?: DocumentRankingOptions,
+): DocumentCardMatch | null;
