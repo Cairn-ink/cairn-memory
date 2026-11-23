@@ -110,6 +110,8 @@ export interface SupersessionStore {
   record(tx: Tx, scope: Scope, edge: { previous: { id: string; revision: Revision }; replacement: { id: string; revision: Revision } }, receiptIds: readonly string[], nowMs: number): Promise<void>;
   markHistorical(tx: Tx, scope: Scope, id: string, nowMs: number): Promise<void>;
   read(tx: Tx, scope: Scope, id: string): Promise<{ supersededBy: string | null; supersedes: string[] }>;
+  /** Batched read for search pages; one round trip. Ids absent from the scope map to the empty answer. */
+  readMany?(tx: Tx, scope: Scope, ids: readonly string[]): Promise<Map<string, { supersededBy: string | null; supersedes: string[] }>>;
   /** Incoming supersession edges of a replacement (core checks incoming + new > limit → supersession_limit). */
   incomingCount(tx: Tx, scope: Scope, replacementId: string): Promise<number>;
 }
@@ -133,6 +135,8 @@ export interface ConflictEdgeStore {
    * ordered by compareUtf8(memoryId), then source.
    */
   list(tx: Tx, scope: Scope, id: string): Promise<ConflictEdge[]>;
+  /** Batched read for search pages; one round trip. Ids absent from the scope map to the empty answer. */
+  readMany?(tx: Tx, scope: Scope, ids: readonly string[]): Promise<Map<string, ConflictEdge[]>>;
   invalidate(tx: Tx, scope: Scope, id: string): Promise<number>;
   /** Current edge count (core enforces the relation limit → conflict_limit). */
   degree(tx: Tx, scope: Scope, id: string): Promise<number>;

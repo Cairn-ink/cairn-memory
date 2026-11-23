@@ -18,6 +18,8 @@ forward migrations in `migrations/`. The metadata change commits with its
 check marked `NOT VALID`. The next migration validates the check in a separate
 transaction while ordinary reads and writes continue.
 
+Migration 0010 adds memory relations. The hosted service ships a byte-identical copy as a drizzle migration until it applies the engine SQL directly.
+
 Load the SQL in the host and pass the full ordered list to
 `applyMigrations(source, migrations)`. Use immutable IDs, append new entries,
 and set `concurrent: true` for `.concurrent.sql` files. A concurrent file
