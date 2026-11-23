@@ -4,7 +4,7 @@ import {
 } from "@cairn-ink/core";
 import { decodePayload, encodePayload, newestFirst } from "./cursor.mjs";
 import { writeTime } from "./memory-store.mjs";
-import { retireTopicTitleSources } from "./unit-of-work.mjs";
+import { dropMemoryPlacement } from "./unit-of-work.mjs";
 import { snapshotArray, validateLimit, validateMemoryId, validateTime, writeNamespace } from "./validation.mjs";
 
 /** @import {PlacementProposal} from "@cairn-ink/core" */
@@ -337,13 +337,11 @@ export function createTopicStore(port, _flags, newId, now, matchFacts, {
     },
 
     async dropMemory(tx, scope, memoryId) {
-      return port.write(tx, scope, "conditional", () => (getState, markDirty) => {
+      return port.write(tx, scope, "conditional", () => (getState, markDirty, run) => {
         const scoped = getState().topics.get(scope.namespace);
-        const memberships = scoped?.outcomes.get(memoryId)?.memberships;
-        const dropped = memberships?.size ?? 0;
-        memberships?.clear();
-        const retired = retireTopicTitleSources(scoped, memoryId);
-        if (dropped || retired) markDirty();
+        const { dropped, retired } = dropMemoryPlacement(scoped, memoryId);
+        if (dropped) markDirty();
+        else if (retired) run.stateWritten = true;
         return { dropped };
       });
     },

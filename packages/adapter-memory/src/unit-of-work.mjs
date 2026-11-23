@@ -37,18 +37,28 @@ export function copyPublicRow({ digests: _digests, ...row }) {
   return structuredClone(row);
 }
 
-/** @param {TopicState | undefined} scoped @param {string} memoryId */
-export function retireTopicTitleSources(scoped, memoryId) {
-  let changed = false;
-  for (const { sources } of scoped?.topics.values() ?? []) {
+/** @param {TopicState | undefined} scoped @param {string} memoryId @param {{erase?: boolean}} [options] */
+export function dropMemoryPlacement(scoped, memoryId, { erase = false } = {}) {
+  if (!scoped) return { dropped: 0, retired: false };
+  const memberships = scoped.outcomes.get(memoryId)?.memberships;
+  const dropped = memberships?.size ?? 0;
+  if (erase) {
+    scoped.outcomes.delete(memoryId);
+    scoped.failures.delete(memoryId);
+  } else {
+    memberships?.clear();
+  }
+
+  let retired = false;
+  for (const { sources } of scoped.topics.values()) {
     const source = sources.find((entry) => entry.memoryId === memoryId);
     if (source && source.revision !== 0) {
       // Memory revisions start at 1, even when an ID is reused.
       source.revision = 0;
-      changed = true;
+      retired = true;
     }
   }
-  return changed;
+  return { dropped, retired };
 }
 
 /**
