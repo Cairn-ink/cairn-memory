@@ -4,6 +4,7 @@ import {
   buildDetectRequest, buildVerifyRequest, detectCardAmendments, renderCardAmendments,
 } from "@cairn-ink/core/routing";
 import { MODEL_INPUT_TOKENS, modelRequestText } from "../src/capture/request-size.mjs";
+import { prepareCoreText } from "../src/privacy/text.mjs";
 
 const scope = { owner: "owner", namespace: "work" };
 const quote = "Set width to 4.";
@@ -69,13 +70,13 @@ test("an unmappable redaction drops only the affected candidate and counts the d
   assert.equal(amendments[0].amendment.sentence, "Width is 4.");
 });
 
-test("verify keeps the model's untrimmed text and only the stored sentence is trimmed", async () => {
+test("verify and storage use NFKC while keeping the model's line endings", async () => {
   const value = " Width is ４.\r\nKeep the label. ";
   const model = makeModel([change(value)]);
   const { amendments } = await detectCardAmendments({ model, capture: makeCapture(), cards: [card] });
 
-  assert.ok(model.verifies[0].input.endsWith(`\nNEW VALUE: ${value}`));
-  assert.equal(amendments[0].amendment.sentence, "Width is ４.\r\nKeep the label.");
+  assert.ok(model.verifies[0].input.endsWith("\nNEW VALUE:  Width is 4.\r\nKeep the label. "));
+  assert.equal(amendments[0].amendment.sentence, "Width is 4.\r\nKeep the label.");
 });
 
 test("detect measures the serialized envelope and rejects one unit above 6,000", () => {
@@ -166,13 +167,65 @@ for (const [description, candidate, capture] of [
   });
 }
 
-test("amendment detection verifies and returns a well-formed model value", async () => {
-  const value = "Width is 4.";
+for (const [description, candidate] of [
+  ["a NUL value and a blank quote", change("\0", "")],
+  ["a NUL quote and a blank value", change("", "\0")],
+  ["a lone surrogate in the card ID and an unexpected field", { ...change("Width is 4."), card_id: "\uD800", extra: true }],
+]) {
+  test(`ill-formed model text takes precedence for ${description}`, async () => {
+    const model = makeModel([candidate]);
+    const { amendments, counters } = await detectCardAmendments({ model, capture: makeCapture(), cards: [card] });
+
+    assert.equal(model.verifies.length, 0);
+    assert.deepEqual(amendments, []);
+    assert.deepEqual(counters, { detect_calls: 1, ill_formed_model_text: 1 });
+  });
+}
+
+const fullwidthMarker = "password=［ＲＥＤＡＣＴＥＤ］";
+const pem = "-----BEGIN PRIVATE KEY-----\r\nsynthetic CRLF payload\r\n-----END PRIVATE KEY-----";
+
+for (const [description, value, quoted, maskedFragments] of [
+  ["a fullwidth marker in the value", fullwidthMarker, quote, ["［ＲＥＤＡＣＴＥＤ］"]],
+  ["a fullwidth marker in the quote", "Width is 4.", fullwidthMarker, ["［ＲＥＤＡＣＴＥＤ］"]],
+  ["overlapping assignments", "password=auth_token=overlap-secret", "password=auth_token=overlap-secret",
+    ["auth_token=", "overlap-secret"]],
+  ["overlapping quoted OAuth and password masks", '{"refresh_token":"prefix-secret password=long-password"}',
+    '{"refresh_token":"prefix-secret password=long-password"}', ["prefix-secret", "password=", "long-password"]],
+  ["a CRLF-delimited PEM block", pem, pem, ["-----BEGIN", "synthetic CRLF payload", "-----END"]],
+  ["a compatibility-width credential", "ｐａｓｓｗｏｒｄ＝compat-secret", "ｐａｓｓｗｏｒｄ＝compat-secret", ["compat-secret"]],
+]) {
+  test(`verify and storage match capture masks for ${description}`, async () => {
+    const model = makeModel([change(value, quoted)]);
+    const { amendments } = await detectCardAmendments({ model, capture: makeCapture(quoted), cards: [card] });
+
+    assert.equal(model.verifies.length, 1);
+    assert.equal(amendments.length, 1);
+    const [{ amendment: { sentence, quote: storedQuote } }] = amendments;
+    const { input } = model.verifies[0];
+    const safeValue = prepareCoreText(value);
+    const safeQuote = prepareCoreText(quoted);
+    for (const fragment of maskedFragments) {
+      for (const text of [safeValue, safeQuote, input, sentence, storedQuote]) {
+        assert.ok(!text.includes(fragment), `unexpected fragment: ${fragment}`);
+      }
+    }
+    assert.ok(input.endsWith(`\nQUOTE: ${safeQuote}\nNEW VALUE: ${safeValue}`));
+    assert.equal(sentence, safeValue);
+    assert.equal(storedQuote, safeQuote);
+  });
+}
+
+test("a well-formed model value keeps the kit verify layout and edge whitespace", async () => {
+  const value = " \tWidth is 4.\t ";
   const model = makeModel([change(value)]);
   const { amendments, counters } = await detectCardAmendments({ model, capture: makeCapture(), cards: [card] });
 
   assert.equal(model.verifies.length, 1);
+  assert.equal(model.verifies[0].input,
+    "DOCUMENT (saved 2025-06-11):\nWidth: 3\n\nLATER CONVERSATION DATE: 2025-06-12\nQUOTE: Set width to 4.\nNEW VALUE:  \tWidth is 4.\t ");
   assert.equal(amendments.length, 1);
-  assert.equal(amendments[0].amendment.sentence, value);
+  assert.equal(amendments[0].amendment.sentence, "Width is 4.");
+  assert.equal(amendments[0].amendment.quote, quote);
   assert.equal(counters.ill_formed_model_text, undefined);
 });

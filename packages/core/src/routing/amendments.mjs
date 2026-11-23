@@ -2,8 +2,8 @@ import { countTokens as checkedTokenCount, MODEL_INPUT_TOKENS, modelRequestText 
 import { cleanContent } from "../privacy/text.mjs";
 import { compareUtf8 } from "../utf8.mjs";
 import { SYS_DETECT, SYS_VERIFY } from "./amendment-prompts.mjs";
-import { redactDocumentText } from "./redaction.mjs";
-import { normalizeDocumentText, SPACE } from "./text.mjs";
+import { redactAmendmentText } from "./redaction.mjs";
+import { SPACE } from "./text.mjs";
 
 export { SYS_DETECT, SYS_VERIFY };
 export { selectAmendmentsForRead, renderCardAmendments, documentCardAmendmentVisible } from "./amendment-read.mjs";
@@ -116,17 +116,6 @@ function hasKeys(value, required, optional = []) {
 /** @param {unknown} value @returns {value is string} */
 const nonblank = (value) => typeof value === "string" && norm(value).length > 0;
 
-/** @param {string} text */
-function redactAmendmentText(text) {
-  try {
-    const redacted = redactDocumentText(text);
-    // Keep the original formatting when the card redactor only normalized the text.
-    return redacted === normalizeDocumentText(text) ? text : redacted;
-  } catch {
-    return null;
-  }
-}
-
 /** @param {string} normalizedQuote */
 function quotePattern(normalizedQuote) {
   const parts = normalizedQuote.split(" ").map(part => part.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"));
@@ -141,18 +130,19 @@ export function checkChangeCandidates({ changes, listedCards, captureMessages, c
   /** @type {ReturnType<typeof import("./amendments.mjs").checkChangeCandidates>["drops"]} */
   const drops = {};
 
-  for (const change of changes) {
-    if (!record(change) || !hasKeys(change, ["card_id", "quote", "new_value"])) {
+  for (const entry of changes) {
+    const change = record(entry) ? entry : null;
+    if (change && Object.values(change).some(text => typeof text === "string" && cleanContent(text) !== text)) {
+      drops.ill_formed_model_text = (drops.ill_formed_model_text ?? 0) + 1;
+      continue;
+    }
+    if (!change || !hasKeys(change, ["card_id", "quote", "new_value"])) {
       drops.malformed = (drops.malformed ?? 0) + 1;
       continue;
     }
     const { card_id: cardId, quote, new_value: value } = change;
     if (!nonblank(cardId) || !nonblank(quote) || !nonblank(value)) {
       drops.malformed = (drops.malformed ?? 0) + 1;
-      continue;
-    }
-    if (cleanContent(value) !== value || cleanContent(quote) !== quote) {
-      drops.ill_formed_model_text = (drops.ill_formed_model_text ?? 0) + 1;
       continue;
     }
     const card = byId.get(cardId);
