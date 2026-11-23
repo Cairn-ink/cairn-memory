@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.11 — 2026-11-23
+
+- **On Linux, `daemon status --local` and `daemon stop --local` show and stop the store’s shared background servers.** The stop command can report that a server is still running. Setup records a capture identity for each connected tool, even with `--no-capture`, and uninstall keeps the engine while one is retained. A shared server normally exits about 30 seconds after its last session closes. To request an earlier stop, run `daemon stop --local` after closing the sessions and before uninstalling. When uninstall does remove the engine, it first asks these servers to stop, best effort. Uninstall keeps memory data.
+- **The bundled local engine records interrupted Claude Code session starts separately and preserves completed starts during recovery.** When this engine runs the capture hooks, a later save can recover an eligible start attempt recorded by installer 0.6.10. When capture stays enabled, rerunning setup keeps the existing hooks on their pinned engine.
+
 ## 0.3.10 — 2026-11-22: capture windows say where they start and end
 
 - Each capture request now also carries the byte range of the transcript window
