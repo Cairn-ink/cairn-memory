@@ -198,7 +198,7 @@ export function createPostgresCapturePorts(options) {
     },
 
     async finish(tx, token, items) {
-      const { scope, source, batch, lease, revision, nowMs } = await pauseLockedWrite(tx, () => {
+      const { scope, source, batch, lease, nowMs } = await pauseLockedWrite(tx, () => {
         const lease = readToken(token);
         const batch = copyFinishItems(items);
         return async (query) => {
@@ -227,18 +227,13 @@ export function createPostgresCapturePorts(options) {
             const fromLease = receiptSource.client === source.client && receiptSource.sessionId === source.sessionId;
             await filterSources(query, receiptSource, [], fromLease ? proofs : [], "assert", captureProofs, hashSessionKey);
           }
-          return { scope, source, batch, lease, revision: await readIndexRevision(query, tx.owner), nowMs };
+          return { scope, source, batch, lease, nowMs };
         };
       });
 
       const { result, saved } = await finishMemories(tx, scope, source, batch, nowMs, memories, hashSessionKey, allowNonNullNamespace);
       return runOperation(tx, async (query) => {
-        const current = await readIndexRevision(query, tx.owner);
-        // The memory store bumps per write. A capture publishes one revision for its whole batch.
-        result.indexRevision = Math.min(current, revision + 1);
-        if (current !== result.indexRevision) {
-          await query("UPDATE core_owner_state SET index_revision = $2 WHERE user_id = $1", [tx.owner, result.indexRevision]);
-        }
+        result.indexRevision = await readIndexRevision(query, tx.owner);
         const { rows: [completed] } = await query(COMPLETE, [tx.owner, lease, saved, JSON.stringify(result)]);
         if (!completed) throw new CoreError("stale_admission");
         trackFinish(tx, completed.client, completed.event_id, result);

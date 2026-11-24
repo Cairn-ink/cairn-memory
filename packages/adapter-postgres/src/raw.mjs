@@ -18,6 +18,7 @@ import { requireLiveRun, runOperation } from "./uow.mjs";
 /** @import { RawStore, SessionLineageStore, ProvenClosure } from "../../core/src/ports/privacy.d.ts" */
 /** @import { StoredFact, TextFact } from "../../core/src/suppression-fact.mjs" */
 /** @import { Tx } from "../../core/src/ports/unit-of-work.d.ts" */
+/** @import { Run } from "./uow.mjs" */
 /** @import { Connection } from "./driver.mjs" */
 /** @import { RawOptions } from "./raw-options.d.mts" */
 /** @typedef {{client: string, sessionId: string}} Session */
@@ -75,18 +76,18 @@ async function changeSessions(query, scope, sessions, statement) {
   return (await query(statement, [scope.owner, JSON.stringify(target)])).rows.length;
 }
 
-/** @param {Query} query @param {Scope} scope @param {readonly Session[]} sessions */
-async function erase(query, scope, sessions) {
+/** @param {Query} query @param {Run} run @param {Scope} scope @param {readonly Session[]} sessions */
+async function erase(query, run, scope, sessions) {
   const fenced = await changeSessions(query, scope, sessions, FENCE);
   const suppressed = await changeSessions(query, scope, sessions, SUPPRESS);
   const rawDeleted = await changeSessions(query, scope, sessions, DELETE);
   const ledgerBlanked = sessions.length ? await scrubLedger(query, scope, sessions) : 0;
-  if (fenced || suppressed || rawDeleted || ledgerBlanked) await advanceIndex(query, scope.owner);
+  if (fenced || suppressed || rawDeleted || ledgerBlanked) await advanceIndex(query, scope.owner, run);
   return { rawDeleted, ledgerBlanked };
 }
 
-/** @param {Query} query @param {Scope} scope @param {Session} session @param {readonly Proof[]} proofs */
-async function record(query, scope, { client, sessionId }, proofs) {
+/** @param {Query} query @param {Run} run @param {Scope} scope @param {Session} session @param {readonly Proof[]} proofs */
+async function record(query, run, scope, { client, sessionId }, proofs) {
   if (!proofs.length) return;
   await query(RECORD, [scope.owner, client, sessionId, JSON.stringify(proofs)]);
   if (!proofs.some(({ content_mac }) => content_mac !== null)) return;
@@ -94,7 +95,7 @@ async function record(query, scope, { client, sessionId }, proofs) {
   const { rows: [closure] } = await query(LATE_PROVEN_CLOSURE, [scope.owner, client, [sessionId]]);
   if (closure.exceeded) throw new CoreError("lineage_closure_limit");
   if (closure.session_ids) {
-    await erase(query, scope, closure.session_ids.map((/** @type {string} */ id) => ({ client, sessionId: id })));
+    await erase(query, run, scope, closure.session_ids.map((/** @type {string} */ id) => ({ client, sessionId: id })));
   }
 }
 
@@ -129,12 +130,13 @@ function archiveRecord({ id, role, content }, occurred_at) {
   return { id: crypto.randomUUID(), message_id: id, role, content, occurred_at };
 }
 
-/** @param {Tx} tx @param {Query} query @param {{scope: Scope} & Session} source @param {ReturnType<typeof archiveRecord>[]} records */
-async function archiveRecords(tx, query, { scope, client, sessionId }, records) {
+/** @param {Tx} tx @param {Query} query @param {Run} run
+ * @param {{scope: Scope} & Session} source @param {ReturnType<typeof archiveRecord>[]} records */
+async function archiveRecords(tx, query, run, { scope, client, sessionId }, records) {
   if (!records.length) return 0;
   const { rows } = await query(ARCHIVE, [scope.owner, client, sessionId, JSON.stringify(records)]);
   if (rows.length) {
-    await advanceIndex(query, scope.owner);
+    await advanceIndex(query, scope.owner, run);
     await refreshFinishRevisions(tx, query);
   }
   return rows.length;
@@ -156,7 +158,7 @@ export function createPostgresRawPorts(options) {
         const capture = copyKey(tx, key);
         rawScope(capture.scope);
         const batch = copyMessages(messages);
-        return async (query) => {
+        return async (query, run) => {
           if (!batch.length) return;
           const proofs = await captureProofs(capture, batch);
           if (proofs === null) throw new CoreError("fingerprint_unavailable");
@@ -173,7 +175,7 @@ export function createPostgresRawPorts(options) {
               await query(`UPDATE capture_events SET raw_lineage_key_id = $6 WHERE ${identity}`, params);
             }
           }
-          await record(query, scope, capture, proofs);
+          await record(query, run, scope, capture, proofs);
         };
       });
     },
@@ -194,7 +196,7 @@ export function createPostgresRawPorts(options) {
         const capture = copyKey(tx, key);
         rawScope(capture.scope);
         const batch = copyArchiveMessages(messages);
-        return async (query) => {
+        return async (query, run) => {
           const times = batch.map(({ occurredAtMs }) => occurredAtMs);
           // An unrepresentable time cannot be archived as an unknown time.
           const hostedTimes = times.map((time) => time === null ? null : hostedTime(time) ?? undefined);
@@ -222,7 +224,7 @@ export function createPostgresRawPorts(options) {
             if (occurred_at === undefined || spanBlocked(batch[index])) return [];
             return [archiveRecord(batch[index], occurred_at)];
           });
-          return { ...result, archived: await archiveRecords(tx, query, capture, records) };
+          return { ...result, archived: await archiveRecords(tx, query, run, capture, records) };
         };
       });
     },
@@ -232,7 +234,7 @@ export function createPostgresRawPorts(options) {
         const source = { scope: rawScope(copyScope(tx, scope)), ...copySession(session) };
         const batch = copyArchiveMessages(messages);
         const withheld = copyWithheldPositions(options, batch.length);
-        return async (query) => {
+        return async (query, run) => {
           const counts = { archived: 0, existing: 0, withheld: batch.length };
           if (!batch.length) return counts;
           const times = batch.map(({ occurredAtMs }) => occurredAtMs);
@@ -259,13 +261,13 @@ export function createPostgresRawPorts(options) {
             eligible.push({ row: archiveRecord(message, occurredAt), proof: proofs[position] });
           }
           if (!eligible.length) return counts;
-          const archived = await archiveRecords(tx, query, source, eligible.map(({ row }) => row));
+          const archived = await archiveRecords(tx, query, run, source, eligible.map(({ row }) => row));
           // For conflicting IDs, anchor the version that actually exists in Raw.
           const { rows: stored } = await query(`SELECT message_id, content FROM raw_messages
             WHERE user_id = $1 AND client = $2 AND session_id = $3 AND message_id = ANY($4::text[])`,
           [...params, eligible.map(({ row }) => row.message_id)]);
           const contents = new Map(stored.map(({ message_id, content }) => [message_id, content]));
-          await record(query, source.scope, source, eligible.flatMap(({ row, proof }) =>
+          await record(query, run, source.scope, source, eligible.flatMap(({ row, proof }) =>
             contents.get(row.message_id) === row.content ? [proof] : []));
           return { archived, existing: eligible.length - archived, withheld: batch.length - eligible.length };
         };
@@ -276,10 +278,10 @@ export function createPostgresRawPorts(options) {
       return pauseLockedWrite(tx, () => {
         const target = rawScope(copyScope(tx, scope));
         const ref = copySession(session);
-        return async (query) => {
+        return async (query, run) => {
           const physical = resolvedSessions.get(tx)?.get(JSON.stringify([ref.client, ref.sessionId])) ??
             await rawSession(query, target, ref);
-          if (await changeSessions(query, target, [physical], FENCE)) await advanceIndex(query, target.owner);
+          if (await changeSessions(query, target, [physical], FENCE)) await advanceIndex(query, target.owner, run);
         };
       });
     },
@@ -289,7 +291,7 @@ export function createPostgresRawPorts(options) {
         const target = rawScope(copyScope(tx, scope));
         const proof = proven.get(closure);
         if (proof?.tx !== tx) throw new CoreError("raw_lineage_unavailable");
-        return (query) => erase(query, target, proof.sessions);
+        return (query, run) => erase(query, run, target, proof.sessions);
       });
     },
 
@@ -303,9 +305,9 @@ export function createPostgresRawPorts(options) {
           return snap.kind === "text" && snap.owner === target.owner && (snap.namespace ?? null) === target.namespace
             ? [/** @type {StoredFact<TextFact>} */ ({ fact: snap })] : [];
         });
-        return async (query) => {
+        return async (query, run) => {
           const result = await purgeRawText(query, target, selected, fingerprintKeys);
-          if (result.rawDeleted || result.ledgerBlanked) await advanceIndex(query, target.owner);
+          if (result.rawDeleted || result.ledgerBlanked) await advanceIndex(query, target.owner, run);
           return result;
         };
       });
@@ -315,9 +317,9 @@ export function createPostgresRawPorts(options) {
       return pauseLockedWrite(tx, () => {
         const target = rawScope(copyScope(tx, scope));
         const ref = copySession(session);
-        return async (query) => {
+        return async (query, run) => {
           const rawDeleted = await changeSessions(query, target, [ref], DELETE);
-          if (rawDeleted) await advanceIndex(query, target.owner);
+          if (rawDeleted) await advanceIndex(query, target.owner, run);
           return { rawDeleted };
         };
       });
@@ -338,7 +340,7 @@ export function createPostgresRawPorts(options) {
           }
           return { message_mac: messageMac, content_mac: contentMac };
         });
-        return (query) => record(query, target, ref, proofs);
+        return (query, run) => record(query, run, target, ref, proofs);
       });
     },
 

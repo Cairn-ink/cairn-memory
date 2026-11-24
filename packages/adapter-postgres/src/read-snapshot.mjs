@@ -2,6 +2,7 @@ import { compareUtf8, CoreError } from "../../core/src/index.mjs";
 import { copyReadScope, pgText } from "./memory-input.mjs";
 
 /** @import { Query } from "./memory-rows.mjs" */
+/** @import { Run } from "./uow.mjs" */
 /** @typedef {ReturnType<typeof copyReadScope>} ReadSet */
 
 const encoder = new TextEncoder();
@@ -50,8 +51,9 @@ export function validateToken(token, allowNonNullNamespace = false) {
   }
 }
 
-/** @param {Query} query @param {ReadSet} scope */
-export async function readStateToken(query, scope) {
+/** @param {Query} query @param {ReadSet} scope @param {Run} run */
+export async function readStateToken(query, scope, run) {
+  if (run.indexStart !== undefined) return scopeToken(scope, run.indexStart.toString());
   const { rows: [row] } = await query("SELECT index_revision::text FROM core_owner_state WHERE user_id = $1", [scope.owner]);
-  return scopeToken(scope, row?.index_revision ?? "0");
+  return scopeToken(scope, BigInt(row?.index_revision ?? "0").toString());
 }

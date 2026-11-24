@@ -5,6 +5,7 @@ export { readSourceKind, requireEmbedding, storedSourceKind } from "./memory-met
 export { applyMigrations } from "./migrate.mjs";
 export { canonicalDigests, factSlot } from "./facts.mjs";
 export { createPostgresSuppressionStore } from "./suppression-store.mjs";
+export { createPostgresTopicStore } from "./topics.mjs";
 export { createPostgresCapturePorts } from "./capture.mjs";
 export { createPostgresRawPorts } from "./raw.mjs";
 export { createPostgresMemoryStore } from "./memory-store.mjs";

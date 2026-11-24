@@ -189,23 +189,30 @@ test("finish applies the memory store namespace option to labelled digests", mig
 });
 
 test("finish and replay use the revision committed with the Raw archive", migrationDbTest, async (t) => {
-  const db = await fixture(t);
-  const { key, capture, raw, acquire, run } = db;
-  const source = message("A source that will also be archived.");
-  const token = await acquire([source]);
-  const result = await run(async (tx) => {
-    const finished = await capture.finish(tx, token, [item("An extracted memory", key, source)]);
-    assert.deepEqual(await raw.archive(tx, key, [source]), { archived: 1 });
-    return finished;
-  });
-  const { revision } = await writeCounts(db);
-  const replay = await run((tx) => capture.claim(tx, key, [source], { leaseMs }));
-  const admitted = await run((tx) => capture.admit(tx, key, [source]));
-  assert.equal(revision, 2);
-  assert.equal(replay.status, "rawReplay");
-  assert.equal(admitted.status, "rawReplay");
-  assert.deepEqual([result.indexRevision, replay.result.indexRevision, admitted.result.indexRevision],
-    [revision, revision, revision]);
+  for (const firstWrite of ["finish", "archive"]) {
+    await t.test(`first index advance by ${firstWrite}`, async (t) => {
+      const db = await fixture(t);
+      const { key, capture, raw, acquire, run } = db;
+      const source = message("A source that will also be archived.");
+      const token = await acquire([source]);
+      const batch = firstWrite === "finish" ? [item("An extracted memory", key, source)] : [];
+      const result = await run(async (tx) => {
+        const finished = await capture.finish(tx, token, batch);
+        assert.equal(finished.indexRevision, firstWrite === "finish" ? 1 : 0);
+        assert.deepEqual(await raw.archive(tx, key, [source]), { archived: 1 });
+        return finished;
+      });
+      const { revision } = await writeCounts(db);
+      const { core_result } = await ledger(db);
+      const replay = await run((tx) => capture.claim(tx, key, [source], { leaseMs }));
+      const admitted = await run((tx) => capture.admit(tx, key, [source]));
+      assert.equal(revision, 1);
+      assert.equal(replay.status, "rawReplay");
+      assert.equal(admitted.status, "rawReplay");
+      assert.deepEqual([result.indexRevision, core_result.indexRevision, replay.result.indexRevision, admitted.result.indexRevision],
+        [revision, revision, revision, revision]);
+    });
+  }
 });
 
 test("Raw import follows an ID-only link into a proven fenced component", migrationDbTest, async (t) => {
