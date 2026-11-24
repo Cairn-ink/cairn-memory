@@ -37,7 +37,7 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
       if (!Number.isSafeInteger(createdAtMs) || createdAtMs > nowMs) invalid();
       const created = timestampParts(createdAtMs);
 
-      return runOperation(tx, async (query) => {
+      return runOperation(tx, async (query, run) => {
         const owner = tx.owner;
         const id = crypto.randomUUID();
         const digests = await contentDigests(content);
@@ -49,7 +49,7 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
         [owner, id, ns, storageHash(content.textHash), created.us, created.exact, updatedAtUs.toString(), ...contentValues(content, digests)]);
         if (!rows.length) throw new CoreError("memory_conflict");
         await attachReceipts(query, owner, id, evidence);
-        await advanceIndex(query, owner);
+        await advanceIndex(query, owner, run);
         return { id, revision: 1, createdAtMs, updatedAtMs: nowMs, updatedAtUs };
       });
     },
@@ -61,7 +61,7 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
       const incoming = copyReceipts(receipts);
       const values = copyMerge(merge);
       const us = writeTime(nowMs);
-      return runOperation(tx, async (query) => {
+      return runOperation(tx, async (query, run) => {
         const owner = tx.owner;
         const entry = await selectMemory(query, owner, ns, key);
         if (!entry) throw new CoreError("memory_not_found");
@@ -79,7 +79,7 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
             changed ? confidence : null, revision]);
         }
         const attached = await attachReceipts(query, owner, key, incoming);
-        if (updated || attached) await advanceIndex(query, owner);
+        if (updated || attached) await advanceIndex(query, owner, run);
         return { outcome: changed ? "changed" : "touched", revision };
       });
     },
@@ -103,7 +103,7 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
       const content = copyContent(next);
       const evidence = receipts === null ? null : copyReceipts(receipts);
       const us = writeTime(nowMs);
-      return runOperation(tx, async (query) => {
+      return runOperation(tx, async (query, run) => {
         const owner = tx.owner;
         const values = [owner, ns, key];
         const entry = await selectMemory(query, owner, ns, key);
@@ -127,7 +127,7 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
           await deleteActiveReceipts(query, owner, key);
           await attachReceipts(query, owner, key, evidence);
         }
-        await advanceIndex(query, owner);
+        await advanceIndex(query, owner, run);
         return { outcome: "changed", revision };
       }, true);
     },
@@ -143,7 +143,7 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
       guardOwner(tx, scope, true);
       const ns = namespaceKey(scope.namespace, allowNonNullNamespace);
       const key = inputText(id);
-      return runOperation(tx, async (query) => {
+      return runOperation(tx, async (query, run) => {
         const owner = tx.owner;
         const deleted = await query(`DELETE FROM memories WHERE ${TARGET} RETURNING id`, [owner, ns, key]);
         if (!deleted.rows.length) return false;
@@ -157,7 +157,7 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
           AND (left_memory_id = $2 OR right_memory_id = $2)`, [owner, key]);
         await query(`UPDATE topic_title_sources SET memory_revision = 0
           WHERE user_id = $1 AND memory_id = $2 AND memory_revision <> 0`, [owner, key]);
-        await advanceIndex(query, owner);
+        await advanceIndex(query, owner, run);
         return true;
       });
     },

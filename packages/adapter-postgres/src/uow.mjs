@@ -4,7 +4,7 @@ import { isReadStatement } from "./read-only.mjs";
 
 /** @import { OwnerId, Tx, UnitOfWork, UnitOfWorkOptions } from "../../core/src/index.mjs" */
 /** @import { Connection, ConnectionSource } from "./driver.mjs" */
-/** @typedef {{ connection: Connection, pending: Set<Promise<unknown>>, operationTail?: Promise<unknown>, failure?: CoreError, statementFailure?: CoreError, pauseLock: boolean }} Run */
+/** @typedef {{ connection: Connection, pending: Set<Promise<unknown>>, operationTail?: Promise<unknown>, failure?: CoreError, statementFailure?: CoreError, pauseLock: boolean, indexAdvanced: boolean }} Run */
 
 const LOCK_TIMEOUT = "5s";
 const STATEMENT_TIMEOUT = "SET LOCAL statement_timeout = '30s'";
@@ -71,7 +71,7 @@ export function query(tx, text, values) {
  * Keep a multi-statement operation on the captured connection until it settles.
  * @template T
  * @param {Tx} tx
- * @param {(query: Connection["query"]) => Promise<T>} body
+ * @param {(query: Connection["query"], run: Run) => Promise<T>} body
  * @param {boolean} [checkAfterFailure] Allow read-only precondition checks after a logical failure.
  */
 export function runOperation(tx, body, checkAfterFailure = false) {
@@ -81,7 +81,7 @@ export function runOperation(tx, body, checkAfterFailure = false) {
   const start = async () => {
     try {
       if (run.failure && (!checkAfterFailure || run.statementFailure)) throw run.failure;
-      return await body((text, values) => queryInRun(run, tx.readOnly, text, values, checkAfterFailure));
+      return await body((text, values) => queryInRun(run, tx.readOnly, text, values, checkAfterFailure), run);
     } catch (error) {
       const mapped = toPostgresError(error);
       run.failure ??= mapped;
@@ -155,7 +155,7 @@ export function createPostgresUnitOfWork(source) {
     try {
       const connection = await source.connect();
       /** @type {Run} */
-      const state = { connection, pending: new Set(), pauseLock: pauseLock === true };
+      const state = { connection, pending: new Set(), pauseLock: pauseLock === true, indexAdvanced: false };
       let committed = false;
       let sharedPauseHeld = false;
       try {

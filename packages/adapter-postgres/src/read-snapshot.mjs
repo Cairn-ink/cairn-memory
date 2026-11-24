@@ -50,8 +50,9 @@ export function validateToken(token, allowNonNullNamespace = false) {
   }
 }
 
-/** @param {Query} query @param {ReadSet} scope */
-export async function readStateToken(query, scope) {
+/** @param {Query} query @param {ReadSet} scope @param {boolean} indexAdvanced */
+export async function readStateToken(query, scope, indexAdvanced) {
   const { rows: [row] } = await query("SELECT index_revision::text FROM core_owner_state WHERE user_id = $1", [scope.owner]);
-  return scopeToken(scope, row?.index_revision ?? "0");
+  const revision = BigInt(row?.index_revision ?? "0") - BigInt(indexAdvanced);
+  return scopeToken(scope, revision.toString());
 }

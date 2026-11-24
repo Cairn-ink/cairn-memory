@@ -3,6 +3,7 @@ import { readSourceKind } from "./memory-metadata.mjs";
 
 /** @import { MemoryRow, Receipt } from "../../core/src/ports/index.d.ts" */
 /** @import { TextDigest } from "../../core/src/index.mjs" */
+/** @import { Run } from "./uow.mjs" */
 /** @import { Connection } from "./driver.mjs" */
 /** @typedef {Connection["query"]} Query */
 
@@ -98,10 +99,12 @@ export async function selectMemory(query, owner, namespace, id) {
   return row ? readEntry(row, owner) : null;
 }
 
-/** @param {Query} query @param {string} owner */
-export async function advanceIndex(query, owner) {
+/** @param {Query} query @param {string} owner @param {Run} [run] */
+export async function advanceIndex(query, owner, run) {
+  if (run?.indexAdvanced) return;
   await query(`INSERT INTO core_owner_state (user_id, index_revision) VALUES ($1, 1)
     ON CONFLICT (user_id) DO UPDATE SET index_revision = core_owner_state.index_revision + 1`, [owner]);
+  if (run) run.indexAdvanced = true;
 }
 
 /** @param {Query} query @param {string} owner @param {readonly string[]} ids @param {number} [limit] */

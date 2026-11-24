@@ -2,7 +2,7 @@ import {
   CoreError, ERROR_CODES, coalesceNewTopics, compareUtf8, isErrorCode, memoryGuards, placementProposal, titleKey,
 } from "../../core/src/index.mjs";
 import { decodeCursor, encodeCursor } from "../../core/src/retrieval/hosted-paging.mjs";
-import { readCandidate, timestampUs } from "./memory-rows.mjs";
+import { advanceIndex, readCandidate, timestampUs } from "./memory-rows.mjs";
 import { readVisibility } from "./memory-visibility.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
@@ -157,30 +157,24 @@ function validateLimit(limit, max = Number.MAX_SAFE_INTEGER) {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > max) throw new CoreError("invalid_input");
 }
 
-/** @param {Query} query @param {string} owner */
-async function readIndexRevision(query, owner) {
-  // Hosted topic changes and core memory/fact changes both invalidate a page.
+/** @param {Query} query @param {string} owner @param {boolean} indexAdvanced */
+async function readIndexRevision(query, owner, indexAdvanced) {
+  // Both counters invalidate pages. While OWNER_LOCK is held, the only
+  // uncommitted change is this run's single advance of the core counter.
   const { rows: [row] } = await query(`
     SELECT (COALESCE((SELECT revision FROM topic_index_state WHERE user_id = $1), 0) +
       COALESCE((SELECT index_revision FROM core_owner_state WHERE user_id = $1), 0))::text AS revision`, [owner]);
-  const revision = Number(row.revision);
+  const revision = Number(BigInt(row.revision) - BigInt(indexAdvanced));
   if (!Number.isSafeInteger(revision) || revision < 0) throw new CoreError("internal_error");
   return revision;
 }
 
-/** @param {Query} query @param {string} owner */
-async function advanceTopicIndex(query, owner) {
-  await query(`
-    INSERT INTO topic_index_state (user_id, revision) VALUES ($1, 1)
-    ON CONFLICT (user_id) DO UPDATE SET revision = topic_index_state.revision + 1`, [owner]);
-}
-
 /**
  * @param {Query} query @param {string} owner @param {string} view @param {string | null} filter
- * @param {number} limit @param {string | null} cursor
+ * @param {number} limit @param {string | null} cursor @param {boolean} indexAdvanced
  */
-async function readPage(query, owner, view, filter, limit, cursor) {
-  const indexRevision = await readIndexRevision(query, owner);
+async function readPage(query, owner, view, filter, limit, cursor, indexAdvanced) {
+  const indexRevision = await readIndexRevision(query, owner, indexAdvanced);
   let offset = 0;
   if (cursor !== null) {
     const decoded = decodeCursor(cursor);
@@ -340,8 +334,8 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
       const owner = personalOwner(tx, scope);
       const { cursor, limit } = options;
       validateLimit(limit);
-      return runOperation(tx, async (query) => {
-        const page = await readPage(query, owner, "catalog", null, limit, cursor);
+      return runOperation(tx, async (query, run) => {
+        const page = await readPage(query, owner, "catalog", null, limit, cursor, run.indexAdvanced);
         const visibility = await readVisibility(query, owner, hashSessionKey);
         const sources = await visibleTitleSources(query, owner, visibility);
         const { rows } = await query(`
@@ -361,8 +355,8 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
       const guards = memoryGuards(snapshotArray(basedOn.memoryRevisions, ids.length), ids);
       const revisions = new Map(guards.map(({ memoryId, revision }) => [memoryId, revision]));
 
-      return runOperation(tx, async (query) => {
-        if (await readIndexRevision(query, owner) !== indexRevision) throw new CoreError("revision_conflict");
+      return runOperation(tx, async (query, run) => {
+        if (await readIndexRevision(query, owner, run.indexAdvanced) !== indexRevision) throw new CoreError("revision_conflict");
         const visibility = await readVisibility(query, owner, hashSessionKey);
         const columns = visibility.candidateColumns([null]);
         const { rows: candidates } = await query(`
@@ -413,7 +407,7 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
           if (retained.length || topicIds.length) changed = true;
           await replaceMemberships(query, owner, memoryId, before.revision, topicIds, retained, () => placedAt ??= new Date(now()));
         }
-        if (changed) await advanceTopicIndex(query, owner);
+        if (changed) await advanceIndex(query, owner, run);
         return { placed, createdTopics };
       });
     },
@@ -448,8 +442,8 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
       const { level, cursor, limit } = options;
       validateLimit(limit);
       if (level !== undefined && level !== "L1" && level !== "L2") throw new CoreError("invalid_input");
-      return runOperation(tx, async (query) => {
-        const page = await readPage(query, owner, "list", level ?? null, limit, cursor);
+      return runOperation(tx, async (query, run) => {
+        const page = await readPage(query, owner, "list", level ?? null, limit, cursor, run.indexAdvanced);
         const visibility = await readVisibility(query, owner, hashSessionKey);
         const columns = visibility.candidateColumns([null]);
         const members = await visiblePage(visibility, owner, (after, size) => query(`
@@ -498,8 +492,8 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
       const owner = personalOwner(tx, scope);
       const { cursor, limit } = options;
       validateLimit(limit);
-      return runOperation(tx, async (query) => {
-        const page = await readPage(query, owner, "members", topicId, limit, cursor);
+      return runOperation(tx, async (query, run) => {
+        const page = await readPage(query, owner, "members", topicId, limit, cursor, run.indexAdvanced);
         if (!sqlText(topicId)) return { items: [], nextCursor: null };
         const visibility = await readVisibility(query, owner, hashSessionKey);
         const columns = visibility.candidateColumns([null]);
@@ -584,7 +578,7 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
     async dropMemory(tx, scope, memoryId) {
       const owner = personalOwner(tx, scope, true);
       if (!sqlText(memoryId)) return { dropped: 0 };
-      return runOperation(tx, async (query) => {
+      return runOperation(tx, async (query, run) => {
         // A drop keeps the outcome. Memory erase owns removal of outcomes and
         // retires the same sources as part of its owner index advance.
         const { rows: [result] } = await query(`
@@ -598,7 +592,7 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
           SELECT (SELECT count(*) FROM refs) AS dropped, EXISTS (SELECT 1 FROM sources) AS retired`,
         [owner, memoryId]);
         const dropped = Number(result.dropped);
-        if (dropped || result.retired) await advanceTopicIndex(query, owner);
+        if (dropped || result.retired) await advanceIndex(query, owner, run);
         return { dropped };
       });
     },

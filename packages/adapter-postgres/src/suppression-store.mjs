@@ -16,6 +16,8 @@ const SELECT_SLOT = `SELECT fact_id, slot, incarnation, epoch::text, ${CREATED_A
 const ADVANCE_OWNER = `INSERT INTO core_owner_state (user_id, fact_epoch, index_revision) VALUES ($1, 1, 1)
   ON CONFLICT (user_id) DO UPDATE SET fact_epoch = core_owner_state.fact_epoch + 1,
   index_revision = core_owner_state.index_revision + 1 RETURNING fact_epoch::text`;
+const ADVANCE_FACT_EPOCH = `UPDATE core_owner_state SET fact_epoch = fact_epoch + 1
+  WHERE user_id = $1 RETURNING fact_epoch::text`;
 const INSERT_FACT = `INSERT INTO core_suppression_facts (
     user_id, fact_id, slot, slot_hash, incarnation, action_id, epoch, origin, kind, mode, body, embedding, shingles, key_id
   ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING ${CREATED_AT_US}`;
@@ -46,7 +48,7 @@ async function writeFact(tx, fact, incarnation, hashedSessions) {
     throw new CoreError("invalid_input");
   }
 
-  return runOperation(tx, async (query) => {
+  return runOperation(tx, async (query, run) => {
     const { rows } = await query(SELECT_SLOT, [owner, slotHash]);
     if (rows.length) {
       const { fact_id: factId, slot: existingSlot, incarnation: existingIncarnation, epoch, created_at_us } = rows[0];
@@ -56,7 +58,9 @@ async function writeFact(tx, fact, incarnation, hashedSessions) {
       return { factId, epoch: readEpoch(epoch, 1n), createdAtMs: readCreatedAtMs(created_at_us), created: false };
     }
 
-    const { rows: [state] } = await query(ADVANCE_OWNER, [owner]);
+    // A new fact always gets its own epoch. Its index advance is shared with ordinary writes.
+    const { rows: [state] } = await query(run.indexAdvanced ? ADVANCE_FACT_EPOCH : ADVANCE_OWNER, [owner]);
+    run.indexAdvanced = true;
     const epoch = readEpoch(state?.fact_epoch, 1n);
     const factId = crypto.randomUUID();
     const { rows: [inserted] } = await query(INSERT_FACT, [
