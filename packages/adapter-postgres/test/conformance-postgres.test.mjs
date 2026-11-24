@@ -386,6 +386,7 @@ const selected = new Set([
   "K-FACTSFOR-1", "K-KEY-1", "K-FACT-3r",
   "K-KD-1", "K-KD-2", "K-HASH-1",
   "K-CLM-1", "K-CLM-2", "K-CLM-3", "K-CLM-4", "K-CLM-5",
+  "K-CLM-6",
   "K-ADM-2", "K-ADM-6", "K-ADM-7", "K-ADM-8", "K-ADM-10", "K-ADM-11", "K-ADM-14", "K-KD-3", "K-KD-5",
   "K-IMP-RAW-1", "K-IMP-RAW-2", "K-IMP-RAW-3", "K-IMP-RAW-3s", "K-IMP-RAW-4k", "K-IMP-RAW-5",
   "K-IMP-RAW-6", "K-IMP-RAW-7", "K-IMP-RAW-8", "K-IMP-RAW-9", "K-IMP-RAW-10",
