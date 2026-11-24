@@ -25,6 +25,19 @@ export interface LegacyInput {
   target: string;
   checkSource(): void;
   withheldReceipts: number;
+  inspect: {
+    cursorSecret: string;
+    receiptPositions: Map<string, number>;
+    epochs: { scope: { owner: string; namespace: string }; value: number }[];
+    evidence: {
+      scope: { owner: string; namespace: string };
+      id: string;
+      filing: "filed" | "unfiled";
+      qualification: string | null;
+      procedural: string | null;
+      supersession: string | null;
+    }[];
+  };
   memories: LegacyMemory[];
   receipts: LegacyReceipt[];
   denials: Array<NamespaceRow & { fingerprint: string }>;

@@ -1,7 +1,7 @@
 import type {
   ClockAndHash, ContextAssemblyValue, ContextReadStore, ContextReadTokenCounter, DiagnosticEvent,
   EmbedderPort, EmbedQuery, FinishResult, InspectStore, MemoryService, ModelGate, ModelPort,
-  ModelStage, ReadContractStorage, Scope, StorageAdapter, StoredDocumentCardRecord, TokenCounter,
+  ModelStage, ReadContractStorage, Scope, StoredDocumentCardRecord, TokenCounter,
 } from "../ports/index.d.ts";
 
 export type { DiagnosticEvent } from "../ports/common.d.ts";
@@ -46,22 +46,29 @@ export interface CaptureRunner {
   ): Promise<{ status: "done" | "duplicate" | "processing" | "paused" | "failed"; code?: string; result?: FinishResult }>;
 }
 
-/** The Addendum 17 entries are required for the explicit keyless-local composition. */
-export type ContextReadMemoryService = MemoryService &
-  Required<Pick<MemoryService, "findCandidates" | "fetchEvidence" | "readContext" | "inspect">>;
+/** The Addendum 17 read entries for the explicit keyless-local composition. */
+export type ContextReadMemoryService = Required<Pick<MemoryService, "findCandidates" | "fetchEvidence" | "readContext" | "inspect">>;
 
-/** Declaration for the keyless-local composition once the runtime implements Addendum 17. */
-export interface KeylessMemoryServiceDeps extends Pick<MemoryServiceDeps, "clock" | "config" | "diagnostics"> {
+export interface KeylessMemoryServiceDeps extends Pick<MemoryServiceDeps, "clock" | "diagnostics"> {
   readonly profile: "keyless-local";
-  readonly storage: ReadContractStorage & {
+  readonly storage: Pick<ReadContractStorage, "capabilities" | "uow" | "fence" | "contextRead" | "inspect"> & {
     readonly capabilities: { readonly contextRead: true; readonly inspect: true };
     readonly contextRead: ContextReadStore;
     readonly inspect: InspectStore;
   };
-  readonly contextReadCounter: ContextReadTokenCounter;
+  readonly config?: MemoryServiceConfig;
+  readonly contextReadCounter?: ContextReadTokenCounter;
   /** Pure deterministic formatter. The host sends the same bytes core counts. */
-  readonly contextReadFormat: (value: ContextAssemblyValue) => string;
+  readonly contextReadFormat?: (value: ContextAssemblyValue) => string;
 }
 
-export function createMemoryService(deps: KeylessMemoryServiceDeps): ContextReadMemoryService & CaptureRunner;
-export function createMemoryService(deps: MemoryServiceDeps): MemoryService & CaptureRunner;
+export interface KeylessInspectServiceDeps extends Pick<MemoryServiceDeps, "clock"> {
+  readonly profile: "keyless-local";
+  readonly storage: Pick<MemoryServiceDeps["storage"], "capabilities" | "uow" | "inspect">;
+}
+
+export type InspectMemoryService = Required<Pick<MemoryService, "inspect">>;
+
+export function createMemoryService(deps: KeylessMemoryServiceDeps): ContextReadMemoryService;
+export function createMemoryService(deps: KeylessInspectServiceDeps): InspectMemoryService;
+export function createMemoryService(deps: MemoryServiceDeps): MemoryService & CaptureRunner & ContextReadMemoryService;

@@ -503,7 +503,7 @@ export interface ContextReadStore extends ReadIdentityPort {
   readonly raw?: ContextRawReadStore;
 }
 
-export type InspectReceiptAnchor = { row: number } | { createdAtMs: number; id: string };
+export type InspectReceiptAnchor = { row: number } | { createdAtMs: number; createdAtUs?: SortKeyUs; id: string };
 
 /** Optional adapter port for inspect-only ordering, counts and receipt paging. */
 export interface InspectStore extends ReadIdentityPort {
@@ -514,7 +514,9 @@ export interface InspectStore extends ReadIdentityPort {
     after?: { updatedAtUs: SortKeyUs; id: string };
     expectedEpoch?: number;
   }): Promise<{ epoch: number; rows: readonly (InspectMemoryMetadata & { updatedAtUs: SortKeyUs })[] }>;
-  /** Returns up to limit visible receipts, in creation time and ID ascending order. */
+  /** Returns up to limit visible receipts in ascending creation time and ID order.
+   * A changed epoch or lost receipt anchor throws cursor_stale.
+   */
   item(tx: Tx, scope: Scope, memoryId: string, page: {
     limit: number;
     after?: InspectReceiptAnchor;

@@ -65,6 +65,8 @@
   "packages/core/src/service/forget.mjs",
   "packages/core/src/service/import.mjs",
   "packages/core/src/service/index.mjs",
+  "packages/core/src/service/inspect-cursor.mjs",
+  "packages/core/src/service/inspect.mjs",
   "packages/core/src/service/pause.mjs",
   "packages/core/src/service/reads.mjs",
   "packages/core/src/service/recall.mjs",

@@ -5,10 +5,11 @@ import { CoreError } from "../errors.mjs";
 import { captureMethods } from "./capture.mjs";
 import { fetchEvidenceMethod } from "./context-read-fetch.mjs";
 import { findCandidatesMethod } from "./context-read-find.mjs";
-import { entry, entryError, scopeOf } from "./entry.mjs";
+import { entryError } from "./entry.mjs";
 import { findMethod, readMethod } from "./find.mjs";
 import { forgetMethod } from "./forget.mjs";
 import { importMethod, importRawMethod } from "./import.mjs";
+import { inspectMethod } from "./inspect.mjs";
 import { pauseMethods } from "./pause.mjs";
 import { recallMethod } from "./recall.mjs";
 import { listRawMessagesMethod, readMethods } from "./reads.mjs";
@@ -66,16 +67,21 @@ function requireMethods(port, ...methods) {
   }
 }
 
-/** @param {import("./index.d.mts").MemoryServiceDeps} input */
-function freezeDeps(input) {
-  const deps = { ...input };
-  const { storage, model, embedder, gate, clock, tokens, embedQuery, diagnostics } = deps;
-  identifier(storage?.name);
+/** @param {import("./index.d.mts").KeylessInspectServiceDeps["storage"]} storage */
+function validateReadRegistration(storage) {
   validateObject(storage.capabilities, [...CAPABILITIES, ...READ_CONTRACT_CAPABILITIES]);
   if (Object.values(storage.capabilities).some(value => typeof value !== "boolean")) {
     throw new CoreError("invalid_input");
   }
   assertReadContractCapabilities(storage);
+}
+
+/** @param {import("./index.d.mts").MemoryServiceDeps} input */
+function freezeDeps(input) {
+  const deps = { ...input };
+  const { storage, model, embedder, gate, clock, tokens, embedQuery, diagnostics } = deps;
+  identifier(storage?.name);
+  validateReadRegistration(storage);
   // Validate the storage methods this slice uses. Optional ports are checked at adapter registration.
   requireMethods(storage.uow, "run");
   requireMethods(storage.pause, "get", "set");
@@ -100,24 +106,49 @@ function freezeDeps(input) {
   return Object.freeze({ ...deps, config: freezeConfig(deps.config) });
 }
 
+/** @param {import("./index.d.mts").KeylessMemoryServiceDeps["storage"] | import("./index.d.mts").MemoryServiceDeps["storage"]} storage
+ * @param {import("../ports/index.d.ts").ClockAndHash} clock
+ * @returns {import("./index.d.mts").ContextReadMemoryService}
+ */
+function readContractMethods(storage, clock) {
+  return {
+    findCandidates: findCandidatesMethod({ storage, clock }),
+    fetchEvidence: fetchEvidenceMethod(storage),
+    async readContext() { throw new CoreError("capability_unavailable"); },
+    inspect: inspectMethod(storage, clock),
+  };
+}
+
 /**
- * @param {import("./index.d.mts").MemoryServiceDeps} input
- * @returns {import("../ports/host.d.ts").MemoryService & import("./index.d.mts").CaptureRunner}
+ * @param {import("./index.d.mts").MemoryServiceDeps | import("./index.d.mts").KeylessInspectServiceDeps |
+ * import("./index.d.mts").KeylessMemoryServiceDeps} input
  */
 export function createMemoryService(input) {
   try {
+    if ("profile" in input && input.profile === "keyless-local") {
+      const { storage, clock } = input;
+      requireMethods(storage.uow, "run");
+      requireMethods(clock, "hmacHex");
+      validateReadRegistration(storage);
+      if (!storage.inspect) throw new CoreError("capability_unavailable");
+      if (storage.capabilities.contextRead === true) {
+        if (!("fence" in storage)) throw new CoreError("invalid_input");
+        requireMethods(storage.fence, "assertVisible");
+        requireMethods(clock, "nowMs", "monotonicMs");
+        return readContractMethods(storage, clock);
+      }
+      return { inspect: inspectMethod(storage, clock) };
+    }
     const deps = freezeDeps(input);
-    const placeholder = entry(unavailable);
     return {
       ...pauseMethods(deps.storage),
       ...readMethods(deps.storage, deps.tokens),
       ...writeMethods(deps),
       ...captureMethods(deps),
+      ...readContractMethods(deps.storage, deps.clock),
       forget: forgetMethod(deps),
       recall: recallMethod(deps),
       find: findMethod(deps),
-      findCandidates: findCandidatesMethod(deps),
-      fetchEvidence: fetchEvidenceMethod(deps.storage),
       read: readMethod(deps.storage),
       listRawMessages: listRawMessagesMethod(deps.storage),
       importMemories: importMethod(deps),
@@ -126,10 +157,4 @@ export function createMemoryService(input) {
   } catch (error) {
     throw entryError(error);
   }
-}
-
-/** @param {unknown} scope */
-async function unavailable(scope) {
-  scopeOf(scope);
-  throw new CoreError("capability_unavailable");
 }

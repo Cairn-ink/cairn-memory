@@ -74,7 +74,8 @@ function evidenceFence(signer, item, row, lineageEnabled) {
   return signer.bind("snapshot-item", value);
 }
 
-/** @param {ReadContractStorage<StoredDocumentCardRecord>} storage @returns {NonNullable<MemoryService["fetchEvidence"]>} */
+/** @param {Pick<ReadContractStorage<StoredDocumentCardRecord>, "contextRead" | "capabilities" | "uow" | "fence">} storage
+ * @returns {NonNullable<MemoryService["fetchEvidence"]>} */
 export function fetchEvidenceMethod({ contextRead: store, capabilities, uow, fence }) {
   return entry(async (/** @type {ContextReadSet} */ value, /** @type {FetchEvidenceInput} */ args,
     /** @type {CallOptions} */ options = {}) => {

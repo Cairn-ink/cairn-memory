@@ -95,7 +95,8 @@ async function page({ items, diagnostics, token }, position, limit, signer) {
   throw new CoreError("context_item_too_large");
 }
 
-/** @param {{storage: ReadContractStorage<StoredDocumentCardRecord>, clock: ClockAndHash}} deps
+/** @param {{storage: Pick<ReadContractStorage<StoredDocumentCardRecord>, "contextRead" | "fence" | "uow" | "capabilities">,
+ * clock: ClockAndHash}} deps
  * @returns {NonNullable<import("../ports/host.d.ts").MemoryService["findCandidates"]>} */
 export function findCandidatesMethod({ storage, clock }) {
   const { contextRead: store, fence, uow } = storage;

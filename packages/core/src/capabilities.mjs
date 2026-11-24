@@ -85,6 +85,10 @@ export function assertReadContractCapabilities({ capabilities: caps, contextRead
   if ((contextRead != null) !== (caps.contextRead === true) ||
       (contextRead?.raw != null) !== (caps.contextRawRead === true) ||
       (inspect != null) !== (caps.inspect === true)) throw new CoreError("capability_unavailable");
+  if (inspect != null && (typeof inspect !== "object" ||
+      ["identity", "list", "item"].some(method => typeof Reflect.get(inspect, method) !== "function"))) {
+    throw new CoreError("invalid_input");
+  }
 }
 
 /**

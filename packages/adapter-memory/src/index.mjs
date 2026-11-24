@@ -3,6 +3,7 @@ import { createCapturePorts } from "./capture.mjs";
 import { createContextReadStore } from "./context-read.mjs";
 import { createDocumentCardStore } from "./document-cards.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
+import { createInspectStore } from "./inspect.mjs";
 import { createRelationStores } from "./memory-relations.mjs";
 import { createMemoryStore } from "./memory-store.mjs";
 import { createFactStore, createFingerprintProvider, createPauseStore } from "./privacy.mjs";
@@ -44,6 +45,12 @@ export function createMemoryAdapter(options = {}) {
     flags.fingerprintKey ? ringKeys : undefined);
   const cardVisible = createCardVisibility(matchFacts, keys, archive?.sourceVisible);
   const rationale = flags.rationaleEdges ? createRationaleStore(port, matchFacts, ringKeys, archive?.findVisibleSource) : undefined;
+  const placement = flags.placement ? handleWriteRejections(
+    createTopicStore(port, flags, newId, now, matchFacts, options, cardVisible),
+    ["applyPlacement", "markFailed", "dropMemory", "applyCardPlacement", "markCardsFailed", "dropCard"]) : undefined;
+  const inspect = flags.inspect ? createInspectStore({ placement,
+    supersession: flags.supersession ? supersession : undefined,
+    conflicts: flags.conflictEdges ? conflicts : undefined }, work, matchFacts) : undefined;
   /** @type {import("./index.d.mts").MemoryAdapter} */
   const adapter = {
     name: "memory",
@@ -62,9 +69,8 @@ export function createMemoryAdapter(options = {}) {
     ...(flags.supersession && { supersession: handleWriteRejections(supersession, ["record", "markHistorical"]) }),
     ...(flags.conflictEdges && { conflicts: handleWriteRejections(conflicts, ["insert", "invalidate"]) }),
     ...(rationale && { ...rationale, rationale: handleWriteRejections(rationale.rationale, ["insert", "invalidate"]) }),
-    ...(flags.placement && { placement: handleWriteRejections(
-      createTopicStore(port, flags, newId, now, matchFacts, options, cardVisible),
-      ["applyPlacement", "markFailed", "dropMemory", "applyCardPlacement", "markCardsFailed", "dropCard"]) }),
+    ...(placement && { placement }),
+    ...(inspect && { inspect: inspect.inspect }),
     ...(flags.documentCards && { documentCards: handleWriteRejections(
       createDocumentCardStore(port, now), ["put", "linkMemories", "amend", "hideAmendment", "hide", "hideWhere", "markStale"]) }),
     nativeErrorMap,
@@ -79,6 +85,7 @@ export function createMemoryAdapter(options = {}) {
         }
       },
       ...(rationale && createRationaleHarness(port, runSeed)),
+      ...(inspect && { seedInspectEvidence: inspect.seedInspectEvidence }),
       setWriteTime,
       setFingerprintSecret,
       setRetainedDigestFixture,

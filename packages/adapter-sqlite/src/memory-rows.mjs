@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { scopeKey } from "./storage-values.mjs";
 
 /** @import { TextDigest } from "@cairn-ink/core" */
@@ -61,16 +62,21 @@ export function clearReceipts(db, scope, id) {
     .run(...scopeKey(scope), id);
 }
 
-/** @param {Connection} db @param {Scope} scope @param {string} id @param {readonly Receipt[]} receipts */
-export function attachReceipts(db, scope, id, receipts) {
+/** @param {Connection} db @param {Scope} scope @param {string} id @param {readonly Receipt[]} receipts @param {number} nowMs */
+export function attachReceipts(db, scope, id, receipts, nowMs) {
   if (!receipts.length) return;
   const select = db.prepare(`SELECT COALESCE(MAX(ordinal), 0) AS last FROM cairn_receipts
     WHERE owner_id = ? AND namespace_key = ? AND memory_id = ?`);
   const insert = db.prepare(`INSERT INTO cairn_receipts (owner_id, namespace_key, memory_id, ordinal, source_key, body)
     VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (owner_id, namespace_key, memory_id, source_key) DO NOTHING`);
+  const insertInspect = db.prepare(`INSERT INTO cairn_inspect_receipts
+    (owner_id, namespace_key, memory_id, ordinal, id, excerpt, created_at_us) VALUES (?, ?, ?, ?, ?, ?, ?)`);
   const keys = [...scopeKey(scope), id];
   let ordinal = Number(select.get(...keys)?.last);
-  for (const receipt of receipts) {
-    insert.run(...keys, ++ordinal, JSON.stringify([receipt.client, receipt.sessionId, receipt.messageId]), JSON.stringify(receipt));
+  const createdAtUs = BigInt(nowMs) * 1000n;
+  for (const { excerpt, ...receipt } of receipts) {
+    const stored = insert.run(...keys, ++ordinal,
+      JSON.stringify([receipt.client, receipt.sessionId, receipt.messageId]), JSON.stringify(receipt));
+    if (stored.changes) insertInspect.run(...keys, ordinal, randomUUID(), excerpt ?? null, createdAtUs);
   }
 }

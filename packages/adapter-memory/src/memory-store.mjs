@@ -5,7 +5,7 @@ import { createFactMatcher } from "./fact-match.mjs";
 import { eraseRelations } from "./memory-relations.mjs";
 import { invalidateRationale } from "./rationale.mjs";
 import { addKeyedDigest } from "./privacy.mjs";
-import { copyPublicRow, dropMemoryPlacement } from "./unit-of-work.mjs";
+import { advanceInspectEpoch, copyPublicRow, dropMemoryPlacement } from "./unit-of-work.mjs";
 import {
   attachReceipts, copyContent, copyDuplicateBatch, copyMerge, copyReceipts, validateLimit, validateMemoryId,
   validateSource, validateTime, writeNamespace, writeTime,
@@ -45,14 +45,6 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
 
   /** @param {InsertRow} row */
   const prepareContent = (row) => copyContent(row, "memory", capabilities.embeddingRequiredOnInsert);
-
-  /** @param {readonly Receipt[]} receipts @param {number} nowMs */
-  function copyEvidence(receipts, nowMs) {
-    return copyReceipts(receipts).map(receipt => {
-      if (!capabilities.contextRead || receipt.excerpt === undefined || receipt.eventId === undefined) return receipt;
-      return { ...receipt, id: receipt.id ?? crypto.randomUUID(), createdAtMs: receipt.createdAtMs ?? nowMs };
-    });
-  }
 
   /** @param {string} owner @param {CopiedContent} content */
   async function rowDigests(owner, content) {
@@ -109,6 +101,26 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
     return namespace ? [...namespace.values()] : [];
   }
 
+  /** @param {import("./unit-of-work.mjs").State} state @param {Entry} entry
+   * @param {Receipt[]} incoming @param {number} createdAtMs
+   */
+  function appendReceipts(state, entry, incoming, createdAtMs) {
+    const receipts = attachReceipts(entry.receipts, incoming);
+    for (const receipt of receipts.slice(entry.receipts.length)) {
+      if (capabilities.inspect) {
+        const position = state.nextInspectReceiptPosition++;
+        if (!Number.isSafeInteger(position)) throw new CoreError("internal_error");
+        (entry.inspectReceiptPositions ??= new Map()).set(receipt, position);
+      }
+      if (receipt.excerpt !== undefined && (capabilities.inspect || (capabilities.contextRead && receipt.eventId !== undefined))) {
+        receipt.id = capabilities.inspect ? crypto.randomUUID() : (receipt.id ?? crypto.randomUUID());
+        receipt.eventId ??= receipt.messageId;
+        receipt.createdAtMs ??= createdAtMs;
+      }
+    }
+    entry.receipts = receipts;
+  }
+
   /**
    * @template {InsertRow} T
    * @param {typeof port.writeFromFinish} write
@@ -121,7 +133,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
       async insert(tx, scope, row, receipts, nowMs) {
         return write(tx, scope, () => {
           const content = prepareContent(row);
-          const evidence = attachReceipts([], copyEvidence(receipts, nowMs));
+          const incoming = copyReceipts(receipts);
           validateTime(nowMs);
           const suppliedCreationTime = row.createdAtMs;
           const createdAtMs = suppliedCreationTime === undefined ? nowMs : suppliedCreationTime;
@@ -130,16 +142,21 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           return async (getState, markDirty) => {
             const id = newId();
             if (typeof id !== "string" || !id) throw new CoreError("internal_error");
-            const { rows } = getState();
+            const state = getState();
+            const { rows } = state;
             const digests = await rowDigests(tx.owner, content);
             let entries = rows.get(namespace);
             if (entries?.has(id)) throw new CoreError("internal_error");
             if (!entries) rows.set(namespace, entries = new Map());
             const created = { id, revision: 1, createdAtMs, ...writeTime(nowMs) };
-            entries.set(id, {
+            /** @type {Entry} */
+            const entry = {
               row: { ...content, digests, ...created, scope: { owner: tx.owner, namespace }, historical: false },
-              receipts: evidence,
-            });
+              receipts: [],
+            };
+            appendReceipts(state, entry, incoming, nowMs);
+            entries.set(id, entry);
+            advanceInspectEpoch(state, namespace);
             markDirty();
             return created;
           };
@@ -151,13 +168,12 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           const copy = copyMerge(merge);
           validateMemoryId(id);
           validateTime(nowMs);
-          const incoming = copyEvidence(receipts, nowMs);
+          const incoming = copyReceipts(receipts);
           const namespace = writeNamespace(scope);
           return (getState, markDirty) => {
             const state = getState();
             const entry = state.rows.get(namespace)?.get(id);
             if (!entry) throw new CoreError("memory_not_found");
-            const evidence = attachReceipts(entry.receipts, incoming);
             const { row } = entry;
             let changed = false;
             if (!row.historical) {
@@ -166,8 +182,9 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
               Object.assign(row, { confidence, kind, origin, revision: row.revision + Number(changed) });
             }
             Object.assign(row, writeTime(nowMs));
-            entry.receipts = evidence;
+            appendReceipts(state, entry, incoming, nowMs);
             if (changed || incoming.length) invalidateRationale(state, namespace, id);
+            advanceInspectEpoch(state, namespace);
             markDirty();
             return { outcome: changed ? "changed" : "touched", revision: row.revision };
           };
@@ -257,7 +274,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
       return port.write(tx, scope, true, () => {
         const content = prepareContent(next);
         validateTime(nowMs);
-        const evidence = receipts === null ? null : attachReceipts([], copyEvidence(receipts, nowMs));
+        const incoming = receipts === null ? null : copyReceipts(receipts);
         validateMemoryId(id);
         if (!Number.isInteger(expectedRevision)) throw new CoreError("invalid_input");
         const namespace = writeNamespace(scope);
@@ -280,8 +297,14 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           const revision = row.revision + 1;
           Object.assign(row, content, { digests, revision, ...writeTime(nowMs) });
           delete row.legacyHash;
-          if (evidence !== null) entry.receipts = evidence;
+          if (incoming !== null) {
+            entry.receipts = [];
+            entry.inspectReceiptPositions?.clear();
+            appendReceipts(state, entry, incoming, nowMs);
+          }
+          delete entry.inspectEvidence;
           invalidateRationale(state, namespace, id);
+          advanceInspectEpoch(state, namespace);
           return { outcome: "changed", revision };
         };
       });
@@ -306,6 +329,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           invalidateRationale(state, namespace, id);
           if (!entries.size) state.rows.delete(namespace);
           dropMemoryPlacement(state.topics.get(namespace), id, { erase: true });
+          advanceInspectEpoch(state, namespace);
           return true;
         };
       });

@@ -1,4 +1,4 @@
-import { cleanContent, CoreError, isErrorCode, redactV1, validateSuppressionFact } from "@cairn-ink/core";
+import { CoreError, isErrorCode, receiptExcerpt, validateSuppressionFact } from "@cairn-ink/core";
 import { copyWindow } from "./retrieval-window.mjs";
 
 /** @typedef {import("@cairn-ink/core/ports").InsertRow} InsertRow */
@@ -329,25 +329,19 @@ export function copyReceipts(receipts) {
     if (!receipt) invalid();
     const { client, sessionId, messageId, role, occurredAtMs, id, excerpt, eventId, createdAtMs } = receipt;
     if (!nonempty(client) || !nonempty(sessionId) || !nonempty(messageId) || !roles.includes(role) ||
-      (occurredAtMs !== null && !Number.isFinite(occurredAtMs))) invalid();
+        (occurredAtMs !== null && !Number.isFinite(occurredAtMs))) invalid();
     if ((id !== undefined && !nonempty(id)) || (eventId !== undefined && !nonempty(eventId)) ||
-        (excerpt !== undefined && (typeof excerpt !== "string" || excerpt.length > 800)) ||
         (createdAtMs !== undefined && (!Number.isSafeInteger(createdAtMs) || createdAtMs < 0))) invalid();
+    if (excerpt !== undefined) {
+      if (typeof excerpt !== "string" || !excerpt || excerpt.length > 800 || /[\u0000\uD800-\uDFFF]/u.test(excerpt)) invalid();
+      const normalized = receiptExcerpt(excerpt);
+      // Legacy truncation can end on a single space immediately before the cutoff.
+      if (excerpt !== normalized && (excerpt.length < 799 || excerpt !== normalized + " ")) invalid();
+    }
     return { client, sessionId, messageId, role, occurredAtMs,
       ...(id !== undefined && { id }), ...(eventId !== undefined && { eventId }),
-      ...(excerpt !== undefined && { excerpt: receiptExcerpt(excerpt) }), ...(createdAtMs !== undefined && { createdAtMs }) };
+      ...(excerpt !== undefined && { excerpt }), ...(createdAtMs !== undefined && { createdAtMs }) };
   });
-}
-
-/** @param {string} text */
-export function receiptExcerpt(text) {
-  const normalized = redactV1(cleanContent(text).normalize("NFKC")).replace(/\s+/gu, " ").trim();
-  let excerpt = "";
-  for (const point of normalized) {
-    if (excerpt.length + point.length > 800) break;
-    excerpt += point;
-  }
-  return excerpt;
 }
 
 /** @param {readonly Receipt[]} previous @param {readonly Receipt[]} receipts */

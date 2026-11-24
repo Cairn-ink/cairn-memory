@@ -1,7 +1,7 @@
-import { CoreError, decideWrite, planDuplicateMerge } from "@cairn-ink/core";
+import { cleanContent, CoreError, decideWrite, planDuplicateMerge, receiptExcerpt } from "@cairn-ink/core";
 import { indexRevisionAfterRun } from "./unit-of-work.mjs";
 import { admissionScope, copyCaptureFailure, copyCaptureMessages, copyCaptureSelection,
-  copyFinishItems, receiptExcerpt, snapshotArray, validateTime, writeNamespace } from "./validation.mjs";
+  copyFinishItems, snapshotArray, validateTime, writeNamespace } from "./validation.mjs";
 
 /** @import { CaptureMessage } from "@cairn-ink/core/ports" */
 /** @typedef {import("@cairn-ink/core/ports").CaptureKey} CaptureKey */
@@ -175,8 +175,9 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
               if (!retained?.content || sourceClient !== client || sourceSession !== sessionId || role !== retained.role) {
                 return link;
               }
+              const excerpt = receiptExcerpt(cleanContent(retained.content));
               return { ...link, occurredAtMs: retained.occurredAtMs, eventId: claim.key.eventId,
-                createdAtMs: nowMs, excerpt: receiptExcerpt(retained.content) };
+                createdAtMs: nowMs, ...(excerpt && { excerpt }) };
             }) : sourceRefs;
             const decision = decideWrite(policy, position, progress);
             switch (decision.status) {

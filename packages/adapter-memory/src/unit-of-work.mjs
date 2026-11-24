@@ -11,7 +11,9 @@ import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from 
  *   embedding: {model: string, vector: number[]} | null, historical: boolean, legacyHash?: string,
  *   digests: import("@cairn-ink/core").TextDigest[]
  * }} Row */
-/** @typedef {{row: Row, receipts: import("@cairn-ink/core/ports").Receipt[]}} Entry */
+/** @typedef {import("@cairn-ink/core/ports").Receipt} Receipt */
+/** @typedef {{row: Row, receipts: Receipt[], inspectReceiptPositions?: Map<Receipt, number>,
+ * inspectEvidence?: import("./inspect.mjs").StoredInspectEvidence}} Entry */
 /** @typedef {import("@cairn-ink/core/ports").FingerprintKeyProvider["userKey"]} UserKey */
 /** @typedef {import("@cairn-ink/core").StoredFact} StoredFact */
 /** @typedef {import("@cairn-ink/core/ports").PauseState} PauseState */
@@ -24,6 +26,7 @@ import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from 
 /** @typedef {import("./memory-relations.mjs").RelationState} RelationState */
 /** @typedef {{topics: Map<Namespace, TopicState>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
  * documentCards: Map<Namespace, Map<string, CardEntry>>, contextEpochs: Map<Namespace, number>,
+ * inspectEpochs: Map<Namespace, number>, nextInspectReceiptPosition: number,
  * rationale: Map<Namespace, Map<string, import("@cairn-ink/core/ports").RationaleEdge>>,
  * rationaleMessages: Map<Namespace, Map<string, RationaleMessage>>,
  * rawRows: Map<string, import("./raw.mjs").RawEntry>, rawFences: Set<string>, rawConflicts: Set<string>,
@@ -44,6 +47,13 @@ export function indexRevisionAfterRun(run) {
 /** @param {Row} row */
 export function copyPublicRow({ digests: _digests, ...row }) {
   return structuredClone(row);
+}
+
+/** @param {State} state @param {Namespace} namespace */
+export function advanceInspectEpoch({ inspectEpochs }, namespace) {
+  const next = (inspectEpochs.get(namespace) ?? 1) + 1;
+  if (!Number.isSafeInteger(next)) throw new CoreError("internal_error");
+  inspectEpochs.set(namespace, next);
 }
 
 /** @param {TopicState | undefined} scoped @param {string} memoryId @param {{erase?: boolean}} [options] */
@@ -113,7 +123,7 @@ class Owner {
   /** @type {State} */
   committed = {
     topics: new Map(), documentCards: new Map(), contextEpochs: new Map(), rows: new Map(), facts: new Map(), epoch: null,
-    pause: { paused: false, generation: 0 }, indexRevision: 0,
+    pause: { paused: false, generation: 0 }, indexRevision: 0, inspectEpochs: new Map(), nextInspectReceiptPosition: 1,
     claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(), rawRows: new Map(), rawFences: new Set(),
     rawAnchors: new Map(), relations: new Map(),
     rawConflicts: new Set(), rationale: new Map(), rationaleMessages: new Map(),
@@ -432,8 +442,10 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
       updated.set(id, { ...entry, row: { ...entry.row, updatedAtUs, updatedAtMs: Number(updatedAtUs / 1000n) } });
       rows.set(namespace, updated);
       const previous = current.committed;
-      const next = { ...previous, rows, contextEpochs: new Map(previous.contextEpochs), indexRevision: previous.indexRevision + 1 };
+      const next = { ...previous, rows, contextEpochs: new Map(previous.contextEpochs),
+        inspectEpochs: new Map(previous.inspectEpochs), indexRevision: previous.indexRevision + 1 };
       if (trackContextEpochs) advanceContextEpochs(previous, next);
+      advanceInspectEpoch(next, namespace);
       current.committed = next;
     } finally {
       release();

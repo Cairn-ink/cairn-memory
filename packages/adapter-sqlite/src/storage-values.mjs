@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import {
-  boundedText, cleanContent, CoreError, normalizeForHash, prepareCoreText,
+  boundedText, cleanContent, CoreError, normalizeForHash, prepareCoreText, receiptExcerpt,
   PRIVACY_REDACTION_VERSIONS, redactV1, validateSuppressionFact,
 } from "@cairn-ink/core";
 
@@ -151,9 +151,12 @@ export function validateBatch(batch) {
 /** @param {readonly Receipt[]} receipts */
 export function copyReceipts(receipts) {
   if (!Array.isArray(receipts)) invalidInput();
-  return Array.from(receipts, ({ client, sessionId, messageId, role, occurredAtMs }) => {
+  return Array.from(receipts, ({ client, sessionId, messageId, role, occurredAtMs, excerpt }) => {
     if (!nonempty(client) || !nonempty(sessionId) || !nonempty(messageId) || !["user", "assistant"].includes(role) ||
         (occurredAtMs !== null && !Number.isFinite(occurredAtMs))) invalidInput();
-    return { client, sessionId, messageId, role, occurredAtMs };
+    if (excerpt !== undefined && (typeof excerpt !== "string" || !excerpt ||
+        /[\u0000\uD800-\uDFFF]/u.test(excerpt) || excerpt.length > 800 ||
+        receiptExcerpt(excerpt) !== excerpt.trimEnd())) invalidInput();
+    return { client, sessionId, messageId, role, occurredAtMs, ...(excerpt !== undefined && { excerpt }) };
   });
 }
