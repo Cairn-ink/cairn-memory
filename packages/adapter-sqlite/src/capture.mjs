@@ -3,7 +3,7 @@ import { finishCapture, validateFinishItems } from "./capture-finish.mjs";
 import { decodeJson } from "./memory-rows.mjs";
 import { readPause } from "./pause.mjs";
 import { rawFactPolicy } from "./raw-facts.mjs";
-import { blocksRawSession } from "./raw-lineage.mjs";
+import { blocksRawSession, hasRawFence } from "./raw-lineage.mjs";
 import { invalidInput, ownerKey, scopeKey, writeTime } from "./storage-values.mjs";
 import { readFacts } from "./suppressions.mjs";
 
@@ -358,6 +358,10 @@ export function createCapturePorts(port, hashSession, index, lineage, now = Date
         if (current) {
           if (selected.some(position => current.messages[position]?.content === "")) throw new CoreError("suppressed");
           if (selected.some(position => !current.matchesClaim(position))) throw new CoreError("stale_admission");
+          // Core can finish a deleted outbox with no sources after withdrawing every slot.
+          if (selected.length === 0 && sources.length > 0 && current.messages.length === sources.length &&
+              current.messages.every(({ content }) => content === "") &&
+              hasRawFence(db, key.scope, hashSession(key.scope, key.client, key.sessionId))) return;
         }
         const proofs = current?.proofs ?? decodeJson(row.source_proofs);
         if (lineage.fenced(db, key.scope, key, proofs)) throw new CoreError("lineage_fenced");
