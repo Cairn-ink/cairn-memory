@@ -1,6 +1,9 @@
 import { isWellFormedText, validateDenseArray, validateObject } from "../capture/validate.mjs";
+import { FUSION_PRESETS } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
 import { prepareCoreText } from "../privacy/text.mjs";
+import { fuseHostedWithCards } from "../retrieval/fusion.mjs";
+import { documentCardFindItem, documentCardVisible, visibleDocumentCardRows } from "../routing/index.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
 import { recallSearch } from "./recall.mjs";
 import { readSet, visibleRawSegments } from "./reads.mjs";
@@ -10,6 +13,13 @@ import { readSet, visibleRawSegments } from "./reads.mjs";
 /** @typedef {import("../ports/host.d.ts").Layer} Layer */
 /** @typedef {import("../ports/common.d.ts").MemoryRow} MemoryRow */
 /** @typedef {import("../ports/retrieval.d.ts").RawSegment} RawSegment */
+/** @typedef {import("./index.d.mts").MemoryServiceDeps["storage"]} StorageAdapter */
+/** @typedef {import("../ports/common.d.ts").Scope} Scope */
+/** @typedef {import("../ports/common.d.ts").ItemRef} ItemRef */
+/** @typedef {import("../ports/unit-of-work.d.ts").Tx} Tx */
+/** @typedef {import("../routing/index.mjs").DocumentCardFindItem} DocumentCardFindItem */
+/** @typedef {NonNullable<StorageAdapter["documentCards"]>} CardStore */
+/** @typedef {NonNullable<CardStore["visibilityInputs"]>} CardVisibilityLoader */
 
 /** @param {unknown} value */
 function timeBound(value) {
@@ -57,10 +67,32 @@ function notSearched(requested) {
     : { status: "not_searched", count: 0 };
 }
 
+/** @param {CardStore | undefined} store */
+function cardVisibilityLoader(store) {
+  return typeof store?.visibilityInputs === "function" ? store.visibilityInputs.bind(store) : undefined;
+}
+
+/**
+ * @param {CardStore} store @param {CardVisibilityLoader} load
+ * @param {Tx} tx @param {Scope} scope @param {ItemRef} ref
+ */
+async function readVisibleCard(store, load, tx, scope, ref) {
+  if (ref.type !== "card" || ref.namespace !== scope.namespace) return null;
+  const card = await store.get(tx, scope, ref.id);
+  if (!card || card.id !== ref.id) return null;
+  const [input] = await load(tx, scope, [ref]);
+  if (!input || input.card.id !== ref.id || input.card.scope.owner !== scope.owner ||
+      input.card.scope.namespace !== scope.namespace) return null;
+  const verdict = await documentCardVisible({
+    ...input, requestedScope: scope, card: { ...card, canonicalSessionKey: input.card.canonicalSessionKey },
+  });
+  return verdict.visible ? { card, memoryStates: input.memoryStates } : null;
+}
+
 /** @param {import("./index.d.mts").MemoryServiceDeps} deps @returns {MemoryService["find"]} */
 export function findMethod(deps) {
   const searchMemories = recallSearch(deps);
-  const { storage: { uow, fence, raw, capabilities }, embedQuery } = deps;
+  const { storage: { uow, fence, raw, capabilities, documentCards, documentCardCandidates }, embedQuery } = deps;
   /** @type {(...args: Parameters<MemoryService["find"]>) => ReturnType<MemoryService["find"]>} */
   const find = entry(async (input, rawQuery, options) => {
     const scope = scopeOf(input);
@@ -70,8 +102,14 @@ export function findMethod(deps) {
     const rawRequested = requested.includes("raw");
     const rawAvailable = capabilities.rawArchive && raw;
     const searchRaw = rawRequested && query && rawAvailable;
+    const cardRequested = requested.includes("card");
+    const loadCardVisibility = cardVisibilityLoader(documentCards);
+    const cardAvailable = capabilities.documentCardSearch && documentCardCandidates && loadCardVisibility;
+    const searchCards = cardRequested && query && cardAvailable;
     /** @type {Float32Array | undefined} */
     let queryVector;
+    /** @type {string | undefined} */
+    let queryModel;
 
     /** @type {MemoryRow[]} */
     let memories = [];
@@ -79,12 +117,13 @@ export function findMethod(deps) {
     if (requested.includes("memory")) {
       try {
         // Capture this request's vector as memory search computes it.
-        const search = searchRaw && embedQuery ? recallSearch({
+        const search = (searchRaw || searchCards) && embedQuery ? recallSearch({
           ...deps,
           embedQuery: {
             async embedQuery(owner, text, options) {
               const embedding = await embedQuery.embedQuery(owner, text, options);
               queryVector = embedding.vector;
+              if (searchCards) queryModel = embedding.model;
               return embedding;
             },
           },
@@ -113,27 +152,84 @@ export function findMethod(deps) {
         rawLayer = { status: "unavailable", count: 0, code: entryError(error).code };
       }
     }
+    /** @type {DocumentCardFindItem[]} */
+    let cards = [];
+    let card = notSearched(cardRequested && query.length > 0 && !cardAvailable);
+    if (searchCards && documentCards && documentCardCandidates && loadCardVisibility) {
+      const readScope = readSet(scope, filters);
+      const pool = FUSION_PRESETS.hosted.pool;
+      try {
+        cards = await uow.run(scope.owner, { readOnly: true }, async tx => {
+          const words = await documentCardCandidates.lexical(tx, readScope, query, pool, {});
+          const semantic = queryVector && queryModel
+            ? await documentCardCandidates.vector(tx, readScope, queryVector, queryModel, pool)
+            : null;
+          const vectorRows = semantic?.coverage.complete === true ? semantic.rows : null;
+          const refs = [...words.rows, ...(semantic?.rows ?? [])].map(({ ref }) => ref);
+          const inputs = await loadCardVisibility(tx, scope, refs);
+          const byRef = new Map(refs.map((ref, i) => [ref, inputs[i]]));
+          /** @param {ItemRef} ref */
+          const load = ref => {
+            const input = byRef.get(ref);
+            return input && ref.namespace === scope.namespace ? { ...input, requestedScope: scope } : null;
+          };
+          const { rows: cardLexical } = await visibleDocumentCardRows(words.rows, load);
+          const cardVector = vectorRows && (await visibleDocumentCardRows(vectorRows, load)).rows;
+          const { rows } = fuseHostedWithCards(
+            { memoryLexical: [], memoryVector: [], cardLexical, cardVector },
+            { offset: 0, limit, floor: false },
+          );
+          const items = [];
+          for (const { ref } of rows) {
+            const visible = await readVisibleCard(documentCards, loadCardVisibility, tx, scope, ref);
+            if (visible) items.push(documentCardFindItem(visible.card, query));
+          }
+          return items;
+        });
+        card = { status: "ok", count: cards.length };
+      } catch (error) {
+        card = { status: "unavailable", count: 0, code: entryError(error).code };
+      }
+    }
     return {
-      memories, cards: [], raw: segments,
-      layers: { memory, card: notSearched(requested.includes("card")), raw: rawLayer },
+      memories, cards, raw: segments,
+      layers: { memory, card, raw: rawLayer },
     };
   });
-  // A null query cannot enter the raw search branch, so its result has an empty raw tuple.
+  // A null query leaves both the raw and card arrays empty.
   return /** @type {MemoryService["find"]} */ (find);
 }
 
-/** @param {Pick<import("../ports/index.d.ts").StorageAdapter, "uow" | "hydrate" | "fence">} storage
+/** @param {Pick<StorageAdapter, "uow" | "hydrate" | "fence" | "documentCards">} storage
  * @returns {MemoryService["read"]} */
-export function readMethod({ uow, hydrate, fence }) {
-  return entry(async (input, target) => {
+export function readMethod({ uow, hydrate, fence, documentCards }) {
+  /** @type {(...args: Parameters<MemoryService["read"]>) => ReturnType<MemoryService["read"]>} */
+  const read = entry(async (input, target) => {
     const scope = scopeOf(input);
     const { type, id } = validateObject(target, ["type", "id"]);
     if ((type !== "memory" && type !== "card") || typeof id !== "string") throw new CoreError("invalid_input");
-    if (type === "card" || !hydrate) throw new CoreError("capability_unavailable");
+    /** @type {ItemRef} */
+    const ref = { type, id, namespace: scope.namespace };
+    if (type === "card") {
+      const load = cardVisibilityLoader(documentCards);
+      if (!documentCards || !load) throw new CoreError("capability_unavailable");
+      return uow.run(scope.owner, { readOnly: true }, async tx => {
+        const visible = await readVisibleCard(documentCards, load, tx, scope, ref);
+        if (!visible) return { status: "not_found" };
+        const { card: { id, title, body, date, origin, sourceMessage, sourceMemories }, memoryStates } = visible;
+        const sourceMemoryIds = sourceMemories.filter(({ id }) => {
+          const state = memoryStates.get(id)?.status;
+          return state === "visible" || state === "historical";
+        }).map(({ id }) => id);
+        return {
+          status: "found",
+          card: { id, title, body, date, origin: origin ?? null, sourceClient: sourceMessage?.client ?? null, sourceMemoryIds },
+        };
+      });
+    }
+    if (!hydrate) throw new CoreError("capability_unavailable");
 
     const readScope = readSet(scope);
-    /** @type {import("../ports/common.d.ts").ItemRef} */
-    const ref = { type, id, namespace: scope.namespace };
     /** @param {import("../ports/common.d.ts").ItemRef} candidate */
     const isRequested = candidate => candidate.type === type && candidate.id === id &&
       candidate.namespace === scope.namespace;
@@ -153,4 +249,5 @@ export function readMethod({ uow, hydrate, fence }) {
       };
     });
   });
+  return /** @type {MemoryService["read"]} */ (read);
 }

@@ -1,6 +1,7 @@
 import { CoreError, compareUtf8 } from "@cairn-ink/core";
+import { DOCUMENT_CARD_SEARCH_TEXT_VERSION } from "@cairn-ink/core/routing";
 import { dropCardMemberships, dropCardPlacement } from "./topics.mjs";
-import { copyScope, snapshotArray, validateCardId, validateTime, writeNamespace } from "./validation.mjs";
+import { copyScope, readEmbedding, snapshotArray, validateCardId, validateTime, writeNamespace, writeTime } from "./validation.mjs";
 
 /** @import { DocumentCardAmendment, DocumentCardHideSelector, DocumentCardSourceMessage,
  * DocumentCardStore, Scope, StoredDocumentCardRecord, Tx } from "@cairn-ink/core/ports" */
@@ -58,8 +59,10 @@ function readCard(entry) {
   return structuredClone({ ...entry.card, amendments });
 }
 
-/** @param {Port} port @param {() => number} now @returns {DocumentCardStore<StoredDocumentCardRecord>} */
-export function createDocumentCardStore(port, now) {
+/** @param {Port} port @param {() => number} now
+ * @param {ReturnType<typeof import("./retrieval.mjs").createCardVisibilityInput>} buildVisibilityInput
+ * @param {boolean} searchEnabled @returns {DocumentCardStore<StoredDocumentCardRecord>} */
+export function createDocumentCardStore(port, now, buildVisibilityInput, searchEnabled) {
   /** @param {Tx} tx @param {Scope} scope @param {() => HideMatcher} prepare */
   function hideCards(tx, scope, prepare) {
     return port.write(tx, scope, "conditional", () => {
@@ -80,6 +83,7 @@ export function createDocumentCardStore(port, now) {
           if (hideCard) {
             entry.card = null;
             delete entry.amendments;
+            delete entry.embedding;
             dropCardMemberships(state, namespace, id);
             hidden++;
           }
@@ -91,7 +95,7 @@ export function createDocumentCardStore(port, now) {
   }
 
   return {
-    async put(tx, scope, card) {
+    async put(tx, scope, card, embedding) {
       return port.write(tx, scope, "conditional", () => {
         const namespace = writeNamespace(scope);
         const copy = structuredClone(card);
@@ -101,6 +105,16 @@ export function createDocumentCardStore(port, now) {
         if (!Array.isArray(copy.sourceMemories) || !Array.isArray(copy.stale)) throw new CoreError("invalid_input");
         Reflect.deleteProperty(copy, "amendments");
         copy.stale = copy.stale.map(({ memoryId, replacementMemoryId }) => ({ memoryId, replacementMemoryId }));
+        /** @type {CardEntry["embedding"]} */
+        let indexedEmbedding;
+        if (searchEnabled && embedding) {
+          requireString(embedding.model);
+          indexedEmbedding = {
+            model: embedding.model, vector: readEmbedding(embedding.vector, "passage"),
+            textVersion: DOCUMENT_CARD_SEARCH_TEXT_VERSION,
+          };
+          if (!indexedEmbedding.vector.length) throw new CoreError("invalid_input");
+        }
         return (getState, _markDirty, run) => {
           const state = getState();
           const cards = state.documentCards.get(namespace) ?? new Map();
@@ -116,8 +130,14 @@ export function createDocumentCardStore(port, now) {
           }
           const createdAtMs = previous?.createdAtMs ?? now();
           validateTime(createdAtMs);
+          let searchIndex;
+          if (searchEnabled) {
+            const updatedAtMs = previous ? now() : createdAtMs;
+            validateTime(updatedAtMs);
+            searchIndex = { updatedAtUs: writeTime(updatedAtMs).updatedAtUs, embedding: indexedEmbedding };
+          }
           if (previous) dropCardPlacement(state, namespace, copy.id);
-          cards.set(copy.id, { ...previous, card: copy, createdAtMs });
+          cards.set(copy.id, { ...previous, card: copy, createdAtMs, ...searchIndex });
           state.documentCards.set(namespace, cards);
           run.cardWrites++;
           return { status: previous ? "replaced" : "inserted" };
@@ -219,6 +239,26 @@ export function createDocumentCardStore(port, now) {
     async list(tx, scope) {
       return port(tx, scope, false, (state) => [...(state.documentCards.get(scope.namespace)?.values() ?? [])]
         .map(readCard).filter((card) => card !== null));
+    },
+
+    async visibilityInputs(tx, scope, refs) {
+      return port.read(tx, scope, getState => {
+        const requestedScope = copyScope(scope);
+        const state = getState();
+        const cards = state.documentCards.get(requestedScope.namespace);
+        return Promise.all(Array.from(refs, async ref => {
+          try {
+            if (ref?.type !== "card" || ref.namespace !== requestedScope.namespace ||
+                typeof ref.id !== "string" || !ref.id) return null;
+            const card = cards?.get(ref.id)?.card;
+            if (!card || card.scope.owner !== requestedScope.owner ||
+                card.scope.namespace !== requestedScope.namespace) return null;
+            return structuredClone(await buildVisibilityInput(state, requestedScope, card, true));
+          } catch {
+            return null;
+          }
+        }));
+      });
     },
   };
 }

@@ -13,7 +13,7 @@ import { createRationaleStore } from "./rationale.mjs";
 import { createRationaleHarness } from "./rationale-harness.mjs";
 import { createRawPorts } from "./raw.mjs";
 import { createReceiptReadSafety } from "./receipt-read-safety.mjs";
-import { createCardVisibility, createRetrievalPorts } from "./retrieval.mjs";
+import { createCardVisibility, createCardVisibilityInput, createDocumentCardCandidates, createRetrievalPorts } from "./retrieval.mjs";
 import { createTopicStore } from "./topics.mjs";
 import { createUnitOfWork, handleWriteRejections } from "./unit-of-work.mjs";
 import { copyReceipts, validateTime, writeNamespace } from "./validation.mjs";
@@ -30,8 +30,10 @@ export function createMemoryAdapter(options = {}) {
   const flags = capabilities({ ...options.capabilities,
     ...(options.receiptAttachAdvancesRevision === true && { receiptAttachAdvancesRevision: true }),
     ...(options.proceduralTags === true && { proceduralTags: true }),
+    ...(options.documentCardSearch !== undefined && { documentCardSearch: options.documentCardSearch }),
   });
-  if ((flags.contextRead && flags.cards) || (flags.contextRawRead && (!flags.contextRead || !flags.rawArchive))) {
+  if ((flags.contextRead && flags.cards) || (flags.contextRawRead && (!flags.contextRead || !flags.rawArchive)) ||
+      (flags.documentCardSearch && !flags.documentCards)) {
     throw new CoreError("capability_unavailable");
   }
   const sessionRefs = options.sessionRefs ?? "plain";
@@ -53,7 +55,8 @@ export function createMemoryAdapter(options = {}) {
   const { supersession, conflicts } = createRelationStores(port, matchFacts);
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts,
     flags.fingerprintKey ? ringKeys : undefined);
-  const cardVisible = createCardVisibility(matchFacts, keys, archive?.sourceVisible);
+  const cardVisibilityInput = createCardVisibilityInput(matchFacts, keys, archive?.sourceVisible);
+  const cardVisible = createCardVisibility(cardVisibilityInput);
   const rationale = flags.rationaleEdges ? createRationaleStore(port, matchFacts, ringKeys, archive?.findVisibleSource) : undefined;
   const placement = flags.placement ? handleWriteRejections(
     createTopicStore(port, flags, newId, now, matchFacts, options, cardVisible),
@@ -95,7 +98,9 @@ export function createMemoryAdapter(options = {}) {
     ...(placement && { placement }),
     ...(inspect && { inspect: inspect.inspect }),
     ...(flags.documentCards && { documentCards: handleWriteRejections(
-      createDocumentCardStore(port, now), ["put", "linkMemories", "amend", "hideAmendment", "hide", "hideWhere", "markStale"]) }),
+      createDocumentCardStore(port, now, cardVisibilityInput, flags.documentCardSearch),
+      ["put", "linkMemories", "amend", "hideAmendment", "hide", "hideWhere", "markStale"]) }),
+    ...(flags.documentCardSearch && { documentCardCandidates: createDocumentCardCandidates(port, cardVisible) }),
     nativeErrorMap,
     harness: {
       async dump() { return dump(flags.rawArchive, flags.documentCards, flags.rationaleEdges); },
