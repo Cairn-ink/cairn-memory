@@ -1,4 +1,4 @@
-import { isWellFormedText } from "../capture/validate.mjs";
+import { detach, isWellFormedText } from "../capture/validate.mjs";
 import { SUPPRESSION_DISTANCE } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
 import { FORGET_STEP_CAPABILITIES } from "../privacy/forget-steps.mjs";
@@ -12,6 +12,25 @@ import { predecessorFact, scopedRow, sourceOf } from "./writes.mjs";
 /** @import {RawSpanFact} from "../suppression-fact.mjs" */
 
 /** @typedef {MemoryService["forget"]} Forget */
+/** @typedef {{ expectedRevision?: Revision }} ForgetOptions */
+
+/** @param {ForgetOptions | null | undefined} options @returns {Revision | undefined} */
+function readExpectedRevision(options) {
+  if (options == null) return undefined;
+  try {
+    if (typeof options === "object") {
+      const prototype = Object.getPrototypeOf(options);
+      if (prototype === Object.prototype || prototype === null) {
+        const descriptor = Object.getOwnPropertyDescriptor(options, "expectedRevision");
+        if (descriptor?.enumerable && Object.hasOwn(descriptor, "value")) return descriptor.value;
+        if (!("expectedRevision" in options)) return undefined;
+      }
+    }
+  } catch {
+    // Proxy traps can throw during reflection. Detachment rejects proxies that pass these checks.
+  }
+  throw new CoreError("invalid_input");
+}
 
 /** @param {Capabilities} flags @param {ForgetStep} step @param {Capability} capability */
 function enabled(flags, step, capability) {
@@ -89,7 +108,7 @@ export function forgetMethod({ storage, clock }) {
   const { uow, capabilities, keys, memories, suppressions, raw, sessionLineage, spanLineage, hydrate,
     conflicts, rationale, documentCards, quantityLedger, forgetLog } = storage;
 
-  /** @type {(...args: [...Parameters<Forget>, options?: { expectedRevision?: Revision }]) =>
+  /** @type {(...args: [...Parameters<Forget>, options?: ForgetOptions]) =>
    *   Promise<Awaited<ReturnType<Forget>> | { status: "conflict" }>} */
   const forget = entry(async (input, id, inputSource, options) => {
     const scope = scopeOf(input);
@@ -227,6 +246,16 @@ export function forgetMethod({ storage, clock }) {
       const indexRevision = await memories.committedIndexRevision?.(tx);
       return { status: "forgotten", removedSimilar, ...(indexRevision === undefined ? {} : { indexRevision }) };
     });
+  }, undefined, args => {
+    // Capture the guard before cloning can drop it or another argument's getter can change it.
+    const expectedRevision = readExpectedRevision(args[3]);
+    const input = detach(args, "invalid_input");
+    // Built-in objects can have a reassigned prototype. Cloning restores their built-in prototype.
+    if (input[3] != null && Object.getPrototypeOf(input[3]) !== Object.prototype) {
+      throw new CoreError("invalid_input");
+    }
+    input[3] = { expectedRevision };
+    return input;
   });
   // Only calls that supply an expected revision can return a conflict.
   return /** @type {Forget} */ (forget);

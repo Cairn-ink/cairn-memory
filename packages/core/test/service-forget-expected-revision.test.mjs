@@ -77,6 +77,67 @@ async function setup(t, fingerprintKey, { externalKey = false, revision = 3 } = 
   return { ...fake, target, similar, service: createMemoryService(deps), keyLookup, writeCalls, snapshot };
 }
 
+const invalidOptions = [
+  ["non-enumerable revision", expectedRevision => Object.defineProperty({ expectedRevision },
+    "expectedRevision", { enumerable: false })],
+  ["inherited data revision", expectedRevision => Object.create({ expectedRevision })],
+  ["inherited revision getter", (_revision, getter) => Object.create(
+    Object.defineProperty({}, "expectedRevision", { get: getter }))],
+  ["own revision getter", (_revision, getter) => Object.defineProperty({}, "expectedRevision",
+    { enumerable: true, get: getter })],
+  ["proxy with a has trap", expectedRevision => new Proxy(Object.defineProperty({ expectedRevision },
+    "expectedRevision", { enumerable: false }), { has: () => false })],
+  ["array options", () => []],
+  ["primitive options", () => 0],
+  ["built-in object with a plain prototype", () => Object.setPrototypeOf(new Date(0), Object.prototype)],
+];
+
+for (const [label, optionsOf] of invalidOptions) {
+  test(`forget rejects ${label} before looking up a key or opening a transaction`, async t => {
+    const { service, target, snapshot, calls, writeCalls } = await setup(t, true, { externalKey: true });
+    const before = snapshot();
+    const getter = t.mock.fn(() => target.revision - 1);
+
+    const result = await service.forget(scope, target.id, source, optionsOf(target.revision - 1, getter))
+      .catch(error => error);
+
+    assert.deepEqual({ status: result.status, writes: writeCalls() }, { status: undefined, writes: [] });
+    assert.ok(result instanceof CoreError);
+    assert.equal(result.code, "invalid_input");
+    assert.deepEqual(calls, []);
+    assert.deepEqual(snapshot(), before);
+    assert.equal(getter.mock.callCount(), 0);
+  });
+}
+
+test("forget keeps the supplied revision if another argument's getter changes the options", async t => {
+  const { service, target, snapshot, writeCalls } = await setup(t, true);
+  const before = snapshot();
+  const options = { expectedRevision: target.revision - 1 };
+  const input = {
+    ...scope,
+    get namespace() {
+      delete options.expectedRevision;
+      return scope.namespace;
+    },
+  };
+
+  assert.deepEqual(await service.forget(input, target.id, source, options), { status: "conflict" });
+  assert.deepEqual(writeCalls(), []);
+  assert.deepEqual(snapshot(), before);
+});
+
+test("forget accepts a null-prototype options record and treats null as omission", async t => {
+  const { service, target, snapshot, writeCalls } = await setup(t, true);
+  const before = snapshot();
+  const options = Object.assign(Object.create(null), { expectedRevision: target.revision - 1 });
+
+  assert.deepEqual(await service.forget(scope, target.id, source, options), { status: "conflict" });
+  assert.deepEqual(writeCalls(), []);
+  assert.deepEqual(snapshot(), before);
+  assert.deepEqual(await service.forget(scope, target.id, source, null), { status: "forgotten", removedSimilar: 1 });
+});
+
 for (const fingerprintKey of [true, false]) {
   const mode = fingerprintKey ? "keyed" : "keyless";
 

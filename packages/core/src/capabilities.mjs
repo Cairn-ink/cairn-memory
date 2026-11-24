@@ -46,8 +46,15 @@ export function capabilities(flags) {
   /** @type {Record<string, boolean>} */
   const out = {};
   for (const name of CAPABILITIES) out[name] = flags[name] === true;
-  for (const name of optionalCapabilities) {
+  for (const name of READ_CONTRACT_CAPABILITIES) {
     if (Object.hasOwn(flags, name)) out[name] = flags[name] === true;
+  }
+  for (const name of WRITE_PARITY_CAPABILITIES) {
+    if (Object.hasOwn(flags, name)) {
+      const value = flags[name];
+      if (typeof value !== "boolean") throw new CoreError("invalid_input");
+      out[name] = value;
+    }
   }
   for (const name of Object.keys(flags)) {
     if (!registeredCapabilities.includes(name)) throw new CoreError("invalid_input");

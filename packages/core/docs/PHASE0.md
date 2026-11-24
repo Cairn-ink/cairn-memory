@@ -743,8 +743,9 @@ and an independently checked token count for the actual assembly block.
   configurable. Postgres disables it, preserving the hosted service's capture duplicate
   revisions.
 - **Index revision.** `MemoryStore.indexRevision(tx)` returns the owner's revision at the start
-  of the run and stays stable throughout that run. The owner index advances once per write run
-  that changes anything. A procedural save and its tag write share that advance. A write result
+  of the run and stays stable throughout that run. A write run that changes anything advances
+  the owner index. An adapter may advance it more than once in one run. The reference adapter
+  does so for Raw and card writes. A procedural save and its tag write share an advance. A write result
   reports the owner revision as it will commit (via `committedIndexRevision`) if it changed
   anything, and the start revision otherwise. A save that changed state can report `suppressed` after its post-commit visibility
   check, and a correction that changed state can report `not_found` after its check. Both
