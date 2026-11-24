@@ -14,11 +14,11 @@ const allowlist = {
   "rationale/store-plan.mjs: store.sourceEvidence(tx, scope, refs)": "Receipt admission enforces Raw and excerpt visibility before evidence is used by rationale.",
   "rationale/store-plan.mjs: store.degree(tx, scope, id)": "The incident count is internal to the insertion limit check.",
   "rationale/decision-context.mjs: edges.incoming(tx, selection, memoryId, 'supports-decision', page)":
-    "fenced via visibleEdges; root fence pending core fix",
+    "fenced via visibleEdges; decisionContext fences the root before reading or caching it",
   "rationale/decision-context.mjs: edges.incoming(tx, selection, memoryId, 'challenges-premise', page)":
-    "fenced via visibleEdges; root fence pending core fix",
+    "fenced via visibleEdges; decisionContext fences the root before reading or caching it",
   "rationale/decision-context.mjs: edges.incoming(tx, selection, id, 'challenges-premise', page)":
-    "fenced via visibleEdges; root fence pending core fix",
+    "fenced via visibleEdges; decisionContext fences the root before reading or caching it",
 };
 
 function walk(node, visit, parent) {

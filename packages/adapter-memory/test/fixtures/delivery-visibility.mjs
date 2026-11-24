@@ -144,10 +144,7 @@ export async function assertRootDelivery(readContext, fenceCalls, rootRef) {
     if (isCoreError(error) && error.code === "memory_not_found") return "pass";
     throw error;
   }
-  // Each returned path belongs to the requested root, even when its ref names only the other endpoint.
-  const askedAboutRoot = fenceCalls.some(({ type, id, namespace }) =>
-    type === rootRef.type && id === rootRef.id && namespace === rootRef.namespace);
-  if (!askedAboutRoot && Array.isArray(actual?.refs) && actual.refs.some((ref) => typeof ref?.id === "string")) return "todo";
+  // Core fences the root before reading or caching it, so any returned value must be empty.
   const expected = { status: "unassessed", refs: [] };
   if (!isDeepStrictEqual(actual, expected)) {
     throw new AssertionError({ message: ROOT_ASSERTION, actual, expected, operator: "decisionContext delivery" });

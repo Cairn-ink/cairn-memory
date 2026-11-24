@@ -14,11 +14,8 @@ test("a text fact on a non-root endpoint removes its decisionContext paths", asy
   await (await rationaleFixture("non-root")).assertDelivery();
 });
 
-test("a text fact on the root endpoint removes its decisionContext paths", async (t) => {
-  const fixture = await rationaleFixture("root");
-  if (await fixture.assertDelivery() === "todo") {
-    t.todo("core decisionContext root endpoint is not fenced (fix pending)");
-  }
+test("a text fact on the root endpoint removes its decisionContext paths", async () => {
+  assert.equal(await (await rationaleFixture("root")).assertDelivery(), "pass");
 });
 
 const rootRef = { type: "memory", id: "root", namespace: null };
@@ -30,12 +27,22 @@ const unrelated = new CoreError("storage_error");
 for (const [label, calls, readContext, expected] of [
   ["fixed throw", [rootRef], async () => { throw new CoreError("memory_not_found"); }, "pass"],
   ["fixed empty", [rootRef], async () => empty, "pass"],
-  ["current bypass", [premiseRef], async () => paths, "todo"],
 ]) {
   test(`root delivery classifier accepts the ${label} outcome`, async () => {
     assert.equal(await assertRootDelivery(readContext, calls, rootRef), expected);
   });
 }
+
+test("root delivery classifier fails when core returns root paths without asking the fence", async () => {
+  await assert.rejects(assertRootDelivery(async () => paths, [premiseRef], rootRef),
+    { code: "ERR_ASSERTION", message: ROOT_ASSERTION, actual: paths });
+});
+
+test("root delivery classifier fails on root metadata inside refs", async () => {
+  const leaked = { status: "unassessed", refs: [{ id: rootRef.id, receiptId: "receipt", digest: "digest" }] };
+  await assert.rejects(assertRootDelivery(async () => leaked, [], rootRef),
+    { code: "ERR_ASSERTION", message: ROOT_ASSERTION, actual: leaked });
+});
 
 test("root delivery classifier fails when core ignores a root fence denial", async () => {
   await assert.rejects(assertRootDelivery(async () => paths, [rootRef, premiseRef], rootRef),
