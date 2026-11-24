@@ -50,7 +50,7 @@ export type DocumentCardVisibility =
 
 /**
  * Message-backed cards can remain visible with historical links. Import and manual cards require exact visible revisions.
- * For erasure, definiteOnly reports fail-closed comparisons as uncertain. Supply a null
+ * For erasure, definiteOnly classifies ordinary hidden verdicts with missing evidence as uncertain. Supply a null
  * sourceWithheld or an unknown memory state when that withholding evidence is indeterminate.
  */
 export declare function documentCardVisible(input: DocumentCardVisibilityInput, options?: { definiteOnly?: boolean }): Promise<DocumentCardVisibility>;

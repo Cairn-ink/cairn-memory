@@ -32,13 +32,9 @@ function unionMemoryLinks(existing, links) {
 
 /** @param {DocumentCardHideSelector} selector @returns {HideMatcher} */
 function selectorMatcher(selector) {
-  const { cardId, sourceMemoryId, sourceMessage, session } = selector;
-  const selectors = [cardId, sourceMemoryId, sourceMessage, session].filter((value) => value !== undefined);
+  const { sourceMemoryId, sourceMessage, session } = selector;
+  const selectors = [sourceMemoryId, sourceMessage, session].filter((value) => value !== undefined);
   if (selectors.length !== 1) throw new CoreError("invalid_input");
-  if (cardId !== undefined) {
-    validateCardId(cardId);
-    return { card: ({ id }) => id === cardId };
-  }
   if (sourceMemoryId !== undefined) {
     requireString(sourceMemoryId);
     return { card: ({ sourceMemories }) => sourceMemories.some(({ id }) => id === sourceMemoryId) };
@@ -114,12 +110,17 @@ function hideMatching(state, namespace, match, reason, { purge = false, retainTe
 
 /** @param {State} state @param {Scope["namespace"]} namespace @param {readonly DocumentCardSourceMessage[]} sources */
 export function purgeDeletedDocumentSources(state, namespace, sources) {
+  if (!sources.length || !state.documentCards.has(namespace)) return { hidden: 0, changed: false };
   /** @param {DocumentCardSourceMessage} source */
   const binding = ({ client, sessionId, messageId }) => JSON.stringify([client, sessionId, messageId]);
   const deleted = new Set(sources.map(binding));
-  /** @param {{ sourceMessage: DocumentCardSourceMessage | null }} record */
-  const matches = ({ sourceMessage }) => sourceMessage != null && deleted.has(binding(sourceMessage));
-  return hideMatching(state, namespace, { card: matches, amendment: matches }, "raw_deleted", { purge: true });
+  /** @param {DocumentCardSourceMessage | null} source */
+  const matches = source => source != null && deleted.has(binding(source));
+  return hideMatching(state, namespace, {
+    card: ({ sourceMessage, sentences }) => matches(sourceMessage) ||
+      (Array.isArray(sentences) && sentences.some(sentence => matches(sentence?.source))),
+    amendment: ({ sourceMessage }) => matches(sourceMessage),
+  }, "raw_deleted", { purge: true });
 }
 
 /** @param {Port} port @param {() => number} now @param {CardVisibility["input"]} visibilityInput
@@ -246,9 +247,20 @@ export function createDocumentCardStore(port, now, visibilityInput, amendmentWit
       return hideCards(tx, scope, () => selectorMatcher(selector), reason, options);
     },
 
-    async listForPurge(tx, scope, selectors) {
+    async purgeById(tx, scope, cardId, reason) {
+      await hideCards(tx, scope, () => {
+        validateCardId(cardId);
+        return { card: ({ id }) => id === cardId };
+      }, reason, { purge: true });
+    },
+
+    async listForPurge(tx, scope, selectors, action) {
       return port.read(tx, scope, async getState => {
         const state = getState();
+        const factIds = new Set(action?.factIds);
+        const facts = new Map([...state.facts].filter(([, { fact, factId }]) =>
+          factIds.has(factId) && fact.origin === "forget" && fact.actionId === action?.actionId &&
+          fact.owner === scope.owner && (fact.namespace ?? null) === scope.namespace));
         const matches = selectors?.map(selectorMatcher);
         const candidates = [];
         for (const entry of state.documentCards.get(scope.namespace)?.values() ?? []) {
@@ -260,11 +272,11 @@ export function createDocumentCardStore(port, now, visibilityInput, amendmentWit
             const amendment = storedAmendment(value);
             if (!amendment || (!selected && !matches?.some(({ amendment: match }) => match?.(amendment)))) continue;
             const { amendmentId, sourceMessage } = amendment;
-            const sourceWithheld = await amendmentWithheld(state, scope, sourceMessage).catch(() => false);
+            const sourceWithheld = await amendmentWithheld(state, scope, sourceMessage, facts).catch(() => false);
             amendments.push({ amendmentId, sourceMessage, sourceWithheld });
           }
           if (!selected && amendments.length === 0) continue;
-          const input = selected ? await visibilityInput(state, scope, card, true) : null;
+          const input = selected ? await visibilityInput(state, scope, card, true, facts) : null;
           candidates.push(structuredClone({ cardId: card.id, input, amendments }));
         }
         return candidates;

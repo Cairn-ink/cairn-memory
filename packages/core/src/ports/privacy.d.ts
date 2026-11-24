@@ -89,9 +89,9 @@ export interface SpanLineageStore {
 
 export interface RawStore {
   fenceSession(tx: Tx, scope: Scope, session: { client: string; sessionId: string }): Promise<void>;
-  /** Deletes raw rows and blanks ledger text for a PROVEN closure only (type-level guard). */
+  /** Deletes Raw rows and blanks ledger text for a PROVEN closure only, tombstoning bound card and amendment payloads. */
   eraseSessions(tx: Tx, scope: Scope, closure: ProvenClosure): Promise<{ rawDeleted: number; ledgerBlanked: number }>;
-  /** Deletes raw rows and blanks ledger messages withheld by the given text facts. */
+  /** Deletes withheld Raw rows, blanks withheld ledger messages, and tombstones bound card and amendment payloads. */
   purgeWithheld(tx: Tx, scope: Scope, facts: ReadonlyArray<StoredFact>, options?: {
     /** Report the source binding of each deleted Raw row inside the write. */
     onDelete?: (source: import("./document-card.d.ts").DocumentCardSourceMessage) => void;

@@ -100,7 +100,7 @@ export function createMemoryAdapter(options = {}) {
     ...(inspect && { inspect: inspect.inspect }),
     ...(flags.documentCards && { documentCards: handleWriteRejections(
       createDocumentCardStore(port, now, cardVisible.input, cardVisible.amendmentWithheld),
-      ["put", "linkMemories", "amend", "hideAmendment", "hide", "hideWhere", "markStale"]) }),
+      ["put", "linkMemories", "amend", "hideAmendment", "hide", "hideWhere", "purgeById", "markStale"]) }),
     nativeErrorMap,
     harness: {
       async dump() { return dump(flags.rawArchive, flags.documentCards, flags.rationaleEdges); },

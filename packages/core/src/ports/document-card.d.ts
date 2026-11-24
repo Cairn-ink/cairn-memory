@@ -61,12 +61,11 @@ export type StoredDocumentCardRecord = DocumentCardRecord |
 
 type DocumentCardWrite<Card> = Card extends StoredDocumentCardRecord ? Omit<Card, "amendments"> : never;
 
-/** Select exactly one card ID or kind of source, confined to the call's scope. */
+/** Select exactly one kind of source, confined to the call's scope. */
 export type DocumentCardHideSelector =
-  | { cardId: string; sourceMemoryId?: never; sourceMessage?: never; session?: never }
-  | { sourceMemoryId: string; cardId?: never; sourceMessage?: never; session?: never }
-  | { sourceMessage: DocumentCardSourceMessage; cardId?: never; sourceMemoryId?: never; session?: never }
-  | { session: DocumentCardSession; cardId?: never; sourceMemoryId?: never; sourceMessage?: never };
+  | { sourceMemoryId: string; sourceMessage?: never; session?: never }
+  | { sourceMessage: DocumentCardSourceMessage; sourceMemoryId?: never; session?: never }
+  | { session: DocumentCardSession; sourceMemoryId?: never; sourceMessage?: never };
 
 export interface DocumentCardHideOptions {
   /** Clear stored text and retain the ID and reason permanently. */
@@ -136,13 +135,17 @@ export interface DocumentCardStore<Card extends StoredDocumentCardRecord = Docum
    * revision advances once if the call hides at least one card or amendment.
    */
   hideWhere(tx: Tx, scope: Scope, selector: DocumentCardHideSelector, reason: string, options?: DocumentCardHideOptions): Promise<{ hidden: number }>;
+  /** Tombstone the stored payload of a card confirmed by the erasure assessment. */
+  purgeById?(tx: Tx, scope: Scope, cardId: string, reason: string): Promise<void>;
   /**
    * Erasure assessment for purge-aware hosts. Load live read inputs inside the forget
    * transaction, including entries hidden with retainText. Omit selectors to scan the scope.
    * Report sourceWithheld as null when source proof is missing. A suppressed memory
    * state and an amendment's sourceWithheld:true each require a definite block.
+   * Use only facts in the supplied action with one of the supplied fact IDs.
    */
-  listForPurge?(tx: Tx, scope: Scope, selectors?: readonly DocumentCardHideSelector[]): Promise<Array<{
+  listForPurge?(tx: Tx, scope: Scope, selectors?: readonly DocumentCardHideSelector[],
+    action?: { actionId: string; factIds: readonly string[] }): Promise<Array<{
     cardId: string;
     /** Null when a selector matched only an amendment. */
     input: DocumentCardVisibilityInput | null;

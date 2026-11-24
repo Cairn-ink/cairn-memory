@@ -5,7 +5,7 @@ import {
 } from "../privacy/fingerprint.mjs";
 import { PRIVACY_REDACTION_VERSIONS } from "../privacy/redact.mjs";
 import { normalizeForHash, prepareCoreText, prepareHostedCaptureText } from "../privacy/text.mjs";
-import { isValidThreshold, passageWithholding, requiresLegacyMacDomain, snapshotReader } from "../privacy/withholds.mjs";
+import { passageWithholding, requiresLegacyMacDomain, snapshotReader } from "../privacy/withholds.mjs";
 import { validateSuppressionFact } from "../suppression-fact.mjs";
 import { buildDocumentCard } from "./card.mjs";
 
@@ -93,6 +93,16 @@ async function legacyCardPassages(text, { key, labels }) {
 /** @param {DocumentCardVisibilityInput} input @param {{ definiteOnly?: boolean }} [options]
  * @returns {Promise<DocumentCardVisibility>} */
 export async function documentCardVisible(input, { definiteOnly = false } = {}) {
+  const verdict = await readCardVisibility(input, false);
+  if (!definiteOnly || verdict.visible ||
+      (verdict.reason !== "text_withheld" && verdict.reason !== "source_memory_not_visible")) return verdict;
+  const evidence = await readCardVisibility(input, true);
+  return evidence.reason === verdict.reason ? verdict : hidden("uncertain");
+}
+
+/** @param {DocumentCardVisibilityInput} input @param {boolean} definiteOnly
+ * @returns {Promise<DocumentCardVisibility>} */
+async function readCardVisibility(input, definiteOnly) {
   try {
     const { card, requestedScope, memoryStates, sourceWithheld } = input;
     if (!nonempty(card?.id) || !validScope(card.scope) || !validScope(requestedScope)) return hidden("uncertain");
@@ -168,14 +178,11 @@ export async function documentCardVisible(input, { definiteOnly = false } = {}) 
         if (!legacy) return hidden("uncertain");
       }
       if (facts.length > 0) {
-        if (definiteOnly && input.containmentThreshold !== undefined && !isValidThreshold(input.containmentThreshold)) {
-          return hidden("uncertain");
-        }
         const texts = title === null ? [body] : [title, body];
         let uncertain = !legacy && facts.some(requiresLegacyMacDomain);
         if (uncertain && !definiteOnly) return hidden("text_withheld");
-        let memoryFacts = uncertain ? facts.filter(fact => !requiresLegacyMacDomain(fact)) : facts;
-        if (legacy) {
+        let memoryFacts = facts;
+        if (legacy || definiteOnly) {
           const legacyFacts = [];
           const coreFacts = [];
           for (const fact of facts) {
@@ -185,7 +192,7 @@ export async function documentCardVisible(input, { definiteOnly = false } = {}) 
               continue;
             }
             // A fact with aliases in both domains participates in both comparisons.
-            const comparable = legacyDigests.filter(digest => digest.keyId === legacy.key.id);
+            const comparable = legacy ? legacyDigests.filter(digest => digest.keyId === legacy.key.id) : [];
             if (comparable.length !== legacyDigests.length) {
               if (!definiteOnly) return hidden("text_withheld");
               uncertain = true;
@@ -197,7 +204,7 @@ export async function documentCardVisible(input, { definiteOnly = false } = {}) 
             }
           }
           memoryFacts = coreFacts;
-          if (legacyFacts.length > 0) {
+          if (legacy && legacyFacts.length > 0) {
             const fingerprints = await Promise.all(texts.map(text => legacyCardPassages(text, legacy)));
             const match = passageWithholding(fingerprints.flat(), legacyFacts, input.containmentThreshold);
             if (match === true || (!definiteOnly && match === "ineligible")) return hidden("text_withheld");

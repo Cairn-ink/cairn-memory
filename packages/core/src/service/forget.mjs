@@ -107,9 +107,11 @@ function sourceBinding({ client, sessionId, messageId }) {
 }
 
 /** @param {NonNullable<import("./index.d.mts").MemoryServiceDeps["storage"]["documentCards"]>} cards @param {Tx} tx @param {Scope} scope
- * @param {Set<string>} deletedSources @param {readonly DocumentCardHideSelector[]} [selectors] */
-async function purgeWithheldCards(cards, tx, scope, deletedSources, selectors) {
-  const candidates = await cards.listForPurge?.(tx, scope, selectors) ?? [];
+ * @param {Set<string>} deletedSources @param {{actionId: string, factIds: readonly string[]}} action
+ * @param {readonly DocumentCardHideSelector[]} [selectors] */
+async function purgeWithheldCards(cards, tx, scope, deletedSources, action, selectors) {
+  if (typeof cards.purgeById !== "function" || typeof cards.listForPurge !== "function") return;
+  const candidates = await cards.listForPurge(tx, scope, selectors, action);
   for (const { cardId, input, amendments } of candidates) {
     if (input) {
       const { sourceMessage } = input.card;
@@ -117,7 +119,7 @@ async function purgeWithheldCards(cards, tx, scope, deletedSources, selectors) {
       const { reason } = await documentCardVisible({ ...input, sourceWithheld }, { definiteOnly: true });
       if (reason === "text_withheld" || reason === "source_withheld" ||
           reason === "source_memory_forgotten" || reason === "source_memory_not_visible") {
-        await cards.hideWhere(tx, scope, { cardId }, reason, { purge: true });
+        await cards.purgeById(tx, scope, cardId, reason);
         continue;
       }
     }
@@ -180,7 +182,8 @@ export function forgetMethod({ storage, clock }) {
       const spans = resolveSpans ? await spanLineage?.resolveSpans(tx, scope, id) : [];
       if (!Array.isArray(spans)) throw new CoreError("raw_lineage_unavailable");
       const hideCards = enabled(capabilities, "dependents.invalidate", "documentCards");
-      const assessCardPurge = hideCards && typeof documentCards?.listForPurge === "function";
+      const assessCardPurge = hideCards && typeof documentCards?.listForPurge === "function" &&
+        typeof documentCards.purgeById === "function";
       const messages = hideCards ? await cardSources(hydrate, tx, scope, row, spans, resolveSpans && spans.length === 0) : [];
 
       const fenceRaw = enabled(capabilities, "session.fence", "rawArchive");
@@ -205,6 +208,7 @@ export function forgetMethod({ storage, clock }) {
       // suppression.write
       const { fact, incarnation } = await predecessorFact(scope, row, key, clock, "forget");
       const { factId, epoch, createdAtMs, created } = await suppressions.writeFact(tx, fact, incarnation);
+      const factIds = created ? [factId] : [];
 
       // session.fence
       if (fenceRaw) {
@@ -241,7 +245,8 @@ export function forgetMethod({ storage, clock }) {
           }
           const span = { ...resolved, actionId: fact.actionId, origin: /** @type {const} */ ("forget") };
           validateSuppressionFact(span);
-          await suppressions.writeFact(tx, span, await clock.sha256Hex(factIncarnationBody(span)));
+          const written = await suppressions.writeFact(tx, span, await clock.sha256Hex(factIncarnationBody(span)));
+          if (written.created) factIds.push(written.factId);
         }
       }
 
@@ -263,7 +268,8 @@ export function forgetMethod({ storage, clock }) {
           }
         }
         if (assessCardPurge) {
-          await purgeWithheldCards(documentCards, tx, scope, deletedSources, fact.kind === "text" ? undefined : selectors);
+          await purgeWithheldCards(documentCards, tx, scope, deletedSources, { actionId: fact.actionId, factIds },
+            fact.kind === "text" ? undefined : selectors);
         }
       }
       if (enabled(capabilities, "dependents.invalidate", "conflictEdges")) {

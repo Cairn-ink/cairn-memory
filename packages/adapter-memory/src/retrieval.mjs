@@ -119,9 +119,10 @@ export function createCardVisibility(matchFacts, keys, rawSourceWithholding) {
   }
 
   /** @param {State} state @param {Scope} scope @param {CardWrite} card @param {boolean} [definiteOnly]
+   * @param {State["facts"]} [facts]
    * @returns {Promise<DocumentCardVisibilityInput | null>} */
-  async function input(state, scope, card, definiteOnly = false) {
-    const policy = matchFacts(state.facts, scope);
+  async function input(state, scope, card, definiteOnly = false, facts = state.facts) {
+    const policy = matchFacts(facts, scope);
     const rows = state.rows.get(scope.namespace);
     /** @type {Map<string, DocumentCardMemoryState>} */
     const memoryStates = new Map();
@@ -145,7 +146,8 @@ export function createCardVisibility(matchFacts, keys, rawSourceWithholding) {
       if (textFacts.length) fingerprintKey = await keys.userKey(scope.owner);
       if (sourceMessage) {
         canonicalSessionKey = policy.canonicalSessionKey(sourceMessage);
-        const raw = rawSourceWithholding ? await rawSourceWithholding(state, scope, sourceMessage, definiteOnly) : false;
+        const rawFacts = definiteOnly ? [...facts.values()] : undefined;
+        const raw = rawSourceWithholding ? await rawSourceWithholding(state, scope, sourceMessage, definiteOnly, rawFacts) : false;
         sourceWithheld = definiteOnly ? raw : raw !== false;
         if (sourceWithheld !== true) {
           // The retained projection also checks identity facts against linked revisions.
@@ -171,12 +173,12 @@ export function createCardVisibility(matchFacts, keys, rawSourceWithholding) {
     return snapshot !== null && (await documentCardVisible(snapshot)).visible;
   }
 
-  /** @param {State} state @param {Scope} scope @param {DocumentCardSourceMessage} source */
-  async function amendmentWithheld(state, scope, source) {
-    if (rawSourceWithholding) return await rawSourceWithholding(state, scope, source, true) === true;
+  /** @param {State} state @param {Scope} scope @param {DocumentCardSourceMessage} source @param {State["facts"]} facts */
+  async function amendmentWithheld(state, scope, source, facts) {
+    if (rawSourceWithholding) return await rawSourceWithholding(state, scope, source, true, [...facts.values()]) === true;
     // Without an archive, compare the original admitted message retained by capture.
     const { client, sessionId, messageId } = source;
-    const policy = matchFacts(state.facts, scope);
+    const policy = matchFacts(facts, scope);
     const key = policy.textFacts.length ? await keys.userKey(scope.owner) : null;
     let matched = false;
     for (const claim of state.claims.values()) {
