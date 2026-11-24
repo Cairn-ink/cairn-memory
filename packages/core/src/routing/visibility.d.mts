@@ -48,8 +48,12 @@ export type DocumentCardVisibility =
   | { visible: true; reason: null }
   | { visible: false; reason: DocumentCardHiddenReason };
 
-/** Message-backed cards can remain visible with historical links. Import and manual cards require exact visible revisions. */
-export declare function documentCardVisible(input: DocumentCardVisibilityInput): Promise<DocumentCardVisibility>;
+/**
+ * Message-backed cards can remain visible with historical links. Import and manual cards require exact visible revisions.
+ * For erasure, definiteOnly reports fail-closed comparisons as uncertain. Supply a null
+ * sourceWithheld or an unknown memory state when that withholding evidence is indeterminate.
+ */
+export declare function documentCardVisible(input: DocumentCardVisibilityInput, options?: { definiteOnly?: boolean }): Promise<DocumentCardVisibility>;
 
 export type DocumentCardRowDropReason = DocumentCardHiddenReason | "invalid_ref" | "load_failed" | "missing_input";
 

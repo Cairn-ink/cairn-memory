@@ -53,7 +53,7 @@ export function createMemoryAdapter(options = {}) {
   const { supersession, conflicts } = createRelationStores(port, matchFacts);
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts,
     flags.fingerprintKey ? ringKeys : undefined);
-  const cardVisible = createCardVisibility(matchFacts, keys, archive?.sourceVisible);
+  const cardVisible = createCardVisibility(matchFacts, keys, archive?.sourceWithholding);
   const rationale = flags.rationaleEdges ? createRationaleStore(port, matchFacts, ringKeys, archive?.findVisibleSource) : undefined;
   const placement = flags.placement ? handleWriteRejections(
     createTopicStore(port, flags, newId, now, matchFacts, options, cardVisible),
@@ -99,7 +99,8 @@ export function createMemoryAdapter(options = {}) {
     ...(placement && { placement }),
     ...(inspect && { inspect: inspect.inspect }),
     ...(flags.documentCards && { documentCards: handleWriteRejections(
-      createDocumentCardStore(port, now), ["put", "linkMemories", "amend", "hideAmendment", "hide", "hideWhere", "markStale"]) }),
+      createDocumentCardStore(port, now, cardVisible.input, cardVisible.amendmentWithheld),
+      ["put", "linkMemories", "amend", "hideAmendment", "hide", "hideWhere", "markStale"]) }),
     nativeErrorMap,
     harness: {
       async dump() { return dump(flags.rawArchive, flags.documentCards, flags.rationaleEdges); },

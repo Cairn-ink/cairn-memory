@@ -14,9 +14,9 @@ import { copyReadScope, copyRefs, readEmbedding, validateLimit } from "./validat
 /** @typedef {import("@cairn-ink/core/ports").Receipt} Receipt */
 /** @typedef {import("./unit-of-work.mjs").State} State */
 /** @typedef {import("./unit-of-work.mjs").Row} Row */
-/** @import { DocumentCardMemoryState } from "@cairn-ink/core/routing" */
+/** @import { DocumentCardMemoryState, DocumentCardVisibilityInput } from "@cairn-ink/core/routing" */
 /** @import { FingerprintKey } from "@cairn-ink/core" */
-/** @import { FingerprintKeyProvider, Scope } from "@cairn-ink/core/ports" */
+/** @import { DocumentCardSourceMessage, FingerprintKeyProvider, Scope } from "@cairn-ink/core/ports" */
 /** @import { CardWrite } from "./document-cards.mjs" */
 
 /** @param {Row} row @returns {ItemRef} */
@@ -109,25 +109,35 @@ function sourceDates(receipts) {
 }
 
 /** @param {ReturnType<typeof createFactMatcher>} matchFacts @param {FingerprintKeyProvider} keys
- * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>["sourceVisible"]} [rawSourceVisible] */
-export function createCardVisibility(matchFacts, keys, rawSourceVisible) {
-  /** @param {State} state @param {Scope} scope @param {CardWrite} card */
-  return async function cardVisible(state, scope, card) {
+ * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>["sourceWithholding"]} [rawSourceWithholding] */
+export function createCardVisibility(matchFacts, keys, rawSourceWithholding) {
+  /** @param {string} text @param {FingerprintKey | null} key */
+  async function passage(text, key) {
+    const digests = await allDigests(text);
+    if (key) digests.push(await coreDigest(text, key));
+    return { digests };
+  }
+
+  /** @param {State} state @param {Scope} scope @param {CardWrite} card @param {boolean} [definiteOnly]
+   * @returns {Promise<DocumentCardVisibilityInput | null>} */
+  async function input(state, scope, card, definiteOnly = false) {
     const policy = matchFacts(state.facts, scope);
     const rows = state.rows.get(scope.namespace);
     /** @type {Map<string, DocumentCardMemoryState>} */
     const memoryStates = new Map();
     for (const { id } of card.sourceMemories) {
       const entry = rows?.get(id);
-      const forgotten = policy.factsFor(id, entry).some(({ fact }) => fact.kind === "identity");
+      const forgotten = policy.factsFor(id, entry, definiteOnly).some(({ fact }) => fact.kind === "identity");
       if (forgotten) memoryStates.set(id, { status: "forgotten" });
       else if (!entry) memoryStates.set(id, { status: "unknown" });
-      else if (policy.hides(entry)) memoryStates.set(id, { status: "suppressed" });
+      else if (definiteOnly && policy.hides(entry) && !policy.definitelyHides(entry)) {
+        memoryStates.set(id, { status: "unknown" });
+      } else if (policy.hides(entry)) memoryStates.set(id, { status: "suppressed" });
       else memoryStates.set(id, { status: entry.row.historical ? "historical" : "visible", revision: entry.row.revision });
     }
     const { sourceMessage } = card;
     let canonicalSessionKey = null;
-    let sourceWithheld = false;
+    let sourceWithheld = /** @type {boolean | null} */ (false);
     /** @type {FingerprintKey | null} */
     let fingerprintKey = null;
     const { textFacts } = policy;
@@ -135,25 +145,56 @@ export function createCardVisibility(matchFacts, keys, rawSourceVisible) {
       if (textFacts.length) fingerprintKey = await keys.userKey(scope.owner);
       if (sourceMessage) {
         canonicalSessionKey = policy.canonicalSessionKey(sourceMessage);
-        sourceWithheld = rawSourceVisible !== undefined && !await rawSourceVisible(state, scope, sourceMessage);
-        if (!sourceWithheld) {
+        const raw = rawSourceWithholding ? await rawSourceWithholding(state, scope, sourceMessage, definiteOnly) : false;
+        sourceWithheld = definiteOnly ? raw : raw !== false;
+        if (sourceWithheld !== true) {
           // The retained projection also checks identity facts against linked revisions.
-          const passages = textFacts.length ? await Promise.all([card.body, card.title].map(async (text) => {
-            const digests = await allDigests(text);
-            if (fingerprintKey) digests.push(await coreDigest(text, fingerprintKey));
-            return { digests };
-          })) : [];
-          sourceWithheld = policy.withholdsCardSource(card, passages);
+          const passages = textFacts.length ? await Promise.all([card.body, card.title].map(text =>
+            passage(text, fingerprintKey))) : [];
+          const projected = policy.cardSourceWithholding(card, passages);
+          if (projected === true) sourceWithheld = true;
+          else if (projected === "ineligible") sourceWithheld = definiteOnly ? null : true;
         }
       }
     } catch {
-      return false;
+      return null;
     }
-    return (await documentCardVisible({
+    return {
       card: { ...card, canonicalSessionKey }, requestedScope: scope, memoryStates,
       sourceWithheld, textFacts, fingerprintKey,
-    })).visible;
-  };
+    };
+  }
+
+  /** @param {State} state @param {Scope} scope @param {CardWrite} card */
+  async function cardVisible(state, scope, card) {
+    const snapshot = await input(state, scope, card);
+    return snapshot !== null && (await documentCardVisible(snapshot)).visible;
+  }
+
+  /** @param {State} state @param {Scope} scope @param {DocumentCardSourceMessage} source */
+  async function amendmentWithheld(state, scope, source) {
+    if (rawSourceWithholding) return await rawSourceWithholding(state, scope, source, true) === true;
+    // Without an archive, compare the original admitted message retained by capture.
+    const { client, sessionId, messageId } = source;
+    const policy = matchFacts(state.facts, scope);
+    const key = policy.textFacts.length ? await keys.userKey(scope.owner) : null;
+    let matched = false;
+    for (const claim of state.claims.values()) {
+      if (claim.status !== "finished" || claim.key.scope.namespace !== scope.namespace ||
+          claim.key.client !== client || claim.key.sessionId !== sessionId) continue;
+      for (const { id, content, occurredAtMs } of claim.messages ?? []) {
+        if (id !== messageId) continue;
+        const passages = content && policy.textFacts.length ? [await passage(content, key)] : [];
+        if (policy.cardSourceWithholding({ sourceMessage: source, sourceMemories: [], date: occurredAtMs }, passages) !== true) {
+          return false;
+        }
+        matched = true;
+      }
+    }
+    return matched;
+  }
+
+  return Object.assign(cardVisible, { input, amendmentWithheld });
 }
 
 /**

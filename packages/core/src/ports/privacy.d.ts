@@ -92,7 +92,11 @@ export interface RawStore {
   /** Deletes raw rows and blanks ledger text for a PROVEN closure only (type-level guard). */
   eraseSessions(tx: Tx, scope: Scope, closure: ProvenClosure): Promise<{ rawDeleted: number; ledgerBlanked: number }>;
   /** Deletes raw rows and blanks ledger messages withheld by the given text facts. */
-  purgeWithheld(tx: Tx, scope: Scope, facts: ReadonlyArray<StoredFact>): Promise<{ rawDeleted: number; ledgerBlanked: number }>;
+  purgeWithheld(tx: Tx, scope: Scope, facts: ReadonlyArray<StoredFact>, options?: {
+    /** Report the source binding of each deleted Raw row inside the write. */
+    onDelete?: (source: import("./document-card.d.ts").DocumentCardSourceMessage) => void;
+  }): Promise<{ rawDeleted: number; ledgerBlanked: number }>;
+  /** Hosts with document cards must tombstone cards and amendments bound to deleted messages in this transaction. */
   deleteConversation(tx: Tx, scope: Scope, session: { client: string; sessionId: string }): Promise<{ rawDeleted: number }>;
 }
 

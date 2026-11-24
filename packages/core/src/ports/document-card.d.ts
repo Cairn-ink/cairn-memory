@@ -1,4 +1,4 @@
-import type { DocumentSentence, DocumentVector } from "../routing/index.mjs";
+import type { DocumentCardVisibilityInput, DocumentSentence, DocumentVector } from "../routing/index.mjs";
 import type { Revision, Scope } from "./common.d.ts";
 import type { LexicalCandidates, VectorCandidates } from "./retrieval.d.ts";
 import type { Tx } from "./unit-of-work.d.ts";
@@ -61,11 +61,19 @@ export type StoredDocumentCardRecord = DocumentCardRecord |
 
 type DocumentCardWrite<Card> = Card extends StoredDocumentCardRecord ? Omit<Card, "amendments"> : never;
 
-/** Select exactly one kind of source. All selectors are confined to the call's scope. */
+/** Select exactly one card ID or kind of source, confined to the call's scope. */
 export type DocumentCardHideSelector =
-  | { sourceMemoryId: string; sourceMessage?: never; session?: never }
-  | { sourceMessage: DocumentCardSourceMessage; sourceMemoryId?: never; session?: never }
-  | { session: DocumentCardSession; sourceMemoryId?: never; sourceMessage?: never };
+  | { cardId: string; sourceMemoryId?: never; sourceMessage?: never; session?: never }
+  | { sourceMemoryId: string; cardId?: never; sourceMessage?: never; session?: never }
+  | { sourceMessage: DocumentCardSourceMessage; cardId?: never; sourceMemoryId?: never; session?: never }
+  | { session: DocumentCardSession; cardId?: never; sourceMemoryId?: never; sourceMessage?: never };
+
+export interface DocumentCardHideOptions {
+  /** Clear stored text and retain the ID and reason permanently. */
+  purge?: boolean;
+  /** Hide during forget while retaining the payload for a later definite purge. */
+  retainText?: boolean;
+}
 
 export interface DocumentCardEmbedding {
   model: string;
@@ -102,7 +110,8 @@ export interface DocumentCardStore<Card extends StoredDocumentCardRecord = Docum
   amend(tx: Tx, scope: Scope, cardId: string, amendment: DocumentCardAmendment): Promise<{
     status: "inserted" | "unchanged" | "hidden_card";
   }>;
-  hideAmendment(tx: Tx, scope: Scope, cardId: string, amendmentId: string, reason: string): Promise<void>;
+  /** A purged amendment retains its ID and reason, with its sentence and quote erased. */
+  hideAmendment(tx: Tx, scope: Scope, cardId: string, amendmentId: string, reason: string, options?: { purge?: boolean }): Promise<void>;
   /**
    * Uses the live Tx to union links into sourceMemories by id, keeping the highest revision.
    * A change returns "linked" and advances the owner index revision once. A union
@@ -118,10 +127,27 @@ export interface DocumentCardStore<Card extends StoredDocumentCardRecord = Docum
   hide(tx: Tx, scope: Scope, cardId: string, reason: string): Promise<void>;
   /**
    * A sourceMessage or session selector also hides amendments with a matching source.
+   * Purge uses stored bindings, including entries excluded by the reader and prior hides
+   * that retained text. Physically erase the card title, body, sentences, and amendment
+   * payloads. Reads exclude the tombstone and put of the same ID returns "tombstoned".
+   * With neither option set, use the adapter's ordinary hide behaviour. Purge takes
+   * precedence over retainText.
    * `hidden` counts newly hidden cards plus newly hidden amendments. The owner index
    * revision advances once if the call hides at least one card or amendment.
    */
-  hideWhere(tx: Tx, scope: Scope, selector: DocumentCardHideSelector, reason: string): Promise<{ hidden: number }>;
+  hideWhere(tx: Tx, scope: Scope, selector: DocumentCardHideSelector, reason: string, options?: DocumentCardHideOptions): Promise<{ hidden: number }>;
+  /**
+   * Erasure assessment for purge-aware hosts. Load live read inputs inside the forget
+   * transaction, including entries hidden with retainText. Omit selectors to scan the scope.
+   * Report sourceWithheld as null when source proof is missing. A suppressed memory
+   * state and an amendment's sourceWithheld:true each require a definite block.
+   */
+  listForPurge?(tx: Tx, scope: Scope, selectors?: readonly DocumentCardHideSelector[]): Promise<Array<{
+    cardId: string;
+    /** Null when a selector matched only an amendment. */
+    input: DocumentCardVisibilityInput | null;
+    amendments: readonly (Pick<DocumentCardAmendment, "amendmentId" | "sourceMessage"> & { sourceWithheld: boolean })[];
+  }>>;
   /** Stores the ids of the changed memory and its replacement. */
   markStale(tx: Tx, scope: Scope, cardId: string, entry: DocumentCardStaleEntry): Promise<void>;
   /**

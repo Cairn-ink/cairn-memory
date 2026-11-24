@@ -2,12 +2,15 @@ import { CoreError, compareUtf8 } from "@cairn-ink/core";
 import { dropCardMemberships, dropCardPlacement } from "./topics.mjs";
 import { copyScope, snapshotArray, validateCardId, validateTime, writeNamespace } from "./validation.mjs";
 
-/** @import { DocumentCardAmendment, DocumentCardHideSelector, DocumentCardSourceMessage,
+/** @import { DocumentCardAmendment, DocumentCardHideOptions, DocumentCardHideSelector, DocumentCardSourceMessage,
  * DocumentCardStore, Scope, StoredDocumentCardRecord, Tx } from "@cairn-ink/core/ports" */
 /** @typedef {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>["port"]} Port */
 /** @typedef {Parameters<DocumentCardStore<StoredDocumentCardRecord>["put"]>[2]} CardWrite */
 /** @typedef {CardWrite["sourceMemories"]} MemoryLinks */
 /** @typedef {import("./unit-of-work.mjs").CardEntry} CardEntry */
+/** @typedef {import("./unit-of-work.mjs").AmendmentEntry} AmendmentEntry */
+/** @typedef {import("./unit-of-work.mjs").State} State */
+/** @typedef {ReturnType<typeof import("./retrieval.mjs").createCardVisibility>} CardVisibility */
 /** @typedef {{ card: (card: CardWrite) => boolean,
  * amendment?: (amendment: DocumentCardAmendment) => boolean }} HideMatcher */
 
@@ -29,9 +32,13 @@ function unionMemoryLinks(existing, links) {
 
 /** @param {DocumentCardHideSelector} selector @returns {HideMatcher} */
 function selectorMatcher(selector) {
-  const { sourceMemoryId, sourceMessage, session } = selector;
-  const selectors = [sourceMemoryId, sourceMessage, session].filter((value) => value !== undefined);
+  const { cardId, sourceMemoryId, sourceMessage, session } = selector;
+  const selectors = [cardId, sourceMemoryId, sourceMessage, session].filter((value) => value !== undefined);
   if (selectors.length !== 1) throw new CoreError("invalid_input");
+  if (cardId !== undefined) {
+    validateCardId(cardId);
+    return { card: ({ id }) => id === cardId };
+  }
   if (sourceMemoryId !== undefined) {
     requireString(sourceMemoryId);
     return { card: ({ sourceMemories }) => sourceMemories.some(({ id }) => id === sourceMemoryId) };
@@ -50,41 +57,83 @@ function selectorMatcher(selector) {
   return { card: matches, amendment: matches };
 }
 
+/** @param {AmendmentEntry} entry */
+function visibleAmendment(entry) {
+  return entry && "amendmentId" in entry ? entry : null;
+}
+
+/** @param {AmendmentEntry} entry */
+function storedAmendment(entry) {
+  return entry && "hidden" in entry ? entry.hidden : visibleAmendment(entry);
+}
+
 /** @param {CardEntry | undefined} entry @returns {StoredDocumentCardRecord | null} */
 function readCard(entry) {
   if (!entry?.card) return null;
-  const amendments = [...(entry.amendments?.values() ?? [])].filter((amendment) => amendment !== null)
+  const amendments = [...(entry.amendments?.values() ?? [])].map(visibleAmendment).filter((amendment) => amendment !== null)
     .sort((a, b) => compareUtf8(a.date, b.date));
   return structuredClone({ ...entry.card, amendments });
 }
 
-/** @param {Port} port @param {() => number} now @returns {DocumentCardStore<StoredDocumentCardRecord>} */
-export function createDocumentCardStore(port, now) {
+/** @param {State} state @param {Scope["namespace"]} namespace @param {HideMatcher} match
+ * @param {string} reason @param {DocumentCardHideOptions} options */
+function hideMatching(state, namespace, match, reason, { purge = false, retainText = false }) {
+  let hidden = 0;
+  let changed = false;
+  for (const [id, entry] of state.documentCards.get(namespace) ?? []) {
+    const card = entry.card ?? (purge ? entry.hiddenCard : undefined);
+    if (!card) continue;
+    if (match.card(card)) {
+      if (entry.card) {
+        hidden += 1 + [...(entry.amendments?.values() ?? [])].filter(visibleAmendment).length;
+        dropCardMemberships(state, namespace, id);
+      }
+      if (purge) {
+        entry.hiddenReason = reason;
+        delete entry.hiddenCard;
+      } else if (retainText) {
+        entry.hiddenCard = card;
+      }
+      entry.card = null;
+      if (purge || !retainText) delete entry.amendments;
+      changed = true;
+      continue;
+    }
+    if (!match.amendment) continue;
+    for (const [amendmentId, value] of entry.amendments ?? []) {
+      const visible = entry.card ? visibleAmendment(value) : null;
+      const amendment = purge ? storedAmendment(value) : visible;
+      if (!amendment || !match.amendment(amendment)) continue;
+      entry.amendments?.set(amendmentId, purge ? { hiddenReason: reason } : retainText ? { hidden: amendment } : null);
+      if (visible) hidden++;
+      changed = true;
+    }
+  }
+  return { hidden, changed };
+}
+
+/** @param {State} state @param {Scope["namespace"]} namespace @param {readonly DocumentCardSourceMessage[]} sources */
+export function purgeDeletedDocumentSources(state, namespace, sources) {
+  /** @param {DocumentCardSourceMessage} source */
+  const binding = ({ client, sessionId, messageId }) => JSON.stringify([client, sessionId, messageId]);
+  const deleted = new Set(sources.map(binding));
+  /** @param {{ sourceMessage: DocumentCardSourceMessage | null }} record */
+  const matches = ({ sourceMessage }) => sourceMessage != null && deleted.has(binding(sourceMessage));
+  return hideMatching(state, namespace, { card: matches, amendment: matches }, "raw_deleted", { purge: true });
+}
+
+/** @param {Port} port @param {() => number} now @param {CardVisibility["input"]} visibilityInput
+ * @param {CardVisibility["amendmentWithheld"]} amendmentWithheld @returns {DocumentCardStore<StoredDocumentCardRecord>} */
+export function createDocumentCardStore(port, now, visibilityInput, amendmentWithheld) {
   /** @param {Tx} tx @param {Scope} scope @param {() => HideMatcher} prepare */
-  function hideCards(tx, scope, prepare) {
+  function hideCards(tx, scope, prepare, /** @type {string} */ reason, /** @type {DocumentCardHideOptions} */ options = {}) {
     return port.write(tx, scope, "conditional", () => {
       const namespace = writeNamespace(scope);
       const match = prepare();
       return (getState, _markDirty, run) => {
-        const state = getState();
-        let hidden = 0;
-        for (const [id, entry] of state.documentCards.get(namespace) ?? []) {
-          if (!entry.card) continue;
-          const hideCard = match.card(entry.card);
-          if (!hideCard && !match.amendment) continue;
-          for (const [amendmentId, amendment] of entry.amendments ?? []) {
-            if (!amendment || !(hideCard || match.amendment?.(amendment))) continue;
-            entry.amendments?.set(amendmentId, null);
-            hidden++;
-          }
-          if (hideCard) {
-            entry.card = null;
-            delete entry.amendments;
-            dropCardMemberships(state, namespace, id);
-            hidden++;
-          }
-        }
+        const { hidden, changed } = hideMatching(getState(), namespace, match, reason, options);
         if (hidden) run.cardWrites++;
+        else if (changed) run.stateWritten = true;
         return { hidden };
       };
     });
@@ -169,29 +218,57 @@ export function createDocumentCardStore(port, now) {
       });
     },
 
-    async hideAmendment(tx, callerScope, cardId, amendmentId, _reason) {
+    async hideAmendment(tx, callerScope, cardId, amendmentId, reason, { purge = false } = {}) {
       const scope = copyScope(callerScope);
       return port.write(tx, scope, "conditional", () => {
         validateCardId(cardId);
         requireString(amendmentId);
         return (getState, _markDirty, run) => {
-          const amendments = getState().documentCards.get(scope.namespace)?.get(cardId)?.amendments;
-          if (!amendments?.get(amendmentId)) return;
-          amendments.set(amendmentId, null);
-          run.cardWrites++;
+          const entry = getState().documentCards.get(scope.namespace)?.get(cardId);
+          const value = entry?.amendments?.get(amendmentId) ?? null;
+          const visible = entry?.card ? visibleAmendment(value) : null;
+          if (!(purge ? storedAmendment(value) : visible)) return;
+          entry?.amendments?.set(amendmentId, purge ? { hiddenReason: reason } : null);
+          if (visible) run.cardWrites++;
+          else run.stateWritten = true;
         };
       });
     },
 
-    async hide(tx, scope, cardId, _reason) {
+    async hide(tx, scope, cardId, reason) {
       await hideCards(tx, scope, () => {
         validateCardId(cardId);
         return { card: ({ id }) => id === cardId };
-      });
+      }, reason);
     },
 
-    async hideWhere(tx, scope, selector, _reason) {
-      return hideCards(tx, scope, () => selectorMatcher(selector));
+    async hideWhere(tx, scope, selector, reason, options) {
+      return hideCards(tx, scope, () => selectorMatcher(selector), reason, options);
+    },
+
+    async listForPurge(tx, scope, selectors) {
+      return port.read(tx, scope, async getState => {
+        const state = getState();
+        const matches = selectors?.map(selectorMatcher);
+        const candidates = [];
+        for (const entry of state.documentCards.get(scope.namespace)?.values() ?? []) {
+          const card = entry.card ?? entry.hiddenCard;
+          if (!card) continue;
+          const selected = matches === undefined || matches.some(({ card: match }) => match(card));
+          const amendments = [];
+          for (const value of entry.amendments?.values() ?? []) {
+            const amendment = storedAmendment(value);
+            if (!amendment || (!selected && !matches?.some(({ amendment: match }) => match?.(amendment)))) continue;
+            const { amendmentId, sourceMessage } = amendment;
+            const sourceWithheld = await amendmentWithheld(state, scope, sourceMessage).catch(() => false);
+            amendments.push({ amendmentId, sourceMessage, sourceWithheld });
+          }
+          if (!selected && amendments.length === 0) continue;
+          const input = selected ? await visibilityInput(state, scope, card, true) : null;
+          candidates.push(structuredClone({ cardId: card.id, input, amendments }));
+        }
+        return candidates;
+      });
     },
 
     async markStale(tx, scope, cardId, { memoryId, replacementMemoryId }) {

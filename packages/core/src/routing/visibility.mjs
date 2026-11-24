@@ -5,7 +5,7 @@ import {
 } from "../privacy/fingerprint.mjs";
 import { PRIVACY_REDACTION_VERSIONS } from "../privacy/redact.mjs";
 import { normalizeForHash, prepareCoreText, prepareHostedCaptureText } from "../privacy/text.mjs";
-import { requiresLegacyMacDomain, snapshotReader, withholdsAnyPassage } from "../privacy/withholds.mjs";
+import { isValidThreshold, passageWithholding, requiresLegacyMacDomain, snapshotReader } from "../privacy/withholds.mjs";
 import { validateSuppressionFact } from "../suppression-fact.mjs";
 import { buildDocumentCard } from "./card.mjs";
 
@@ -90,8 +90,9 @@ async function legacyCardPassages(text, { key, labels }) {
   return retained.map(({ shingles, keyId }) => ({ digests, shingles, keyId }));
 }
 
-/** @param {DocumentCardVisibilityInput} input @returns {Promise<DocumentCardVisibility>} */
-export async function documentCardVisible(input) {
+/** @param {DocumentCardVisibilityInput} input @param {{ definiteOnly?: boolean }} [options]
+ * @returns {Promise<DocumentCardVisibility>} */
+export async function documentCardVisible(input, { definiteOnly = false } = {}) {
   try {
     const { card, requestedScope, memoryStates, sourceWithheld } = input;
     if (!nonempty(card?.id) || !validScope(card.scope) || !validScope(requestedScope)) return hidden("uncertain");
@@ -131,8 +132,9 @@ export async function documentCardVisible(input) {
           case "forgotten":
             return hidden("source_memory_forgotten");
           case "suppressed":
-          case "unknown":
             return hidden("source_memory_not_visible");
+          case "unknown":
+            return hidden(definiteOnly ? "uncertain" : "source_memory_not_visible");
           case "historical":
           case "visible":
             if (!natural(state.revision)) return hidden("uncertain");
@@ -144,9 +146,11 @@ export async function documentCardVisible(input) {
       }
       if (!state) return hidden("source_memory_missing");
       if (state.status === "forgotten") return hidden("source_memory_forgotten");
-      if (state.status !== "visible") return hidden("source_memory_not_visible");
+      if (state.status !== "visible") {
+        return hidden(definiteOnly && state.status !== "suppressed" ? "uncertain" : "source_memory_not_visible");
+      }
       if (!natural(state.revision)) return hidden("uncertain");
-      if (state.revision !== source.revision) return hidden("source_memory_not_visible");
+      if (state.revision !== source.revision) return hidden(definiteOnly ? "uncertain" : "source_memory_not_visible");
     }
 
     if (!messageBacked) {
@@ -164,9 +168,13 @@ export async function documentCardVisible(input) {
         if (!legacy) return hidden("uncertain");
       }
       if (facts.length > 0) {
-        if (!legacy && facts.some(requiresLegacyMacDomain)) return hidden("text_withheld");
+        if (definiteOnly && input.containmentThreshold !== undefined && !isValidThreshold(input.containmentThreshold)) {
+          return hidden("uncertain");
+        }
         const texts = title === null ? [body] : [title, body];
-        let memoryFacts = facts;
+        let uncertain = !legacy && facts.some(requiresLegacyMacDomain);
+        if (uncertain && !definiteOnly) return hidden("text_withheld");
+        let memoryFacts = uncertain ? facts.filter(fact => !requiresLegacyMacDomain(fact)) : facts;
         if (legacy) {
           const legacyFacts = [];
           const coreFacts = [];
@@ -176,11 +184,13 @@ export async function documentCardVisible(input) {
               coreFacts.push(fact);
               continue;
             }
-            if (legacyDigests.some(digest => digest.keyId !== legacy.key.id)) {
-              return hidden("text_withheld");
-            }
             // A fact with aliases in both domains participates in both comparisons.
-            legacyFacts.push({ ...fact, text: { ...fact.text, digests: legacyDigests } });
+            const comparable = legacyDigests.filter(digest => digest.keyId === legacy.key.id);
+            if (comparable.length !== legacyDigests.length) {
+              if (!definiteOnly) return hidden("text_withheld");
+              uncertain = true;
+            }
+            if (comparable.length > 0) legacyFacts.push({ ...fact, text: { ...fact.text, digests: comparable } });
             const coreDigests = fact.text.digests.filter(digest => !isLegacyMac(digest));
             if (coreDigests.length > 0) {
               coreFacts.push({ ...fact, text: { ...fact.text, digests: coreDigests } });
@@ -189,16 +199,19 @@ export async function documentCardVisible(input) {
           memoryFacts = coreFacts;
           if (legacyFacts.length > 0) {
             const fingerprints = await Promise.all(texts.map(text => legacyCardPassages(text, legacy)));
-            if (withholdsAnyPassage(fingerprints.flat(), legacyFacts, input.containmentThreshold)) {
-              return hidden("text_withheld");
-            }
+            const match = passageWithholding(fingerprints.flat(), legacyFacts, input.containmentThreshold);
+            if (match === true || (!definiteOnly && match === "ineligible")) return hidden("text_withheld");
+            if (match === "ineligible") uncertain = true;
           }
         }
         if (memoryFacts.length > 0) {
           const fingerprints = await Promise.all(texts.map(text =>
             fingerprintMemoryPassages(text, prepareCoreText(text), fingerprintKey)));
-          if (withholdsAnyPassage(fingerprints.flat(), memoryFacts)) return hidden("text_withheld");
+          const match = passageWithholding(fingerprints.flat(), memoryFacts);
+          if (match === true || (!definiteOnly && match === "ineligible")) return hidden("text_withheld");
+          if (match === "ineligible") uncertain = true;
         }
+        if (uncertain) return hidden("uncertain");
       }
     }
     return { visible: true, reason: null };

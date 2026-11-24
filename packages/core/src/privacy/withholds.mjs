@@ -291,10 +291,11 @@ export function shingleContainmentMatch(passage, reference, threshold, checkCont
  * @param {boolean} checkContainment
  * @param {boolean} [containmentKeyUnavailable]
  */
-function withholdsValidatedPassage(passage, fact, threshold, checkContainment, containmentKeyUnavailable) {
-  if (compareValidatedDigests(passage.digests, fact.text.digests) !== false) return true;
+function comparePassage(passage, fact, threshold, checkContainment, containmentKeyUnavailable) {
+  const digest = compareValidatedDigests(passage.digests, fact.text.digests);
+  if (digest !== false) return digest;
   if (fact.mode === "exact") return false;
-  return shingleContainmentMatch(passage, fact.text, threshold, checkContainment, containmentKeyUnavailable) !== false;
+  return shingleContainmentMatch(passage, fact.text, threshold, checkContainment, containmentKeyUnavailable);
 }
 
 /**
@@ -319,15 +320,33 @@ export function requiresLegacyMacDomain({ text }) {
  * @param {number} [threshold]
  */
 export function withholdsAnyPassage(passages, facts, threshold = CONTAINMENT_THRESHOLD) {
+  return passageWithholding(passages, facts, threshold) !== false;
+}
+
+/**
+ * @param {readonly PassageFingerprint[]} passages
+ * @param {readonly TextFact[]} facts
+ * @param {number} [threshold]
+ * @returns {boolean | "ineligible"}
+ */
+export function passageWithholding(passages, facts, threshold = CONTAINMENT_THRESHOLD) {
   try {
     const snapshot = snapshotReader();
     const candidates = snapshot.list(passages, snapshot.fingerprint);
     const stored = snapshot.list(facts, snapshot.fact);
     const cutoff = finiteNumber(threshold);
-    if (!candidates.every(isValidFingerprint) || !stored.every(isValidFact) || !isValidThreshold(cutoff)) return true;
-    return candidates.some((passage) => stored.some((fact) => withholdsValidatedPassage(passage, fact, cutoff, true)));
+    if (!candidates.every(isValidFingerprint) || !stored.every(isValidFact) || !isValidThreshold(cutoff)) return "ineligible";
+    let result = /** @type {false | "ineligible"} */ (false);
+    for (const passage of candidates) {
+      for (const fact of stored) {
+        const match = comparePassage(passage, fact, cutoff, true);
+        if (match === true) return true;
+        if (match === "ineligible") result = match;
+      }
+    }
+    return result;
   } catch {
-    return true;
+    return "ineligible";
   }
 }
 
@@ -359,7 +378,7 @@ export function blocksMemoryPassage(passages, facts, key, threshold = CONTAINMEN
       if (containmentKeyUnavailable && candidates.length === 0) return true;
       // The exemption skips containment only after a comparable exact miss.
       return candidates.some((passage) =>
-        withholdsValidatedPassage(passage, fact, cutoff, checkContainment, containmentKeyUnavailable));
+        comparePassage(passage, fact, cutoff, checkContainment, containmentKeyUnavailable) !== false);
     });
   } catch {
     return true;
