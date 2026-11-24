@@ -246,6 +246,13 @@ export function compareValidatedDigests(a, b) {
   return comparable ? false : "ineligible";
 }
 
+/** @param {Partial<FingerprintSnapshot>} fingerprint */
+function hasNoKeyOrShingles({ keyId, shingles, retainedShingles, digests }) {
+  return keyId == null && shingles == null &&
+    (retainedShingles === undefined || (Array.isArray(retainedShingles) && retainedShingles.length === 0)) &&
+    !digests?.some(digest => digest.alg === "hmac" || digest.keyId != null);
+}
+
 /**
  * @param {Partial<FingerprintSnapshot>} passage
  * @param {Partial<FingerprintSnapshot>} reference
@@ -256,6 +263,8 @@ export function compareValidatedDigests(a, b) {
 export function shingleContainmentMatch(passage, reference, threshold, checkContainment, containmentKeyUnavailable = false) {
   if (reference.shingles == null && passage.digests?.some(left => left.label !== undefined &&
     reference.digests?.some(right => sameDigestDomain(left, right)))) return false;
+  // A comparable digest miss settles containment only when neither side has key evidence.
+  if (hasNoKeyOrShingles(passage) && hasNoKeyOrShingles(reference)) return false;
 
   const retained = Array.isArray(passage.retainedShingles) &&
     reference.digests?.some(digest => digest.alg === "hmac" && digest.keyId === reference.keyId &&

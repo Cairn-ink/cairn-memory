@@ -224,11 +224,12 @@ test("the old exact-only snapshot fails the keyed case and the core capture pin"
   await assert.rejects(assertCaptureWithholds(createAdapter), /Core capture finish inserted the containing output/);
 });
 
-test("an unfiltered snapshot fails the no-key case and K-SNAP-F1", async () => {
+test("an unfiltered snapshot passes the no-key case through core's exact-only rule and fails K-SNAP-F1", async () => {
   const createAdapter = await mutantAdapter("unfiltered snapshot", incoming, `${incoming}
     return stored;`);
   const factory = memoryFactory(createAdapter);
-  await assert.rejects(runCase(factory, noKey), /Core must admit the SHA-miss containing output without a key/);
+  // Core treats a no-key fact against a no-key candidate as exact-only, so the prefilter no longer decides this miss.
+  assert.equal(await runCase(factory, noKey), null);
   await assert.rejects(runCase(factory, scoped), /Snapshot must return only matching scoped passages/);
 });
 
