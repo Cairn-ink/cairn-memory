@@ -1,7 +1,10 @@
-import { compareUtf8, CoreError } from "../../core/src/index.mjs";
+import { CoreError } from "../../core/src/index.mjs";
 import { copyReadScope, copyRefs, guardOwner, invalid, pgText } from "./memory-input.mjs";
-import { CREATED_MS, MEMORY_COLUMNS, readEntry, timestampUs } from "./memory-rows.mjs";
+import { MEMORY_COLUMNS, readEntry, timestampUs } from "./memory-rows.mjs";
 import { readVisibility } from "./memory-visibility.mjs";
+import { createRawRefReader } from "./raw-read.mjs";
+import { decode, encode, readStateToken, validateToken } from "./read-snapshot.mjs";
+import { MEMORY_FILTER, memoryScopeParams } from "./retrieval-scope.mjs";
 import { runOperation } from "./uow.mjs";
 
 /** @import { HydrateItems, ListRecent, ReadSnapshot, Receipt, Tx, VisibilityFence } from "../../core/src/ports/index.d.ts" */
@@ -11,33 +14,7 @@ import { runOperation } from "./uow.mjs";
 /** @typedef {{cursor: string | null, limit: number}} Page */
 /** @typedef {{id: string, updatedAtUs: bigint}} PageKey */
 
-const encoder = new TextEncoder();
-const decoder = new TextDecoder("utf-8", { fatal: true });
 const PAGE_BATCH_SIZE = 128;
-const FILTER = `user_id = $1 AND array_position($2::text[], core_namespace) IS NOT NULL
-  AND ($3::text[] IS NULL OR source_client = ANY($3))
-  AND ($4::bigint IS NULL OR ${CREATED_MS} >= $4)
-  AND ($5::bigint IS NULL OR ${CREATED_MS} < $5)
-  AND ($6::boolean OR currentness = 'current')`;
-
-/** @param {unknown[]} values */
-function encode(values) {
-  const binary = Array.from(encoder.encode(JSON.stringify(values)), byte => String.fromCharCode(byte)).join("");
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
-}
-
-/** @param {string} cursor @returns {unknown[]} */
-function decode(cursor) {
-  try {
-    if (typeof cursor !== "string" || !/^[A-Za-z0-9_-]+$/u.test(cursor)) throw new Error();
-    const bytes = Uint8Array.from(atob(cursor.replaceAll("-", "+").replaceAll("_", "/")), char => char.charCodeAt(0));
-    const values = JSON.parse(decoder.decode(bytes));
-    if (!Array.isArray(values) || encode(values) !== cursor) throw new Error();
-    return values;
-  } catch {
-    throw new CoreError("invalid_cursor");
-  }
-}
 
 /** @param {string} cursor @returns {PageKey} */
 function pageAfter(cursor) {
@@ -48,11 +25,6 @@ function pageAfter(cursor) {
   const updatedAtUs = BigInt(us);
   if (updatedAtUs < -210866803200000000n || updatedAtUs > 9223372036854775807n) throw new CoreError("invalid_cursor");
   return { id, updatedAtUs };
-}
-
-/** @param {ReadSet} scope @param {boolean} historical */
-function scopeParams({ owner, keys, clients, since, until }, historical) {
-  return [owner, keys, clients, since, until, historical];
 }
 
 /** @param {Tx} tx @param {ReadSet} scope @param {Page} page @param {boolean} historical
@@ -69,10 +41,10 @@ export function memoryPage(tx, scope, page, historical, hashSessionKey) {
     const visibility = await readVisibility(query, scope.owner, hashSessionKey);
     while (items.length <= limit) {
       const batchSize = Math.min(PAGE_BATCH_SIZE, Math.max(16, limit - items.length + 1));
-      const { rows } = await query(`SELECT ${MEMORY_COLUMNS} FROM memories WHERE ${FILTER}
+      const { rows } = await query(`SELECT ${MEMORY_COLUMNS} FROM memories WHERE ${MEMORY_FILTER}
         AND ($7::bigint IS NULL OR (updated_at, id COLLATE "C") < (${timestampUs("$7")}, $8::text COLLATE "C"))
         ORDER BY updated_at DESC, id COLLATE "C" DESC LIMIT $9`,
-      [...scopeParams(scope, historical), after?.updatedAtUs.toString() ?? null, after?.id ?? null, batchSize]);
+      [...memoryScopeParams(scope, historical), after?.updatedAtUs.toString() ?? null, after?.id ?? null, batchSize]);
       const entries = rows.map(row => readEntry(row, scope.owner));
       const checked = await visibility.check(entries);
       for (const { memory, hidden } of checked) {
@@ -96,8 +68,8 @@ async function visibleRefs(query, scope, refs, historical, includeReceipts, hash
   const keys = new Set(scope.keys);
   const selected = refs.filter(({ ref, key }) => ref.type === "memory" && keys.has(key));
   if (!selected.length) return [];
-  const { rows } = await query(`SELECT ${MEMORY_COLUMNS} FROM memories WHERE ${FILTER} AND id = ANY($7::text[])`,
-    [...scopeParams(scope, historical), [...new Set(selected.map(({ ref }) => ref.id))]]);
+  const { rows } = await query(`SELECT ${MEMORY_COLUMNS} FROM memories WHERE ${MEMORY_FILTER} AND id = ANY($7::text[])`,
+    [...memoryScopeParams(scope, historical), [...new Set(selected.map(({ ref }) => ref.id))]]);
   const visibility = await readVisibility(query, scope.owner, hashSessionKey);
   const checked = await visibility.check(rows.map(row => readEntry(row, scope.owner)), includeReceipts);
   const byId = new Map(checked.map(entry => [entry.memory.id, entry]));
@@ -121,42 +93,13 @@ function sourceDates(receipts) {
   return { firstMs, lastMs };
 }
 
-/** @param {ReadSet} scope @param {string} revision */
-function scopeToken({ owner, keys, clients, since, until, hasWindow }, revision) {
-  const namespaces = keys.map(key => key ?? "").sort(compareUtf8);
-  return encode([owner, revision, namespaces, clients?.slice().sort(compareUtf8) ?? null, hasWindow ? [since, until] : null]);
-}
-
-/** @param {string} token @param {boolean} allowNonNullNamespace */
-function validateToken(token, allowNonNullNamespace) {
-  const [owner, revision, keys, clients, bounds, ...extra] = decode(token);
-  if (extra.length || !pgText(owner) || !owner || typeof revision !== "string" ||
-      !/^(?:0|[1-9][0-9]{0,18})$/u.test(revision) || BigInt(revision) > 9223372036854775807n) {
-    throw new CoreError("invalid_cursor");
-  }
-  try {
-    if (!Array.isArray(keys) || keys.some(key => typeof key !== "string") ||
-        (bounds !== null && (!Array.isArray(bounds) || bounds.length !== 2))) throw new Error();
-    const selection = copyReadScope(owner, { namespaces: keys.map(key => key === "" ? null : JSON.parse(key)),
-      clients: clients === null ? undefined : /** @type {string[]} */ (clients),
-      window: bounds === null ? undefined : { sinceMs: bounds[0] ?? undefined, untilMs: bounds[1] ?? undefined } }, allowNonNullNamespace);
-    if (scopeToken(selection, revision) !== token) throw new Error();
-  } catch {
-    throw new CoreError("invalid_cursor");
-  }
-}
-
-/** @param {Tx} tx @param {ReadSet} scope */
-function stateToken(tx, scope) {
-  return runOperation(tx, async (query) => {
-    const { rows: [row] } = await query("SELECT index_revision::text FROM core_owner_state WHERE user_id = $1", [tx.owner]);
-    return scopeToken(scope, row?.index_revision ?? "0");
-  });
-}
-
-/** @param {Pick<FactMatchPolicy, "hashSessionKey"> & {allowNonNullNamespace?: boolean}} [options]
+/** @param {Pick<FactMatchPolicy, "hashSessionKey"> & {allowNonNullNamespace?: boolean} |
+ *   (import("./raw-visibility.mjs").RawReadOptions & {allowNonNullNamespace?: boolean})} [options]
  * @returns {{ recent: ListRecent, snapshot: ReadSnapshot, hydrate: HydrateItems, fence: VisibilityFence }} */
-export function createPostgresMemoryReads({ hashSessionKey, allowNonNullNamespace = false } = {}) {
+export function createPostgresMemoryReads(options = {}) {
+  const visibleRawIds = "lineageSecret" in options ? createRawRefReader(options) : undefined;
+  // Raw delivery accepts mixed scopes and returns only personal raw refs.
+  const { hashSessionKey, allowNonNullNamespace = visibleRawIds !== undefined } = options;
   return {
     recent: {
       async recent(tx, scope, page) {
@@ -167,13 +110,14 @@ export function createPostgresMemoryReads({ hashSessionKey, allowNonNullNamespac
     snapshot: {
       async stateToken(tx, scope) {
         guardOwner(tx, scope);
-        return stateToken(tx, copyReadScope(tx.owner, scope, allowNonNullNamespace));
+        const selection = copyReadScope(tx.owner, scope, allowNonNullNamespace);
+        return runOperation(tx, query => readStateToken(query, selection));
       },
       async assertUnchanged(tx, scope, token) {
         guardOwner(tx, scope);
         const selection = copyReadScope(tx.owner, scope, allowNonNullNamespace);
         validateToken(token, allowNonNullNamespace);
-        if (await stateToken(tx, selection) !== token) throw new CoreError("cursor_stale");
+        if (await runOperation(tx, query => readStateToken(query, selection)) !== token) throw new CoreError("cursor_stale");
       },
     },
     hydrate: {
@@ -194,8 +138,15 @@ export function createPostgresMemoryReads({ hashSessionKey, allowNonNullNamespac
         const selection = copyReadScope(tx.owner, scope, allowNonNullNamespace);
         const references = copyRefs(refs);
         if (intent !== undefined && intent !== "read") invalid();
-        return runOperation(tx, async (query) =>
-          (await visibleRefs(query, selection, references, intent === "read", false, hashSessionKey)).map(({ ref }) => ref));
+        return runOperation(tx, async (query) => {
+          const memories = await visibleRefs(query, selection, references, intent === "read", false, hashSessionKey);
+          if (!visibleRawIds) return memories.map(({ ref }) => ref);
+          const rawIds = await visibleRawIds(query, selection, references.flatMap(({ ref }) =>
+            ref.type === "raw" && ref.namespace === null ? [ref.id] : []));
+          const visibleMemoryRefs = new Set(memories.map(({ ref }) => ref));
+          return references.flatMap(({ ref }) => visibleMemoryRefs.has(ref) ||
+            (ref.type === "raw" && ref.namespace === null && rawIds.has(ref.id)) ? [ref] : []);
+        });
       },
     },
   };

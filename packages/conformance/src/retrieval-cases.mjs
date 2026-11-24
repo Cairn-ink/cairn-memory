@@ -90,7 +90,8 @@ export const retrievalCases = [
       const third = ctx.scope("outside");
       const readSet = { owner, namespaces: [second.namespace, first.namespace] };
       const tied = await row(ctx, "orchard apple");
-      const otherTied = ctx.adapter.capabilities.embeddingRequiredOnInsert ? await row(ctx, tied.text) : tied;
+      // Hosted storage enforces text-hash uniqueness across an owner's namespaces.
+      const otherTied = ctx.adapter.capabilities.embeddingRequiredOnInsert ? await row(ctx, "orchard berry") : tied;
       const a = await insert(ctx, second, tied, 5002n);
       const b = await insert(ctx, first, otherTied, 5002n);
       const c = await insert(ctx, first, await row(ctx, "orchard orchard pear"), 5001n);

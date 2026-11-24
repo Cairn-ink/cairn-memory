@@ -65,7 +65,7 @@ export function createCaptureProofs(secret) {
     return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
   }
 
-  /** @param {CaptureKey} capture @param {readonly CaptureMessage[]} messages @returns {Promise<Proof[] | null>} */
+  /** @param {Pick<CaptureKey, "scope" | "client">} capture @param {readonly Pick<CaptureMessage, "id" | "content">[]} messages @returns {Promise<Proof[] | null>} */
   return async ({ scope: { owner }, client }, messages) => {
     if (!messages.length) return [];
     try {
@@ -136,20 +136,26 @@ export async function filterSources(query, key, times, proofs, mode, hashSession
     factBlocksIncoming(stored, { ...candidate, occurredAtMs: times[position] }, policy) !== false));
   if (mode === "assert" && positions.length !== times.length) throw new CoreError("suppressed");
 
-  // Signing failures and older leases can leave proofs unavailable.
-  if (proofs === null) {
-    if (mode === "assert") throw new CoreError("lineage_fenced");
-    return [];
-  }
-  const { rows: [lineage] } = await query(CHECK_LINEAGE, [
-    scope.owner, client, sessionId, [...fencedSessions], JSON.stringify(proofs), fencedSessionHashes.size > 0,
-  ]);
-  // Check every returned hash candidate, including ID-only matches outside the traversal.
-  if (lineage?.fenced !== false || lineage.withheld !== false ||
-      lineage.hash_candidates.some((/** @type {string} */ id) =>
-        withholdsHashedAncestor(fencedSessionHashes, hashSessionKey, client, id)) || lineage.exceeded !== false) {
+  if (await lineageWithheld(query, key, proofs, fencedSessions, fencedSessionHashes, hashSessionKey)) {
     if (mode === "assert") throw new CoreError("lineage_fenced");
     return [];
   }
   return positions;
+}
+
+/**
+ * @param {Connection["query"]} query @param {Pick<CaptureKey, "scope" | "client" | "sessionId">} key
+ * @param {Proof[] | null} proofs @param {Set<string>} fencedSessions @param {Set<string>} fencedSessionHashes
+ * @param {CaptureOptions["hashSessionKey"]} hashSessionKey
+ */
+export async function lineageWithheld(query, { scope, client, sessionId }, proofs, fencedSessions, fencedSessionHashes, hashSessionKey) {
+  // Signing failures and older leases can leave proofs unavailable.
+  if (proofs === null) return true;
+  const { rows: [lineage] } = await query(CHECK_LINEAGE, [
+    scope.owner, client, sessionId, [...fencedSessions], JSON.stringify(proofs), fencedSessionHashes.size > 0,
+  ]);
+  // Check every returned hash candidate, including ID-only matches outside the traversal.
+  return lineage?.fenced !== false || lineage.withheld !== false || lineage.exceeded !== false ||
+    lineage.hash_candidates.some((/** @type {string} */ id) =>
+      withholdsHashedAncestor(fencedSessionHashes, hashSessionKey, client, id));
 }
