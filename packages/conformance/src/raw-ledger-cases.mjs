@@ -61,6 +61,10 @@ export const RAW_LEDGER_CASES = [
       equal(await read(), scrubbed, "Purge must preserve both slot identities and the unmatched text");
       equal(await purge(), { rawDeleted: 0, ledgerBlanked: 0 }, "A repeated purge must report zero changes");
       equal(await read(), scrubbed, "A repeated purge must preserve the ledger");
+      const remaining = await ctx.adapter.uow.run(ctx.owner, { readOnly: true }, (tx) =>
+        raw.listRaw(tx, { owner: scope.owner, namespaces: [scope.namespace] }, { limit: 10, cursor: null }));
+      equal(remaining.items.map(({ messageId }) => messageId), [second.id],
+        "Purge must delete the matched Raw row and keep the unmatched one");
       equal(await write((tx) => raw.deleteConversation(tx, scope, key)), { rawDeleted: 1 },
         "Only the unmatched Raw row must remain in storage");
     },

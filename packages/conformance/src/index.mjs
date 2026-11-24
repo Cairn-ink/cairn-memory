@@ -74,6 +74,12 @@ async function runOpenedCase(factory, testCase) {
     if (retry.sessionLineage === true && testCase.needs.includes("sessionLineage")) delete retry.sessionLineage;
     if (retry.rawArchive === capabilities.rawArchive && retry.sessionLineage === capabilities.sessionLineage) throw error;
     opened = await factory.open({ capabilities: retry });
+    // The retry may only turn a rejected NEEDED capability into a reported skip. If the store provides that
+    // capability after all, the first rejection was a real setup failure and must not become a pass.
+    if (retry.sessionLineage !== capabilities.sessionLineage && opened.adapter?.capabilities?.sessionLineage) {
+      await opened.close();
+      throw error;
+    }
   }
   const { adapter, embeddingDimensions, harness, nativeErrorMap, busyNativeCodes, sessionRefs, settleMs,
     timeoutMs = DEFAULT_TIMEOUT_MS } = opened;
