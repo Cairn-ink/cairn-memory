@@ -248,7 +248,9 @@ for (const [operation, write] of Object.entries(writesAndAdmission)) {
     assert.equal(await write(f, replay), "suppressed");
     const signed = f.signerCalls.filter(call => "text" in call);
     const spellings = new Set([replay, v1, hosted, prepareCoreText(replay)].map(normalizeForHash));
-    assert.deepEqual(signed.map(call => call.text).sort(), [...spellings].sort());
+    assert.deepEqual(signed.map(call => call.text).sort(), [
+      ...spellings, ...(operation === "capture" ? ["the user described the inventory."] : []),
+    ].sort());
     assertSignerCalls(f, replay);
   });
 }
