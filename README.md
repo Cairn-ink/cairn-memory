@@ -10,6 +10,7 @@
 <p align="center"><strong>Memory for Claude Code and Codex that you can inspect, correct and forget.</strong></p>
 
 <p align="center">
+  <a href="https://glama.ai/mcp/servers/Cairn-ink/cairn-memory"><img alt="Cairn-ink/cairn-memory MCP server" src="https://glama.ai/mcp/servers/Cairn-ink/cairn-memory/badges/score.svg"></a>
   <a href="https://github.com/Cairn-ink/cairn-memory/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Cairn-ink/cairn-memory/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://www.npmjs.com/package/@cairn-ink/memory"><img alt="npm version" src="https://img.shields.io/npm/v/%40cairn-ink%2Fmemory"></a>
   <a href="LICENSE"><img alt="Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
