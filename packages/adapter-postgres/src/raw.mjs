@@ -1,10 +1,10 @@
 import { CoreError, validateSuppressionFact } from "../../core/src/index.mjs";
-import { copyArray, copyKey, copyMessages, copyScope, hostedTime, identifier, jsonbSource, pgText, readInput } from "./capture-input.mjs";
+import { copyArray, copyKey, copyMessages, copyScope, decodeRequest, hostedTime, identifier, pgText, readInput } from "./capture-input.mjs";
 import { checkSourceLineage, createCaptureProofs, filterSources } from "./capture-source.mjs";
 import { pauseLockedWrite } from "./capture-lock.mjs";
 import { namespaceKey } from "./memory-input.mjs";
 import { advanceIndex } from "./memory-rows.mjs";
-import { MAX_LINEAGE_SESSIONS, MAX_LINEAGE_VERTICES, PROVEN_CLOSURE } from "./raw-lineage-query.mjs";
+import { LATE_PROVEN_CLOSURE, MAX_LINEAGE_SESSIONS, MAX_LINEAGE_VERTICES, PROVEN_CLOSURE } from "./raw-lineage-query.mjs";
 import { purgeRawText, scrubLedger } from "./raw-purge.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
@@ -36,10 +36,23 @@ const FENCE = `INSERT INTO capture_raw_fences (user_id, client, session_id)
   FROM jsonb_to_recordset($2::jsonb) AS target(client text, session_id text)
   ON CONFLICT (user_id, client, session_id) DO NOTHING RETURNING 1`;
 
+const SUPPRESS = `INSERT INTO suppressions (id, user_id, kind, client, session_id, origin)
+  SELECT target.id, $1, 'session', target.client, target.session_id, 'forget'
+  FROM jsonb_to_recordset($2::jsonb) AS target(id text, client text, session_id text)
+  WHERE NOT EXISTS (
+    SELECT 1 FROM suppressions s WHERE s.user_id = $1
+      AND (s.client, s.session_id) = (target.client, target.session_id)
+      AND s.kind = 'session' AND s.origin = 'forget'
+  ) RETURNING 1`;
+
 const DELETE = `DELETE FROM raw_messages r
   USING jsonb_to_recordset($2::jsonb) AS target(client text, session_id text)
   WHERE r.user_id = $1
     AND (r.client, r.session_id) = (target.client, target.session_id) RETURNING 1`;
+
+const LOCK_ARCHIVE_OUTBOX = `SELECT raw_request, core_outbox_metadata FROM capture_events
+  WHERE user_id = $1 AND client = $2 AND session_id = $3 AND event_id = $4
+    AND core_namespace IS NULL AND (core_admitted OR core_payload_digest IS NULL) FOR UPDATE`;
 
 /** @param {Session} session */
 function copySession(session) {
@@ -49,13 +62,42 @@ function copySession(session) {
 /** @param {Query} query @param {Scope} scope @param {readonly Session[]} sessions @param {string} statement */
 async function changeSessions(query, scope, sessions, statement) {
   if (!sessions.length) return 0;
-  const target = sessions.map(({ client, sessionId }) => ({ client, session_id: sessionId }));
+  const target = sessions.map(({ client, sessionId }) => ({ client, session_id: sessionId,
+    ...(statement === SUPPRESS && { id: crypto.randomUUID() }) }));
   return (await query(statement, [scope.owner, JSON.stringify(target)])).rows.length;
+}
+
+/** @param {Query} query @param {Scope} scope @param {readonly Session[]} sessions */
+async function erase(query, scope, sessions) {
+  const fenced = await changeSessions(query, scope, sessions, FENCE);
+  const suppressed = await changeSessions(query, scope, sessions, SUPPRESS);
+  const rawDeleted = await changeSessions(query, scope, sessions, DELETE);
+  const ledgerBlanked = sessions.length ? await scrubLedger(query, scope, sessions) : 0;
+  if (fenced || suppressed || rawDeleted || ledgerBlanked) await advanceIndex(query, scope.owner);
+  return { rawDeleted, ledgerBlanked };
 }
 
 /** @param {Query} query @param {Scope} scope @param {Session} session @param {readonly Proof[]} proofs */
 async function record(query, scope, { client, sessionId }, proofs) {
-  if (proofs.length) await query(RECORD, [scope.owner, client, sessionId, JSON.stringify(proofs)]);
+  if (!proofs.length) return;
+  await query(RECORD, [scope.owner, client, sessionId, JSON.stringify(proofs)]);
+  if (!proofs.some(({ content_mac }) => content_mac !== null)) return;
+  // A bare Raw fence can hide a fork, but only a session suppression propagates erasure.
+  const { rows: [closure] } = await query(LATE_PROVEN_CLOSURE, [scope.owner, client, [sessionId]]);
+  if (closure.exceeded) throw new CoreError("lineage_closure_limit");
+  if (closure.session_ids) {
+    await erase(query, scope, closure.session_ids.map((/** @type {string} */ id) => ({ client, sessionId: id })));
+  }
+}
+
+/** @param {Query} query @param {Scope} scope @param {Session} ref */
+async function rawSession(query, scope, ref) {
+  if (ref.client === "mcp" || !ref.sessionId.startsWith("mcp-save:")) return ref;
+  const { rows } = await query(`SELECT DISTINCT source_kind = 'mcp' AS explicit_save FROM memories
+    WHERE user_id = $1 AND core_namespace IS NULL AND source_client = $2 AND source_session_id = $3`,
+  [scope.owner, ref.client, ref.sessionId]);
+  if (rows.length > 1) throw new CoreError("raw_lineage_unavailable");
+  return rows[0]?.explicit_save ? { ...ref, client: "mcp" } : ref;
 }
 
 /** @param {Scope} scope */
@@ -68,8 +110,10 @@ function rawScope(scope) {
 export function createPostgresRawPorts(options) {
   const { lineageSecret, hashSessionKey, fingerprintKeys } = options ?? {};
   const captureProofs = createCaptureProofs(lineageSecret);
-  /** @type {WeakMap<ProvenClosure, Tx>} */
+  /** @type {WeakMap<ProvenClosure, {tx: Tx, sessions: readonly Session[]}>} */
   const proven = new WeakMap();
+  /** @type {WeakMap<Tx, Map<string, Session>>} */
+  const resolvedSessions = new WeakMap();
 
   /** @type {RawCapture & RawStore} */
   const raw = {
@@ -83,15 +127,18 @@ export function createPostgresRawPorts(options) {
           const proofs = await captureProofs(capture, batch);
           if (proofs === null) throw new CoreError("fingerprint_unavailable");
           const { scope, client, sessionId, eventId, payloadDigest } = capture;
+          const params = [scope.owner, client, sessionId, eventId, payloadDigest, "content:" + await captureProofs.keyId()];
+          const identity = `user_id = $1 AND client = $2 AND session_id = $3 AND event_id = $4
+            AND core_namespace IS NULL AND core_payload_digest = $5 AND raw_lineage_key_id IS DISTINCT FROM $6`;
+          const { rows: [outbox] } = await query(`SELECT raw_request FROM capture_events WHERE ${identity} FOR UPDATE`, params);
+          if (outbox) {
+            const { messages: stored } = decodeRequest(outbox.raw_request);
+            if (stored.length === batch.length && batch.every(({ id, content }, index) =>
+              stored[index].id === id && stored[index].content === content)) {
+              await query(`UPDATE capture_events SET raw_lineage_key_id = $6 WHERE ${identity}`, params);
+            }
+          }
           await record(query, scope, capture, proofs);
-          await query(`UPDATE capture_events SET raw_lineage_key_id = $6
-            WHERE user_id = $1 AND client = $2 AND session_id = $3 AND event_id = $4
-              AND core_namespace IS NULL AND core_payload_digest = $5
-              AND raw_lineage_key_id IS DISTINCT FROM $6
-              AND (SELECT jsonb_agg(jsonb_build_array(message->>'id', message->>'content') ORDER BY ordinal)
-                FROM jsonb_array_elements(raw_request->'messages') WITH ORDINALITY AS entry(message, ordinal)) = $7::jsonb`,
-          [scope.owner, client, sessionId, eventId, payloadDigest, "content:" + await captureProofs.keyId(),
-            jsonbSource(batch.map(({ id, content }) => [id, content]))]);
         };
       });
     },
@@ -119,9 +166,21 @@ export function createPostgresRawPorts(options) {
         return async (query) => {
           const times = batch.map(({ occurredAtMs }) => occurredAtMs);
           if (!times.length) return { archived: 0 };
-          const positions = await filterSources(query, capture, times, await captureProofs(capture, batch), "raw", captureProofs, hashSessionKey);
+          let positions = await filterSources(query, capture, times, await captureProofs(capture, batch), "raw", captureProofs, hashSessionKey);
           if (!positions.length) return { archived: 0 };
-          const { scope, client, sessionId } = capture;
+          const { scope, client, sessionId, eventId } = capture;
+          const { rows: [outbox] } = await query(LOCK_ARCHIVE_OUTBOX, [scope.owner, client, sessionId, eventId]);
+          if (outbox) {
+            const { messages: stored } = decodeRequest(outbox.raw_request);
+            const metadata = decodeRequest(outbox.core_outbox_metadata);
+            const eligible = new Set(stored.flatMap((/** @type {{id: string, content: string}} */ { id, content }, /** @type {number} */ index) =>
+              content ? [JSON.stringify([metadata?.[index]?.id ?? id, content])] : []));
+            positions = positions.filter((index) => {
+              const { id, content } = batch[index];
+              return eligible.has(JSON.stringify([id, content]));
+            });
+          }
+          if (!positions.length) return { archived: 0 };
           const records = positions.map((index) => {
             const { id, occurredAtMs, role, content } = batch[index];
             const occurred_at = occurredAtMs === null ? null : hostedTime(occurredAtMs);
@@ -140,7 +199,9 @@ export function createPostgresRawPorts(options) {
         const target = rawScope(copyScope(tx, scope));
         const ref = copySession(session);
         return async (query) => {
-          if (await changeSessions(query, target, [ref], FENCE)) await advanceIndex(query, target.owner);
+          const physical = resolvedSessions.get(tx)?.get(JSON.stringify([ref.client, ref.sessionId])) ??
+            await rawSession(query, target, ref);
+          if (await changeSessions(query, target, [physical], FENCE)) await advanceIndex(query, target.owner);
         };
       });
     },
@@ -148,15 +209,9 @@ export function createPostgresRawPorts(options) {
     eraseSessions(tx, scope, closure) {
       return pauseLockedWrite(tx, () => {
         const target = rawScope(copyScope(tx, scope));
-        if (proven.get(closure) !== tx) throw new CoreError("raw_lineage_unavailable");
-        return async (query) => {
-          if (!closure.length) return { rawDeleted: 0, ledgerBlanked: 0 };
-          const fenced = await changeSessions(query, target, closure, FENCE);
-          const rawDeleted = await changeSessions(query, target, closure, DELETE);
-          const ledgerBlanked = await scrubLedger(query, target, closure);
-          if (fenced || rawDeleted || ledgerBlanked) await advanceIndex(query, target.owner);
-          return { rawDeleted, ledgerBlanked };
-        };
+        const proof = proven.get(closure);
+        if (proof?.tx !== tx) throw new CoreError("raw_lineage_unavailable");
+        return (query) => erase(query, target, proof.sessions);
       });
     },
 
@@ -221,19 +276,42 @@ export function createPostgresRawPorts(options) {
         }
         return async (query) => {
           const members = [];
+          /** @type {Map<string, Session>} */
+          const physical = new Map();
+          /** @type {Map<string, Session>} */
+          const resolved = new Map(resolvedSessions.get(tx));
           let vertices = 0;
           for (const [client, sessions] of byClient) {
-            const { rows: [closure] } = await query(PROVEN_CLOSURE,
-              [target.owner, client, [...sessions]]);
-            vertices += closure.vertex_count;
-            if (closure.exceeded || vertices > MAX_LINEAGE_VERTICES ||
-                members.length + closure.session_ids.length > MAX_LINEAGE_SESSIONS) {
-              throw new CoreError("lineage_closure_limit");
+            /** @type {Map<string, string[]>} */
+            const captureClients = new Map();
+            for (const sessionId of sessions) {
+              const ref = await rawSession(query, target, { client, sessionId });
+              const group = captureClients.get(ref.client) ?? [];
+              group.push(ref.sessionId);
+              captureClients.set(ref.client, group);
             }
-            for (const sessionId of closure.session_ids) members.push(Object.freeze({ client, sessionId }));
+            for (const [captureClient, roots] of captureClients) {
+              const { rows: [closure] } = await query(PROVEN_CLOSURE, [target.owner, captureClient, roots]);
+              vertices += closure.vertex_count;
+              if (closure.exceeded || vertices > MAX_LINEAGE_VERTICES ||
+                  members.length + closure.session_ids.length > MAX_LINEAGE_SESSIONS) {
+                throw new CoreError("lineage_closure_limit");
+              }
+              for (const sessionId of closure.session_ids) {
+                // Core validates the closure against the memory's source client.
+                members.push(Object.freeze({ client, sessionId }));
+                const ref = { client: captureClient, sessionId };
+                physical.set(JSON.stringify([captureClient, sessionId]), ref);
+                const logical = JSON.stringify([client, sessionId]);
+                const previous = resolved.get(logical);
+                if (previous && previous.client !== captureClient) throw new CoreError("raw_lineage_unavailable");
+                resolved.set(logical, ref);
+              }
+            }
           }
           const closure = /** @type {ProvenClosure} */ (/** @type {unknown} */ (Object.freeze(members)));
-          proven.set(closure, tx);
+          proven.set(closure, { tx, sessions: [...physical.values()] });
+          resolvedSessions.set(tx, resolved);
           return closure;
         };
       });

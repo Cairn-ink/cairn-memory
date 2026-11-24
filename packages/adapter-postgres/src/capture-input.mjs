@@ -3,6 +3,7 @@ import { toPostgresError } from "./errors.mjs";
 
 /** @import { CaptureKey, CaptureMessage, Scope } from "../../core/src/ports/index.d.ts" */
 /** @import { Tx } from "../../core/src/ports/unit-of-work.d.ts" */
+/** @typedef {Pick<CaptureMessage, "id" | "role" | "content"> & {occurred_at?: string, occurredAtMs?: number}} OutboxMessage */
 
 /** @returns {never} */
 function invalid() {
@@ -135,6 +136,22 @@ export function jsonbSource(value) {
   const json = JSON.stringify(value);
   // A free-form message ID may contain NUL or an unpaired surrogate, which JSONB cannot decode.
   return /\\u(?:0000|d[89a-f][0-9a-f]{2})/iu.test(json) ? JSON.stringify(json) : json;
+}
+
+/** @param {unknown} raw */
+export function decodeRequest(raw) {
+  return typeof raw === "string" ? JSON.parse(raw) : raw;
+}
+
+/** @param {unknown} raw @param {unknown} extra */
+export function decodeOutboxMessages(raw, extra) {
+  const { messages } = /** @type {{messages: OutboxMessage[]}} */ (decodeRequest(raw));
+  const metadata = decodeRequest(extra);
+  // Older Core outboxes stored message times directly in milliseconds.
+  return copyMessages(messages.map(({ id, role, content, occurred_at, occurredAtMs }, index) => ({
+    id, role, content, occurredAtMs: occurredAtMs ?? (occurred_at === undefined ? null : Date.parse(occurred_at)),
+    ...metadata?.[index],
+  })));
 }
 
 /** @param {number} time */

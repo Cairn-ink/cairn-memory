@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import test from "node:test";
 import {
-  coreDigest, factIncarnationBody, fingerprintLegacyCapture, userFingerprintKey,
+  coreDigest, coreFingerprintLabels, factIncarnationBody, fingerprintLegacyCapture, userFingerprintKey,
 } from "../../core/src/index.mjs";
+import { forgetMethod } from "../../core/src/service/forget.mjs";
 import {
-  createPostgresCapturePorts, createPostgresRawPorts, createPostgresSuppressionStore, createPostgresUnitOfWork,
+  createPostgresCapturePorts, createPostgresMemoryStore, createPostgresRawPorts, createPostgresSuppressionStore, createPostgresUnitOfWork,
   HOSTED_FINGERPRINT_LABELS,
 } from "../src/index.mjs";
 import { migrationDatabase, migrationDbTest } from "./migration-database.mjs";
@@ -375,10 +376,10 @@ test("project ancestor facts still block a fork of a personal Raw session", migr
   assert.deepEqual((await read((tx) => capture.load(tx, projectEvent))).messages, [projectMessage]);
 });
 
-async function whileArchiveWaits({ pool, source, owner, raw }, target, messages, privacyStep) {
+async function whileRawWriteWaits({ pool, source, owner }, rawWrite, privacyStep, action = "Raw write") {
   let started;
   const waiting = new Promise((resolve) => { started = resolve; });
-  const archiveUow = createPostgresUnitOfWork({
+  const waitingUow = createPostgresUnitOfWork({
     async connect() {
       const conn = await source.connect();
       const { rows: [{ pid }] } = await conn.query("SELECT pg_backend_pid() AS pid");
@@ -392,11 +393,11 @@ async function whileArchiveWaits({ pool, source, owner, raw }, target, messages,
     },
   });
   const uow = createPostgresUnitOfWork(source);
-  let archive;
+  let waitingWrite;
   try {
     const result = await uow.run(owner, pauseLock, async (tx) => {
-      archive = archiveUow.run(owner, pauseLock, (tx) => raw.archive(tx, target, messages));
-      const pid = await Promise.race([waiting, archive.then(() => assert.fail("archive skipped the pause lock"))]);
+      waitingWrite = waitingUow.run(owner, pauseLock, rawWrite);
+      const pid = await Promise.race([waiting, waitingWrite.then(() => assert.fail(`${action} skipped the pause lock`))]);
       let blocked = false;
       for (let i = 0; i < 100 && !blocked; i++) {
         const { rows } = await pool.query("SELECT cardinality(pg_blocking_pids($1)) > 0 AS blocked", [pid]);
@@ -406,10 +407,15 @@ async function whileArchiveWaits({ pool, source, owner, raw }, target, messages,
       assert.equal(blocked, true);
       return privacyStep(tx);
     });
-    return { result, archive: await archive };
+    return { result, waitingWrite: await waitingWrite };
   } finally {
-    await archive?.catch(() => {});
+    await waitingWrite?.catch(() => {});
   }
+}
+
+async function whileArchiveWaits(f, target, messages, privacyStep) {
+  const { result, waitingWrite } = await whileRawWriteWaits(f, (tx) => f.raw.archive(tx, target, messages), privacyStep, "archive");
+  return { result, archive: waitingWrite };
 }
 
 test("a concurrent archive waits for fenceSession and refuses a late message", migrationDbTest, async (t) => {
@@ -437,4 +443,176 @@ test("a concurrent archive waits for proven erasure and cannot repopulate a memb
   });
   assert.deepEqual(result, { result: { rawDeleted: 2, ledgerBlanked: 2 }, archive: { archived: 0 } });
   assert.deepEqual((await f.pool.query("SELECT message_id FROM raw_messages WHERE user_id = $1", [f.owner])).rows, []);
+});
+
+test("legacy hosted readers refuse every erased session after rollback", migrationDbTest, async (t) => {
+  const { pool, owner, other, key, mac, raw, sessionLineage, write } = await fixture(t);
+  const root = key();
+  const fork = key();
+  const bare = key();
+  const item = message("shared source");
+  const second = message("separate passage in the fork");
+  const proof = mac(contentDomain(root, item));
+  for (const event of [root, fork]) {
+    await hostedAnchor(pool, event, mac(item.id), proof);
+    await hostedArchive(pool, event, item);
+  }
+  await hostedLedger(pool, fork, [wireMessage(item), wireMessage(second)]);
+  await hostedArchive(pool, fork, second);
+  // The hosted admission and readSuppressions predicates key by owner, client and session.
+  const hostedAllows = async (session, user = owner) => (await pool.query(`SELECT NOT EXISTS (
+    SELECT 1 FROM suppressions WHERE user_id = $1 AND client = $2 AND session_id = $3 AND kind = 'session'
+  ) AS allowed`, [user, client, session.sessionId])).rows[0].allowed;
+  assert.equal(await hostedAllows(fork), true);
+  await write(async (tx) => {
+    await raw.fenceSession(tx, bare.scope, bare);
+    const closure = await sessionLineage.provenClosure(tx, root.scope, [root]);
+    assert.deepEqual(await raw.eraseSessions(tx, root.scope, closure), { rawDeleted: 3, ledgerBlanked: 2 });
+    await raw.eraseSessions(tx, root.scope, closure);
+  });
+  for (const session of [root, fork]) assert.equal(await hostedAllows(session), false);
+  assert.equal(await hostedAllows(fork, other), true);
+  assert.equal(await hostedAllows(bare), true);
+  const { rows } = await pool.query(`SELECT session_id, origin FROM suppressions
+    WHERE user_id = $1 AND client = $2 AND kind = 'session' ORDER BY session_id`, [owner, client]);
+  assert.deepEqual(rows, [root.sessionId, fork.sessionId].sort().map((session_id) => ({ session_id, origin: "forget" })));
+});
+
+test("a committed text purge refuses the worker's cached ledger position at dispatch and archive", migrationDbTest, async (t) => {
+  const f = await fixture(t);
+  const event = f.key();
+  const forgotten = f.key();
+  const item = message("cedar desk plan");
+  const keep = message("other furniture " + String.fromCharCode(92) + "u0000");
+  await f.save(forgotten, [message(item.content)]);
+  await f.write((tx) => f.capture.admit(tx, event, [item, keep]));
+  const fact = await f.storeFact({ ...forgotten.scope, kind: "text", mode: "exact", origin: "forget",
+    actionId: randomUUID(), text: { digests: [await coreDigest(item.content)] } });
+  const worker = await f.source.connect();
+  const workerUow = createPostgresUnitOfWork({ async connect() {
+    return { query: worker.query, release() {} };
+  } });
+  const runWorker = (fn) => workerUow.run(f.owner, pauseLock, fn);
+  try {
+    const cached = await runWorker(async (tx) => {
+      const { messages } = await f.capture.load(tx, event);
+      assert.equal((await f.capture.claim(tx, event, messages, { leaseMs: 60_000 })).status, "claimed");
+      return messages;
+    });
+    assert.deepEqual(await f.write((tx) => f.raw.purgeWithheld(tx, forgotten.scope, [fact])),
+      { rawDeleted: 1, ledgerBlanked: 2 });
+    await assert.rejects(runWorker((tx) => f.capture.assertEligible(tx, event, [0])), { code: "suppressed" });
+    assert.deepEqual(await runWorker((tx) => f.raw.archive(tx, event, [cached[0]])), { archived: 0 });
+    assert.deepEqual((await f.pool.query("SELECT 1 FROM raw_messages WHERE user_id = $1", [f.owner])).rows, []);
+    await runWorker((tx) => f.capture.assertEligible(tx, event, [1]));
+    assert.deepEqual(await runWorker((tx) => f.raw.archive(tx, event, cached)), { archived: 1 });
+    assert.deepEqual((await f.pool.query("SELECT message_id FROM raw_messages WHERE user_id = $1", [f.owner])).rows,
+      [{ message_id: keep.id }]);
+  } finally {
+    worker.release();
+  }
+});
+
+test("forget maps a legacy explicit-save memory to its MCP Raw and ledger client", migrationDbTest, async (t) => {
+  const secret = randomBytes(32).toString("hex");
+  const userKey = (owner) => userFingerprintKey(secret, owner, coreFingerprintLabels);
+  const f = await fixture(t, { fingerprintKeys: async (owner) => [{ pipeline: "core", key: await userKey(owner) }] });
+  const event = f.key(undefined, `mcp-save:${randomUUID()}`);
+  const fork = f.key();
+  const item = message("Send the bicycle to Oslo.");
+  const memory = "Destination: Norway.";
+  const id = randomUUID();
+  const reportedClient = "coding-client";
+  const sha256Hex = (value) => createHash("sha256").update(value).digest("hex");
+  await f.pool.query(`INSERT INTO memories
+    (id, user_id, text, text_hash, kind, embedding, embedding_model, source_kind, source_client, source_session_id)
+    VALUES ($1, $2, $3, $4, 'fact', $5, 'test', 'mcp', $6, $7)`,
+  [id, f.owner, memory, sha256Hex(memory), JSON.stringify([1, ...Array(1535).fill(0)]), reportedClient, event.sessionId]);
+  for (const target of [event, fork]) {
+    await hostedLedger(f.pool, target, [wireMessage(item)]);
+    await hostedArchive(f.pool, target, item);
+    await hostedAnchor(f.pool, target, f.mac(item.id), f.mac(contentDomain(target, item)));
+  }
+  const otherClientItem = message("source from a separate client");
+  await f.pool.query(`INSERT INTO raw_messages (id, user_id, client, session_id, message_id, role, content)
+    VALUES ($1, $2, $3, $4, $5, 'user', $6)`,
+  [randomUUID(), f.owner, reportedClient, event.sessionId, otherClientItem.id, otherClientItem.content]);
+  const forget = forgetMethod({ storage: {
+    ...f, capabilities: { rawArchive: true, sessionLineage: true }, keys: { userKey },
+    memories: createPostgresMemoryStore(), suppressions: createPostgresSuppressionStore(),
+  }, clock: { sha256Hex } });
+  assert.deepEqual(await forget(event.scope, id, { kind: "mcp", client: reportedClient, sessionId: null }),
+    { status: "forgotten", removedSimilar: 0 });
+  assert.deepEqual((await f.pool.query("SELECT client, content FROM raw_messages WHERE user_id = $1", [f.owner])).rows,
+    [{ client: reportedClient, content: otherClientItem.content }]);
+  assert.deepEqual((await f.pool.query(`SELECT raw_request #>> '{messages,0,content}' AS content FROM capture_events
+    WHERE user_id = $1 AND client = $2`, [f.owner, client])).rows, [{ content: "" }, { content: "" }]);
+  assert.deepEqual((await f.pool.query(`SELECT DISTINCT client FROM capture_raw_fences WHERE user_id = $1`, [f.owner])).rows,
+    [{ client }]);
+});
+
+test("recordLineage stamps a JSONB-string ledger with the full proof key", migrationDbTest, async (t) => {
+  const { pool, owner, mac, key, capture, raw, write } = await fixture(t);
+  const event = { ...key(), client: "coding-client" };
+  const item = message("show the escape " + String.fromCharCode(92) + "u0000");
+  await write((tx) => capture.admit(tx, event, [item]));
+  await write((tx) => raw.recordLineage(tx, event, [item]));
+  const { rows: [ledger] } = await pool.query(`SELECT jsonb_typeof(raw_request) AS encoding, raw_lineage_key_id
+    FROM capture_events WHERE user_id = $1 AND client = $2 AND event_id = $3`, [owner, event.client, event.eventId]);
+  assert.deepEqual(ledger, { encoding: "string", raw_lineage_key_id: "content:" + mac(keyIdDomain) });
+});
+
+for (const writer of ["recordLineage", "recordAnchors"]) {
+  test(`${writer} erases a fork newly proven after a concurrent erase`, migrationDbTest, async (t) => {
+    const f = await fixture(t);
+    const root = f.key();
+    const fork = f.key();
+    const weak = f.key();
+    const item = message("full proof arrives late");
+    const messageMac = f.mac(item.id);
+    const contentMac = f.mac(contentDomain(root, item));
+    for (const session of [root, fork, weak]) {
+      await hostedAnchor(f.pool, session, messageMac, session === fork ? contentMac : null);
+      await hostedLedger(f.pool, session, [wireMessage(item)]);
+      await hostedArchive(f.pool, session, item);
+    }
+    await whileRawWriteWaits(f, (tx) => writer === "recordLineage" ? f.raw.recordLineage(tx, root, [item]) :
+      f.sessionLineage.recordAnchors(tx, root.scope, root, [{ messageMac, contentMac }]), async (tx) => {
+      const closure = await f.sessionLineage.provenClosure(tx, root.scope, [root]);
+      assert.deepEqual(closure, [{ client, sessionId: root.sessionId }]);
+      assert.deepEqual(await f.raw.eraseSessions(tx, root.scope, closure), { rawDeleted: 1, ledgerBlanked: 1 });
+      assert.deepEqual((await f.pool.query(`SELECT content FROM raw_messages
+        WHERE user_id = $1 AND client = $2 AND session_id = $3`, [f.owner, client, fork.sessionId])).rows,
+      [{ content: item.content }]);
+    });
+    assert.deepEqual((await f.pool.query("SELECT session_id, content FROM raw_messages WHERE user_id = $1", [f.owner])).rows,
+      [{ session_id: weak.sessionId, content: item.content }]);
+    assert.deepEqual((await f.pool.query(`SELECT raw_request #>> '{messages,0,content}' AS content FROM capture_events
+      WHERE user_id = $1 AND client = $2 AND session_id = $3`, [f.owner, client, fork.sessionId])).rows, [{ content: "" }]);
+    assert.deepEqual((await f.pool.query(`SELECT session_id FROM capture_raw_fences
+      WHERE user_id = $1 AND client = $2 AND session_id = $3`, [f.owner, client, fork.sessionId])).rows,
+    [{ session_id: fork.sessionId }]);
+  });
+}
+
+test("an oversized late proof rolls back without partially erasing its component", migrationDbTest, async (t) => {
+  const f = await fixture(t);
+  const root = f.key();
+  const fork = f.key();
+  const item = message("one shared anchor across the component");
+  const messageMac = f.mac(item.id);
+  const contentMac = f.mac(contentDomain(root, item));
+  await hostedAnchor(f.pool, fork, messageMac, contentMac);
+  await hostedArchive(f.pool, fork, item);
+  await f.pool.query(`INSERT INTO capture_raw_lineage (user_id, client, session_id, message_mac, content_mac)
+    SELECT $1, $2, 'linked-' || n, $3, $4 FROM generate_series(1, 999) AS n`, [f.owner, client, messageMac, contentMac]);
+  await f.write(async (tx) => {
+    const closure = await f.sessionLineage.provenClosure(tx, root.scope, [root]);
+    await f.raw.eraseSessions(tx, root.scope, closure);
+  });
+  await assert.rejects(f.write((tx) => f.raw.recordLineage(tx, root, [item])), { code: "lineage_closure_limit" });
+  assert.deepEqual((await f.pool.query(`SELECT 1 FROM capture_raw_lineage
+    WHERE user_id = $1 AND client = $2 AND session_id = $3`, [f.owner, client, root.sessionId])).rows, []);
+  assert.deepEqual((await f.pool.query("SELECT content FROM raw_messages WHERE user_id = $1 AND client = $2", [f.owner, client])).rows,
+    [{ content: item.content }]);
 });

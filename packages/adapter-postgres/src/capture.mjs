@@ -1,6 +1,6 @@
 import { CoreError, isErrorCode } from "../../core/src/index.mjs";
 import {
-  clockMs, copyKey, copyMessages, copyPositions, copyScope, hostedTime, identifier, jsonbSource, readFailure,
+  clockMs, copyKey, copyMessages, copyPositions, copyScope, decodeOutboxMessages, hostedTime, identifier, jsonbSource, readFailure,
   readInput, readLease, readSelection, readToken,
 } from "./capture-input.mjs";
 import { pauseLockedWrite } from "./capture-lock.mjs";
@@ -37,6 +37,9 @@ const SELECT_EVENT = `SELECT session_id, status, raw_archive_from, core_namespac
   FROM capture_events WHERE ${IDENTITY}`;
 const LOAD = `SELECT raw_request, core_payload_digest, core_outbox_metadata FROM capture_events
   WHERE ${IDENTITY} AND session_id = $4 AND core_namespace IS NOT DISTINCT FROM $5 AND core_admitted`;
+const LOCK_LEASE_SOURCE = `SELECT session_id, core_namespace, core_payload_digest, core_admitted,
+    core_lease_expires_at_ms::text, core_lease_sources, raw_request, core_outbox_metadata
+  FROM capture_events WHERE ${IDENTITY} FOR UPDATE`;
 const STATUS = `SELECT core_failure_code,
     CASE WHEN status = 'completed' THEN 2
       WHEN core_failure_code IS NOT NULL OR (${LEGACY_FAILED}) THEN 1 ELSE 0 END AS status_rank
@@ -63,7 +66,7 @@ function identity({ scope, client, eventId }) {
   return [scope.owner, client, eventId];
 }
 
-/** @param {CaptureRow} row @param {CaptureKey} key */
+/** @param {Pick<CaptureRow, "core_payload_digest" | "session_id">} row @param {CaptureKey} key */
 function assertSameEvent(row, key) {
   if (row.core_payload_digest !== key.payloadDigest || row.session_id !== key.sessionId) {
     throw new CoreError("event_payload_conflict");
@@ -88,7 +91,7 @@ function storedRetry(row, key) {
   }
 }
 
-/** @param {CaptureRow} row @param {bigint} now */
+/** @param {Pick<CaptureRow, "core_lease_expires_at_ms">} row @param {bigint} now */
 function hasLiveLease(row, now) {
   return row.core_lease_expires_at_ms !== null && now < BigInt(row.core_lease_expires_at_ms);
 }
@@ -240,8 +243,9 @@ export function createPostgresCapturePorts(options) {
       requireLiveRun(tx, true);
       const [copy, selected] = readInput(() => /** @type {const} */ ([copyKey(tx, key), copyPositions(positions)]));
       return runOperation(tx, async (query) => {
-        /** @type {{rows: CaptureRow[]}} */
-        const { rows: [row] } = await query(SELECT_EVENT + " FOR UPDATE", identity(copy));
+        /** @type {{rows: (Pick<CaptureRow, "session_id" | "core_namespace" | "core_payload_digest" | "core_admitted" |
+         *   "core_lease_expires_at_ms" | "core_lease_sources"> & {raw_request: unknown, core_outbox_metadata: unknown})[]}} */
+        const { rows: [row] } = await query(LOCK_LEASE_SOURCE, identity(copy));
         if (!row || row.core_namespace !== copy.scope.namespace || row.core_payload_digest === null) {
           throw new CoreError("stale_admission");
         }
@@ -253,6 +257,14 @@ export function createPostgresCapturePorts(options) {
           return times[position];
         });
         await filterSources(query, copy, selectedTimes, proofs, "assert", captureProofs, hashSessionKey);
+        if (row.core_admitted && selected.length) {
+          const current = decodeOutboxMessages(row.raw_request, row.core_outbox_metadata);
+          const currentSources = selected.map((position) => current[position]);
+          if (currentSources.some((message) => !message?.content)) throw new CoreError("suppressed");
+          const currentProofs = await captureProofs(copy, currentSources);
+          if (!currentProofs || selected.some((position, index) =>
+            currentProofs[index].content_mac !== proofs?.[position]?.content_mac)) throw new CoreError("suppressed");
+        }
       });
     },
   };
@@ -300,13 +312,6 @@ async function loadAdmission(query, selection, namespace) {
   const { rows: [row] } = await query(LOAD, [...identity(selection), selection.sessionId, namespace]);
   if (!row) return null;
   const { raw_request: raw, core_payload_digest: payloadDigest, core_outbox_metadata: extra } = row;
-  const { messages } = typeof raw === "string" ? JSON.parse(raw) : raw;
-  const metadata = typeof extra === "string" ? JSON.parse(extra) : extra;
-  // Older Core outboxes stored message times directly in milliseconds.
-  const batch = messages.map(({ id, role, content, occurred_at, occurredAtMs }, index) => ({
-    id, role, content, occurredAtMs: occurredAtMs ?? (occurred_at === undefined ? null : Date.parse(occurred_at)),
-    ...metadata?.[index],
-  }));
   return { key: { ...selection, scope: { owner: selection.scope.owner, namespace }, payloadDigest },
-    messages: copyMessages(batch) };
+    messages: decodeOutboxMessages(raw, extra) };
 }

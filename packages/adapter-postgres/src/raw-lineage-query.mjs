@@ -22,11 +22,24 @@ const WALK = `vertices(session_id, message_mac, content_mac) AS (
 const EXCEEDED = `(SELECT count(*) FROM bounded) > ${MAX_LINEAGE_VERTICES}
   OR (SELECT count(DISTINCT session_id) FROM bounded) > ${MAX_LINEAGE_SESSIONS}`;
 
-export const PROVEN_CLOSURE = `WITH RECURSIVE roots(session_id, message_mac, content_mac) AS (
+const SESSION_ROOTS = `
     SELECT session_id, NULL::text, NULL::text FROM unnest($3::text[]) AS root(session_id)
+`;
+
+export const PROVEN_CLOSURE = `WITH RECURSIVE roots(session_id, message_mac, content_mac) AS (
+    ${SESSION_ROOTS}
   ), ${WALK}
   SELECT ARRAY(SELECT DISTINCT session_id FROM bounded WHERE session_id IS NOT NULL) AS session_ids,
     (SELECT count(*)::int FROM bounded) AS vertex_count, ${EXCEEDED} AS exceeded`;
+
+export const LATE_PROVEN_CLOSURE = `WITH RECURSIVE erased AS MATERIALIZED (
+    SELECT session_id FROM suppressions WHERE user_id = $1 AND client = $2 AND kind = 'session'
+  ), roots(session_id, message_mac, content_mac) AS (
+    ${SESSION_ROOTS} WHERE EXISTS (SELECT 1 FROM erased)
+  ), ${WALK}
+  SELECT CASE WHEN EXISTS (SELECT 1 FROM bounded JOIN erased USING (session_id))
+      THEN ARRAY(SELECT session_id FROM bounded WHERE session_id IS NOT NULL) END AS session_ids,
+    ${EXCEEDED} AS exceeded`;
 
 const FENCES = (/** @type {string} */ facts) => `SELECT f.session_id, NULL::text AS namespace, false AS wildcard FROM capture_raw_fences f
     WHERE f.user_id = $1 AND f.client = $2
