@@ -336,6 +336,36 @@ test("forget preserves a sentence-bound card when a different ledger body at the
   assertTombstoned(await snapshot(), erasedCard, erased.content);
 });
 
+test("forget preserves a sentence-bound card when a different ledger body at the same address is erased with a non-breaking space", async () => {
+  const { capture, cards, fence, service, read, write, snapshot } = fixture();
+  const survivor = message("ledger-address", "The blue gauge measures the outlet.");
+  const erased = message(survivor.id, "The spare lens is in the equipment\u00a0cabinet.");
+  const survivingKey = { ...captureKey(survivor), eventId: "first-copy" };
+  const erasedKey = { ...captureKey(erased), eventId: "second-copy" };
+  const card = authored("surviving-ledger-card", survivor.content, [
+    { start: 0, end: survivor.content.length, source: binding(survivor) },
+  ]);
+  const erasedCard = authored("erased-ledger-card", `Inventory. ${erased.content}`, [
+    { start: "Inventory. ".length, end: "Inventory. ".length + erased.content.length, source: binding(erased) },
+  ]);
+  const saved = await service.save(scope, erased.content, source, "fact");
+  assert.equal(saved.status, "saved");
+  await write(async tx => {
+    assert.equal((await capture.admit(tx, survivingKey, [survivor])).status, "admitted");
+    assert.equal((await capture.admit(tx, erasedKey, [erased])).status, "admitted");
+    for (const candidate of [card, erasedCard]) assert.equal((await cards.put(tx, scope, candidate)).status, "inserted");
+  });
+  assert.deepEqual((await snapshot()).rawRows, []);
+  const refs = [cardRef(card)];
+  assert.deepEqual(await read(tx => fence.assertVisible(tx, selection, refs)), refs);
+  assert.equal((await service.forget(scope, saved.item.id, source)).status, "forgotten");
+  assert.equal((await read(tx => capture.load(tx, survivingKey))).messages[0].content, survivor.content);
+  assert.equal((await read(tx => capture.load(tx, erasedKey))).messages[0].content, "");
+  assert.equal((await read(tx => cards.get(tx, scope, card.id)))?.body, survivor.content);
+  assert.deepEqual(await read(tx => fence.assertVisible(tx, selection, refs)), refs);
+  assertTombstoned(await snapshot(), erasedCard, erased.content);
+});
+
 test("forget tombstones an archived router card on a definite keyed containment match", async () => {
   const { raw, cards, fence, service, read, write, snapshot } = fixture(undefined, { fingerprintKey: true });
   const passage = "The brass compass was calibrated beside the north entrance on Tuesday.";

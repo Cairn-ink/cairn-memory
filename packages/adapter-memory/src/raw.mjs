@@ -709,12 +709,16 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
               const copies = ledgerCopies.get(id);
               if (!copies) return false;
               if (!copies.retained.length) return true;
-              // With competing copies, the binding must identify text found only in the erased copies.
+              // Keep a card only when the evidence identifies a retained copy and rules out every erased copy.
+              const excerpt = redactDocumentText(text, true);
+              if (!excerpt) return true;
               const matchesText = (/** @type {string} */ content) => {
-                const body = redactDocumentText(content, true) ?? content;
-                return wholeMessage ? body === text : body.includes(text);
+                const body = redactDocumentText(content, true);
+                if (body === null) return null;
+                return wholeMessage ? body === excerpt : body.includes(excerpt);
               };
-              return !!text && !copies.retained.some(matchesText) && copies.erased.some(matchesText);
+              return !copies.retained.some(content => matchesText(content) === true) ||
+                copies.erased.some(content => matchesText(content) !== false);
             });
             if (hidden) run.cardWrites++;
             else if (changed) run.stateWritten = true;
