@@ -13,7 +13,7 @@ const text = { owner, actionId: "action", origin: "edit", kind: "text", mode: "e
 const store = createPostgresSuppressionStore();
 const timeUs = "trunc(EXTRACT(EPOCH FROM created_at) * 1000000)::text AS created_at_us";
 const selectSlot = `SELECT fact_id, slot, incarnation, epoch::text, ${timeUs} FROM core_suppression_facts WHERE user_id = $1 AND slot_hash = $2`;
-const advance = "INSERT INTO core_owner_state (user_id, fact_epoch, index_revision) VALUES ($1, 1, 1) ON CONFLICT (user_id) DO UPDATE SET fact_epoch = core_owner_state.fact_epoch + 1, index_revision = core_owner_state.index_revision + 1 RETURNING fact_epoch::text";
+const advance = "INSERT INTO core_owner_state (user_id, fact_epoch, index_revision) VALUES ($1, 1, 1) ON CONFLICT (user_id) DO UPDATE SET fact_epoch = core_owner_state.fact_epoch + 1, index_revision = core_owner_state.index_revision + 1 RETURNING fact_epoch::text, index_revision::text";
 const insert = `INSERT INTO core_suppression_facts ( user_id, fact_id, slot, slot_hash, incarnation, action_id, epoch, origin, kind, mode, body, embedding, shingles, key_id ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING ${timeUs}`;
 const digests = "INSERT INTO core_fact_digests (user_id, fact_id, alg, value, pipeline, redaction_version, key_id) SELECT $1, $2, * FROM unnest($3::text[], $4::text[], $5::text[], $6::integer[], $7::text[])";
 const selectEpoch = "SELECT fact_epoch::text FROM core_owner_state WHERE user_id = $1";
@@ -45,7 +45,7 @@ function controlledStub(reply) {
 
 for (const fact of [identity, text]) {
   test(`new ${fact.kind} binds the storage snapshot and runs the exact statement sequence`, async () => {
-    const db = stub([], [{ fact_epoch: "9007199254740993" }], [{ created_at_us: "1234999" }]);
+    const db = stub([], [{ fact_epoch: "9007199254740993", index_revision: "9007199254740993" }], [{ created_at_us: "1234999" }]);
     let ownerReads = 0;
     const candidate = new Proxy(fact, { get(target, key) {
       assert.equal(key, "owner");
@@ -97,7 +97,7 @@ for (const insertFails of [false, true]) {
       assert.deepEqual(db.calls.map(([sql]) => sql), [selectSlot, advance]);
       assert.ok(!db.lifecycle.includes("COMMIT"));
     } finally {
-      finishAdvance.resolve([{ fact_epoch: "1" }]);
+      finishAdvance.resolve([{ fact_epoch: "1", index_revision: "1" }]);
       await outcome;
     }
 
@@ -121,7 +121,7 @@ for (const sameIncarnation of [true, false]) {
     let epoch = 0n;
     const db = controlledStub((sql, values) => {
       if (sql === selectSlot) return row ? [row] : [];
-      if (sql === advance) return [{ fact_epoch: String(++epoch) }];
+      if (sql === advance) return [{ fact_epoch: String(++epoch), index_revision: "1" }];
       assert.equal(sql, insert);
       if (row) return Object.assign(new Error(), { code: "23505" });
       row = { fact_id: values[1], slot: values[2], incarnation: values[4], epoch: values[6], created_at_us: "1234999" };
@@ -209,14 +209,14 @@ test("epoch reads in a read-only run and maps absent, zero and int8 text", async
 });
 
 test("a native unique violation is mapped and remains sticky when caught", async () => {
-  const db = stub([], [{ fact_epoch: "1" }], Object.assign(new Error(), { code: "23505" }));
+  const db = stub([], [{ fact_epoch: "1", index_revision: "1" }], Object.assign(new Error(), { code: "23505" }));
   await assert.rejects(db.run(owner, {}, async (tx) => {
     await assert.rejects(store.writeFact(tx, identity, incarnation), CoreError);
   }), code("internal_error"));
   assert.equal(db.lifecycle.at(-1), "ROLLBACK");
 });
 
-for (const replies of [[[], [{ fact_epoch: "-1" }]], [[], [{ fact_epoch: "1" }], [{ created_at_us: null }]]]) {
+for (const replies of [[[], [{ fact_epoch: "-1", index_revision: "1" }]], [[], [{ fact_epoch: "1", index_revision: "1" }], [{ created_at_us: null }]]]) {
   test(`malformed new fact output at statement ${replies.length} aborts the run`, async () => {
     const db = stub(...replies);
     await assert.rejects(db.run(owner, {}, (tx) => assert.rejects(store.writeFact(tx, identity, incarnation), code("internal_error"))),

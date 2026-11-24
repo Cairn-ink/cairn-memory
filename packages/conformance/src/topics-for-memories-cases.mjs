@@ -53,7 +53,7 @@ function item({ memoryId }, parentIds = [], newL1) {
   return { memoryId, parentIds, ...(newL1 && { newL1 }) };
 }
 
-/** @param {number} number @param {string} title @param {ConformanceCase["run"]} run @returns {ConformanceCase} */
+/** @param {number | "4-namespace"} number @param {string} title @param {ConformanceCase["run"]} run @returns {ConformanceCase} */
 function batchCase(number, title, run) {
   return {
     id: `T-TFM-${number}`, title, needs: ["placement"],
@@ -62,6 +62,19 @@ function batchCase(number, title, run) {
       return run(ctx);
     },
   };
+}
+
+/** @param {ReturnType<typeof setup>[]} lanes */
+async function checkIsolation(lanes) {
+  const ids = [];
+  for (const [index, lane] of lanes.entries()) {
+    const memory = await lane.seed(`Scoped memory ${index}`);
+    await lane.apply([memory], [item(memory)]);
+    ids.push(memory.memoryId);
+  }
+  for (const [index, lane] of lanes.entries()) {
+    equal(await lane.lookup(ids), [{ memoryId: ids[index], topics: [] }], "Only the memory in the requested scope appears");
+  }
 }
 
 /** @type {ConformanceCase[]} */
@@ -114,17 +127,12 @@ export const TOPIC_FOR_MEMORIES_CASES = [
       "A forgotten title source hides the title even when the member remains visible");
   }),
 
-  batchCase(4, "other owners and namespaces are invisible to the batch lookup", async (ctx) => {
-    const lanes = [setup(ctx), setup(ctx, ctx.scope("other-namespace")), setup(ctx, { owner: ctx.otherOwner, namespace: null })];
-    const ids = [];
-    for (const [index, lane] of lanes.entries()) {
-      const memory = await lane.seed(`Scoped memory ${index}`);
-      await lane.apply([memory], [item(memory)]);
-      ids.push(memory.memoryId);
-    }
-    for (const [index, lane] of lanes.entries()) {
-      equal(await lane.lookup(ids), [{ memoryId: ids[index], topics: [] }], "Only the memory in the requested scope appears");
-    }
+  batchCase(4, "other owners are invisible to the batch lookup", async (ctx) => {
+    await checkIsolation([setup(ctx), setup(ctx, { owner: ctx.otherOwner, namespace: null })]);
+  }),
+
+  batchCase("4-namespace", "other owners and namespaces are invisible to the batch lookup", async (ctx) => {
+    await checkIsolation([setup(ctx), setup(ctx, ctx.scope("other-namespace")), setup(ctx, { owner: ctx.otherOwner, namespace: null })]);
   }),
 
   batchCase(5, "the batch size must be between 1 and 100 before deduplication", async (ctx) => {

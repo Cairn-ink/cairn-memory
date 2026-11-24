@@ -11,9 +11,10 @@ import {
   applyMigrations, createPostgresCapturePorts, createPostgresConflictEdgeStore, createPostgresDigestGate,
   createPostgresFingerprintKeyProvider, createPostgresMemoryCandidates, createPostgresMemoryReads, createPostgresMemoryStore,
   createPostgresPauseStore, createPostgresRawPorts, createPostgresRawReads, createPostgresSupersessionStore, createPostgresSuppressionStore,
-  createPostgresUnitOfWork, HOSTED_FINGERPRINT_LABELS, query,
+  createPostgresTopicStore, createPostgresUnitOfWork, HOSTED_FINGERPRINT_LABELS, query,
 } from "../src/index.mjs";
 import { advanceIndex, timestampUs } from "../src/memory-rows.mjs";
+import { requireLiveRun } from "../src/uow.mjs";
 import { withDistinctNamespaceText, withRelationCaptureFinish } from "./relation-fixtures.mjs";
 
 /** @import { AdapterFactory, ConformanceCase, TestHarness } from "@cairn-ink/conformance" */
@@ -258,7 +259,7 @@ function postgresFactory(wrapSuppressions = (store) => store) {
       const flags = capabilities({
         embeddingRequiredOnInsert: true, nearDuplicate, vectorSuppression: true, supersession: true,
         conflictEdges: true, semanticRetrieval, rawArchive, rawWindowHide: rawArchive || requested.rawWindowHide === true,
-        sessionLineage: rawArchive, rawSpans: true, fingerprintKey,
+        sessionLineage: rawArchive, rawSpans: true, fingerprintKey, placement: true,
       });
       const stagedSecrets = fingerprintKey ? ["test-secret-a", "test-secret-rotation"] : [];
       const keys = createPostgresFingerprintKeyProvider(null, { uow, stagedSecrets });
@@ -312,7 +313,7 @@ function postgresFactory(wrapSuppressions = (store) => store) {
               WHERE user_id = $1 AND core_namespace IS NOT DISTINCT FROM $2 AND id = $3`,
             [owner, namespace === null ? null : JSON.stringify(namespace), id, updatedAtUs.toString()]);
             assert.equal(result.rowCount, 1);
-            await advanceIndex((sql, values) => query(tx, sql, values), owner);
+            await advanceIndex((sql, values) => query(tx, sql, values), owner, requireLiveRun(tx, true));
           });
         },
         async seedFact(owner, fact) {
@@ -323,6 +324,7 @@ function postgresFactory(wrapSuppressions = (store) => store) {
       return {
         adapter: {
           capabilities: flags, uow, suppressions, keys, lexical, ...memoryReads,
+          placement: createPostgresTopicStore({ hashSessionKey }),
           ...(semanticRetrieval && { vector }),
           ...(rawPorts && { raw: { ...rawPorts.raw, ...createPostgresRawReads(rawOptions) }, sessionLineage: rawPorts.sessionLineage }),
           capture: requested.supersession ? withRelationCaptureFinish(capture, memories) : capture,
@@ -370,6 +372,9 @@ const selected = new Set([
   "K-KD-1", "K-KD-2", "K-HASH-1",
   "K-REL-1", "K-REL-2", "K-REL-3", "K-REL-4", "K-REL-5", "K-REL-6",
   "K-REL-7", "K-REL-8", "K-REL-9", "K-REL-10", "K-REL-11", "K-REL-12",
+  "T-TFM-1", "T-TFM-2", "T-TFM-3", "T-TFM-4", "T-TFM-5", "T-TFM-6", "T-TFM-7", "T-TFM-8",
+  "T-TOP-1", "T-TOP-2", "T-TOP-5", "T-TOP-6", "T-TOP-7", "T-TOP-8",
+  "T-TOP-9", "T-TOP-10", "T-TOP-11", "T-TOP-12", "T-TOP-13", "T-TOP-15",
 ]);
 
 // Each entry names a missing port, method, capability, or profile behavior.
@@ -397,9 +402,8 @@ const notApplicable = {
   rationaleEdges: ["T-RAT-content", "T-RAT-correct", "T-RAT-currentness", "T-RAT-degree", "T-RAT-duplicate", "T-RAT-forget",
     "T-RAT-hidden", "T-RAT-index", "T-RAT-insert", "T-RAT-namespace", "T-RAT-raw-deleted", "T-RAT-receipt-add",
     "T-RAT-receipt-private", "T-RAT-receipt-remove", "T-RAT-receipt-update", "T-RAT-revision", "T-RAT-scope", "T-RAT-stale"],
-  "topics.forMemories": ["T-TFM-1", "T-TFM-2", "T-TFM-3", "T-TFM-4", "T-TFM-5", "T-TFM-6", "T-TFM-7", "T-TFM-8"],
-  placement: ["T-TOP-1", "T-TOP-2", "T-TOP-3", "T-TOP-4", "T-TOP-5", "T-TOP-6", "T-TOP-7", "T-TOP-8",
-    "T-TOP-9", "T-TOP-10", "T-TOP-11", "T-TOP-12", "T-TOP-13", "T-TOP-14", "T-TOP-15"],
+  "topics.forMemories requires personal scope": ["T-TFM-4-namespace"],
+  "placement requires personal scope": ["T-TOP-3", "T-TOP-4", "T-TOP-14"],
 };
 
 const { PRIVACY_CASES, runCase } = kit;

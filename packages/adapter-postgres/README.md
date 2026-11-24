@@ -108,6 +108,18 @@ created by the hosted service. The hosted service applies a byte-identical
 copy of `0011_core_topic_cards.sql` as a Drizzle migration. Make subsequent
 changes to these tables through adapter-postgres migrations.
 
+Register `createPostgresTopicStore()` as the `placement` port with
+`capabilities({ placement: true })` when composing the adapter. The topic store
+supports single-memory and batch annotations. Its cursors incorporate both the
+hosted topic revision and the core owner index revision.
+
+The Postgres TopicStore uses the hosted topic schema and supports personal scope
+(`namespace: null`). Every method throws `capability_unavailable` for a non-null
+namespace. Hosted scope mapping is deferred to scopes step 2.
+
+As a P2 difference, Postgres returns L1 `parentIds` in UTF-8 parent ID order.
+The in-memory store preserves placement order.
+
 ## Memory ports
 
 Migration 0013 adds memory namespaces, digest evidence, and the creation-time
@@ -213,9 +225,3 @@ add concurrent Raw purge and capture ledger scan indexes. Archive withholds
 messages with timestamps outside the hosted wire range and reports their
 count as `withheld` when it is positive. Messages with a genuinely unknown
 timestamp are eligible to be archived with a null `occurred_at`.
-
-## Database tests
-
-Database tests use `CORE_PG_TEST_URL` to reach a PostgreSQL instance with
-pgvector and PGroonga. The test role needs permission to create and drop the
-disposable databases and install the extensions.

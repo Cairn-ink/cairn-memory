@@ -9,6 +9,7 @@ import {
   createPostgresUnitOfWork, query,
 } from "../src/index.mjs";
 import { advanceIndex, timestampUs } from "../src/memory-rows.mjs";
+import { requireLiveRun } from "../src/uow.mjs";
 import { migrationDatabase, migrationDbTest } from "./migration-database.mjs";
 
 const owner = "retrieval-owner";
@@ -141,7 +142,7 @@ test("Postgres searches and pages the personal raw archive with scoped cursors",
     await assert.rejects(list(changed, first.nextCursor), { code: "cursor_stale" });
   }
   await assert.rejects(list(scope, "%%%"), { code: "invalid_cursor" });
-  await uow.run(owner, {}, tx => advanceIndex((sql, values) => query(tx, sql, values), owner));
+  await uow.run(owner, {}, tx => advanceIndex((sql, values) => query(tx, sql, values), owner, requireLiveRun(tx, true)));
   await assert.rejects(list(scope, first.nextCursor), { code: "cursor_stale" });
 });
 

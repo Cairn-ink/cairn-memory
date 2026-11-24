@@ -67,3 +67,4 @@ export function createPostgresMemoryReads(options?: MemoryReadOptions | (MemoryR
 export function createPostgresPauseStore(): PauseStore;
 export function createPostgresSupersessionStore(options?: SessionHashOptions & { allowNonNullNamespace?: boolean }): SupersessionStore;
 export function createPostgresConflictEdgeStore(options?: SessionHashOptions & { allowNonNullNamespace?: boolean }): ConflictEdgeStore;
+export { createPostgresTopicStore } from "./topics.mjs";

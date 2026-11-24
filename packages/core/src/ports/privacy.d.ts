@@ -75,7 +75,8 @@ export interface SessionLineageStore {
 export interface SpanLineageStore {
   /**
    * Resolves the raw spans a memory came from. Runs BEFORE receipts are deleted (forget step
-   * lineage.resolve). Throws raw_lineage_unavailable on any doubt; never returns [] on doubt.
+   * lineage.resolve). Returns [] when the memory's source Raw rows no longer exist.
+   * In that case, forget still erases the memory. Throws raw_lineage_unavailable on any other doubt.
    */
   resolveSpans(tx: Tx, scope: Scope, memoryId: string): Promise<RawSpanFact[]>;
 }

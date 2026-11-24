@@ -108,7 +108,7 @@ export async function backfillPostgresHostedDigests(uow, owner, { keyId, redacti
   if (!inputText(owner) || !inputText(keyId) || keyId.length > 64 ||
       !Number.isSafeInteger(redactionVersion) || redactionVersion < 1 || typeof macForText !== "function") invalid();
   const mac = new RegExp(macPattern, "u");
-  return uow.run(owner, {}, tx => runOperation(tx, async query => {
+  return uow.run(owner, {}, tx => runOperation(tx, async (query, run) => {
     const { rows } = await query(`SELECT id, text FROM memories
       WHERE user_id = $1 AND NOT EXISTS (
         SELECT 1 FROM jsonb_array_elements(core_digests) d
@@ -121,7 +121,7 @@ export async function backfillPostgresHostedDigests(uow, owner, { keyId, redacti
       await query(`UPDATE memories SET core_digests = COALESCE(core_digests, '[]'::jsonb) || $3::jsonb
         WHERE user_id = $1 AND id = $2`, [owner, id, JSON.stringify([digest])]);
     }
-    if (rows.length) await advanceIndex(query, owner);
+    if (rows.length) await advanceIndex(query, owner, run);
     return rows.length;
   }));
 }
