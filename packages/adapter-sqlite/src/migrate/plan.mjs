@@ -151,7 +151,7 @@ export function planMigration(source) {
     state.addresses.add(eventKey);
     receiptOrder.set(row.memory_id, state);
     const body = { client, sessionId, messageId, role: row.role, occurredAtMs: null,
-      legacy: { id, excerpt: row.excerpt, createdAt: row.created_at,
+      legacy: { id, excerpt: row.excerpt, createdAt: row.created_at, canonicalRead: true,
         spans: source.archive.spans.get(id) } };
     receiptRows.push([...keys, row.memory_id, ++state.ordinal, sourceKey, row.receipt_key, JSON.stringify(body)]);
   }

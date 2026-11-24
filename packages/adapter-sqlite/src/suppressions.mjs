@@ -8,6 +8,7 @@ import { digestAliases, invalidInput, ownerKey, scopeKey, sha256 } from "./stora
 /** @import { DuplicateQuery, Receipt, Scope, SourceRef, SuppressionStore, Tx } from "@cairn-ink/core/ports" */
 /** @import { Connection, Port } from "./storage-values.mjs" */
 /** @import { Entry } from "./memory-rows.mjs" */
+/** @import { StoredReceipt } from "./memory-rows.mjs" */
 /** @import { MigratedRawPolicy } from "./migrate/raw-privacy.mjs" */
 /** @import { MigratedCaptureControls } from "./migrate/capture-controls.mjs" */
 /** @typedef {(scope: Scope, client: string, sessionId: string) => string} SessionHasher */
@@ -147,13 +148,14 @@ export function scopedSuppression(db, scope, hashSession) {
   const legacyText = (digests, historyHash) => digests.some(digest =>
     digest.alg === "sha256" && digest.value !== historyHash && legacy.has(digest.value));
 
-  /** @param {ReadonlyArray<Receipt & { legacyReceiptKey?: string }>} [receipts] */
-  function blocksReceipts(receipts) {
-    return hasLegacyReceipts && (receipts?.some(({ client, sessionId, messageId, role, legacyReceiptKey }) =>
+  /** @param {readonly StoredReceipt[]} [receipts] @param {boolean} [stored] */
+  function blocksReceipts(receipts, stored = false) {
+    return hasLegacyReceipts && (receipts?.some(({ client, sessionId, messageId, role, legacyReceiptKey, legacy: proof }) =>
       // Stored migration receipts already passed legacy's canonical read.
-      // Keep address denials for newly written receipts.
-      legacyReceiptKey === undefined &&
-      legacy.has("rs1:a:" + sha256(JSON.stringify(["receipt-source-address-v1", client, sessionId, messageId, role]))))
+      // The proof is written at migration and paired with its private column.
+      !(stored && legacyReceiptKey !== undefined && proof?.canonicalRead === true) &&
+      ((legacyReceiptKey !== undefined && legacy.has("rs1:i:" + legacyReceiptKey)) ||
+        legacy.has("rs1:a:" + sha256(JSON.stringify(["receipt-source-address-v1", client, sessionId, messageId, role])))))
       ?? false);
   }
 
@@ -185,7 +187,7 @@ export function scopedSuppression(db, scope, hashSession) {
       }
     });
     const retained = row.historical && legacyHash === "sha256:" + historyHash ? historyHash : undefined;
-    return { applicable, legacyDenied: legacyText(aliases, retained) || blocksReceipts(receipts) };
+    return { applicable, legacyDenied: legacyText(aliases, retained) || blocksReceipts(receipts, true) };
   }
 
   /** @param {SourceRef["client"] | undefined} client @param {SourceRef["sessionId"] | undefined} sessionId */

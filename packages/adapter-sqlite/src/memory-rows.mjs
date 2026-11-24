@@ -5,6 +5,7 @@ import { scopeKey } from "./storage-values.mjs";
 /** @import { Connection } from "./storage-values.mjs" */
 /** @typedef {{ row: MemoryRow, legacyHash?: string, historyHash?: string, digests: TextDigest[] }} Entry */
 /** @typedef {Receipt & {legacyReceiptKey?: string, legacy?: {
+ * canonicalRead?: boolean,
  * spans?: Array<{sessionId: string, start: number, end: number, precision: string}>
  * }}} StoredReceipt */
 
