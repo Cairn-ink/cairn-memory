@@ -262,3 +262,25 @@ export async function bounded(work, message, ms) {
     cancel?.();
   }
 }
+
+/**
+ * Reads the optional addendum 18 capability without depending on a core version that declares it.
+ * @param {{ adapter: { capabilities: object } }} ctx
+ */
+export function receiptAttachAdvancesRevision(ctx) {
+  return /** @type {Readonly<Record<string, unknown>>} */ (ctx.adapter.capabilities).receiptAttachAdvancesRevision === true;
+}
+
+/**
+ * Checks the optional receiptIds a store may return for attached receipts, then drops them for exact comparison.
+ * @template T @param {T} result @param {number} attached
+ */
+export function withoutReceiptIds(result, attached) {
+  const { receiptIds, ...rest } = /** @type {T & { receiptIds?: unknown }} */ (result);
+  if (receiptIds !== undefined) {
+    check(Array.isArray(receiptIds) && receiptIds.length === attached &&
+      receiptIds.every((id) => typeof id === "string" && id.length > 0),
+      "receiptIds must list one stored ID per attached receipt");
+  }
+  return rest;
+}

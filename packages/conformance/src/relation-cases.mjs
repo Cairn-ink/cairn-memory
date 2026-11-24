@@ -1,5 +1,5 @@
 import { canonicalPair, compareUtf8, NEAR_DUPLICATE_DISTANCE, planConflictInsert, planSupersede, RELATION_LIMIT } from "@cairn-ink/core";
-import { check, equal, rejects, row } from "./support.mjs";
+import { check, equal, rejects, row, withoutReceiptIds } from "./support.mjs";
 
 /** @import { ConflictEdge, InsertRow, ItemRef, Scope, Tx } from "@cairn-ink/core/ports" */
 /** @import { CaseContext, ConformanceCase } from "./index.d.mts" */
@@ -422,7 +422,7 @@ export const relationCases = [
 
       const touch = await uow.run(owner, {}, (tx) => memories.touchDuplicate(tx, scope, id, [],
         { kind: "decision", origin: "explicit", confidence: 0.9 }, captured.updatedAtMs + 1));
-      equal(touch, { outcome: "touched", revision }, "Direct touch merged into a historical row");
+      equal(withoutReceiptIds(touch, 0), { outcome: "touched", revision }, "Direct touch merged into a historical row");
       const saved = await uow.run(owner, { readOnly: true }, (tx) => memories.get(tx, scope, id));
       check(saved, "Historical row is missing after direct touch");
       equal([saved.kind, saved.origin, saved.confidence, saved.revision, saved.historical],
