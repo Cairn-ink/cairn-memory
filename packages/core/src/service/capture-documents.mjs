@@ -530,37 +530,31 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
       const { owner } = key.scope;
       await gate.assertOpen(owner, "pre-send");
       await assertSendGeneration();
-      /** @param {typeof candidates} batch */
-      const refresh = batch => awaitRefresh(transport, () => runAtGeneration(async tx => {
+      const refreshed = await awaitRefresh(transport, () => runAtGeneration(async tx => {
         const eligible = await screenEmbeddingSources(tx, positions);
         if ("status" in eligible) return eligible;
         const allowed = new Set(eligible);
         if (!allowed.size) return [];
         const withholds = await readTextWithholding(tx, key.scope, true);
         const survivors = [];
-        for (const { message, card } of batch) {
+        for (const { message, card } of candidates) {
           if (!allowed.has(message)) continue;
           const text = documentCardSearchText(card);
           const payload = [text, card.body, ...sentenceTexts(card)];
           if (card.title) payload.push(card.title);
-          if (!await withholds(payload)) survivors.push({ message, card, text });
+          if (!await withholds(payload)) survivors.push({ message, text });
         }
         return survivors;
       }));
-      const beforeDispatch = await refresh(candidates);
-      if (beforeDispatch === null) return /** @type {const} */ ({ status: "paused" });
-      if ("status" in beforeDispatch) return beforeDispatch;
-      if (!beforeDispatch.length) return;
+      if (refreshed === null) return /** @type {const} */ ({ status: "paused" });
+      if ("status" in refreshed) return refreshed;
+      if (!refreshed.length) return;
+      screenedForEmbedding = new Set(refreshed.map(({ message }) => message.id));
+      const texts = [...new Set(refreshed.map(({ text }) => text))];
 
       await gate.assertOpen(owner, "dispatch");
-      let texts, embedded;
+      let embedded;
       try {
-        const refreshed = await refresh(beforeDispatch);
-        if (refreshed === null) return /** @type {const} */ ({ status: "paused" });
-        if ("status" in refreshed) return refreshed;
-        if (!refreshed.length) return;
-        screenedForEmbedding = new Set(refreshed.map(({ message }) => message.id));
-        texts = [...new Set(refreshed.map(({ text }) => text))];
         transport.check();
         embedded = await untilAborted(transport.signal, embedder.embed(texts, { signal: transport.signal }));
       } catch (error) {

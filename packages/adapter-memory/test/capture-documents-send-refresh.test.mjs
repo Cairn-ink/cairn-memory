@@ -144,7 +144,7 @@ function planModel() {
 }
 
 for (const related of [true, false]) {
-  test(`Raw deletion in card dispatch ${related ? "withdraws the card payload" : "preserves an unrelated card payload"}`, async () => {
+  test(`Raw deletion in card dispatch ${related ? "leaves no stored card" : "preserves an unrelated stored card"}`, async () => {
     const f = fixture({ rawArchive: true, model: planModel() });
     const capture = event("plan");
     const deleted = related ? capture : event("unrelated");
@@ -154,7 +154,8 @@ for (const related of [true, false]) {
     await f.run(capture, { phase: "dispatch", occurrence: 3, async commit() {
       assert.deepEqual(await f.write(tx => f.storage.raw.deleteConversation(tx, scope, deleted)), { rawDeleted: 1 });
     } });
-    assert.deepEqual(f.embeddings.filter(texts => texts.includes(planText)), related ? [] : [[planText]]);
+    const cards = await f.read(tx => f.storage.documentCards.list(tx, scope));
+    assert.deepEqual(cards.map(({ sourceMessage }) => sourceMessage.messageId), related ? [] : [plan.id]);
   });
 }
 
