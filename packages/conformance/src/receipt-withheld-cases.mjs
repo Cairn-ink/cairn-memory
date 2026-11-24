@@ -6,18 +6,15 @@ import { check, DEFAULT_EMBEDDING_DIMENSIONS, equal, readDump } from "./support.
 
 const encoder = new TextEncoder();
 
-/** Copies every port, including ports an adapter exposes through prototype getters.
- * @param {CaseContext["adapter"]} adapter @returns {CaseContext["adapter"]}
+/** Lends the adapter to core under a fixture name. Core reads each port when it needs it, on the adapter itself,
+ * so ports behind prototype getters work and properties outside the storage contract are never read.
+ * @param {CaseContext["adapter"]} adapter @returns {CaseContext["adapter"] & { name: string }}
  */
 function storageOf(adapter) {
-  /** @type {Record<string, unknown>} */
-  const storage = {};
-  for (let source = adapter; source && source !== Object.prototype; source = Object.getPrototypeOf(source)) {
-    for (const key of Object.getOwnPropertyNames(source)) {
-      if (key !== "constructor" && !Object.hasOwn(storage, key)) storage[key] = Reflect.get(adapter, key);
-    }
-  }
-  return /** @type {CaseContext["adapter"]} */ (storage);
+  return /** @type {CaseContext["adapter"] & { name: string }} */ (new Proxy(adapter, {
+    get: (target, key) => key === "name" ? "receipt-fixture" : Reflect.get(target, key, target),
+    has: (target, key) => key === "name" || Reflect.has(target, key),
+  }));
 }
 
 /** Equivalent dumps compare equal whatever order their object keys were inserted in.
@@ -42,7 +39,7 @@ function saveService(ctx) {
   const unused = () => { throw new Error("Unexpected provider call during save"); };
   const dimensions = ctx.embeddingDimensions ?? DEFAULT_EMBEDDING_DIMENSIONS;
   return createMemoryService({
-    storage: { ...storageOf(ctx.adapter), name: "receipt-fixture" },
+    storage: storageOf(ctx.adapter),
     model: { model: "fixture-only", contextWindow: 1, call: unused, countTokens: unused },
     embedder: ctx.adapter.capabilities.embeddingRequiredOnInsert ? {
       model: "fixture-only", dimensions,

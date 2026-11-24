@@ -146,13 +146,38 @@ test("K-RCPT-W1 rejects a port that writes while it checks a receipt", async () 
 });
 
 test("K-RCPT-W1 accepts an adapter that exposes its ports through prototype getters", async () => {
+  // Like class getters over private state, each getter only works on the adapter instance itself.
+  const references = new WeakMap();
   const factory = rawFactory({
     create(options) {
       const reference = createMemoryAdapter(options);
       /** @type {PropertyDescriptorMap} */
       const getters = {};
-      for (const key of Object.keys(reference)) getters[key] = { get: () => reference[key] };
-      return Object.create(Object.create(Object.prototype, getters));
+      for (const key of Object.keys(reference)) {
+        getters[key] = {
+          get() {
+            const own = references.get(this);
+            if (!own) throw new TypeError("Port read through a foreign receiver");
+            return own[key];
+          },
+        };
+      }
+      const adapter = Object.create(Object.create(Object.prototype, getters));
+      references.set(adapter, reference);
+      return adapter;
+    },
+  });
+  assert.equal(await runCase(factory, testCase), null);
+});
+
+test("K-RCPT-W1 never reads adapter properties outside the storage contract", async () => {
+  const factory = rawFactory({
+    create(options) {
+      const adapter = { ...createMemoryAdapter(options) };
+      Object.defineProperty(adapter, "debugConnection", {
+        enumerable: false, get() { throw new Error("Diagnostics are disabled"); },
+      });
+      return adapter;
     },
   });
   assert.equal(await runCase(factory, testCase), null);
