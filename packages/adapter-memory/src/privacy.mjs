@@ -25,24 +25,33 @@ const encoder = new TextEncoder();
 
 /** @param {TextDigest[]} digests @param {TextDigest} keyed */
 export function addKeyedDigest(digests, keyed) {
-  const domain = digestDomain(keyed);
-  if (!digests.some((digest) => digest.value === keyed.value && digestDomain(digest) === domain)) {
+  if (!digests.some((digest) => digest.alg === keyed.alg && digest.keyId === keyed.keyId &&
+      digest.label === keyed.label && digest.pipeline === keyed.pipeline &&
+      digest.redactionVersion === keyed.redactionVersion && digest.value === keyed.value)) {
     digests.push(keyed);
   }
 }
 
-/** @param {Pick<TextDigest, "alg" | "keyId" | "label" | "pipeline">} digest */
-export function digestDomain({ alg, keyId, label, pipeline }) {
-  return JSON.stringify([alg, keyId, label ?? pipeline]);
+/** @param {Pick<TextDigest, "alg" | "keyId" | "label" | "pipeline" | "redactionVersion">} digest */
+export function digestDomain({ alg, keyId, label, pipeline, redactionVersion }) {
+  return JSON.stringify([alg, keyId, label ?? pipeline, pipeline, redactionVersion]);
 }
 
-/** @param {Iterable<import("@cairn-ink/core").StoredFact>} facts */
-export function liveKeyedDomains(facts) {
+/** @param {Iterable<{fact: SuppressionFact}>} facts @param {boolean} [includeShingles] */
+export function liveKeyedDomains(facts, includeShingles = false) {
   /** @type {Map<string, TextDigest>} */
   const domains = new Map();
   for (const { fact } of facts) {
-    if (fact.kind !== "text" || !fact.text.digests.every(({ keyId }) => keyId !== null)) continue;
-    for (const digest of fact.text.digests) domains.set(digestDomain(digest), digest);
+    if (fact.kind !== "text") continue;
+    const keyedOnly = fact.text.digests.every(({ keyId }) => keyId !== null);
+    for (const digest of fact.text.digests) {
+      const coreShingles = includeShingles && fact.mode === "full" && fact.text.shingles != null &&
+        digest.alg === "hmac" && digest.keyId === fact.text.keyId &&
+        digest.pipeline === "core" && (digest.label ?? digest.pipeline) === "core";
+      if (!keyedOnly && !coreShingles) continue;
+      const domain = digestDomain(digest);
+      if (!domains.has(domain) || digest.label !== undefined) domains.set(domain, digest);
+    }
   }
   return domains;
 }
@@ -209,10 +218,9 @@ export function createPauseStore(port) {
 }
 
 /** @param {boolean} enabled @param {Options["fingerprint"]} config
- * @param {UnitOfWork["rotateRowDigests"]} rotateRowDigests
- * @param {UnitOfWork["keyedDomains"]} keyedDomains
+ * @param {Pick<UnitOfWork, "rotateRowDigests" | "keyedDomains" | "writeOwner">} work
  */
-export function createFingerprintProvider(enabled, config, rotateRowDigests, keyedDomains) {
+export function createFingerprintProvider(enabled, config, { rotateRowDigests, keyedDomains, writeOwner }) {
   if (!enabled && config != null) throw new CoreError("capability_unavailable");
   const labels = config == null ? TEST_FINGERPRINT_LABELS : validateFingerprintLabels(config.labels);
   let secret = enabled ? (config == null ? TEST_FINGERPRINT_SECRET : config.secret) : null;
@@ -236,27 +244,33 @@ export function createFingerprintProvider(enabled, config, rotateRowDigests, key
     async userKey(owner) {
       return userFingerprintKey(secret, owner, labels);
     },
+    async userKeyForWrite(tx) {
+      // The owner write lock prevents publication until this transaction ends.
+      return userFingerprintKey(secret, writeOwner(tx), labels);
+    },
     async retainedDigesters(owner) {
-      const domains = keyedDomains(owner);
+      const domains = keyedDomains(owner, true);
       if (domains.size === 0) return [];
       const fixture = fixtures.get(owner);
       const [current, ...retained] = await ringKeys(owner);
       if (!current) return [];
-      /** @type {RetainedDigester[]} */
-      const signers = [];
+      /** @type {Map<string, RetainedDigester>} */
+      const signers = new Map();
       for (const digest of domains.values()) {
         const { alg, keyId } = digest;
         const label = digest.label ?? digest.pipeline;
         if (alg !== "hmac" || (keyId === current.id && label === "core")) continue;
+        const signingDomain = JSON.stringify([alg, keyId, label]);
+        if (signers.has(signingDomain)) continue;
         if (fixture && fixture.keyId === keyId && fixture.label === label) {
-          signers.push(fixture);
+          signers.set(signingDomain, fixture);
           continue;
         }
         // The ring's native exact MAC uses the core domain. Foreign domains need their own signer.
         const key = label === "core" && retained.find(({ id }) => id === keyId);
-        if (key) signers.push(localDigester(key, label));
+        if (key) signers.set(signingDomain, localDigester(key, label));
       }
-      return signers;
+      return [...signers.values()];
     },
   };
 

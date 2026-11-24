@@ -1,4 +1,5 @@
 import { coreDigest, CoreError, compareUtf8, isErrorCode, toCoreError } from "@cairn-ink/core";
+import { compareValidatedDigests } from "../../core/src/privacy/withholds.mjs";
 import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from "./privacy.mjs";
 
 /** @typedef {import("@cairn-ink/core").ErrorCode} ErrorCode */
@@ -490,30 +491,37 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
     publish();
   }
 
-  /** @param {string} owner */
-  function keyedDomains(owner) {
-    return liveKeyedDomains(owners.get(owner)?.committed.facts.values() ?? []);
+  /** @param {Tx} tx */
+  function writeOwner(tx) {
+    if (!issued.has(tx) || tx.readOnly) throw new CoreError("internal_error");
+    return tx.owner;
+  }
+
+  /** @param {string} owner @param {boolean} [includeShingles] */
+  function keyedDomains(owner, includeShingles) {
+    return liveKeyedDomains(owners.get(owner)?.committed.facts.values() ?? [], includeShingles);
   }
 
   /** @param {string} owner @param {import("./privacy.mjs").RingKeys} ringKeys */
   async function rowsMissingKeyedDigest(owner, ringKeys) {
     const rows = owners.get(owner)?.committed.rows;
     if (!rows) return 0;
-    const domains = new Set(keyedDomains(owner).keys());
+    const domains = keyedDomains(owner);
     const keys = await ringKeys(owner);
     if (keys.length === 0) return 0;
-    domains.add(digestDomain({ alg: "hmac", keyId: keys[0].id, pipeline: "core" }));
+    const current = await coreDigest("", keys[0]);
+    const currentDomain = digestDomain(current);
+    if (!domains.has(currentDomain)) domains.set(currentDomain, current);
     let count = 0;
     for (const entries of rows.values()) {
       for (const { row: { digests } } of entries.values()) {
-        const covered = new Set(digests?.map(digestDomain));
-        for (const domain of domains) {
-          if (!covered.has(domain)) count++;
+        for (const digest of domains.values()) {
+          if (compareValidatedDigests(digests ?? [], [digest]) === "ineligible") count++;
         }
       }
     }
     return count;
   }
 
-  return { uow, port, dump, appendFact, runSeed, setWriteTime, rotateRowDigests, keyedDomains, rowsMissingKeyedDigest };
+  return { uow, port, dump, appendFact, runSeed, setWriteTime, rotateRowDigests, keyedDomains, rowsMissingKeyedDigest, writeOwner };
 }

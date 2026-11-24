@@ -332,11 +332,12 @@ export const RETAINED_KEYED_DIGEST_CASES = [
       const fixture = { ...legacy, keyId: key.id };
       const both = async (/** @type {string} */ text) => {
         const digest = await fixtureDigest(currentForm(text), fixture);
-        return [digest, { ...digest, label: "hosted-v1" }];
+        const historical = /** @satisfies {TextDigest} */ ({ ...digest, label: "hosted-v1", pipeline: "hosted-v1" });
+        return [digest, historical];
       };
       const [foreignFact, { label: _label, ...historicalFact }] = await both(matching);
       await seedRetainedFact(ctx, foreignFact, "test-forget-foreign");
-      await seedRetainedFact(ctx, { ...historicalFact, pipeline: "hosted-v1" }, "test-forget-historical");
+      await seedRetainedFact(ctx, historicalFact, "test-forget-historical");
       const missing = () => harness.rowsMissingKeyedDigest?.(owner);
       const initial = await row(ctx, unrelated);
       const current = await allDigests(unrelated, key);

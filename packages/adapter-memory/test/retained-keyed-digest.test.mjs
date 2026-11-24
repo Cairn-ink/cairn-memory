@@ -102,16 +102,16 @@ test("K-KD-9 detects stripping the signing label on insert", async () => {
 test("K-KD-8 detects comparing MACs without the signing label", async () => {
   const factory = await sourceMutant("ignore-comparison-label", new URL("./privacy/withholds.mjs", coreEntry),
     [adapterModule("fact-match"), coreEntry, new URL("./privacy/fact-match.mjs", coreEntry)],
-    'return left.alg === right.alg && left.keyId === right.keyId &&\n' +
-      '    (left.keyId === null || (left.label ?? left.pipeline) === (right.label ?? right.pipeline));',
-    "return left.alg === right.alg && left.keyId === right.keyId;");
+    "(left.label ?? left.pipeline) === (right.label ?? right.pipeline);",
+    "true;");
   await assert.rejects(runCase(factory, retainedCase("K-KD-8")), /A wrong-label write query must fail closed/);
 });
 
 test("K-KD-9 detects counting an incomplete row only once", async () => {
   const factory = await sourceMutant("one-count-per-row", adapterModule("unit-of-work"), [],
-    "for (const domain of domains) {\n          if (!covered.has(domain)) count++;\n        }",
-    "if ([...domains].some((domain) => !covered.has(domain))) count++;");
+    'for (const digest of domains.values()) {\n' +
+      '          if (compareValidatedDigests(digests ?? [], [digest]) === "ineligible") count++;\n        }',
+    'if ([...domains.values()].some(digest => compareValidatedDigests(digests ?? [], [digest]) === "ineligible")) count++;');
   await assert.rejects(runCase(factory, retainedCase("K-KD-9")), /One row missing two live domains must count twice/);
 });
 
@@ -122,8 +122,7 @@ test("K-KD-7v rejects a signer that signs only the current redacted form", async
     adapter.keys.retainedDigesters = async (owner) => (await retained(owner)).map((signer) => ({
       ...signer,
       async mac(text) {
-        if (text !== normalizeForHash(prepareCoreText(text))) throw new Error("Historical spelling unavailable");
-        return signer.mac(text);
+        return signer.mac(normalizeForHash(prepareCoreText(text)));
       },
     }));
     return adapter;

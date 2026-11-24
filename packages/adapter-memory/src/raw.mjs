@@ -1,6 +1,6 @@
 import { allDigests, cleanContent, compareUtf8, CoreError, coreDigest, factHidesRow, tokenizeT1,
   legacyExactMac, PRIVACY_REDACTION_VERSIONS, withholdsAnyPassage } from "@cairn-ink/core";
-import { fingerprintMemoryPassages, retainedDigestBuilder } from "../../core/src/privacy/fingerprint.mjs";
+import { fingerprintMemoryPassages } from "../../core/src/privacy/fingerprint.mjs";
 import { requiresLegacyMacDomain } from "../../core/src/privacy/withholds.mjs";
 import { prepareMessageContent } from "../../core/src/service/capture.mjs";
 import { decodePayload, encodePayload } from "./cursor.mjs";
@@ -222,22 +222,21 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     return false;
   }
 
-  /** @param {Scope} scope @param {TextFact[]} facts */
-  function importTextFilter(scope, facts) {
+  /** @param {Tx} tx @param {TextFact[]} facts */
+  function importTextFilter(tx, facts) {
     const legacyKeyUnavailable = facts.some(requiresLegacyMacDomain);
     /** @type {ReturnType<FingerprintKeyProvider["userKey"]> | undefined} */
     let key;
-    /** @type {Promise<ReturnType<typeof retainedDigestBuilder>> | undefined} */
+    /** @type {ReturnType<NonNullable<FingerprintKeyProvider["retainedDigesters"]>> | undefined} */
     let retained;
     return async (/** @type {string} */ content) => {
       if (!facts.length) return false;
       try {
         const prepared = prepareMessageContent(cleanContent(content));
-        const retainedFor = await (retained ??=
-          Promise.resolve(keys.retainedDigesters?.(scope.owner)).then(retainedDigestBuilder));
-        if (!retainedFor && (legacyKeyUnavailable || !prepared)) return legacyKeyUnavailable;
-        const activeKey = await (key ??= keys.userKey(scope.owner));
-        const evidence = await fingerprintMemoryPassages(content, prepared, activeKey, undefined, retainedFor);
+        const digesters = await (retained ??= keys.retainedDigesters?.(tx.owner));
+        if (!digesters?.length && (legacyKeyUnavailable || !prepared)) return legacyKeyUnavailable;
+        const activeKey = await (key ??= keys.userKeyForWrite ? keys.userKeyForWrite(tx) : keys.userKey(tx.owner));
+        const evidence = await fingerprintMemoryPassages(content, prepared, activeKey, undefined, digesters);
         return withholdsAnyPassage(evidence, facts);
       } catch {
         return true;
@@ -443,7 +442,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
           const windows = facts.filter(({ fact }) => fact.kind === "window");
           const spans = facts.filter(({ fact }) => fact.kind === "rawSpan");
           const texts = facts.map(({ fact }) => fact).filter((fact) => fact.kind === "text");
-          const textBlocked = importTextFilter(selection, texts);
+          const textBlocked = importTextFilter(tx, texts);
           const hash = spans.length ? await spanSessionHash(admission).catch(() => "") : "";
           counts.withheld = withheld.size;
           for (let position = 0; position < copied.length; position++) {
