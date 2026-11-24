@@ -153,10 +153,10 @@ function trace(t, label, read, expected, expectedBytes) {
 
 const statementTrace = {
   false: {
-    'memory groups': [74, '550fb785b76e4e51fbcbb82ac44c8a22b30bfbf35bf157ba8a0c9b3b71b2e9fc'],
+    'memory groups': [74, '3e6a20de842ba8a51c364080b52b820ac0f09914d441fdec790afd43459a250f'],
   },
   true: {
-    'memory groups': [91, '4a1051fc78e3e8f28521388ae0bc3bc2399452a505374889c30c905abfd7116d'],
+    'memory groups': [91, '50b84d6375a290d22d5d57719f5f5666dfbc80102b754777283d5c4b5105d6b8'],
   },
 };
 
@@ -216,8 +216,8 @@ for (const safety of [false, true]) {
 }
 
 const fullGroupTrace = {
-  false: [900, '0d910b96d4c5f5351e715433abe421c0b59e7a931839da8c286adf0725125e52'],
-  true: [932, 'cfe4208ffd7e70f59b9ec84ec861966164db0dd61fabfb15df699879b773b1da']
+  false: [900, '20c85e6fb401b165ebeb232fd2b07be628c8aa742c7cdfabb222470633528565'],
+  true: [932, 'a84e48f69e2df9a572b075d67d2a5bda6fb762ce89b5dbcfb9bd8bb102946159']
 };
 
 const responseTrace = {

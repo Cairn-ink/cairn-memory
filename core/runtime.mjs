@@ -732,7 +732,7 @@ export function createMemoryRuntime(input, internal) {
     const original = db.prepare('SELECT * FROM receipts WHERE memory_id = ? ORDER BY created_at, id LIMIT 101').all(row.id);
     const ns = { ownerId: row.owner_id, scope: row.scope, projectId: row.project_id || null };
     if (qualificationStorage.inspect(row, qualificationOptions) === false) return null;
-    if (qualificationOptions?.withholdDenied && cachedContentLayout(db)?.suppressionRevision) {
+    if (qualificationOptions?.withholdDenied) {
       return sessionSourceEvidence(ns, row, original);
     }
     const full = sourceEvidence(row, original, detailDto(row).receiptCount, receiptKey);
@@ -748,21 +748,26 @@ export function createMemoryRuntime(input, internal) {
   }
 
   function sessionSourceEvidence(ns, row, original) {
-    const total = storedReceiptCount(row.id), memo = createContentReadMemo(db);
+    const { total, hasMarkers } = db.prepare(`SELECT count(*) AS total,
+      EXISTS(SELECT 1 FROM suppressed WHERE ${where} AND fingerprint GLOB 'rs1:*') AS hasMarkers
+      FROM receipts WHERE memory_id = ?`).get(ns.ownerId, ns.scope, ns.projectId ?? '', row.id);
+    const memo = createContentReadMemo(db);
+    const safety = cachedContentLayout(db)?.suppressionRevision;
     const ref = { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision };
     const readable = receipts => contentReadSafety(db, { identity, namespace: ns, intent: 'history', memo, ref, receipts }).allowed;
-    if (total <= 100) {
+    const withheldReceiptIds = hasMarkers ? withheldReceiptIdsInside(db, ns, original) : new Set();
+    if (total <= 100 && !withheldReceiptIds.size) {
       const full = sourceEvidence(row, original, total, receiptKey);
       if (readable(original)) return full;
-    } else if (cachedContentSuppressionRequestInside(db, ns.ownerId)?.facts?.length === 0) {
-      fail('context_item_too_large');
+      if (!safety) fail('revision_conflict');
     }
 
-    const receipts = [], withheldReceiptIds = new Set();
+    const receipts = [];
     let batch = original, scanned = original.length;
     while (true) {
       for (const receipt of batch) {
-        if (receiptReadSafety(db, { namespace: ns, receipt, memo }).allowed) receipts.push(receipt);
+        if (withheldReceiptIds.has(receipt.id)) continue;
+        if (!safety || receiptReadSafety(db, { namespace: ns, receipt, memo }).allowed) receipts.push(receipt);
         else withheldReceiptIds.add(receipt.id);
       }
       if (receipts.length > 100) fail('context_item_too_large');
@@ -770,8 +775,11 @@ export function createMemoryRuntime(input, internal) {
       batch = db.prepare('SELECT * FROM receipts WHERE memory_id = ? ORDER BY created_at, id LIMIT 101 OFFSET ?').all(row.id, scanned);
       if (!batch.length) fail('storage_error');
       scanned += batch.length;
+      if (hasMarkers) for (const id of withheldReceiptIdsInside(db, ns, batch)) withheldReceiptIds.add(id);
     }
-    if (!readable(receipts)) fail('revision_conflict');
+    // An empty legacy receipt set retains the existing Raw lineage refusal.
+    const emptyLegacy = !safety && total <= 100 && !receipts.length;
+    if (!readable(receipts) || (emptyLegacy && !readable(original))) fail('revision_conflict');
     return { ...sourceEvidence(row, receipts, receipts.length, receiptKey, { allowEmpty: true }), withheldReceiptIds };
   }
 
@@ -928,7 +936,7 @@ export function createMemoryRuntime(input, internal) {
   let rawCapture;
   rawCapture = internal?.attachRaw?.(db);
   const episodeProjection = createEpisodeReadProjection({ db, epoch });
-  function assertEpisodeRead(ns, row, budget = { remaining: 4096, bytesRemaining: 4*1024*1024 }, mode) {
+  function assertEpisodeRead(ns, row, budget = { remaining: 4096, bytesRemaining: 4*1024*1024 }, mode, withheldSources) {
     if (!(cachedContentLayout(db) ?? installedContentLayout(db)).suppressionRevision) return;
     if (contentSuppressionReasonInside(db, ns)) fail('episode_not_found');
     const proof = cachedContentSuppressionRequestInside(db, ns.ownerId);
@@ -955,7 +963,8 @@ export function createMemoryRuntime(input, internal) {
       if (row.episode_read_proof !== undefined) {
         budget.bytesRemaining -= Buffer.byteLength(row.episode_read_proof, 'utf8');
         if (budget.bytesRemaining < 0) fail('episode_sources_unavailable');
-        const evidence = JSON.parse(row.episode_read_proof);
+        let evidence = JSON.parse(row.episode_read_proof);
+        if (withheldSources?.size) evidence = evidence.filter(source => !withheldSources.has(source.id));
         if (mode === 'detail') {
           for (const source of evidence) checkedSources.add(source.id);
           if (evidence.some(source => source.deleted)) firstSourceDenial = 'revision_conflict';
@@ -974,12 +983,14 @@ export function createMemoryRuntime(input, internal) {
         if (mode === 'detail') checkedSources.add(source.id);
         if (source.owner_id !== ns.ownerId || source.scope !== ns.scope ||
             source.project_id !== (ns.projectId ?? '')) fail('revision_conflict');
+        if (withheldSources?.has(source.id)) continue;
         if (source.deleted && !deniedSources.has(source.id)) {
           if (!mode) fail('revision_conflict');
           withholdSource(source.id, 'revision_conflict');
         }
       }
-      const eligible = deniedSources.size ? sources.filter(source => !deniedSources.has(source.id)) : sources;
+      const eligible = deniedSources.size || withheldSources?.size
+        ? sources.filter(source => !deniedSources.has(source.id) && !withheldSources?.has(source.id)) : sources;
       rawLineage.assertReceipts(ns, eligible.map(source => ({ client: source.origin_client, sessionId: source.origin_session,
         eventId: source.message_id, role: source.role, excerpt: source.text })), false, undefined, undefined,
         mode ? (index, code) => withholdSource(eligible[index].id, code) : undefined);
@@ -1139,7 +1150,7 @@ export function createMemoryRuntime(input, internal) {
     resolveReview(ns, action, input) { ready(); return resolveReview(ns, action, input); },
     prepareEpisodeKeep(ns,input) { ready(); return episodes.prepareKeep(ns,input); },
     failEpisodeKeep(ns,input,code) { ready(); return episodes.failKeep(ns,input,code); },
-    assertEpisodeKeep(ns,input) { ready(); return episodes.assertKeep(ns,input); },
+    assertEpisodeKeep(ns,input,delivery) { ready(); return episodes.assertKeep(ns,input,delivery); },
     validateEpisodeBatch(ns, input) { ready(); return episodes.validateBatch(ns, input); },
     episodeCaptureState(ns, input) { ready(); return episodes.captureState(ns, input); },
     pendingEpisodeSession(ns, input) { ready(); return episodes.pendingSession(ns, input); },
