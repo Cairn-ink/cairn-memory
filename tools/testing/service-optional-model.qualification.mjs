@@ -19,17 +19,21 @@ try {
   const previous = await import(pathToFileURL(join(workspace.path, "packages/core/src/service/index.mjs")).href);
   const expected = await captureTrace(previous.createMemoryService);
   const actual = await captureTrace(createMemoryService);
-  const refresh = ["run", "lock", "lock", "pause.get", "suppressions.snapshot", "capture.assertEligible"];
+  const refresh = ["run", "lock", "lock", "pause.get", "suppressions.snapshot", "capture.assertEligible", "capture.load"];
   const dispatch = actual.calls.findIndex(([method, , phase]) => method === "gate" && phase === "dispatch");
   const start = dispatch - refresh.length;
   assert.ok(start >= 0);
   assert.deepEqual(actual.calls.slice(start, dispatch).map(([method]) => method), refresh);
+  const finishRead = actual.calls.findIndex(([method], index) => index > dispatch && method === "capture.load");
+  assert.ok(finishRead > dispatch);
+  assert.deepEqual(actual.calls.slice(finishRead - 4, finishRead + 2).map(([method]) => method),
+    ["run", "lock", "lock", "pause.get", "capture.load", "capture.assertEligible"]);
   const refreshRun = 1 + actual.calls.slice(0, start).filter(([method]) => method === "run").length;
   const mutations = actual.mutations.map(mutation => {
     assert.notEqual(mutation.run, refreshRun, "the refresh has no mutations");
     return { ...mutation, run: mutation.run - Number(mutation.run > refreshRun) };
   });
-  const normalized = { ...actual, calls: actual.calls.toSpliced(start, refresh.length), mutations };
+  const normalized = { ...actual, calls: actual.calls.toSpliced(finishRead, 1).toSpliced(start, refresh.length), mutations };
   assert.deepEqual(normalized, expected);
   assert.equal(JSON.stringify(normalized), JSON.stringify(expected));
 

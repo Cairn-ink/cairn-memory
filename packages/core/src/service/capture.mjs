@@ -360,6 +360,8 @@ export function captureMethods(deps) {
       const readLedgerStatus = readStatus.bind(capture);
       const lock = { pauseLock: true };
       /** @param {Tx} tx */
+      const readAdmission = tx => load.call(capture, tx, { scope, client, sessionId, eventId });
+      /** @param {Tx} tx */
       const readPause = async tx => pauseResult(await pause.get(tx, owner));
       /** @param {Tx} tx @param {CaptureKey} key @param {readonly CaptureMessage[]} messages */
       const readEligible = async (tx, key, messages) => {
@@ -388,7 +390,7 @@ export function captureMethods(deps) {
       try {
         claimed = await uow.run(owner, lock, async tx => {
           if ((await readPause(tx)).paused) return /** @type {const} */ ({ status: "paused" });
-          const admission = await load.call(capture, tx, { scope, client, sessionId, eventId });
+          const admission = await readAdmission(tx);
           if (admission === null) return /** @type {const} */ ({ status: "failed", code: "not_found" });
           const { key, messages } = admission;
           if (key?.scope?.owner !== owner || key.scope.namespace !== scope.namespace ||
@@ -415,6 +417,19 @@ export function captureMethods(deps) {
       if (claimed.status !== "claimed") return claimed;
       const { key, admittedMessages } = claimed;
       let { token, positions } = claimed;
+
+      /** @param {Tx} tx */
+      async function readCurrentMessages(tx) {
+        const current = await readAdmission(tx);
+        return current?.key.payloadDigest === key.payloadDigest ? current.messages : [];
+      }
+
+      /** @param {CaptureMessage[]} current @param {number} position */
+      function sourceUnchanged(current, position) {
+        const content = current[position]?.content;
+        // Erasure preserves the slot and blanks its content. Compare the stored text verbatim.
+        return !!content && content === admittedMessages[position].content;
+      }
 
       /** @param {Tx} tx */
       async function pauseChanged(tx) {
@@ -554,6 +569,10 @@ export function captureMethods(deps) {
             if (await pauseChanged(tx)) throw new CoreError("capture_paused");
             const allowed = await screenSourcePositions(tx, positions);
             if (allowed?.length !== positions.length) throw new CoreError("ingest_inputs_changed");
+            const current = await readCurrentMessages(tx);
+            if (!positions.every(position => sourceUnchanged(current, position))) {
+              throw new CoreError("ingest_inputs_changed");
+            }
           }));
         } catch (error) {
           transport.check();
@@ -605,7 +624,9 @@ export function captureMethods(deps) {
 
         const completed = await runAtGeneration(async tx => {
           checkCaptureAbort(signal, deadline);
-          await capture.assertEligible(tx, key, preEmbed.stillEligible);
+          const current = await readCurrentMessages(tx);
+          const stillCurrent = preEmbed.stillEligible.filter(position => sourceUnchanged(current, position));
+          await capture.assertEligible(tx, key, stillCurrent);
           let writeKey;
           if (prepared.length && keys.userKeyForWrite) {
             writeKey = await keys.userKeyForWrite(tx);
@@ -619,15 +640,15 @@ export function captureMethods(deps) {
           const allowedCandidates = filterCaptureCandidates(embedded, snapshot, scope, excludedSources);
 
           // Source checks need the same unprojected text facts as admission.
-          const sourcePassages = await readSourcePassages(tx, preEmbed.stillEligible);
+          const sourcePassages = await readSourcePassages(tx, stillCurrent);
           let currentSourceKey = null;
           if (capabilities.fingerprintKey && sourcePassages.length) {
             currentSourceKey = writeKey === undefined ? await selectWriteKey(tx) : writeKey;
             if (sourceKey !== undefined && currentSourceKey?.id !== sourceKey?.id) return abandonKeyMismatch(tx);
           }
-          const allowedPositions = await filterCaptureSources(sources, preEmbed.stillEligible, sourcePassages,
+          const allowedPositions = await filterCaptureSources(sources, stillCurrent, sourcePassages,
             null, sourceEvidence, currentSourceKey);
-          const allowedMessages = allowedPositions.map(position => admittedMessages[position]);
+          const allowedMessages = allowedPositions.map(position => current[position]);
           const allowedIds = new Set(allowedMessages.map(({ id }) => id));
           const items = allowedCandidates.map(({ item }) => item).filter(({ receipts }) =>
             receipts.every(({ messageId }) => allowedIds.has(messageId)));
