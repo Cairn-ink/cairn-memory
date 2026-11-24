@@ -1,7 +1,7 @@
 import { compareUtf8, CoreError } from "../../core/src/index.mjs";
 import { copyArray, guardOwner, inputText, invalid, namespaceKey, writeTime } from "./memory-input.mjs";
 import { advanceIndex, readRevisionNumber, timestampUs } from "./memory-rows.mjs";
-import { readRelationEndpoints } from "./relation-read.mjs";
+import { readRelationBatches } from "./relation-read.mjs";
 import { runOperation } from "./uow.mjs";
 
 /** @import { SupersessionStore } from "../../core/src/ports/index.d.ts" */
@@ -14,16 +14,18 @@ import { runOperation } from "./uow.mjs";
 export async function readSupersessionViews(query, owner, ns, ids, hashSessionKey) {
   /** @type {Map<string, View>} */
   const views = new Map(ids.map(id => [id, { supersededBy: null, supersedes: [] }]));
-  if (!views.size) return views;
-  const { edges, visible } = await readRelationEndpoints(query, owner, ns, [...views.keys()],
+  const batches = readRelationBatches(query, owner, ns, [...views.keys()],
     `SELECT previous_memory_id AS left_id, replacement_memory_id AS right_id
     FROM memory_supersessions WHERE user_id = $1
-      AND (previous_memory_id = ANY($3::text[]) OR replacement_memory_id = ANY($3::text[]))`, hashSessionKey);
-  for (const { left_id: previous, right_id: replacement } of edges) {
-    if (!visible.has(previous) || !visible.has(replacement)) continue;
-    const predecessor = views.get(previous);
-    if (predecessor) predecessor.supersededBy = replacement;
-    views.get(replacement)?.supersedes.push(previous);
+      AND (previous_memory_id = ANY($3::text[]) OR replacement_memory_id = ANY($3::text[]))`, false, hashSessionKey);
+  for await (const { requested, edges, visible } of batches) {
+    for (const { left_id: previous, right_id: replacement } of edges) {
+      if (!visible.has(previous) || !visible.has(replacement)) continue;
+      // A cross-batch edge appears in both queries. Fill only this batch's views.
+      const predecessor = requested.has(previous) ? views.get(previous) : undefined;
+      if (predecessor) predecessor.supersededBy = replacement;
+      if (requested.has(replacement)) views.get(replacement)?.supersedes.push(previous);
+    }
   }
   for (const view of views.values()) view.supersedes.sort(compareUtf8);
   return views;
@@ -34,7 +36,7 @@ export function createPostgresSupersessionStore({ allowNonNullNamespace = false,
   /** @type {NonNullable<SupersessionStore["readMany"]>} */
   async function readMany(tx, scope, ids) {
     guardOwner(tx, scope);
-    const ns = namespaceKey(scope.namespace);
+    const ns = namespaceKey(scope.namespace, allowNonNullNamespace);
     const requested = copyArray(ids).map(inputText);
     return runOperation(tx, query => readSupersessionViews(query, tx.owner, ns, requested, hashSessionKey));
   }
@@ -93,7 +95,7 @@ export function createPostgresSupersessionStore({ allowNonNullNamespace = false,
 
     async incomingCount(tx, scope, replacementId) {
       guardOwner(tx, scope);
-      const ns = namespaceKey(scope.namespace);
+      const ns = namespaceKey(scope.namespace, allowNonNullNamespace);
       const id = inputText(replacementId);
       return runOperation(tx, async (query) => {
         const { rows: [row] } = await query(`SELECT count(*)::integer AS count FROM memory_supersessions s

@@ -135,7 +135,7 @@ export function createPostgresMemoryReads(options = {}) {
             const historical = rows.map(({ memory }) => memory).filter(memory => memory.historical);
             for (const namespace of new Set(historical.map(memory => memory.scope.namespace))) {
               const memories = historical.filter(memory => memory.scope.namespace === namespace);
-              const views = await readSupersessionViews(query, tx.owner, namespaceKey(namespace),
+              const views = await readSupersessionViews(query, tx.owner, namespaceKey(namespace, allowNonNullNamespace),
                 memories.map(memory => memory.id), hashSessionKey);
               for (const memory of memories) {
                 if (views.get(memory.id)?.supersededBy === null) {

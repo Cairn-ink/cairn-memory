@@ -2,17 +2,19 @@ import {
   allDigests, CoreError, factBlocksIncoming, factHidesRow, PRIVACY_REDACTION_VERSIONS, validateSuppressionFact,
 } from "../../core/src/index.mjs";
 import { factSlot } from "./facts.mjs";
-import { CREATED_MS, MATCH_COLUMNS, readReceipts, TEXT_HASH } from "./memory-rows.mjs";
+import { CREATED_MS, MATCH_COLUMNS, readReceipts, TEXT_HASH, WRITE_TIME_US } from "./memory-rows.mjs";
 
 /** @import { FactMatchIncoming, FactMatchPolicy, FactMatchRow, StoredFact, TextDigest } from "../../core/src/index.mjs" */
 /** @import { IncomingFactMatchPolicy } from "../../core/src/privacy/fact-match.d.mts" */
 /** @import { CaptureKey, DuplicateQuery, Receipt, Scope, SourceRef } from "../../core/src/ports/index.d.ts" */
 /** @import { CandidateEntry, MemoryEntry, Query } from "./memory-rows.mjs" */
 
+const SHA256 = /^(?:sha256:)?[0-9a-f]{64}$/u;
+
 /** @param {string} value */
 function digestValue(value) {
   // The hosted column can contain a legacy bare SHA-256.
-  return /^(?:sha256:)?[0-9a-f]{64}$/u.test(value) ? value.replace(/^sha256:/u, "") : null;
+  return SHA256.test(value) ? value.replace(/^sha256:/u, "") : null;
 }
 
 /** @param {Pick<DuplicateQuery, "textHash" | "legacyHash" | "digests">} candidate */
@@ -86,16 +88,47 @@ export function usesSource({ fact }) {
   return fact.kind === "session" || fact.kind === "window";
 }
 
+const FACT_KIND = "COALESCE(kind, body->>'kind')";
+const TEXT_FACT = `${FACT_KIND} = 'text'`;
+// Select candidate evidence from the same live fact rows that the matcher decodes.
+const ROW_EVIDENCE = {
+  needs_digests: { when: TEXT_FACT, columns: { logical_hash: TEXT_HASH, core_digests: "core_digests" } },
+  needs_text: { when: `${TEXT_FACT} AND CASE WHEN legacy THEN (body->>'text_hash') ~ '${SHA256.source}'
+    ELSE jsonb_path_exists(body, '$.text.digests[*] ? (@.alg == "sha256")') END`, columns: { text: "text" } },
+  needs_source: { when: `${FACT_KIND} IN ('session', 'window')`,
+    columns: { source_client: "source_client", source_session_id: "source_session_id" } },
+  needs_window: { when: `${FACT_KIND} = 'window'`,
+    columns: { created_ms: `${CREATED_MS}::text` } },
+  needs_vector: { when: `${TEXT_FACT} AND CASE WHEN legacy THEN body->>'embedding' IS NOT NULL
+    ELSE mode = 'full' AND body #>> '{text,embedding}' IS NOT NULL END`, columns: { embedding: "embedding::text" } },
+};
+
+const evidence = Object.entries(ROW_EVIDENCE);
+
+/** @param {string} namespace SQL expression for the JSON-encoded namespace. */
+export function scopedEvidenceSql(namespace) {
+  // The encoded scope can contain an escaped NUL, which PostgreSQL jsonb cannot decode.
+  return `SELECT ${evidence.map(([key]) => `bool_or(${key}) AS ${key}`).join(", ")} FROM facts
+    WHERE NULLIF(body->'namespace', 'null'::jsonb)::text IS NOT DISTINCT FROM ${namespace}`;
+}
+
+/** @param {boolean} currentness */
+export function endpointEvidenceSql(currentness) {
+  return [
+    `jsonb_build_object('id', id, 'core_namespace', core_namespace, 'revision', revision${currentness ? ", 'currentness', currentness" : ""})`,
+    ...evidence.map(([key, { columns }]) => {
+      const fields = Object.entries(columns).map(([name, expression]) => `'${name}', ${expression}`);
+      if (key === "needs_window") fields.push(`'updated_us', ${WRITE_TIME_US}::text`);
+      return `CASE WHEN ${key} THEN jsonb_build_object(${fields.join(", ")}) ELSE '{}'::jsonb END`;
+    }),
+  ].join(" || ");
+}
+
 export function visibilityFactsSql({
   textOnly = "false", legacyOnly = "false", limit = "NULL", allowPendingLegacy = "false", rawSpans = "false",
-  hasSource = "false", namespace = "NULL", client = "NULL", sessionId = "NULL",
+  hasSource = "false", namespace = "NULL", client = "NULL", sessionId = "NULL", rowEvidence = false,
 } = {}) {
-  // Both halves see the same statement snapshot while legacy writers are still active.
-  return `WITH owner_state AS (
-    SELECT legacy_facts_ready AS ready, legacy_writes_reconciled AS reconciled
-    FROM core_owner_state WHERE user_id = $1
-  )
-  SELECT false AS legacy, false AS pending, fact_id, action_id, incarnation, epoch::text, body,
+  const liveFacts = `SELECT false AS legacy, false AS pending, fact_id, action_id, incarnation, epoch::text, body,
     trunc(EXTRACT(EPOCH FROM created_at) * 1000000)::text AS created_at_us, kind, origin, mode, slot
     FROM core_suppression_facts WHERE user_id = $1
       AND (kind IN ('identity', 'text', 'session', 'window') OR (${rawSpans} AND kind = 'rawSpan'))
@@ -121,6 +154,13 @@ export function visibilityFactsSql({
         OR kind = 'session' AND client = ${client}::text AND session_id <> ${sessionId}::text
       ))
     LIMIT ${limit}`;
+  // Both halves see the same statement snapshot while legacy writers are still active.
+  return `WITH owner_state AS (
+    SELECT legacy_facts_ready AS ready, legacy_writes_reconciled AS reconciled
+    FROM core_owner_state WHERE user_id = $1
+  )
+  ${rowEvidence ? `SELECT f.*, ${evidence.map(([key, { when }]) => `(${when}) AS ${key}`).join(", ")}
+    FROM (${liveFacts}) f` : liveFacts}`;
 }
 
 /** @param {any[]} rows @param {string} owner @param {boolean} [allowPendingLegacy] */
@@ -190,48 +230,51 @@ export function rowVisibilityPolicy(hashSessionKey) {
 
 /** @param {Query} query @param {string} owner @param {FactMatchPolicy["hashSessionKey"]} [hashSessionKey] */
 export async function readVisibility(query, owner, hashSessionKey) {
-  const facts = await readVisibilityFacts(query, owner);
-  return createVisibility(facts, ids => readReceipts(query, owner, ids), hashSessionKey);
+  const { rows } = await query(visibilityFactsSql({ rowEvidence: true }), [owner]);
+  return createVisibility(rows, owner, ids => readReceipts(query, owner, ids), hashSessionKey);
 }
 
-/** @param {StoredFact[]} facts @param {(ids: string[]) => Promise<Map<string, Receipt[]>>} loadReceipts
+/** @template {Pick<Receipt, "client" | "sessionId">} R
+ * @param {any[]} rows @param {string} owner @param {(ids: string[]) => Promise<Map<string, R[]>>} loadReceipts
  * @param {FactMatchPolicy["hashSessionKey"]} [hashSessionKey] */
-export function createVisibility(facts, loadReceipts, hashSessionKey) {
+export function createVisibility(rows, owner, loadReceipts, hashSessionKey) {
+  const facts = decodeVisibilityFacts(rows, owner);
   const policy = rowVisibilityPolicy(hashSessionKey);
   const capture = /** @type {const} */ ({ ...policy, mode: "capture" });
   const explicitSave = /** @type {const} */ ({ ...policy, mode: "explicitSave" });
-  /** @type {Map<Scope["namespace"], StoredFact[]>} */
+  /** @type {Map<Scope["namespace"], { facts: StoredFact[], evidence: Set<string> }>} */
   const byNamespace = new Map();
-  for (const stored of facts) {
+  for (const [index, stored] of facts.entries()) {
     const ns = stored.fact.namespace ?? null;
-    let facts = byNamespace.get(ns);
-    if (!facts) byNamespace.set(ns, facts = []);
-    facts.push(stored);
+    let selected = byNamespace.get(ns);
+    if (!selected) byNamespace.set(ns, selected = { facts: [], evidence: new Set() });
+    selected.facts.push(stored);
+    for (const [key] of evidence) {
+      if (rows[index][key]) selected.evidence.add(key);
+    }
   }
 
   /** @param {readonly Scope["namespace"][]} namespaces */
   function selectedFacts(namespaces) {
-    return namespaces.flatMap(namespace => byNamespace.get(namespace) ?? []);
+    return namespaces.flatMap(namespace => byNamespace.get(namespace)?.facts ?? []);
   }
 
   /** @param {readonly Scope["namespace"][]} namespaces @param {{exact?: boolean, distance?: boolean, skipEmbedding?: boolean}} [options] */
   function candidateColumns(namespaces, { exact, distance, skipEmbedding } = {}) {
-    const facts = selectedFacts(namespaces);
-    const textFacts = facts.flatMap(({ fact }) => fact.kind === "text" ? [fact] : []);
-    const aliases = textFacts.some(fact => fact.text.digests.some(d => d.alg === "sha256"));
-    const vector = textFacts.some(fact => fact.mode === "full" && fact.text.embedding != null);
+    const projections = new Set(namespaces.flatMap(namespace => [...(byNamespace.get(namespace)?.evidence ?? [])]));
+    if (!skipEmbedding && distance) projections.add("needs_vector");
+    if (skipEmbedding) projections.delete("needs_vector");
     const columns = [MATCH_COLUMNS];
-    if (exact || textFacts.length) columns.push(`${TEXT_HASH} AS logical_hash`);
-    if (textFacts.length) columns.push("core_digests");
-    if (aliases) columns.push("text");
-    if (facts.some(usesSource)) columns.push("source_client", "source_session_id", `${CREATED_MS}::text AS created_ms`);
-    if (!skipEmbedding && (vector || distance)) columns.push("embedding::text");
+    if (exact && !projections.has("needs_digests")) columns.push(`${TEXT_HASH} AS logical_hash`);
+    for (const [key, { columns: required }] of evidence) {
+      if (projections.has(key)) columns.push(...Object.entries(required).map(([name, sql]) => `${sql} AS ${name}`));
+    }
     return columns.join(", ");
   }
 
-  /** @param {MemoryEntry | CandidateEntry} entry @param {readonly Receipt[]} evidence */
+  /** @param {MemoryEntry | CandidateEntry} entry @param {readonly R[]} evidence */
   async function hides(entry, evidence) {
-    const facts = byNamespace.get(entry.memory.scope.namespace);
+    const facts = byNamespace.get(entry.memory.scope.namespace)?.facts;
     if (!facts?.length) return false;
     const candidate = await rowFactCandidate(entry, facts);
     return facts.some(stored => matchesRowFact(stored, candidate, evidence, policy, entry.memory));
@@ -240,7 +283,7 @@ export function createVisibility(facts, loadReceipts, hashSessionKey) {
   /** @template {MemoryEntry | CandidateEntry} T @param {readonly T[]} entries @param {boolean} [includeReceipts] */
   async function check(entries, includeReceipts = false) {
     const ids = entries.filter(({ memory }) => includeReceipts ||
-      byNamespace.get(memory.scope.namespace)?.some(usesSource)).map(({ memory }) => memory.id);
+      byNamespace.get(memory.scope.namespace)?.facts.some(usesSource)).map(({ memory }) => memory.id);
     const receipts = await loadReceipts(ids);
     return Promise.all(entries.map(async (entry) => {
       const evidence = receipts.get(entry.memory.id) ?? [];
@@ -252,14 +295,14 @@ export function createVisibility(facts, loadReceipts, hashSessionKey) {
    * @param {FactMatchIncoming["sourceMemory"]} sourceMemory */
   function blocks(scope, incoming, mode, sourceMemory) {
     const passages = [{ digests: digestAliases(incoming), embedding: incoming.embedding }];
-    return byNamespace.get(scope.namespace)?.some((stored) => stored.fact.kind === "text" &&
+    return byNamespace.get(scope.namespace)?.facts.some((stored) => stored.fact.kind === "text" &&
       factBlocksIncoming(stored, { scope, passages, sourceMemory }, mode === "hash" ? explicitSave : capture) !== false) ?? false;
   }
 
   /** @param {Scope} scope @param {Pick<SourceRef, "client" | "sessionId">} source */
   function blocksSession(scope, { client, sessionId }) {
     if (client === null || sessionId === null) return false;
-    return byNamespace.get(scope.namespace)?.some(stored =>
+    return byNamespace.get(scope.namespace)?.facts.some(stored =>
       sessionBlocksIncoming(stored, scope, { client, sessionId }, capture)) ?? false;
   }
 

@@ -1,7 +1,7 @@
 import { canonicalPair, compareUtf8 } from "../../core/src/index.mjs";
 import { copyArray, guardOwner, inputText, invalid, namespaceKey, writeTime } from "./memory-input.mjs";
 import { advanceIndex, readRevisionNumber, timestampUs } from "./memory-rows.mjs";
-import { readRelationEndpoints } from "./relation-read.mjs";
+import { readRelationBatches } from "./relation-read.mjs";
 import { runOperation } from "./uow.mjs";
 
 /** @import {ConflictEdge, ConflictEdgeStore} from "../../core/src/ports/index.d.ts" */
@@ -15,21 +15,23 @@ export function createPostgresConflictEdgeStore({ allowNonNullNamespace = false,
   /** @type {NonNullable<ConflictEdgeStore["readMany"]>} */
   async function readMany(tx, scope, ids) {
     guardOwner(tx, scope);
-    const ns = namespaceKey(scope.namespace);
+    const ns = namespaceKey(scope.namespace, allowNonNullNamespace);
     /** @type {Map<string, ConflictEdge[]>} */
     const result = new Map(copyArray(ids).map(id => [inputText(id), []]));
     if (!result.size) return result;
     return runOperation(tx, async (query) => {
-      const { edges, visible } = await readRelationEndpoints(query, tx.owner, ns, [...result.keys()],
+      const batches = readRelationBatches(query, tx.owner, ns, [...result.keys()],
         `SELECT left_memory_id AS left_id, right_memory_id AS right_id, left_revision, right_revision, relation, source
         FROM memory_conflicts WHERE user_id = $1
-          AND (left_memory_id = ANY($3::text[]) OR right_memory_id = ANY($3::text[]))`, hashSessionKey);
-      for (const { left_id, right_id, left_revision, right_revision, relation, source } of edges) {
-        const left = visible.get(left_id);
-        const right = visible.get(right_id);
-        if (left?.revision !== left_revision || right?.revision !== right_revision || left?.historical || right?.historical) continue;
-        result.get(left_id)?.push({ memoryId: right_id, revision: right_revision, relation, source });
-        result.get(right_id)?.push({ memoryId: left_id, revision: left_revision, relation, source });
+          AND (left_memory_id = ANY($3::text[]) OR right_memory_id = ANY($3::text[]))`, true, hashSessionKey);
+      for await (const { requested, edges, visible } of batches) {
+        for (const { left_id, right_id, left_revision, right_revision, relation, source } of edges) {
+          const left = visible.get(left_id);
+          const right = visible.get(right_id);
+          if (left?.revision !== left_revision || right?.revision !== right_revision || left?.historical || right?.historical) continue;
+          if (requested.has(left_id)) result.get(left_id)?.push({ memoryId: right_id, revision: right_revision, relation, source });
+          if (requested.has(right_id)) result.get(right_id)?.push({ memoryId: left_id, revision: left_revision, relation, source });
+        }
       }
       for (const edges of result.values()) {
         edges.sort((a, b) => compareUtf8(a.memoryId, b.memoryId) || compareUtf8(a.source, b.source));
@@ -88,7 +90,7 @@ export function createPostgresConflictEdgeStore({ allowNonNullNamespace = false,
 
     async degree(tx, scope, id) {
       guardOwner(tx, scope);
-      const ns = namespaceKey(scope.namespace);
+      const ns = namespaceKey(scope.namespace, allowNonNullNamespace);
       const key = inputText(id);
       return runOperation(tx, async (query) => {
         const { rows: [row] } = await query(`SELECT count(*)::integer AS count FROM memory_conflicts WHERE ${TOUCHING}`,
