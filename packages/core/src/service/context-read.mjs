@@ -119,16 +119,22 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
           Math.max(bytes(JSON.stringify(assembly)), bytes(text) - blockOverhead) + (snapshotSize ? snapshotSize + 2 : 4);
         return snapshotSize <= SNAPSHOT_LIMIT && full <= MAX_BYTES;
       } };
-    const rawPack = rawPacking ? packRawContext(prepared, rawRead, readSet, candidate.query, packing, meter(packing)) : null;
-    if (rawPacking && !rawPack) {
-      rawCoverage = "partial";
-      rawPacking = false;
+    let packed = rawPacking ? packRawContext(prepared, rawRead, readSet, candidate.query, packing, meter(packing)) : null;
+    let snapshot;
+    if (packed) {
+      packed.diagnostics.stops.deadline ||= now() >= deadline;
+      snapshot = await evidence.deliver(packed.selected.map(item => item.evidence), rawRead.turns, options.signal);
     }
-    const packed = rawPack ?? packContext(prepared, packing, meter(packing));
-    const selected = packed.selected.map(item => item.evidence);
-    packed.diagnostics.stops.deadline ||= now() >= deadline;
-    const snapshot = await evidence.deliver(selected, rawPack ? rawRead.turns : [], options.signal);
-    return { assembly: packed.value, diagnostics: diagnostics(packed.diagnostics, packed.used), snapshot };
+    if (!packed || snapshot === undefined) {
+      if (rawPacking) {
+        rawCoverage = "partial";
+        rawPacking = false;
+      }
+      packed = packContext(prepared, packing, meter(packing));
+      packed.diagnostics.stops.deadline ||= now() >= deadline;
+      snapshot = await evidence.deliver(packed.selected.map(item => item.evidence), [], options.signal);
+    }
+    return { assembly: packed.value, diagnostics: diagnostics(packed.diagnostics, packed.used), snapshot: snapshot ?? null };
   }, undefined, snapshotContextCall);
   return async (readSet, request, options = {}) => {
     const result = await run(readSet, request, options);

@@ -333,6 +333,25 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     return visible;
   }
 
+  /** @param {State} state @param {Scope} scope @param {RawEntry} archived */
+  async function sourceLineageVisible(state, scope, archived) {
+    const { client, sessionId, messageId, role, content } = archived;
+    const roots = state.rawAnchors.get(client);
+    if (!roots) return true;
+    const proofs = await captureProofs(scope, client, [{ id: messageId, content }]);
+    if (!proofs) return false;
+    for (const root of roots.values()) {
+      if (root.namespace === scope.namespace && root.sessionId === sessionId) continue;
+      if (!matchesAnchor(root, proofs)) continue;
+      const target = { owner: scope.owner, namespace: root.namespace };
+      const source = { client, sessionId: root.sessionId, messageId };
+      const row = await findVisibleSource(state, target, source);
+      if (!row?.content || row.role !== role ||
+          (state.receiptDenials.size && state.receiptDenials.has(await receiptAddressKey(target.namespace, source)))) return false;
+    }
+    return true;
+  }
+
   /** @param {State} state @param {Scope} scope @param {import("@cairn-ink/core/ports").Receipt} receipt */
   async function receiptSourcesVisible(state, scope, receipt) {
     const { client, sessionId, messageId, role } = receipt;
@@ -350,19 +369,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     }
     const archived = await findVisibleSource(state, scope, receipt);
     if (!archived?.content || archived.role !== role) return false;
-    if (!roots) return true;
-    const proofs = await captureProofs(scope, client, [{ id: messageId, content: archived.content }]);
-    if (!proofs) return false;
-    for (const root of roots.values()) {
-      if (root.namespace === scope.namespace && root.sessionId === sessionId) continue;
-      if (!matchesAnchor(root, proofs)) continue;
-      const target = { owner: scope.owner, namespace: root.namespace };
-      const source = { client, sessionId: root.sessionId, messageId };
-      const row = await findVisibleSource(state, target, source);
-      if (!row?.content || row.role !== role ||
-          (state.receiptDenials.size && state.receiptDenials.has(await receiptAddressKey(target.namespace, source)))) return false;
-    }
-    return true;
+    return sourceLineageVisible(state, scope, archived);
   }
 
   /** @param {State} state @param {RetrievalScope} selection @param {readonly ItemRef[]} refs */
@@ -645,6 +652,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     }));
   }
 
-  return { raw, findVisibleSource, visibleRawRefs, captureProofs, lineageFenced, sourceVisible, receiptSourcesVisible, seedClientlessRaw,
+  return { raw, findVisibleSource, visibleRawRefs, captureProofs, lineageFenced, sourceVisible, sourceLineageVisible,
+    receiptSourcesVisible, seedClientlessRaw,
     counters: () => ({ rawKeyConflict, rawArchiveRefused }) };
 }

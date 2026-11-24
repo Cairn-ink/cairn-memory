@@ -324,8 +324,8 @@ export function copyContent(row, format, embeddingRequiredOnInsert) {
     source: { kind: source.kind, client: source.client, sessionId: source.sessionId }, embedding: copy };
 }
 
-/** @param {readonly StoredReceipt[]} receipts */
-export function copyReceipts(receipts) {
+/** @param {readonly StoredReceipt[]} receipts @param {boolean} [fromFinish] */
+export function copyReceipts(receipts, fromFinish = false) {
   return snapshotArray(receipts).map((receipt) => {
     if (!receipt) invalid();
     const { client, sessionId, messageId, role, occurredAtMs, id, excerpt, createdAtMs } = receipt;
@@ -339,7 +339,8 @@ export function copyReceipts(receipts) {
     }
     return { client, sessionId, messageId, role, occurredAtMs,
       ...(id !== undefined && { id }),
-      ...(excerpt !== undefined && { excerpt }), ...(createdAtMs !== undefined && { createdAtMs }) };
+      ...(excerpt !== undefined && { excerpt }), ...(createdAtMs !== undefined && { createdAtMs }),
+      ...(fromFinish && receipt.captureEventId !== undefined && { captureEventId: receipt.captureEventId }) };
   });
 }
 

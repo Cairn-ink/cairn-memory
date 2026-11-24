@@ -376,6 +376,10 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
       .map(([owner, { committed }]) => ({
         owner,
         rows: [...committed.rows.values()].flatMap((namespace) => [...namespace.values()])
+          .map(entry => ({
+            ...entry,
+            receipts: entry.receipts.map(({ captureEventId: _captureEventId, ...receipt }) => receipt),
+          }))
           .sort(({ row: a }, { row: b }) => {
             const x = a.scope.namespace;
             const y = b.scope.namespace;

@@ -127,15 +127,16 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
    * @template {InsertRow} T
    * @param {typeof port.writeFromFinish} write
    * @param {(row: T) => CopiedContent} prepareContent
+   * @param {boolean} [fromFinish]
    * @returns {{insert: (tx: Tx, scope: Scope, row: T, receipts: readonly Receipt[], nowMs: number) =>
    *   ReturnType<MemoryStore["insert"]>, touchDuplicate: MemoryStore["touchDuplicate"]}}
    */
-  function memoryWrites(write, prepareContent) {
+  function memoryWrites(write, prepareContent, fromFinish = false) {
     return {
       async insert(tx, scope, row, receipts, nowMs) {
         return write(tx, scope, () => {
           const content = prepareContent(row);
-          const incoming = copyReceipts(receipts);
+          const incoming = copyReceipts(receipts, fromFinish);
           validateTime(nowMs);
           const suppliedCreationTime = row.createdAtMs;
           const createdAtMs = suppliedCreationTime === undefined ? nowMs : suppliedCreationTime;
@@ -170,7 +171,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           const copy = copyMerge(merge);
           validateMemoryId(id);
           validateTime(nowMs);
-          const incoming = copyReceipts(receipts);
+          const incoming = copyReceipts(receipts, fromFinish);
           const namespace = writeNamespace(scope);
           return async (getState, markDirty) => {
             const state = getState();
@@ -375,8 +376,8 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
     },
   };
 
-  // Finish already snapshots its items before entering the queue.
-  const finishWrites = memoryWrites(port.writeFromFinish, (/** @type {CopiedContent} */ row) => row);
+  // Finish snapshots its inputs before assigning the internal capture event ID.
+  const finishWrites = memoryWrites(port.writeFromFinish, (/** @type {CopiedContent} */ row) => row, true);
   /** @param {Tx} tx @param {Scope} scope @param {readonly CanonicalQuery[]} batch
    * @param {SourceRef} source @param {"hash" | "full"} mode */
   function readWritePolicy(tx, scope, batch, source, mode) {

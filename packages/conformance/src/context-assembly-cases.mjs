@@ -53,8 +53,7 @@ const retainedSession = { client: "fixture-client", sessionId: "fixture-session"
 
 /** @param {number} id @param {string} excerpt @param {number | null} [occurredAtMs] @returns {Receipt} */
 function receipt(id, excerpt, occurredAtMs = null) {
-  return { ...retainedSession, id: "receipt-" + id, eventId: "event-" + id, messageId: "turn-" + id,
-    role: "user", occurredAtMs, createdAtMs: id, excerpt };
+  return { ...retainedSession, id: "receipt-" + id, messageId: "turn-" + id, role: "user", occurredAtMs, excerpt };
 }
 
 /** @param {CaseContext} ctx @param {Scope} scope @param {string} body @param {readonly Receipt[]} [receipts] */
@@ -288,7 +287,7 @@ export const CONTEXT_ASSEMBLY_CASES = [
   },
   {
     id: "T-CONTEXT-ASSEMBLY-5",
-    title: "uses exact authorized Raw spans and refuses Raw suppressed before final delivery",
+    title: "uses exact authorized Raw spans and repacks without Raw suppressed before final delivery",
     needs: ["contextRead", "contextRawRead", "rawArchive"],
     async run(ctx) {
       const storage = storageOf(ctx);
@@ -324,8 +323,12 @@ export const CONTEXT_ASSEMBLY_CASES = [
           return storage.uow.run(owner, options, action);
         } },
       }, { count(text) { counted = true; return fixtureCount(text); } });
-      await rejects(() => stale.readContext(readSet, { ...query, semantic: false }), "snapshot_stale");
+      const replaced = await stale.readContext(readSet, { ...query, semantic: false });
       check(fenced, "Suppression committed before final Raw witness check");
+      check(replaced.assembly.items.every(unit => !("layer" in unit && unit.layer === "Raw")),
+        "A Raw unit whose witness went stale is not delivered");
+      equal(replaced.diagnostics.coverage.raw, "partial", "The replacement reports Raw as partial");
+      equal(replaced.diagnostics.budget.used, fixtureCount(formatAssembly(replaced.assembly)), "The replacement block is metered");
       const after = await service.readContext(readSet, query);
       equal(after.assembly.items, [], "Fenced Raw text never appears in a subsequent assembly");
       equal(after.diagnostics.coverage.raw, "included", "Complete scan found no eligible Raw turns");
