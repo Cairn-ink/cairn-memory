@@ -327,10 +327,11 @@ export function copyContent(row, format, embeddingRequiredOnInsert) {
 export function copyReceipts(receipts) {
   return snapshotArray(receipts).map((receipt) => {
     if (!receipt) invalid();
-    const { client, sessionId, messageId, role, occurredAtMs } = receipt;
+    const { client, sessionId, messageId, role, occurredAtMs, excerpt } = receipt;
     if (!nonempty(client) || !nonempty(sessionId) || !nonempty(messageId) || !roles.includes(role) ||
-      (occurredAtMs !== null && !Number.isFinite(occurredAtMs))) invalid();
-    return { client, sessionId, messageId, role, occurredAtMs };
+      (occurredAtMs !== null && !Number.isFinite(occurredAtMs)) ||
+      (excerpt !== undefined && typeof excerpt !== "string")) invalid();
+    return { client, sessionId, messageId, role, occurredAtMs, ...(excerpt !== undefined && { excerpt }) };
   });
 }
 

@@ -70,14 +70,14 @@ function snapshotImport(input, items, inputSource) {
 
 /** @param {import("./index.d.mts").MemoryServiceDeps} deps @returns {MemoryService["importMemories"]} */
 export function importMethod(deps) {
-  const { storage: { uow, pause, memories, suppressions, keys }, clock } = deps;
+  const { storage: { uow, pause, memories, suppressions, keys }, clock, embedder } = deps;
   const { embedImport } = writeEmbedding(deps);
 
   return async (input, items, inputSource) => {
     try {
       const { scope, source, rows } = snapshotImport(input, items, inputSource);
       const { owner } = scope;
-      if (typeof keys?.userKey !== "function" || typeof suppressions?.snapshot !== "function" ||
+      if (embedder === null || typeof keys?.userKey !== "function" || typeof suppressions?.snapshot !== "function" ||
           typeof memories.readWritePolicy !== "function" || typeof memories.insert !== "function") {
         throw new CoreError("capability_unavailable");
       }

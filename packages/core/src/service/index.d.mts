@@ -18,7 +18,7 @@ export interface MemoryServiceConfig {
 export interface MemoryServiceDeps {
   readonly storage: StorageAdapter<StoredDocumentCardRecord>;
   readonly model: ModelPort;
-  readonly embedder: EmbedderPort;
+  readonly embedder: EmbedderPort | null;
   readonly gate: ModelGate;
   readonly clock: ClockAndHash;
   readonly tokens: TokenCounter;

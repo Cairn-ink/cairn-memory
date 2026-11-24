@@ -85,9 +85,11 @@ function freezeDeps(input) {
   if (typeof model.model !== "string" || !model.model ||
       (model.fits !== undefined && typeof model.fits !== "function")) throw new CoreError("invalid_input");
   positiveInteger(model.contextWindow);
-  requireMethods(embedder, "embed");
-  if (typeof embedder.model !== "string" || !embedder.model) throw new CoreError("invalid_input");
-  positiveInteger(embedder.dimensions);
+  if (embedder !== null) {
+    requireMethods(embedder, "embed");
+    if (typeof embedder.model !== "string" || !embedder.model) throw new CoreError("invalid_input");
+    positiveInteger(embedder.dimensions);
+  }
   requireMethods(gate, "assertOpen");
   requireMethods(clock, "nowMs", "monotonicMs", "sha256Hex", "hmacHex");
   requireMethods(tokens, "countTokens");

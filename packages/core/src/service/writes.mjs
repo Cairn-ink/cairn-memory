@@ -11,7 +11,7 @@ import { factIncarnationBody, validateSuppressionFact } from "../suppression-fac
 import { entry, entryError, scopeOf } from "./entry.mjs";
 import { pauseResult } from "./pause.mjs";
 
-/** @import {ClockAndHash, DuplicateQuery, InsertRow, MemoryRow, PassageFingerprint, RetainedDigester, Scope, SourceRef, SuppressionStore, Tx, WritePolicy} from "../ports/index.d.ts" */
+/** @import {ClockAndHash, DuplicateQuery, InsertRow, MemoryRow, PassageFingerprint, Receipt, RetainedDigester, Scope, SourceRef, SuppressionStore, Tx, WritePolicy} from "../ports/index.d.ts" */
 /** @import {FingerprintKey} from "../privacy/fingerprint.mjs" */
 /** @import {IdentityFact, TextDigest, TextFact} from "../suppression-fact.mjs" */
 
@@ -204,6 +204,7 @@ export function writeEmbedding({ storage: { keys, capabilities }, embedder, gate
    * @param {boolean} importing
    */
   async function embedBatch(owner, input, key, importing) {
+    if (embedder === null) throw new CoreError("embedding_failed");
     const options = {};
     const texts = input.map(normalizeForHash);
     const { model, dimensions } = embedder;
@@ -227,7 +228,7 @@ export function writeEmbedding({ storage: { keys, capabilities }, embedder, gate
       if (!importing || capabilities.embeddingRequiredOnInsert === true) throw new CoreError("embedding_failed");
       return null;
     });
-    if ((await keys.userKey(owner))?.id !== key?.id) throw new CoreError("fingerprint_key_mismatch");
+    if ((await keys?.userKey?.(owner))?.id !== key?.id) throw new CoreError("fingerprint_key_mismatch");
     return embeddings;
   }
 
@@ -280,7 +281,7 @@ export async function fullWriteWithholds(suppressions, tx, scope, source, batch)
  * @returns {Pick<import("../ports/host.d.ts").MemoryService, "save" | "correct">}
  */
 export function writeMethods(deps) {
-  const { storage, gate, clock } = deps;
+  const { storage, gate, clock, embedder } = deps;
   const { uow, pause, memories, suppressions, keys, fence, capabilities } = storage;
   const { embed } = writeEmbedding(deps);
   /** @param {string} text */
@@ -314,6 +315,7 @@ export function writeMethods(deps) {
         return invalid();
       }
 
+      if (embedder === null) throw new CoreError("capability_unavailable");
       const { owner } = scope;
       const preflight = await uow.run(owner, { pauseLock: true }, async tx => pauseResult(await pause.get(tx, owner)));
       if (preflight.paused) return { status: "paused" };
@@ -365,50 +367,57 @@ export function writeMethods(deps) {
       return item ? { status: result.status, item } : { status: "suppressed" };
     }, invalid),
 
-    correct: entry(async (input, inputId, inputRevision, raw, inputSource) => {
+    correct: entry(async (input, inputId, inputRevision, raw, inputSource, options) => {
       const scope = scopeOf(input);
       const id = identifier(inputId);
       const expectedRevision = revision(inputRevision);
       sourceOf(inputSource);
       if (typeof raw !== "string") throw new CoreError("invalid_input");
       const { owner } = scope;
-      const { state: preflight, previous } = await uow.run(owner, { pauseLock: true }, async tx => {
+      const preflight = await uow.run(owner, { pauseLock: true }, async tx => {
         const state = pauseResult(await pause.get(tx, owner));
         const row = state.paused ? null : await scopedRow(memories, scope, id, tx);
         const previous = row && await visible(scope, id, tx) ? row : null;
-        return { state, previous };
+        if (previous && previous.revision === expectedRevision && !previous.historical) return { state, previous };
+        const status = state.paused ? "paused" : previous ? "conflict" : "not_found";
+        const start = await memories.indexRevision?.(tx);
+        return /** @type {const} */ ({ status, ...(start === undefined ? {} : { indexRevision: start }) });
       });
-      if (preflight.paused) return { status: "paused" };
-      if (!previous) return { status: "not_found" };
-      if (previous.revision !== expectedRevision || previous.historical) return { status: "conflict" };
+      if (preflight.previous === undefined) return preflight;
+      const { state: initialState, previous } = preflight;
 
       await gate.assertOpen(owner, "pre-send");
       const text = prepareCoreText(raw);
       if (!text) throw new CoreError("invalid_text");
-      const key = await keys.userKey(owner);
-      if (key === null) throw new CoreError("fingerprint_unavailable");
-      const digesters = await keys.retainedDigesters?.(owner);
+      const key = await keys?.userKey?.(owner) ?? null;
+      if (key === null && capabilities.fingerprintKey === true && typeof keys?.userKey === "function") {
+        throw new CoreError("fingerprint_unavailable");
+      }
+      const digesters = await keys?.retainedDigesters?.(owner);
       const { query, passages } = await prepareWriteText(raw, text, key, sha256Hex, digesters);
       const unchanged = sameText(previous, query, text);
-      const embedding = unchanged ? null : await embed(owner, text, key);
+      const kindOverride = !unchanged && options?.kind !== undefined ? memoryKindOf(options.kind) : undefined;
+      const embedding = unchanged || (embedder === null && capabilities.embeddingRequiredOnInsert !== true)
+        ? null : await embed(owner, text, key);
       query.embedding = embedding?.vector;
       const source = previous.source;
 
       const predecessor = unchanged ? undefined : await predecessorFact(scope, previous, key, clock, "edit");
 
-      let result;
+      let result, start;
       if (!unchanged) await gate.assertOpen(owner, "post-send");
       try {
         result = await uow.run(owner, { pauseLock: true }, async tx => {
+          start = await memories.indexRevision?.(tx);
           const state = pauseResult(await pause.get(tx, owner));
-          if (state.paused || state.generation !== preflight.generation) return /** @type {const} */ ({ status: "paused" });
+          if (state.paused || state.generation !== initialState.generation) return /** @type {const} */ ({ status: "paused" });
           const current = await scopedRow(memories, scope, id, tx);
           if (current === null || !await visible(scope, id, tx)) return /** @type {const} */ ({ status: "not_found" });
           if (current.revision !== expectedRevision || current.textHash !== previous.textHash ||
               current.text !== previous.text || current.createdAtMs !== previous.createdAtMs || current.historical) {
             return /** @type {const} */ ({ status: "conflict" });
           }
-          if (keys.userKeyForWrite && (await keys.userKeyForWrite(tx))?.id !== key?.id) {
+          if (keys?.userKeyForWrite && (await keys.userKeyForWrite(tx))?.id !== key?.id) {
             throw new CoreError("fingerprint_key_mismatch");
           }
           if (await withheld(suppressions, tx, scope, source, passages, key, { id, createdAtMs: current.createdAtMs })) {
@@ -418,27 +427,36 @@ export function writeMethods(deps) {
           const decision = decide(policy, false, id);
           if (decision.status === "suppressed") return decision;
           const plan = planCorrect(current, expectedRevision,
-            { textHash: unchanged ? current.textHash : query.textHash, kind: current.kind }, decision.status === "duplicate");
+            { textHash: unchanged ? current.textHash : query.textHash, kind: kindOverride ?? current.kind },
+            decision.status === "duplicate");
           if (plan.outcome === "unchanged") return /** @type {const} */ ({ status: "unchanged", revision: plan.revision });
           if (!predecessor) throw new CoreError("internal_error");
           const { kind, origin, confidence, textHash } = plan;
+          const receipt = options?.receipt;
+          /** @type {Receipt[] | null} */
+          const receipts = receipt ? [{
+            client: receipt.client, sessionId: receipt.sessionId, messageId: receipt.eventId ?? receipt.messageId,
+            role: receipt.role, occurredAtMs: receipt.occurredAtMs, excerpt: text,
+          }] : null;
           const now = clock.nowMs();
           await suppressions.writeFact(tx, predecessor.fact, predecessor.incarnation);
           const replaced = await memories.replaceContent(tx, scope, id, expectedRevision,
-            { kind, origin, confidence, textHash, text, source, embedding, digests: query.digests }, null, now);
+            { kind, origin, confidence, textHash, text, source, embedding, digests: query.digests }, receipts, now);
           if (replaced.outcome !== "changed") throw new CoreError("internal_error");
           return /** @type {const} */ ({ status: "saved", revision: replaced.revision });
         });
       } catch (error) {
         const failure = entryError(error);
-        if (["revision_conflict", "memory_conflict", "memory_historical"].includes(failure.code)) return { status: "conflict" };
-        if (failure.code === "memory_not_found") return { status: "not_found" };
-        throw failure;
+        const status = ["revision_conflict", "memory_conflict", "memory_historical"].includes(failure.code) ? "conflict"
+          : failure.code === "memory_not_found" ? "not_found" : null;
+        if (status === null) throw failure;
+        return { status, ...(start === undefined ? {} : { indexRevision: start }) };
       }
 
-      if (result.status !== "saved" && result.status !== "unchanged") return result;
+      const index = start === undefined ? {} : { indexRevision: result.status === "saved" ? start + 1 : start };
+      if (result.status !== "saved" && result.status !== "unchanged") return { ...result, ...index };
       const item = await deliver(scope, id, result.revision);
-      return item ? { status: result.status, item } : { status: "not_found" };
+      return item ? { status: result.status, item, ...index } : { status: "not_found", ...index };
     }),
   };
 }
