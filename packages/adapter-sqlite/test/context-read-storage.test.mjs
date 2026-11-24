@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createMemoryService } from "@cairn-ink/core/service";
-import { assemblyClock, fixtureCount, formatAssembly } from "../../conformance/src/context-assembly-cases.mjs";
+import { assemblyClock, fixtureCount, formatAssembly } from "@cairn-ink/conformance/context-assembly";
 import { openSqliteAdapter } from "../src/index.mjs";
 import { scratch, sha256 } from "./storage-fixtures.mjs";
 

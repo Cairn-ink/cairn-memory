@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { runCase } from "@cairn-ink/conformance";
-import { CONTEXT_ASSEMBLY_CASES } from "../../conformance/src/context-assembly-cases.mjs";
-import { CONTEXT_READ_CASES } from "../../conformance/src/context-read-cases.mjs";
+import { CONTEXT_ASSEMBLY_CASES } from "@cairn-ink/conformance/context-assembly";
+import { CONTEXT_READ_CASES } from "@cairn-ink/conformance/context-read";
 import { createSqliteAdapter } from "../src/adapter.mjs";
 import { openStorage } from "../src/schema/open.mjs";
 import { scopeKey } from "../src/storage-values.mjs";

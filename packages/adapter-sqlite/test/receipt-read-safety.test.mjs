@@ -8,7 +8,7 @@ import { createContextReadStore } from "../../adapter-memory/src/context-read.mj
 import { createFactMatcher } from "../../adapter-memory/src/fact-match.mjs";
 import { createMemoryStore } from "../../adapter-memory/src/memory-store.mjs";
 import { createUnitOfWork } from "../../adapter-memory/src/unit-of-work.mjs";
-import { contextReadTestService } from "../../conformance/src/context-read-cases.mjs";
+import { contextReadTestService } from "@cairn-ink/conformance/context-read";
 import { fixture, sha256, testAccess } from "./storage-fixtures.mjs";
 
 const scope = { owner: "fixture-owner", namespace: "personal\0" };

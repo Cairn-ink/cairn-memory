@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { runCase } from "@cairn-ink/conformance";
-import { CONTEXT_ASSEMBLY_CASES } from "../../conformance/src/context-assembly-cases.mjs";
+import { CONTEXT_ASSEMBLY_CASES } from "@cairn-ink/conformance/context-assembly";
 import { createMemoryAdapter } from "../src/index.mjs";
 
 const factory = {

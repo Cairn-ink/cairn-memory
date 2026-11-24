@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
-import { contextReadTestService } from "../../conformance/src/context-read-cases.mjs";
+import { contextReadTestService } from "@cairn-ink/conformance/context-read";
 import { createMemoryAdapter } from "../src/index.mjs";
 
 const scope = { owner: "synthetic-owner", namespace: "project\0synthetic-project" };

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { contextReadTestService } from "../../conformance/src/context-read-cases.mjs";
+import { contextReadTestService } from "@cairn-ink/conformance/context-read";
 import { createMemoryAdapter } from "../src/index.mjs";
 
 test("F4 capture receipts bind the source message and keep retention time outside the common port", async () => {
