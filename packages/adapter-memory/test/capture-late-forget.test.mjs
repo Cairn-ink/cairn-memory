@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { registerHooks } from "node:module";
 import { test } from "node:test";
 import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
 import { CAPTURE_LATE_FORGET_CASES, runCase } from "@cairn-ink/conformance";
@@ -18,7 +20,32 @@ const messages = [
 const outputs = ["The route passes over water.", "The wire is conductive."];
 const factBase = { owner: scope.owner, actionId: "test-forget", origin: "forget" };
 
-async function captureRace({ keyed = false, timing, kind = "text", mutate = adapter => adapter }) {
+function forgetAfterLoadedClaim(storage, forget) {
+  const { claim } = storage.capture;
+  const { run } = storage.uow;
+  let claimTx;
+  storage.capture.claim = async (tx, key, batch, options) => {
+    const result = await claim(tx, key, batch, options);
+    if (result.status === "claimed") {
+      assert.equal(batch[0]?.content, messages[0].content, "The runner must already hold the source text");
+      claimTx = tx;
+    }
+    return result;
+  };
+  storage.uow.run = async (owner, options, work) => {
+    let tx;
+    const result = await run(owner, options, (current) => {
+      tx = current;
+      return work(current);
+    });
+    // Forget takes the same pause lock, so commit it as soon as the claim transaction releases the lock.
+    if (claimTx && tx === claimTx) await forget();
+    return result;
+  };
+}
+
+async function captureRace({ keyed = false, timing, kind = "text", mutate = adapter => adapter,
+  afterClaim = false, createService = createMemoryService }) {
   const storage = mutate(createMemoryAdapter({ capabilities: {
     rawArchive: true, rawWindowHide: true, fingerprintKey: keyed, shingleSuppression: keyed,
   } }));
@@ -42,7 +69,7 @@ async function captureRace({ keyed = false, timing, kind = "text", mutate = adap
       throw error;
     }
   };
-  const service = createMemoryService({
+  const service = createService({
     storage,
     model: {
       model: "test", contextWindow: 16_384, countTokens: () => 1,
@@ -101,7 +128,8 @@ async function captureRace({ keyed = false, timing, kind = "text", mutate = adap
     assert.match(digests[0], /^[a-f0-9]{64}$/u);
   }
   assert.deepEqual(admitted.rawRows, []);
-  if (timing === "before dispatch") await commitForget();
+  if (afterClaim) forgetAfterLoadedClaim(storage, commitForget);
+  else if (timing === "before dispatch") await commitForget();
   if (timing === "during embedding") commitDuringEmbedding = commitForget;
 
   const completed = await service.runCapture(scope, selection);
@@ -192,6 +220,44 @@ test("the pre-dispatch test detects stale source passages", async () => {
   // keep it from the model even with stale passages and so hide this check.
   await assert.rejects(captureRace({ timing: "before dispatch", mutate: reuseAdmissionPassages }),
     /Unexpected source text reached the model/);
+});
+
+test("the keyed pre-dispatch check withholds a source forgotten after the outbox batch is loaded", () =>
+  captureRace({ keyed: true, timing: "before dispatch", afterClaim: true }));
+
+async function createKeyedDispatchMutant() {
+  const entry = new URL(import.meta.resolve("@cairn-ink/core/service"));
+  const capture = new URL("./capture.mjs", entry);
+  const source = readFileSync(capture, "utf8");
+  const before = "const allowed = await filterCaptureSources(sources, positions, passages, null, sourceEvidence, writeKey);";
+  const after = "const allowed = writeKey ? positions : " +
+    "await filterCaptureSources(sources, positions, passages, null, sourceEvidence, writeKey);";
+  assert.equal(source.split(before).length, 2, "Expected one pre-dispatch filter to mutate");
+  entry.searchParams.set("variant", "skip-keyed-dispatch-filter");
+  capture.searchParams.set("variant", "skip-keyed-dispatch-filter");
+  const hooks = registerHooks({
+    resolve(specifier, context, nextResolve) {
+      return nextResolve(context.parentURL === entry.href && specifier === "./capture.mjs" ? capture.href : specifier, context);
+    },
+    load(url, context, nextLoad) {
+      return url === capture.href ? { format: "module", source: source.replace(before, after), shortCircuit: true }
+        : nextLoad(url, context);
+    },
+  });
+  try {
+    return (await import(entry.href)).createMemoryService;
+  } finally {
+    hooks.deregister();
+  }
+}
+
+test("the loaded outbox regression detects a bypass of the keyed pre-dispatch filter", async () => {
+  const createService = await createKeyedDispatchMutant();
+  await assert.rejects(captureRace({ keyed: true, timing: "before dispatch", afterClaim: true, createService }), {
+    message: /^Unexpected source text reached the model\b/,
+    actual: [messages.map(({ content }) => content)],
+    expected: [[messages[1].content]],
+  });
 });
 
 test("the final text check detects stale source passages", async () => {

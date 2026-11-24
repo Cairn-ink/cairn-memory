@@ -87,9 +87,11 @@ function copyDigests(digests) {
   if (digests === undefined) return undefined;
   const copy = copyArray(digests).map((digest) => {
     if (!digest) invalid();
-    const { alg, value, pipeline, redactionVersion, keyId } = digest;
+    const { alg, value, pipeline, redactionVersion, keyId, label } = digest;
+    inputText(alg);
     if (keyId !== null) inputText(keyId);
-    return { alg, value, pipeline, redactionVersion, keyId };
+    if (label !== undefined) inputText(label);
+    return { alg, value, pipeline, redactionVersion, keyId, ...(label === undefined ? {} : { label }) };
   });
   validateSuppressionFact({
     kind: "text", mode: "exact", origin: "forget", owner: "validation", actionId: "validation",

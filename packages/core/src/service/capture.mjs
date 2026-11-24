@@ -226,6 +226,7 @@ function filterCaptureCandidates(candidates, snapshot, scope, excludedSources) {
  */
 async function embedCaptureCandidates(prepared, owner, { storage, gate, embedder }, deadline, caller) {
   if (prepared.length === 0) return [];
+  if (embedder === null) throw new CoreError("capability_unavailable");
   const texts = prepared.map(({ item }) => normalizeForHash(item.content));
   const { model, dimensions } = embedder;
   const { signal, check } = captureTransport(caller, deadline);
@@ -254,7 +255,7 @@ async function embedCaptureCandidates(prepared, owner, { storage, gate, embedder
  * @returns {Pick<import("../ports/host.d.ts").MemoryService, "enqueueCapture" | "captureStatus"> & import("./index.d.mts").CaptureRunner}
  */
 export function captureMethods(deps) {
-  const { storage, clock, model, gate, config, diagnostics } = deps;
+  const { storage, clock, model, gate, config, diagnostics, embedder } = deps;
   const { uow, pause, suppressions, capture, sessionLineage, raw, keys, capabilities } = storage;
   /** @param {Tx} tx @param {SuppressionSnapshot["passages"]} passages */
   const sourceWriteKey = (tx, passages) =>
@@ -263,7 +264,7 @@ export function captureMethods(deps) {
     enqueueCapture: entry(async (inputScope, input) => {
       const scope = scopeOf(inputScope);
       const admit = capture?.admit;
-      if (typeof admit !== "function") throw new CoreError("capability_unavailable");
+      if (embedder === null || typeof admit !== "function") throw new CoreError("capability_unavailable");
       const { client: inputClient, sessionId: inputSession, eventId: inputEvent, messages } =
         validateObject(input, ["client", "sessionId", "eventId", "messages"]);
       const client = identifier(inputClient);
@@ -350,7 +351,7 @@ export function captureMethods(deps) {
       const load = capture?.load;
       const readStatus = capture?.status;
       const archive = capabilities.rawArchive ? raw : undefined;
-      if (typeof load !== "function" || typeof readStatus !== "function" ||
+      if (embedder === null || typeof load !== "function" || typeof readStatus !== "function" ||
           [capture.claim, capture.beginDispatch, capture.finish, capture.abandon, capture.eligible, capture.assertEligible,
             suppressions?.snapshot, storage.keys?.userKey].some(method => typeof method !== "function") ||
           (capabilities.rawArchive && (typeof archive?.archiveAllowed !== "function" || typeof archive.archive !== "function"))) {

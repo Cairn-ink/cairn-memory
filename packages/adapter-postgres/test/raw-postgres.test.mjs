@@ -580,7 +580,7 @@ test("forget maps a legacy explicit-save memory to its MCP Raw and ledger client
     memories: createPostgresMemoryStore(), suppressions: createPostgresSuppressionStore(),
   }, clock: { sha256Hex } });
   assert.deepEqual(await forget(event.scope, id, { kind: "mcp", client: reportedClient, sessionId: null }),
-    { status: "forgotten", removedSimilar: 0 });
+    { status: "forgotten", removedSimilar: 0, indexRevision: 1 });
   assert.deepEqual((await f.pool.query("SELECT client, content FROM raw_messages WHERE user_id = $1", [f.owner])).rows,
     [{ client: reportedClient, content: otherClientItem.content }]);
   assert.deepEqual((await f.pool.query(`SELECT raw_request #>> '{messages,0,content}' AS content FROM capture_events

@@ -13,7 +13,8 @@ export async function readCatalog(connection, tables = null, { includeDefaults =
         format_type(a.atttypid, a.atttypmod)
           || COALESCE(' COLLATE ' || quote_ident(coll.collname), '')
           || CASE WHEN a.attnotnull THEN ' NOT NULL' ELSE ' NULL' END
-          || COALESCE(' DEFAULT ' || pg_get_expr(d.adbin, d.adrelid), '') AS definition
+          || COALESCE(CASE WHEN a.attgenerated = 's' THEN ' GENERATED STORED ' ELSE ' DEFAULT ' END
+            || pg_get_expr(d.adbin, d.adrelid), '') AS definition
       FROM tables t JOIN pg_attribute a ON a.attrelid = t.oid
       JOIN pg_type ty ON ty.oid = a.atttypid
       LEFT JOIN pg_collation coll ON coll.oid = a.attcollation AND a.attcollation <> ty.typcollation

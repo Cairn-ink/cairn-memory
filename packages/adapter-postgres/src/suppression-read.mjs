@@ -35,12 +35,16 @@ const SNAPSHOT_FACTS = `WITH hits AS (
       NOT EXISTS (
         SELECT 1 FROM core_fact_digests d
         WHERE d.user_id = f.user_id AND d.fact_id = f.fact_id AND d.alg = 'sha256'
+          AND d.key_id IS NULL AND d.label = d.pipeline
           AND f.body -> 'text' = jsonb_build_object('digests', jsonb_build_array(jsonb_build_object(
             'alg', d.alg, 'value', d.value, 'pipeline', d.pipeline,
             'redactionVersion', d.redaction_version, 'keyId', d.key_id)))
           AND f.body - 'text' - 'namespace' = jsonb_build_object('kind', f.kind, 'origin', f.origin, 'mode', f.mode)
           AND (f.body -> 'namespace' IS NULL OR jsonb_typeof(f.body -> 'namespace') IN ('null', 'string'))
-          AND f.slot = $7 || to_json(d.value)::text || ']],null]'
+          AND f.slot IN (
+            $7 || to_json(d.value)::text || ']],null]',
+            $7 || to_json(d.value)::text || ',null,' || to_json(d.label)::text || ',' ||
+              to_json(d.pipeline)::text || ',' || d.redaction_version::text || ']],null]')
       )
     ))
   )
@@ -82,19 +86,28 @@ function copyList(value, copy, max = MAX_POSITIONS) {
 function copyPassage(value) {
   const digests = copyList(field(value, "digests"), (digest) => ({
     alg: field(digest, "alg"), value: field(digest, "value"), keyId: field(digest, "keyId"),
-    pipeline: field(digest, "pipeline"), redactionVersion: field(digest, "redactionVersion"),
+    pipeline: field(digest, "pipeline"), redactionVersion: field(digest, "redactionVersion"), label: field(digest, "label"),
   }), 128);
   const shingleList = field(value, "shingles");
-  const shingles = shingleList == null ? null : copyList(shingleList, (item) => {
-    if (typeof item !== "string" || item.length > 64 || !/^[0-9a-f]+$/u.test(item)) ineligible();
-    return item;
-  });
+  const shingles = shingleList == null ? null : copyList(shingleList, copyShingle);
   const keyId = field(value, "keyId") ?? null;
+  const retained = field(value, "retainedShingles");
+  const retainedShingles = retained === undefined ? undefined : copyList(retained, (entry) => {
+    const keyId = field(entry, "keyId");
+    if (!validString(keyId, 64)) ineligible();
+    return { keyId, shingles: copyList(field(entry, "shingles"), copyShingle) };
+  });
   validateSuppressionFact({
     owner: "validation", actionId: "validation", kind: "text", mode: "full", origin: "forget",
     text: { digests, shingles, keyId },
   });
-  return { digests, shingles, keyId };
+  return { digests, shingles, keyId, retainedShingles };
+}
+
+/** @param {unknown} item */
+function copyShingle(item) {
+  if (typeof item !== "string" || item.length > 64 || !/^[0-9a-f]+$/u.test(item)) ineligible();
+  return item;
 }
 
 /** @param {Parameters<SuppressionStore["snapshot"]>[2]} candidates */
@@ -162,7 +175,8 @@ export function createSuppressionReads({ hashSessionKey, allowNonNullNamespace =
     }
     const { client, sessionId, occurredAtMs, passages } = copy;
     let digestValues = null;
-    if (passages?.length && passages.every(({ digests }) => digests.some(({ alg }) => alg === "sha256"))) {
+    if (passages?.length && passages.every(({ digests }) =>
+      digests.some(({ alg, label }) => alg === "sha256" && label === undefined))) {
       const values = new Set(passages.flatMap(({ digests }) => digests.map(({ value }) => value)));
       if (values.size <= MAX_POSITIONS) digestValues = [...values];
     }

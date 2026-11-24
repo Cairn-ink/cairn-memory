@@ -4,6 +4,8 @@ import { DatabaseSync } from "node:sqlite";
 import { CoreError } from "@cairn-ink/core";
 import { cleanMigrationBootstraps, installMigrationTarget, targetExists } from "../legacy/migration-bootstrap.mjs";
 import { LegacyRefusal, refuse, readMigrationInput } from "../legacy/migration-input.mjs";
+import { installContextReadSchema } from "../schema/context-read.mjs";
+import { installInspectSchema } from "../schema/inspect.mjs";
 import { INITIALIZE_STORE, SQLITE_APPLICATION_ID, SQLITE_PHYSICAL_VERSION, STORAGE_SCHEMA } from "../schema/layout.mjs";
 import { sha256 } from "../storage-values.mjs";
 import { openMigrationUnitOfWork } from "../uow.mjs";
@@ -204,6 +206,8 @@ export async function migrateLegacyStore(input) {
       if (record.migrationId !== migrationId || record.checkpoint < 2) return refuse("legacy_incomplete");
       if (record.checkpoint === 3) return [String(record.attestation), false];
       const proof = verify(db, source, plan, record, schema);
+      installInspectSchema(db, source.inspect);
+      installContextReadSchema(db);
       db.prepare("UPDATE cairn_migration SET checkpoint = 3, attestation = ?").run(proof);
       return [proof, true];
     });

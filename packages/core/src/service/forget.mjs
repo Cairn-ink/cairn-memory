@@ -1,4 +1,4 @@
-import { isWellFormedText } from "../capture/validate.mjs";
+import { detach, isWellFormedText } from "../capture/validate.mjs";
 import { SUPPRESSION_DISTANCE } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
 import { FORGET_STEP_CAPABILITIES } from "../privacy/forget-steps.mjs";
@@ -8,8 +8,29 @@ import { predecessorFact, scopedRow, sourceOf } from "./writes.mjs";
 
 /** @import {Capability, Capabilities} from "../capabilities.mjs" */
 /** @import {ForgetStep} from "../privacy/forget-steps.mjs" */
-/** @import {DocumentCardSession, DocumentCardSourceMessage, MemoryRow, ProvenClosure, Scope, StorageAdapter, Tx} from "../ports/index.d.ts" */
+/** @import {DocumentCardSession, DocumentCardSourceMessage, MemoryRow, MemoryService, ProvenClosure, Revision, Scope, StorageAdapter, Tx} from "../ports/index.d.ts" */
 /** @import {RawSpanFact} from "../suppression-fact.mjs" */
+
+/** @typedef {MemoryService["forget"]} Forget */
+/** @typedef {{ expectedRevision?: Revision }} ForgetOptions */
+
+/** @param {ForgetOptions | null | undefined} options @returns {Revision | undefined} */
+function readExpectedRevision(options) {
+  if (options == null) return undefined;
+  try {
+    if (typeof options === "object") {
+      const prototype = Object.getPrototypeOf(options);
+      if (prototype === Object.prototype || prototype === null) {
+        const descriptor = Object.getOwnPropertyDescriptor(options, "expectedRevision");
+        if (descriptor?.enumerable && Object.hasOwn(descriptor, "value")) return descriptor.value;
+        if (!("expectedRevision" in options)) return undefined;
+      }
+    }
+  } catch {
+    // Proxy traps can throw during reflection. Detachment rejects proxies that pass these checks.
+  }
+  throw new CoreError("invalid_input");
+}
 
 /** @param {Capabilities} flags @param {ForgetStep} step @param {Capability} capability */
 function enabled(flags, step, capability) {
@@ -81,18 +102,24 @@ async function cardSources(hydrate, tx, scope, row, spans, resolvedEmptySpans) {
 
 /**
  * @param {import("./index.d.mts").MemoryServiceDeps} deps
- * @returns {import("../ports/host.d.ts").MemoryService["forget"]}
+ * @returns {Forget}
  */
 export function forgetMethod({ storage, clock }) {
   const { uow, capabilities, keys, memories, suppressions, raw, sessionLineage, spanLineage, hydrate,
-    conflicts, rationale, documentCards, quantityLedger, forgetLog } = storage;
+    conflicts, rationale, documentCards, quantityLedger, forgetLog, proceduralTags } = storage;
 
-  return entry(async (input, id, inputSource) => {
+  /** @type {(...args: [...Parameters<Forget>, options?: ForgetOptions]) =>
+   *   Promise<Awaited<ReturnType<Forget>> | { status: "conflict" }>} */
+  const forget = entry(async (input, id, inputSource, options) => {
     const scope = scopeOf(input);
     const { owner, namespace } = scope;
     if (!isWellFormedText(id) || !id || id.length > 512 ||
         id.trim() !== id || /[\x00-\x1f\x7f]/.test(id)) throw new CoreError("invalid_input");
     sourceOf(inputSource);
+    const expectedRevision = options?.expectedRevision;
+    if (expectedRevision !== undefined && (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0)) {
+      throw new CoreError("invalid_input");
+    }
     if (typeof memories.get !== "function") throw new CoreError("capability_unavailable");
 
     // Only the adapter's configured key provider can use its transaction.
@@ -106,7 +133,12 @@ export function forgetMethod({ storage, clock }) {
     return uow.run(owner, { pauseLock: true }, async tx => {
       // resolve
       const row = await scopedRow(memories, scope, id, tx);
-      if (!row) return { status: "not_found" };
+      if (!row) {
+        const indexRevision = await (memories.committedIndexRevision
+          ? memories.committedIndexRevision(tx) : memories.indexRevision?.(tx));
+        return { status: "not_found", ...(indexRevision === undefined ? {} : { indexRevision }) };
+      }
+      if (expectedRevision !== undefined && row.revision !== expectedRevision) return { status: "conflict" };
       if (keyResult?.error) throw keyResult.error;
       const key = userKeyForWrite ? await userKeyForWrite(tx) : keyResult === null ? null : keyResult.key;
       if (typeof suppressions?.writeFact !== "function" || typeof memories.erase !== "function") {
@@ -198,6 +230,10 @@ export function forgetMethod({ storage, clock }) {
         if (!quantityLedger) throw new CoreError("capability_unavailable");
         await quantityLedger.dropWhere(tx, scope, { by: "memoryId", id });
       }
+      if (capabilities.proceduralTags === true) {
+        if (!proceduralTags) throw new CoreError("capability_unavailable");
+        await proceduralTags.clear(tx, scope, id);
+      }
       if (enabled(capabilities, "dependents.invalidate", "cards") ||
           enabled(capabilities, "dependents.invalidate", "stagedEvidence")) {
         throw new CoreError("capability_unavailable");
@@ -211,7 +247,20 @@ export function forgetMethod({ storage, clock }) {
         await forgetLog.record(tx, owner, id, clock.nowMs());
       }
       // epoch.advance is owned by each writeFact call.
-      return { status: "forgotten", removedSimilar };
+      const indexRevision = await memories.committedIndexRevision?.(tx);
+      return { status: "forgotten", removedSimilar, ...(indexRevision === undefined ? {} : { indexRevision }) };
     });
+  }, undefined, args => {
+    // Capture the guard before cloning can drop it or another argument's getter can change it.
+    const expectedRevision = readExpectedRevision(args[3]);
+    const input = detach(args, "invalid_input");
+    // Built-in objects can have a reassigned prototype. Cloning restores their built-in prototype.
+    if (input[3] != null && Object.getPrototypeOf(input[3]) !== Object.prototype) {
+      throw new CoreError("invalid_input");
+    }
+    input[3] = { expectedRevision };
+    return input;
   });
+  // Only calls that supply an expected revision can return a conflict.
+  return /** @type {Forget} */ (forget);
 }
