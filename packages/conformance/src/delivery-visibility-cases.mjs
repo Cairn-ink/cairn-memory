@@ -2,15 +2,16 @@ import { coreDigest } from "@cairn-ink/core";
 import { buildDocumentCard } from "@cairn-ink/core/routing";
 import { check, equal, row } from "./support.mjs";
 
-/** @import { DocumentCardStore, ItemRef, StoredDocumentCardRecord, TopicCardGuard, Tx } from "@cairn-ink/core/ports" */
+/** @import { DocumentCardStore, ItemRef, Receipt, StoredDocumentCardRecord, TopicCardGuard, Tx } from "@cairn-ink/core/ports" */
 /** @import { CaseContext, ConformanceCase } from "./index.d.mts" */
 /** @typedef {Parameters<DocumentCardStore<StoredDocumentCardRecord>["put"]>[2]} CardWrite */
-/** @typedef {"text" | "identity" | "session"} Exclusion */
+/** @typedef {"text" | "identity" | "session" | "linked-session"} Exclusion */
 
 const page = { cursor: null, limit: 10 };
 const client = "fixture";
 const title = "Filed notes";
 const dependentText = "Keep the spare key in the top drawer.";
+const sourceSession = (/** @type {string} */ label) => `${label}-memory`;
 
 /** @param {CardWrite} card @returns {TopicCardGuard} */
 const guard = ({ id, contentHash }) => ({ cardId: id, contentHash });
@@ -32,33 +33,45 @@ async function checkDelivery(ctx, exclusion) {
   /** @template T @param {(tx: Tx) => Promise<T>} fn */
   const write = (fn) => uow.run(ctx.owner, { pauseLock: true }, fn);
 
-  /** @param {string} text */
-  async function memory(text) {
+  /** @param {string} text @param {Receipt[]} [receipts] */
+  async function memory(text, receipts = []) {
     const input = await row(ctx, text);
     const { value } = await coreDigest(text);
-    const { id, revision } = await write((tx) => memories.insert(tx, scope, { ...input, textHash: `sha256:${value}` }, [], 1));
+    const { id, revision } = await write((tx) => memories.insert(tx, scope, { ...input, textHash: `sha256:${value}` }, receipts, 1));
     return { id, revision };
+  }
+
+  /** @param {string} sessionId @param {string} content */
+  async function archive(sessionId, content) {
+    check(raw, "Raw archive is required for message-backed cards");
+    const message = { id: "message", role: /** @type {const} */ ("user"), occurredAtMs: 1, content };
+    const capture = { scope, client, sessionId, eventId: sessionId, payloadDigest: "a".repeat(64) };
+    equal(await write((tx) => raw.archive(tx, capture, [message])), { archived: 1 }, "Expected a visible Raw source");
+    return message;
   }
 
   /** @param {string} label @param {string} text */
   async function card(label, text) {
-    const sourceMemories = [await memory(text)];
+    const receipts = [];
+    if (exclusion === "linked-session") {
+      const sessionId = sourceSession(label);
+      const { id: messageId, role, occurredAtMs } = await archive(sessionId, text);
+      receipts.push({ client, sessionId, messageId, role, occurredAtMs });
+    }
+    const sourceMemories = [await memory(text, receipts)];
     const body = `Notes filed under ${label}.`;
     const cardTitle = `Document ${label}`;
     /** @type {CardWrite} */
     let record = { id: label, scope, origin: "import", title: cardTitle, body, contentHash: await ctx.hash(body),
       date: null, sourceMessage: null, sourceMemories, sentences: [], stale: [] };
-    if (exclusion === "session") {
-      check(raw, "Raw archive is required for message-backed cards");
-      const sessionId = label;
+    if (exclusion === "session" || exclusion === "linked-session") {
+      const sessionId = `${label}-message`;
       const canonicalSessionKey = ctx.harness.hashSessionKey?.(client, sessionId) ??
         (ctx.sessionRefs === "plain" ? sessionId : undefined);
       check(canonicalSessionKey, "Expected the capture session key");
-      const message = { id: "message", role: /** @type {const} */ ("user"), occurredAtMs: 1, content: `${cardTitle}\n\n${body}` };
+      const message = await archive(sessionId, `${cardTitle}\n\n${body}`);
       const { card: routed } = await buildDocumentCard(message, { scope, client, canonicalSessionKey });
       check(routed, "Expected a message-backed card");
-      const capture = { scope, client, sessionId, eventId: label, payloadDigest: "a".repeat(64) };
-      equal(await write((tx) => raw.archive(tx, capture, [message])), { archived: 1 }, "Expected a visible Raw source");
       record = { ...record, id: routed.id, origin: "router", title: routed.title, body: routed.body,
         contentHash: await ctx.hash(routed.body), date: routed.date, sourceMessage: { client, sessionId, messageId: message.id } };
     }
@@ -119,10 +132,30 @@ async function checkDelivery(ctx, exclusion) {
     await ctx.harness.seedFact(ctx.owner, { ...fact, kind: "text", mode: "exact", text: { digests: [digest] } });
   } else if (exclusion === "identity") {
     await ctx.harness.seedFact(ctx.owner, { ...fact, kind: "identity", memoryId: dependent.sourceMemories[0].id });
-  } else {
+  } else if (exclusion === "session") {
     check(raw && dependent.sourceMessage, "Expected a message-backed source to fence");
     const { client, sessionId } = dependent.sourceMessage;
     await write((tx) => raw.fenceSession(tx, scope, { client, sessionId }));
+  } else {
+    const sessionId = sourceSession("dependent");
+    let session;
+    if (ctx.sessionRefs === "hashed") {
+      const sessionKeyHash = ctx.harness.hashSessionKey?.(client, sessionId);
+      check(sessionKeyHash && /^[a-f0-9]{64}$/u.test(sessionKeyHash), "Expected the linked memory session hash");
+      session = { client, sessionKeyHash };
+    } else {
+      session = { client, sessionId };
+    }
+    await ctx.harness.seedFact(ctx.owner, { ...fact, kind: "session", session });
+
+    check(raw && dependent.sourceMessage, "Expected a message-backed card with a linked memory");
+    /** @type {ItemRef[]} */
+    const linkedRefs = cards.map(({ sourceMemories: [{ id }] }) => ({ type: "memory", id, namespace: scope.namespace }));
+    equal(await read((tx) => fence.assertVisible(tx, selection, linkedRefs)), [linkedRefs[1]], "Only the linked control memory stays visible");
+    const { items } = await read((tx) => raw.listRaw(tx, selection, page));
+    const source = dependent.sourceMessage;
+    check(items.some(({ client, sessionId, messageId }) =>
+      client === source.client && sessionId === source.sessionId && messageId === source.messageId), "The card's own Raw message stays visible");
   }
   await assertDelivery([control], "after exclusion");
 }
@@ -130,7 +163,8 @@ async function checkDelivery(ctx, exclusion) {
 /** @param {Exclusion} exclusion @param {string} title @returns {ConformanceCase} */
 const deliveryCase = (exclusion, title) => ({
   id: `T-DVIS-${exclusion}`, title,
-  needs: exclusion === "session" ? ["documentCards", "placement", "rawArchive"] : ["documentCards", "placement"],
+  needs: exclusion === "session" || exclusion === "linked-session"
+    ? ["documentCards", "placement", "rawArchive"] : ["documentCards", "placement"],
   async run(ctx) {
     if (exclusion === "session" && !ctx.adapter.raw?.fenceSession) return "needs Raw session fence";
     return checkDelivery(ctx, exclusion);
@@ -141,4 +175,5 @@ export const DELIVERY_VISIBILITY_CASES = [
   deliveryCase("text", "a linked text fact excludes a card from the fence and topic views"),
   deliveryCase("identity", "a linked identity fact excludes a card from the fence and batch annotations"),
   deliveryCase("session", "a message session fence excludes its card from topic views"),
+  deliveryCase("linked-session", "a linked memory session fact excludes a card from the fence and topic views"),
 ];

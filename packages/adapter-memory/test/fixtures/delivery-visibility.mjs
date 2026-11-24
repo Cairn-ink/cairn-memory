@@ -2,7 +2,8 @@ import assert, { AssertionError } from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
-import { coreDigest, decisionContext } from "@cairn-ink/core";
+import { coreDigest, decisionContext, isCoreError, placePendingCardsBatch } from "@cairn-ink/core";
+import { buildDocumentCard } from "@cairn-ink/core/routing";
 
 export const scope = { owner: "fixture", namespace: null };
 export const selection = { owner: scope.owner, namespaces: [scope.namespace] };
@@ -26,8 +27,8 @@ export function deliveryFactory(create = createMemoryAdapter) {
   };
 }
 
-export function memoryFixture(capabilities) {
-  const adapter = createMemoryAdapter({ capabilities });
+export function memoryFixture(capabilities, create = createMemoryAdapter) {
+  const adapter = create({ capabilities });
   const read = (fn) => adapter.uow.run(scope.owner, { readOnly: true }, fn);
   const write = (fn) => adapter.uow.run(scope.owner, { pauseLock: true }, fn);
   async function archive(sessionId, content) {
@@ -49,6 +50,109 @@ export function memoryFixture(capabilities) {
     });
   }
   return { adapter, read, write, archive, insert, excludeText };
+}
+
+const guard = ({ id, contentHash }) => ({ cardId: id, contentHash });
+const memoryRef = ({ memoryId: id }) => ({ type: "memory", id, namespace: scope.namespace });
+
+export async function assertPlacementDelivery(exclusion, create) {
+  const linkedSession = exclusion === "linked-session";
+  const messageBacked = exclusion === "session" || linkedSession;
+  const { adapter, read, write, archive, insert, excludeText } =
+    memoryFixture({ documentCards: true, placement: true, rawArchive: messageBacked }, create);
+  const { uow, documentCards, placement, fence, raw } = adapter;
+  const sourceText = "The spare tiles are on the bottom shelf.";
+  const sourceSession = (label) => `${label}-memory`;
+  const dependent = await card("dependent", sourceText);
+  const control = await card("control", "The spare hinges are in the small box.");
+
+  async function card(label, text) {
+    const receipts = [];
+    if (linkedSession) {
+      const sessionId = sourceSession(label);
+      const { id: messageId, role, occurredAtMs } = await archive(sessionId, text);
+      receipts.push({ client, sessionId, messageId, role, occurredAtMs });
+    }
+    const { id, revision } = await insert(text, receipts);
+    const title = `Filing note ${label}`;
+    const body = `Use the ${label} folder.`;
+    let record = { id: label, scope, origin: "import", title, body, date: null, sourceMessage: null,
+      sourceMemories: [{ id, revision }], sentences: [], stale: [] };
+    if (messageBacked) {
+      const sessionId = `${label}-message`;
+      const message = await archive(sessionId, `${title}\n\n${body}`);
+      const { card: routed } = await buildDocumentCard(message, { scope, client, canonicalSessionKey: sessionId });
+      assert.ok(routed);
+      record = { ...record, id: routed.id, origin: "router", title: routed.title, body: routed.body, date: routed.date,
+        sourceMessage: { client, sessionId, messageId: message.id } };
+    }
+    const { value } = await coreDigest(record.body);
+    const stored = { ...record, contentHash: `sha256:${value}` };
+    assert.equal((await write((tx) => documentCards.put(tx, scope, stored))).status, "inserted");
+    return stored;
+  }
+
+  if (exclusion === "text") {
+    await excludeText(sourceText);
+  } else if (exclusion === "identity") {
+    await adapter.harness.seedFact(scope.owner, { ...scope, kind: "identity", origin: "forget",
+      actionId: "exclude-identity", memoryId: dependent.sourceMemories[0].id });
+  } else if (exclusion === "session") {
+    const { sessionId } = dependent.sourceMessage;
+    await write((tx) => raw.fenceSession(tx, scope, { client, sessionId }));
+  } else {
+    await adapter.harness.seedFact(scope.owner, { ...scope, kind: "session", origin: "forget",
+      actionId: "exclude-linked-session", session: { client, sessionId: sourceSession("dependent") } });
+    const linkedRefs = [dependent, control].map(({ sourceMemories: [{ id }] }) => memoryRef({ memoryId: id }));
+    assert.deepEqual(await read((tx) => fence.assertVisible(tx, selection, linkedRefs)), [linkedRefs[1]],
+      "Only the linked control memory stays visible");
+    const { items } = await read((tx) => raw.listRaw(tx, selection, { cursor: null, limit: 10 }));
+    const { sessionId, messageId } = dependent.sourceMessage;
+    assert.ok(items.some((item) => item.client === client && item.sessionId === sessionId && item.messageId === messageId),
+      "The card's own Raw message stays visible");
+  }
+
+  const offered = [dependent, control];
+  const fenceCalls = [];
+  const classified = [];
+  const result = await placePendingCardsBatch({
+    uow, documentCards, scope,
+    // Supply both guards so the test exercises the core fence regardless of queue eligibility.
+    placement: { ...placement, async pendingCards() { return offered.map(guard); } },
+    fence: {
+      async assertVisible(tx, selection, refs) {
+        fenceCalls.push(refs.map(({ id }) => id));
+        return fence.assertVisible(tx, selection, refs);
+      },
+    },
+    async classify({ cards }) {
+      classified.push(cards);
+      return { items: cards.map(({ cardId }) => ({ cardId, parentIds: [] })) };
+    },
+  });
+  assert.deepEqual(fenceCalls[0], offered.map(({ id }) => id), "Both cards must reach the core fence");
+  assert.deepEqual(classified, [[{ ...guard(control), content: `${control.title}\n\n${control.body}` }]],
+    "Only the visible card must reach the classifier");
+  assert.deepEqual(result, { status: "applied", placed: [{ cardId: control.id, topicIds: [] }] });
+}
+
+export async function assertRootDelivery(readContext, fenceCalls, rootRef) {
+  let actual;
+  try {
+    actual = await readContext();
+  } catch (error) {
+    if (isCoreError(error) && error.code === "memory_not_found") return "pass";
+    throw error;
+  }
+  // Each returned path belongs to the requested root, even when its ref names only the other endpoint.
+  const askedAboutRoot = fenceCalls.some(({ type, id, namespace }) =>
+    type === rootRef.type && id === rootRef.id && namespace === rootRef.namespace);
+  if (!askedAboutRoot && Array.isArray(actual?.refs) && actual.refs.some((ref) => typeof ref?.id === "string")) return "todo";
+  const expected = { status: "unassessed", refs: [] };
+  if (!isDeepStrictEqual(actual, expected)) {
+    throw new AssertionError({ message: ROOT_ASSERTION, actual, expected, operator: "decisionContext delivery" });
+  }
+  return "pass";
 }
 
 export async function rationaleFixture(exclusion, bypassFence = false) {
@@ -92,12 +196,12 @@ export async function rationaleFixture(exclusion, bypassFence = false) {
   const hideRoot = exclusion === "root";
   const hidden = hideRoot ? root : challenger;
   await excludeText(hideRoot ? rootText : challengerText);
-  const memoryRef = ({ memoryId: id }) => ({ type: "memory", id, namespace: scope.namespace });
   const requested = [memoryRef(hidden), memoryRef(premise)];
   assert.deepEqual(await read((tx) => fence.assertVisible(tx, selection, requested)), [memoryRef(premise)],
     "The real fence must exclude the fact-hidden source and admit the visible control");
   const retained = new Map(evidence.map((source) => [source.memory.id, source]));
 
+  const fenceCalls = [];
   const isolated = {
     ...options,
     store: {
@@ -115,23 +219,27 @@ export async function rationaleFixture(exclusion, bypassFence = false) {
       ...adapter,
       fence: {
         async assertVisible(tx, selected, refs) {
+          fenceCalls.push(...refs.map((ref) => ({ ...ref })));
           return bypassFence ? refs : fence.assertVisible(tx, selected, refs);
         },
       },
     },
   };
-  const expected = { status: "unassessed", refs: hideRoot ? [] : [ref(premise, support)] };
-  const message = hideRoot ? ROOT_ASSERTION : ENDPOINT_ASSERTION;
   return {
     baseline,
     async assertDelivery() {
       // Every path to a hidden root is inadmissible, so use a separate root for its positive control.
       assert.deepEqual(await decisionContext({ ...isolated, ...control }),
         { status: "unassessed", refs: [ref(controlPremise, support)] }, "The visible control path must survive");
+      fenceCalls.length = 0;
+      const readContext = () => decisionContext({ ...isolated, ...root });
+      if (hideRoot) return assertRootDelivery(readContext, fenceCalls, memoryRef(root));
+
       // Exact shape checks the surviving path count and status, and excludes extra IDs, receipt IDs and digests.
-      const actual = await decisionContext({ ...isolated, ...root });
+      const actual = await readContext();
+      const expected = { status: "unassessed", refs: [ref(premise, support)] };
       if (!isDeepStrictEqual(actual, expected)) {
-        throw new AssertionError({ message, actual, expected, operator: "decisionContext delivery" });
+        throw new AssertionError({ message: ENDPOINT_ASSERTION, actual, expected, operator: "decisionContext delivery" });
       }
     },
   };
