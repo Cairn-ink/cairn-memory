@@ -7,6 +7,13 @@ export interface PassageFingerprint {
   digests: readonly TextDigest[];
   shingles: string[] | null;
   keyId: string | null;
+  /** Shingles signed by retained Core HMAC keys, scoped to the spelling of this passage. */
+  retainedShingles?: readonly RetainedShingles[];
+}
+
+export interface RetainedShingles {
+  keyId: string;
+  shingles: readonly string[];
 }
 
 export interface SuppressionSnapshot {
@@ -84,7 +91,7 @@ export interface PauseStore {
 export interface FingerprintKeyProvider {
   /** null when no key is configured: the store then uses FORGET_POLICY.withoutKey. Key ids stay stable. */
   userKey(owner: OwnerId): Promise<{ id: string; signingKey: CryptoKey } | null>;
-  /** Signers for every non-current domain with live HMAC-only facts for this owner. Called outside a UoW. */
+  /** Signers for non-current domains with live HMAC-only facts or retained Core shingle evidence for this owner. */
   retainedDigesters?(owner: OwnerId): Promise<ReadonlyArray<RetainedDigester>>;
 }
 
@@ -92,7 +99,7 @@ export interface RetainedDigester {
   alg: string;
   keyId: string;
   label: string;
-  /** Signs normalized, redacted text locally and returns a lowercase 64-character hex MAC. */
+  /** Signs the supplied spelling or shingle locally. Never persists, logs or transmits the input. */
   mac(text: string): Promise<string>;
 }
 

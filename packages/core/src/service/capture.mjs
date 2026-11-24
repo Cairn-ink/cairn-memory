@@ -4,7 +4,7 @@ import { countTokens, MODEL_OUTPUT_TOKENS, modelRequestText } from "../capture/r
 import { detach, identifier, isWellFormedText, validateDenseArray, validateObject } from "../capture/validate.mjs";
 import { CoreError, isErrorCode } from "../errors.mjs";
 import { plainExtractionSpec, validatePlainCandidates } from "../extraction/extraction.mjs";
-import { fingerprintMemoryPassages, retainedDigestBuilder } from "../privacy/fingerprint.mjs";
+import { fingerprintMemoryPassages } from "../privacy/fingerprint.mjs";
 import { redactCore } from "../privacy/redact.mjs";
 import { cleanContent, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
 import { requiresLegacyMacDomain, withholdsAnyPassage } from "../privacy/withholds.mjs";
@@ -230,9 +230,9 @@ export function captureMethods(deps) {
         prepared.map(({ id, role, content, occurredAtMs }) => [id, role, content.replace(/\s+/gu, " ").trim(), occurredAtMs])]));
       const key = { scope, client, sessionId, eventId, payloadDigest };
       const fingerprintKey = capabilities.fingerprintKey ? await keys.userKey(scope.owner) : null;
-      const retainedFor = retainedDigestBuilder(await keys?.retainedDigesters?.(scope.owner));
-      const evidence = retainedFor && await Promise.all(incoming.map(({ message, originalContent }) =>
-        fingerprintMemoryPassages(originalContent, message.content, fingerprintKey, undefined, retainedFor)));
+      const digesters = await keys?.retainedDigesters?.(scope.owner);
+      const evidence = digesters?.length ? await Promise.all(incoming.map(({ message, originalContent }) =>
+        fingerprintMemoryPassages(originalContent, message.content, fingerprintKey, undefined, digesters))) : null;
       return uow.run(scope.owner, { pauseLock: true }, async tx => {
         if (pauseResult(await pause.get(tx, scope.owner)).paused) return { status: "paused" };
         const session = { client, sessionId };

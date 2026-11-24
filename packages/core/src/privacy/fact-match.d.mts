@@ -1,4 +1,5 @@
 import type { Scope } from "../ports/common.d.ts";
+import type { RetainedShingles } from "../ports/privacy.d.ts";
 import type { SessionRef, StoredFact, TextDigest } from "../suppression-fact.mjs";
 
 export { NEAR_DUPLICATE_DISTANCE, SUPPRESSION_DISTANCE } from "../decisions.mjs";
@@ -55,6 +56,7 @@ export interface FactMatchIncoming {
   scope: Scope;
   passages: readonly (Pick<FactMatchRowFields, "shingles" | "keyId" | "embedding"> & {
     digests: readonly TextDigest[];
+    retainedShingles?: readonly RetainedShingles[];
   })[];
   session?: SessionRef;
   occurredAtMs?: number | null;

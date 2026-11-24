@@ -100,11 +100,16 @@ export function snapshotReader() {
   function fingerprint(input) {
     const data = record(input);
     const shingles = field(data, "shingles");
+    const retainedShingles = field(data, "retainedShingles");
     return Object.freeze({
       digests: digests(field(data, "digests")),
       // Sparse shingle evidence matters only for full-mode comparisons.
       shingles: shingles == null ? shingles : array(shingles, string) ?? false,
       keyId: optionalString(field(data, "keyId")),
+      retainedShingles: retainedShingles === undefined ? undefined : list(retainedShingles, evidence => {
+        const entry = record(evidence);
+        return Object.freeze({ keyId: string(field(entry, "keyId")), shingles: list(field(entry, "shingles"), string) });
+      }),
     });
   }
 
@@ -201,8 +206,12 @@ export const isValidThreshold = (threshold) => typeof threshold === "number" && 
 
 /** @param {DigestSnapshot} left @param {DigestSnapshot} right */
 function sameDigestDomain(left, right) {
-  return left.alg === right.alg && left.keyId === right.keyId &&
-    (left.keyId === null || (left.label ?? left.pipeline) === (right.label ?? right.pipeline));
+  if (left.alg !== right.alg || left.keyId !== right.keyId) return false;
+  if (left.label === undefined && right.label === undefined) {
+    return left.keyId === null || left.pipeline === right.pipeline;
+  }
+  return left.pipeline === right.pipeline && left.redactionVersion === right.redactionVersion &&
+    (left.label ?? left.pipeline) === (right.label ?? right.pipeline);
 }
 
 /** @param {readonly DigestSnapshot[]} a @param {readonly DigestSnapshot[]} b */
@@ -226,40 +235,41 @@ export function exactDigestMatch(a, b) {
 
 /** @param {readonly DigestSnapshot[]} a @param {readonly DigestSnapshot[]} b */
 export function compareValidatedDigests(a, b) {
-  // A legacy or explicitly labelled HMAC-only fact needs evidence for all its domains to prove a miss.
-  const requireAllDomains = b.every(digest => digest.keyId !== null) &&
-    b.some(digest => digest.label !== undefined || digest.pipeline !== "core");
   let comparable = false;
-  let missingDomain = false;
   for (const right of b) {
-    let compared = false;
     for (const left of a) {
       if (!sameDigestDomain(left, right)) continue;
       if (left.value === right.value) return true;
-      compared = true;
+      comparable = true;
     }
-    comparable ||= compared;
-    missingDomain ||= !compared;
   }
-  return comparable && !(requireAllDomains && missingDomain) ? false : "ineligible";
+  return comparable ? false : "ineligible";
 }
 
 /**
- * @param {Pick<FingerprintSnapshot, "shingles" | "keyId">} passage
- * @param {Partial<Pick<FingerprintSnapshot, "shingles" | "keyId">>} reference
+ * @param {Partial<FingerprintSnapshot>} passage
+ * @param {Partial<FingerprintSnapshot>} reference
  * @param {number} threshold
  * @param {boolean} checkContainment
  * @param {boolean} [containmentKeyUnavailable]
  */
 export function shingleContainmentMatch(passage, reference, threshold, checkContainment, containmentKeyUnavailable = false) {
-  if (!Array.isArray(passage.shingles) || !Array.isArray(reference.shingles) ||
-      !passage.shingles.every(isHex) || !reference.shingles.every(isHex)) return "ineligible";
-  if (!isKeyId(passage.keyId) || !isKeyId(reference.keyId)) return "ineligible";
-  if (!checkContainment) return false;
-  if (containmentKeyUnavailable || reference.keyId !== passage.keyId) return "ineligible";
-  if (passage.shingles.length === 0 || reference.shingles.length === 0) return false;
+  if (reference.shingles == null && passage.digests?.some(left => left.label !== undefined &&
+    reference.digests?.some(right => sameDigestDomain(left, right)))) return false;
 
-  const shingles = new Set(passage.shingles);
+  const retained = Array.isArray(passage.retainedShingles) &&
+    reference.digests?.some(digest => digest.alg === "hmac" && digest.keyId === reference.keyId &&
+      digest.pipeline === "core" && (digest.label ?? digest.pipeline) === "core") &&
+    passage.retainedShingles.find(evidence => evidence.keyId === reference.keyId);
+  const candidate = retained || passage;
+  if (!Array.isArray(candidate.shingles) || !Array.isArray(reference.shingles) ||
+      !candidate.shingles.every(isHex) || !reference.shingles.every(isHex)) return "ineligible";
+  if (!isKeyId(candidate.keyId) || !isKeyId(reference.keyId)) return "ineligible";
+  if (!checkContainment) return false;
+  if ((!retained && containmentKeyUnavailable) || reference.keyId !== candidate.keyId) return "ineligible";
+  if (candidate.shingles.length === 0 || reference.shingles.length === 0) return false;
+
+  const shingles = new Set(candidate.shingles);
   const shared = reference.shingles.filter((shingle) => shingles.has(shingle)).length;
   // Round toward withholding at the threshold.
   return shared > 0 && shared / reference.shingles.length >= threshold - 1e-12;

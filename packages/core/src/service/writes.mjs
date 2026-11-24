@@ -2,7 +2,7 @@ import { identifier, isWellFormedText, revision, validateObject } from "../captu
 import { NEAR_DUPLICATE_DISTANCE } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
 import { decideWrite, planCorrect, planDuplicateMerge } from "../memory-policy/index.mjs";
-import { addDigest, allDigests, coreDigest, coreFingerprintLabels, fingerprintMemoryPassages, legacyExactMac, passageShingles, retainedDigestBuilder } from "../privacy/fingerprint.mjs";
+import { addDigest, allDigests, coreDigest, coreFingerprintLabels, fingerprintMemoryPassages, legacyExactMac, passageShingles, textVariants } from "../privacy/fingerprint.mjs";
 import { PRIVACY_REDACTION_VERSIONS, redactCore, redactHostedCurrent, redactV1 } from "../privacy/redact.mjs";
 import { cleanContent, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
 import { blocksMemoryPassage, withholdsAnyPassage } from "../privacy/withholds.mjs";
@@ -43,16 +43,15 @@ export function sourceOf(value) {
 }
 
 /** @param {string} raw @param {string} text @param {FingerprintKey | null} key
- * @param {ReturnType<typeof retainedDigestBuilder>} retainedFor @returns {Promise<DuplicateQuery>}
+ * @returns {Promise<DuplicateQuery>}
  */
-async function hashesOf(raw, text, key, retainedFor) {
-  const [[core, ...aliases], current, retained] = await Promise.all([
-    allDigests(raw, null), key && allDigests(text, key), retainedFor?.(text),
+async function hashesOf(raw, text, key) {
+  const [[core, ...aliases], current] = await Promise.all([
+    allDigests(raw, null), key && allDigests(text, key),
   ]);
-  const digests = retained?.length ? [...(current ?? []), ...retained] : current;
   const legacy = aliases.at(-1);
   return { textHash: 'sha256:' + core.value, ...(legacy && { legacyHash: 'sha256:' + legacy.value }),
-    ...(digests && { digests }) };
+    ...(current && { digests: current }) };
 }
 
 /** @param {string} raw @param {string} text @param {FingerprintKey | null} key
@@ -60,28 +59,13 @@ async function hashesOf(raw, text, key, retainedFor) {
  * @param {readonly RetainedDigester[]} [digesters]
  */
 export async function prepareWriteText(raw, text, key, sha256Hex, digesters) {
-  const retainedFor = retainedDigestBuilder(digesters);
   const [query, passages] = await Promise.all([
-    hashesOf(raw, text, key, retainedFor),
-    fingerprintMemoryPassages(raw, text, key, sha256Hex, retainedFor),
+    hashesOf(raw, text, key),
+    fingerprintMemoryPassages(raw, text, key, sha256Hex, digesters),
   ]);
+  const retained = passages[0].digests.filter(digest => digest.label !== undefined);
+  if (retained.length) query.digests = [...(query.digests ?? []), ...retained];
   return { query, passages };
-}
-
-/** @param {string} raw @param {string} text */
-function textVariants(raw, text) {
-  const original = cleanContent(raw);
-  const { v1, hostedCurrent, core } = PRIVACY_REDACTION_VERSIONS;
-  /** @type {Array<[string, TextDigest["pipeline"], number]>} */
-  const variants = [
-    [original, "hosted-v1", v1],
-    [redactV1(original), "hosted-v1", v1],
-    [redactHostedCurrent(original), "hosted-v1", hostedCurrent],
-    [text, "core", core],
-    // Hosted capture derives its stored V1 evidence after capture normalization.
-    [redactV1(original.normalize("NFKC")), "hosted-v1", v1],
-  ];
-  return variants;
 }
 
 /** @param {Scope} scope @param {MemoryRow} row @param {FingerprintKey} key

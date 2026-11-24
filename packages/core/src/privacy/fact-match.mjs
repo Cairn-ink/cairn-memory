@@ -13,7 +13,8 @@ export const SUPPRESSION_DISTANCE_TOLERANCE = 1e-6;
 /** @import { Scope } from "../ports/common.d.ts" */
 /** @import { SessionRef, StoredFact, SuppressionFact, TextFact, WindowFact } from "../suppression-fact.mjs" */
 
-/** @typedef {Pick<FactMatchRow, "digests" | "shingles" | "keyId" | "embedding">} TextCandidate */
+/** @typedef {Pick<FactMatchRow, "digests" | "shingles" | "keyId" | "embedding"> &
+ * Pick<FactMatchIncoming["passages"][number], "retainedShingles">} TextCandidate */
 
 /** @param {unknown} value @returns {value is string} */
 const nonempty = (value) => typeof value === "string" && value.length > 0;
@@ -122,7 +123,11 @@ function matchReader() {
     incoming(incoming, useShingles) {
       /** @param {unknown} value */
       const passage = (value) => record(value, useShingles ? ["keyId"] : [], {
-        ...(useShingles ? fingerprintLists : fingerprintDigests), embedding: candidateEmbedding,
+        ...(useShingles ? {
+          ...fingerprintLists,
+          retainedShingles: (value) => list(value, item =>
+            record(item, ["keyId"], { shingles: value => list(value, scalar) })),
+        } : fingerprintDigests), embedding: candidateEmbedding,
       });
       return /** @type {FactMatchIncoming} */ (/** @type {unknown} */ (record(incoming, ["occurredAtMs"], {
         scope, passages: (value) => list(value, passage, true), session: source, sourceMemory: incarnation,

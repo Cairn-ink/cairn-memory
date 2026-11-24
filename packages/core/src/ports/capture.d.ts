@@ -54,7 +54,7 @@ export interface FinishItem {
   kind: MemoryKind;
   confidence: number;
   textHash: string;
-  /** Stores persist Core's current digests and any retained-domain MACs, with their labels. */
+  /** Addenda 5 and 13. Persist current digests and retained exact evidence with labels, pipelines and redaction versions. */
   digests?: TextDigest[];
   /** null when not embedded at write time (rule 10). */
   embedding: { model: string; vector: Float32Array } | null;
