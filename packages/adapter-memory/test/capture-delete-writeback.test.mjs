@@ -149,8 +149,12 @@ test("deleting a conversation withdraws its ledger messages from capture", async
     assert.deepEqual(await read(tx => capture.eligible(tx, resent, messages)), [],
       "eligible accepted deleted text in a new event");
   });
+  await t.test("assertEligible rejects a withdrawn position with suppressed", async () => {
+    await assert.rejects(write(tx => capture.assertEligible(tx, key, [0])), { code: "suppressed" },
+      "assertEligible accepted a withdrawn position");
+  });
   await t.test("assertEligible rejects a stored resend of deleted text with suppressed", async () => {
-    // Core withdraws a blanked slot itself, so the adapter must catch the resend whose text looks unchanged.
+    // The resend's text looks unchanged, so only the delete tombstone can reject it.
     await admitAndClaim(f, resent, messages);
     await assert.rejects(write(tx => capture.assertEligible(tx, resent, [0])), { code: "suppressed" },
       "assertEligible accepted deleted text in a new event");
