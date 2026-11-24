@@ -807,3 +807,14 @@ still apply. On writes, only an explicit save that inserts a new physical row
 can qualify, using the server clock in the save transaction. Duplicate touches
 use full matching for cutoff-bearing facts. When the field is absent, full text
 matching follows the caller's existing policy.
+
+For legacy cutoff-bearing facts, explicit saves check exact passages from both
+ICU sentence segmentation and a split of the normalized text at sentence
+punctuation followed by whitespace.
+
+The Postgres batch copy merges rows that share a slot and have identical matching
+evidence at the latest cutoff. A slot with differing evidence yields no copied
+fact and returns every affected legacy row ID in `uncopyable`. The host may set
+`legacy_writes_reconciled` only once legacy writes have stopped, all facts are
+copied, and the owner has no uncopyable rows. The live union applies every legacy
+row until reconciliation.

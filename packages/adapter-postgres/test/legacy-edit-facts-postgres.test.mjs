@@ -51,12 +51,12 @@ async function fixture(t) {
   }
 
   async function legacyText(origin, text = original, {
-    textHash, textHmac = null, key = null, shingles = null, id = "legacy-text", created = cutoff,
+    textHash, textHmac = null, key = null, shingles = null, id = "legacy-text", created = cutoff, vector = embedding,
   } = {}) {
     const { value } = await hostedV1Digest(text);
     await pool.query(`INSERT INTO suppressions (id, user_id, kind, origin, text_hash, embedding, created_at, text_hmac, key_id, shingles)
       VALUES ($1, $2, 'text', $3, $4, $5, $6, $7, $8, $9)`,
-    [id, owner, origin, textHash ?? value, JSON.stringify(embedding), created, textHmac, key, shingles]);
+    [id, owner, origin, textHash ?? value, JSON.stringify(vector), created, textHmac, key, shingles]);
   }
 
   async function visible(ids, wanted) {
@@ -95,11 +95,15 @@ async function fixture(t) {
   }
 
   async function copyFacts() {
-    for (const fact of legacySuppressionsToFacts(await legacyRows(), owner)) {
+    const { facts, uncopyable } = legacySuppressionsToFacts(await legacyRows(), owner);
+    for (const fact of facts) {
       const incarnation = createHash("sha256").update(factIncarnationBody(fact)).digest("hex");
       await uow.run(owner, {}, tx => suppressions.writeFact(tx, fact, incarnation));
     }
-    await pool.query("UPDATE core_owner_state SET legacy_writes_reconciled = true WHERE user_id = $1", [owner]);
+    if (uncopyable.length === 0) {
+      await pool.query("UPDATE core_owner_state SET legacy_writes_reconciled = true WHERE user_id = $1", [owner]);
+    }
+    return { facts, uncopyable };
   }
 
   return { pool, uow, memory, memoryStore, suppressions, legacyText, visible, exactResaveIsBlocked, legacyRows, copyFacts };
@@ -259,13 +263,30 @@ test("copying repeated forgets retains the latest cutoff per slot regardless of 
   await f.memory("between", "Notebook is on the middle shelf");
   await f.visible(["between"], []);
   const rows = await f.legacyRows();
-  const facts = legacySuppressionsToFacts(rows, owner);
+  const result = legacySuppressionsToFacts(rows, owner);
+  const { facts, uncopyable } = result;
   assert.equal(facts.length, 1);
-  assert.deepEqual(legacySuppressionsToFacts(rows.reverse(), owner), facts);
+  assert.deepEqual(uncopyable, []);
+  assert.deepEqual(legacySuppressionsToFacts(rows.reverse(), owner), result);
   assert.equal(facts[0].explicitSaveExemptAfterUs, "1735689600000600");
   await f.copyFacts();
   assert.equal((await f.pool.query("SELECT count(*)::int AS count FROM core_suppression_facts")).rows[0].count, 1);
   await f.visible(["between"], []);
+});
+
+test("a repeated slot with different vectors stays live and reports both legacy row IDs", migrationDbTest, async t => {
+  const f = await fixture(t);
+  await f.legacyText("forget", original, { id: "first-forget" });
+  await f.legacyText("forget", original, { id: "later-forget", created: "2025-01-01T00:00:00.000600Z", vector: far });
+  await f.memory("capture", "Notebook is on the middle shelf", { kind: "plugin" });
+  await f.visible(["capture"], []);
+
+  const result = await f.copyFacts();
+  assert.deepEqual(result, { facts: [], uncopyable: ["first-forget", "later-forget"] });
+  assert.equal((await f.pool.query("SELECT count(*)::int AS count FROM core_suppression_facts")).rows[0].count, 0);
+  assert.equal((await f.pool.query("SELECT legacy_writes_reconciled FROM core_owner_state WHERE user_id = $1",
+    [owner])).rows[0].legacy_writes_reconciled, false);
+  await f.visible(["capture"], []);
 });
 
 const web = { kind: "web", client: null, sessionId: null };
@@ -333,13 +354,15 @@ test("later explicit saves still withhold an exact re-save and multi-sentence co
 test("a lowercase exact sentence is withheld under a keyless SHA-only legacy forget", migrationDbTest, async t => {
   const f = await writeFixture(t, { keyed: false });
   await f.forget();
-  const text = `A journal entry follows. ${forgottenSentence.toLowerCase()}`;
-  for (const source of [web, mcp]) {
-    assert.equal((await f.service.save(scope, text, source)).status, "suppressed");
-  }
-  await f.copyFacts();
-  for (const source of [web, mcp]) {
-    assert.equal((await f.service.save(scope, text, source)).status, "suppressed");
+  const prefix = `A journal entry follows. ${forgottenSentence.toLowerCase()}`;
+  const cases = [["two sentences", prefix], ["mixed-case boundary", `${prefix} A new entry begins.`]];
+  for (const phase of ["live", "copied"]) {
+    if (phase === "copied") await f.copyFacts();
+    for (const [label, text] of cases) {
+      for (const source of [web, mcp]) {
+        assert.equal((await f.service.save(scope, text, source)).status, "suppressed", `${phase} ${source.kind} ${label}`);
+      }
+    }
   }
   assert.equal((await f.pool.query("SELECT count(*)::int AS count FROM memories")).rows[0].count, 0);
 });

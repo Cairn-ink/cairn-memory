@@ -81,14 +81,16 @@ must keep each non-null `legacy_ref` within 256 UTF-8 bytes so the owner and
 reference can be indexed together.
 
 Use `legacySuppressionsToFacts(rows, owner)` to convert an owner's legacy rows
-before writing it into `core_suppression_facts`. The batch helper calls
+before writing them into `core_suppression_facts`. The batch helper calls
 `legacySuppressionToFact(row, owner)`, which the live read union also uses.
-The batch helper emits one fact per storage slot and keeps the latest cutoff
-when repeated suppressions share a slot. This query projects the expected row
-shape.
+It returns `{ facts, uncopyable }`. Include all rows sharing a slot in the same
+batch. Rows with identical matching evidence in one slot merge at the latest
+cutoff. If a slot has conflicting matching evidence such as different embeddings,
+the helper omits that slot from `facts` and returns every legacy row ID for the
+slot in `uncopyable`. This query projects the expected row shape.
 
 ```sql
-SELECT kind, origin, client, session_id, text_hash, text_hmac, key_id,
+SELECT id, kind, origin, client, session_id, text_hash, text_hmac, key_id,
   redaction_version, embedding::text AS embedding, shingles,
   floor(EXTRACT(EPOCH FROM window_start) * 1000) AS start_ms,
   ceil(EXTRACT(EPOCH FROM window_end) * 1000) AS end_ms,
@@ -201,9 +203,11 @@ visibility checks for duplicates, export, recent, hydration, and the memory
 fence. A pending legacy suppression copy closes those reads and write policy
 for owners with legacy suppression rows. Once the copy is ready, both fact stores
 remain authoritative until the final per-owner reconciliation. Set migration
-0015's `legacy_writes_reconciled` after stopping legacy suppression writes and
-copying all remaining facts for that owner. Receipt-less rows use their stored
-source and creation/write times for session and window checks.
+0015's `legacy_writes_reconciled` only after stopping legacy suppression writes,
+copying all remaining facts for that owner, and confirming `uncopyable` is empty
+across the owner's copy. Until then, the live union continues to apply every
+legacy row. Receipt-less rows use their stored source and creation/write times
+for session and window checks.
 
 State tokens assume all writers advance `core_owner_state` in the same
 transaction as retrieval-affecting changes. Legacy hosted writers must do so

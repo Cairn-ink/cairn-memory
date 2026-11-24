@@ -61,8 +61,10 @@ export type LegacySuppressionRow = {
 );
 /** Convert a legacy suppression projection into the same fact used by the live read union. */
 export function legacySuppressionToFact(row: LegacySuppressionRow, owner: string): SuppressionFact;
-/** Convert a legacy copy batch, retaining the latest explicit-save cutoff per storage slot. */
-export function legacySuppressionsToFacts(rows: readonly LegacySuppressionRow[], owner: string): SuppressionFact[];
+/** Merge identical evidence at the latest cutoff and return the legacy row IDs for conflicting slots. */
+export function legacySuppressionsToFacts(
+  rows: readonly (LegacySuppressionRow & { id: string })[], owner: string,
+): { facts: SuppressionFact[]; uncopyable: string[] };
 type SessionHashOptions = Pick<FactMatchPolicy, "hashSessionKey">;
 export function createPostgresSuppressionStore(
   options?: SessionHashOptions & Pick<FactMatchPolicy, "vectorSuppression"> & { sessionRefs?: "plain" | "hashed"; allowNonNullNamespace?: boolean },

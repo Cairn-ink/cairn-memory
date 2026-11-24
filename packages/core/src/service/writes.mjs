@@ -306,13 +306,18 @@ async function withheld(suppressions, tx, scope, source, passages, key, edit, ex
   const { raw, sha256Hex, digesters } = explicitSave;
   // Whole-text variants preserve legacy digest and shingle evidence. Sentence
   // fingerprints also let exact passage matches block a multi-sentence save.
-  let sentences = Array.from(sentenceSegmenter.segment(raw), ({ segment }) => segment.trim()).filter(Boolean);
-  if (sentences.length < 2) {
-    // ICU can keep a lowercase sentence after a period in the preceding segment.
-    sentences = prepareCoreText(raw).split(/(?<=[.!?。！？])\s+/u);
-  }
-  const candidates = sentences.length > 1 ? passages.concat((await Promise.all(sentences.map(sentence =>
-    fingerprintMemoryPassages(sentence, prepareCoreText(sentence), key, sha256Hex, digesters)))).flat()) : passages;
+  // ICU can keep a lowercase sentence after a period in the preceding segment.
+  const normalized = prepareCoreText(raw);
+  const sentences = new Set([
+    ...Array.from(sentenceSegmenter.segment(raw), ({ segment }) => segment.trim()),
+    ...normalized.split(/(?<=[.!?。！？])\s+/u),
+  ]);
+  // Whole-text spellings are already in passages.
+  sentences.delete(raw.trim());
+  sentences.delete(normalized);
+  const sentencePassages = await Promise.all([...sentences].filter(Boolean).map(sentence =>
+    fingerprintMemoryPassages(sentence, prepareCoreText(sentence), key, sha256Hex, digesters)));
+  const candidates = passages.concat(sentencePassages.flat());
   const blocked = legacy.some(entry => factBlocksIncoming(entry, { scope, passages: candidates },
     { mode: "explicitSave", key }) !== false);
   return { blocked, mayExemptVector: legacy.some(({ fact }) => fact.explicitSaveExemptAfterUs !== "infinity") };

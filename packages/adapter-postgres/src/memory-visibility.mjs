@@ -73,21 +73,52 @@ function legacyCutoff(fact) {
   return BigInt(cutoff);
 }
 
-/** @param {readonly LegacySuppressionRow[]} rows @param {string} owner */
+/** @param {SuppressionFact} fact */
+function legacyMatchingBody(fact) {
+  // The legacy matcher treats non-edit origins alike. The cutoff value can be
+  // merged by taking the maximum only when both facts have a cutoff.
+  const origin = fact.origin === "edit" ? "edit" : "backfill";
+  return factBody(fact.kind === "text" && fact.explicitSaveExemptAfterUs !== undefined
+    ? { ...fact, origin, explicitSaveExemptAfterUs: "infinity" }
+    : { ...fact, origin });
+}
+
+/** @param {readonly (LegacySuppressionRow & { id: string })[]} rows @param {string} owner */
 export function legacySuppressionsToFacts(rows, owner) {
-  /** @type {Map<string, SuppressionFact>} */
+  /** @type {Map<string, { fact: SuppressionFact | null, rowIds: string[] }>} */
   const bySlot = new Map();
   for (const row of rows) {
+    if (typeof row.id !== "string") throw new CoreError("invalid_input");
     const fact = legacySuppressionToFact(row, owner);
     const slot = factSlot(fact);
     const previous = bySlot.get(slot);
+    if (!previous) {
+      bySlot.set(slot, { fact, rowIds: [row.id] });
+      continue;
+    }
+    previous.rowIds.push(row.id);
+    if (previous.fact === null) continue;
+    if (legacyMatchingBody(fact) !== legacyMatchingBody(previous.fact)) {
+      previous.fact = null;
+      continue;
+    }
     const cutoff = legacyCutoff(fact);
-    if (!previous || cutoff > legacyCutoff(previous) ||
-      (cutoff === legacyCutoff(previous) && compareUtf8(factBody(fact), factBody(previous)) < 0)) {
-      bySlot.set(slot, fact);
+    const previousCutoff = legacyCutoff(previous.fact);
+    if (cutoff > previousCutoff ||
+      (cutoff === previousCutoff && compareUtf8(factBody(fact), factBody(previous.fact)) < 0)) {
+      previous.fact = fact;
     }
   }
-  return [...bySlot.keys()].sort(compareUtf8).map(slot => /** @type {SuppressionFact} */ (bySlot.get(slot)));
+  const facts = [];
+  const uncopyable = [];
+  for (const [, { fact, rowIds }] of [...bySlot].sort(([a], [b]) => compareUtf8(a, b))) {
+    if (fact === null) {
+      for (const id of rowIds) uncopyable.push(id);
+    } else {
+      facts.push(fact);
+    }
+  }
+  return { facts, uncopyable: uncopyable.sort(compareUtf8) };
 }
 
 /** @param {unknown} value @param {bigint} minimum */
