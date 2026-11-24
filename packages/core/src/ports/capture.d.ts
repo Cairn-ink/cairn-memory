@@ -75,6 +75,9 @@ export interface FinishResult {
 /** Writes the capture's memories and completes the claim in one transaction. */
 export interface CaptureFinish {
   finish(tx: Tx, token: string, items: readonly FinishItem[]): Promise<FinishResult>;
+  /** Canonical IDs of the matched, retained capture receipts in input order. Null denotes no match. */
+  retainedReceiptIds?(tx: Tx, scope: Scope, memoryId: string,
+    receipts: readonly (Receipt & { excerpt: string })[]): Promise<readonly (string | null)[]>;
 }
 
 /** Which captured messages may reach the model and the archive. Fails closed on any doubt. */

@@ -333,7 +333,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     return visible;
   }
 
-  /** @param {State} state @param {Scope} scope @param {RawEntry} archived */
+  /** @param {State} state @param {Scope} scope @param {RawEvidence & Pick<RawEntry, "role">} archived */
   async function sourceLineageVisible(state, scope, archived) {
     const { client, sessionId, messageId, role, content } = archived;
     const roots = state.rawAnchors.get(client);
@@ -352,14 +352,23 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     return true;
   }
 
-  /** @param {State} state @param {Scope} scope @param {import("@cairn-ink/core/ports").Receipt} receipt */
-  async function receiptSourcesVisible(state, scope, receipt) {
+  /** @param {State} state @param {Scope} scope @param {import("@cairn-ink/core/ports").Receipt} receipt
+   * @param {string} [admittedContent] */
+  async function receiptSourcesVisible(state, scope, receipt, admittedContent) {
     const { client, sessionId, messageId, role } = receipt;
     const roots = state.rawAnchors.get(client);
     const id = rawId(scope, receipt, messageId);
     if (!state.rawRows.has(id)) {
       const slot = sessionSlot(scope.namespace, receipt);
-      if (state.rawFences.has(slot) || state.rawConflicts.has(id) || roots?.has(slot)) return false;
+      if (state.rawFences.has(slot) || state.rawConflicts.has(id)) return false;
+      if (admittedContent !== undefined) {
+        const source = { ...receipt, content: admittedContent };
+        const facts = scopedFacts(state, scope);
+        const candidate = await readEvidence(scope, facts)(source);
+        return facts.every(stored => factHidesRow(stored, candidate, policy) === false) &&
+          sourceLineageVisible(state, scope, source);
+      }
+      if (roots?.has(slot)) return false;
       // Without the archived turn, the excerpt cannot disambiguate matching IDs.
       for (const root of roots?.values() ?? []) if (root.messages.has(messageId)) return false;
       for (const row of state.rawRows.values()) {
@@ -368,7 +377,8 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
       return true;
     }
     const archived = await findVisibleSource(state, scope, receipt);
-    if (!archived?.content || archived.role !== role) return false;
+    if (!archived?.content || archived.role !== role ||
+        (admittedContent !== undefined && admittedContent !== archived.content)) return false;
     return sourceLineageVisible(state, scope, archived);
   }
 
@@ -387,8 +397,8 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     return rows.map(({ ref }) => ({ ...ref }));
   }
 
-  /** @param {Tx} tx @param {Scope} scope @param {() => Session[]} prepare @param {boolean} [eraseLedger] */
-  function deleteSessions(tx, scope, prepare, eraseLedger = false) {
+  /** @param {Tx} tx @param {Scope} scope @param {() => Session[]} prepare */
+  function deleteSessions(tx, scope, prepare) {
     return port.write(tx, scope, "conditional", () => {
       const namespace = writeNamespace(scope);
       const slots = new Set(prepare().map((session) => sessionSlot(namespace, session)));
@@ -404,8 +414,8 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
           }
         }
         await invalidateRationaleSources(state, namespace, deleted);
-        const ledgerBlanked = eraseLedger ? await blankCaptureMessages(state, namespace,
-          (key) => slots.has(sessionSlot(namespace, key))) : 0;
+        const ledgerBlanked = await blankCaptureMessages(state, namespace,
+          (key) => slots.has(sessionSlot(namespace, key)));
         if (deleted.length || ledgerBlanked) advanceRawInspectEpoch(state);
         if (deleted.length) advanceRevision(run);
         if (ledgerBlanked) run.stateWritten = true;
@@ -597,7 +607,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
       return { rawDeleted };
     },
     async eraseSessions(tx, scope, closure) {
-      return deleteSessions(tx, scope, () => snapshotArray(closure).map(copySession), true);
+      return deleteSessions(tx, scope, () => snapshotArray(closure).map(copySession));
     },
     async purgeWithheld(tx, scope, facts) {
       return port.write(tx, scope, "conditional", () => {
