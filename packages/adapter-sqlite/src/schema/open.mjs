@@ -10,6 +10,7 @@ import { INITIALIZE_STORE, SQLITE_APPLICATION_ID, SQLITE_PHYSICAL_VERSION, STORA
 const layoutTables = [
   "cairn_store", "cairn_memories", "cairn_receipts", "cairn_suppression_facts",
   "cairn_suppression_epochs", "cairn_legacy_denials", "cairn_pause",
+  "cairn_capture_claims", "cairn_capture_outbox", "cairn_capture_abandoned_tokens", "cairn_index_revisions",
 ];
 
 /** @param {Reader} db */

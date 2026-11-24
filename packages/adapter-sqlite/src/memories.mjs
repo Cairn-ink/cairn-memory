@@ -5,7 +5,7 @@ import {
   copyReceipts, encodeContent, invalidInput, scopeKey, validateBatch, validateId, validateMerge, validateSource, writeTime,
 } from "./storage-values.mjs";
 
-/** @import { MemoryMatch, MemoryStore, Scope, Tx } from "@cairn-ink/core/ports" */
+/** @import { DuplicateMerge, DuplicateQuery, MemoryMatch, MemoryStore, Receipt, Scope, SourceRef, Tx } from "@cairn-ink/core/ports" */
 /** @import { Connection, Port } from "./storage-values.mjs" */
 /** @import { Entry } from "./memory-rows.mjs" */
 /** @import { SessionHasher } from "./suppressions.mjs" */
@@ -107,8 +107,72 @@ function duplicateMatches(db, scope, batch, policy, excludeId, hiddenIds) {
   });
 }
 
-/** @param {Port} port @param {SessionHasher} hashSession @returns {MemoryStore} */
-export function createMemoryStore(port, hashSession) {
+/** @param {Connection} db @param {Scope} scope @param {readonly DuplicateQuery[]} input
+ * @param {SourceRef} source @param {"hash" | "full"} mode @param {SessionHasher} hashSession
+ * @param {string} [editId]
+ */
+export function readWritePolicy(db, scope, input, source, mode, hashSession, editId) {
+  const batch = validateBatch(input);
+  validateSource(source);
+  if ((mode !== "hash" && mode !== "full") || (editId !== undefined && typeof editId !== "string")) invalidInput();
+  const policy = scopedSuppression(db, scope, hashSession);
+  const hidden = new Set();
+  const matches = duplicateMatches(db, scope, batch, policy, editId, hidden);
+  const edit = editId === undefined ? undefined : readEntry(db, scope, editId)?.row;
+  const sourceMemory = edit && { id: edit.id, createdAtMs: edit.createdAtMs };
+  const blockedPositions = [];
+  for (const [i, query] of batch.entries()) {
+    if (policy.blocks(query, mode, sourceMemory)) blockedPositions.push(i);
+  }
+  return {
+    matches, hiddenIds: [...hidden].sort(compareUtf8), blockedPositions,
+    blockedSession: policy.blocksSession(source.client, source.sessionId),
+  };
+}
+
+/** @param {Connection} db @param {Scope} scope @param {ReturnType<typeof encodeContent>} content
+ * @param {readonly Receipt[]} receipts @param {number} nowMs @param {number} [createdAtMs]
+ */
+export function insertMemory(db, scope, { body, textHash, legacyHash }, receipts, nowMs, createdAtMs = nowMs) {
+  const time = writeTime(nowMs);
+  if (!Number.isSafeInteger(createdAtMs) || createdAtMs > nowMs) invalidInput();
+  const inserted = db.prepare(`INSERT INTO cairn_memories
+    (owner_id, namespace_key, id, revision, created_at_ms, updated_at_us, text_hash, legacy_hash, body)
+    VALUES (?, ?, lower(hex(randomblob(16))), 1, ?, ?, ?, ?, ?) RETURNING id`)
+    .get(...scopeKey(scope), createdAtMs, time.updatedAtUs, textHash, legacyHash, JSON.stringify(body));
+  if (typeof inserted?.id !== "string") throw new CoreError("internal_error");
+  attachReceipts(db, scope, inserted.id, receipts);
+  return { id: inserted.id, revision: 1, createdAtMs, ...time };
+}
+
+/** @param {Connection} db @param {Scope} scope @param {string} id @param {readonly Receipt[]} receipts
+ * @param {DuplicateMerge} merge @param {number} nowMs
+ * @returns {{outcome: "changed" | "touched", revision: number}}
+ */
+export function touchDuplicate(db, scope, id, receipts, merge, nowMs) {
+  validateId(id);
+  validateMerge(merge);
+  const evidence = copyReceipts(receipts);
+  const { updatedAtUs } = writeTime(nowMs);
+  const entry = readEntry(db, scope, id);
+  if (!entry) throw new CoreError("memory_not_found");
+  const { row } = entry;
+  const confidence = row.historical ? row.confidence : merge.confidence;
+  const kind = row.historical ? row.kind : merge.kind ?? row.kind;
+  const origin = row.historical ? row.origin : merge.origin ?? row.origin;
+  const changed = confidence !== row.confidence || kind !== row.kind || origin !== row.origin;
+  const revision = row.revision + Number(changed);
+  db.prepare(`UPDATE cairn_memories SET revision = ?, updated_at_us = ?,
+    body = json_set(body, '$.confidence', ?, '$.kind', ?, '$.origin', ?) WHERE ${LIVE_SCOPE} AND id = ?`)
+    .run(revision, updatedAtUs, confidence, kind, origin, ...scopeKey(scope), id);
+  attachReceipts(db, scope, id, evidence);
+  return { outcome: changed ? "changed" : "touched", revision };
+}
+
+/** @param {Port} port @param {SessionHasher} hashSession
+ * @param {(db: Connection, tx: Tx) => void} [markDirty] @returns {MemoryStore}
+ */
+export function createMemoryStore(port, hashSession, markDirty) {
   /** @param {Tx} tx @param {Scope} scope @param {string} id */
   function liveRow(tx, scope, id) {
     return port(tx, scope?.owner, {}, db => {
@@ -128,62 +192,22 @@ export function createMemoryStore(port, hashSession) {
     },
 
     readWritePolicy(tx, scope, input, source, mode, editId) {
-      return port(tx, scope?.owner, {}, db => {
-        const batch = validateBatch(input);
-        validateSource(source);
-        if ((mode !== "hash" && mode !== "full") || (editId !== undefined && typeof editId !== "string")) invalidInput();
-        const policy = scopedSuppression(db, scope, hashSession);
-        const hidden = new Set();
-        const matches = duplicateMatches(db, scope, batch, policy, editId, hidden);
-        const edit = editId === undefined ? undefined : readEntry(db, scope, editId)?.row;
-        const sourceMemory = edit && { id: edit.id, createdAtMs: edit.createdAtMs };
-        const blockedPositions = [];
-        for (const [i, query] of batch.entries()) {
-          if (policy.blocks(query, mode, sourceMemory)) blockedPositions.push(i);
-        }
-        return {
-          matches, hiddenIds: [...hidden].sort(compareUtf8), blockedPositions,
-          blockedSession: policy.blocksSession(source.client, source.sessionId),
-        };
-      });
+      return port(tx, scope?.owner, {}, db => readWritePolicy(db, scope, input, source, mode, hashSession, editId));
     },
 
     insert(tx, scope, row, receipts, nowMs) {
       return port(tx, scope?.owner, { write: true }, db => {
-        const { body, textHash, legacyHash } = encodeContent(row);
-        const evidence = copyReceipts(receipts);
-        const time = writeTime(nowMs);
-        const createdAtMs = row.createdAtMs ?? nowMs;
-        if (!Number.isSafeInteger(createdAtMs) || createdAtMs > nowMs) invalidInput();
-        const inserted = db.prepare(`INSERT INTO cairn_memories
-          (owner_id, namespace_key, id, revision, created_at_ms, updated_at_us, text_hash, legacy_hash, body)
-          VALUES (?, ?, lower(hex(randomblob(16))), 1, ?, ?, ?, ?, ?) RETURNING id`)
-          .get(...scopeKey(scope), createdAtMs, time.updatedAtUs, textHash, legacyHash, JSON.stringify(body));
-        if (typeof inserted?.id !== "string") throw new CoreError("internal_error");
-        attachReceipts(db, scope, inserted.id, evidence);
-        return { id: inserted.id, revision: 1, createdAtMs, ...time };
+        const inserted = insertMemory(db, scope, encodeContent(row), copyReceipts(receipts), nowMs, row.createdAtMs ?? nowMs);
+        markDirty?.(db, tx);
+        return inserted;
       });
     },
 
     touchDuplicate(tx, scope, id, receipts, merge, nowMs) {
       return port(tx, scope?.owner, { write: true }, db => {
-        validateId(id);
-        validateMerge(merge);
-        const evidence = copyReceipts(receipts);
-        const { updatedAtUs } = writeTime(nowMs);
-        const entry = readEntry(db, scope, id);
-        if (!entry) throw new CoreError("memory_not_found");
-        const { row } = entry;
-        const confidence = row.historical ? row.confidence : merge.confidence;
-        const kind = row.historical ? row.kind : merge.kind ?? row.kind;
-        const origin = row.historical ? row.origin : merge.origin ?? row.origin;
-        const changed = confidence !== row.confidence || kind !== row.kind || origin !== row.origin;
-        const revision = row.revision + Number(changed);
-        db.prepare(`UPDATE cairn_memories SET revision = ?, updated_at_us = ?,
-          body = json_set(body, '$.confidence', ?, '$.kind', ?, '$.origin', ?) WHERE ${LIVE_SCOPE} AND id = ?`)
-          .run(revision, updatedAtUs, confidence, kind, origin, ...scopeKey(scope), id);
-        attachReceipts(db, scope, id, evidence);
-        return { outcome: changed ? "changed" : "touched", revision };
+        const touched = touchDuplicate(db, scope, id, receipts, merge, nowMs);
+        markDirty?.(db, tx);
+        return touched;
       });
     },
 
@@ -220,6 +244,7 @@ export function createMemoryStore(port, hashSession) {
           clearReceipts(db, scope, id);
           attachReceipts(db, scope, id, evidence);
         }
+        markDirty?.(db, tx);
         return { outcome: "changed", revision };
       });
     },
@@ -232,6 +257,7 @@ export function createMemoryStore(port, hashSession) {
           WHERE ${LIVE_SCOPE} AND id = ?`).run(...scopeKey(scope), id);
         if (changes === 0) return false;
         clearReceipts(db, scope, id);
+        markDirty?.(db, tx);
         return true;
       });
     },

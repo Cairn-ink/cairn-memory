@@ -4,7 +4,7 @@ import { decodeJson, readEntry, readReceipts } from "./memory-rows.mjs";
 import { digestAliases, invalidInput, ownerKey, scopeKey, sha256 } from "./storage-values.mjs";
 
 /** @import { FactMatchIncoming, FactMatchRow, StoredFact, SuppressionFact, TextDigest, TextFact } from "@cairn-ink/core" */
-/** @import { DuplicateQuery, Scope, SourceRef, SuppressionStore } from "@cairn-ink/core/ports" */
+/** @import { DuplicateQuery, Scope, SourceRef, SuppressionStore, Tx } from "@cairn-ink/core/ports" */
 /** @import { Connection, Port } from "./storage-values.mjs" */
 /** @import { Entry } from "./memory-rows.mjs" */
 /** @typedef {(scope: Scope, client: string, sessionId: string) => string} SessionHasher */
@@ -209,8 +209,10 @@ export function scopedSuppression(db, scope, hashSession) {
   };
 }
 
-/** @param {Port} port @param {SessionHasher} hashSession @returns {SuppressionStore} */
-export function createSuppressionStore(port, hashSession) {
+/** @param {Port} port @param {SessionHasher} hashSession
+ * @param {(db: Connection, tx: Tx) => void} [markDirty] @returns {SuppressionStore}
+ */
+export function createSuppressionStore(port, hashSession, markDirty) {
   return {
     writeFact(tx, input, incarnation) {
       return port(tx, input?.owner, { write: true }, db => {
@@ -236,6 +238,7 @@ export function createSuppressionStore(port, hashSession) {
           .get(...keys, incarnation, epoch.toString(), createdAtMs, JSON.stringify(actionId), factBody(fact));
         db.prepare(`INSERT INTO cairn_suppression_epochs (owner_id, epoch) VALUES (?, ?)
           ON CONFLICT (owner_id) DO UPDATE SET epoch = excluded.epoch`).run(owner, epoch.toString());
+        markDirty?.(db, tx);
         return { factId: String(inserted?.fact_id), epoch, createdAtMs, created: true };
       });
     },

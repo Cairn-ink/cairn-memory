@@ -1,10 +1,10 @@
 import { CoreError, isErrorCode } from "../../core/src/index.mjs";
 import {
-  clockMs, copyKey, copyMessages, copyPositions, copyScope, identifier, readFailure,
+  clockMs, copyKey, copyMessages, copyPositions, copyScope, decodeOutboxMessages, hostedTime, identifier, jsonbSource, readFailure,
   readInput, readLease, readSelection, readToken,
 } from "./capture-input.mjs";
+import { pauseLockedWrite } from "./capture-lock.mjs";
 import { createCaptureProofs, filterSources } from "./capture-source.mjs";
-import { toPostgresError } from "./errors.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
 /** @import { CaptureClaim, CaptureKey, FinishResult, SourceFilter } from "../../core/src/ports/capture.d.ts" */
@@ -23,15 +23,6 @@ import { requireLiveRun, runOperation } from "./uow.mjs";
  *   } | null
  * }} CaptureRow */
 
-// The pause lock is acquired by the UnitOfWork before the owner write lock.
-// Inspect the lock held by this backend without acquiring it in reverse order.
-const HAS_PAUSE_LOCK = `SELECT EXISTS (
-  SELECT 1 FROM pg_catalog.pg_locks
-  CROSS JOIN (SELECT hashtextextended('cairn:memory-pause:' || $1, 0) AS key) AS pause
-  WHERE locktype = 'advisory' AND pid = pg_backend_pid() AND objsubid = 1 AND granted AND mode = 'ExclusiveLock'
-    AND classid::bigint = ((pause.key >> 32) & 4294967295)
-    AND objid::bigint = (pause.key & 4294967295)
-) AS held`;
 const IDENTITY = "user_id = $1 AND client = $2 AND event_id = $3";
 const TOKEN = "user_id = $1 AND core_lease_token = $2";
 // A failed attempt leaves the hosted event queued. Only its ingest job records the failure.
@@ -46,6 +37,9 @@ const SELECT_EVENT = `SELECT session_id, status, raw_archive_from, core_namespac
   FROM capture_events WHERE ${IDENTITY}`;
 const LOAD = `SELECT raw_request, core_payload_digest, core_outbox_metadata FROM capture_events
   WHERE ${IDENTITY} AND session_id = $4 AND core_namespace IS NOT DISTINCT FROM $5 AND core_admitted`;
+const LOCK_LEASE_SOURCE = `SELECT session_id, core_namespace, core_payload_digest, core_admitted,
+    core_lease_expires_at_ms::text, core_lease_sources, raw_request, core_outbox_metadata
+  FROM capture_events WHERE ${IDENTITY} FOR UPDATE`;
 const STATUS = `SELECT core_failure_code,
     CASE WHEN status = 'completed' THEN 2
       WHEN core_failure_code IS NOT NULL OR (${LEGACY_FAILED}) THEN 1 ELSE 0 END AS status_rank
@@ -72,7 +66,7 @@ function identity({ scope, client, eventId }) {
   return [scope.owner, client, eventId];
 }
 
-/** @param {CaptureRow} row @param {CaptureKey} key */
+/** @param {Pick<CaptureRow, "core_payload_digest" | "session_id">} row @param {CaptureKey} key */
 function assertSameEvent(row, key) {
   if (row.core_payload_digest !== key.payloadDigest || row.session_id !== key.sessionId) {
     throw new CoreError("event_payload_conflict");
@@ -97,7 +91,7 @@ function storedRetry(row, key) {
   }
 }
 
-/** @param {CaptureRow} row @param {bigint} now */
+/** @param {Pick<CaptureRow, "core_lease_expires_at_ms">} row @param {bigint} now */
 function hasLiveLease(row, now) {
   return row.core_lease_expires_at_ms !== null && now < BigInt(row.core_lease_expires_at_ms);
 }
@@ -129,36 +123,9 @@ async function requireLiveToken(query, owner, token, now) {
   return row;
 }
 
-/**
- * Prepare inputs synchronously, then check the pause lock before touching capture state.
- * Guard and validation failures leave an otherwise usable run, as in the reference adapter.
- * @template T @param {Tx} tx @param {() => (query: Query) => Promise<T>} prepare
- */
-async function pauseLockedWrite(tx, prepare) {
-  requireLiveRun(tx, true);
-  /** @type {((query: Query) => Promise<T>) | undefined} */
-  let body;
-  /** @type {CoreError | undefined} */
-  let invalidInput;
-  try {
-    body = prepare();
-  } catch (error) {
-    invalidInput = toPostgresError(error);
-  }
-  const result = await runOperation(tx, async (query) => {
-    const { rows: [lock] } = await query(HAS_PAUSE_LOCK, [tx.owner]);
-    if (lock?.held !== true) return { error: new CoreError("internal_error") };
-    if (!body) return { error: invalidInput };
-    return { value: await body(query) };
-  });
-  if ("value" in result) return /** @type {T} */ (result.value);
-  throw result.error;
-}
-
 /** @param {CaptureOptions} options @returns {CapturePorts} */
 export function createPostgresCapturePorts(options) {
   const { now = Date.now, lineageSecret, hashSessionKey } = options ?? {};
-  if (typeof lineageSecret !== "string" || lineageSecret.length === 0) throw new CoreError("invalid_input");
   const captureProofs = createCaptureProofs(lineageSecret);
 
   return {
@@ -269,15 +236,16 @@ export function createPostgresCapturePorts(options) {
       requireLiveRun(tx);
       const [copy, batch] = readInput(() => /** @type {const} */ ([copyKey(tx, key), copyMessages(messages)]));
       return runOperation(tx, async (query) => filterSources(query, copy, batch.map(({ occurredAtMs }) => occurredAtMs),
-        await captureProofs(copy, batch), "read", hashSessionKey));
+        await captureProofs(copy, batch), "read", captureProofs, hashSessionKey));
     },
 
     async assertEligible(tx, key, positions) {
       requireLiveRun(tx, true);
       const [copy, selected] = readInput(() => /** @type {const} */ ([copyKey(tx, key), copyPositions(positions)]));
       return runOperation(tx, async (query) => {
-        /** @type {{rows: CaptureRow[]}} */
-        const { rows: [row] } = await query(SELECT_EVENT, identity(copy));
+        /** @type {{rows: (Pick<CaptureRow, "session_id" | "core_namespace" | "core_payload_digest" | "core_admitted" |
+         *   "core_lease_expires_at_ms" | "core_lease_sources"> & {raw_request: unknown, core_outbox_metadata: unknown})[]}} */
+        const { rows: [row] } = await query(LOCK_LEASE_SOURCE, identity(copy));
         if (!row || row.core_namespace !== copy.scope.namespace || row.core_payload_digest === null) {
           throw new CoreError("stale_admission");
         }
@@ -288,7 +256,15 @@ export function createPostgresCapturePorts(options) {
           if (position >= times.length) throw new CoreError("invalid_input");
           return times[position];
         });
-        await filterSources(query, copy, selectedTimes, proofs, "assert", hashSessionKey);
+        await filterSources(query, copy, selectedTimes, proofs, "assert", captureProofs, hashSessionKey);
+        if (row.core_admitted && selected.length) {
+          const current = decodeOutboxMessages(row.raw_request, row.core_outbox_metadata);
+          const currentSources = selected.map((position) => current[position]);
+          if (currentSources.some((message) => !message?.content)) throw new CoreError("suppressed");
+          const currentProofs = await captureProofs(copy, currentSources);
+          if (!currentProofs || selected.some((position, index) =>
+            currentProofs[index].content_mac !== proofs?.[position]?.content_mac)) throw new CoreError("suppressed");
+        }
       });
     },
   };
@@ -314,13 +290,11 @@ function encodeRequest(key, batch) {
       ids.add(storedId);
       metadata[index] = { id };
     }
-    const time = occurredAtMs !== null && Math.abs(occurredAtMs) <= 8.64e15
-      ? new Date(occurredAtMs).toISOString() : undefined;
-    const occurredAt = time?.length === 24 && !time.startsWith("0000") ? time : undefined;
-    if (occurredAt === undefined && occurredAtMs !== null) {
+    const occurredAt = occurredAtMs === null ? null : hostedTime(occurredAtMs);
+    if (occurredAt === null && occurredAtMs !== null) {
       metadata[index] = { ...metadata[index], occurredAtMs };
     }
-    return { id: storedId, role, content, ...(occurredAt === undefined ? {} : { occurred_at: occurredAt }) };
+    return { id: storedId, role, content, ...(occurredAt === null ? {} : { occurred_at: occurredAt }) };
   });
   const request = {
     client: requestIdentifier(key.client), event_id: requestIdentifier(key.eventId).padEnd(8, "-"),
@@ -333,25 +307,11 @@ function encodeRequest(key, batch) {
   };
 }
 
-/** @param {object} value */
-function jsonbSource(value) {
-  const json = JSON.stringify(value);
-  // A free-form message ID may contain NUL or an unpaired surrogate, which JSONB cannot decode.
-  return /\\u(?:0000|d[89a-f][0-9a-f]{2})/iu.test(json) ? JSON.stringify(json) : json;
-}
-
 /** @param {Query} query @param {Omit<CaptureKey, "payloadDigest">} selection @param {string | null} namespace */
 async function loadAdmission(query, selection, namespace) {
   const { rows: [row] } = await query(LOAD, [...identity(selection), selection.sessionId, namespace]);
   if (!row) return null;
   const { raw_request: raw, core_payload_digest: payloadDigest, core_outbox_metadata: extra } = row;
-  const { messages } = typeof raw === "string" ? JSON.parse(raw) : raw;
-  const metadata = typeof extra === "string" ? JSON.parse(extra) : extra;
-  // Older Core outboxes stored message times directly in milliseconds.
-  const batch = messages.map(({ id, role, content, occurred_at, occurredAtMs }, index) => ({
-    id, role, content, occurredAtMs: occurredAtMs ?? (occurred_at === undefined ? null : Date.parse(occurred_at)),
-    ...metadata?.[index],
-  }));
   return { key: { ...selection, scope: { owner: selection.scope.owner, namespace }, payloadDigest },
-    messages: copyMessages(batch) };
+    messages: decodeOutboxMessages(raw, extra) };
 }
