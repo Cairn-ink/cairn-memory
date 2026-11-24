@@ -178,10 +178,15 @@ function fixture({ rawArchive = false, ledger = false, amendments = false } = {}
     return result.result;
   }
 
-  async function storedCards() {
+  async function storedArtifacts() {
     const [state] = await base.harness.dump();
-    return state.documentCards.flatMap(({ cards }) => cards.map(([, entry]) => entry));
+    return {
+      memories: state.rows,
+      cards: state.documentCards.flatMap(({ cards }) => cards.map(([, entry]) => entry)),
+      raw: state.rawRows,
+    };
   }
+  const storedCards = async () => (await storedArtifacts()).cards;
 
   async function assertSurvivor(result) {
     const memories = await read(tx => Promise.all(result.memories.map(({ id }) => storage.memories.get(tx, scope, id))));
@@ -199,13 +204,30 @@ function fixture({ rawArchive = false, ledger = false, amendments = false } = {}
     (await write(tx => storage.raw.importArchive(tx, scope, event, [turn]))).archived, 1);
   const deleteRaw = async (event, count = 1) => assert.deepEqual(
     await write(tx => storage.raw.deleteConversation(tx, scope, event)), { rawDeleted: count });
-  const ledgerRows = () => read(tx => storage.quantityLedger.list(tx, scope, { fromMs: day, toMs: nextDay + 1 }));
+  const ledgerRows = () => read(tx =>
+    storage.quantityLedger.list(tx, scope, { fromMs: 0, toMs: Number.MAX_SAFE_INTEGER }));
 
-  return { storage, service, trace, capture, read, storedCards, assertSurvivor, forget, seedRaw, deleteRaw, ledgerRows };
+  return { storage, service, trace, capture, read, storedArtifacts, storedCards, assertSurvivor, forget,
+    seedRaw, deleteRaw, ledgerRows };
 }
 
 const extractPair = text => ({ items: [extract(text), extract(unrelated.content, 1)] });
 const purchasePair = { ...extractPair(tea), quantities: [quantity(0, "tea", 6), quantity(1, "bread", 3)] };
+const planExtraction = { items: [extract(tea)], quantities: [quantity(0, "tea", 6)] };
+
+async function assertNoDeletedArtifacts(f, result, prior = { memories: [], cards: [], raw: [] }) {
+  assert.deepEqual(result.memories, []);
+  assert.deepEqual(await f.storedArtifacts(), prior);
+  assert.deepEqual(await f.ledgerRows(), []);
+}
+
+async function captureSeparateSurvivor(f, { seed = false } = {}) {
+  const result = await f.capture(selection("bread"), [unrelated], {
+    items: [extract(unrelated.content)],
+    ...(seed ? {} : { quantities: [quantity(0, "bread", 3)] }),
+  }, { seed });
+  return f.assertSurvivor(result);
+}
 
 async function assertCardHidden(f, event) {
   const { card: expected } = await buildDocumentCard(plan, {
@@ -238,14 +260,17 @@ test("1: Raw deletion inside the extraction send leaves no card or ledger attrib
   for (const deleting of [false, true]) {
     const f = fixture({ rawArchive: true, ledger: true });
     await f.seedRaw(event, plan);
-    const result = await f.capture(event, [plan, unrelated], purchasePair, {
+    const result = await f.capture(event, [plan], planExtraction, {
       race: deleting ? { point: "extract", commit: () => f.deleteRaw(event) } : undefined,
     });
-    const survivor = await f.assertSurvivor(result);
+    if (deleting) {
+      assert.deepEqual(f.trace.slice(0, 3), ["dispatch-1", "extract", "committed"]);
+      await assertNoDeletedArtifacts(f, result);
+    }
+    const survivor = await captureSeparateSurvivor(f);
     const cards = await f.storedCards();
     const ledger = await f.ledgerRows();
     if (deleting) {
-      assert.deepEqual(f.trace.slice(0, 3), ["dispatch-1", "extract", "committed"]);
       assert.deepEqual(cards, []);
       assert.deepEqual(ledger.map(({ memoryId, category }) => [memoryId, category]), [[survivor, "bread"]]);
     } else {
@@ -257,16 +282,16 @@ test("1: Raw deletion inside the extraction send leaves no card or ledger attrib
 
 for (const [label, point] of [["2a", "embed-card"], ["2b", "dispatch-3"]]) {
   test(label + ": Raw deletion during card embedding at " + point + " leaves no card", async () => {
-    const f = fixture({ rawArchive: true });
+    const f = fixture({ rawArchive: true, ledger: true });
     const event = selection("plan");
     await f.seedRaw(event, plan);
-    const result = await f.capture(event, [plan, unrelated], extractPair(tea), {
+    const result = await f.capture(event, [plan], planExtraction, {
       race: { point, commit: () => f.deleteRaw(event) },
     });
     assert.deepEqual(f.trace, ["dispatch-1", "extract", "dispatch-2", "embed-memory",
       ...(point === "embed-card" ? ["dispatch-3", "embed-card", "committed"] : ["dispatch-3", "committed", "embed-card"])]);
-    await f.assertSurvivor(result);
-    assert.deepEqual(await f.storedCards(), []);
+    await assertNoDeletedArtifacts(f, result);
+    await captureSeparateSurvivor(f);
   });
 }
 
@@ -314,22 +339,33 @@ for (const [label, point, deletion] of [
   test(label + ": " + (deletion ? "Raw correction deletion" : "bound-memory forget") + " at " + point +
     " leaves no amendment", async () => {
     for (const racing of [false, true]) {
-      const f = fixture({ rawArchive: deletion, amendments: true });
+      const f = fixture({ rawArchive: deletion, ledger: deletion, amendments: true });
       const first = await f.capture(selection("plan"), [plan], { items: [extract(tea)] });
       const [{ card }] = await f.storedCards();
       const memoryId = first.memories[0].id;
       assert.deepEqual(card.sourceMemories, [{ id: memoryId, revision: 1 }]);
       const event = selection("correction");
-      const result = await f.capture(event, [correction, unrelated], { items: [extract(unrelated.content, 1)] }, {
+      const prior = deletion && racing ? await f.storedArtifacts() : undefined;
+      // Amendments run after capture finishes. Send the correction to the verifier without extracting a memory.
+      const messages = deletion ? [correction] : [correction, unrelated];
+      const items = deletion ? [] : [extract(unrelated.content, 1)];
+      const result = await f.capture(event, messages, { items }, {
         cardId: card.id,
-        race: racing ? { point, commit: () => deletion ? f.deleteRaw(event, 2) : f.forget(memoryId) } : undefined,
+        race: racing ? { point, commit: () => deletion ? f.deleteRaw(event) : f.forget(memoryId) } : undefined,
       });
-      await f.assertSurvivor(result);
-      assert.deepEqual(f.trace, ["dispatch-1", "extract", "dispatch-2", "embed-memory", "dispatch-3", "detect",
-        ...(racing && point === "dispatch-4" ? ["dispatch-4", "committed", "verify"] : ["dispatch-4", "verify"]),
+      const verifyDispatch = deletion ? "dispatch-3" : "dispatch-4";
+      assert.deepEqual(f.trace, ["dispatch-1", "extract",
+        ...(deletion ? ["dispatch-2", "detect"] : ["dispatch-2", "embed-memory", "dispatch-3", "detect"]),
+        ...(racing && point === verifyDispatch ? [verifyDispatch, "committed", "verify"] : [verifyDispatch, "verify"]),
         ...(racing && point === "verify" ? ["committed"] : [])]);
       const stored = (await f.storedCards()).flatMap(({ amendments }) => amendments ?? []);
       assert.deepEqual(stored.map(([, amendment]) => amendment?.sourceMessage.messageId), racing ? [] : [correction.id]);
+      if (deletion) {
+        if (racing) await assertNoDeletedArtifacts(f, result, prior);
+        await captureSeparateSurvivor(f, { seed: true });
+      } else {
+        await f.assertSurvivor(result);
+      }
     }
   });
 }
