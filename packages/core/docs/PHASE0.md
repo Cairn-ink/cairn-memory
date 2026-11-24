@@ -133,7 +133,7 @@ Each addendum is additive unless it says what it supersedes. Adapters written ag
 14. **Capture-time containment snapshots.** `SuppressionStore.snapshot().passages` returns live text facts with their shingle evidence, filtered only by owner/namespace and by a definite false from core's own capture matcher. The adapter uses `factBlocksIncoming` in capture mode with shingles enabled on the same candidate `passages` Core supplied. It keeps exact and containment matches, ineligible results, and facts requiring legacy-domain handling. A definite miss leaves Core's decision unchanged because Core applies the same match.
    - `rowShingles: false` applies to row hiding and row-level write decisions (`factHidesRow` and `factBlocksIncoming` on stored rows and `DuplicateQuery`). Fact mode, `rowShingles`, and missing row shingles are forbidden as independent filters on capture snapshots.
    - Core supplies candidate `passages` before embedding and at finish. At capture admission and Raw import, Core omits `passages`, so only owner and namespace scope the returned text facts. Client, session and time candidates govern `blockedSession` and `blockedMessages`.
-   - When neither side has a key or shingle evidence, capture matching is exact-only. This is the weaker protection available without a key.
+   - This is the weaker protection available without a key. In this case, exact-only for no-key/no-key is decided by core's matcher; adapters may still prefilter by a definite false.
 
 ### Topics addendum 4 — Cards in topics
 
