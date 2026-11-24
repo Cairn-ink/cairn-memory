@@ -408,6 +408,7 @@ const notApplicable = {
   "raw conflict counters": ["K-RAW-7"],
   "raw span purge": ["K-RAW-8s"],
   "raw.recordLineage": ["K-FORK-8", "K-FORK-9"],
+  "spanLineage.resolveSpans": ["K-SPAN-1", "K-SPAN-2"],
   documentCards: ["T-CARD-AMEND-1", "T-CARD-AMEND-2", "T-CARD-AMEND-3", "T-CARD-AMEND-4", "T-CARD-AMEND-5", "T-CARD-AMEND-6",
     "T-CARD-LINK-1", "T-CARD-LINK-2", "T-CARD-LINK-3", "T-CARD-LINK-4", "T-CARD-LINK-5", "T-CARD-LINK-6", "T-CARD-LINK-7",
     "T-DVIS-text", "T-DVIS-identity", "T-DVIS-session", "T-DVIS-linked-session"],
