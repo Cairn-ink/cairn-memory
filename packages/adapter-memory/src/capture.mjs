@@ -295,6 +295,9 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
           const { deletedMessages } = state;
           if (deletedMessages.size > 0) {
             for (const position of selected) {
+              // Core withdraws a blanked stored slot itself. Only a slot it cannot see as changed is rejected here:
+              // a direct claim with no stored text, or a stored resend of a deleted message.
+              if (claim.messages?.[position]?.content === "") continue;
               if (await messageDeleted(deletedMessages, claim.key, claim.messageIds[position])) throw new CoreError("suppressed");
             }
           }

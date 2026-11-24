@@ -97,16 +97,10 @@ for (const phase of ["model", "embedding"]) {
         assert.deepEqual(messages.filter(({ content }) => serialized.includes(content)).map(({ id }) => id),
           [], "The dump still contains deleted source text");
       });
-      if (phase === "embedding") {
-        await t.test("suppresses capture at the final eligibility check", () => {
-          assert.deepEqual(interrupted, { status: "failed", code: "suppressed" });
-        });
-      } else {
-        await t.test("finishes at the model-stage recheck with no memories", () => {
-          assert.equal(interrupted.status, "done");
-          assert.equal(interrupted.result.memories.length, 0);
-        });
-      }
+      await t.test(`finishes at the ${phase}-stage recheck with no memories`, () => {
+        assert.equal(interrupted.status, "done");
+        assert.equal(interrupted.result.memories.length, 0);
+      });
 
       assert.deepEqual(await service.enqueueCapture(scope, { ...control, messages: [controlMessage] }),
         { status: "accepted" });
@@ -155,9 +149,11 @@ test("deleting a conversation withdraws its ledger messages from capture", async
     assert.deepEqual(await read(tx => capture.eligible(tx, resent, messages)), [],
       "eligible accepted deleted text in a new event");
   });
-  await t.test("assertEligible rejects a withdrawn position with suppressed", async () => {
-    await assert.rejects(write(tx => capture.assertEligible(tx, key, [0])), { code: "suppressed" },
-      "assertEligible accepted a withdrawn position");
+  await t.test("assertEligible rejects a stored resend of deleted text with suppressed", async () => {
+    // Core withdraws a blanked slot itself, so the adapter must catch the resend whose text looks unchanged.
+    await admitAndClaim(f, resent, messages);
+    await assert.rejects(write(tx => capture.assertEligible(tx, resent, [0])), { code: "suppressed" },
+      "assertEligible accepted deleted text in a new event");
   });
   await t.test("the same message ID in another session stays eligible", async () => {
     const controlKey = { ...key, ...control };
