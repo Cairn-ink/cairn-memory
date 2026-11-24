@@ -422,7 +422,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
           const { key, messages } = claim;
           if (key.scope.namespace !== namespace || !slots.has(sessionSlot(namespace, key))) continue;
           const { client, sessionId } = key;
-          const messageIds = claim.status === "leased" ? claim.messageIds : messages?.map(({ id }) => id) ?? [];
+          const messageIds = claim.messageIds ?? messages?.map(({ id }) => id) ?? [];
           for (const messageId of messageIds) {
             deletedMessages.add(await receiptAddressKey(namespace, { client, sessionId, messageId }));
           }
@@ -450,7 +450,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
           const retained = [];
           for (const message of copied) {
             // A deleted resend is blanked at admission, so its proof would match any text at this ID.
-            if (deletedMessages.size && deletedMessages.has(await receiptAddressKey(selection.namespace,
+            if (message.content === "" && deletedMessages.size && deletedMessages.has(await receiptAddressKey(selection.namespace,
               { client, sessionId, messageId: message.id }))) continue;
             retained.push(message);
           }

@@ -321,3 +321,67 @@ test("a message whose captured memory was forgotten stays eligible", async () =>
   assert.deepEqual(await read(tx => capture.eligible(tx, resent, batch)), [0]);
   await write(tx => capture.assertEligible(tx, resent, [0]));
 });
+
+test("recording original text after deletion preserves a cross-namespace lineage fence", async () => {
+  const { storage, write, remove } = fixture();
+  const { raw, harness } = storage;
+  assert.deepEqual(await write(tx => raw.archive(tx, key, messages)), { archived: 2 });
+  assert.deepEqual(await remove(), { rawDeleted: 2 });
+  await write(tx => raw.recordLineage(tx, key, messages));
+  await write(tx => raw.fenceSession(tx, scope, target));
+
+  const forkScope = { ...scope, namespace: "fork" };
+  const service = captureService(storage);
+  assert.deepEqual(await service.enqueueCapture(forkScope, { ...control, messages }), { status: "accepted" });
+  const result = await service.runCapture(forkScope, control);
+  assert.equal(result.status, "done");
+  const [{ rows, rawRows }] = await harness.dump();
+  assert.deepEqual({ memories: result.result.memories.length, rows: rows.length, rawRows: rawRows.length },
+    { memories: 0, rows: 0, rawRows: 0 });
+});
+
+test("deletion prevents writeback after a direct claim ends", async t => {
+  await t.test("a retryable abandonment blocks writeback on reclaim", async () => {
+    const { storage: { capture, raw, harness }, write, remove } = fixture();
+    const claim = await write(tx => capture.claim(tx, key, messages, { leaseMs: 60_000 }));
+    assert.equal(claim.status, "claimed");
+    await write(tx => capture.abandon(tx, claim.token, { code: "extraction_failed", retryable: true }));
+    assert.deepEqual(await remove(), { rawDeleted: 0 });
+
+    const retry = await write(tx => capture.claim(tx, key, messages, { leaseMs: 60_000 }));
+    assert.equal(retry.status, "claimed");
+    await write(tx => capture.beginDispatch(tx, retry.token));
+    const [{ id: messageId, role, occurredAtMs, content: source }] = messages;
+    const { client, sessionId } = key;
+    const content = extracted.get(source);
+    const item = { content, kind: "fact", confidence: 1, embedding: null,
+      textHash: "sha256:" + createHash("sha256").update(content.toLowerCase()).digest("hex"),
+      receipts: [{ client, sessionId, messageId, role, occurredAtMs }] };
+    await assert.rejects(write(async tx => {
+      await capture.assertEligible(tx, key, [0, 1]);
+      await capture.finish(tx, retry.token, [item]);
+      await raw.archive(tx, key, messages);
+    }), { code: "suppressed" });
+    const [{ rows, rawRows }] = await harness.dump();
+    assert.deepEqual({ rows, rawRows }, { rows: [], rawRows: [] });
+  });
+
+  await t.test("an empty finish keeps a fresh event from restoring the messages", async () => {
+    const { storage, write, remove } = fixture();
+    const { capture, harness } = storage;
+    const claim = await write(tx => capture.claim(tx, key, messages, { leaseMs: 60_000 }));
+    assert.equal(claim.status, "claimed");
+    const finished = await write(tx => capture.finish(tx, claim.token, []));
+    assert.deepEqual(finished.memories, []);
+    assert.deepEqual(await remove(), { rawDeleted: 0 });
+
+    const service = captureService(storage);
+    const fresh = { ...target, eventId: resent.eventId };
+    assert.deepEqual(await service.enqueueCapture(scope, { ...fresh, messages }), { status: "accepted" });
+    const result = await service.runCapture(scope, fresh);
+    assert.equal(result.status, "done");
+    const [{ rows, rawRows }] = await harness.dump();
+    assert.deepEqual({ memories: result.result.memories.length, rows: rows.length, rawRows: rawRows.length },
+      { memories: 0, rows: 0, rawRows: 0 });
+  });
+});

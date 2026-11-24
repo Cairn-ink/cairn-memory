@@ -14,7 +14,7 @@ import { admissionScope, copyCaptureFailure, copyCaptureMessages, copyCaptureSel
 /** @typedef {{status: "leased", expiresAtMs: number, token: string, dispatched: boolean,
  * messageIds: readonly string[], occurredAtMs: ReadonlyArray<number | null>,
  * proofs?: readonly import("./raw.mjs").CaptureProof[] | null}} Lease */
-/** @typedef {{key: CaptureKey, messages?: CaptureMessage[]} & (Lease | {status: "pending"} |
+/** @typedef {{key: CaptureKey, messages?: CaptureMessage[], messageIds?: readonly string[]} & (Lease | {status: "pending"} |
  * {status: "finished", result: FinishResult} |
  * {status: "abandoned", failure: ReturnType<typeof copyCaptureFailure>})} ClaimRecord */
 
@@ -143,7 +143,8 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
           const state = getState();
           if (state.abandonedTokens.has(token)) return;
           const { identity, claim } = liveClaim(state, token, now());
-          state.claims.set(identity, { key: claim.key, messages: claim.messages, status: "abandoned", failure: copy });
+          state.claims.set(identity, { key: claim.key, messages: claim.messages, messageIds: claim.messageIds,
+            status: "abandoned", failure: copy });
           state.activeTokens.delete(token);
           state.abandonedTokens.add(token);
           run.stateWritten = true;
@@ -217,7 +218,8 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
             suppressedCount: suppressedItems.length, ...(suppressedItems.length > 0 && { suppressedItems }),
             duplicateCount, counters: policy.counters };
           const result = copyResult(stored, true);
-          state.claims.set(identity, { key: claim.key, messages: claim.messages, status: "finished", result: stored });
+          state.claims.set(identity, { key: claim.key, messages: claim.messages, messageIds: claim.messageIds,
+            status: "finished", result: stored });
           state.activeTokens.delete(token);
           run.finishes.add(stored);
           run.stateWritten = true;
@@ -320,7 +322,7 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
             return { status: "rawReplay", result: copyResult(previous.result, run.finishes.has(previous.result)) };
           }
           if (previous) return { status: "duplicate" };
-          state.claims.set(identity, { key: copy, messages: batch, status: "pending" });
+          state.claims.set(identity, { key: copy, messages: batch, messageIds: batch.map(({ id }) => id), status: "pending" });
           run.stateWritten = true;
           return { status: "admitted" };
         };
