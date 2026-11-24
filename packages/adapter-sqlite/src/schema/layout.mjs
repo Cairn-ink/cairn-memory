@@ -1,4 +1,6 @@
-// Version 4 includes the version-3 tables, inspect tables, and Context Read tables, all created with the store.
+// ASCII "CNXT" identifies core-next stores. Their user_version starts a
+// separate schema version sequence from the legacy engine. Version 4 adds the
+// inspect and Context Read tables, all created with the store.
 export const SQLITE_APPLICATION_ID = 0x434e5854;
 export const SQLITE_PHYSICAL_VERSION = 4;
 
