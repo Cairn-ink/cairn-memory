@@ -209,7 +209,7 @@ test("resolved UTF-16 span facts hide every dependent memory within their scope"
   for (const scope of [project, other]) {
     await assert.rejects(resolve(scope, forgotten.id), { code: "raw_lineage_unavailable" });
   }
-  await assert.rejects(resolve(personal, dangling.id), { code: "raw_lineage_unavailable" });
+  assert.deepEqual(await resolve(personal, dangling.id), []);
   await assert.rejects(resolve(personal, unproven.id), { code: "raw_lineage_unavailable" });
 
   const [span] = await resolve(personal, forgotten.id);
