@@ -9,6 +9,13 @@ const SET_DEFAULT_STATEMENT_TIMEOUT = "SET statement_timeout = '30s'";
 const MIGRATION_LOCK_KEY = "hashtextextended('core_schema_migrations', 0)";
 const MIGRATION_LOCK = `SELECT pg_try_advisory_lock(${MIGRATION_LOCK_KEY}) AS locked`;
 const MIGRATION_UNLOCK = `SELECT pg_advisory_unlock(${MIGRATION_LOCK_KEY}) AS unlocked`;
+// PostgreSQL stores the two halves of a bigint advisory key in classid and objid.
+const HOLDS_MIGRATION_LOCK = `SELECT EXISTS (
+  SELECT 1 FROM pg_catalog.pg_locks
+  WHERE locktype = 'advisory' AND granted AND pid = pg_catalog.pg_backend_pid()
+    AND mode = 'ExclusiveLock' AND objsubid = 1
+    AND ((classid::bigint << 32) | objid::bigint) = ${MIGRATION_LOCK_KEY}
+) AS locked`;
 const CREATE_LEDGER = `CREATE TABLE IF NOT EXISTS core_schema_migrations (
   id text PRIMARY KEY,
   applied_at timestamptz NOT NULL DEFAULT now()
@@ -48,20 +55,36 @@ const NON_READ_KEYWORDS = new Set(["DELETE", "INSERT", "INTO", "MERGE", "UPDATE"
 const TRANSACTION_OR_LOCK_KEYWORDS = new Set([
   "ABORT", "BEGIN", "COMMIT", "END", "LOCK", "PREPARE", "RELEASE", "ROLLBACK", "SAVEPOINT", "SET", "START",
 ]);
+const ADVISORY_LOCK_FUNCTION = /^pg_(?:advisory_(?:lock|unlock)|try_advisory)/i;
+
+/** @param {string} name @param {string} escape */
+function decodeUnicodeIdentifier(name, escape) {
+  const marker = `\\u{${escape.charCodeAt(0).toString(16)}}`;
+  const escapes = new RegExp(`${marker}(${marker}|\\+[0-9a-fA-F]{6}|[0-9a-fA-F]{4})`, "gu");
+  return name.replace(escapes, (_, code) => {
+    if (code === escape) return escape;
+    const point = Number.parseInt(code.replace(/^\+/, ""), 16);
+    return point <= 0x10ffff ? String.fromCodePoint(point) : "\0";
+  });
+}
 
 /** @param {string} text */
 function isReadProbe(text) {
   if (typeof text !== "string" || text.includes("\0")) return false;
   // Consume complete PostgreSQL lexical tokens before checking words or semicolons.
   // Require E strings for backslashes so ordinary strings are unambiguous in any session.
-  const token = /[\t\n\v\f\r ]+|--[^\r\n]*|\/\*|[Ee]'(?:''|\\[\s\S]|[^'\\])*'|'(?:''|[^'\\])*'|"(?:""|[^"])*"|(\$(?:[a-z_\u0080-\uffff][a-z_0-9\u0080-\uffff]*)?\$)|([a-z_\u0080-\uffff][a-z_0-9$\u0080-\uffff]*)|[\s\S]/iy;
+  const token = /[\t\n\v\f\r ]+|--[^\r\n]*|\/\*|[Ee]'(?:''|\\[\s\S]|[^'\\])*'|'(?:''|[^'\\])*'|(U&)?"((?:""|[^"])*)"|(\$(?:[a-z_\u0080-\uffff][a-z_0-9\u0080-\uffff]*)?\$)|([a-z_\u0080-\uffff][a-z_0-9$\u0080-\uffff]*)|[\s\S]/iy;
   const comment = /\/\*|\*\//g;
   let started = false;
   let terminated = false;
   let parentheses = 0;
   let cases = 0;
+  let identifier;
+  let unicodeName;
+  let awaitingEscape = false;
+  let readEscape = false;
   while (token.lastIndex < text.length) {
-    const [value, dollarQuote, word] = /** @type {RegExpExecArray} */ (token.exec(text));
+    const [value, unicodeQuote, quotedName, dollarQuote, word] = /** @type {RegExpExecArray} */ (token.exec(text));
     if (value === "/*") {
       comment.lastIndex = token.lastIndex;
       let depth = 1;
@@ -76,6 +99,27 @@ function isReadProbe(text) {
     if (/^[\t\n\v\f\r ]/.test(value) || value.startsWith("--")) continue;
     if (terminated) return false;
     const keyword = word?.toUpperCase();
+    if (awaitingEscape) {
+      // Require a single plain character so PostgreSQL and this lexer interpret UESCAPE identically.
+      if (!/^'[^\t\n\v\f\r +0-9a-f'"\\]'$/i.test(value)) return false;
+      identifier = decodeUnicodeIdentifier(unicodeName ?? "", value[1]);
+      unicodeName = undefined;
+      awaitingEscape = false;
+      readEscape = true;
+      continue;
+    }
+    if (readEscape && value.startsWith("'")) return false; // SQL can concatenate adjacent literals across a newline.
+    readEscape = false;
+    if (unicodeName !== undefined && keyword === "UESCAPE") {
+      awaitingEscape = true;
+      continue;
+    }
+    if (value === "(") {
+      const name = unicodeName === undefined ? identifier : decodeUnicodeIdentifier(unicodeName, "\\");
+      if (name !== undefined && ADVISORY_LOCK_FUNCTION.test(name)) return false;
+    }
+    identifier = word ?? quotedName?.replaceAll('""', '"');
+    unicodeName = unicodeQuote ? identifier : undefined;
     if (!started) {
       if (keyword !== "SELECT" && keyword !== "WITH") return false;
       started = true;
@@ -99,7 +143,7 @@ function isReadProbe(text) {
       else if (TRANSACTION_OR_LOCK_KEYWORDS.has(keyword)) return false;
     }
   }
-  return started && parentheses === 0 && cases === 0;
+  return started && !awaitingEscape && parentheses === 0 && cases === 0;
 }
 
 /** @param {Connection} connection @param {(query: MigrationQuery) => Promise<boolean>} adopt */
@@ -146,7 +190,16 @@ async function shouldAdopt(connection, adopt) {
 async function applyTransactional(connection, { id, sql, adopt }) {
   await connection.query("BEGIN");
   try {
-    if (!adopt || !(await shouldAdopt(connection, adopt))) await connection.query(sql);
+    let adopted = false;
+    if (adopt) {
+      adopted = await shouldAdopt(connection, adopt);
+      // Only adoption hooks run host code that could release the lock. Between hooks, losing
+      // the session would already fail the run, so this check covers the intervening migrations.
+      if ((await connection.query(HOLDS_MIGRATION_LOCK)).rows[0]?.locked !== true) {
+        throw new CoreError("storage_busy");
+      }
+    }
+    if (!adopted) await connection.query(sql);
     await connection.query(RECORD_MIGRATION, [id]);
   } catch (error) {
     try {
