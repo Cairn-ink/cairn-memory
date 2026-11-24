@@ -1,9 +1,18 @@
 import type {
-  ClockAndHash, DiagnosticEvent, EmbedderPort, EmbedQuery, FinishResult, MemoryService,
-  ModelGate, ModelPort, ModelStage, Scope, StorageAdapter, StoredDocumentCardRecord, TokenCounter,
+  ClockAndHash, ContextAssemblyValue, ContextReadStore, ContextReadTokenCounter, DiagnosticEvent,
+  EmbedderPort, EmbedQuery, FinishResult, InspectStore, MemoryService, ModelGate, ModelPort,
+  ModelStage, ReadContractStorage, Scope, StorageAdapter, StoredDocumentCardRecord, TokenCounter,
 } from "../ports/index.d.ts";
 
 export type { DiagnosticEvent } from "../ports/common.d.ts";
+export type {
+  ContextAssemblyDiagnostics, ContextAssemblyItem, ContextAssemblyPolicy, ContextAssemblyRepresentation,
+  ContextAssemblyValue, ContextCandidateDiagnostics, ContextCardEvidence, ContextMemoryEvidence,
+  ContextReadError, ContextReadErrorCode, ContextReadRef, ContextReadSet, ContextReadTokenCounter,
+  FetchEvidenceInput, FetchEvidenceResult, FindCandidatesInput, FindCandidatesResult,
+  InspectItemInput, InspectItemResult, InspectListInput, InspectListResult, InspectMemoryMetadata,
+  InspectReceipt, InspectState, ReadContextInput, ReadContextResult,
+} from "../ports/host.d.ts";
 
 export interface MemoryServiceConfig {
   readonly nearDuplicateDistance?: number;
@@ -37,4 +46,22 @@ export interface CaptureRunner {
   ): Promise<{ status: "done" | "duplicate" | "processing" | "paused" | "failed"; code?: string; result?: FinishResult }>;
 }
 
+/** The Addendum 17 entries are required for the explicit keyless-local composition. */
+export type ContextReadMemoryService = MemoryService &
+  Required<Pick<MemoryService, "findCandidates" | "fetchEvidence" | "readContext" | "inspect">>;
+
+/** Declaration for the keyless-local composition once the runtime implements Addendum 17. */
+export interface KeylessMemoryServiceDeps extends Pick<MemoryServiceDeps, "clock" | "config" | "diagnostics"> {
+  readonly profile: "keyless-local";
+  readonly storage: ReadContractStorage & {
+    readonly capabilities: { readonly contextRead: true; readonly inspect: true };
+    readonly contextRead: ContextReadStore;
+    readonly inspect: InspectStore;
+  };
+  readonly contextReadCounter: ContextReadTokenCounter;
+  /** Pure deterministic formatter. The host sends the same bytes core counts. */
+  readonly contextReadFormat: (value: ContextAssemblyValue) => string;
+}
+
+export function createMemoryService(deps: KeylessMemoryServiceDeps): ContextReadMemoryService & CaptureRunner;
 export function createMemoryService(deps: MemoryServiceDeps): MemoryService & CaptureRunner;
