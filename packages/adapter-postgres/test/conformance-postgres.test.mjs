@@ -368,7 +368,7 @@ const notApplicable = {
   "pending historical edit case has no assertions": ["K-MEM-5h"],
   supersessionEdges: ["K-REL-1", "K-REL-2", "K-REL-3", "K-REL-6", "K-REL-7", "K-REL-9", "K-REL-10", "K-REL-11", "K-REL-12"],
   conflictEdges: ["K-REL-4", "K-REL-5", "K-REL-8"],
-  "K1 pending": ["K-KD-4", "K-KD-6"],
+  "K1 pending": ["K-KD-4", "K-KD-6", "K-KD-7", "K-KD-7v", "K-KD-8", "K-KD-9"],
   "capture.finish": [
     "K-CLM-1", "K-CLM-2", "K-CLM-3", "K-CLM-4", "K-CLM-5",
     "K-ADM-2", "K-ADM-6", "K-ADM-8", "K-ADM-10", "K-ADM-11", "K-ADM-14",

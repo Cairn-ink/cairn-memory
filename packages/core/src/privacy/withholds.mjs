@@ -89,6 +89,7 @@ export function snapshotReader() {
       pipeline: string(field(data, "pipeline")),
       redactionVersion: finiteNumber(field(data, "redactionVersion")),
       keyId: optionalString(field(data, "keyId")),
+      label: optionalString(field(data, "label")),
     });
   }
 
@@ -99,11 +100,16 @@ export function snapshotReader() {
   function fingerprint(input) {
     const data = record(input);
     const shingles = field(data, "shingles");
+    const retainedShingles = field(data, "retainedShingles");
     return Object.freeze({
       digests: digests(field(data, "digests")),
       // Sparse shingle evidence matters only for full-mode comparisons.
       shingles: shingles == null ? shingles : array(shingles, string) ?? false,
       keyId: optionalString(field(data, "keyId")),
+      retainedShingles: retainedShingles === undefined ? undefined : list(retainedShingles, evidence => {
+        const entry = record(evidence);
+        return Object.freeze({ keyId: string(field(entry, "keyId")), shingles: list(field(entry, "shingles"), string) });
+      }),
     });
   }
 
@@ -198,13 +204,21 @@ function isValidFact(fact) {
 /** @param {unknown} threshold @returns {threshold is number} */
 export const isValidThreshold = (threshold) => typeof threshold === "number" && threshold > 0 && threshold <= 1;
 
-/** @param {DigestSnapshot} digest */
-const digestIdentity = ({ alg, value }) => `${alg}:${value}`;
+/** @param {DigestSnapshot} left @param {DigestSnapshot} right */
+function sameDigestDomain(left, right) {
+  if (left.alg !== right.alg || left.keyId !== right.keyId) return false;
+  if (left.label === undefined && right.label === undefined) {
+    return left.keyId === null || left.pipeline === right.pipeline;
+  }
+  return left.pipeline === right.pipeline && left.redactionVersion === right.redactionVersion &&
+    (left.label ?? left.pipeline) === (right.label ?? right.pipeline);
+}
 
 /** @param {readonly DigestSnapshot[]} a @param {readonly DigestSnapshot[]} b */
 function hasExactDigestMatch(a, b) {
-  const identities = new Set(a.map(digestIdentity));
-  return b.some((digest) => identities.has(digestIdentity(digest)));
+  // Keep the historical alias API for unlabelled inputs.
+  return b.some(right => a.some(left => left.value === right.value &&
+    (left.label === undefined && right.label === undefined ? left.alg === right.alg : sameDigestDomain(left, right))));
 }
 
 /** @param {readonly TextDigest[]} a @param {readonly TextDigest[]} b */
@@ -221,35 +235,41 @@ export function exactDigestMatch(a, b) {
 
 /** @param {readonly DigestSnapshot[]} a @param {readonly DigestSnapshot[]} b */
 export function compareValidatedDigests(a, b) {
-  let result = /** @type {false | "ineligible"} */ ("ineligible");
-  for (const left of a) {
-    for (const right of b) {
-      if (left.alg !== right.alg) continue;
-      // SHA aliases compare by hash. Keyed digests also need the same signing domain.
-      if (left.alg === "hmac" && (left.keyId !== right.keyId || left.pipeline !== right.pipeline)) continue;
+  let comparable = false;
+  for (const right of b) {
+    for (const left of a) {
+      if (!sameDigestDomain(left, right)) continue;
       if (left.value === right.value) return true;
-      result = false;
+      comparable = true;
     }
   }
-  return result;
+  return comparable ? false : "ineligible";
 }
 
 /**
- * @param {Pick<FingerprintSnapshot, "shingles" | "keyId">} passage
- * @param {Partial<Pick<FingerprintSnapshot, "shingles" | "keyId">>} reference
+ * @param {Partial<FingerprintSnapshot>} passage
+ * @param {Partial<FingerprintSnapshot>} reference
  * @param {number} threshold
  * @param {boolean} checkContainment
  * @param {boolean} [containmentKeyUnavailable]
  */
 export function shingleContainmentMatch(passage, reference, threshold, checkContainment, containmentKeyUnavailable = false) {
-  if (!Array.isArray(passage.shingles) || !Array.isArray(reference.shingles) ||
-      !passage.shingles.every(isHex) || !reference.shingles.every(isHex)) return "ineligible";
-  if (!isKeyId(passage.keyId) || !isKeyId(reference.keyId)) return "ineligible";
-  if (!checkContainment) return false;
-  if (containmentKeyUnavailable || reference.keyId !== passage.keyId) return "ineligible";
-  if (passage.shingles.length === 0 || reference.shingles.length === 0) return false;
+  if (reference.shingles == null && passage.digests?.some(left => left.label !== undefined &&
+    reference.digests?.some(right => sameDigestDomain(left, right)))) return false;
 
-  const shingles = new Set(passage.shingles);
+  const retained = Array.isArray(passage.retainedShingles) &&
+    reference.digests?.some(digest => digest.alg === "hmac" && digest.keyId === reference.keyId &&
+      digest.pipeline === "core" && (digest.label ?? digest.pipeline) === "core") &&
+    passage.retainedShingles.find(evidence => evidence.keyId === reference.keyId);
+  const candidate = retained || passage;
+  if (!Array.isArray(candidate.shingles) || !Array.isArray(reference.shingles) ||
+      !candidate.shingles.every(isHex) || !reference.shingles.every(isHex)) return "ineligible";
+  if (!isKeyId(candidate.keyId) || !isKeyId(reference.keyId)) return "ineligible";
+  if (!checkContainment) return false;
+  if ((!retained && containmentKeyUnavailable) || reference.keyId !== candidate.keyId) return "ineligible";
+  if (candidate.shingles.length === 0 || reference.shingles.length === 0) return false;
+
+  const shingles = new Set(candidate.shingles);
   const shared = reference.shingles.filter((shingle) => shingles.has(shingle)).length;
   // Round toward withholding at the threshold.
   return shared > 0 && shared / reference.shingles.length >= threshold - 1e-12;
@@ -280,8 +300,8 @@ export function withholdsPassage(passage, fact, threshold = CONTAINMENT_THRESHOL
 /** @param {TextFact} fact */
 export function requiresLegacyMacDomain({ text }) {
   // Legacy MAC labels are adapter-owned. With only keyed digests, core cannot prove a miss.
-  return text.digests.every(digest => digest.alg === "hmac") &&
-    text.digests.some(digest => digest.pipeline !== "core");
+  return text.digests.every(digest => digest.keyId !== null) &&
+    text.digests.some(digest => (digest.label ?? digest.pipeline) !== "core");
 }
 
 /**

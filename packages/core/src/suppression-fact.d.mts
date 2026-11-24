@@ -10,16 +10,17 @@ export declare const FACT_ORIGINS: readonly FactOrigin[];
 export declare const FACT_MODES: readonly FactMode[];
 export declare const DIGEST_PIPELINES: readonly DigestPipeline[];
 
-/** One digest of the forgotten text. sha256 only for text that held no secret; hmac uses the owner key. */
+/** One text digest. A labelled MAC uses its explicit signing domain. An old MAC uses its pipeline as the label. */
 export interface TextDigest {
-  alg: "sha256" | "hmac";
+  /** Unlabelled records use "sha256" or "hmac". Labelled records can declare another MAC algorithm. */
+  alg: string;
+  keyId: string | null;
+  label?: string;
   /** Lowercase hex, 64 chars. */
   value: string;
   pipeline: DigestPipeline;
   /** Redactor version this digest was computed under (1 = frozen v1). */
   redactionVersion: number;
-  /** Required for hmac; null for sha256. */
-  keyId: string | null;
 }
 
 interface FactBase {
@@ -43,7 +44,7 @@ export interface TextFact extends FactBase {
   kind: "text";
   mode: FactMode;
   text: {
-    /** Non-empty, deduped by (alg, value). */
+    /** Non-empty, deduped by (alg, value) for old digests and by signing domain, pipeline, version and value for labelled MACs. */
     digests: readonly TextDigest[];
     /** Keyed 4-char shingle MACs (hex), when the store has a fingerprint key. */
     shingles?: string[] | null;
