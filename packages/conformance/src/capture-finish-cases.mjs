@@ -16,15 +16,18 @@ function readPositions(list, itemCount, label) {
   check(Array.isArray(list), `${label} must be an array`);
   const positions = /** @type {unknown[]} */ (list);
   check(!(positions.length > itemCount), `${label} must not list more positions than items`);
-  /** @type {number[]} */
-  const values = [];
+  /** @type {Set<number>} */
+  const values = new Set();
   for (let index = 0; index < positions.length; index++) {
     const position = positions[index];
     check(Object.hasOwn(positions, index), `${label} must not have holes`);
     check(Number.isInteger(position), `${label} must hold integer positions`);
-    values.push(/** @type {number} */ (position));
+    const value = /** @type {number} */ (position);
+    check(value >= 0 && value < itemCount, `${label} must be within the item range`);
+    check(!values.has(value), `${label} must not repeat a position`);
+    values.add(value);
   }
-  return values.sort((a, b) => a - b);
+  return [...values].sort((a, b) => a - b);
 }
 
 /** @type {readonly ConformanceCase[]} */

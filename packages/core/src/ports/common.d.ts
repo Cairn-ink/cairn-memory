@@ -70,16 +70,16 @@ export interface MemoryRow {
   supersession?: "superseded (replacement no longer available)";
 }
 
-/** Evidence link from a memory to the capture messages it came from. */
+/** Evidence link from a memory to its source. */
 export interface Receipt {
   client: string;
   sessionId: string;
   messageId: string;
   role: Role;
   occurredAtMs: number | null;
-  /** Stable identity of the retained receipt, distinct from its source message. */
+  /** Stored receipt ID, when available. */
   id?: string;
-  /** Stored, normalized and redacted source excerpt, at most 800 UTF-16 code units. */
+  /** For explicit writes, the saved text. */
   excerpt?: string;
   /** Source event and retention time, when the receipt store preserves them. */
   eventId?: string;
