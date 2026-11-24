@@ -29,7 +29,7 @@ export type AmendmentCounter =
   | "detect_card_list_truncated" | "detect_skipped_oversize"
   | "detect_skipped_no_user" | "detect_skipped_no_earlier_cards" | "detect_skipped_missing_model"
   | "detect_skipped_token_count_unavailable" | "verify_skipped_token_count_unavailable"
-  | "verify_skipped_oversize" | "verify_skipped_quote_already_applied" | "verify_skipped_limit"
+  | "verify_skipped_oversize" | "verify_skipped_quote_already_applied" | "verify_skipped_limit" | "verify_skipped_ineligible"
   | "detect_calls" | "verify_calls" | "verify_rejected"
   | `${"detect" | "verify"}_${"input_tokens" | "output_tokens" | "failed" | "malformed_output" | "timeout"}`;
 
@@ -92,6 +92,8 @@ export declare function detectCardAmendments(input: {
   model?: Pick<ModelPort, "countTokens" | "detectChanges" | "verifyChange"> | null;
   capture: AmendmentConversation;
   cards: readonly AmendmentDetectCard[];
+  /** Checks the selected document and correction source immediately before verification. */
+  canVerify?: (cardId: string, source: DocumentCardSourceMessage) => Promise<boolean>;
   limits?: {
     /** Serialized request token limit, capped at 6,000. */
     inputLimit?: number;

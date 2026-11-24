@@ -1,7 +1,7 @@
 import { cleanContent, CoreError, decideWrite, planDuplicateMerge, receiptExcerpt } from "@cairn-ink/core";
 import { indexRevisionAfterRun } from "./unit-of-work.mjs";
 import { admissionScope, copyCaptureFailure, copyCaptureMessages, copyCaptureSelection,
-  copyFinishItems, snapshotArray, validateTime, writeNamespace } from "./validation.mjs";
+  copyFinishItems, copyReceipts, snapshotArray, validateTime, writeNamespace } from "./validation.mjs";
 
 /** @import { CaptureMessage } from "@cairn-ink/core/ports" */
 /** @typedef {import("@cairn-ink/core/ports").CaptureKey} CaptureKey */
@@ -231,6 +231,16 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
         if (lineage && lineage.lineageFenced(state, scope, key, await lineage.captureProofs(scope, client, copied))) return [];
         const blocked = new Set(matcher.blockedMessages(client, sessionId, occurredAtMs));
         return Array.from(occurredAtMs.keys()).filter((position) => !blocked.has(position));
+      });
+    },
+
+    async retainedReceiptIds(tx, scope, memoryId, receipts) {
+      return port.read(tx, scope, getState => {
+        const stored = getState().rows.get(writeNamespace(scope))?.get(memoryId)?.receipts ?? [];
+        return copyReceipts(receipts).map(({ client, sessionId, messageId, role, occurredAtMs, excerpt }) =>
+          stored.find(receipt => receipt.client === client && receipt.sessionId === sessionId &&
+            receipt.messageId === messageId && receipt.role === role && receipt.occurredAtMs === occurredAtMs &&
+            receipt.excerpt === excerpt)?.id ?? null);
       });
     },
 
