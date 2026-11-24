@@ -2,7 +2,8 @@ import {
   CoreError, ERROR_CODES, coalesceNewTopics, compareUtf8, isErrorCode, memoryGuards, placementProposal, titleKey,
 } from "../../core/src/index.mjs";
 import { decodeCursor, encodeCursor } from "../../core/src/retrieval/hosted-paging.mjs";
-import { visibleTopicMemory } from "./topic-visibility.mjs";
+import { readCandidate, timestampUs } from "./memory-rows.mjs";
+import { readVisibility } from "./memory-visibility.mjs";
 import { requireLiveRun, runOperation } from "./uow.mjs";
 
 /** @import { PlacementProposal } from "../../core/src/index.mjs" */
@@ -19,26 +20,77 @@ const RETRYABLE_CODES = Object.keys(ERROR_CODES).filter((code) =>
 const currentPlacementJoin = `
   LEFT JOIN memory_placements p ON p.user_id = m.user_id AND p.memory_id = m.id
     AND p.memory_revision = m.revision`;
-const currentMemberJoin = `
-  JOIN memory_placements p ON p.user_id = mt.user_id AND p.memory_id = mt.memory_id
-    AND p.memory_revision = mt.memory_revision AND p.status = 'filed'
-  JOIN memories m ON m.user_id = mt.user_id AND m.id = mt.memory_id
-    AND m.revision = mt.memory_revision AND ${visibleTopicMemory("m")}`;
-const visibleTopicTitle = `CASE WHEN EXISTS (
+const currentMemberJoin = `JOIN memories m ON m.user_id = mt.user_id AND m.id = mt.memory_id
+    AND m.revision = mt.memory_revision
+  JOIN memory_placements p ON p.user_id = m.user_id AND p.memory_id = m.id
+    AND p.memory_revision = m.revision AND p.status = 'filed'`;
+
+// Restrict SQL to current personal rows. Suppression is evaluated by MemoryStore's matcher.
+/** @param {string} alias */
+const currentMemory = (alias) => `${alias}.currentness = 'current' AND ${alias}.core_namespace IS NULL
+  AND NOT EXISTS (SELECT 1 FROM memory_forget_log f WHERE f.user_id = ${alias}.user_id AND f.memory_id = ${alias}.id)`;
+
+/** @param {string} visibleSources */
+const visibleTopicTitle = (visibleSources) => `CASE WHEN EXISTS (
     SELECT 1 FROM topic_title_sources s WHERE s.user_id = t.user_id AND s.topic_id = t.id
   ) AND NOT EXISTS (
     SELECT 1 FROM topic_title_sources s
     LEFT JOIN memories source ON source.user_id = s.user_id AND source.id = s.memory_id
-      AND source.revision = s.memory_revision AND ${visibleTopicMemory("source")}
+      AND source.revision = s.memory_revision AND ${currentMemory("source")} AND source.id = ANY(${visibleSources}::text[])
     WHERE s.user_id = t.user_id AND s.topic_id = t.id AND source.id IS NULL
   ) THEN t.title END`;
-const topicColumns = `t.id, t.level, ${visibleTopicTitle} AS title,
+/** @param {string} visibleSources */
+const topicColumns = (visibleSources) => `t.id, t.level, ${visibleTopicTitle(visibleSources)} AS title,
   ARRAY(SELECT e.parent_id FROM topic_edges e
     JOIN topics parent ON parent.user_id = e.user_id AND parent.id = e.parent_id AND parent.level = 2
     WHERE e.user_id = t.user_id AND e.child_id = t.id AND t.level = 1
     ORDER BY e.parent_id COLLATE "C") AS parent_ids`;
 const topicOrder = `level, coalesce(title, '') COLLATE "C", id COLLATE "C"`;
 const newestFirst = `placed_at DESC, memory_id COLLATE "C" DESC`;
+
+/** @typedef {Awaited<ReturnType<typeof readVisibility>>} Visibility */
+/** @import {FactMatchPolicy} from "../../core/src/index.mjs" */
+
+/** @param {Visibility} visibility @param {string} owner @param {any[]} rows */
+async function visibleRows(visibility, owner, rows) {
+  const checked = await visibility.check(rows.map((row) => readCandidate(row, owner)));
+  return rows.filter((_, index) => !checked[index].hidden);
+}
+
+/**
+ * Refill by the last SQL candidate, including when an entire batch was hidden.
+ * Public member offsets count only visible rows.
+ * @param {Visibility} visibility @param {string} owner
+ * @param {(after: any, size: number) => Promise<{rows: any[]}>} load
+ * @param {number} [limit] @param {number} [skip]
+ */
+async function visiblePage(visibility, owner, load, limit = Infinity, skip = 0) {
+  const items = [];
+  let after = null;
+  while (items.length < limit) {
+    const size = Math.min(128, Math.max(16, skip + limit - items.length));
+    const { rows } = await load(after, size);
+    const visible = await visibleRows(visibility, owner, rows);
+    items.push(...visible.slice(skip, skip + limit - items.length));
+    skip = Math.max(0, skip - visible.length);
+    if (rows.length < size) break;
+    after = rows.at(-1);
+  }
+  return items;
+}
+
+/** @param {Query} query @param {string} owner @param {Visibility} visibility @param {string[] | null} [topicIds] */
+async function visibleTitleSources(query, owner, visibility, topicIds = null) {
+  const columns = visibility.candidateColumns([null]);
+  const rows = await visiblePage(visibility, owner, (after, size) => query(`
+    SELECT ${columns} FROM memories m
+    WHERE m.user_id = $1 AND ${currentMemory("m")} AND ($2::text IS NULL OR m.id COLLATE "C" > $2)
+      AND EXISTS (SELECT 1 FROM topic_title_sources s
+        WHERE s.user_id = m.user_id AND s.memory_id = m.id AND s.memory_revision = m.revision
+          AND ($3::text[] IS NULL OR s.topic_id = ANY($3)))
+    ORDER BY m.id COLLATE "C" LIMIT $4`, [owner, after?.id ?? null, topicIds, size]));
+  return rows.map(({ id }) => id);
+}
 
 /** @param {unknown} value @returns {value is string} */
 function sqlText(value) {
@@ -254,10 +306,10 @@ class WithoutDocumentCards {
 }
 
 /**
- * @param {{now?: () => number, topicRetryAfterMs?: number, topicMaxAttempts?: number}} [options]
+ * @param {{now?: () => number, topicRetryAfterMs?: number, topicMaxAttempts?: number, hashSessionKey?: FactMatchPolicy["hashSessionKey"]}} [options]
  * @returns {Placement}
  */
-export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3_600_000, topicMaxAttempts = 3 } = {}) {
+export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3_600_000, topicMaxAttempts = 3, hashSessionKey } = {}) {
   validateLimit(topicMaxAttempts, 3);
   if (!Number.isSafeInteger(topicRetryAfterMs) || topicRetryAfterMs < 0) throw new CoreError("invalid_input");
 
@@ -268,15 +320,19 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
       const { limit } = options;
       validateLimit(limit, BATCH_LIMIT);
       return runOperation(tx, async (query) => {
-        const { rows } = await query(`
-          SELECT m.id AS "memoryId", m.revision
+        const visibility = await readVisibility(query, owner, hashSessionKey);
+        const columns = visibility.candidateColumns([null]);
+        const cutoff = new Date(now() - topicRetryAfterMs);
+        const rows = await visiblePage(visibility, owner, (after, size) => query(`
+          SELECT ${columns}, m.created_at::text AS created_at_key
           FROM memories m ${currentPlacementJoin}
-          WHERE m.user_id = $1 AND ${visibleTopicMemory("m")}
+          WHERE m.user_id = $1 AND ${currentMemory("m")}
             AND (p.memory_id IS NULL OR (p.status = 'failed' AND p.code = ANY($2::text[])
               AND p.attempts < $3 AND p.placed_at <= $4))
-          ORDER BY m.created_at, m.id COLLATE "C" LIMIT $5`,
-        [owner, RETRYABLE_CODES, topicMaxAttempts, new Date(now() - topicRetryAfterMs), limit]);
-        return rows;
+            AND ($5::timestamptz IS NULL OR (m.created_at, m.id COLLATE "C") > ($5, $6::text))
+          ORDER BY m.created_at, m.id COLLATE "C" LIMIT $7`,
+        [owner, RETRYABLE_CODES, topicMaxAttempts, cutoff, after?.created_at_key ?? null, after?.id ?? null, size]), limit);
+        return rows.map(({ id, revision }) => ({ memoryId: id, revision }));
       });
     },
 
@@ -286,9 +342,11 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
       validateLimit(limit);
       return runOperation(tx, async (query) => {
         const page = await readPage(query, owner, "catalog", null, limit, cursor);
+        const visibility = await readVisibility(query, owner, hashSessionKey);
+        const sources = await visibleTitleSources(query, owner, visibility);
         const { rows } = await query(`
-          SELECT * FROM (SELECT ${topicColumns} FROM topics t WHERE t.user_id = $1) catalog
-          ORDER BY ${topicOrder} LIMIT $2 OFFSET $3`, [owner, limit + 1, page.offset]);
+          SELECT * FROM (SELECT ${topicColumns("$2")} FROM topics t WHERE t.user_id = $1) catalog
+          ORDER BY ${topicOrder} LIMIT $3 OFFSET $4`, [owner, sources, limit + 1, page.offset]);
         const { items, nextCursor } = page.slice(rows);
         return { items: items.map(toTopic), nextCursor, exhausted: nextCursor === null, indexRevision: page.indexRevision };
       });
@@ -305,14 +363,17 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
 
       return runOperation(tx, async (query) => {
         if (await readIndexRevision(query, owner) !== indexRevision) throw new CoreError("revision_conflict");
-        const { rows } = await query(`
-          SELECT m.id, m.revision, p.status, ARRAY(
+        const visibility = await readVisibility(query, owner, hashSessionKey);
+        const columns = visibility.candidateColumns([null]);
+        const { rows: candidates } = await query(`
+          SELECT ${columns}, p.status, ARRAY(
             SELECT mt.topic_id FROM memory_topics mt
             WHERE mt.user_id = m.user_id AND mt.memory_id = m.id AND mt.memory_revision = m.revision
           ) AS topic_ids
           FROM memories m ${currentPlacementJoin}
-          WHERE m.user_id = $1 AND m.id = ANY($2::text[]) AND ${visibleTopicMemory("m")}
+          WHERE m.user_id = $1 AND m.id = ANY($2::text[]) AND ${currentMemory("m")}
           ORDER BY m.id COLLATE "C" FOR UPDATE OF m`, [owner, ids]);
+        const rows = await visibleRows(visibility, owner, candidates);
         if (rows.length !== ids.length || rows.some(({ id, revision }) => revisions.get(id) !== revision)) {
           throw new CoreError("revision_conflict");
         }
@@ -363,17 +424,22 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
       const ids = snapshotArray(memoryIds, undefined, false);
       if (ids.some((id) => typeof id !== "string" || !id)) throw new CoreError("invalid_input");
       return runOperation(tx, async (query) => {
+        const visibility = await readVisibility(query, owner, hashSessionKey);
+        const columns = visibility.candidateColumns([null]);
+        const { rows } = await query(`SELECT ${columns} FROM memories m
+          WHERE m.user_id = $1 AND m.id = ANY($2::text[]) AND ${currentMemory("m")}`, [owner, ids.filter(sqlText)]);
+        const visibleIds = (await visibleRows(visibility, owner, rows)).map(({ id }) => id);
         await query(`
           INSERT INTO memory_placements (user_id, memory_id, memory_revision, status, code, attempts, placed_at)
           SELECT m.user_id, m.id, m.revision, 'failed', $3, 1, $4
-          FROM memories m WHERE m.user_id = $1 AND m.id = ANY($2::text[]) AND ${visibleTopicMemory("m")}
+          FROM memories m WHERE m.user_id = $1 AND m.id = ANY($2::text[])
           ON CONFLICT (user_id, memory_id) DO UPDATE SET
             memory_revision = EXCLUDED.memory_revision, code = EXCLUDED.code, placed_at = EXCLUDED.placed_at,
             attempts = CASE WHEN memory_placements.memory_revision = EXCLUDED.memory_revision
               THEN least(memory_placements.attempts + 1, 3) ELSE 1 END,
             status = CASE WHEN memory_placements.memory_revision = EXCLUDED.memory_revision
               THEN memory_placements.status ELSE 'failed' END`,
-        [owner, ids.filter(sqlText), code, new Date(now())]);
+        [owner, visibleIds, code, new Date(now())]);
       });
     },
 
@@ -384,11 +450,22 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
       if (level !== undefined && level !== "L1" && level !== "L2") throw new CoreError("invalid_input");
       return runOperation(tx, async (query) => {
         const page = await readPage(query, owner, "list", level ?? null, limit, cursor);
+        const visibility = await readVisibility(query, owner, hashSessionKey);
+        const columns = visibility.candidateColumns([null]);
+        const members = await visiblePage(visibility, owner, (after, size) => query(`
+          SELECT ${columns} FROM memories m ${currentPlacementJoin}
+          WHERE m.user_id = $1 AND ${currentMemory("m")} AND p.status = 'filed'
+            AND ($2::text IS NULL OR m.id COLLATE "C" > $2)
+            AND EXISTS (SELECT 1 FROM memory_topics mt WHERE mt.user_id = m.user_id
+              AND mt.memory_id = m.id AND mt.memory_revision = m.revision)
+          ORDER BY m.id COLLATE "C" LIMIT $3`, [owner, after?.id ?? null, size]));
+        if (!members.length) return { items: [], nextCursor: null };
+        const sources = await visibleTitleSources(query, owner, visibility);
         const { rows } = await query(`
           WITH direct AS (
             SELECT mt.topic_id, mt.memory_id, mt.placed_at FROM memory_topics mt
             ${currentMemberJoin}
-            WHERE mt.user_id = $1
+            WHERE mt.user_id = $1 AND m.id = ANY($5::text[]) AND ${currentMemory("m")}
           ), effective AS (
             SELECT topic_id, memory_id, placed_at FROM direct WHERE $2::smallint IS DISTINCT FROM 2
             UNION ALL
@@ -405,11 +482,11 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
             FROM ranked GROUP BY topic_id
           )
           SELECT * FROM (
-            SELECT ${topicColumns}, s.member_count, s.newest_member_ids
+            SELECT ${topicColumns("$6")}, s.member_count, s.newest_member_ids
             FROM summary s JOIN topics t ON t.user_id = $1 AND t.id = s.topic_id
             WHERE $2::smallint IS NULL OR t.level = $2
           ) listed ORDER BY ${topicOrder} LIMIT $3 OFFSET $4`,
-        [owner, level === undefined ? null : level === "L1" ? 1 : 2, limit + 1, page.offset]);
+        [owner, level === undefined ? null : level === "L1" ? 1 : 2, limit + 1, page.offset, members.map(({ id }) => id), sources]);
         const { items, nextCursor } = page.slice(rows);
         return { items: items.map((row) => ({
           ...toTopic(row), memberCount: Number(row.member_count), newestMemberIds: row.newest_member_ids,
@@ -424,7 +501,9 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
       return runOperation(tx, async (query) => {
         const page = await readPage(query, owner, "members", topicId, limit, cursor);
         if (!sqlText(topicId)) return { items: [], nextCursor: null };
-        const { rows } = await query(`
+        const visibility = await readVisibility(query, owner, hashSessionKey);
+        const columns = visibility.candidateColumns([null]);
+        const rows = await visiblePage(visibility, owner, (after, size) => query(`
           WITH child_topics AS (
             SELECT t.id FROM topics t WHERE t.user_id = $1 AND t.id = $2 AND t.level = 1
             UNION ALL
@@ -433,10 +512,13 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
           ), current_members AS (
             SELECT mt.memory_id, max(mt.placed_at) AS placed_at
             FROM child_topics c JOIN memory_topics mt ON mt.topic_id = c.id ${currentMemberJoin}
-            WHERE mt.user_id = $1 GROUP BY mt.memory_id
+            WHERE mt.user_id = $1 AND ${currentMemory("m")} GROUP BY mt.memory_id
           )
-          SELECT memory_id, (extract(epoch FROM placed_at) * 1000000)::bigint::text AS placed_at_us
-          FROM current_members ORDER BY ${newestFirst} LIMIT $3 OFFSET $4`, [owner, topicId, limit + 1, page.offset]);
+          SELECT ${columns}, memory_id, (extract(epoch FROM placed_at) * 1000000)::bigint::text AS placed_at_us
+          FROM current_members c JOIN memories m ON m.user_id = $1 AND m.id = c.memory_id
+          WHERE ($3::bigint IS NULL OR (c.placed_at, c.memory_id COLLATE "C") < (${timestampUs("$3")}, $4::text))
+          ORDER BY ${newestFirst} LIMIT $5`,
+        [owner, topicId, after?.placed_at_us ?? null, after?.memory_id ?? null, size]), limit + 1, page.offset);
         const { items, nextCursor } = page.slice(rows);
         return { items: items.map((row) => ({ kind: "memory", id: row.memory_id, placedAtUs: BigInt(row.placed_at_us) })), nextCursor };
       });
@@ -446,12 +528,17 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
       const owner = personalOwner(tx, scope);
       if (!sqlText(memoryId)) return [];
       return runOperation(tx, async (query) => {
+        const visibility = await readVisibility(query, owner, hashSessionKey);
+        const columns = visibility.candidateColumns([null]);
         const { rows } = await query(`
-          SELECT mt.topic_id FROM memory_topics mt ${currentMemberJoin}
-          JOIN topics t ON t.user_id = mt.user_id AND t.id = mt.topic_id
-          WHERE mt.user_id = $1 AND mt.memory_id = $2
-          ORDER BY mt.topic_id COLLATE "C"`, [owner, memoryId]);
-        return rows.map(({ topic_id }) => topic_id);
+          SELECT ${columns}, ARRAY(
+            SELECT mt.topic_id FROM memory_topics mt JOIN topics t ON t.user_id = mt.user_id AND t.id = mt.topic_id
+            WHERE mt.user_id = m.user_id AND mt.memory_id = m.id AND mt.memory_revision = m.revision
+            ORDER BY mt.topic_id COLLATE "C"
+          ) AS topic_ids FROM memories m ${currentPlacementJoin}
+          WHERE m.user_id = $1 AND m.id = $2 AND p.status = 'filed' AND ${currentMemory("m")}`, [owner, memoryId]);
+        const [row] = await visibleRows(visibility, owner, rows);
+        return row?.topic_ids ?? [];
       });
     },
 
@@ -461,23 +548,36 @@ export function createPostgresTopicStore({ now = Date.now, topicRetryAfterMs = 3
       validateLimit(ids.length);
       if (ids.some((id) => typeof id !== "string")) throw new CoreError("invalid_input");
       return runOperation(tx, async (query) => {
+        const visibility = await readVisibility(query, owner, hashSessionKey);
+        const columns = visibility.candidateColumns([null]);
         const { rows } = await query(`
           WITH requested AS (
-            SELECT id, min(position) AS position
-            FROM unnest($2::text[]) WITH ORDINALITY AS input(id, position) GROUP BY id
+            SELECT memory_id, min(position) AS position
+            FROM unnest($2::text[]) WITH ORDINALITY AS input(memory_id, position) GROUP BY memory_id
           )
-          SELECT m.id AS "memoryId", COALESCE((
-            SELECT jsonb_agg(jsonb_build_object('id', t.id, 'title', ${visibleTopicTitle}) ORDER BY t.id COLLATE "C")
-            FROM memory_topics mt JOIN topics t ON t.user_id = mt.user_id AND t.id = mt.topic_id
+          SELECT ${columns}, ARRAY(
+            SELECT t.id FROM memory_topics mt JOIN topics t ON t.user_id = mt.user_id AND t.id = mt.topic_id
             WHERE mt.user_id = m.user_id AND t.level = 1 AND mt.memory_id = m.id AND mt.memory_revision = p.memory_revision
               AND p.status = 'filed'
-          ), '[]'::jsonb) AS topics
-          FROM requested r JOIN memories m ON m.id = r.id
-          JOIN memory_placements p ON p.user_id = m.user_id AND p.memory_id = m.id AND p.memory_revision = m.revision
-          WHERE m.user_id = $1 AND ${visibleTopicMemory("m")}
-            AND p.status IN ('filed', 'unfiled')
+            ORDER BY t.id COLLATE "C"
+          ) AS topic_ids
+          FROM requested r JOIN memories m ON m.id = r.memory_id ${currentPlacementJoin}
+          WHERE m.user_id = $1 AND ${currentMemory("m")} AND p.status IN ('filed', 'unfiled')
           ORDER BY r.position`, [owner, ids.filter(sqlText)]);
-        return rows;
+        const visible = await visibleRows(visibility, owner, rows);
+        const topicIds = [...new Set(visible.flatMap(({ topic_ids }) => topic_ids))];
+        const titles = new Map();
+        if (topicIds.length) {
+          const sources = await visibleTitleSources(query, owner, visibility, topicIds);
+          const { rows: topics } = await query(`
+            SELECT t.id, ${visibleTopicTitle("$3")} AS title FROM topics t
+            WHERE t.user_id = $1 AND t.id = ANY($2::text[])`, [owner, topicIds, sources]);
+          for (const { id, title } of topics) titles.set(id, title);
+        }
+        return visible.map(({ id, topic_ids }) => ({
+          memoryId: id,
+          topics: topic_ids.map((/** @type {string} */ id) => ({ id, title: titles.get(id) ?? null })),
+        }));
       });
     },
 
