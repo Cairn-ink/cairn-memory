@@ -797,6 +797,29 @@ The MCP host uses these status mappings.
 | `suppressed` | `memory_suppressed` |
 | `invalid` | `invalid_input` |
 
+## Addendum 19 — Document card Find and Read (2026-11-25)
+
+- **Visibility input.** The optional `documentCards.visibilityInputs(tx, scope, refs)`
+  returns one entry per ref in order. From the live transaction's snapshot the store
+  supplies the stored card fields, capture's canonical session key, all linked memory
+  states, and applicable text facts and fingerprint key for card title and body
+  containment, plus a definite whole-message Raw withholding verdict that includes
+  lineage and receipt qualification for message-backed cards. Non-card,
+  foreign-scope, unknown, hidden, tombstoned, and unresolvable refs return null
+  individually. Null withholds the card. The store rejects an ended transaction.
+  This method adds no capability flag.
+- **Find.** For a nonblank query, the requested card layer needs `documentCardSearch`,
+  the candidates port, and visibility inputs. In one read-only transaction it applies
+  the requested window and clients, takes up to 50 rows per channel, checks visibility
+  before fusion, and checks each loaded card again before delivery. It reuses the
+  memory query embedding when available and uses lexical alone without complete
+  vector coverage. A failed card operation affects only the card layer. Blank
+  queries skip card search.
+- **Read.** `readCard(scope, id)` uses the store and visibility inputs in one read-only
+  transaction. It returns the ID, title, body, date, origin, source client, and
+  IDs of visible or historical linked memories. Missing or withheld cards
+  return `not_found`. A missing store or method returns `capability_unavailable`.
+
 ## Addendum 20 — In-transaction hosted write hooks and pause-locked Postgres snapshots
 
 *Number provisional until merge. Addendum 19 is used by the pending document-card Find and Read change.*

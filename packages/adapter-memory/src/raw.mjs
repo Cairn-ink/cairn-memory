@@ -146,8 +146,10 @@ function publicSegment(segment) {
  * @param {import("@cairn-ink/core").FingerprintLabels} labels
  * @param {FactMatchPolicy["hashSessionKey"]} [hashSessionKey]
  * @param {boolean} [rationaleEdges]
+ * @param {boolean} [documentCards]
  */
-export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSessionKey, rationaleEdges = false) {
+export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSessionKey,
+  rationaleEdges = false, documentCards = false) {
   const cursorBinding = crypto.randomUUID();
   const policy = { hashSessionKey, rowShingles: false };
   let rawKeyConflict = 0;
@@ -157,8 +159,8 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
   let proofKey;
 
   /** @param {State} state @param {string} id */
-  function recordRationaleConflict(state, id) {
-    if (!rationaleEdges || state.rawConflicts.has(id)) return false;
+  function recordSourceConflict(state, id) {
+    if (!(rationaleEdges || documentCards) || state.rawConflicts.has(id)) return false;
     state.rawConflicts.add(id);
     return true;
   }
@@ -287,17 +289,6 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     };
   }
 
-  /** @param {State} state @param {Scope} scope
-   * @param {import("@cairn-ink/core/ports").DocumentCardSourceMessage} source */
-  async function sourceVisible(state, scope, source) {
-    const row = state.rawRows.get(rawId(scope, source, source.messageId));
-    if (!row || state.rawFences.has(sessionSlot(scope.namespace, source))) return false;
-    const facts = scopedFacts(state, scope);
-    if (!facts.length) return true;
-    const candidate = await readEvidence(scope, facts)(row);
-    return facts.every((stored) => factHidesRow(stored, candidate, policy) === false);
-  }
-
   /** @param {Pick<State, "facts" | "rawFences" | "rawRows">} state @param {RetrievalScope} selection */
   async function visibleRows(state, selection) {
     const byNamespace = new Map(selection.namespaces.map((namespace) => {
@@ -327,7 +318,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
   async function findVisibleSource(state, scope, receipt) {
     const id = rawId(scope, receipt, receipt.messageId);
     const row = state.rawRows.get(id);
-    if (!row || state.rawConflicts.has(id)) return undefined;
+    if (!row || (rationaleEdges && state.rawConflicts.has(id))) return undefined;
     const [visible] = await visibleRows({ ...state, rawRows: new Map([[id, row]]) },
       { owner: scope.owner, namespaces: [scope.namespace] });
     return visible;
@@ -360,7 +351,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     const id = rawId(scope, receipt, messageId);
     if (!state.rawRows.has(id)) {
       const slot = sessionSlot(scope.namespace, receipt);
-      if (state.rawFences.has(slot) || state.rawConflicts.has(id)) return false;
+      if (state.rawFences.has(slot) || (rationaleEdges && state.rawConflicts.has(id))) return false;
       if (admittedContent !== undefined) {
         const source = { ...receipt, content: admittedContent };
         const facts = scopedFacts(state, scope);
@@ -404,21 +395,33 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
       const slots = new Set(prepare().map((session) => sessionSlot(namespace, session)));
       return async (getState, _markDirty, run) => {
         const state = getState();
+        const { deletedMessages } = state;
+        const before = deletedMessages.size;
         const deleted = [];
         for (const [id, row] of state.rawRows) {
           if (slots.has(sessionSlot(row.ref.namespace, row))) {
             state.rawRows.delete(id);
             state.rawConflicts.delete(id);
-            state.receiptDenials.add(await receiptAddressKey(namespace, row));
+            const address = await receiptAddressKey(namespace, row);
+            deletedMessages.add(address);
+            state.receiptDenials.add(address);
             deleted.push(row);
           }
         }
         await invalidateRationaleSources(state, namespace, deleted);
-        const ledgerBlanked = await blankCaptureMessages(state, namespace,
-          (key) => slots.has(sessionSlot(namespace, key)));
+        for (const claim of state.claims.values()) {
+          const { key, messages } = claim;
+          if (key.scope.namespace !== namespace || !slots.has(sessionSlot(namespace, key))) continue;
+          const { client, sessionId } = key;
+          const messageIds = claim.messageIds ?? messages?.map(({ id }) => id) ?? [];
+          for (const messageId of messageIds) {
+            deletedMessages.add(await receiptAddressKey(namespace, { client, sessionId, messageId }));
+          }
+        }
+        const ledgerBlanked = await blankCaptureMessages(state, namespace, key => slots.has(sessionSlot(namespace, key)));
         if (deleted.length || ledgerBlanked) advanceRawInspectEpoch(state);
         if (deleted.length) advanceRevision(run);
-        if (ledgerBlanked) run.stateWritten = true;
+        if (ledgerBlanked || deletedMessages.size !== before) run.stateWritten = true;
         return { rawDeleted: deleted.length, ledgerBlanked };
       };
     });
@@ -434,8 +437,16 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
         return async (getState, _markDirty, run) => {
           if (!copied.length) return;
           const state = getState();
-          const { rawAnchors } = state;
-          const proofs = await captureProofs(selection, client, copied);
+          const { deletedMessages, rawAnchors } = state;
+          const retained = [];
+          for (const message of copied) {
+            // A deleted resend is blanked at admission, so its proof would match any text at this ID.
+            if (message.content === "" && deletedMessages.size && deletedMessages.has(await receiptAddressKey(selection.namespace,
+              { client, sessionId, messageId: message.id }))) continue;
+            retained.push(message);
+          }
+          if (!retained.length) return;
+          const proofs = await captureProofs(selection, client, retained);
           if (proofs === null) throw new CoreError("fingerprint_unavailable");
           const sessions = rawAnchors.get(client) ?? new Map();
           const slot = sessionSlot(selection.namespace, { client, sessionId });
@@ -480,7 +491,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
             const previous = state.rawRows.get(entry.ref.id);
             if (previous && previous.content !== entry.content) {
               rawKeyConflict++;
-              if (recordRationaleConflict(state, entry.ref.id)) newConflict = true;
+              if (recordSourceConflict(state, entry.ref.id)) newConflict = true;
             }
             const candidate = evidence(entry, scope, hash);
             if (!allowed || refusalFacts.some((stored) => {
@@ -497,8 +508,11 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
             state.rawRows.set(entry.ref.id, entry);
             archived++;
           }
-          if (newConflict || archived) advanceRawInspectEpoch(state);
-          if (newConflict && !archived) markDirty();
+          if ((rationaleEdges && newConflict) || archived) advanceRawInspectEpoch(state);
+          if (newConflict && !archived) {
+            if (rationaleEdges) markDirty();
+            else run.stateWritten = true;
+          }
           if (archived) advanceRevision(run);
           return { archived };
         };
@@ -539,9 +553,8 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
               counts.withheld++;
             } else if (previous) {
               counts.existing++;
-              if (previous.content !== entry.content && recordRationaleConflict(state, id)) {
-                // The rationale guard changed, while the Raw index stayed the same.
-                advanceRawInspectEpoch(state);
+              if (previous.content !== entry.content && recordSourceConflict(state, id)) {
+                if (rationaleEdges) advanceRawInspectEpoch(state);
                 run.stateWritten = true;
               }
             } else {
@@ -662,7 +675,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     }));
   }
 
-  return { raw, findVisibleSource, visibleRawRefs, captureProofs, lineageFenced, sourceVisible, sourceLineageVisible,
+  return { raw, findVisibleSource, visibleRawRefs, captureProofs, lineageFenced, sourceLineageVisible,
     receiptSourcesVisible, seedClientlessRaw,
     counters: () => ({ rawKeyConflict, rawArchiveRefused }) };
 }

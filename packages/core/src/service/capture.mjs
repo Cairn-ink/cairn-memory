@@ -435,6 +435,12 @@ export function captureMethods(deps) {
         return !!content && content === admittedMessages[position].content;
       }
 
+      /** @param {Tx} tx @param {number[]} positions */
+      async function unchangedPositions(tx, positions) {
+        const current = await readCurrentMessages(tx);
+        return positions.filter(position => sourceUnchanged(current, position));
+      }
+
       /** @param {Tx} tx */
       async function pauseChanged(tx) {
         const state = await readPause(tx);
@@ -513,8 +519,10 @@ export function captureMethods(deps) {
           if (blockedSession !== false || blockedMessages.length) throw new CoreError("suppressed");
           return passages;
         };
-        /** @param {Tx} tx @param {number[]} positions */
-        async function screenSourcePositions(tx, positions) {
+        /** @param {Tx} tx @param {number[]} requestedPositions */
+        async function screenSourcePositions(tx, requestedPositions) {
+          const positions = await unchangedPositions(tx, requestedPositions);
+          if (!positions.length) return positions;
           const passages = await readSourcePassages(tx, positions);
           const writeKey = capabilities.fingerprintKey && passages.length ? await selectWriteKey(tx) : null;
           if (passages.length && sourceKey !== undefined && writeKey?.id !== sourceKey?.id) return null;
@@ -523,11 +531,7 @@ export function captureMethods(deps) {
           return allowed;
         }
         const supplemental = documents?.forCapture({ key, messages: admittedMessages, excludedSources, sourceKey,
-          readSourcePassages, selectWriteKey,
-          unchangedPositions: async (tx, positions) => {
-            const current = await readCurrentMessages(tx);
-            return positions.filter(position => sourceUnchanged(current, position));
-          },
+          readSourcePassages, selectWriteKey, unchangedPositions,
           filterSources: (positions, passages, writeKey) =>
             filterCaptureSources(sources, positions, passages, null, sourceEvidence, writeKey),
           abandonKeyMismatch, readEligible, runAtGeneration, finish, assertSendGeneration,
@@ -586,10 +590,6 @@ export function captureMethods(deps) {
             if (await pauseChanged(tx)) throw new CoreError("capture_paused");
             const allowed = await screenSourcePositions(tx, positions);
             if (allowed?.length !== positions.length) throw new CoreError("ingest_inputs_changed");
-            const current = await readCurrentMessages(tx);
-            if (!positions.every(position => sourceUnchanged(current, position))) {
-              throw new CoreError("ingest_inputs_changed");
-            }
           }));
         } catch (error) {
           transport.check();
@@ -647,8 +647,7 @@ export function captureMethods(deps) {
 
         const completed = await runAtGeneration(async tx => {
           checkCaptureAbort(signal, deadline);
-          const current = await readCurrentMessages(tx);
-          const stillCurrent = preEmbed.stillEligible.filter(position => sourceUnchanged(current, position));
+          const stillCurrent = await unchangedPositions(tx, preEmbed.stillEligible);
           await capture.assertEligible(tx, key, stillCurrent);
           let writeKey;
           if (prepared.length && keys.userKeyForWrite) {

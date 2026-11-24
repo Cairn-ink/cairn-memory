@@ -255,15 +255,10 @@ async function createKeyedDispatchMutant() {
 }
 
 test("a bypass of the keyed pre-dispatch filter still cannot send a purged source", async () => {
-  // The keyed forget purges the exact source from the stored outbox. The send refresh compares the
-  // current outbox content, so the forgotten text never reaches the model even without the keyed filter.
-  // The mutant builds a request with both sources; the send refresh sees the purged slot and ends the
-  // attempt retryably before dispatch, so the model receives no request at all.
+  // The keyed forget purges the exact source from the stored outbox. Screening withdraws the blanked
+  // slot before sizing the request, so the mutant still sends only the unchanged source.
   const createService = await createKeyedDispatchMutant();
-  await assert.rejects(captureRace({ keyed: true, timing: "before dispatch", afterClaim: true, createService }), {
-    message: /^Unexpected source text reached the model\b/,
-    actual: [],
-  });
+  await captureRace({ keyed: true, timing: "before dispatch", afterClaim: true, createService });
 });
 
 test("stale source passages still cannot store a purged source", async () => {

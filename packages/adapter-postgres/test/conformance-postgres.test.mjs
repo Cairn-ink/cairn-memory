@@ -462,6 +462,7 @@ const notApplicable = {
     "T-RAT-receipt-private", "T-RAT-receipt-remove", "T-RAT-receipt-update", "T-RAT-revision", "T-RAT-scope", "T-RAT-stale"],
   "topics.forMemories requires personal scope": ["T-TFM-4-namespace"],
   "placement requires personal scope": ["T-TOP-3", "T-TOP-4", "T-TOP-14"],
+  "suppressions.receiptWithheld not implemented yet": ["K-RCPT-W1"],
 };
 
 const { PRIVACY_CASES, runCase } = kit;

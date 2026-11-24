@@ -157,7 +157,8 @@ async function windowRefusal(ctx) {
   equal((await f.remove()).rawDeleted, 3, "Conversation deletion must count only stored window survivors");
   await ctx.harness.seedFact(ctx.owner, windowFact(f.capture, true));
   const known = await readDump(ctx.harness);
-  equal((await f.archive([unknown])).archived, 0, "unknownTime must refuse arrivals without a time");
+  const unknownTime = fixture(ctx, { ...f.capture, sessionId: "other-conversation" });
+  equal((await unknownTime.archive([unknown])).archived, 0, "unknownTime must refuse arrivals without a time");
   equal(await readDump(ctx.harness), known, "A refused unknown-time message must never be stored");
 }
 
@@ -420,7 +421,8 @@ async function purgeSafety(ctx) {
   const session = sessionFact(ctx, sessionOnly.capture);
   await sessionOnly.archive([message("session-only", 2)]);
   const storedSession = await storeFact(ctx, session);
-  await f.archive([{ ...matching, id: "second-match" }]);
+  const secondMatch = fixture(ctx, { ...f.capture, sessionId: "other-conversation" });
+  await secondMatch.archive([{ ...matching, id: "second-match" }]);
   const deletedWithSession = await purge(f, [text]);
   equal([deletedWithSession.rawDeleted, deletedWithSession.ledgerBlanked], [1, 0],
     "Text purge must retain session-only-hidden rows");

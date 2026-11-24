@@ -9,7 +9,7 @@ import { dropMemoryPlacement } from "./unit-of-work.mjs";
 import { snapshotArray, validateCardId, validateLimit, validateMemoryId, validateTime, writeNamespace } from "./validation.mjs";
 
 /** @import {PlacementProposal} from "@cairn-ink/core" */
-/** @import {Scope, StoredDocumentCardRecord, Topic, TopicStore} from "@cairn-ink/core/ports" */
+/** @import {Scope, StoredDocumentCardRecord, Topic, TopicStore, Tx} from "@cairn-ink/core/ports" */
 /** @import {DocumentCardMemoryState} from "@cairn-ink/core/routing" */
 /** @import {State} from "./unit-of-work.mjs" */
 /** @import {CardOutcome, Failure, Outcome, StoredTopic, TopicState} from "./topics.d.mts" */
@@ -173,21 +173,21 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
   const mayRetry = (failure, readNow) => ERROR_CODES[failure.code] === "retryable" &&
     failure.attempts < topicMaxAttempts && readNow() - failure.failedAtMs >= topicRetryAfterMs;
 
-  /** @param {State} state @param {Scope} scope @param {string} cardId @param {string} contentHash
+  /** @param {Tx} tx @param {State} state @param {Scope} scope @param {string} cardId @param {string} contentHash
    * @param {ReturnType<typeof visibility>["current"]} current */
-  async function visibleCardAt(state, scope, cardId, contentHash, current) {
+  async function visibleCardAt(tx, state, scope, cardId, contentHash, current) {
     const card = state.documentCards.get(scope.namespace)?.get(cardId)?.card;
     return card?.contentHash === contentHash &&
       !cardIsStale(card, current) &&
-      await cardVisible(state, scope, card);
+      await cardVisible(tx, state, scope, card);
   }
 
-  /** @param {State} state @param {Scope} scope @param {TopicState} scoped */
-  async function visibleFiledCards(state, scope, scoped) {
+  /** @param {Tx} tx @param {State} state @param {Scope} scope @param {TopicState} scoped */
+  async function visibleFiledCards(tx, state, scope, scoped) {
     const { current } = visibility(state, scope, matchFacts);
     const ids = new Set();
     for (const [id, { contentHash, memberships }] of scoped.cardOutcomes) {
-      if (memberships.size && await visibleCardAt(state, scope, id, contentHash, current)) ids.add(id);
+      if (memberships.size && await visibleCardAt(tx, state, scope, id, contentHash, current)) ids.add(id);
     }
     return ids;
   }
@@ -394,7 +394,7 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
           const previous = state.topics.get(namespace);
           const { current } = view(state, tx.owner, namespace);
           for (const [id, hash] of hashes) {
-            if (!await visibleCardAt(state, selection, id, hash, current)) throw new CoreError("revision_conflict");
+            if (!await visibleCardAt(tx, state, selection, id, hash, current)) throw new CoreError("revision_conflict");
           }
           for (const { topicIds } of items) {
             if (topicIds.some((id) => previous?.topics.get(id)?.level !== "L1")) throw new CoreError("revision_conflict");
@@ -464,7 +464,7 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
         const state = getState();
         const scoped = state.topics.get(namespace);
         const { current, topic } = view(state, tx.owner, namespace);
-        const cards = flags.documentCards && scoped ? await visibleFiledCards(state, { owner: tx.owner, namespace }, scoped) : null;
+        const cards = flags.documentCards && scoped ? await visibleFiledCards(tx, state, { owner: tx.owner, namespace }, scoped) : null;
         const rows = scoped ? [...scoped.topics.values()].filter((row) => !level || row.level === level)
           .flatMap((row) => {
             const children = memberTopics(scoped, row);
@@ -493,7 +493,7 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
           const memories = visibleMembers(scoped.outcomes, children, (id, outcome) => current(id)?.revision === outcome.revision);
           for (const memory of memories) rows.push({ ...memory, kind: "memory" });
           if (flags.documentCards) {
-            const cards = await visibleFiledCards(state, { owner: tx.owner, namespace }, scoped);
+            const cards = await visibleFiledCards(tx, state, { owner: tx.owner, namespace }, scoped);
             for (const card of visibleMembers(scoped.cardOutcomes, children, (id) => cards.has(id))) {
               rows.push({ ...card, kind: "card" });
             }
@@ -514,7 +514,7 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
         const outcome = scoped?.cardOutcomes.get(cardId);
         if (!scoped || !outcome?.memberships.size) return [];
         const { current } = view(state, tx.owner, namespace);
-        return await visibleCardAt(state, { owner: tx.owner, namespace }, cardId, outcome.contentHash, current)
+        return await visibleCardAt(tx, state, { owner: tx.owner, namespace }, cardId, outcome.contentHash, current)
           ? cardTopics(scoped, outcome).map(({ id }) => id) : [];
       });
     },
@@ -534,7 +534,7 @@ export function createTopicStore(port, flags, newId, now, matchFacts, {
         const rows = [];
         for (const cardId of new Set(ids)) {
           const outcome = scoped.cardOutcomes.get(cardId);
-          if (!outcome || !await visibleCardAt(state, selection, cardId, outcome.contentHash, current)) continue;
+          if (!outcome || !await visibleCardAt(tx, state, selection, cardId, outcome.contentHash, current)) continue;
           const topics = cardTopics(scoped, outcome).map((stored) => ({ id: stored.id, title: topic(stored).title }));
           rows.push({ cardId, topics });
         }

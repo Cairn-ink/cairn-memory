@@ -10,7 +10,7 @@ import { fetchEvidenceMethod } from "./context-read-fetch.mjs";
 import { findCandidatesMethod } from "./context-read-find.mjs";
 import { readContextMethod } from "./context-read.mjs";
 import { entryError } from "./entry.mjs";
-import { findMethod, readMethod } from "./find.mjs";
+import { findMethod, readCardMethod, readMethod } from "./find.mjs";
 import { forgetMethod } from "./forget.mjs";
 import { importMethod, importRawMethod } from "./import.mjs";
 import { inspectMethod } from "./inspect.mjs";
@@ -190,6 +190,7 @@ export function createMemoryService(input) {
       recall: recallMethod(deps),
       find: findMethod(deps),
       read: readMethod(deps.storage),
+      readCard: readCardMethod(deps.storage),
       listRawMessages: listRawMessagesMethod(deps.storage),
       importMemories: importMethod(deps),
       importRawMessages: importRawMethod(deps),
