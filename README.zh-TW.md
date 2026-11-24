@@ -174,7 +174,7 @@ Codex 的規則，以及外掛的隱私約定。
   30 分鐘內有訊息的對話一起隱藏。這可能藏到無關的對話，也可能漏掉相關的對話，
   要刪掉特定一段對話請用 `raw delete`。
 - **解除安裝。** `npx @cairn-ink/memory uninstall --local` 會斷開工具的連接，
-  資料會留在硬碟上。從安裝器 0.6.11 起，在 Linux 上解除安裝時，如果要移除引擎，
+  資料會留在硬碟上。使用安裝器 0.6.12 在 Linux 上解除安裝時，如果要移除引擎，
   會先請這個資料庫還在執行的共用伺服器停止。無論伺服器是否停下來，解除安裝都會繼續。
   解除雲端模式，你在 cairn.ink 上的記憶也會留著。
 
@@ -191,7 +191,7 @@ Codex 的規則，以及外掛的隱私約定。
 `/mnt/` 底下或網路檔案系統時，每個對話會各自啟動一個伺服器。共用伺服器如果
 無法啟動，對話會自動啟動自己的伺服器。
 
-安裝器 0.6.11 新增 `npx @cairn-ink/memory daemon status --local`，可查看這份本機安裝的資料庫所用的共用伺服器。已安裝的引擎需要支援共用伺服器。在 Linux 上，指令會以 JSON 回傳已登記伺服器的資料庫短 ID、執行狀態、引擎 build，以及最近回報的對話數（如果有回報）。還沒有伺服器登記紀錄的端點可能顯示為 `endpoint_uncertain`。`npx @cairn-ink/memory daemon stop --local` 會向這個資料庫已驗證且仍在執行的伺服器送出 SIGTERM，最多等五秒，再針對已送出訊號的伺服器回報 `stopped` 和 `still_running`。請等對話閒置再執行。進行中的呼叫即使已經寫入資料，也可能收到 `daemon_outcome_unknown`。在其他平台，如果已安裝的引擎支援這兩個指令，兩個指令都會印出 `daemon_platform`。
+安裝器 0.6.12 支援 `npx @cairn-ink/memory daemon status --local`，可查看這份本機安裝的資料庫所用的共用伺服器。已安裝的引擎需要支援共用伺服器。在 Linux 上，指令會以 JSON 回傳已登記伺服器的資料庫短 ID、執行狀態、引擎 build，以及最近回報的對話數（如果有回報）。還沒有伺服器登記紀錄的端點可能顯示為 `endpoint_uncertain`。`npx @cairn-ink/memory daemon stop --local` 會向這個資料庫已驗證且仍在執行的伺服器送出 SIGTERM，最多等五秒，再針對已送出訊號的伺服器回報 `stopped` 和 `still_running`。請等對話閒置再執行。進行中的呼叫即使已經寫入資料，也可能收到 `daemon_outcome_unknown`。在其他平台，如果已安裝的引擎支援這兩個指令，兩個指令都會印出 `daemon_platform`。
 
 不想讓 worker 載入它，可以這樣做：
 

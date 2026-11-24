@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.12 — 2026-11-24
+
+- **Forgetting a memory can finish when a topic title came from an earlier source you already forgot.**
+- **The bundled cloud client accepts capture requests that include transcript boundaries, a final-part marker and a parser version.** It rejects empty or reversed ranges before sending them.
+- **Pausing local memory stops new model requests from background Card updates.** Saved conversation searches that match only on words skip the embedding service.
+- **Local recall, memory details and related views hide evidence that shares a forgotten source.** Evidence from independent sources can still appear.
+- **Episode Keep no longer brings back sources affected by a forget.** Reopening a saved Episode or retrying a Keep leaves them out; sources unrelated to the forget still appear.
+- Forgetting now also hides forgotten text that other conversations repeated: shared messages, Session Start Next Steps, and Episode Keep no longer bring back content you forgot. Known limit: a Next Steps item is withdrawn when its text matches forgotten content exactly. A forgotten sentence embedded inside a longer Next Steps item is not detected by the local engine yet.
+
 ## 0.3.11 — 2026-11-23: turn off capture for one session or project
 
 - Setting `CAIRN_MEMORY_CAPTURE=off` stops the plugin from capturing that

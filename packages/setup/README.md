@@ -11,7 +11,7 @@ Requires Node ≥22.16 and the selected CLI on PATH. The installer itself has no
 runtime dependencies.
 Known issue: on Node.js 24.22.3, whose built-in SQLite is 3.54, some searches run slower, so recall can return fewer results when you have a lot of saved memory. Your saved data isn't affected. Node.js 22, or Node.js 24 up to 24.22.2, works as before. Setup uses the Node.js that ran it, so run setup again after you switch versions.
 
-This README describes **installer 0.6.11** (2026-11-23). Claude Code can
+This README describes **installer 0.6.12** (2026-11-24). Claude Code can
 recover a session if its start hook is cancelled or times out during a
 permission check. The bundled local engine records interrupted starts
 separately and preserves completed start records during recovery. When this
@@ -124,7 +124,7 @@ stop them.
 
 已知問題：Node.js 24.22.3 內建的 SQLite 是 3.54，部分搜尋會變慢，記憶很多時，回想可能找到比較少的結果。已存的資料不受影響。Node.js 22，或 Node.js 24 的 24.22.2 以前版本，都跟以前一樣。安裝程式會用執行它的那個 Node.js，所以換版本後要重新跑一次安裝。
 
-本說明對應**安裝器 0.6.11**（2026-11-23）。Claude Code 的啟動 hook 如果在檢查權限時被取消或逾時，後續仍有機會恢復保存該對話。隨附的本機引擎會分開記錄中斷的啟動，並在恢復時保留已完成的啟動紀錄。擷取 hooks 使用這個引擎時，如果安裝器 0.6.10 留下的啟動中斷紀錄符合條件，後續保存時仍可用它恢復對話。若擷取維持開啟，重跑 setup 後，既有的 hooks 會繼續使用原本綁定的引擎。新存的內容通常約 10 秒內就搜得到，由腳本或
+本說明對應**安裝器 0.6.12**（2026-11-24）。Claude Code 的啟動 hook 如果在檢查權限時被取消或逾時，後續仍有機會恢復保存該對話。隨附的本機引擎會分開記錄中斷的啟動，並在恢復時保留已完成的啟動紀錄。擷取 hooks 使用這個引擎時，如果安裝器 0.6.10 留下的啟動中斷紀錄符合條件，後續保存時仍可用它恢復對話。若擷取維持開啟，重跑 setup 後，既有的 hooks 會繼續使用原本綁定的引擎。新存的內容通常約 10 秒內就搜得到，由腳本或
 Agent SDK 啟動的 Claude Code 執行也不再被保存。Claude Code 也能在 macOS 自動保存對話。
 Codex 在 macOS 還不支援自動保存，但記憶工具可以正常使用。若只要設定
 Claude Code，請執行 `npx @cairn-ink/memory setup --local --client claude`。
@@ -267,7 +267,7 @@ servers. On macOS and other platforms, or for stores under `/mnt/` or on
 network filesystems, each session starts its own server. If the shared server
 can't start, the session automatically starts its own server.
 
-Installer 0.6.11 adds `npx @cairn-ink/memory daemon status --local` for a local
+Installer 0.6.12 supports `npx @cairn-ink/memory daemon status --local` for a local
 store whose installed engine supports shared servers. On Linux it returns JSON
 with each published server's short store ID, running state, build and last
 reported session count, when available. An endpoint without a published server
@@ -295,7 +295,7 @@ Linux 上使用同一份安裝且符合條件的對話會共用一個背景伺�
 底下或網路檔案系統時，每個對話會各自啟動一個伺服器。共用伺服器如果無法啟動，
 對話會自動啟動自己的伺服器。
 
-安裝器 0.6.11 新增 `npx @cairn-ink/memory daemon status --local`，可查看這份本機安裝的資料庫所用的共用伺服器。已安裝的引擎需要支援共用伺服器。在 Linux 上，指令會以 JSON 回傳已登記伺服器的資料庫短 ID、執行狀態、引擎 build，以及最近回報的對話數（如果有回報）。還沒有伺服器登記紀錄的端點可能顯示為 `endpoint_uncertain`。`npx @cairn-ink/memory daemon stop --local` 會向這個資料庫已驗證且仍在執行的伺服器送出 SIGTERM，最多等五秒，再針對已送出訊號的伺服器回報 `stopped` 和 `still_running`。請等對話閒置再執行。進行中的呼叫即使已經寫入資料，也可能收到 `daemon_outcome_unknown`。在其他平台，如果已安裝的引擎支援這兩個指令，兩個指令都會印出 `daemon_platform`。
+安裝器 0.6.12 支援 `npx @cairn-ink/memory daemon status --local`，可查看這份本機安裝的資料庫所用的共用伺服器。已安裝的引擎需要支援共用伺服器。在 Linux 上，指令會以 JSON 回傳已登記伺服器的資料庫短 ID、執行狀態、引擎 build，以及最近回報的對話數（如果有回報）。還沒有伺服器登記紀錄的端點可能顯示為 `endpoint_uncertain`。`npx @cairn-ink/memory daemon stop --local` 會向這個資料庫已驗證且仍在執行的伺服器送出 SIGTERM，最多等五秒，再針對已送出訊號的伺服器回報 `stopped` 和 `still_running`。請等對話閒置再執行。進行中的呼叫即使已經寫入資料，也可能收到 `daemon_outcome_unknown`。在其他平台，如果已安裝的引擎支援這兩個指令，兩個指令都會印出 `daemon_platform`。
 
 **Local mode captures Raw automatically by default on supported platforms.** Use the explicit MCP tools:
 `remember_memory`, `recall_memory`, `inspect_memory`, `correct_memory`,
