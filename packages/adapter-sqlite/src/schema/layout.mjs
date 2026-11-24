@@ -97,7 +97,7 @@ export const STORAGE_SCHEMA = `
     dispatched INTEGER NOT NULL DEFAULT 0 CHECK (dispatched IN (0, 1)),
     source_times TEXT,
     failure_code TEXT,
-    PRIMARY KEY (owner_id, namespace_key, client_key, event_key),
+    PRIMARY KEY (owner_id, client_key, event_key),
     CHECK ((status = 'leased') = (token IS NOT NULL)),
     CHECK ((status = 'leased') = (expires_at_ms IS NOT NULL)),
     CHECK ((status = 'leased') = (source_times IS NOT NULL)),
@@ -106,29 +106,28 @@ export const STORAGE_SCHEMA = `
 
   CREATE INDEX cairn_capture_event ON cairn_capture_claims (owner_id, namespace_key, event_key);
 
+  -- Keep admission insertion order for clientless failure status.
   CREATE TABLE cairn_capture_outbox (
     owner_id TEXT NOT NULL,
-    namespace_key TEXT NOT NULL,
     client_key TEXT NOT NULL,
     event_key TEXT NOT NULL,
     messages TEXT,
     result TEXT,
-    PRIMARY KEY (owner_id, namespace_key, client_key, event_key),
-    FOREIGN KEY (owner_id, namespace_key, client_key, event_key)
-      REFERENCES cairn_capture_claims (owner_id, namespace_key, client_key, event_key),
+    PRIMARY KEY (owner_id, client_key, event_key),
+    FOREIGN KEY (owner_id, client_key, event_key)
+      REFERENCES cairn_capture_claims (owner_id, client_key, event_key),
     CHECK (messages IS NOT NULL OR result IS NOT NULL)
-  ) STRICT, WITHOUT ROWID;
+  ) STRICT;
 
   -- Keep repeat abandon idempotent even after a replacement lease finishes.
   CREATE TABLE cairn_capture_abandoned_tokens (
     owner_id TEXT NOT NULL,
-    namespace_key TEXT NOT NULL,
     client_key TEXT NOT NULL,
     event_key TEXT NOT NULL,
     token TEXT NOT NULL,
     PRIMARY KEY (owner_id, token),
-    FOREIGN KEY (owner_id, namespace_key, client_key, event_key)
-      REFERENCES cairn_capture_claims (owner_id, namespace_key, client_key, event_key)
+    FOREIGN KEY (owner_id, client_key, event_key)
+      REFERENCES cairn_capture_claims (owner_id, client_key, event_key)
   ) STRICT, WITHOUT ROWID;
 
   CREATE TABLE cairn_index_revisions (

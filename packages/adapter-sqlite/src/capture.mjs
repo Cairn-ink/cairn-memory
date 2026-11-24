@@ -11,8 +11,8 @@ import { scopedSuppression } from "./suppressions.mjs";
 /** @typedef {Pick<CaptureKey, "scope" | "client" | "eventId">} Identity */
 /** @typedef {ReturnType<typeof import("./index-revisions.mjs").createIndexRevisions>} IndexRevisions */
 
-const identityColumns = "owner_id, namespace_key, client_key, event_key";
-const identityWhere = "owner_id = ? AND namespace_key = ? AND client_key = ? AND event_key = ?";
+const identityColumns = "owner_id, client_key, event_key";
+const identityWhere = "owner_id = ? AND client_key = ? AND event_key = ?";
 const clearLease = "token = NULL, expires_at_ms = NULL, dispatched = 0, source_times = NULL";
 const claimWrite = { write: true, pauseLock: true };
 const selectClaim = `SELECT namespace_key, client_key, event_key, session_key, payload_digest,
@@ -21,7 +21,7 @@ const selectClaim = `SELECT namespace_key, client_key, event_key, session_key, p
 
 /** @param {Identity} key */
 function claimIdentity({ scope, client, eventId }) {
-  return /** @type {const} */ ([...scopeKey(scope), JSON.stringify(requiredString(client)), JSON.stringify(requiredString(eventId))]);
+  return /** @type {const} */ ([ownerKey(scope.owner), JSON.stringify(requiredString(client)), JSON.stringify(requiredString(eventId))]);
 }
 
 /** @param {unknown} value */
@@ -32,6 +32,7 @@ function requiredString(value) {
 
 /** @param {CaptureKey} key @param {Scope} scope @returns {CaptureKey} */
 function captureKey({ client, eventId, sessionId, payloadDigest }, scope) {
+  scopeKey(scope);
   if (typeof payloadDigest !== "string" || !/^[0-9a-f]{64}$/u.test(payloadDigest)) invalidInput();
   return { scope, client: requiredString(client), eventId: requiredString(eventId),
     sessionId: requiredString(sessionId), payloadDigest };
@@ -111,9 +112,10 @@ function assertUnpaused(db, owner) {
 /** @param {Connection} db @param {CaptureKey} key @param {"pending" | "leased"} status */
 function insertClaim(db, key, status, /** @type {bigint | null} */ expires, /** @type {string | null} */ sourceTimes) {
   return db.prepare(`INSERT INTO cairn_capture_claims
-    (${identityColumns}, session_key, payload_digest, status, token, expires_at_ms, source_times)
+    (${identityColumns}, namespace_key, session_key, payload_digest, status, token, expires_at_ms, source_times)
     VALUES (?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 'leased' THEN lower(hex(randomblob(16))) END, ?, ?) RETURNING token`)
-    .get(...claimIdentity(key), JSON.stringify(key.sessionId), key.payloadDigest, status, status, expires, sourceTimes);
+    .get(...claimIdentity(key), JSON.stringify(key.scope.namespace), JSON.stringify(key.sessionId),
+      key.payloadDigest, status, status, expires, sourceTimes);
 }
 
 /** @param {Connection} db @param {CaptureKey} key @param {readonly (number | null)[]} times @param {SessionHasher} hashSession */
@@ -141,7 +143,7 @@ export function createCapturePorts(port, hashSession, index, now = Date.now) {
         if (row) return { status: "duplicate" };
         assertUnpaused(db, tx.owner);
         insertClaim(db, key, "pending", null, null);
-        db.prepare(`INSERT INTO cairn_capture_outbox (${identityColumns}, messages) VALUES (?, ?, ?, ?, ?)`)
+        db.prepare(`INSERT INTO cairn_capture_outbox (${identityColumns}, messages) VALUES (?, ?, ?, ?)`)
           .run(...claimIdentity(key), JSON.stringify(batch));
         return { status: "admitted" };
       });
@@ -152,8 +154,9 @@ export function createCapturePorts(port, hashSession, index, now = Date.now) {
       return port(tx, scope?.owner, {}, db => {
         const session = JSON.stringify(requiredString(input.sessionId));
         const selection = { owner: tx.owner, namespace: scope.namespace };
+        const [, namespace] = scopeKey(selection);
         const row = readClaim(db, { scope: selection, client: input.client, eventId: input.eventId });
-        if (typeof row?.messages !== "string" || row.session_key !== session) return null;
+        if (typeof row?.messages !== "string" || row.namespace_key !== namespace || row.session_key !== session) return null;
         return { key: storedKey(row, tx.owner), messages: decodeJson(row.messages) };
       });
     },
@@ -166,7 +169,7 @@ export function createCapturePorts(port, hashSession, index, now = Date.now) {
           FROM cairn_capture_claims JOIN cairn_capture_outbox USING (${identityColumns})
           WHERE owner_id = ? AND namespace_key = ? AND event_key = ? AND messages IS NOT NULL
             ${client === undefined ? "" : "AND client_key = ?"}
-          ORDER BY CASE status WHEN 'done' THEN 2 WHEN 'failed' THEN 1 ELSE 0 END, client_key LIMIT 1`).get(...keys);
+          ORDER BY CASE status WHEN 'done' THEN 2 WHEN 'failed' THEN 1 ELSE 0 END, cairn_capture_outbox.rowid LIMIT 1`).get(...keys);
         if (!row) return { status: "unknown" };
         if (row.status === "failed") return { status: "failed", code: String(row.failure_code) };
         return { status: row.status === "done" ? "done" : "pending" };
@@ -219,7 +222,7 @@ export function createCapturePorts(port, hashSession, index, now = Date.now) {
           .get(ownerKey(tx.owner), token)) return;
         const row = liveClaim(db, tx.owner, token, time());
         const identity = claimIdentity(storedKey(row, tx.owner));
-        db.prepare(`INSERT INTO cairn_capture_abandoned_tokens (${identityColumns}, token) VALUES (?, ?, ?, ?, ?)`)
+        db.prepare(`INSERT INTO cairn_capture_abandoned_tokens (${identityColumns}, token) VALUES (?, ?, ?, ?)`)
           .run(...identity, token);
         db.prepare(`UPDATE cairn_capture_claims SET status = ?, ${clearLease}, failure_code = ? WHERE ${identityWhere}`)
           .run(retryable ? "retryable" : "failed", code, ...identity);
@@ -236,7 +239,7 @@ export function createCapturePorts(port, hashSession, index, now = Date.now) {
         const finished = finishCapture(db, key, batch, nowMs, hashSession);
         const identity = claimIdentity(key);
         const result = { indexRevision: index.finish(db, tx, identity, finished.memories.length > 0), ...finished };
-        db.prepare(`INSERT INTO cairn_capture_outbox (${identityColumns}, result) VALUES (?, ?, ?, ?, ?)
+        db.prepare(`INSERT INTO cairn_capture_outbox (${identityColumns}, result) VALUES (?, ?, ?, ?)
           ON CONFLICT (${identityColumns}) DO UPDATE SET result = excluded.result`)
           .run(...identity, JSON.stringify(result));
         db.prepare(`UPDATE cairn_capture_claims SET status = 'done', ${clearLease} WHERE ${identityWhere}`).run(...identity);
@@ -264,6 +267,8 @@ export function createCapturePorts(port, hashSession, index, now = Date.now) {
         if (new Set(selected).size !== selected.length ||
             selected.some(position => !Number.isSafeInteger(position) || position < 0)) invalidInput();
         const row = readClaim(db, key);
+        // Only the original namespace can recheck the lease's sources.
+        if (row && row.namespace_key !== JSON.stringify(key.scope.namespace)) throw new CoreError("stale_admission");
         assertSamePayload(row, key);
         if (!row || !active(row, time())) throw new CoreError("stale_admission");
         /** @type {(number | null)[]} */

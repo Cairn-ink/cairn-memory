@@ -38,62 +38,95 @@ function durableRows(fixture) {
       .map(table => db.prepare(`SELECT * FROM ${table}`).all()));
 }
 
-test("namespace scopes have independent admissions, leases, conflicts and replays", async t => {
+test("namespaces share one capture identity and retain the original work scope", async t => {
   const fixture = await opened(t);
   let { adapter } = fixture;
-  const first = key("same-event");
   // Core namespaces can contain a NUL-delimited tuple.
-  const second = { ...key(first.eventId, { ...scope, namespace: "project\0notes" }), payloadDigest: "b".repeat(64),
-    sessionId: "other-session" };
+  const first = key("same-event", { ...scope, namespace: "project\0notes" });
+  const second = { ...first, scope: { ...scope, namespace: "project\0other" } };
   const third = { ...first, client: "another-client" };
   assert.deepEqual(await admit(adapter, first), { status: "admitted" });
-  assert.deepEqual(await admit(adapter, second), { status: "admitted" });
-  const [a, b, c] = await Promise.all([claim(adapter, first), claim(adapter, second, batch, 200), claim(adapter, third)]);
-  for (const result of [a, b, c]) assert.equal(result.status, "claimed");
-  assert.equal(new Set([a.token, b.token, c.token]).size, 3);
-  assert.deepEqual(await admit(adapter, first), { status: "processing" });
-  await assert.rejects(claim(adapter, { ...first, payloadDigest: second.payloadDigest }), { code: "event_payload_conflict" });
-  await assert.rejects(claim(adapter, { ...second, sessionId: first.sessionId }), { code: "event_payload_conflict" });
+  assert.deepEqual(await admit(adapter, second, []), { status: "duplicate" });
+  const load = selection => adapter.uow.run(scope.owner, { readOnly: true }, tx => adapter.capture.load(tx, selection));
+  assert.deepEqual(await load(first), { key: first, messages: batch });
+  assert.equal(await load(second), null);
+
+  const [a, b, c] = await Promise.all([claim(adapter, first, []), claim(adapter, second, []), claim(adapter, third)]);
+  assert.deepEqual([a.status, b.status].sort(), ["claimed", "processing"]);
+  const original = a.token ?? b.token;
+  assert.equal(c.status, "claimed");
+  assert.notEqual(c.token, original);
+  await write(adapter, first, tx => adapter.capture.assertEligible(tx, first, [0]));
+  assert.deepEqual(await admit(adapter, second), { status: "processing" });
+  await assert.rejects(claim(adapter, { ...second, payloadDigest: "b".repeat(64) }), { code: "event_payload_conflict" });
+  await assert.rejects(admit(adapter, { ...second, sessionId: "other-session" }), { code: "event_payload_conflict" });
 
   fixture.advanceClock(100);
   adapter = await fixture.reopen();
-  const replacement = await claim(adapter, first);
-  assert.notEqual(replacement.token, a.token);
-  await assert.rejects(finish(adapter, first, a.token, []), { code: "stale_admission" });
-  assert.deepEqual(await claim(adapter, second), { status: "processing" });
-  const bResult = await finish(adapter, second, b.token, [item("Second namespace memory")]);
+  const replacement = await claim(adapter, second);
+  assert.equal(replacement.status, "claimed");
+  assert.notEqual(replacement.token, original);
+  await assert.rejects(finish(adapter, first, original, []), { code: "stale_admission" });
+  assert.deepEqual(await claim(adapter, first), { status: "processing" });
   assert.deepEqual(await status(adapter, first), { status: "pending" });
-  assert.deepEqual(await status(adapter, second), { status: "done" });
-  const aResult = await finish(adapter, first, replacement.token, [item("First namespace memory")]);
-  assert.equal(aResult.indexRevision, bResult.indexRevision + 1);
+  assert.deepEqual(await status(adapter, second), { status: "unknown" });
+  const result = await finish(adapter, second, replacement.token, [item("Original namespace memory")]);
+  assert.deepEqual(await status(adapter, first), { status: "done" });
+  assert.deepEqual(await status(adapter, second), { status: "unknown" });
+  const exportPage = selection => adapter.uow.run(scope.owner, { readOnly: true }, tx =>
+    adapter.memories.exportPage(tx, selection.scope, { cursor: null, limit: 10 }));
+  assert.deepEqual((await exportPage(first)).items.map(({ id }) => id), [result.memories[0].id]);
+  assert.deepEqual((await exportPage(second)).items, []);
   adapter = await fixture.reopen();
-  const replay = await claim(adapter, first);
-  assert.deepEqual(replay, { status: "rawReplay", result: aResult });
+  assert.deepEqual(await load(first), { key: first, messages: batch });
+  assert.equal(await load(second), null);
+  const replay = await claim(adapter, second);
+  assert.deepEqual(replay, { status: "rawReplay", result });
   replay.result.memories[0].id = "changed";
   replay.result.memories.length = 0;
   replay.result.indexRevision = 999;
-  assert.deepEqual(await claim(adapter, first), { status: "rawReplay", result: aResult });
-  assert.deepEqual(await admit(adapter, second), { status: "rawReplay", result: bResult });
+  assert.deepEqual(await claim(adapter, first), { status: "rawReplay", result });
+  assert.deepEqual(await admit(adapter, second), { status: "rawReplay", result });
 });
 
-test("standalone leases, terminal abandonment and source rechecks are scoped", async t => {
+test("a standalone lease shares terminal abandonment and rechecks sources in its original namespace", async t => {
   const { adapter } = await opened(t);
   const first = key("standalone");
   const second = key(first.eventId, { ...scope, namespace: "another" });
   const a = await claim(adapter, first);
   const b = await claim(adapter, second, [...batch, { ...batch[0], id: "second" }]);
   assert.equal(a.status, "claimed");
-  assert.equal(b.status, "claimed");
+  assert.deepEqual(b, { status: "processing" });
+  await write(adapter, first, tx => adapter.capture.assertEligible(tx, first, [0]));
   await assert.rejects(write(adapter, first, tx => adapter.capture.assertEligible(tx, first, [1])), { code: "invalid_input" });
-  await write(adapter, second, tx => adapter.capture.assertEligible(tx, second, [1]));
+  for (const input of [second, { ...second, payloadDigest: "b".repeat(64) }]) {
+    await assert.rejects(write(adapter, input, tx => adapter.capture.assertEligible(tx, input, [0])), { code: "stale_admission" });
+  }
   await write(adapter, first, tx => adapter.capture.abandon(tx, a.token, { code: "invalid_input", retryable: false }));
   assert.deepEqual(await admit(adapter, first), { status: "duplicate" });
-  assert.deepEqual(await admit(adapter, second), { status: "processing" });
-  await assert.rejects(admit(adapter, { ...first, payloadDigest: "b".repeat(64) }), { code: "event_payload_conflict" });
+  assert.deepEqual(await admit(adapter, second), { status: "duplicate" });
+  assert.deepEqual(await claim(adapter, second), { status: "duplicate" });
+  await assert.rejects(admit(adapter, { ...second, payloadDigest: "b".repeat(64) }), { code: "event_payload_conflict" });
   await assert.rejects(finish(adapter, first, a.token, []), { code: "stale_admission" });
-  const result = await finish(adapter, second, b.token, [item("Only the second claim can finish")]);
-  assert.deepEqual(await claim(adapter, second), { status: "rawReplay", result });
+  assert.deepEqual(await status(adapter, first), { status: "unknown" });
   assert.deepEqual(await status(adapter, second), { status: "unknown" });
+});
+
+test("clientless status uses the first terminal failure in the selected namespace", async t => {
+  const { adapter } = await opened(t);
+  const first = { ...key("same-event"), client: "z-client" };
+  const second = { ...first, client: "a-client" };
+  const other = { ...first, client: "pending-client", scope: { ...scope, namespace: "other" } };
+  await admit(adapter, first);
+  await admit(adapter, second);
+  await admit(adapter, other);
+  for (const [input, code] of [[second, "storage_error"], [first, "invalid_input"]]) {
+    const { token } = await claim(adapter, input);
+    await write(adapter, input, tx => adapter.capture.abandon(tx, token, { code, retryable: false }));
+  }
+  assert.deepEqual(await status(adapter, { ...first, client: undefined }), { status: "failed", code: "invalid_input" });
+  assert.deepEqual(await status(adapter, second), { status: "failed", code: "storage_error" });
+  assert.deepEqual(await status(adapter, { ...other, client: undefined }), { status: "pending" });
 });
 
 test("another owner cannot use a lease or see a replay for the same event", async t => {

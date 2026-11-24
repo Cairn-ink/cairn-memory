@@ -3,7 +3,7 @@ import { ownerKey } from "./storage-values.mjs";
 
 /** @import { FinishResult, Tx, UnitOfWork } from "@cairn-ink/core/ports" */
 /** @import { Connection, Port } from "./storage-values.mjs" */
-/** @typedef {readonly [string, string, string, string]} Identity */
+/** @typedef {readonly [string, string, string]} Identity */
 /** @typedef {{ revision: number | undefined }} RevisionView */
 /** @typedef {{ ordinaryWrite: boolean, view: RevisionView,
  *   finishes: Map<string, { identity: Identity, revision: number }> }} IndexRun */
@@ -45,7 +45,7 @@ export function createIndexRevisions(uow, port) {
           if (earlier.length) {
             await port(tx, owner, { write: true }, db => {
               const update = db.prepare(`UPDATE cairn_capture_outbox SET result = json_set(result, '$.indexRevision', ?)
-                WHERE owner_id = ? AND namespace_key = ? AND client_key = ? AND event_key = ?`);
+                WHERE owner_id = ? AND client_key = ? AND event_key = ?`);
               for (const finish of earlier) update.run(revision ?? null, ...finish.identity);
             }).catch(() => {
               // The write guard records the first failure and rolls the run back.

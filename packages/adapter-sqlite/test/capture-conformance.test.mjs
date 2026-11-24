@@ -5,10 +5,6 @@ import { SQLITE_ERROR_MAP } from "../src/index.mjs";
 import { captureFixture } from "./capture-fixtures.mjs";
 import { seedFact, testAccess } from "./storage-fixtures.mjs";
 
-// These cases encode cross-namespace identity. The scoped contract is exercised
-// directly by the capture storage tests.
-const crossNamespace = new Set(["K-CLM-1", "K-ADM-4", "K-ADM-10", "K-ADM-12", "K-ADM-14"]);
-
 function factory() {
   let owner;
   return {
@@ -48,8 +44,8 @@ function factory() {
   };
 }
 
-function register(kitCase, name, skip) {
-  test(name, { skip }, async t => {
+function register(kitCase, name) {
+  test(name, async t => {
     const fixture = factory();
     const reason = await runCase(fixture, {
       ...kitCase,
@@ -66,7 +62,6 @@ function register(kitCase, name, skip) {
 }
 
 for (const { followUp, ...kitCase } of [...CAPTURE_CASES, ...ADMISSION_CASES, ...SOURCE_FILTER_CASES]) {
-  register(kitCase, `${kitCase.id} ${kitCase.title}`,
-    crossNamespace.has(kitCase.id) ? "this case expects shared claims across namespaces" : false);
-  if (followUp) register(followUp, `${kitCase.id} follow-up`, false);
+  register(kitCase, `${kitCase.id} ${kitCase.title}`);
+  if (followUp) register(followUp, `${kitCase.id} follow-up`);
 }
