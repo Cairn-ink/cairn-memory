@@ -1,9 +1,9 @@
 import { factHidesRow } from "../privacy/fact-match.mjs";
 import {
-  fingerprintLegacyCapture, fingerprintMemoryPassages, validateFingerprintLabels, validateFingerprintSigningKey,
+  fingerprintLegacyCapture, fingerprintMemoryPassages, textVariants, validateFingerprintLabels,
+  validateFingerprintSigningKey,
 } from "../privacy/fingerprint.mjs";
-import { PRIVACY_REDACTION_VERSIONS, redactHostedCurrent, redactV1 } from "../privacy/redact.mjs";
-import { cleanContent, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
+import { normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
 import { requiresLegacyMacDomain, snapshotReader, withholdsAnyPassage } from "../privacy/withholds.mjs";
 import { validateSuppressionFact } from "../suppression-fact.mjs";
 import { buildDocumentCard } from "./card.mjs";
@@ -44,13 +44,8 @@ async function readLegacyFingerprint(input) {
 /** @param {string} text @param {LegacyFingerprint} legacy
  * @returns {Promise<import("../ports/privacy.d.ts").PassageFingerprint[]>} */
 function legacyCardPassages(text, { key, labels }) {
-  const original = cleanContent(text);
-  const { v1, hostedCurrent } = PRIVACY_REDACTION_VERSIONS;
-  const variants = new Map([
-    [normalizeForHash(original), v1],
-    [normalizeForHash(redactV1(original)), v1],
-    [normalizeForHash(redactHostedCurrent(original)), hostedCurrent],
-  ]);
+  const variants = new Map(textVariants(text, prepareCoreText(text)).map(([variant, , redactionVersion]) =>
+    [normalizeForHash(variant), redactionVersion]));
   return Promise.all(Array.from(variants, async ([variant, redactionVersion]) => {
     const { text_hmac, shingles, key_id: keyId } = await fingerprintLegacyCapture(variant, key, labels);
     return { digests: [{ alg: "hmac", value: text_hmac, pipeline: "hosted-v1", redactionVersion, keyId }], shingles, keyId };
@@ -156,7 +151,9 @@ export async function documentCardVisible(input) {
           memoryFacts = coreFacts;
           if (legacyFacts.length > 0) {
             const fingerprints = await Promise.all(texts.map(text => legacyCardPassages(text, legacy)));
-            if (withholdsAnyPassage(fingerprints.flat(), legacyFacts)) return hidden("text_withheld");
+            if (withholdsAnyPassage(fingerprints.flat(), legacyFacts, input.containmentThreshold)) {
+              return hidden("text_withheld");
+            }
           }
         }
         if (memoryFacts.length > 0) {

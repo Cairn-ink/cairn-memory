@@ -74,11 +74,15 @@ key evidence needed for comparison withhold the card.
 
 For facts with legacy MACs, the adapter can pass `legacyFingerprint: { key, labels }`.
 Use the adapter's frozen legacy domain labels and derive the key with
-`userFingerprintKey(secret, owner, labels)`. Core compares legacy exact MACs
-and keyed shingles for the original and historically redacted forms of each
-field after cleaning the stored text. A fact with both legacy and Core aliases
-can match through either comparison. A host holding both kinds of facts passes
-both `fingerprintKey` (derived with Core labels) and `legacyFingerprint`
+`userFingerprintKey(secret, owner, labels)`. For each field, Core compares
+legacy exact MACs and keyed shingles under those labels for the cleaned
+original, V1 redacted text, hostedCurrent redacted text, core-prepared text,
+and text normalized with NFKC then redacted with V1. Equal normalized variants
+are signed once per field. For full legacy facts, `containmentThreshold` sets
+the shingle cutoff. It defaults to 0.6 and must be greater than zero and at
+most one. An invalid cutoff withholds the card. A fact with both legacy and
+Core aliases can match through either comparison. A host holding both kinds
+of facts passes both `fingerprintKey` (derived with Core labels) and `legacyFingerprint`
 (derived with adapter labels). Omitting either leaves facts that require that
 key fail-closed. For a fact with both MACs, passing only `legacyFingerprint`
 can withhold an unrelated card because the Core MAC cannot be compared. With
