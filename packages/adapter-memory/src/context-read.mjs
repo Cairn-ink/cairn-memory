@@ -1,22 +1,26 @@
-import { canonicalKey, compareUtf8, CoreError, createBM25 } from "@cairn-ink/core";
+import { canonicalKey, compareUtf8, CoreError, createBM25, rankScores } from "@cairn-ink/core";
+import { documentCardSearchText, visibleDocumentCardRows } from "@cairn-ink/core/routing";
 import { createReceiptReadSafety } from "./receipt-read-safety.mjs";
 
 /** @import { ContextEvidenceRow, ContextIndexObservation, ContextReadSelection, ContextReadSet, ContextReadStore,
-  Counters, InspectReceipt, Scope, Tx } from "@cairn-ink/core/ports" */
+  ContextCardRef, ContextMemoryRef, Counters, DocumentCardStore, InspectReceipt, ItemRef, Scope, StoredDocumentCardRecord, Tx } from "@cairn-ink/core/ports" */
 /** @import { Policy } from "./receipt-read-safety.mjs" */
 /** @import { Entry, State } from "./unit-of-work.mjs" */
-/** @typedef {{ binding: string, index: ReturnType<typeof createBM25<ReturnType<typeof documentsFor>[number]>>,
+/** @import { CardEntry } from "./unit-of-work.mjs" */
+/** @typedef {{ ref: ItemRef, qualified: ContextMemoryRef | ContextCardRef, text: string }} Document */
+/** @typedef {{ binding: string, index: ReturnType<typeof createBM25<Document>>, cardIndex?: ReturnType<typeof createBM25<Document>>,
  * ids: ReadonlySet<string>, observation: ContextIndexObservation }} Publication */
 
 const MAX_PROJECTIONS = 8;
 
-/** @param {State} state @param {ContextReadSet} readSet @param {ContextReadSelection} selection */
-function canonicalBinding(state, readSet, { types }) {
+/** @param {State} state @param {ContextReadSet} readSet @param {ContextReadSelection} selection @param {boolean} cards */
+function canonicalBinding(state, readSet, { types }, cards) {
   const memory = types.includes("memory");
   return JSON.stringify(readSet.namespaces.map(namespace => {
-    if (!memory) return [namespace];
+    if (!memory && !cards) return [namespace];
     const facts = [...state.facts.values()].filter(({ fact }) => (fact.namespace ?? null) === namespace);
-    return [namespace, state.contextEpochs.get(namespace) ?? 1, facts.at(-1)?.epoch.toString() ?? "0"];
+    return [namespace, state.contextEpochs.get(namespace) ?? 1, facts.at(-1)?.epoch.toString() ?? "0",
+      ...(cards ? [state.indexRevision] : [])];
   }));
 }
 
@@ -36,6 +40,11 @@ function documentsFor(state, readSet, selection, matchFacts) {
   });
 }
 
+/** @param {Scope} scope @param {string} id @param {CardEntry} entry @returns {ContextCardRef} */
+function cardRef(scope, id, { revision, bodyRevision }) {
+  return { type: "card", scope, id, revision, bodyRevision };
+}
+
 /** @param {Entry} entry @param {ContextReadSelection["intent"]} intent
  * @param {ReturnType<ReturnType<typeof import("./fact-match.mjs").createFactMatcher>>} policy */
 function eligible(entry, intent, policy) {
@@ -50,11 +59,15 @@ function projectionKey(readSet, { types, intent }) {
 /** @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>} work
  * @param {ReturnType<typeof import("./fact-match.mjs").createFactMatcher>} matchFacts
  * @param {import("./privacy.mjs").RingKeys} ringKeys
- * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>["receiptSourcesVisible"]} [rawSourcesVisible]
+ * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>} [archive]
+ * @param {DocumentCardStore<StoredDocumentCardRecord>} [documentCards]
  * @returns {ContextReadStore} */
-export function createContextReadStore({ port, uow, enableContextEpochs, readTokenIdentity }, matchFacts, ringKeys, rawSourcesVisible) {
+export function createContextReadStore({ port, uow, enableContextEpochs, readTokenIdentity }, matchFacts, ringKeys, archive, documentCards) {
   enableContextEpochs();
-  const { receiptReadSafety } = createReceiptReadSafety(ringKeys, rawSourcesVisible);
+  const { receiptReadSafety } = createReceiptReadSafety(ringKeys, archive?.receiptSourcesVisible);
+  const loadCardInputs = documentCards?.visibilityInputs?.bind(documentCards);
+  /** @param {ContextReadSelection} selection */
+  const readsCards = ({ types }) => !!loadCardInputs && types.includes("card");
   /** @type {Map<string, Publication>} */
   const projections = new Map();
   /** @type {WeakMap<Tx, Map<string, Publication | undefined>>} */
@@ -68,7 +81,7 @@ export function createContextReadStore({ port, uow, enableContextEpochs, readTok
     if (!selections) observations.set(tx, selections = new Map());
     if (!selections.has(key)) {
       const current = projections.get(key);
-      selections.set(key, current?.binding === canonicalBinding(state, readSet, selection) ? current : undefined);
+      selections.set(key, current?.binding === canonicalBinding(state, readSet, selection, readsCards(selection)) ? current : undefined);
     }
     return selections.get(key);
   }
@@ -95,22 +108,61 @@ export function createContextReadStore({ port, uow, enableContextEpochs, readTok
     return { receipts, receiptCoverage };
   }
 
+  /** @param {Tx} tx @param {State} state @param {ContextReadSet} readSet
+   * @returns {Promise<Document[]>} */
+  async function cardDocuments(tx, state, readSet) {
+    if (!loadCardInputs) return [];
+    const documents = await Promise.all(readSet.namespaces.map(async namespace => {
+      const scope = { owner: readSet.owner, namespace };
+      const cards = [...(state.documentCards.get(namespace) ?? [])].flatMap(([id, entry]) => entry.card ? [{
+        ref: { type: /** @type {const} */ ("card"), namespace, id }, qualified: cardRef(scope, id, entry), card: entry.card,
+      }] : []);
+      const inputs = await loadCardInputs(tx, scope, cards.map(({ ref }) => ref));
+      const byId = new Map(cards.map(({ ref }, i) => [ref.id, inputs[i]]));
+      const { rows } = await visibleDocumentCardRows(cards, ref => byId.get(ref.id) ?? null);
+      return rows.map(({ ref, qualified, card }) => ({ ref, qualified, text: documentCardSearchText(card) }));
+    }));
+    return documents.flat();
+  }
+
+  /** @param {State} state @param {Scope} scope @param {CardEntry | undefined} entry
+   * @param {ContextReadSelection["intent"]} intent @returns {ContextEvidenceRow | null} */
+  function cardEvidence(state, scope, entry, intent) {
+    const card = entry?.card;
+    if (!entry || !card || card.scope.owner !== scope.owner || card.scope.namespace !== scope.namespace) return null;
+    const memoryRows = state.rows.get(scope.namespace);
+    const policy = matchFacts(state.facts, scope);
+    const triggerMemoryRefs = card.sourceMemories.flatMap(({ id }) => {
+      const memory = memoryRows?.get(id);
+      return memory && eligible(memory, intent, policy)
+        ? [{ type: /** @type {const} */ ("memory"), scope, id, revision: memory.row.revision }] : [];
+    });
+    return { type: "card", lineageStamp: null, item: {
+      type: "card", ref: cardRef(scope, card.id, entry), title: card.title ?? "", body: card.body,
+      origin: card.origin ?? "router", state: "active", triggerMemoryRefs,
+      bindings: [], support: {}, qualification: {}, provenance: {},
+    } };
+  }
+
   return {
     maintenanceAvailable: true,
     identity: readTokenIdentity,
     async prepareLexical(readSet, selection, { signal }) {
-      return uow.run(readSet.owner, { readOnly: true }, tx => port(tx, readSet, false, state => {
+      return uow.run(readSet.owner, { readOnly: true }, tx => port(tx, readSet, false, async state => {
         if (signal?.aborted) throw new CoreError("index_unavailable");
         const key = projectionKey(readSet, selection);
-        const binding = canonicalBinding(state, readSet, selection);
+        const binding = canonicalBinding(state, readSet, selection, readsCards(selection));
         const prior = projections.get(key);
         /** @type {Counters} */
         const idle = { canonicalRows: 0, sidecarRows: 0, textRows: 0, textUnits: 0, transformed: 0, removed: 0 };
         if (prior?.binding === binding) return idle;
 
-        const documents = documentsFor(state, readSet, selection, matchFacts);
+        const memories = documentsFor(state, readSet, selection, matchFacts);
+        const cards = readsCards(selection) ? await cardDocuments(tx, state, readSet) : [];
+        if (signal?.aborted) throw new CoreError("index_unavailable");
+        const documents = [...memories, ...cards];
         const byType = Object.fromEntries(selection.types.map(type => {
-          const count = type === "memory" ? documents.length : 0;
+          const count = type === "memory" ? memories.length : cards.length;
           return [type, { eligible: count, indexed: count }];
         }));
         const previous = prior?.observation.maintenance.progress?.sequence ?? 0;
@@ -127,7 +179,8 @@ export function createContextReadStore({ port, uow, enableContextEpochs, readTok
           if (oldest !== undefined) projections.delete(oldest);
         }
         const ids = new Set(documents.map(canonicalKey));
-        projections.set(key, { binding, index: createBM25(documents), ids, observation });
+        projections.set(key, { binding, index: createBM25(memories),
+          ...(cards.length && { cardIndex: createBM25(cards) }), ids, observation });
         return {
           canonicalRows: documents.length,
           sidecarRows: prior?.ids.size ?? 0,
@@ -149,15 +202,23 @@ export function createContextReadStore({ port, uow, enableContextEpochs, readTok
       return port(tx, readSet, false, state => {
         const publication = observed(state, tx, readSet, selection);
         if (!publication || signal?.aborted) throw new CoreError("index_unavailable");
-        const { rows, matched } = publication.index.searchWithCount(query, depth);
-        return structuredClone({ rows: rows.map(({ qualified: ref, score }) => ({ ref, score })), matched });
+        const memories = publication.index.searchWithCount(query, depth);
+        const cards = publication.cardIndex?.searchWithCount(query, depth);
+        const rows = cards ? rankScores([...memories.rows, ...cards.rows]).slice(0, depth) : memories.rows;
+        return structuredClone({ rows: rows.map(({ qualified: ref, score }) => ({ ref, score })),
+          matched: memories.matched + (cards?.matched ?? 0) });
       });
     },
     async snapshotState(tx, readSet, types) {
       return port(tx, readSet, false, state => readSet.namespaces.map(namespace => ({
-        memory: state.contextEpochs.get(namespace) ?? 1, ...(types.includes("card") && { card: 1 }),
+        memory: state.contextEpochs.get(namespace) ?? 1, ...(types.includes("card") && { card: loadCardInputs ? state.cardGeneration : 1 }),
       })));
     },
+    ...(loadCardInputs && archive && {
+      async documentCardAmendmentSource(tx, scope, source) {
+        return port(tx, scope, false, state => archive.amendmentSource(state, scope, source));
+      },
+    }),
     async evidence(tx, readSet, refs, intent) {
       return port(tx, readSet, false, async state => {
         if (refs.some(({ scope }) => scope.owner !== readSet.owner || !readSet.namespaces.includes(scope.namespace))) {
@@ -167,7 +228,11 @@ export function createContextReadStore({ port, uow, enableContextEpochs, readTok
         const rows = [];
         for (const ref of refs) {
           const { scope, id, type } = ref;
-          const entry = type === "memory" ? state.rows.get(scope.namespace)?.get(id) : undefined;
+          if (type === "card") {
+            rows.push(loadCardInputs ? cardEvidence(state, scope, state.documentCards.get(scope.namespace)?.get(id), intent) : null);
+            continue;
+          }
+          const entry = state.rows.get(scope.namespace)?.get(id);
           const policy = matchFacts(state.facts, scope);
           if (!entry || !eligible(entry, intent, policy)) {
             rows.push(null);

@@ -3,6 +3,7 @@ import { createBM25, scoreBM25 } from "../retrieval/bm25.mjs";
 import { termFrequencies, tokenizeT1 } from "../retrieval/tokenize.mjs";
 import { compareUtf8 } from "../utf8.mjs";
 import { CONTEXT_HORIZON, namespaceSlot } from "./context-read-input.mjs";
+import { fitCardAmendments } from "./context-read-pack.mjs";
 import { cardHits, citesMemory, compareDates, FRAMING, minute, sourceDate, turnKey, wireItem } from "./context-read-projection.mjs";
 
 /** @import { CallOptions, ContextAssemblyRawExcerpt, ContextAssemblyRepresentation, ContextRawCoverage,
@@ -136,14 +137,14 @@ function excerptFor(turn, i, readSet, terms, representation, count, check) {
       start: span.start, end: span.end, body: span.body } };
 }
 
-/** @param {readonly PreparedItem[]} items @param {Excerpt[]} excerpts */
-function groupContext(items, excerpts) {
+/** @param {readonly PreparedItem[]} items @param {Excerpt[]} excerpts @param {boolean} rankWhole */
+function groupContext(items, excerpts, rankWhole) {
   /** @type {Group[]} */
   const groups = [];
   // Legacy context-read-three-layer.mjs:228–246. Only shared qualified
   // receipt lineage may merge two Memories or attach a Raw excerpt.
   for (const item of items) {
-    const linked = groups.filter(group => item.turnIds.some(turn => group.turns.includes(turn)));
+    const linked = rankWhole ? [] : groups.filter(group => item.turnIds.some(turn => group.turns.includes(turn)));
     const group = linked[0] ?? { members: [], turns: [], evidence: [] };
     if (!linked.length) groups.push(group);
     group.members.push(item);
@@ -153,7 +154,11 @@ function groupContext(items, excerpts) {
     }
     group.turns = [...new Set(group.members.flatMap(member => member.turnIds))];
   }
-  const owners = new Map(groups.flatMap(group => group.turns.map(turn => [turn, group])));
+  /** @type {Map<string, Group>} */
+  const owners = new Map();
+  for (const group of groups) for (const turn of group.turns) {
+    if (!owners.has(turn)) owners.set(turn, group);
+  }
   for (const excerpt of excerpts) {
     const group = owners.get(excerpt.key);
     if (group) group.evidence.push(excerpt);
@@ -225,7 +230,8 @@ export function packRawContext(items, raw, readSet, query, options, metering) {
       return excerpt ? [excerpt] : [];
     });
     if (excerpts.length !== raw.turns.length) return null;
-    const groups = groupContext(items, excerpts);
+    const rankWhole = options.policy === "rank-first-whole-v1" && items.some(item => item.evidence.documentCard);
+    const groups = groupContext(items, excerpts, rankWhole);
     const docs = groups.map(group => {
       const unit = projectUnit(group, representation, items.length);
       return { unit, text: unit.lexical, ref: { namespace: null, type: /** @type {const} */ ("raw"), id: unit.id } };
@@ -252,7 +258,7 @@ export function packRawContext(items, raw, readSet, query, options, metering) {
     const breadth = /\b(how many|how often|number of|count|total|list|all|which)\b|\bhow much\b(?!\s+(earlier|later|more|less|longer|shorter)\b)/iu.test(query);
     /** @param {Unit[]} proposed @returns {Projection} */
     function project(proposed) {
-      const cards = proposed.flatMap(unit => unit.members).filter(item => item.engine);
+      const cards = proposed.flatMap(unit => unit.members).filter(item => item.engine || item.evidence.documentCard);
       const surviving = proposed.flatMap(unit => {
         const members = unit.members.filter(item => !cards.some(card => citesMemory(card, item)));
         if (members.length === unit.members.length) return [unit];
@@ -278,14 +284,25 @@ export function packRawContext(items, raw, readSet, query, options, metering) {
     // Legacy context-read-three-layer.mjs:310–365. Pack ranked units together,
     // including their provenance, and update diversity only on acceptance.
     let accepted = empty;
-    while (remaining.length && accepted.value.items.length < budget.maxItems) {
+    while (remaining.length) {
+      const full = accepted.value.items.length >= budget.maxItems;
+      if (full && (!rankWhole || !remaining.some(unit => unit.members[0]?.evidence.documentCard))) break;
       active();
       const score = (/** @type {Unit} */ unit) => unit.bm25 + unit.prior - (unit.cardHit ? 0 : 0.15 * unit.cost / 250)
         + (breadth ? 0.30 : 0.15) * unit.sessions.filter(session => !sessions.has(session)).length
         + 0.05 * unit.turns.filter(turn => !turns.has(turn)).length
         - 0.30 * Math.max(0, ...selected.map(other => overlap(unit.terms, other.terms)));
-      remaining.sort((a, b) => score(b) - score(a) || a.rank - b.rank || compareUtf8(a.id, b.id));
+      remaining.sort((a, b) => {
+        // Default document-card reads visit candidate bodies in lexical rank order.
+        // Raw-only units keep their existing scoring and use the remaining budget.
+        if (rankWhole && (a.members.length || b.members.length)) {
+          return Number(!a.members.length) - Number(!b.members.length) || a.rank - b.rank;
+        }
+        return score(b) - score(a) || a.rank - b.rank || compareUtf8(a.id, b.id);
+      });
       const unit = /** @type {Unit} */ (remaining.shift());
+      const first = unit.members[0];
+      if (full && !first?.evidence.documentCard) { stops.items = true; continue; }
       if (!unit.cardHit && unit.members.some(card => card.engine && accepted.selected.some(memory =>
         memory.rank < card.rank && citesMemory(card, memory)))) continue;
       const trial = project([...selected, unit]);
@@ -295,8 +312,16 @@ export function packRawContext(items, raw, readSet, query, options, metering) {
       const value = check(trial, p => diagnostics(p, selected.length + 1));
       active();
       if (!value?.fits) { stops.budget = true; continue; }
-      selected.push(unit);
-      accepted = trial;
+      const amended = first?.evidence.amendments.length ? fitCardAmendments(first, value.used, budget, (body, sources) => {
+        active();
+        const revised = { ...unit, ...projectUnit({ ...unit, members: [{ ...first, body, sources }] }, representation, items.length) };
+        const projection = project([...selected, revised]);
+        const result = check(projection, p => diagnostics(p, selected.length + 1));
+        active();
+        return result ? { result, value: { revised, projection } } : null;
+      }) : null;
+      selected.push(amended?.revised ?? unit);
+      accepted = amended?.projection ?? trial;
       unit.sessions.forEach(session => sessions.add(session));
       unit.turns.forEach(turn => turns.add(turn));
     }

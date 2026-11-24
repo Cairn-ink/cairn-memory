@@ -50,13 +50,16 @@ export function createMemoryAdapter(options = {}) {
   const archive = flags.rawArchive ?
     createRawPorts(work, keys, ringKeys, labels, options.hashSessionKey, flags.rationaleEdges) : undefined;
   const { receiptReadSafety, receiptWithheld } = createReceiptReadSafety(ringKeys, archive?.receiptSourcesVisible);
-  const contextRead = flags.contextRead ? createContextReadStore(work, matchFacts, ringKeys, archive?.receiptSourcesVisible) : undefined;
   const store = createMemoryStore(port, flags, newId, matchFacts, ringKeys);
   const { supersession, conflicts } = createRelationStores(port, matchFacts);
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts,
     flags.fingerprintKey ? ringKeys : undefined);
   const cardVisibilityInput = createCardVisibilityInput(matchFacts, keys, archive?.sourceVisible);
   const cardVisible = createCardVisibility(cardVisibilityInput);
+  const documentCards = flags.documentCards ? handleWriteRejections(
+    createDocumentCardStore(port, now, cardVisibilityInput, flags.documentCardSearch),
+    ["put", "linkMemories", "amend", "hideAmendment", "hide", "hideWhere", "markStale"]) : undefined;
+  const contextRead = flags.contextRead ? createContextReadStore(work, matchFacts, ringKeys, archive, documentCards) : undefined;
   const rationale = flags.rationaleEdges ? createRationaleStore(port, matchFacts, ringKeys, archive?.findVisibleSource) : undefined;
   const placement = flags.placement ? handleWriteRejections(
     createTopicStore(port, flags, newId, now, matchFacts, options, cardVisible),
@@ -97,9 +100,7 @@ export function createMemoryAdapter(options = {}) {
     ...(rationale && { ...rationale, rationale: handleWriteRejections(rationale.rationale, ["insert", "invalidate"]) }),
     ...(placement && { placement }),
     ...(inspect && { inspect: inspect.inspect }),
-    ...(flags.documentCards && { documentCards: handleWriteRejections(
-      createDocumentCardStore(port, now, cardVisibilityInput, flags.documentCardSearch),
-      ["put", "linkMemories", "amend", "hideAmendment", "hide", "hideWhere", "markStale"]) }),
+    ...(documentCards && { documentCards }),
     ...(flags.documentCardSearch && { documentCardCandidates: createDocumentCardCandidates(port, cardVisible) }),
     nativeErrorMap,
     harness: {

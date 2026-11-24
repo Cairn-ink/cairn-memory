@@ -75,11 +75,14 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, searchE
           if (!entry.card) continue;
           const hideCard = match.card(entry.card);
           if (!hideCard && !match.amendment) continue;
+          let hiddenAmendment = false;
           for (const [amendmentId, amendment] of entry.amendments ?? []) {
             if (!amendment || !(hideCard || match.amendment?.(amendment))) continue;
             entry.amendments?.set(amendmentId, null);
+            hiddenAmendment = true;
             hidden++;
           }
+          if (hideCard || hiddenAmendment) entry.revision++;
           if (hideCard) {
             entry.card = null;
             delete entry.amendments;
@@ -137,7 +140,11 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, searchE
             searchIndex = { updatedAtUs: writeTime(updatedAtMs).updatedAtUs, embedding: indexedEmbedding };
           }
           if (previous) dropCardPlacement(state, namespace, copy.id);
-          cards.set(copy.id, { ...previous, card: copy, createdAtMs, ...searchIndex });
+          const bodyChanged = previous?.card?.title !== copy.title || previous?.card?.body !== copy.body;
+          cards.set(copy.id, { ...previous, card: copy, createdAtMs, ...searchIndex,
+            revision: (previous?.revision ?? 0) + 1,
+            bodyRevision: (previous?.bodyRevision ?? 0) + Number(bodyChanged),
+          });
           state.documentCards.set(namespace, cards);
           run.cardWrites++;
           return { status: previous ? "replaced" : "inserted" };
@@ -165,6 +172,7 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, searchE
           if (sourceMemories.length === existing.length && sourceMemories.every(({ id, revision }, index) =>
             id === existing[index].id && revision === existing[index].revision)) return { status: "unchanged" };
           entry.card = { ...entry.card, sourceMemories };
+          entry.revision++;
           run.cardWrites++;
           return { status: "linked" };
         };
@@ -183,6 +191,7 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, searchE
           const amendments = entry.amendments ??= new Map();
           if (amendments.has(copy.amendmentId)) return { status: "unchanged" };
           amendments.set(copy.amendmentId, copy);
+          entry.revision++;
           run.cardWrites++;
           return { status: "inserted" };
         };
@@ -195,9 +204,10 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, searchE
         validateCardId(cardId);
         requireString(amendmentId);
         return (getState, _markDirty, run) => {
-          const amendments = getState().documentCards.get(scope.namespace)?.get(cardId)?.amendments;
-          if (!amendments?.get(amendmentId)) return;
-          amendments.set(amendmentId, null);
+          const entry = getState().documentCards.get(scope.namespace)?.get(cardId);
+          if (!entry?.amendments?.get(amendmentId)) return;
+          entry.amendments.set(amendmentId, null);
+          entry.revision++;
           run.cardWrites++;
         };
       });
@@ -226,6 +236,7 @@ export function createDocumentCardStore(port, now, buildVisibilityInput, searchE
           if (!entry?.card) return;
           if (!entry.card.stale.some((item) => item.memoryId === memoryId && item.replacementMemoryId === replacementMemoryId)) {
             entry.card = { ...entry.card, stale: [...entry.card.stale, stale] };
+            entry.revision++;
           }
           run.cardWrites++;
         };

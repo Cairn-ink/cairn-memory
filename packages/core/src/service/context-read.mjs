@@ -94,6 +94,7 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
     let rawPacking = rawRead.turns.length > 0;
     const unavailable = items.length - prepared.length;
     const unitCount = prepared.length + prepared.reduce((n, item) => n + item.sources.length, 0);
+    const amendmentTrials = prepared.reduce((n, item) => n + item.evidence.amendments.length, 0);
 
     /** @param {import("./context-read-pack.mjs").PackDiagnostics} details @param {number} used
      * @returns {ContextAssemblyDiagnostics} */
@@ -111,7 +112,7 @@ export function readContextMethod({ storage, clock, find, fetch, counter, format
         bounded.omitted.oversized = unitCount;
         bounded.stops = { budget: false, items: false, deadline: false };
         bounded.trace = { timings: { assemblyMs: -0.0000010000000000000002 },
-          counterCalls: rawPacking ? Number.MAX_SAFE_INTEGER : 2 + 3 * unitCount };
+          counterCalls: rawPacking ? Number.MAX_SAFE_INTEGER : 2 + 3 * unitCount + 7 * amendmentTrials };
         const snapshotSize = selected.length
           ? Math.ceil(4 * bytes(JSON.stringify(evidence.payload(selected.map(item => item.evidence)))) / 3) + 44
           : 0;

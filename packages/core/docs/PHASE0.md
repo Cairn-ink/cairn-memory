@@ -812,3 +812,25 @@ The MCP host uses these status mappings.
   transaction. It returns the ID, title, body, date, origin, source client, and
   IDs of visible or historical linked memories. Missing or withheld cards
   return `not_found`. A missing store or method returns `capability_unavailable`.
+
+## Addendum 20 — Document cards in Context Read (2026-11-25)
+
+The memory adapter supplies document cards to the Context Read `card` channel
+when both capabilities are enabled. It scores exactly `documentCardSearchText`
+with the memory lexical scorer and keeps memory corpus statistics independent.
+The card ref carries the record revision and the title/body revision. The
+snapshot binds the owner card generation alongside the namespace memory epoch.
+
+Core checks `documentCards.visibilityInputs` and `documentCardVisible` inside
+the evidence read transaction and again in the final assembly snapshot. Missing,
+failed, or withheld inputs make document-card evidence unavailable. Without
+the loader, the document-card channel is empty. For assembly, Core checks each
+selected amendment against the card verdict and its own whole-message Raw
+projection in the same snapshot. Render up to five amendments in date order
+with their source quotes. Neither the card nor its amendment sources emit
+session IDs.
+
+At the card's rank in the shared whole-item budget, count the complete body,
+suffix, and sources against the remaining tokens. Drop the oldest amendments
+first, keeping the bare card when no suffix fits. A selected card occupies one
+item slot and replaces any memory it cites by its qualified ref.

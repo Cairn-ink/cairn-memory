@@ -268,14 +268,14 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     };
   }
 
-  /** @param {Scope} scope @param {StoredFact[]} facts */
-  function readEvidence(scope, facts) {
+  /** @param {Scope} scope @param {StoredFact[]} facts @param {string} [sessionKeyHash] */
+  function readEvidence(scope, facts, sessionKeyHash) {
     const useDigests = facts.some(({ fact }) => fact.kind === "text");
     const useSpans = facts.some(({ fact }) => fact.kind === "rawSpan");
     /** @type {ReturnType<typeof ringKeys> | undefined} */
     let keys;
     return async (/** @type {RawEvidence} */ row) => {
-      const hash = useSpans ? await spanSessionHash(row) : "";
+      const hash = sessionKeyHash ?? (useSpans ? await spanSessionHash(row) : "");
       if (!useDigests) return evidence(row, scope, hash);
       const [digests, ownerKeys] = await Promise.all([
         allDigests(row.content, null), keys ??= ringKeys(scope.owner),
@@ -296,6 +296,26 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     if (!facts.length) return true;
     const candidate = await readEvidence(scope, facts)(row);
     return facts.every((stored) => factHidesRow(stored, candidate, policy) === false);
+  }
+
+  /** @param {State} state @param {Scope} scope
+   * @param {import("@cairn-ink/core/ports").DocumentCardSourceMessage} source */
+  async function amendmentSource(state, scope, source) {
+    const id = rawId(scope, source, source.messageId);
+    const row = state.rawRows.get(id);
+    if (!row?.content || row.role !== "user" || state.rawConflicts.has(id)) return null;
+    const sessionKeyHash = await spanSessionHash(row);
+    if (!sessionKeyHash) return null;
+    const facts = scopedFacts(state, scope);
+    const raw = await readEvidence(scope, facts, sessionKeyHash)(row);
+    const sourceExcluded = state.rawFences.has(sessionSlot(scope.namespace, row)) ||
+      (state.receiptDenials.size > 0 && state.receiptDenials.has(await receiptAddressKey(scope.namespace, row))) ||
+      !await sourceLineageVisible(state, scope, row);
+    return {
+      sourceIdentity: { sessionKeyHash, messageKey: source.messageId },
+      source: { rawRows: [raw], sourceLengthUtf16: row.content.length,
+        facts: structuredClone(facts), sourceExcluded, policy: { ...policy } },
+    };
   }
 
   /** @param {Pick<State, "facts" | "rawFences" | "rawRows">} state @param {RetrievalScope} selection */
@@ -653,6 +673,6 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
   }
 
   return { raw, findVisibleSource, visibleRawRefs, captureProofs, lineageFenced, sourceVisible, sourceLineageVisible,
-    receiptSourcesVisible, seedClientlessRaw,
+    amendmentSource, receiptSourcesVisible, seedClientlessRaw,
     counters: () => ({ rawKeyConflict, rawArchiveRefused }) };
 }
