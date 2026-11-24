@@ -78,11 +78,13 @@ export function createBM25(documents) {
       matched: matches.length,
     };
   }
-  return { N, totalLength, avgLength: totalLength / (N || 1), df,
+  const index = { N, totalLength, avgLength: totalLength / (N || 1), df,
     searchWithCount,
     /** @param {string} text */
     search(text, depth = MAX_DEPTH) {
       return searchWithCount(text, depth).rows;
     },
   };
+  // Keep the count method out of legacy callers' enumerable index statistics.
+  return Object.defineProperty(index, "searchWithCount", { enumerable: false });
 }
