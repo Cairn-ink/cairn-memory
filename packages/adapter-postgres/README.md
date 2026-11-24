@@ -207,10 +207,11 @@ stored row. A scrub keeps the hosted ledger's object or encoded-string
 representation and retains the message positions and their IDs.
 
 Hosted Raw writes require the personal (null) namespace. Suppression facts
-can still apply to ancestors in project namespaces. Migrations 0021–0023 add
-nullable Raw timestamp metadata and concurrent scan indexes. A timestamp
-beyond the hosted wire range retains its exact milliseconds in
-`core_occurred_at_ms`.
+can still apply to ancestors in project namespaces. Migrations 0022 and 0023
+add concurrent Raw purge and capture ledger scan indexes. Archive withholds
+messages with timestamps outside the hosted wire range and reports their
+count as `withheld` when it is positive. Messages with a genuinely unknown
+timestamp are eligible to be archived with a null `occurred_at`.
 
 ## Database tests
 

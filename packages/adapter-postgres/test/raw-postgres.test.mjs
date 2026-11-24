@@ -222,6 +222,24 @@ test("Raw archive refuses session and window facts, preserving supplied position
   assert.deepEqual(await write((tx) => raw.deleteConversation(tx, root.scope, root)), { rawDeleted: 3 });
 });
 
+test("Raw archive withholds out-of-range times and preserves known and unknown times", migrationDbTest, async (t) => {
+  const { pool, owner, capture, key, read, save } = await fixture(t);
+  const root = key();
+  const outside = message("oak chest", Date.parse("0000-12-31T12:00:00.000Z"));
+  const withheld = await save(root, [outside]);
+  const rawRows = async () => (await pool.query(`SELECT message_id, occurred_at, content FROM raw_messages
+    WHERE user_id = $1 AND client = $2 AND session_id = $3`, [owner, client, root.sessionId])).rows;
+  assert.deepEqual(await rawRows(), []);
+  assert.deepEqual(withheld, { archived: 0, withheld: 1 });
+  assert.deepEqual((await read((tx) => capture.load(tx, root))).messages, [outside]);
+
+  const known = message("elm cabinet", Date.parse("2024-01-02T03:04:05.678Z"));
+  const unknown = message("birch cabinet");
+  assert.deepEqual(await save(key(root.scope, root.sessionId), [known, outside, unknown]), { archived: 2, withheld: 1 });
+  assert.deepEqual(new Map((await rawRows()).map(({ message_id, occurred_at, content }) => [message_id, [occurred_at, content]])),
+    new Map([[known.id, [new Date(known.occurredAtMs), known.content]], [unknown.id, [null, unknown.content]]]));
+});
+
 test("a pending legacy copy refuses Raw archive and capture eligibility without writing", migrationDbTest, async (t) => {
   const { pool, owner, capture, raw, key, read, write } = await fixture(t);
   const event = key();

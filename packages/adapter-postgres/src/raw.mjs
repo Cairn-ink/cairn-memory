@@ -20,12 +20,15 @@ import { requireLiveRun, runOperation } from "./uow.mjs";
 /** @typedef {{client: string, sessionId: string}} Session */
 /** @typedef {{message_mac: string, content_mac: string | null}} Proof */
 /** @typedef {Connection["query"]} Query */
+/** @typedef {Omit<RawCapture, "archive"> & RawStore & {
+ *   archive: (...args: Parameters<RawCapture["archive"]>) => Promise<{ archived: number, withheld?: number }>,
+ * }} PostgresRaw */
 
 const ARCHIVE = `INSERT INTO raw_messages
-    (id, user_id, client, session_id, message_id, occurred_at, role, content, core_occurred_at_ms)
-  SELECT id, $1, $2, $3, message_id, occurred_at, role, content, occurred_ms
+    (id, user_id, client, session_id, message_id, occurred_at, role, content)
+  SELECT id, $1, $2, $3, message_id, occurred_at, role, content
   FROM jsonb_to_recordset($4::jsonb) AS batch(
-    id text, message_id text, occurred_at timestamptz, role text, content text, occurred_ms bigint)
+    id text, message_id text, occurred_at timestamptz, role text, content text)
   ON CONFLICT (user_id, client, session_id, message_id) DO NOTHING RETURNING 1`;
 
 const RECORD = `INSERT INTO capture_raw_lineage (user_id, client, session_id, message_mac, content_mac)
@@ -108,7 +111,7 @@ function rawScope(scope) {
   return scope;
 }
 
-/** @param {RawOptions} options @returns {{ raw: RawCapture & RawStore, sessionLineage: SessionLineageStore }} */
+/** @param {RawOptions} options @returns {{ raw: PostgresRaw, sessionLineage: SessionLineageStore }} */
 export function createPostgresRawPorts(options) {
   const { lineageSecret, hashSessionKey, fingerprintKeys } = options ?? {};
   const captureProofs = createCaptureProofs(lineageSecret);
@@ -117,7 +120,7 @@ export function createPostgresRawPorts(options) {
   /** @type {WeakMap<Tx, Map<string, Session>>} */
   const resolvedSessions = new WeakMap();
 
-  /** @type {RawCapture & RawStore} */
+  /** @type {PostgresRaw} */
   const raw = {
     recordLineage(tx, key, messages) {
       return pauseLockedWrite(tx, () => {
@@ -168,9 +171,13 @@ export function createPostgresRawPorts(options) {
         }
         return async (query) => {
           const times = batch.map(({ occurredAtMs }) => occurredAtMs);
-          if (!times.length) return { archived: 0 };
+          // An unrepresentable time cannot be archived as an unknown time.
+          const hostedTimes = times.map((time) => time === null ? null : hostedTime(time) ?? undefined);
+          const withheld = hostedTimes.filter((time) => time === undefined).length;
+          const result = { archived: 0, ...(withheld > 0 && { withheld }) };
+          if (!times.length) return result;
           let positions = await filterSources(query, capture, times, await captureProofs(capture, batch), "raw", captureProofs, hashSessionKey);
-          if (!positions.length) return { archived: 0 };
+          if (!positions.length) return result;
           const { scope, client, sessionId, eventId } = capture;
           const { rows: [outbox] } = await query(LOCK_ARCHIVE_OUTBOX, [scope.owner, client, sessionId, eventId]);
           if (outbox) {
@@ -183,16 +190,16 @@ export function createPostgresRawPorts(options) {
               return eligible.has(JSON.stringify([id, content]));
             });
           }
-          if (!positions.length) return { archived: 0 };
-          const records = positions.map((index) => {
-            const { id, occurredAtMs, role, content } = batch[index];
-            const occurred_at = occurredAtMs === null ? null : hostedTime(occurredAtMs);
-            return { id: crypto.randomUUID(), message_id: id, role, content, occurred_at,
-              occurred_ms: occurred_at === null ? occurredAtMs : null };
+          const records = positions.flatMap((index) => {
+            const occurred_at = hostedTimes[index];
+            if (occurred_at === undefined) return [];
+            const { id, role, content } = batch[index];
+            return [{ id: crypto.randomUUID(), message_id: id, role, content, occurred_at }];
           });
+          if (!records.length) return result;
           const { rows } = await query(ARCHIVE, [scope.owner, client, sessionId, JSON.stringify(records)]);
           if (rows.length) await advanceIndex(query, scope.owner);
-          return { archived: rows.length };
+          return { ...result, archived: rows.length };
         };
       });
     },
