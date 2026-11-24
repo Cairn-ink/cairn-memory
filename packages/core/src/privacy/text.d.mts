@@ -4,6 +4,8 @@ export declare function normalizeBoundedText(value: unknown, rawMax?: number): s
 export declare function boundedText(value: unknown, max: number, truncate?: boolean, rawMax?: number): string;
 /** Replaces lone UTF-16 surrogates and removes NUL. */
 export declare function cleanContent(text: string): string;
+/** Historical capture pipeline: clean, NFKC, then apply hosted-current redaction. */
+export declare function prepareHostedCaptureText(text: string): string;
 /** NFKC, lowercase, collapse whitespace, then trim. */
 export declare function normalizeForHash(text: string): string;
 /** New-content pipeline: clean, NFKC, mask, collapse whitespace, then trim. */
