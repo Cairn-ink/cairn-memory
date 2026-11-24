@@ -27,6 +27,28 @@ function actionResult(row) {
   return result;
 }
 
+// Record the absence proof before conversion drops the Raw and episode rows.
+// Use the same exact/hashed session aliases as legacy Raw source resolution.
+export function legacyReceiptHasRawAncestry(db, key) {
+  const scope = "owner_id = $owner AND scope = $scope AND project_id = $project";
+  const session = "session_key IN ($session, $hashed)";
+  const possible = db.prepare(`
+    SELECT 1 FROM raw_receipt_lineage WHERE receipt_id = $id
+    UNION ALL SELECT 1 WHERE NOT EXISTS (
+      SELECT 1 FROM raw_receipt_origins WHERE receipt_id = $id AND kind = 'independent')
+    UNION ALL SELECT 1 FROM episode_memory_links l JOIN json_each(l.receipt_ids) r
+      WHERE l.memory_id = $memory AND r.value = $id
+    UNION ALL SELECT 1 FROM raw_conversations WHERE ${scope} AND client = $client AND ${session}
+    UNION ALL SELECT 1 FROM session_episodes WHERE ${scope} AND client = $client AND ${session}
+    UNION ALL SELECT 1 FROM raw_job_sources WHERE ${scope} AND source_client = $client AND ${session}
+    LIMIT 1`);
+  return (memory, receipt) => Boolean(possible.get({
+    id: receipt.id, memory: receipt.memory_id, owner: memory.owner_id, scope: memory.scope,
+    project: memory.project_id, client: receipt.client, session: receipt.session_id,
+    hashed: "s1:" + legacyRawHash(key, keys(memory), "episode-v1", receipt.client, receipt.session_id),
+  }));
+}
+
 // All input comes from the attested snapshot. Journals contain only
 // coordinates and counts. Body and projection payloads are never copied here.
 export function readRawPrivacy(db, inventory) {

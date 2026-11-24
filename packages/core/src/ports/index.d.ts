@@ -62,5 +62,6 @@ export interface StorageAdapter<Card extends StoredDocumentCardRecord = Document
   readonly documentCards?: DocumentCardStore<Card>; // documentCards
   readonly documentCardCandidates?: DocumentCardCandidates; // documentCardSearch
   readonly quantityLedger?: QuantityLedgerStore; // quantityLedger
+  readonly inspect?: import("./host.d.ts").InspectStore; // inspect
   readonly proceduralTags?: ProceduralTagStore; // proceduralTags
 }

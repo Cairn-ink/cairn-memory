@@ -1,9 +1,10 @@
 import { factHidesRow } from "../privacy/fact-match.mjs";
 import {
-  fingerprintLegacyCapture, fingerprintMemoryPassages, validateFingerprintLabels, validateFingerprintSigningKey,
+  fingerprintLegacyCapture, fingerprintMemoryPassages, textVariants, validateFingerprintLabels,
+  validateFingerprintSigningKey,
 } from "../privacy/fingerprint.mjs";
-import { PRIVACY_REDACTION_VERSIONS, redactHostedCurrent, redactV1 } from "../privacy/redact.mjs";
-import { cleanContent, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
+import { PRIVACY_REDACTION_VERSIONS } from "../privacy/redact.mjs";
+import { normalizeForHash, prepareCoreText, prepareHostedCaptureText } from "../privacy/text.mjs";
 import { requiresLegacyMacDomain, snapshotReader, withholdsAnyPassage } from "../privacy/withholds.mjs";
 import { validateSuppressionFact } from "../suppression-fact.mjs";
 import { buildDocumentCard } from "./card.mjs";
@@ -43,18 +44,50 @@ async function readLegacyFingerprint(input) {
 
 /** @param {string} text @param {LegacyFingerprint} legacy
  * @returns {Promise<import("../ports/privacy.d.ts").PassageFingerprint[]>} */
-function legacyCardPassages(text, { key, labels }) {
-  const original = cleanContent(text);
-  const { v1, hostedCurrent } = PRIVACY_REDACTION_VERSIONS;
-  const variants = new Map([
-    [normalizeForHash(original), v1],
-    [normalizeForHash(redactV1(original)), v1],
-    [normalizeForHash(redactHostedCurrent(original)), hostedCurrent],
-  ]);
-  return Promise.all(Array.from(variants, async ([variant, redactionVersion]) => {
-    const { text_hmac, shingles, key_id: keyId } = await fingerprintLegacyCapture(variant, key, labels);
-    return { digests: [{ alg: "hmac", value: text_hmac, pipeline: "hosted-v1", redactionVersion, keyId }], shingles, keyId };
+async function legacyCardPassages(text, { key, labels }) {
+  const spellings = textVariants(text, prepareCoreText(text));
+  spellings.push([prepareHostedCaptureText(text), "hosted-v1", PRIVACY_REDACTION_VERSIONS.hostedCurrent]);
+  /** @type {Map<string, Set<number>>} */
+  const variants = new Map();
+  for (const [spelling, , version] of spellings) {
+    const versions = variants.get(spelling) ?? new Set();
+    versions.add(version);
+    variants.set(spelling, versions);
+  }
+
+  /** @type {Map<string, ReturnType<typeof fingerprintLegacyCapture>>} */
+  const signatures = new Map();
+  // Reuse signing work for identical bytes while keeping each spelling's version set.
+  /** @param {string} input @param {string} signedText */
+  function sign(input, signedText) {
+    const existing = signatures.get(signedText);
+    if (existing) return existing;
+    const pending = fingerprintLegacyCapture(input, key, labels);
+    signatures.set(signedText, pending);
+    return pending;
+  }
+
+  const signed = await Promise.all(Array.from(variants).flatMap(([spelling, versions]) => {
+    const normalized = normalizeForHash(spelling);
+    const normalizedAgain = normalizeForHash(normalized);
+    const candidates = [sign(spelling, normalized)];
+    // Hosted forget signs stored text. Older card lookups signed already normalized text.
+    if (normalizedAgain !== normalized) candidates.push(sign(normalized, normalizedAgain));
+    return candidates.map(async candidate => ({ ...await candidate, versions }));
   }));
+  const passages = new Map();
+  for (const { text_hmac, shingles, key_id: keyId, versions } of signed) {
+    const redactionVersions = [...versions].sort((a, b) => a - b);
+    const identity = `${text_hmac}:${keyId}:${redactionVersions.join(",")}`;
+    if (passages.has(identity)) continue;
+    const digests = redactionVersions.map((redactionVersion) =>
+      /** @satisfies {TextDigest} */ ({ alg: "hmac", value: text_hmac, pipeline: "hosted-v1", redactionVersion, keyId }));
+    passages.set(identity, { digests, shingles, keyId });
+  }
+  const retained = [...passages.values()];
+  // Compare every exact alias before checking each spelling's own shingles.
+  const digests = retained.flatMap(passage => passage.digests);
+  return retained.map(({ shingles, keyId }) => ({ digests, shingles, keyId }));
 }
 
 /** @param {DocumentCardVisibilityInput} input @returns {Promise<DocumentCardVisibility>} */
@@ -156,7 +189,9 @@ export async function documentCardVisible(input) {
           memoryFacts = coreFacts;
           if (legacyFacts.length > 0) {
             const fingerprints = await Promise.all(texts.map(text => legacyCardPassages(text, legacy)));
-            if (withholdsAnyPassage(fingerprints.flat(), legacyFacts)) return hidden("text_withheld");
+            if (withholdsAnyPassage(fingerprints.flat(), legacyFacts, input.containmentThreshold)) {
+              return hidden("text_withheld");
+            }
           }
         }
         if (memoryFacts.length > 0) {

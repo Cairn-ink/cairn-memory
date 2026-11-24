@@ -7,9 +7,9 @@ export declare const ERROR_KINDS: readonly ErrorKind[];
 export type ErrorCode =
   | "invalid_input" | "invalid_cursor" | "invalid_window" | "invalid_model_output"
   | "not_found"
-  | "revision_conflict" | "memory_conflict" | "memory_historical" | "cursor_stale" | "fact_conflict"
+  | "revision_conflict" | "memory_conflict" | "memory_historical" | "cursor_stale" | "snapshot_stale" | "fact_conflict"
   | "capture_paused" | "capture_evidence_closed"
-  | "suppressed" | "session_blocked" | "lineage_fenced" | "ineligible"
+  | "suppressed" | "session_blocked" | "lineage_fenced" | "ineligible" | "authority_required"
   | "fingerprint_unavailable" | "fingerprint_key_mismatch" | "raw_lineage_unavailable"
   | "local_raw_hide_anchor_missing" | "index_unavailable" | "capability_unavailable" | "model_unavailable"
   | "commit_outcome_unknown"

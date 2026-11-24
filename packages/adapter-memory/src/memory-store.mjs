@@ -1,11 +1,12 @@
-import { allDigests, coreDigest, CoreError, NEAR_DUPLICATE_DISTANCE, compareUtf8 } from "@cairn-ink/core";
+import { allDigests, coreDigest, CoreError, NEAR_DUPLICATE_DISTANCE, compareUtf8, receiptExcerpt } from "@cairn-ink/core";
 import { cosineDistance } from "./cosine.mjs";
 import { decodeCursor, encodeCursor, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
 import { eraseRelations } from "./memory-relations.mjs";
 import { invalidateRationale } from "./rationale.mjs";
 import { addKeyedDigest } from "./privacy.mjs";
-import { copyPublicRow, dropMemoryPlacement } from "./unit-of-work.mjs";
+import { receiptAddressKey, receiptExcerptDenial, receiptIdentityKey } from "./receipt-read-safety.mjs";
+import { advanceInspectEpoch, advanceRawInspectEpoch, copyPublicRow, dropMemoryPlacement } from "./unit-of-work.mjs";
 import {
   attachReceipts, copyContent, copyDuplicateBatch, copyMerge, copyReceipts, validateLimit, validateMemoryId,
   validateSource, validateTime, writeNamespace, writeTime,
@@ -18,6 +19,7 @@ export { writeTime };
 /** @typedef {import("@cairn-ink/core/ports").MemoryStore} MemoryStore */
 /** @import { InsertRow, Receipt, Scope, SourceRef, Tx } from "@cairn-ink/core/ports" */
 /** @import { CanonicalQuery } from "./validation.mjs" */
+/** @import { StoredReceipt } from "./receipt-read-safety.mjs" */
 /** @typedef {ReturnType<typeof copyContent>} CopiedContent */
 /** @typedef {import("./unit-of-work.mjs").Row} Row */
 /** @typedef {import("./unit-of-work.mjs").Entry} Entry */
@@ -101,19 +103,40 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
     return namespace ? [...namespace.values()] : [];
   }
 
+  /** @param {import("./unit-of-work.mjs").State} state @param {Entry} entry
+   * @param {StoredReceipt[]} incoming @param {number} createdAtMs
+   */
+  async function appendReceipts(state, entry, incoming, createdAtMs) {
+    const receipts = attachReceipts(entry.receipts, incoming);
+    for (const receipt of receipts.slice(entry.receipts.length)) {
+      if (capabilities.inspect) {
+        const position = state.nextInspectReceiptPosition++;
+        if (!Number.isSafeInteger(position)) throw new CoreError("internal_error");
+        (entry.inspectReceiptPositions ??= new Map()).set(receipt, position);
+      }
+      if (receipt.excerpt !== undefined && (capabilities.inspect || capabilities.contextRead)) {
+        receipt.id = capabilities.inspect ? crypto.randomUUID() : (receipt.id ?? crypto.randomUUID());
+        receipt.createdAtMs ??= createdAtMs;
+        (entry.receiptKeys ??= new Map()).set(receipt, await receiptIdentityKey(receipt));
+      }
+    }
+    entry.receipts = receipts;
+  }
+
   /**
    * @template {InsertRow} T
    * @param {typeof port.writeFromFinish} write
    * @param {(row: T) => CopiedContent} prepareContent
+   * @param {boolean} [fromFinish]
    * @returns {{insert: (tx: Tx, scope: Scope, row: T, receipts: readonly Receipt[], nowMs: number) =>
    *   ReturnType<MemoryStore["insert"]>, touchDuplicate: MemoryStore["touchDuplicate"]}}
    */
-  function memoryWrites(write, prepareContent) {
+  function memoryWrites(write, prepareContent, fromFinish = false) {
     return {
       async insert(tx, scope, row, receipts, nowMs) {
         return write(tx, scope, () => {
           const content = prepareContent(row);
-          const evidence = attachReceipts([], copyReceipts(receipts));
+          const incoming = copyReceipts(receipts, fromFinish);
           validateTime(nowMs);
           const suppliedCreationTime = row.createdAtMs;
           const createdAtMs = suppliedCreationTime === undefined ? nowMs : suppliedCreationTime;
@@ -122,16 +145,21 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           return async (getState, markDirty) => {
             const id = newId();
             if (typeof id !== "string" || !id) throw new CoreError("internal_error");
-            const { rows } = getState();
+            const state = getState();
+            const { rows } = state;
             const digests = await rowDigests(tx.owner, content);
             let entries = rows.get(namespace);
             if (entries?.has(id)) throw new CoreError("internal_error");
             if (!entries) rows.set(namespace, entries = new Map());
             const created = { id, revision: 1, createdAtMs, ...writeTime(nowMs) };
-            entries.set(id, {
+            /** @type {Entry} */
+            const entry = {
               row: { ...content, digests, ...created, scope: { owner: tx.owner, namespace }, historical: false },
-              receipts: evidence,
-            });
+              receipts: [],
+            };
+            await appendReceipts(state, entry, incoming, nowMs);
+            entries.set(id, entry);
+            advanceInspectEpoch(state, namespace);
             markDirty();
             return created;
           };
@@ -143,13 +171,12 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           const copy = copyMerge(merge);
           validateMemoryId(id);
           validateTime(nowMs);
-          const incoming = copyReceipts(receipts);
+          const incoming = copyReceipts(receipts, fromFinish);
           const namespace = writeNamespace(scope);
-          return (getState, markDirty) => {
+          return async (getState, markDirty) => {
             const state = getState();
             const entry = state.rows.get(namespace)?.get(id);
             if (!entry) throw new CoreError("memory_not_found");
-            const evidence = attachReceipts(entry.receipts, incoming);
             const { row } = entry;
             let changed = false;
             if (!row.historical) {
@@ -158,8 +185,9 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
               Object.assign(row, { confidence, kind, origin, revision: row.revision + Number(changed) });
             }
             Object.assign(row, writeTime(nowMs));
-            entry.receipts = evidence;
+            await appendReceipts(state, entry, incoming, nowMs);
             if (changed || incoming.length) invalidateRationale(state, namespace, id);
+            advanceInspectEpoch(state, namespace);
             markDirty();
             return { outcome: changed ? "changed" : "touched", revision: row.revision };
           };
@@ -249,7 +277,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
       return port.write(tx, scope, true, () => {
         const content = prepareContent(next);
         validateTime(nowMs);
-        const evidence = receipts === null ? null : attachReceipts([], copyReceipts(receipts));
+        const incoming = receipts === null ? null : copyReceipts(receipts);
         validateMemoryId(id);
         if (!Number.isInteger(expectedRevision)) throw new CoreError("invalid_input");
         const namespace = writeNamespace(scope);
@@ -272,8 +300,15 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           const revision = row.revision + 1;
           Object.assign(row, content, { digests, revision, ...writeTime(nowMs) });
           delete row.legacyHash;
-          if (evidence !== null) entry.receipts = evidence;
+          if (incoming !== null) {
+            entry.receipts = [];
+            entry.inspectReceiptPositions?.clear();
+            entry.receiptKeys?.clear();
+            await appendReceipts(state, entry, incoming, nowMs);
+          }
+          delete entry.inspectEvidence;
           invalidateRationale(state, namespace, id);
+          advanceInspectEpoch(state, namespace);
           return { outcome: "changed", revision };
         };
       });
@@ -290,14 +325,32 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
       return port.write(tx, scope, true, () => {
         validateMemoryId(id);
         const namespace = writeNamespace(scope);
-        return (getState) => {
+        return async (getState) => {
           const state = getState();
           eraseRelations(state, namespace, id);
           const entries = state.rows.get(namespace);
-          if (!entries?.delete(id)) return false;
+          const entry = entries?.get(id);
+          if (!entries || !entry) return false;
+          if (capabilities.inspect || capabilities.contextRead) {
+            // Retain only opaque suppression coordinates before erasing the source links.
+            for (const receipt of entry.receipts) {
+              state.receiptDenials.add(await receiptAddressKey(namespace, receipt));
+              const key = entry.receiptKeys?.get(receipt);
+              if (key) state.receiptDenials.add(JSON.stringify([namespace, key]));
+            }
+            if (entry.receipts.length && state.rawAnchors.size) advanceRawInspectEpoch(state);
+            // An explicit save may have retained the full source text without a
+            // receipt. Carry a digest of its normalized cutoff through erase.
+            if (entry.row.text.length > 800) {
+              const excerpt = receiptExcerpt(entry.row.text);
+              if (excerpt.length >= 799) state.receiptDenials.add(await receiptExcerptDenial(namespace, excerpt));
+            }
+          }
+          entries.delete(id);
           invalidateRationale(state, namespace, id);
           if (!entries.size) state.rows.delete(namespace);
           dropMemoryPlacement(state.topics.get(namespace), id, { erase: true });
+          advanceInspectEpoch(state, namespace);
           return true;
         };
       });
@@ -323,8 +376,8 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
     },
   };
 
-  // Finish already snapshots its items before entering the queue.
-  const finishWrites = memoryWrites(port.writeFromFinish, (/** @type {CopiedContent} */ row) => row);
+  // Finish snapshots its inputs before assigning the internal capture event ID.
+  const finishWrites = memoryWrites(port.writeFromFinish, (/** @type {CopiedContent} */ row) => row, true);
   /** @param {Tx} tx @param {Scope} scope @param {readonly CanonicalQuery[]} batch
    * @param {SourceRef} source @param {"hash" | "full"} mode */
   function readWritePolicy(tx, scope, batch, source, mode) {

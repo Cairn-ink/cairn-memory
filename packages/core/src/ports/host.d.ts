@@ -217,8 +217,9 @@ export interface InspectMemoryMetadata {
 export interface InspectReceipt extends Receipt {
   id: string;
   excerpt: string;
-  /** Receipt source event and receipt insertion time, respectively. */
+  /** Legacy alias for the source message ID. */
   eventId: string;
+  /** Receipt insertion time, distinct from the source event time. */
   createdAtMs: number;
 }
 
@@ -260,7 +261,7 @@ export interface InspectItemEvidence {
     procedural: boolean;
     origin: Origin | null;
     anchors: readonly { receiptId: string; digest: string; start: number; end: number }[];
-  };
+  } | null;
   supersession?: ContextReadFields;
 }
 
@@ -412,8 +413,7 @@ export interface ReadContextResult {
   snapshot: string | null;
 }
 
-/** Proposed codes join ERROR_CODES when the runtime implements Addendum 17. */
-export type ContextReadErrorCode = ErrorCode | "snapshot_stale" | "authority_required";
+export type ContextReadErrorCode = ErrorCode;
 export interface ContextReadError extends Error {
   code: ContextReadErrorCode;
   retryable: boolean;
@@ -426,9 +426,13 @@ export interface ContextReadTokenCounter {
   count(text: string): number;
 }
 
-/** All Context Read signing uses this store identity and key, independent of model and fingerprint keys. */
+/** Pure synchronous formatter for the exact block the host delivers. */
+export type ContextReadBlockFormatter = (value: ContextAssemblyValue) => string;
+
+/** Context Read and inspect share this store identity and key, independent of model and fingerprint keys. */
 export interface ReadTokenIdentity {
   storeId: string;
+  /** Raw HMAC-SHA256 bytes or an HMAC-SHA256 CryptoKey with sign and verify usages. */
   cursorKey: Uint8Array | CryptoKey;
 }
 
@@ -497,13 +501,14 @@ export interface ContextReadStore extends ReadIdentityPort {
   snapshotState(tx: Tx, readSet: ContextReadSet, types: readonly ContextReadType[]): Promise<
     readonly { memory: number; card?: number; lineage?: string }[]
   >;
-  /** One slot per ref. Null means missing or denied. Visible rows carry their actual revisions. */
+  /** One slot per ref. Null means missing or denied. Visible rows carry their actual revisions.
+   * Withhold unsafe receipts and any qualification they anchor inside this read transaction. */
   evidence(tx: Tx, readSet: ContextReadSet, refs: readonly ContextReadRef[],
     intent: ContextReadIntent): Promise<readonly (ContextEvidenceRow | null)[]>;
   readonly raw?: ContextRawReadStore;
 }
 
-export type InspectReceiptAnchor = { row: number } | { createdAtMs: number; id: string };
+export type InspectReceiptAnchor = { row: number } | { createdAtMs: number; createdAtUs?: SortKeyUs; id: string };
 
 /** Optional adapter port for inspect-only ordering, counts and receipt paging. */
 export interface InspectStore extends ReadIdentityPort {
@@ -514,7 +519,9 @@ export interface InspectStore extends ReadIdentityPort {
     after?: { updatedAtUs: SortKeyUs; id: string };
     expectedEpoch?: number;
   }): Promise<{ epoch: number; rows: readonly (InspectMemoryMetadata & { updatedAtUs: SortKeyUs })[] }>;
-  /** Returns up to limit visible receipts, in creation time and ID ascending order. */
+  /** Returns up to limit visible receipts in ascending creation time and ID order.
+   * A changed epoch or lost receipt anchor throws cursor_stale.
+   */
   item(tx: Tx, scope: Scope, memoryId: string, page: {
     limit: number;
     after?: InspectReceiptAnchor;

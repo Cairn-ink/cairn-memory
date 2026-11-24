@@ -1,5 +1,5 @@
 import { compareSortKey, compareUtf8, CoreError } from "@cairn-ink/core";
-import { attachReceipts, clearReceipts, decodeEntry, LIVE_SCOPE, MEMORY_COLUMNS, readEntry } from "./memory-rows.mjs";
+import { attachReceipts, clearReceipts, decodeEntry, LIVE_SCOPE, MEMORY_COLUMNS, readEntry, suppressReceiptSources } from "./memory-rows.mjs";
 import { scopedSuppression } from "./suppressions.mjs";
 import {
   copyReceipts, encodeContent, invalidInput, scopeKey, validateBatch, validateId, validateMerge, validateSource, writeTime,
@@ -144,7 +144,7 @@ export function insertMemory(db, scope, { body, textHash, legacyHash }, receipts
     VALUES (?, ?, lower(hex(randomblob(16))), 1, ?, ?, ?, ?, ?) RETURNING id`)
     .get(...scopeKey(scope), createdAtMs, time.updatedAtUs, textHash, legacyHash, JSON.stringify(body));
   if (typeof inserted?.id !== "string") throw new CoreError("internal_error");
-  attachReceipts(db, scope, inserted.id, receipts);
+  attachReceipts(db, scope, inserted.id, receipts, nowMs);
   return { id: inserted.id, revision: 1, createdAtMs, ...time };
 }
 
@@ -168,7 +168,7 @@ export function touchDuplicate(db, scope, id, receipts, merge, nowMs) {
   db.prepare(`UPDATE cairn_memories SET revision = ?, updated_at_us = ?,
     body = json_set(body, '$.confidence', ?, '$.kind', ?, '$.origin', ?) WHERE ${LIVE_SCOPE} AND id = ?`)
     .run(revision, updatedAtUs, confidence, kind, origin, ...scopeKey(scope), id);
-  attachReceipts(db, scope, id, evidence);
+  attachReceipts(db, scope, id, evidence, nowMs);
   return { outcome: changed ? "changed" : "touched", revision };
 }
 
@@ -250,7 +250,7 @@ export function createMemoryStore(port, hashSession, markDirty) {
           .run(revision, updatedAtUs, textHash, legacyHash, JSON.stringify(body), ...scopeKey(scope), id);
         if (evidence !== null) {
           clearReceipts(db, scope, id);
-          attachReceipts(db, scope, id, evidence);
+          attachReceipts(db, scope, id, evidence, nowMs);
         }
         markDirty?.(db, tx);
         return { outcome: "changed", revision };
@@ -260,10 +260,12 @@ export function createMemoryStore(port, hashSession, markDirty) {
     erase(tx, scope, id) {
       return port(tx, scope?.owner, { write: true }, db => {
         validateId(id);
-        const { changes } = db.prepare(`UPDATE cairn_memories
+        const entry = readEntry(db, scope, id);
+        if (!entry) return false;
+        db.prepare(`UPDATE cairn_memories
           SET deleted = 1, body = NULL, text_hash = NULL, legacy_hash = NULL, revision = revision + 1
           WHERE ${LIVE_SCOPE} AND id = ?`).run(...scopeKey(scope), id);
-        if (changes === 0) return false;
+        suppressReceiptSources(db, scope, id, entry.row.text);
         clearReceipts(db, scope, id);
         markDirty?.(db, tx);
         return true;
