@@ -1,7 +1,9 @@
 import { rankScores, scoreBM25, termFrequencies, tokenizeT1 } from "@cairn-ink/core";
+import { receiptAddressKey } from "./receipt-read-safety.mjs";
 
 /** @import { ContextEvidenceRow, ContextMemoryRef, ContextRawReadStore, ContextRawTurn, ContextReadSet, ContextReadStore, Receipt, Scope, Tx } from "@cairn-ink/core/ports" */
 /** @import { RawEntry } from "./raw.mjs" */
+/** @import { StoredReceipt } from "./receipt-read-safety.mjs" */
 /** @import { State } from "./unit-of-work.mjs" */
 /** @typedef {Extract<ContextEvidenceRow, { type: "memory" }>["receipts"][number]} QualifiedReceipt */
 
@@ -26,9 +28,10 @@ async function rawTurn(scope, row) {
 /** @param {Scope} scope @param {Pick<Receipt, "client" | "sessionId" | "messageId">} source */
 const sourceSlot = ({ namespace }, { client, sessionId, messageId }) => JSON.stringify([namespace, client, sessionId, messageId]);
 
-/** @param {State} state @param {ContextMemoryRef} ref @param {Receipt} receipt @param {RawEntry} raw */
+/** @param {State} state @param {ContextMemoryRef} ref @param {StoredReceipt} receipt @param {RawEntry} raw */
 function exactLineage(state, { scope, id }, receipt, raw) {
-  const claim = state.claims.get(JSON.stringify([receipt.client, receipt.eventId]));
+  if (!receipt.captureEventId) return false;
+  const claim = state.claims.get(JSON.stringify([receipt.client, receipt.captureEventId]));
   if (claim?.status !== "finished" || claim.key.scope.namespace !== scope.namespace ||
       claim.key.sessionId !== receipt.sessionId || !claim.result.memories.some(memory => memory.id === id)) return false;
   const admitted = claim.messages?.find(message => message.id === receipt.messageId);
@@ -37,7 +40,7 @@ function exactLineage(state, { scope, id }, receipt, raw) {
 
 /** @param {State} state @param {ContextReadSet} readSet @param {Set<string>} candidates @param {() => boolean} expired */
 function receiptLinks(state, readSet, candidates, expired) {
-  /** @type {Map<string, { ref: ContextMemoryRef, receipt: Receipt }[]>} */
+  /** @type {Map<string, { ref: ContextMemoryRef, receipt: StoredReceipt }[]>} */
   const links = new Map();
   let scanned = 0;
   for (const namespace of readSet.namespaces) {
@@ -60,13 +63,16 @@ function receiptLinks(state, readSet, candidates, expired) {
 /** @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>} work
  * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>} archive @param {ContextReadStore} store
  * @returns {ContextReadStore} */
-export function withContextRawRead({ port }, { findVisibleSource }, store) {
+export function withContextRawRead({ port }, { findVisibleSource, sourceLineageVisible }, store) {
   /** @param {Tx} tx @param {ContextReadSet} readSet @param {State} state @param {NonNullable<ReturnType<typeof receiptLinks>>} links */
   function checkLineage(tx, readSet, state, links) {
     /** @type {Map<string, readonly QualifiedReceipt[]>} */
     const qualified = new Map();
     /** @param {Scope} scope @param {RawEntry} row */
     return async (scope, row) => {
+      if (!row.content ||
+          (state.receiptDenials.size && state.receiptDenials.has(await receiptAddressKey(scope.namespace, row))) ||
+          !await sourceLineageVisible(state, scope, row)) return false;
       // Legacy raw-search-authority.mjs:154–186. A possible receipt link must
       // still point to a qualified current Memory. Missing ancestry is a denial.
       for (const { ref, receipt } of links.get(sourceSlot(scope, row)) ?? []) {
@@ -115,7 +121,7 @@ export function withContextRawRead({ port }, { findVisibleSource }, store) {
         for (const { scope, row } of inventory) {
           if (expired()) return partial;
           const visible = await findVisibleSource(state, scope, row);
-          if (!visible?.content || !await current(scope, visible)) continue;
+          if (!visible || !await current(scope, visible)) continue;
           const tokens = termFrequencies(visible.content);
           totalLength += tokens.length;
           for (const term of tokens.frequencies.keys()) df.set(term, (df.get(term) ?? 0) + 1);
@@ -166,11 +172,15 @@ export function withContextRawRead({ port }, { findVisibleSource }, store) {
       const rows = await store.evidence(tx, readSet, refs, intent);
       return port(tx, readSet, false, state => Promise.all(rows.map(async row => {
         if (row?.type !== "memory" || row.sourceAccess !== "available") return row;
-        const { scope } = row.ref;
+        const { scope, id } = row.ref;
+        const stored = state.rows.get(scope.namespace)?.get(id)?.receipts;
         const receipts = await Promise.all(row.receipts.map(async receipt => {
           // Only enrich a receipt already qualified by the evidence store.
+          const slot = sourceSlot(scope, receipt);
+          const source = stored?.find(source => source.id === receipt.id && sourceSlot(scope, source) === slot);
+          if (!source?.captureEventId) return receipt;
           const visible = await findVisibleSource(state, scope, receipt);
-          if (!visible || !exactLineage(state, row.ref, receipt, visible)) return receipt;
+          if (!visible || !exactLineage(state, row.ref, source, visible)) return receipt;
           return { ...receipt, rawTurns: [{ scope, conversationId: conversation(visible), messageId: visible.messageId }],
             ...(visible.occurredAtMs !== null && { sourceTimesMs: [visible.occurredAtMs] }) };
         }));

@@ -199,14 +199,15 @@ function projectUnit(group, representation, count) {
   }
   const originalDate = [...members.flatMap(item => item.receiptDate ? [item.receiptDate] : []), ...rawDates].sort(compareUtf8)[0];
   const itemDate = originalDate ?? members.flatMap(item => item.date ? [item.date] : []).sort(compareUtf8)[0];
-  const wire = wireItem({ ...first, date: itemDate }, representation, sources,
-    first.sourcesComplete && sources.length === primarySources, text);
   const attached = evidence.map(({ wire }) => {
     const { body, ...ref } = wire;
     return body === text ? { ...ref, sameAsBody: /** @type {const} */ (true) } : wire;
   });
-  return { ...group, members, evidence, date, turns, sessions, lexical, rank, id,
-    wire: { ...wire, ...(attached.length && { evidence: attached }) } };
+  const wire = { ...wireItem(first, representation, sources, first.sourcesComplete && sources.length === primarySources, text),
+    ...(attached.length && { evidence: attached }) };
+  // Legacy updates an existing primary date in place and appends a new date after the evidence.
+  if (representation === "representation-v2-dated" && itemDate) wire.date = itemDate;
+  return { ...group, members, evidence, date, turns, sessions, lexical, rank, id, wire };
 }
 
 /** @param {readonly PreparedItem[]} items @param {Channel} raw @param {ContextReadSet} readSet @param {string} query

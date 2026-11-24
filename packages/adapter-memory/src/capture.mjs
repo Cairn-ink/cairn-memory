@@ -153,7 +153,7 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
           const writeTimeUs = BigInt(nowMs) * 1000n;
           const state = getState();
           const { identity, claim } = liveClaim(state, token, nowMs);
-          const { scope, client, sessionId } = claim.key;
+          const { scope, client, sessionId, eventId } = claim.key;
           /** @type {SourceRef} */
           const source = { kind: "capture", client, sessionId };
           const queries = batch.map(({ row }) => ({
@@ -176,7 +176,7 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
                 return link;
               }
               const excerpt = receiptExcerpt(cleanContent(retained.content));
-              return { ...link, occurredAtMs: retained.occurredAtMs, ...(excerpt && { excerpt }) };
+              return { ...link, occurredAtMs: retained.occurredAtMs, ...(excerpt && { excerpt, captureEventId: eventId }) };
             }) : sourceRefs;
             const decision = decideWrite(policy, position, progress);
             switch (decision.status) {

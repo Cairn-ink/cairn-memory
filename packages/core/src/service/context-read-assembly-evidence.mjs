@@ -70,7 +70,8 @@ export function fetchForAssembly({ contextRead: store, uow, fence }) {
       rows: prepared.rows,
       payload,
       /** @param {readonly AssemblyEvidence[]} selected @param {readonly ContextRawTurn[]} rawTurns
-       * @param {AbortSignal} [signal] */
+       * @param {AbortSignal} [signal]
+       * @returns {Promise<string | null | undefined>} Undefined requests a replacement after a stale Raw witness. */
       async deliver(selected, rawTurns, signal) {
         // Legacy context-read-facade.mjs:918–937. All final predicates share
         // this snapshot, after the host formatter and counter have finished.
@@ -82,11 +83,22 @@ export function fetchForAssembly({ contextRead: store, uow, fence }) {
           }
           const delivered = selected.map(({ item }) => item.ref);
           const current = await evidence(tx, signer, delivered);
-          if (selected.some((row, i) => row.fence !== current[i]?.fence || row.witness !== current[i]?.witness) ||
-              (rawTurns.length && !await store.raw?.revalidate(tx, readSet, rawTurns))) {
+          if (selected.some((row, i) => row.fence !== current[i]?.fence || row.witness !== current[i]?.witness)) {
             throw new CoreError("snapshot_stale");
           }
           await assertContextVisible(fence, tx, readSet, delivered, intent, "snapshot_stale");
+          if (rawTurns.length) {
+            let rawCurrent = false;
+            try {
+              rawCurrent = await store.raw?.revalidate(tx, readSet, rawTurns) === true;
+            } catch {
+              // A failed Raw check invalidates the Raw pack.
+            }
+            if (!rawCurrent) {
+              if (signal?.aborted) throw new CoreError("snapshot_stale");
+              return undefined;
+            }
+          }
           const snapshot = selected.length ? await signer.encode("snapshot", payload(selected)) : null;
           if (signal?.aborted) throw new CoreError("snapshot_stale");
           return snapshot;

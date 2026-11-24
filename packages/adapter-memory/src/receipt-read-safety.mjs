@@ -3,7 +3,7 @@ import { sha256Hex } from "../../core/src/privacy/fingerprint.mjs";
 
 /** @import { InspectReceipt, Receipt, Scope } from "@cairn-ink/core/ports" */
 /** @import { State } from "./unit-of-work.mjs" */
-/** @typedef {Receipt & { createdAtMs?: number }} StoredReceipt */
+/** @typedef {Receipt & { createdAtMs?: number, captureEventId?: string }} StoredReceipt */
 /** @typedef {ReturnType<ReturnType<typeof import("./fact-match.mjs").createFactMatcher>>} Policy */
 
 /** @param {Pick<Receipt, "client" | "sessionId" | "messageId" | "role" | "excerpt">} receipt */
