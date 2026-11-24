@@ -3,7 +3,7 @@ import { scopeKey } from "./storage-values.mjs";
 /** @import { TextDigest } from "@cairn-ink/core" */
 /** @import { MemoryRow, Receipt, Scope } from "@cairn-ink/core/ports" */
 /** @import { Connection } from "./storage-values.mjs" */
-/** @typedef {{ row: MemoryRow, legacyHash?: string, digests: TextDigest[] }} Entry */
+/** @typedef {{ row: MemoryRow, legacyHash?: string, historyHash?: string, digests: TextDigest[] }} Entry */
 
 export const MEMORY_COLUMNS =
   "id, revision, historical, created_at_ms, CAST(updated_at_us AS TEXT) AS sort_key, text_hash, legacy_hash, body";
@@ -17,7 +17,8 @@ export function decodeJson(value) {
 
 /** @param {Scope} scope @param {Record<string, import("node:sqlite").SQLOutputValue>} record @returns {Entry} */
 export function decodeEntry(scope, record) {
-  const { digests, ...body } = /** @type {ReturnType<typeof import("./storage-values.mjs").encodeContent>["body"]} */ (
+  const { digests, historyHash, time: _legacyTime, ...body } = /** @type {ReturnType<typeof import("./storage-values.mjs").encodeContent>["body"] &
+    { historyHash?: string, time?: { createdAt: string, updatedAt: string } }} */ (
     decodeJson(record.body)
   );
   const updatedAtUs = BigInt(String(record.sort_key));
@@ -34,6 +35,7 @@ export function decodeEntry(scope, record) {
       updatedAtUs,
     },
     legacyHash: record.legacy_hash === null ? undefined : String(record.legacy_hash),
+    historyHash,
     digests,
   };
 }

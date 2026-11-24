@@ -111,6 +111,12 @@ export function readFacts(db, scope) {
 /** @param {StoredFact} stored @returns {stored is StoredFact<TextFact>} */
 const isText = stored => stored.fact.kind === "text";
 
+/** @param {Connection} db @param {Scope} scope */
+export function readLegacyDenials(db, scope) {
+  return new Set(db.prepare("SELECT fingerprint FROM cairn_legacy_denials WHERE owner_id = ? AND namespace_key = ?")
+    .all(...scopeKey(scope)).map(row => String(row.fingerprint)));
+}
+
 /** @param {Connection} db @param {Scope} scope @param {SessionHasher} hashSession */
 export function scopedSuppression(db, scope, hashSession) {
   const facts = readFacts(db, scope);
@@ -118,16 +124,16 @@ export function scopedSuppression(db, scope, hashSession) {
   const sessions = facts.filter(({ fact }) => fact.kind === "session");
   const windows = facts.filter(({ fact }) => fact.kind === "window");
   const hasSpans = facts.some(({ fact }) => fact.kind === "rawSpan");
-  const legacy = new Set(db.prepare(`SELECT fingerprint FROM cairn_legacy_denials WHERE owner_id = ? AND namespace_key = ?`)
-    .all(...scopeKey(scope)).map(row => String(row.fingerprint)));
+  const legacy = readLegacyDenials(db, scope);
   const hasLegacyReceipts = [...legacy].some(key => key.startsWith("rs1:"));
 
-  /** @param {readonly TextDigest[]} digests */
-  const legacyText = digests => digests.some(digest => digest.alg === "sha256" && legacy.has(digest.value));
+  /** @param {readonly TextDigest[]} digests @param {string} [historyHash] */
+  const legacyText = (digests, historyHash) => digests.some(digest =>
+    digest.alg === "sha256" && digest.value !== historyHash && legacy.has(digest.value));
 
   /** @param {Entry} entry */
   function classify(entry) {
-    const { row, legacyHash, digests } = entry;
+    const { row, legacyHash, historyHash, digests } = entry;
     const aliases = digestAliases({ textHash: row.textHash, legacyHash, digests });
     const receipts = sessions.length || hasSpans || hasLegacyReceipts ? readReceipts(db, scope, row.id) : [];
     const receiptDenied = hasLegacyReceipts && receipts.some(({ client, sessionId, messageId, role, legacyReceiptKey }) =>
@@ -155,7 +161,8 @@ export function scopedSuppression(db, scope, hashSession) {
           return false;
       }
     });
-    return { applicable, legacyDenied: legacyText(aliases) || receiptDenied };
+    const retained = row.historical && legacyHash === "sha256:" + historyHash ? historyHash : undefined;
+    return { applicable, legacyDenied: legacyText(aliases, retained) || receiptDenied };
   }
 
   /** @param {SourceRef["client"] | undefined} client @param {SourceRef["sessionId"] | undefined} sessionId */

@@ -91,14 +91,15 @@ export function rawFactPolicy(scope, session, facts, hashSession) {
   };
 }
 
-/** @param {StoredFact[]} facts @param {string} content */
-export function importTextBlocked(facts, content) {
+/** @param {StoredFact[]} facts @param {string} content @param {ReadonlySet<string>} [legacy] */
+export function importTextBlocked(facts, content, legacy) {
   const texts = facts.map(({ fact }) => fact).filter(fact => fact.kind === "text");
-  if (!texts.length) return false;
+  if (!texts.length && !legacy?.size) return false;
   const original = cleanContent(content);
   const normalized = original.normalize("NFKC");
   const prepared = redactCore(normalized);
-  if (!prepared) return texts.some(unavailableLegacyDomain);
+  if (!prepared) return exactDigests(original).some(({ value }) => legacy?.has(value)) ||
+    texts.some(unavailableLegacyDomain);
 
   // Match the exact aliases Core uses at capture admission, including historical redaction spellings.
   /** @type {Map<string, TextDigest[]>} */
@@ -111,6 +112,7 @@ export function importTextBlocked(facts, content) {
     const spelling = normalizeForHash(variant);
     const digests = exactDigests(variant);
     appendDigest(digests, digest(spelling, pipeline, version));
+    if (digests.some(({ value }) => legacy?.has(value))) return true;
     spellings.set(spelling, digests);
   }
   return withholdsAnyPassage(Array.from(spellings.values(), digests => ({ digests, shingles: null, keyId: null })), texts);
