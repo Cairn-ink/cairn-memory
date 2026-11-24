@@ -356,6 +356,7 @@ const selected = new Set([
   "K-FORK-6", "K-FORK-7", "K-FORK-10",
   "K-RET-1", "K-RET-2", "K-RET-3", "K-FEN-1", "K-FEN-I1", "K-FEN-I2", "K-FEN-I3",
   "K-RET-W1", "K-RET-W2", "K-SNAP-W1", "K-RAW-W1", "K-RAW-3", "K-RAW-3w", "K-RAW-3c", "K-RAW-3s",
+  "K-RAW-LEDGER-1", "K-RAW-LEDGER-2",
   "K-RET-9", "K-SNAP-1", "K-HYD-1", "K-HYD-2", "K-PAUSE-1", "K-IMP-T1", "K-IMP-T2", "K-IMP-T3",
   "K-SNAP-F1", "K-SNAP-F3", "K-SNAP-F4", "K-SNAP-F5", "K-SNAP-F5u", "K-SNAP-F6", "K-SNAP-F7",
   "K-SNAP-C1", "K-SNAP-C3", "K-SNAP-C4",

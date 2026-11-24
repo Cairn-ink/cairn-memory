@@ -12,10 +12,11 @@ import { admissionScope, copyCaptureMessages, copyReadScope, guardCaptureScope, 
   writeNamespace } from "./validation.mjs";
 
 /** @import { FactMatchPolicy, FactMatchRow, StoredFact, TextDigest, TextFact } from "@cairn-ink/core" */
-/** @import { CaptureMessage, FingerprintKeyProvider, ItemRef, Namespace, RawSegment, RetrievalScope, Scope, StorageAdapter, Tx } from "@cairn-ink/core/ports" */
+/** @import { CaptureKey, CaptureMessage, FingerprintKeyProvider, ItemRef, Namespace, RawSegment, RetrievalScope, Scope, StorageAdapter, Tx } from "@cairn-ink/core/ports" */
 /** @import { IssuedRun, State } from "./unit-of-work.mjs" */
 /** @typedef {Omit<RawSegment, "score">} RawEntry */
 /** @typedef {Pick<RawEntry, "client" | "sessionId">} Session */
+/** @typedef {Pick<RawEntry, "client" | "sessionId" | "messageId" | "occurredAtMs" | "content">} RawEvidence */
 /** @typedef {Pick<RawEntry, "occurredAtMs"> & {ref: {id: string}}} PageKey */
 /** @typedef {{id: string, digest: string | null}} CaptureProof */
 /** @typedef {{namespace: Namespace, sessionId: string, messages: Map<string, Set<CaptureProof["digest"]>>}} AnchorSession */
@@ -39,6 +40,23 @@ function rawEntry(scope, session, { id, role, content, occurredAtMs }) {
     ref: { type: "raw", namespace: scope.namespace, id: rawId(scope, session, id) },
     client, sessionId, messageId: id, role, content, occurredAtMs,
   };
+}
+
+/** @param {State} state @param {Namespace} namespace
+ * @param {(key: CaptureKey, message: CaptureMessage) => boolean | Promise<boolean>} matches
+ */
+async function blankCaptureMessages(state, namespace, matches) {
+  let blanked = 0;
+  for (const { key, messages } of state.claims.values()) {
+    if (key.scope.namespace !== namespace || !messages) continue;
+    for (const message of messages) {
+      if (message.content !== "" && await matches(key, message)) {
+        message.content = "";
+        blanked++;
+      }
+    }
+  }
+  return blanked;
 }
 
 /** @param {readonly CaptureMessage[]} messages */
@@ -182,7 +200,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     return [...state.facts.values()].filter(({ fact }) => fact.owner === owner && (fact.namespace ?? null) === namespace);
   }
 
-  /** @param {RawEntry} row @param {Scope} scope @param {string} sessionKeyHash @param {TextDigest[]} [digests]
+  /** @param {RawEvidence} row @param {Scope} scope @param {string} sessionKeyHash @param {TextDigest[]} [digests]
    * @returns {Extract<FactMatchRow, {type: "raw"}>}
    */
   function evidence(row, scope, sessionKeyHash, digests) {
@@ -250,7 +268,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     const useSpans = facts.some(({ fact }) => fact.kind === "rawSpan");
     /** @type {ReturnType<typeof ringKeys> | undefined} */
     let keys;
-    return async (/** @type {RawEntry} */ row) => {
+    return async (/** @type {RawEvidence} */ row) => {
       const hash = useSpans ? await spanSessionHash(row) : "";
       if (!useDigests) return evidence(row, scope, hash);
       const [digests, ownerKeys] = await Promise.all([
@@ -324,8 +342,8 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     return rows.map(({ ref }) => ({ ...ref }));
   }
 
-  /** @param {Tx} tx @param {Scope} scope @param {() => Session[]} prepare */
-  function deleteSessions(tx, scope, prepare) {
+  /** @param {Tx} tx @param {Scope} scope @param {() => Session[]} prepare @param {boolean} [eraseLedger] */
+  function deleteSessions(tx, scope, prepare, eraseLedger = false) {
     return port.write(tx, scope, "conditional", () => {
       const namespace = writeNamespace(scope);
       const slots = new Set(prepare().map((session) => sessionSlot(namespace, session)));
@@ -340,8 +358,11 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
           }
         }
         await invalidateRationaleSources(state, namespace, deleted);
+        const ledgerBlanked = eraseLedger ? await blankCaptureMessages(state, namespace,
+          (key) => slots.has(sessionSlot(namespace, key))) : 0;
         if (deleted.length) advanceRevision(run);
-        return { rawDeleted: deleted.length };
+        if (ledgerBlanked) run.stateWritten = true;
+        return { rawDeleted: deleted.length, ledgerBlanked };
       };
     });
   }
@@ -516,11 +537,11 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
       });
     },
     async deleteConversation(tx, scope, session) {
-      return deleteSessions(tx, scope, () => [copySession(session)]);
+      const { rawDeleted } = await deleteSessions(tx, scope, () => [copySession(session)]);
+      return { rawDeleted };
     },
     async eraseSessions(tx, scope, closure) {
-      const { rawDeleted } = await deleteSessions(tx, scope, () => snapshotArray(closure).map(copySession));
-      return { rawDeleted, ledgerBlanked: 0 };
+      return deleteSessions(tx, scope, () => snapshotArray(closure).map(copySession), true);
     },
     async purgeWithheld(tx, scope, facts) {
       return port.write(tx, scope, "conditional", () => {
@@ -536,18 +557,25 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
           const hasEdges = state.rationale.has(target.namespace);
           let rawDeleted = 0;
           for (const [id, row] of state.rawRows) {
-            if (row.ref.namespace !== target.namespace) continue;
-            const candidate = await project(row);
-            if (candidates.some((stored) => factHidesRow(stored, candidate, policy) === true)) {
+            if (row.ref.namespace === target.namespace && await matches(row)) {
               state.rawRows.delete(id);
               state.rawConflicts.delete(id);
               if (hasEdges) deleted.push(row);
               rawDeleted++;
             }
           }
+          /** @param {RawEvidence} row */
+          async function matches(row) {
+            const candidate = await project(row);
+            return candidates.some((stored) => factHidesRow(stored, candidate, policy) === true);
+          }
           await invalidateRationaleSources(state, target.namespace, deleted);
+          const ledgerBlanked = await blankCaptureMessages(state, target.namespace,
+            ({ client, sessionId }, { id, content, occurredAtMs }) =>
+              matches({ client, sessionId, messageId: id, content, occurredAtMs }));
           if (rawDeleted) advanceRevision(run);
-          return { rawDeleted, ledgerBlanked: 0 };
+          if (ledgerBlanked) run.stateWritten = true;
+          return { rawDeleted, ledgerBlanked };
         };
       });
     },
