@@ -150,9 +150,9 @@ export function insertMemory(db, scope, { body, textHash, legacyHash }, receipts
 }
 
 /** @param {Connection} db @param {Scope} scope @param {string} id @param {readonly Receipt[]} receipts
- * @param {DuplicateMerge} merge @param {number} nowMs
+ * @param {DuplicateMerge} merge @param {number} nowMs @param {boolean} [checkReplay]
  */
-export function touchDuplicate(db, scope, id, receipts, merge, nowMs) {
+export function touchDuplicate(db, scope, id, receipts, merge, nowMs, checkReplay = false) {
   validateId(id);
   validateMerge(merge);
   const evidence = copyReceipts(receipts);
@@ -163,7 +163,7 @@ export function touchDuplicate(db, scope, id, receipts, merge, nowMs) {
   const confidence = row.historical ? row.confidence : merge.confidence;
   const kind = row.historical ? row.kind : merge.kind ?? row.kind;
   const origin = row.historical ? row.origin : merge.origin ?? row.origin;
-  const { receiptIds, added } = attachReceipts(db, scope, id, evidence, nowMs);
+  const { receiptIds, added } = attachReceipts(db, scope, id, evidence, nowMs, checkReplay);
   const changed = added !== 0 || confidence !== row.confidence || kind !== row.kind || origin !== row.origin;
   const revision = row.revision + Number(changed);
   db.prepare(`UPDATE cairn_memories SET revision = ?, updated_at_us = ?,
@@ -219,7 +219,7 @@ export function createMemoryStore(port, hashSession, index) {
 
     touchDuplicate(tx, scope, id, receipts, merge, nowMs) {
       return port(tx, scope?.owner, { write: true }, db => {
-        const result = touchDuplicate(db, scope, id, receipts, merge, nowMs);
+        const result = touchDuplicate(db, scope, id, receipts, merge, nowMs, true);
         index.markDirty(db, tx);
         return result;
       });
