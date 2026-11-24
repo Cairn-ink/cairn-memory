@@ -68,9 +68,9 @@ test("capture runs the leased plain extraction outside transactions and binds tr
   assert.deepEqual(methods(f), [
     ...locked,
     ...locked, "capture.load", "capture.claim", "capture.eligible",
-    ...locked, "suppressions.snapshot", "capture.assertEligible",
-    ...locked, "suppressions.snapshot", "capture.assertEligible", "capture.beginDispatch",
-    "gate", ...locked, ...locked, "suppressions.snapshot", "capture.assertEligible", "capture.load",
+    ...locked, "capture.load", "suppressions.snapshot", "capture.assertEligible",
+    ...locked, "capture.load", "suppressions.snapshot", "capture.assertEligible", "capture.beginDispatch",
+    "gate", ...locked, ...locked, "capture.load", "suppressions.snapshot", "capture.assertEligible",
     "gate", "model.call", "gate", "keys.userKey",
     ...locked, "capture.eligible", "capture.load", "suppressions.snapshot", "gate", "embed",
     ...locked, "capture.load", "capture.assertEligible", "suppressions.snapshot", "keys.userKey", "suppressions.snapshot", "capture.finish",
