@@ -773,8 +773,10 @@ and an independently checked token count for the actual assembly block.
   Stores that require an embedding and failures from a configured embedder keep their current rules.
 - **Optional model.** With `capabilities.fingerprintKey` off, the service accepts an omitted,
   undefined, or null model at registration. Capture admission and execution then refuse with
-  `capability_unavailable` before doing any work. With `fingerprintKey` on, registration still
-  refuses a missing model with `invalid_input`.
+  `capability_unavailable` before doing any work, except when the host opts into capture-time
+  [document cards](document-cards.md) and the adapter supplies card storage. That composition can
+  finish without extraction. With `fingerprintKey` on, registration still refuses a missing model
+  with `invalid_input`.
 - **Keyless correct.** Use addendum 15's keyless predecessor rule for exact suppression and
   lineage only when the store's `fingerprintKey` capability is off or no key provider is
   configured. This covers the local installer's SQLite profile. With `fingerprintKey` on and
@@ -794,6 +796,29 @@ The MCP host uses these status mappings.
 | `conflict` | `revision_conflict` |
 | `suppressed` | `memory_suppressed` |
 | `invalid` | `invalid_input` |
+
+## Addendum 19 — Document card Find and Read (2026-11-25)
+
+- **Visibility input.** The optional `documentCards.visibilityInputs(tx, scope, refs)`
+  returns one entry per ref in order. From the live transaction's snapshot the store
+  supplies the stored card fields, capture's canonical session key, all linked memory
+  states, and applicable text facts and fingerprint key for card title and body
+  containment, plus a definite whole-message Raw withholding verdict that includes
+  lineage and receipt qualification for message-backed cards. Non-card,
+  foreign-scope, unknown, hidden, tombstoned, and unresolvable refs return null
+  individually. Null withholds the card. The store rejects an ended transaction.
+  This method adds no capability flag.
+- **Find.** For a nonblank query, the requested card layer needs `documentCardSearch`,
+  the candidates port, and visibility inputs. In one read-only transaction it applies
+  the requested window and clients, takes up to 50 rows per channel, checks visibility
+  before fusion, and checks each loaded card again before delivery. It reuses the
+  memory query embedding when available and uses lexical alone without complete
+  vector coverage. A failed card operation affects only the card layer. Blank
+  queries skip card search.
+- **Read.** `readCard(scope, id)` uses the store and visibility inputs in one read-only
+  transaction. It returns the ID, title, body, date, origin, source client, and
+  IDs of visible or historical linked memories. Missing or withheld cards
+  return `not_found`. A missing store or method returns `capability_unavailable`.
 
 ## Addendum 20 — In-transaction hosted write hooks and pause-locked Postgres snapshots
 

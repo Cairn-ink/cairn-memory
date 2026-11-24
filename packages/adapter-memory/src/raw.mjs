@@ -146,8 +146,10 @@ function publicSegment(segment) {
  * @param {import("@cairn-ink/core").FingerprintLabels} labels
  * @param {FactMatchPolicy["hashSessionKey"]} [hashSessionKey]
  * @param {boolean} [rationaleEdges]
+ * @param {boolean} [documentCards]
  */
-export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSessionKey, rationaleEdges = false) {
+export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSessionKey,
+  rationaleEdges = false, documentCards = false) {
   const cursorBinding = crypto.randomUUID();
   const policy = { hashSessionKey, rowShingles: false };
   let rawKeyConflict = 0;
@@ -157,8 +159,8 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
   let proofKey;
 
   /** @param {State} state @param {string} id */
-  function recordRationaleConflict(state, id) {
-    if (!rationaleEdges || state.rawConflicts.has(id)) return false;
+  function recordSourceConflict(state, id) {
+    if (!(rationaleEdges || documentCards) || state.rawConflicts.has(id)) return false;
     state.rawConflicts.add(id);
     return true;
   }
@@ -287,17 +289,6 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     };
   }
 
-  /** @param {State} state @param {Scope} scope
-   * @param {import("@cairn-ink/core/ports").DocumentCardSourceMessage} source */
-  async function sourceVisible(state, scope, source) {
-    const row = state.rawRows.get(rawId(scope, source, source.messageId));
-    if (!row || state.rawFences.has(sessionSlot(scope.namespace, source))) return false;
-    const facts = scopedFacts(state, scope);
-    if (!facts.length) return true;
-    const candidate = await readEvidence(scope, facts)(row);
-    return facts.every((stored) => factHidesRow(stored, candidate, policy) === false);
-  }
-
   /** @param {Pick<State, "facts" | "rawFences" | "rawRows">} state @param {RetrievalScope} selection */
   async function visibleRows(state, selection) {
     const byNamespace = new Map(selection.namespaces.map((namespace) => {
@@ -327,13 +318,13 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
   async function findVisibleSource(state, scope, receipt) {
     const id = rawId(scope, receipt, receipt.messageId);
     const row = state.rawRows.get(id);
-    if (!row || state.rawConflicts.has(id)) return undefined;
+    if (!row || (rationaleEdges && state.rawConflicts.has(id))) return undefined;
     const [visible] = await visibleRows({ ...state, rawRows: new Map([[id, row]]) },
       { owner: scope.owner, namespaces: [scope.namespace] });
     return visible;
   }
 
-  /** @param {State} state @param {Scope} scope @param {RawEntry} archived */
+  /** @param {State} state @param {Scope} scope @param {RawEvidence & Pick<RawEntry, "role">} archived */
   async function sourceLineageVisible(state, scope, archived) {
     const { client, sessionId, messageId, role, content } = archived;
     const roots = state.rawAnchors.get(client);
@@ -352,14 +343,23 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     return true;
   }
 
-  /** @param {State} state @param {Scope} scope @param {import("@cairn-ink/core/ports").Receipt} receipt */
-  async function receiptSourcesVisible(state, scope, receipt) {
+  /** @param {State} state @param {Scope} scope @param {import("@cairn-ink/core/ports").Receipt} receipt
+   * @param {string} [admittedContent] */
+  async function receiptSourcesVisible(state, scope, receipt, admittedContent) {
     const { client, sessionId, messageId, role } = receipt;
     const roots = state.rawAnchors.get(client);
     const id = rawId(scope, receipt, messageId);
     if (!state.rawRows.has(id)) {
       const slot = sessionSlot(scope.namespace, receipt);
-      if (state.rawFences.has(slot) || state.rawConflicts.has(id) || roots?.has(slot)) return false;
+      if (state.rawFences.has(slot) || (rationaleEdges && state.rawConflicts.has(id))) return false;
+      if (admittedContent !== undefined) {
+        const source = { ...receipt, content: admittedContent };
+        const facts = scopedFacts(state, scope);
+        const candidate = await readEvidence(scope, facts)(source);
+        return facts.every(stored => factHidesRow(stored, candidate, policy) === false) &&
+          sourceLineageVisible(state, scope, source);
+      }
+      if (roots?.has(slot)) return false;
       // Without the archived turn, the excerpt cannot disambiguate matching IDs.
       for (const root of roots?.values() ?? []) if (root.messages.has(messageId)) return false;
       for (const row of state.rawRows.values()) {
@@ -368,7 +368,8 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
       return true;
     }
     const archived = await findVisibleSource(state, scope, receipt);
-    if (!archived?.content || archived.role !== role) return false;
+    if (!archived?.content || archived.role !== role ||
+        (admittedContent !== undefined && admittedContent !== archived.content)) return false;
     return sourceLineageVisible(state, scope, archived);
   }
 
@@ -387,8 +388,8 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     return rows.map(({ ref }) => ({ ...ref }));
   }
 
-  /** @param {Tx} tx @param {Scope} scope @param {() => Session[]} prepare @param {boolean} [eraseLedger] */
-  function deleteSessions(tx, scope, prepare, eraseLedger = false) {
+  /** @param {Tx} tx @param {Scope} scope @param {() => Session[]} prepare */
+  function deleteSessions(tx, scope, prepare) {
     return port.write(tx, scope, "conditional", () => {
       const namespace = writeNamespace(scope);
       const slots = new Set(prepare().map((session) => sessionSlot(namespace, session)));
@@ -404,8 +405,8 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
           }
         }
         await invalidateRationaleSources(state, namespace, deleted);
-        const ledgerBlanked = eraseLedger ? await blankCaptureMessages(state, namespace,
-          (key) => slots.has(sessionSlot(namespace, key))) : 0;
+        const ledgerBlanked = await blankCaptureMessages(state, namespace,
+          (key) => slots.has(sessionSlot(namespace, key)));
         if (deleted.length || ledgerBlanked) advanceRawInspectEpoch(state);
         if (deleted.length) advanceRevision(run);
         if (ledgerBlanked) run.stateWritten = true;
@@ -470,7 +471,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
             const previous = state.rawRows.get(entry.ref.id);
             if (previous && previous.content !== entry.content) {
               rawKeyConflict++;
-              if (recordRationaleConflict(state, entry.ref.id)) newConflict = true;
+              if (recordSourceConflict(state, entry.ref.id)) newConflict = true;
             }
             const candidate = evidence(entry, scope, hash);
             if (!allowed || refusalFacts.some((stored) => {
@@ -487,8 +488,11 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
             state.rawRows.set(entry.ref.id, entry);
             archived++;
           }
-          if (newConflict || archived) advanceRawInspectEpoch(state);
-          if (newConflict && !archived) markDirty();
+          if ((rationaleEdges && newConflict) || archived) advanceRawInspectEpoch(state);
+          if (newConflict && !archived) {
+            if (rationaleEdges) markDirty();
+            else run.stateWritten = true;
+          }
           if (archived) advanceRevision(run);
           return { archived };
         };
@@ -529,9 +533,8 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
               counts.withheld++;
             } else if (previous) {
               counts.existing++;
-              if (previous.content !== entry.content && recordRationaleConflict(state, id)) {
-                // The rationale guard changed, while the Raw index stayed the same.
-                advanceRawInspectEpoch(state);
+              if (previous.content !== entry.content && recordSourceConflict(state, id)) {
+                if (rationaleEdges) advanceRawInspectEpoch(state);
                 run.stateWritten = true;
               }
             } else {
@@ -597,7 +600,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
       return { rawDeleted };
     },
     async eraseSessions(tx, scope, closure) {
-      return deleteSessions(tx, scope, () => snapshotArray(closure).map(copySession), true);
+      return deleteSessions(tx, scope, () => snapshotArray(closure).map(copySession));
     },
     async purgeWithheld(tx, scope, facts) {
       return port.write(tx, scope, "conditional", () => {
@@ -652,7 +655,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
     }));
   }
 
-  return { raw, findVisibleSource, visibleRawRefs, captureProofs, lineageFenced, sourceVisible, sourceLineageVisible,
+  return { raw, findVisibleSource, visibleRawRefs, captureProofs, lineageFenced, sourceLineageVisible,
     receiptSourcesVisible, seedClientlessRaw,
     counters: () => ({ rawKeyConflict, rawArchiveRefused }) };
 }

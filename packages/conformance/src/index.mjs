@@ -29,8 +29,13 @@ export { relationCases as RELATION_CASES } from "./relation-cases.mjs";
 export { TOPIC_CARD_CASES } from "./topics-cards-cases.mjs";
 export { DOCUMENT_CARD_AMENDMENT_CASES } from "./document-card-amendment-cases.mjs";
 export { DOCUMENT_CARD_LINK_CASES } from "./document-card-link-cases.mjs";
+export { CAPTURE_DOCUMENT_CARD_CASES } from "./capture-document-card-cases.mjs";
+export { CAPTURE_DOCUMENT_AMENDMENT_CASES } from "./capture-document-amendment-cases.mjs";
+export { CAPTURE_QUANTITY_LEDGER_CASES } from "./capture-quantity-ledger-cases.mjs";
+export { CAPTURE_DOCUMENT_FORGET_CASES } from "./capture-document-forget-cases.mjs";
 export { TOPICS_FOR_CARDS_CASES } from "./topics-for-cards-cases.mjs";
 export { DELIVERY_VISIBILITY_CASES } from "./delivery-visibility-cases.mjs";
+export { RECEIPT_WITHHELD_CASES } from "./receipt-withheld-cases.mjs";
 
 /** @type {readonly import("./index.d.mts").ConformanceCase[]} */
 export const CAPTURE_CASES = [...captureCases, ...captureFinishCases];
@@ -79,12 +84,14 @@ async function runOpenedCase(factory, testCase) {
     const retry = { ...capabilities };
     // A factory can reject these requests during setup. Check the actual flags after reopening.
     if (retry.rawArchive === true && !testCase.needs.includes("rawArchive")) delete retry.rawArchive;
-    if (retry.sessionLineage === true && testCase.needs.includes("sessionLineage")) delete retry.sessionLineage;
-    if (retry.rawArchive === capabilities.rawArchive && retry.sessionLineage === capabilities.sessionLineage) throw error;
+    const unavailable = (/** @type {const} */ (["sessionLineage", "quantityLedger"]))
+      .filter(flag => retry[flag] === true && testCase.needs.includes(flag));
+    for (const flag of unavailable) delete retry[flag];
+    if (retry.rawArchive === capabilities.rawArchive && !unavailable.length) throw error;
     opened = await factory.open({ capabilities: retry });
     // The retry may only turn a rejected NEEDED capability into a reported skip. If the store provides that
     // capability after all, the first rejection was a real setup failure and must not become a pass.
-    if (retry.sessionLineage !== capabilities.sessionLineage && opened.adapter?.capabilities?.sessionLineage) {
+    if (unavailable.some(flag => opened.adapter?.capabilities?.[flag])) {
       retryFailure = { error };
     }
   }

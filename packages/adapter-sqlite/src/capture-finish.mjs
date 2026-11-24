@@ -1,6 +1,6 @@
 import { CoreError, decideWrite, planDuplicateMerge } from "@cairn-ink/core";
-import { readEntry } from "./memory-rows.mjs";
-import { insertMemory, readWritePolicy, touchDuplicate } from "./memories.mjs";
+import { insertMemory, readEntry } from "./memory-rows.mjs";
+import { readWritePolicy, touchDuplicate } from "./memories.mjs";
 import { copyReceipts, encodeContent, invalidInput } from "./storage-values.mjs";
 
 /** @import { CaptureKey, FinishItem, FinishResult, SourceRef } from "@cairn-ink/core/ports" */
@@ -60,9 +60,9 @@ export function finishCapture(db, { scope, client, sessionId }, batch, nowMs, ha
         const existing = readEntry(db, scope, id);
         if (!existing) throw new CoreError("internal_error");
         const { merge } = planDuplicateMerge(existing.row, content.body);
-        const touched = touchDuplicate(db, scope, id, receipts, merge, nowMs);
+        const { outcome, revision } = touchDuplicate(db, scope, id, receipts, merge, nowMs);
         progress.writeTimes.set(id, updatedAtUs);
-        memories.push({ id, ...touched });
+        memories.push({ id, outcome, revision });
         duplicateCount++;
         break;
       }

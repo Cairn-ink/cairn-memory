@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
-import { openSqliteAdapter } from "../src/index.mjs";
+import { openSqliteAdapter, SQLITE_PHYSICAL_VERSION } from "../src/index.mjs";
 import { migrateLegacyStore } from "../src/migrate/index.mjs";
 import { CONTEXT_READ_TABLES } from "../src/schema/context-read.mjs";
 import { INSPECT_TABLES } from "../src/schema/inspect.mjs";
@@ -70,7 +70,7 @@ test("fresh version 5 store has all read and compatibility tables and reopens wi
   try {
     await openAndClose(path);
     const initial = snapshot(path);
-    assert.equal(initial.version, 5);
+    assert.equal(initial.version, SQLITE_PHYSICAL_VERSION);
     assertReadTables(initial);
     const bytes = readFileSync(path);
     await openAndClose(path);
@@ -91,7 +91,7 @@ test("migrated version 5 store has all read and compatibility tables before open
 
     const initial = snapshot(input.destination);
     assertReadTables(initial);
-    assert.equal(initial.version, 5);
+    assert.equal(initial.version, SQLITE_PHYSICAL_VERSION);
     await openAndClose(input.destination);
     assert.deepEqual(snapshot(input.destination), initial);
   } finally {

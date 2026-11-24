@@ -2,8 +2,11 @@ import { createHmac } from "node:crypto";
 import { compareUtf8, CoreError, factBlocksIncoming, factBody, factHidesRow, validateSuppressionFact } from "@cairn-ink/core";
 import { decodeJson, readEntry, readReceipts } from "./memory-rows.mjs";
 import { legacyRawHash, opaqueSessionHash } from "./migrate/raw-privacy.mjs";
-import { receiptAddressDenial, receiptIdentityDenial } from "./receipt-identity.mjs";
-import { digestAliases, invalidInput, ownerKey, scopeKey, sha256 } from "./storage-values.mjs";
+import { rawFactPolicy } from "./raw-facts.mjs";
+import { allowsRawSession } from "./raw-lineage.mjs";
+import { readRawRow } from "./raw-rows.mjs";
+import { receiptAddressDenial, receiptIdentityDenial, receiptIdentityKey } from "./receipt-identity.mjs";
+import { copyReceipts, digestAliases, invalidInput, ownerKey, scopeKey, sha256 } from "./storage-values.mjs";
 
 /** @import { FactMatchIncoming, FactMatchRow, StoredFact, SuppressionFact, TextDigest, TextFact } from "@cairn-ink/core" */
 /** @import { DuplicateQuery, Receipt, Scope, SourceRef, SuppressionStore, Tx } from "@cairn-ink/core/ports" */
@@ -160,6 +163,13 @@ export function scopedSuppression(db, scope, hashSession) {
       ?? false);
   }
 
+  /** @param {Receipt} receipt @param {string} [key] @param {string} [legacyKey] */
+  function hasReceiptDenial(receipt, key, legacyKey) {
+    return legacy.has(receiptAddressDenial(receipt)) ||
+      (key !== undefined && (legacy.has(receiptIdentityDenial(key)) || legacy.has("rs1:i:" + key))) ||
+      blocksReceipts([{ ...receipt, legacyReceiptKey: legacyKey }]);
+  }
+
   /** @param {Entry} entry */
   function classify(entry) {
     const { row, legacyHash, historyHash, digests } = entry;
@@ -219,14 +229,13 @@ export function scopedSuppression(db, scope, hashSession) {
 
     facts,
     legacy,
+    hasReceiptDenial,
 
     /** @param {Receipt} receipt @param {string} [key] @param {string} [legacyKey] */
     withholdsReceipt(receipt, key, legacyKey) {
       const { client, sessionId, messageId, occurredAtMs } = receipt;
       const sessionKeyHash = hashSession(scope, client, sessionId);
-      return legacy.has(receiptAddressDenial(receipt)) ||
-        (key !== undefined && (legacy.has(receiptIdentityDenial(key)) || legacy.has("rs1:i:" + key))) ||
-        blocksReceipts([{ ...receipt, legacyReceiptKey: legacyKey }]) || blocksSession(client, sessionId) ||
+      return hasReceiptDenial(receipt, key, legacyKey) || blocksSession(client, sessionId) ||
         facts.some(({ fact }) => fact.kind === "rawSpan" && fact.messageKey === messageId && fact.sessionKeyHash === sessionKeyHash) ||
         windows.some(stored => factBlocksIncoming(stored,
           { scope, passages: [], session: { client, sessionId }, occurredAtMs }, capture) !== false);
@@ -329,6 +338,24 @@ export function createSuppressionStore(port, hashSession, markDirty, migratedRaw
         const result = scopedSuppression(db, scope, hashSession).snapshot(candidates);
         if (client && sessionId && migratedRaw?.blocks(db, scope, { client, sessionId }, [])) result.blockedSession = true;
         return result;
+      });
+    },
+    receiptWithheld(tx, scope, input) {
+      return port(tx, scope?.owner, {}, db => {
+        const [receipt] = copyReceipts([input]);
+        const { client, messageId, occurredAtMs, excerpt } = receipt;
+        if (excerpt === undefined) invalidInput();
+        const policy = scopedSuppression(db, scope, hashSession);
+        if (policy.hasReceiptDenial(receipt, receiptIdentityKey(receipt))) return true;
+        const raw = rawFactPolicy(scope, receipt, policy.facts, hashSession);
+        const position = { id: messageId, occurredAtMs };
+        if (!allowsRawSession(db, scope, client, raw.sessionKeyHash, policy.facts) || raw.refusesSource(position, true) ||
+            migratedRaw?.blocksEvent(db, { scope, client, eventId: messageId }) ||
+            migratedRaw?.blocks(db, scope, receipt, [position]) ||
+            migratedRaw?.blocksSpan(db, scope, receipt, messageId)) return true;
+        const session = migratedRaw?.storageSession(db, scope, receipt) ?? receipt;
+        const archived = readRawRow(db, scope, session, messageId);
+        return archived ? raw.refusesSource(archived.message, true) : false;
       });
     },
     factsFor(tx, scope, { memoryId }) {

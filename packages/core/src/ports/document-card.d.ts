@@ -1,5 +1,6 @@
 import type { DocumentSentence, DocumentVector } from "../routing/index.mjs";
-import type { Revision, Scope } from "./common.d.ts";
+import type { DocumentCardVisibilityInput } from "../routing/visibility.mjs";
+import type { ItemRef, Revision, Scope } from "./common.d.ts";
 import type { LexicalCandidates, VectorCandidates } from "./retrieval.d.ts";
 import type { Tx } from "./unit-of-work.d.ts";
 
@@ -131,6 +132,15 @@ export interface DocumentCardStore<Card extends StoredDocumentCardRecord = Docum
   get(tx: Tx, scope: Scope, cardId: string): Promise<Card | null>;
   /** Same read snapshot, visibility, and amendment ordering as get. */
   list(tx: Tx, scope: Scope): Promise<Card[]>;
+  /**
+   * One entry per ref in input order, computed from the live Tx's read snapshot.
+   * Include the stored card fields, capture's canonical session key, every linked
+   * memory's current state, and the whole-message Raw visibility verdict for
+   * message-backed cards or applicable text facts and key for authored cards.
+   * Return null for invalid, out-of-scope, unknown, store-hidden, tombstoned, or
+   * unresolvable refs. A bad ref does not fail the batch. Reject an ended Tx.
+   */
+  visibilityInputs?(tx: Tx, scope: Scope, refs: readonly ItemRef[]): Promise<Array<DocumentCardVisibilityInput | null>>;
 }
 
 /**

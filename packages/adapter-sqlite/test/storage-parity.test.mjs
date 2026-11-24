@@ -54,7 +54,7 @@ test("Core forget erases a live SQLite row that is already suppressed", async t 
   // synthetic key while running the forget sequence against SQLite storage.
   const { keys } = createMemoryAdapter({ capabilities: { fingerprintKey: true } });
   const forget = forgetMethod({ storage: { ...adapter, keys }, clock: { sha256Hex: sha256 } });
-  assert.deepEqual(await forget(scope, id, source), { status: "forgotten", removedSimilar: 0 });
+  assert.deepEqual(await forget(scope, id, source), { status: "forgotten", removedSimilar: 0, indexRevision: 3 });
   assert.deepEqual({ ...await storedRow() }, { deleted: 1, text_hash: null, legacy_hash: null, body: null });
   await read(adapter, async tx => {
     assert.equal(await memories.get(tx, scope, id), null);
