@@ -29,14 +29,28 @@ async function setup(saveSource = false) {
 const extractionInputs = fake => fake.calls.filter(([method]) => method === "model.call")
   .map(([, , { input }]) => input.messages.map(({ content }) => content));
 
-for (const change of ["text forget", "forget window"]) {
-  test(`a ${change} committed at the dispatch gate prevents the stale send and allows a retry`, async () => {
-    const fake = await setup(change === "text forget");
-    const assertOpen = fake.deps.gate.assertOpen;
-    let committed = false;
-    async function forgetAtDispatch(owner, phase) {
-      await assertOpen(owner, phase);
+function afterSendGeneration(fake, work) {
+  const { uow } = fake.storage;
+  const run = uow.run;
+  uow.run = async (...args) => {
+    const start = fake.calls.length;
+    const [method, , phase] = fake.calls.at(-1) ?? [];
+    const result = await run(...args);
+    if (method === "gate" && phase === "pre-send") {
+      assert.deepEqual(fake.calls.slice(start).map(([method]) => method), ["run", "lock", "lock", "pause.get"]);
       assert.ok(fake.mutations.some(({ method }) => method === "capture.beginDispatch"));
+      await work(args[0]);
+    }
+    return result;
+  };
+}
+
+for (const change of ["text forget", "forget window"]) {
+  test(`a ${change} committed after the send-generation check prevents the stale send and allows a retry`, async () => {
+    const fake = await setup(change === "text forget");
+    let committed = false;
+    afterSendGeneration(fake, async owner => {
+      if (committed) return;
       if (change === "text forget") {
         assert.equal((await fake.service.forget(scope, fake.saved.item.id, source)).status, "forgotten");
       } else {
@@ -46,9 +60,7 @@ for (const change of ["text forget", "forget window"]) {
         }, "fixture"));
       }
       committed = true;
-    }
-    fake.deps.gate.assertOpen = (owner, phase) => phase === "dispatch" && !committed
-      ? forgetAtDispatch(owner, phase) : assertOpen(owner, phase);
+    });
 
     const attempt = await fake.run();
     assert.equal(committed, true);
@@ -66,6 +78,34 @@ for (const change of ["text forget", "forget window"]) {
   });
 }
 
+test("a forget committed while the dispatch gate is pending is enforced at finish", async () => {
+  const fake = await setup(true);
+  const derived = "Use the space beneath the staircase for storage.";
+  // Let Core's finish-time passage screen decide whether the derived item can use this source.
+  fake.hooks.eligible = batch => batch.map((_, position) => position);
+  const model = fake.hooks.model;
+  fake.hooks.model = (...args) => ({ items: model(...args).items.map(item =>
+    item.content === withheld.content ? { ...item, content: derived } : item) });
+  const assertOpen = fake.deps.gate.assertOpen;
+  let committed = false;
+  async function forgetWhilePending(owner, phase) {
+    assert.equal((await fake.service.forget(scope, fake.saved.item.id, source)).status, "forgotten");
+    committed = true;
+    return assertOpen(owner, phase);
+  }
+  fake.deps.gate.assertOpen = (owner, phase) => phase === "dispatch" && !committed
+    ? forgetWhilePending(owner, phase) : assertOpen(owner, phase);
+
+  const result = await fake.run();
+  assert.equal(committed, true);
+  assert.deepEqual(extractionInputs(fake), [[withheld.content, remaining.content]]);
+  assert.ok(fake.calls.some(([method, texts]) => method === "embed" && texts.includes(derived.toLowerCase())));
+  assert.equal(result.status, "done");
+  assert.equal(result.result.memories.length, 1);
+  assert.deepEqual(fake.committed(scope.owner).rows.map(({ text }) => text), [remaining.content]);
+  assert.deepEqual(fake.archived(scope.owner), [remaining]);
+});
+
 test("an unchanged capture sends the same provider trace as the base", async () => {
   const { calls } = await captureSendTrace(createMemoryService);
   const trace = providerCalls(calls);
@@ -77,9 +117,9 @@ test("an unchanged capture sends the same provider trace as the base", async () 
 
 test("a storage error in the final refresh passes through and prevents the send", async () => {
   const fake = await setup();
-  let dispatched = false;
-  fake.hooks.gate = phase => { if (phase === "dispatch") dispatched = true; };
-  fake.hooks.snapshot = () => { if (dispatched) throw new CoreError("storage_error"); };
+  afterSendGeneration(fake, () => {
+    fake.hooks.snapshot = () => { throw new CoreError("storage_error"); };
+  });
 
   assert.deepEqual(await fake.run(), { status: "failed", code: "storage_error" });
   assert.deepEqual(providerCalls(fake.calls), []);

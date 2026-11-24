@@ -545,9 +545,9 @@ export function captureMethods(deps) {
           onDiagnostic: diagnostics && (event => emitDiagnostic(diagnostics, event.stage, event.layer, event.reason)),
         };
         await assertSendGeneration();
-        await gate.assertOpen(owner, "dispatch");
-        // Recheck the positions in the built request after the last gate. The run must
-        // finish before sending, and a retry must rebuild if any position was withheld.
+        // Recheck the positions bound to the request before the dispatch gate.
+        // As with callBuiltModel, a hide can still commit while the gate is pending.
+        // The finish-time source recheck keeps withheld evidence out of storage.
         transport.check();
         try {
           await untilAborted(transport.signal, uow.run(owner, lock, async tx => {
@@ -558,11 +558,10 @@ export function captureMethods(deps) {
         } catch (error) {
           transport.check();
           const failure = entryError(error);
-          if (failure.code === "suppressed" || failure.code === "lineage_fenced") {
-            throw new CoreError("ingest_inputs_changed");
-          }
+          if (failure.code === "suppressed") throw new CoreError("ingest_inputs_changed");
           throw failure;
         }
+        await gate.assertOpen(owner, "dispatch");
         let output;
         try {
           transport.check();

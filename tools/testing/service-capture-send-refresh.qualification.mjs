@@ -20,12 +20,13 @@ try {
   const expected = await captureSendTrace(previous.createMemoryService);
   const actual = await captureSendTrace(createMemoryService);
 
-  const start = actual.calls.findIndex(([method, , phase]) => method === "gate" && phase === "dispatch") + 1;
-  const end = actual.calls.findIndex(([method]) => method === "model.call");
-  assert.ok(start > 0 && end > start);
-  assert.deepEqual(actual.calls.slice(start, end).map(([method]) => method),
-    ["run", "lock", "lock", "pause.get", "suppressions.snapshot", "capture.assertEligible"]);
-  assert.deepEqual(actual.calls.toSpliced(start, end - start), expected.calls);
+  const refresh = ["run", "lock", "lock", "pause.get", "suppressions.snapshot", "capture.assertEligible"];
+  const dispatch = actual.calls.findIndex(([method, , phase]) => method === "gate" && phase === "dispatch");
+  const start = dispatch - refresh.length;
+  assert.ok(start >= 0);
+  assert.deepEqual(actual.calls.slice(start, dispatch).map(([method]) => method), refresh);
+  assert.equal(actual.calls[dispatch + 1][0], "model.call");
+  assert.deepEqual(actual.calls.toSpliced(start, refresh.length), expected.calls);
   assert.deepEqual({ ...actual, calls: undefined, mutations: undefined },
     { ...expected, calls: undefined, mutations: undefined });
   const writes = trace => trace.mutations.map(({ method, args }) => [method, args]);
