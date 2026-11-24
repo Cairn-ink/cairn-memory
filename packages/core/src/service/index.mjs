@@ -84,10 +84,10 @@ function validateReadRegistration(storage) {
   if (storage.capabilities.proceduralTags === true) requireMethods(storage.proceduralTags, "write", "clear", "read");
 }
 
-/** @param {import("./index.d.mts").MemoryServiceDeps} input */
+/** @param {import("./index.d.mts").MemoryServiceRegistrationDeps} input */
 function freezeDeps(input) {
   const deps = { ...input };
-  const { storage, model, embedder, gate, clock, tokens, embedQuery, diagnostics } = deps;
+  const { storage, model, embedder: configuredEmbedder, gate, clock, tokens, embedQuery, diagnostics } = deps;
   identifier(storage?.name);
   validateReadRegistration(storage);
   // Validate the storage methods this slice uses. Optional ports are checked at adapter registration.
@@ -102,6 +102,10 @@ function freezeDeps(input) {
   if (typeof model.model !== "string" || !model.model ||
       (model.fits !== undefined && typeof model.fits !== "function")) throw new CoreError("invalid_input");
   positiveInteger(model.contextWindow);
+  if (configuredEmbedder === undefined && storage.capabilities.embeddingRequiredOnInsert !== false) {
+    throw new CoreError("invalid_input");
+  }
+  const embedder = configuredEmbedder ?? null;
   if (embedder !== null) {
     requireMethods(embedder, "embed");
     if (typeof embedder.model !== "string" || !embedder.model) throw new CoreError("invalid_input");
@@ -113,7 +117,7 @@ function freezeDeps(input) {
   if (embedQuery !== undefined) requireMethods(embedQuery, "embedQuery");
   if (diagnostics !== undefined && typeof diagnostics !== "function") throw new CoreError("invalid_input");
 
-  return Object.freeze({ ...deps, config: freezeConfig(deps.config) });
+  return Object.freeze({ ...deps, embedder, config: freezeConfig(deps.config) });
 }
 
 /** @param {import("./index.d.mts").KeylessMemoryServiceDeps["storage"] | import("./index.d.mts").MemoryServiceDeps["storage"]} storage
@@ -133,7 +137,7 @@ function readContractMethods(storage, clock, host) {
 }
 
 /**
- * @param {import("./index.d.mts").MemoryServiceDeps | import("./index.d.mts").KeylessInspectServiceDeps |
+ * @param {import("./index.d.mts").MemoryServiceRegistrationDeps | import("./index.d.mts").KeylessInspectServiceDeps |
  * import("./index.d.mts").KeylessMemoryServiceDeps} input
  */
 export function createMemoryService(input) {

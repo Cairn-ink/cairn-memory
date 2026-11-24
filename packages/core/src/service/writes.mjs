@@ -315,6 +315,19 @@ export function writeMethods(deps) {
   /** @param {string} text */
   const sha256Hex = (text) => clock.sha256Hex(text);
 
+  /** @param {Tx} tx */
+  async function paused(tx) {
+    return /** @type {const} */ ({ status: "paused", ...reportedIndex(await memories.indexRevision?.(tx)) });
+  }
+
+  /** @param {Tx} tx @param {Scope} scope @param {Receipt & { excerpt: string }} receipt */
+  async function withheldReceipt(tx, scope, receipt) {
+    if (suppressions.receiptWithheld) return suppressions.receiptWithheld(tx, scope, receipt);
+    const { client, sessionId, occurredAtMs } = receipt;
+    const snapshot = await suppressions.snapshot(tx, scope, { client, sessionId, occurredAtMs: [occurredAtMs] });
+    return snapshot.blockedSession || snapshot.blockedMessages.length > 0;
+  }
+
   /** @param {Scope} scope @param {string} id @param {Tx} tx */
   async function visible(scope, id, tx) {
     const refs = await fence.assertVisible(tx, { owner: scope.owner, namespaces: [scope.namespace] },
@@ -363,8 +376,11 @@ export function writeMethods(deps) {
         }
       }
       const { owner } = scope;
-      const preflight = await uow.run(owner, { pauseLock: true }, async tx => pauseResult(await pause.get(tx, owner)));
-      if (preflight.paused) return { status: "paused" };
+      const preflight = await uow.run(owner, { pauseLock: true }, async tx => {
+        const state = pauseResult(await pause.get(tx, owner));
+        return state.paused ? paused(tx) : state;
+      });
+      if ("status" in preflight) return preflight;
       await gate.assertOpen(owner, "pre-send");
       if (!text) return invalid();
       const key = await keys?.userKey?.(owner) ?? null;
@@ -387,11 +403,12 @@ export function writeMethods(deps) {
           status: "suppressed", ...reportedIndex(await memories.indexRevision?.(tx)),
         });
         const state = pauseResult(await pause.get(tx, owner));
-        if (state.paused || state.generation !== preflight.generation) return /** @type {const} */ ({ status: "paused" });
+        if (state.paused || state.generation !== preflight.generation) return paused(tx);
         if (keys?.userKeyForWrite && (await keys.userKeyForWrite(tx))?.id !== key?.id) {
           throw new CoreError("fingerprint_key_mismatch");
         }
-        if (await withheld(suppressions, tx, scope, source, passages, key)) return suppressed();
+        if ((receipts.length && await withheldReceipt(tx, scope, receipts[0])) ||
+            await withheld(suppressions, tx, scope, source, passages, key)) return suppressed();
         const policy = await memories.readWritePolicy(tx, scope, [query], source, mode);
         const decision = decide(policy, capabilities.nearDuplicate === true && embedding !== null);
         if (decision.status === "suppressed") return suppressed();
@@ -407,6 +424,7 @@ export function writeMethods(deps) {
             match.revision === current?.revision);
           if (current === null || !matched || !await visible(scope, duplicateId, tx)) return suppressed();
           const { merge } = planDuplicateMerge(current, current);
+          if (tag && kind !== current.kind) merge.kind = kind;
           written = await memories.touchDuplicate(tx, scope, duplicateId, receipts, merge, clock.nowMs());
         }
         if (tag && proceduralTags) {
@@ -419,9 +437,12 @@ export function writeMethods(deps) {
         }
         return { status: decision.status, id, revision: written.revision,
           ...reportedIndex(await memories.committedIndexRevision?.(tx)) };
+      }).catch(error => {
+        if (receipts.length && entryError(error).code === "invalid_input") return invalid();
+        throw error;
       });
 
-      if (result.status === "paused" || result.status === "suppressed") return result;
+      if (result.status === "paused" || result.status === "suppressed" || result.status === "invalid") return result;
       const item = await deliver(scope, result.id, result.revision);
       const index = reportedIndex(result.indexRevision);
       return item ? { status: result.status, item, ...index } : { status: "suppressed", ...index };
@@ -433,6 +454,7 @@ export function writeMethods(deps) {
       const expectedRevision = revision(inputRevision);
       sourceOf(inputSource);
       if (typeof raw !== "string") throw new CoreError("invalid_input");
+      if (options?.receipt !== undefined && options.receipt?.role !== "user") return invalid();
       const { owner } = scope;
       const preflight = await uow.run(owner, { pauseLock: true }, async tx => {
         const state = pauseResult(await pause.get(tx, owner));
@@ -449,6 +471,7 @@ export function writeMethods(deps) {
       await gate.assertOpen(owner, "pre-send");
       const text = prepareCoreText(raw);
       if (!text) throw new CoreError("invalid_text");
+      const receipts = options?.receipt ? explicitReceipts(options.receipt, text) : null;
       const key = await keys?.userKey?.(owner) ?? null;
       if (key === null && capabilities.fingerprintKey === true && typeof keys?.userKey === "function") {
         throw new CoreError("fingerprint_unavailable");
@@ -480,7 +503,8 @@ export function writeMethods(deps) {
           if (keys?.userKeyForWrite && (await keys.userKeyForWrite(tx))?.id !== key?.id) {
             throw new CoreError("fingerprint_key_mismatch");
           }
-          if (await withheld(suppressions, tx, scope, source, passages, key, { id, createdAtMs: current.createdAtMs })) {
+          if ((receipts?.length && await withheldReceipt(tx, scope, receipts[0])) ||
+              await withheld(suppressions, tx, scope, source, passages, key, { id, createdAtMs: current.createdAtMs })) {
             return /** @type {const} */ ({ status: "suppressed" });
           }
           const policy = await memories.readWritePolicy(tx, scope, [query], source, "full", id);
@@ -492,7 +516,6 @@ export function writeMethods(deps) {
           if (plan.outcome === "unchanged") return /** @type {const} */ ({ status: "unchanged", revision: plan.revision });
           if (!predecessor) throw new CoreError("internal_error");
           const { kind, origin, confidence, textHash } = plan;
-          const receipts = options?.receipt ? explicitReceipts(options.receipt, text) : null;
           const now = clock.nowMs();
           await suppressions.writeFact(tx, predecessor.fact, predecessor.incarnation);
           const replaced = await memories.replaceContent(tx, scope, id, expectedRevision,

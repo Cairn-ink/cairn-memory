@@ -16,7 +16,7 @@ import { createReceiptReadSafety } from "./receipt-read-safety.mjs";
 import { createCardVisibility, createRetrievalPorts } from "./retrieval.mjs";
 import { createTopicStore } from "./topics.mjs";
 import { createUnitOfWork, handleWriteRejections } from "./unit-of-work.mjs";
-import { validateTime } from "./validation.mjs";
+import { copyReceipts, validateTime, writeNamespace } from "./validation.mjs";
 
 export { TEST_FINGERPRINT_LABELS, TEST_FINGERPRINT_SECRET } from "./privacy.mjs";
 
@@ -47,7 +47,7 @@ export function createMemoryAdapter(options = {}) {
     createFingerprintProvider(flags.fingerprintKey, options.fingerprint, work);
   const archive = flags.rawArchive ?
     createRawPorts(work, keys, ringKeys, labels, options.hashSessionKey, flags.rationaleEdges) : undefined;
-  const receiptReadSafety = createReceiptReadSafety(ringKeys, archive?.receiptSourcesVisible);
+  const { receiptReadSafety, receiptWithheld } = createReceiptReadSafety(ringKeys, archive?.receiptSourcesVisible);
   const contextRead = flags.contextRead ? createContextReadStore(work, matchFacts, ringKeys, archive?.receiptSourcesVisible) : undefined;
   const store = createMemoryStore(port, flags, newId, matchFacts, ringKeys);
   const { supersession, conflicts } = createRelationStores(port, matchFacts);
@@ -58,9 +58,11 @@ export function createMemoryAdapter(options = {}) {
   const placement = flags.placement ? handleWriteRejections(
     createTopicStore(port, flags, newId, now, matchFacts, options, cardVisible),
     ["applyPlacement", "markFailed", "dropMemory", "applyCardPlacement", "markCardsFailed", "dropCard"]) : undefined;
+  const proceduralTags = flags.proceduralTags === true ? handleWriteRejections(
+    createProceduralTagStore(port, matchFacts, receiptReadSafety), ["write", "clear"]) : undefined;
   const inspect = flags.inspect ? createInspectStore({ placement,
     supersession: flags.supersession ? supersession : undefined,
-    conflicts: flags.conflictEdges ? conflicts : undefined }, work, matchFacts, receiptReadSafety) : undefined;
+    conflicts: flags.conflictEdges ? conflicts : undefined, proceduralTags }, work, matchFacts, receiptReadSafety) : undefined;
   /** @type {import("./index.d.mts").MemoryAdapter} */
   const adapter = {
     name: "memory",
@@ -69,7 +71,17 @@ export function createMemoryAdapter(options = {}) {
     memories: handleWriteRejections(store.memories, ["insert", "touchDuplicate", "replaceContent", "erase"]),
     capture: handleWriteRejections(createCapturePorts(port, store, now, matchFacts, flags.embeddingRequiredOnInsert, archive, flags.contextRead),
       ["admit", "claim", "beginDispatch", "abandon", "finish", "assertEligible"]),
-    suppressions: handleWriteRejections(suppressions, ["writeFact"]),
+    suppressions: handleWriteRejections({ ...suppressions,
+      async receiptWithheld(tx, scope, receipt) {
+        return port.read(tx, scope, getState => {
+          const target = { owner: tx.owner, namespace: writeNamespace(scope) };
+          const [copy] = copyReceipts([receipt]);
+          if (copy.excerpt === undefined) throw new CoreError("invalid_input");
+          const state = getState();
+          return receiptWithheld(state, target, { ...copy, excerpt: copy.excerpt }, matchFacts(state.facts, target));
+        });
+      },
+    }, ["writeFact"]),
     pause: handleWriteRejections(createPauseStore(port), ["set"]),
     keys,
     ...createRetrievalPorts(port, flags, matchFacts, archive?.visibleRawRefs, cardVisible),
@@ -78,8 +90,7 @@ export function createMemoryAdapter(options = {}) {
       ["recordLineage", "archive", "importArchive", "fenceSession", "purgeWithheld", "eraseSessions", "deleteConversation"]) }),
     ...(flags.supersession && { supersession: handleWriteRejections(supersession, ["record", "markHistorical"]) }),
     ...(flags.conflictEdges && { conflicts: handleWriteRejections(conflicts, ["insert", "invalidate"]) }),
-    ...(flags.proceduralTags === true && { proceduralTags: handleWriteRejections(
-      createProceduralTagStore(port, matchFacts), ["write", "clear"]) }),
+    ...(proceduralTags && { proceduralTags }),
     ...(rationale && { ...rationale, rationale: handleWriteRejections(rationale.rationale, ["insert", "invalidate"]) }),
     ...(placement && { placement }),
     ...(inspect && { inspect: inspect.inspect }),

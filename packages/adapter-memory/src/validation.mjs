@@ -346,8 +346,9 @@ export function copyReceipts(receipts, fromFinish = false) {
 
 /** @param {readonly StoredReceipt[]} previous @param {readonly StoredReceipt[]} receipts
  * @param {StoredReceipt[]} [retained] Receives the stored receipt for each input in order.
+ * @param {boolean} [checkReplay] Rejects a replay that supplies a different excerpt for the same source.
  */
-export function attachReceipts(previous, receipts, retained) {
+export function attachReceipts(previous, receipts, retained, checkReplay = false) {
   /** @param {Receipt} receipt */
   const key = (receipt) => JSON.stringify([receipt.client, receipt.sessionId, receipt.messageId]);
   const seen = new Map(previous.map(receipt => [key(receipt), receipt]));
@@ -358,6 +359,8 @@ export function attachReceipts(previous, receipts, retained) {
     if (stored === undefined) {
       seen.set(id, stored = receipt);
       result.push(stored);
+    } else if (checkReplay && receipt.excerpt !== undefined && stored.excerpt !== undefined && receipt.excerpt !== stored.excerpt) {
+      invalid();
     }
     retained?.push(stored);
   }

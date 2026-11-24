@@ -13,6 +13,21 @@ const procedural = { anchors: [span] };
 const storedReceipt = id => ({ client: receipt.client, sessionId: receipt.sessionId,
   messageId: id, role: "user", occurredAtMs: 42, excerpt: text });
 
+test("review: an omitted embedder works for optional embedding and still rejects required registration", async () => {
+  const { deps, storage, mutations, calls } = serviceFake({ writes: true, hasKey: false });
+  delete deps.embedder;
+  storage.capabilities.embeddingRequiredOnInsert = false;
+  const service = createMemoryService(deps);
+  const result = await service.save(scope, text, source);
+  assert.equal(result.status, "saved");
+  assert.equal(result.item.embedding, null);
+  assert.equal(mutations[0].args[0].embedding, null);
+  assert.ok(!calls.some(([method]) => method === "embed"));
+  assert.doesNotThrow(() => createMemoryService({ ...deps, embedder: undefined }));
+  storage.capabilities.embeddingRequiredOnInsert = true;
+  assert.throws(() => createMemoryService(deps), { code: "invalid_input" });
+});
+
 function fixture({ required = false, tags = false, index = "both" } = {}) {
   const fake = serviceFake({ writes: true, hasKey: false, capture: true, forgetting: tags ? {} : undefined });
   const { deps, storage, mutations } = fake;

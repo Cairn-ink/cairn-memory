@@ -9,10 +9,10 @@ import { advanceInspectEpoch } from "./unit-of-work.mjs";
 
 const encoder = new TextEncoder();
 
-/** @param {Pick<StorageAdapter<StoredDocumentCardRecord>, "placement" | "supersession" | "conflicts">} related
+/** @param {Pick<StorageAdapter<StoredDocumentCardRecord>, "placement" | "supersession" | "conflicts" | "proceduralTags">} related
  * @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>} work
  * @param {ReturnType<typeof import("./fact-match.mjs").createFactMatcher>} matchFacts
- * @param {ReturnType<typeof import("./receipt-read-safety.mjs").createReceiptReadSafety>} receiptReadSafety
+ * @param {ReturnType<typeof import("./receipt-read-safety.mjs").createReceiptReadSafety>["receiptReadSafety"]} receiptReadSafety
  */
 export function createInspectStore(related, { port, runSeed, readTokenIdentity }, matchFacts, receiptReadSafety) {
   /** @param {State} state @param {Scope} scope @param {number} [expectedEpoch] */
@@ -113,12 +113,16 @@ export function createInspectStore(related, { port, runSeed, readTokenIdentity }
         const { qualification: storedQualification, procedural: storedProcedural } = entry.inspectEvidence ?? {};
         const qualification = includeQualification && storedQualification &&
           await anchorsVisible(storedQualification.anchors, retained, storedIds) ? structuredClone(storedQualification) : null;
-        const proceduralSafety = storedProcedural ? await anchorsVisible(storedProcedural.anchors, retained, storedIds) : undefined;
+        const proceduralSafety = !related.proceduralTags && storedProcedural
+          ? await anchorsVisible(storedProcedural.anchors, retained, storedIds) : undefined;
         const procedural = proceduralSafety ? structuredClone(storedProcedural) : proceduralSafety === null ? null : undefined;
         return { epoch, nextAnchor, item: { memory, receipts, qualification, procedural } };
       });
       if (!snapshot.item) return { epoch: snapshot.epoch, item: null, nextAnchor: null };
-      const { epoch, nextAnchor, item: { qualification, procedural, ...item } } = snapshot;
+      const { epoch, nextAnchor, item: { qualification, procedural: seededProcedural, ...item } } = snapshot;
+      const tag = await related.proceduralTags?.read(tx, scope, memoryId);
+      const procedural = tag ? { tagRevision: tag.tagRevision, procedural: tag.positive, origin: tag.origin, anchors: tag.anchors }
+        : seededProcedural;
       const placements = (await related.placement?.forMemory(tx, scope, memoryId) ?? []).map(id => ({ id }));
       const conflicts = (await related.conflicts?.list(tx, scope, memoryId) ?? []).map(edge => ({ ...edge }));
 

@@ -581,7 +581,7 @@ export interface MemoryService {
   >;
   correct(scope: Scope, id: string, expectedRevision: Revision, text: string, source: SourceRef, options?: CorrectOptions): Promise<
     { status: "saved" | "unchanged"; item: MemoryRow; indexRevision?: number } |
-    { status: "suppressed" | "paused" | "not_found" | "conflict"; indexRevision?: number }
+    { status: "suppressed" | "paused" | "not_found" | "conflict" | "invalid"; indexRevision?: number }
   >;
   /** The optional guard compares the memory row revision. */
   forget(scope: Scope, id: string, source: SourceRef, options: { expectedRevision?: Revision }): Promise<
