@@ -339,3 +339,59 @@ test("K-CLM-6 bounds the positions by the batch size counted before finish, as c
   };
   assert.equal(await runCase(rawFactory({ create }), testCase), null);
 });
+
+test("K-CLM-6 checks which items were stored even when the store omits suppressedItems", async () => {
+  const { CAPTURE_CASES, runCase } = await import("@cairn-ink/conformance");
+  const { rawFactory } = await import("./fixtures/raw.mjs");
+  const testCase = CAPTURE_CASES.find(({ id }) => id === "K-CLM-6");
+  assert.ok(testCase);
+  const create = (options) => {
+    const adapter = createMemoryAdapter(options);
+    const { finish, claim } = adapter.capture;
+    // Suppresses the first item and stores the forgotten middle one under the first item's hash. Like a store
+    // without the optional field, it reports no positions at finish or on replay.
+    adapter.capture.finish = async (tx, token, items) => {
+      const swapped = items.map((item, index) => index === 0 ? { ...item, textHash: items[1].textHash }
+        : index === 1 ? { ...item, textHash: items[0].textHash } : item);
+      const { suppressedItems: _omitted, ...rest } = await finish(tx, token, swapped);
+      return rest;
+    };
+    adapter.capture.claim = async (...args) => {
+      const replay = await claim.apply(adapter.capture, args);
+      if (replay.status !== "rawReplay") return replay;
+      const { suppressedItems: _omitted, ...result } = replay.result;
+      return { ...replay, result };
+    };
+    return adapter;
+  };
+  await assert.rejects(runCase(rawFactory({ create }), testCase), /Finish must store exactly the first and last items/);
+});
+
+test("K-CLM-6 finds a suppressed item committed beside the reported writes", async () => {
+  const { CAPTURE_CASES, runCase } = await import("@cairn-ink/conformance");
+  const { rawFactory } = await import("./fixtures/raw.mjs");
+  const testCase = CAPTURE_CASES.find(({ id }) => id === "K-CLM-6");
+  assert.ok(testCase);
+  const create = (options) => {
+    const adapter = createMemoryAdapter(options);
+    const { finish, claim } = adapter.capture;
+    let claimed;
+    adapter.capture.claim = async (tx, key, ...rest) => {
+      claimed = key;
+      return claim.call(adapter.capture, tx, key, ...rest);
+    };
+    // Reports the right two writes but also commits the forgotten middle item, which reads then hide.
+    adapter.capture.finish = async (tx, token, items) => {
+      const result = await finish(tx, token, items);
+      const { content, kind, confidence, textHash, embedding } = items[1];
+      await adapter.memories.insert(tx, claimed.scope, {
+        text: content, textHash, kind, confidence, origin: "inferred", embedding: embedding ?? null,
+        source: { kind: "capture", client: claimed.client, sessionId: claimed.sessionId },
+      }, [], 1);
+      return result;
+    };
+    return adapter;
+  };
+  await assert.rejects(runCase(rawFactory({ create }), testCase),
+    /Finish must not store the suppressed middle item in any form/);
+});
