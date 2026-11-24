@@ -2,8 +2,10 @@ import { CoreError } from "../../core/src/index.mjs";
 import { toPostgresError } from "./errors.mjs";
 
 /** @import { Connection, ConnectionSource } from "./driver.mjs" */
-/** @import { Migration } from "./index.mjs" */
+/** @import { ApplyMigrationsOptions, Migration, MigrationQuery } from "./index.mjs" */
 
+const DEFAULT_STATEMENT_TIMEOUT_MS = 30_000;
+const SET_DEFAULT_STATEMENT_TIMEOUT = "SET statement_timeout = '30s'";
 const MIGRATION_LOCK_KEY = "hashtextextended('core_schema_migrations', 0)";
 const MIGRATION_LOCK = `SELECT pg_try_advisory_lock(${MIGRATION_LOCK_KEY}) AS locked`;
 const MIGRATION_UNLOCK = `SELECT pg_advisory_unlock(${MIGRATION_LOCK_KEY}) AS unlocked`;
@@ -42,11 +44,109 @@ function quoteIdentifier(name) {
   return `"${name.replaceAll('"', '""')}"`;
 }
 
-/** @param {Connection} connection @param {Migration} migration */
-async function applyTransactional(connection, { id, sql }) {
+const NON_READ_KEYWORDS = new Set(["DELETE", "INSERT", "INTO", "MERGE", "UPDATE"]);
+const TRANSACTION_OR_LOCK_KEYWORDS = new Set([
+  "ABORT", "BEGIN", "COMMIT", "END", "LOCK", "PREPARE", "RELEASE", "ROLLBACK", "SAVEPOINT", "SET", "START",
+]);
+
+/** @param {string} text */
+function isReadProbe(text) {
+  if (typeof text !== "string" || text.includes("\0")) return false;
+  // Consume complete PostgreSQL lexical tokens before checking words or semicolons.
+  // Require E strings for backslashes so ordinary strings are unambiguous in any session.
+  const token = /[\t\n\v\f\r ]+|--[^\r\n]*|\/\*|[Ee]'(?:''|\\[\s\S]|[^'\\])*'|'(?:''|[^'\\])*'|"(?:""|[^"])*"|(\$(?:[a-z_\u0080-\uffff][a-z_0-9\u0080-\uffff]*)?\$)|([a-z_\u0080-\uffff][a-z_0-9$\u0080-\uffff]*)|[\s\S]/iy;
+  const comment = /\/\*|\*\//g;
+  let started = false;
+  let terminated = false;
+  let parentheses = 0;
+  let cases = 0;
+  while (token.lastIndex < text.length) {
+    const [value, dollarQuote, word] = /** @type {RegExpExecArray} */ (token.exec(text));
+    if (value === "/*") {
+      comment.lastIndex = token.lastIndex;
+      let depth = 1;
+      while (depth) {
+        const delimiter = comment.exec(text)?.[0];
+        if (!delimiter) return false;
+        depth += delimiter === "/*" ? 1 : -1;
+      }
+      token.lastIndex = comment.lastIndex;
+      continue;
+    }
+    if (/^[\t\n\v\f\r ]/.test(value) || value.startsWith("--")) continue;
+    if (terminated) return false;
+    const keyword = word?.toUpperCase();
+    if (!started) {
+      if (keyword !== "SELECT" && keyword !== "WITH") return false;
+      started = true;
+    } else if (dollarQuote) {
+      const end = text.indexOf(dollarQuote, token.lastIndex);
+      if (end === -1) return false;
+      token.lastIndex = end + dollarQuote.length;
+    } else if (value === "'" || value === '"') {
+      return false;
+    } else if (value === ";") {
+      terminated = true;
+    } else if (value === "(") {
+      parentheses++;
+    } else if (value === ")") {
+      if (--parentheses < 0) return false;
+    } else if (keyword) {
+      if (NON_READ_KEYWORDS.has(keyword)) return false;
+      if (parentheses) continue;
+      if (keyword === "CASE") cases++;
+      else if (keyword === "END" && cases) cases--;
+      else if (TRANSACTION_OR_LOCK_KEYWORDS.has(keyword)) return false;
+    }
+  }
+  return started && parentheses === 0 && cases === 0;
+}
+
+/** @param {Connection} connection @param {(query: MigrationQuery) => Promise<boolean>} adopt */
+async function shouldAdopt(connection, adopt) {
+  await connection.query("SAVEPOINT migration_adoption");
+  await connection.query("SET LOCAL transaction_read_only = on");
+  let probing = true;
+  let invalidProbe = false;
+  let adopted;
+  try {
+    adopted = await adopt(async (text, params) => {
+      if (!probing || !isReadProbe(text)) {
+        invalidProbe = true;
+        throw new CoreError("invalid_input");
+      }
+      try {
+        return (await connection.query(text, params)).rows;
+      } catch (error) {
+        if (error && typeof error === "object" && "code" in error && error.code === "25006") {
+          invalidProbe = true;
+          throw new CoreError("invalid_input");
+        }
+        throw error;
+      }
+    });
+  } finally {
+    probing = false;
+    if (invalidProbe) throw new CoreError("invalid_input");
+  }
+  if (adopted !== true && adopted !== false) throw new CoreError("invalid_input");
+  try {
+    const { rows: [state] } = await connection.query("SELECT pg_catalog.pg_current_xact_id_if_assigned() IS NULL AS clean");
+    if (state?.clean !== true) throw new CoreError("invalid_input");
+    // Roll back to restore write mode, then release to verify the savepoint survived the probe.
+    await connection.query("ROLLBACK TO SAVEPOINT migration_adoption");
+    await connection.query("RELEASE SAVEPOINT migration_adoption");
+  } catch {
+    throw new CoreError("invalid_input");
+  }
+  return adopted;
+}
+
+/** @param {Connection} connection @param {Extract<Migration, { concurrent: false }>} migration */
+async function applyTransactional(connection, { id, sql, adopt }) {
   await connection.query("BEGIN");
   try {
-    await connection.query(sql);
+    if (!adopt || !(await shouldAdopt(connection, adopt))) await connection.query(sql);
     await connection.query(RECORD_MIGRATION, [id]);
   } catch (error) {
     try {
@@ -68,7 +168,7 @@ async function applyTransactional(connection, { id, sql }) {
 }
 
 /** @param {Connection} connection @param {Extract<Migration, { concurrent: true }>} migration */
-async function applyConcurrent(connection, { id, sql, index }) {
+async function buildAndInspectIndex(connection, { sql, index }) {
   let failure;
   try {
     await connection.query(sql);
@@ -87,13 +187,41 @@ async function applyConcurrent(connection, { id, sql, index }) {
   if (state.definition !== index.definition.trim()) throw new CoreError("index_unavailable");
   // A same-named collation in another schema can render identically; require catalog identity.
   if (state.builtin_collations !== true) throw new CoreError("index_unavailable");
+  if (state.valid !== true && state.valid !== false) throw new CoreError("index_unavailable");
+  return state;
+}
+
+/**
+ * @param {Connection} connection
+ * @param {Extract<Migration, { concurrent: true }>} migration
+ * @param {number} statementTimeoutMs
+ */
+async function applyConcurrent(connection, migration, statementTimeoutMs) {
+  const override = statementTimeoutMs !== DEFAULT_STATEMENT_TIMEOUT_MS;
+  let state;
+  try {
+    if (override) await connection.query(`SET statement_timeout = '${statementTimeoutMs}ms'`);
+    state = await buildAndInspectIndex(connection, migration);
+  } finally {
+    if (override) {
+      try {
+        await connection.query(SET_DEFAULT_STATEMENT_TIMEOUT);
+      } catch (error) {
+        // A matching invalid index can already enforce uniqueness. Clean it up even if SET fails.
+        if (state?.valid === true) throw error;
+      }
+    }
+  }
   if (state.valid === false) {
     const qualifiedName = `${quoteIdentifier(state.schema)}.${quoteIdentifier(state.name)}`;
-    await connection.query(`DROP INDEX CONCURRENTLY IF EXISTS ${qualifiedName}`);
+    try {
+      await connection.query(`DROP INDEX CONCURRENTLY IF EXISTS ${qualifiedName}`);
+    } catch {
+      // The runner destroys the session on failure. A later run can retry the drop.
+    }
     throw new CoreError("index_unavailable");
   }
-  if (state.valid !== true) throw new CoreError("index_unavailable");
-  await connection.query(RECORD_MIGRATION, [id]);
+  await connection.query(RECORD_MIGRATION, [migration.id]);
 }
 
 /**
@@ -101,15 +229,22 @@ async function applyConcurrent(connection, { id, sql, index }) {
  * The connection must support session state and be dedicated to this run until destroyed.
  * @param {ConnectionSource} source
  * @param {readonly Migration[]} migrations
+ * @param {ApplyMigrationsOptions} [options]
  */
-export async function applyMigrations(source, migrations) {
+export async function applyMigrations(source, migrations, options = {}) {
   try {
+    const { concurrentStatementTimeoutMs = DEFAULT_STATEMENT_TIMEOUT_MS } = options;
+    // PostgreSQL accepts integer milliseconds up to the signed 32-bit limit.
+    if (!Number.isInteger(concurrentStatementTimeoutMs)
+      || concurrentStatementTimeoutMs < 1 || concurrentStatementTimeoutMs > 2_147_483_647) {
+      throw new CoreError("invalid_input");
+    }
     const ids = new Set();
     const ordered = migrations.map((migration) => {
       const { id, sql, concurrent } = migration;
-      if (!id || ids.has(id)) throw new CoreError("invalid_input");
+      if (typeof id !== "string" || !id || ids.has(id)) throw new CoreError("invalid_input");
       ids.add(id);
-      if (!concurrent) return { id, sql, concurrent };
+      if (!concurrent) return { id, sql, concurrent, adopt: migration.adopt };
 
       const target = CONCURRENT_INDEX.exec(sql);
       const { index } = migration;
@@ -124,7 +259,7 @@ export async function applyMigrations(source, migrations) {
     let complete = false;
     try {
       await connection.query("SET lock_timeout = '5s'");
-      await connection.query("SET statement_timeout = '30s'");
+      await connection.query(SET_DEFAULT_STATEMENT_TIMEOUT);
       // The runner owns its session: the hosted tables live in public, so new objects land there and
       // only public and pg_catalog are visible. A caller's search_path (or lookalike objects in other
       // schemas) cannot change what a migration touches or how index definitions render.
@@ -142,10 +277,14 @@ export async function applyMigrations(source, migrations) {
       }
 
       for (const migration of ordered.slice(applied.size)) {
-        if (migration.concurrent) {
-          await applyConcurrent(connection, migration);
-        } else {
-          await applyTransactional(connection, migration);
+        try {
+          if (migration.concurrent) {
+            await applyConcurrent(connection, migration, concurrentStatementTimeoutMs);
+          } else {
+            await applyTransactional(connection, migration);
+          }
+        } catch (error) {
+          throw Object.assign(new CoreError(toPostgresError(error).code), { migrationId: migration.id });
         }
       }
       // A pool may return from destroy before PostgreSQL ends the session.

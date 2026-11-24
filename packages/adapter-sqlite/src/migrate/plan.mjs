@@ -2,6 +2,9 @@ import { normalizeForHash, prepareCoreText, receiptExcerpt } from "@cairn-ink/co
 import { legacyIdentifier, refuse } from "../legacy/migration-input.mjs";
 import { receiptIdentityKey } from "../receipt-identity.mjs";
 import { encodeContent, scopeKey, sha256 } from "../storage-values.mjs";
+import { createRawLineage } from "../raw-lineage.mjs";
+import { sessionHasher } from "../suppressions.mjs";
+import { legacyEpoch, planSafety } from "./safety.mjs";
 
 /** @import { SQLInputValue } from "node:sqlite" */
 /** @import { LegacyInput, LegacyMemory } from "../legacy/migration-input.mjs" */
@@ -72,12 +75,12 @@ function memoryValues(row, denials, provenHistory) {
 /** @param {LegacyInput} source */
 export function planMigration(source) {
   const { memories, receipts, denials, namespaceEpochs, history, episodeControls, consent, rawControls } = source;
-  /** @type {Map<string, { denials: bigint, epoch: bigint, generation: number, paused: boolean, controls: number }>} */
+  /** @type {Map<string, { denials: bigint, epoch: bigint, generation: number }>} */
   const owners = new Map();
   /** @param {string} owner */
   const ownerState = owner => {
     legacyIdentifier(owner);
-    const state = owners.get(owner) ?? { denials: 0n, epoch: 0n, generation: 1, paused: false, controls: 0 };
+    const state = owners.get(owner) ?? { denials: 0n, epoch: 0n, generation: 1 };
     owners.set(owner, state);
     return state;
   };
@@ -99,16 +102,12 @@ export function planMigration(source) {
     if (row.epoch > state.epoch) state.epoch = row.epoch;
   }
   for (const row of episodeControls) {
-    const state = ownerState(fromNamespace(row).owner);
+    ownerState(fromNamespace(row).owner);
     legacyIdentifier(row.generation);
-    state.controls++;
-    state.paused ||= row.paused === 1n || row.enabled === 0n || state.controls > 1;
   }
   for (const row of [...consent, ...rawControls]) {
     if ("scope" in row) fromNamespace(row);
     const state = ownerState(row.owner_id);
-    // Client-scoped consent or archive control has no owner-wide equivalent.
-    state.paused = true;
     state.generation = Math.max(state.generation, safeRevision(row.revision));
   }
   const byId = new Map(memories.map(row => [row.id, row]));
@@ -135,19 +134,13 @@ export function planMigration(source) {
 
   /** @type {Map<string, { ordinal: number, addresses: Set<string> }>} */
   const receiptOrder = new Map();
-  let withheldReceipts = source.withheldReceipts;
+  const withheldReceipts = source.withheldReceipts;
   /** @type {SQLInputValue[][]} */
   const receiptRows = [];
   for (const row of receipts) {
     const memory = byId.get(row.memory_id);
     if (!memory || memory.deleted === 1n) return refuse("legacy_incomplete");
     const keys = scopeKey(fromNamespace(memory));
-    const denied = byScope.get(JSON.stringify(keys));
-    const addressHash = sha256(JSON.stringify(["receipt-source-address-v1", row.client, row.session_id, row.event_id, row.role]));
-    if (denied?.has("rs1:i:" + row.receipt_key) || denied?.has("rs1:a:" + addressHash)) {
-      withheldReceipts++;
-      continue;
-    }
     const client = legacyIdentifier(row.client);
     const sessionId = legacyIdentifier(row.session_id);
     const messageId = legacyIdentifier(row.event_id);
@@ -160,19 +153,41 @@ export function planMigration(source) {
     receiptOrder.set(row.memory_id, state);
     const excerpt = receiptExcerpt(row.excerpt);
     const address = { client, sessionId, messageId, role: row.role };
-    const body = { ...address, occurredAtMs: null, legacy: { id, excerpt, createdAt: row.created_at },
+    const body = { ...address, occurredAtMs: null, legacy: { id, excerpt, createdAt: row.created_at, canonicalRead: true,
+      spans: source.archive.spans.get(id) },
       ...(excerpt !== row.excerpt && { receiptKey: receiptIdentityKey({ ...address, excerpt }) }) };
     receiptRows.push([...keys, row.memory_id, ++state.ordinal, sourceKey, row.receipt_key, JSON.stringify(body)]);
   }
   const epochs = Array.from(owners, ([owner, state]) =>
     [owner, (state.epoch > state.denials ? state.epoch : state.denials).toString()]);
-  const pause = Array.from(owners, ([owner, state]) => [owner, Number(state.paused), state.generation]);
+  const ownerEpochs = source.safety ? source.safety.epochs.map(row =>
+    [legacyIdentifier(row.owner_id), legacyEpoch(row).toString()]) : epochs;
+  const safety = planSafety(source, fromNamespace, encodeEvidence);
+  // An unlisted namespace is enabled in the legacy store. No scoped row
+  // proves that even a newly created namespace must be paused.
+  const pause = Array.from(owners, ([owner, state]) => [owner, 0, state.generation]);
   const revisions = Array.from(owners.keys(), owner => [owner, 1]);
+  const archiveKey = source.rawPrivacy?.key;
+  const lineage = archiveKey ? createRawLineage(archiveKey, sessionHasher(archiveKey, true)) : null;
+  const anchors = lineage ? source.archive.anchors.flatMap(({ scope, client, sessionId, message }) =>
+    lineage.anchorRows(scope, { client, sessionId }, [message])) : [];
+  const closed = new Map();
+  for (const row of [...source.admissions, ...source.registered]) {
+    const tuple = [...scopeKey(fromNamespace(row)), JSON.stringify(legacyIdentifier(row.client)),
+      "admission", legacyIdentifier(row.event_id), "null"];
+    closed.set(JSON.stringify(tuple), tuple);
+  }
+  const ledger = { closed: closed.size, completed: 0, invalidated: 0, registered: source.registered.length };
+  for (const { state } of source.admissions) {
+    if (state === "completed") ledger.completed++;
+    else ledger.invalidated++;
+  }
   return {
-    memoryRows, receiptRows, markers, epochs, pause, revisions, withheldReceipts,
-    evidence: encodeEvidence({ history, namespaceEpochs, episodeControls, consent, rawControls, withheldReceipts,
-      legacyRawHashing: source.rawPrivacy !== null, rawDeletionActions: source.rawPrivacy?.actions ?? [],
-      rawDeletionEffects: source.rawPrivacy?.effects ?? [], dropped: source.dropped }),
+    memoryRows, receiptRows, markers, epochs: ownerEpochs, pause, revisions, withheldReceipts,
+    anchors, closed: [...closed.values()], ledger, safety,
+    evidence: encodeEvidence({ history, namespaceEpochs, episodeControls, consent, rawControls, scopedCaptureControls: true, withheldReceipts,
+      legacyRawHashing: source.rawPrivacy !== null, localRawPrivacy: source.localRawPrivacy, rawDeletionActions: source.rawPrivacy?.actions ?? [],
+      rawDeletionEffects: source.rawPrivacy?.effects ?? [], archived: source.archive.counts, ledger, dropped: source.dropped }),
     pausedOwners: pause.filter(([, paused]) => paused === 1).map(([owner]) => String(owner)).sort(),
   };
 }
