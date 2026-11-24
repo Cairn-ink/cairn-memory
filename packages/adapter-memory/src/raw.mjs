@@ -47,10 +47,9 @@ function rawEntry(scope, session, { id, role, content, occurredAtMs }) {
 
 /** @param {State} state @param {Namespace} namespace
  * @param {(key: CaptureKey, message: CaptureMessage) => boolean | Promise<boolean>} matches
- * @param {(source: DocumentCardSourceMessage) => void} onMatch
- * @param {boolean} [includeBlanked]
+ * @param {(source: DocumentCardSourceMessage) => void} [onBlank]
  */
-async function blankCaptureMessages(state, namespace, matches, onMatch, includeBlanked = false) {
+async function blankCaptureMessages(state, namespace, matches, onBlank) {
   let blanked = 0;
   for (const { key, messages } of state.claims.values()) {
     if (key.scope.namespace !== namespace || !messages) continue;
@@ -58,10 +57,8 @@ async function blankCaptureMessages(state, namespace, matches, onMatch, includeB
       if (message.content !== "" && await matches(key, message)) {
         message.content = "";
         blanked++;
-      } else if (!includeBlanked || message.content !== "" || !await matches(key, message)) {
-        continue;
+        onBlank?.({ client: key.client, sessionId: key.sessionId, messageId: message.id });
       }
-      onMatch({ client: key.client, sessionId: key.sessionId, messageId: message.id });
     }
   }
   return blanked;
@@ -429,11 +426,10 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
           }
         }
         await invalidateRationaleSources(state, namespace, deleted);
-        /** @type {DocumentCardSourceMessage[]} */
-        const sources = [...deleted];
-        const ledgerBlanked = await blankCaptureMessages(state, namespace,
-          key => slots.has(sessionSlot(namespace, key)), source => { sources.push(source); }, true);
-        const { hidden, changed } = purgeDeletedDocumentSources(state, namespace, sources);
+        /** @param {Session} session */
+        const matchesSession = session => slots.has(sessionSlot(namespace, session));
+        const ledgerBlanked = await blankCaptureMessages(state, namespace, matchesSession);
+        const { hidden, changed } = purgeDeletedDocumentSources(state, namespace, matchesSession);
         if (hidden) run.cardWrites++;
         else if (changed) run.stateWritten = true;
         if (deleted.length || ledgerBlanked) advanceRawInspectEpoch(state);
@@ -640,8 +636,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
           if (!candidates.length) return { rawDeleted: 0, ledgerBlanked: 0 };
           const state = getState();
           const deleted = [];
-          /** @type {DocumentCardSourceMessage[]} */
-          const sources = [];
+          const deletedSources = new Set();
           const hasEdges = state.rationale.has(target.namespace);
           let rawDeleted = 0;
           for (const [id, row] of state.rawRows) {
@@ -651,7 +646,7 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
               state.receiptDenials.add(await receiptAddressKey(target.namespace, row));
               if (hasEdges) deleted.push(row);
               const { client, sessionId, messageId } = row;
-              sources.push({ client, sessionId, messageId });
+              deletedSources.add(id);
               onDelete?.({ client, sessionId, messageId });
               rawDeleted++;
             }
@@ -664,10 +659,17 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
           await invalidateRationaleSources(state, target.namespace, deleted);
           const ledgerBlanked = await blankCaptureMessages(state, target.namespace,
             ({ client, sessionId }, { id: messageId, content, occurredAtMs }) =>
-              matches({ client, sessionId, messageId, content, occurredAtMs }), source => { sources.push(source); });
-          const { hidden, changed } = purgeDeletedDocumentSources(state, target.namespace, sources);
-          if (hidden) run.cardWrites++;
-          else if (changed) run.stateWritten = true;
+              matches({ client, sessionId, messageId, content, occurredAtMs }), source => {
+              const id = rawId(target, source, source.messageId);
+              // A conflicting ledger copy can be erased while the archived source survives.
+              if (!state.rawRows.has(id)) deletedSources.add(id);
+            });
+          if (deletedSources.size) {
+            const { hidden, changed } = purgeDeletedDocumentSources(state, target.namespace,
+              source => deletedSources.has(rawId(target, source, source.messageId)));
+            if (hidden) run.cardWrites++;
+            else if (changed) run.stateWritten = true;
+          }
           if (rawDeleted || ledgerBlanked) advanceRawInspectEpoch(state);
           if (rawDeleted) advanceRevision(run);
           if (ledgerBlanked) run.stateWritten = true;

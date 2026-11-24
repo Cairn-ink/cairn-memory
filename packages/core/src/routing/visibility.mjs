@@ -94,9 +94,10 @@ async function legacyCardPassages(text, { key, labels }) {
  * @returns {Promise<DocumentCardVisibility>} */
 export async function documentCardVisible(input, { definiteOnly = false } = {}) {
   const verdict = await readCardVisibility(input, false);
-  if (!definiteOnly || verdict.visible ||
-      (verdict.reason !== "text_withheld" && verdict.reason !== "source_memory_not_visible")) return verdict;
+  if (!definiteOnly || verdict.visible) return verdict;
   const evidence = await readCardVisibility(input, true);
+  if (evidence.reason === "text_withheld") return evidence;
+  if (verdict.reason !== "text_withheld" && verdict.reason !== "source_memory_not_visible") return verdict;
   return evidence.reason === verdict.reason ? verdict : hidden("uncertain");
 }
 
@@ -114,6 +115,9 @@ async function readCardVisibility(input, definiteOnly) {
     if (!messageBacked && ((origin !== "import" && origin !== "manual") || sourceMessage !== null)) {
       return hidden("uncertain");
     }
+    // Definite text evidence can establish erasure even when the link state is uncertain.
+    const textEvidence = definiteOnly && !messageBacked ? await authoredTextVisibility(input, true) : null;
+    if (textEvidence?.reason === "text_withheld") return textEvidence;
     if (messageBacked && sourceWithheld === true) return hidden("source_withheld");
     if (!Array.isArray(card.sourceMemories) ||
         ((messageBacked || card.sourceMemories.length > 0) && typeof memoryStates?.get !== "function")) {
@@ -163,63 +167,71 @@ async function readCardVisibility(input, definiteOnly) {
       if (state.revision !== source.revision) return hidden(definiteOnly ? "uncertain" : "source_memory_not_visible");
     }
 
-    if (!messageBacked) {
-      const { title, body } = card;
-      const { textFacts, fingerprintKey = null, legacyFingerprint } = input;
-      if ((title !== null && typeof title !== "string") || typeof body !== "string") return hidden("uncertain");
-      const facts = snapshotReader().array(textFacts, validateSuppressionFact);
-      if (!facts?.every(fact => fact.kind === "text") ||
-          facts.some(fact => fact.owner !== card.scope.owner || (fact.namespace ?? null) !== card.scope.namespace)) {
-        return hidden("uncertain");
-      }
-      let legacy;
-      if (legacyFingerprint !== undefined) {
-        legacy = await readLegacyFingerprint(legacyFingerprint);
-        if (!legacy) return hidden("uncertain");
-      }
-      if (facts.length > 0) {
-        const texts = title === null ? [body] : [title, body];
-        let uncertain = !legacy && facts.some(requiresLegacyMacDomain);
-        if (uncertain && !definiteOnly) return hidden("text_withheld");
-        let memoryFacts = facts;
-        if (legacy || definiteOnly) {
-          const legacyFacts = [];
-          const coreFacts = [];
-          for (const fact of facts) {
-            const legacyDigests = fact.text.digests.filter(isLegacyMac);
-            if (legacyDigests.length === 0) {
-              coreFacts.push(fact);
-              continue;
-            }
-            // A fact with aliases in both domains participates in both comparisons.
-            const comparable = legacy ? legacyDigests.filter(digest => digest.keyId === legacy.key.id) : [];
-            if (comparable.length !== legacyDigests.length) {
-              if (!definiteOnly) return hidden("text_withheld");
-              uncertain = true;
-            }
-            if (comparable.length > 0) legacyFacts.push({ ...fact, text: { ...fact.text, digests: comparable } });
-            const coreDigests = fact.text.digests.filter(digest => !isLegacyMac(digest));
-            if (coreDigests.length > 0) {
-              coreFacts.push({ ...fact, text: { ...fact.text, digests: coreDigests } });
-            }
+    if (!messageBacked) return textEvidence ?? await authoredTextVisibility(input, false);
+    return { visible: true, reason: null };
+  } catch {
+    return hidden("uncertain");
+  }
+}
+
+/** @param {DocumentCardVisibilityInput} input @param {boolean} definiteOnly
+ * @returns {Promise<DocumentCardVisibility>} */
+async function authoredTextVisibility(input, definiteOnly) {
+  try {
+    const { card: { title, body, scope }, textFacts, fingerprintKey = null, legacyFingerprint } = input;
+    if ((title !== null && typeof title !== "string") || typeof body !== "string") return hidden("uncertain");
+    const facts = snapshotReader().array(textFacts, validateSuppressionFact);
+    if (!facts?.every(fact => fact.kind === "text") ||
+        facts.some(fact => fact.owner !== scope.owner || (fact.namespace ?? null) !== scope.namespace)) {
+      return hidden("uncertain");
+    }
+    let legacy;
+    if (legacyFingerprint !== undefined) {
+      legacy = await readLegacyFingerprint(legacyFingerprint);
+      if (!legacy) return hidden("uncertain");
+    }
+    if (facts.length > 0) {
+      const texts = title === null ? [body] : [title, body];
+      let uncertain = !legacy && facts.some(requiresLegacyMacDomain);
+      if (uncertain && !definiteOnly) return hidden("text_withheld");
+      let memoryFacts = facts;
+      if (legacy || definiteOnly) {
+        const legacyFacts = [];
+        const coreFacts = [];
+        for (const fact of facts) {
+          const legacyDigests = fact.text.digests.filter(isLegacyMac);
+          if (legacyDigests.length === 0) {
+            coreFacts.push(fact);
+            continue;
           }
-          memoryFacts = coreFacts;
-          if (legacy && legacyFacts.length > 0) {
-            const fingerprints = await Promise.all(texts.map(text => legacyCardPassages(text, legacy)));
-            const match = passageWithholding(fingerprints.flat(), legacyFacts, input.containmentThreshold);
-            if (match === true || (!definiteOnly && match === "ineligible")) return hidden("text_withheld");
-            if (match === "ineligible") uncertain = true;
+          // A fact with aliases in both domains participates in both comparisons.
+          const comparable = legacy ? legacyDigests.filter(digest => digest.keyId === legacy.key.id) : [];
+          if (comparable.length !== legacyDigests.length) {
+            if (!definiteOnly) return hidden("text_withheld");
+            uncertain = true;
+          }
+          if (comparable.length > 0) legacyFacts.push({ ...fact, text: { ...fact.text, digests: comparable } });
+          const coreDigests = fact.text.digests.filter(digest => !isLegacyMac(digest));
+          if (coreDigests.length > 0) {
+            coreFacts.push({ ...fact, text: { ...fact.text, digests: coreDigests } });
           }
         }
-        if (memoryFacts.length > 0) {
-          const fingerprints = await Promise.all(texts.map(text =>
-            fingerprintMemoryPassages(text, prepareCoreText(text), fingerprintKey)));
-          const match = passageWithholding(fingerprints.flat(), memoryFacts);
+        memoryFacts = coreFacts;
+        if (legacy && legacyFacts.length > 0) {
+          const fingerprints = await Promise.all(texts.map(text => legacyCardPassages(text, legacy)));
+          const match = passageWithholding(fingerprints.flat(), legacyFacts, input.containmentThreshold);
           if (match === true || (!definiteOnly && match === "ineligible")) return hidden("text_withheld");
           if (match === "ineligible") uncertain = true;
         }
-        if (uncertain) return hidden("uncertain");
       }
+      if (memoryFacts.length > 0) {
+        const fingerprints = await Promise.all(texts.map(text =>
+          fingerprintMemoryPassages(text, prepareCoreText(text), fingerprintKey)));
+        const match = passageWithholding(fingerprints.flat(), memoryFacts);
+        if (match === true || (!definiteOnly && match === "ineligible")) return hidden("text_withheld");
+        if (match === "ineligible") uncertain = true;
+      }
+      if (uncertain) return hidden("uncertain");
     }
     return { visible: true, reason: null };
   } catch {

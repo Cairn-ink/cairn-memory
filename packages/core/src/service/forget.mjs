@@ -208,7 +208,7 @@ export function forgetMethod({ storage, clock }) {
       // suppression.write
       const { fact, incarnation } = await predecessorFact(scope, row, key, clock, "forget");
       const { factId, epoch, createdAtMs, created } = await suppressions.writeFact(tx, fact, incarnation);
-      const factIds = created ? [factId] : [];
+      const factIds = new Set([factId]);
 
       // session.fence
       if (fenceRaw) {
@@ -246,7 +246,7 @@ export function forgetMethod({ storage, clock }) {
           const span = { ...resolved, actionId: fact.actionId, origin: /** @type {const} */ ("forget") };
           validateSuppressionFact(span);
           const written = await suppressions.writeFact(tx, span, await clock.sha256Hex(factIncarnationBody(span)));
-          if (written.created) factIds.push(written.factId);
+          factIds.add(written.factId);
         }
       }
 
@@ -268,7 +268,7 @@ export function forgetMethod({ storage, clock }) {
           }
         }
         if (assessCardPurge) {
-          await purgeWithheldCards(documentCards, tx, scope, deletedSources, { actionId: fact.actionId, factIds },
+          await purgeWithheldCards(documentCards, tx, scope, deletedSources, { actionId: fact.actionId, factIds: [...factIds] },
             fact.kind === "text" ? undefined : selectors);
         }
       }

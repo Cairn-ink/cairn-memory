@@ -108,14 +108,11 @@ function hideMatching(state, namespace, match, reason, { purge = false, retainTe
   return { hidden, changed };
 }
 
-/** @param {State} state @param {Scope["namespace"]} namespace @param {readonly DocumentCardSourceMessage[]} sources */
-export function purgeDeletedDocumentSources(state, namespace, sources) {
-  if (!sources.length || !state.documentCards.has(namespace)) return { hidden: 0, changed: false };
-  /** @param {DocumentCardSourceMessage} source */
-  const binding = ({ client, sessionId, messageId }) => JSON.stringify([client, sessionId, messageId]);
-  const deleted = new Set(sources.map(binding));
+/** @param {State} state @param {Scope["namespace"]} namespace
+ * @param {(source: DocumentCardSourceMessage) => boolean} isDeleted */
+export function purgeDeletedDocumentSources(state, namespace, isDeleted) {
   /** @param {DocumentCardSourceMessage | null} source */
-  const matches = source => source != null && deleted.has(binding(source));
+  const matches = source => source != null && isDeleted(source);
   return hideMatching(state, namespace, {
     card: ({ sourceMessage, sentences }) => matches(sourceMessage) ||
       (Array.isArray(sentences) && sentences.some(sentence => matches(sentence?.source))),
@@ -259,7 +256,7 @@ export function createDocumentCardStore(port, now, visibilityInput, amendmentWit
         const state = getState();
         const factIds = new Set(action?.factIds);
         const facts = new Map([...state.facts].filter(([, { fact, factId }]) =>
-          factIds.has(factId) && fact.origin === "forget" && fact.actionId === action?.actionId &&
+          factIds.has(factId) && fact.origin === "forget" &&
           fact.owner === scope.owner && (fact.namespace ?? null) === scope.namespace));
         const matches = selectors?.map(selectorMatcher);
         const candidates = [];

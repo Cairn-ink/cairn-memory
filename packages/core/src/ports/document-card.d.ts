@@ -142,7 +142,8 @@ export interface DocumentCardStore<Card extends StoredDocumentCardRecord = Docum
    * transaction, including entries hidden with retainText. Omit selectors to scan the scope.
    * Report sourceWithheld as null when source proof is missing. A suppressed memory
    * state and an amendment's sourceWithheld:true each require a definite block.
-   * Use only facts in the supplied action with one of the supplied fact IDs.
+   * Use only scoped forget facts identified by the supplied fact IDs. These IDs are
+   * returned by the action's writes, including replays of an existing incarnation.
    */
   listForPurge?(tx: Tx, scope: Scope, selectors?: readonly DocumentCardHideSelector[],
     action?: { actionId: string; factIds: readonly string[] }): Promise<Array<{

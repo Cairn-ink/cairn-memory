@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
 import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
-import { buildDocumentCard } from "@cairn-ink/core/routing";
+import { coreDigest, legacyExactMac, userFingerprintKey } from "@cairn-ink/core";
+import { buildDocumentCard, documentCardVisible } from "@cairn-ink/core/routing";
 import { createMemoryService } from "@cairn-ink/core/service";
+import { predecessorFact } from "../../core/src/service/writes.mjs";
 
 const scope = { owner: "test-owner", namespace: null };
 const source = { kind: "mcp", client: null, sessionId: null };
@@ -19,16 +21,20 @@ const authored = (id, body, sentences = []) => ({
   date: null, sourceMessage: null, sourceMemories: [], sentences, stale: [],
 });
 
-function fixture(wrapRaw = raw => raw) {
-  const adapter = createMemoryAdapter({ capabilities: { rawArchive: true, documentCards: true } });
-  const { raw, documentCards: cards, uow, capture, fence } = adapter;
+function fixture(wrapRaw = raw => raw, { fingerprintKey = false, spanLineage } = {}) {
+  const adapter = createMemoryAdapter({ capabilities: { rawArchive: true, documentCards: true, fingerprintKey } });
+  const { raw, documentCards: cards, uow, capture, fence, keys, memories, suppressions } = adapter;
   return {
-    raw, cards, capture, fence,
+    raw, cards, capture, fence, keys, memories, suppressions,
     write: work => uow.run(scope.owner, { pauseLock: true }, work),
     read: work => uow.run(scope.owner, { readOnly: true }, work),
     async snapshot() { return (await adapter.harness.dump())[0]; },
     service: createMemoryService({
-      storage: { ...adapter, raw: wrapRaw(raw) }, tokens: { countTokens: () => 1 },
+      storage: { ...adapter, raw: wrapRaw(raw),
+        ...(spanLineage && { spanLineage, capabilities: { ...adapter.capabilities, spanLineage: true } }) },
+      tokens: { countTokens: () => 1 },
+      ...(fingerprintKey && { model: { model: "test", contextWindow: 1000, countTokens: () => 1,
+        async call() { assert.fail("Unexpected model call"); } } }),
       embedder: { model: "test", dimensions: 1, async embed(texts) { return texts.map(() => Float32Array.of(1)); } },
       clock: { nowMs: () => 1, monotonicMs: () => 1, sha256Hex, async hmacHex() { assert.fail("Unexpected HMAC"); } },
       gate: { async assertOpen() {} }, config: {},
@@ -177,4 +183,125 @@ test("forget uses this action's facts and preserves payloads withheld by a prior
   }
   assert.equal(await read(tx => cards.get(tx, scope, target.id)), null);
   assert.equal(stored.includes(target.body), false);
+});
+
+test("deletion retries purge sentence and amendment bindings after Raw rows are gone", async () => {
+  const results = [];
+  for (const operation of ["deleteConversation", "eraseSessions"]) {
+    const { raw, cards, write, snapshot } = fixture();
+    const item = message("raw-only", "The green folder belongs in the drawer.");
+    const otherSession = { ...session, sessionId: "keep" };
+    const card = authored("late-sentence", item.content, [{ start: 0, end: item.content.length, source: binding(item) }]);
+    const keep = authored("other-session", "The manual belongs on the shelf.", [
+      { start: 0, end: 3, source: binding(item, otherSession) },
+    ]);
+    const amendment = { amendmentId: "late-amendment", date: "2025-01-02", sourceMessage: binding(item),
+      sentence: item.content, quote: "The green folder" };
+    const remove = tx => operation === "deleteConversation"
+      ? raw.deleteConversation(tx, scope, session)
+      : raw.eraseSessions(tx, scope, [session]);
+    await write(async tx => {
+      assert.equal((await raw.archive(tx, captureKey(item), [item])).archived, 1);
+      assert.equal((await remove(tx)).rawDeleted, 1);
+    });
+    const deleted = await snapshot();
+    assert.deepEqual(deleted.rawRows, []);
+    assert.deepEqual(deleted.claims ?? [], []);
+    await write(async tx => {
+      for (const candidate of [card, keep]) assert.equal((await cards.put(tx, scope, candidate)).status, "inserted");
+      assert.equal((await cards.amend(tx, scope, keep.id, amendment)).status, "inserted");
+      assert.equal((await remove(tx)).rawDeleted, 0);
+    });
+    const stored = await snapshot();
+    const [, erased] = stored.documentCards[0].cards.find(([id]) => id === card.id);
+    const [, entry] = stored.documentCards[0].cards.find(([id]) => id === keep.id);
+    assert.equal(entry.card.body, keep.body, operation);
+    results.push({ operation, cardBody: erased.card?.body, hiddenReason: erased.hiddenReason, amendments: entry.amendments });
+  }
+  assert.deepEqual(results, ["deleteConversation", "eraseSessions"].map(operation => ({
+    operation, cardBody: undefined, hiddenReason: "raw_deleted",
+    amendments: [["late-amendment", { hiddenReason: "raw_deleted" }]],
+  })));
+});
+
+test("forget blanks a conflicting ledger copy while preserving the surviving Raw card", async () => {
+  const { raw, capture, cards, fence, service, read, write, snapshot } = fixture();
+  const item = message("shared-address", "The blue gauge measures the outlet.");
+  const ledgerItem = message(item.id, "The spare lens is in the equipment cabinet.");
+  const ledgerKey = captureKey(ledgerItem);
+  const { card: routed } = await buildDocumentCard(item, { scope, client: session.client, canonicalSessionKey: session.sessionId });
+  const card = { ...authored(routed.id, routed.body), origin: "router", title: routed.title, sourceMessage: binding(item) };
+  const saved = await service.save(scope, ledgerItem.content, source, "fact");
+  assert.equal(saved.status, "saved");
+  await write(async tx => {
+    assert.equal((await raw.archive(tx, captureKey(item), [item])).archived, 1);
+    assert.equal((await capture.admit(tx, ledgerKey, [ledgerItem])).status, "admitted");
+    assert.equal((await cards.put(tx, scope, card)).status, "inserted");
+  });
+  const refs = [cardRef(card)];
+  assert.deepEqual(await read(tx => fence.assertVisible(tx, selection, refs)), refs);
+  assert.equal((await service.forget(scope, saved.item.id, source)).status, "forgotten");
+  assert.equal((await read(tx => capture.load(tx, ledgerKey))).messages[0].content, "");
+  assert.deepEqual((await snapshot()).rawRows.map(row => row.content), [item.content]);
+  assert.equal((await read(tx => cards.get(tx, scope, card.id)))?.body, item.content);
+  assert.deepEqual(await read(tx => fence.assertVisible(tx, selection, refs)), refs);
+});
+
+test("definite text withholding purges a card with a stale memory link", async () => {
+  const { cards, fence, keys, service, read, write, snapshot } = fixture(undefined, { fingerprintKey: true });
+  const card = authored("stale-link", "The bronze compass rests in a wooden case.");
+  const linked = await service.save(scope, "The blue gauge measures the outlet.", source, "fact");
+  const saved = await service.save(scope, card.body, source, "fact");
+  assert.equal(linked.status, "saved");
+  assert.equal(saved.status, "saved");
+  card.sourceMemories = [{ id: linked.item.id, revision: linked.item.revision + 1 }];
+  const key = await keys.userKey(scope.owner);
+  const labels = Object.freeze({ keyIdDomain: "legacy-id", shingleKeyPrefix: "legacy-shingle:", legacyExactPrefix: "legacy-exact:" });
+  const legacyKey = await userFingerprintKey("fixture legacy secret", scope.owner, labels);
+  const legacy = { alg: "hmac", pipeline: "hosted-v1", redactionVersion: 1,
+    value: await legacyExactMac(card.body, legacyKey, labels), keyId: legacyKey.id };
+  const input = { card, requestedScope: scope, memoryStates: new Map([[linked.item.id,
+    { status: "visible", revision: linked.item.revision }]]), fingerprintKey: key,
+    textFacts: [{ ...scope, kind: "text", mode: "exact", origin: "forget", actionId: "fixture",
+      text: { digests: [await coreDigest(card.body, key), legacy] } }],
+  };
+  assert.deepEqual(await documentCardVisible(input), { visible: false, reason: "source_memory_not_visible" });
+  assert.deepEqual(await documentCardVisible({ ...input, fingerprintKey: null }, { definiteOnly: true }),
+    { visible: false, reason: "uncertain" });
+  const verdict = await documentCardVisible(input, { definiteOnly: true });
+  await write(async tx => {
+    assert.equal((await cards.put(tx, scope, card)).status, "inserted");
+  });
+  assert.deepEqual(await read(tx => fence.assertVisible(tx, selection, [cardRef(card)])), []);
+  assert.equal((await service.forget(scope, saved.item.id, source)).status, "forgotten");
+  const stored = (await snapshot()).documentCards[0].cards[0][1];
+  assert.deepEqual({ verdict, reason: stored.hiddenReason, body: stored.card?.body }, {
+    verdict: { visible: false, reason: "text_withheld" }, reason: "text_withheld", body: undefined,
+  });
+});
+
+test("forget reuses its previously stored text fact when no spans resolve", async () => {
+  const spanLineage = { async resolveSpans() { return []; } };
+  const payloads = [];
+  for (const actionId of [undefined, "equivalent-forget"]) {
+    const { cards, memories, suppressions, service, write, snapshot } = fixture(undefined, { spanLineage });
+    const card = authored("replayed-copy", "The orange marker is under the map.");
+    const saved = await service.save(scope, card.body, source, "fact");
+    assert.equal(saved.status, "saved");
+    const written = await write(async tx => {
+      const row = await memories.get(tx, scope, saved.item.id);
+      assert.equal(row.text, card.body);
+      const { fact, incarnation } = await predecessorFact(scope, row, null, { sha256Hex }, "forget");
+      assert.equal(fact.kind, "text");
+      const result = await suppressions.writeFact(tx, { ...fact, actionId: actionId ?? fact.actionId }, incarnation);
+      assert.equal(result.created, true);
+      assert.equal((await cards.put(tx, scope, card)).status, "inserted");
+      return result;
+    });
+    assert.equal((await service.forget(scope, saved.item.id, source)).status, "forgotten");
+    const stored = await snapshot();
+    assert.deepEqual(stored.facts.map(({ factId }) => factId), [written.factId]);
+    payloads.push(stored.documentCards[0].cards[0][1].card?.body);
+  }
+  assert.deepEqual(payloads, [undefined, undefined]);
 });
