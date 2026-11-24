@@ -50,10 +50,11 @@ function receiptProjector(db, scope, policy, receiptReadSafety) {
   return ({ body, legacy_receipt_key, id, excerpt, position, time }) => {
     if (typeof excerpt !== "string" || !excerpt || excerpt.length > 800 || /[\u0000\uD800-\uDFFF]/u.test(excerpt) ||
         typeof id !== "string" || !id) return null;
-    const { client, sessionId, messageId, role, occurredAtMs, receiptKey } = /** @type {StoredReceipt} */ (decodeJson(body));
+    const { client, sessionId, messageId, role, occurredAtMs, receiptKey, legacyRawAncestryEmpty } =
+      /** @type {StoredReceipt} */ (decodeJson(body));
     const source = { client, sessionId, messageId, role, occurredAtMs, excerpt };
     const legacyKey = typeof legacy_receipt_key === "string" ? legacy_receipt_key : undefined;
-    if (!receiptReadSafety(db, scope, policy, source, receiptKey ?? legacyKey, legacyKey)) return null;
+    if (!receiptReadSafety(db, scope, policy, source, receiptKey ?? legacyKey, legacyKey, legacyRawAncestryEmpty)) return null;
     const createdAtMs = Number(BigInt(String(time)) / 1000n);
     return { position: Number(position), receipt: { ...source, id, eventId: messageId, createdAtMs } };
   };

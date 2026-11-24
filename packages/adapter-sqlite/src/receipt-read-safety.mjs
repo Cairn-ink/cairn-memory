@@ -20,16 +20,22 @@ import { scopedSuppression } from "./suppressions.mjs";
 export function createReceiptReadSafety(hashSession, lineage, migratedRaw) {
   /** @param {Connection} db @param {Scope} scope @param {Policy} policy @param {Receipt & {excerpt: string}} receipt
    * @param {string | undefined} key @param {string | undefined} legacyKey
+   * @param {boolean | undefined} [legacyRawAncestryEmpty]
    */
-  return function receiptReadSafety(db, scope, policy, receipt, key, legacyKey) {
-    const { client, sessionId, messageId, role, excerpt } = receipt;
+  return function receiptReadSafety(db, scope, policy, receipt, key, legacyKey, legacyRawAncestryEmpty) {
+    const { client, sessionId, messageId, role, excerpt, occurredAtMs } = receipt;
     if (!client || !sessionId || !messageId || (role !== "user" && role !== "assistant") ||
         !key || receiptIdentityKey(receipt) !== key || receiptExcerpt(excerpt) !== excerpt) return false;
-    // A Raw-enabled legacy conversion drops the archived rows and retained
-    // lineage. Re-archiving an immediate turn alone cannot restore its roots.
-    if (legacyKey && migratedRaw) return false;
     if (policy.withholdsReceipt(receipt, key, legacyKey) ||
         importTextBlocked(policy.facts, excerpt, policy.legacy)) return false;
+    if (hasRawFence(db, scope, hashSession(scope, client, sessionId))) return false;
+    const archived = readRawRow(db, scope, receipt, messageId);
+    if (migratedRaw) {
+      if (legacyKey && (!migratedRaw.receiptAncestryEmpty(db, legacyRawAncestryEmpty) ||
+          migratedRaw.blocksEvent(db, { scope, client, eventId: messageId }))) return false;
+      if ((legacyKey || !archived) && migratedRaw.blocks(db, scope, receipt, [{ id: messageId, occurredAtMs }])) return false;
+    }
+    if (!archived) return !lineage.hasPossibleReceiptSource(db, scope, receipt);
 
     /** @param {Scope} target @param {RawRow} row @param {Policy} facts */
     function visible(target, row, facts) {
@@ -42,8 +48,7 @@ export function createReceiptReadSafety(hashSession, lineage, migratedRaw) {
         !migratedRaw?.blocks(db, target, row, [message]);
     }
 
-    const archived = readRawRow(db, scope, receipt, messageId);
-    return archived !== undefined && visible(scope, archived, policy) &&
+    return visible(scope, archived, policy) &&
       lineage.receiptRootsVisible(db, scope, archived, (target, row) =>
         visible(target, row, target.namespace === scope.namespace ? policy : scopedSuppression(db, target, hashSession)));
   };

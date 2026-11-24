@@ -336,9 +336,20 @@ export function createRawPorts({ port, runSeed }, keys, ringKeys, labels, hashSe
   /** @param {State} state @param {Scope} scope @param {import("@cairn-ink/core/ports").Receipt} receipt */
   async function receiptSourcesVisible(state, scope, receipt) {
     const { client, sessionId, messageId, role } = receipt;
+    const roots = state.rawAnchors.get(client);
+    const id = rawId(scope, receipt, messageId);
+    if (!state.rawRows.has(id)) {
+      const slot = sessionSlot(scope.namespace, receipt);
+      if (state.rawFences.has(slot) || state.rawConflicts.has(id) || roots?.has(slot)) return false;
+      // Without the archived turn, the excerpt cannot disambiguate matching IDs.
+      for (const root of roots?.values() ?? []) if (root.messages.has(messageId)) return false;
+      for (const row of state.rawRows.values()) {
+        if (row.ref.namespace === scope.namespace && row.client === client && row.sessionId === sessionId) return false;
+      }
+      return true;
+    }
     const archived = await findVisibleSource(state, scope, receipt);
     if (!archived?.content || archived.role !== role) return false;
-    const roots = state.rawAnchors.get(client);
     if (!roots) return true;
     const proofs = await captureProofs(scope, client, [{ id: messageId, content: archived.content }]);
     if (!proofs) return false;

@@ -5,7 +5,7 @@ import { identifier } from "../../../../core/validation.mjs";
 import { verifyLegacyBackupAgainstSource } from "./backup.mjs";
 import { readInspectMigrationInput } from "./inspect-evidence.mjs";
 import { readIdentity, readLegacySnapshot } from "./inventory.mjs";
-import { readRawPrivacy } from "./migration-raw.mjs";
+import { legacyReceiptHasRawAncestry, readRawPrivacy } from "./migration-raw.mjs";
 import { privateLocation } from "./paths.mjs";
 import { LegacyRefusal } from "./refusal.mjs";
 
@@ -43,13 +43,17 @@ export function readMigrationInput(input) {
     const memories = rows(db, "SELECT * FROM memories ORDER BY id");
     const byId = new Map(memories.map(row => [row.id, row]));
     const memo = createContentReadMemo(db);
+    const rawPrivacy = readRawPrivacy(db, inventory);
+    const hasRawAncestry = rawPrivacy && legacyReceiptHasRawAncestry(db, rawPrivacy.key);
     const receipts = rows(db, "SELECT rowid AS inspect_position, * FROM receipts ORDER BY memory_id, created_at, id");
     let withheldReceipts = 0;
+    const rawAncestryEmpty = new Map();
     const visibleReceipts = receipts.filter(({ inspect_position: _position, ...receipt }) => {
       const memory = byId.get(receipt.memory_id);
       const namespace = { ownerId: memory.owner_id, scope: memory.scope, projectId: memory.project_id || null };
       const allowed = receiptReadSafety(db, { namespace, receipt, memo }).allowed;
       if (!allowed) withheldReceipts++;
+      else if (hasRawAncestry) rawAncestryEmpty.set(receipt.id, !hasRawAncestry(memory, receipt));
       return allowed;
     });
     const namespaceEpochs = rows(db, "SELECT * FROM namespace_epochs ORDER BY owner_id, scope, project_id");
@@ -63,12 +67,12 @@ export function readMigrationInput(input) {
       target: target.path, checkSource: file.check, withheldReceipts,
       memories, receipts: visibleReceipts,
       denials: rows(db, "SELECT * FROM suppressed ORDER BY owner_id, scope, project_id, fingerprint"),
-      namespaceEpochs, history, inspect,
+      namespaceEpochs, history, inspect: { ...inspect, rawAncestryEmpty },
       episodeControls: rows(db, "SELECT * FROM episode_controls ORDER BY owner_id, scope, project_id"),
       consent: inventory.localControls
         ? rows(db, "SELECT * FROM local_capture_controls ORDER BY owner_id, scope, project_id, client") : [],
       rawControls: inventory.raw ? rows(db, "SELECT * FROM raw_capture_controls ORDER BY owner_id, client") : [],
-      rawPrivacy: readRawPrivacy(db, inventory),
+      rawPrivacy,
       dropped: Object.fromEntries(Object.entries({
         rawConversations: "raw_conversations", rawMessages: "raw_messages", rawParts: "raw_parts",
         rawEvents: "raw_events", rawCaptureEvents: "raw_capture_events", rawSourceMaps: "raw_source_maps",
