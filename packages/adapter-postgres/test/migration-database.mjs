@@ -32,6 +32,11 @@ const concurrentIndexes = {
     table: "capture_events",
     definition: "CREATE INDEX capture_events_core_abandoned_idx ON public.capture_events USING gin (core_abandoned_tokens) WHERE (core_abandoned_tokens IS NOT NULL)",
   },
+  "0021_core_raw_owner_time_idx.concurrent.sql": {
+    name: "raw_messages_user_time_id_idx",
+    table: "raw_messages",
+    definition: 'CREATE INDEX raw_messages_user_time_id_idx ON public.raw_messages USING btree (user_id, occurred_at, id COLLATE "C")',
+  },
 };
 
 export async function migrationDatabase(t, { migrate = true } = {}) {

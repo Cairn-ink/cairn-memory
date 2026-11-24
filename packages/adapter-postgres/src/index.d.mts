@@ -1,8 +1,8 @@
 import type { FactMatchPolicy, FingerprintKeyProvider, Tx, UnitOfWork } from "../../core/src/index.mjs";
 import type { SourceRef } from "../../core/src/ports/common.d.ts";
 import type {
-  HydrateItems, InsertRow, ListRecent, MemoryStore, PauseStore, ReadSnapshot,
-  SupersessionStore, SuppressionStore, VisibilityFence,
+  HydrateItems, InsertRow, LexicalCandidates, ListRawMessages, ListRecent, MemoryStore, PauseStore, RawCandidates, ReadSnapshot,
+  SupersessionStore, SuppressionStore, VectorCandidates, VisibilityFence,
 } from "../../core/src/ports/index.d.ts";
 import type { SuppressionFact, TextDigest } from "../../core/src/suppression-fact.mjs";
 import type { ConnectionSource, QueryResult } from "./driver.mjs";
@@ -54,7 +54,11 @@ export function backfillPostgresHostedDigests(uow: UnitOfWork, owner: string, op
   redactionVersion: number;
   macForText: (text: string) => string | Promise<string>;
 }): Promise<number>;
-export function createPostgresMemoryReads(options?: SessionHashOptions & { allowNonNullNamespace?: boolean }): {
+export type { RawReadOptions } from "./raw-visibility.mjs";
+type MemoryReadOptions = SessionHashOptions & { allowNonNullNamespace?: boolean };
+export function createPostgresMemoryCandidates(options?: MemoryReadOptions): { lexical: LexicalCandidates; vector: VectorCandidates };
+export function createPostgresRawReads(options: import("./raw-visibility.mjs").RawReadOptions): RawCandidates & ListRawMessages;
+export function createPostgresMemoryReads(options?: MemoryReadOptions | (MemoryReadOptions & import("./raw-visibility.mjs").RawReadOptions)): {
   recent: ListRecent;
   snapshot: ReadSnapshot;
   hydrate: HydrateItems;

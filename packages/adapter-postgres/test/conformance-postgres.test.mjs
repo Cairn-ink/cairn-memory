@@ -9,8 +9,8 @@ import { capabilities, factIncarnationBody, userFingerprintKey } from "@cairn-in
 import { toPostgresError } from "../src/errors.mjs";
 import {
   applyMigrations, createPostgresCapturePorts, createPostgresDigestGate,
-  createPostgresFingerprintKeyProvider, createPostgresMemoryReads, createPostgresMemoryStore,
-  createPostgresPauseStore, createPostgresRawPorts, createPostgresSupersessionStore, createPostgresSuppressionStore,
+  createPostgresFingerprintKeyProvider, createPostgresMemoryCandidates, createPostgresMemoryReads, createPostgresMemoryStore,
+  createPostgresPauseStore, createPostgresRawPorts, createPostgresRawReads, createPostgresSupersessionStore, createPostgresSuppressionStore,
   createPostgresUnitOfWork, HOSTED_FINGERPRINT_LABELS, query,
 } from "../src/index.mjs";
 import { advanceIndex, timestampUs } from "../src/memory-rows.mjs";
@@ -144,6 +144,11 @@ const concurrentIndexes = {
     table: "capture_events",
     definition: "CREATE INDEX capture_events_core_abandoned_idx ON public.capture_events USING gin (core_abandoned_tokens) WHERE (core_abandoned_tokens IS NOT NULL)",
   },
+  "0021_core_raw_owner_time_idx.concurrent.sql": {
+    name: "raw_messages_user_time_id_idx",
+    table: "raw_messages",
+    definition: 'CREATE INDEX raw_messages_user_time_id_idx ON public.raw_messages USING btree (user_id, occurred_at, id COLLATE "C")',
+  },
 };
 
 async function readMigrations() {
@@ -243,37 +248,33 @@ function postgresFactory(wrapSuppressions = (store) => store) {
       }));
       const { pool, source, close } = await openDatabase();
       const uow = createPostgresUnitOfWork(source);
-      const lineage = { lineageSecret: randomUUID(), hashSessionKey };
-      const capture = createPostgresCapturePorts(lineage);
-      const rawPorts = createPostgresRawPorts(lineage);
+      const lineageSecret = randomUUID();
+      const capture = createPostgresCapturePorts({ lineageSecret, hashSessionKey });
       const nearDuplicate = requested.nearDuplicate !== false;
+      const semanticRetrieval = requested.semanticRetrieval !== false;
+      const rawArchive = requested.rawArchive === true;
       const fingerprintKey = requested.fingerprintKey === true;
       const flags = capabilities({
-        embeddingRequiredOnInsert: true, nearDuplicate, vectorSuppression: true, supersession: true, rawSpans: true, fingerprintKey,
-        rawArchive: requested.rawArchive === true, rawWindowHide: requested.rawWindowHide === true,
-        sessionLineage: requested.rawArchive === true,
+        embeddingRequiredOnInsert: true, nearDuplicate, vectorSuppression: true, supersession: true,
+        semanticRetrieval, rawArchive, rawWindowHide: rawArchive || requested.rawWindowHide === true,
+        sessionLineage: rawArchive, rawSpans: true, fingerprintKey,
       });
       const stagedSecrets = fingerprintKey ? ["test-secret-a", "test-secret-rotation"] : [];
       const keys = createPostgresFingerprintKeyProvider(null, { uow, stagedSecrets });
-      const memoryReads = createPostgresMemoryReads({ hashSessionKey, allowNonNullNamespace: true });
-      // Exercise hydration's read filters on lexical matches for the memory cases.
-      // The production lexical ranker and its own cases belong to the lexical lane.
-      const lexical = {
-        async lexical(tx, scope, text, depth) {
-          const { rows } = await query(tx, `SELECT id, core_namespace FROM memories
-            WHERE user_id = $1 AND text &@ $2 ORDER BY updated_at DESC, id COLLATE "C" DESC`, [tx.owner, text]);
-          const refs = rows.map(({ id, core_namespace }) => ({
-            type: "memory", id, namespace: core_namespace === null ? null : JSON.parse(core_namespace),
-          }));
-          const items = await memoryReads.hydrate.hydrate(tx, scope, refs, "recall");
-          return { rows: items.slice(0, depth).map(({ ref, memory }) => ({
-            ref, updatedAtUs: memory.updatedAtUs, score: 1,
-          })), matched: items.length > 0 };
+      const rawOptions = {
+        lineageSecret, hashSessionKey,
+        fingerprintKeys: async (owner) => {
+          const key = await keys.userKey(owner);
+          return key ? [key] : [];
         },
       };
+      const rawPorts = rawArchive ? createPostgresRawPorts(rawOptions) : null;
+      const readOptions = { hashSessionKey, allowNonNullNamespace: true };
+      const memoryReads = createPostgresMemoryReads(rawArchive ? { ...readOptions, ...rawOptions } : readOptions);
+      const { lexical, vector } = createPostgresMemoryCandidates(readOptions);
       /** @type {string[]} */
       const harnessOwners = [];
-      /** @type {Pick<TestHarness, "dump" | "seedFact" | "setWriteTime" | "rowsMissingKeyedDigest" | "hashSessionKey" | "setFingerprintSecret"> & {seedOwners(owner: string, otherOwner: string): Promise<void>}} */
+      /** @type {Pick<TestHarness, "dump" | "seedFact" | "setWriteTime" | "rowsMissingKeyedDigest" | "hashSessionKey" | "setFingerprintSecret" | "seedClientlessRaw"> & {seedOwners(owner: string, otherOwner: string): Promise<void>}} */
       const harness = {
         hashSessionKey,
         rowsMissingKeyedDigest: createPostgresDigestGate(uow, async (owner) => {
@@ -285,6 +286,13 @@ function postgresFactory(wrapSuppressions = (store) => store) {
           const key = await userFingerprintKey(secret, harnessOwners[0], HOSTED_FINGERPRINT_LABELS);
           assert.ok(key);
           for (const owner of harnessOwners) await keys.publish(owner, key.id);
+        },
+        async seedClientlessRaw(scope, sessionId, { id, occurredAtMs, role, content }) {
+          assert.equal(scope.namespace, null);
+          await pool.query(`INSERT INTO raw_messages (id, user_id, client, session_id, message_id, role, content, occurred_at)
+            VALUES ($1, $2, '', $3, $4, $5, $6, ${timestampUs("$7")})`,
+          [randomUUID(), scope.owner, sessionId, id, role, content,
+            occurredAtMs === null ? null : (BigInt(occurredAtMs) * 1000n).toString()]);
         },
         async seedOwners(owner, otherOwner) {
           await beforeDeadline("Owner fixture setup", 4_000,
@@ -312,7 +320,9 @@ function postgresFactory(wrapSuppressions = (store) => store) {
       };
       return {
         adapter: {
-          capabilities: flags, uow, suppressions, capture, lexical, keys, ...memoryReads, ...(flags.rawArchive ? rawPorts : {}),
+          capabilities: flags, uow, suppressions, capture, keys, lexical, ...memoryReads,
+          ...(semanticRetrieval && { vector }),
+          ...(rawPorts && { raw: { ...rawPorts.raw, ...createPostgresRawReads(rawOptions) }, sessionLineage: rawPorts.sessionLineage }),
           memories: createPostgresMemoryStore({ nearDuplicate, allowNonNullNamespace: true, hashSessionKey }),
           pause: createPostgresPauseStore(), supersession: createPostgresSupersessionStore({ allowNonNullNamespace: true }),
         },
@@ -344,6 +354,8 @@ const selected = new Set([
   "K-HIDE-1", "K-HIDE-2", "K-HIDE-3", "K-HIDE-4", "K-WRITE-1", "K-WRITE-2",
   "K-FORK-1", "K-FORK-2", "K-FORK-3", "K-FORK-4", "K-FORK-5",
   "K-FORK-6", "K-FORK-7", "K-FORK-10",
+  "K-RET-1", "K-RET-2", "K-RET-3", "K-FEN-1", "K-FEN-I1", "K-FEN-I2", "K-FEN-I3",
+  "K-RET-W1", "K-RET-W2", "K-SNAP-W1", "K-RAW-W1", "K-RAW-3", "K-RAW-3w", "K-RAW-3c", "K-RAW-3s",
   "K-RET-9", "K-SNAP-1", "K-HYD-1", "K-HYD-2", "K-PAUSE-1", "K-IMP-T1", "K-IMP-T2", "K-IMP-T3",
   "K-SNAP-F1", "K-SNAP-F3", "K-SNAP-F4", "K-SNAP-F5", "K-SNAP-F5u", "K-SNAP-F6", "K-SNAP-F7",
   "K-FACTSFOR-1", "K-KEY-1", "K-FACT-3r",
@@ -354,10 +366,6 @@ const selected = new Set([
 const notApplicable = {
   "hosted profile requires an embedding": ["K-MEM-10"],
   "pending historical edit case has no assertions": ["K-MEM-5h"],
-  lexical: ["K-RET-1", "K-RET-2"],
-  vector: ["K-RET-3"],
-  fence: ["K-FEN-1", "K-FEN-I1", "K-FEN-I2", "K-FEN-I3"],
-  "retrieval window": ["K-RET-W1", "K-RET-W2", "K-SNAP-W1", "K-RAW-W1"],
   supersessionEdges: ["K-REL-1", "K-REL-2", "K-REL-3", "K-REL-6", "K-REL-7", "K-REL-9", "K-REL-10", "K-REL-11", "K-REL-12"],
   conflictEdges: ["K-REL-4", "K-REL-5", "K-REL-8"],
   "K1 pending": ["K-KD-4", "K-KD-6"],
@@ -367,8 +375,8 @@ const notApplicable = {
     "K-KD-3", "K-KD-5",
   ],
   "snapshot.stateToken": ["K-ADM-7"],
-  raw: ["K-RAW-1", "K-RAW-2", "K-RAW-2s", "K-RAW-3", "K-RAW-3w", "K-RAW-3c", "K-RAW-3s",
-    "K-RAW-4", "K-RAW-5", "K-RAW-6", "K-RAW-7", "K-RAW-8", "K-RAW-8w", "K-RAW-8s"],
+  raw: ["K-RAW-1", "K-RAW-2", "K-RAW-2s", "K-RAW-6", "K-RAW-7", "K-RAW-8", "K-RAW-8w", "K-RAW-8s"],
+  "hosted raw is personal-only until scopes step 2 (namespace guard)": ["K-RAW-4", "K-RAW-5"],
   "raw.importArchive": ["K-IMP-RAW-1", "K-IMP-RAW-2", "K-IMP-RAW-3", "K-IMP-RAW-3s", "K-IMP-RAW-4", "K-IMP-RAW-4e", "K-IMP-RAW-4k",
     "K-IMP-RAW-5", "K-IMP-RAW-6", "K-IMP-RAW-7", "K-IMP-RAW-8", "K-IMP-RAW-9", "K-IMP-RAW-10"],
   "raw.recordLineage": ["K-FORK-8", "K-FORK-9"],
@@ -427,6 +435,12 @@ async function runPreparedCase(factory, testCase, t, execute = runCase) {
   const prepare = (run) => async (ctx) => {
     // runCase generates these IDs after open(), so seed both together at the case entry point.
     await ctx.harness.seedOwners(ctx.owner, ctx.otherOwner);
+    // Equal lexical text in two namespaces needs distinct fixture hashes on hosted.
+    if (testCase.id === "K-RET-1") {
+      let fixture = 0;
+      const hash = ctx.hash;
+      ctx = { ...ctx, hash: (text) => hash(JSON.stringify([text, fixture++])) };
+    }
     return beforeDeadline("Conformance case", 40_000, () => run(ctx));
   };
   const prepared = { ...testCase, run: prepare(testCase.run) };
