@@ -13,6 +13,7 @@ import { readFacts } from "./suppressions.mjs";
 /** @import { Connection, Port } from "./storage-values.mjs" */
 /** @import { SessionHasher } from "./suppressions.mjs" */
 /** @import { MigratedRawPolicy } from "./migrate/raw-privacy.mjs" */
+/** @import { MigratedCaptureControls } from "./migrate/capture-controls.mjs" */
 /** @typedef {Pick<RawSegment, "occurredAtMs"> & {ref: {id: string}}} PageKey */
 
 const decoder = new TextDecoder("utf-8", { fatal: true });
@@ -55,13 +56,15 @@ function refAddress({ owner, namespace }, id) {
   }
 }
 
-/** @param {Port} port @param {SessionHasher} hashSession @param {string} storeKey @param {MigratedRawPolicy} [migratedRaw] */
-export function createRawReads(port, hashSession, storeKey, migratedRaw) {
+/** @param {Port} port @param {SessionHasher} hashSession @param {string} storeKey
+ * @param {MigratedRawPolicy} [migratedRaw] @param {MigratedCaptureControls} [controls] */
+export function createRawReads(port, hashSession, storeKey, migratedRaw, controls) {
   const stateToken = createSnapshotToken(storeKey);
   const binding = randomUUID();
 
   /** @param {Connection} db @param {Scope} scope @param {RetrievalScope} selection */
   function visibility(db, scope, { clients, window }) {
+    if (controls && !controls.rawReadable(scope)) return () => false;
     const facts = readFacts(db, scope);
     /** @type {Map<string, ReturnType<typeof rawFactPolicy> | null>} */
     const sessions = new Map();
@@ -75,10 +78,12 @@ export function createRawReads(port, hashSession, storeKey, migratedRaw) {
       let policy = sessions.get(key);
       if (policy === undefined) {
         const candidate = rawFactPolicy(scope, row, facts, hashSession);
-        policy = hasRawFence(db, scope, candidate.sessionKeyHash) ? null : candidate;
+        policy = (migratedRaw
+          ? migratedRaw.blocksSession(db, scope, row, [])
+          : hasRawFence(db, scope, candidate.sessionKeyHash)) ? null : candidate;
         sessions.set(key, policy);
       }
-      return policy !== null && !policy.hides(row.message) && !migratedRaw?.blocks(db, scope, row, [row.message]);
+      return policy !== null && !policy.hides(row.message) && !migratedRaw?.blocksUuid(db, scope, row, row.message.id);
     };
   }
 

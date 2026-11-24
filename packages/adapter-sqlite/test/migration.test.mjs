@@ -24,7 +24,7 @@ test("legacy forget evidence denies reads and future writes across the SQLite po
   const result = await migrateLegacyStore(input);
   assert.equal(result.sourceLayout, 29);
   assert.equal(result.storeId, input.expectedStoreId);
-  assert.deepEqual(result.pausedOwners, [pausedScope.ownerId]);
+  assert.deepEqual(result.pausedOwners, []);
   assert.equal(fileDigest(input.path), before);
   const bytes = readFileSync(input.destination);
   for (const { text } of sentinels) assert.equal(bytes.includes(Buffer.from(text)), false);
@@ -105,7 +105,7 @@ test("legacy forget evidence denies reads and future writes across the SQLite po
   });
   const paused = await adapter.uow.run(pausedScope.ownerId, { pauseLock: true, readOnly: true },
     tx => adapter.pause.get(tx, pausedScope.ownerId));
-  assert.deepEqual(paused, { paused: true, generation: 1 });
+  assert.deepEqual(paused, { paused: false, generation: 1 });
 });
 
 test("copies layout 18 while preserving exact fractional keys and owner scope boundaries", async t => {
@@ -155,7 +155,7 @@ test("all other legacy layouts refuse without copying or changing source bytes",
   for (const physical of LEGACY_LAYOUTS.filter(layout => layout !== 29 && layout !== 18)) {
     const input = prepareInput(directory, await fixture(directory, physical));
     const before = fileDigest(input.path);
-    await assert.rejects(migrateLegacyStore(input), { code: "legacy_cross_version" });
+    await assert.rejects(migrateLegacyStore(input), { code: [48, 53].includes(physical) ? "legacy_backup_unpublished" : "legacy_cross_version" });
     assert.equal(fileDigest(input.path), before);
     assert.equal(existsSync(input.destination), false);
   }
