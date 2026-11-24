@@ -1,3 +1,4 @@
+import { NEAR_DUPLICATE_DISTANCE } from "@cairn-ink/core";
 import { check, equal, fixtureEmbedding } from "./support.mjs";
 
 /** @import { CaptureKey, FinishItem } from "@cairn-ink/core/ports" */
@@ -35,7 +36,7 @@ export const captureFinishCases = [
   {
     id: "K-CLM-6", title: "finish reports the positions its write policy suppressed", needs: [],
     async run(ctx) {
-      const { adapter: { capture, uow }, harness, owner } = ctx;
+      const { adapter: { capture, memories, uow }, harness, owner } = ctx;
       if (typeof capture?.claim !== "function" || typeof capture.finish !== "function") {
         return "capture claim and finish ports are required";
       }
@@ -60,6 +61,8 @@ export const captureFinishCases = [
       check(fresh.status === "claimed", "Expected a fresh claim");
       // Core counts the batch before handing it to the store; the store may consume the caller's array.
       const itemCount = items.length;
+      const expectedTexts = [items[0].content, items[2].content].sort();
+      const forgottenHash = items[1].textHash;
       const { result, reported } = await uow.run(owner, { pauseLock: true }, async (tx) => {
         const finished = await capture.finish(tx, fresh.token, items);
         // Core reads this field first, inside the transaction, and archives from that single read.
@@ -70,6 +73,17 @@ export const captureFinishCases = [
       if (reported) equal(reported, [1], "Finish must report exactly the suppressed middle position");
       equal(result.suppressedCount, 1, "Finish must count the suppressed middle item");
       equal(result.memories.length, 2, "Finish must write the other two items");
+      // Whether or not the store reports positions, it must store exactly the first and last items and not the
+      // suppressed middle one. Compare stored text: a store could carry the wrong item under a reported hash.
+      const stored = await uow.run(owner, { readOnly: true }, async (tx) => {
+        const rows = [];
+        for (const { id } of result.memories) rows.push(await memories.get(tx, key.scope, id));
+        const [matches] = await memories.findDuplicates(tx, key.scope, [{ textHash: forgottenHash }],
+          { nearDistance: NEAR_DUPLICATE_DISTANCE });
+        return { texts: rows.map((row) => row?.text), forgotten: matches.filter(({ match }) => match === "exact").length };
+      });
+      equal([...stored.texts].sort(), expectedTexts, "Finish must store exactly the first and last items");
+      equal(stored.forgotten, 0, "Finish must not store the suppressed middle item");
 
       const replay = await claim();
       // A completed claim may acknowledge a duplicate without returning a result.
