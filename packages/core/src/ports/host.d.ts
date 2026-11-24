@@ -412,8 +412,7 @@ export interface ReadContextResult {
   snapshot: string | null;
 }
 
-/** Proposed codes join ERROR_CODES when the runtime implements Addendum 17. */
-export type ContextReadErrorCode = ErrorCode | "snapshot_stale" | "authority_required";
+export type ContextReadErrorCode = ErrorCode;
 export interface ContextReadError extends Error {
   code: ContextReadErrorCode;
   retryable: boolean;
@@ -429,6 +428,7 @@ export interface ContextReadTokenCounter {
 /** All Context Read signing uses this store identity and key, independent of model and fingerprint keys. */
 export interface ReadTokenIdentity {
   storeId: string;
+  /** Raw HMAC-SHA256 bytes or an HMAC-SHA256 CryptoKey with sign and verify usages. */
   cursorKey: Uint8Array | CryptoKey;
 }
 

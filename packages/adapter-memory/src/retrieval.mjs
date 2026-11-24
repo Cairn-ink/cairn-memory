@@ -268,7 +268,8 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
           if (intent !== "recall" && intent !== "read" && intent !== "export") throw new CoreError("invalid_input");
           const references = copyRefs(refs);
           return Array.from(visibleRefs(getState(), selection, references, intent !== "recall"), ({ ref, entry }) => ({
-            ref, memory: copyPublicRow(entry.row), receipts: structuredClone(entry.receipts),
+            ref, memory: copyPublicRow(entry.row), receipts: entry.receipts.map(({ client, sessionId, messageId, role, occurredAtMs }) =>
+              ({ client, sessionId, messageId, role, occurredAtMs })),
             sourceDates: sourceDates(entry.receipts),
           }));
         });

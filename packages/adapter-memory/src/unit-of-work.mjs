@@ -1,5 +1,6 @@
 import { coreDigest, CoreError, compareUtf8, isErrorCode, toCoreError } from "@cairn-ink/core";
 import { compareValidatedDigests } from "../../core/src/privacy/withholds.mjs";
+import { advanceContextEpochs } from "./context-read-state.mjs";
 import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from "./privacy.mjs";
 
 /** @typedef {import("@cairn-ink/core").ErrorCode} ErrorCode */
@@ -22,7 +23,7 @@ import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from 
 /** @typedef {{text: string, role: import("@cairn-ink/core/ports").Role, occurredAtMs: number | null}} RationaleMessage */
 /** @typedef {import("./memory-relations.mjs").RelationState} RelationState */
 /** @typedef {{topics: Map<Namespace, TopicState>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
- * documentCards: Map<Namespace, Map<string, CardEntry>>,
+ * documentCards: Map<Namespace, Map<string, CardEntry>>, contextEpochs: Map<Namespace, number>,
  * rationale: Map<Namespace, Map<string, import("@cairn-ink/core/ports").RationaleEdge>>,
  * rationaleMessages: Map<Namespace, Map<string, RationaleMessage>>,
  * rawRows: Map<string, import("./raw.mjs").RawEntry>, rawFences: Set<string>, rawConflicts: Set<string>,
@@ -111,7 +112,8 @@ class Mutex {
 class Owner {
   /** @type {State} */
   committed = {
-    topics: new Map(), documentCards: new Map(), rows: new Map(), facts: new Map(), epoch: null, pause: { paused: false, generation: 0 }, indexRevision: 0,
+    topics: new Map(), documentCards: new Map(), contextEpochs: new Map(), rows: new Map(), facts: new Map(), epoch: null,
+    pause: { paused: false, generation: 0 }, indexRevision: 0,
     claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(), rawRows: new Map(), rawFences: new Set(),
     rawAnchors: new Map(), relations: new Map(),
     rawConflicts: new Set(), rationale: new Map(), rationaleMessages: new Map(),
@@ -140,6 +142,7 @@ function jsonSafe(value) {
 
 /** @param {Readonly<Record<string, ErrorCode>>} nativeErrorMap @param {() => number} [now] @param {boolean} [includeTopics] */
 export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics = false) {
+  let trackContextEpochs = false;
   /** @type {Map<string, Owner>} */
   const owners = new Map();
   /** @type {WeakMap<Tx, IssuedRun>} */
@@ -200,6 +203,7 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
             finish.indexRevision = revision;
           }
           state.indexRevision = revision;
+          if (trackContextEpochs && revision !== current.committed.indexRevision) advanceContextEpochs(current.committed, state);
           current.committed = state;
         }
         return result;
@@ -427,7 +431,10 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
       const updated = new Map(entries);
       updated.set(id, { ...entry, row: { ...entry.row, updatedAtUs, updatedAtMs: Number(updatedAtUs / 1000n) } });
       rows.set(namespace, updated);
-      current.committed = { ...current.committed, rows, indexRevision: current.committed.indexRevision + 1 };
+      const previous = current.committed;
+      const next = { ...previous, rows, contextEpochs: new Map(previous.contextEpochs), indexRevision: previous.indexRevision + 1 };
+      if (trackContextEpochs) advanceContextEpochs(previous, next);
+      current.committed = next;
     } finally {
       release();
     }
@@ -523,5 +530,6 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
     return count;
   }
 
-  return { uow, port, dump, appendFact, runSeed, setWriteTime, rotateRowDigests, keyedDomains, rowsMissingKeyedDigest, writeOwner };
+  return { uow, port, dump, appendFact, runSeed, setWriteTime, rotateRowDigests, keyedDomains, rowsMissingKeyedDigest, writeOwner,
+    enableContextEpochs() { trackContextEpochs = true; } };
 }

@@ -1,7 +1,7 @@
 import { CoreError, decideWrite, planDuplicateMerge } from "@cairn-ink/core";
 import { indexRevisionAfterRun } from "./unit-of-work.mjs";
 import { admissionScope, copyCaptureFailure, copyCaptureMessages, copyCaptureSelection,
-  copyFinishItems, snapshotArray, validateTime, writeNamespace } from "./validation.mjs";
+  copyFinishItems, receiptExcerpt, snapshotArray, validateTime, writeNamespace } from "./validation.mjs";
 
 /** @import { CaptureMessage } from "@cairn-ink/core/ports" */
 /** @typedef {import("@cairn-ink/core/ports").CaptureKey} CaptureKey */
@@ -65,10 +65,11 @@ function copyResult(stored, pending) {
  * @param {ReturnType<typeof import("./fact-match.mjs").createFactMatcher>} matchFacts
  * @param {boolean} embeddingRequiredOnInsert
  * @param {RawLineage} [lineage]
+ * @param {boolean} [retainReceipts]
  * @returns {import("./index.d.mts").MemoryAdapter["capture"]}
  */
 export function createCapturePorts(port, { memories, finishWrites, readWritePolicy }, now, matchFacts, embeddingRequiredOnInsert,
-  lineage) {
+  lineage, retainReceipts = false) {
   return {
     async claim(tx, key, messages, options) {
       const scope = admissionScope(tx, key);
@@ -165,8 +166,18 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
           /** @type {number[]} */
           const suppressedItems = [];
           let duplicateCount = 0;
+          const sources = retainReceipts ? new Map(claim.messages?.map(message => [message.id, message])) : undefined;
 
-          for (const [position, { row, receipts }] of batch.entries()) {
+          for (const [position, { row, receipts: sourceRefs }] of batch.entries()) {
+            const receipts = sources ? sourceRefs.map(({ client: sourceClient, sessionId: sourceSession, messageId, role, occurredAtMs }) => {
+              const link = { client: sourceClient, sessionId: sourceSession, messageId, role, occurredAtMs };
+              const retained = sources.get(messageId);
+              if (!retained?.content || sourceClient !== client || sourceSession !== sessionId || role !== retained.role) {
+                return link;
+              }
+              return { ...link, occurredAtMs: retained.occurredAtMs, eventId: claim.key.eventId,
+                createdAtMs: nowMs, excerpt: receiptExcerpt(retained.content) };
+            }) : sourceRefs;
             const decision = decideWrite(policy, position, progress);
             switch (decision.status) {
               case "suppressed":

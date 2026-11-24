@@ -23,9 +23,11 @@ const runtimeGlobals = new Set([
   'encodeURIComponent', 'isFinite', 'isNaN', 'parseInt', 'structuredClone', 'undefined',
 ]);
 const stdioProcessMembers = new Set(['argv', 'stdin', 'stdout']);
+const contextReadTokens = coreSource + 'service/context-read-tokens.mjs';
 const webCryptoMembers = new Map([
   [coreSource + 'privacy/fingerprint.mjs', new Set(['digest', 'importKey', 'sign'])],
   [coreSource + 'routing/card.mjs', new Set(['digest'])],
+  [contextReadTokens, new Set(['importKey', 'sign', 'verify'])],
 ]);
 const functionTypes = new Set(['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression']);
 const scopeTypes = new Set([
@@ -107,8 +109,12 @@ function allowedAmbient(name, node, parents, path) {
   if (path === cliEntry && name === 'console') {
     return (property === 'log' || property === 'error') && use.type === 'CallExpression' && use.callee === member;
   }
-  if (name === 'globalThis' && property === 'crypto' && dotMember(member, use) === 'subtle') {
+  if (name === 'globalThis' && property === 'crypto') {
     const method = parents.get(use);
+    if (path === contextReadTokens && dotMember(member, use) === 'randomUUID') {
+      return method.type === 'CallExpression' && method.callee === use;
+    }
+    if (dotMember(member, use) !== 'subtle') return false;
     const call = parents.get(method);
     return webCryptoMembers.get(path)?.has(dotMember(use, method)) &&
       call.type === 'CallExpression' && call.callee === method;

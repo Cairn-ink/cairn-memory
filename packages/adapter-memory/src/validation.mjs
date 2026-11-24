@@ -1,4 +1,4 @@
-import { CoreError, isErrorCode, validateSuppressionFact } from "@cairn-ink/core";
+import { cleanContent, CoreError, isErrorCode, redactV1, validateSuppressionFact } from "@cairn-ink/core";
 import { copyWindow } from "./retrieval-window.mjs";
 
 /** @typedef {import("@cairn-ink/core/ports").InsertRow} InsertRow */
@@ -327,11 +327,27 @@ export function copyContent(row, format, embeddingRequiredOnInsert) {
 export function copyReceipts(receipts) {
   return snapshotArray(receipts).map((receipt) => {
     if (!receipt) invalid();
-    const { client, sessionId, messageId, role, occurredAtMs } = receipt;
+    const { client, sessionId, messageId, role, occurredAtMs, id, excerpt, eventId, createdAtMs } = receipt;
     if (!nonempty(client) || !nonempty(sessionId) || !nonempty(messageId) || !roles.includes(role) ||
       (occurredAtMs !== null && !Number.isFinite(occurredAtMs))) invalid();
-    return { client, sessionId, messageId, role, occurredAtMs };
+    if ((id !== undefined && !nonempty(id)) || (eventId !== undefined && !nonempty(eventId)) ||
+        (excerpt !== undefined && (typeof excerpt !== "string" || excerpt.length > 800)) ||
+        (createdAtMs !== undefined && (!Number.isSafeInteger(createdAtMs) || createdAtMs < 0))) invalid();
+    return { client, sessionId, messageId, role, occurredAtMs,
+      ...(id !== undefined && { id }), ...(eventId !== undefined && { eventId }),
+      ...(excerpt !== undefined && { excerpt: receiptExcerpt(excerpt) }), ...(createdAtMs !== undefined && { createdAtMs }) };
   });
+}
+
+/** @param {string} text */
+export function receiptExcerpt(text) {
+  const normalized = redactV1(cleanContent(text).normalize("NFKC")).replace(/\s+/gu, " ").trim();
+  let excerpt = "";
+  for (const point of normalized) {
+    if (excerpt.length + point.length > 800) break;
+    excerpt += point;
+  }
+  return excerpt;
 }
 
 /** @param {readonly Receipt[]} previous @param {readonly Receipt[]} receipts */

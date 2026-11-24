@@ -30,13 +30,24 @@ export const CAPABILITIES = Object.freeze([
   "forgetLog", // cutover-only forget log (Postgres, removed after cutover)
 ]);
 
+export const READ_CONTRACT_CAPABILITIES = Object.freeze([
+  "contextRead", // qualified Memory and Card candidates and evidence
+  "contextRawRead", // snapshot-bound Raw context search and revalidation
+  "inspect", // exact-scope Memory and receipt paging
+]);
+
+const registeredCapabilities = [...CAPABILITIES, ...READ_CONTRACT_CAPABILITIES];
+
 /** @param {Partial<Record<string, boolean>>} flags */
 export function capabilities(flags) {
   /** @type {Record<string, boolean>} */
   const out = {};
   for (const name of CAPABILITIES) out[name] = flags[name] === true;
+  for (const name of READ_CONTRACT_CAPABILITIES) {
+    if (Object.hasOwn(flags, name)) out[name] = flags[name] === true;
+  }
   for (const name of Object.keys(flags)) {
-    if (!CAPABILITIES.includes(name)) throw new CoreError("invalid_input");
+    if (!registeredCapabilities.includes(name)) throw new CoreError("invalid_input");
   }
   return Object.freeze(out);
 }
@@ -46,7 +57,7 @@ export function capabilities(flags) {
  * @param {string} name
  */
 export function requireCapability(caps, name) {
-  if (!CAPABILITIES.includes(name)) throw new CoreError("invalid_input");
+  if (!registeredCapabilities.includes(name)) throw new CoreError("invalid_input");
   if (caps[name] !== true) throw new CoreError("capability_unavailable");
 }
 
@@ -69,6 +80,13 @@ export const OPTIONAL_PORTS = Object.freeze({
   quantityLedger: "quantityLedger",
 });
 
+/** @param {{ capabilities: Readonly<Record<string, boolean>>, contextRead?: {raw?: object}, inspect?: object }} adapter */
+export function assertReadContractCapabilities({ capabilities: caps, contextRead, inspect }) {
+  if ((contextRead != null) !== (caps.contextRead === true) ||
+      (contextRead?.raw != null) !== (caps.contextRawRead === true) ||
+      (inspect != null) !== (caps.inspect === true)) throw new CoreError("capability_unavailable");
+}
+
 /**
  * Checked at adapter registration, both directions: a present optional port requires its
  * flag, and a true flag requires its port.
@@ -80,4 +98,5 @@ export function assertAdapterCapabilities(adapter) {
     if ((adapter[member] != null) !== (caps[flag] === true)) throw new CoreError("capability_unavailable");
   }
   if (caps.documentCardSearch === true && caps.documentCards !== true) throw new CoreError("capability_unavailable");
+  assertReadContractCapabilities(adapter);
 }

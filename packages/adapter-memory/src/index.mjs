@@ -1,5 +1,6 @@
 import { CoreError, assertAdapterCapabilities, capabilities, toCoreError } from "@cairn-ink/core";
 import { createCapturePorts } from "./capture.mjs";
+import { createContextReadStore } from "./context-read.mjs";
 import { createDocumentCardStore } from "./document-cards.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
 import { createRelationStores } from "./memory-relations.mjs";
@@ -23,6 +24,7 @@ const nativeErrorMap = Object.freeze({});
  */
 export function createMemoryAdapter(options = {}) {
   const flags = capabilities(options.capabilities ?? {});
+  if (flags.contextRead && flags.cards) throw new CoreError("capability_unavailable");
   const sessionRefs = options.sessionRefs ?? "plain";
   if (sessionRefs !== "plain" && sessionRefs !== "hashed") throw new CoreError("invalid_input");
   const newId = options.newId ?? (() => crypto.randomUUID());
@@ -48,12 +50,13 @@ export function createMemoryAdapter(options = {}) {
     capabilities: flags,
     uow,
     memories: handleWriteRejections(store.memories, ["insert", "touchDuplicate", "replaceContent", "erase"]),
-    capture: handleWriteRejections(createCapturePorts(port, store, now, matchFacts, flags.embeddingRequiredOnInsert, archive),
+    capture: handleWriteRejections(createCapturePorts(port, store, now, matchFacts, flags.embeddingRequiredOnInsert, archive, flags.contextRead),
       ["admit", "claim", "beginDispatch", "abandon", "finish", "assertEligible"]),
     suppressions: handleWriteRejections(suppressions, ["writeFact"]),
     pause: handleWriteRejections(createPauseStore(port), ["set"]),
     keys,
     ...createRetrievalPorts(port, flags, matchFacts, archive?.visibleRawRefs, cardVisible),
+    ...(flags.contextRead && { contextRead: createContextReadStore(work, matchFacts, ringKeys, archive?.sourceVisible) }),
     ...(archive && { raw: handleWriteRejections(archive.raw,
       ["recordLineage", "archive", "importArchive", "fenceSession", "purgeWithheld", "eraseSessions", "deleteConversation"]) }),
     ...(flags.supersession && { supersession: handleWriteRejections(supersession, ["record", "markHistorical"]) }),

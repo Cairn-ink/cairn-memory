@@ -81,6 +81,9 @@ export interface Receipt {
   id?: string;
   /** Stored, normalized and redacted source excerpt, at most 800 UTF-16 code units. */
   excerpt?: string;
+  /** Source event and retention time, when the receipt store preserves them. */
+  eventId?: string;
+  createdAtMs?: number;
 }
 
 /** A content-free diagnostic event (no text, ids, hashes or keys). */

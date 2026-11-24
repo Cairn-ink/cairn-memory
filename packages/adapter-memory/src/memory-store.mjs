@@ -46,6 +46,14 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
   /** @param {InsertRow} row */
   const prepareContent = (row) => copyContent(row, "memory", capabilities.embeddingRequiredOnInsert);
 
+  /** @param {readonly Receipt[]} receipts @param {number} nowMs */
+  function copyEvidence(receipts, nowMs) {
+    return copyReceipts(receipts).map(receipt => {
+      if (!capabilities.contextRead || receipt.excerpt === undefined || receipt.eventId === undefined) return receipt;
+      return { ...receipt, id: receipt.id ?? crypto.randomUUID(), createdAtMs: receipt.createdAtMs ?? nowMs };
+    });
+  }
+
   /** @param {string} owner @param {CopiedContent} content */
   async function rowDigests(owner, content) {
     const keys = await ringKeys(owner);
@@ -113,7 +121,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
       async insert(tx, scope, row, receipts, nowMs) {
         return write(tx, scope, () => {
           const content = prepareContent(row);
-          const evidence = attachReceipts([], copyReceipts(receipts));
+          const evidence = attachReceipts([], copyEvidence(receipts, nowMs));
           validateTime(nowMs);
           const suppliedCreationTime = row.createdAtMs;
           const createdAtMs = suppliedCreationTime === undefined ? nowMs : suppliedCreationTime;
@@ -143,7 +151,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
           const copy = copyMerge(merge);
           validateMemoryId(id);
           validateTime(nowMs);
-          const incoming = copyReceipts(receipts);
+          const incoming = copyEvidence(receipts, nowMs);
           const namespace = writeNamespace(scope);
           return (getState, markDirty) => {
             const state = getState();
@@ -249,7 +257,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
       return port.write(tx, scope, true, () => {
         const content = prepareContent(next);
         validateTime(nowMs);
-        const evidence = receipts === null ? null : attachReceipts([], copyReceipts(receipts));
+        const evidence = receipts === null ? null : attachReceipts([], copyEvidence(receipts, nowMs));
         validateMemoryId(id);
         if (!Number.isInteger(expectedRevision)) throw new CoreError("invalid_input");
         const namespace = writeNamespace(scope);

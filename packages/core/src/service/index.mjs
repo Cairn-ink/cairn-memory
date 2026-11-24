@@ -1,8 +1,10 @@
-import { CAPABILITIES } from "../capabilities.mjs";
+import { assertReadContractCapabilities, CAPABILITIES, READ_CONTRACT_CAPABILITIES } from "../capabilities.mjs";
 import { identifier, validateObject } from "../capture/validate.mjs";
 import { FUSION_PRESETS, NEAR_DUPLICATE_DISTANCE } from "../decisions.mjs";
 import { CoreError } from "../errors.mjs";
 import { captureMethods } from "./capture.mjs";
+import { fetchEvidenceMethod } from "./context-read-fetch.mjs";
+import { findCandidatesMethod } from "./context-read-find.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
 import { findMethod, readMethod } from "./find.mjs";
 import { forgetMethod } from "./forget.mjs";
@@ -69,10 +71,11 @@ function freezeDeps(input) {
   const deps = { ...input };
   const { storage, model, embedder, gate, clock, tokens, embedQuery, diagnostics } = deps;
   identifier(storage?.name);
-  validateObject(storage.capabilities, CAPABILITIES);
+  validateObject(storage.capabilities, [...CAPABILITIES, ...READ_CONTRACT_CAPABILITIES]);
   if (Object.values(storage.capabilities).some(value => typeof value !== "boolean")) {
     throw new CoreError("invalid_input");
   }
+  assertReadContractCapabilities(storage);
   // Validate the storage methods this slice uses. Optional ports are checked at adapter registration.
   requireMethods(storage.uow, "run");
   requireMethods(storage.pause, "get", "set");
@@ -113,6 +116,8 @@ export function createMemoryService(input) {
       forget: forgetMethod(deps),
       recall: recallMethod(deps),
       find: findMethod(deps),
+      findCandidates: findCandidatesMethod(deps),
+      fetchEvidence: fetchEvidenceMethod(deps.storage),
       read: readMethod(deps.storage),
       listRawMessages: listRawMessagesMethod(deps.storage),
       importMemories: importMethod(deps),

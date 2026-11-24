@@ -22,6 +22,7 @@ export type MemoryAdapter = Pick<StorageAdapter<StoredDocumentCardRecord>, "capa
   "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent" | "suppressions" | "pause" | "keys" | "placement" | "raw" |
   "supersession" | "conflicts" | "documentCards" | "rationale" | "rationaleSourceText"> & {
   readonly capture: CapturePorts & Required<Pick<CapturePorts, "admit" | "load" | "status">>;
+  readonly contextRead?: import("@cairn-ink/core/ports").ContextReadStore;
   name: "memory";
   nativeErrorMap: Readonly<Record<string, ErrorCode>>;
   harness: TestHarness & Required<Pick<TestHarness, "setFingerprintSecret" | "rowsMissingKeyedDigest" | "advanceClock">>;
