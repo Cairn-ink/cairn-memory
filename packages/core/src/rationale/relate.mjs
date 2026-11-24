@@ -82,7 +82,7 @@ export async function relate({ model, sources, validateFresh, deadline, gate, ow
   const built = buildRelateRequest(sources);
   await validateFresh();
   const edges = await callBuiltModel(model, 'relate', built, {
-    failureCode: 'rationale_failed', deadline, gate, owner, signal, onDiagnostic,
+    failureCode: 'rationale_failed', refresh: validateFresh, deadline, gate, owner, signal, onDiagnostic,
   });
   await validateFresh();
   return edges;
