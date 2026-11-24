@@ -353,6 +353,7 @@ const selected = new Set([
   "K-FACT-5", "K-FACT-6", "K-FACT-7", "K-SESS-1",
   "K-ADM-1", "K-ADM-3", "K-ADM-4", "K-ADM-5", "K-ADM-9", "K-ADM-12", "K-ADM-13",
   "K-SRC-1", "K-SRC-2", "K-SRC-3", "K-SRC-4", "K-SRC-5",
+  "K-RAW-LATE-1", "K-RAW-LATE-2",
   "K-UOW-1", "K-UOW-2", "K-UOW-4", "K-UOW-7", "K-UOW-8b",
   "K-MEM-1", "K-MEM-3", "K-CAP-1", "K-MEM-4", "K-MEM-4r", "K-MEM-5",
   "K-MEM-11", "K-MEM-12", "K-MEM-13",

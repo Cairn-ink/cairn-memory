@@ -1,7 +1,9 @@
-import { chmodSync, statSync } from "node:fs";
+import { chmodSync, realpathSync, statSync } from "node:fs";
+import { basename } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { CoreError } from "@cairn-ink/core";
 import { toSqliteError } from "../errors.mjs";
+import { BOOTSTRAP_FILENAME } from "../migrate/layout.mjs";
 import { openSqliteUnitOfWork } from "../uow.mjs";
 import { INITIALIZE_STORE, SQLITE_APPLICATION_ID, SQLITE_PHYSICAL_VERSION, STORAGE_SCHEMA } from "./layout.mjs";
 
@@ -38,8 +40,17 @@ function classifyStore(db) {
     throw new CoreError("storage_error");
   }
   const tables = db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'").all();
-  if (tables.length !== layoutTables.length || !layoutTables.every(name => tables.some(table => table.name === name))) {
+  const migrated = tables.some(table => table.name === "cairn_migration");
+  if (tables.length !== layoutTables.length + Number(migrated) ||
+      !layoutTables.every(name => tables.some(table => table.name === name))) {
     throw new CoreError("storage_error");
+  }
+  if (migrated) {
+    const record = db.prepare("SELECT singleton, checkpoint, attestation FROM cairn_migration LIMIT 2").all();
+    if (record.length !== 1 || record[0].singleton !== 1 || record[0].checkpoint !== 3 ||
+        typeof record[0].attestation !== "string" || !/^[0-9a-f]{64}$/u.test(record[0].attestation)) {
+      throw new CoreError("storage_error");
+    }
   }
   return readSessionHashKey(db);
 }
@@ -48,8 +59,10 @@ function classifyStore(db) {
 function preflight(filename) {
   if (typeof filename !== "string" || !filename || filename === ":memory:" ||
       filename.startsWith("file:") || filename.includes("\0")) throw new CoreError("invalid_input");
+  if (basename(filename) === BOOTSTRAP_FILENAME) throw new CoreError("storage_error");
   try {
     if (!statSync(filename).isFile()) throw new CoreError("invalid_input");
+    if (basename(realpathSync(filename)) === BOOTSTRAP_FILENAME) throw new CoreError("storage_error");
   } catch (error) {
     if (/** @type {NodeJS.ErrnoException} */ (error)?.code !== "ENOENT") throw error;
     return false;
