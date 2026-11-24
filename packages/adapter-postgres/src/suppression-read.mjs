@@ -147,9 +147,9 @@ async function legacyFacts(query, scope) {
 }
 
 /** @param {Pick<FactMatchPolicy, "hashSessionKey" | "vectorSuppression"> & {allowNonNullNamespace?: boolean}} options */
-export function createSuppressionReads({ hashSessionKey, vectorSuppression = false, allowNonNullNamespace = false }) {
+export function createSuppressionReads({ hashSessionKey, allowNonNullNamespace = false }) {
   const policy = rowVisibilityPolicy(hashSessionKey);
-  const capture = /** @type {const} */ ({ hashSessionKey, vectorSuppression, rowShingles: true, mode: "capture" });
+  const capture = /** @type {const} */ ({ hashSessionKey, mode: "capture" });
 
   /** @type {SuppressionStore["snapshot"]} */
   async function snapshot(tx, scope, candidates) {
@@ -190,8 +190,12 @@ export function createSuppressionReads({ hashSessionKey, vectorSuppression = fal
             blockedMessages.push(position);
           }
         }
-        return { blockedSession, blockedMessages, passages: passages === undefined ? texts :
-          texts.filter((stored) => factBlocksIncoming(stored, { scope: scoped, passages }, capture) !== false) };
+        // Core decides containment at capture and write time. Keep the full evidence
+        // for every scoped full fact, including facts decoded from hosted rows.
+        const projected = passages === undefined ? texts : passages.length === 0 ? [] :
+          texts.filter((stored) => stored.fact.mode === "full" ||
+            factBlocksIncoming(stored, { scope: scoped, passages }, capture) !== false);
+        return { blockedSession, blockedMessages, passages: projected };
       } catch {
         return ineligible();
       }

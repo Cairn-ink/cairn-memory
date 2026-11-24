@@ -1,10 +1,11 @@
 import { CoreError } from "../../core/src/index.mjs";
-import { copyReadScope, copyRefs, guardOwner, invalid, pgText } from "./memory-input.mjs";
+import { copyReadScope, copyRefs, guardOwner, invalid, namespaceKey, pgText } from "./memory-input.mjs";
 import { MEMORY_COLUMNS, readEntry, timestampUs } from "./memory-rows.mjs";
 import { readVisibility } from "./memory-visibility.mjs";
 import { createRawRefReader } from "./raw-read.mjs";
 import { decode, encode, readStateToken, validateToken } from "./read-snapshot.mjs";
 import { MEMORY_FILTER, memoryScopeParams } from "./retrieval-scope.mjs";
+import { readSupersessionViews } from "./supersession-store.mjs";
 import { runOperation } from "./uow.mjs";
 
 /** @import { HydrateItems, ListRecent, ReadSnapshot, Receipt, Tx, VisibilityFence } from "../../core/src/ports/index.d.ts" */
@@ -130,6 +131,19 @@ export function createPostgresMemoryReads(options = {}) {
         if (intent !== "recall" && intent !== "read" && intent !== "export") invalid();
         return runOperation(tx, async (query) => {
           const rows = await visibleRefs(query, selection, references, intent !== "recall", true, hashSessionKey);
+          if (intent === "read") {
+            const historical = rows.map(({ memory }) => memory).filter(memory => memory.historical);
+            for (const namespace of new Set(historical.map(memory => memory.scope.namespace))) {
+              const memories = historical.filter(memory => memory.scope.namespace === namespace);
+              const views = await readSupersessionViews(query, tx.owner, namespaceKey(namespace, allowNonNullNamespace),
+                memories.map(memory => memory.id), hashSessionKey);
+              for (const memory of memories) {
+                if (views.get(memory.id)?.supersededBy === null) {
+                  memory.supersession = "superseded (replacement no longer available)";
+                }
+              }
+            }
+          }
           return rows.map(item => ({ ...structuredClone(item), sourceDates: sourceDates(item.receipts) }));
         });
       },

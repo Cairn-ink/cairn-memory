@@ -47,9 +47,8 @@ export function floorMillis(us) {
   return Number((us - (us < 0n ? 999n : 0n)) / 1000n);
 }
 
-/** @param {any} row @param {string} owner */
-function readVisibilityFields(row, owner) {
-  const updatedAtUs = BigInt(row.updated_us);
+/** @param {any} row @param {string} owner @param {bigint} updatedAtUs */
+function readVisibilityFields(row, owner, updatedAtUs) {
   return {
     id: /** @type {string} */ (row.id),
     scope: { owner, namespace: /** @type {string | null} */ (row.core_namespace === null ? null : JSON.parse(row.core_namespace)) },
@@ -63,7 +62,7 @@ function readVisibilityFields(row, owner) {
 
 /** @param {any} row @param {string} owner @returns {MemoryRow} */
 export function readMemory(row, owner) {
-  const fields = readVisibilityFields(row, owner);
+  const fields = readVisibilityFields(row, owner, BigInt(row.updated_us));
   const kind = readSourceKind(row.source_kind);
   return {
     ...fields,
@@ -85,7 +84,8 @@ export function readEntry(row, owner) {
 /** @param {any} row @param {string} owner */
 export function readCandidate(row, owner) {
   const memory = {
-    ...readVisibilityFields(row, owner),
+    // Relation reads only need the timestamp when a window fact applies.
+    ...readVisibilityFields(row, owner, BigInt(row.updated_us ?? 0)),
     text: /** @type {string | undefined} */ (row.text ?? undefined),
     embedding: row.embedding == null ? undefined : { vector: /** @type {number[]} */ (JSON.parse(row.embedding)) },
   };
@@ -108,16 +108,30 @@ export async function advanceIndex(query, owner, run) {
   run.indexStart = BigInt(row.index_revision) - 1n;
 }
 
-/** @param {Query} query @param {string} owner @param {readonly string[]} ids @param {number} [limit] */
-export async function readReceipts(query, owner, ids, limit) {
+/** @param {string} ids SQL expression returning the selected memory IDs as text[]. */
+function activeReceiptsSql(ids) {
+  return `FROM core_memory_receipts WHERE user_id = $1 AND memory_id = ANY(${ids}) AND forgotten_at IS NULL`;
+}
+
+/** @param {string} ids SQL expression returning the selected memory IDs as text[]. */
+export function memoryReceiptSourcesSql(ids) {
+  return `SELECT memory_id, client, session_id AS "sessionId" ${activeReceiptsSql(ids)}`;
+}
+
+/** @param {string} ids SQL expression returning the selected memory IDs as text[].
+ * @param {string} [limit] SQL expression limiting the returned receipts. */
+export function memoryReceiptsSql(ids, limit = "NULL") {
+  return `SELECT memory_id, client, session_id, message_id, role,
+      COALESCE(core_occurred_at_ms, EXTRACT(EPOCH FROM occurred_at) * 1000)::text AS occurred_ms
+    ${activeReceiptsSql(ids)}
+    ORDER BY memory_id COLLATE "C", client COLLATE "C", session_id COLLATE "C", message_id COLLATE "C"
+    LIMIT ${limit}`;
+}
+
+/** @param {any[]} rows */
+export function decodeReceipts(rows) {
   /** @type {Map<string, Receipt[]>} */
   const result = new Map();
-  if (ids.length === 0) return result;
-  const { rows } = await query(`SELECT memory_id, client, session_id, message_id, role,
-      COALESCE(core_occurred_at_ms, EXTRACT(EPOCH FROM occurred_at) * 1000) AS occurred_ms
-    FROM core_memory_receipts WHERE user_id = $1 AND memory_id = ANY($2::text[]) AND forgotten_at IS NULL
-    ORDER BY memory_id COLLATE "C", client COLLATE "C", session_id COLLATE "C", message_id COLLATE "C"
-    LIMIT $3`, [owner, ids, limit ?? null]);
   for (const row of rows) {
     let receipts = result.get(row.memory_id);
     if (!receipts) result.set(row.memory_id, receipts = []);
@@ -127,6 +141,14 @@ export async function readReceipts(query, owner, ids, limit) {
     });
   }
   return result;
+}
+
+/** @param {Query} query @param {string} owner @param {readonly string[]} ids @param {number} [limit]
+ * @returns {Promise<Map<string, Receipt[]>>} */
+export async function readReceipts(query, owner, ids, limit) {
+  if (ids.length === 0) return new Map();
+  const { rows } = await query(memoryReceiptsSql("$2::text[]", "$3"), [owner, ids, limit ?? null]);
+  return decodeReceipts(rows);
 }
 
 /** @param {Query} query @param {string} owner @param {string} id @param {readonly Receipt[]} receipts */

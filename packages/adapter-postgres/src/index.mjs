@@ -15,3 +15,4 @@ export { createPostgresRawReads } from "./raw-read.mjs";
 export { createPostgresMemoryReads } from "./memory-read.mjs";
 export { createPostgresPauseStore } from "./pause-store.mjs";
 export { createPostgresSupersessionStore } from "./supersession-store.mjs";
+export { createPostgresConflictEdgeStore } from "./conflict-edge-store.mjs";

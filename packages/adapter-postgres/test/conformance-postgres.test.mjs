@@ -8,13 +8,14 @@ import * as kit from "@cairn-ink/conformance";
 import { capabilities, factIncarnationBody, userFingerprintKey } from "@cairn-ink/core";
 import { toPostgresError } from "../src/errors.mjs";
 import {
-  applyMigrations, createPostgresCapturePorts, createPostgresDigestGate,
+  applyMigrations, createPostgresCapturePorts, createPostgresConflictEdgeStore, createPostgresDigestGate,
   createPostgresFingerprintKeyProvider, createPostgresMemoryCandidates, createPostgresMemoryReads, createPostgresMemoryStore,
   createPostgresPauseStore, createPostgresRawPorts, createPostgresRawReads, createPostgresSupersessionStore, createPostgresSuppressionStore,
   createPostgresTopicStore, createPostgresUnitOfWork, HOSTED_FINGERPRINT_LABELS, query,
 } from "../src/index.mjs";
 import { advanceIndex, timestampUs } from "../src/memory-rows.mjs";
 import { requireLiveRun } from "../src/uow.mjs";
+import { withDistinctNamespaceText, withRelationCaptureFinish } from "./relation-fixtures.mjs";
 
 /** @import { AdapterFactory, ConformanceCase, TestHarness } from "@cairn-ink/conformance" */
 
@@ -257,7 +258,7 @@ function postgresFactory(wrapSuppressions = (store) => store) {
       const fingerprintKey = requested.fingerprintKey === true;
       const flags = capabilities({
         embeddingRequiredOnInsert: true, nearDuplicate, vectorSuppression: true, supersession: true,
-        semanticRetrieval, rawArchive, rawWindowHide: rawArchive || requested.rawWindowHide === true,
+        conflictEdges: true, semanticRetrieval, rawArchive, rawWindowHide: rawArchive || requested.rawWindowHide === true,
         sessionLineage: rawArchive, rawSpans: true, fingerprintKey, placement: true,
       });
       const stagedSecrets = fingerprintKey ? ["test-secret-a", "test-secret-rotation"] : [];
@@ -273,6 +274,7 @@ function postgresFactory(wrapSuppressions = (store) => store) {
       const readOptions = { hashSessionKey, allowNonNullNamespace: true };
       const memoryReads = createPostgresMemoryReads(rawArchive ? { ...readOptions, ...rawOptions } : readOptions);
       const { lexical, vector } = createPostgresMemoryCandidates(readOptions);
+      const memories = createPostgresMemoryStore({ ...readOptions, nearDuplicate });
       /** @type {string[]} */
       const harnessOwners = [];
       /** @type {Pick<TestHarness, "dump" | "seedFact" | "setWriteTime" | "rowsMissingKeyedDigest" | "hashSessionKey" | "setFingerprintSecret" | "seedClientlessRaw"> & {seedOwners(owner: string, otherOwner: string): Promise<void>}} */
@@ -321,12 +323,15 @@ function postgresFactory(wrapSuppressions = (store) => store) {
       };
       return {
         adapter: {
-          capabilities: flags, uow, suppressions, capture, keys, lexical, ...memoryReads,
+          capabilities: flags, uow, suppressions, keys, lexical, ...memoryReads,
           placement: createPostgresTopicStore({ hashSessionKey }),
           ...(semanticRetrieval && { vector }),
           ...(rawPorts && { raw: { ...rawPorts.raw, ...createPostgresRawReads(rawOptions) }, sessionLineage: rawPorts.sessionLineage }),
-          memories: createPostgresMemoryStore({ nearDuplicate, allowNonNullNamespace: true, hashSessionKey }),
-          pause: createPostgresPauseStore(), supersession: createPostgresSupersessionStore({ allowNonNullNamespace: true }),
+          capture: requested.supersession ? withRelationCaptureFinish(capture, memories) : capture,
+          memories: requested.supersession && requested.conflictEdges ? withDistinctNamespaceText(memories) : memories,
+          pause: createPostgresPauseStore(),
+          supersession: createPostgresSupersessionStore(readOptions),
+          conflicts: createPostgresConflictEdgeStore(readOptions),
         },
         sessionRefs: /** @type {const} */ ("hashed"),
         harness,
@@ -360,9 +365,11 @@ const selected = new Set([
   "K-RET-W1", "K-RET-W2", "K-SNAP-W1", "K-RAW-W1", "K-RAW-3", "K-RAW-3w", "K-RAW-3c", "K-RAW-3s",
   "K-RET-9", "K-SNAP-1", "K-HYD-1", "K-HYD-2", "K-PAUSE-1", "K-IMP-T1", "K-IMP-T2", "K-IMP-T3",
   "K-SNAP-F1", "K-SNAP-F3", "K-SNAP-F4", "K-SNAP-F5", "K-SNAP-F5u", "K-SNAP-F6", "K-SNAP-F7",
-  "K-SNAP-C1", "K-SNAP-C3",
+  "K-SNAP-C1", "K-SNAP-C3", "K-SNAP-C4",
   "K-FACTSFOR-1", "K-KEY-1", "K-FACT-3r",
   "K-KD-1", "K-KD-2", "K-HASH-1",
+  "K-REL-1", "K-REL-2", "K-REL-3", "K-REL-4", "K-REL-5", "K-REL-6",
+  "K-REL-7", "K-REL-8", "K-REL-9", "K-REL-10", "K-REL-11", "K-REL-12",
   "T-TFM-1", "T-TFM-2", "T-TFM-3", "T-TFM-4", "T-TFM-5", "T-TFM-6", "T-TFM-7", "T-TFM-8",
   "T-TOP-1", "T-TOP-2", "T-TOP-5", "T-TOP-6", "T-TOP-7", "T-TOP-8",
   "T-TOP-9", "T-TOP-10", "T-TOP-11", "T-TOP-12", "T-TOP-13", "T-TOP-15",
@@ -373,8 +380,6 @@ const notApplicable = {
   "snapshot retains ineligible full facts in the no-key profile": ["K-SNAP-C2"],
   "hosted profile requires an embedding": ["K-MEM-10"],
   "pending historical edit case has no assertions": ["K-MEM-5h"],
-  supersessionEdges: ["K-REL-1", "K-REL-2", "K-REL-3", "K-REL-6", "K-REL-7", "K-REL-9", "K-REL-10", "K-REL-11", "K-REL-12"],
-  conflictEdges: ["K-REL-4", "K-REL-5", "K-REL-8"],
   "K1 pending": ["K-KD-4", "K-KD-6", "K-KD-7", "K-KD-7v", "K-KD-8", "K-KD-9"],
   "capture.finish": [
     "K-CLM-1", "K-CLM-2", "K-CLM-3", "K-CLM-4", "K-CLM-5",

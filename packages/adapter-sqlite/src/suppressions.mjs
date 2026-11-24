@@ -85,8 +85,16 @@ function readEpoch(db, owner) {
   return row ? BigInt(String(row.epoch)) : null;
 }
 
+/** @param {Connection} db @param {string} owner */
+export function advanceSuppressionEpoch(db, owner) {
+  const epoch = (readEpoch(db, owner) ?? 0n) + 1n;
+  db.prepare(`INSERT INTO cairn_suppression_epochs (owner_id, epoch) VALUES (?, ?)
+    ON CONFLICT (owner_id) DO UPDATE SET epoch = excluded.epoch`).run(owner, epoch.toString());
+  return epoch;
+}
+
 /** @param {Connection} db @param {Scope} scope @returns {StoredFact[]} */
-function readFacts(db, scope) {
+export function readFacts(db, scope) {
   const rows = db.prepare(`SELECT fact_id, incarnation, epoch, created_at_ms, action_id, body
     FROM cairn_suppression_facts WHERE owner_id = ? AND namespace_key = ? ORDER BY length(epoch), epoch`)
     .all(...scopeKey(scope));
@@ -109,6 +117,7 @@ export function scopedSuppression(db, scope, hashSession) {
   const texts = facts.filter(isText);
   const sessions = facts.filter(({ fact }) => fact.kind === "session");
   const windows = facts.filter(({ fact }) => fact.kind === "window");
+  const hasSpans = facts.some(({ fact }) => fact.kind === "rawSpan");
   const legacy = new Set(db.prepare(`SELECT fingerprint FROM cairn_legacy_denials WHERE owner_id = ? AND namespace_key = ?`)
     .all(...scopeKey(scope)).map(row => String(row.fingerprint)));
   const hasLegacyReceipts = [...legacy].some(key => key.startsWith("rs1:"));
@@ -120,7 +129,7 @@ export function scopedSuppression(db, scope, hashSession) {
   function classify(entry) {
     const { row, legacyHash, digests } = entry;
     const aliases = digestAliases({ textHash: row.textHash, legacyHash, digests });
-    const receipts = sessions.length || hasLegacyReceipts ? readReceipts(db, scope, row.id) : [];
+    const receipts = sessions.length || hasSpans || hasLegacyReceipts ? readReceipts(db, scope, row.id) : [];
     const receiptDenied = hasLegacyReceipts && receipts.some(({ client, sessionId, messageId, role, legacyReceiptKey }) =>
       (legacyReceiptKey !== undefined && legacy.has("rs1:i:" + legacyReceiptKey)) ||
       legacy.has("rs1:a:" + sha256(JSON.stringify(["receipt-source-address-v1", client, sessionId, messageId, role]))));
@@ -136,6 +145,12 @@ export function scopedSuppression(db, scope, hashSession) {
             factHidesRow(stored, { ...candidate, source: {
               client, sessionKeyHash: hashSession(scope, client, sessionId), occurredAtMs,
             } }, matchPolicy) !== false);
+        case "rawSpan": {
+          const { sessionKeyHash, messageKey } = stored.fact;
+          // A capture receipt attributes the full message to the memory.
+          return receipts.some(receipt => receipt.messageId === messageKey &&
+            hashSession(scope, receipt.client, receipt.sessionId) === sessionKeyHash);
+        }
         default:
           return false;
       }
@@ -230,14 +245,12 @@ export function createSuppressionStore(port, hashSession, markDirty) {
             createdAtMs: Number(previous.created_at_ms), created: false,
           };
         }
-        const epoch = (readEpoch(db, owner) ?? 0n) + 1n;
+        const epoch = advanceSuppressionEpoch(db, owner);
         const createdAtMs = Date.now();
         const inserted = db.prepare(`INSERT INTO cairn_suppression_facts
           (owner_id, namespace_key, slot, fact_id, incarnation, epoch, created_at_ms, action_id, body)
           VALUES (?, ?, ?, lower(hex(randomblob(16))), ?, ?, ?, ?, ?) RETURNING fact_id`)
           .get(...keys, incarnation, epoch.toString(), createdAtMs, JSON.stringify(actionId), factBody(fact));
-        db.prepare(`INSERT INTO cairn_suppression_epochs (owner_id, epoch) VALUES (?, ?)
-          ON CONFLICT (owner_id) DO UPDATE SET epoch = excluded.epoch`).run(owner, epoch.toString());
         markDirty?.(db, tx);
         return { factId: String(inserted?.fact_id), epoch, createdAtMs, created: true };
       });

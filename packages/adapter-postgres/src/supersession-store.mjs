@@ -1,43 +1,46 @@
-import { CoreError } from "../../core/src/index.mjs";
+import { compareUtf8, CoreError } from "../../core/src/index.mjs";
 import { copyArray, guardOwner, inputText, invalid, namespaceKey, writeTime } from "./memory-input.mjs";
-import { advanceIndex, MEMORY_COLUMNS, readEntry, readRevisionNumber, timestampUs } from "./memory-rows.mjs";
-import { readVisibility } from "./memory-visibility.mjs";
+import { advanceIndex, readRevisionNumber, timestampUs } from "./memory-rows.mjs";
+import { readRelationBatches } from "./relation-read.mjs";
 import { runOperation } from "./uow.mjs";
 
 /** @import { SupersessionStore } from "../../core/src/ports/index.d.ts" */
+/** @import { FactMatchPolicy } from "../../core/src/index.mjs" */
+/** @import { Query } from "./memory-rows.mjs" */
 /** @typedef {Awaited<ReturnType<SupersessionStore["read"]>>} View */
 
-/** @type {SupersessionStore["read"]} */
-async function read(tx, scope, id) {
-  guardOwner(tx, scope);
-  const ns = namespaceKey(scope.namespace);
-  const requested = inputText(id);
-  /** @type {View} */
-  const view = { supersededBy: null, supersedes: [] };
-  return runOperation(tx, async (query) => {
-    const owner = tx.owner;
-    const { rows: edges } = await query(`SELECT previous_memory_id, replacement_memory_id
-      FROM memory_supersessions WHERE user_id = $1
-        AND (previous_memory_id = $2 OR replacement_memory_id = $2)
-      ORDER BY previous_memory_id COLLATE "C"`, [owner, requested]);
-    if (!edges.length) return view;
-    const endpoints = [...new Set(edges.flatMap(edge => [edge.previous_memory_id, edge.replacement_memory_id]))];
-    const { rows } = await query(`SELECT ${MEMORY_COLUMNS} FROM memories
-      WHERE user_id = $1 AND core_namespace IS NOT DISTINCT FROM $2 AND id = ANY($3::text[])`, [owner, ns, endpoints]);
-    const visibility = await readVisibility(query, owner);
-    const checked = await visibility.check(rows.map(row => readEntry(row, owner)));
-    const visible = new Set(checked.filter(entry => !entry.hidden).map(entry => entry.memory.id));
-    for (const { previous_memory_id: previous, replacement_memory_id: replacement } of edges) {
+/** @param {Query} query @param {string} owner @param {string | null} ns @param {readonly string[]} ids
+ * @param {FactMatchPolicy["hashSessionKey"]} [hashSessionKey] */
+export async function readSupersessionViews(query, owner, ns, ids, hashSessionKey) {
+  /** @type {Map<string, View>} */
+  const views = new Map(ids.map(id => [id, { supersededBy: null, supersedes: [] }]));
+  const batches = readRelationBatches(query, owner, ns, [...views.keys()],
+    `SELECT previous_memory_id AS left_id, replacement_memory_id AS right_id
+    FROM memory_supersessions WHERE user_id = $1
+      AND (previous_memory_id = ANY($3::text[]) OR replacement_memory_id = ANY($3::text[]))`, false, hashSessionKey);
+  for await (const { requested, edges, visible } of batches) {
+    for (const { left_id: previous, right_id: replacement } of edges) {
       if (!visible.has(previous) || !visible.has(replacement)) continue;
-      if (previous === requested) view.supersededBy = replacement;
-      if (replacement === requested) view.supersedes.push(previous);
+      // A cross-batch edge appears in both queries. Fill only this batch's views.
+      const predecessor = requested.has(previous) ? views.get(previous) : undefined;
+      if (predecessor) predecessor.supersededBy = replacement;
+      if (requested.has(replacement)) views.get(replacement)?.supersedes.push(previous);
     }
-    return view;
-  });
+  }
+  for (const view of views.values()) view.supersedes.sort(compareUtf8);
+  return views;
 }
 
-/** @param {{allowNonNullNamespace?: boolean}} [options] @returns {SupersessionStore} */
-export function createPostgresSupersessionStore({ allowNonNullNamespace = false } = {}) {
+/** @param {Pick<FactMatchPolicy, "hashSessionKey"> & {allowNonNullNamespace?: boolean}} [options] @returns {SupersessionStore} */
+export function createPostgresSupersessionStore({ allowNonNullNamespace = false, hashSessionKey } = {}) {
+  /** @type {NonNullable<SupersessionStore["readMany"]>} */
+  async function readMany(tx, scope, ids) {
+    guardOwner(tx, scope);
+    const ns = namespaceKey(scope.namespace, allowNonNullNamespace);
+    const requested = copyArray(ids).map(inputText);
+    return runOperation(tx, query => readSupersessionViews(query, tx.owner, ns, requested, hashSessionKey));
+  }
+
   return {
     async record(tx, scope, edge, receiptIds, nowMs) {
       guardOwner(tx, scope, true);
@@ -83,11 +86,16 @@ export function createPostgresSupersessionStore({ allowNonNullNamespace = false 
       });
     },
 
-    read,
+    async read(tx, scope, id) {
+      const [view] = (await readMany(tx, scope, [id])).values();
+      return view;
+    },
+
+    readMany,
 
     async incomingCount(tx, scope, replacementId) {
       guardOwner(tx, scope);
-      const ns = namespaceKey(scope.namespace);
+      const ns = namespaceKey(scope.namespace, allowNonNullNamespace);
       const id = inputText(replacementId);
       return runOperation(tx, async (query) => {
         const { rows: [row] } = await query(`SELECT count(*)::integer AS count FROM memory_supersessions s

@@ -69,6 +69,13 @@ export function createIndexRevisions(uow, port) {
       }
     },
 
+    /** Each changing Raw operation advances the owner revision.
+     * @param {Connection} db @param {Tx} tx
+     */
+    advanceRaw(db, tx) {
+      indexRun(tx).view.revision = readRevision(db, tx.owner, true);
+    },
+
     /** @param {Connection} db @param {Tx} tx @param {Identity} identity @param {boolean} changed */
     finish(db, tx, identity, changed) {
       const { view, finishes } = indexRun(tx);

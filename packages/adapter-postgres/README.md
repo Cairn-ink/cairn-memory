@@ -128,10 +128,11 @@ Receipt times that PostgreSQL represents exactly stay in `occurred_at`.
 
 `core_namespace` stays null on hosted until the product's scopes step 2 defines
 the mapping. The adapter rejects non-null namespace writes on hosted unless
-`allowNonNullNamespace` is enabled on the memory and supersession ports. The
-hosted unique key applies across the owner. All writers store bare SHA-256 hex in
-`memories.text_hash`, and core ports return `sha256:<hex>`. An exact hash held by a
-hidden row suppresses the incoming save. An exact hash in a different namespace
+`allowNonNullNamespace` is enabled on the respective memory, supersession, and
+conflict ports. Supersession and conflict reads and counts also require the opt-in
+for named namespaces. The hosted unique key applies across the owner. All writers
+store bare SHA-256 hex in `memories.text_hash`, and core ports return `sha256:<hex>`.
+An exact hash held by a hidden row suppresses the incoming save. An exact hash in a different namespace
 is also withheld without exposing the existing row. Near duplicate queries use
 pgvector to fetch at most 32 candidates per vector. Imports request exact-only
 dedupe and still supply their embeddings for suppression.

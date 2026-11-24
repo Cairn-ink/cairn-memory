@@ -86,7 +86,7 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
 
     async readRevision(tx, scope, id) {
       guardOwner(tx, scope);
-      const ns = namespaceKey(scope.namespace);
+      const ns = namespaceKey(scope.namespace, true);
       const key = inputText(id);
       return runOperation(tx, async (query) => {
         const { rows: [row] } = await query(`SELECT revision, ${TEXT_HASH} AS "textHash" FROM memories WHERE ${TARGET}`,
@@ -134,7 +134,7 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
 
     async get(tx, scope, id) {
       guardOwner(tx, scope);
-      const ns = namespaceKey(scope.namespace);
+      const ns = namespaceKey(scope.namespace, true);
       const key = inputText(id);
       return runOperation(tx, async (query) => (await selectMemory(query, tx.owner, ns, key))?.memory ?? null);
     },
@@ -166,7 +166,7 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
       guardOwner(tx, scope);
       const { namespace } = scope;
       const selection = { owner: tx.owner, namespace };
-      const ns = namespaceKey(namespace);
+      const ns = namespaceKey(namespace, true);
       const queries = copyQueries(batch);
       if (!options) invalid();
       const { nearDistance, excludeId } = options;
@@ -183,7 +183,7 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
       guardOwner(tx, scope);
       const { namespace } = scope;
       const selection = { owner: tx.owner, namespace };
-      const ns = namespaceKey(namespace);
+      const ns = namespaceKey(namespace, true);
       const queries = copyQueries(batch);
       const incoming = copySource(source);
       if (mode !== "hash" && mode !== "full") invalid();
@@ -204,7 +204,7 @@ export function createPostgresMemoryStore({ nearDuplicate = true, allowNonNullNa
 
     async exportPage(tx, scope, page) {
       guardOwner(tx, scope);
-      return memoryPage(tx, { owner: tx.owner, keys: [namespaceKey(scope.namespace)], clients: null, since: null, until: null, hasWindow: false },
+      return memoryPage(tx, { owner: tx.owner, keys: [namespaceKey(scope.namespace, true)], clients: null, since: null, until: null, hasWindow: false },
         page, true, hashSessionKey);
     },
   };

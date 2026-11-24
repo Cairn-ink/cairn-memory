@@ -55,7 +55,8 @@ function publicRow({ digests: _digests, ...row }) {
 }
 
 export function serviceFake({ rows = [], leakForgotten = false, writes = false, near = false, hasKey = true, forgetting,
-  recall = false, semantic = false, capture = false, rawArchive = false, sessionLineage = false } = {}) {
+  recall = false, semantic = false, capture = false, rawArchive = false, sessionLineage = false,
+  compliantCapturePrefilter = false } = {}) {
   let committedRows = [...rows];
   const calls = [];
   const mutations = [];
@@ -478,9 +479,9 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
           passages: facts.filter(stored => {
             const { fact } = stored;
             return fact.kind === "text" &&
-              (!forgetting || candidates.passages === undefined ||
+              (!(forgetting || compliantCapturePrefilter) || candidates.passages === undefined ||
                 factBlocksIncoming(stored, { scope, passages: candidates.passages },
-                  { mode: "capture", rowShingles: false }) !== false);
+                  { mode: "capture", rowShingles: compliantCapturePrefilter }) !== false);
           }) };
       },
       async writeFact(tx, fact, incarnation) {
