@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 import { allDigests, CoreError } from "@cairn-ink/core";
 import { createMemoryService } from "@cairn-ink/core/service";
+import { createMemoryAdapter } from "../../adapter-memory/src/index.mjs";
 import { hostedScope as scope, memory, serviceFake } from "./helpers/service-fake.mjs";
 
 const source = { kind: "mcp", client: null, sessionId: null };
@@ -195,3 +197,29 @@ for (const fingerprintKey of [true, false]) {
     assert.deepEqual(snapshot(), corrected);
   });
 }
+
+test("forget reports the committed index revision with the reference adapter", async () => {
+  const storage = createMemoryAdapter();
+  const { uow, memories } = storage;
+  const { deps } = serviceFake();
+  const sha256Hex = value => createHash("sha256").update(value).digest("hex");
+  const service = createMemoryService({ ...deps, storage, clock: { ...deps.clock, sha256Hex } });
+  const { id, revision } = await uow.run(scope.owner, {}, tx => memories.insert(tx, scope, {
+    text, textHash: "sha256:" + sha256Hex(text), kind: "fact", origin: "explicit",
+    confidence: 1, source, embedding: null,
+  }, [], 1));
+  const readRevision = () => uow.run(scope.owner, { readOnly: true }, tx => memories.indexRevision(tx));
+  const start = await readRevision();
+
+  assert.deepEqual(await service.forget(scope, id, source, { expectedRevision: revision + 1 }),
+    { status: "conflict" });
+  assert.equal(await readRevision(), start);
+
+  const forgotten = await service.forget(scope, id, source, { expectedRevision: revision });
+  assert.deepEqual(forgotten, { status: "forgotten", removedSimilar: 0, indexRevision: start + 1 });
+  assert.equal(await readRevision(), forgotten.indexRevision);
+
+  assert.deepEqual(await service.forget(scope, id, source, { expectedRevision: revision }),
+    { status: "not_found", indexRevision: forgotten.indexRevision });
+  assert.equal(await readRevision(), forgotten.indexRevision);
+});
