@@ -1,4 +1,5 @@
 import { cleanContent, CoreError, decideWrite, planDuplicateMerge, receiptExcerpt } from "@cairn-ink/core";
+import { receiptAddressKey } from "./receipt-read-safety.mjs";
 import { indexRevisionAfterRun } from "./unit-of-work.mjs";
 import { admissionScope, copyCaptureFailure, copyCaptureMessages, copyCaptureSelection,
   copyFinishItems, copyReceipts, snapshotArray, validateTime, writeNamespace } from "./validation.mjs";
@@ -27,6 +28,11 @@ function assertClaimKey(claim, key) {
   if (claim && (claim.key.payloadDigest !== key.payloadDigest || claim.key.sessionId !== key.sessionId)) {
     throw new CoreError("event_payload_conflict");
   }
+}
+
+/** @param {State["deletedMessages"]} deletedMessages @param {CaptureKey} key @param {string} messageId */
+async function messageDeleted(deletedMessages, { scope, client, sessionId }, messageId) {
+  return deletedMessages.has(await receiptAddressKey(scope.namespace, { client, sessionId, messageId }));
 }
 
 /** @param {State} state @param {string} token @param {number} nowMs */
@@ -230,7 +236,13 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
         if (matcher.blocksSession(client, sessionId)) return [];
         if (lineage && lineage.lineageFenced(state, scope, key, await lineage.captureProofs(scope, client, copied))) return [];
         const blocked = new Set(matcher.blockedMessages(client, sessionId, occurredAtMs));
-        return Array.from(occurredAtMs.keys()).filter((position) => !blocked.has(position));
+        const { deletedMessages } = state;
+        const positions = [];
+        for (const [position, { id }] of copied.entries()) {
+          if (blocked.has(position) || (deletedMessages.size > 0 && await messageDeleted(deletedMessages, key, id))) continue;
+          positions.push(position);
+        }
+        return positions;
       });
     },
 
@@ -256,7 +268,7 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
           }
           selected.add(position);
         }
-        return (getState) => {
+        return async (getState) => {
           const state = getState();
           const claim = state.claims.get(captureIdentity(copy.client, copy.eventId));
           // Another namespace never holds this lease. Reject it before comparing the key, so the
@@ -275,6 +287,12 @@ export function createCapturePorts(port, { memories, finishWrites, readWritePoli
           const matcher = matchFacts(state.facts, scope);
           if (matcher.blocksSession(client, sessionId) || matcher.blockedMessages(client, sessionId, occurredAtMs).length) {
             throw new CoreError("suppressed");
+          }
+          const { deletedMessages } = state;
+          if (deletedMessages.size > 0 && claim.messages) {
+            for (const position of selected) {
+              if (await messageDeleted(deletedMessages, claim.key, claim.messages[position].id)) throw new CoreError("suppressed");
+            }
           }
           if (lineage?.lineageFenced(state, scope, copy, claim.proofs)) throw new CoreError("lineage_fenced");
         };

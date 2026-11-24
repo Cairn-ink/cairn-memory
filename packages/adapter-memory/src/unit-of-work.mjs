@@ -30,7 +30,7 @@ import { addKeyedDigest, createFactStore, digestDomain, liveKeyedDomains } from 
 /** @typedef {{topics: Map<Namespace, TopicState>, rows: Map<Namespace, Map<string, Entry>>, facts: Map<string, StoredFact>, epoch: bigint | null, pause: PauseState, indexRevision: number,
  * documentCards: Map<Namespace, Map<string, CardEntry>>, contextEpochs: Map<Namespace, number>,
  * inspectEpochs: Map<Namespace, number>, rawInspectEpoch: number, nextInspectReceiptPosition: number,
- * receiptDenials: Set<string>,
+ * receiptDenials: Set<string>, deletedMessages: Set<string>,
  * rationale: Map<Namespace, Map<string, import("@cairn-ink/core/ports").RationaleEdge>>,
  * rationaleMessages: Map<Namespace, Map<string, RationaleMessage>>,
  * rawRows: Map<string, import("./raw.mjs").RawEntry>, rawFences: Set<string>, rawConflicts: Set<string>,
@@ -134,7 +134,7 @@ class Owner {
   committed = {
     topics: new Map(), documentCards: new Map(), contextEpochs: new Map(), rows: new Map(), facts: new Map(), epoch: null,
     pause: { paused: false, generation: 0 }, indexRevision: 0, inspectEpochs: new Map(), rawInspectEpoch: 0,
-    nextInspectReceiptPosition: 1, receiptDenials: new Set(),
+    nextInspectReceiptPosition: 1, receiptDenials: new Set(), deletedMessages: new Set(),
     claims: new Map(), activeTokens: new Map(), abandonedTokens: new Set(), rawRows: new Map(), rawFences: new Set(),
     rawAnchors: new Map(), relations: new Map(),
     rawConflicts: new Set(), rationale: new Map(), rationaleMessages: new Map(),
