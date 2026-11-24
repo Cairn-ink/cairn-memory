@@ -11,10 +11,12 @@ const unrelated = "Log small purchases in the blue notebook.";
 const message = (id, content, occurredAtMs) => ({ id, role: "user", content, occurredAtMs });
 const messages = [message("containing", containing, 10), message("unrelated", unrelated, 20)];
 const { client, sessionId } = selection;
+const modelOutput = () => ({ items: [containing, unrelated].map(content => ({
+  content, kind: "fact", confidence: 0.9, sourceIndices: [0],
+})) });
 
-async function setup() {
-  // `forgetting` enables the fake's row-level prefilter when candidates include passages.
-  const fake = serviceFake({ writes: true, capture: true, rawArchive: true, forgetting: {} });
+async function setup({ compliantCapturePrefilter = true } = {}) {
+  const fake = serviceFake({ writes: true, capture: true, rawArchive: true, forgetting: {}, compliantCapturePrefilter });
   const key = await fake.storage.keys.userKey(scope.owner);
   const { shingles } = await fingerprintLegacyCapture(forgotten, key, coreFingerprintLabels);
   const fact = { ...scope, kind: "text", mode: "full", origin: "forget", actionId: "forget-lantern",
@@ -52,9 +54,7 @@ for (const forgottenDuringEmbedding of [false, true]) {
       { status: "accepted" });
     if (forgottenDuringEmbedding) hooks.embed = seedForgotten;
     else seedForgotten();
-    hooks.model = () => ({ items: [containing, unrelated].map(content => ({
-      content, kind: "fact", confidence: 0.9, sourceIndices: [0],
-    })) });
+    hooks.model = modelOutput;
     assert.equal((await service.runCapture(scope, selection)).status, "done");
     const items = mutations.find(({ method }) => method === "capture.finish").args[1];
     assert.deepEqual(items.map(({ content }) => content), [unrelated]);
@@ -62,3 +62,15 @@ for (const forgottenDuringEmbedding of [false, true]) {
       (forgottenDuringEmbedding ? [containing, unrelated] : [unrelated]).map(content => content.toLowerCase()));
   });
 }
+
+test("the forbidden rowShingles:false capture prefilter leaks the forgotten passage", async () => {
+  // Non-compliant adapter shape: `forgetting` applies row policy to the capture snapshot.
+  const { service, hooks, mutations, seedForgotten } = await setup({ compliantCapturePrefilter: false });
+  assert.deepEqual(await service.enqueueCapture(scope, { ...selection, messages: [messages[1]] }),
+    { status: "accepted" });
+  seedForgotten();
+  hooks.model = modelOutput;
+  assert.equal((await service.runCapture(scope, selection)).status, "done");
+  const items = mutations.find(({ method }) => method === "capture.finish").args[1];
+  assert.deepEqual(items.map(({ content }) => content), [containing, unrelated]);
+});

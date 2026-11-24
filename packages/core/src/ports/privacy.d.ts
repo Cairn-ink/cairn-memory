@@ -33,11 +33,17 @@ export interface SuppressionStore {
    */
   writeFact(tx: Tx, fact: SuppressionFact, incarnation: string): Promise<{ factId: string; epoch: bigint; createdAtMs: number; created: boolean }>;
   /**
-   * With `candidates.passages` omitted, returns every live text fact in `passages`, including
-   * full text facts and their shingles, filtered only by owner and namespace. The client,
-   * session and time candidates govern `blockedSession` and `blockedMessages` only.
-   * Candidate `passages` may narrow text facts only for row-level decisions. Capture-time
-   * containment always uses the complete scoped text snapshot, regardless of `rowShingles`.
+   * For capture, returns live text facts with their shingle evidence, in `passages`,
+   * filtered only by owner/namespace and by a definite false from core's own capture matcher.
+   * Use `factBlocksIncoming` in capture mode with shingles enabled on the same candidate
+   * `passages` Core supplied. Keep exact and containment matches, ineligible results,
+   * and facts requiring legacy-domain handling. Core applies the same match, so a definite
+   * miss leaves its decision unchanged. Fact mode, `rowShingles`, and missing row shingles
+   * are forbidden as independent capture filters.
+   * When neither side has a key or shingle evidence, capture matching is exact-only,
+   * with weaker protection without a key. When `candidates.passages` is omitted, only owner
+   * and namespace scope the text facts. Client, session and time candidates govern
+   * `blockedSession` and `blockedMessages`.
    * Uncertain or unbounded → throws ineligible (fail closed).
    */
   snapshot(tx: Tx, scope: Scope, candidates: { client?: string; sessionId?: string; occurredAtMs?: ReadonlyArray<number | null>; passages?: readonly PassageFingerprint[] }): Promise<SuppressionSnapshot>;
