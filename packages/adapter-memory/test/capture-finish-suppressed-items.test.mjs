@@ -265,6 +265,24 @@ test("K-CLM-6 reads the list length in core's order", async () => {
   await assert.rejects(result, /Finish must report exactly the suppressed middle position/);
 });
 
+for (const [label, invalid, expected] of [
+  ["a negative position", [-1], /must be within the item range/],
+  ["a position past the batch", [3], /must be within the item range/],
+  ["a duplicate position", [1, 1], /must not repeat a position/],
+]) {
+  test(`K-CLM-6 stops reading at ${label}`, async () => {
+    let reads = 0;
+    const positions = [...invalid];
+    Object.defineProperty(positions, positions.length, { get() { reads += 1; return 0; } });
+    const result = runWithFinishField((rest) => ({ ...rest, suppressedItems: positions }));
+    await assert.rejects(result, (error) => {
+      assert.equal(reads, 0, "The kit must reject before reading the next entry");
+      assert.match(error.message, expected);
+      return true;
+    });
+  });
+}
+
 test("K-CLM-6 reads the list before the other result fields", async () => {
   const positions = [0];
   // Core reads [0]; reading the count first would turn it into the expected [1].
