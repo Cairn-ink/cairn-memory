@@ -1,5 +1,4 @@
-import { NEAR_DUPLICATE_DISTANCE } from "@cairn-ink/core";
-import { check, equal, fixtureEmbedding } from "./support.mjs";
+import { check, equal, fixtureEmbedding, readDump } from "./support.mjs";
 
 /** @import { CaptureKey, FinishItem } from "@cairn-ink/core/ports" */
 /** @import { ConformanceCase } from "./index.d.mts" */
@@ -62,7 +61,7 @@ export const captureFinishCases = [
       // Core counts the batch before handing it to the store; the store may consume the caller's array.
       const itemCount = items.length;
       const expectedTexts = [items[0].content, items[2].content].sort();
-      const forgottenHash = items[1].textHash;
+      const forgottenText = items[1].content;
       const { result, reported } = await uow.run(owner, { pauseLock: true }, async (tx) => {
         const finished = await capture.finish(tx, fresh.token, items);
         // Core reads this field first, inside the transaction, and archives from that single read.
@@ -75,15 +74,16 @@ export const captureFinishCases = [
       equal(result.memories.length, 2, "Finish must write the other two items");
       // Whether or not the store reports positions, it must store exactly the first and last items and not the
       // suppressed middle one. Compare stored text: a store could carry the wrong item under a reported hash.
-      const stored = await uow.run(owner, { readOnly: true }, async (tx) => {
+      const texts = await uow.run(owner, { readOnly: true }, async (tx) => {
         const rows = [];
         for (const { id } of result.memories) rows.push(await memories.get(tx, key.scope, id));
-        const [matches] = await memories.findDuplicates(tx, key.scope, [{ textHash: forgottenHash }],
-          { nearDistance: NEAR_DUPLICATE_DISTANCE });
-        return { texts: rows.map((row) => row?.text), forgotten: matches.filter(({ match }) => match === "exact").length };
+        return rows.map((row) => row?.text);
       });
-      equal([...stored.texts].sort(), expectedTexts, "Finish must store exactly the first and last items");
-      equal(stored.forgotten, 0, "Finish must not store the suppressed middle item");
+      equal([...texts].sort(), expectedTexts, "Finish must store exactly the first and last items");
+      // Reads can hide a row under the forget fact, so check the whole store state. Only a finish item carries this
+      // text: the claim holds no messages and the fact holds digests.
+      check(!JSON.stringify(await readDump(harness)).includes(forgottenText),
+        "Finish must not store the suppressed middle item in any form");
 
       const replay = await claim();
       // A completed claim may acknowledge a duplicate without returning a result.
