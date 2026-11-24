@@ -103,6 +103,8 @@ export interface MemoryStore {
   }>;
   /** Returns the run's start revision for this owner, stable across writes in the run. */
   indexRevision?(tx: Tx): Promise<Revision>;
+  /** Returns the owner index revision this run will commit with, given its writes so far. */
+  committedIndexRevision?(tx: Tx): Promise<Revision>;
   readRevision(tx: Tx, scope: Scope, id: string): Promise<{ revision: Revision; textHash: string } | null>;
   /**
    * Throws revision_conflict, memory_historical, or memory_conflict (the new text collides with
