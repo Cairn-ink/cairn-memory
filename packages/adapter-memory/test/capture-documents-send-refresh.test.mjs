@@ -83,6 +83,26 @@ for (const related of [true, false]) {
   });
 }
 
+test("an exact forget in the card pre-send gate preserves the routing limit", async () => {
+  const f = fixture();
+  const capture = event("plans");
+  const plans = [plan, ...["garden", "library", "theater", "studio"].map(place =>
+    message(place, plan.content.replace("workshop", place).replace(schedule, `Store the ${place} keys near the entrance.`)))];
+  const saved = await f.service.save(scope, schedule, actor);
+  assert.equal(saved.status, "saved");
+  f.embeddings.length = 0;
+  await f.enqueue(capture, plans);
+  await f.run(capture, { phase: "pre-send", async commit() {
+    assert.equal((await f.service.forget(scope, saved.item.id, actor)).status, "forgotten");
+  } });
+
+  assert.equal(f.embeddings.length, 1);
+  assert.ok(f.embeddings[0].every(text => !text.includes(schedule)));
+  const cards = await f.read(tx => f.storage.documentCards.list(tx, scope));
+  assert.deepEqual(cards.map(({ sourceMessage }) => sourceMessage.messageId).sort(),
+    plans.slice(1, 4).map(({ id }) => id).sort());
+});
+
 for (const forgotten of ["bound memory", "unrelated memory", "new value"]) {
   test(`Forgetting the ${forgotten} in the verify dispatch gate ${forgotten === "unrelated memory" ? "preserves" : "withdraws"} the verify payload`, async () => {
     let cardId;
@@ -199,7 +219,7 @@ test("an exact edit fact for the new value committed in verify dispatch withdraw
 
 for (const stage of ["card embedding", "verification"]) {
   for (const code of ["model_cancelled", "model_timeout"]) {
-    test(`${stage} refresh interrupted by ${code} fails capture with zero sends`, { timeout: 5000 }, async t => {
+    test(`${stage} refresh interrupted by ${code} leaves capture ${stage === "verification" ? "done" : "failed"} with zero sends`, { timeout: 5000 }, async t => {
       let armed = stage === "card embedding";
       const f = armed ? fixture() : await prepareVerification(() => { armed = true; });
       const capture = f.capture ?? event("plan");
@@ -242,8 +262,22 @@ for (const stage of ["card embedding", "verification"]) {
         release.resolve();
       }
       assert.deepEqual(stage === "verification" ? f.verifyRequests : f.embeddings, []);
-      assert.deepEqual(await attempt, { status: "failed", code });
       await f.write(() => {});
+      const result = await attempt;
+      if (stage === "verification") {
+        assert.equal((await f.service.captureStatus(scope, capture.eventId, { client: capture.client })).status, "done");
+        const replay = await f.service.runCapture(scope, capture);
+        assert.equal(replay.status, "done");
+        assert.deepEqual(result, replay);
+        const cards = await f.read(tx => f.storage.documentCards.list(tx, scope));
+        assert.deepEqual(cards.flatMap(({ amendments }) => amendments), []);
+        const reason = code === "model_timeout" ? "verify_timeout" : "verify_failed";
+        assert.deepEqual(f.diagnostics.find(entry => entry.reason === reason), {
+          version: 1, stage: "amendment", layer: "core_call", reason,
+        });
+      } else {
+        assert.deepEqual(result, { status: "failed", code });
+      }
       assert.deepEqual(stage === "verification" ? f.verifyRequests : f.embeddings, []);
     });
   }

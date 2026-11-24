@@ -151,8 +151,9 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
    * @param {readonly FinishItem[]} items @param {FinishResult} result @param {CardVectors | undefined} vectors
    * @param {WeakMap<FinishItem["receipts"], ExtractedQuantity[]> | undefined} quantities
    * @param {Set<string> | undefined} screenedForEmbedding
+   * @param {Set<string> | undefined} withheldEmbeddings
    */
-  async function write(tx, key, messages, items, result, vectors, quantities, screenedForEmbedding) {
+  async function write(tx, key, messages, items, result, vectors, quantities, screenedForEmbedding, withheldEmbeddings) {
     const { scope, client, sessionId } = key;
     const allowed = await screenReceipts(tx, key, messages);
     if (!allowed.length) return allowed;
@@ -180,8 +181,10 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
         if (await withholds(sentenceTexts(card))) continue;
         const sourceMessage = { client, sessionId, messageId: message.id };
         const sourceMemories = documentCardMemoryLinks(sourceMessage, written);
-        const embedding = vectors?.get(documentCardSearchText(card));
-        if (embedder && !embedding) throw new CoreError("embedding_failed");
+        // A card that passes the stored-state checks can still have its embedding withheld.
+        const embeddingWithheld = withheldEmbeddings?.has(message.id);
+        const embedding = embeddingWithheld ? undefined : vectors?.get(documentCardSearchText(card));
+        if (embedder && !embeddingWithheld && !embedding) throw new CoreError("embedding_failed");
         const record = {
           id: card.id, scope, origin: /** @type {const} */ ("router"), title: card.title, body: card.body,
           contentHash: "sha256:" + await sha256Hex(card.body), date: card.date, sourceMessage, sourceMemories,
@@ -289,8 +292,6 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
    */
   async function amend(key, messages, generation, assertSendGeneration, caller, sourceStillEligible) {
     if (!cards || !config.documentCards?.amendments || !model || !messages.some(({ role }) => role === "user")) return;
-    /** @type {(() => void) | undefined} */
-    let checkVerifyRefresh;
     try {
       const { detectChanges, verifyChange } = model;
       if (typeof detectChanges !== "function" || typeof verifyChange !== "function") return;
@@ -343,12 +344,7 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
             if (deadline?.aborted && refreshSignal.reason === deadline.reason) throw new CoreError("model_timeout");
             transport.check();
           };
-          checkVerifyRefresh = check;
-          try { return await awaitRefresh({ signal: refreshSignal, check }, verification.eligible); }
-          finally {
-            check();
-            checkVerifyRefresh = undefined;
-          }
+          return awaitRefresh({ signal: refreshSignal, check }, verification.eligible);
         }
 
         signal.throwIfAborted();
@@ -451,9 +447,6 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
       }
     } catch {
       emitDiagnostic(diagnostics, "amendment", "core_call", "amendment_failed");
-    } finally {
-      // The amendment runner treats provider failures as best effort, including when its timer wins the race.
-      checkVerifyRefresh?.();
     }
   }
 
@@ -469,6 +462,8 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
     const quantities = ledger ? new WeakMap() : undefined;
     /** @type {Set<string> | undefined} */
     let screenedForEmbedding;
+    /** @type {Set<string> | undefined} */
+    let withheldEmbeddings;
     /** @type {CardVectors | undefined} */
     let vectors;
     /** @type {readonly CaptureMessage[] | undefined} */
@@ -515,7 +510,8 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
       const screened = await awaitRefresh(transport, () => runAtGeneration(tx => screenEmbeddingSources(tx, positions)));
       if (screened === null) return /** @type {const} */ ({ status: "paused" });
       if ("status" in screened) return screened;
-      screenedForEmbedding = new Set();
+      // Keep the router's input independent of the send-time payload checks.
+      screenedForEmbedding = new Set(screened.map(({ id }) => id));
 
       // Precompute vectors for all potential cards. The finish may route a different subset.
       /** @type {{message: CaptureMessage, card: import("../routing/index.mjs").DocumentCard}[]} */
@@ -548,8 +544,9 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
       }));
       if (refreshed === null) return /** @type {const} */ ({ status: "paused" });
       if ("status" in refreshed) return refreshed;
+      const sentIds = new Set(refreshed.map(({ message }) => message.id));
+      withheldEmbeddings = new Set(candidates.map(({ message }) => message.id).filter(id => !sentIds.has(id)));
       if (!refreshed.length) return;
-      screenedForEmbedding = new Set(refreshed.map(({ message }) => message.id));
       const texts = [...new Set(refreshed.map(({ text }) => text))];
 
       await gate.assertOpen(owner, "dispatch");
@@ -575,7 +572,9 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
 
     /** @param {Tx} tx @param {readonly CaptureMessage[]} allowed @param {readonly FinishItem[]} items @param {FinishResult} result */
     async function finishDocuments(tx, allowed, items, result) {
-      if (allowed.length) finishedMessages = await write(tx, key, allowed, items, result, vectors, quantities, screenedForEmbedding);
+      if (allowed.length) {
+        finishedMessages = await write(tx, key, allowed, items, result, vectors, quantities, screenedForEmbedding, withheldEmbeddings);
+      }
     }
 
     async function afterCommit() {
