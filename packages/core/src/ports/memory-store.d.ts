@@ -4,7 +4,7 @@ import type { Tx } from "./unit-of-work.d.ts";
 
 export interface DuplicateQuery {
   textHash: string;
-  /** Core's allDigests(text, key) under the owner's current key. Stores persist row digests. */
+  /** Core's current digests and any retained-domain MACs, with their labels. */
   digests?: TextDigest[];
   /** Digest under the legacy engine fingerprint, when it differs (lookup only). */
   legacyHash?: string;
@@ -57,7 +57,7 @@ export interface InsertRow {
   origin: Origin;
   text: string;
   textHash: string;
-  /** Core's allDigests(text, key) under the owner's current key. Stores persist row digests. */
+  /** Stores persist Core's current digests and any retained-domain MACs, with their labels. */
   digests?: TextDigest[];
   confidence: number;
   source: SourceRef;

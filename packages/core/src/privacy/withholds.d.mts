@@ -1,7 +1,7 @@
 import type { PassageFingerprint } from "../ports/privacy.d.ts";
 import type { TextDigest, TextFact } from "../suppression-fact.mjs";
 
-/** Matches any shared algorithm and digest value across pipelines. Invalid lists also withhold. */
+/** Matches historical aliases by algorithm and value. Labelled MACs require the same domain. Invalid lists also withhold. */
 export declare function exactDigestMatch(a: readonly TextDigest[], b: readonly TextDigest[]): boolean;
 /** @internal */
 export declare function snapshotReader(): {

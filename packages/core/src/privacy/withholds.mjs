@@ -89,6 +89,7 @@ export function snapshotReader() {
       pipeline: string(field(data, "pipeline")),
       redactionVersion: finiteNumber(field(data, "redactionVersion")),
       keyId: optionalString(field(data, "keyId")),
+      label: optionalString(field(data, "label")),
     });
   }
 
@@ -198,13 +199,17 @@ function isValidFact(fact) {
 /** @param {unknown} threshold @returns {threshold is number} */
 export const isValidThreshold = (threshold) => typeof threshold === "number" && threshold > 0 && threshold <= 1;
 
-/** @param {DigestSnapshot} digest */
-const digestIdentity = ({ alg, value }) => `${alg}:${value}`;
+/** @param {DigestSnapshot} left @param {DigestSnapshot} right */
+function sameDigestDomain(left, right) {
+  return left.alg === right.alg && left.keyId === right.keyId &&
+    (left.keyId === null || (left.label ?? left.pipeline) === (right.label ?? right.pipeline));
+}
 
 /** @param {readonly DigestSnapshot[]} a @param {readonly DigestSnapshot[]} b */
 function hasExactDigestMatch(a, b) {
-  const identities = new Set(a.map(digestIdentity));
-  return b.some((digest) => identities.has(digestIdentity(digest)));
+  // Keep the historical alias API for unlabelled inputs.
+  return b.some(right => a.some(left => left.value === right.value &&
+    (left.label === undefined && right.label === undefined ? left.alg === right.alg : sameDigestDomain(left, right))));
 }
 
 /** @param {readonly TextDigest[]} a @param {readonly TextDigest[]} b */
@@ -221,17 +226,22 @@ export function exactDigestMatch(a, b) {
 
 /** @param {readonly DigestSnapshot[]} a @param {readonly DigestSnapshot[]} b */
 export function compareValidatedDigests(a, b) {
-  let result = /** @type {false | "ineligible"} */ ("ineligible");
-  for (const left of a) {
-    for (const right of b) {
-      if (left.alg !== right.alg) continue;
-      // SHA aliases compare by hash. Keyed digests also need the same signing domain.
-      if (left.alg === "hmac" && (left.keyId !== right.keyId || left.pipeline !== right.pipeline)) continue;
+  // A legacy or explicitly labelled HMAC-only fact needs evidence for all its domains to prove a miss.
+  const requireAllDomains = b.every(digest => digest.keyId !== null) &&
+    b.some(digest => digest.label !== undefined || digest.pipeline !== "core");
+  let comparable = false;
+  let missingDomain = false;
+  for (const right of b) {
+    let compared = false;
+    for (const left of a) {
+      if (!sameDigestDomain(left, right)) continue;
       if (left.value === right.value) return true;
-      result = false;
+      compared = true;
     }
+    comparable ||= compared;
+    missingDomain ||= !compared;
   }
-  return result;
+  return comparable && !(requireAllDomains && missingDomain) ? false : "ineligible";
 }
 
 /**
@@ -280,8 +290,8 @@ export function withholdsPassage(passage, fact, threshold = CONTAINMENT_THRESHOL
 /** @param {TextFact} fact */
 export function requiresLegacyMacDomain({ text }) {
   // Legacy MAC labels are adapter-owned. With only keyed digests, core cannot prove a miss.
-  return text.digests.every(digest => digest.alg === "hmac") &&
-    text.digests.some(digest => digest.pipeline !== "core");
+  return text.digests.every(digest => digest.keyId !== null) &&
+    text.digests.some(digest => (digest.label ?? digest.pipeline) !== "core");
 }
 
 /**

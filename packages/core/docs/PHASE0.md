@@ -125,6 +125,11 @@ Each addendum is additive unless it says what it supersedes. Adapters written ag
 12. **Raw import withheld positions.** `RawCapture.importArchive` accepts an optional fifth argument `options?: { withheld?: readonly number[] }`. The zero-based positions identify messages Core has already withheld in the full prepared batch. All text at the port uses Core's usual normalization and redaction.
    - The adapter computes lineage and fork proofs over the entire batch, including the withheld positions. It never stores, indexes or returns a message at a withheld position. It counts that position once in `withheld` and applies the ordinary eligibility rules to the other positions, including fencing a proven fork.
    - It supersedes nothing.
+13. **Retained signing domains.** The optional `FingerprintKeyProvider.retainedDigesters(owner)` returns a signer `{ alg, keyId, label, mac(text) }` for each non-current domain with a live HMAC-only fact for the owner. The provider keeps its keys local and signs locally. An absent method preserves the existing write behavior.
+   - Core resolves the signers at most once per entry call per owner, outside the unit of work. Capture admission, save, correct, capture finish, and memory import invoke the signers outside the unit of work on the same normalized and redacted passage spellings used for the current-key MAC. A signer failure or invalid MAC leaves its domain without evidence. Errors that reach callers use `CoreError` or its code-only capture envelope.
+   - Core adds an optional `label` to the shared digest shape. `DuplicateQuery` carries the labelled evidence to write policy. Stores persist the provided `InsertRow` and `FinishItem` digests, including the labels, alongside the current digests. Legacy unlabelled MACs use their existing `pipeline` as the signing label.
+   - Exact comparisons for each HMAC-only fact require a matching `(alg, keyId, label)` domain. Equal MACs match. Unequal MACs in a comparable domain give an exact miss. Missing required evidence makes the candidate ineligible for that fact.
+   - This addendum supersedes nothing.
 
 ### Topics addendum 4 — Cards in topics
 

@@ -5,6 +5,7 @@ import { boundedText, cleanContent, normalizeForHash, prepareCoreText } from "./
 /** @typedef {import("./fingerprint.mjs").FingerprintKey} FingerprintKey */
 /** @typedef {import("./fingerprint.mjs").FingerprintLabels} FingerprintLabels */
 /** @typedef {import("../suppression-fact.mjs").TextDigest} TextDigest */
+/** @typedef {import("../ports/privacy.d.ts").RetainedDigester} RetainedDigester */
 
 const encoder = new TextEncoder();
 const hmac = { name: "HMAC", hash: "SHA-256" };
@@ -169,9 +170,12 @@ export async function fingerprintLegacyCapture(text, key, labels) {
   }
 }
 
+/** @param {string} raw */
+const coreDigestText = raw => normalizeForHash(prepareCoreText(raw));
+
 /** @param {string} raw @param {FingerprintKey | null} [key] @returns {Promise<TextDigest>} */
 export async function coreDigest(raw, key) {
-  const text = normalizeForHash(prepareCoreText(raw));
+  const text = coreDigestText(raw);
   const version = { pipeline: /** @type {const} */ ("core"), redactionVersion: PRIVACY_REDACTION_VERSIONS.core };
   if (key == null) return { alg: "sha256", value: await sha256(text), ...version, keyId: null };
   try {
@@ -232,12 +236,47 @@ export function addDigest(digests, digest) {
   if (!digests.some(({ alg, value }) => alg === digest.alg && value === digest.value)) digests.push(digest);
 }
 
+/** Builds retained MACs once per distinct normalized and redacted spelling.
+ * @param {readonly RetainedDigester[] | undefined} digesters
+ */
+export function retainedDigestBuilder(digesters) {
+  if (!digesters?.length) return undefined;
+  /** @type {Map<string, Promise<TextDigest[]>>} */
+  const byText = new Map();
+  /** @param {string} raw */
+  return raw => {
+    const text = coreDigestText(raw);
+    let pending = byText.get(text);
+    if (pending === undefined) {
+      pending = Promise.all(digesters.map(async digester => {
+        try {
+          const { alg, keyId, label } = digester;
+          if (typeof alg !== "string" || !alg || alg.length > 512 ||
+              typeof keyId !== "string" || !keyId || keyId.length > 64 ||
+              typeof label !== "string" || !label || label.length > 512) return null;
+          const value = await digester.mac(text);
+          if (typeof value !== "string" || !/^[0-9a-f]{64}$/u.test(value)) return null;
+          return /** @satisfies {TextDigest} */ ({
+            alg, keyId, label, value, pipeline: "core", redactionVersion: PRIVACY_REDACTION_VERSIONS.core,
+          });
+        } catch {
+          // Missing evidence makes a comparison with this domain ineligible.
+          return null;
+        }
+      })).then(results => results.filter(digest => digest !== null));
+      byText.set(text, pending);
+    }
+    return pending;
+  };
+}
+
 /** Builds the withholding evidence for a passage under current and historical memory pipelines.
  * @param {string} raw @param {string} text @param {FingerprintKey | null} key
  * @param {(text: string) => Promise<string>} [sha256Hex]
+ * @param {(raw: string) => Promise<TextDigest[]>} [retainedFor]
  * @returns {Promise<import("../ports/privacy.d.ts").PassageFingerprint[]>}
  */
-export async function fingerprintMemoryPassages(raw, text, key, sha256Hex = sha256) {
+export async function fingerprintMemoryPassages(raw, text, key, sha256Hex = sha256, retainedFor) {
   const original = cleanContent(raw);
   const { v1, hostedCurrent, core } = PRIVACY_REDACTION_VERSIONS;
   /** @type {Array<[string, TextDigest["pipeline"], number]>} */
@@ -251,10 +290,11 @@ export async function fingerprintMemoryPassages(raw, text, key, sha256Hex = sha2
   ];
   const distinct = new Map(variants.map(variant => [normalizeForHash(variant[0]), variant]));
   return Promise.all(Array.from(distinct, async ([normalized, [variant, pipeline, redactionVersion]]) => {
-    const [digests, exact, legacy] = await Promise.all([
+    const [digests, exact, legacy, retained] = await Promise.all([
       allDigests(variant, key),
       sha256Hex(normalized),
       key && fingerprintLegacyCapture(variant, key, coreFingerprintLabels),
+      retainedFor?.(variant),
     ]);
     // allDigests re-redacts its input. Keep the exact variant for historical facts.
     addDigest(digests, { alg: "sha256", value: exact, pipeline, redactionVersion, keyId: null });
@@ -263,6 +303,7 @@ export async function fingerprintMemoryPassages(raw, text, key, sha256Hex = sha2
         alg: "hmac", value: legacy.text_hmac, pipeline: "core", redactionVersion, keyId: legacy.key_id,
       });
     }
-    return { digests, shingles: legacy?.shingles ?? null, keyId: legacy?.key_id ?? null };
+    return { digests: retained ? [...digests, ...retained] : digests,
+      shingles: legacy?.shingles ?? null, keyId: legacy?.key_id ?? null };
   }));
 }

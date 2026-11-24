@@ -80,7 +80,7 @@ function matchReader() {
   /** @param {unknown} value */
   const incarnation = (value) => record(value, ["id", "createdAtMs"]);
   /** @param {unknown} value */
-  const digest = (value) => record(value, ["alg", "value", "pipeline", "redactionVersion", "keyId"]);
+  const digest = (value) => record(value, ["alg", "value", "pipeline", "redactionVersion", "keyId", "label"]);
   const fingerprintDigests = {
     digests: (/** @type {unknown} */ value) => list(value, digest),
   };

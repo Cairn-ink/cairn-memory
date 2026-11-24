@@ -84,6 +84,16 @@ export interface PauseStore {
 export interface FingerprintKeyProvider {
   /** null when no key is configured: the store then uses FORGET_POLICY.withoutKey. Key ids stay stable. */
   userKey(owner: OwnerId): Promise<{ id: string; signingKey: CryptoKey } | null>;
+  /** Signers for every non-current domain with live HMAC-only facts for this owner. Called outside a UoW. */
+  retainedDigesters?(owner: OwnerId): Promise<ReadonlyArray<RetainedDigester>>;
+}
+
+export interface RetainedDigester {
+  alg: string;
+  keyId: string;
+  label: string;
+  /** Signs normalized, redacted text locally and returns a lowercase 64-character hex MAC. */
+  mac(text: string): Promise<string>;
 }
 
 /** Cutover-only (capability forgetLog). Removed after the hosted cutover is final. */

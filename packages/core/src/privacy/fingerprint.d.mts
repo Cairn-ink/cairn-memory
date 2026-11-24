@@ -1,5 +1,5 @@
 import type { TextDigest } from "../suppression-fact.mjs";
-import type { PassageFingerprint } from "../ports/privacy.d.ts";
+import type { PassageFingerprint, RetainedDigester } from "../ports/privacy.d.ts";
 
 export interface FingerprintKey {
   id: string;
@@ -46,7 +46,12 @@ export declare function allDigests(raw: string, key?: FingerprintKey | null): Pr
 export declare const coreFingerprintLabels: FingerprintLabels;
 /** @internal */
 export declare function addDigest(digests: TextDigest[], digest: TextDigest): void;
+/** @internal Builds labelled MACs for one candidate's normalized and redacted spellings. */
+export declare function retainedDigestBuilder(
+  digesters?: readonly RetainedDigester[],
+): ((raw: string) => Promise<TextDigest[]>) | undefined;
 /** @internal Builds the current and historical fingerprints used by memory withholding. */
 export declare function fingerprintMemoryPassages(
   raw: string, text: string, key: FingerprintKey | null, sha256Hex?: (text: string) => Promise<string>,
+  retainedFor?: (raw: string) => Promise<TextDigest[]>,
 ): Promise<PassageFingerprint[]>;

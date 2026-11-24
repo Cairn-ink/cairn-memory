@@ -4,15 +4,15 @@ import { countTokens, MODEL_OUTPUT_TOKENS, modelRequestText } from "../capture/r
 import { detach, identifier, isWellFormedText, validateDenseArray, validateObject } from "../capture/validate.mjs";
 import { CoreError, isErrorCode } from "../errors.mjs";
 import { plainExtractionSpec, validatePlainCandidates } from "../extraction/extraction.mjs";
-import { fingerprintMemoryPassages } from "../privacy/fingerprint.mjs";
+import { fingerprintMemoryPassages, retainedDigestBuilder } from "../privacy/fingerprint.mjs";
 import { redactCore } from "../privacy/redact.mjs";
 import { cleanContent, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
 import { requiresLegacyMacDomain, withholdsAnyPassage } from "../privacy/withholds.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
 import { pauseResult } from "./pause.mjs";
-import { hashesOf, validWriteEmbedding } from "./writes.mjs";
+import { prepareWriteText, validWriteEmbedding } from "./writes.mjs";
 
-/** @import {CaptureKey, CaptureMessage, Tx} from "../ports/index.d.ts" */
+/** @import {CaptureKey, CaptureMessage, RetainedDigester, Tx} from "../ports/index.d.ts" */
 /** @import {CallOptions} from "../ports/common.d.ts" */
 /** @import {ModelRequest} from "../ports/model.d.ts" */
 /** @typedef {ReturnType<typeof createCaptureDeadline>} CaptureDeadline */
@@ -133,16 +133,15 @@ function hostedCandidates(raw, policy, diagnostics) {
  * @param {CaptureKey} key
  * @param {FingerprintKey} fingerprintKey
  * @param {Deps["clock"]} clock
+ * @param {readonly RetainedDigester[] | undefined} digesters
  */
-function prepareCaptureCandidates(candidates, messages, { client, sessionId }, fingerprintKey, clock) {
+function prepareCaptureCandidates(candidates, messages, { client, sessionId }, fingerprintKey, clock, digesters) {
   return Promise.all(candidates.map(async candidate => {
     const { rawContent: raw, kind, confidence } = candidate;
     const content = prepareCoreText(raw);
     if (!content || content === "[REDACTED]" || content.length > 600) throw new CoreError("invalid_model_output");
-    const [{ textHash, digests }, passages] = await Promise.all([
-      hashesOf(raw, content, fingerprintKey),
-      fingerprintMemoryPassages(raw, content, fingerprintKey, text => clock.sha256Hex(text)),
-    ]);
+    const { query: { textHash, digests }, passages } =
+      await prepareWriteText(raw, content, fingerprintKey, text => clock.sha256Hex(text), digesters);
     const receipts = candidate.sourceIndices.map(index => {
       const { id: messageId, role, occurredAtMs } = messages[index];
       return { client, sessionId, messageId, role, occurredAtMs };
@@ -165,9 +164,8 @@ function filterCaptureCandidates(candidates, snapshot, scope, excludedSources) {
   if (facts.some(fact => fact?.owner !== scope.owner || (fact.namespace ?? null) !== scope.namespace)) {
     throw new CoreError("internal_error");
   }
-  const legacyMac = facts.some(requiresLegacyMacDomain);
   return candidates.filter(candidate => {
-    if (!legacyMac && !withholdsAnyPassage(candidate.passages, facts)) return true;
+    if (!withholdsAnyPassage(candidate.passages, facts)) return true;
     for (const { messageId } of candidate.item.receipts) excludedSources.add(messageId);
     return false;
   });
@@ -232,6 +230,9 @@ export function captureMethods(deps) {
         prepared.map(({ id, role, content, occurredAtMs }) => [id, role, content.replace(/\s+/gu, " ").trim(), occurredAtMs])]));
       const key = { scope, client, sessionId, eventId, payloadDigest };
       const fingerprintKey = capabilities.fingerprintKey ? await keys.userKey(scope.owner) : null;
+      const retainedFor = retainedDigestBuilder(await keys?.retainedDigesters?.(scope.owner));
+      const evidence = retainedFor && await Promise.all(incoming.map(({ message, originalContent }) =>
+        fingerprintMemoryPassages(originalContent, message.content, fingerprintKey, undefined, retainedFor)));
       return uow.run(scope.owner, { pauseLock: true }, async tx => {
         if (pauseResult(await pause.get(tx, scope.owner)).paused) return { status: "paused" };
         const session = { client, sessionId };
@@ -251,12 +252,14 @@ export function captureMethods(deps) {
         }
         const eligible = new Set(positions);
         const { legacyKeyUnavailable, matches } = captureTextWithholding(passages);
+        const textFacts = evidence && passages.map(({ fact }) => fact);
         const admitted = await Promise.all(incoming.map(async ({ message, originalContent }, index) => {
           const scrubbed = { ...message, content: "" };
-          if (!eligible.has(index) || legacyKeyUnavailable) return scrubbed;
+          if (!eligible.has(index)) return scrubbed;
           // The reference filter checks the source and its time. Compare snapshot text facts too.
-          if (matches && message.content && await matches(originalContent, message.content, fingerprintKey)) return scrubbed;
-          return message;
+          if (evidence && textFacts) return withholdsAnyPassage(evidence[index], textFacts) ? scrubbed : message;
+          return legacyKeyUnavailable || (matches && message.content &&
+            await matches(originalContent, message.content, fingerprintKey)) ? scrubbed : message;
         }));
         const { status } = await admit.call(capture, tx, key, admitted);
         switch (status) {
@@ -446,7 +449,8 @@ export function captureMethods(deps) {
         transport.check();
         const candidates = hostedCandidates(output, policy, diagnostics);
         const fingerprintKey = candidates.length ? await keys.userKey(owner) : null;
-        const prepared = await prepareCaptureCandidates(candidates, messages, key, fingerprintKey, clock);
+        const digesters = candidates.length ? await keys.retainedDigesters?.(owner) : undefined;
+        const prepared = await prepareCaptureCandidates(candidates, messages, key, fingerprintKey, clock, digesters);
         const excludedSources = new Set();
         /** @param {Tx} tx @param {PreparedCandidate[]} batch */
         const readFacts = (tx, batch) => suppressions.snapshot(tx, scope, {

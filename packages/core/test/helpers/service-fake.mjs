@@ -725,6 +725,7 @@ export function serviceFake({ rows = [], leakForgotten = false, writes = false, 
           tx.rows = [...tx.rows, {
             ...memory(memoryId, { scope: row.key.scope, kind: item.kind, text: item.content }),
             origin: "inferred", confidence: item.confidence, textHash: item.textHash, embedding: item.embedding,
+            ...(item.digests && { digests: item.digests }),
           }];
           return { id: memoryId, revision: 1, outcome: "inserted" };
         });
