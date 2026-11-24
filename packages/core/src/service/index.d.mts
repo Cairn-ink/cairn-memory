@@ -70,7 +70,10 @@ export interface KeylessInspectServiceDeps extends Pick<MemoryServiceDeps, "cloc
 export type InspectMemoryService = Required<Pick<MemoryService, "inspect">>;
 export type MemoryServiceRegistrationDeps = Omit<MemoryServiceDeps, "model" | "embedder">
   & Partial<Pick<MemoryServiceDeps, "embedder">> & {
-    /** Capture admission and execution require a model. */
+    /**
+     * Registration requires a model when storage.capabilities.fingerprintKey is true.
+     * Capture admission and execution always require a model.
+     */
     readonly model?: MemoryServiceDeps["model"] | undefined;
   };
 

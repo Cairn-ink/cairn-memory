@@ -23,15 +23,27 @@ try {
   resolver.deregister();
 }
 
-test("registration accepts a model that is omitted, undefined, or null", () => {
-  const { deps: { model: _model, ...deps } } = serviceFake();
+test("keyless registration accepts a model that is omitted, undefined, or null", () => {
+  const { deps: { model: _model, ...deps }, storage } = serviceFake();
+  for (const capabilities of [{}, { fingerprintKey: false }]) {
+    const keyless = { ...deps, storage: { ...storage, capabilities } };
+    for (const input of [keyless, { ...keyless, model: undefined }, { ...keyless, model: null }]) {
+      assert.equal(typeof createMemoryService(input).runCapture, "function");
+    }
+  }
+});
+
+test("registration requires a model when the fingerprint key capability is on", () => {
+  const { deps: { model: _model, ...deps }, storage } = serviceFake({ writes: true });
+  assert.equal(storage.capabilities.fingerprintKey, true);
   for (const input of [deps, { ...deps, model: undefined }, { ...deps, model: null }]) {
-    assert.equal(typeof createMemoryService(input).runCapture, "function");
+    assert.throws(() => createMemoryService(input), { code: "invalid_input" });
   }
 });
 
 test("registration still validates every supplied model field", () => {
-  const { deps } = serviceFake();
+  const { deps, storage } = serviceFake();
+  storage.capabilities.fingerprintKey = false;
   const { model } = deps;
   for (const invalid of [false, {}, { ...model, call: null }, { ...model, countTokens: null },
     { ...model, model: "" }, { ...model, contextWindow: 0 }, { ...model, fits: false }]) {
@@ -40,7 +52,9 @@ test("registration still validates every supplied model field", () => {
 });
 
 test("model-free capture admission refuses before touching any port", async () => {
-  const { deps, calls, mutations } = serviceFake({ writes: true, capture: true, rawArchive: true });
+  const { deps, calls, mutations, hooks, storage } = serviceFake({ writes: true, capture: true, rawArchive: true, hasKey: false });
+  storage.capabilities.fingerprintKey = false;
+  hooks.fault = method => assert.fail(`unexpected port call: ${method}`);
   const service = createMemoryService({ ...deps, model: null });
   await assert.rejects(service.enqueueCapture(scope, admission), { code: "capability_unavailable" });
   assert.deepEqual(calls, []);
@@ -49,11 +63,13 @@ test("model-free capture admission refuses before touching any port", async () =
 });
 
 test("model-free capture run refuses before claiming a pending admission", async () => {
-  const { deps, calls, mutations } = serviceFake({ writes: true, capture: true, rawArchive: true });
-  const hosted = createMemoryService(deps);
-  assert.deepEqual(await hosted.enqueueCapture(scope, admission), { status: "accepted" });
+  const { deps, calls, mutations, hooks, storage } = serviceFake({ writes: true, capture: true, rawArchive: true, hasKey: false });
+  storage.capabilities.fingerprintKey = false;
+  const withModel = createMemoryService(deps);
+  assert.deepEqual(await withModel.enqueueCapture(scope, admission), { status: "accepted" });
   calls.length = 0;
   mutations.length = 0;
+  hooks.fault = method => assert.fail(`unexpected port call: ${method}`);
 
   const service = createMemoryService({ ...deps, model: null });
   await assert.rejects(service.runCapture(scope, selection), { code: "capability_unavailable" });
@@ -65,6 +81,7 @@ test("model-free capture run refuses before claiming a pending admission", async
 test("the keyless reference adapter saves, recalls, reads, finds, inspects, exports, corrects and forgets", async () => {
   const { deps, calls } = serviceFake({ writes: true });
   const storage = createMemoryAdapter({ capabilities: { inspect: true } });
+  assert.equal(storage.capabilities.fingerprintKey, false);
   const service = createMemoryService({ ...deps, storage, model: null, embedder: null });
   const source = { kind: "mcp", client: null, sessionId: null };
   const original = "The spare lens is in the cabinet.";
@@ -91,7 +108,7 @@ test("the keyless reference adapter saves, recalls, reads, finds, inspects, expo
   assert.ok(calls.every(([port, , phase]) => port === "gate" && phase !== "dispatch"));
 });
 
-test("a supplied model keeps the qualified hosted capture trace", async () => {
+test("a supplied model keeps the qualified capture trace", async () => {
   const trace = await captureTrace(createMemoryService);
   // Captured from the core-next base with tools/testing/service-optional-model.qualification.mjs.
   const digest = createHash("sha256").update(JSON.stringify(trace)).digest("hex");

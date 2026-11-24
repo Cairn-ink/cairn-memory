@@ -771,6 +771,10 @@ and an independently checked token count for the actual assembly block.
   Typed hosts will use `embedder: null` in `MemoryServiceDeps`. The declaration change ships
   with the save implementation.
   Stores that require an embedding and failures from a configured embedder keep their current rules.
+- **Optional model.** With `capabilities.fingerprintKey` off, the service accepts an omitted,
+  undefined, or null model at registration. Capture admission and execution then refuse with
+  `capability_unavailable` before doing any work. With `fingerprintKey` on, registration still
+  refuses a missing model with `invalid_input`.
 - **Keyless correct.** Use addendum 15's keyless predecessor rule for exact suppression and
   lineage only when the store's `fingerprintKey` capability is off or no key provider is
   configured. This covers the local installer's SQLite profile. With `fingerprintKey` on and

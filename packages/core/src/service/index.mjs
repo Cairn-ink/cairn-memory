@@ -99,6 +99,7 @@ function freezeDeps(input) {
   requireMethods(storage.memories, "exportPage");
 
   const model = configuredModel ?? null;
+  if (model === null && storage.capabilities.fingerprintKey === true) throw new CoreError("invalid_input");
   if (model !== null) {
     requireMethods(model, "call", "countTokens");
     if (typeof model.model !== "string" || !model.model ||
