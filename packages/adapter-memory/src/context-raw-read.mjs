@@ -1,11 +1,14 @@
 import { rankScores, scoreBM25, termFrequencies, tokenizeT1 } from "@cairn-ink/core";
+import { currentMemoryReceipts } from "./context-read.mjs";
 import { receiptAddressKey } from "./receipt-read-safety.mjs";
 
-/** @import { ContextEvidenceRow, ContextMemoryRef, ContextRawReadStore, ContextRawTurn, ContextReadSet, ContextReadStore, Receipt, Scope, Tx } from "@cairn-ink/core/ports" */
+/** @import { ContextEvidenceRow, ContextMemoryRef, ContextRawReadStore, ContextRawTurn, ContextReadSet, ContextReadStore,
+ * DocumentCardSourceMessage, Receipt, Scope, Tx } from "@cairn-ink/core/ports" */
 /** @import { RawEntry } from "./raw.mjs" */
 /** @import { StoredReceipt } from "./receipt-read-safety.mjs" */
 /** @import { State } from "./unit-of-work.mjs" */
 /** @typedef {Extract<ContextEvidenceRow, { type: "memory" }>["receipts"][number]} QualifiedReceipt */
+/** @typedef {ReturnType<typeof import("./raw.mjs").createRawPorts>} Archive */
 
 const MAX_INVENTORY = 4096;
 const MAX_RECEIPT_SCAN = 16_384;
@@ -61,51 +64,92 @@ function receiptLinks(state, readSet, candidates, expired) {
   return links;
 }
 
+/** @param {State} state @param {NonNullable<ReturnType<typeof receiptLinks>>} links
+ * @param {Archive["sourceLineageVisible"]} sourceLineageVisible
+ * @param {(ref: ContextMemoryRef) => Promise<readonly QualifiedReceipt[]>} readQualified
+ * @param {(ref: ContextMemoryRef, receipt: StoredReceipt) => boolean} [retainsAddress] */
+function checkLineage(state, links, sourceLineageVisible, readQualified, retainsAddress) {
+  /** @type {Map<string, readonly QualifiedReceipt[]>} */
+  const qualified = new Map();
+  /** @param {Scope} scope @param {RawEntry} row */
+  return async (scope, row) => {
+    if (!row.content ||
+        (state.receiptDenials.size && state.receiptDenials.has(await receiptAddressKey(scope.namespace, row))) ||
+        !await sourceLineageVisible(state, scope, row)) return false;
+    // A possible receipt link must still point to a qualified current Memory.
+    // Missing ancestry is a denial.
+    for (const { ref, receipt } of links.get(sourceSlot(scope, row)) ?? []) {
+      if (!receipt.id) {
+        if (!retainsAddress || !exactLineage(state, ref, receipt, row) || !retainsAddress(ref, receipt)) return false;
+        continue;
+      }
+      if (!exactLineage(state, ref, receipt, row)) return false;
+      const key = JSON.stringify([ref.scope.namespace, ref.id]);
+      let receipts = qualified.get(key);
+      if (!receipts) {
+        receipts = await readQualified(ref);
+        qualified.set(key, receipts);
+      }
+      if (!receipts.some(source => source.id === receipt.id)) return false;
+    }
+    return true;
+  };
+}
+
+/** @param {Archive} archive
+ * @param {ReturnType<typeof import("./fact-match.mjs").createFactMatcher>} matchFacts
+ * @param {Parameters<typeof currentMemoryReceipts>[3]} receiptReadSafety */
+export function createCardRawSourceChecks({ findVisibleSource, sourceLineageVisible }, matchFacts, receiptReadSafety) {
+  /** @param {State} state @param {Scope} scope @param {RawEntry} row */
+  async function lineageVisible(state, scope, row) {
+    const links = receiptLinks(state, { owner: scope.owner, namespaces: [scope.namespace] },
+      new Set([sourceSlot(scope, row)]), () => false);
+    if (!links) return false;
+    const policy = matchFacts(state.facts, scope);
+    const current = checkLineage(state, links, sourceLineageVisible,
+      ref => currentMemoryReceipts(state, ref, policy, receiptReadSafety),
+      ({ id, revision }, receipt) => {
+        const entry = state.rows.get(scope.namespace)?.get(id);
+        return entry?.row.revision === revision && !entry.row.historical && !policy.hides(entry) &&
+          entry.receipts.some(source => source.client === receipt.client && source.sessionId === receipt.sessionId &&
+            source.messageId === receipt.messageId && source.captureEventId === receipt.captureEventId);
+      });
+    return current(scope, row);
+  }
+
+  /** @param {State} state @param {Scope} scope @param {DocumentCardSourceMessage} source */
+  async function sourceVisible(state, scope, source) {
+    const row = await findVisibleSource(state, scope, source);
+    // A conflicting replay invalidates whole-message evidence for cards.
+    return !!row && !state.rawConflicts.has(row.ref.id) && await lineageVisible(state, scope, row);
+  }
+  return { sourceVisible, lineageVisible };
+}
+
 /** @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>} work
- * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>} archive @param {ContextReadStore} store
- * @param {{ raw: boolean, amendments: boolean }} options
+ * @param {Archive} archive @param {ContextReadStore} store
+ * @param {{ raw: boolean, amendmentLineage?: ReturnType<typeof createCardRawSourceChecks>["lineageVisible"] }} options
  * @returns {ContextReadStore} */
 export function withContextRawRead({ port }, { findVisibleSource, sourceLineageVisible, amendmentSource }, store,
-  { raw: rawEnabled, amendments }) {
-  /** @param {Tx} tx @param {ContextReadSet} readSet @param {State} state @param {NonNullable<ReturnType<typeof receiptLinks>>} links */
-  function checkLineage(tx, readSet, state, links) {
-    /** @type {Map<string, readonly QualifiedReceipt[]>} */
-    const qualified = new Map();
-    /** @param {Scope} scope @param {RawEntry} row */
-    return async (scope, row) => {
-      if (!row.content ||
-          (state.receiptDenials.size && state.receiptDenials.has(await receiptAddressKey(scope.namespace, row))) ||
-          !await sourceLineageVisible(state, scope, row)) return false;
-      // Legacy raw-search-authority.mjs:154–186. A possible receipt link must
-      // still point to a qualified current Memory. Missing ancestry is a denial.
-      for (const { ref, receipt } of links.get(sourceSlot(scope, row)) ?? []) {
-        if (!receipt.id || !exactLineage(state, ref, receipt, row)) return false;
-        const key = JSON.stringify([ref.scope.namespace, ref.id]);
-        let receipts = qualified.get(key);
-        if (!receipts) {
-          const [evidence] = await store.evidence(tx, readSet, [ref], "current");
-          receipts = evidence?.type === "memory" && evidence.sourceAccess === "available" ? evidence.receipts : [];
-          qualified.set(key, receipts);
-        }
-        if (!receipts.some(source => source.id === receipt.id)) return false;
-      }
-      return true;
-    };
-  }
+  { raw: rawEnabled, amendmentLineage }) {
   /** @type {ContextReadStore} */
-  const context = amendments ? {
+  const context = amendmentLineage ? {
     ...store,
     async documentCardAmendmentSource(tx, readSet, scope, { sourceMessage, quote }) {
       if (scope.owner !== readSet.owner || !readSet.namespaces.includes(scope.namespace)) return null;
-      return port(tx, scope, false, state => amendmentSource(state, scope, sourceMessage, quote, async row => {
-        const links = receiptLinks(state, { owner: scope.owner, namespaces: [scope.namespace] },
-          new Set([sourceSlot(scope, row)]), () => false);
-        return links !== null && await checkLineage(tx, readSet, state, links)(scope, row);
-      }));
+      return port(tx, scope, false, state => amendmentSource(state, scope, sourceMessage, quote,
+        row => amendmentLineage(state, scope, row)));
     },
   } : store;
   if (!rawEnabled) return context;
 
+  /** @param {Tx} tx @param {ContextReadSet} readSet @param {State} state @param {NonNullable<ReturnType<typeof receiptLinks>>} links */
+  function currentLineage(tx, readSet, state, links) {
+    return checkLineage(state, links, sourceLineageVisible, async ref => {
+      const [evidence] = await store.evidence(tx, readSet, [ref], "current");
+      return evidence?.type === "memory" && evidence.sourceAccess === "available" ? evidence.receipts : [];
+    });
+  }
   /** @type {ContextRawReadStore} */
   const raw = {
     async search(tx, readSet, query, { limit, deadlineAtMs, signal }) {
@@ -131,7 +175,7 @@ export function withContextRawRead({ port }, { findVisibleSource, sourceLineageV
         if (!inventory.length) return complete ? { turns: [], coverage: "included" } : partial;
         const links = receiptLinks(state, readSet, new Set(inventory.map(({ scope, row }) => sourceSlot(scope, row))), expired);
         if (!links) return partial;
-        const current = checkLineage(tx, readSet, state, links);
+        const current = currentLineage(tx, readSet, state, links);
         const documents = [];
         const df = new Map(), terms = tokenizeT1(query);
         let totalLength = 0;
@@ -173,7 +217,7 @@ export function withContextRawRead({ port }, { findVisibleSource, sourceLineageV
         }
         const links = receiptLinks(state, readSet, new Set(requested.map(({ slot }) => slot)), () => false);
         if (!links) return false;
-        const current = checkLineage(tx, readSet, state, links);
+        const current = currentLineage(tx, readSet, state, links);
         for (const { turn, source } of requested) {
           const row = await findVisibleSource(state, turn.scope, source);
           if (!row || !await current(turn.scope, row) ||

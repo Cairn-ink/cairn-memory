@@ -83,10 +83,11 @@ async function readVisibleCard(store, load, tx, scope, ref) {
   const [input] = await load(tx, scope, [ref]);
   if (!input || input.card.id !== ref.id || input.card.scope.owner !== scope.owner ||
       input.card.scope.namespace !== scope.namespace) return null;
+  const checkedCard = { ...card, title: card.title ?? null };
   const verdict = await documentCardVisible({
-    ...input, requestedScope: scope, card: { ...card, canonicalSessionKey: input.card.canonicalSessionKey },
+    ...input, requestedScope: scope, card: { ...checkedCard, canonicalSessionKey: input.card.canonicalSessionKey },
   });
-  return verdict.visible ? { card, memoryStates: input.memoryStates } : null;
+  return verdict.visible ? { card: checkedCard, memoryStates: input.memoryStates } : null;
 }
 
 /** @param {import("./index.d.mts").MemoryServiceDeps} deps @returns {MemoryService["find"]} */
@@ -200,36 +201,18 @@ export function findMethod(deps) {
   return /** @type {MemoryService["find"]} */ (find);
 }
 
-/** @param {Pick<StorageAdapter, "uow" | "hydrate" | "fence" | "documentCards">} storage
+/** @param {Pick<import("../ports/index.d.ts").StorageAdapter, "uow" | "hydrate" | "fence">} storage
  * @returns {MemoryService["read"]} */
-export function readMethod({ uow, hydrate, fence, documentCards }) {
-  /** @type {(...args: Parameters<MemoryService["read"]>) => ReturnType<MemoryService["read"]>} */
-  const read = entry(async (input, target) => {
+export function readMethod({ uow, hydrate, fence }) {
+  return entry(async (input, target) => {
     const scope = scopeOf(input);
     const { type, id } = validateObject(target, ["type", "id"]);
     if ((type !== "memory" && type !== "card") || typeof id !== "string") throw new CoreError("invalid_input");
-    /** @type {ItemRef} */
-    const ref = { type, id, namespace: scope.namespace };
-    if (type === "card") {
-      const load = cardVisibilityLoader(documentCards);
-      if (!documentCards || !load) throw new CoreError("capability_unavailable");
-      return uow.run(scope.owner, { readOnly: true }, async tx => {
-        const visible = await readVisibleCard(documentCards, load, tx, scope, ref);
-        if (!visible) return { status: "not_found" };
-        const { card: { id, title, body, date, origin, sourceMessage, sourceMemories }, memoryStates } = visible;
-        const sourceMemoryIds = sourceMemories.filter(({ id }) => {
-          const state = memoryStates.get(id)?.status;
-          return state === "visible" || state === "historical";
-        }).map(({ id }) => id);
-        return {
-          status: "found",
-          card: { id, title, body, date, origin: origin ?? null, sourceClient: sourceMessage?.client ?? null, sourceMemoryIds },
-        };
-      });
-    }
-    if (!hydrate) throw new CoreError("capability_unavailable");
+    if (type === "card" || !hydrate) throw new CoreError("capability_unavailable");
 
     const readScope = readSet(scope);
+    /** @type {import("../ports/common.d.ts").ItemRef} */
+    const ref = { type, id, namespace: scope.namespace };
     /** @param {import("../ports/common.d.ts").ItemRef} candidate */
     const isRequested = candidate => candidate.type === type && candidate.id === id &&
       candidate.namespace === scope.namespace;
@@ -249,5 +232,28 @@ export function readMethod({ uow, hydrate, fence, documentCards }) {
       };
     });
   });
-  return /** @type {MemoryService["read"]} */ (read);
+}
+
+/** @param {Pick<StorageAdapter, "uow" | "documentCards">} storage
+ * @returns {MemoryService["readCard"]} */
+export function readCardMethod({ uow, documentCards }) {
+  return entry(async (input, id) => {
+    const scope = scopeOf(input);
+    if (typeof id !== "string") throw new CoreError("invalid_input");
+    const load = cardVisibilityLoader(documentCards);
+    if (!documentCards || !load) throw new CoreError("capability_unavailable");
+    return uow.run(scope.owner, { readOnly: true }, async tx => {
+      const visible = await readVisibleCard(documentCards, load, tx, scope, { type: "card", id, namespace: scope.namespace });
+      if (!visible) return { status: "not_found" };
+      const { card: { title, body, date, origin, sourceMessage, sourceMemories }, memoryStates } = visible;
+      const sourceMemoryIds = sourceMemories.filter(({ id }) => {
+        const state = memoryStates.get(id)?.status;
+        return state === "visible" || state === "historical";
+      }).map(({ id }) => id);
+      return {
+        status: "found",
+        card: { id, title, body, date, origin: origin ?? null, sourceClient: sourceMessage?.client ?? null, sourceMemoryIds },
+      };
+    });
+  });
 }

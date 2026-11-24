@@ -14,7 +14,7 @@ export async function findCards(): Promise<DocumentCardFindItem[]> {
 }
 
 export async function readCard(): Promise<[string, string | null, string[]] | null> {
-  const result = await service.read(scope, { type: "card", id: "id" });
+  const result = await service.readCard(scope, "id");
   if (result.status === "not_found") return null;
   // @ts-expect-error The card read does not expose session IDs.
   result.card.sessionId;

@@ -5,7 +5,6 @@ import { buildDocumentCard } from "@cairn-ink/core/routing";
 import { createMemoryService } from "@cairn-ink/core/service";
 import { hostedScope as scope, serviceFake } from "./helpers/service-fake.mjs";
 
-const target = id => ({ type: "card", id });
 const notFound = { status: "not_found" };
 
 function manual(id, fields = {}) {
@@ -48,7 +47,7 @@ test("card read projects the record and visible and historical source IDs in one
     memoryStates: new Map([["current", { status: "visible", revision: 1 }], ["old", { status: "historical", revision: 2 }]]),
   }]]);
   const { service, transactions, calls } = fixture(new Map([[card.id, card]]), inputs);
-  const result = await service.read(scope, target(card.id));
+  const result = await service.readCard(scope, card.id);
   assert.deepEqual(result, { status: "found", card: {
     id: card.id, title: card.title, body: card.body, date: card.date, origin: "router",
     sourceClient: "fixture", sourceMemoryIds: ["current", "old"],
@@ -65,7 +64,7 @@ test("card read projects the record and visible and historical source IDs in one
 test("source-less cards expose a null source client and an empty source list", async () => {
   const { id, title, body, date, origin } = manual("authored");
   const { service } = fixture(new Map([[id, manual(id)]]));
-  assert.deepEqual(await service.read(scope, target(id)), {
+  assert.deepEqual(await service.readCard(scope, id), {
     status: "found", card: { id, title, body, date, origin, sourceClient: null, sourceMemoryIds: [] },
   });
 });
@@ -88,16 +87,16 @@ test("hidden, forgotten-source, foreign, missing and tombstoned cards share not_
   ]);
   const { service } = fixture(records, inputs);
   for (const id of [hidden.id, forgotten.id, foreign.id, withheld.id, "missing", "tombstoned"]) {
-    assert.deepEqual(await service.read(scope, target(id)), notFound, id);
+    assert.deepEqual(await service.readCard(scope, id), notFound, id);
   }
 });
 
 test("card read requires the store and its visibility input method", async () => {
   const { deps, storage, calls } = fixture(new Map());
   delete storage.documentCards.visibilityInputs;
-  await assert.rejects(createMemoryService(deps).read(scope, target("card")), { code: "capability_unavailable" });
+  await assert.rejects(createMemoryService(deps).readCard(scope, "card"), { code: "capability_unavailable" });
   storage.capabilities.documentCards = false;
   delete storage.documentCards;
-  await assert.rejects(createMemoryService(deps).read(scope, target("card")), { code: "capability_unavailable" });
+  await assert.rejects(createMemoryService(deps).readCard(scope, "card"), { code: "capability_unavailable" });
   assert.deepEqual(calls, []);
 });

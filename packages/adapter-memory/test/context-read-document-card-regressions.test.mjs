@@ -83,7 +83,7 @@ test("receipt ancestry withholds only the amendment when its capture memory is f
   assert.deepEqual(assembly.items.map(({ ref, body, sources }) => [ref.id, body, sources]), [["map", "Map\n" + note, []]]);
 });
 
-test("archived quote must come from the retained message even after a colliding replay", async () => {
+test("a conflicting replay withholds amendments from the retained address", async () => {
   const f = fixture({ rationaleEdges: false });
   const retained = "Cross at the footbridge.";
   assert.deepEqual(await f.archive("Directions: " + retained), { archived: 1 });
@@ -97,7 +97,7 @@ test("archived quote must come from the retained message even after a colliding 
   const { assembly } = await f.assemble();
   assert.equal(assembly.items[0].ref.id, "map");
   assert.doesNotMatch(assembly.items[0].body, /west ridge/u);
-  assert.deepEqual(assembly.items[0].sources.map(({ excerpt }) => excerpt), [retained]);
+  assert.deepEqual(assembly.items[0].sources, []);
 });
 
 test("namespace generations and personal cursor ignore card writes in an excluded project", async () => {

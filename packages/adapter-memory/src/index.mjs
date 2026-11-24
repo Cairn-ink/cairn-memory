@@ -1,6 +1,6 @@
-import { CoreError, assertAdapterCapabilities, capabilities, toCoreError } from "@cairn-ink/core";
+import { CoreError, assertAdapterCapabilities, capabilities, receiptExcerpt, toCoreError } from "@cairn-ink/core";
 import { createCapturePorts } from "./capture.mjs";
-import { withContextRawRead } from "./context-raw-read.mjs";
+import { createCardRawSourceChecks, withContextRawRead } from "./context-raw-read.mjs";
 import { createContextReadStore } from "./context-read.mjs";
 import { createDocumentCardStore } from "./document-cards.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
@@ -16,7 +16,7 @@ import { createReceiptReadSafety } from "./receipt-read-safety.mjs";
 import { createCardVisibility, createCardVisibilityInput, createDocumentCardCandidates, createRetrievalPorts } from "./retrieval.mjs";
 import { createTopicStore } from "./topics.mjs";
 import { createUnitOfWork, handleWriteRejections } from "./unit-of-work.mjs";
-import { copyReceipts, validateTime, writeNamespace } from "./validation.mjs";
+import { copyCaptureMessages, copyReceipts, validateTime, writeNamespace } from "./validation.mjs";
 
 export { TEST_FINGERPRINT_LABELS, TEST_FINGERPRINT_SECRET } from "./privacy.mjs";
 
@@ -48,13 +48,14 @@ export function createMemoryAdapter(options = {}) {
   const { keys, ringKeys, labels, setFingerprintSecret, setRetainedDigestFixture } =
     createFingerprintProvider(flags.fingerprintKey, options.fingerprint, work);
   const archive = flags.rawArchive ?
-    createRawPorts(work, keys, ringKeys, labels, options.hashSessionKey, flags.rationaleEdges) : undefined;
+    createRawPorts(work, keys, ringKeys, labels, options.hashSessionKey, flags.rationaleEdges, flags.documentCards) : undefined;
   const { receiptReadSafety, receiptWithheld } = createReceiptReadSafety(ringKeys, archive?.receiptSourcesVisible);
   const store = createMemoryStore(port, flags, newId, matchFacts, ringKeys);
   const { supersession, conflicts } = createRelationStores(port, matchFacts);
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts,
     flags.fingerprintKey ? ringKeys : undefined);
-  const cardVisibilityInput = createCardVisibilityInput(matchFacts, keys, archive?.sourceVisible);
+  const cardRawSources = archive && createCardRawSourceChecks(archive, matchFacts, receiptReadSafety);
+  const cardVisibilityInput = createCardVisibilityInput(matchFacts, keys, cardRawSources?.sourceVisible);
   const cardVisible = createCardVisibility(cardVisibilityInput);
   const documentCards = flags.documentCards ? handleWriteRejections(
     createDocumentCardStore(port, now, cardVisibilityInput, flags.documentCardSearch),
@@ -75,16 +76,20 @@ export function createMemoryAdapter(options = {}) {
     capabilities: flags,
     uow,
     memories: handleWriteRejections(store.memories, ["insert", "touchDuplicate", "replaceContent", "erase"]),
-    capture: handleWriteRejections(createCapturePorts(port, store, now, matchFacts, flags.embeddingRequiredOnInsert, archive, flags.contextRead),
+    capture: handleWriteRejections(createCapturePorts(port, store, now, matchFacts, flags.embeddingRequiredOnInsert, archive, flags),
       ["admit", "claim", "beginDispatch", "abandon", "finish", "assertEligible"]),
     suppressions: handleWriteRejections({ ...suppressions,
-      async receiptWithheld(tx, scope, receipt) {
+      async receiptWithheld(tx, scope, receipt, admitted) {
         return port.read(tx, scope, getState => {
           const target = { owner: tx.owner, namespace: writeNamespace(scope) };
           const [copy] = copyReceipts([receipt]);
           if (copy.excerpt === undefined) throw new CoreError("invalid_input");
+          const source = admitted === undefined ? undefined : copyCaptureMessages([admitted])[0];
+          if (source && (!source.content || source.id !== copy.messageId || source.role !== copy.role ||
+              source.occurredAtMs !== copy.occurredAtMs || receiptExcerpt(source.content) !== copy.excerpt)) return true;
           const state = getState();
-          return receiptWithheld(state, target, { ...copy, excerpt: copy.excerpt }, matchFacts(state.facts, target));
+          return receiptWithheld(state, target, { ...copy, excerpt: copy.excerpt }, matchFacts(state.facts, target),
+            undefined, source?.content);
         });
       },
     }, ["writeFact"]),
@@ -92,7 +97,9 @@ export function createMemoryAdapter(options = {}) {
     keys,
     ...createRetrievalPorts(port, flags, matchFacts, archive?.visibleRawRefs, cardVisible),
     ...(contextRead && { contextRead: archive && (flags.contextRawRead || flags.documentCards)
-      ? withContextRawRead(work, archive, contextRead, { raw: flags.contextRawRead, amendments: flags.documentCards })
+      ? withContextRawRead(work, archive, contextRead, {
+        raw: flags.contextRawRead, amendmentLineage: flags.documentCards ? cardRawSources?.lineageVisible : undefined,
+      })
       : contextRead }),
     ...(archive && { raw: handleWriteRejections(archive.raw,
       ["recordLineage", "archive", "importArchive", "fenceSession", "purgeWithheld", "eraseSessions", "deleteConversation"]) }),

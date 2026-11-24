@@ -8,6 +8,7 @@ import { fingerprintMemoryPassages } from "../privacy/fingerprint.mjs";
 import { redactCore } from "../privacy/redact.mjs";
 import { cleanContent, normalizeForHash, prepareCoreText } from "../privacy/text.mjs";
 import { requiresLegacyMacDomain, withholdsAnyPassage } from "../privacy/withholds.mjs";
+import { captureDocumentSteps } from "./capture-documents.mjs";
 import { entry, entryError, scopeOf } from "./entry.mjs";
 import { pauseResult } from "./pause.mjs";
 import { prepareWriteText, validWriteEmbedding } from "./writes.mjs";
@@ -145,8 +146,9 @@ async function untilAborted(signal, pending) {
  * @param {unknown} raw
  * @param {{sourceCount: number, itemLimit: number}} policy
  * @param {CallOptions["onDiagnostic"]} diagnostics
+ * @param {NonNullable<ReturnType<typeof captureDocumentSteps>>["validateExtraction"]} [validate]
  */
-function hostedCandidates(raw, policy, diagnostics) {
+function hostedCandidates(raw, policy, diagnostics, validate) {
   let output;
   try {
     output = structuredClone(raw);
@@ -161,7 +163,7 @@ function hostedCandidates(raw, policy, diagnostics) {
   try {
     // Hosted openai.ts:101–109 checks distinct, non-empty, in-range indices.
     // Hosted ingest.ts:122–125 and index.ts:37 apply the inclusive confidence floor.
-    const validated = validatePlainCandidates(output, policy);
+    const validated = (validate ?? validatePlainCandidates)(output, policy);
     const { items } = /** @type {{items: Array<{content: string}>}} */ (output);
     return validated
       .map((candidate, index) => ({ ...candidate, rawContent: items[index].content }))
@@ -257,6 +259,8 @@ async function embedCaptureCandidates(prepared, owner, { storage, gate, embedder
 export function captureMethods(deps) {
   const { storage, clock, model, gate, config, diagnostics, embedder } = deps;
   const { uow, pause, suppressions, capture, sessionLineage, raw, keys, capabilities } = storage;
+  const documents = captureDocumentSteps(deps, untilAborted, captureTransport, checkCaptureAbort);
+  const captureUnavailable = documents?.captureUnavailable ?? (model === null || embedder === null);
   /** @param {Tx} tx @param {SuppressionSnapshot["passages"]} passages */
   const sourceWriteKey = (tx, passages) =>
     capabilities.fingerprintKey && passages.length && keys.userKeyForWrite ? keys.userKeyForWrite(tx) : null;
@@ -264,7 +268,7 @@ export function captureMethods(deps) {
     enqueueCapture: entry(async (inputScope, input) => {
       const scope = scopeOf(inputScope);
       const admit = capture?.admit;
-      if (embedder === null || typeof admit !== "function") throw new CoreError("capability_unavailable");
+      if (captureUnavailable || typeof admit !== "function") throw new CoreError("capability_unavailable");
       const { client: inputClient, sessionId: inputSession, eventId: inputEvent, messages } =
         validateObject(input, ["client", "sessionId", "eventId", "messages"]);
       const client = identifier(inputClient);
@@ -351,7 +355,7 @@ export function captureMethods(deps) {
       const load = capture?.load;
       const readStatus = capture?.status;
       const archive = capabilities.rawArchive ? raw : undefined;
-      if (embedder === null || typeof load !== "function" || typeof readStatus !== "function" ||
+      if (captureUnavailable || typeof load !== "function" || typeof readStatus !== "function" ||
           [capture.claim, capture.beginDispatch, capture.finish, capture.abandon, capture.eligible, capture.assertEligible,
             suppressions?.snapshot, storage.keys?.userKey].some(method => typeof method !== "function") ||
           (capabilities.rawArchive && (typeof archive?.archiveAllowed !== "function" || typeof archive.archive !== "function"))) {
@@ -494,6 +498,11 @@ export function captureMethods(deps) {
           if (blockedSession !== false || blockedMessages.length) throw new CoreError("suppressed");
           return passages;
         };
+        const supplemental = documents?.forCapture({ key, messages: admittedMessages, excludedSources, sourceKey,
+          readSourcePassages, selectWriteKey, filterSources: (positions, passages, writeKey) =>
+            filterCaptureSources(sources, positions, passages, null, sourceEvidence, writeKey),
+          abandonKeyMismatch, readEligible, runAtGeneration, finish, assertSendGeneration,
+          generation: preflight.generation, signal: options?.signal });
         /** @type {{request: ModelRequest, messages: CaptureMessage[], policy: {sourceCount: number, itemLimit: number}} | undefined} */
         let extraction;
         for (;;) {
@@ -519,8 +528,11 @@ export function captureMethods(deps) {
 
           // Size only screened text, outside the lock. The next check can only shrink the batch.
           positions = dispatch.allowed;
+          if (supplemental && documents?.skipExtraction) return await supplemental.finishWithoutExtraction(positions,
+            createCaptureDeadline(config.deadlines?.extract ?? DEFAULT_EXTRACT_MS, clock));
+          if (model === null) throw new CoreError("capability_unavailable");
           const messages = positions.map(position => admittedMessages[position]);
-          const { system, input, schema } = plainExtractionSpec(messages);
+          const { system, input, schema } = (documents?.extractionSpec ?? plainExtractionSpec)(messages);
           const inputTokens = countTokens(model, modelRequestText(system, input, HOSTED_EXTRACT_OUTPUT_TOKENS));
           const maxOutputTokens = Math.min(HOSTED_EXTRACT_OUTPUT_TOKENS,
             model.contextWindow - inputTokens - EXTRACT_FRAMING_TOKENS);
@@ -529,7 +541,7 @@ export function captureMethods(deps) {
           extraction = { messages, request: { system, input, schema, schemaName: "extract_memories", maxOutputTokens },
             policy: { sourceCount: messages.length, itemLimit: properties.items.maxItems } };
         }
-        if (!extraction) throw new CoreError("internal_error");
+        if (!extraction || model === null) throw new CoreError("internal_error");
         const { request, messages, policy } = extraction;
         const signal = options?.signal;
         const deadline = createCaptureDeadline(config.deadlines?.extract ?? DEFAULT_EXTRACT_MS, clock);
@@ -559,9 +571,10 @@ export function captureMethods(deps) {
           await gate.assertOpen(owner, "post-send");
         }
         transport.check();
-        const candidates = hostedCandidates(output, policy, diagnostics);
+        const candidates = hostedCandidates(output, policy, diagnostics, documents?.validateExtraction);
         const fingerprintKey = candidates.length ? await keys.userKey(owner) : null;
         const prepared = await prepareCaptureCandidates(candidates, messages, key, fingerprintKey, clock, digesters);
+        supplemental?.trackQuantities(candidates, prepared);
         /** @param {Tx} tx @param {PreparedCandidate[]} batch */
         const readFacts = (tx, batch) => suppressions.snapshot(tx, scope, {
           client, sessionId, passages: batch.flatMap(candidate => candidate.passages),
@@ -582,6 +595,10 @@ export function captureMethods(deps) {
         if (preEmbed === null) return { status: "paused" };
         if ("status" in preEmbed) return preEmbed;
         const embedded = await embedCaptureCandidates(preEmbed.survivors, owner, deps, deadline, signal);
+        if (supplemental) {
+          const embeddingStopped = await supplemental.embed(deadline, preEmbed.stillEligible);
+          if (embeddingStopped) return embeddingStopped;
+        }
 
         const completed = await runAtGeneration(async tx => {
           checkCaptureAbort(signal, deadline);
@@ -616,12 +633,14 @@ export function captureMethods(deps) {
           const rawMessages = allowedMessages.filter(({ id }) => !excludedSources.has(id));
           if (archive && rawMessages.length && await archive.archiveAllowed(tx, key) === true) {
             await archive.archive(tx, key, rawMessages);
-          }
+            if (supplemental) await supplemental.finishDocuments(tx, rawMessages, items, result);
+          } else if (!archive && supplemental) await supplemental.finishDocuments(tx, rawMessages, items, result);
           return /** @type {const} */ ({ status: "done", result, withheld: prepared.length - items.length });
         });
         if (completed === null) return { status: "paused" };
         if (completed.status === "failed") return completed;
         for (let i = 0; i < completed.withheld; i++) emitDiagnostic(diagnostics, "extract", "core_finish", "candidate_withheld");
+        if (supplemental) await supplemental.afterCommit();
         return { status: "done", result: completed.result };
       } catch (error) {
         const failure = entryError(error);

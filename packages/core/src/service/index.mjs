@@ -10,7 +10,7 @@ import { fetchEvidenceMethod } from "./context-read-fetch.mjs";
 import { findCandidatesMethod } from "./context-read-find.mjs";
 import { readContextMethod } from "./context-read.mjs";
 import { entryError } from "./entry.mjs";
-import { findMethod, readMethod } from "./find.mjs";
+import { findMethod, readCardMethod, readMethod } from "./find.mjs";
 import { forgetMethod } from "./forget.mjs";
 import { importMethod, importRawMethod } from "./import.mjs";
 import { inspectMethod } from "./inspect.mjs";
@@ -34,7 +34,7 @@ function freezeConfig(input) {
     vectorWeight: FUSION_PRESETS.hosted.vectorWeight,
     rowShingles: true,
   };
-  validateObject(input, [...Object.keys(config), "leaseMs", "deadlines"]);
+  validateObject(input, [...Object.keys(config), "leaseMs", "deadlines", "documentCards", "quantityLedger"]);
   const {
     nearDuplicateDistance = config.nearDuplicateDistance,
     lexicalWeight = config.lexicalWeight,
@@ -42,6 +42,8 @@ function freezeConfig(input) {
     rowShingles = config.rowShingles,
     leaseMs,
     deadlines,
+    documentCards,
+    quantityLedger,
   } = input;
   for (const weight of [nearDuplicateDistance, lexicalWeight, vectorWeight]) {
     if (!Number.isFinite(weight) || weight < 0) throw new CoreError("invalid_input");
@@ -57,10 +59,24 @@ function freezeConfig(input) {
     // Match the capture runner's deadline range.
     if (duration > 120_000) throw new CoreError("invalid_input");
   }
+  let cards, ledger;
+  if (documentCards !== undefined) {
+    const { enabled, amendments } = validateObject(documentCards, ["enabled", "amendments"]);
+    if (typeof enabled !== "boolean" || (amendments !== undefined && typeof amendments !== "boolean")) {
+      throw new CoreError("invalid_input");
+    }
+    cards = Object.freeze({ enabled, amendments });
+  }
+  if (quantityLedger !== undefined) {
+    const { enabled } = validateObject(quantityLedger, ["enabled"]);
+    if (typeof enabled !== "boolean") throw new CoreError("invalid_input");
+    ledger = Object.freeze({ enabled });
+  }
 
   return Object.freeze({
     nearDuplicateDistance, lexicalWeight, vectorWeight, rowShingles, leaseMs,
     deadlines: Object.freeze(stages),
+    documentCards: cards, quantityLedger: ledger,
   });
 }
 
@@ -87,7 +103,7 @@ function validateReadRegistration(storage) {
 /** @param {import("./index.d.mts").MemoryServiceRegistrationDeps} input */
 function freezeDeps(input) {
   const deps = { ...input };
-  const { storage, model, embedder: configuredEmbedder, gate, clock, tokens, embedQuery, diagnostics } = deps;
+  const { storage, model: configuredModel, embedder: configuredEmbedder, gate, clock, tokens, embedQuery, diagnostics } = deps;
   identifier(storage?.name);
   validateReadRegistration(storage);
   // Validate the storage methods this slice uses. Optional ports are checked at adapter registration.
@@ -98,10 +114,14 @@ function freezeDeps(input) {
   requireMethods(storage.recent, "recent");
   requireMethods(storage.memories, "exportPage");
 
-  requireMethods(model, "call", "countTokens");
-  if (typeof model.model !== "string" || !model.model ||
-      (model.fits !== undefined && typeof model.fits !== "function")) throw new CoreError("invalid_input");
-  positiveInteger(model.contextWindow);
+  const model = configuredModel ?? null;
+  if (model === null && storage.capabilities.fingerprintKey === true) throw new CoreError("invalid_input");
+  if (model !== null) {
+    requireMethods(model, "call", "countTokens");
+    if (typeof model.model !== "string" || !model.model ||
+        (model.fits !== undefined && typeof model.fits !== "function")) throw new CoreError("invalid_input");
+    positiveInteger(model.contextWindow);
+  }
   if (configuredEmbedder === undefined && storage.capabilities.embeddingRequiredOnInsert !== false) {
     throw new CoreError("invalid_input");
   }
@@ -116,8 +136,11 @@ function freezeDeps(input) {
   requireMethods(tokens, "countTokens");
   if (embedQuery !== undefined) requireMethods(embedQuery, "embedQuery");
   if (diagnostics !== undefined && typeof diagnostics !== "function") throw new CoreError("invalid_input");
+  if (deps.documentCardSessionKey !== undefined && typeof deps.documentCardSessionKey !== "function") {
+    throw new CoreError("invalid_input");
+  }
 
-  return Object.freeze({ ...deps, embedder, config: freezeConfig(deps.config) });
+  return Object.freeze({ ...deps, model, embedder, config: freezeConfig(deps.config) });
 }
 
 /** @param {import("./index.d.mts").KeylessMemoryServiceDeps["storage"] | import("./index.d.mts").MemoryServiceDeps["storage"]} storage
@@ -167,6 +190,7 @@ export function createMemoryService(input) {
       recall: recallMethod(deps),
       find: findMethod(deps),
       read: readMethod(deps.storage),
+      readCard: readCardMethod(deps.storage),
       listRawMessages: listRawMessagesMethod(deps.storage),
       importMemories: importMethod(deps),
       importRawMessages: importRawMethod(deps),
