@@ -77,6 +77,10 @@ export interface Receipt {
   messageId: string;
   role: Role;
   occurredAtMs: number | null;
+  /** Stable identity of the retained receipt, distinct from its source message. */
+  id?: string;
+  /** Stored, normalized and redacted source excerpt, at most 800 UTF-16 code units. */
+  excerpt?: string;
 }
 
 /** A content-free diagnostic event (no text, ids, hashes or keys). */
