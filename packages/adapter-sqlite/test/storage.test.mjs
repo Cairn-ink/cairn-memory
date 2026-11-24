@@ -334,8 +334,10 @@ test("fresh file metadata, facts, pause, and hashed fences survive factory reope
       assert.equal(await reopened.suppressions.epoch(tx, left.owner), 1n);
       assert.deepEqual(await reopened.pause.get(tx, left.owner), { paused: true, generation: 1 });
     }, { pauseLock: true });
-    assert.equal(reopened.capabilities.rawSpans, true);
-    for (const flag of ["rawArchive", "rawWindowHide", "sessionLineage", "spanLineage", "fingerprintKey",
+    for (const flag of ["rawSpans", "rawArchive", "rawWindowHide", "spanLineage"]) {
+      assert.equal(reopened.capabilities[flag], true);
+    }
+    for (const flag of ["sessionLineage", "fingerprintKey",
       "semanticRetrieval", "nearDuplicate", "shingleSuppression", "vectorSuppression"]) {
       assert.equal(reopened.capabilities[flag], false);
     }
