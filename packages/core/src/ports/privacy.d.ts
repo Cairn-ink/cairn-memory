@@ -20,7 +20,7 @@ export interface SuppressionSnapshot {
   blockedSession: boolean;
   /** Capture message positions blocked by session/window/lineage facts. */
   blockedMessages: number[];
-  /** Text facts relevant to the candidates (for core's withholds / blocks decisions). */
+  /** Live text facts per the snapshot contract, including their shingle evidence. */
   passages: Array<StoredFact<Extract<SuppressionFact, { kind: "text" }>>>;
 }
 
@@ -32,7 +32,20 @@ export interface SuppressionStore {
    * A new fact advances the owner epoch by exactly 1.
    */
   writeFact(tx: Tx, fact: SuppressionFact, incarnation: string): Promise<{ factId: string; epoch: bigint; createdAtMs: number; created: boolean }>;
-  /** Facts that apply to a capture/write candidate set. Uncertain or unbounded → throws ineligible (fail closed). */
+  /**
+   * For capture, returns live text facts with their shingle evidence, in `passages`,
+   * filtered only by owner/namespace and by a definite false from core's own capture matcher.
+   * Use `factBlocksIncoming` in capture mode with shingles enabled on the same candidate
+   * `passages` Core supplied. Keep exact and containment matches, ineligible results,
+   * and facts requiring legacy-domain handling. Core applies the same match, so a definite
+   * miss leaves its decision unchanged. Fact mode, `rowShingles`, and missing row shingles
+   * are forbidden as independent capture filters.
+   * When neither side has a key or shingle evidence, capture matching is exact-only,
+   * with weaker protection without a key. When `candidates.passages` is omitted, only owner
+   * and namespace scope the text facts. Client, session and time candidates govern
+   * `blockedSession` and `blockedMessages`.
+   * Uncertain or unbounded → throws ineligible (fail closed).
+   */
   snapshot(tx: Tx, scope: Scope, candidates: { client?: string; sessionId?: string; occurredAtMs?: ReadonlyArray<number | null>; passages?: readonly PassageFingerprint[] }): Promise<SuppressionSnapshot>;
   /** Facts that target one item; "ineligible" when the store cannot decide. */
   factsFor(tx: Tx, scope: Scope, target: { memoryId: string }): Promise<StoredFact[] | "ineligible">;
