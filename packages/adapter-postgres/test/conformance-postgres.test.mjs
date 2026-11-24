@@ -110,12 +110,12 @@ const concurrentIndexes = {
   "0022_core_raw_purge_idx.concurrent.sql": {
     name: "raw_messages_core_purge_idx",
     table: "raw_messages",
-    definition: "CREATE INDEX raw_messages_core_purge_idx ON public.raw_messages USING btree (user_id, core_namespace, id)",
+    definition: "CREATE INDEX raw_messages_core_purge_idx ON public.raw_messages USING btree (user_id, id)",
   },
   "0023_core_raw_ledger_idx.concurrent.sql": {
     name: "capture_events_core_raw_ledger_idx",
     table: "capture_events",
-    definition: "CREATE INDEX capture_events_core_raw_ledger_idx ON public.capture_events USING btree (user_id, core_namespace, client, event_id)",
+    definition: "CREATE INDEX capture_events_core_raw_ledger_idx ON public.capture_events USING btree (user_id, client, event_id) WHERE (core_namespace IS NULL)",
   },
   "0004_core_recent_index.concurrent.sql": {
     name: "memories_user_recent_c",
@@ -238,7 +238,7 @@ function postgresFactory(wrapSuppressions = (store) => store) {
       const uow = createPostgresUnitOfWork(source);
       const lineage = { lineageSecret: randomUUID() };
       const capture = createPostgresCapturePorts(lineage);
-      const rawPorts = createPostgresRawPorts({ ...lineage, allowNonNullNamespace: true });
+      const rawPorts = createPostgresRawPorts(lineage);
       const nearDuplicate = requested.nearDuplicate !== false;
       const flags = capabilities({ embeddingRequiredOnInsert: true, nearDuplicate, vectorSuppression: true, supersession: true,
         rawArchive: requested.rawArchive === true, rawWindowHide: requested.rawWindowHide === true,
@@ -317,11 +317,11 @@ const selected = new Set([
   "K-MEM-11", "K-MEM-12", "K-MEM-13",
   "K-HIDE-1", "K-HIDE-2", "K-HIDE-3", "K-HIDE-4", "K-WRITE-1", "K-WRITE-2",
   "K-FORK-1", "K-FORK-2", "K-FORK-3", "K-FORK-4", "K-FORK-5",
-  "K-FORK-6", "K-FORK-7", "K-FORK-8", "K-FORK-10",
+  "K-FORK-6", "K-FORK-7", "K-FORK-10",
   "K-RET-9", "K-SNAP-1", "K-HYD-1", "K-HYD-2", "K-PAUSE-1", "K-IMP-T1", "K-IMP-T2", "K-IMP-T3",
 ]);
 
-// Each entry names a missing port, method, or capability.
+// Each entry names a profile limit or a missing port, method, or capability.
 const notApplicable = {
   "hosted profile requires an embedding": ["K-MEM-10"],
   "pending historical edit case has no assertions": ["K-MEM-5h"],
@@ -340,11 +340,12 @@ const notApplicable = {
   ],
   "snapshot.stateToken": ["K-ADM-7"],
   "suppressions.snapshot (capture text)": ["K-SRC-4"],
-  RawCandidates: ["K-RAW-1", "K-RAW-2", "K-RAW-3", "K-RAW-3w", "K-RAW-3c",
-    "K-RAW-4", "K-RAW-5", "K-RAW-7", "K-RAW-8w"],
-  "RawCandidates and capture.finish": ["K-RAW-6", "K-RAW-8"],
+  RawCandidates: ["K-RAW-1", "K-RAW-2", "K-RAW-3", "K-RAW-3w", "K-RAW-3c", "K-RAW-7", "K-RAW-8w"],
+  "hosted raw is personal-only until scopes step 2 (namespace guard)": [
+    "K-FORK-8", "K-RAW-4", "K-RAW-5", "K-RAW-6", "K-RAW-8", "K-IMP-RAW-4", "K-IMP-RAW-4e",
+  ],
   "rawSpans not declared": ["K-FACT-3r", "K-RAW-2s", "K-RAW-3s", "K-RAW-8s"],
-  "raw.importArchive": ["K-IMP-RAW-1", "K-IMP-RAW-2", "K-IMP-RAW-3", "K-IMP-RAW-3s", "K-IMP-RAW-4", "K-IMP-RAW-4e", "K-IMP-RAW-4k",
+  "raw.importArchive": ["K-IMP-RAW-1", "K-IMP-RAW-2", "K-IMP-RAW-3", "K-IMP-RAW-3s", "K-IMP-RAW-4k",
     "K-IMP-RAW-5", "K-IMP-RAW-6", "K-IMP-RAW-7", "K-IMP-RAW-8", "K-IMP-RAW-9", "K-IMP-RAW-10"],
   "raw.listRaw": ["K-FORK-9"],
   "hashed session refs required": ["K-HASH-1"],

@@ -2,6 +2,7 @@ import { CoreError, validateSuppressionFact } from "../../core/src/index.mjs";
 import { copyArray, copyKey, copyMessages, copyScope, hostedTime, identifier, jsonbSource, pgText, readInput } from "./capture-input.mjs";
 import { checkSourceLineage, createCaptureProofs, filterSources } from "./capture-source.mjs";
 import { pauseLockedWrite } from "./capture-lock.mjs";
+import { namespaceKey } from "./memory-input.mjs";
 import { advanceIndex } from "./memory-rows.mjs";
 import { MAX_LINEAGE_SESSIONS, MAX_LINEAGE_VERTICES, PROVEN_CLOSURE } from "./raw-lineage-query.mjs";
 import { purgeRawText, scrubLedger } from "./raw-purge.mjs";
@@ -19,32 +20,25 @@ import { requireLiveRun, runOperation } from "./uow.mjs";
 /** @typedef {Connection["query"]} Query */
 
 const ARCHIVE = `INSERT INTO raw_messages
-    (id, user_id, client, session_id, message_id, occurred_at, role, content, core_namespace, core_occurred_at_ms)
-  SELECT id, $1, $2, $3, message_id, occurred_at, role, content, $4, occurred_ms
-  FROM jsonb_to_recordset($5::jsonb) AS batch(
+    (id, user_id, client, session_id, message_id, occurred_at, role, content, core_occurred_at_ms)
+  SELECT id, $1, $2, $3, message_id, occurred_at, role, content, occurred_ms
+  FROM jsonb_to_recordset($4::jsonb) AS batch(
     id text, message_id text, occurred_at timestamptz, role text, content text, occurred_ms bigint)
   ON CONFLICT (user_id, client, session_id, message_id) DO NOTHING RETURNING 1`;
 
-const RECORD = `INSERT INTO capture_raw_lineage (user_id, client, session_id, message_mac, content_mac, core_namespaces)
-  SELECT DISTINCT $1, $2, $3, message_mac, content_mac, ARRAY[$4::text]
-  FROM jsonb_to_recordset($5::jsonb) AS proof(message_mac text, content_mac text)
-  ON CONFLICT (user_id, client, session_id, message_mac, content_mac) DO UPDATE
-  SET core_namespaces = array_append(COALESCE(capture_raw_lineage.core_namespaces, ARRAY[NULL]::text[]), $4)
-  WHERE capture_raw_lineage.user_id = $1
-    AND array_position(COALESCE(capture_raw_lineage.core_namespaces, ARRAY[NULL]::text[]), $4) IS NULL`;
+const RECORD = `INSERT INTO capture_raw_lineage (user_id, client, session_id, message_mac, content_mac)
+  SELECT DISTINCT $1, $2, $3, message_mac, content_mac
+  FROM jsonb_to_recordset($4::jsonb) AS proof(message_mac text, content_mac text)
+  ON CONFLICT (user_id, client, session_id, message_mac, content_mac) DO NOTHING`;
 
-const FENCE = `INSERT INTO capture_raw_fences (user_id, client, session_id, core_namespaces)
-  SELECT DISTINCT $1, client, session_id, ARRAY[$2::text]
-  FROM jsonb_to_recordset($3::jsonb) AS target(client text, session_id text)
-  ON CONFLICT (user_id, client, session_id) DO UPDATE
-  SET core_namespaces = array_append(COALESCE(capture_raw_fences.core_namespaces, ARRAY[NULL]::text[]), $2)
-  WHERE capture_raw_fences.user_id = $1
-    AND array_position(COALESCE(capture_raw_fences.core_namespaces, ARRAY[NULL]::text[]), $2) IS NULL
-  RETURNING 1`;
+const FENCE = `INSERT INTO capture_raw_fences (user_id, client, session_id)
+  SELECT DISTINCT $1, client, session_id
+  FROM jsonb_to_recordset($2::jsonb) AS target(client text, session_id text)
+  ON CONFLICT (user_id, client, session_id) DO NOTHING RETURNING 1`;
 
 const DELETE = `DELETE FROM raw_messages r
-  USING jsonb_to_recordset($3::jsonb) AS target(client text, session_id text)
-  WHERE r.user_id = $1 AND r.core_namespace IS NOT DISTINCT FROM $2
+  USING jsonb_to_recordset($2::jsonb) AS target(client text, session_id text)
+  WHERE r.user_id = $1
     AND (r.client, r.session_id) = (target.client, target.session_id) RETURNING 1`;
 
 /** @param {Session} session */
@@ -56,26 +50,26 @@ function copySession(session) {
 async function changeSessions(query, scope, sessions, statement) {
   if (!sessions.length) return 0;
   const target = sessions.map(({ client, sessionId }) => ({ client, session_id: sessionId }));
-  return (await query(statement, [scope.owner, scope.namespace, JSON.stringify(target)])).rows.length;
+  return (await query(statement, [scope.owner, JSON.stringify(target)])).rows.length;
 }
 
 /** @param {Query} query @param {Scope} scope @param {Session} session @param {readonly Proof[]} proofs */
 async function record(query, scope, { client, sessionId }, proofs) {
-  if (proofs.length) await query(RECORD, [scope.owner, client, sessionId, scope.namespace, JSON.stringify(proofs)]);
+  if (proofs.length) await query(RECORD, [scope.owner, client, sessionId, JSON.stringify(proofs)]);
+}
+
+/** @param {Scope} scope */
+function rawScope(scope) {
+  namespaceKey(scope.namespace, false);
+  return scope;
 }
 
 /** @param {RawOptions} options @returns {{ raw: RawCapture & RawStore, sessionLineage: SessionLineageStore }} */
 export function createPostgresRawPorts(options) {
-  const { lineageSecret, hashSessionKey, fingerprintKeys, allowNonNullNamespace = false } = options ?? {};
+  const { lineageSecret, hashSessionKey, fingerprintKeys } = options ?? {};
   const captureProofs = createCaptureProofs(lineageSecret);
-  /** @type {WeakMap<ProvenClosure, {tx: Tx, namespace: Scope["namespace"]}>} */
+  /** @type {WeakMap<ProvenClosure, Tx>} */
   const proven = new WeakMap();
-
-  /** @param {Scope} scope */
-  function rawScope(scope) {
-    if (!allowNonNullNamespace && scope.namespace !== null) throw new CoreError("invalid_input");
-    return scope;
-  }
 
   /** @type {RawCapture & RawStore} */
   const raw = {
@@ -90,13 +84,13 @@ export function createPostgresRawPorts(options) {
           if (proofs === null) throw new CoreError("fingerprint_unavailable");
           const { scope, client, sessionId, eventId, payloadDigest } = capture;
           await record(query, scope, capture, proofs);
-          await query(`UPDATE capture_events SET raw_lineage_key_id = $7
+          await query(`UPDATE capture_events SET raw_lineage_key_id = $6
             WHERE user_id = $1 AND client = $2 AND session_id = $3 AND event_id = $4
-              AND core_namespace IS NOT DISTINCT FROM $5 AND core_payload_digest = $6
-              AND raw_lineage_key_id IS DISTINCT FROM $7
+              AND core_namespace IS NULL AND core_payload_digest = $5
+              AND raw_lineage_key_id IS DISTINCT FROM $6
               AND (SELECT jsonb_agg(jsonb_build_array(message->>'id', message->>'content') ORDER BY ordinal)
-                FROM jsonb_array_elements(raw_request->'messages') WITH ORDINALITY AS entry(message, ordinal)) = $8::jsonb`,
-          [scope.owner, client, sessionId, eventId, scope.namespace, payloadDigest, "content:" + await captureProofs.keyId(),
+                FROM jsonb_array_elements(raw_request->'messages') WITH ORDINALITY AS entry(message, ordinal)) = $7::jsonb`,
+          [scope.owner, client, sessionId, eventId, payloadDigest, "content:" + await captureProofs.keyId(),
             jsonbSource(batch.map(({ id, content }) => [id, content]))]);
         };
       });
@@ -134,7 +128,7 @@ export function createPostgresRawPorts(options) {
             return { id: crypto.randomUUID(), message_id: id, role, content, occurred_at,
               occurred_ms: occurred_at === null ? occurredAtMs : null };
           });
-          const { rows } = await query(ARCHIVE, [scope.owner, client, sessionId, scope.namespace, JSON.stringify(records)]);
+          const { rows } = await query(ARCHIVE, [scope.owner, client, sessionId, JSON.stringify(records)]);
           if (rows.length) await advanceIndex(query, scope.owner);
           return { archived: rows.length };
         };
@@ -154,8 +148,7 @@ export function createPostgresRawPorts(options) {
     eraseSessions(tx, scope, closure) {
       return pauseLockedWrite(tx, () => {
         const target = rawScope(copyScope(tx, scope));
-        const proof = proven.get(closure);
-        if (proof?.tx !== tx || proof.namespace !== target.namespace) throw new CoreError("raw_lineage_unavailable");
+        if (proven.get(closure) !== tx) throw new CoreError("raw_lineage_unavailable");
         return async (query) => {
           if (!closure.length) return { rawDeleted: 0, ledgerBlanked: 0 };
           const fenced = await changeSessions(query, target, closure, FENCE);
@@ -231,7 +224,7 @@ export function createPostgresRawPorts(options) {
           let vertices = 0;
           for (const [client, sessions] of byClient) {
             const { rows: [closure] } = await query(PROVEN_CLOSURE,
-              [target.owner, client, target.namespace, [...sessions]]);
+              [target.owner, client, [...sessions]]);
             vertices += closure.vertex_count;
             if (closure.exceeded || vertices > MAX_LINEAGE_VERTICES ||
                 members.length + closure.session_ids.length > MAX_LINEAGE_SESSIONS) {
@@ -240,7 +233,7 @@ export function createPostgresRawPorts(options) {
             for (const sessionId of closure.session_ids) members.push(Object.freeze({ client, sessionId }));
           }
           const closure = /** @type {ProvenClosure} */ (/** @type {unknown} */ (Object.freeze(members)));
-          proven.set(closure, { tx, namespace: target.namespace });
+          proven.set(closure, tx);
           return closure;
         };
       });

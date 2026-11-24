@@ -137,10 +137,10 @@ async function lineageVerdict(query, source, proofs, facts, signer, hashSessionK
   if (lineage.direct || lineage.proven) return "proven";
   if (lineage.fenced) return "id-only";
   let weak = false;
-  for (const [id, namespace, legacy, proven] of lineage.hash_candidates) {
+  for (const [id, namespace, unscoped, proven] of lineage.hash_candidates) {
     for (const stored of hashes) {
       const factNamespace = stored.fact.namespace ?? null;
-      if (!legacy && namespace !== factNamespace) continue;
+      if (!unscoped && namespace !== factNamespace) continue;
       const match = factBlocksIncoming(stored, {
         scope: { owner: scope.owner, namespace: factNamespace }, passages: [], session: { client, sessionId: id },
       }, policy);

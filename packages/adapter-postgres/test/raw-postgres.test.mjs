@@ -318,25 +318,61 @@ test("erase rejects unproven and stale closures and recording rolls back without
     [{ session_id: root.sessionId, content: item.content }]);
 });
 
-test("recorded namespace scopes ancestor facts and the closure stays in its own namespace", migrationDbTest, async (t) => {
-  const { capture, raw, sessionLineage, owner, key, write, read, storeFact } =
-    await fixture(t, { allowNonNullNamespace: true });
-  const root = key({ owner, namespace: randomUUID() });
-  const fork = key();
-  const wrongScope = key({ owner, namespace: randomUUID() }, root.sessionId);
-  const item = message("narrow green bookcase");
+test("hosted Raw writes refuse a project namespace without writing", migrationDbTest, async (t) => {
+  const { capture, raw, sessionLineage, pool, owner, key, write } = await fixture(t);
+  const root = key({ owner, namespace: "project" });
+  const personal = { ...root.scope, namespace: null };
+  const item = message("green bookcase");
+  await write((tx) => capture.admit(tx, root, [item]));
+
   await write(async (tx) => {
+    const refusal = { code: "invalid_input" };
+    await assert.rejects(raw.archive(tx, root, [item]), refusal);
+    await assert.rejects(raw.recordLineage(tx, root, [item]), refusal);
+    await assert.rejects(sessionLineage.recordAnchors(tx, root.scope, root, []), refusal);
+    await assert.rejects(raw.fenceSession(tx, root.scope, root), refusal);
+    const closure = await sessionLineage.provenClosure(tx, personal, [root]);
+    await assert.rejects(raw.eraseSessions(tx, root.scope, closure), refusal);
+    await assert.rejects(raw.purgeWithheld(tx, root.scope, []), refusal);
+    await assert.rejects(raw.deleteConversation(tx, root.scope, root), refusal);
+  });
+
+  for (const table of ["raw_messages", "capture_raw_lineage", "capture_raw_fences"]) {
+    const { rows } = await pool.query(`SELECT 1 FROM ${table} WHERE user_id = $1`, [owner]);
+    assert.deepEqual(rows, []);
+  }
+  const { rows } = await pool.query("SELECT raw_lineage_key_id, raw_request FROM capture_events WHERE user_id = $1", [owner]);
+  assert.deepEqual(rows, [{
+    raw_lineage_key_id: null,
+    raw_request: { client, event_id: root.eventId, session_id: root.sessionId, messages: [wireMessage(item)] },
+  }]);
+});
+
+test("project ancestor facts still block a fork of a personal Raw session", migrationDbTest, async (t) => {
+  const { capture, raw, sessionLineage, owner, key, write, read, storeFact } = await fixture(t);
+  const root = key();
+  const fork = key();
+  const project = { owner, namespace: "project" };
+  const projectEvent = key(project, root.sessionId);
+  const item = message("narrow green bookcase");
+  const projectMessage = message("different project capture");
+  await write(async (tx) => {
+    await capture.admit(tx, projectEvent, [projectMessage]);
     await raw.recordLineage(tx, root, [item]);
     await raw.recordLineage(tx, fork, [item]);
   });
-  const suppress = (scope) => storeFact({ ...scope, kind: "session", origin: "forget",
-    actionId: randomUUID(), session: { client, sessionId: root.sessionId } });
-  await suppress(wrongScope.scope);
+  const suppress = (sessionId) => storeFact({ ...project, kind: "session", origin: "forget",
+    actionId: randomUUID(), session: { client, sessionId } });
+  await suppress(fork.sessionId);
   assert.deepEqual(await read((tx) => capture.eligible(tx, fork, [item])), [0]);
-  await suppress(root.scope);
+  await suppress(root.sessionId);
   assert.deepEqual(await read((tx) => capture.eligible(tx, fork, [item])), []);
-  const closure = await write((tx) => sessionLineage.provenClosure(tx, root.scope, [root]));
-  assert.deepEqual(closure, [{ client, sessionId: root.sessionId }]);
+  await write(async (tx) => {
+    const closure = await sessionLineage.provenClosure(tx, root.scope, [root]);
+    assert.deepEqual(new Set(closure.map(({ sessionId }) => sessionId)), new Set([root.sessionId, fork.sessionId]));
+    assert.deepEqual(await raw.eraseSessions(tx, root.scope, closure), { rawDeleted: 0, ledgerBlanked: 0 });
+  });
+  assert.deepEqual((await read((tx) => capture.load(tx, projectEvent))).messages, [projectMessage]);
 });
 
 async function whileArchiveWaits({ pool, source, owner, raw }, target, messages, privacyStep) {

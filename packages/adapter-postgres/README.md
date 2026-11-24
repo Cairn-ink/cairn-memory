@@ -181,11 +181,11 @@ and keyed containment can prove a match. Inconclusive evidence preserves the
 stored row. A scrub keeps the hosted ledger's object or encoded-string
 representation and retains the message positions and their IDs.
 
-The hosted profile uses the null namespace. Set `allowNonNullNamespace` only
-for isolated stores with no hosted writers. Migrations 0021–0023 add nullable
-Raw metadata and concurrent scan indexes. The hosted Raw identity and
-lineage MAC domains are unchanged. A timestamp beyond the hosted wire
-range retains its exact milliseconds in `core_occurred_at_ms`.
+Hosted Raw writes require the personal (null) namespace. Suppression facts
+can still apply to ancestors in project namespaces. Migrations 0021–0023 add
+nullable Raw timestamp metadata and concurrent scan indexes. A timestamp
+beyond the hosted wire range retains its exact milliseconds in
+`core_occurred_at_ms`.
 
 ## Database tests
 

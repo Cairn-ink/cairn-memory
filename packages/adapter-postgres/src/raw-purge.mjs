@@ -77,15 +77,15 @@ export async function purgeRawText(query, scope, facts, fingerprintKeys) {
   let after = null;
   for (;;) {
     const { rows } = await query(`SELECT id, content FROM raw_messages
-      WHERE user_id = $1 AND core_namespace IS NOT DISTINCT FROM $2 AND ($3::text IS NULL OR id > $3)
-      ORDER BY id LIMIT 100`, [scope.owner, scope.namespace, after]);
+      WHERE user_id = $1 AND ($2::text IS NULL OR id > $2)
+      ORDER BY id LIMIT 100`, [scope.owner, after]);
     if (!rows.length) break;
     const ids = [];
     for (const row of rows) if (await matches(row)) ids.push(row.id);
     if (ids.length) {
       const { rows: deleted } = await query(`DELETE FROM raw_messages
-        WHERE user_id = $1 AND core_namespace IS NOT DISTINCT FROM $2 AND id = ANY($3::text[]) RETURNING 1`,
-      [scope.owner, scope.namespace, ids]);
+        WHERE user_id = $1 AND id = ANY($2::text[]) RETURNING 1`,
+      [scope.owner, ids]);
       rawDeleted += deleted.length;
     }
     after = rows.at(-1).id;
@@ -104,14 +104,14 @@ export async function scrubLedger(query, scope, sessions, matches) {
   let afterEvent = null;
   for (;;) {
     const { rows } = await query(`SELECT client, event_id, raw_request FROM capture_events e
-      WHERE e.user_id = $1 AND e.core_namespace IS NOT DISTINCT FROM $2
-        AND ($3::text IS NULL OR (e.client, e.event_id) > ($3, $4))
-        AND ($6::boolean OR EXISTS (
-          SELECT 1 FROM jsonb_to_recordset($5::jsonb) AS target(client text, session_id text)
+      WHERE e.user_id = $1 AND e.core_namespace IS NULL
+        AND ($2::text IS NULL OR (e.client, e.event_id) > ($2, $3))
+        AND ($5::boolean OR EXISTS (
+          SELECT 1 FROM jsonb_to_recordset($4::jsonb) AS target(client text, session_id text)
           WHERE (target.client, target.session_id) = (e.client, e.session_id)
         ))
       ORDER BY e.client, e.event_id LIMIT 16 FOR UPDATE`,
-    [scope.owner, scope.namespace, afterClient, afterEvent, targets, matches !== undefined]);
+    [scope.owner, afterClient, afterEvent, targets, matches !== undefined]);
     if (!rows.length) return ledgerBlanked;
     for (const { client, event_id, raw_request } of rows) {
       const legacy = typeof raw_request === "string";
@@ -138,9 +138,9 @@ export async function scrubLedger(query, scope, sessions, matches) {
       }
       if (changed) {
         const patch = legacy ? JSON.stringify(JSON.stringify(request)) : jsonbSource(request);
-        await query(`UPDATE capture_events SET raw_request = $5::jsonb
-          WHERE user_id = $1 AND core_namespace IS NOT DISTINCT FROM $2 AND client = $3 AND event_id = $4`,
-        [scope.owner, scope.namespace, client, event_id, patch]);
+        await query(`UPDATE capture_events SET raw_request = $4::jsonb
+          WHERE user_id = $1 AND core_namespace IS NULL AND client = $2 AND event_id = $3`,
+        [scope.owner, client, event_id, patch]);
       }
     }
     ({ client: afterClient, event_id: afterEvent } = rows.at(-1));
