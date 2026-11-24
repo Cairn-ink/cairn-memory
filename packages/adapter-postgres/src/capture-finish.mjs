@@ -67,8 +67,9 @@ export async function readIndexRevision(query, owner) {
 
 /** @param {Tx} tx @param {Scope} scope @param {SourceRef} source
  * @param {ReturnType<typeof copyFinishItems>} items @param {number} nowMs
- * @param {MemoryStore} memories @param {FactMatchPolicy["hashSessionKey"]} hashSessionKey */
-export async function finishMemories(tx, scope, source, items, nowMs, memories, hashSessionKey) {
+ * @param {MemoryStore} memories @param {FactMatchPolicy["hashSessionKey"]} hashSessionKey
+ * @param {boolean} [allowNonNullNamespace] */
+export async function finishMemories(tx, scope, source, items, nowMs, memories, hashSessionKey, allowNonNullNamespace) {
   /** @type {FinishResult} */
   const result = { indexRevision: 0, memories: [], suppressedCount: 0, duplicateCount: 0, counters: { nearSkippedUnembedded: 0 } };
   let saved = 0;
@@ -106,7 +107,7 @@ export async function finishMemories(tx, scope, source, items, nowMs, memories, 
           // Preserve the complete digest shape on the inserted row before the transaction can publish it.
           await runOperation(tx, (query) => query(`UPDATE memories SET core_digests = $4::jsonb
             WHERE user_id = $1 AND core_namespace IS NOT DISTINCT FROM $2 AND id = $3`,
-          [scope.owner, namespaceKey(scope.namespace), id, JSON.stringify(row.digests)]));
+          [scope.owner, namespaceKey(scope.namespace, allowNonNullNamespace), id, JSON.stringify(row.digests)]));
         }
         progress.inserted.set(position, id);
         progress.writeTimes.set(id, updatedAtUs);

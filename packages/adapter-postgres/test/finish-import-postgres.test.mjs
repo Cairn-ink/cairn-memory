@@ -11,11 +11,11 @@ const leaseMs = 60_000;
 const hash = (text) => createHash("sha256").update(text).digest("hex");
 const message = (content, id = randomUUID()) => ({ id, role: "user", content, occurredAtMs: 10 });
 
-async function fixture(t) {
+async function fixture(t, { namespace = null, allowNonNullNamespace } = {}) {
   const { pool } = await migrationDatabase(t);
   const owner = randomUUID();
   const otherOwner = randomUUID();
-  const scope = { owner, namespace: null };
+  const scope = { owner, namespace };
   const key = { scope, client: "test-client", sessionId: randomUUID(), eventId: randomUUID(), payloadDigest: hash("event") };
   await pool.query("INSERT INTO users (id) VALUES ($1), ($2)", [owner, otherOwner]);
   const backends = [];
@@ -28,7 +28,7 @@ async function fixture(t) {
   });
   let now = Date.now();
   const lineageSecret = randomBytes(32).toString("hex");
-  const capture = createPostgresCapturePorts({ lineageSecret, nearDuplicate: false, now: () => now });
+  const capture = createPostgresCapturePorts({ lineageSecret, nearDuplicate: false, allowNonNullNamespace, now: () => now });
   const { raw, sessionLineage } = createPostgresRawPorts({ lineageSecret });
   const run = (operation) => uow.run(owner, write, operation);
   const acquire = (messages, admit = true) => run(async (tx) => {
@@ -154,6 +154,38 @@ test("finish persists lossless replay and the completed status and count read by
   const replay = await run((tx) => capture.claim(tx, key, messages, { leaseMs }));
   assert.deepEqual(replay, { status: "rawReplay", result: expected });
   assert.deepEqual(await run((tx) => capture.admit(tx, key, messages)), replay);
+});
+
+test("finish applies the memory store namespace option to labelled digests", migrationDbTest, async (t) => {
+  for (const allowNonNullNamespace of [false, true]) {
+    await t.test(`allowNonNullNamespace=${allowNonNullNamespace}`, async (t) => {
+      const namespace = "project";
+      const db = await fixture(t, { namespace, allowNonNullNamespace });
+      const { pool, owner, key, capture, acquire, run } = db;
+      const source = message("A source in a named namespace.");
+      const token = await acquire([source]);
+      const candidate = item("A memory in a named namespace", key, source);
+      candidate.digests = [await coreDigest(candidate.content), {
+        alg: "hmac", keyId: randomUUID(), label: "test-domain", pipeline: "core",
+        redactionVersion: 1, value: randomBytes(32).toString("hex"),
+      }];
+      const finish = () => run((tx) => capture.finish(tx, token, [candidate]));
+
+      if (!allowNonNullNamespace) {
+        await assert.rejects(finish, { code: "invalid_input" });
+        assert.deepEqual(await writeCounts(db), { memories: 0, receipts: 0, revision: 0 });
+        assert.equal((await ledger(db)).core_lease_token, token);
+        return;
+      }
+
+      const result = await finish();
+      assert.equal(result.memories.length, 1);
+      const [{ id, outcome }] = result.memories;
+      assert.equal(outcome, "inserted");
+      const { rows } = await pool.query("SELECT text, core_namespace, core_digests FROM memories WHERE user_id = $1 AND id = $2", [owner, id]);
+      assert.deepEqual(rows, [{ text: candidate.content, core_namespace: JSON.stringify(namespace), core_digests: candidate.digests }]);
+    });
+  }
 });
 
 test("finish and replay use the revision committed with the Raw archive", migrationDbTest, async (t) => {

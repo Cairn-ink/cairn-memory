@@ -231,7 +231,7 @@ export function createPostgresCapturePorts(options) {
         };
       });
 
-      const { result, saved } = await finishMemories(tx, scope, source, batch, nowMs, memories, hashSessionKey);
+      const { result, saved } = await finishMemories(tx, scope, source, batch, nowMs, memories, hashSessionKey, allowNonNullNamespace);
       return runOperation(tx, async (query) => {
         const current = await readIndexRevision(query, tx.owner);
         // The memory store bumps per write. A capture publishes one revision for its whole batch.
