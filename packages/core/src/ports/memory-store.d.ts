@@ -86,13 +86,23 @@ export interface MemoryStore {
    */
   readWritePolicy(tx: Tx, scope: Scope, batch: readonly DuplicateQuery[], source: SourceRef, mode: "hash" | "full",
     editId?: string, options?: { nearDuplicate?: boolean }): Promise<WritePolicy>;
-  insert(tx: Tx, scope: Scope, row: InsertRow, receipts: readonly Receipt[], nowMs: number): Promise<{ id: string; revision: Revision; createdAtMs: number; updatedAtMs: number; updatedAtUs: SortKeyUs }>;
+  /** When returned, receiptIds are the stored IDs of the attached receipts in input order. */
+  insert(tx: Tx, scope: Scope, row: InsertRow, receipts: readonly Receipt[], nowMs: number): Promise<{
+    id: string; revision: Revision; createdAtMs: number; updatedAtMs: number; updatedAtUs: SortKeyUs;
+    receiptIds?: readonly string[];
+  }>;
   /**
    * Attaches receipts and applies the merge verbatim; bumps the revision only when something
    * changed. No exemption: a store that cannot persist kind/origin/confidence does not conform.
-   * Whether a receipt-only attachment counts as a change is pending (PHASE0 addendum 17).
+   * A newly attached receipt counts as a change when receiptAttachAdvancesRevision is true
+   * (PHASE0 addendum 18). When returned, receiptIds are the stored IDs of the attached
+   * receipts in input order.
    */
-  touchDuplicate(tx: Tx, scope: Scope, id: string, receipts: readonly Receipt[], merge: DuplicateMerge, nowMs: number): Promise<{ outcome: "touched" | "changed"; revision: Revision }>;
+  touchDuplicate(tx: Tx, scope: Scope, id: string, receipts: readonly Receipt[], merge: DuplicateMerge, nowMs: number): Promise<{
+    outcome: "touched" | "changed"; revision: Revision; receiptIds?: readonly string[];
+  }>;
+  /** Returns the run's start revision for this owner, stable across writes in the run. */
+  indexRevision?(tx: Tx): Promise<Revision>;
   readRevision(tx: Tx, scope: Scope, id: string): Promise<{ revision: Revision; textHash: string } | null>;
   /**
    * Throws revision_conflict, memory_historical, or memory_conflict (the new text collides with

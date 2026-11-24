@@ -286,17 +286,16 @@ citation excludes a source, including sources also cited by a written item, matc
 `suppressedSources`. Core rejects a malformed list with `internal_error` inside the finish
 transaction before archiving. Omitting the field preserves existing behavior.
 
-## Addendum 17 — Write results for local parity
+## Addendum 18 — Write results for local parity
 
-- **Write results.** Read the owner's `indexRevision` from the run's index state inside the same
-  transaction, after all writes. Save returns `{ status, item, indexRevision }` with `saved` or
-  `duplicate`. Correct returns the same fields with `saved` or `unchanged`. Forget returns
+- **Write results.** Every write result reports the owner's `indexRevision` as it will commit.
+  Save returns `{ status, item, indexRevision }` with `saved` or `duplicate`. Correct returns
+  the same fields with `saved` or `unchanged`. Forget returns
   `{ status: "forgotten", removedSimilar, indexRevision }` or `{ status: "not_found", indexRevision }`.
   A missing or already forgotten row maps to `forgotten: false` on the wire. Refusals keep their
   status. The result types allow older implementations to omit `indexRevision`.
-- **Index advances.** A new save, a duplicate save, a correction that writes, and a successful
-  forget each advance the owner index once. An unchanged correction, a missing or repeated forget,
-  and a refused write leave it unchanged.
+- **Index advances.** The owner index advances once per write run that changes anything. A
+  procedural save and its tag write share that advance.
 - **Forget guard.** With `options.expectedRevision`, compare the revision inside the forget
   transaction after resolving the row and before any privacy mutation. A mismatch returns
   `{ status: "conflict" }` and writes nothing. Omitting the option keeps forget unconditional.
@@ -304,21 +303,29 @@ transaction before archiving. Omitting the field preserves existing behavior.
   or `messageId`, `role: "user"`, and `occurredAtMs`. The host supplies the identity. Core uses
   the supplied event or message ID as `Receipt.messageId`. The excerpt is the normalized,
   redacted text from the write. `Receipt.id` and `Receipt.excerpt` are optional. A new save inserts
-  that one receipt. A duplicate attaches it. The local installer also advances the memory
-  revision for a newly attached receipt.
-- **Pending: receipt-only attachment and the memory revision.** Whether a newly attached receipt
-  counts as a change under `touchDuplicate` for every store (it also affects capture duplicates on
-  the hosted service) or only for stores that declare it needs a port decision.
-- **Pending: reading the final index revision.** Core needs one port read that returns the owner's
-  index revision as it will be after the run commits, including for a run that wrote nothing
-  (a repeated forget). The seam and its name need a port decision.
-- **Pending: procedural anchor storage needs a port decision.** The local installer accepts
-  `options.procedural = { anchors: [{ receiptIndex, start, end }] }` for `instruction` and
+  that one receipt. A duplicate attaches it.
+- **Receipt-only attachment.** With `receiptAttachAdvancesRevision` enabled, a newly attached
+  receipt counts as a change under `touchDuplicate` and advances the memory revision once.
+  SQLite enables this capability for the local installer. The reference adapter makes it
+  configurable. Postgres disables it, preserving the hosted service's capture duplicate
+  revisions.
+- **Index revision.** `MemoryStore.indexRevision(tx)` returns the owner's revision at the start
+  of the run, so optimistic guards compare against the same value throughout the run. A write
+  result reports the start revision plus one if the run changed anything. An unchanged
+  correction, a missing or repeated forget, and a refused write report the start revision.
+- **Procedural tags.** The optional `ProceduralTagStore` port requires the `proceduralTags`
+  capability. SQLite and the reference adapter enable it. Postgres disables it, so a save with
+  `options.procedural` fails with `capability_unavailable` on the hosted service. The local installer
+  accepts `options.procedural = { anchors: [{ receiptIndex, start, end }] }` for `instruction` and
   `preference`. It requires one to four anchors on the explicit receipt at index zero, with
   integer UTF-16 offsets satisfying `0 ≤ start < end ≤ excerpt.length` on code-point boundaries.
-  Invalid input returns `invalid` and writes nothing. The local installer's procedural save also
-  advances the index a second time for the tag write; whether that second advance is kept is part
-  of the same decision.
+  Invalid input returns `invalid` and writes nothing. `MemoryStore.insert` and `touchDuplicate`
+  can return `receiptIds`, the stored IDs of the attached receipts in input order, so core can
+  bind the anchors in the same transaction. Each stored anchor has `receiptId`, `digest`,
+  `start` and `end`. The SHA-256 hex digest covers the whole receipt excerpt. The tag carries
+  `positive`, `origin` and its own revision. Save writes the tag in the memory write transaction.
+  Correct and forget clear the tag in their respective transactions. The port also provides a read
+  for inspect.
 - **Optional embedding.** Save and correct can write `embedding: null` when
   `capabilities.embeddingRequiredOnInsert` is false and the embedder is absent or null.
   Stores that require an embedding and failures from a configured embedder keep their current rules.
