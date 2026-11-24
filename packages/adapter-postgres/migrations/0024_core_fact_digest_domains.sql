@@ -3,9 +3,14 @@ SET LOCAL statement_timeout = '30s';
 
 DO $migration$
 BEGIN
+  -- Keep writes out between the bounded check and the exclusive rewrite.
+  LOCK TABLE core_fact_digests IN SHARE ROW EXCLUSIVE MODE;
   IF EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'core_fact_digests'::regclass
     AND attname = 'lookup_key' AND NOT attisdropped) THEN
     RETURN;
+  END IF;
+  IF EXISTS (SELECT 1 FROM core_fact_digests OFFSET 10000) THEN
+    RAISE EXCEPTION 'Migration 0024 requires a populated-table variant when core_fact_digests has more than 10,000 rows';
   END IF;
 
   -- Keep the lookup key bounded even when a signer uses long Unicode identifiers.

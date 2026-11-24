@@ -32,12 +32,13 @@ export async function refreshFinishRevisions(tx, query) {
 export function copyFinishItems(items) {
   return copyArray(items).map((item) => {
     if (!item) throw new CoreError("invalid_input");
+    const { digests } = item;
     /** @type {InsertRow} */
     const row = { text: item.content, kind: item.kind, origin: "inferred", confidence: item.confidence,
       textHash: item.textHash, source: { kind: "capture", client: null, sessionId: null },
-      embedding: item.embedding, digests: item.digests };
-    const { model, vector, digests } = copyContent(row);
-    return { row: { ...row, digests, embedding: { model, vector: JSON.parse(vector) } }, receipts: copyReceipts(item.receipts) };
+      embedding: item.embedding, digests: digests === undefined ? undefined : copyArray(digests) };
+    const { model, vector, digests: copiedDigests } = copyContent(row);
+    return { row: { ...row, digests: copiedDigests, embedding: { model, vector: JSON.parse(vector) } }, receipts: copyReceipts(item.receipts) };
   });
 }
 

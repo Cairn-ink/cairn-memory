@@ -180,6 +180,38 @@ test("suppression migrations upgrade the existing prefix and match the structura
   }
 });
 
+test("migration 0024 refuses to rewrite 10,001 existing digest rows", migrationDbTest, async (t) => {
+  const { pool, source, migrations } = await migrationDatabase(t, { migrate: false });
+  const migrationIndex = migrations.findIndex(({ id }) => id === "0024_core_fact_digest_domains.sql");
+  assert.ok(migrationIndex > 0);
+  await applyMigrations(source, migrations.slice(0, migrationIndex));
+  await pool.query("INSERT INTO users (id) VALUES ('owner')");
+  await pool.query(`INSERT INTO core_suppression_facts
+      (user_id, fact_id, slot, slot_hash, incarnation, action_id, epoch, origin, kind, mode, body)
+    SELECT 'owner', 'fact', 'slot', repeat('0', 64), repeat('0', 64), 'action', 1, 'forget', 'text', 'exact', '{}'`);
+  const { rowCount } = await pool.query(`INSERT INTO core_fact_digests
+      (user_id, fact_id, alg, value, pipeline, redaction_version)
+    SELECT 'owner', 'fact', 'sha256', lpad(to_hex(n), 64, '0'), 'core', 1 FROM generate_series(1, 10001) n`);
+  assert.equal(rowCount, 10_001);
+  const before = await readFactsCatalog(pool);
+  const connection = await pool.connect();
+  try {
+    await connection.query("BEGIN");
+    try {
+      await assert.rejects(connection.query(migrations[migrationIndex].sql), {
+        code: "P0001",
+        message: /0024 requires a populated-table variant when core_fact_digests has more than 10,000 rows/u,
+      });
+    } finally {
+      await connection.query("ROLLBACK");
+    }
+  } finally {
+    connection.release();
+  }
+  assert.deepEqual(await readFactsCatalog(pool), before);
+  assert.deepEqual((await pool.query("SELECT count(*)::int FROM core_fact_digests")).rows, [{ count: 10_001 }]);
+});
+
 test("the suppression catalog snapshot detects a change to the created_at default", migrationDbTest, async (t) => {
   const pool = keepConnections((await migrationDatabase(t)).pool);
   const before = await readFactsCatalog(pool);

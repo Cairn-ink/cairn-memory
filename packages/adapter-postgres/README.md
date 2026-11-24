@@ -52,8 +52,8 @@ keep the runner's target objects and comparisons independent of caller settings.
 
 Migrations 0005 and 0006 add owner state, suppression facts, and their digest
 rows. Each new fact advances its owner's `fact_epoch` by one. The owner's
-`index_revision` advances on every committed change to visible rows, receipts,
-raw data, lineage, or facts. This is the value returned as
+`index_revision` advances once per committed run that changes visible rows,
+receipts, raw data, lineage, or facts. This is the value returned as
 `FinishResult.indexRevision` and used to bind retrieval state tokens.
 `legacy_facts_ready` defaults to false for the later legacy copy. The backfill
 must keep each non-null `legacy_ref` within 256 UTF-8 bytes so the owner and
@@ -92,6 +92,12 @@ order. Reordering the same digests preserves the slot.
 Store the JSON slot for diagnostics and use
 `slotHash(slot)` for the lowercase SHA-256 of its UTF-8 bytes. The owner and
 hash form the unique key.
+
+The first hosted rollout applies the full engine migration chain to a fresh
+database, with `core_fact_digests` empty when 0024 runs. Use a populated-table
+variant before applying 0024 to any database with existing facts. Migration
+0024 rewrites the digest table under an exclusive lock and refuses to proceed
+if it has more than 10,000 rows.
 
 Store core's canonical `factBody(snapshot)` in `body`. Migration 0024 adds the
 effective label and a bounded lookup key over the complete digest tuple to
