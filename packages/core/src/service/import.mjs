@@ -110,6 +110,9 @@ export function importMethod(deps) {
         const committed = await uow.run(owner, { pauseLock: true }, async tx => {
           const state = pauseResult(await pause.get(tx, owner));
           if (state.paused || state.generation !== before.generation) return null;
+          if (keys.userKeyForWrite && (await keys.userKeyForWrite(tx))?.id !== key?.id) {
+            throw new CoreError("fingerprint_key_mismatch");
+          }
           const withheld = await fullWriteWithholds(suppressions, tx, scope, source, prepared);
           const queries = prepared.map(({ query }, i) => ({ ...query, embedding: embeddings[i]?.vector }));
           const policy = await memories.readWritePolicy(tx, scope, queries, source, "full", undefined, { nearDuplicate: false });
@@ -219,7 +222,8 @@ export function importRawMethod({ storage }) {
           if (legacyKeyUnavailable) {
             withheld = prepared.map((_, position) => position);
           } else if (matches && messages.length) {
-            const key = capabilities.fingerprintKey ? await keys.userKey(owner) : null;
+            const key = capabilities.fingerprintKey
+              ? await (keys.userKeyForWrite ? keys.userKeyForWrite(tx) : keys.userKey(owner)) : null;
             const blocked = await Promise.all(messages.map(({ message, originalContent }) =>
               matches(originalContent, message.content, key)));
             withheld = blocked.flatMap((matched, position) => matched ? [position] : []);

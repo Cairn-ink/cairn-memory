@@ -311,6 +311,9 @@ export function writeMethods(deps) {
       const result = await uow.run(owner, { pauseLock: true }, async tx => {
         const state = pauseResult(await pause.get(tx, owner));
         if (state.paused || state.generation !== preflight.generation) return /** @type {const} */ ({ status: "paused" });
+        if (keys.userKeyForWrite && (await keys.userKeyForWrite(tx))?.id !== key?.id) {
+          throw new CoreError("fingerprint_key_mismatch");
+        }
         if (await withheld(suppressions, tx, scope, source, passages, key)) return /** @type {const} */ ({ status: "suppressed" });
         const policy = await memories.readWritePolicy(tx, scope, [query], source, mode);
         const decision = decide(policy, capabilities.nearDuplicate === true);
@@ -377,6 +380,9 @@ export function writeMethods(deps) {
           if (current.revision !== expectedRevision || current.textHash !== previous.textHash ||
               current.text !== previous.text || current.createdAtMs !== previous.createdAtMs || current.historical) {
             return /** @type {const} */ ({ status: "conflict" });
+          }
+          if (keys.userKeyForWrite && (await keys.userKeyForWrite(tx))?.id !== key?.id) {
+            throw new CoreError("fingerprint_key_mismatch");
           }
           if (await withheld(suppressions, tx, scope, source, passages, key, { id, createdAtMs: current.createdAtMs })) {
             return /** @type {const} */ ({ status: "suppressed" });

@@ -1,15 +1,17 @@
 import assert from "node:assert/strict";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import { Socket } from "node:net";
 import test from "node:test";
 import { Pool } from "pg";
 import * as kit from "@cairn-ink/conformance";
-import { capabilities, factIncarnationBody } from "@cairn-ink/core";
+import { capabilities, factIncarnationBody, userFingerprintKey } from "@cairn-ink/core";
 import { toPostgresError } from "../src/errors.mjs";
 import {
-  applyMigrations, createPostgresCapturePorts, createPostgresDigestGate, createPostgresMemoryReads, createPostgresMemoryStore,
-  createPostgresPauseStore, createPostgresRawPorts, createPostgresSupersessionStore, createPostgresSuppressionStore, createPostgresUnitOfWork, query,
+  applyMigrations, createPostgresCapturePorts, createPostgresDigestGate,
+  createPostgresFingerprintKeyProvider, createPostgresMemoryReads, createPostgresMemoryStore,
+  createPostgresPauseStore, createPostgresRawPorts, createPostgresSupersessionStore, createPostgresSuppressionStore,
+  createPostgresUnitOfWork, HOSTED_FINGERPRINT_LABELS, query,
 } from "../src/index.mjs";
 import { advanceIndex, timestampUs } from "../src/memory-rows.mjs";
 
@@ -233,17 +235,27 @@ function postgresFactory(wrapSuppressions = (store) => store) {
   return {
     name: "Postgres",
     async open({ capabilities: requested }) {
-      const suppressions = wrapSuppressions(createPostgresSuppressionStore());
+      const sessionKey = randomBytes(32);
+      const hashSessionKey = (client, sessionId) =>
+        createHmac("sha256", sessionKey).update(JSON.stringify([client, sessionId])).digest("hex");
+      const suppressions = wrapSuppressions(createPostgresSuppressionStore({
+        sessionRefs: "hashed", hashSessionKey, vectorSuppression: true, allowNonNullNamespace: true,
+      }));
       const { pool, source, close } = await openDatabase();
       const uow = createPostgresUnitOfWork(source);
-      const lineage = { lineageSecret: randomUUID() };
+      const lineage = { lineageSecret: randomUUID(), hashSessionKey };
       const capture = createPostgresCapturePorts(lineage);
       const rawPorts = createPostgresRawPorts(lineage);
       const nearDuplicate = requested.nearDuplicate !== false;
-      const flags = capabilities({ embeddingRequiredOnInsert: true, nearDuplicate, vectorSuppression: true, supersession: true,
+      const fingerprintKey = requested.fingerprintKey === true;
+      const flags = capabilities({
+        embeddingRequiredOnInsert: true, nearDuplicate, vectorSuppression: true, supersession: true, rawSpans: true, fingerprintKey,
         rawArchive: requested.rawArchive === true, rawWindowHide: requested.rawWindowHide === true,
-        sessionLineage: requested.rawArchive === true });
-      const memoryReads = createPostgresMemoryReads();
+        sessionLineage: requested.rawArchive === true,
+      });
+      const stagedSecrets = fingerprintKey ? ["test-secret-a", "test-secret-rotation"] : [];
+      const keys = createPostgresFingerprintKeyProvider(null, { uow, stagedSecrets });
+      const memoryReads = createPostgresMemoryReads({ hashSessionKey, allowNonNullNamespace: true });
       // Exercise hydration's read filters on lexical matches for the memory cases.
       // The production lexical ranker and its own cases belong to the lexical lane.
       const lexical = {
@@ -259,12 +271,26 @@ function postgresFactory(wrapSuppressions = (store) => store) {
           })), matched: items.length > 0 };
         },
       };
-      /** @type {Pick<TestHarness, "dump" | "seedFact" | "setWriteTime" | "rowsMissingKeyedDigest"> & {seedOwners(owner: string, otherOwner: string): Promise<void>}} */
+      /** @type {string[]} */
+      const harnessOwners = [];
+      /** @type {Pick<TestHarness, "dump" | "seedFact" | "setWriteTime" | "rowsMissingKeyedDigest" | "hashSessionKey" | "setFingerprintSecret"> & {seedOwners(owner: string, otherOwner: string): Promise<void>}} */
       const harness = {
-        rowsMissingKeyedDigest: createPostgresDigestGate(uow, () => []),
+        hashSessionKey,
+        rowsMissingKeyedDigest: createPostgresDigestGate(uow, async (owner) => {
+          const key = await keys.userKey(owner);
+          return key ? [key.id] : [];
+        }),
+        async setFingerprintSecret(secret) {
+          assert.ok(fingerprintKey);
+          const key = await userFingerprintKey(secret, harnessOwners[0], HOSTED_FINGERPRINT_LABELS);
+          assert.ok(key);
+          for (const owner of harnessOwners) await keys.publish(owner, key.id);
+        },
         async seedOwners(owner, otherOwner) {
           await beforeDeadline("Owner fixture setup", 4_000,
             () => pool.query("INSERT INTO users (id) VALUES ($1), ($2)", [owner, otherOwner]));
+          harnessOwners.push(owner, otherOwner);
+          if (fingerprintKey) await harness.setFingerprintSecret("test-secret-a");
         },
         async dump() {
           const { rows } = await pool.query(dumpSql);
@@ -286,11 +312,11 @@ function postgresFactory(wrapSuppressions = (store) => store) {
       };
       return {
         adapter: {
-          capabilities: flags, uow, suppressions, capture, lexical, ...memoryReads, ...(flags.rawArchive ? rawPorts : {}),
-          memories: createPostgresMemoryStore({ nearDuplicate, allowNonNullNamespace: true }),
+          capabilities: flags, uow, suppressions, capture, lexical, keys, ...memoryReads, ...(flags.rawArchive ? rawPorts : {}),
+          memories: createPostgresMemoryStore({ nearDuplicate, allowNonNullNamespace: true, hashSessionKey }),
           pause: createPostgresPauseStore(), supersession: createPostgresSupersessionStore({ allowNonNullNamespace: true }),
         },
-        sessionRefs: /** @type {const} */ ("plain"),
+        sessionRefs: /** @type {const} */ ("hashed"),
         harness,
         nativeErrorMap,
         busyNativeCodes,
@@ -311,7 +337,7 @@ const selected = new Set([
   "K-FACT-1", "K-FACT-2", "K-UOW-8a", "K-FACT-3", "K-FACT-4",
   "K-FACT-5", "K-FACT-6", "K-FACT-7", "K-SESS-1",
   "K-ADM-1", "K-ADM-3", "K-ADM-4", "K-ADM-5", "K-ADM-9", "K-ADM-12", "K-ADM-13",
-  "K-SRC-1", "K-SRC-2", "K-SRC-3", "K-SRC-5",
+  "K-SRC-1", "K-SRC-2", "K-SRC-3", "K-SRC-4", "K-SRC-5",
   "K-UOW-1", "K-UOW-2", "K-UOW-4", "K-UOW-7", "K-UOW-8b",
   "K-MEM-1", "K-MEM-3", "K-CAP-1", "K-MEM-4", "K-MEM-4r", "K-MEM-5",
   "K-MEM-11", "K-MEM-12", "K-MEM-13",
@@ -319,9 +345,12 @@ const selected = new Set([
   "K-FORK-1", "K-FORK-2", "K-FORK-3", "K-FORK-4", "K-FORK-5",
   "K-FORK-6", "K-FORK-7", "K-FORK-10",
   "K-RET-9", "K-SNAP-1", "K-HYD-1", "K-HYD-2", "K-PAUSE-1", "K-IMP-T1", "K-IMP-T2", "K-IMP-T3",
+  "K-SNAP-F1", "K-SNAP-F3", "K-SNAP-F4", "K-SNAP-F5", "K-SNAP-F5u", "K-SNAP-F6", "K-SNAP-F7",
+  "K-FACTSFOR-1", "K-KEY-1", "K-FACT-3r",
+  "K-KD-1", "K-KD-2", "K-HASH-1",
 ]);
 
-// Each entry names a profile limit or a missing port, method, or capability.
+// Each entry names a missing port, method, or capability.
 const notApplicable = {
   "hosted profile requires an embedding": ["K-MEM-10"],
   "pending historical edit case has no assertions": ["K-MEM-5h"],
@@ -331,24 +360,18 @@ const notApplicable = {
   "retrieval window": ["K-RET-W1", "K-RET-W2", "K-SNAP-W1", "K-RAW-W1"],
   supersessionEdges: ["K-REL-1", "K-REL-2", "K-REL-3", "K-REL-6", "K-REL-7", "K-REL-9", "K-REL-10", "K-REL-11", "K-REL-12"],
   conflictEdges: ["K-REL-4", "K-REL-5", "K-REL-8"],
-  keys: ["K-KEY-1", "K-KD-1", "K-KD-2", "K-KD-3", "K-KD-4", "K-KD-5", "K-KD-6"],
-  "suppressions.snapshot": ["K-SNAP-F1", "K-SNAP-F3", "K-SNAP-F4", "K-SNAP-F5", "K-SNAP-F5u", "K-SNAP-F6", "K-SNAP-F7"],
-  "suppressions.factsFor": ["K-FACTSFOR-1"],
+  "K1 pending": ["K-KD-4", "K-KD-6"],
   "capture.finish": [
     "K-CLM-1", "K-CLM-2", "K-CLM-3", "K-CLM-4", "K-CLM-5",
     "K-ADM-2", "K-ADM-6", "K-ADM-8", "K-ADM-10", "K-ADM-11", "K-ADM-14",
+    "K-KD-3", "K-KD-5",
   ],
   "snapshot.stateToken": ["K-ADM-7"],
-  "suppressions.snapshot (capture text)": ["K-SRC-4"],
-  RawCandidates: ["K-RAW-1", "K-RAW-2", "K-RAW-3", "K-RAW-3w", "K-RAW-3c", "K-RAW-7", "K-RAW-8w"],
-  "hosted raw is personal-only until scopes step 2 (namespace guard)": [
-    "K-FORK-8", "K-RAW-4", "K-RAW-5", "K-RAW-6", "K-RAW-8", "K-IMP-RAW-4", "K-IMP-RAW-4e",
-  ],
-  "rawSpans not declared": ["K-FACT-3r", "K-RAW-2s", "K-RAW-3s", "K-RAW-8s"],
-  "raw.importArchive": ["K-IMP-RAW-1", "K-IMP-RAW-2", "K-IMP-RAW-3", "K-IMP-RAW-3s", "K-IMP-RAW-4k",
+  raw: ["K-RAW-1", "K-RAW-2", "K-RAW-2s", "K-RAW-3", "K-RAW-3w", "K-RAW-3c", "K-RAW-3s",
+    "K-RAW-4", "K-RAW-5", "K-RAW-6", "K-RAW-7", "K-RAW-8", "K-RAW-8w", "K-RAW-8s"],
+  "raw.importArchive": ["K-IMP-RAW-1", "K-IMP-RAW-2", "K-IMP-RAW-3", "K-IMP-RAW-3s", "K-IMP-RAW-4", "K-IMP-RAW-4e", "K-IMP-RAW-4k",
     "K-IMP-RAW-5", "K-IMP-RAW-6", "K-IMP-RAW-7", "K-IMP-RAW-8", "K-IMP-RAW-9", "K-IMP-RAW-10"],
-  "raw.listRaw": ["K-FORK-9"],
-  "hashed session refs required": ["K-HASH-1"],
+  "raw.recordLineage": ["K-FORK-8", "K-FORK-9"],
   documentCards: ["T-CARD-AMEND-1", "T-CARD-AMEND-2", "T-CARD-AMEND-3", "T-CARD-AMEND-4", "T-CARD-AMEND-5", "T-CARD-AMEND-6",
     "T-CARD-LINK-1", "T-CARD-LINK-2", "T-CARD-LINK-3", "T-CARD-LINK-4", "T-CARD-LINK-5", "T-CARD-LINK-6", "T-CARD-LINK-7",
     "T-DVIS-text", "T-DVIS-identity", "T-DVIS-session", "T-DVIS-linked-session"],

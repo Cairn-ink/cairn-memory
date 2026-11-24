@@ -103,23 +103,30 @@ async function legacyProofs(query, { scope, client, sessionId }, signer, fences,
 
 /**
  * @param {Connection["query"]} query @param {Source} source @param {Proof[] | null} proofs
- * @param {StoredFact[]} facts @param {Signer} signer @param {CaptureOptions["hashSessionKey"]} hashSessionKey
+ * @param {{incoming: StoredFact[], ancestors?: StoredFact[]}} facts
+ * @param {Signer} signer @param {CaptureOptions["hashSessionKey"]} hashSessionKey
  * @param {boolean} raw
  * @returns {Promise<"allowed" | "suppressed" | "proven" | "id-only" | "unknown" | "session-unknown">}
  */
-async function lineageVerdict(query, source, proofs, facts, signer, hashSessionKey, raw) {
+async function lineageVerdict(query, source, proofs, { incoming, ancestors = incoming }, signer, hashSessionKey, raw) {
   if (proofs === null) return "unknown";
   const { scope, client, sessionId } = source;
   const policy = /** @type {const} */ ({ mode: "capture", hashSessionKey });
-  const fences = [];
-  const hashes = [];
-  for (const stored of facts) {
-    const { fact } = stored;
-    if (fact.kind !== "session") continue;
-    const ancestorScope = { owner: scope.owner, namespace: fact.namespace ?? null };
+  for (const stored of incoming) {
+    if (stored.fact.kind !== "session") continue;
     const applies = factBlocksIncoming(stored, { scope, passages: [], session: { client, sessionId } }, policy);
     if (applies === true) return "suppressed";
     if (applies !== false) return "session-unknown";
+  }
+
+  // Ancestor matching needs Core session facts in their own namespaces. An
+  // incoming-scope visibility read can omit a plain fact for the same session ID.
+  const fences = [];
+  const hashes = [];
+  for (const stored of ancestors) {
+    const { fact } = stored;
+    if (fact.kind !== "session") continue;
+    const ancestorScope = { owner: scope.owner, namespace: fact.namespace ?? null };
     if ("sessionKeyHash" in fact.session) {
       hashes.push(stored);
     } else if (factBlocksIncoming(stored, { scope: ancestorScope, passages: [], session: fact.session }, policy) !== false) {
@@ -158,7 +165,7 @@ async function lineageVerdict(query, source, proofs, facts, signer, hashSessionK
   if (raw) {
     for (const [id, namespace] of lineage.weak_roots) {
       const ancestor = { scope: { owner: scope.owner, namespace }, client, sessionId: id };
-      const result = await lineageVerdict(query, ancestor, [], facts, signer, hashSessionKey, false);
+      const result = await lineageVerdict(query, ancestor, [], { incoming: ancestors, ancestors }, signer, hashSessionKey, false);
       if (result === "unknown" || result === "session-unknown") return "unknown";
       if (result === "proven" || result === "suppressed") return "id-only";
     }
@@ -181,7 +188,7 @@ export async function filterSources(query, source, times, proofs, mode, signer, 
     factBlocksIncoming(stored, { ...candidate, occurredAtMs: times[position] }, policy) !== false));
   if (mode === "assert" && positions.length !== times.length) throw new CoreError("suppressed");
 
-  const verdict = await lineageVerdict(query, source, proofs, facts, signer, hashSessionKey, mode === "raw");
+  const verdict = await lineageVerdict(query, source, proofs, { incoming: facts }, signer, hashSessionKey, mode === "raw");
   if (verdict === "allowed") return positions;
   if (mode === "assert") throw new CoreError(verdict === "suppressed" || verdict === "session-unknown" ? "suppressed" : "lineage_fenced");
   return [];
@@ -192,5 +199,6 @@ export async function filterSources(query, source, times, proofs, mode, signer, 
  * @param {Signer} signer @param {CaptureOptions["hashSessionKey"]} hashSessionKey @param {boolean} [raw]
  */
 export async function checkSourceLineage(query, source, signer, hashSessionKey, raw = true) {
-  return lineageVerdict(query, source, [], await sourceFacts(query, source), signer, hashSessionKey, raw);
+  const incoming = await sourceFacts(query, source);
+  return lineageVerdict(query, source, [], { incoming }, signer, hashSessionKey, raw);
 }
