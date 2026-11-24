@@ -5,7 +5,6 @@ import { createMemoryService } from '../../packages/core/src/service/index.mjs';
 import tokenizer from './vendor/tiktoken/tiktoken.cjs';
 import { formatBlock } from './wire-tools.mjs';
 
-const modelUnavailable = () => { throw new Error('model_not_configured'); };
 const clock = {
   nowMs: Date.now,
   monotonicMs: () => performance.now(),
@@ -21,7 +20,6 @@ export async function openStorage(database) {
     const countTokens = text => encoding.encode(text, [], []).length;
     const service = createMemoryService({
       storage, embedder: null, clock, tokens: { countTokens }, config: {},
-      model: { model: 'unavailable', contextWindow: 1, countTokens, call: modelUnavailable },
       // The fixed local connection has no provider. The service checks the
       // persisted write pause separately from its model gate.
       gate: { assertOpen() {} },
