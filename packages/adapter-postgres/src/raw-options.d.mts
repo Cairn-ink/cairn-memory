@@ -3,6 +3,8 @@ import type { FingerprintKey } from "../../core/src/privacy/fingerprint.mjs";
 import type { CaptureOptions } from "./capture.mjs";
 
 export interface RawOptions extends Pick<CaptureOptions, "lineageSecret" | "hashSessionKey"> {
+  /** If provided, use the same clock as the capture ports' lease checks. */
+  now?: CaptureOptions["now"];
   /** Current and retained owner keys, identified by the pipeline that derived them. */
   fingerprintKeys?(owner: OwnerId): readonly {
     key: FingerprintKey;
