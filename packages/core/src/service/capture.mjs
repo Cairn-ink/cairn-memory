@@ -436,6 +436,15 @@ export function captureMethods(deps) {
         });
       }
 
+      /** @param {Tx} tx */
+      async function abandonKeyMismatch(tx) {
+        await capture.abandon(tx, token, { code: "fingerprint_key_mismatch", retryable: true });
+        return /** @type {const} */ ({ status: "failed", code: "fingerprint_key_mismatch" });
+      }
+
+      /** @param {Tx} tx */
+      const selectWriteKey = tx => keys.userKeyForWrite ? keys.userKeyForWrite(tx) : keys.userKey(owner);
+
       let retryableExtraction = false;
       try {
         if (positions.length === 0) {
@@ -445,9 +454,9 @@ export function captureMethods(deps) {
 
         // The outbox retains only the prepared text. Use it to derive the available historical spellings.
         const sources = admittedMessages.map(message => ({ message, originalContent: message.content }));
-        const sourceKey = capabilities.fingerprintKey && !keys.userKeyForWrite ? await keys.userKey(owner) : null;
+        // Retained signers omit the current Core key. Bind their evidence to that key's generation.
+        const sourceKey = capabilities.fingerprintKey ? await keys.userKey(owner) : undefined;
         const digesters = await keys.retainedDigesters?.(owner);
-        // Keep retained signing outside the lock; the current key may be selected inside it.
         const sourceEvidence = await retainedSourceEvidence(sources, null, digesters);
         /** @param {Tx} tx @param {number[]} selected */
         const readSourcePassages = async (tx, selected) => {
@@ -462,14 +471,18 @@ export function captureMethods(deps) {
         for (;;) {
           const dispatch = await runAtGeneration(async tx => {
             const passages = await readSourcePassages(tx, positions);
-            const allowed = await filterCaptureSources(sources, positions, passages, null, sourceEvidence,
-              await sourceWriteKey(tx, passages) ?? sourceKey);
+            const writeKey = capabilities.fingerprintKey && passages.length ? await selectWriteKey(tx) : null;
+            if (passages.length && sourceKey !== undefined && writeKey?.id !== sourceKey?.id) {
+              return abandonKeyMismatch(tx);
+            }
+            const allowed = await filterCaptureSources(sources, positions, passages, null, sourceEvidence, writeKey);
             await capture.assertEligible(tx, key, allowed);
             if (!allowed.length) return { result: await capture.finish(tx, token, []) };
             if (extraction && allowed.length === positions.length) return capture.beginDispatch(tx, token);
             return { allowed };
           });
           if (dispatch === null) return { status: "paused" };
+          if ("status" in dispatch) return dispatch;
           if ("result" in dispatch) return { status: "done", result: dispatch.result };
           if ("token" in dispatch) {
             token = dispatch.token;
@@ -526,11 +539,6 @@ export function captureMethods(deps) {
         const readFacts = (tx, batch) => suppressions.snapshot(tx, scope, {
           client, sessionId, passages: batch.flatMap(candidate => candidate.passages),
         });
-        /** @param {Tx} tx */
-        const abandonKeyMismatch = async tx => {
-          await capture.abandon(tx, token, { code: "fingerprint_key_mismatch", retryable: true });
-          return /** @type {const} */ ({ status: "failed", code: "fingerprint_key_mismatch" });
-        };
         const preEmbed = await runAtGeneration(async tx => {
           const eligible = new Set(await readEligible(tx, key, admittedMessages));
           const stillEligible = positions.filter(position => eligible.has(position));
@@ -547,26 +555,31 @@ export function captureMethods(deps) {
         if (preEmbed === null) return { status: "paused" };
         if ("status" in preEmbed) return preEmbed;
         const embedded = await embedCaptureCandidates(preEmbed.survivors, owner, deps, deadline, signal);
-        const finalSourceKey = capabilities.fingerprintKey && !keys.userKeyForWrite
-          ? prepared.length ? fingerprintKey : await keys.userKey(owner) : null;
 
         const completed = await runAtGeneration(async tx => {
           checkCaptureAbort(signal, deadline);
-          // Source checks need the same unprojected text facts as admission.
-          const sourcePassages = await readSourcePassages(tx, preEmbed.stillEligible);
-          const transactionKey = prepared.length && keys.userKeyForWrite ? await keys.userKeyForWrite(tx)
-            : await sourceWriteKey(tx, sourcePassages);
-          if (prepared.length && keys.userKeyForWrite && transactionKey?.id !== fingerprintKey?.id) {
-            return abandonKeyMismatch(tx);
+          await capture.assertEligible(tx, key, preEmbed.stillEligible);
+          let writeKey;
+          if (prepared.length && keys.userKeyForWrite) {
+            writeKey = await keys.userKeyForWrite(tx);
+            if (writeKey?.id !== fingerprintKey?.id) return abandonKeyMismatch(tx);
           }
           const snapshot = await readFacts(tx, embedded);
-          if (prepared.length && !keys.userKeyForWrite && (await keys.userKey(owner))?.id !== fingerprintKey?.id) {
-            return abandonKeyMismatch(tx);
+          if (prepared.length && !keys.userKeyForWrite) {
+            writeKey = await keys.userKey(owner);
+            if (writeKey?.id !== fingerprintKey?.id) return abandonKeyMismatch(tx);
           }
           const allowedCandidates = filterCaptureCandidates(embedded, snapshot, scope, excludedSources);
+
+          // Source checks need the same unprojected text facts as admission.
+          const sourcePassages = await readSourcePassages(tx, preEmbed.stillEligible);
+          let currentSourceKey = null;
+          if (capabilities.fingerprintKey && sourcePassages.length) {
+            currentSourceKey = writeKey === undefined ? await selectWriteKey(tx) : writeKey;
+            if (sourceKey !== undefined && currentSourceKey?.id !== sourceKey?.id) return abandonKeyMismatch(tx);
+          }
           const allowedPositions = await filterCaptureSources(sources, preEmbed.stillEligible, sourcePassages,
-            null, sourceEvidence, capabilities.fingerprintKey ? transactionKey ?? finalSourceKey : null);
-          await capture.assertEligible(tx, key, allowedPositions);
+            null, sourceEvidence, currentSourceKey);
           const allowedMessages = allowedPositions.map(position => admittedMessages[position]);
           const allowedIds = new Set(allowedMessages.map(({ id }) => id));
           const items = allowedCandidates.map(({ item }) => item).filter(({ receipts }) =>

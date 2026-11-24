@@ -72,7 +72,7 @@ test("capture runs the leased plain extraction outside transactions and binds tr
     ...locked, "suppressions.snapshot", "capture.assertEligible", "capture.beginDispatch",
     "gate", ...locked, "gate", "model.call", "gate", "keys.userKey",
     ...locked, "capture.eligible", "suppressions.snapshot", "gate", "embed",
-    ...locked, "suppressions.snapshot", "suppressions.snapshot", "keys.userKey", "capture.assertEligible", "capture.finish",
+    ...locked, "capture.assertEligible", "suppressions.snapshot", "keys.userKey", "suppressions.snapshot", "capture.finish",
   ]);
   const runs = f.calls.filter(([method]) => method === "run");
   assert.deepEqual(runs.map(([, owner]) => owner), Array(runs.length).fill(scope.owner));
