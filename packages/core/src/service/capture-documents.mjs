@@ -28,6 +28,7 @@ import { validWriteEmbedding } from "./writes.mjs";
  *   excludedSources: Set<string>,
  *   sourceKey: FingerprintKey | undefined,
  *   readSourcePassages: (tx: Tx, positions: number[]) => Promise<import("../ports/privacy.d.ts").SuppressionSnapshot["passages"]>,
+ *   unchangedPositions: (tx: Tx, positions: number[]) => Promise<number[]>,
  *   selectWriteKey: (tx: Tx) => Promise<FingerprintKey>,
  *   filterSources: (positions: number[], passages: import("../ports/privacy.d.ts").SuppressionSnapshot["passages"],
  *     writeKey: FingerprintKey) => Promise<number[]>,
@@ -370,8 +371,9 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
 
   /** @param {CaptureContext} context */
   function forCapture(context) {
-    const { key, messages, excludedSources, sourceKey, readSourcePassages, selectWriteKey, filterSources,
-      abandonKeyMismatch, readEligible, runAtGeneration, finish, assertSendGeneration, generation, signal } = context;
+    const { key, messages, excludedSources, sourceKey, readSourcePassages, unchangedPositions, selectWriteKey,
+      filterSources, abandonKeyMismatch, readEligible, runAtGeneration, finish, assertSendGeneration, generation,
+      signal } = context;
     const { capture } = storage;
     const archive = capabilities.rawArchive ? raw : undefined;
     // Candidate preparation and embedding preserve the receipts array through finish.
@@ -410,7 +412,10 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
       if (!cards || !embedder) return;
       const screened = await runAtGeneration(async tx => {
         const eligible = new Set(await readEligible(tx, key, messages));
-        const allowed = await currentSources(tx, positions.filter(position => eligible.has(position)));
+        // A deleted or edited conversation blanks or changes its stored slot. Withdraw it before card
+        // embedding, which maps positions back to the admitted copy.
+        const unchanged = await unchangedPositions(tx, positions.filter(position => eligible.has(position)));
+        const allowed = await currentSources(tx, unchanged);
         if (allowed === null) return abandonKeyMismatch(tx);
         if (allowed.length) await capture.assertEligible(tx, key, allowed);
         if (archive && await archive.archiveAllowed(tx, key) !== true) return [];
@@ -449,7 +454,9 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
       const result = await runAtGeneration(async tx => {
         checkAbort(signal, deadline);
         await capture.assertEligible(tx, key, preEmbed);
-        const allowed = await currentSources(tx, preEmbed);
+        // The card write and the Raw archive map positions back to the admitted copy, so withdraw a
+        // blanked or changed slot first. A post-commit amendment check reads Raw instead.
+        const allowed = await currentSources(tx, await unchangedPositions(tx, preEmbed));
         if (allowed === null) return abandonKeyMismatch(tx);
         checkAbort(signal, deadline);
         const result = await finish(tx, []);

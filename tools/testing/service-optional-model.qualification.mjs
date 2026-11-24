@@ -19,11 +19,33 @@ try {
   const previous = await import(pathToFileURL(join(workspace.path, "packages/core/src/service/index.mjs")).href);
   const expected = await captureTrace(previous.createMemoryService);
   const actual = await captureTrace(createMemoryService);
-  assert.deepEqual(actual, expected);
-  const serialized = JSON.stringify(expected);
-  assert.equal(JSON.stringify(actual), serialized);
+  const refresh = ["run", "lock", "lock", "pause.get", "suppressions.snapshot", "capture.assertEligible", "capture.load"];
+  const dispatch = actual.calls.findIndex(([method, , phase]) => method === "gate" && phase === "dispatch");
+  const start = dispatch - refresh.length;
+  assert.ok(start >= 0);
+  assert.deepEqual(actual.calls.slice(start, dispatch).map(([method]) => method), refresh);
+  const preEmbedRead = actual.calls.findIndex(([method], index) => index > dispatch && method === "capture.load");
+  assert.ok(preEmbedRead > dispatch);
+  assert.deepEqual(actual.calls.slice(preEmbedRead - 5, preEmbedRead + 2).map(([method]) => method),
+    ["run", "lock", "lock", "pause.get", "capture.eligible", "capture.load", "suppressions.snapshot"]);
+  const finishRead = actual.calls.findIndex(([method], index) => index > preEmbedRead && method === "capture.load");
+  assert.ok(finishRead > dispatch);
+  assert.deepEqual(actual.calls.slice(finishRead - 4, finishRead + 2).map(([method]) => method),
+    ["run", "lock", "lock", "pause.get", "capture.load", "capture.assertEligible"]);
+  const refreshRun = 1 + actual.calls.slice(0, start).filter(([method]) => method === "run").length;
+  const mutations = actual.mutations.map(mutation => {
+    assert.notEqual(mutation.run, refreshRun, "the refresh has no mutations");
+    return { ...mutation, run: mutation.run - Number(mutation.run > refreshRun) };
+  });
+  const calls = actual.calls.toSpliced(finishRead, 1).toSpliced(preEmbedRead, 1).toSpliced(start, refresh.length);
+  const normalized = { ...actual, calls, mutations };
+  assert.deepEqual(normalized, expected);
+  assert.equal(JSON.stringify(normalized), JSON.stringify(expected));
+
+  const serialized = JSON.stringify(actual);
   const digest = createHash("sha256").update(serialized).digest("hex");
-  process.stdout.write(`Hosted capture: ${actual.calls.length} trace entries, ${actual.mutations.length} writes, ${Buffer.byteLength(serialized)} bytes, sha256 ${digest}\n`);
+  process.stdout.write(`Hosted capture: ${expected.calls.length} base trace entries, ${actual.calls.length} current entries, ` +
+    `${actual.mutations.length} writes, ${Buffer.byteLength(serialized)} bytes, sha256 ${digest}\n`);
 } finally {
   await workspace.cleanup();
 }

@@ -131,7 +131,7 @@ test("absent, disabled, and unsupported options preserve the plain request and f
     const request = f.calls.find(([method]) => method === "model.call")[2];
     assert.deepEqual(bytes(request), bytes(priorRequest));
     assert.equal(digest(request), "cecb3c238ea2783a7c1d6704eac85f676d3e5bcc35f01e10732a9b2a8ea8038d");
-    assert.equal(digest(f.mutations), "31c674db3295aece1598c9851bdebd9f0b7f22e1bb161351eeb5dc2ff73c40bf");
+    assert.equal(digest(f.mutations), "ba1f933f3a0ee9425c4e3e318cc566ff94ef6d77b8d2a5b9e90a46a1f23797a5");
     assert.deepEqual([f.puts, f.ledgerRows, f.sends], [[], [], []]);
   }
 });
