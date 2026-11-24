@@ -104,16 +104,20 @@ export async function advanceIndex(query, owner) {
     ON CONFLICT (user_id) DO UPDATE SET index_revision = core_owner_state.index_revision + 1`, [owner]);
 }
 
-/** @param {Query} query @param {string} owner @param {readonly string[]} ids @param {number} [limit] */
-export async function readReceipts(query, owner, ids, limit) {
+/** @param {string} ids SQL expression returning the selected memory IDs as text[].
+ * @param {string} [limit] SQL expression limiting the returned receipts. */
+export function memoryReceiptsSql(ids, limit = "NULL") {
+  return `SELECT memory_id, client, session_id, message_id, role,
+      COALESCE(core_occurred_at_ms, EXTRACT(EPOCH FROM occurred_at) * 1000)::text AS occurred_ms
+    FROM core_memory_receipts WHERE user_id = $1 AND memory_id = ANY(${ids}) AND forgotten_at IS NULL
+    ORDER BY memory_id COLLATE "C", client COLLATE "C", session_id COLLATE "C", message_id COLLATE "C"
+    LIMIT ${limit}`;
+}
+
+/** @param {any[]} rows */
+export function decodeReceipts(rows) {
   /** @type {Map<string, Receipt[]>} */
   const result = new Map();
-  if (ids.length === 0) return result;
-  const { rows } = await query(`SELECT memory_id, client, session_id, message_id, role,
-      COALESCE(core_occurred_at_ms, EXTRACT(EPOCH FROM occurred_at) * 1000) AS occurred_ms
-    FROM core_memory_receipts WHERE user_id = $1 AND memory_id = ANY($2::text[]) AND forgotten_at IS NULL
-    ORDER BY memory_id COLLATE "C", client COLLATE "C", session_id COLLATE "C", message_id COLLATE "C"
-    LIMIT $3`, [owner, ids, limit ?? null]);
   for (const row of rows) {
     let receipts = result.get(row.memory_id);
     if (!receipts) result.set(row.memory_id, receipts = []);
@@ -123,6 +127,13 @@ export async function readReceipts(query, owner, ids, limit) {
     });
   }
   return result;
+}
+
+/** @param {Query} query @param {string} owner @param {readonly string[]} ids @param {number} [limit] */
+export async function readReceipts(query, owner, ids, limit) {
+  if (ids.length === 0) return new Map();
+  const { rows } = await query(memoryReceiptsSql("$2::text[]", "$3"), [owner, ids, limit ?? null]);
+  return decodeReceipts(rows);
 }
 
 /** @param {Query} query @param {string} owner @param {string} id @param {readonly Receipt[]} receipts */

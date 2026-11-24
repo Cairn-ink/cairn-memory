@@ -86,26 +86,24 @@ export function usesSource({ fact }) {
   return fact.kind === "session" || fact.kind === "window";
 }
 
-/** @param {Query} query @param {string} owner
- * @param {{ textOnly?: boolean, rawSpans?: boolean, source?: Pick<CaptureKey, "scope" | "client" | "sessionId">,
- *   legacyOnly?: boolean, allowPendingLegacy?: boolean, limit?: number }} [options] */
-export async function readVisibilityFacts(query, owner, {
-  textOnly = false, rawSpans = false, source, legacyOnly = false, allowPendingLegacy = false, limit,
+export function visibilityFactsSql({
+  textOnly = "false", legacyOnly = "false", limit = "NULL", allowPendingLegacy = "false", rawSpans = "false",
+  hasSource = "false", namespace = "NULL", client = "NULL", sessionId = "NULL",
 } = {}) {
   // Both halves see the same statement snapshot while legacy writers are still active.
-  const { rows } = await query(`WITH owner_state AS (
+  return `WITH owner_state AS (
     SELECT legacy_facts_ready AS ready, legacy_writes_reconciled AS reconciled
     FROM core_owner_state WHERE user_id = $1
   )
   SELECT false AS legacy, false AS pending, fact_id, action_id, incarnation, epoch::text, body,
     trunc(EXTRACT(EPOCH FROM created_at) * 1000000)::text AS created_at_us, kind, origin, mode, slot
     FROM core_suppression_facts WHERE user_id = $1
-      AND (kind IN ('identity', 'text', 'session', 'window') OR ($10::boolean AND kind = 'rawSpan'))
-      AND (NOT $2::boolean OR kind = 'text') AND NOT $3::boolean
-      AND (NOT $6::boolean OR (
-        kind IN ('session', 'window') AND (body ->> 'namespace') IS NOT DISTINCT FROM $7::text
-        OR kind = 'session' AND body #>> '{session,client}' = $8::text AND (
-          body #>> '{session,sessionId}' <> $9::text OR body #>> '{session,sessionKeyHash}' IS NOT NULL
+      AND (kind IN ('identity', 'text', 'session', 'window') OR (${rawSpans} AND kind = 'rawSpan'))
+      AND (NOT ${textOnly} OR kind = 'text') AND NOT ${legacyOnly}
+      AND (NOT ${hasSource} OR (
+        kind IN ('session', 'window') AND (body ->> 'namespace') IS NOT DISTINCT FROM ${namespace}::text
+        OR kind = 'session' AND body #>> '{session,client}' = ${client}::text AND (
+          body #>> '{session,sessionId}' <> ${sessionId}::text OR body #>> '{session,sessionKeyHash}' IS NOT NULL
         )
       ))
   UNION ALL
@@ -116,16 +114,36 @@ export async function readVisibilityFacts(query, owner, {
       'text_hash', text_hash, 'text_hmac', text_hmac, 'key_id', key_id,
       'embedding', embedding::text, 'redaction_version', redaction_version, 'shingles', shingles), NULL, NULL, NULL, NULL, NULL
     FROM suppressions WHERE user_id = $1
-      AND (NOT $2::boolean OR kind = 'text' OR (NOT $5::boolean AND NOT COALESCE((SELECT ready FROM owner_state), false)))
+      AND (NOT ${textOnly} OR kind = 'text' OR (NOT ${allowPendingLegacy} AND NOT COALESCE((SELECT ready FROM owner_state), false)))
       AND NOT COALESCE((SELECT ready AND reconciled FROM owner_state), false)
-      AND (NOT $6::boolean OR (
-        kind IN ('session', 'window') AND $7::text IS NULL
-        OR kind = 'session' AND client = $8::text AND session_id <> $9::text
+      AND (NOT ${hasSource} OR (
+        kind IN ('session', 'window') AND ${namespace}::text IS NULL
+        OR kind = 'session' AND client = ${client}::text AND session_id <> ${sessionId}::text
       ))
-    LIMIT $4`, [owner, textOnly, legacyOnly, limit ?? null, allowPendingLegacy,
-    source !== undefined, source?.scope.namespace ?? null, source?.client ?? null, source?.sessionId ?? null, rawSpans]);
+    LIMIT ${limit}`;
+}
+
+/** @param {any[]} rows @param {string} owner @param {boolean} [allowPendingLegacy] */
+export function decodeVisibilityFacts(rows, owner, allowPendingLegacy = false) {
   if (!allowPendingLegacy && rows.some(row => row.pending)) throw new CoreError("ineligible");
   return rows.map(row => row.legacy ? legacyFact(row.body, owner) : decodeCoreFact(row, owner));
+}
+
+const filteredVisibilityFactsSql = visibilityFactsSql({
+  textOnly: "$2::boolean", legacyOnly: "$3::boolean", limit: "$4", allowPendingLegacy: "$5::boolean",
+  hasSource: "$6::boolean", namespace: "$7", client: "$8", sessionId: "$9", rawSpans: "$10::boolean",
+});
+
+/** @param {Query} query @param {string} owner
+ * @param {{ textOnly?: boolean, rawSpans?: boolean, source?: Pick<CaptureKey, "scope" | "client" | "sessionId">,
+ *   legacyOnly?: boolean, allowPendingLegacy?: boolean, limit?: number }} [options] */
+export async function readVisibilityFacts(query, owner, {
+  textOnly = false, rawSpans = false, source, legacyOnly = false, allowPendingLegacy = false, limit,
+} = {}) {
+  const { rows } = await query(filteredVisibilityFactsSql, [owner, textOnly, legacyOnly, limit ?? null,
+    allowPendingLegacy, source !== undefined, source?.scope.namespace ?? null, source?.client ?? null,
+    source?.sessionId ?? null, rawSpans]);
+  return decodeVisibilityFacts(rows, owner, allowPendingLegacy);
 }
 
 /** @param {MemoryEntry | CandidateEntry} entry @param {readonly StoredFact[]} facts @returns {Promise<FactMatchRow>} */
@@ -172,10 +190,16 @@ export function rowVisibilityPolicy(hashSessionKey) {
 
 /** @param {Query} query @param {string} owner @param {FactMatchPolicy["hashSessionKey"]} [hashSessionKey] */
 export async function readVisibility(query, owner, hashSessionKey) {
+  const facts = await readVisibilityFacts(query, owner);
+  return createVisibility(facts, ids => readReceipts(query, owner, ids), hashSessionKey);
+}
+
+/** @param {StoredFact[]} facts @param {(ids: string[]) => Promise<Map<string, Receipt[]>>} loadReceipts
+ * @param {FactMatchPolicy["hashSessionKey"]} [hashSessionKey] */
+export function createVisibility(facts, loadReceipts, hashSessionKey) {
   const policy = rowVisibilityPolicy(hashSessionKey);
   const capture = /** @type {const} */ ({ ...policy, mode: "capture" });
   const explicitSave = /** @type {const} */ ({ ...policy, mode: "explicitSave" });
-  const facts = await readVisibilityFacts(query, owner);
   /** @type {Map<Scope["namespace"], StoredFact[]>} */
   const byNamespace = new Map();
   for (const stored of facts) {
@@ -217,7 +241,7 @@ export async function readVisibility(query, owner, hashSessionKey) {
   async function check(entries, includeReceipts = false) {
     const ids = entries.filter(({ memory }) => includeReceipts ||
       byNamespace.get(memory.scope.namespace)?.some(usesSource)).map(({ memory }) => memory.id);
-    const receipts = await readReceipts(query, owner, ids);
+    const receipts = await loadReceipts(ids);
     return Promise.all(entries.map(async (entry) => {
       const evidence = receipts.get(entry.memory.id) ?? [];
       return { ...entry, evidence, hidden: await hides(entry, evidence) };

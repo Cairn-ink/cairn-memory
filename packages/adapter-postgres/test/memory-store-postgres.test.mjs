@@ -8,7 +8,7 @@ import { importMethod } from "../../core/src/service/import.mjs";
 import { cases, FAKE_MASTER, inputOf, OWNERS } from "../../core/test/privacy-vectors.mjs";
 import * as postgres from "../src/index.mjs";
 import {
-  createPostgresMemoryReads, createPostgresMemoryStore, createPostgresPauseStore,
+  createPostgresConflictEdgeStore, createPostgresMemoryReads, createPostgresMemoryStore, createPostgresPauseStore,
   createPostgresSupersessionStore, createPostgresSuppressionStore, createPostgresUnitOfWork,
 } from "../src/index.mjs";
 import { migrationDatabase, migrationDbTest } from "./migration-database.mjs";
@@ -46,6 +46,7 @@ async function fixture(t, observe) {
   return {
     pool, run: uow.run, uow, memories: createPostgresMemoryStore(), pause: createPostgresPauseStore(),
     supersession: createPostgresSupersessionStore(), suppressions: createPostgresSuppressionStore(),
+    conflicts: createPostgresConflictEdgeStore(),
     ...createPostgresMemoryReads(),
   };
 }
@@ -442,4 +443,168 @@ test("Postgres preserves safe-integer import times and requires an opt-in for na
   await assert.rejects(run(owner, {}, tx => supersession.markHistorical(tx, named, later.id, 11)), { code: "invalid_input" });
   await assert.rejects(run(owner, {}, tx => memories.erase(tx, named, later.id)), { code: "invalid_input" });
   await assert.rejects(run(owner, {}, tx => optedIn.insert(tx, named, text, [], 11)), { code: "memory_conflict" });
+});
+
+const emptySupersession = { supersededBy: null, supersedes: [] };
+const conflict = (left, right) => ({ left, right, relation: "contradicts", source: "explicit-hint" });
+
+test("Postgres relation batches use one statement and fence both endpoints against receipt sessions", migrationDbTest, async (t) => {
+  const statements = [];
+  const { run, memories, supersession, conflicts, suppressions } = await fixture(t, sql => statements.push(sql));
+  const [left, right] = await run(owner, {}, async tx => {
+    const left = await memories.insert(tx, scope, content("left endpoint"), [], 1);
+    const right = await memories.insert(tx, scope, content("right endpoint"), [evidence], 1);
+    await supersession.record(tx, scope, { previous: left, replacement: right }, [], 2);
+    assert.deepEqual(await conflicts.insert(tx, scope, conflict(right, left), 2), { inserted: true });
+    return [left, right];
+  });
+  const unrelated = Array.from({ length: 64 }, (_, i) => `missing-${i}`);
+  const ids = [left.id, ...unrelated, right.id, left.id];
+  const check = (visible) => run(owner, readOnly, async tx => {
+    statements.length = 0;
+    const links = await supersession.readMany(tx, scope, ids);
+    assert.equal(statements.length, 1);
+    statements.length = 0;
+    const edges = await conflicts.readMany(tx, scope, ids);
+    assert.equal(statements.length, 1);
+    assert.equal(links.size, 66);
+    assert.equal(edges.size, 66);
+    for (const id of unrelated) {
+      assert.deepEqual(links.get(id), emptySupersession);
+      assert.deepEqual(edges.get(id), []);
+    }
+    assert.deepEqual(links.get(left.id), { supersededBy: visible ? right.id : null, supersedes: [] });
+    assert.deepEqual(links.get(right.id), { supersededBy: null, supersedes: visible ? [left.id] : [] });
+    for (const [endpoint, peer] of [[left, right], [right, left]]) {
+      assert.deepEqual(edges.get(endpoint.id), visible
+        ? [{ memoryId: peer.id, revision: peer.revision, relation: "contradicts", source: "explicit-hint" }] : []);
+    }
+  });
+  await check(true);
+  await run(owner, {}, tx => suppressions.writeFact(tx, {
+    owner, kind: "session", origin: "forget", actionId: "withhold-evidence",
+    session: { client: evidence.client, sessionId: evidence.sessionId },
+  }, hash("withhold-evidence")));
+  await check(false);
+});
+
+test("Postgres scopes relation mutations and advances the index only for real conflict changes", migrationDbTest, async (t) => {
+  const { run, memories, supersession, conflicts, snapshot } = await fixture(t);
+  const [first, second] = await run(owner, {}, async tx => [
+    await memories.insert(tx, scope, content("first"), [], 1),
+    await memories.insert(tx, scope, content("second"), [], 1),
+  ]);
+  const foreignScope = { ...scope, owner: other };
+  const foreign = await run(other, {}, tx => memories.insert(tx, foreignScope, content("unrelated"), [], 1));
+  const edge = conflict(first, second);
+  await run(owner, {}, async tx => {
+    const before = await snapshot.stateToken(tx, readSet);
+    assert.deepEqual(await conflicts.insert(tx, scope, conflict(first, foreign), 2), { inserted: false });
+    assert.equal(await snapshot.stateToken(tx, readSet), before);
+    assert.deepEqual(await conflicts.insert(tx, scope, edge, 2), { inserted: true });
+    const inserted = await snapshot.stateToken(tx, readSet);
+    assert.notEqual(inserted, before);
+    assert.deepEqual(await conflicts.insert(tx, scope, edge, 3), { inserted: false });
+    assert.equal(await conflicts.invalidate(tx, scope, foreign.id), 0);
+    assert.equal(await snapshot.stateToken(tx, readSet), inserted);
+    await supersession.record(tx, scope, { previous: first, replacement: second }, [], 2);
+  });
+  await assert.rejects(run(other, {}, tx => conflicts.invalidate(tx, scope, first.id)), { code: "internal_error" });
+  await assert.rejects(run(other, {}, tx => supersession.record(tx, foreignScope, {
+    previous: foreign, replacement: second,
+  }, [], 2)), { code: "invalid_ref" });
+  await run(other, {}, async tx => {
+    assert.deepEqual(await supersession.read(tx, foreignScope, first.id), emptySupersession);
+    assert.deepEqual(await conflicts.list(tx, foreignScope, first.id), []);
+    assert.equal(await conflicts.degree(tx, foreignScope, first.id), 0);
+    assert.equal(await conflicts.invalidate(tx, foreignScope, first.id), 0);
+  });
+  await run(owner, {}, async tx => {
+    const before = await snapshot.stateToken(tx, readSet);
+    assert.equal(await conflicts.invalidate(tx, scope, first.id), 1);
+    assert.notEqual(await snapshot.stateToken(tx, readSet), before);
+    assert.equal(await supersession.incomingCount(tx, scope, second.id), 1);
+  });
+});
+
+test("Postgres forget removes relation rows atomically and delivers only the unavailable marker", migrationDbTest, async (t) => {
+  const { run, memories, supersession, conflicts, hydrate, fence } = await fixture(t);
+  const [previous, replacement, peer] = await run(owner, {}, async tx => {
+    const previous = await memories.insert(tx, scope, content("former"), [], 1);
+    const replacement = await memories.insert(tx, scope, content("replacement"), [], 1);
+    const peer = await memories.insert(tx, scope, content("other current"), [], 1);
+    await supersession.record(tx, scope, { previous, replacement }, [], 2);
+    await supersession.markHistorical(tx, scope, previous.id, 2);
+    await conflicts.insert(tx, scope, conflict(replacement, peer), 2);
+    return [previous, replacement, peer];
+  });
+  const ids = [previous.id, replacement.id, peer.id];
+  const refs = ids.map(ref);
+  const counts = async tx => (await postgres.query(tx, `SELECT
+    (SELECT count(*)::int FROM memory_supersessions WHERE user_id = $1) AS supersessions,
+    (SELECT count(*)::int FROM memory_conflicts WHERE user_id = $1) AS conflicts`, [owner])).rows[0];
+  const erase = async tx => {
+    assert.deepEqual(await counts(tx), { supersessions: 1, conflicts: 1 });
+    assert.equal(await memories.erase(tx, scope, replacement.id), true);
+    assert.deepEqual(await counts(tx), { supersessions: 0, conflicts: 0 });
+    assert.deepEqual(await supersession.readMany(tx, scope, ids), new Map(ids.map(id => [id, emptySupersession])));
+    assert.deepEqual(await conflicts.readMany(tx, scope, ids), new Map(ids.map(id => [id, []])));
+  };
+  await assert.rejects(run(owner, {}, async tx => {
+    await erase(tx);
+    throw new Error("rollback forget");
+  }), { message: "rollback forget" });
+  await run(owner, {}, erase);
+  await run(owner, readOnly, async tx => {
+    const items = await hydrate.hydrate(tx, readSet, refs, "read");
+    assert.deepEqual(await fence.assertVisible(tx, readSet, refs, "read"), [refs[0], refs[2]]);
+    assert.deepEqual(items.map(({ memory }) => [memory.id, memory.historical, memory.supersession]), [
+      [previous.id, true, "superseded (replacement no longer available)"], [peer.id, false, undefined],
+    ]);
+    assert.deepEqual((await hydrate.hydrate(tx, readSet, refs, "recall")).map(({ ref }) => ref.id), [peer.id]);
+    const exported = await memories.exportPage(tx, scope, { cursor: null, limit: 10 });
+    assert.deepEqual(new Set(exported.items.map(({ id }) => id)), new Set([previous.id, peer.id]));
+    for (const memory of [...items.map(({ memory }) => memory), ...exported.items]) {
+      assert.ok(!JSON.stringify(memory, (_, value) => typeof value === "bigint" ? value.toString() : value).includes(replacement.id));
+    }
+  });
+});
+
+test("Postgres relation reads and hydration use the same hashed session visibility", migrationDbTest, async (t) => {
+  const { run, memories } = await fixture(t);
+  const hashSessionKey = (client, sessionId) => hash(JSON.stringify([client, sessionId]));
+  const suppressions = createPostgresSuppressionStore({ sessionRefs: "hashed", hashSessionKey });
+  const supersession = createPostgresSupersessionStore({ hashSessionKey });
+  const conflicts = createPostgresConflictEdgeStore({ hashSessionKey });
+  const { hydrate } = createPostgresMemoryReads({ hashSessionKey });
+  const [previous, replacement, peer] = await run(owner, {}, async tx => {
+    const previous = await memories.insert(tx, scope, content("previous"), [], 1);
+    const replacement = await memories.insert(tx, scope, content("replacement"), [evidence], 1);
+    const peer = await memories.insert(tx, scope, content("peer"), [{ ...evidence, sessionId: "peer-session" }], 1);
+    await supersession.record(tx, scope, { previous, replacement }, [], 2);
+    await supersession.markHistorical(tx, scope, previous.id, 2);
+    await conflicts.insert(tx, scope, conflict(replacement, peer), 2);
+    return [previous, replacement, peer];
+  });
+  const writeSessionFact = (sessionId) => run(owner, {}, tx => suppressions.writeFact(tx, {
+    ...scope, kind: "session", origin: "forget", actionId: sessionId,
+    session: { client: evidence.client, sessionKeyHash: hashSessionKey(evidence.client, sessionId) },
+  }, hash(sessionId)));
+
+  await writeSessionFact("unrelated-session");
+  await run(owner, readOnly, async tx => {
+    assert.equal((await supersession.read(tx, scope, previous.id)).supersededBy, replacement.id);
+    assert.deepEqual((await conflicts.list(tx, scope, peer.id)).map(edge => edge.memoryId), [replacement.id]);
+    const [item] = await hydrate.hydrate(tx, readSet, [ref(previous.id)], "read");
+    assert.equal(item.memory.supersession, undefined);
+  });
+
+  await writeSessionFact(evidence.sessionId);
+  await run(owner, readOnly, async tx => {
+    assert.deepEqual(await supersession.read(tx, scope, previous.id), emptySupersession);
+    assert.deepEqual(await conflicts.list(tx, scope, peer.id), []);
+    const [item] = await hydrate.hydrate(tx, readSet, [ref(previous.id), ref(replacement.id)], "read");
+    assert.equal(item.memory.supersession, "superseded (replacement no longer available)");
+    assert.deepEqual(await hydrate.hydrate(tx, readSet, [ref(replacement.id)], "read"), []);
+  });
 });
