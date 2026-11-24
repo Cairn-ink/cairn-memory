@@ -323,7 +323,7 @@ export async function keepEpisodeCapture(options) {
   if (kept.failure) fail(kept.failure);
   const claim = (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.claimAdmission(ns, { ...kept.key, leaseMs: 125000 })) : runtime.claimAdmission(ns, { ...kept.key, leaseMs: 125000 }));
   if (claim.duplicate || claim.processing) return { ...claim,
-    episode: { id: keepInput.episodeId, policy: 'explicit-keep', sourceCoverage: kept.coverage },
+    episode: { id: keepInput.episodeId, policy: 'explicit-keep', sourceCoverage: runtime.assertEpisodeKeep(ns, kept, true) },
     admission: { status: claim.duplicate ? 'completed' : 'processing', memoryIds: claim.memoryIds } };
   kept.admissionToken = claim.token;
   const deadline = startAdmission?.();
@@ -347,7 +347,7 @@ export async function keepEpisodeCapture(options) {
     const result = await captureMessages({ ...options, operations, deadline,
       episodeRun: { snapshot, claim, skip: false, keep: true } });
     return { ...result, episode: {
-      id: keepInput.episodeId, policy: 'explicit-keep', sourceCoverage: kept.coverage } };
+      id: keepInput.episodeId, policy: 'explicit-keep', sourceCoverage: runtime.assertEpisodeKeep(ns, kept, true) } };
   } catch (error) {
     const code = error instanceof MemoryStoreError ? error.code : 'storage_error';
     try { (hasCommitDispatcher(runtime) ? await dispatchCommit(runtime, () => runtime.failEpisodeKeep(ns, kept, code), undefined, { compensating: true }) : runtime.failEpisodeKeep(ns, kept, code)); } catch { /* Preserve the original failure. */ }

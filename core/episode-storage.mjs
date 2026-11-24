@@ -3,7 +3,7 @@ import { hasCommitDispatcher } from './commit-dispatch.mjs';
 import { contentReadSafety, bindReceiptMarkerKeys, withheldReceiptIdsInside } from './content-safety.mjs';
 import { cachedContentSuppressionRequestInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
-import { transaction, isStorageBusy } from './database.mjs';
+import { transaction, readTransaction, isStorageBusy } from './database.mjs';
 import { ADMISSION_LEASE_MS, HEX_DIGEST, advanceEpisodeControlGeneration } from './episode-schema.mjs';
 import { boundedText, denseArray, fail, identifier, object, revision } from './validation.mjs';
 import { sourceDigest, sourceSpan } from './procedural-storage.mjs';
@@ -162,7 +162,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       const previous = JSON.parse(row.record);
       for (const key of ['eventStart', 'eventEnd', 'eventTimeCoverage']) record[key] = previous[key];
     }
-    mutateSources(ns, id, () => db.prepare('DELETE FROM episode_sources WHERE episode_id=?').run(id));
+    mutateSources(ns, id, () => removeSources(ns, row));
     db.prepare('UPDATE session_episodes SET source_fence=source_fence+1,writer_token=NULL,writer_expires_at=NULL WHERE id=?').run(id);
     save(ns, row, record);
   }
@@ -175,6 +175,22 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
   }
   function mutateSources(ns, id, work) {
     return sourceRoots?.mutateEpisodeSources ? sourceRoots.mutateEpisodeSources(ns, id, work) : work();
+  }
+  function removeSources(ns, row) {
+    // The finished Episode journal already holds durable, content-free identities.
+    // Before a source row goes away, retain only the marker keys a Keep can need.
+    bindEpisodeMarkerKeys(db);
+    db.prepare(`INSERT INTO episode_attempts(episode_id,marker,watermark,token,expires_at,revision,source_fence,generation,finished,started)
+      SELECT s.episode_id,'keep-source:'||s.id,0,
+        receipt_marker_keys(episode_receipt_key(o.client,o.session_key,s.message_id,s.role,s.text),o.client,o.session_key,s.message_id,s.role),
+        0,?,?,?,1,1
+      FROM episode_sources s JOIN session_episodes o ON o.id=s.origin_episode_id
+      WHERE s.episode_id=? AND o.owner_id=? AND o.scope=? AND o.project_id=?
+        AND EXISTS (SELECT 1 FROM episode_keep_actions a CROSS JOIN json_each(a.keep_source_ids) j
+          WHERE a.episode_id=s.episode_id AND j.value=s.id)
+      ON CONFLICT(episode_id,marker) DO NOTHING`)
+      .run(row.revision, row.source_fence, row.generation, row.id, ...boundary(ns));
+    db.prepare('DELETE FROM episode_sources WHERE episode_id=?').run(row.id);
   }
   function invalidateSourceConsumers(ns, id, preserveInterval = false) {
     // Capture consumers before deleting passages, including zero-memory episodes.
@@ -218,7 +234,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     });
   }
   function guard(ns, input) {
-    if (input.keepActionId) return keepGuard(ns, input);
+    if (input.keepActionId) return keepGuard(ns, input, true);
     const registered = event(ns, input);
     if (!registered) return null;
     const row = read(ns, registered.episode_id);
@@ -717,7 +733,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       for (const consumer of consumers) invalidateSources(ns,consumer.episode_id);
       if (read(ns,row.id).revision !== row.revision) fail('stale_episode');
       mutateSources(ns, row.id, () => {
-        db.prepare('DELETE FROM episode_sources WHERE episode_id=?').run(row.id);
+        removeSources(ns, row);
         const insert = db.prepare('INSERT INTO episode_sources VALUES(?,?,?,?,?,?,?,?,?,?)');
         for (const source of sources) insert.run(source.id,row.id,source.origin_episode_id,source.event_id,source.message_id,source.digest,source.role,source.text,source.truncated,source.ordinal);
       });
@@ -840,12 +856,16 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       WHERE e.owner_id=? AND e.scope=? AND e.project_id=? AND a.admission_key=?`)
       .get(...boundary(ns), input.keepActionId);
   }
-  function keepGuard(ns, input) {
+  function keepGuard(ns, input, checkMarkers) {
     const action = keepAttempt(ns, input);
     if (!action) return null;
     if (action.deleted || control(ns)?.enabled === 0) return 'capture_evidence_closed';
     if (action.keep_state === 'completed') return null;
     if (action.revision !== action.current_revision || action.source_fence !== action.current_fence) return 'revision_conflict';
+    if (checkMarkers) {
+      const withheld = episodeWithheldSourceIds(ns, action.id);
+      if (JSON.parse(action.keep_source_ids).some(id => withheld.has(id))) return 'revision_conflict';
+    }
     return null;
   }
   function cleanupKeep(ns, kept, code) {
@@ -859,6 +879,65 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       .run(terminal ? 'failed' : 'retryable', terminal ? code : null, kept.episodeId, kept.key.eventId);
     advanceEpoch(ns);
   }
+  function episodeWithheldSourceIds(ns, id) {
+    return new Set(withheldEpisodeSourcesInside(db, ns, [id]).map(source => source.id));
+  }
+  function keepCoverage(row, sourceIds) {
+    return { sourceIds, revision: row.revision, sourceFence: row.source_fence };
+  }
+  function keepSourceProjection(ns, episodeId, { withheldSources, currentSourceIds, checkedSources, deniedSources, reviewRetainedSources }) {
+    const retainedSources = new Map(), retainedDecisions = new Map();
+    let lookup, historicalMarker;
+    function retainedSource(id) {
+      lookup ??= db.prepare(`SELECT s.*,o.client,o.session_key,o.owner_id,o.scope,o.project_id,o.deleted
+        FROM episode_sources s LEFT JOIN session_episodes o ON o.id=s.origin_episode_id WHERE s.id=?`);
+      if (!retainedSources.has(id)) retainedSources.set(id, lookup.get(id));
+      return retainedSources.get(id);
+    }
+    function visible(id) {
+      if (withheldSources.has(id)) return false;
+      if (currentSourceIds?.has(id) || checkedSources?.has(id)) return true;
+      const source = retainedSource(id);
+      if (!source) {
+        // Old actions may have lost the source before its identity was recorded.
+        // An absent identity cannot match a marker.
+        historicalMarker ??= db.prepare(`SELECT 1 FROM episode_attempts a
+          CROSS JOIN json_each(a.token) k CROSS JOIN suppressed s
+          WHERE a.episode_id=? AND a.marker=? AND s.owner_id=? AND s.scope=? AND s.project_id=? AND s.fingerprint=k.value
+          LIMIT 1`);
+        return !historicalMarker.get(episodeId, 'keep-source:' + id, ...boundary(ns));
+      }
+      if (source.owner_id !== ns.ownerId || source.scope !== ns.scope ||
+          source.project_id !== (ns.projectId ?? '') || source.deleted) return false;
+      if (source.episode_id === episodeId) return true;
+      const receipt_key = episodeReceiptKey(source.client, source.session_key, source.message_id, source.role, source.text);
+      return !withheldReceiptIdsInside(db, ns, [{ id, receipt_key, client: source.client,
+        session_id: source.session_key, event_id: source.message_id, role: source.role }]).has(id);
+    }
+    function denied(id) {
+      if (deniedSources?.has(id)) return true;
+      if (!reviewRetainedSources || checkedSources?.has(id)) return false;
+      if (retainedDecisions.has(id)) return retainedDecisions.get(id);
+      const source = retainedSource(id);
+      let denied = false;
+      if (source) {
+        denied = Boolean(source.deleted || source.owner_id !== ns.ownerId || source.scope !== ns.scope ||
+          source.project_id !== (ns.projectId ?? ''));
+        if (!denied) {
+          try {
+            sourceAuthority.assertReceipts(ns, [{ client: source.client, sessionId: source.session_key,
+              eventId: source.message_id, role: source.role, excerpt: source.text }]);
+          } catch (error) {
+            if (!['source_excluded', 'conversation_deleted'].includes(error.code)) throw error;
+            denied = true;
+          }
+        }
+      }
+      retainedDecisions.set(id, denied);
+      return denied;
+    }
+    return { visible, denied };
+  }
   function prepareKeep(ns, input) {
     return transaction(db, () => {
       const row = live(ns, input.episodeId);
@@ -871,21 +950,27 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
         cleanupKeep(ns, pendingCleanup.kept, pendingCleanup.code);
         keepCleanup.delete(eventId);
       }
-      const prior = keepAttempt(ns, key);
-      if (prior && prior.payload_digest !== payloadDigest) fail('event_payload_conflict');
       const action = keepAttempt(ns, key);
-      const coverage = action && { sourceIds: JSON.parse(action.keep_source_ids), revision: action.revision, sourceFence: action.source_fence };
+      if (action && action.payload_digest !== payloadDigest) fail('event_payload_conflict');
       if (action?.keep_state === 'failed') return { failure: action.keep_error_code };
-      if (prior?.state === 'completed') return { key, client: row.client, sessionKey: row.session_key, sources: [], coverage };
+      const withheldSources = episodeWithheldSourceIds(ns, row.id);
+      if (action?.state === 'completed') {
+        const { visible } = keepSourceProjection(ns, row.id, { withheldSources });
+        return { key, client: row.client, sessionKey: row.session_key, sources: [],
+          coverage: keepCoverage(action, JSON.parse(action.keep_source_ids).filter(visible)) };
+      }
       if (!getControl(ns).enabled) fail('capture_disabled');
       if (row.revision !== input.expectedRevision) fail('revision_conflict');
       const denied = keepGuard(ns, key); if (denied) fail(denied);
-      const sources = db.prepare(`SELECT s.*,e.client AS originClient,e.session_key AS originSessionKey
+      const original = db.prepare(`SELECT s.*,e.client AS originClient,e.session_key AS originSessionKey
         FROM episode_sources s JOIN session_episodes e ON e.id=s.origin_episode_id
         WHERE s.episode_id=? AND e.owner_id=? AND e.scope=? AND e.project_id=? ORDER BY s.ordinal,s.id LIMIT 17`)
         .all(row.id, ...boundary(ns));
-      if (!sources.length || sources.length > 16) fail('episode_sources_unavailable');
-      if (!prior) {
+      const planned = action && new Set(JSON.parse(action.keep_source_ids));
+      const sources = original.filter(source => !withheldSources.has(source.id) && (!planned || planned.has(source.id)));
+      if (!sources.length || original.length > 16) fail('episode_sources_unavailable');
+      const sourceIds = sources.map(source => source.id);
+      if (!action) {
         // Independent, transactionally allocated per-episode action ordinal.
         const ordinal = db.prepare('SELECT coalesce(max(keep_ordinal),0)+1 AS next FROM episode_keep_actions WHERE episode_id=?')
           .get(row.id).next;
@@ -893,14 +978,16 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
           client,event_id,payload_digest,state,keep_state,keep_source_ids,revision,source_fence,keep_ordinal,keep_created_at)
           VALUES(?,?,?,?,?,?,?,?,?,'reserved','pending',?,?,?,?,?)`)
           .run(eventId, input.actionId, row.id, ...boundary(ns), row.client, eventId, payloadDigest,
-            JSON.stringify(sources.map(source => source.id)), row.revision, row.source_fence, ordinal, iso());
+            JSON.stringify(sourceIds), row.revision, row.source_fence, ordinal, iso());
         advanceEpoch(ns);
-      } else db.prepare("UPDATE episode_keep_actions SET keep_state='pending',keep_error_code=NULL WHERE episode_id=? AND admission_key=?")
-        .run(row.id, eventId);
+      } else if (action.state !== 'pending' || action.lease_expires_at <= Date.now()) {
+        db.prepare(`UPDATE episode_keep_actions SET keep_state='pending',keep_error_code=NULL,keep_source_ids=?
+          WHERE episode_id=? AND admission_key=?`).run(JSON.stringify(sourceIds), row.id, eventId);
+      }
       sourceRoots?.bindJob(ns, key, sources.map(source => ({ client: source.originClient,
         sessionId: source.originSessionKey, eventId: source.message_id, role: source.role, excerpt: source.text })));
       return { key, client: row.client, sessionKey: row.session_key, sources, episodeId: row.id,
-        coverage: coverage ?? { sourceIds: sources.map(source => source.id), revision: row.revision, sourceFence: row.source_fence } };
+        coverage: keepCoverage(row, sourceIds) };
     });
   }
   function failKeep(ns, kept, code) {
@@ -913,8 +1000,17 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       if (!isStorageBusy(error)) throw error;
     }
   }
-  function assertKeep(ns, kept) {
-    const denied = keepGuard(ns, kept.key); if (denied) fail(denied);
+  function assertKeep(ns, kept, delivery) {
+    const check = () => {
+      const denied = keepGuard(ns, kept.key, true); if (denied) fail(denied);
+      if (delivery) {
+        const action = keepAttempt(ns, kept.key);
+        if (!action) fail('revision_conflict');
+        const { visible } = keepSourceProjection(ns, action.id, { withheldSources: episodeWithheldSourceIds(ns, action.id) });
+        return keepCoverage(action, kept.coverage.sourceIds.filter(visible));
+      }
+    };
+    return db.isTransaction ? check() : readTransaction(db, check);
   }
   function keepAdmitted(ns, input, entries) {
     const action = keepAttempt(ns, input); if (!action) return;
@@ -1137,70 +1233,21 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
         const reviewRetainedSources = safety &&
           (deniedSources?.size || cachedContentSuppressionRequestInside(db, ns.ownerId)?.facts?.length !== 0);
         const currentSourceIds = new Set(sources.map(source => source.id));
-        const retainedSources = new Map(), retainedDecisions = new Map();
-        let lookup, hasReceiptMarkers;
+        const { visible, denied } = keepSourceProjection(ns, row.id,
+          { withheldSources, currentSourceIds, checkedSources, deniedSources, reviewRetainedSources });
         let after = pages.keep.after ?? 0;
         while (true) {
           const batch = statement.all(row.id, after, count);
           for (const action of batch) {
             const sourceIds = JSON.parse(action.keep_source_ids);
-            if (sourceIds.some(keepSourceDenied)) continue;
+            if (sourceIds.some(denied)) continue;
             result.push({ actionKey: action.admission_key, ordinal: action.keep_ordinal,
               createdAt: action.keep_created_at, policy: 'explicit-keep', admission: action.keep_state,
-              errorCode: action.keep_error_code, sourceCoverage: { sourceIds: sourceIds.filter(keepSourceVisible),
-                revision: action.revision, sourceFence: action.source_fence } });
+              errorCode: action.keep_error_code, sourceCoverage: keepCoverage(action, sourceIds.filter(visible)) });
             if (result.length === count) break;
           }
           if (result.length === count || batch.length < count) return result;
           after = batch.at(-1).keep_ordinal;
-        }
-
-        function retainedSource(id) {
-          lookup ??= db.prepare(`SELECT s.*,o.client,o.session_key,o.owner_id,o.scope,o.project_id,o.deleted
-            FROM episode_sources s LEFT JOIN session_episodes o ON o.id=s.origin_episode_id WHERE s.id=?`);
-          if (!retainedSources.has(id)) retainedSources.set(id, lookup.get(id));
-          return retainedSources.get(id);
-        }
-
-        function keepSourceVisible(id) {
-          if (withheldSources.has(id)) return false;
-          if (currentSourceIds.has(id) || checkedSources?.has(id)) return true;
-          const source = retainedSource(id);
-          if (!source) {
-            // A replaced source ID has no receipt identity to check against a later marker.
-            hasReceiptMarkers ??= Boolean(db.prepare(`SELECT 1 FROM suppressed WHERE ${where}
-              AND fingerprint GLOB 'rs1:*' LIMIT 1`).get(...boundary(ns)));
-            return !hasReceiptMarkers;
-          }
-          if (source.owner_id !== ns.ownerId || source.scope !== ns.scope ||
-              source.project_id !== (ns.projectId ?? '') || source.deleted) return false;
-          if (source.episode_id === row.id) return true;
-          const receipt_key = episodeReceiptKey(source.client, source.session_key, source.message_id, source.role, source.text);
-          return !withheldReceiptIdsInside(db, ns, [{ id, receipt_key, client: source.client,
-            session_id: source.session_key, event_id: source.message_id, role: source.role }]).has(id);
-        }
-
-        function keepSourceDenied(id) {
-          if (deniedSources?.has(id)) return true;
-          if (!reviewRetainedSources || checkedSources?.has(id)) return false;
-          if (retainedDecisions.has(id)) return retainedDecisions.get(id);
-          const source = retainedSource(id);
-          let denied = false;
-          if (source) {
-            denied = Boolean(source.deleted || source.owner_id !== ns.ownerId || source.scope !== ns.scope ||
-              source.project_id !== (ns.projectId ?? ''));
-            if (!denied) {
-              try {
-                sourceAuthority.assertReceipts(ns, [{ client: source.client, sessionId: source.session_key,
-                  eventId: source.message_id, role: source.role, excerpt: source.text }]);
-              } catch (error) {
-                if (!['source_excluded', 'conversation_deleted'].includes(error.code)) throw error;
-                denied = true;
-              }
-            }
-          }
-          retainedDecisions.set(id, denied);
-          return denied;
         }
       }
     });
@@ -1210,16 +1257,38 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
 }
 
 const episodeMarkerFunctions = new WeakSet();
-export function withheldEpisodeSourcesInside(db, ns, ids, receiptIds = []) {
-  if (!ids.length) return [];
-  if (!db.isTransaction) fail('storage_error');
+export function bindEpisodeMarkerKeys(db) {
   bindReceiptMarkerKeys(db);
   if (!episodeMarkerFunctions.has(db)) {
     db.function('episode_receipt_key', { deterministic: true }, episodeReceiptKey);
     episodeMarkerFunctions.add(db);
   }
+}
+const sourceReceiptKeySQL = 'episode_receipt_key(origin.client,origin.session_key,src.message_id,src.role,src.text)';
+
+// Project the same scoped receipt-marker matches in the bounded Episode
+// candidate query used by Session Start.
+export const episodeWithheldSourceIdsSQL = `CASE WHEN EXISTS (
+  SELECT 1 FROM suppressed marker WHERE marker.owner_id=e.owner_id AND marker.scope=e.scope
+    AND marker.project_id=e.project_id AND marker.fingerprint GLOB 'rs1:*'
+) THEN (
+  SELECT json_group_array(src.id)
+  FROM episode_sources src INDEXED BY episode_source_page
+  CROSS JOIN session_episodes origin ON origin.id=src.origin_episode_id
+  WHERE src.episode_id=e.id AND origin.owner_id=e.owner_id AND origin.scope=e.scope AND origin.project_id=e.project_id
+    AND EXISTS (
+      SELECT 1 FROM json_each(receipt_marker_keys(${sourceReceiptKeySQL},origin.client,origin.session_key,src.message_id,src.role)) k
+      CROSS JOIN suppressed marker ON marker.owner_id=e.owner_id AND marker.scope=e.scope
+        AND marker.project_id=e.project_id AND marker.fingerprint=k.value
+    )
+) END`;
+
+export function withheldEpisodeSourcesInside(db, ns, ids, receiptIds = []) {
+  if (!ids.length) return [];
+  if (!db.isTransaction) fail('storage_error');
+  bindEpisodeMarkerKeys(db);
   return db.prepare(`WITH candidates(kind,id,episode_id,receipt_key,client,session_id,event_id,role) AS (
-SELECT 'source',src.id,src.episode_id,episode_receipt_key(origin.client,origin.session_key,src.message_id,src.role,src.text),
+SELECT 'source',src.id,src.episode_id,${sourceReceiptKeySQL},
   origin.client,origin.session_key,src.message_id,src.role
 FROM json_each(?) wanted
 CROSS JOIN episode_sources src INDEXED BY episode_source_page ON src.episode_id=wanted.value

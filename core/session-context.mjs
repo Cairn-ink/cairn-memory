@@ -4,7 +4,7 @@ import { contentSuppressionReasonInside } from './content-suppression-storage.mj
 import { transaction } from './database.mjs';
 import { countTokens } from './model-budget.mjs';
 import { envelopeText, memoryMetadata } from './episode-reads.mjs';
-import { episodeReadRow } from './episode-storage.mjs';
+import { bindEpisodeMarkerKeys, episodeReadRow, episodeWithheldSourceIdsSQL } from './episode-storage.mjs';
 import { sourceDigest, sourceSpan } from './procedural-storage.mjs';
 import { fail, object } from './validation.mjs';
 
@@ -30,13 +30,14 @@ export function contextInput(input) {
     ...(groups.background ? { background: true } : {}) }, maxTokens, maxChars,
     ...(groups.background ? { backgroundBudget: { maxTokens: backgroundTokens, maxChars: backgroundChars } } : {}) };
 }
-export function contextQuery(ns, group, { rawAncestry = false } = {}) {
+export function contextQuery(ns, group, { rawAncestry = false, sourceMarkers = false } = {}) {
   const params = [ns.ownerId, ns.scope, ns.projectId, 13];
   const ancestry = rawAncestry ? `,EXISTS(
     SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id
     LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=m.id
     AND (ac.owner_id IS NOT m.owner_id OR ac.scope IS NOT m.scope OR ac.project_id IS NOT m.project_id)) AS invalid_raw_ancestry` : '';
-  const sql = group === 'nextSteps' ? `SELECT e.* FROM session_episodes e INDEXED BY episode_open_step_read
+  const markers = sourceMarkers ? `,${episodeWithheldSourceIdsSQL} AS withheld_source_ids` : '';
+  const sql = group === 'nextSteps' ? `SELECT e.*${markers} FROM session_episodes e INDEXED BY episode_open_step_read
     WHERE e.owner_id=? AND e.scope=? AND e.project_id=? AND e.deleted=0
       AND e.id NOT IN (SELECT id FROM review_hidden_episodes)
       AND json_extract(e.record,'$.processing.state')='ready' AND json_extract(e.record,'$.nextStep.status')='open'
@@ -49,8 +50,9 @@ export function contextQuery(ns, group, { rawAncestry = false } = {}) {
   return { sql, params };
 }
 export function createSessionContextStorage({ db, epoch, indexStorage, readSourceEvidence, proceduralStorage, decisionReview, assertEpisodeRead, episodeProjection }) {
-  function step(row) {
+  function step(row, withheldSources) {
     const record = JSON.parse(row.record), nextStep = record.nextStep;
+    if (withheldSources) nextStep.anchors = nextStep.anchors.filter(anchor => !withheldSources.has(anchor.sourceId));
     const sources = [];
     for (const anchor of nextStep.anchors) {
       const source = db.prepare(`SELECT s.* FROM episode_sources s JOIN session_episodes origin ON origin.id=s.origin_episode_id
@@ -89,7 +91,9 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
   }
   return function snapshot(ns, groups, expected) {
     return transaction(db, () => {
-      const projected = groups.nextSteps ? episodeProjection(ns, contextQuery(ns, 'nextSteps'), expected?.indexRevision) : { epoch: epoch(ns) };
+      if (groups.nextSteps) bindEpisodeMarkerKeys(db);
+      const nextStepQuery = groups.nextSteps ? contextQuery(ns, 'nextSteps', { sourceMarkers: true }) : null;
+      const projected = nextStepQuery ? episodeProjection(ns, nextStepQuery, expected?.indexRevision) : { epoch: epoch(ns) };
       const current = projected.epoch;
       if (expected && expected.indexRevision !== current) fail('index_revision_conflict');
       if (groups.procedural || groups.background) indexStorage.assertAvailable(ns);
@@ -101,10 +105,11 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
         }
         const layout = cachedContentLayout(db), safety = Boolean(layout?.suppressionRevision);
         const nextSteps = group === 'nextSteps';
-        const original = contextQuery(ns, group, { rawAncestry: safety && layout.rawLineage });
+        const original = nextSteps ? nextStepQuery : contextQuery(ns, group, { rawAncestry: safety && layout.rawLineage });
         let query = nextSteps ? projected.query : original;
         let budget = projected.budget;
         const rows = [];
+        const withheldStepSources = new Map();
         const memoryItems = safety && !nextSteps ? [] : null;
         let sourceError;
         const count = original.params.at(-1);
@@ -116,7 +121,15 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
             : contentReadSafety(db, { namespace: ns, selectedMemory: row,
               ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed));
           for (const row of eligible) {
-            if (nextSteps && assertEpisodeRead?.(ns, row, budget, 'batch') === false) continue;
+            if (nextSteps) {
+              const withheldSources = row.withheld_source_ids && new Set(JSON.parse(row.withheld_source_ids));
+              if (withheldSources?.size) {
+                const { anchors } = JSON.parse(row.record).nextStep;
+                if (anchors.length && anchors.every(anchor => withheldSources.has(anchor.sourceId))) continue;
+                withheldStepSources.set(row.id, withheldSources);
+              }
+              if (assertEpisodeRead?.(ns, row, budget, 'batch', withheldSources) === false) continue;
+            }
             if (memoryItems && rows.length < count - 1 && !sourceError) {
               try {
                 const item = sourcedMemory(ns, row, group);
@@ -144,7 +157,8 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
         let items;
         try {
           if (sourceError) throw sourceError;
-          items = memoryItems ?? rows.slice(0, 12).map(row => group === 'nextSteps' ? step(row) : sourcedMemory(ns, row, group));
+          items = memoryItems ?? rows.slice(0, 12).map(row => nextSteps
+            ? step(row, withheldStepSources.get(row.id)) : sourcedMemory(ns, row, group));
         }
         catch (error) {
           if (expected && error.code !== 'index_revision_conflict') fail('revision_conflict');
