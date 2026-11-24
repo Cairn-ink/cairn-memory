@@ -36,10 +36,10 @@ function nearVector(embedding) {
 export async function duplicateMatches(query, scope, ns, visibility, batch, near, threshold, excluded) {
   const hashes = batch.map(exactHashes);
   const exactRows = await exactCandidates(query, scope.owner,
-    visibility.candidateColumns(scope.namespace, { exact: true, distance: batch.some(item => item.embedding?.length === 1536) }),
+    visibility.candidateColumns([scope.namespace], { exact: true, distance: batch.some(item => item.embedding?.length === 1536) }),
     [...new Set(hashes.flat())], excluded);
   const exact = new Map(exactRows.map(row => [storageHash(row.logical_hash), readCandidate(row, scope.owner)]));
-  const nearColumns = near ? visibility.candidateColumns(scope.namespace) : null;
+  const nearColumns = near ? visibility.candidateColumns([scope.namespace]) : null;
 
   /** @type {Map<string, CandidateEntry>} */
   const entries = new Map();
