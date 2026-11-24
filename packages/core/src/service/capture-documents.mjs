@@ -1,7 +1,7 @@
 import { emitDiagnostic } from "../capture/model-call.mjs";
 import { CoreError } from "../errors.mjs";
 import { plainExtractionSpec, validatePlainExtraction } from "../extraction/extraction.mjs";
-import { writeLedgerQuantities } from "../ledger/index.mjs";
+import { reconcileLedgerQuantities } from "../ledger/index.mjs";
 import { fingerprintMemoryPassages, sha256Hex } from "../privacy/fingerprint.mjs";
 import { prepareCoreText, receiptExcerpt } from "../privacy/text.mjs";
 import { withholdsAnyPassage } from "../privacy/withholds.mjs";
@@ -111,6 +111,21 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
     return messages.filter((_, index) => allowed[index]);
   }
 
+  /** @param {Tx} tx @param {CaptureKey["scope"]} scope @returns {Promise<(texts: readonly string[]) => Promise<boolean>>} */
+  async function readTextWithholding(tx, scope) {
+    const facts = (await suppressions.snapshot(tx, scope, {})).passages
+      .map(({ fact }) => fact).filter(({ origin }) => origin === "forget");
+    const fingerprintKey = facts.length && capabilities.fingerprintKey
+      ? await (keys.userKeyForWrite ? keys.userKeyForWrite(tx) : keys.userKey(scope.owner)) : null;
+    const digesters = facts.length ? await keys.retainedDigesters?.(scope.owner) : undefined;
+    return async texts => {
+      if (!facts.length) return false;
+      const passages = await Promise.all([...new Set(texts)].map(text =>
+        fingerprintMemoryPassages(text, prepareCoreText(text), fingerprintKey, undefined, digesters)));
+      return withholdsAnyPassage(passages.flat(), facts);
+    };
+  }
+
   /**
    * Precompute search vectors without selecting or building any card. A withheld source can move
    * another message into the router's final limit. Only an exact search-text match can use a vector.
@@ -177,27 +192,19 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
     const written = (mapped ? surviving : []).map(({ receipts }, index) => ({
       ...result.memories[index], receipts, quantities: quantities?.get(receipts),
     }));
+    /** @type {ReturnType<typeof readTextWithholding> | undefined} */
+    let textWithholding;
     const canonicalSessionKey = cards && sessionKey({ client, sessionId });
     if (cards && canonicalSessionKey) {
       const cardSources = allowed.filter(({ id }) => !ambiguous.has(id) && (!embedder || screenedForEmbedding?.has(id)));
       const { chosen } = routeDocumentMessages(cardSources);
-      // Whole-source and extracted-memory checks can both miss an exact forget
-      // of one sentence retained verbatim in a card.
-      const facts = chosen.length ? (await suppressions.snapshot(tx, scope, {})).passages
-        .map(({ fact }) => fact).filter(({ origin }) => origin === "forget") : [];
-      const fingerprintKey = facts.length && capabilities.fingerprintKey
-        ? await (keys.userKeyForWrite ? keys.userKeyForWrite(tx) : keys.userKey(scope.owner)) : null;
-      const digesters = facts.length ? await keys.retainedDigesters?.(scope.owner) : undefined;
       for (const { position } of chosen) {
         const message = cardSources[position];
         const { card } = await buildDocumentCard(message, { scope, client, canonicalSessionKey });
         if (!card) continue;
-        if (facts.length) {
-          const sentences = new Set(card.sentences.map(({ start, end }) => card.body.slice(start, end)));
-          const passages = await Promise.all([...sentences].map(sentence =>
-            fingerprintMemoryPassages(sentence, prepareCoreText(sentence), fingerprintKey, undefined, digesters)));
-          if (withholdsAnyPassage(passages.flat(), facts)) continue;
-        }
+        // Whole-source and extracted-memory checks can miss an exact forget of one card sentence.
+        const withholds = await (textWithholding ??= readTextWithholding(tx, scope));
+        if (await withholds(card.sentences.map(({ start, end }) => card.body.slice(start, end)))) continue;
         const sourceMessage = { client, sessionId, messageId: message.id };
         const sourceMemories = documentCardMemoryLinks(sourceMessage, written);
         const embedding = vectors?.get(documentCardSearchText(card));
@@ -258,9 +265,23 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
           unresolved();
           continue;
         }
-        await writeLedgerQuantities(tx, scope, ledger, {
-          memoryId: id, textHash: row.memory.textHash, captureTimeMs: clock.nowMs(), quantities, citedReceipts,
+        const captureTimeMs = clock.nowMs();
+        const existingRows = await ledger.listForMemory(tx, scope, id);
+        const rows = reconcileLedgerQuantities({
+          memoryId: id, textHash: row.memory.textHash, captureTimeMs, quantities, citedReceipts, existingRows,
         });
+        if (!rows.length) continue;
+        const withholds = await (textWithholding ??= readTextWithholding(tx, scope));
+        const permitted = [];
+        for (const quantityRow of rows) {
+          const { memoryId, receiptId, textHash, ...quantity } = quantityRow;
+          if (await withholds(Object.values(quantity).filter(value => typeof value === "string"))) {
+            emitDiagnostic(diagnostics, "extract", "core_finish", "ledger_text_withheld");
+          } else {
+            permitted.push(quantityRow);
+          }
+        }
+        if (permitted.length) await ledger.put(tx, scope, permitted);
       }
     }
     return allowed;
@@ -371,6 +392,11 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
             if (state.paused || state.generation !== generation || caller?.aborted) return;
             const message = byMessage.get(amendment.sourceMessage.messageId);
             if (message && await correctionEligible(tx, message) && await canAmend(tx, cardId, message)) {
+              const withholds = await readTextWithholding(tx, scope);
+              if (await withholds([amendment.quote, amendment.sentence])) {
+                emitDiagnostic(diagnostics, "amendment", "core_finish", "amendment_text_withheld");
+                return;
+              }
               await cards.amend(tx, scope, cardId, amendment);
             }
           });

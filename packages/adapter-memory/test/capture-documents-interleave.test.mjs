@@ -361,3 +361,52 @@ test("7: a ledger-source forget inside extraction drops the old row and prevents
     }
   }
 });
+
+test("8: an exact forget inside verification withholds the amendment payload", async () => {
+  const longerCorrection = { ...correction,
+    content: correction.content + " The inspection checklist stays by the door." };
+  for (const forgotten of [null, "The spare key is in a blue box.", correction.content]) {
+    const f = fixture({ amendments: true });
+    await f.capture(selection("plan"), [plan], { items: [extract(tea)] });
+    const [{ card }] = await f.storedCards();
+    const saved = forgotten && await f.service.save(scope, forgotten, user);
+    if (saved) assert.equal(saved.status, "saved");
+    const result = await f.capture(selection("correction"), [longerCorrection, unrelated], {
+      items: [extract(unrelated.content, 1)],
+    }, {
+      cardId: card.id,
+      race: saved ? { point: "verify", commit: () => f.forget(saved.item.id) } : undefined,
+    });
+    await f.assertSurvivor(result);
+    assert.deepEqual(f.trace.slice(-2), saved ? ["verify", "committed"] : ["dispatch-4", "verify"]);
+    const stored = (await f.storedCards()).flatMap(({ amendments }) => amendments ?? []);
+    assert.deepEqual(stored.map(([, { quote, sentence }]) => ({ quote, sentence })),
+      forgotten === correction.content ? [] : [{ quote: correction.content, sentence: correction.content }]);
+  }
+});
+
+test("9: an exact forget inside extraction withholds quantity rows carrying the forgotten sentence", async () => {
+  const category = "Tea was for the afternoon workshop.";
+  const turn = { ...purchase, content: `${purchase.content} ${category}` };
+  const quantities = [
+    quantity(0, category, 6),
+    { ...quantity(0, "tea", 6), measure: category },
+    { ...quantity(0, "tea", 6), unit: category },
+    quantity(1, "bread", 3),
+  ];
+  for (const forgotten of [null, "The spare key is in a blue box.", category]) {
+    const f = fixture({ ledger: true });
+    const saved = forgotten && await f.service.save(scope, forgotten, user);
+    if (saved) assert.equal(saved.status, "saved");
+    const result = await f.capture(selection("purchase"), [turn, unrelated], {
+      items: extractPair(tea).items, quantities,
+    }, { race: saved ? { point: "extract", commit: () => f.forget(saved.item.id) } : undefined });
+    await f.assertSurvivor(result);
+    assert.equal(result.memories.length, 2);
+    assert.deepEqual(f.trace.slice(0, 3), saved
+      ? ["dispatch-1", "extract", "committed"] : ["dispatch-1", "extract", "dispatch-2"]);
+    const fields = ({ category, measure, unit, value }) => ({ category, measure, unit, value });
+    assert.deepEqual((await f.ledgerRows()).map(fields),
+      (forgotten === category ? quantities.slice(-1) : quantities).map(fields));
+  }
+});
