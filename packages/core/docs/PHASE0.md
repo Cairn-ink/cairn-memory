@@ -138,6 +138,7 @@ Each addendum is additive unless it says what it supersedes. Adapters written ag
    - The text fact uses `mode: "exact"` and `keyId: null`. It uses the same prepared spellings as incoming candidates, including Core, hosted-v1 and engine-legacy SHA-256 aliases. For a plain row it also keeps the stored SHA-256 alias. Core skips HMAC, shingles, vector evidence and vector neighbours in `removedSimilar`. Exact matches still count.
    - Core checks each spelling before hashing it. If redaction masked a secret value anywhere in the row, every spelling that still contains that value is excluded. When no safe spelling can be verified, Core writes an identity fact for the forgotten memory and still records any resolved span facts. In that case replays under a different identity rely on lineage for protection.
    - Lineage and erasure keep their order in one transaction. An empty span result still allows erasure. Session fencing and proven-closure erasure apply as usual, and purge by text applies when there is a text fact.
+   - Without a key, Raw purge deletes only on an exact text match or a resolved span. A Raw message that merely contains the forgotten text is not purged; this is the documented weaker protection without a key.
 
 ### Topics addendum 4 — Cards in topics
 
