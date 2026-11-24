@@ -305,11 +305,11 @@ function losesConcurrentOwnerWrite(opened) {
 }
 
 const regressions = [
-  ["ignores the pause lock", "K-UOW-3", ignoresPauseLock, /Pause-lock writer entered while the reader held the pause lock/],
-  ["takes the write lock first", "K-UOW-3", takesWriteLockFirst, /Concurrent runs exceeded 5100 ms/],
-  ["delays paused writers and ignores the pause lock", "K-UOW-3", (opened) => delaysPausedWriters(ignoresPauseLock(opened)),
+  ["ignores the pause lock", "K-UOW-3r", ignoresPauseLock, /Pause-lock writer entered while the reader held the pause lock/],
+  ["takes the write lock first", "K-UOW-3r", takesWriteLockFirst, /Concurrent runs exceeded 5100 ms/],
+  ["delays paused writers and ignores the pause lock", "K-UOW-3r", (opened) => delaysPausedWriters(ignoresPauseLock(opened)),
     /Pause-lock writer entered while the reader held the pause lock/],
-  ["delays paused writers and takes the write lock first", "K-UOW-3", (opened) => delaysPausedWriters(takesWriteLockFirst(opened)),
+  ["delays paused writers and takes the write lock first", "K-UOW-3r", (opened) => delaysPausedWriters(takesWriteLockFirst(opened)),
     /Concurrent runs exceeded 5100 ms/],
   ["returns a Map dump", "K-UOW-1", dumpsMap, /dump\(\) must return JSON-safe data.*Map/],
   ["commits inserts after a callback fails", "K-UOW-1", replaysInsertsAfterFailure, /Callback failure did not roll back/],
@@ -342,21 +342,26 @@ test("K-MEM-12 rejects changed exported text on re-read", async () => {
   await assert.rejects(() => run("K-MEM-12", changesExportedText), /First page cursor reached different items on re-read/);
 });
 
-test("K-UOW-3 allows settle waits on top of the concurrency bound", { timeout: 2000 }, async (t) => {
+test("K-UOW-3 and K-UOW-3r allow settle waits on top of the concurrency bound", { timeout: 2000 }, async (t) => {
   const delayMs = 175;
   const settleMs = 4800;
   const timeoutMs = 4900;
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  const result = run("K-UOW-3", (opened) => delaysPausedWriters({ ...opened, settleMs, timeoutMs }, delayMs));
-  result.catch(() => {});
-
-  // Phase one overlaps the writer delay with settling. Phase two serially waits
-  // for the held writer to enter and for the other owner before settling.
-  for (const step of [delayMs, settleMs - delayMs, delayMs, delayMs, settleMs]) {
-    await setImmediate();
-    t.mock.timers.tick(step);
+  const wrap = (opened) => delaysPausedWriters({ ...opened, settleMs, timeoutMs }, delayMs);
+  // The reader phase overlaps the writer delay with settling. The writer phase
+  // waits for the held writer and then the other owner before settling.
+  for (const [id, steps] of [
+    ["K-UOW-3r", [delayMs, settleMs - delayMs]],
+    ["K-UOW-3", [delayMs, delayMs, settleMs]],
+  ]) {
+    const result = run(id, wrap);
+    result.catch(() => {});
+    for (const step of steps) {
+      await setImmediate();
+      t.mock.timers.tick(step);
+    }
+    assert.equal(await result, null);
   }
-  assert.equal(await result, null);
 });
 
 test("K-MEM-12 accepts fresh cursors for the same position", async () => {

@@ -1,6 +1,6 @@
 import type {
   ClockAndHash, DiagnosticEvent, EmbedderPort, EmbedQuery, FinishResult, MemoryService,
-  ModelGate, ModelPort, ModelStage, Scope, StorageAdapter, TokenCounter,
+  ModelGate, ModelPort, ModelStage, Scope, StorageAdapter, StoredDocumentCardRecord, TokenCounter,
 } from "../ports/index.d.ts";
 
 export type { DiagnosticEvent } from "../ports/common.d.ts";
@@ -16,7 +16,7 @@ export interface MemoryServiceConfig {
 }
 
 export interface MemoryServiceDeps {
-  readonly storage: StorageAdapter;
+  readonly storage: StorageAdapter<StoredDocumentCardRecord>;
   readonly model: ModelPort;
   readonly embedder: EmbedderPort;
   readonly gate: ModelGate;
@@ -24,6 +24,7 @@ export interface MemoryServiceDeps {
   readonly tokens: TokenCounter;
   readonly embedQuery?: EmbedQuery;
   readonly config: MemoryServiceConfig;
+  /** Capture emits extract/core_finish/candidate_withheld once per core-filtered candidate after commit. */
   readonly diagnostics?: (e: DiagnosticEvent) => void;
 }
 

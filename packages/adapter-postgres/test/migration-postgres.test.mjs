@@ -7,6 +7,8 @@ import { applyMigrations, storedSourceKind } from "../src/index.mjs";
 import { migrationDatabase, migrationDbTest } from "./migration-database.mjs";
 
 const readLedger = "SELECT id, applied_at::text FROM core_schema_migrations ORDER BY id";
+const readCaptureDigestCheck = `SELECT convalidated FROM pg_constraint
+  WHERE conrelid = 'capture_events'::regclass AND conname = 'capture_events_core_payload_digest_check'`;
 const readMetadataValidation = `
   SELECT convalidated FROM pg_constraint WHERE conrelid = 'memories'::regclass
     AND conname = 'memories_core_metadata_check'
@@ -22,6 +24,22 @@ function insertMemory(connection, id, sourceKind = "plugin") {
             TIMESTAMPTZ 'epoch' + INTERVAL '1 microsecond')
   `, [id, sourceKind]);
 }
+
+test("transactional capture migrations add no index", migrationDbTest, async (t) => {
+  const { pool, source, migrations } = await migrationDatabase(t, { migrate: false });
+  const capture = migrations.findIndex(({ id }) => id === "0016_core_capture_claims.sql");
+  assert.notEqual(capture, -1);
+  const readIndexes = `SELECT indexrelid FROM pg_index
+    WHERE indrelid = 'capture_events'::regclass ORDER BY indexrelid`;
+  const { rows: initialIndexes } = await pool.query(readIndexes);
+  await applyMigrations(source, migrations.slice(0, capture + 1));
+  assert.deepEqual((await pool.query(readIndexes)).rows, initialIndexes);
+  assert.deepEqual((await pool.query(readCaptureDigestCheck)).rows, [{ convalidated: false }]);
+  assert.equal(migrations[capture + 1].concurrent, false);
+  await applyMigrations(source, migrations.slice(0, capture + 2));
+  assert.deepEqual((await pool.query(readIndexes)).rows, initialIndexes);
+  assert.deepEqual((await pool.query(readCaptureDigestCheck)).rows, [{ convalidated: true }]);
+});
 
 test("Postgres hosted baseline matches the expected catalog structure", migrationDbTest, async (t) => {
   const { pool } = await migrationDatabase(t, { migrate: false });
@@ -63,10 +81,10 @@ test("Postgres applies all migrations to the empty hosted baseline", migrationDb
       )
   `);
   assert.deepEqual(tables.tables, [
-    "capture_events", "capture_raw_fences", "capture_raw_lineage", "core_fact_digests",
+    "capture_events", "capture_raw_fences", "capture_raw_lineage", "card_placements", "card_topics", "core_fact_digests",
     "core_memory_receipts", "core_owner_state", "core_schema_migrations", "core_suppression_facts",
-    "jobs", "memories", "memory_forget_log", "memory_pause",
-    "raw_messages", "suppressions", "users",
+    "document_cards", "jobs", "memories", "memory_conflicts", "memory_forget_log", "memory_pause", "memory_placements", "memory_supersessions", "memory_topics",
+    "raw_messages", "suppressions", "topic_edges", "topic_index_state", "topic_title_sources", "topics", "users",
   ]);
 
   const { rows: [index] } = await pool.query(`
@@ -102,7 +120,7 @@ test("Postgres bounds the metadata lock wait, then upgrades an existing row with
     code: "23514", constraint: "memories_source_kind_check",
   });
   await insertMemory(pool, "old");
-  const oldProjection = "SELECT to_jsonb(memories) - ARRAY['revision', 'confidence', 'origin'] AS value FROM memories";
+  const oldProjection = "SELECT to_jsonb(memories) - ARRAY['revision', 'confidence', 'origin', 'currentness', 'core_namespace', 'core_digests', 'core_created_at_ms'] AS value FROM memories";
   const fileNode = "SELECT pg_relation_filenode('memories') AS node";
   const { rows: [oldRow] } = await pool.query(oldProjection);
   const { rows: [{ node: before }] } = await pool.query(fileNode);

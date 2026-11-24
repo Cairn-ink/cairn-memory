@@ -1,10 +1,18 @@
 import { cleanContent } from "../privacy/text.mjs";
-import { redactDocumentText } from "./redaction.mjs";
+import { isMarkerOnly, redactDocumentText } from "./redaction.mjs";
 
 const REVISION = 1;
 const BODY_LIMIT = 4_000;
 const TITLE_LIMIT = 200;
 const encoder = new TextEncoder();
+
+/** Version of the redacted text used for indexing and embedding document cards. */
+export const DOCUMENT_CARD_SEARCH_TEXT_VERSION = 1;
+
+/** @param {{ title: string | null, body: string }} card */
+export function documentCardSearchText({ title, body }) {
+  return title ? `${title}\n\n${body}` : body;
+}
 
 /** @param {string} body @param {import("./index.mjs").DocumentMessageRef} source */
 function sentenceSources(body, source) {
@@ -31,11 +39,16 @@ function sentenceSources(body, source) {
   return sentences;
 }
 
+/** @param {readonly (string | number | null)[]} identity @returns {Promise<string>} */
+export async function identityDigest(identity) {
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", encoder.encode(JSON.stringify(identity)));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
 /** @param {import("./index.mjs").DocumentMessageRef} source */
 async function cardId({ scope, client, canonicalSessionKey, messageId }) {
   const identity = ["document-card", scope.owner, scope.namespace, client, canonicalSessionKey, messageId, REVISION];
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", encoder.encode(JSON.stringify(identity)));
-  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+  return identityDigest(identity);
 }
 
 /** @param {import("./index.mjs").DocumentCardDropReason} reason
@@ -54,6 +67,7 @@ export async function buildDocumentCard(message, { scope, client, canonicalSessi
   if (typeof canonicalSessionKey !== "string" || !canonicalSessionKey) return dropped("missing_session_key");
   const body = redactDocumentText(message.content, true);
   if (body === null) return dropped("unmappable_redaction");
+  if (isMarkerOnly(body)) return dropped("marker_only");
   if (body.length > BODY_LIMIT) return dropped("oversize");
   const firstLine = body.split("\n").find(line => line.trim());
   if (firstLine === undefined) return dropped("empty_body");

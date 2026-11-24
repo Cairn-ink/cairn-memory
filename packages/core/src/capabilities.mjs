@@ -5,15 +5,18 @@ import { CoreError } from "./errors.mjs";
 // unless the caller explicitly requires it (then: capability_unavailable).
 export const CAPABILITIES = Object.freeze([
   "nearDuplicate", // vector near-duplicate collapse on write (distance NEAR_DUPLICATE_DISTANCE)
+  "embeddingRequiredOnInsert", // inserts and content replacements require an embedding
   "vectorSuppression", // forget hides vector neighbours within SUPPRESSION_DISTANCE
   "shingleSuppression", // keyed 4-char shingle containment withholds passages
   "fingerprintKey", // a per-owner fingerprint key is configured (HMAC facts, shingles)
   "orderedCapture", // causal stream + reconcile (supersede/correct from capture)
   "stagedEvidence", // staged capture evidence claims
+  "rationaleEdges", // receipt-anchored rationale proposals
   "placement", // MOC placement journal
   "relations", // card relations and MOC rank
   "cards", // cards and card lineage
   "documentCards", // document card storage and invalidation
+  "documentCardSearch", // lexical and vector candidates for document cards
   "quantityLedger", // quantity rows and invalidation
   "episodes", // episode capture (parked: SQLite only, not in core)
   "spanLineage", // span-level raw receipt lineage (engine): resolveSpans
@@ -53,6 +56,7 @@ export const OPTIONAL_PORTS = Object.freeze({
   raw: "rawArchive",
   staged: "stagedEvidence",
   placement: "placement",
+  rationale: "rationaleEdges",
   relations: "relations",
   causal: "orderedCapture",
   supersession: "supersession",
@@ -61,6 +65,7 @@ export const OPTIONAL_PORTS = Object.freeze({
   sessionLineage: "sessionLineage",
   spanLineage: "spanLineage",
   documentCards: "documentCards",
+  documentCardCandidates: "documentCardSearch",
   quantityLedger: "quantityLedger",
 });
 
@@ -74,4 +79,5 @@ export function assertAdapterCapabilities(adapter) {
   for (const [member, flag] of Object.entries(OPTIONAL_PORTS)) {
     if ((adapter[member] != null) !== (caps[flag] === true)) throw new CoreError("capability_unavailable");
   }
+  if (caps.documentCardSearch === true && caps.documentCards !== true) throw new CoreError("capability_unavailable");
 }

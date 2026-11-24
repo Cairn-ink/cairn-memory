@@ -181,6 +181,9 @@ checkRows("window", [
   ["different client", window, { source: { client: "different", occurredAtMs: 0 } }, false],
   ["all clients", globalWindow, { source: { client: "different", occurredAtMs: 0 } }, true],
   ["scoped client absent", window, { source: { occurredAtMs: 0 } }, ineligible],
+  ["scoped client absent outside the window", window, { source: { occurredAtMs: 10 } }, false],
+  ["scoped client absent with unknown time covered", unknownWindow, { source: { occurredAtMs: null } }, ineligible],
+  ["scoped client absent with unknown time outside the ordinary window", window, { source: { occurredAtMs: null } }, false],
   ["unknown time covered", unknownWindow, { source: { client, occurredAtMs: null } }, true],
   ["unknown time outside the ordinary window", window, { source: { client, occurredAtMs: null } }, false],
   ["unknown time under a different client", unknownWindow, { source: { client: "different", occurredAtMs: null } }, false],
@@ -320,6 +323,7 @@ for (const [label, fact, input, policy, want] of [
   ["wildcard window with no session", globalWindow, { occurredAtMs: -10 }, capture, true],
   ["unknown time is explicit", unknownWindow, { session: source, occurredAtMs: null }, capture, true],
   ["scoped window without client", window, { occurredAtMs: 0 }, capture, ineligible],
+  ["scoped window without client outside its time", window, { occurredAtMs: 10 }, capture, false],
   ["window without time", globalWindow, {}, capture, ineligible],
   ["invalid mode", text, {}, { mode: "other" }, ineligible],
   ["missing list", text, { passages: undefined }, capture, ineligible],
@@ -535,7 +539,7 @@ test("malformed stored text fields affect withholding by mode", async () => {
     ["non-finite embedding item", { text: { ...reference, embedding: [Infinity] } }],
     ["sparse embedding", { text: { ...reference, embedding: Array(1) } }],
     ["duplicate digests", { text: { ...reference, digests: [digest("a"), digest("a")] } }, true],
-    ["oversized source ID", { sourceMemory: { ...edit, id: "m".repeat(129) } }, true],
+    ["oversized source ID", { sourceMemory: { ...edit, id: "m".repeat(513) } }, true],
     ["non-integer source timestamp", { sourceMemory: { ...edit, createdAtMs: 1.5 } }, true],
   ]) {
     for (const [mode, denies] of [["full", true], ["exact", exactDenies]]) {

@@ -220,15 +220,18 @@ export function exactDigestMatch(a, b) {
 }
 
 /** @param {readonly DigestSnapshot[]} a @param {readonly DigestSnapshot[]} b */
-function hasComparableDigests(a, b) {
-  return a.some((left) => b.some((right) => left.alg === right.alg &&
-    (left.alg === "sha256" || left.keyId === right.keyId)));
-}
-
-/** @param {readonly DigestSnapshot[]} a @param {readonly DigestSnapshot[]} b */
 export function compareValidatedDigests(a, b) {
-  if (hasExactDigestMatch(a, b)) return true;
-  return hasComparableDigests(a, b) ? false : "ineligible";
+  let result = /** @type {false | "ineligible"} */ ("ineligible");
+  for (const left of a) {
+    for (const right of b) {
+      if (left.alg !== right.alg) continue;
+      // SHA aliases compare by hash. Keyed digests also need the same signing domain.
+      if (left.alg === "hmac" && (left.keyId !== right.keyId || left.pipeline !== right.pipeline)) continue;
+      if (left.value === right.value) return true;
+      result = false;
+    }
+  }
+  return result;
 }
 
 /**
@@ -272,6 +275,13 @@ function withholdsValidatedPassage(passage, fact, threshold, checkContainment, c
  */
 export function withholdsPassage(passage, fact, threshold = CONTAINMENT_THRESHOLD) {
   return withholdsAnyPassage([passage], [fact], threshold);
+}
+
+/** @param {TextFact} fact */
+export function requiresLegacyMacDomain({ text }) {
+  // Legacy MAC labels are adapter-owned. With only keyed digests, core cannot prove a miss.
+  return text.digests.every(digest => digest.alg === "hmac") &&
+    text.digests.some(digest => digest.pipeline !== "core");
 }
 
 /**

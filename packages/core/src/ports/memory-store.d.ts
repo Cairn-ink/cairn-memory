@@ -1,8 +1,11 @@
+import type { TextDigest } from "../suppression-fact.mjs";
 import type { MemoryKind, MemoryRow, Origin, Receipt, Revision, Scope, SortKeyUs, SourceRef } from "./common.d.ts";
 import type { Tx } from "./unit-of-work.d.ts";
 
 export interface DuplicateQuery {
   textHash: string;
+  /** Core's allDigests(text, key) under the owner's current key. Stores persist row digests. */
+  digests?: TextDigest[];
   /** Digest under the legacy engine fingerprint, when it differs (lookup only). */
   legacyHash?: string;
   /** Absent when the incoming text is not embedded (near matching is then skipped and counted). */
@@ -54,8 +57,11 @@ export interface InsertRow {
   origin: Origin;
   text: string;
   textHash: string;
+  /** Core's allDigests(text, key) under the owner's current key. Stores persist row digests. */
+  digests?: TextDigest[];
   confidence: number;
   source: SourceRef;
+  createdAtMs?: number;
   /** null when not embedded at write time (engine pump, or a store without an embedder). */
   embedding: { model: string; vector: Float32Array | number[] } | null;
 }
@@ -74,8 +80,12 @@ export interface DuplicateMerge {
 export interface MemoryStore {
   /** Exact first, then near (capability nearDuplicate, distance from decisions). Visible rows only. */
   findDuplicates(tx: Tx, scope: Scope, batch: readonly DuplicateQuery[], options: { nearDistance: number; excludeId?: string }): Promise<MemoryMatch[][]>;
-  /** Suppression runs BEFORE dedupe. mode "hash" lets an explicit save pass distance-only facts. */
-  readWritePolicy(tx: Tx, scope: Scope, batch: readonly DuplicateQuery[], source: SourceRef, mode: "hash" | "full", editId?: string): Promise<WritePolicy>;
+  /**
+   * Suppression runs BEFORE dedupe. mode "hash" lets an explicit save pass distance-only facts.
+   * nearDuplicate:false lets the adapter skip near lookups while keeping the embedding for suppression.
+   */
+  readWritePolicy(tx: Tx, scope: Scope, batch: readonly DuplicateQuery[], source: SourceRef, mode: "hash" | "full",
+    editId?: string, options?: { nearDuplicate?: boolean }): Promise<WritePolicy>;
   insert(tx: Tx, scope: Scope, row: InsertRow, receipts: readonly Receipt[], nowMs: number): Promise<{ id: string; revision: Revision; createdAtMs: number; updatedAtMs: number; updatedAtUs: SortKeyUs }>;
   /**
    * Attaches receipts and applies the merge verbatim; bumps the revision only when something
@@ -104,6 +114,8 @@ export interface SupersessionStore {
   record(tx: Tx, scope: Scope, edge: { previous: { id: string; revision: Revision }; replacement: { id: string; revision: Revision } }, receiptIds: readonly string[], nowMs: number): Promise<void>;
   markHistorical(tx: Tx, scope: Scope, id: string, nowMs: number): Promise<void>;
   read(tx: Tx, scope: Scope, id: string): Promise<{ supersededBy: string | null; supersedes: string[] }>;
+  /** Batched read for search pages; one round trip. Ids absent from the scope map to the empty answer. */
+  readMany?(tx: Tx, scope: Scope, ids: readonly string[]): Promise<Map<string, { supersededBy: string | null; supersedes: string[] }>>;
   /** Incoming supersession edges of a replacement (core checks incoming + new > limit → supersession_limit). */
   incomingCount(tx: Tx, scope: Scope, replacementId: string): Promise<number>;
 }
@@ -127,6 +139,8 @@ export interface ConflictEdgeStore {
    * ordered by compareUtf8(memoryId), then source.
    */
   list(tx: Tx, scope: Scope, id: string): Promise<ConflictEdge[]>;
+  /** Batched read for search pages; one round trip. Ids absent from the scope map to the empty answer. */
+  readMany?(tx: Tx, scope: Scope, ids: readonly string[]): Promise<Map<string, ConflictEdge[]>>;
   invalidate(tx: Tx, scope: Scope, id: string): Promise<number>;
   /** Current edge count (core enforces the relation limit → conflict_limit). */
   degree(tx: Tx, scope: Scope, id: string): Promise<number>;

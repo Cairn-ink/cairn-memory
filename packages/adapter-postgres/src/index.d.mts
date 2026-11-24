@@ -1,7 +1,9 @@
 import type { Tx, UnitOfWork } from "../../core/src/index.mjs";
 import type { SourceRef } from "../../core/src/ports/common.d.ts";
-import type { InsertRow } from "../../core/src/ports/memory-store.d.ts";
-import type { SuppressionStore } from "../../core/src/ports/privacy.d.ts";
+import type {
+  HydrateItems, InsertRow, ListRecent, MemoryStore, PauseStore, ReadSnapshot,
+  SupersessionStore, SuppressionStore, VisibilityFence,
+} from "../../core/src/ports/index.d.ts";
 import type { SuppressionFact, TextDigest } from "../../core/src/suppression-fact.mjs";
 import type { ConnectionSource, QueryResult } from "./driver.mjs";
 
@@ -30,3 +32,22 @@ export function canonicalDigests(digests: readonly TextDigest[]): TextDigest[];
 /** Snapshot and validate a suppression fact before computing its storage slot. */
 export function factSlot(fact: SuppressionFact): string;
 export function createPostgresSuppressionStore(): Pick<SuppressionStore, "writeFact" | "epoch">;
+export { createPostgresCapturePorts, type CaptureOptions } from "./capture.mjs";
+
+export function createPostgresMemoryStore(options?: { nearDuplicate?: boolean; allowNonNullNamespace?: boolean }): MemoryStore;
+export function createPostgresDigestGate(uow: UnitOfWork,
+  keyIdsForOwner: (owner: string) => readonly string[] | Promise<readonly string[]>): (owner: string) => Promise<number>;
+/** Append missing hosted-v1 MACs for one owner's existing rows. Returns the number updated. */
+export function backfillPostgresHostedDigests(uow: UnitOfWork, owner: string, options: {
+  keyId: string;
+  redactionVersion: number;
+  macForText: (text: string) => string | Promise<string>;
+}): Promise<number>;
+export function createPostgresMemoryReads(): {
+  recent: ListRecent;
+  snapshot: ReadSnapshot;
+  hydrate: HydrateItems;
+  fence: VisibilityFence;
+};
+export function createPostgresPauseStore(): PauseStore;
+export function createPostgresSupersessionStore(options?: { allowNonNullNamespace?: boolean }): SupersessionStore;

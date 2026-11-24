@@ -4,12 +4,15 @@ import { isReadStatement } from "./read-only.mjs";
 
 /** @import { OwnerId, Tx, UnitOfWork, UnitOfWorkOptions } from "../../core/src/index.mjs" */
 /** @import { Connection, ConnectionSource } from "./driver.mjs" */
-/** @typedef {{ connection: Connection, pending: Set<Promise<unknown>>, operationTail?: Promise<unknown>, failure?: CoreError }} Run */
+/** @typedef {{ connection: Connection, pending: Set<Promise<unknown>>, operationTail?: Promise<unknown>, failure?: CoreError, statementFailure?: CoreError, pauseLock: boolean }} Run */
 
-const LOCK_TIMEOUT = "SET LOCAL lock_timeout = '5s'";
+const LOCK_TIMEOUT = "5s";
 const STATEMENT_TIMEOUT = "SET LOCAL statement_timeout = '30s'";
 // Match the hosted service so both implementations serialize on the same locks.
-const PAUSE_LOCK = "SELECT pg_advisory_xact_lock(hashtextextended('cairn:memory-pause:' || $1, 0))";
+const PAUSE_LOCK_KEY = "hashtextextended('cairn:memory-pause:' || $1, 0)";
+const PAUSE_LOCK = `SELECT pg_advisory_xact_lock(${PAUSE_LOCK_KEY})`;
+const SHARED_PAUSE_LOCK = `SELECT pg_advisory_lock_shared(${PAUSE_LOCK_KEY})`;
+const SHARED_PAUSE_UNLOCK = `SELECT pg_advisory_unlock_shared(${PAUSE_LOCK_KEY}) AS value`;
 const OWNER_LOCK = "SELECT pg_advisory_xact_lock(hashtext('w3:' || $1))";
 
 /** @type {WeakMap<Tx, Run>} */
@@ -36,15 +39,19 @@ function trackPending(run, pending) {
  * @param {boolean} readOnly
  * @param {string} text
  * @param {unknown[]} [values]
+ * @param {boolean} [checkAfterFailure]
  */
-async function queryInRun(run, readOnly, text, values) {
+async function queryInRun(run, readOnly, text, values, checkAfterFailure = false) {
+  // Logical write failures leave PostgreSQL usable for precondition reads. The
+  // transaction still rolls back with the first failure and issues no further writes.
+  if (run.failure && (!checkAfterFailure || run.statementFailure || !isReadStatement(text))) throw run.failure;
   try {
-    if (run.failure) throw run.failure;
     if (readOnly && !isReadStatement(text)) throw new CoreError("internal_error");
     return await run.connection.query(text, values);
   } catch (error) {
     // A failed statement can leave the transaction aborted even if fn catches it.
-    run.failure ??= toPostgresError(error);
+    run.statementFailure ??= toPostgresError(error);
+    run.failure ??= run.statementFailure;
     throw run.failure;
   }
 }
@@ -65,18 +72,20 @@ export function query(tx, text, values) {
  * @template T
  * @param {Tx} tx
  * @param {(query: Connection["query"]) => Promise<T>} body
+ * @param {boolean} [checkAfterFailure] Allow read-only precondition checks after a logical failure.
  */
-export function runOperation(tx, body) {
+export function runOperation(tx, body, checkAfterFailure = false) {
   const run = liveRuns.get(tx);
   if (!run) return Promise.reject(new CoreError("internal_error"));
 
   const start = async () => {
     try {
-      if (run.failure) throw run.failure;
-      return await body((text, values) => queryInRun(run, tx.readOnly, text, values));
+      if (run.failure && (!checkAfterFailure || run.statementFailure)) throw run.failure;
+      return await body((text, values) => queryInRun(run, tx.readOnly, text, values, checkAfterFailure));
     } catch (error) {
-      run.failure ??= toPostgresError(error);
-      throw run.failure;
+      const mapped = toPostgresError(error);
+      run.failure ??= mapped;
+      throw mapped;
     }
   };
   const pending = (run.operationTail ?? Promise.resolve()).then(start, start);
@@ -84,10 +93,21 @@ export function runOperation(tx, body) {
   return trackPending(run, pending);
 }
 
-/** @param {Connection} connection @param {boolean} committed */
-async function releaseConnection(connection, committed) {
-  // Failed runs already destroy the connection. Reset reusable sessions outside the transaction.
-  if (committed) {
+/** @param {Connection} connection @param {OwnerId} owner */
+async function unlockSharedPause(connection, owner) {
+  try {
+    const { rows } = await connection.query(SHARED_PAUSE_UNLOCK, [owner]);
+    return Boolean(rows[0]?.value);
+  } catch {
+    // The caller discards the session and preserves the transaction outcome.
+    return false;
+  }
+}
+
+/** @param {Connection} connection @param {boolean} reusable */
+async function releaseConnection(connection, reusable) {
+  // Reset reusable sessions outside the transaction.
+  if (reusable) {
     try {
       // The server tag is "DISCARD ALL"; some drivers report only the first word.
       const { command } = await connection.query("DISCARD ALL");
@@ -131,16 +151,26 @@ export function createPostgresUnitOfWork(source) {
    * @param {(tx: Tx) => Promise<T>} fn
    */
   async function run(owner, { pauseLock, readOnly = false }, fn) {
+    const callbackFailure = { caught: false, error: /** @type {unknown} */ (undefined) };
     try {
       const connection = await source.connect();
       /** @type {Run} */
-      const state = { connection, pending: new Set() };
+      const state = { connection, pending: new Set(), pauseLock: pauseLock === true };
       let committed = false;
+      let sharedPauseHeld = false;
       try {
+        if (readOnly && pauseLock) {
+          // Acquire the session lock before BEGIN so the snapshot follows the wait.
+          const { rows: [{ value: previousTimeout }] } = await connection.query("SELECT current_setting('lock_timeout') AS value");
+          await connection.query(`SET lock_timeout = '${LOCK_TIMEOUT}'`);
+          await connection.query(SHARED_PAUSE_LOCK, [owner]);
+          sharedPauseHeld = true;
+          await connection.query("SELECT set_config('lock_timeout', $1, false)", [previousTimeout]);
+        }
         let result;
         try {
           await connection.query(readOnly ? "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY" : "BEGIN");
-          await connection.query(LOCK_TIMEOUT);
+          await connection.query(`SET LOCAL lock_timeout = '${LOCK_TIMEOUT}'`);
           await connection.query(STATEMENT_TIMEOUT);
           if (!readOnly) {
             if (pauseLock) await connection.query(PAUSE_LOCK, [owner]);
@@ -151,6 +181,10 @@ export function createPostgresUnitOfWork(source) {
           liveRuns.set(tx, state);
           try {
             result = await fn(tx);
+          } catch (error) {
+            callbackFailure.caught = true;
+            callbackFailure.error = error;
+            throw error;
           } finally {
             liveRuns.delete(tx);
             await Promise.allSettled(state.pending);
@@ -178,9 +212,13 @@ export function createPostgresUnitOfWork(source) {
         committed = true;
         return result;
       } finally {
-        await releaseConnection(connection, committed);
+        const unlocked = !sharedPauseHeld || await unlockSharedPause(connection, owner);
+        await releaseConnection(connection, committed && unlocked);
       }
     } catch (error) {
+      // Port and driver failures have their own mapping. Preserve an explicit
+      // callback rejection so callers can distinguish their rollback signal.
+      if (callbackFailure.caught && Object.is(error, callbackFailure.error)) throw error;
       throw toPostgresError(error);
     }
   }

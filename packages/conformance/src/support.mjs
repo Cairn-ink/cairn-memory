@@ -1,6 +1,7 @@
-import { CoreError } from "@cairn-ink/core";
+import { CoreError, ERROR_CODES, isErrorCode, NEAR_DUPLICATE_DISTANCE, SUPPRESSION_DISTANCE, VECTOR_ONLY_FLOOR } from "@cairn-ink/core";
 
 export const DEFAULT_TIMEOUT_MS = 5000;
+export const DEFAULT_EMBEDDING_DIMENSIONS = 4;
 
 /** @typedef {import("./index.d.mts").CaseContext} CaseContext */
 
@@ -116,10 +117,19 @@ export async function caught(action) {
   throw new Error("Expected operation to reject");
 }
 
+/** @param {unknown} error @returns {error is Error & { code: import("@cairn-ink/core").ErrorCode }} */
+export function isCoreErrorShape(error) {
+  if (!(error instanceof Error) || error.name !== "CoreError" ||
+    !Object.hasOwn(error, "code") || !Object.hasOwn(error, "kind") || !Object.hasOwn(error, "retryable")) return false;
+  const { code, kind, retryable } = /** @type {Error & { code: unknown, kind: unknown, retryable: unknown }} */ (error);
+  return isErrorCode(code) && error.message === code && kind === ERROR_CODES[code] &&
+    retryable === new CoreError(code).retryable;
+}
+
 /** @param {() => Promise<unknown>} action @param {import("@cairn-ink/core").ErrorCode} code */
 export async function rejects(action, code) {
   const error = await caught(action);
-  check(error instanceof CoreError && error.code === code, `Expected CoreError ${code}`);
+  check(isCoreErrorShape(error) && error.code === code, `Expected CoreError ${code}`);
 }
 
 /** @type {import("@cairn-ink/core/ports").SourceRef} */
@@ -133,11 +143,61 @@ export const projectReceipt = ({ client, sessionId, messageId, role, occurredAtM
 export const evidence = (messageId, occurredAtMs) =>
   ({ client: "test-client", sessionId: "test-origin", messageId, role: "user", occurredAtMs });
 
+/** @type {WeakMap<Error, CaseContext>} */
+const fixtureExhaustions = new WeakMap();
+
+/** @param {unknown} error @param {CaseContext} ctx @returns {error is Error} */
+export function isFixtureEmbeddingExhaustion(error, ctx) {
+  return error instanceof Error && fixtureExhaustions.get(error) === ctx;
+}
+
+/** @param {CaseContext} ctx @param {number} axis @param {string} message */
+function allocateFixtureVector(ctx, axis, message) {
+  const dimensions = ctx.embeddingDimensions ?? DEFAULT_EMBEDDING_DIMENSIONS;
+  if (!Number.isSafeInteger(dimensions) || axis >= dimensions) {
+    const error = new Error(message);
+    if (ctx.adapter.capabilities.embeddingRequiredOnInsert) fixtureExhaustions.set(error, ctx);
+    throw error;
+  }
+  return Array(dimensions).fill(0);
+}
+
+/** @param {CaseContext} ctx @param {number} distance */
+export function referenceVector(ctx, distance) {
+  const vector = allocateFixtureVector(ctx, 1, "At least two embedding dimensions are needed");
+  const cosine = 1 - distance;
+  vector[0] = cosine;
+  vector[1] = Math.sqrt(1 - cosine * cosine);
+  return vector;
+}
+
+/** @type {WeakMap<CaseContext, number>} */
+const nextFixtureVector = new WeakMap();
+
+/** @param {CaseContext} ctx */
+export function fixtureEmbedding(ctx) {
+  if (!ctx.adapter.capabilities.embeddingRequiredOnInsert) return null;
+
+  const index = nextFixtureVector.get(ctx) ?? 0;
+  // Reference vectors use axes 0 and 1. The signed unit vectors on the remaining
+  // axes are at cosine distance 1 or 2 from one another and 1 from the references.
+  const axis = 2 + Math.floor(index / 2);
+  const vector = allocateFixtureVector(ctx, axis,
+    `embeddingRequiredOnInsert needs at least ${axis + 1} dimensions for separated fixture vectors`);
+  check(1 > Math.max(NEAR_DUPLICATE_DISTANCE, SUPPRESSION_DISTANCE, VECTOR_ONLY_FLOOR) + 1e-6,
+    "Fixture vectors must be farther apart than the vector thresholds");
+  vector[axis] = index % 2 === 0 ? 1 : -1;
+  nextFixtureVector.set(ctx, index + 1);
+  // Vector retrieval filters by model even when it ranks candidates without a cutoff.
+  return { model: "fixture-only", vector };
+}
+
 /**
  * @param {CaseContext} ctx @param {string} text @param {number | null} [distance]
  * @returns {Promise<import("@cairn-ink/core/ports").InsertRow>}
  */
 export async function row(ctx, text, distance = null) {
+  const embedding = distance === null ? fixtureEmbedding(ctx) : null;
   return {
     kind: "fact",
     origin: "explicit",
@@ -145,7 +205,7 @@ export async function row(ctx, text, distance = null) {
     textHash: await ctx.hash(text),
     confidence: 0.4,
     source,
-    embedding: distance === null ? null : { model: "test", vector: ctx.vec(distance) },
+    embedding: distance === null ? embedding : { model: "test", vector: ctx.vec(distance) },
   };
 }
 

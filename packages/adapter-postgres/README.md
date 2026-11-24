@@ -18,6 +18,8 @@ forward migrations in `migrations/`. The metadata change commits with its
 check marked `NOT VALID`. The next migration validates the check in a separate
 transaction while ordinary reads and writes continue.
 
+Migration 0010 adds memory relations. The hosted service ships a byte-identical copy as a drizzle migration until it applies the engine SQL directly.
+
 Load the SQL in the host and pass the full ordered list to
 `applyMigrations(source, migrations)`. Use immutable IDs, append new entries,
 and set `concurrent: true` for `.concurrent.sql` files. A concurrent file
@@ -96,6 +98,67 @@ used only for neighbour search, and `body` stays authoritative. In exact mode,
 the embedding and shingles stay in `body` for raw checks, with no vector
 dimension or float4 range check. Leave the shingle lookup column null for
 absent or empty shingles. A populated shingles column requires `key_id`.
+
+## Topics and document cards
+
+Migration 0007 defines the topic store, 0008 adds the concurrent oldest-first
+index on `memories`, and 0009 defines `document_cards`. Migration 0011 adds
+`card_placements` and `card_topics`. These migrations skip objects already
+created by the hosted service. The hosted service applies a byte-identical
+copy of `0011_core_topic_cards.sql` as a Drizzle migration. Make subsequent
+changes to these tables through adapter-postgres migrations.
+
+## Memory ports
+
+Migration 0013 adds memory namespaces, digest evidence, and the creation-time
+sidecar. Migration 0014 adds the receipt-time sidecar in a separate transaction.
+Receipt times that PostgreSQL represents exactly stay in `occurred_at`.
+
+`core_namespace` stays null on hosted until the product's scopes step 2 defines
+the mapping. The adapter rejects non-null namespace writes on hosted unless
+`allowNonNullNamespace` is enabled on the memory and supersession ports. The
+hosted unique key applies across the owner. All writers store bare SHA-256 hex in
+`memories.text_hash`, and core ports return `sha256:<hex>`. An exact hash held by a
+hidden row suppresses the incoming save. An exact hash in a different namespace
+is also withheld without exposing the existing row. Near duplicate queries use
+pgvector to fetch at most 32 candidates per vector. Imports request exact-only
+dedupe and still supply their embeddings for suppression.
+
+`createPostgresMemoryStore` and `createPostgresMemoryReads` use the same
+visibility checks for duplicates, export, recent, hydration, and the memory
+fence. A pending legacy suppression copy closes those reads and write policy
+for owners with legacy suppression rows. Once the copy is ready, both fact stores
+remain authoritative until the final per-owner reconciliation. Set migration
+0015's `legacy_writes_reconciled` after stopping legacy suppression writes and
+copying all remaining facts for that owner. Receipt-less rows use their stored
+source and creation/write times for session and window checks.
+
+`createPostgresDigestGate(uow, keyIdsForOwner)` returns
+`rowsMissingKeyedDigest(owner)`. Supply the owner's current key ID for cutover.
+The gate counts each row missing evidence for an accepted key or for any live
+HMAC-only fact domain, including hosted facts during dual-read. Require a zero
+count before enabling the adapter. For each fact, admission and visibility
+withhold candidates without a comparable MAC. MAC domains match on algorithm,
+key ID, and pipeline label.
+
+With the owner's memory writers paused, the host's cutover script can call
+`backfillPostgresHostedDigests(uow, owner, { keyId, redactionVersion, macForText })`
+for each required hosted key. The callback receives stored text and returns the
+legacy exact MAC as 64 lowercase hex characters. The host keeps the signing key.
+The backfill appends missing `hosted-v1` digests in one transaction per call and
+returns the number of rows updated. Recheck the digest gate before cutover.
+
+A receipt with `forgotten_at` set is a replay tombstone. Its original memory ID
+serves as part of the storage key. Replacement and erasure delete active receipts
+only, and receipt hydration omits tombstones. Admission still resolves them by
+owner, client, session, and message.
+
+The direct MemoryStore lookup is available inside transactions for revision
+checks and forget operations.
+`createPostgresPauseStore` requires a run opened with `pauseLock`.
+`createPostgresSupersessionStore` records edges and marks historical rows.
+Historical rows remain available for direct reads and export after the other
+visibility checks pass.
 
 ## Database tests
 

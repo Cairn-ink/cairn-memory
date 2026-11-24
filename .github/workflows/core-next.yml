@@ -48,6 +48,8 @@ jobs:
         working-directory: packages/conformance
       - run: npm run typecheck
         working-directory: packages/conformance
+      - run: node --test packaging/test/core-local-candidate.check.mjs packaging/test/core-local-inventory.check.mjs
+        working-directory: .
   adapter-postgres-db:
     runs-on: ubuntu-latest
     strategy:

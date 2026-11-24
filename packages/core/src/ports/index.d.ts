@@ -7,13 +7,17 @@ export type * from "./memory-store.d.ts";
 export type * from "./retrieval.d.ts";
 export type * from "./privacy.d.ts";
 export type * from "./host.d.ts";
+export type * from "./topics.d.ts";
+export type * from "./rationale.d.ts";
 
 import type { Capabilities } from "../capabilities.mjs";
-import type { CaptureClaim, CaptureFinish, CausalStream, PlacementJournal, RawCapture, SourceFilter, StagedEvidence } from "./capture.d.ts";
-import type { DocumentCardStore } from "./document-card.d.ts";
+import type { CaptureClaim, CaptureFinish, CausalStream, RawCapture, SourceFilter, StagedEvidence } from "./capture.d.ts";
+import type { DocumentCardCandidates, DocumentCardRecord, DocumentCardStore, StoredDocumentCardRecord } from "./document-card.d.ts";
 import type { ConflictEdgeStore, MemoryStore, SupersessionStore } from "./memory-store.d.ts";
 import type { HydrateItems, LexicalCandidates, ListRawMessages, ListRecent, RawCandidates, ReadSnapshot, RelationSource, VectorCandidates, VisibilityFence } from "./retrieval.d.ts";
 import type { FingerprintKeyProvider, ForgetLog, PauseStore, RawStore, SessionLineageStore, SpanLineageStore, SuppressionStore } from "./privacy.d.ts";
+import type { RationaleEdgeStore, RationaleSourceText } from "./rationale.d.ts";
+import type { TopicStore } from "./topics.d.ts";
 import type { UnitOfWork } from "./unit-of-work.d.ts";
 import type { QuantityLedgerStore } from "./quantity-ledger.d.ts";
 
@@ -23,7 +27,7 @@ export type * from "./quantity-ledger.d.ts";
  * Everything a storage adapter provides. Optional members must be present exactly when
  * the matching capability flag is true (the conformance kit checks this).
  */
-export interface StorageAdapter {
+export interface StorageAdapter<Card extends StoredDocumentCardRecord = DocumentCardRecord> {
   readonly name: string;
   readonly capabilities: Capabilities;
   readonly uow: UnitOfWork;
@@ -42,12 +46,15 @@ export interface StorageAdapter {
   readonly sessionLineage?: SessionLineageStore; // sessionLineage
   readonly spanLineage?: SpanLineageStore; // spanLineage
   readonly staged?: StagedEvidence; // stagedEvidence
-  readonly placement?: PlacementJournal; // placement
+  readonly placement?: TopicStore; // placement
+  readonly rationale?: RationaleEdgeStore; // rationaleEdges
+  readonly rationaleSourceText?: RationaleSourceText; // local discovery for rationaleEdges
   readonly relations?: RelationSource; // relations
   readonly causal?: CausalStream; // orderedCapture
   readonly supersession?: SupersessionStore; // supersession
   readonly conflicts?: ConflictEdgeStore; // conflictEdges
   readonly forgetLog?: ForgetLog; // forgetLog
-  readonly documentCards?: DocumentCardStore; // documentCards
+  readonly documentCards?: DocumentCardStore<Card>; // documentCards
+  readonly documentCardCandidates?: DocumentCardCandidates; // documentCardSearch
   readonly quantityLedger?: QuantityLedgerStore; // quantityLedger
 }

@@ -1,8 +1,11 @@
-import { CoreError, compareUtf8, createBM25, rankScores, scoreBM25, termFrequencies, tokenizeT1 } from "@cairn-ink/core";
+import { allDigests, coreDigest, CoreError, compareUtf8, createBM25, rankScores, scoreBM25, termFrequencies, tokenizeT1 } from "@cairn-ink/core";
+import { documentCardVisible } from "@cairn-ink/core/routing";
 import { cosineDistance } from "./cosine.mjs";
 import { decodePayload, decodeSortKey, encodePayload, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
-import { readEmbedding, validateLimit, validateReadSet, validateRefs } from "./validation.mjs";
+import { matchesMemoryFilters } from "./retrieval-window.mjs";
+import { copyPublicRow } from "./unit-of-work.mjs";
+import { copyReadScope, copyRefs, readEmbedding, validateLimit } from "./validation.mjs";
 
 /** @typedef {import("@cairn-ink/core/ports").StorageAdapter} StorageAdapter */
 /** @typedef {import("@cairn-ink/core/ports").RetrievalScope} RetrievalScope */
@@ -11,6 +14,10 @@ import { readEmbedding, validateLimit, validateReadSet, validateRefs } from "./v
 /** @typedef {import("@cairn-ink/core/ports").Receipt} Receipt */
 /** @typedef {import("./unit-of-work.mjs").State} State */
 /** @typedef {import("./unit-of-work.mjs").Row} Row */
+/** @import { DocumentCardMemoryState } from "@cairn-ink/core/routing" */
+/** @import { FingerprintKey } from "@cairn-ink/core" */
+/** @import { FingerprintKeyProvider, Scope } from "@cairn-ink/core/ports" */
+/** @import { CardWrite } from "./document-cards.mjs" */
 
 /** @param {Row} row @returns {ItemRef} */
 function memoryRef({ id, scope: { namespace } }) {
@@ -44,24 +51,47 @@ function recentAfter(cursor) {
 }
 
 /** @param {RetrievalScope} scope @param {number} revision */
-function stateToken({ owner, namespaces, clients }, revision) {
-  return encodePayload([owner, revision, [...namespaces].sort(compareNamespaces), clients ? [...clients].sort(compareStrings) : null]);
+export function stateToken({ owner, namespaces, clients, window }, revision) {
+  /** @type {unknown[]} */
+  const payload = [owner, revision, [...namespaces].sort(compareNamespaces), clients ? [...clients].sort(compareStrings) : null];
+  if (window) payload.push([window.sinceMs ?? null, window.untilMs ?? null]);
+  return encodePayload(payload);
 }
 
 /** @param {string} token */
-function validateToken(token) {
-  const [owner, revision, namespaces, clients, ...extra] = decodePayload(token);
+export function validateToken(token) {
+  const [owner, revision, namespaces, clients, bounds, ...extra] = decodePayload(token);
   if (extra.length || typeof owner !== "string" || !owner ||
     typeof revision !== "number" || !Number.isSafeInteger(revision) || revision < 0) {
     throw new CoreError("invalid_cursor");
   }
-  const scope = /** @type {RetrievalScope} */ ({ owner, namespaces, clients: clients === null ? undefined : clients });
+  if (bounds !== undefined && (!Array.isArray(bounds) || bounds.length !== 2)) throw new CoreError("invalid_cursor");
+  const window = bounds === undefined ? undefined : { sinceMs: bounds[0] ?? undefined, untilMs: bounds[1] ?? undefined };
+  const scope = /** @type {Omit<RetrievalScope, "owner">} */ ({
+    namespaces, clients: clients === null ? undefined : clients, window,
+  });
+  let selection;
   try {
-    validateReadSet(scope);
+    selection = copyReadScope(owner, scope);
   } catch {
     throw new CoreError("invalid_cursor");
   }
-  if (stateToken(scope, revision) !== token) throw new CoreError("invalid_cursor");
+  if (stateToken(selection, revision) !== token) throw new CoreError("invalid_cursor");
+}
+
+/**
+ * @template {{ref: ItemRef, text: string}} T
+ * @param {T[]} documents @param {string[]} terms @param {number} depth
+ */
+export function rankLexical(documents, terms, depth) {
+  // The BM25 search convenience method caps depth. The port accepts any positive safe integer.
+  const index = createBM25(documents);
+  const rows = [];
+  for (const { text, ...document } of documents) {
+    const score = scoreBM25(terms, termFrequencies(text), index);
+    if (score !== null) rows.push({ ...document, score });
+  }
+  return rankScores(rows).slice(0, depth);
 }
 
 /** @param {Receipt[]} receipts */
@@ -78,13 +108,64 @@ function sourceDates(receipts) {
   return { firstMs, lastMs };
 }
 
+/** @param {ReturnType<typeof createFactMatcher>} matchFacts @param {FingerprintKeyProvider} keys
+ * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>["sourceVisible"]} [rawSourceVisible] */
+export function createCardVisibility(matchFacts, keys, rawSourceVisible) {
+  /** @param {State} state @param {Scope} scope @param {CardWrite} card */
+  return async function cardVisible(state, scope, card) {
+    const policy = matchFacts(state.facts, scope);
+    const rows = state.rows.get(scope.namespace);
+    /** @type {Map<string, DocumentCardMemoryState>} */
+    const memoryStates = new Map();
+    for (const { id } of card.sourceMemories) {
+      const entry = rows?.get(id);
+      const forgotten = policy.factsFor(id, entry).some(({ fact }) => fact.kind === "identity");
+      if (forgotten) memoryStates.set(id, { status: "forgotten" });
+      else if (!entry) memoryStates.set(id, { status: "unknown" });
+      else if (policy.hides(entry)) memoryStates.set(id, { status: "suppressed" });
+      else memoryStates.set(id, { status: entry.row.historical ? "historical" : "visible", revision: entry.row.revision });
+    }
+    const { sourceMessage } = card;
+    let canonicalSessionKey = null;
+    let sourceWithheld = false;
+    /** @type {FingerprintKey | null} */
+    let fingerprintKey = null;
+    const { textFacts } = policy;
+    try {
+      if (textFacts.length) fingerprintKey = await keys.userKey(scope.owner);
+      if (sourceMessage) {
+        canonicalSessionKey = policy.canonicalSessionKey(sourceMessage);
+        sourceWithheld = rawSourceVisible !== undefined && !await rawSourceVisible(state, scope, sourceMessage);
+        if (!sourceWithheld) {
+          // The retained projection also checks identity facts against linked revisions.
+          const passages = textFacts.length ? await Promise.all([card.body, card.title].map(async (text) => {
+            const digests = await allDigests(text);
+            if (fingerprintKey) digests.push(await coreDigest(text, fingerprintKey));
+            return { digests };
+          })) : [];
+          sourceWithheld = policy.withholdsCardSource(card, passages);
+        }
+      }
+    } catch {
+      return false;
+    }
+    return (await documentCardVisible({
+      card: { ...card, canonicalSessionKey }, requestedScope: scope, memoryStates,
+      sourceWithheld, textFacts, fingerprintKey,
+    })).visible;
+  };
+}
+
 /**
  * @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>["port"]} port
  * @param {import("@cairn-ink/core").Capabilities} capabilities
  * @param {ReturnType<typeof createFactMatcher>} [matchFacts]
+ * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>["visibleRawRefs"]} [visibleRawRefs]
+ * @param {ReturnType<typeof createCardVisibility>} [cardVisible]
  * @returns {Pick<StorageAdapter, "lexical" | "vector" | "fence" | "snapshot" | "hydrate" | "recent">}
  */
-export function createRetrievalPorts(port, capabilities, matchFacts = createFactMatcher(capabilities.vectorSuppression)) {
+export function createRetrievalPorts(port, capabilities, matchFacts = createFactMatcher(capabilities.vectorSuppression),
+  visibleRawRefs, cardVisible = createCardVisibility(matchFacts, { async userKey() { return null; } })) {
   /** @param {State} state @param {RetrievalScope} scope */
   function policies(state, scope) {
     return new Map(scope.namespaces.map((namespace) =>
@@ -99,7 +180,7 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
       const entries = state.rows.get(namespace);
       if (!entries) continue;
       for (const entry of entries.values()) {
-        if (!entry.row.historical && !policy.hides(entry)) rows.push(entry.row);
+        if (!entry.row.historical && matchesMemoryFilters(scope, entry.row) && !policy.hides(entry)) rows.push(entry.row);
       }
     }
     return rows;
@@ -107,13 +188,13 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
 
   /** @param {State} state @param {RetrievalScope} scope @param {readonly ItemRef[]} refs @param {boolean} includeHistorical */
   function* visibleRefs(state, scope, refs, includeHistorical) {
-    validateRefs(refs);
     const byNamespace = policies(state, scope);
     for (const ref of refs) {
       const policy = byNamespace.get(ref.namespace);
       if (ref.type !== "memory" || !policy) continue;
       const entry = state.rows.get(ref.namespace)?.get(ref.id);
-      if (entry && (includeHistorical || !entry.row.historical) && !policy.hides(entry)) {
+      if (entry && (includeHistorical || !entry.row.historical) &&
+          matchesMemoryFilters(scope, entry.row) && !policy.hides(entry)) {
         yield { ref: memoryRef(entry.row), entry };
       }
     }
@@ -122,13 +203,13 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
   /** @type {import("@cairn-ink/core/ports").VectorCandidates} */
   const vector = {
     async vector(tx, scope, query, model, depth) {
-      return port(tx, scope, false, (state) => {
-        validateReadSet(scope);
+      return port.read(tx, scope, (getState) => {
+        const selection = copyReadScope(tx.owner, scope);
         validateLimit(depth);
         const queryVector = readEmbedding(query);
         if (typeof model !== "string" || !model) throw new CoreError("invalid_input");
 
-        const visible = visibleRows(state, scope);
+        const visible = visibleRows(getState(), selection);
         const rows = [];
         for (const row of visible) {
           const { embedding } = row;
@@ -150,73 +231,92 @@ export function createRetrievalPorts(port, capabilities, matchFacts = createFact
     ...(capabilities.semanticRetrieval ? { vector } : {}),
     lexical: {
       async lexical(tx, scope, query, depth) {
-        return port(tx, scope, false, (state) => {
-          validateReadSet(scope);
+        return port.read(tx, scope, (getState) => {
+          const selection = copyReadScope(tx.owner, scope);
           validateLimit(depth);
           if (typeof query !== "string") throw new CoreError("invalid_input");
           const terms = tokenizeT1(query);
           if (terms.length === 0) return { rows: [], matched: false };
 
-          const documents = visibleRows(state, scope).map((row) => ({
+          const documents = visibleRows(getState(), selection).map((row) => ({
             ref: memoryRef(row), updatedAtUs: row.updatedAtUs, text: row.text,
           }));
-          // The core search convenience method caps depth. Score using the same corpus stats
-          // and scorer so the port can honor all positive safe-integer depths.
-          const index = createBM25(documents);
-          const rows = [];
-          for (const { ref, updatedAtUs, text } of documents) {
-            const score = scoreBM25(terms, termFrequencies(text), index);
-            if (score !== null) rows.push({ ref, updatedAtUs, score });
-          }
-          return { rows: rankScores(rows).slice(0, depth), matched: rows.length > 0 };
+          const rows = rankLexical(documents, terms, depth);
+          return { rows, matched: rows.length > 0 };
         });
       },
     },
     snapshot: {
       async stateToken(tx, scope) {
-        return port(tx, scope, false, (state) => {
-          validateReadSet(scope);
-          return stateToken(scope, state.indexRevision);
+        return port.read(tx, scope, (getState) => {
+          const selection = copyReadScope(tx.owner, scope);
+          return stateToken(selection, getState().indexRevision);
         });
       },
       async assertUnchanged(tx, scope, token) {
-        return port(tx, scope, false, (state) => {
-          validateReadSet(scope);
+        return port.read(tx, scope, (getState) => {
+          const selection = copyReadScope(tx.owner, scope);
           validateToken(token);
-          if (token !== stateToken(scope, state.indexRevision)) throw new CoreError("cursor_stale");
+          if (token !== stateToken(selection, getState().indexRevision)) throw new CoreError("cursor_stale");
         });
       },
     },
     hydrate: {
       async hydrate(tx, scope, refs, intent) {
-        return port(tx, scope, false, (state) => {
-          validateReadSet(scope);
+        return port.read(tx, scope, (getState) => {
+          const selection = copyReadScope(tx.owner, scope);
           if (intent !== "recall" && intent !== "read" && intent !== "export") throw new CoreError("invalid_input");
-          return Array.from(visibleRefs(state, scope, refs, intent !== "recall"), ({ ref, entry }) => ({
-            ref, memory: structuredClone(entry.row), receipts: structuredClone(entry.receipts),
+          const references = copyRefs(refs);
+          return Array.from(visibleRefs(getState(), selection, references, intent !== "recall"), ({ ref, entry }) => ({
+            ref, memory: copyPublicRow(entry.row), receipts: structuredClone(entry.receipts),
             sourceDates: sourceDates(entry.receipts),
           }));
         });
       },
     },
     fence: {
-      async assertVisible(tx, scope, refs) {
-        return port(tx, scope, false, (state) => {
-          validateReadSet(scope);
-          return Array.from(visibleRefs(state, scope, refs, false), ({ ref }) => ref);
+      async assertVisible(tx, scope, refs, intent) {
+        return port.read(tx, scope, (getState) => {
+          const selection = copyReadScope(tx.owner, scope);
+          const references = copyRefs(refs);
+          const state = getState();
+          const includeHistorical = intent === "read";
+          const rawFence = visibleRawRefs && references.some(({ type }) => type === "raw") ? visibleRawRefs : undefined;
+          if (!capabilities.documentCards || !references.some(({ type }) => type === "card")) {
+            const visible = Array.from(visibleRefs(state, selection, references, includeHistorical), ({ ref }) => ref);
+            if (!rawFence) return visible;
+            return rawFence(state, selection, references).then(rawRefs => [...visible, ...rawRefs]);
+          }
+          return (async () => {
+            const byNamespace = policies(state, selection);
+            const visible = [];
+            for (const ref of references) {
+              if (ref.type === "memory") {
+                // Memory refs keep the shared rule: read intent, source/time filters and fact policy.
+                for (const { ref: shown } of visibleRefs(state, selection, [ref], includeHistorical)) visible.push(shown);
+              } else if (ref.type === "card") {
+                const { namespace, id } = ref;
+                if (!byNamespace.get(namespace)) continue;
+                const card = state.documentCards.get(namespace)?.get(id)?.card;
+                if (card && await cardVisible(state, { owner: tx.owner, namespace }, card)) visible.push(ref);
+              }
+            }
+            if (!rawFence) return visible;
+            return [...visible, ...await rawFence(state, selection, references)];
+          })();
         });
       },
     },
     recent: {
       async recent(tx, scope, page) {
-        return port(tx, scope, false, (state) => {
-          validateReadSet(scope);
+        return port.read(tx, scope, (getState) => {
+          const selection = copyReadScope(tx.owner, scope);
           if (!page || typeof page !== "object") throw new CoreError("invalid_input");
           const { cursor, limit } = page;
           validateLimit(limit);
           const after = cursor === null ? null : recentAfter(cursor);
-          const rows = visibleRows(state, scope).filter((row) => !after || recentOrder(row, after) > 0).sort(recentOrder);
-          const items = rows.slice(0, limit).map((row) => structuredClone(row));
+          const rows = visibleRows(getState(), selection).filter((row) => !after || recentOrder(row, after) > 0).sort(recentOrder);
+          const items = rows.slice(0, limit).map(copyPublicRow);
           const last = items.at(-1);
           return {
             items,

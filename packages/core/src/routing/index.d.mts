@@ -1,4 +1,5 @@
-import type { Role, Scope } from "../ports/common.d.ts";
+import type { Receipt, Revision, Role, Scope } from "../ports/common.d.ts";
+import type { DocumentCardSourceMessage } from "../ports/document-card.d.ts";
 
 export interface DocumentMessage {
   id: string;
@@ -27,6 +28,8 @@ export interface DocumentRoutingDecision {
     capture_limit: number;
     /** Included in extract_only and reported when positive. */
     ill_formed_text?: number;
+    /** Included in extract_only and reported when positive. */
+    marker_only?: number;
   };
 }
 
@@ -62,12 +65,36 @@ export interface DocumentCard {
   sentences: DocumentSentence[];
 }
 
-export type DocumentCardDropReason = "oversize" | "unmappable_redaction" | "empty_body" | "missing_session_key" | "ill_formed_text";
+export type DocumentCardDropReason =
+  | "oversize" | "unmappable_redaction" | "empty_body" | "missing_session_key" | "ill_formed_text" | "marker_only";
 export type DocumentCardBuild =
   | { card: DocumentCard; drops: Readonly<Record<string, never>> }
   | { card: null; drops: Partial<Record<DocumentCardDropReason, 1>> };
 
 export declare function buildDocumentCard(message: DocumentMessage, session: DocumentSession): Promise<DocumentCardBuild>;
+
+/** Bump when the search text changes to invalidate indexes and embeddings. */
+export declare const DOCUMENT_CARD_SEARCH_TEXT_VERSION: 1;
+
+/** Exact text for indexing and embedding. The stored title and body are already redacted. */
+export declare function documentCardSearchText(card: { title: string | null; body: string }): string;
+
+export interface DocumentCardFindItem {
+  type: "card";
+  id: string;
+  title: string | null;
+  date: number | null;
+  excerpt: string;
+  /** True when the selected line was clipped. */
+  truncated: boolean;
+}
+
+/** Selects a matching line and clips it to maxChars Unicode code points (positive integer, default 240). */
+export declare function documentCardFindItem(
+  card: Pick<DocumentCardFindItem, "id" | "title" | "date"> & { body: string },
+  query: string,
+  options?: { maxChars?: number },
+): DocumentCardFindItem;
 
 export interface DocumentPieceOptions {
   maxTokens: number;
@@ -117,3 +144,15 @@ export declare function rankDocumentCards(
 ): DocumentCardMatch | null;
 
 export * from "./visibility.mjs";
+export * from "./amendments.mjs";
+
+/**
+ * Optional fallback for hosts with receipts and no capture-time set of touched
+ * memories. Keep capture-time binding when available. Matches client, plain
+ * sessionId and messageId, ignores role for matching, keeps the highest matching
+ * revision per id and sorts by UTF-8 id order. Malformed input throws invalid_input.
+ */
+export declare function documentCardMemoryLinks(
+  sourceMessage: DocumentCardSourceMessage,
+  memories: ReadonlyArray<{ id: string; revision: Revision; receipts: readonly Receipt[] }>,
+): { id: string; revision: Revision }[];

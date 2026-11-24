@@ -10,8 +10,14 @@ import type { Tx } from "./unit-of-work.d.ts";
 export interface RetrievalScope {
   owner: OwnerId;
   namespaces: readonly Namespace[];
-  /** Restrict to these clients (raw), when set. */
+  /** Restrict memories to matching source.client values (null never matches) and raw to matching clients. */
   clients?: readonly string[];
+  /**
+   * Half-open store-entry time range: memory createdAtMs, card creation time, raw occurredAtMs.
+   * Raw segments with unknown time are excluded whenever set.
+   * Candidate ports apply both window and clients before depth or pool cuts.
+   */
+  window?: { sinceMs?: number; untilMs?: number };
 }
 
 export interface LexicalRow {
@@ -61,11 +67,12 @@ export interface RawCandidates {
 
 /** Final fence: re-checks refs in the same snapshot right before delivery; drops anything now hidden. */
 export interface VisibilityFence {
-  assertVisible(tx: Tx, scope: RetrievalScope, refs: readonly ItemRef[]): Promise<ItemRef[]>;
+  /** The "read" intent includes historical memories that pass the other visibility checks. */
+  assertVisible(tx: Tx, scope: RetrievalScope, refs: readonly ItemRef[], intent?: "read"): Promise<ItemRef[]>;
 }
 
 export interface ReadSnapshot {
-  /** A token binding a cursor to (request, scope, index state). */
+  /** A token binding a cursor to (request, scope including clients and window, index state). */
   stateToken(tx: Tx, scope: RetrievalScope): Promise<string>;
   /** Throws cursor_stale when the token no longer matches. */
   assertUnchanged(tx: Tx, scope: RetrievalScope, token: string): Promise<void>;
