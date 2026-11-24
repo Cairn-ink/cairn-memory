@@ -41,9 +41,11 @@ import { createRawDeletionStorage } from './raw-deletion-storage.mjs';
 import { createRawLineageStorage, isSourceSnapshotOverflow, SOURCE_SNAPSHOT_MS } from './raw-lineage-storage.mjs';
 import { installLocalRawPrivacy } from './local-authority-schema.mjs';
 import { createLocalRawPrivacyStorage } from './local-authority-storage.mjs';
+import { suppressedFingerprintSQL } from './suppression-content.mjs';
 
 const where = "owner_id = ? AND scope = ? AND project_id = ?";
 const boundary = (ns) => [ns.ownerId, ns.scope, ns.projectId];
+const suppressedFingerprint = suppressedFingerprintSQL();
 
 // Internal diagnostics only; the weak key keeps the cache scoped to one open runtime.
 const recallJournalModes = new WeakMap();
@@ -143,7 +145,7 @@ export function createMemoryRuntime(input, internal) {
 
   // admitMutation retains its existing-row content-safety check too.
   function isSuppressed(ns, value) {
-    if(db.prepare(`SELECT 1 FROM suppressed WHERE ${where} AND fingerprint = ?`).get(...boundary(ns),value))return true;
+    if(db.prepare(suppressedFingerprint).get(...boundary(ns),value))return true;
     if(cachedContentLayout(db)?.suppressionRevision){
       const row=db.prepare(`SELECT id,revision FROM memories WHERE ${where} AND fingerprint=? AND deleted=0`).get(...boundary(ns),value);
       if(row&&!contentReadSafety(db,{namespace:ns,ref:{type:'memory',namespace:ns,memoryId:row.id,revision:row.revision},intent:'history'}).allowed)return true;
