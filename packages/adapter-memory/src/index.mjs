@@ -1,6 +1,6 @@
 import { CoreError, assertAdapterCapabilities, capabilities, toCoreError } from "@cairn-ink/core";
 import { createCapturePorts } from "./capture.mjs";
-import { withContextRawRead } from "./context-raw-read.mjs";
+import { createCardRawSourceCheck, withContextRawRead } from "./context-raw-read.mjs";
 import { createContextReadStore } from "./context-read.mjs";
 import { createDocumentCardStore } from "./document-cards.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
@@ -55,7 +55,8 @@ export function createMemoryAdapter(options = {}) {
   const { supersession, conflicts } = createRelationStores(port, matchFacts);
   const { suppressions, seedFact } = createFactStore(port, runSeed, { sessionRefs, newId, now }, matchFacts,
     flags.fingerprintKey ? ringKeys : undefined);
-  const cardVisibilityInput = createCardVisibilityInput(matchFacts, keys, archive?.sourceVisible);
+  const rawSourceVisible = archive && createCardRawSourceCheck(archive, matchFacts, receiptReadSafety);
+  const cardVisibilityInput = createCardVisibilityInput(matchFacts, keys, rawSourceVisible);
   const cardVisible = createCardVisibility(cardVisibilityInput);
   const rationale = flags.rationaleEdges ? createRationaleStore(port, matchFacts, ringKeys, archive?.findVisibleSource) : undefined;
   const placement = flags.placement ? handleWriteRejections(

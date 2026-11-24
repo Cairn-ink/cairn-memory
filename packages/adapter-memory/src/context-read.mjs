@@ -1,10 +1,11 @@
 import { canonicalKey, compareUtf8, CoreError, createBM25 } from "@cairn-ink/core";
 import { createReceiptReadSafety } from "./receipt-read-safety.mjs";
 
-/** @import { ContextEvidenceRow, ContextIndexObservation, ContextReadSelection, ContextReadSet, ContextReadStore,
+/** @import { ContextEvidenceRow, ContextIndexObservation, ContextMemoryRef, ContextReadSelection, ContextReadSet, ContextReadStore,
   Counters, InspectReceipt, Scope, Tx } from "@cairn-ink/core/ports" */
 /** @import { Policy } from "./receipt-read-safety.mjs" */
 /** @import { Entry, State } from "./unit-of-work.mjs" */
+/** @typedef {ReturnType<typeof createReceiptReadSafety>["receiptReadSafety"]} ReceiptReadSafety */
 /** @typedef {{ binding: string, index: ReturnType<typeof createBM25<ReturnType<typeof documentsFor>[number]>>,
  * ids: ReadonlySet<string>, observation: ContextIndexObservation }} Publication */
 
@@ -42,6 +43,36 @@ function eligible(entry, intent, policy) {
   return (intent === "history" || !entry.row.historical) && !policy.hides(entry);
 }
 
+/** @param {State} state @param {Scope} scope @param {Entry} entry
+ * @param {Policy} policy @param {ReceiptReadSafety} receiptReadSafety */
+async function receiptEvidence(state, scope, entry, policy, receiptReadSafety) {
+  const ordered = [...entry.receipts].sort((a, b) =>
+    (a.createdAtMs ?? 0) - (b.createdAtMs ?? 0) || compareUtf8(a.id ?? "", b.id ?? ""));
+  const prefix = ordered.slice(0, 17);
+  /** @type {InspectReceipt[]} */
+  const receipts = [];
+  let visible = 0;
+  for (const receipt of prefix) {
+    const safe = await receiptReadSafety(state, scope, receipt, entry.receiptKeys?.get(receipt), policy);
+    if (!safe) continue;
+    visible++;
+    if (receipts.length < 16) receipts.push(safe);
+  }
+  const exhausted = prefix.length > 16;
+  /** @type {import("@cairn-ink/core/ports").ContextReceiptCoverage} */
+  const receiptCoverage = { status: exhausted || visible < prefix.length ? "budget_exhausted" : "complete",
+    included: receipts.length, omitted: exhausted ? null : prefix.length - visible };
+  return { receipts, receiptCoverage };
+}
+
+/** @param {State} state @param {ContextMemoryRef} ref @param {Policy} policy
+ * @param {ReceiptReadSafety} receiptReadSafety */
+export async function currentMemoryReceipts(state, { scope, id }, policy, receiptReadSafety) {
+  const entry = state.rows.get(scope.namespace)?.get(id);
+  if (!entry || !eligible(entry, "current", policy)) return [];
+  return (await receiptEvidence(state, scope, entry, policy, receiptReadSafety)).receipts;
+}
+
 /** @param {ContextReadSet} readSet @param {ContextReadSelection} selection */
 function projectionKey(readSet, { types, intent }) {
   return JSON.stringify([readSet.owner, readSet.namespaces, types, intent]);
@@ -71,28 +102,6 @@ export function createContextReadStore({ port, uow, enableContextEpochs, readTok
       selections.set(key, current?.binding === canonicalBinding(state, readSet, selection) ? current : undefined);
     }
     return selections.get(key);
-  }
-
-  /** @param {State} state @param {Scope} scope @param {Entry} entry
-   * @param {Policy} policy */
-  async function receiptEvidence(state, scope, entry, policy) {
-    const ordered = [...entry.receipts].sort((a, b) =>
-      (a.createdAtMs ?? 0) - (b.createdAtMs ?? 0) || compareUtf8(a.id ?? "", b.id ?? ""));
-    const prefix = ordered.slice(0, 17);
-    /** @type {InspectReceipt[]} */
-    const receipts = [];
-    let visible = 0;
-    for (const receipt of prefix) {
-      const safe = await receiptReadSafety(state, scope, receipt, entry.receiptKeys?.get(receipt), policy);
-      if (!safe) continue;
-      visible++;
-      if (receipts.length < 16) receipts.push(safe);
-    }
-    const exhausted = prefix.length > 16;
-    /** @type {import("@cairn-ink/core/ports").ContextReceiptCoverage} */
-    const receiptCoverage = { status: exhausted || visible < prefix.length ? "budget_exhausted" : "complete",
-      included: receipts.length, omitted: exhausted ? null : prefix.length - visible };
-    return { receipts, receiptCoverage };
   }
 
   return {
@@ -183,7 +192,7 @@ export function createContextReadStore({ port, uow, enableContextEpochs, readTok
             qualification: null,
             attribution: { status: "unassessed", commitment: "unknown" },
             sourceAccess: historical ? "unavailable-for-noncurrent-memory" : "available",
-            ...await receiptEvidence(state, scope, entry, policy),
+            ...await receiptEvidence(state, scope, entry, policy, receiptReadSafety),
           });
         }
         return structuredClone(rows);

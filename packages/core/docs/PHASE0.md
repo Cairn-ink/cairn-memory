@@ -796,8 +796,9 @@ The MCP host uses these status mappings.
 - **Visibility input.** The optional `documentCards.visibilityInputs(tx, scope, refs)`
   returns one entry per ref in order. From the live transaction's snapshot the store
   supplies the stored card fields, capture's canonical session key, all linked memory
-  states, and a definite whole-message Raw withholding verdict for message-backed
-  cards or applicable text facts and fingerprint key for authored cards. Non-card,
+  states, and applicable text facts and fingerprint key for card title and body
+  containment, plus a definite whole-message Raw withholding verdict that includes
+  lineage and receipt qualification for message-backed cards. Non-card,
   foreign-scope, unknown, hidden, tombstoned, and unresolvable refs return null
   individually. Null withholds the card. The store rejects an ended transaction.
   This method adds no capability flag.

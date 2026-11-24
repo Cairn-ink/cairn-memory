@@ -1,5 +1,9 @@
-import { allDigests, coreDigest, CoreError, compareUtf8, createBM25, rankScores, scoreBM25, termFrequencies, tokenizeT1 } from "@cairn-ink/core";
+import { allDigests, coreDigest, CoreError, compareUtf8, createBM25, rankScores, scoreBM25, termFrequencies,
+  tokenizeT1, withholdsAnyPassage } from "@cairn-ink/core";
 import { DOCUMENT_CARD_SEARCH_TEXT_VERSION, documentCardSearchText, documentCardVisible } from "@cairn-ink/core/routing";
+import { fingerprintMemoryPassages } from "../../core/src/privacy/fingerprint.mjs";
+import { prepareCoreText } from "../../core/src/privacy/text.mjs";
+import { requiresLegacyMacDomain } from "../../core/src/privacy/withholds.mjs";
 import { cosineDistance } from "./cosine.mjs";
 import { decodePayload, decodeSortKey, encodePayload, newestFirst } from "./cursor.mjs";
 import { createFactMatcher } from "./fact-match.mjs";
@@ -117,7 +121,7 @@ function sourceDates(receipts) {
 }
 
 /** @param {ReturnType<typeof createFactMatcher>} matchFacts @param {FingerprintKeyProvider} keys
- * @param {ReturnType<typeof import("./raw.mjs").createRawPorts>["sourceVisible"]} [rawSourceVisible] */
+ * @param {ReturnType<typeof import("./context-raw-read.mjs").createCardRawSourceCheck>} [rawSourceVisible] */
 export function createCardVisibilityInput(matchFacts, keys, rawSourceVisible) {
   /** @type {WeakMap<Tx, Promise<FingerprintKey | null>>} */
   const fingerprintKeys = new WeakMap();
@@ -163,6 +167,12 @@ export function createCardVisibilityInput(matchFacts, keys, rawSourceVisible) {
             return { digests };
           })) : [];
           sourceWithheld = policy.withholdsCardSource(card, passages);
+        }
+        if (!sourceWithheld && textFacts.length) {
+          const texts = title == null ? [body] : [title, body];
+          const fingerprints = await Promise.all(texts.map(text =>
+            fingerprintMemoryPassages(text, prepareCoreText(text), fingerprintKey)));
+          sourceWithheld = textFacts.some(requiresLegacyMacDomain) || withholdsAnyPassage(fingerprints.flat(), textFacts);
         }
       }
     } catch {
