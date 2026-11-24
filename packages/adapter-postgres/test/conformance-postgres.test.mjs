@@ -394,6 +394,7 @@ const notApplicable = {
   "raw.importArchive": ["K-IMP-RAW-1", "K-IMP-RAW-2", "K-IMP-RAW-3", "K-IMP-RAW-3s", "K-IMP-RAW-4", "K-IMP-RAW-4e", "K-IMP-RAW-4k",
     "K-IMP-RAW-5", "K-IMP-RAW-6", "K-IMP-RAW-7", "K-IMP-RAW-8", "K-IMP-RAW-9", "K-IMP-RAW-10"],
   "raw.recordLineage": ["K-FORK-8", "K-FORK-9"],
+  "spanLineage.resolveSpans": ["K-SPAN-1", "K-SPAN-2"],
   documentCards: ["T-CARD-AMEND-1", "T-CARD-AMEND-2", "T-CARD-AMEND-3", "T-CARD-AMEND-4", "T-CARD-AMEND-5", "T-CARD-AMEND-6",
     "T-CARD-LINK-1", "T-CARD-LINK-2", "T-CARD-LINK-3", "T-CARD-LINK-4", "T-CARD-LINK-5", "T-CARD-LINK-6", "T-CARD-LINK-7",
     "T-DVIS-text", "T-DVIS-identity", "T-DVIS-session", "T-DVIS-linked-session"],

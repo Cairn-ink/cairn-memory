@@ -20,6 +20,7 @@ export { FENCE_INTENT_CASES } from "./fence-intent-cases.mjs";
 export { topicCases as TOPIC_CASES } from "./topics-cases.mjs";
 export { TOPIC_FOR_MEMORIES_CASES } from "./topics-for-memories-cases.mjs";
 export { RAW_CASES } from "./raw-cases.mjs";
+export { SPAN_LINEAGE_CASES } from "./span-lineage-cases.mjs";
 export { RAW_LEDGER_CASES } from "./raw-ledger-cases.mjs";
 export { IMPORT_ARCHIVE_CASES } from "./import-archive-cases.mjs";
 export { PROVEN_FORK_CASES } from "./proven-fork-cases.mjs";
@@ -72,12 +73,14 @@ async function runOpenedCase(factory, testCase) {
     const retry = { ...capabilities };
     // A factory can reject these requests during setup. Check the actual flags after reopening.
     if (retry.rawArchive === true && !testCase.needs.includes("rawArchive")) delete retry.rawArchive;
-    if (retry.sessionLineage === true && testCase.needs.includes("sessionLineage")) delete retry.sessionLineage;
-    if (retry.rawArchive === capabilities.rawArchive && retry.sessionLineage === capabilities.sessionLineage) throw error;
+    const lineageFlags = /** @type {const} */ (["sessionLineage", "spanLineage"]);
+    const declined = lineageFlags.filter(flag => retry[flag] === true && testCase.needs.includes(flag));
+    for (const flag of declined) delete retry[flag];
+    if (retry.rawArchive === capabilities.rawArchive && declined.length === 0) throw error;
     opened = await factory.open({ capabilities: retry });
     // The retry may only turn a rejected NEEDED capability into a reported skip. If the store provides that
     // capability after all, the first rejection was a real setup failure and must not become a pass.
-    if (retry.sessionLineage !== capabilities.sessionLineage && opened.adapter?.capabilities?.sessionLineage) {
+    if (declined.some(flag => opened.adapter?.capabilities?.[flag])) {
       await opened.close();
       throw error;
     }
