@@ -44,15 +44,102 @@ function quoteIdentifier(name) {
   return `"${name.replaceAll('"', '""')}"`;
 }
 
+const NON_READ_KEYWORDS = new Set(["DELETE", "INSERT", "INTO", "MERGE", "UPDATE"]);
+const TRANSACTION_OR_LOCK_KEYWORDS = new Set([
+  "ABORT", "BEGIN", "COMMIT", "END", "LOCK", "PREPARE", "RELEASE", "ROLLBACK", "SAVEPOINT", "SET", "START",
+]);
+
+/** @param {string} text */
+function isReadProbe(text) {
+  if (typeof text !== "string" || text.includes("\0")) return false;
+  // Consume complete PostgreSQL lexical tokens before checking words or semicolons.
+  // Require E strings for backslashes so ordinary strings are unambiguous in any session.
+  const token = /[\t\n\v\f\r ]+|--[^\r\n]*|\/\*|[Ee]'(?:''|\\[\s\S]|[^'\\])*'|'(?:''|[^'\\])*'|"(?:""|[^"])*"|(\$(?:[a-z_\u0080-\uffff][a-z_0-9\u0080-\uffff]*)?\$)|([a-z_\u0080-\uffff][a-z_0-9$\u0080-\uffff]*)|[\s\S]/iy;
+  const comment = /\/\*|\*\//g;
+  let started = false;
+  let terminated = false;
+  let parentheses = 0;
+  let cases = 0;
+  while (token.lastIndex < text.length) {
+    const [value, dollarQuote, word] = /** @type {RegExpExecArray} */ (token.exec(text));
+    if (value === "/*") {
+      comment.lastIndex = token.lastIndex;
+      let depth = 1;
+      while (depth) {
+        const delimiter = comment.exec(text)?.[0];
+        if (!delimiter) return false;
+        depth += delimiter === "/*" ? 1 : -1;
+      }
+      token.lastIndex = comment.lastIndex;
+      continue;
+    }
+    if (/^[\t\n\v\f\r ]/.test(value) || value.startsWith("--")) continue;
+    if (terminated) return false;
+    const keyword = word?.toUpperCase();
+    if (!started) {
+      if (keyword !== "SELECT" && keyword !== "WITH") return false;
+      started = true;
+    } else if (dollarQuote) {
+      const end = text.indexOf(dollarQuote, token.lastIndex);
+      if (end === -1) return false;
+      token.lastIndex = end + dollarQuote.length;
+    } else if (value === "'" || value === '"') {
+      return false;
+    } else if (value === ";") {
+      terminated = true;
+    } else if (value === "(") {
+      parentheses++;
+    } else if (value === ")") {
+      if (--parentheses < 0) return false;
+    } else if (keyword) {
+      if (NON_READ_KEYWORDS.has(keyword)) return false;
+      if (parentheses) continue;
+      if (keyword === "CASE") cases++;
+      else if (keyword === "END" && cases) cases--;
+      else if (TRANSACTION_OR_LOCK_KEYWORDS.has(keyword)) return false;
+    }
+  }
+  return started && parentheses === 0 && cases === 0;
+}
+
 /** @param {Connection} connection @param {(query: MigrationQuery) => Promise<boolean>} adopt */
 async function shouldAdopt(connection, adopt) {
   await connection.query("SAVEPOINT migration_adoption");
   await connection.query("SET LOCAL transaction_read_only = on");
-  const adopted = await adopt(async (text, params) => (await connection.query(text, params)).rows);
-  // Rolling back the savepoint restores the transaction's write mode after the probe.
-  await connection.query("ROLLBACK TO SAVEPOINT migration_adoption");
-  await connection.query("RELEASE SAVEPOINT migration_adoption");
-  return adopted === true;
+  let probing = true;
+  let invalidProbe = false;
+  let adopted;
+  try {
+    adopted = await adopt(async (text, params) => {
+      if (!probing || !isReadProbe(text)) {
+        invalidProbe = true;
+        throw new CoreError("invalid_input");
+      }
+      try {
+        return (await connection.query(text, params)).rows;
+      } catch (error) {
+        if (error && typeof error === "object" && "code" in error && error.code === "25006") {
+          invalidProbe = true;
+          throw new CoreError("invalid_input");
+        }
+        throw error;
+      }
+    });
+  } finally {
+    probing = false;
+    if (invalidProbe) throw new CoreError("invalid_input");
+  }
+  if (adopted !== true && adopted !== false) throw new CoreError("invalid_input");
+  try {
+    const { rows: [state] } = await connection.query("SELECT pg_catalog.pg_current_xact_id_if_assigned() IS NULL AS clean");
+    if (state?.clean !== true) throw new CoreError("invalid_input");
+    // Roll back to restore write mode, then release to verify the savepoint survived the probe.
+    await connection.query("ROLLBACK TO SAVEPOINT migration_adoption");
+    await connection.query("RELEASE SAVEPOINT migration_adoption");
+  } catch {
+    throw new CoreError("invalid_input");
+  }
+  return adopted;
 }
 
 /** @param {Connection} connection @param {Extract<Migration, { concurrent: false }>} migration */
@@ -120,13 +207,18 @@ async function applyConcurrent(connection, migration, statementTimeoutMs) {
       try {
         await connection.query(SET_DEFAULT_STATEMENT_TIMEOUT);
       } catch (error) {
-        if (state) throw error;
+        // A matching invalid index can already enforce uniqueness. Clean it up even if SET fails.
+        if (state?.valid === true) throw error;
       }
     }
   }
   if (state.valid === false) {
     const qualifiedName = `${quoteIdentifier(state.schema)}.${quoteIdentifier(state.name)}`;
-    await connection.query(`DROP INDEX CONCURRENTLY IF EXISTS ${qualifiedName}`);
+    try {
+      await connection.query(`DROP INDEX CONCURRENTLY IF EXISTS ${qualifiedName}`);
+    } catch {
+      // The runner destroys the session on failure. A later run can retry the drop.
+    }
     throw new CoreError("index_unavailable");
   }
   await connection.query(RECORD_MIGRATION, [migration.id]);

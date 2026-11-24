@@ -26,7 +26,7 @@ interface MigrationBase {
   sql: string;
 }
 
-/** Runs a read-only probe on the migration connection and returns its rows. */
+/** Runs one read-only SELECT or WITH statement on the migration connection and returns its rows. */
 export type MigrationQuery = (text: string, params?: unknown[]) => Promise<QueryResult["rows"]>;
 
 export type Migration = MigrationBase & (

@@ -38,12 +38,14 @@ and their ledger entries commit together.
 
 For a database whose schema the host already created with the same SQL, a
 transactional migration can supply an `async adopt(query)` callback. Use
-`await query(text, params)` for read-only probes that verify the migration is
-already in effect. The helper returns rows from the runner's connection inside
-the migration transaction. Returning `true` records the migration ID without
-executing its SQL. Returning `false` runs the SQL. Throwing rolls back the
-migration and stops the run. Earlier committed entries remain recorded, and
-the runner processes the unapplied suffix in order.
+`await query(text, params)` for a single read-only `SELECT` or `WITH` statement
+with an optional trailing semicolon. Use `E'...'` for strings containing
+backslashes. The helper returns rows from the runner's connection inside the
+migration transaction. Returning `true` records the migration ID without
+executing its SQL. Returning `false` runs the SQL. A prohibited probe, a probe
+that assigns a transaction ID or loses its savepoint, or a non-boolean result
+fails with `invalid_input`. A failed hook rolls back the migration and stops the
+run. Earlier committed entries remain recorded.
 
 The session defaults are a 5-second lock timeout and a 30-second statement
 timeout. A transactional migration's own `SET LOCAL` takes precedence. Pass
@@ -54,8 +56,9 @@ session statement timeout after inspection or failure when an override is used.
 
 The runner records a concurrent file after PostgreSQL reports a valid index
 with the expected definition. It drops an invalid index with a matching
-definition so a subsequent run can retry. An invalid index or a definition
-mismatch returns `index_unavailable`. A mismatched index is left in place.
+definition so a subsequent run can retry. The runner attempts the drop even if
+restoring the statement timeout fails. An invalid index or a definition mismatch
+returns `index_unavailable`. A mismatched index is left in place.
 The runner returns `storage_busy` if another runner holds the migration lock or
 `invalid_input` if the manifest omits an applied migration or has a gap in the
 applied prefix.
