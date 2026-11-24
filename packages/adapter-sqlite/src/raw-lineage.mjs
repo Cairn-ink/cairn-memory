@@ -88,38 +88,49 @@ export function createRawLineage(storeKey, hashSession) {
   };
 }
 
-/** @param {Port} port @param {SessionHasher} hashSession @returns {SpanLineageStore} */
+/** @param {Port} port @param {SessionHasher} hashSession
+ * @returns {SpanLineageStore & {readSpans: SpanLineageStore["resolveSpans"]}}
+ */
 export function createSpanLineage(port, hashSession) {
-  return {
-    resolveSpans(tx, input, memoryId) {
-      return port(tx, input?.owner, {}, db => {
-        const scope = { owner: tx.owner, namespace: input.namespace };
-        validateId(memoryId);
-        const entry = readEntry(db, scope, memoryId);
-        if (!entry) throw new CoreError("raw_lineage_unavailable");
-        const receipts = readReceipts(db, scope, memoryId);
-        if (!receipts.length && entry.row.source.kind === "capture") throw new CoreError("raw_lineage_unavailable");
+  /** @param {Connection} db @param {Scope} scope @param {string} memoryId @param {"read" | "forget"} intent */
+  function resolve(db, scope, memoryId, intent) {
+    validateId(memoryId);
+    const entry = readEntry(db, scope, memoryId);
+    if (!entry) throw new CoreError("raw_lineage_unavailable");
+    const receipts = readReceipts(db, scope, memoryId);
+    if (!receipts.length && entry.row.source.kind === "capture") throw new CoreError("raw_lineage_unavailable");
 
-        /** @type {RawSpanFact[]} */
-        const spans = [];
-        for (const receipt of receipts) {
-          const { client, sessionId, messageId, role } = receipt;
-          const archived = readRawRow(db, scope, receipt, messageId);
-          // A missing row leaves no Raw span to fence. Surviving rows still need
-          // to support the receipt before their content can supply a span.
-          if (!archived) continue;
-          const { content } = archived.message;
-          if (typeof content !== "string" || !content || archived.message.role !== role) {
-            throw new CoreError("raw_lineage_unavailable");
-          }
-          // Capture receipts identify a full message. Core supplies the final
-          // action ID when it writes the resolved facts.
-          spans.push({ ...scope, kind: "rawSpan", origin: "forget", actionId: memoryId,
-            sessionKeyHash: hashSession(scope, client, sessionId), messageKey: messageId,
-            startUtf16: 0, endUtf16: content.length, contentDigest: sha256(content) });
-        }
-        return spans;
-      });
+    /** @type {RawSpanFact[]} */
+    const spans = [];
+    for (const receipt of receipts) {
+      const { client, sessionId, messageId, role } = receipt;
+      const archived = readRawRow(db, scope, receipt, messageId);
+      if (!archived) continue;
+      const { content } = archived.message;
+      if (typeof content !== "string") throw new CoreError("raw_lineage_unavailable");
+      if (content === "" || archived.message.role !== role) {
+        if (intent === "forget") continue;
+        throw new CoreError("raw_lineage_unavailable");
+      }
+      spans.push({ ...scope, kind: "rawSpan", origin: "forget", actionId: memoryId,
+        sessionKeyHash: hashSession(scope, client, sessionId), messageKey: messageId,
+        startUtf16: 0, endUtf16: content.length, contentDigest: sha256(content) });
+    }
+    return spans;
+  }
+
+  /** @type {SpanLineageStore["resolveSpans"]} */
+  const readSpans = (tx, input, id) => port(tx, input?.owner, {}, db =>
+    resolve(db, { owner: tx.owner, namespace: input.namespace }, id, "read"));
+  /** @type {SpanLineageStore["resolveSpans"]} */
+  const resolveForForget = (tx, input, id) => port(tx, input?.owner, { write: true, pauseLock: true }, db =>
+    resolve(db, { owner: tx.owner, namespace: input.namespace }, id, "forget"));
+  return {
+    readSpans,
+    resolveSpans(tx, input, id) {
+      // The core forget port uses the pause-locked writer. Keep the existing
+      // read-only entry strict, and expose the strict read on either Tx type.
+      return tx?.readOnly ? readSpans(tx, input, id) : resolveForForget(tx, input, id);
     },
   };
 }
