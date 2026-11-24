@@ -46,7 +46,7 @@ function resolveReceiptAnchor(db, scope, id, anchor) {
 /** @param {Connection} db @param {Scope} scope @param {Policy} policy @param {ReceiptReadSafety} receiptReadSafety
  * @returns {ReceiptProjector}
  */
-function receiptProjector(db, scope, policy, receiptReadSafety) {
+export function receiptProjector(db, scope, policy, receiptReadSafety) {
   return ({ body, legacy_receipt_key, id, excerpt, position, time }) => {
     if (typeof excerpt !== "string" || !excerpt || excerpt.length > 800 || /[\u0000\uD800-\uDFFF]/u.test(excerpt) ||
         typeof id !== "string" || !id) return null;
@@ -75,7 +75,7 @@ function* visibleReceipts(db, scope, id, project, after) {
 }
 
 /** @param {Connection} db @param {Scope} scope @param {string} id */
-function storedEvidence(db, scope, id) {
+export function storedEvidence(db, scope, id) {
   return db.prepare(`SELECT filing, procedural, qualification, supersession
     FROM cairn_inspect_evidence WHERE ${withinMemory}`).get(...scopeKey(scope), id);
 }
@@ -103,7 +103,7 @@ function receiptsById(db, scope, id, project, ids) {
 }
 
 /** @param {Connection} db @param {Scope} scope @param {string} id @param {ReceiptProjector} project @param {unknown} anchors */
-function anchorsVisible(db, scope, id, project, anchors) {
+export function anchorsVisible(db, scope, id, project, anchors) {
   if (!Array.isArray(anchors) || anchors.length > 4 ||
       anchors.some(anchor => !anchor || typeof anchor.receiptId !== "string")) return false;
   const receipts = receiptsById(db, scope, id, project, anchors.map(anchor => anchor.receiptId));

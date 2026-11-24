@@ -4,6 +4,7 @@ import { CoreError } from "@cairn-ink/core";
 import { toSqliteError } from "../errors.mjs";
 import { assertMigrationComplete, assertServingFilename } from "../migrate/guard.mjs";
 import { openSqliteUnitOfWork } from "../uow.mjs";
+import { CONTEXT_READ_TABLES, installContextReadSchema } from "./context-read.mjs";
 import { INSPECT_TABLES, installInspectSchema, upgradeInspectEpochTriggers } from "./inspect.mjs";
 import { INITIALIZE_STORE, SQLITE_APPLICATION_ID, SQLITE_PHYSICAL_VERSION, STORAGE_SCHEMA } from "./layout.mjs";
 
@@ -43,7 +44,9 @@ function classifyStore(db) {
   const migrated = tables.some(table => table.name === "cairn_migration");
   const rawPrivacy = migrated && tables.some(table => table.name === "cairn_migrated_raw_privacy");
   const inspectInstalled = tables.some(table => table.name === "cairn_inspect_identity");
-  const expected = inspectInstalled ? [...layoutTables, ...INSPECT_TABLES] : layoutTables;
+  const contextReadInstalled = tables.some(table => table.name === "cairn_context_publications");
+  const expected = [...layoutTables, ...(inspectInstalled ? INSPECT_TABLES : []),
+    ...(contextReadInstalled && inspectInstalled ? CONTEXT_READ_TABLES : [])];
   if (tables.length !== expected.length + Number(migrated) + Number(rawPrivacy) ||
       !expected.every(name => tables.some(table => table.name === name))) {
     throw new CoreError("storage_error");
@@ -58,7 +61,7 @@ function classifyStore(db) {
   }
   const legacyRawHashing = rawPrivacy && db.prepare(
     "SELECT json_type(source_evidence, '$.legacyRawHashing') AS kind FROM cairn_migration").get()?.kind === "true";
-  return { sessionHashKey: readSessionHashKey(db), legacyRawHashing, inspectInstalled };
+  return { sessionHashKey: readSessionHashKey(db), legacyRawHashing, inspectInstalled, contextReadInstalled };
 }
 
 /** @param {string} filename */
@@ -104,6 +107,7 @@ export async function openStorage(filename) {
         if (existingKey === null) db.exec(STORAGE_SCHEMA + INITIALIZE_STORE);
         if (!existingKey?.inspectInstalled) installInspectSchema(db);
         else upgradeInspectEpochTriggers(db);
+        if (!existingKey?.contextReadInstalled) installContextReadSchema(db);
         db.exec("PRAGMA secure_delete = ON");
         return existingKey ?? { sessionHashKey: readSessionHashKey(db), legacyRawHashing: false };
       }));
