@@ -7,10 +7,10 @@ import { fingerprintMemoryPassages, sha256Hex } from "../privacy/fingerprint.mjs
 import { prepareCoreText, receiptExcerpt } from "../privacy/text.mjs";
 import { withholdsAnyPassage } from "../privacy/withholds.mjs";
 import {
-  buildDocumentCard, detectCardAmendments, documentCardMemoryLinks, documentCardSearchText,
-  documentCardVisible, routeDocumentMessages,
+  buildDocumentCard, buildVerifyRequest, checkChangeCandidates, detectCardAmendments, documentCardMemoryLinks,
+  documentCardSearchText, documentCardVisible, routeDocumentMessages,
 } from "../routing/index.mjs";
-import { isMarkerOnly, redactDocumentText } from "../routing/redaction.mjs";
+import { redactDocumentText } from "../routing/redaction.mjs";
 import { pauseResult } from "./pause.mjs";
 import { validWriteEmbedding } from "./writes.mjs";
 
@@ -128,52 +128,8 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
     };
   }
 
-  /**
-   * Precompute search vectors without selecting or building any card. A withheld source can move
-   * another message into the router's final limit. Only an exact search-text match can use a vector.
-   * @param {CaptureKey} key
-   * @param {readonly CaptureMessage[]} messages
-   * @param {() => {signal: AbortSignal, check(): void}} transportFor
-   * @param {() => Promise<void>} assertSendGeneration
-   * @returns {Promise<CardVectors | undefined>}
-   */
-  async function embedCards(key, messages, transportFor, assertSendGeneration) {
-    if (!cards || !embedder || !messages.length) return;
-    const texts = [...new Set(messages.flatMap(({ content }) => {
-      const body = redactDocumentText(content, true);
-      if (!body || body.length > 4000 || isMarkerOnly(body) ||
-          (body.length < 200 && (redactDocumentText(content)?.length ?? 0) < 200)) return [];
-      const firstLine = body.split("\n").find(line => line.trim());
-      if (firstLine === undefined) return [];
-      const title = firstLine.trim().slice(0, 200).replace(/[\uD800-\uDBFF]$/u, "");
-      return [documentCardSearchText({ title, body })];
-    }))];
-    if (!texts.length) return;
-    await gate.assertOpen(key.scope.owner, "pre-send");
-    const { signal, check } = transportFor();
-    await assertSendGeneration();
-    await gate.assertOpen(key.scope.owner, "dispatch");
-    let vectors;
-    try {
-      check();
-      vectors = await untilAborted(signal, embedder.embed(texts, { signal }));
-    } catch (error) {
-      check();
-      throw error;
-    } finally {
-      await gate.assertOpen(key.scope.owner, "post-send");
-    }
-    check();
-    /** @type {CardVectors} */
-    const embeddings = new Map();
-    if (Array.isArray(vectors) && vectors.length <= texts.length) {
-      for (const [index, text] of texts.entries()) {
-        const vector = vectors[index];
-        if (validWriteEmbedding(vector, embedder.dimensions)) embeddings.set(text, { model: embedder.model, vector });
-      }
-    }
-    return embeddings;
-  }
+  /** @param {{body: string, sentences: readonly {start: number, end: number}[]}} card */
+  const sentenceTexts = ({ body, sentences }) => sentences.map(({ start, end }) => body.slice(start, end));
 
   /**
    * @param {Tx} tx @param {CaptureKey} key @param {readonly CaptureMessage[]} messages
@@ -206,7 +162,7 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
         if (!card) continue;
         // Whole-source and extracted-memory checks can miss an exact forget of one card sentence.
         const withholds = await (textWithholding ??= readTextWithholding(tx, scope));
-        if (await withholds(card.sentences.map(({ start, end }) => card.body.slice(start, end)))) continue;
+        if (await withholds(sentenceTexts(card))) continue;
         const sourceMessage = { client, sessionId, messageId: message.id };
         const sourceMemories = documentCardMemoryLinks(sourceMessage, written);
         const embedding = vectors?.get(documentCardSearchText(card));
@@ -314,7 +270,7 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
   /**
    * @param {CaptureKey} key @param {readonly CaptureMessage[]} messages @param {number} generation
    * @param {() => Promise<void>} assertSendGeneration @param {AbortSignal | undefined} caller
-   * @param {(tx: Tx, message: CaptureMessage) => Promise<boolean>} sourceStillEligible
+   * @param {(tx: Tx, message: CaptureMessage, checkUnchanged?: boolean) => Promise<boolean>} sourceStillEligible
    */
   async function amend(key, messages, generation, assertSendGeneration, caller, sourceStillEligible) {
     if (!cards || !config.documentCards?.amendments || !model || !messages.some(({ role }) => role === "user")) return;
@@ -336,12 +292,12 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
         }
         return eligible;
       });
-      const hashes = new Map(earlier.map(({ id, contentHash }) => [id, contentHash]));
+      const byCard = new Map(earlier.map(card => [card.id, card]));
       const byMessage = new Map(messages.map(message => [message.id, message]));
 
-      /** @param {Tx} tx @param {CaptureMessage} message */
-      async function correctionEligible(tx, message) {
-        return await sourceStillEligible(tx, message) &&
+      /** @param {Tx} tx @param {CaptureMessage} message @param {boolean} [checkUnchanged] */
+      async function correctionEligible(tx, message, checkUnchanged) {
+        return await sourceStillEligible(tx, message, checkUnchanged) &&
           (!capabilities.rawArchive || await raw?.archiveAllowed(tx, key) === true);
       }
 
@@ -349,17 +305,29 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
       async function canAmend(tx, cardId, message) {
         if (!(await screenReceipts(tx, key, [message])).length) return false;
         const card = await cards?.get(tx, scope, cardId);
-        return !!card?.sourceMessage && card.contentHash === hashes.get(cardId) && await visible(tx, scope, card);
+        return !!card?.sourceMessage && card.contentHash === byCard.get(cardId)?.contentHash && await visible(tx, scope, card);
       }
 
-      /** @template T @param {AbortSignal | undefined} deadline @param {(signal: AbortSignal) => Promise<T>} send */
-      async function guarded(deadline, send) {
+      /**
+       * @template T
+       * @param {AbortSignal | undefined} deadline
+       * @param {(signal: AbortSignal) => Promise<T>} send
+       * @param {{eligible: () => Promise<boolean>, skip: () => T}} [verification]
+       */
+      async function guarded(deadline, send, verification) {
         const signal = AbortSignal.any([...(caller ? [caller] : []), ...(deadline ? [deadline] : [])]);
         signal.throwIfAborted();
         await gate.assertOpen(owner, "pre-send");
         await assertSendGeneration();
+        if (verification) {
+          signal.throwIfAborted();
+          if (!await untilAborted(signal, verification.eligible())) return verification.skip();
+        }
         await gate.assertOpen(owner, "dispatch");
         try {
+          signal.throwIfAborted();
+          // A deletion can commit while the dispatch gate is pending.
+          if (verification && !await untilAborted(signal, verification.eligible())) return verification.skip();
           signal.throwIfAborted();
           return await untilAborted(signal, send(signal));
         } finally {
@@ -367,18 +335,59 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
         }
       }
 
+      const capture = { scope, client, sessionId, date: dates[0], messages };
+      /** @type {readonly unknown[]} */
+      let changes = [];
+      /** @type {ReturnType<typeof checkChangeCandidates>["candidates"] | undefined} */
+      let candidates;
+      /** @type {{cardId: string, message: CaptureMessage} | undefined} */
+      let target;
       const { amendments, counters } = await detectCardAmendments({
-        capture: { scope, client, sessionId, date: dates[0], messages }, cards: earlier,
+        capture, cards: earlier,
         limits: { timeoutMs: config.deadlines?.extract },
         async canVerify(id, source) {
           const message = byMessage.get(source.messageId);
           if (!message || !await uow.run(owner, { pauseLock: true }, tx => correctionEligible(tx, message))) return false;
-          return uow.run(owner, { readOnly: true }, tx => canAmend(tx, id, message));
+          if (!await uow.run(owner, { readOnly: true }, tx => canAmend(tx, id, message))) return false;
+          target = { cardId: id, message };
+          return true;
         },
         model: {
           countTokens: model.countTokens.bind(model),
-          detectChanges: (request, options) => guarded(options?.signal, signal => detectChanges.call(model, request, { signal })),
-          verifyChange: (request, options) => guarded(options?.signal, signal => verifyChange.call(model, request, { signal })),
+          detectChanges: async (request, options) => {
+            const result = await guarded(options?.signal, signal => detectChanges.call(model, request, { signal }));
+            if (Array.isArray(result?.changes)) changes = result.changes;
+            return result;
+          },
+          verifyChange(request, options) {
+            const selected = target;
+            target = undefined;
+            const card = selected && byCard.get(selected.cardId);
+            // Match the validated fields to the wire request so multiline text needs no parsing.
+            candidates ??= checkChangeCandidates({
+              changes, listedCards: earlier, captureMessages: messages, captureSession: capture,
+            }).candidates;
+            const texts = candidates.filter(candidate => candidate.card.id === selected?.cardId &&
+              candidate.sourceMessage.messageId === selected.message.id &&
+              buildVerifyRequest({ ...candidate, sessionDate: capture.date }).input === request.input)
+              .flatMap(({ quote, newValue }) => [quote, newValue]);
+            return guarded(options?.signal, signal => verifyChange.call(model, request, { signal }), {
+              eligible: () => uow.run(owner, { pauseLock: true }, async tx => {
+                const state = pauseResult(await pause.get(tx, owner));
+                if (state.paused || state.generation !== generation) throw new CoreError("capture_paused");
+                // canAmend checks the earlier card and its source through the visibility fence.
+                if (!card || !selected || !texts.length ||
+                    !await correctionEligible(tx, selected.message, true) ||
+                    !await canAmend(tx, selected.cardId, selected.message)) return false;
+                const withholds = await readTextWithholding(tx, scope);
+                return !await withholds([card.body, ...sentenceTexts(card), ...texts]);
+              }),
+              skip: () => {
+                emitDiagnostic(diagnostics, "amendment", "core_call", "verify_skipped_ineligible");
+                return { applies: false, line: "" };
+              },
+            });
+          },
         },
       });
       for (const [reason, count] of Object.entries(counters)) {
@@ -448,24 +457,78 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
     /** @param {number[]} positions */
     const allowedMessages = positions => positions.map(position => messages[position]).filter(({ id }) => !excludedSources.has(id));
 
+    /** @param {Tx} tx @param {number[]} positions */
+    async function screenEmbeddingSources(tx, positions) {
+      const eligible = new Set(await readEligible(tx, key, messages));
+      // Erasure can blank a stored slot while the runner still holds the admitted copy.
+      const unchanged = await unchangedPositions(tx, positions.filter(position => eligible.has(position)));
+      if (!unchanged.length) return [];
+      const allowed = await currentSources(tx, unchanged);
+      if (allowed === null) return abandonKeyMismatch(tx);
+      if (allowed.length) await capture.assertEligible(tx, key, allowed);
+      if (archive && await archive.archiveAllowed(tx, key) !== true) return [];
+      return screenReceipts(tx, key, allowedMessages(allowed), !!archive);
+    }
+
     /** @param {CaptureDeadline} deadline @param {number[]} positions */
     async function embed(deadline, positions) {
       if (!cards || !embedder) return;
-      const screened = await runAtGeneration(async tx => {
-        const eligible = new Set(await readEligible(tx, key, messages));
-        // A deleted or edited conversation blanks or changes its stored slot. Withdraw it before card
-        // embedding, which maps positions back to the admitted copy.
-        const unchanged = await unchangedPositions(tx, positions.filter(position => eligible.has(position)));
-        const allowed = await currentSources(tx, unchanged);
-        if (allowed === null) return abandonKeyMismatch(tx);
-        if (allowed.length) await capture.assertEligible(tx, key, allowed);
-        if (archive && await archive.archiveAllowed(tx, key) !== true) return [];
-        return screenReceipts(tx, key, allowedMessages(allowed), !!archive);
-      });
+      const screened = await runAtGeneration(tx => screenEmbeddingSources(tx, positions));
       if (screened === null) return /** @type {const} */ ({ status: "paused" });
       if ("status" in screened) return screened;
       screenedForEmbedding = new Set(screened.map(({ id }) => id));
-      vectors = await embedCards(key, screened, () => transportFor(signal, deadline), assertSendGeneration);
+
+      // Precompute vectors for all potential cards. The finish may route a different subset.
+      /** @type {{message: CaptureMessage, card: import("../routing/index.mjs").DocumentCard}[]} */
+      const candidates = [];
+      for (const message of screened) {
+        const { card } = await buildDocumentCard(message, { ...key, canonicalSessionKey: key.sessionId });
+        if (!card || (card.body.length < 200 && (redactDocumentText(message.content)?.length ?? 0) < 200)) continue;
+        candidates.push({ message, card });
+      }
+      if (!candidates.length) return;
+
+      const { owner } = key.scope;
+      await gate.assertOpen(owner, "pre-send");
+      const transport = transportFor(signal, deadline);
+      await assertSendGeneration();
+      transport.check();
+      const refreshed = await untilAborted(transport.signal, runAtGeneration(async tx => {
+        const eligible = await screenEmbeddingSources(tx, positions);
+        if ("status" in eligible) return eligible;
+        const allowed = new Set(eligible);
+        if (!allowed.size) return [];
+        const withholds = await readTextWithholding(tx, key.scope);
+        const texts = new Set();
+        for (const { message, card } of candidates) {
+          if (allowed.has(message) && !await withholds(sentenceTexts(card))) texts.add(documentCardSearchText(card));
+        }
+        return [...texts];
+      }));
+      transport.check();
+      if (refreshed === null) return /** @type {const} */ ({ status: "paused" });
+      if ("status" in refreshed) return refreshed;
+      if (!refreshed.length) return;
+
+      await gate.assertOpen(owner, "dispatch");
+      let embedded;
+      try {
+        transport.check();
+        embedded = await untilAborted(transport.signal, embedder.embed(refreshed, { signal: transport.signal }));
+      } catch (error) {
+        transport.check();
+        throw error;
+      } finally {
+        await gate.assertOpen(owner, "post-send");
+      }
+      transport.check();
+      vectors = new Map();
+      if (Array.isArray(embedded) && embedded.length <= refreshed.length) {
+        for (const [index, text] of refreshed.entries()) {
+          const vector = embedded[index];
+          if (validWriteEmbedding(vector, embedder.dimensions)) vectors.set(text, { model: embedder.model, vector });
+        }
+      }
     }
 
     /** @param {Tx} tx @param {readonly CaptureMessage[]} allowed @param {readonly FinishItem[]} items @param {FinishResult} result */
@@ -475,9 +538,10 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
 
     async function afterCommit() {
       if (!finishedMessages?.length) return;
-      await amend(key, finishedMessages, generation, assertSendGeneration, signal, async (tx, message) => {
+      await amend(key, finishedMessages, generation, assertSendGeneration, signal, async (tx, message, checkUnchanged) => {
         const position = messages.indexOf(message);
         if (!(await readEligible(tx, key, messages)).includes(position)) return false;
+        if (checkUnchanged && !(await unchangedPositions(tx, [position])).length) return false;
         return (await currentSources(tx, [position]))?.length === 1;
       });
     }
