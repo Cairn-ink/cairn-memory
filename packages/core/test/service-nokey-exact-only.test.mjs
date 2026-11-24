@@ -70,8 +70,9 @@ function referenceService({ fingerprintKey = false, resolveSpans } = {}) {
 async function forgetSaved(service, memorySource = explicitSource) {
   const saved = await service.save(scope, forgotten, memorySource);
   assert.equal(saved.status, "saved");
-  assert.deepEqual(await service.forget(scope, saved.item.id, explicitSource),
-    { status: "forgotten", removedSimilar: 0 });
+  const { indexRevision, ...forgotResult } = await service.forget(scope, saved.item.id, explicitSource);
+  assert.deepEqual(forgotResult, { status: "forgotten", removedSimilar: 0 });
+  assert.ok(Number.isSafeInteger(indexRevision) && indexRevision > 0);
   return saved.item.id;
 }
 
