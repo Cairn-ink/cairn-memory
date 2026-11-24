@@ -136,6 +136,9 @@ test('Linux drains a real daemon, closes native admission and restores the exact
   serving.release();
   const { owner } = await daemon.connect(serving);
   const saved = ok(await serving.tool('remember_memory', { content: 'synthetic before cutover', kind: 'fact' }));
+  serving.process.stdin.end();
+  await until(() => serving.messages.some(message => message.kind === 'forwarder-done'), 'synthetic session has closed');
+  assert.equal(startAwareAlive(owner), true);
   const storeId = editFixture(daemon.path, db => db.prepare('SELECT store_id FROM store_metadata').get().store_id);
   const capture = await nativeCapture(f, storeId);
   assert.equal(await capture.run(), 'headless_skipped');
