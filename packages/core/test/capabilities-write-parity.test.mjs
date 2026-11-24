@@ -36,6 +36,22 @@ test("service refuses non-boolean write-parity flags", () => {
   }
 });
 
+test("capabilities rejects non-boolean values on either write-parity flag", () => {
+  for (const name of Object.keys(parityFlags)) {
+    for (const value of ["true", 0, 1, null, undefined, new Boolean(true)]) {
+      assert.throws(() => capabilities({ [name]: value }), invalidInput, name);
+    }
+  }
+});
+
+test("capabilities preserves legacy and read-contract flag normalization", () => {
+  const flags = capabilities({ nearDuplicate: "true", contextRead: 1 });
+  assert.equal(flags.nearDuplicate, false);
+  assert.equal(flags.contextRead, false);
+  assert.equal(capabilities({}).nearDuplicate, false);
+  assert.equal(Object.hasOwn(capabilities({}), "contextRead"), false);
+});
+
 test("procedural tags require a port with write, clear, and read methods", () => {
   const { deps, storage } = serviceFake();
   const flags = { ...storage.capabilities, proceduralTags: true };
