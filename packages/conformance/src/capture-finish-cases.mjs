@@ -4,15 +4,18 @@ import { check, equal, fixtureEmbedding } from "./support.mjs";
 /** @import { ConformanceCase } from "./index.d.mts" */
 
 /**
- * Reads reported positions the way core does: the array length and its own indexed entries, never its iterator,
- * each entry read before its ownership is checked. Returns a sorted copy, so a later change to the store's array
- * cannot alter what was checked. Callers read the result field once and pass that value here.
+ * Reads reported positions in core's exact sequence: one length read for the bounds check, then the loop's own
+ * length reads and each indexed entry before its ownership check, never the iterator. Returns a sorted copy, so a
+ * later change to the store's array cannot alter what was checked. Callers read the result field once, first,
+ * inside the finish transaction, as core does before it archives.
  * @param {unknown} list
+ * @param {number} itemCount
  * @param {string} label
  */
-function readPositions(list, label) {
+function readPositions(list, itemCount, label) {
   check(Array.isArray(list), `${label} must be an array`);
   const positions = /** @type {unknown[]} */ (list);
+  check(positions.length <= itemCount, `${label} must not list more positions than items`);
   /** @type {number[]} */
   const values = [];
   for (let index = 0; index < positions.length; index++) {
@@ -52,12 +55,16 @@ export const captureFinishCases = [
       const claim = () => uow.run(owner, { pauseLock: true }, (tx) => capture.claim(tx, key, [], { leaseMs: 60_000 }));
       const fresh = await claim();
       check(fresh.status === "claimed", "Expected a fresh claim");
-      const result = await uow.run(owner, { pauseLock: true }, (tx) => capture.finish(tx, fresh.token, items));
+      const { result, reported } = await uow.run(owner, { pauseLock: true }, async (tx) => {
+        const finished = await capture.finish(tx, fresh.token, items);
+        // Core reads this field first, inside the transaction, and archives from that single read.
+        const list = finished.suppressedItems;
+        return { result: finished,
+          reported: list === undefined ? undefined : readPositions(list, items.length, "Finish suppression positions") };
+      });
+      if (reported) equal(reported, [1], "Finish must report exactly the suppressed middle position");
       equal(result.suppressedCount, 1, "Finish must count the suppressed middle item");
       equal(result.memories.length, 2, "Finish must write the other two items");
-      const finishList = result.suppressedItems;
-      const reported = finishList === undefined ? undefined : readPositions(finishList, "Finish suppression positions");
-      if (reported) equal(reported, [1], "Finish must report exactly the suppressed middle position");
 
       const replay = await claim();
       // A completed claim may acknowledge a duplicate without returning a result.
@@ -65,7 +72,7 @@ export const captureFinishCases = [
       if (replay.status === "rawReplay") {
         const replayList = replay.result.suppressedItems;
         const replayed = replayList === undefined ? undefined
-          : readPositions(replayList, "Replayed suppression positions");
+          : readPositions(replayList, items.length, "Replayed suppression positions");
         equal(replayed, reported, "Replay must preserve the reported suppression positions");
       }
     },

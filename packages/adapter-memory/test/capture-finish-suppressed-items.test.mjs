@@ -254,3 +254,51 @@ test("K-CLM-6 reads each entry before checking that it is the list's own, as cor
   });
   await assert.rejects(result, /Finish suppression positions must not have holes/);
 });
+
+test("K-CLM-6 reads the list length in core's order", async () => {
+  let lengthReads = 0;
+  // Core's bounds check sees 1, then its loop sees 0 and excludes nothing.
+  const result = runWithFinishField((rest) => ({ ...rest, suppressedItems: new Proxy([1], {
+    get: (target, property, receiver) => property === "length" ? (lengthReads++ === 0 ? 1 : 0)
+      : Reflect.get(target, property, receiver),
+  }) }));
+  await assert.rejects(result, /Finish must report exactly the suppressed middle position/);
+});
+
+test("K-CLM-6 reads the list before the other result fields", async () => {
+  const positions = [0];
+  // Core reads [0]; reading the count first would turn it into the expected [1].
+  const result = runWithFinishField((rest) => Object.defineProperties({ ...rest, suppressedItems: positions }, {
+    suppressedCount: { enumerable: true, get() { positions[0] = 1; return 1; } },
+  }));
+  await assert.rejects(result, /Finish must report exactly the suppressed middle position/);
+});
+
+test("K-CLM-6 reads the list inside the finish transaction", async () => {
+  const { CAPTURE_CASES, runCase } = await import("@cairn-ink/conformance");
+  const { rawFactory } = await import("./fixtures/raw.mjs");
+  const testCase = CAPTURE_CASES.find(({ id }) => id === "K-CLM-6");
+  assert.ok(testCase);
+  const create = (options) => {
+    const adapter = createMemoryAdapter(options);
+    const { finish } = adapter.capture;
+    const { run } = adapter.uow;
+    /** @type {number[] | undefined} */
+    let returned;
+    adapter.capture.finish = async (tx, token, items) => {
+      const { suppressedItems, ...rest } = await finish(tx, token, items);
+      assert.deepEqual(suppressedItems, [1]);
+      returned = [0];
+      return { ...rest, suppressedItems: returned };
+    };
+    // Core archives from [0] inside the transaction; the store changes the list only after it commits.
+    adapter.uow.run = async (...args) => {
+      const value = await run.apply(adapter.uow, args);
+      if (returned) returned[0] = 1;
+      return value;
+    };
+    return adapter;
+  };
+  await assert.rejects(runCase(rawFactory({ create }), testCase),
+    /Finish must report exactly the suppressed middle position/);
+});
