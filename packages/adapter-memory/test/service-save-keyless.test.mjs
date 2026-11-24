@@ -2,10 +2,8 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
 import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
-import { CAPABILITIES, CoreError } from "@cairn-ink/core";
-import { forgetMethod } from "../../core/src/service/forget.mjs";
-import { createMemoryService } from "../../core/src/service/index.mjs";
-import { writeMethods } from "../../core/src/service/writes.mjs";
+import { CoreError } from "@cairn-ink/core";
+import { createMemoryService } from "@cairn-ink/core/service";
 
 const scope = { owner: "synthetic-owner", namespace: "synthetic-project" };
 const source = { kind: "mcp", client: "cairn-local-mcp", sessionId: "explicit-tool" };
@@ -18,9 +16,9 @@ const receipt = eventId => ({ client: source.client, sessionId: source.sessionId
 const sha256Hex = text => createHash("sha256").update(text).digest("hex");
 
 function fixture(options) {
-  const storage = createMemoryAdapter(options);
+  const storage = createMemoryAdapter({ ...options, capabilities: { ...options?.capabilities, inspect: true } });
   function service(adapter = storage) {
-    const deps = {
+    return createMemoryService({
       storage: adapter,
       model: { model: "test", contextWindow: 100, countTokens: () => 1,
         async call() { assert.fail("Explicit writes do not call the model"); } },
@@ -30,18 +28,12 @@ function fixture(options) {
         async hmacHex() { assert.fail("These writes are keyless"); } },
       tokens: { countTokens: () => 1 },
       config: {},
-    };
-    // The current facade rejects the two optional flags until their runtime registry lands.
-    // Use the registered facade for reads and the same production write methods for these flags.
-    const registeredCaps = Object.fromEntries(Object.entries(adapter.capabilities).filter(([key]) => CAPABILITIES.includes(key)));
-    const facade = createMemoryService({ ...deps, storage: { ...adapter, capabilities: registeredCaps } });
-    return Object.keys(registeredCaps).length === Object.keys(adapter.capabilities).length
-      ? facade : { ...facade, ...writeMethods(deps), forget: forgetMethod(deps) };
+    });
   }
   const readTx = fn => storage.uow.run(scope.owner, { readOnly: true }, fn);
   const index = () => readTx(tx => storage.memories.indexRevision(tx));
   const tag = id => readTx(tx => storage.proceduralTags.read(tx, scope, id));
-  const inspect = id => service().read(scope, { type: "memory", id });
+  const inspect = id => service().inspect(scope, { memoryId: id });
   return { storage, service, readTx, index, tag, inspect };
 }
 
@@ -54,8 +46,8 @@ test("remember, remember duplicate and inspect item retain two receipts at store
   assert.equal(first.item.revision, 1);
   assert.equal(first.indexRevision, start + 1);
   const id = first.item.id;
-  const firstReceiptId = (await inspect(id)).receipts[0].id;
-  assert.ok(firstReceiptId);
+  const [firstReceipt] = (await inspect(id)).receipts;
+  assert.equal(firstReceipt.messageId, "first");
 
   const second = await save(scope, factText, source, "fact", { receipt: receipt("second") });
   assert.equal(second.status, "duplicate");
@@ -65,13 +57,14 @@ test("remember, remember duplicate and inspect item retain two receipts at store
   assert.equal(second.indexRevision, await index());
   assert.equal((await readTx(tx => storage.memories.readRevision(tx, scope, id))).revision, 2);
   const read = await inspect(id);
-  assert.equal(read.status, "found");
-  assert.equal(read.item.revision, 2);
-  assert.equal(read.receipts.length, 2);
-  assert.equal(read.receipts[0].id, firstReceiptId);
-  assert.ok(read.receipts[1].id && read.receipts[1].id !== firstReceiptId);
-  assert.deepEqual(read.receipts.map(({ id: _id, ...evidence }) => evidence), ["first", "second"].map(messageId => ({
+  assert.equal(read.mode, "item");
+  assert.equal(read.memory.revision, 2);
+  const sortedReceipts = [...read.receipts].sort((a, b) => a.messageId.localeCompare(b.messageId));
+  assert.equal(sortedReceipts[0].id, firstReceipt.id);
+  assert.ok(sortedReceipts[1].id && sortedReceipts[1].id !== firstReceipt.id);
+  assert.deepEqual(sortedReceipts.map(({ id: _id, ...retained }) => retained), ["first", "second"].map(messageId => ({
     client: source.client, sessionId: source.sessionId, role: "user", occurredAtMs: null, messageId, excerpt: factText,
+    eventId: messageId, createdAtMs: 100,
   })));
 
   const replay = await save(scope, factText, source, "fact", { receipt: receipt("second") });
@@ -94,8 +87,8 @@ test("a receipt-only duplicate keeps the memory revision when the flag is absent
   }
 });
 
-test("insert and touch return stable stored receipt IDs in input order and bump once per change", async () => {
-  const { storage, service, inspect } = fixture({ receiptAttachAdvancesRevision: true });
+test("with procedural tags enabled, insert and touch return stable receipt IDs in input order", async () => {
+  const { storage, service, inspect } = fixture({ proceduralTags: true, receiptAttachAdvancesRevision: true });
   const { memories, uow } = storage;
   const row = { kind: "fact", origin: "explicit", confidence: 1, source, text: factText, embedding: null,
     textHash: "sha256:" + sha256Hex(factText.toLowerCase()) };
@@ -106,9 +99,13 @@ test("insert and touch return stable stored receipt IDs in input order and bump 
   assert.equal(aId, repeatId);
   const touch = async (receipts, merge) => write(tx => memories.touchDuplicate(tx, scope, id, receipts, merge, 101));
   const changed = await touch([b, d, a, c], { confidence: 0.9 });
-  const read = await inspect(id);
-  assert.deepEqual(read.receipts.map(item => item.messageId), ["a", "b", "d", "c"]);
-  const [, , dId, cId] = read.receipts.map(item => item.id);
+  const { receipts } = await inspect(id);
+  const ids = new Map(receipts.map(item => [item.messageId, item.id]));
+  assert.equal(ids.size, 4);
+  assert.equal(ids.get("a"), aId);
+  assert.equal(ids.get("b"), bId);
+  const cId = ids.get("c");
+  const dId = ids.get("d");
   assert.equal(new Set([aId, bId, cId, dId]).size, 4);
   assert.deepEqual(changed, { outcome: "changed", revision: 2, receiptIds: [bId, dId, aId, cId] });
   assert.deepEqual(await touch([c, a], { confidence: 0.9 }), { outcome: "touched", revision: 2, receiptIds: [cId, aId] });
@@ -142,8 +139,24 @@ test("remember invalid anchors, remember procedural and inspect procedural follo
   const second = await save(scope, instruction, source, "instruction", { receipt: receipt("second"), procedural });
   assert.equal(second.status, "duplicate");
   assert.equal(second.indexRevision, first.indexRevision + 1);
-  const secondReceiptId = (await inspect(id)).receipts[1].id;
+  const secondReceiptId = (await inspect(id)).receipts.find(item => item.messageId === "second").id;
   assert.deepEqual(await tag(id), { ...expected, tagRevision: 2, anchors: [{ ...expected.anchors[0], receiptId: secondReceiptId }] });
+});
+
+test("procedural offsets and digest use the bounded receipt excerpt", async () => {
+  const { service, inspect, tag } = fixture({ proceduralTags: true });
+  const { save } = service();
+  const excerpt = "x".repeat(799);
+  const text = excerpt + "🧭";
+  const options = { receipt: receipt("bounded"), procedural: { anchors: [{ receiptIndex: 0, start: 798, end: 801 }] } };
+  assert.deepEqual(await save(scope, text, source, "instruction", options), { status: "invalid" });
+  options.procedural.anchors[0].end = 799;
+  const result = await save(scope, text, source, "instruction", options);
+  assert.equal(result.item.text, text);
+  const [stored] = (await inspect(result.item.id)).receipts;
+  assert.equal(stored.excerpt, excerpt);
+  assert.deepEqual((await tag(result.item.id)).anchors,
+    [{ receiptId: stored.id, digest: sha256Hex(excerpt), start: 798, end: 799 }]);
 });
 
 test("correct clears the tag, forget clears another active tag, and resave forgotten is suppressed", async () => {
@@ -168,7 +181,7 @@ test("correct clears the tag, forget clears another active tag, and resave forgo
   assert.equal(forgotten.status, "forgotten");
   assert.equal(clearedInTx, true);
   assert.equal(await tag(id), null);
-  assert.deepEqual(await inspect(id), { status: "not_found" });
+  await assert.rejects(inspect(id), { code: "memory_not_found" });
   assert.deepEqual(await save(scope, correctedText, source, "fact", { receipt: receipt("resave") }),
     { status: "suppressed", indexRevision: forgotten.indexRevision });
   assert.equal(await index(), forgotten.indexRevision);
@@ -190,7 +203,7 @@ test("failure after a procedural tag write rolls back the row, receipt, tag and 
   await assert.rejects(save(scope, instruction, source, "instruction", { receipt: receipt("rollback"), procedural }),
     { code: "internal_error" });
   assert.ok(writtenId);
-  assert.deepEqual(await inspect(writtenId), { status: "not_found" });
+  await assert.rejects(inspect(writtenId), { code: "memory_not_found" });
   assert.equal(await tag(writtenId), null);
   assert.deepEqual(await storage.harness.dump(), []);
   assert.equal(await index(), start);

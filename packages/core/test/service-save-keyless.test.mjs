@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
-import { CAPABILITIES } from "@cairn-ink/core";
 import { createMemoryService } from "@cairn-ink/core/service";
-import { forgetMethod } from "../src/service/forget.mjs";
-import { writeMethods } from "../src/service/writes.mjs";
 import { hostedScope as scope, serviceFake } from "./helpers/service-fake.mjs";
 
 const source = { kind: "mcp", client: "local-mcp", sessionId: "explicit-tool" };
@@ -55,10 +52,7 @@ function fixture({ required = false, tags = false, index = "both" } = {}) {
       storage.memories[method] = async (...args) => ({ ...await write(...args), receiptIds: [receiptId] });
     }
   }
-  // Once the parallel runtime registry lands, these tests also exercise service registration.
-  const service = tags && !CAPABILITIES.includes("proceduralTags")
-    ? { ...writeMethods(deps), forget: forgetMethod(deps) }
-    : createMemoryService(deps);
+  const service = createMemoryService(deps);
   return { ...fake, service, reads, tagWrites };
 }
 

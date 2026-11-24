@@ -15,16 +15,20 @@ const receipt = { client: "editor-client", sessionId: "editor-session", eventId:
   role: "user", occurredAtMs: 42 };
 
 function setup({ fingerprintKey = false, withProvider = true, withEmbedder = true,
-  embeddingRequiredOnInsert = false, withIndex = true } = {}) {
+  embeddingRequiredOnInsert = false, index = "both" } = {}) {
   const fake = serviceFake({ rows: [original], writes: true, capture: true, hasKey: false });
   const { deps, storage } = fake;
   Object.assign(storage.capabilities, { fingerprintKey, embeddingRequiredOnInsert });
   if (!withProvider) delete storage.keys;
   if (!withEmbedder) deps.embedder = null;
   const indexReads = [];
-  if (withIndex) storage.memories.indexRevision = async tx => {
-    indexReads.push(tx);
+  if (index !== "none") storage.memories.indexRevision = async tx => {
+    indexReads.push(["start", tx]);
     return 12;
+  };
+  if (index === "both") storage.memories.committedIndexRevision = async tx => {
+    indexReads.push(["committed", tx]);
+    return 15;
   };
   const service = createMemoryService(deps);
   return { ...fake, service, indexReads,
@@ -39,8 +43,9 @@ test("correction with fingerprintKey off records exact keyless suppression and p
   const { correct, committed, mutations, indexReads } = setup();
   const result = await correct(newText);
   assert.equal(result.status, "saved");
-  assert.equal(result.indexRevision, 13);
-  assert.equal(indexReads.length, 1);
+  assert.equal(result.indexRevision, 15);
+  assert.deepEqual(indexReads.map(([read]) => read), ["start", "committed"]);
+  assert.equal(indexReads[0][1], indexReads[1][1]);
   assert.equal(result.item.text, newText);
   assert.equal(result.item.revision, original.revision + 1);
   assert.deepEqual(result.item.source, source);
@@ -127,21 +132,26 @@ test("a configured embedder failure still aborts the correction when embeddings 
   }
 });
 
-test("save, capture admission and processing, and import refuse a null embedder before sending or writing", async () => {
+test("optional-embedding save succeeds while capture and import refuse a null embedder", async () => {
   const { service, calls, mutations } = setup({ withEmbedder: false });
   const event = { client: "capture-client", sessionId: "capture-session", eventId: "capture-event" };
   const message = { id: "message", role: "user", content: newText, occurredAtMs: 42 };
   const unavailable = rejectsWith("capability_unavailable");
-  await assert.rejects(service.save(scope, newText, editor), unavailable);
   await assert.rejects(service.enqueueCapture(scope, { ...event, messages: [message] }), unavailable);
   await assert.rejects(service.runCapture(scope, event), unavailable);
   await assert.rejects(service.importMemories(scope, [{ text: newText, kind: "fact" }], editor), unavailable);
   assert.deepEqual(mutations, []);
   assert.deepEqual(calls, []);
+  const saved = await service.save(scope, newText, editor);
+  assert.equal(saved.status, "saved");
+  assert.equal(saved.item.embedding, null);
+  assert.equal(saved.indexRevision, 15);
+  assert.deepEqual(mutations.map(({ method }) => method), ["memories.insert"]);
+  assert.ok(!calls.some(([method, , phase]) => method === "embed" || phase === "dispatch"));
 });
 
 test("correction omits the index revision when the store has no accessor", async () => {
-  const { correct } = setup({ withIndex: false });
+  const { correct } = setup({ index: "none" });
   for (const [text, status] of [[oldText, "unchanged"], [newText, "saved"]]) {
     const result = await correct(text);
     assert.equal(result.status, status);
@@ -179,9 +189,12 @@ test("a row revised during embedding returns conflict at the write transaction's
 });
 
 test("a row lost at post-commit delivery returns not_found with the advanced index revision", async () => {
-  const { correct, hooks, forget, mutations, indexReads } = setup();
-  hooks.beforeRun = (_, options) => { if (options.readOnly) forget(original); };
-  assert.deepEqual(await correct(newText), { status: "not_found", indexRevision: 13 });
-  assert.deepEqual(mutations.map(({ method }) => method), ["suppressions.writeFact", "memories.replaceContent"]);
-  assert.equal(indexReads.length, 1);
+  for (const index of ["both", "start"]) {
+    const { correct, hooks, forget, mutations, indexReads } = setup({ index });
+    hooks.beforeRun = (_, options) => { if (options.readOnly) forget(original); };
+    const both = index === "both";
+    assert.deepEqual(await correct(newText), { status: "not_found", ...(both && { indexRevision: 15 }) });
+    assert.deepEqual(mutations.map(({ method }) => method), ["suppressions.writeFact", "memories.replaceContent"]);
+    assert.deepEqual(indexReads.map(([read]) => read), both ? ["start", "committed"] : ["start"]);
+  }
 });

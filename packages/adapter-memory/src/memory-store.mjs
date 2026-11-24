@@ -36,7 +36,7 @@ function matchOrder(a, b) {
 
 /**
  * @param {ReturnType<typeof import("./unit-of-work.mjs").createUnitOfWork>["port"]} port
- * @param {import("@cairn-ink/core").Capabilities} capabilities
+ * @param {import("@cairn-ink/core/ports").StorageAdapter["capabilities"]} capabilities
  * @param {() => string} newId
  * @param {ReturnType<typeof createFactMatcher>} [matchFacts]
  * @param {import("./privacy.mjs").RingKeys} [ringKeys]
@@ -44,6 +44,7 @@ function matchOrder(a, b) {
 export function createMemoryStore(port, capabilities, newId, matchFacts = createFactMatcher(capabilities.vectorSuppression),
   ringKeys = async () => []) {
   let nearSkippedUnembedded = 0;
+  const proceduralTags = capabilities.proceduralTags === true;
 
   /** @param {InsertRow} row */
   const prepareContent = (row) => copyContent(row, "memory", capabilities.embeddingRequiredOnInsert);
@@ -163,7 +164,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
               row: { ...content, digests, ...created, scope: { owner: tx.owner, namespace }, historical: false },
               receipts: [],
             };
-            const receiptIds = await appendReceipts(state, entry, incoming, nowMs, !fromFinish);
+            const receiptIds = await appendReceipts(state, entry, incoming, nowMs, proceduralTags && !fromFinish);
             entries.set(id, entry);
             advanceInspectEpoch(state, namespace);
             markDirty();
@@ -184,7 +185,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
             const entry = state.rows.get(namespace)?.get(id);
             if (!entry) throw new CoreError("memory_not_found");
             const previousCount = entry.receipts.length;
-            const receiptIds = await appendReceipts(state, entry, incoming, nowMs, !fromFinish);
+            const receiptIds = await appendReceipts(state, entry, incoming, nowMs, proceduralTags && !fromFinish);
             const { row } = entry;
             let changed = capabilities.receiptAttachAdvancesRevision === true && entry.receipts.length > previousCount;
             if (!row.historical) {

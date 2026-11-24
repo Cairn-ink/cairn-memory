@@ -5,7 +5,7 @@ import { createMemoryAdapter } from "@cairn-ink/adapter-memory";
 import { createMemoryService } from "@cairn-ink/core/service";
 
 test("the reference service replaces a keyless correction's evidence and suppresses replay of the predecessor", async () => {
-  const storage = createMemoryAdapter();
+  const storage = createMemoryAdapter({ capabilities: { inspect: true } });
   const scope = { owner: "synthetic-owner", namespace: "synthetic-project" };
   const source = { kind: "mcp", client: "synthetic-local-mcp", sessionId: "explicit-tool" };
   const oldText = "The synthetic albatross wears a teal scarf.";
@@ -33,14 +33,16 @@ test("the reference service replaces a keyless correction's evidence and suppres
   const save = await service.save(scope, oldText, source, "context");
   assert.equal(save.status, "saved");
   const { id } = save.item;
-  const read = () => service.read(scope, { type: "memory", id });
+  const readReceipts = async () => (await service.inspect(scope, { memoryId: id })).receipts
+    .map(({ id: _id, eventId: _eventId, createdAtMs: _time, ...retained }) => retained)
+    .sort((a, b) => a.messageId.localeCompare(b.messageId));
   const priorReceipts = ["first-event", "second-event"].map(messageId => ({
     client: source.client, sessionId: source.sessionId, messageId, role: "user", occurredAtMs: 10, excerpt: oldText,
   }));
   const seeded = await storage.uow.run(scope.owner, {}, tx => storage.memories.touchDuplicate(tx, scope, id,
     priorReceipts, { kind: "fact", origin: "explicit", confidence: 1 }, 100));
-  assert.equal(seeded.revision, 2);
-  assert.deepEqual((await read()).receipts, priorReceipts);
+  assert.deepEqual(seeded, { outcome: "changed", revision: 2 });
+  assert.deepEqual(await readReceipts(), priorReceipts);
   const start = await indexRevision();
 
   const receipt = { client: source.client, sessionId: source.sessionId, eventId: "correct-event", role: "user", occurredAtMs: 20 };
@@ -58,11 +60,12 @@ test("the reference service replaces a keyless correction's evidence and suppres
 
   const { eventId, ...metadata } = receipt;
   const expectedReceipts = [{ ...metadata, messageId: eventId, excerpt: newText }];
-  assert.deepEqual((await read()).receipts, expectedReceipts);
+  assert.deepEqual(await readReceipts(), expectedReceipts);
   const unchanged = await service.correct(scope, id, corrected.item.revision, newText, source,
     { kind: "instruction", receipt: { ...receipt, eventId: "unused-event" } });
   assert.deepEqual(unchanged, { ...corrected, status: "unchanged" });
-  assert.deepEqual((await read()).receipts, expectedReceipts);
-  assert.deepEqual(await service.save(scope, oldText, source), { status: "suppressed" });
+  assert.deepEqual(await readReceipts(), expectedReceipts);
+  assert.deepEqual(await service.save(scope, oldText, source),
+    { status: "suppressed", indexRevision: corrected.indexRevision });
   assert.equal(await indexRevision(), corrected.indexRevision);
 });
