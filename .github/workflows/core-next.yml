@@ -22,9 +22,6 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - run: npm ci --ignore-scripts
-      # The Core forget integration test imports the reference adapter.
-      - run: npm ci --ignore-scripts
-        working-directory: packages/adapter-memory
       - run: npm test
       - run: npm run typecheck
       - run: npm run check:prompt
@@ -34,6 +31,8 @@ jobs:
         working-directory: packages/adapter-postgres
       - run: npm run typecheck
         working-directory: packages/adapter-postgres
+      - run: npm ci --ignore-scripts
+        working-directory: packages/adapter-memory
       # The conformance kit's own cases and regression mutants run here, against the memory adapter.
       - run: npm test
         working-directory: packages/adapter-memory

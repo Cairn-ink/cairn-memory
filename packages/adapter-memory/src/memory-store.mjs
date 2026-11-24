@@ -280,6 +280,7 @@ export function createMemoryStore(port, capabilities, newId, matchFacts = create
     },
 
     indexRevision: port.indexRevision,
+    committedIndexRevision: port.committedIndexRevision,
 
     async get(tx, scope, id) {
       return port(tx, scope, false, (state) => {

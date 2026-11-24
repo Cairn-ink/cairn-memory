@@ -108,10 +108,13 @@ export function forgetMethod({ storage, clock }) {
       );
 
     return uow.run(owner, { pauseLock: true }, async tx => {
-      const start = await memories.indexRevision?.(tx);
       // resolve
       const row = await scopedRow(memories, scope, id, tx);
-      if (!row) return { status: "not_found", ...(start === undefined ? {} : { indexRevision: start }) };
+      if (!row) {
+        const indexRevision = await (memories.committedIndexRevision
+          ? memories.committedIndexRevision(tx) : memories.indexRevision?.(tx));
+        return { status: "not_found", ...(indexRevision === undefined ? {} : { indexRevision }) };
+      }
       if (expectedRevision !== undefined && row.revision !== expectedRevision) return { status: "conflict" };
       if (keyResult?.error) throw keyResult.error;
       const key = userKeyForWrite ? await userKeyForWrite(tx) : keyResult === null ? null : keyResult.key;
@@ -217,7 +220,8 @@ export function forgetMethod({ storage, clock }) {
         await forgetLog.record(tx, owner, id, clock.nowMs());
       }
       // epoch.advance is owned by each writeFact call.
-      return { status: "forgotten", removedSimilar, ...(start === undefined ? {} : { indexRevision: start + 1 }) };
+      const indexRevision = await memories.committedIndexRevision?.(tx);
+      return { status: "forgotten", removedSimilar, ...(indexRevision === undefined ? {} : { indexRevision }) };
     });
   });
 }

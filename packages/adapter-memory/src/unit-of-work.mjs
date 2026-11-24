@@ -307,6 +307,8 @@ export function createUnitOfWork(nativeErrorMap, now = Date.now, includeTopics =
   // Raw writes can advance the working state's revision before commit.
   port.indexRevision = (/** @type {Tx} */ tx) =>
     accessPort(tx, tx, false, (_getState, _markDirty, run) => run.startIndexRevision);
+  port.committedIndexRevision = (/** @type {Tx} */ tx) =>
+    accessPort(tx, tx, false, (_getState, _markDirty, run) => indexRevisionAfterRun(run));
 
   /**
    * Memory operations invoked by the finish that already holds the queue.

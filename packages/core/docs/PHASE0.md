@@ -310,9 +310,10 @@ transaction before archiving. Omitting the field preserves existing behavior.
   configurable. Postgres disables it, preserving the hosted service's capture duplicate
   revisions.
 - **Index revision.** `MemoryStore.indexRevision(tx)` returns the owner's revision at the start
-  of the run, so optimistic guards compare against the same value throughout the run. A write
-  result reports the start revision plus one if the run changed anything. An unchanged
-  correction, a missing or repeated forget, and a refused write report the start revision.
+  of the run, so optimistic guards compare against the same value throughout the run.
+  - Write results read `MemoryStore.committedIndexRevision(tx)` at the end of the write transaction
+    to report the owner revision as it will commit. An unchanged correction, a missing or repeated
+    forget, and a refused write report the start revision.
 - **Procedural tags.** The optional `ProceduralTagStore` port requires the `proceduralTags`
   capability. SQLite and the reference adapter enable it. Postgres disables it, so a save with
   `options.procedural` fails with `capability_unavailable` on the hosted service. The local installer
