@@ -8,12 +8,13 @@ import * as kit from "@cairn-ink/conformance";
 import { capabilities, factIncarnationBody, userFingerprintKey } from "@cairn-ink/core";
 import { toPostgresError } from "../src/errors.mjs";
 import {
-  applyMigrations, createPostgresCapturePorts, createPostgresDigestGate,
+  applyMigrations, createPostgresCapturePorts, createPostgresConflictEdgeStore, createPostgresDigestGate,
   createPostgresFingerprintKeyProvider, createPostgresMemoryCandidates, createPostgresMemoryReads, createPostgresMemoryStore,
   createPostgresPauseStore, createPostgresRawPorts, createPostgresRawReads, createPostgresSupersessionStore, createPostgresSuppressionStore,
   createPostgresUnitOfWork, HOSTED_FINGERPRINT_LABELS, query,
 } from "../src/index.mjs";
 import { advanceIndex, timestampUs } from "../src/memory-rows.mjs";
+import { withDistinctNamespaceText, withRelationCaptureFinish } from "./relation-fixtures.mjs";
 
 /** @import { AdapterFactory, ConformanceCase, TestHarness } from "@cairn-ink/conformance" */
 
@@ -258,7 +259,7 @@ function postgresFactory(wrapSuppressions = (store) => store, { seedRetainedStat
       const fingerprintKey = requested.fingerprintKey === true;
       const flags = capabilities({
         embeddingRequiredOnInsert: true, nearDuplicate, vectorSuppression: true, supersession: true,
-        semanticRetrieval, rawArchive, rawWindowHide: rawArchive || requested.rawWindowHide === true,
+        conflictEdges: true, semanticRetrieval, rawArchive, rawWindowHide: rawArchive || requested.rawWindowHide === true,
         sessionLineage: rawArchive, rawSpans: true, fingerprintKey, shingleSuppression: rawArchive && fingerprintKey,
       });
       const fixtureSecrets = new Map([["test-secret-a", randomUUID()], ["test-secret-rotation", randomUUID()]]);
@@ -277,6 +278,7 @@ function postgresFactory(wrapSuppressions = (store) => store, { seedRetainedStat
       const readOptions = { hashSessionKey, allowNonNullNamespace: true };
       const memoryReads = createPostgresMemoryReads(rawArchive ? { ...readOptions, ...rawOptions } : readOptions);
       const { lexical, vector } = createPostgresMemoryCandidates(readOptions);
+      const memories = createPostgresMemoryStore({ ...readOptions, nearDuplicate });
       /** @type {string[]} */
       const harnessOwners = [];
       /** @type {Pick<TestHarness, "advanceClock" | "dump" | "seedFact" | "setWriteTime" | "rowsMissingKeyedDigest" | "hashSessionKey" | "setFingerprintSecret" | "seedClientlessRaw"> & {seedOwners(owner: string, otherOwner: string): Promise<void>}} */
@@ -334,11 +336,14 @@ function postgresFactory(wrapSuppressions = (store) => store, { seedRetainedStat
       };
       return {
         adapter: {
-          capabilities: flags, uow, suppressions, capture, keys, lexical, ...memoryReads,
+          capabilities: flags, uow, suppressions, keys, lexical, ...memoryReads,
           ...(semanticRetrieval && { vector }),
           ...(rawPorts && { raw: { ...rawPorts.raw, ...createPostgresRawReads(rawOptions) }, sessionLineage: rawPorts.sessionLineage }),
-          memories: createPostgresMemoryStore({ nearDuplicate, allowNonNullNamespace: true, hashSessionKey }),
-          pause: createPostgresPauseStore(), supersession: createPostgresSupersessionStore({ allowNonNullNamespace: true }),
+          capture: requested.supersession ? withRelationCaptureFinish(capture, memories) : capture,
+          memories: requested.supersession && requested.conflictEdges ? withDistinctNamespaceText(memories) : memories,
+          pause: createPostgresPauseStore(),
+          supersession: createPostgresSupersessionStore(readOptions),
+          conflicts: createPostgresConflictEdgeStore(readOptions),
         },
         sessionRefs: /** @type {const} */ ("hashed"),
         harness,
@@ -370,6 +375,7 @@ const selected = new Set([
   "K-FORK-6", "K-FORK-7", "K-FORK-10",
   "K-RET-1", "K-RET-2", "K-RET-3", "K-FEN-1", "K-FEN-I1", "K-FEN-I2", "K-FEN-I3",
   "K-RET-W1", "K-RET-W2", "K-SNAP-W1", "K-RAW-W1", "K-RAW-3", "K-RAW-3w", "K-RAW-3c", "K-RAW-3s",
+  "K-RAW-LEDGER-1", "K-RAW-LEDGER-2",
   "K-RET-9", "K-SNAP-1", "K-HYD-1", "K-HYD-2", "K-PAUSE-1", "K-IMP-T1", "K-IMP-T2", "K-IMP-T3",
   "K-SNAP-F1", "K-SNAP-F3", "K-SNAP-F4", "K-SNAP-F5", "K-SNAP-F5u", "K-SNAP-F6", "K-SNAP-F7",
   "K-SNAP-C1", "K-SNAP-C3", "K-SNAP-C4",
@@ -380,6 +386,8 @@ const selected = new Set([
   "K-IMP-RAW-1", "K-IMP-RAW-2", "K-IMP-RAW-3", "K-IMP-RAW-3s", "K-IMP-RAW-4k", "K-IMP-RAW-5",
   "K-IMP-RAW-6", "K-IMP-RAW-7", "K-IMP-RAW-8", "K-IMP-RAW-9", "K-IMP-RAW-10",
   "K-RAW-1", "K-RAW-2", "K-RAW-2s", "K-RAW-8w",
+  "K-REL-1", "K-REL-2", "K-REL-3", "K-REL-4", "K-REL-5", "K-REL-6",
+  "K-REL-7", "K-REL-8", "K-REL-9", "K-REL-10", "K-REL-11", "K-REL-12",
 ]);
 
 // Each entry names a missing port, method, capability, or profile behavior.
@@ -387,8 +395,6 @@ const notApplicable = {
   "snapshot retains ineligible full facts in the no-key profile": ["K-SNAP-C2"],
   "hosted profile requires an embedding": ["K-MEM-10"],
   "pending historical edit case has no assertions": ["K-MEM-5h"],
-  supersessionEdges: ["K-REL-1", "K-REL-2", "K-REL-3", "K-REL-6", "K-REL-7", "K-REL-9", "K-REL-10", "K-REL-11", "K-REL-12"],
-  conflictEdges: ["K-REL-4", "K-REL-5", "K-REL-8"],
   "K1 pending": ["K-KD-4", "K-KD-6", "K-KD-7", "K-KD-7v", "K-KD-8", "K-KD-9"],
   "hosted raw is personal-only (namespace guard)": ["K-RAW-4", "K-RAW-5", "K-RAW-6", "K-RAW-8", "K-IMP-RAW-4", "K-IMP-RAW-4e"],
   "raw conflict counters": ["K-RAW-7"],

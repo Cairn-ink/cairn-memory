@@ -33,7 +33,8 @@ export function finishCapture(db, { scope, client, sessionId }, batch, nowMs, ha
   const queries = batch.map(({ content: { textHash, body } }) => ({
     textHash, digests: body.digests, embedding: body.embedding?.vector,
   }));
-  const policy = readWritePolicy(db, scope, queries, source, "full", hashSession);
+  const policy = readWritePolicy(db, scope, queries, source, "full", hashSession, undefined,
+    batch.map(({ receipts }) => receipts));
   const progress = { inserted: new Map(), writeTimes: new Map() };
   /** @type {FinishResult["memories"]} */
   const memories = [];
