@@ -159,3 +159,59 @@ test("the Raw assertion catches a written position reported as suppressed", asyn
     actual: ["mugs"], expected: ["mugs", "orchids"],
   });
 });
+
+test("K-CLM-6 reads reported positions by index, as core does, not through the iterator", async () => {
+  const { CAPTURE_CASES, runCase } = await import("@cairn-ink/conformance");
+  const { rawFactory } = await import("./fixtures/raw.mjs");
+  const testCase = CAPTURE_CASES.find(({ id }) => id === "K-CLM-6");
+  assert.ok(testCase);
+  assert.equal(await runCase(rawFactory(), testCase), null);
+  // Core reads entry 0 and would exclude the first item's sources; the iterator claims the middle one.
+  const crafted = () => {
+    const positions = [0];
+    positions[Symbol.iterator] = function* () { yield 1; };
+    return positions;
+  };
+  const create = (options) => {
+    const adapter = createMemoryAdapter(options);
+    const { finish, claim } = adapter.capture;
+    adapter.capture.finish = async (tx, token, items) => ({ ...await finish(tx, token, items), suppressedItems: crafted() });
+    // The replay reports the same crafted list, so only the finish-time reading can catch it.
+    adapter.capture.claim = async (...args) => {
+      const replay = await claim.apply(adapter.capture, args);
+      if (replay.status !== "rawReplay") return replay;
+      return { ...replay, result: { ...replay.result, suppressedItems: crafted() } };
+    };
+    return adapter;
+  };
+  await assert.rejects(runCase(rawFactory({ create }), testCase),
+    /Finish must report exactly the suppressed middle position/);
+});
+
+test("K-CLM-6 compares the replay against the positions checked at finish", async () => {
+  const { CAPTURE_CASES, runCase } = await import("@cairn-ink/conformance");
+  const { rawFactory } = await import("./fixtures/raw.mjs");
+  const testCase = CAPTURE_CASES.find(({ id }) => id === "K-CLM-6");
+  assert.ok(testCase);
+  const create = (options) => {
+    const adapter = createMemoryAdapter(options);
+    const { finish, claim } = adapter.capture;
+    /** @type {number[] | undefined} */
+    let shared;
+    adapter.capture.finish = async (tx, token, items) => {
+      const result = await finish(tx, token, items);
+      shared = [...result.suppressedItems];
+      return { ...result, suppressedItems: shared };
+    };
+    adapter.capture.claim = async (...args) => {
+      const replay = await claim.apply(adapter.capture, args);
+      if (replay.status !== "rawReplay" || !shared) return replay;
+      // The store changes the array it returned earlier and hands the same array back on replay.
+      shared[0] = 0;
+      return { ...replay, result: { ...replay.result, suppressedItems: shared } };
+    };
+    return adapter;
+  };
+  await assert.rejects(runCase(rawFactory({ create }), testCase),
+    /Replay must preserve the reported suppression positions/);
+});
