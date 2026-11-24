@@ -538,7 +538,7 @@ export interface ReadContractCapabilities {
 }
 
 export interface ReadContractStorage<Card extends StoredDocumentCardRecord = StoredDocumentCardRecord> extends StorageAdapter<Card> {
-  readonly capabilities: Capabilities & ReadContractCapabilities;
+  readonly capabilities: StorageAdapter<Card>["capabilities"] & ReadContractCapabilities;
   readonly contextRead?: ContextReadStore;
   readonly inspect?: InspectStore;
 }
