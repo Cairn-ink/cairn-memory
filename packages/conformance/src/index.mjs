@@ -31,6 +31,7 @@ export { DOCUMENT_CARD_AMENDMENT_CASES } from "./document-card-amendment-cases.m
 export { DOCUMENT_CARD_LINK_CASES } from "./document-card-link-cases.mjs";
 export { TOPICS_FOR_CARDS_CASES } from "./topics-for-cards-cases.mjs";
 export { DELIVERY_VISIBILITY_CASES } from "./delivery-visibility-cases.mjs";
+export { RECEIPT_WITHHELD_CASES } from "./receipt-withheld-cases.mjs";
 
 /** @type {readonly import("./index.d.mts").ConformanceCase[]} */
 export const CAPTURE_CASES = [...captureCases, ...captureFinishCases];
