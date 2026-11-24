@@ -73,13 +73,13 @@ const readScope = ({ owner, namespace }) => ({ owner, namespaces: [namespace] })
  */
 export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbort) {
   const { storage, config, model, embedder, clock, gate, diagnostics } = deps;
-  const { capabilities, uow, suppressions, raw, hydrate, inspect, fence, pause } = storage;
+  const { capabilities, uow, suppressions, raw, hydrate, fence, pause } = storage;
   const cards = capabilities.documentCards && config.documentCards?.enabled ? storage.documentCards : undefined;
-  const skipExtraction = model === null || (embedder === null && capabilities.embeddingRequiredOnInsert === true);
+  const skipExtraction = model === null;
   const ledger = !skipExtraction && capabilities.quantityLedger && config.quantityLedger?.enabled
     ? storage.quantityLedger : undefined;
   if (!cards && !ledger) return;
-  const captureUnavailable = model === null && (!cards || capabilities.fingerprintKey === true);
+  const captureUnavailable = skipExtraction ? !cards || capabilities.fingerprintKey === true : embedder === null;
   /** @param {DocumentCardSession} session */
   const sessionKey = session => deps.documentCardSessionKey ? deps.documentCardSessionKey(session) : session.sessionId;
 
@@ -97,24 +97,17 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
     }));
   }
 
-  /** @param {Tx} tx @param {CaptureKey} key @param {readonly CaptureMessage[]} messages */
-  async function screenReceipts(tx, key, messages) {
+  /** @param {Tx} tx @param {CaptureKey} key @param {readonly CaptureMessage[]} messages @param {boolean} [beforeArchive] */
+  async function screenReceipts(tx, key, messages, beforeArchive = false) {
     const withheld = suppressions.receiptWithheld?.bind(suppressions);
     if (!withheld) return messages;
     const allowed = await Promise.all(messages.map(async message => {
       const receipt = sourceReceipt(key, message);
-      return receipt.excerpt !== "" && await withheld(tx, key.scope, receipt) === false;
+      return receipt.excerpt !== "" && (beforeArchive
+        ? await withheld(tx, key.scope, receipt, message)
+        : await withheld(tx, key.scope, receipt)) === false;
     }));
     return messages.filter((_, index) => allowed[index]);
-  }
-
-  /** @param {Tx} tx @param {CaptureKey} key @param {readonly CaptureMessage[]} messages */
-  async function beforeEmbedding(tx, key, messages) {
-    if (capabilities.rawArchive) {
-      // Some stores require the Raw row to exist before they can decide receipt visibility.
-      return await raw?.archiveAllowed(tx, key) === true ? messages : [];
-    }
-    return screenReceipts(tx, key, messages);
   }
 
   /**
@@ -123,9 +116,10 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
    * @param {CaptureKey} key
    * @param {readonly CaptureMessage[]} messages
    * @param {() => {signal: AbortSignal, check(): void}} transportFor
+   * @param {() => Promise<void>} assertSendGeneration
    * @returns {Promise<CardVectors | undefined>}
    */
-  async function embedCards(key, messages, transportFor) {
+  async function embedCards(key, messages, transportFor, assertSendGeneration) {
     if (!cards || !embedder || !messages.length) return;
     const texts = [...new Set(messages.flatMap(({ content }) => {
       const body = redactDocumentText(content, true);
@@ -137,7 +131,9 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
       return [documentCardSearchText({ title, body })];
     }))];
     if (!texts.length) return;
+    await gate.assertOpen(key.scope.owner, "pre-send");
     const { signal, check } = transportFor();
+    await assertSendGeneration();
     await gate.assertOpen(key.scope.owner, "dispatch");
     let vectors;
     try {
@@ -146,6 +142,8 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
     } catch (error) {
       check();
       throw error;
+    } finally {
+      await gate.assertOpen(key.scope.owner, "post-send");
     }
     check();
     /** @type {CardVectors} */
@@ -163,22 +161,26 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
    * @param {Tx} tx @param {CaptureKey} key @param {readonly CaptureMessage[]} messages
    * @param {readonly FinishItem[]} items @param {FinishResult} result @param {CardVectors | undefined} vectors
    * @param {WeakMap<FinishItem["receipts"], ExtractedQuantity[]> | undefined} quantities
+   * @param {Set<string> | undefined} screenedForEmbedding
    */
-  async function write(tx, key, messages, items, result, vectors, quantities) {
+  async function write(tx, key, messages, items, result, vectors, quantities, screenedForEmbedding) {
     const { scope, client, sessionId } = key;
     const allowed = await screenReceipts(tx, key, messages);
     if (!allowed.length) return allowed;
 
     const suppressed = new Set(result.suppressedItems);
     const surviving = items.filter((_, index) => !suppressed.has(index));
-    if (surviving.length !== result.memories.length) throw new CoreError("internal_error");
-    const written = surviving.map(({ receipts }, index) => ({
+    const mapped = suppressed.size === result.suppressedCount && surviving.length === result.memories.length;
+    if (!mapped) emitDiagnostic(diagnostics, "extract", "core_finish", "capture_finish_mapping_unavailable");
+    const ambiguous = new Set(mapped ? [] : surviving.flatMap(({ receipts }) => receipts.map(({ messageId }) => messageId)));
+    const written = (mapped ? surviving : []).map(({ receipts }, index) => ({
       ...result.memories[index], receipts, quantities: quantities?.get(receipts),
     }));
     const canonicalSessionKey = cards && sessionKey({ client, sessionId });
     if (cards && canonicalSessionKey) {
-      for (const { position } of routeDocumentMessages(allowed).chosen) {
-        const message = allowed[position];
+      const cardSources = allowed.filter(({ id }) => !ambiguous.has(id) && (!embedder || screenedForEmbedding?.has(id)));
+      for (const { position } of routeDocumentMessages(cardSources).chosen) {
+        const message = cardSources[position];
         const { card } = await buildDocumentCard(message, { scope, client, canonicalSessionKey });
         if (!card) continue;
         const sourceMessage = { client, sessionId, messageId: message.id };
@@ -207,47 +209,40 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
       const hydrated = refs.length ? await hydrate.hydrate(tx, readScope(scope), refs, "recall") : [];
       const byMemory = new Map(hydrated.filter(({ ref }) => ref.type === "memory" && ref.namespace === scope.namespace)
         .map(item => [item.ref.id, item]));
-      /** @type {Map<string, readonly Receipt[]>} */
-      const inspected = new Map();
       for (const { id, receipts, quantities } of eligible) {
-        const row = byMemory.get(id);
-        if (row?.memory?.id !== id || row.memory.historical || !quantities ||
-            row.memory.scope.owner !== scope.owner || row.memory.scope.namespace !== scope.namespace) continue;
+        if (!quantities) continue;
         const userReceipts = receipts.filter(({ role }) => role === "user");
         if (!userReceipts.length) continue;
-        /** @param {Receipt} receipt @param {readonly Receipt[]} retained */
-        function canonicalReceipt(receipt, retained) {
-          const message = byMessage.get(receipt.messageId);
-          const excerpt = message && receiptExcerpt(message.content);
-          const ids = new Set(retained.filter(candidate => candidate.id && sameReceipt(candidate, receipt) &&
-            (candidate.excerpt === undefined || candidate.excerpt === excerpt)).map(candidate => candidate.id));
-          return ids.size === 1 ? [...ids][0] : undefined;
+        const unresolved = () => {
+          for (const _ of quantities) emitDiagnostic(diagnostics, "extract", "core_finish", "ledger_receipt_unresolved");
+        };
+        const row = byMemory.get(id);
+        if (row?.memory?.id !== id || row.memory.historical ||
+            row.memory.scope.owner !== scope.owner || row.memory.scope.namespace !== scope.namespace) {
+          unresolved();
+          continue;
         }
-        let retained = row.receipts ?? [];
-        if (inspect && userReceipts.some(receipt => canonicalReceipt(receipt, retained) === undefined)) {
-          if (!inspected.has(id)) {
-            /** @type {Receipt[]} */
-            const receipts = [];
-            let after, expectedEpoch;
-            do {
-              const page = await inspect.item(tx, scope, id, { limit: 50, after, expectedEpoch, includeQualification: false });
-              receipts.push(...(page.item?.receipts ?? []));
-              after = page.nextAnchor ?? undefined;
-              expectedEpoch = page.epoch;
-            } while (after);
-            inspected.set(id, receipts);
-          }
-          retained = [...retained, ...(inspected.get(id) ?? [])];
-        }
+        const sources = userReceipts.map(receipt => ({
+          ...receipt, excerpt: receiptExcerpt(byMessage.get(receipt.messageId)?.content ?? ""),
+        }));
+        const ids = storage.capture.retainedReceiptIds
+          ? await storage.capture.retainedReceiptIds(tx, scope, id, sources)
+          : sources.map(receipt => {
+            const ids = new Set(row.receipts?.filter(candidate => candidate.id && sameReceipt(candidate, receipt) &&
+              (candidate.excerpt === undefined || candidate.excerpt === receipt.excerpt)).map(candidate => candidate.id));
+            return ids.size === 1 ? [...ids][0] : undefined;
+          });
         /** @type {LedgerReceipt[]} */
         const citedReceipts = [];
-        for (const receipt of userReceipts) {
-          const receiptId = canonicalReceipt(receipt, retained);
+        for (const [index, { messageId, role, occurredAtMs }] of sources.entries()) {
+          const receiptId = ids[index];
           if (!receiptId) break;
-          const { messageId, role, occurredAtMs } = receipt;
           citedReceipts.push({ receiptId, messageId, role, occurredAtMs, content: byMessage.get(messageId)?.content ?? "" });
         }
-        if (citedReceipts.length !== userReceipts.length) continue;
+        if (citedReceipts.length !== sources.length) {
+          unresolved();
+          continue;
+        }
         await writeLedgerQuantities(tx, scope, ledger, {
           memoryId: id, textHash: row.memory.textHash, captureTimeMs: clock.nowMs(), quantities, citedReceipts,
         });
@@ -304,6 +299,21 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
         }
         return eligible;
       });
+      const hashes = new Map(earlier.map(({ id, contentHash }) => [id, contentHash]));
+      const byMessage = new Map(messages.map(message => [message.id, message]));
+
+      /** @param {Tx} tx @param {CaptureMessage} message */
+      async function correctionEligible(tx, message) {
+        return await sourceStillEligible(tx, message) &&
+          (!capabilities.rawArchive || await raw?.archiveAllowed(tx, key) === true);
+      }
+
+      /** @param {Tx} tx @param {string} cardId @param {CaptureMessage} message */
+      async function canAmend(tx, cardId, message) {
+        if (!(await screenReceipts(tx, key, [message])).length) return false;
+        const card = await cards?.get(tx, scope, cardId);
+        return !!card?.sourceMessage && card.contentHash === hashes.get(cardId) && await visible(tx, scope, card);
+      }
 
       /** @template T @param {AbortSignal | undefined} deadline @param {(signal: AbortSignal) => Promise<T>} send */
       async function guarded(deadline, send) {
@@ -323,6 +333,11 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
       const { amendments, counters } = await detectCardAmendments({
         capture: { scope, client, sessionId, date: dates[0], messages }, cards: earlier,
         limits: { timeoutMs: config.deadlines?.extract },
+        async canVerify(id, source) {
+          const message = byMessage.get(source.messageId);
+          if (!message || !await uow.run(owner, { pauseLock: true }, tx => correctionEligible(tx, message))) return false;
+          return uow.run(owner, { readOnly: true }, tx => canAmend(tx, id, message));
+        },
         model: {
           countTokens: model.countTokens.bind(model),
           detectChanges: (request, options) => guarded(options?.signal, signal => detectChanges.call(model, request, { signal })),
@@ -330,24 +345,19 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
         },
       });
       for (const [reason, count] of Object.entries(counters)) {
-        if (count && /(?:failed|timeout|malformed_output|token_count_unavailable)$/u.test(reason)) {
+        if (count && /(?:failed|timeout|malformed_output|token_count_unavailable|skipped_ineligible)$/u.test(reason)) {
           emitDiagnostic(diagnostics, "amendment", "core_call", reason);
         }
       }
-      const hashes = new Map(earlier.map(({ id, contentHash }) => [id, contentHash]));
-      const byMessage = new Map(messages.map(message => [message.id, message]));
       for (const { cardId, amendment } of amendments) {
         try {
           await uow.run(owner, { pauseLock: true }, async tx => {
             const state = pauseResult(await pause.get(tx, owner));
             if (state.paused || state.generation !== generation || caller?.aborted) return;
             const message = byMessage.get(amendment.sourceMessage.messageId);
-            if (!message || !await sourceStillEligible(tx, message) ||
-                (capabilities.rawArchive && await raw?.archiveAllowed(tx, key) !== true) ||
-                !(await screenReceipts(tx, key, [message])).length) return;
-            const card = await cards.get(tx, scope, cardId);
-            if (!card?.sourceMessage || card.contentHash !== hashes.get(cardId) || !await visible(tx, scope, card)) return;
-            await cards.amend(tx, scope, cardId, amendment);
+            if (message && await correctionEligible(tx, message) && await canAmend(tx, cardId, message)) {
+              await cards.amend(tx, scope, cardId, amendment);
+            }
           });
         } catch {
           emitDiagnostic(diagnostics, "amendment", "core_finish", "amend_failed");
@@ -367,8 +377,8 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
     // Candidate preparation and embedding preserve the receipts array through finish.
     /** @type {WeakMap<FinishItem["receipts"], ExtractedQuantity[]> | undefined} */
     const quantities = ledger ? new WeakMap() : undefined;
-    /** @type {readonly CaptureMessage[] | undefined} */
-    let messagesToEmbed;
+    /** @type {Set<string> | undefined} */
+    let screenedForEmbedding;
     /** @type {CardVectors | undefined} */
     let vectors;
     /** @type {readonly CaptureMessage[] | undefined} */
@@ -395,22 +405,26 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
     /** @param {number[]} positions */
     const allowedMessages = positions => positions.map(position => messages[position]).filter(({ id }) => !excludedSources.has(id));
 
-    /** @param {Tx} tx @param {number[]} positions */
-    async function prepareEmbedding(tx, positions) {
+    /** @param {CaptureDeadline} deadline @param {number[]} positions */
+    async function embed(deadline, positions) {
       if (!cards || !embedder) return;
-      const allowed = await currentSources(tx, positions);
-      if (allowed === null) return abandonKeyMismatch(tx);
-      messagesToEmbed = await beforeEmbedding(tx, key, allowedMessages(allowed));
-    }
-
-    /** @param {CaptureDeadline} deadline */
-    async function embed(deadline) {
-      if (messagesToEmbed) vectors = await embedCards(key, messagesToEmbed, () => transportFor(signal, deadline));
+      const screened = await runAtGeneration(async tx => {
+        const eligible = new Set(await readEligible(tx, key, messages));
+        const allowed = await currentSources(tx, positions.filter(position => eligible.has(position)));
+        if (allowed === null) return abandonKeyMismatch(tx);
+        if (allowed.length) await capture.assertEligible(tx, key, allowed);
+        if (archive && await archive.archiveAllowed(tx, key) !== true) return [];
+        return screenReceipts(tx, key, allowedMessages(allowed), !!archive);
+      });
+      if (screened === null) return /** @type {const} */ ({ status: "paused" });
+      if ("status" in screened) return screened;
+      screenedForEmbedding = new Set(screened.map(({ id }) => id));
+      vectors = await embedCards(key, screened, () => transportFor(signal, deadline), assertSendGeneration);
     }
 
     /** @param {Tx} tx @param {readonly CaptureMessage[]} allowed @param {readonly FinishItem[]} items @param {FinishResult} result */
     async function finishDocuments(tx, allowed, items, result) {
-      if (allowed.length) finishedMessages = await write(tx, key, allowed, items, result, vectors, quantities);
+      if (allowed.length) finishedMessages = await write(tx, key, allowed, items, result, vectors, quantities, screenedForEmbedding);
     }
 
     async function afterCommit() {
@@ -426,17 +440,16 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
     async function finishWithoutExtraction(positions, deadline) {
       const preEmbed = await runAtGeneration(async tx => {
         const eligible = new Set(await readEligible(tx, key, messages));
-        const stillEligible = positions.filter(position => eligible.has(position));
-        return await prepareEmbedding(tx, stillEligible) ?? { stillEligible };
+        return positions.filter(position => eligible.has(position));
       });
       if (preEmbed === null) return /** @type {const} */ ({ status: "paused" });
-      if ("status" in preEmbed) return preEmbed;
-      await embed(deadline);
+      const embeddingStopped = await embed(deadline, preEmbed);
+      if (embeddingStopped) return embeddingStopped;
 
       const result = await runAtGeneration(async tx => {
         checkAbort(signal, deadline);
-        await capture.assertEligible(tx, key, preEmbed.stillEligible);
-        const allowed = await currentSources(tx, preEmbed.stillEligible);
+        await capture.assertEligible(tx, key, preEmbed);
+        const allowed = await currentSources(tx, preEmbed);
         if (allowed === null) return abandonKeyMismatch(tx);
         checkAbort(signal, deadline);
         const result = await finish(tx, []);
@@ -455,12 +468,9 @@ export function captureDocumentSteps(deps, untilAborted, transportFor, checkAbor
       return /** @type {const} */ ({ status: "done", result });
     }
 
-    return { trackQuantities, prepareEmbedding, embed, finishDocuments, afterCommit, finishWithoutExtraction };
+    return { trackQuantities, embed, finishDocuments, afterCommit, finishWithoutExtraction };
   }
 
-  /** @template {{item: Omit<FinishItem, "embedding">}} T @param {T[]} prepared */
-  const unembedded = prepared => prepared.map(candidate => ({ ...candidate, item: { ...candidate.item, embedding: null } }));
-
-  return { captureUnavailable, skipExtraction, forCapture, unembedded,
+  return { captureUnavailable, skipExtraction, forCapture,
     extractionSpec: ledger ? extractionSpec : undefined, validateExtraction: ledger ? validateExtraction : undefined };
 }

@@ -590,13 +590,15 @@ export function captureMethods(deps) {
             ? filterCaptureCandidates(prepared, await readFacts(tx, prepared), scope, excludedSources) : prepared;
           const survivors = allowedByPassage.filter(({ item }) =>
             item.receipts.every(({ messageId }) => eligibleIds.has(messageId)));
-          return (supplemental && await supplemental.prepareEmbedding(tx, stillEligible)) ?? { stillEligible, survivors };
+          return { stillEligible, survivors };
         });
         if (preEmbed === null) return { status: "paused" };
         if ("status" in preEmbed) return preEmbed;
-        const embedded = embedder === null && documents ? documents.unembedded(preEmbed.survivors)
-          : await embedCaptureCandidates(preEmbed.survivors, owner, deps, deadline, signal);
-        if (supplemental) await supplemental.embed(deadline);
+        const embedded = await embedCaptureCandidates(preEmbed.survivors, owner, deps, deadline, signal);
+        if (supplemental) {
+          const embeddingStopped = await supplemental.embed(deadline, preEmbed.stillEligible);
+          if (embeddingStopped) return embeddingStopped;
+        }
 
         const completed = await runAtGeneration(async tx => {
           checkCaptureAbort(signal, deadline);
