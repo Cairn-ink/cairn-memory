@@ -89,7 +89,7 @@ test("a zero-length file initializes and a no-op reopen preserves database bytes
   const reader = new DatabaseSync(file, { readOnly: true });
   try {
     assert.equal(reader.prepare("PRAGMA application_id").get().application_id, SQLITE_APPLICATION_ID);
-    assert.equal(reader.prepare("PRAGMA user_version").get().user_version, 3);
+    assert.equal(reader.prepare("PRAGMA user_version").get().user_version, 5);
   } finally {
     reader.close();
   }

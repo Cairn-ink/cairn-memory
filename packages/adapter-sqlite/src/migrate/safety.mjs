@@ -22,11 +22,12 @@ function origin(row) {
 function memoryFact(row, scope) {
   let throughRevision;
   if (row.match_mode === "revision-through") {
-    const [tag, value, ...extra] = JSON.parse(row.source_version);
-    if (tag !== "memory-revision-v1" || !Number.isSafeInteger(value) || value < 1 || extra.length) {
+    const selector = JSON.parse(row.source_version);
+    if (!Array.isArray(selector) || selector.length !== 2 || selector[0] !== "memory-revision-through-v1" ||
+        !Number.isSafeInteger(selector[1]) || selector[1] < 1) {
       refuse("legacy_safety_unrepresentable");
     }
-    throughRevision = value;
+    throughRevision = selector[1];
   } else if (row.match_mode !== "incarnation") refuse("legacy_safety_unrepresentable");
   return validateSuppressionFact({ ...scope, actionId: row.action_id, origin: origin(row),
     kind: "identity", memoryId: row.stable_key, ...(throughRevision !== undefined && { throughRevision }) });

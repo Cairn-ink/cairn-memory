@@ -1,6 +1,7 @@
 import { decodeJson } from "./memory-rows.mjs";
 import { rawFactPolicy } from "./raw-facts.mjs";
 import { decodeRawRow, rawSessionKey, rawSessionWhere } from "./raw-rows.mjs";
+import { receiptAddressDenial } from "./receipt-identity.mjs";
 import { scopeKey } from "./storage-values.mjs";
 
 /** @import { StoredFact } from "@cairn-ink/core" */
@@ -40,10 +41,15 @@ function scrubOutbox(db, scope, matches, onlySession) {
 
 /** @param {Connection} db @param {Scope} scope @param {readonly Session[]} sessions */
 export function eraseRawSessions(db, scope, sessions) {
+  const list = db.prepare(`SELECT message_key FROM cairn_raw_messages WHERE ${rawSessionWhere}`);
   const remove = db.prepare(`DELETE FROM cairn_raw_messages WHERE ${rawSessionWhere}`);
+  const suppress = receiptSourceDenier(db, scope);
   let rawDeleted = 0;
   let ledgerBlanked = 0;
   for (const session of sessions) {
+    for (const { message_key } of list.iterate(...rawSessionKey(scope, session))) {
+      suppress(session, decodeJson(message_key));
+    }
     rawDeleted += Number(remove.run(...rawSessionKey(scope, session)).changes);
     ledgerBlanked += scrubOutbox(db, scope, () => true, session);
   }
@@ -56,14 +62,24 @@ export function purgeRawMessages(db, scope, facts, hashSession) {
   const rows = db.prepare(`SELECT * FROM cairn_raw_messages WHERE owner_id = ? AND namespace_key = ?`)
     .all(...scopeKey(scope));
   const remove = db.prepare(`DELETE FROM cairn_raw_messages WHERE ${rawSessionWhere} AND message_key = ?`);
+  const suppress = receiptSourceDenier(db, scope);
   const matches = (/** @type {Session} */ session, /** @type {CaptureMessage} */ message) =>
     rawFactPolicy(scope, session, facts, hashSession).purges(message);
   let rawDeleted = 0;
   for (const row of rows) {
     const decoded = decodeRawRow(row);
     if (matches(decoded, decoded.message)) {
+      suppress(decoded, decoded.message.id);
       rawDeleted += Number(remove.run(...rawSessionKey(scope, decoded), row.message_key).changes);
     }
   }
   return { rawDeleted, ledgerBlanked: scrubOutbox(db, scope, matches) };
+}
+
+/** @param {Connection} db @param {Scope} scope */
+function receiptSourceDenier(db, scope) {
+  const insert = db.prepare("INSERT INTO cairn_legacy_denials VALUES (?, ?, ?) ON CONFLICT DO NOTHING");
+  const keys = scopeKey(scope);
+  return (/** @type {Session} */ session, /** @type {string} */ messageId) =>
+    insert.run(...keys, receiptAddressDenial({ ...session, messageId }));
 }

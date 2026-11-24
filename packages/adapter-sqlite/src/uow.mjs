@@ -1,3 +1,4 @@
+// port is scoped to accidental misuse in first-party adapter code.
 import { AsyncLocalStorage } from "node:async_hooks";
 import { realpathSync, statSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
@@ -71,6 +72,12 @@ function hasThenableResult(value) {
  * @param {string} filename
  */
 export function openSqliteUnitOfWork(filename) {
+  const { uow, port, close } = openAdapterUnitOfWork(filename);
+  return { uow, port, close };
+}
+
+/** @param {string} filename */
+export function openAdapterUnitOfWork(filename) {
   return openUnitOfWork(filename, false);
 }
 
@@ -117,7 +124,7 @@ function openUnitOfWork(filename, migration) {
   }
   const writer = openingWriter;
   const reader = openingReader;
-  const migratedRaw = Boolean(writer.prepare("SELECT 1 FROM sqlite_schema WHERE name='cairn_migrated_raw_privacy'").get());
+  const migratedRaw = Boolean(writer.prepare("SELECT 1 FROM sqlite_schema WHERE name='cairn_migration'").get());
   const writerLock = new Mutex();
   const readerLock = new Mutex();
   /** @type {Map<OwnerId, { lock: Mutex, users: number }>} */

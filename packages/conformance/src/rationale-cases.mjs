@@ -1,5 +1,5 @@
 import { coreDigest, decisionContext, relatePlaced } from "@cairn-ink/core";
-import { check, equal, evidence, rejects, row } from "./support.mjs";
+import { check, equal, evidence, receiptAttachAdvancesRevision, rejects, row } from "./support.mjs";
 
 /** @import { ModelPort, RationaleGuard, RationaleRelation, Receipt, Scope, Tx } from "@cairn-ink/core/ports" */
 /** @import { CaseContext, ConformanceCase } from "./index.d.mts" */
@@ -105,9 +105,13 @@ const invalidationCases = [
   rationaleCase("forget", "erasure deletes incident edges", async ctx => {
     await invalidates(ctx, async (f, source) => check(await f.erase(source), "Memory must be erased"));
   }),
-  rationaleCase("receipt-add", "adding a receipt deletes incident edges at the same revision", async ctx => {
+  rationaleCase("receipt-add", "adding a receipt deletes incident edges", async ctx => {
+    // With receiptAttachAdvancesRevision, a newly attached receipt advances the revision once (PHASE0 addendum 18).
+    const advances = receiptAttachAdvancesRevision(ctx);
     await invalidates(ctx, async (f, source) => {
-      equal((await f.touch(source, [evidence("conformance-extra", 12)])).revision, source.revision, "Guard stays current");
+      equal((await f.touch(source, [evidence("conformance-extra", 12)])).revision,
+        advances ? source.revision + 1 : source.revision, advances ? "A new receipt advances the revision once"
+          : "Guard stays current");
     });
   }),
   rationaleCase("receipt-remove", "removing a receipt deletes incident edges", async ctx => {

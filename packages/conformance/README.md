@@ -24,14 +24,14 @@ Both timing options must be finite and greater than zero when supplied. The runn
 
 ### Capability handshake
 
-Honor a requested flag setting when the store supports it. To decline a setting and let the kit report a skip where appropriate, return the adapter with the actual flag value. A rejected `open` fails the test.
+Honor a requested flag setting when the store supports it. To decline a setting and let the kit report a skip where appropriate, return the adapter with the actual flag value. For `capability_unavailable` during `open`, the runner can retry without a preferred `rawArchive` request or a required `sessionLineage` request. It rethrows the original error if the reopened adapter still advertises `sessionLineage`.
 
 - `needs` requests flags on. The runner returns `needs <flag>` for the first required flag that is off.
 - `needsOff` requests flags off. The runner returns `needs <flag> off` for the first required-off flag that is on, after checking `needs`.
 - `requests` supplies additional preferences at open. The runner applies `requests`, then `needs`, then `needsOff`. It checks only explicit requirements for automatic capability skips. A case can branch on the actual flags or return its own reason.
 - `pending` returns the given skip reason before opening an adapter. `followUp` runs with its own requests on a fresh open after the first run succeeds and closes.
 
-`runCase` returns `null` on success, a reason string on a skip, and rejects on failure. Pass the string to `t.skip(reason)` so `node:test` reports a skipped test with its reason. Treat a skip as missing coverage, even if an earlier check ran successfully. `defineConformanceTests(factory)` from `@cairn-ink/conformance/node-test` does this for all of `CASES`.
+`runCase` returns `null` on success, a reason string on a skip, and rejects on failure. Pass the string to `t.skip(reason)` so `node:test` reports a skipped test with its reason. Treat a skip as missing coverage, even if an earlier check ran successfully. `defineConformanceTests(factory)` from `@cairn-ink/conformance/node-test` does this for `CASES`.
 
 ### Test harness hooks
 
@@ -85,6 +85,7 @@ Each row lists the ports used across the export, including those used only in a 
 | `KEYED_DIGEST_CASES` | `uow`, `memories`, `keys`, `capture`, `lexical`, `recent`, `hydrate` | All cases need `fingerprintKey`. An enabled provider that returns no owner key fails when the case requests one. | `seedFact`, `dump` in the rotation refusal check. |
 | `RETAINED_KEYED_DIGEST_CASES` | `uow`, `memories`, `keys`, `capture`, `pause`, `suppressions`, `snapshot`, `fence`, `recent` | All cases need `fingerprintKey`. The retained-save cases also require `keys.retainedDigesters`. | `seedFact`, `setRetainedDigestFixture` for the retained-save cases, and `rowsMissingKeyedDigest` and `dump` for coverage. The dump exposes `[{ owner, rows: [{ row: { id, digests } }] }]`. |
 | `RAW_CASES` | `uow`, `raw`, `suppressions`, `capture`, `keys` | All need `rawArchive`. Window cases also need `rawWindowHide`. Span cases also need `rawSpans`. The session and text visibility case requests `fingerprintKey` as a preference. | `dump`, `seedFact`, `counters`, plus `hashSessionKey` for hashed session or raw span fixtures as described above. |
+| `SPAN_LINEAGE_CASES` | `uow`, `capture.claim`, `capture.finish`, `raw.archive`, `raw.deleteConversation`, `spanLineage.resolveSpans` | Both need `spanLineage` and `rawArchive`. Deleted Raw resolves to an empty list. An unknown memory throws `raw_lineage_unavailable`. | None. |
 | `IMPORT_ARCHIVE_CASES` | `uow`, `raw`, `keys` for keyed text | All need `rawArchive` and skip with a reason when `raw.importArchive` is absent. Window checks need `rawWindowHide`. Raw span checks need `rawSpans`. Keyed containment needs `fingerprintKey` and `shingleSuppression`. | `dump`, `seedFact`, plus `hashSessionKey` for hashed session and raw span fixtures as described above. |
 | `PROVEN_FORK_CASES` | `uow`, `raw`, `capture`, `suppressions` | All need `rawArchive`. | `dump`, including retained anchor IDs and opaque proof metadata, `seedFact`, plus `hashSessionKey` for hashed session fixtures. |
 | `TOPIC_CASES` | `uow`, `memories`, `placement` | All cases need `placement`. | `dump`, `seedFact`, plus `hashSessionKey` for the hashed session fixture. |

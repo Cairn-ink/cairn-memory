@@ -65,16 +65,26 @@ export function createBM25(documents) {
     return { ...doc, ...tokens };
   });
   const N = docs.length, totalLength = docs.reduce((sum, doc) => sum + doc.length, 0);
-  return { N, totalLength, avgLength: totalLength / (N || 1), df,
+  /** @param {string} text @param {number} depth */
+  function searchWithCount(text, depth = MAX_DEPTH) {
+    if (!Number.isSafeInteger(depth) || depth < 1 || depth > MAX_DEPTH) throw new TypeError("invalid_depth");
+    const terms = tokenizeT1(text), matches = [];
+    for (const doc of docs) {
+      const score = scoreBM25(terms, doc, { N, totalLength, df });
+      if (score !== null) matches.push({ ...doc, score });
+    }
+    return {
+      rows: rankScores(matches).slice(0, depth).map(({ text, length, frequencies, ...identity }) => identity),
+      matched: matches.length,
+    };
+  }
+  const index = { N, totalLength, avgLength: totalLength / (N || 1), df,
+    searchWithCount,
     /** @param {string} text */
     search(text, depth = MAX_DEPTH) {
-      if (!Number.isSafeInteger(depth) || depth < 1 || depth > MAX_DEPTH) throw new TypeError("invalid_depth");
-      const terms = tokenizeT1(text), rows = [];
-      for (const doc of docs) {
-        const score = scoreBM25(terms, doc, { N, totalLength, df });
-        if (score !== null) rows.push({ ...doc, score });
-      }
-      return rankScores(rows).slice(0, depth).map(({ text, length, frequencies, ...identity }) => identity);
+      return searchWithCount(text, depth).rows;
     },
   };
+  // Keep the count method out of legacy callers' enumerable index statistics.
+  return Object.defineProperty(index, "searchWithCount", { enumerable: false });
 }

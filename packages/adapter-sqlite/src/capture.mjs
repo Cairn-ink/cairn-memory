@@ -141,7 +141,7 @@ function sourcePolicy(db, key, hashSession) {
  * @param {() => number} [now]
  * @param {MigratedRawPolicy} [migratedRaw]
  * @param {MigratedCaptureControls} [controls]
- * @param {ReturnType<typeof import("./uow.mjs").openSqliteUnitOfWork>["preserveArrivalRefusal"]} [preserveArrivalRefusal]
+ * @param {ReturnType<typeof import("./uow.mjs").openAdapterUnitOfWork>["preserveArrivalRefusal"]} [preserveArrivalRefusal]
  * @returns {Required<CaptureClaim> & CaptureFinish & SourceFilter}
  */
 export function createCapturePorts(port, hashSession, index, lineage, now = Date.now, migratedRaw, controls, preserveArrivalRefusal) {

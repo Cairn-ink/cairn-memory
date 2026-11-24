@@ -36,6 +36,8 @@ export interface DocumentCardVisibilityInput {
    * Omitting either leaves facts that require that key fail-closed.
    */
   legacyFingerprint?: { key: FingerprintKey; labels: FingerprintLabels };
+  /** Legacy full-fact shingle containment cutoff in (0, 1]. Defaults to 0.6. */
+  containmentThreshold?: number;
 }
 
 export type DocumentCardHiddenReason =

@@ -21,6 +21,7 @@ export { FENCE_INTENT_CASES } from "./fence-intent-cases.mjs";
 export { topicCases as TOPIC_CASES } from "./topics-cases.mjs";
 export { TOPIC_FOR_MEMORIES_CASES } from "./topics-for-memories-cases.mjs";
 export { RAW_CASES } from "./raw-cases.mjs";
+export { SPAN_LINEAGE_CASES } from "./span-lineage-cases.mjs";
 export { RAW_LEDGER_CASES } from "./raw-ledger-cases.mjs";
 export { IMPORT_ARCHIVE_CASES } from "./import-archive-cases.mjs";
 export { PROVEN_FORK_CASES } from "./proven-fork-cases.mjs";
@@ -69,6 +70,8 @@ async function runOpenedCase(factory, testCase) {
     ...Object.fromEntries(needsOff.map((flag) => [flag, false])),
   };
   let opened;
+  /** @type {{ error: unknown } | undefined} */
+  let retryFailure;
   try {
     opened = await factory.open({ capabilities });
   } catch (error) {
@@ -82,8 +85,7 @@ async function runOpenedCase(factory, testCase) {
     // The retry may only turn a rejected NEEDED capability into a reported skip. If the store provides that
     // capability after all, the first rejection was a real setup failure and must not become a pass.
     if (retry.sessionLineage !== capabilities.sessionLineage && opened.adapter?.capabilities?.sessionLineage) {
-      await opened.close();
-      throw error;
+      retryFailure = { error };
     }
   }
   const { adapter, embeddingDimensions, harness, nativeErrorMap, busyNativeCodes, sessionRefs, settleMs,
@@ -95,6 +97,7 @@ async function runOpenedCase(factory, testCase) {
   /** @type {import("./index.d.mts").CaseContext | undefined} */
   let ctx;
   try {
+    if (retryFailure) throw retryFailure.error;
     check(validTimeout, "timeoutMs must be a finite number greater than 0");
     check(settleMs === undefined || (Number.isFinite(settleMs) && settleMs > 0),
       "settleMs must be a finite number greater than 0");
@@ -133,6 +136,7 @@ async function runOpenedCase(factory, testCase) {
     try {
       await bounded(() => opened.close(), "Adapter close", roundedTimeout);
     } catch (closeError) {
+      if (retryFailure) throw retryFailure.error;
       if (caseFailure) {
         throw new AggregateError([caseFailure.error, closeError], "Conformance case and adapter close both failed",
           { cause: closeError });

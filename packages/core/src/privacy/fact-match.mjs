@@ -89,6 +89,11 @@ function matchReader() {
     ...fingerprintDigests,
     shingles: (/** @type {unknown} */ value) => list(value, scalar),
   };
+  const passageLists = {
+    ...fingerprintLists,
+    retainedShingles: (/** @type {unknown} */ value) => list(value, item =>
+      record(item, ["keyId"], { shingles: value => list(value, scalar) })),
+  };
 
   return {
     /** @param {StoredFact} stored */
@@ -98,7 +103,7 @@ function matchReader() {
           "kind", "origin", "owner", "namespace", "actionId", "memoryId", "throughRevision", "mode", "client",
           "unknownTime", "anchor", "sessionKeyHash", "messageKey", "startUtf16", "endUtf16", "contentDigest",
         ], {
-          text: (value) => record(value, ["keyId"], { ...fingerprintLists, embedding: (value) => list(value, scalar) }),
+          text: (value) => record(value, ["keyId"], { ...passageLists, embedding: (value) => list(value, scalar) }),
           sourceMemory: incarnation,
           session: source,
           window: (value) => record(value, ["startMs", "endMs"]),
@@ -123,11 +128,7 @@ function matchReader() {
     incoming(incoming, useShingles) {
       /** @param {unknown} value */
       const passage = (value) => record(value, useShingles ? ["keyId"] : [], {
-        ...(useShingles ? {
-          ...fingerprintLists,
-          retainedShingles: (value) => list(value, item =>
-            record(item, ["keyId"], { shingles: value => list(value, scalar) })),
-        } : fingerprintDigests), embedding: candidateEmbedding,
+        ...(useShingles ? passageLists : fingerprintDigests), embedding: candidateEmbedding,
       });
       return /** @type {FactMatchIncoming} */ (/** @type {unknown} */ (record(incoming, ["occurredAtMs"], {
         scope, passages: (value) => list(value, passage, true), session: source, sourceMemory: incarnation,

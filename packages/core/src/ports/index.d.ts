@@ -4,6 +4,7 @@ export type * from "./model.d.ts";
 export type * from "./capture.d.ts";
 export type * from "./document-card.d.ts";
 export type * from "./memory-store.d.ts";
+export type * from "./procedural-tag.d.ts";
 export type * from "./retrieval.d.ts";
 export type * from "./privacy.d.ts";
 export type * from "./host.d.ts";
@@ -16,6 +17,7 @@ import type { DocumentCardCandidates, DocumentCardRecord, DocumentCardStore, Sto
 import type { ConflictEdgeStore, MemoryStore, SupersessionStore } from "./memory-store.d.ts";
 import type { HydrateItems, LexicalCandidates, ListRawMessages, ListRecent, RawCandidates, ReadSnapshot, RelationSource, VectorCandidates, VisibilityFence } from "./retrieval.d.ts";
 import type { FingerprintKeyProvider, ForgetLog, PauseStore, RawStore, SessionLineageStore, SpanLineageStore, SuppressionStore } from "./privacy.d.ts";
+import type { ProceduralTagStore } from "./procedural-tag.d.ts";
 import type { RationaleEdgeStore, RationaleSourceText } from "./rationale.d.ts";
 import type { TopicStore } from "./topics.d.ts";
 import type { UnitOfWork } from "./unit-of-work.d.ts";
@@ -29,7 +31,10 @@ export type * from "./quantity-ledger.d.ts";
  */
 export interface StorageAdapter<Card extends StoredDocumentCardRecord = DocumentCardRecord> {
   readonly name: string;
-  readonly capabilities: Capabilities;
+  readonly capabilities: Capabilities & Readonly<{
+    proceduralTags?: boolean;
+    receiptAttachAdvancesRevision?: boolean;
+  }>;
   readonly uow: UnitOfWork;
   readonly capture: CaptureClaim & CaptureFinish & SourceFilter;
   readonly memories: MemoryStore;
@@ -57,4 +62,6 @@ export interface StorageAdapter<Card extends StoredDocumentCardRecord = Document
   readonly documentCards?: DocumentCardStore<Card>; // documentCards
   readonly documentCardCandidates?: DocumentCardCandidates; // documentCardSearch
   readonly quantityLedger?: QuantityLedgerStore; // quantityLedger
+  readonly inspect?: import("./host.d.ts").InspectStore; // inspect
+  readonly proceduralTags?: ProceduralTagStore; // proceduralTags
 }
