@@ -15,7 +15,11 @@ export async function decisionContext({ uow, scope, store, retrieval, memoryId, 
   const page = { limit: RATIONALE_LIMITS.inspectEdges + 1 };
   const { root, paths, sources } = await uow.run(owner, { readOnly: true }, async tx => {
     const current = await retrieval.memories.readRevision(tx, selection, memoryId);
-    if (!current) throw new CoreError('memory_not_found');
+    // A missing root and a fenced root fail at the same site, so the two cannot be told apart.
+    const [visible] = current
+      ? await retrieval.fence.assertVisible(tx, readScope, [{ type: 'memory', id: memoryId, namespace }])
+      : [];
+    if (!current || !visible) throw new CoreError('memory_not_found');
     const [guard] = rationaleGuards([{ memoryId, revision: revision ?? current.revision }]);
     const [root] = await readEvidence(tx, selection, edges, [guard]);
     /** @type {Map<string, RationaleSource | null>} */

@@ -89,8 +89,10 @@ export interface PauseStore {
 }
 
 export interface FingerprintKeyProvider {
-  /** null when no key is configured: the store then uses FORGET_POLICY.withoutKey. Key ids stay stable. */
+  /** null when no key is active: the store then uses FORGET_POLICY.withoutKey. Key ids stay stable. */
   userKey(owner: OwnerId): Promise<{ id: string; signingKey: CryptoKey } | null>;
+  /** Select the active key in a write transaction that serializes with publication. */
+  userKeyForWrite?(tx: Tx): ReturnType<FingerprintKeyProvider["userKey"]>;
   /** Signers for non-current domains with live HMAC-only facts or retained Core shingle evidence for this owner. */
   retainedDigesters?(owner: OwnerId): Promise<ReadonlyArray<RetainedDigester>>;
 }

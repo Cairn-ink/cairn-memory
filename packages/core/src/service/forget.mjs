@@ -88,9 +88,9 @@ export function forgetMethod({ storage, clock }) {
     sourceOf(inputSource);
     if (typeof memories.get !== "function") throw new CoreError("capability_unavailable");
 
-    // Key lookup can be external. Defer its result until the transaction has
-    // established that there is a row to forget, as for a missing key.
-    const keyResult = await Promise.resolve().then(() => keys?.userKey(owner)).then(
+    // External key providers resolve before the lock. Surface their failure
+    // after establishing that a row exists to forget.
+    const keyResult = keys?.userKeyForWrite ? null : await Promise.resolve().then(() => keys?.userKey(owner)).then(
       key => ({ key, error: null }), error => ({ key: null, error: entryError(error) }),
     );
 
@@ -98,8 +98,8 @@ export function forgetMethod({ storage, clock }) {
       // resolve
       const row = await scopedRow(memories, scope, id, tx);
       if (!row) return { status: "not_found" };
-      if (keyResult.error) throw keyResult.error;
-      const { key } = keyResult;
+      if (keyResult?.error) throw keyResult.error;
+      const key = keys?.userKeyForWrite ? await keys.userKeyForWrite(tx) : keyResult?.key;
       if (!key) throw new CoreError("fingerprint_unavailable");
       if (typeof suppressions?.writeFact !== "function" || typeof memories.erase !== "function") {
         throw new CoreError("capability_unavailable");
