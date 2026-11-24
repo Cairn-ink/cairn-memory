@@ -302,3 +302,22 @@ test("K-CLM-6 reads the list inside the finish transaction", async () => {
   await assert.rejects(runCase(rawFactory({ create }), testCase),
     /Finish must report exactly the suppressed middle position/);
 });
+
+test("K-CLM-6 bounds the positions by the batch size counted before finish, as core does", async () => {
+  const { CAPTURE_CASES, runCase } = await import("@cairn-ink/conformance");
+  const { rawFactory } = await import("./fixtures/raw.mjs");
+  const testCase = CAPTURE_CASES.find(({ id }) => id === "K-CLM-6");
+  assert.ok(testCase);
+  const create = (options) => {
+    const adapter = createMemoryAdapter(options);
+    const { finish } = adapter.capture;
+    // A store that consumes the caller's array still reports correct positions; core counted the batch first.
+    adapter.capture.finish = async (tx, token, items) => {
+      const result = await finish(tx, token, items);
+      items.splice(0);
+      return result;
+    };
+    return adapter;
+  };
+  assert.equal(await runCase(rawFactory({ create }), testCase), null);
+});

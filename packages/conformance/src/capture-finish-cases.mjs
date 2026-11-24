@@ -15,7 +15,7 @@ import { check, equal, fixtureEmbedding } from "./support.mjs";
 function readPositions(list, itemCount, label) {
   check(Array.isArray(list), `${label} must be an array`);
   const positions = /** @type {unknown[]} */ (list);
-  check(positions.length <= itemCount, `${label} must not list more positions than items`);
+  check(!(positions.length > itemCount), `${label} must not list more positions than items`);
   /** @type {number[]} */
   const values = [];
   for (let index = 0; index < positions.length; index++) {
@@ -55,12 +55,14 @@ export const captureFinishCases = [
       const claim = () => uow.run(owner, { pauseLock: true }, (tx) => capture.claim(tx, key, [], { leaseMs: 60_000 }));
       const fresh = await claim();
       check(fresh.status === "claimed", "Expected a fresh claim");
+      // Core counts the batch before handing it to the store; the store may consume the caller's array.
+      const itemCount = items.length;
       const { result, reported } = await uow.run(owner, { pauseLock: true }, async (tx) => {
         const finished = await capture.finish(tx, fresh.token, items);
         // Core reads this field first, inside the transaction, and archives from that single read.
         const list = finished.suppressedItems;
         return { result: finished,
-          reported: list === undefined ? undefined : readPositions(list, items.length, "Finish suppression positions") };
+          reported: list === undefined ? undefined : readPositions(list, itemCount, "Finish suppression positions") };
       });
       if (reported) equal(reported, [1], "Finish must report exactly the suppressed middle position");
       equal(result.suppressedCount, 1, "Finish must count the suppressed middle item");
@@ -72,7 +74,7 @@ export const captureFinishCases = [
       if (replay.status === "rawReplay") {
         const replayList = replay.result.suppressedItems;
         const replayed = replayList === undefined ? undefined
-          : readPositions(replayList, items.length, "Replayed suppression positions");
+          : readPositions(replayList, itemCount, "Replayed suppression positions");
         equal(replayed, reported, "Replay must preserve the reported suppression positions");
       }
     },
