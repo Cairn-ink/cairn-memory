@@ -6,6 +6,7 @@ import { unitOfWorkCases } from "./unit-of-work-cases.mjs";
 
 export { privacyCases as PRIVACY_CASES } from "./privacy-cases.mjs";
 export { captureCases as CAPTURE_CASES } from "./capture-cases.mjs";
+export { CAPTURE_CONTAINMENT_CASES } from "./capture-containment-cases.mjs";
 export { ADMISSION_CASES } from "./admission-cases.mjs";
 export { IMPORT_TIME_CASES } from "./import-time-cases.mjs";
 export { PRIVACY_MATCH_CASES } from "./privacy-match-cases.mjs";
