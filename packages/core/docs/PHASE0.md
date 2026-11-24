@@ -588,6 +588,40 @@ accounts for diagnostics and the underlying signed snapshot, following
 `core/context-read-facade.mjs:881–917`. Core finishes its formatter and
 counter calls before the authoritative delivery read.
 
+### Receipt read safety
+
+Every route that uses a receipt applies the receipt read-safety check first. The routes are:
+
+- fetch provenance;
+- assembly source excerpts and dates;
+- inspect receipt pages;
+- stored qualification and procedural anchors;
+- historical supersession receipt IDs.
+
+The check runs inside the same read snapshot that delivers the result. A Memory
+that passes `VisibilityFence` does not make its receipts deliverable. A receipt
+passes only when all three of these hold:
+
+1. **Identity.** Its stored identity still matches its stored source fields: client,
+   session, event, role and excerpt.
+2. **Lineage.** Its source lineage is intact. Where lineage is enabled, a purged, excluded or
+   deleted source conversation fails, and unavailable lineage fails.
+3. **Suppression.** No content-suppression fact covers the receipt itself or the Raw targets
+   its lineage resolves to.
+
+A receipt that fails any of the three is withheld. It is skipped, never emitted, and
+counted where the route has a counter. A qualification or procedural value that
+anchors on a withheld receipt is returned as null. Supersession receipt IDs
+drop withheld receipts and report `evidenceAvailable:false`. The check applies
+with Raw search disabled. Recomputing a receipt content identity or compact
+fence is not a safety check. The store ports (`InspectStore` receipt pages
+and `ContextReadStore` evidence) return only receipts that passed, under the
+same transaction. Core treats a receipt without that guarantee as withheld.
+See `core/content-safety.mjs:74–109` and `core/runtime.mjs:609–668`.
+Conformance for both capabilities includes a visible Memory whose one
+receipt source is fenced. Its excerpt must never appear in inspect, fetch or
+assembly output, with or without Raw search.
+
 ### Inspect and receipts
 
 List defaults to both `active` and `historical` and both filing statuses.
@@ -605,7 +639,9 @@ See `core/contract.mjs:152–165,437–458` and
 
 Item returns its metadata and current stored body at that inspected
 revision, including an authorized historical body. Page safe receipts by
-creation time ascending then ID ascending, skipping withheld receipts.
+creation time ascending then ID ascending, skipping withheld receipts. Paging is visible-first: a page holds the next receipts that pass read safety.
+Legacy can return an empty page with a continuation when it withholds a whole
+physical page. The fixture has no such page, and both behaviours resume correctly.
 Return placements, conflicts, and, where present and safe, procedural tag
 revision, origin and receipt anchors and historical supersession links. A
 procedural anchor carries its receipt ID, excerpt digest and UTF-16 start

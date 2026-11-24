@@ -10,7 +10,10 @@ export function embeddingRequiredFactory({ vectors = true, embeddingDimensions =
   enforce = true, sessionRefs = "plain" } = {}) {
   return {
     name: `memory with required embeddings, vectors ${vectors ? "on" : "off"}`,
-    async open({ capabilities }) {
+    async open({ capabilities: requested }) {
+      // The reference adapter has no span lineage port, so this fixture does not forward that request.
+      // The flag then stays off and the kit reports its standard needs skip.
+      const { spanLineage: _unsupported, ...capabilities } = requested;
       const memory = createMemoryAdapter({
         capabilities: {
           ...capabilities,
